@@ -230,7 +230,6 @@ export function SourcesPane(props: SourcesPaneProps) {
             <FolderOpen size={14} aria-hidden="true" />
             <strong>{baseResumeName || "No base saved"}</strong>
           </div>
-          {workspacePath ? <p className="workspace-path">{workspacePath}</p> : null}
           <div className="workspace-actions">
             <label className="secondary-button is-compact workspace-upload">
               <Upload size={12} aria-hidden="true" />
