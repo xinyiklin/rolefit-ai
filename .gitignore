@@ -17,6 +17,7 @@ dist/
 
 # --- Agent handoff (local-only, per CLAUDE.md "do not stage") ---
 CONTINUITY.md
+.claude/
 
 # --- Personal job-search artifacts (privacy guard) ---
 *.docx
