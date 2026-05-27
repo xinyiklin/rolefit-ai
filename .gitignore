@@ -1,0 +1,28 @@
+# --- Dependencies & build output ---
+node_modules/
+dist/
+*.tsbuildinfo
+
+# --- Editor / IDE ---
+.DS_Store
+.vscode/
+.idea/
+
+# --- Logs & caches ---
+*.log
+.eslintcache
+
+# --- Secrets ---
+.env
+
+# --- Agent handoff (local-only, per CLAUDE.md "do not stage") ---
+CONTINUITY.md
+
+# --- Personal job-search artifacts (privacy guard) ---
+*.docx
+*.pdf
+*resume*.txt
+*resume*.md
+*resume*.csv
+job-search-workspace/*
+!job-search-workspace/README.md

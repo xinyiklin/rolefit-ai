@@ -1,0 +1,135 @@
+// Subscription-CLI providers. Lets the polish route use Claude Max (via
+// Claude Code) or ChatGPT/Codex Plus (via Codex CLI) without burning paid
+// API tokens. Each helper spawns the local CLI binary and returns the model
+// response as a string (the polish route then parses it as JSON).
+
+import { spawn } from "node:child_process";
+
+function runCli(command, args, stdinPayload, { timeoutMs = 180_000 } = {}) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, { stdio: ["pipe", "pipe", "pipe"] });
+    let stdout = "";
+    let stderr = "";
+    const timer = setTimeout(() => {
+      child.kill("SIGTERM");
+      reject(new Error(`${command} timed out after ${Math.round(timeoutMs / 1000)}s.`));
+    }, timeoutMs);
+    child.stdout.on("data", (chunk) => { stdout += chunk.toString(); });
+    child.stderr.on("data", (chunk) => { stderr += chunk.toString(); });
+    child.on("error", (err) => {
+      clearTimeout(timer);
+      if (err.code === "ENOENT") {
+        reject(new Error(`${command} is not installed or not on PATH.`));
+      } else {
+        reject(new Error(`Failed to spawn ${command}: ${err.message}`));
+      }
+    });
+    child.on("close", (code) => {
+      clearTimeout(timer);
+      if (code === 0) {
+        resolve({ stdout, stderr });
+      } else {
+        const tail = (stderr || stdout).slice(-600).trim();
+        reject(new Error(`${command} exited with code ${code}. ${tail}`));
+      }
+    });
+    if (stdinPayload) child.stdin.write(stdinPayload);
+    child.stdin.end();
+  });
+}
+
+// ----- Claude Code (claude --print) -----
+
+export async function callClaudeCli({ model, systemPrompt, userPrompt }) {
+  const args = ["-p", "--tools", "", "--output-format", "json"];
+  if (systemPrompt) args.push("--append-system-prompt", systemPrompt);
+  if (model && model !== "default") args.push("--model", model);
+
+  const { stdout } = await runCli("claude", args, userPrompt);
+
+  let envelope;
+  try {
+    envelope = JSON.parse(stdout);
+  } catch (parseError) {
+    throw new Error(`Claude Code returned non-JSON output (first 300 chars): ${stdout.slice(0, 300)}`);
+  }
+
+  if (envelope.is_error) {
+    const message = String(envelope.result ?? envelope.error ?? "Claude Code returned an error.");
+    if (/not logged in|please run \/login/i.test(message)) {
+      throw new Error("Claude Code is not authenticated. Run `claude auth login` and try again.");
+    }
+    throw new Error(`Claude Code error: ${message}`);
+  }
+
+  return String(envelope.result ?? "");
+}
+
+// ----- Codex CLI (codex exec) -----
+
+export async function callCodexCli({ model, systemPrompt, userPrompt }) {
+  const combined = systemPrompt
+    ? `${systemPrompt}\n\n---\n\n${userPrompt}`
+    : userPrompt;
+
+  const args = ["exec", "--skip-git-repo-check", "--sandbox", "read-only"];
+  if (model && model !== "default") args.push("--model", model);
+
+  const { stdout } = await runCli("codex", args, combined);
+  return extractCodexFinalOutput(stdout);
+}
+
+// Codex exec writes a structured transcript: preamble → "user" → prompt →
+// "codex" → response → "tokens used" → count → final response. Strategy:
+// prefer the trailing block after "tokens used N", else fall back to the
+// block after the last "codex" marker.
+function extractCodexFinalOutput(stdout) {
+  const tokensIdx = stdout.lastIndexOf("tokens used");
+  if (tokensIdx >= 0) {
+    const tail = stdout.slice(tokensIdx).split("\n");
+    // Skip the "tokens used" header + numeric line.
+    const result = tail.slice(2).join("\n").trim();
+    if (result) return result;
+  }
+  const codexMarker = "\ncodex\n";
+  const codexIdx = stdout.lastIndexOf(codexMarker);
+  if (codexIdx >= 0) {
+    return stdout.slice(codexIdx + codexMarker.length).trim();
+  }
+  return stdout.trim();
+}
+
+// ----- Availability check used by /api/templates style probes -----
+
+let claudeCheck = null;
+let codexCheck = null;
+
+export function checkClaudeCliAvailability() {
+  if (claudeCheck) return claudeCheck;
+  claudeCheck = new Promise((resolve) => {
+    const child = spawn("claude", ["--version"], { stdio: ["ignore", "pipe", "ignore"] });
+    let out = "";
+    child.stdout?.on("data", (chunk) => { out += chunk.toString(); });
+    child.on("error", () => resolve({ available: false }));
+    child.on("close", (code) => {
+      if (code === 0) resolve({ available: true, version: out.trim().split("\n")[0] ?? "" });
+      else resolve({ available: false });
+    });
+  });
+  return claudeCheck;
+}
+
+export function checkCodexCliAvailability() {
+  if (codexCheck) return codexCheck;
+  codexCheck = new Promise((resolve) => {
+    const child = spawn("codex", ["--version"], { stdio: ["ignore", "pipe", "ignore"] });
+    let out = "";
+    child.stdout?.on("data", (chunk) => { out += chunk.toString(); });
+    child.on("error", () => resolve({ available: false }));
+    child.on("close", (code) => {
+      if (code === 0) resolve({ available: true, version: out.trim().split("\n")[0] ?? "" });
+      else resolve({ available: false });
+    });
+  });
+  return codexCheck;
+}

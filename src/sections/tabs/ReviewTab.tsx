@@ -1,0 +1,157 @@
+import { FileText, ListChecks } from "lucide-react";
+import { ChipList, PanelHeading, ScoreMeter, Stat } from "../../ui";
+import type { MatchBreakdown, PolishedResume, ResumeDiff } from "../../resumeEngine";
+import { scoreLabel, type ScoreSource } from "../shared";
+
+type ReviewTabProps = {
+  scoreSource: ScoreSource;
+  scoreContext: string;
+  resumeBulletCount: number;
+  matchBreakdown: MatchBreakdown[];
+  resumeDiff: ResumeDiff | null;
+  result: PolishedResume | null;
+};
+
+export function ReviewTab({
+  scoreSource,
+  scoreContext,
+  resumeBulletCount,
+  matchBreakdown,
+  resumeDiff,
+  result
+}: ReviewTabProps) {
+  return (
+    <div className="review-stack">
+      <section className="studio-card score-panel">
+        <div className="score-panel__hero">
+          <p className="eyebrow">Fit Score</p>
+          <strong className="overall-score">{scoreSource ? scoreSource.score.overall : "--"}</strong>
+          <span className="score-panel__label">
+            {scoreSource ? scoreLabel(scoreSource.score.overall) : "Awaiting draft"}
+          </span>
+          <small>{scoreContext}</small>
+        </div>
+        <div className="score-grid">
+          <ScoreMeter label="Keywords" value={scoreSource?.score.keywordFit ?? 0} />
+          <ScoreMeter label="Bullets" value={scoreSource?.score.bulletQuality ?? 0} />
+          <ScoreMeter label="Structure" value={scoreSource?.score.structure ?? 0} />
+          <ScoreMeter label="Concision" value={scoreSource?.score.concision ?? 0} />
+        </div>
+        <div className="score-panel__stats">
+          <Stat label="Resume bullets" value={resumeBulletCount} />
+          <Stat label="Matched" value={scoreSource?.matchedKeywords.length ?? 0} />
+          <Stat label="Missing" value={scoreSource?.missingKeywords.length ?? 0} />
+        </div>
+      </section>
+
+      <section className="studio-card">
+        <PanelHeading icon={<ListChecks size={15} aria-hidden="true" />} title="Match breakdown" />
+        <div className="breakdown-grid">
+          {matchBreakdown.length ? (
+            matchBreakdown.map((group) => (
+              <div className="breakdown-card" key={group.category}>
+                <div className="breakdown-card__title">
+                  <h3>{group.category}</h3>
+                  <strong>
+                    {group.covered.length}/{group.covered.length + group.missing.length}
+                  </strong>
+                </div>
+                <div className="mini-chip-list">
+                  {group.covered.map((item) => (
+                    <span className="mini-chip mini-chip--covered" key={`${group.category}-${item}`}>
+                      {item}
+                    </span>
+                  ))}
+                  {group.missing.map((item) => (
+                    <span className="mini-chip mini-chip--missing" key={`${group.category}-${item}`}>
+                      {item}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ))
+          ) : (
+            <p className="muted-line">Add a job description to break the match into experience, knowledge, skills, and tools.</p>
+          )}
+        </div>
+      </section>
+
+      {resumeDiff ? (
+        <section className="studio-card">
+          <PanelHeading icon={<FileText size={15} aria-hidden="true" />} title="Before / after" />
+          <div className="diff-grid">
+            <div>
+              <h3>Added or rewritten</h3>
+              <ul className="diff-list diff-list--added">
+                {(resumeDiff.added.length ? resumeDiff.added : ["No major line-level additions detected."]).map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+            </div>
+            <div>
+              <h3>Removed or condensed</h3>
+              <ul className="diff-list diff-list--removed">
+                {(resumeDiff.removed.length ? resumeDiff.removed : ["No major line-level removals detected."]).map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+            </div>
+          </div>
+          {resumeDiff.metricPrompts.length ? (
+            <div className="metric-prompts">
+              <h3>Metric prompts to resolve</h3>
+              <ul>
+                {resumeDiff.metricPrompts.map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+        </section>
+      ) : null}
+
+      <section className="studio-card insights">
+        <div>
+          <h3>Interview signals</h3>
+          <ul>
+            {(result?.strengths ?? [
+              "Projects, practical tools, measurable proof, and concise bullets carry entry-level SDE applications."
+            ]).map((item) => (
+              <li key={item}>{item}</li>
+            ))}
+          </ul>
+        </div>
+        <div>
+          <h3>Next fixes</h3>
+          <ul>
+            {(result?.fixes ?? [
+              "Paste a job description to see missing keywords, then add truthful project evidence."
+            ]).map((item) => (
+              <li key={item}>{item}</li>
+            ))}
+          </ul>
+        </div>
+      </section>
+
+      <section className="studio-card">
+        <PanelHeading icon={<ListChecks size={15} aria-hidden="true" />} title="Keywords" />
+        <div className="keyword-grid">
+          <div>
+            <h3>Matched</h3>
+            <ChipList
+              items={scoreSource?.matchedKeywords.slice(0, 14) ?? []}
+              emptyText="Add a resume and job target to see matches."
+            />
+          </div>
+          <div>
+            <h3>Missing</h3>
+            <ChipList
+              items={scoreSource?.missingKeywords.slice(0, 14) ?? []}
+              emptyText="No obvious gaps yet."
+            />
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+}
