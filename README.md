@@ -1,21 +1,25 @@
 # RoleFit AI
 
-Desktop-first React app for polishing a resume against a job description.
+A **local-first** resume tailoring webapp. Paste a job link, pull your base resume from your workspace, get a polished draft scored against the job description, and export to LaTeX / DOCX / PDF — without your data leaving your machine.
 
-## Framework Choice
+> Built for an entry-level SDE job hunt: tight workflow loop, blunt recruiter-style audit before applying, and a local pipeline tracker so you never lose track of a role.
 
-This project uses Vite, React, and TypeScript. It runs as a fast local desktop browser app today and can later be wrapped with Electron or Tauri if a native desktop installer is needed.
+## Highlights
 
-## Features
+- **Multi-format resume I/O** — ingest `.docx`, `.pdf`, `.tex` (Jake's-style), or plain text; export back to each.
+- **Multi-provider AI** — 10 backends, including **subscription-CLI providers** (`Claude Code`, `Codex CLI`) that route through existing Claude Max / ChatGPT Plus subscriptions instead of per-token API billing.
+- **Fit scoring + 4-category keyword gap analysis** — required experience, knowledge, required skills, technical tools.
+- **Strict recruiter review mode** — verdict (STRONG FIT / REASONABLE FIT / STRETCH / DON'T APPLY), gap severity, targeted bullet rewrites, interview risk flags, cover-letter angle.
+- **LaTeX export pipeline** with three resume templates (Jake's, Awesome-CV, Deedy) + **one-click Overleaf submission** via form POST + optional local PDF compile through **Tectonic**.
+- **DOCX format preservation** through direct OpenXML paragraph edits.
+- **On-disk pipeline tracker** with status / source / company / role / follow-up date / notes / resume snapshot per application — survives browser wipes.
+- **Local-first** — workspace lives in `job-search-workspace/` and never touches the network; API keys stay server-side in `.env`.
 
-- Paste a job link and job description.
-- Upload a text-based resume file or paste resume content directly.
-- Score the resume for job keyword fit, bullet quality, action verbs, metrics, and section structure.
-- Keep role bullet groups to five bullets.
-- Generate a polished resume draft without inventing achievements or metrics.
-- Use OpenAI, Claude, Gemini, OpenRouter, Groq, Together AI, Mistral AI, or a local/custom provider.
-- Save a local base resume in `job-search-workspace/` and auto-load it on startup.
-- Copy the polished draft for editing.
+## Stack
+
+React 19 · TypeScript · Vite · Node.js (single-file `server.mjs` with Vite middleware in dev) · custom CSS · `lucide-react` icons
+
+No SaaS dependencies. Optional integrations: OpenAI · Anthropic · Gemini · OpenRouter · Groq · Together · Mistral · local Ollama · Claude Code CLI · Codex CLI · Tectonic · Overleaf.
 
 ## Run
 
@@ -24,57 +28,82 @@ npm install
 npm run dev
 ```
 
-Open the local URL Vite prints in the terminal.
+Visit `http://localhost:5174`.
 
-## Local Workspace
+## AI setup
 
-The app creates `job-search-workspace/` for private local job-search files. Put
-personal resumes, application trackers, exported drafts, rendered tracker
-previews, notes, and job-specific files in that folder rather than in the repo
-root.
-
-Save your generic/base resume there through the Resume Source panel. On startup,
-the server loads `base-resume.docx` first when it exists, then text fallbacks
-such as `base-resume.txt`.
-
-The folder is ignored by git except for its README, and also holds the in-app
-pipeline tracker (`applications.json`). Root-level resume files, PDFs, and
-DOCX files are also ignored by `.gitignore` as a privacy guard.
-
-## AI Setup
-
-Create a local `.env` file and set an API key. The local Node server calls AI providers from `/api/polish`, so saved keys are never exposed in browser code. You can also paste a one-time key in the app's AI Settings panel.
+Pick a provider in the app's **Advanced AI settings** panel, or set a key in `.env`:
 
 ```bash
-printf 'OPENAI_API_KEY=your-key-here\n' > .env
-npm run dev
+# pick one (or set multiple and switch in-app)
+OPENAI_API_KEY=...
+ANTHROPIC_API_KEY=...
+GEMINI_API_KEY=...
+GROQ_API_KEY=...
+OPENROUTER_API_KEY=...
+TOGETHER_API_KEY=...
+MISTRAL_API_KEY=...
 ```
 
-The default provider is OpenAI Responses API with model `gpt-5.5`. Override it with `OPENAI_MODEL` or `AI_MODEL`.
-
-For other providers, choose Claude, Gemini, OpenRouter, Groq, Together AI,
-Mistral AI, or Local/custom in AI Settings. Claude and Gemini use their native
-APIs. The other provider choices use compatible chat-completions endpoints and
-fill a starter base URL/model name that you can edit.
-
-The Model control changes with the selected provider. Pick a common model from
-the dropdown, or choose **Custom model** when a provider releases a newer model
-ID that is not listed yet.
-
-You can also set values in `.env`:
+For **zero per-token cost**, use the subscription-CLI providers (default):
 
 ```bash
-AI_PROVIDER=openai-compatible
-AI_API_KEY=your-provider-key
-AI_BASE_URL=https://provider.example/v1
-AI_MODEL=provider/model-name
+# requires Claude Max
+brew install claude-code   # or via the official installer
+claude auth login
+
+# requires ChatGPT Plus / Codex Plus
+brew install codex
+codex login
 ```
 
-Use `AI_PROVIDER=anthropic` for Claude, `AI_PROVIDER=gemini` for Gemini, or
-the named provider value shown in the app for the other presets. Keep
-`openai-compatible` only for a custom chat-completions endpoint that is not one
-of the named presets.
+The app shells out to these CLIs for polish requests — no API key required.
 
-Native provider keys use provider-specific env names such as
-`ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `GROQ_API_KEY`, `OPENROUTER_API_KEY`,
-`TOGETHER_API_KEY`, or `MISTRAL_API_KEY`.
+## Optional local LaTeX
+
+```bash
+brew install tectonic
+```
+
+When installed, the `PDF · LaTeX` button in the export rail compiles your polished `.tex` directly to PDF in-app. Without it, use the **Overleaf** button instead — one click sends the `.tex` to a new Overleaf tab for compile.
+
+## Workspace
+
+The app creates `job-search-workspace/` for your private local data:
+
+- `base-resume.docx` (or `.tex`, `.txt`, `.md`, `.csv`) — auto-loaded on startup
+- `applications.json` — the pipeline tracker's on-disk store
+- Anything else you drop in there
+
+This folder is gitignored except its README. Personal resumes, PDFs, and DOCX files at the repo root are also gitignored as a privacy guard.
+
+## Project layout
+
+```
+server.mjs                       # main HTTP server
+server/
+  ai-cli/index.mjs               # Claude Code / Codex CLI shell-out
+  applications/index.mjs         # pipeline tracker storage
+  latex/                         # parser + 3 template renderers + optional Tectonic compile
+src/
+  App.tsx                        # state + handlers + composition
+  hooks/{useApplications, useTemplates}.ts
+  sections/                      # Masthead / SourcesPane / StudioPane / ExportRail
+  sections/tabs/                 # Resume / Review / StrictReview / CoverLetter / Pipeline
+  resumeEngine.ts                # scoring + analysis + deterministic local fallback
+  pdfResume.ts                   # clean ATS PDF template
+docs/engineering/                # contributor notes (server, UI, git workflow, testing)
+job-search-workspace/            # local-only; gitignored except README
+```
+
+## Scripts
+
+```bash
+npm run dev        # start API + Vite middleware on :5174
+npm run build      # tsc + vite production build
+npm run preview    # serve the production build locally
+```
+
+## License
+
+[MIT](LICENSE) © Xinyi Lin
