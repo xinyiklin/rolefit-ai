@@ -4,6 +4,8 @@ A **local-first** resume tailoring webapp. Paste a job link, pull your base resu
 
 > Built for an entry-level SDE job hunt: tight workflow loop, blunt recruiter-style audit before applying, and a local pipeline tracker so you never lose track of a role.
 
+![RoleFit AI workspace](docs/screenshot.png)
+
 ## Highlights
 
 - **Multi-format resume I/O** — ingest `.docx`, `.pdf`, `.tex` (Jake's-style), or plain text; export back to each.
