@@ -2,7 +2,7 @@
 // Single-column, compact, ATS-friendly. Uses only packages that ship with
 // Tectonic / TeX Live by default.
 
-import { escapeTex, titleCase, linkify } from "../util.mjs";
+import { escapeTex, escapeTexUrl, titleCase, linkify } from "../util.mjs";
 
 const PREAMBLE = String.raw`\documentclass[letterpaper,11pt]{article}
 
@@ -79,7 +79,7 @@ function renderHeader(resume) {
   const contactPieces = (resume.contact ?? []).map((item) => {
     const link = linkify(item);
     if (link) {
-      return `\\href{${link.url}}{\\underline{${escapeTex(link.label)}}}`;
+      return `\\href{${escapeTexUrl(link.url)}}{\\underline{${escapeTex(link.label)}}}`;
     }
     return escapeTex(item);
   });

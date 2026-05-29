@@ -14,6 +14,7 @@ import {
   Upload
 } from "lucide-react";
 import { blockKindLabel, type ResumeBlock, type ResumeBlockKind, type SourceDocx } from "./shared";
+import type { PolishedResume } from "../resumeEngine";
 
 export type AiProviderValue =
   | "openai"
@@ -62,7 +63,7 @@ type SourcesPaneProps = {
   blockStats: Record<ResumeBlockKind, number>;
   resumeText: string;
   setResumeText: (v: string) => void;
-  setResult: (v: null) => void;
+  setResult: (v: PolishedResume | null) => void;
   resumeReady: boolean;
   onBaseResumeUpload: (event: ChangeEvent<HTMLInputElement>) => void;
   onSaveCurrentAsBase: () => void;
@@ -103,8 +104,6 @@ type SourcesPaneProps = {
   currentModelOptions: readonly ModelOption[];
   selectedProviderOption: ProviderOption | undefined;
   customModelPlaceholder: string;
-
-  workspaceArtifactCount: number;
 };
 
 export function SourcesPane(props: SourcesPaneProps) {

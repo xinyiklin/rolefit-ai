@@ -21,6 +21,34 @@ export function escapeTex(value) {
   return out;
 }
 
+// Escapes for the FIRST argument of \href{...}. Neutralizes the characters that
+// let a crafted URL break out of the brace group and inject arbitrary LaTeX
+// (e.g. "...}{}\input{/etc/passwd}%"). Unlike escapeTex we do NOT escape "_",
+// "/", ":" etc., which are legal, common URL characters and are safe inside the
+// \href target. Backslash must be replaced first so we don't double-escape the
+// replacements below.
+const LATEX_URL_ESCAPES = [
+  [/\\/g, "\\textbackslash{}"],
+  [/\{/g, "\\{"],
+  [/\}/g, "\\}"],
+  [/%/g, "\\%"],
+  [/#/g, "\\#"],
+  [/\$/g, "\\$"],
+  [/&/g, "\\&"],
+  [/~/g, "\\textasciitilde{}"],
+  [/\^/g, "\\textasciicircum{}"]
+];
+
+export function escapeTexUrl(value) {
+  // Drop ASCII control chars, space, and DEL — never valid in a contact URL and
+  // a vector for hiding injected payloads.
+  let out = String(value ?? "").replace(/[\x00-\x20\x7f]/g, "");
+  for (const [pattern, replacement] of LATEX_URL_ESCAPES) {
+    out = out.replace(pattern, replacement);
+  }
+  return out;
+}
+
 // Title-case for section headings ("EDUCATION" -> "Education")
 export function titleCase(value) {
   return String(value ?? "")
@@ -41,6 +69,12 @@ const LINK_HOSTS = ["github.com", "linkedin.com", "gitlab.com", "twitter.com", "
 export function linkify(contactItem) {
   const raw = String(contactItem ?? "").trim();
   if (!raw) return null;
+
+  // Defense in depth: a legitimate contact URL never contains whitespace,
+  // control chars, or LaTeX brace/backslash characters. Bail out so the item
+  // falls back to plain escaped text. The authoritative injection fix is the
+  // escapeTexUrl() applied at the \href{...} interpolation in each template.
+  if (/[\s\\{}]/.test(raw)) return null;
 
   if (/^https?:\/\//i.test(raw)) {
     return { url: raw, label: raw.replace(/^https?:\/\//i, "") };

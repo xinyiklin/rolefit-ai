@@ -1,5 +1,6 @@
 import { createServer } from "node:http";
 import { execFile } from "node:child_process";
+import { lookup as dnsLookup } from "node:dns/promises";
 import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { extname, join, resolve } from "node:path";
@@ -15,9 +16,7 @@ import {
 } from "./server/latex/index.mjs";
 import {
   callClaudeCli,
-  callCodexCli,
-  checkClaudeCliAvailability,
-  checkCodexCliAvailability
+  callCodexCli
 } from "./server/ai-cli/index.mjs";
 import {
   readApplications,
@@ -178,6 +177,21 @@ function applyTextToDocumentXml(documentXml, polishedText) {
   };
 }
 
+// Rejects archive entry names that are absolute or contain a `..` traversal
+// segment, so a malicious .docx can't escape the unpack directory (zip-slip).
+function assertSafeZipEntries(listing) {
+  const entries = listing.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  for (const entry of entries) {
+    const normalized = entry.replace(/\\/g, "/");
+    if (normalized.startsWith("/") || /^[A-Za-z]:/.test(normalized)) {
+      throw new Error("Archive contains an absolute path entry.");
+    }
+    if (normalized.split("/").some((segment) => segment === "..")) {
+      throw new Error("Archive contains a path traversal entry.");
+    }
+  }
+}
+
 async function withUnpackedDocx(docxBase64, callback) {
   const workspace = await mkdtemp(join(tmpdir(), "resume-polisher-docx-"));
   const sourcePath = join(workspace, "source.docx");
@@ -185,6 +199,8 @@ async function withUnpackedDocx(docxBase64, callback) {
 
   try {
     await writeFile(sourcePath, base64ToBuffer(docxBase64));
+    const { stdout: listing } = await execFileAsync("unzip", ["-Z1", sourcePath]);
+    assertSafeZipEntries(listing);
     await execFileAsync("unzip", ["-qq", sourcePath, "-d", unpackedPath]);
     return await callback({ workspace, unpackedPath });
   } finally {
@@ -299,9 +315,9 @@ function providerDefaultModel(provider) {
   return (
     {
       openai: process.env.OPENAI_MODEL ?? "gpt-5.5",
-      anthropic: process.env.ANTHROPIC_MODEL ?? "claude-sonnet-4-5-20250929",
-      gemini: process.env.GEMINI_MODEL ?? "gemini-2.5-flash",
-      openrouter: process.env.OPENROUTER_MODEL ?? "anthropic/claude-sonnet-4.5",
+      anthropic: process.env.ANTHROPIC_MODEL ?? "claude-sonnet-4-6",
+      gemini: process.env.GEMINI_MODEL ?? "gemini-3.5-flash",
+      openrouter: process.env.OPENROUTER_MODEL ?? "anthropic/claude-sonnet-4.6",
       groq: process.env.GROQ_MODEL ?? "llama-3.3-70b-versatile",
       together: process.env.TOGETHER_MODEL ?? "openai/gpt-oss-20b",
       mistral: process.env.MISTRAL_MODEL ?? "mistral-large-latest",
@@ -353,21 +369,103 @@ function isLocalHost(hostname) {
   return host === "localhost" || host === "127.0.0.1" || host === "::1" || host === "[::1]";
 }
 
+// Returns true for any IPv4 literal in a loopback/private/link-local/CGNAT/unspecified range.
+function isPrivateIPv4(ip) {
+  const octets = ip.split(".");
+  if (octets.length !== 4) return false;
+  const parts = octets.map((part) => Number(part));
+  if (parts.some((part) => !Number.isInteger(part) || part < 0 || part > 255)) return false;
+  const [a, b] = parts;
+  if (a === 0) return true; // 0.0.0.0/8
+  if (a === 10) return true; // 10.0.0.0/8
+  if (a === 127) return true; // loopback
+  if (a === 169 && b === 254) return true; // link-local 169.254.0.0/16 (cloud metadata)
+  if (a === 172 && b >= 16 && b <= 31) return true; // 172.16.0.0/12
+  if (a === 192 && b === 168) return true; // 192.168.0.0/16
+  if (a === 100 && b >= 64 && b <= 127) return true; // CGNAT 100.64.0.0/10
+  return false;
+}
+
+// Returns true for IPv6 loopback, ULA (fc00::/7), link-local (fe80::/10),
+// unspecified, or IPv4-mapped addresses that map to a private IPv4.
+function isPrivateIPv6(ip) {
+  const host = ip.toLowerCase().replace(/^\[|\]$/g, "");
+  if (host === "::1" || host === "::") return true;
+  const mapped = host.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
+  if (mapped) return isPrivateIPv4(mapped[1]);
+  const head = host.split(":")[0];
+  if (!head) return false;
+  const block = Number.parseInt(head, 16);
+  if (Number.isNaN(block)) return false;
+  if ((block & 0xfe00) === 0xfc00) return true; // fc00::/7 (ULA)
+  if ((block & 0xffc0) === 0xfe80) return true; // fe80::/10 (link-local)
+  return false;
+}
+
+function isPrivateIpLiteral(value) {
+  const host = String(value).replace(/^\[|\]$/g, "");
+  if (host.includes(":")) return isPrivateIPv6(host);
+  if (/^\d+\.\d+\.\d+\.\d+$/.test(host)) return isPrivateIPv4(host);
+  return false;
+}
+
 function isPrivateHost(hostname) {
   const host = hostname.toLowerCase();
   return (
     isLocalHost(host) ||
     host.endsWith(".local") ||
-    host.startsWith("10.") ||
-    host.startsWith("192.168.") ||
-    /^172\.(1[6-9]|2\d|3[0-1])\./.test(host)
+    isPrivateIpLiteral(host)
   );
+}
+
+// Resolves a hostname and rejects if it is a private literal or any resolved
+// address is private/link-local/loopback. Throws a tagged error otherwise.
+async function assertPublicHost(hostname) {
+  const host = String(hostname).toLowerCase();
+  if (isPrivateHost(host)) {
+    throw new BlockedHostError("Private or local hosts are not allowed.");
+  }
+  let resolved;
+  try {
+    resolved = await dnsLookup(host.replace(/^\[|\]$/g, ""), { all: true });
+  } catch {
+    throw new DnsError("Could not resolve the host for that URL.");
+  }
+  if (!resolved.length) {
+    throw new DnsError("Could not resolve the host for that URL.");
+  }
+  for (const { address } of resolved) {
+    if (isPrivateIpLiteral(address)) {
+      throw new BlockedHostError("That URL resolves to a private or local address.");
+    }
+  }
 }
 
 function isPublicHttpUrl(url) {
   if (!["http:", "https:"].includes(url.protocol)) return false;
 
   return !isPrivateHost(url.hostname);
+}
+
+class BlockedHostError extends Error {}
+class DnsError extends Error {}
+class FetchTimeoutError extends Error {}
+
+// Shared fetch wrapper that aborts after `timeoutMs` so a hung peer never
+// holds a request open forever. Surfaces a tagged FetchTimeoutError on abort.
+async function fetchWithTimeout(input, init = {}, timeoutMs = 120_000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(input, { ...init, signal: controller.signal });
+  } catch (error) {
+    if (controller.signal.aborted) {
+      throw new FetchTimeoutError("The request timed out.");
+    }
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 function chatCompletionsEndpoint(rawBaseUrl) {
@@ -509,7 +607,7 @@ ${resumeText}`;
 }
 
 async function callOpenAiResponses({ apiKey, model, systemPrompt, userPrompt }) {
-  const response = await fetch("https://api.openai.com/v1/responses", {
+  const response = await fetchWithTimeout("https://api.openai.com/v1/responses", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -540,7 +638,7 @@ async function callOpenAiResponses({ apiKey, model, systemPrompt, userPrompt }) 
 
 async function callOpenAiCompatibleChat({ apiKey, apiBaseUrl, model, systemPrompt, userPrompt }) {
   const endpoint = chatCompletionsEndpoint(apiBaseUrl);
-  const response = await fetch(endpoint, {
+  const response = await fetchWithTimeout(endpoint, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -565,7 +663,7 @@ async function callOpenAiCompatibleChat({ apiKey, apiBaseUrl, model, systemPromp
 }
 
 async function callAnthropicMessages({ apiKey, model, systemPrompt, userPrompt }) {
-  const response = await fetch("https://api.anthropic.com/v1/messages", {
+  const response = await fetchWithTimeout("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -590,7 +688,7 @@ async function callAnthropicMessages({ apiKey, model, systemPrompt, userPrompt }
 
 async function callGeminiGenerateContent({ apiKey, model, systemPrompt, userPrompt }) {
   const safeModel = encodeURIComponent(model.replace(/^models\//, ""));
-  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${safeModel}:generateContent`, {
+  const response = await fetchWithTimeout(`https://generativelanguage.googleapis.com/v1beta/models/${safeModel}:generateContent`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -854,7 +952,11 @@ async function handleExportResumeDocx(req, res) {
       const outputPath = join(workspace, "polished.docx");
 
       await writeFile(documentPath, applied.documentXml);
+      // Confine the re-zip to the unpack dir, then re-verify the resulting entry
+      // names so a crafted source archive can't smuggle traversal paths through.
       await execFileAsync("zip", ["-qr", outputPath, "."], { cwd: unpackedPath });
+      const { stdout: repackListing } = await execFileAsync("unzip", ["-Z1", outputPath]);
+      assertSafeZipEntries(repackListing);
 
       return {
         docxBase64: bufferToBase64(await readFile(outputPath)),
@@ -973,27 +1075,67 @@ async function handleSaveApplications(req, res) {
   }
 }
 
+// Fetches a job page, following redirects manually and re-validating the
+// host + resolved IP of every hop. Rejects private/blocked targets instead of
+// auto-following them, so a public URL can't bounce to an internal address.
+async function fetchPublicHtml(startUrl) {
+  let current = startUrl;
+  for (let hop = 0; hop < 5; hop += 1) {
+    if (!isPublicHttpUrl(current)) {
+      throw new BlockedHostError("Only public http or https URLs are allowed.");
+    }
+    await assertPublicHost(current.hostname);
+
+    const response = await fetchWithTimeout(
+      current,
+      {
+        headers: { "User-Agent": "Mozilla/5.0 ResumePolisher/0.1" },
+        redirect: "manual"
+      },
+      10_000
+    );
+
+    if (response.status >= 300 && response.status < 400) {
+      const location = response.headers.get("location");
+      if (!location) throw new BlockedHostError("The site redirected without a destination.");
+      current = new URL(location, current);
+      continue;
+    }
+
+    return response;
+  }
+  throw new BlockedHostError("The site redirected too many times.");
+}
+
 async function handleImportJob(req, res) {
   if (req.method !== "POST") {
     sendJson(res, 405, { error: "Use POST." });
     return;
   }
 
+  let jobUrl;
   try {
     const { url } = JSON.parse(await readBody(req));
-    const jobUrl = new URL(String(url ?? ""));
-    if (!isPublicHttpUrl(jobUrl)) {
-      sendJson(res, 400, { error: "Enter a public http or https job posting URL." });
+    jobUrl = new URL(String(url ?? ""));
+  } catch {
+    sendJson(res, 400, { error: "Enter a valid job posting URL." });
+    return;
+  }
+
+  if (!isPublicHttpUrl(jobUrl)) {
+    sendJson(res, 400, { error: "Enter a public http or https job posting URL." });
+    return;
+  }
+
+  try {
+    const response = await fetchPublicHtml(jobUrl);
+
+    if (!response.ok) {
+      sendJson(res, 400, {
+        error: `The job page returned HTTP ${response.status}. Paste the job description text instead.`
+      });
       return;
     }
-
-    const response = await fetch(jobUrl, {
-      headers: {
-        "User-Agent": "Mozilla/5.0 ResumePolisher/0.1"
-      }
-    });
-
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
     const html = await response.text();
     const text = html
@@ -1003,9 +1145,24 @@ async function handleImportJob(req, res) {
       .replace(/\s+/g, " ")
       .trim();
 
-    if (text.length < 200) throw new Error("Job page did not expose enough readable text.");
+    if (text.length < 200) {
+      sendJson(res, 400, { error: "Job page did not expose enough readable text. Paste it instead." });
+      return;
+    }
     sendJson(res, 200, { text: text.slice(0, 12_000) });
-  } catch {
+  } catch (error) {
+    if (error instanceof BlockedHostError) {
+      sendJson(res, 400, { error: `${error.message} Paste the job description text instead.` });
+      return;
+    }
+    if (error instanceof DnsError) {
+      sendJson(res, 400, { error: "Could not resolve that URL's host. Check the link or paste the text instead." });
+      return;
+    }
+    if (error instanceof FetchTimeoutError) {
+      sendJson(res, 504, { error: "Fetching the job page timed out. Paste the job description text instead." });
+      return;
+    }
     sendJson(res, 400, { error: "This site blocked direct import. Paste the job description text instead." });
   }
 }

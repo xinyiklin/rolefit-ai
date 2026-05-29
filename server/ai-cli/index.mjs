@@ -98,38 +98,3 @@ function extractCodexFinalOutput(stdout) {
   }
   return stdout.trim();
 }
-
-// ----- Availability check used by /api/templates style probes -----
-
-let claudeCheck = null;
-let codexCheck = null;
-
-export function checkClaudeCliAvailability() {
-  if (claudeCheck) return claudeCheck;
-  claudeCheck = new Promise((resolve) => {
-    const child = spawn("claude", ["--version"], { stdio: ["ignore", "pipe", "ignore"] });
-    let out = "";
-    child.stdout?.on("data", (chunk) => { out += chunk.toString(); });
-    child.on("error", () => resolve({ available: false }));
-    child.on("close", (code) => {
-      if (code === 0) resolve({ available: true, version: out.trim().split("\n")[0] ?? "" });
-      else resolve({ available: false });
-    });
-  });
-  return claudeCheck;
-}
-
-export function checkCodexCliAvailability() {
-  if (codexCheck) return codexCheck;
-  codexCheck = new Promise((resolve) => {
-    const child = spawn("codex", ["--version"], { stdio: ["ignore", "pipe", "ignore"] });
-    let out = "";
-    child.stdout?.on("data", (chunk) => { out += chunk.toString(); });
-    child.on("error", () => resolve({ available: false }));
-    child.on("close", (code) => {
-      if (code === 0) resolve({ available: true, version: out.trim().split("\n")[0] ?? "" });
-      else resolve({ available: false });
-    });
-  });
-  return codexCheck;
-}

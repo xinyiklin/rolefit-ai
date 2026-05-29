@@ -72,7 +72,3 @@ function sanitizeApplication(raw) {
     coverLetterText: typeof raw.coverLetterText === "string" ? raw.coverLetterText.slice(0, MAX_FIELD) : ""
   };
 }
-
-export { APPLICATION_SOURCES };
-
-export { APPLICATION_STATUSES };

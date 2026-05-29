@@ -6,7 +6,7 @@
 //
 // Original (XeLaTeX, Open Sans): https://github.com/deedy/Deedy-Resume
 
-import { escapeTex, titleCase, linkify } from "../util.mjs";
+import { escapeTex, escapeTexUrl, titleCase, linkify } from "../util.mjs";
 
 const PREAMBLE = String.raw`\documentclass[10pt,letterpaper]{article}
 
@@ -51,7 +51,7 @@ function renderHeader(resume) {
   const name = escapeTex(resume.name);
   const pieces = (resume.contact ?? []).map((item) => {
     const link = linkify(item);
-    if (link) return `\\href{${link.url}}{${escapeTex(link.label)}}`;
+    if (link) return `\\href{${escapeTexUrl(link.url)}}{${escapeTex(link.label)}}`;
     return escapeTex(item);
   });
   const contactRow = pieces.join("  $\\cdot$  ");
