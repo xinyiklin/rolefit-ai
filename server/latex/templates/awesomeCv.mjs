@@ -4,7 +4,7 @@
 //
 // Original (XeLaTeX, custom fonts): https://github.com/posquit0/Awesome-CV
 
-import { escapeTex, titleCase, linkify } from "../util.mjs";
+import { escapeTex, escapeTexUrl, titleCase, linkify } from "../util.mjs";
 
 const PREAMBLE = String.raw`\documentclass[10pt,a4paper]{article}
 
@@ -54,7 +54,7 @@ function renderHeader(resume) {
   const name = escapeTex(resume.name);
   const pieces = (resume.contact ?? []).map((item) => {
     const link = linkify(item);
-    if (link) return `\\href{${link.url}}{${escapeTex(link.label)}}`;
+    if (link) return `\\href{${escapeTexUrl(link.url)}}{${escapeTex(link.label)}}`;
     return escapeTex(item);
   });
   const contactRow = pieces.join("  $\\cdot$  ");

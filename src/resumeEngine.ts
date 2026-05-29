@@ -485,7 +485,7 @@ function hasTechnicalSection(lines: string[]) {
   return lines.some((line) => TECHNICAL_SECTION_NAMES.has(sectionName(line)));
 }
 
-function localEngineLabel(polishedText: string, missingKeywords: string[], trimmedGroups: number) {
+function localEngineLabel(polishedText: string, trimmedGroups: number) {
   return unique([
     "Local engine ranked bullets by role keyword evidence, action verbs, metrics, and concision.",
     polishedText.includes("[add metric") ? "Metric prompts mark stronger proof to add before submitting." : "Existing measurable proof was preserved.",
@@ -541,7 +541,7 @@ export function polishResume(resumeText: string, jobText: string): PolishedResum
     topKeywords: jobKeywords,
     matchedKeywords,
     missingKeywords,
-    strengths: localEngineLabel(polishedText, missingKeywords, trimmedGroups),
+    strengths: localEngineLabel(polishedText, trimmedGroups),
     fixes: localEngineFixes(missingKeywords, trimmedGroups),
     trimmedBulletGroups: trimmedGroups
   };

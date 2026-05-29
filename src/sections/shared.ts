@@ -1,6 +1,5 @@
 // Types + helpers shared across the section components.
 
-import type { ChangeEvent } from "react";
 import type { PolishedResume, ResumeAnalysis } from "../resumeEngine";
 
 export type OutputTab = "resume" | "review" | "cover" | "strict" | "pipeline";
@@ -26,8 +25,6 @@ export type ResumeBlock = {
 };
 
 export type ScoreSource = PolishedResume | ResumeAnalysis | null;
-
-export type ChangeHandler = (event: ChangeEvent<HTMLInputElement>) => void;
 
 export function scoreLabel(score: number) {
   if (score >= 85) return "Strong";

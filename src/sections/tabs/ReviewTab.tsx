@@ -83,16 +83,16 @@ export function ReviewTab({
             <div>
               <h3>Added or rewritten</h3>
               <ul className="diff-list diff-list--added">
-                {(resumeDiff.added.length ? resumeDiff.added : ["No major line-level additions detected."]).map((item) => (
-                  <li key={item}>{item}</li>
+                {(resumeDiff.added.length ? resumeDiff.added : ["No major line-level additions detected."]).map((item, index) => (
+                  <li key={`${index}-${item}`}>{item}</li>
                 ))}
               </ul>
             </div>
             <div>
               <h3>Removed or condensed</h3>
               <ul className="diff-list diff-list--removed">
-                {(resumeDiff.removed.length ? resumeDiff.removed : ["No major line-level removals detected."]).map((item) => (
-                  <li key={item}>{item}</li>
+                {(resumeDiff.removed.length ? resumeDiff.removed : ["No major line-level removals detected."]).map((item, index) => (
+                  <li key={`${index}-${item}`}>{item}</li>
                 ))}
               </ul>
             </div>
@@ -101,8 +101,8 @@ export function ReviewTab({
             <div className="metric-prompts">
               <h3>Metric prompts to resolve</h3>
               <ul>
-                {resumeDiff.metricPrompts.map((item) => (
-                  <li key={item}>{item}</li>
+                {resumeDiff.metricPrompts.map((item, index) => (
+                  <li key={`${index}-${item}`}>{item}</li>
                 ))}
               </ul>
             </div>
@@ -116,8 +116,8 @@ export function ReviewTab({
           <ul>
             {(result?.strengths ?? [
               "Projects, practical tools, measurable proof, and concise bullets carry entry-level SDE applications."
-            ]).map((item) => (
-              <li key={item}>{item}</li>
+            ]).map((item, index) => (
+              <li key={`${index}-${item}`}>{item}</li>
             ))}
           </ul>
         </div>
@@ -126,8 +126,8 @@ export function ReviewTab({
           <ul>
             {(result?.fixes ?? [
               "Paste a job description to see missing keywords, then add truthful project evidence."
-            ]).map((item) => (
-              <li key={item}>{item}</li>
+            ]).map((item, index) => (
+              <li key={`${index}-${item}`}>{item}</li>
             ))}
           </ul>
         </div>

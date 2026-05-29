@@ -159,7 +159,7 @@ function buildContentPages(polishedText: string, sourceResumeText?: string) {
   const polished = extractHeader(polishedText);
   const source = sourceResumeText ? extractHeader(sourceResumeText) : null;
   const header = polished.name === "Polished Resume" && source ? source : polished;
-  const bodyLines = polished.name === "Polished Resume" ? polished.bodyLines : polished.bodyLines;
+  const bodyLines = polished.bodyLines;
 
   const pages: string[][] = [[]];
   let y = pageHeight - marginTop;

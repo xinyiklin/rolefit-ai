@@ -41,16 +41,16 @@ import type {
 // ============ Constants ============
 
 const providerOptions: readonly ProviderOption[] = [
-  { value: "claude-cli", label: "Claude Max · CLI (recommended)", baseUrl: "", model: "" },
+  { value: "claude-cli", label: "Claude Max · CLI (recommended)", baseUrl: "", model: "opus" },
   { value: "codex-cli", label: "Codex Plus · CLI", baseUrl: "", model: "" },
   { value: "openai", label: "OpenAI", baseUrl: "", model: "" },
-  { value: "anthropic", label: "Claude", baseUrl: "", model: "claude-sonnet-4-5-20250929" },
-  { value: "gemini", label: "Gemini", baseUrl: "", model: "gemini-2.5-flash" },
+  { value: "anthropic", label: "Claude", baseUrl: "", model: "claude-sonnet-4-6" },
+  { value: "gemini", label: "Gemini", baseUrl: "", model: "gemini-3.5-flash" },
   {
     value: "openrouter",
     label: "OpenRouter",
     baseUrl: "https://openrouter.ai/api/v1",
-    model: "anthropic/claude-sonnet-4.5"
+    model: "anthropic/claude-sonnet-4.6"
   },
   {
     value: "groq",
@@ -90,21 +90,21 @@ const modelOptionsByProvider: Record<AiProviderValue, readonly ModelOption[]> = 
     customModelOption
   ],
   anthropic: [
-    { value: "claude-sonnet-4-5-20250929", label: "Claude Sonnet 4.5" },
+    { value: "claude-sonnet-4-6", label: "Claude Sonnet 4.6" },
     { value: "claude-haiku-4-5-20251001", label: "Claude Haiku 4.5" },
-    { value: "claude-opus-4-1-20250805", label: "Claude Opus 4.1" },
+    { value: "claude-opus-4-8", label: "Claude Opus 4.8" },
     customModelOption
   ],
   gemini: [
-    { value: "gemini-2.5-flash", label: "Gemini 2.5 Flash" },
+    { value: "gemini-3.5-flash", label: "Gemini 3.5 Flash" },
     { value: "gemini-2.5-pro", label: "Gemini 2.5 Pro" },
-    { value: "gemini-2.5-flash-lite", label: "Gemini 2.5 Flash-Lite" },
+    { value: "gemini-3.1-flash-lite", label: "Gemini 3.1 Flash-Lite" },
     customModelOption
   ],
   openrouter: [
-    { value: "anthropic/claude-sonnet-4.5", label: "Claude Sonnet 4.5" },
-    { value: "openai/gpt-5.4", label: "GPT-5.4" },
-    { value: "google/gemini-2.5-pro", label: "Gemini 2.5 Pro" },
+    { value: "anthropic/claude-sonnet-4.6", label: "Claude Sonnet 4.6" },
+    { value: "openai/gpt-5.5", label: "GPT-5.5" },
+    { value: "google/gemini-3.5-flash", label: "Gemini 3.5 Flash" },
     customModelOption
   ],
   groq: [
@@ -253,6 +253,19 @@ type JobWorkspace = {
   files: string[];
 };
 
+// ============ Hooks (local) ============
+
+// Defers a fast-changing value so expensive derivations don't recompute on
+// every keystroke. Used for the live pre-polish analysis only.
+function useDebouncedValue<T>(value: T, delayMs = 280): T {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const handle = setTimeout(() => setDebounced(value), delayMs);
+    return () => clearTimeout(handle);
+  }, [value, delayMs]);
+  return debounced;
+}
+
 // ============ App ============
 
 function App() {
@@ -280,7 +293,7 @@ function App() {
   const [aiProvider, setAiProvider] = useState<AiProviderValue>("claude-cli");
   const [apiKey, setApiKey] = useState("");
   const [apiBaseUrl, setApiBaseUrl] = useState("");
-  const [selectedModel, setSelectedModel] = useState("");
+  const [selectedModel, setSelectedModel] = useState("opus");
   const [customModel, setCustomModel] = useState("");
   const [includeCoverLetter, setIncludeCoverLetter] = useState(false);
   const [strictReview, setStrictReview] = useState(true);
@@ -334,20 +347,26 @@ function App() {
     return [jobDescription, jobUrl.replace(/[-_/?.=&]+/g, " ")].filter(Boolean).join("\n");
   }, [jobDescription, jobUrl]);
 
+  // Debounce the live inputs so per-keystroke synchronous scoring doesn't jank
+  // typing on large resumes. The polished `result` stays immediate.
+  const debouncedResumeText = useDebouncedValue(resumeText);
+  const debouncedCombinedJobText = useDebouncedValue(combinedJobText);
+
   const currentAnalysis = useMemo(() => {
-    return resumeText.trim() && combinedJobText.trim()
-      ? analyzeResumeText(resumeText, combinedJobText)
+    return debouncedResumeText.trim() && debouncedCombinedJobText.trim()
+      ? analyzeResumeText(debouncedResumeText, debouncedCombinedJobText)
       : null;
-  }, [combinedJobText, resumeText]);
+  }, [debouncedCombinedJobText, debouncedResumeText]);
 
   const resumeBulletCount = useMemo(() => {
     return resumeText.split("\n").filter((line) => /^\s*[-*•]\s+/.test(line)).length;
   }, [resumeText]);
 
   const matchBreakdown = useMemo(() => {
-    const sourceText = result?.polishedText ?? resumeText;
-    return combinedJobText.trim() ? analyzeMatchBreakdown(sourceText, combinedJobText) : [];
-  }, [combinedJobText, result, resumeText]);
+    const sourceText = result?.polishedText ?? debouncedResumeText;
+    const jobText = result ? combinedJobText : debouncedCombinedJobText;
+    return jobText.trim() ? analyzeMatchBreakdown(sourceText, jobText) : [];
+  }, [combinedJobText, debouncedCombinedJobText, debouncedResumeText, result]);
 
   const resumeDiff = useMemo(
     () => (result ? buildResumeDiff(resumeText, result.polishedText) : null),
@@ -378,7 +397,6 @@ function App() {
   const resumeReady = resumeText.trim().length > 80;
   const jobReady = jobDescription.trim().length > 40 || jobUrl.trim().length > 8;
   const outputReady = Boolean(result);
-  const workspaceArtifactCount = workspaceFiles.filter((file) => file !== "README.md").length;
   const selectedTemplate = templates.find((t) => t.id === selectedTemplateId) ?? null;
   const outputTabs: OutputTabDescriptor[] = [
     { id: "resume", label: "Resume" },
@@ -611,11 +629,10 @@ function App() {
   }
 
   async function handlePolish() {
-    const localCombinedJobText = [jobDescription, jobUrl.replace(/[-_/?.=&]+/g, " ")].filter(Boolean).join("\n");
     const model = selectedModel === "custom" ? customModel.trim() : selectedModel;
-    const fallbackBase = polishResume(resumeText, localCombinedJobText);
+    const fallbackBase = polishResume(resumeText, combinedJobText);
     const fallback = includeCoverLetter
-      ? { ...fallbackBase, coverLetterText: draftCoverLetter(resumeText, localCombinedJobText, fallbackBase.polishedText) }
+      ? { ...fallbackBase, coverLetterText: draftCoverLetter(resumeText, combinedJobText, fallbackBase.polishedText) }
       : fallbackBase;
 
     setIsPolishing(true);
@@ -650,13 +667,13 @@ function App() {
       if (!data.polishedText) throw new Error("AI response did not include polished resume text.");
 
       const polishedText = normalizePolishedResume(data.polishedText, resumeText);
-      const analysis = analyzeResumeText(polishedText, localCombinedJobText);
+      const analysis = analyzeResumeText(polishedText, combinedJobText);
       setResult({
         ...analysis,
         polishedText,
         source: "ai",
         coverLetterText: includeCoverLetter
-          ? data.coverLetterText || draftCoverLetter(resumeText, localCombinedJobText, polishedText)
+          ? data.coverLetterText || draftCoverLetter(resumeText, combinedJobText, polishedText)
           : undefined,
         strengths: data.strengths?.length ? data.strengths : fallback.strengths,
         fixes: data.fixes?.length ? data.fixes : fallback.fixes,
@@ -823,18 +840,37 @@ function App() {
       const tex = await renderTex(result.polishedText, selectedTemplateId);
       const templateLabel = selectedTemplate?.name ?? "Resume";
       const snipName = `Polished resume — ${templateLabel}`;
-      const escapeHtml = (value: string) =>
-        value
-          .replace(/&/g, "&amp;")
-          .replace(/</g, "&lt;")
-          .replace(/>/g, "&gt;")
-          .replace(/"/g, "&quot;");
 
-      const html = `<!doctype html><html><head><meta charset="utf-8"><title>Opening in Overleaf…</title></head><body style="font-family:system-ui;color:#555;padding:24px">Sending polished resume to Overleaf…<form id="overleaf-form" action="https://www.overleaf.com/docs" method="POST" enctype="application/x-www-form-urlencoded"><textarea name="snip">${escapeHtml(tex)}</textarea><input type="hidden" name="snip_name" value="${escapeHtml(snipName)}"><input type="hidden" name="engine" value="pdflatex"></form><script>document.getElementById('overleaf-form').submit();</script></body></html>`;
+      // Build the auto-submitting form via DOM APIs so correctness never depends
+      // on a hand-rolled HTML escaper. Values are assigned, not interpolated.
+      const doc = overleafWindow.document;
+      doc.title = "Opening in Overleaf…";
+      doc.body.style.cssText = "font-family:system-ui;color:#555;padding:24px";
+      doc.body.textContent = "Sending polished resume to Overleaf…";
 
-      overleafWindow.document.open();
-      overleafWindow.document.write(html);
-      overleafWindow.document.close();
+      const form = doc.createElement("form");
+      form.action = "https://www.overleaf.com/docs";
+      form.method = "POST";
+      form.enctype = "application/x-www-form-urlencoded";
+
+      const snip = doc.createElement("textarea");
+      snip.name = "snip";
+      snip.value = tex;
+
+      const snipNameInput = doc.createElement("input");
+      snipNameInput.type = "hidden";
+      snipNameInput.name = "snip_name";
+      snipNameInput.value = snipName;
+
+      const engineInput = doc.createElement("input");
+      engineInput.type = "hidden";
+      engineInput.name = "engine";
+      engineInput.value = "pdflatex";
+
+      form.append(snip, snipNameInput, engineInput);
+      doc.body.append(form);
+      form.submit();
+
       setTexStatus(`Opened ${templateLabel} in Overleaf. Hit Compile in the new tab to generate the PDF.`);
     } catch (error) {
       overleafWindow.close();
@@ -1030,7 +1066,6 @@ function App() {
           currentModelOptions={currentModelOptions}
           selectedProviderOption={selectedProviderOption}
           customModelPlaceholder={customModelPlaceholder}
-          workspaceArtifactCount={workspaceArtifactCount}
         />
 
         <StudioPane
