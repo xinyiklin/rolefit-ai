@@ -12,17 +12,17 @@ acting. This file adds Claude-specific behavior; when it conflicts with
   intentional full-file replacements after first reading the existing
   file.
 - Run commands via `Bash` from the project root. The dev server uses
-  port `5174` by default. If `5174` is already in use, the app is
-  almost certainly already running — connect to
-  `http://localhost:5174` instead of launching another `npm run dev`,
-  and do not switch ports to sidestep the conflict. (Sibling project
-  careflow uses port `5173`; do not confuse the two.)
+  port `5181` by default (reserved range `5181-5183`). If `5181` is
+  already in use, the app is almost certainly already running — connect
+  to `http://localhost:5181` instead of launching another `npm run dev`,
+  and do not switch ports to sidestep the conflict. (Sibling
+  reservations: careflow `5173-5180`, portfolio `5184-5185`.)
 
 ## Visual QA
 
 For UI changes, use `mcp__Claude_in_Chrome` when available:
-`navigate` to `http://localhost:5174` after `npm run dev` (or directly
-if the server is already running on `5174`), then `get_page_text`,
+`navigate` to `http://localhost:5181` after `npm run dev` (or directly
+if the server is already running on `5181`), then `get_page_text`,
 `read_page`, or `computer` (screenshot) to verify the change. Note the
 gap in the final response if Chrome tooling is unavailable.
 

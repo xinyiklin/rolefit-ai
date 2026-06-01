@@ -1,0 +1,45 @@
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+}
+
+body {
+  min-height: 100vh;
+  background:
+    radial-gradient(900px 540px at 92% -8%, rgba(31, 93, 74, 0.05), transparent 60%),
+    radial-gradient(800px 420px at -8% 110%, rgba(138, 90, 8, 0.04), transparent 55%),
+    linear-gradient(180deg, var(--paper) 0%, var(--paper-deep) 100%);
+  background-attachment: fixed;
+  color: var(--ink);
+}
+
+button, input, select, textarea {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+
+h1, h2, h3, p { margin: 0; }
+
+ul {
+  display: grid;
+  gap: var(--s2);
+  margin: 0;
+  padding-left: var(--s5);
+  color: var(--ink-muted);
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+
+::placeholder { color: var(--ink-faint); }
+::selection { background: var(--accent-veil); color: var(--accent-deep); }
+

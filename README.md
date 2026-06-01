@@ -30,7 +30,7 @@ npm install
 npm run dev
 ```
 
-Visit `http://localhost:5174`.
+Visit `http://localhost:5181`.
 
 ## AI setup
 
@@ -101,7 +101,7 @@ job-search-workspace/            # local-only; gitignored except README
 ## Scripts
 
 ```bash
-npm run dev        # start API + Vite middleware on :5174
+npm run dev        # start API + Vite middleware on :5181
 npm run build      # tsc + vite production build
 npm run preview    # serve the production build locally
 ```

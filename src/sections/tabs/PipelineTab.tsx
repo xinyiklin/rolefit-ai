@@ -1,4 +1,5 @@
-import { CheckCircle2, ChevronRight, ClipboardList, RefreshCw, Trash2 } from "lucide-react";
+import { AlertCircle, Ban, CheckCircle2, ChevronRight, ClipboardList, Inbox, RefreshCw, Trash2 } from "lucide-react";
+import type { ComponentType } from "react";
 import { PanelHeading } from "../../ui";
 import {
   APPLICATION_SOURCES,
@@ -18,9 +19,24 @@ const STATUS_LABEL: Record<ApplicationStatus, string> = {
   withdrawn: "Withdrawn"
 };
 
+// Map an AI verdict to a tone slug + icon so it can render as a semantic pill
+// (same vocabulary as the status pills) instead of a one-off banner.
+const VERDICT_META: Record<string, { slug: string; Icon: ComponentType<{ size?: number; "aria-hidden"?: boolean }> }> = {
+  "STRONG FIT": { slug: "strong-fit", Icon: CheckCircle2 },
+  "REASONABLE FIT": { slug: "reasonable-fit", Icon: CheckCircle2 },
+  STRETCH: { slug: "stretch", Icon: AlertCircle },
+  "DON'T APPLY": { slug: "dont-apply", Icon: Ban }
+};
+
+function verdictMeta(verdict: string) {
+  return VERDICT_META[verdict.toUpperCase()] ?? { slug: "neutral", Icon: CheckCircle2 };
+}
+
 type PipelineTabProps = {
   applications: Application[];
   applicationsPath: string;
+  applicationsError: string;
+  isApplicationsLoading: boolean;
   pipelineFilter: "all" | ApplicationStatus;
   setPipelineFilter: (v: "all" | ApplicationStatus) => void;
   expandedApplicationId: string | null;
@@ -35,6 +51,8 @@ type PipelineTabProps = {
 export function PipelineTab({
   applications,
   applicationsPath,
+  applicationsError,
+  isApplicationsLoading,
   pipelineFilter,
   setPipelineFilter,
   expandedApplicationId,
@@ -69,6 +87,13 @@ export function PipelineTab({
             : undefined
         }
       />
+      {isApplicationsLoading ? <p className="pipeline-note">Loading saved roles...</p> : null}
+      {applicationsError ? (
+        <div className="pipeline-alert" role="status">
+          <AlertCircle size={14} aria-hidden="true" />
+          <span>Pipeline change was not saved: {applicationsError}</span>
+        </div>
+      ) : null}
       <div className="pipeline-filters" role="tablist" aria-label="Pipeline status filter">
         <button
           type="button"
@@ -83,7 +108,6 @@ export function PipelineTab({
             type="button"
             className={`pipeline-filter pipeline-filter--${status} ${pipelineFilter === status ? "is-active" : ""}`}
             onClick={() => setPipelineFilter(status)}
-            disabled={!counts[status]}
           >
             {STATUS_LABEL[status]} <em>{counts[status]}</em>
           </button>
@@ -109,9 +133,25 @@ export function PipelineTab({
                   <div className="pipeline-row__main">
                     <div className="pipeline-row__head">
                       <strong>{app.title}</strong>
-                      {typeof app.fitScore === "number" ? (
-                        <span className="pipeline-row__fit">Fit {app.fitScore}</span>
-                      ) : null}
+                      <span className="pipeline-row__signals">
+                        {app.review?.verdict
+                          ? (() => {
+                              const { slug, Icon } = verdictMeta(app.review.verdict);
+                              return (
+                                <span
+                                  className={`verdict-pill verdict-pill--${slug}`}
+                                  title={app.review?.verdictReason || undefined}
+                                >
+                                  <Icon size={11} aria-hidden={true} />
+                                  {app.review.verdict}
+                                </span>
+                              );
+                            })()
+                          : null}
+                        {typeof app.fitScore === "number" ? (
+                          <span className="pipeline-row__fit">Fit {app.fitScore}</span>
+                        ) : null}
+                      </span>
                     </div>
                     <div className="pipeline-row__sub">
                       {app.company ? <span>{app.company}</span> : null}
@@ -214,12 +254,76 @@ export function PipelineTab({
                       <span>Tracked {formatShortDate(app.createdAt)}</span>
                       {app.appliedAt ? <span>Applied {formatShortDate(app.appliedAt)}</span> : null}
                       <span>Last activity {formatShortDate(app.updatedAt)}</span>
+                      {app.resumeUsed ? (
+                        <span className="pipeline-tag">
+                          Sent {app.resumeUsed === "base" ? "original" : "tailored"} resume
+                        </span>
+                      ) : null}
                       {app.templateId ? <span>Template · {app.templateId}</span> : null}
                     </div>
 
+                    {app.review ? (
+                      <section className="pipeline-review" aria-label="Recruiter review">
+                        <p className="pipeline-review__head">
+                          {(() => {
+                            const { slug, Icon } = verdictMeta(app.review.verdict);
+                            return (
+                              <span className={`verdict-pill verdict-pill--${slug}`}>
+                                <Icon size={12} aria-hidden={true} />
+                                {app.review.verdict || "Reviewed"}
+                              </span>
+                            );
+                          })()}
+                          {app.review.verdictReason ? (
+                            <span className="pipeline-review__reason">{app.review.verdictReason}</span>
+                          ) : null}
+                        </p>
+                        {app.review.riskFlags.length ? (
+                          <details className="pipeline-snapshot" open>
+                            <summary>Interview risks ({app.review.riskFlags.length})</summary>
+                            <ul className="pipeline-review__list">
+                              {app.review.riskFlags.map((r, i) => (
+                                <li className="pipeline-review__item" key={i}>
+                                  <span className="pipeline-review__item-main">{r.risk}</span>
+                                  {r.suggestion ? (
+                                    <span className="pipeline-review__item-sub">{r.suggestion}</span>
+                                  ) : null}
+                                </li>
+                              ))}
+                            </ul>
+                          </details>
+                        ) : null}
+                        {app.review.gaps.length ? (
+                          <details className="pipeline-snapshot">
+                            <summary>Gaps ({app.review.gaps.length})</summary>
+                            <ul className="pipeline-review__list">
+                              {app.review.gaps.map((g, i) => (
+                                <li className="pipeline-review__gap" key={i}>
+                                  <span className={`gap-sev gap-sev--${(g.severity || "low").toLowerCase()}`}>
+                                    {g.severity || "LOW"}
+                                  </span>
+                                  <span>{g.gap}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          </details>
+                        ) : null}
+                        {app.review.recommendation.coverLetterAngle ? (
+                          <p className="pipeline-review__angle">
+                            <span className="pipeline-review__angle-label">Cover-letter angle</span>
+                            {app.review.recommendation.coverLetterAngle}
+                          </p>
+                        ) : null}
+                      </section>
+                    ) : null}
+
                     {app.polishedText ? (
                       <details className="pipeline-snapshot">
-                        <summary>Resume sent ({app.polishedText.split("\n").length} lines)</summary>
+                        <summary>
+                          Resume sent
+                          {app.resumeUsed ? ` · ${app.resumeUsed === "base" ? "original" : "tailored"}` : ""} (
+                          {app.polishedText.split("\n").length} lines)
+                        </summary>
                         <textarea className="resume-output" readOnly value={app.polishedText} />
                       </details>
                     ) : null}
@@ -233,7 +337,7 @@ export function PipelineTab({
                     <div className="pipeline-detail__actions">
                       <button type="button" className="secondary-button is-compact" onClick={() => onLoad(app)}>
                         <RefreshCw size={12} aria-hidden="true" />
-                        Reload into Polish
+                        Load into Polish
                       </button>
                       {app.status !== "applied" ? (
                         <button
@@ -261,11 +365,25 @@ export function PipelineTab({
           })}
         </div>
       ) : (
-        <p className="muted-line">
-          {applications.length
-            ? `No roles with status "${STATUS_LABEL[pipelineFilter as ApplicationStatus]}". Switch filter or Track a role first.`
-            : "No roles tracked yet. Polish a role, then click Track in the export rail."}
-        </p>
+        <div className="pipeline-empty">
+          <Inbox size={24} aria-hidden="true" />
+          {applications.length ? (
+            <>
+              <p className="pipeline-empty__title">
+                No {STATUS_LABEL[pipelineFilter as ApplicationStatus].toLowerCase()} roles
+              </p>
+              <p className="pipeline-empty__hint">Switch the filter above, or track another role.</p>
+            </>
+          ) : (
+            <>
+              <p className="pipeline-empty__title">Your pipeline is empty</p>
+              <p className="pipeline-empty__hint">
+                Polish a resume against a job, then hit Track to save the role, its fit score, and the recruiter
+                review here.
+              </p>
+            </>
+          )}
+        </div>
       )}
     </section>
   );

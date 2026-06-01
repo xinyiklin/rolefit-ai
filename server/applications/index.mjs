@@ -42,6 +42,34 @@ export async function writeApplications(workspaceDir, applications) {
 
 const APPLICATION_SOURCES = ["LinkedIn", "Company site", "Referral", "Job board", "Recruiter", "Other"];
 
+function sanitizeReview(raw) {
+  if (!raw || typeof raw !== "object") return undefined;
+  const str = (v, n) => (typeof v === "string" ? v.slice(0, n) : "");
+  const list = (v) => (Array.isArray(v) ? v : []);
+  const rec = raw.recommendation && typeof raw.recommendation === "object" ? raw.recommendation : {};
+  const review = {
+    verdict: str(raw.verdict, 40),
+    verdictReason: str(raw.verdictReason, 1_000),
+    riskFlags: list(raw.riskFlags)
+      .slice(0, 12)
+      .map((r) => ({ risk: str(r?.risk, 400), suggestion: str(r?.suggestion, 400) }))
+      .filter((r) => r.risk),
+    gaps: list(raw.gaps)
+      .slice(0, 12)
+      .map((g) => ({ gap: str(g?.gap, 400), severity: str(g?.severity, 12) }))
+      .filter((g) => g.gap),
+    recommendation: {
+      applyAsIs: Boolean(rec.applyAsIs),
+      reason: str(rec.reason, 1_000),
+      coverLetterAngle: str(rec.coverLetterAngle, 1_000),
+      topEdits: list(rec.topEdits).slice(0, 8).map((e) => str(e, 300)).filter(Boolean)
+    }
+  };
+  // Drop an empty snapshot entirely so it doesn't clutter storage.
+  if (!review.verdict && !review.riskFlags.length && !review.gaps.length) return undefined;
+  return review;
+}
+
 function sanitizeApplication(raw) {
   if (!raw || typeof raw !== "object") return null;
   const id = typeof raw.id === "string" ? raw.id.slice(0, 80) : "";
@@ -69,6 +97,8 @@ function sanitizeApplication(raw) {
     fitScore: typeof raw.fitScore === "number" && Number.isFinite(raw.fitScore) ? Math.round(raw.fitScore) : null,
     templateId: typeof raw.templateId === "string" ? raw.templateId.slice(0, 80) : "",
     polishedText: typeof raw.polishedText === "string" ? raw.polishedText.slice(0, MAX_FIELD) : "",
-    coverLetterText: typeof raw.coverLetterText === "string" ? raw.coverLetterText.slice(0, MAX_FIELD) : ""
+    coverLetterText: typeof raw.coverLetterText === "string" ? raw.coverLetterText.slice(0, MAX_FIELD) : "",
+    review: sanitizeReview(raw.review),
+    resumeUsed: raw.resumeUsed === "base" || raw.resumeUsed === "tailored" ? raw.resumeUsed : undefined
   };
 }

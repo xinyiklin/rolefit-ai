@@ -7,11 +7,11 @@ browser.
 
 ## Port
 
-The canonical dev/preview port is `5174` (overridable via `PORT`). If
-`5174` is already bound, the app is almost certainly already running —
-reuse the existing instance instead of starting a second process or
-switching ports. Sibling project careflow uses port `5173`; do not mix
-them up.
+The canonical dev/preview port is `5181` (overridable via `PORT`;
+reserved range `5181-5183`). If `5181` is already bound, the app is
+almost certainly already running — reuse the existing instance instead
+of starting a second process or switching ports. Sibling reservations:
+careflow `5173-5180`, portfolio `5184-5185`; do not mix them up.
 
 ## Server Boundaries
 

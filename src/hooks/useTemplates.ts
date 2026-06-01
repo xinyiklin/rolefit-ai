@@ -58,14 +58,15 @@ export function useTemplates() {
   }, []);
 
   const renderTex = useCallback(
-    async (resumeText: string, templateId?: string): Promise<string> => {
+    async (resumeText: string, templateId?: string, options?: { rawTex?: boolean }): Promise<string> => {
       const response = await fetch("/api/render-resume-latex", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           resumeText,
           templateId: templateId ?? selectedTemplateId,
-          wantsPdf: false
+          wantsPdf: false,
+          rawTex: options?.rawTex ?? false
         })
       });
       const data = await response.json();
@@ -76,14 +77,15 @@ export function useTemplates() {
   );
 
   const renderPdf = useCallback(
-    async (resumeText: string, templateId?: string): Promise<RenderPdfResult> => {
+    async (resumeText: string, templateId?: string, options?: { rawTex?: boolean }): Promise<RenderPdfResult> => {
       const response = await fetch("/api/render-resume-latex", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           resumeText,
           templateId: templateId ?? selectedTemplateId,
-          wantsPdf: true
+          wantsPdf: true,
+          rawTex: options?.rawTex ?? false
         })
       });
       const data = await response.json();

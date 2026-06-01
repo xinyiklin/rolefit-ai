@@ -12,17 +12,22 @@ import {
 } from "./resumeEngine";
 import { sampleResume } from "./samples";
 
+import {
+  cliReasoningEffortOptionsByProvider,
+  modelOptionsByProvider,
+  providerOptions,
+  roleAppliedOptions
+} from "./config/aiOptions";
 import { useTemplates } from "./hooks/useTemplates";
+import { useDebouncedValue } from "./hooks/useDebouncedValue";
 import { useApplications, type Application, type ApplicationStatus } from "./hooks/useApplications";
+import { arrayBufferToBase64, buildResumeFileName, downloadBlob, extractApplicantName } from "./lib/downloads";
+import { inferApplicationTitle, inferCompanyFromUrl, isLikelyJobUrl } from "./lib/jobTarget";
+import { blocksToText, buildResumeBlocks } from "./lib/resumeBlocks";
+import { describeResumeFormat, looksLikeLatex } from "./lib/resumeFormat";
 
 import { Masthead } from "./sections/Masthead";
-import {
-  SourcesPane,
-  type AiProviderValue,
-  type ModelOption,
-  type ProviderOption,
-  type RoleOption
-} from "./sections/SourcesPane";
+import { SourcesPane, type AiProviderValue } from "./sections/SourcesPane";
 import { StudioPane } from "./sections/StudioPane";
 import { ExportRail } from "./sections/ExportRail";
 import { ResumeTab } from "./sections/tabs/ResumeTab";
@@ -37,204 +42,6 @@ import type {
   ResumeBlockKind,
   SourceDocx
 } from "./sections/shared";
-
-// ============ Constants ============
-
-const providerOptions: readonly ProviderOption[] = [
-  { value: "claude-cli", label: "Claude Max · CLI (recommended)", baseUrl: "", model: "opus" },
-  { value: "codex-cli", label: "Codex Plus · CLI", baseUrl: "", model: "" },
-  { value: "openai", label: "OpenAI", baseUrl: "", model: "" },
-  { value: "anthropic", label: "Claude", baseUrl: "", model: "claude-sonnet-4-6" },
-  { value: "gemini", label: "Gemini", baseUrl: "", model: "gemini-3.5-flash" },
-  {
-    value: "openrouter",
-    label: "OpenRouter",
-    baseUrl: "https://openrouter.ai/api/v1",
-    model: "anthropic/claude-sonnet-4.6"
-  },
-  {
-    value: "groq",
-    label: "Groq",
-    baseUrl: "https://api.groq.com/openai/v1",
-    model: "llama-3.3-70b-versatile"
-  },
-  {
-    value: "together",
-    label: "Together AI",
-    baseUrl: "https://api.together.xyz/v1",
-    model: "openai/gpt-oss-20b"
-  },
-  {
-    value: "mistral",
-    label: "Mistral AI",
-    baseUrl: "https://api.mistral.ai/v1",
-    model: "mistral-large-latest"
-  },
-  {
-    value: "local",
-    label: "Local / custom",
-    baseUrl: "http://localhost:11434/v1",
-    model: "llama3.2"
-  }
-];
-
-const customModelOption: ModelOption = { value: "custom", label: "Custom model" };
-
-const modelOptionsByProvider: Record<AiProviderValue, readonly ModelOption[]> = {
-  openai: [
-    { value: "", label: "Server default" },
-    { value: "gpt-5.5", label: "GPT-5.5" },
-    { value: "gpt-5.4", label: "GPT-5.4" },
-    { value: "gpt-5.4-mini", label: "GPT-5.4 Mini" },
-    { value: "gpt-5.4-nano", label: "GPT-5.4 Nano" },
-    customModelOption
-  ],
-  anthropic: [
-    { value: "claude-sonnet-4-6", label: "Claude Sonnet 4.6" },
-    { value: "claude-haiku-4-5-20251001", label: "Claude Haiku 4.5" },
-    { value: "claude-opus-4-8", label: "Claude Opus 4.8" },
-    customModelOption
-  ],
-  gemini: [
-    { value: "gemini-3.5-flash", label: "Gemini 3.5 Flash" },
-    { value: "gemini-2.5-pro", label: "Gemini 2.5 Pro" },
-    { value: "gemini-3.1-flash-lite", label: "Gemini 3.1 Flash-Lite" },
-    customModelOption
-  ],
-  openrouter: [
-    { value: "anthropic/claude-sonnet-4.6", label: "Claude Sonnet 4.6" },
-    { value: "openai/gpt-5.5", label: "GPT-5.5" },
-    { value: "google/gemini-3.5-flash", label: "Gemini 3.5 Flash" },
-    customModelOption
-  ],
-  groq: [
-    { value: "llama-3.3-70b-versatile", label: "Llama 3.3 70B Versatile" },
-    { value: "openai/gpt-oss-120b", label: "GPT-OSS 120B" },
-    { value: "openai/gpt-oss-20b", label: "GPT-OSS 20B" },
-    customModelOption
-  ],
-  together: [
-    { value: "openai/gpt-oss-20b", label: "GPT-OSS 20B" },
-    customModelOption
-  ],
-  mistral: [
-    { value: "mistral-large-latest", label: "Mistral Large" },
-    { value: "mistral-medium-latest", label: "Mistral Medium" },
-    { value: "mistral-small-latest", label: "Mistral Small" },
-    customModelOption
-  ],
-  local: [
-    { value: "llama3.2", label: "Llama 3.2" },
-    { value: "llama3.1", label: "Llama 3.1" },
-    { value: "local-model", label: "Local model" },
-    customModelOption
-  ],
-  "claude-cli": [
-    { value: "", label: "Subscription default" },
-    { value: "sonnet", label: "Sonnet" },
-    { value: "opus", label: "Opus" },
-    { value: "haiku", label: "Haiku" },
-    customModelOption
-  ],
-  "codex-cli": [
-    { value: "", label: "Subscription default" },
-    { value: "gpt-5.5", label: "GPT-5.5" },
-    { value: "gpt-5.4", label: "GPT-5.4" },
-    { value: "o3", label: "o3" },
-    customModelOption
-  ]
-};
-
-const roleAppliedOptions: readonly RoleOption[] = [
-  { value: "New Grad", label: "New Grad" },
-  { value: "Early Career", label: "Early Career" },
-  { value: "SWE I", label: "SWE I" },
-  { value: "SWE II", label: "SWE II" },
-  { value: "Senior", label: "Senior" },
-  { value: "Other", label: "Other" }
-];
-
-// ============ Pure helpers ============
-
-function classifyResumeLine(line: string, index: number): ResumeBlockKind {
-  const trimmed = line.trim();
-  if (index <= 1 && /@|linkedin|github|\b\d{3}[-.)\s]?\d{3}[-.\s]?\d{4}\b/i.test(trimmed)) return "contact";
-  if (/^\s*(?:[-*•]|\d+[.)])\s+/.test(trimmed)) return "bullet";
-  if (trimmed.length <= 42 && /^[A-Z0-9/&,\- ]+$/.test(trimmed) && /[A-Z]/.test(trimmed)) return "section";
-  return "text";
-}
-
-function buildResumeBlocks(text: string): ResumeBlock[] {
-  return text
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .map((line, index) => ({
-      id: `${index}-${line.slice(0, 24).replace(/[^a-z0-9]+/gi, "-")}`,
-      kind: classifyResumeLine(line, index),
-      text: line
-    }));
-}
-
-function blocksToText(blocks: ResumeBlock[]) {
-  return blocks
-    .map((block) => block.text.trim())
-    .filter(Boolean)
-    .join("\n");
-}
-
-function arrayBufferToBase64(buffer: ArrayBuffer) {
-  let binary = "";
-  const bytes = new Uint8Array(buffer);
-  const chunkSize = 0x8000;
-  for (let index = 0; index < bytes.length; index += chunkSize) {
-    binary += String.fromCharCode(...bytes.subarray(index, index + chunkSize));
-  }
-  return window.btoa(binary);
-}
-
-function downloadBlob(blob: Blob, fileName: string) {
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = fileName;
-  document.body.append(link);
-  link.click();
-  link.remove();
-  URL.revokeObjectURL(url);
-}
-
-function inferApplicationTitle(url: string, jobDescription: string) {
-  try {
-    if (url) {
-      const u = new URL(url);
-      return u.hostname.replace(/^www\./, "") + (u.pathname && u.pathname !== "/" ? u.pathname.slice(0, 30) : "");
-    }
-  } catch {
-    // fall through
-  }
-  const firstLine = jobDescription
-    .split("\n")
-    .map((l) => l.trim())
-    .find((l) => l.length > 6);
-  if (firstLine) return firstLine.slice(0, 80);
-  return "Untitled role";
-}
-
-function inferCompanyFromUrl(url: string) {
-  try {
-    if (!url) return "";
-    const u = new URL(url);
-    const host = u.hostname.replace(/^www\./, "");
-    const cleaned = host
-      .replace(/^(jobs|careers|apply|hire|boards|workday|smartrecruiters|lever|greenhouse)\./, "")
-      .replace(/\.(com|io|co|net|ai|app|dev|org)$/, "");
-    const first = cleaned.split(".")[0];
-    return first ? first.charAt(0).toUpperCase() + first.slice(1) : "";
-  } catch {
-    return "";
-  }
-}
 
 // ============ Types ============
 
@@ -253,24 +60,10 @@ type JobWorkspace = {
   files: string[];
 };
 
-// ============ Hooks (local) ============
-
-// Defers a fast-changing value so expensive derivations don't recompute on
-// every keystroke. Used for the live pre-polish analysis only.
-function useDebouncedValue<T>(value: T, delayMs = 280): T {
-  const [debounced, setDebounced] = useState(value);
-  useEffect(() => {
-    const handle = setTimeout(() => setDebounced(value), delayMs);
-    return () => clearTimeout(handle);
-  }, [value, delayMs]);
-  return debounced;
-}
-
 // ============ App ============
 
 function App() {
   // ----- State -----
-  const [jobUrl, setJobUrl] = useState("");
   const [jobDescription, setJobDescription] = useState("");
   const [resumeText, setResumeText] = useState(sampleResume);
   const [fileName, setFileName] = useState("");
@@ -282,7 +75,6 @@ function App() {
   const [fileError, setFileError] = useState("");
   const [fileStatus, setFileStatus] = useState("");
   const [linkStatus, setLinkStatus] = useState("");
-  const [isImporting, setIsImporting] = useState(false);
   const [isPolishing, setIsPolishing] = useState(false);
   const [polishStatus, setPolishStatus] = useState("");
   const [downloadStatus, setDownloadStatus] = useState("");
@@ -294,12 +86,14 @@ function App() {
   const [apiKey, setApiKey] = useState("");
   const [apiBaseUrl, setApiBaseUrl] = useState("");
   const [selectedModel, setSelectedModel] = useState("opus");
+  const [cliReasoningEffort, setCliReasoningEffort] = useState("");
   const [customModel, setCustomModel] = useState("");
   const [includeCoverLetter, setIncludeCoverLetter] = useState(false);
   const [strictReview, setStrictReview] = useState(true);
-  const [lastImportedUrl, setLastImportedUrl] = useState("");
+  const [preserveFormat, setPreserveFormat] = useState(true);
   const [roleAppliedAs, setRoleAppliedAs] = useState<string>("Early Career");
   const [honestContext, setHonestContext] = useState("");
+  const [customInstructions, setCustomInstructions] = useState("");
   const [activeOutputTab, setActiveOutputTab] = useState<OutputTab>("resume");
   const [workspacePath, setWorkspacePath] = useState("");
   const [workspaceFiles, setWorkspaceFiles] = useState<string[]>([]);
@@ -318,12 +112,13 @@ function App() {
     tectonic,
     templatesError,
     renderTex,
-    renderPdf,
-    importTex
+    renderPdf
   } = useTemplates();
 
   const {
     applications,
+    isLoading: isApplicationsLoading,
+    error: applicationsError,
     upsert: upsertApplication,
     updateStatus: updateApplicationStatus,
     updateNotes: updateApplicationNotes,
@@ -339,13 +134,26 @@ function App() {
   }, []);
 
   // ----- Derived (memos) -----
+  // The job field is one box: a pasted link OR a description. When it holds a
+  // bare URL we surface it as the job URL (for the prompt hint, company
+  // inference, and pipeline tracking); otherwise it's treated as job text.
+  const jobUrl = useMemo(() => {
+    const trimmed = jobDescription.trim();
+    return isLikelyJobUrl(trimmed) ? trimmed : "";
+  }, [jobDescription]);
+
+  const jobTextForPolish = useMemo(() => (jobUrl ? "" : jobDescription), [jobDescription, jobUrl]);
+  const jobUrlOnlyStatus = jobUrl
+    ? "Paste the full job description before polishing. A bare link can be tracked, but it is not enough for tailoring."
+    : "";
+
   const canPolish = useMemo(() => {
-    return resumeText.trim().length > 80 && (jobDescription.trim().length > 40 || jobUrl.trim().length > 8);
-  }, [jobDescription, jobUrl, resumeText]);
+    return resumeText.trim().length > 80 && jobTextForPolish.trim().length > 40;
+  }, [jobTextForPolish, resumeText]);
 
   const combinedJobText = useMemo(() => {
-    return [jobDescription, jobUrl.replace(/[-_/?.=&]+/g, " ")].filter(Boolean).join("\n");
-  }, [jobDescription, jobUrl]);
+    return jobTextForPolish;
+  }, [jobTextForPolish]);
 
   // Debounce the live inputs so per-keystroke synchronous scoring doesn't jank
   // typing on large resumes. The polished `result` stays immediate.
@@ -393,9 +201,11 @@ function App() {
   const resultSourceLabel = result?.source === "local" ? "Local engine" : result?.source === "ai" ? "AI" : "";
   const selectedProviderOption = providerOptions.find((option) => option.value === aiProvider);
   const currentModelOptions = modelOptionsByProvider[aiProvider];
+  const currentCliReasoningEffortOptions = cliReasoningEffortOptionsByProvider[aiProvider] ?? [];
   const customModelPlaceholder = selectedProviderOption?.model || "model-id";
   const resumeReady = resumeText.trim().length > 80;
-  const jobReady = jobDescription.trim().length > 40 || jobUrl.trim().length > 8;
+  const resumeSourceFormat = describeResumeFormat(fileName, Boolean(sourceDocx), resumeText);
+  const jobReady = jobTextForPolish.trim().length > 40;
   const outputReady = Boolean(result);
   const selectedTemplate = templates.find((t) => t.id === selectedTemplateId) ?? null;
   const outputTabs: OutputTabDescriptor[] = [
@@ -499,6 +309,40 @@ function App() {
     }
   }
 
+  async function removeBaseResume() {
+    if (!baseResumeName) return;
+    // Destructive + irreversible-looking action: confirm first. The server keeps
+    // a timestamped backup in .trash, so this is recoverable, but a stray click
+    // shouldn't wipe a base resume.
+    const confirmed = window.confirm(
+      `Remove the base resume "${baseResumeName}"?\n\nA backup is kept in job-search-workspace/.trash, and the resume text stays in the editor.`
+    );
+    if (!confirmed) return;
+    setIsSavingBaseResume(true);
+    setWorkspaceStatus("Removing the base resume from the local workspace...");
+    try {
+      const response = await fetch("/api/workspace/base-resume", { method: "DELETE" });
+      const workspace = (await response.json()) as Partial<JobWorkspace> & { error?: string };
+      if (!response.ok) throw new Error(workspace.error ?? "Base resume removal failed.");
+      updateWorkspaceState({
+        path: workspace.path ?? workspacePath,
+        baseResume: workspace.baseResume ?? { exists: false },
+        files: workspace.files ?? workspaceFiles
+      });
+      // Detach the file from the editor so the resume text is editable again,
+      // but keep the current text so the user doesn't lose their draft.
+      setFileName("");
+      setSourceDocx(null);
+      setResumeBlocks([]);
+      setFileStatus("");
+      setWorkspaceStatus("Removed the base resume (backup saved in .trash). Save again to set a new one.");
+    } catch (error) {
+      setWorkspaceStatus(error instanceof Error ? error.message : "Base resume removal failed.");
+    } finally {
+      setIsSavingBaseResume(false);
+    }
+  }
+
   async function handleBaseResumeUpload(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     event.target.value = "";
@@ -514,18 +358,10 @@ function App() {
       return;
     }
 
-    if (/\.tex$/i.test(file.name)) {
-      try {
-        const tex = await file.text();
-        const text = await importTex(tex);
-        await saveBaseResume({ fileName: file.name.replace(/\.tex$/i, ".txt"), text });
-      } catch (error) {
-        setWorkspaceStatus(error instanceof Error ? error.message : "TEX parse failed.");
-      }
-      return;
-    }
-
-    if (!/\.(txt|md|csv)$/i.test(file.name)) {
+    // Keep .tex as raw LaTeX so the source format stays "LaTeX" and Preserve
+    // format can rewrite it in place. Flattening to plain text (and renaming to
+    // .txt) here is what previously destroyed the formatting.
+    if (!/\.(txt|md|csv|tex)$/i.test(file.name)) {
       setWorkspaceStatus("Save a DOCX, TXT, MD, CSV, or TEX resume as the base resume.");
       return;
     }
@@ -602,15 +438,11 @@ function App() {
     }
 
     if (/\.tex$/i.test(file.name)) {
-      try {
-        const tex = await file.text();
-        const text = await importTex(tex);
-        setResumeText(text);
-        setResumeBlocks([]);
-        setFileStatus("LaTeX resume parsed. Polish, then re-render with any template via the Export bar.");
-      } catch (error) {
-        setFileError(error instanceof Error ? error.message : "LaTeX import failed. Paste the resume text instead.");
-      }
+      // Keep the raw LaTeX as the working text so Preserve format rewrites it in
+      // place as .tex. The editor shows LaTeX markup; export stays .tex/Overleaf.
+      setResumeText(await file.text());
+      setResumeBlocks([]);
+      setFileStatus("LaTeX source loaded. Keep “Preserve format” on to rewrite in place; export as .tex or via Overleaf.");
       return;
     }
 
@@ -629,6 +461,11 @@ function App() {
   }
 
   async function handlePolish() {
+    if (jobUrl && !jobTextForPolish.trim()) {
+      setPolishStatus("Paste the full job description before polishing. A link alone is only useful for tracking.");
+      return;
+    }
+
     const model = selectedModel === "custom" ? customModel.trim() : selectedModel;
     const fallbackBase = polishResume(resumeText, combinedJobText);
     const fallback = includeCoverLetter
@@ -648,17 +485,22 @@ function App() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           resumeText,
-          jobText: jobDescription,
+          // A bare link is kept only as tracking/prompt metadata. Polishing
+          // requires pasted job text so the AI is not tailoring from a URL slug.
+          jobText: jobTextForPolish,
           jobUrl,
           provider: aiProvider,
           apiKey,
           apiBaseUrl,
           model,
-          preserveFormat: Boolean(sourceDocx),
+          reasoningEffort: cliReasoningEffort,
+          preserveFormat,
+          sourceFormat: resumeSourceFormat,
           includeCoverLetter,
           strictReview,
           roleAppliedAs,
-          honestContext
+          honestContext,
+          customInstructions
         })
       });
 
@@ -666,7 +508,13 @@ function App() {
       if (!response.ok) throw new Error(data.error ?? "AI polish failed.");
       if (!data.polishedText) throw new Error("AI response did not include polished resume text.");
 
-      const polishedText = normalizePolishedResume(data.polishedText, resumeText);
+      // For a preserved LaTeX source the model returns the full edited .tex —
+      // keep it verbatim. normalizePolishedResume reflows section text and would
+      // shred the LaTeX commands.
+      const latexInPlace = resumeSourceFormat === "LaTeX" && preserveFormat && looksLikeLatex(String(data.polishedText));
+      const polishedText = latexInPlace
+        ? String(data.polishedText).trim()
+        : normalizePolishedResume(data.polishedText, resumeText);
       const analysis = analyzeResumeText(polishedText, combinedJobText);
       setResult({
         ...analysis,
@@ -693,33 +541,6 @@ function App() {
     }
   }
 
-  async function importJobLink() {
-    if (!jobUrl.trim()) return;
-    setIsImporting(true);
-    setLinkStatus("Fetching job text...");
-    try {
-      const response = await fetch("/api/import-job", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: jobUrl })
-      });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error ?? "Job import failed.");
-      const text = String(data.text ?? "").trim();
-      if (!text) {
-        setLinkStatus("Found the page but could not extract job text. Paste it manually.");
-        return;
-      }
-      setJobDescription(text);
-      setLinkStatus("Imported readable job text. Review it before polishing.");
-    } catch (error) {
-      const message = error instanceof Error ? error.message.replace(/[.。]\s*$/, "") : "import failed";
-      setLinkStatus(`Could not import: ${message}. Paste the description manually.`);
-    } finally {
-      setIsImporting(false);
-    }
-  }
-
   async function handleCopy() {
     if (!result?.polishedText) return;
     await navigator.clipboard.writeText(result.polishedText);
@@ -734,11 +555,22 @@ function App() {
     window.setTimeout(() => setCoverCopied(false), 1800);
   }
 
+  // Name downloads after the applicant (+ company when a job link gives one):
+  // Xinyi_Lin_Stripe_Resume.pdf → Xinyi_Lin_Resume.pdf → Resume.pdf.
+  function resumeDownloadName(ext: string): string {
+    return buildResumeFileName(
+      extractApplicantName(result?.polishedText || resumeText),
+      inferCompanyFromUrl(jobUrl),
+      ext
+    );
+  }
+
   function handleDownloadPdf() {
     if (!result) return;
     const blob = createResumePdfBlob(result.polishedText, resumeText);
-    downloadBlob(blob, "polished-sde-resume.pdf");
-    setDownloadStatus("Downloaded polished-sde-resume.pdf with the SDE resume template.");
+    const fileName = resumeDownloadName("pdf");
+    downloadBlob(blob, fileName);
+    setDownloadStatus(`Downloaded ${fileName} using the clean ATS template.`);
   }
 
   async function handleDownloadDocx() {
@@ -756,17 +588,18 @@ function App() {
       for (let index = 0; index < byteCharacters.length; index += 1) {
         bytes[index] = byteCharacters.charCodeAt(index);
       }
+      const fileName = resumeDownloadName("docx");
       downloadBlob(
         new Blob([bytes], {
           type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
         }),
-        "polished-resume.docx"
+        fileName
       );
       const appended = Number(data.appendedParagraphs ?? 0);
       setDownloadStatus(
         appended
-          ? `Downloaded polished-resume.docx. Added ${appended} extra paragraph${appended === 1 ? "" : "s"} because the polished text was longer than the source layout.`
-          : "Downloaded polished-resume.docx using the uploaded DOCX structure."
+          ? `Downloaded ${fileName}. Added ${appended} extra paragraph${appended === 1 ? "" : "s"} because the polished text was longer than the source layout.`
+          : `Downloaded ${fileName} using the uploaded DOCX structure.`
       );
     } catch (error) {
       setDownloadStatus(
@@ -777,15 +610,23 @@ function App() {
 
   async function handleDownloadTex() {
     if (!result) return;
+    // In-place: the polished text already is the user's edited .tex — download it
+    // directly so the original LaTeX layout is kept (no template re-render).
+    if (resumeSourceFormat === "LaTeX" && looksLikeLatex(result.polishedText)) {
+      const fileName = resumeDownloadName("tex");
+      downloadBlob(new Blob([result.polishedText], { type: "application/x-tex" }), fileName);
+      setTexStatus(`Downloaded ${fileName} — your original LaTeX, edited in place. Paste into Overleaf or your LaTeX editor.`);
+      return;
+    }
     setIsDownloadingTex(true);
     setTexStatus("Rendering LaTeX source...");
     try {
       const tex = await renderTex(result.polishedText, selectedTemplateId);
       const templateLabel = selectedTemplate?.name ?? selectedTemplateId;
-      const fileSafe = (selectedTemplate?.id ?? "resume").replace(/[^a-z0-9]+/gi, "-");
-      downloadBlob(new Blob([tex], { type: "application/x-tex" }), `polished-resume-${fileSafe}.tex`);
+      const fileName = resumeDownloadName("tex");
+      downloadBlob(new Blob([tex], { type: "application/x-tex" }), fileName);
       setTexStatus(
-        `Downloaded polished-resume-${fileSafe}.tex using the ${templateLabel} template. Paste into Overleaf or your local LaTeX editor.`
+        `Downloaded ${fileName} using the ${templateLabel} template. Paste into Overleaf or your local LaTeX editor.`
       );
     } catch (error) {
       setTexStatus(error instanceof Error ? error.message : "TEX render failed.");
@@ -802,10 +643,15 @@ function App() {
       );
       return;
     }
+    const latexInPlace = resumeSourceFormat === "LaTeX" && looksLikeLatex(result.polishedText);
     setIsRenderingLatexPdf(true);
-    setTexStatus("Compiling LaTeX → PDF with Tectonic...");
+    setTexStatus(
+      latexInPlace ? "Compiling your edited LaTeX → PDF with Tectonic..." : "Compiling LaTeX → PDF with Tectonic..."
+    );
     try {
-      const outcome = await renderPdf(result.polishedText, selectedTemplateId);
+      const outcome = latexInPlace
+        ? await renderPdf(result.polishedText, undefined, { rawTex: true })
+        : await renderPdf(result.polishedText, selectedTemplateId);
       if ("error" in outcome) {
         setTexStatus(
           outcome.missingTectonic
@@ -814,10 +660,12 @@ function App() {
         );
         return;
       }
-      const fileSafe = (selectedTemplate?.id ?? "resume").replace(/[^a-z0-9]+/gi, "-");
-      downloadBlob(outcome.pdf, `polished-resume-${fileSafe}.pdf`);
+      const fileName = resumeDownloadName("pdf");
+      downloadBlob(outcome.pdf, fileName);
       setTexStatus(
-        `Downloaded polished-resume-${fileSafe}.pdf rendered via Tectonic + ${selectedTemplate?.name ?? selectedTemplateId}.`
+        latexInPlace
+          ? `Downloaded ${fileName} compiled from your edited LaTeX via Tectonic (in place, no template).`
+          : `Downloaded ${fileName} rendered via Tectonic + ${selectedTemplate?.name ?? selectedTemplateId}.`
       );
     } catch (error) {
       setTexStatus(error instanceof Error ? error.message : "LaTeX PDF render failed.");
@@ -830,15 +678,16 @@ function App() {
     if (!result) return;
     const overleafWindow = window.open("about:blank", "_blank");
     if (!overleafWindow) {
-      setTexStatus("Popup blocked. Allow popups for localhost:5174 and try again.");
+      setTexStatus("Popup blocked. Allow popups for localhost:5181 and try again.");
       return;
     }
 
+    const latexInPlace = resumeSourceFormat === "LaTeX" && looksLikeLatex(result.polishedText);
     setIsOpeningOverleaf(true);
     setTexStatus("Preparing .tex for Overleaf...");
     try {
-      const tex = await renderTex(result.polishedText, selectedTemplateId);
-      const templateLabel = selectedTemplate?.name ?? "Resume";
+      const tex = latexInPlace ? result.polishedText : await renderTex(result.polishedText, selectedTemplateId);
+      const templateLabel = latexInPlace ? "Original LaTeX" : selectedTemplate?.name ?? "Resume";
       const snipName = `Polished resume — ${templateLabel}`;
 
       // Build the auto-submitting form via DOM APIs so correctness never depends
@@ -916,24 +765,11 @@ function App() {
     setAiProvider(value);
     setApiBaseUrl(option?.baseUrl ?? "");
     setSelectedModel(option?.model ?? "");
+    setCliReasoningEffort("");
     setCustomModel("");
   }
 
-  function maybeAutoImportJobLink() {
-    const trimmed = jobUrl.trim();
-    if (!trimmed || trimmed.length < 12 || trimmed === lastImportedUrl || isImporting) return;
-    try {
-      const parsed = new URL(trimmed);
-      if (!["http:", "https:"].includes(parsed.protocol)) return;
-    } catch {
-      return;
-    }
-    setLastImportedUrl(trimmed);
-    void importJobLink();
-  }
-
   function handleNextRole() {
-    setJobUrl("");
     setJobDescription("");
     setResult(null);
     setLinkStatus("");
@@ -941,17 +777,21 @@ function App() {
     setDownloadStatus("");
     setTexStatus("");
     setHonestContext("");
-    setLastImportedUrl("");
     setCopied(false);
     setCoverCopied(false);
     setActiveOutputTab("resume");
   }
 
-  function handleTrackInPipeline() {
+  function handleTrackInPipeline(resumeUsed: "tailored" | "base" = "tailored") {
     if (!jobUrl.trim() && !jobDescription.trim()) return;
     const title = inferApplicationTitle(jobUrl, jobDescription);
     const company = inferCompanyFromUrl(jobUrl);
     const now = new Date().toISOString();
+    const sr = result?.strictReview;
+    // Record the resume that actually went out: the tailored draft, or the
+    // original/base resume the user submitted instead.
+    const usedBase = resumeUsed === "base" || !result?.polishedText;
+    const sentResume = usedBase ? resumeText : result?.polishedText ?? "";
     const app: Application = {
       id: crypto.randomUUID(),
       title,
@@ -965,24 +805,60 @@ function App() {
       updatedAt: now,
       fitScore: result?.score.overall ?? null,
       templateId: selectedTemplateId,
-      polishedText: result?.polishedText ?? "",
-      coverLetterText: result?.coverLetterText ?? ""
+      polishedText: sentResume,
+      resumeUsed: usedBase ? "base" : "tailored",
+      coverLetterText: result?.coverLetterText ?? "",
+      // Snapshot the recruiter review so the pipeline keeps the verdict,
+      // interview risks, and gaps for this application.
+      review: sr
+        ? {
+            verdict: sr.verdict,
+            verdictReason: sr.verdictReason,
+            riskFlags: sr.riskFlags.map((r) => ({ risk: r.risk, suggestion: r.suggestion })),
+            gaps: sr.gaps.map((g) => ({ gap: g.gap, severity: g.severity })),
+            recommendation: {
+              applyAsIs: sr.recommendation.applyAsIs,
+              reason: sr.recommendation.reason,
+              coverLetterAngle: sr.recommendation.coverLetterAngle,
+              topEdits: sr.recommendation.topEdits
+            }
+          }
+        : undefined
     };
     upsertApplication(app);
-    setTexStatus(`Tracked "${title}" in pipeline.`);
+    setTexStatus(`Tracked "${title}" in the pipeline (${usedBase ? "original" : "tailored"} resume).`);
     setActiveOutputTab("pipeline");
     setExpandedApplicationId(app.id);
   }
 
   function handleLoadApplication(app: Application) {
-    setJobUrl(app.jobUrl ?? "");
-    setJobDescription(app.jobDescription ?? "");
-    setLastImportedUrl(app.jobUrl ?? "");
-    setLinkStatus(`Loaded "${app.title}" from pipeline.`);
+    // One field now: prefer the saved description, fall back to the saved link.
+    setJobDescription(app.jobDescription || app.jobUrl || "");
+    if (app.polishedText) {
+      const restoredResume = app.polishedText;
+      const restoredAnalysis = analyzeResumeText(restoredResume, app.jobDescription || "");
+      setResumeText(restoredResume);
+      setFileName("");
+      setSourceDocx(null);
+      setResumeBlocks([]);
+      setFileStatus("Loaded the tracked resume snapshot into the editor. Save it as base if you want it at startup.");
+      setResult({
+        ...restoredAnalysis,
+        polishedText: restoredResume,
+        coverLetterText: app.coverLetterText || undefined,
+        strengths: app.review?.verdictReason ? [app.review.verdictReason] : ["Loaded from pipeline snapshot."],
+        fixes: app.review?.recommendation?.topEdits?.length
+          ? app.review.recommendation.topEdits
+          : ["Review against the current job text before sending again."]
+      });
+      setLinkStatus(`Loaded "${app.title}" and its saved resume snapshot from pipeline.`);
+    } else {
+      setLinkStatus(`Loaded "${app.title}" job target from pipeline.`);
+      setResult(null);
+    }
     setPolishStatus("");
     setDownloadStatus("");
     setTexStatus("");
-    setResult(null);
     setActiveOutputTab("resume");
   }
 
@@ -1009,14 +885,10 @@ function App() {
 
       <div className="workspace-grid">
         <SourcesPane
-          jobUrl={jobUrl}
-          setJobUrl={setJobUrl}
           jobDescription={jobDescription}
           setJobDescription={setJobDescription}
-          isImporting={isImporting}
-          linkStatus={linkStatus}
+          linkStatus={jobUrlOnlyStatus || linkStatus}
           jobReady={jobReady}
-          onMaybeAutoImport={maybeAutoImportJobLink}
           baseResumeName={baseResumeName}
           workspacePath={workspacePath}
           workspaceStatus={workspaceStatus}
@@ -1033,6 +905,7 @@ function App() {
           resumeReady={resumeReady}
           onBaseResumeUpload={handleBaseResumeUpload}
           onSaveCurrentAsBase={saveCurrentAsBaseResume}
+          onRemoveBaseResume={removeBaseResume}
           onLoadWorkspace={loadWorkspace}
           onFileUpload={handleFileUpload}
           onUpdateResumeBlock={updateResumeBlock}
@@ -1041,10 +914,15 @@ function App() {
           setIncludeCoverLetter={setIncludeCoverLetter}
           strictReview={strictReview}
           setStrictReview={setStrictReview}
+          preserveFormat={preserveFormat}
+          setPreserveFormat={setPreserveFormat}
+          resumeSourceFormat={resumeSourceFormat}
           roleAppliedAs={roleAppliedAs}
           setRoleAppliedAs={setRoleAppliedAs}
           honestContext={honestContext}
           setHonestContext={setHonestContext}
+          customInstructions={customInstructions}
+          setCustomInstructions={setCustomInstructions}
           showAdvanced={showAdvanced}
           setShowAdvanced={setShowAdvanced}
           canPolish={canPolish}
@@ -1060,10 +938,13 @@ function App() {
           setApiBaseUrl={setApiBaseUrl}
           selectedModel={selectedModel}
           setSelectedModel={setSelectedModel}
+          cliReasoningEffort={cliReasoningEffort}
+          setCliReasoningEffort={setCliReasoningEffort}
           customModel={customModel}
           setCustomModel={setCustomModel}
           providerOptions={providerOptions}
           currentModelOptions={currentModelOptions}
+          currentCliReasoningEffortOptions={currentCliReasoningEffortOptions}
           selectedProviderOption={selectedProviderOption}
           customModelPlaceholder={customModelPlaceholder}
         />
@@ -1122,6 +1003,8 @@ function App() {
             <PipelineTab
               applications={applications}
               applicationsPath={applicationsPath}
+              applicationsError={applicationsError}
+              isApplicationsLoading={isApplicationsLoading}
               pipelineFilter={pipelineFilter}
               setPipelineFilter={setPipelineFilter}
               expandedApplicationId={expandedApplicationId}

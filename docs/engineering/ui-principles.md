@@ -8,15 +8,18 @@ marketing landing page, a SaaS dashboard, or a native desktop installer.
 
 - Reuse primitives from `src/ui.tsx` (`ScoreMeter`, `Stat`, `ChipList`,
   `PanelHeading`).
-- Prefer tokens and classes from `src/styles.css` instead of one-off
-  inline styles.
+- Prefer tokens and classes from `src/styles/` instead of one-off
+  inline styles (tokens in `src/styles/tokens.css`; each surface has its
+  own file under `src/styles/`, aggregated in import order by
+  `src/styles/index.css`).
 - Use lucide-react icons for compact controls when the action is familiar
   and the icon is already in the app's icon set.
-- Use Google Chrome for visual inspection/QA at `http://localhost:5174`
+- Use Google Chrome for visual inspection/QA at `http://localhost:5181`
   unless the user explicitly asks for another browser surface. If port
-  `5174` is already in use, the app is most likely already running —
+  `5181` is already in use, the app is most likely already running —
   attach to the existing instance instead of starting a second
-  `npm run dev`. (Sibling project careflow uses port `5173`.)
+  `npm run dev`. (Sibling reservations: careflow `5173-5180`, portfolio
+  `5184-5185`.)
 
 ## Workflow Shape
 
@@ -125,7 +128,7 @@ Never show:
 
 For meaningful UI changes:
 
-1. Run `npm run dev` and open `http://localhost:5174` in Chrome.
+1. Run `npm run dev` and open `http://localhost:5181` in Chrome.
 2. Walk through the affected control in the normal two-column workflow.
 3. Confirm no console errors, overlap, unexpected layout shift, or
    broken keyboard path.

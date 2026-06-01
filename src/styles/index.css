@@ -1,0 +1,14 @@
+/* Aggregated stylesheet, imported once from main.tsx.
+   Split from a single styles.css by surface. The import order IS the cascade
+   order, so do not reorder these lines. Add new surfaces near their neighbours. */
+@import "./tokens.css";
+@import "./base.css";
+@import "./shell.css";
+@import "./sources.css";
+@import "./studio.css";
+@import "./review.css";
+@import "./pipeline.css";
+@import "./vault.css";
+@import "./export-rail.css";
+@import "./responsive.css";
+@import "./pipeline-review.css";

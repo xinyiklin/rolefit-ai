@@ -21,7 +21,7 @@ function runCli(command, args, stdinPayload, { timeoutMs = 180_000 } = {}) {
       if (err.code === "ENOENT") {
         reject(new Error(`${command} is not installed or not on PATH.`));
       } else {
-        reject(new Error(`Failed to spawn ${command}: ${err.message}`));
+        reject(new Error(`${command} could not be started. Check the CLI installation and try again.`));
       }
     });
     child.on("close", (code) => {
@@ -29,8 +29,7 @@ function runCli(command, args, stdinPayload, { timeoutMs = 180_000 } = {}) {
       if (code === 0) {
         resolve({ stdout, stderr });
       } else {
-        const tail = (stderr || stdout).slice(-600).trim();
-        reject(new Error(`${command} exited with code ${code}. ${tail}`));
+        reject(new Error(`${command} exited with code ${code}. Check CLI authentication and model access, then try again.`));
       }
     });
     if (stdinPayload) child.stdin.write(stdinPayload);
@@ -40,10 +39,11 @@ function runCli(command, args, stdinPayload, { timeoutMs = 180_000 } = {}) {
 
 // ----- Claude Code (claude --print) -----
 
-export async function callClaudeCli({ model, systemPrompt, userPrompt }) {
+export async function callClaudeCli({ model, reasoningEffort, systemPrompt, userPrompt }) {
   const args = ["-p", "--tools", "", "--output-format", "json"];
   if (systemPrompt) args.push("--append-system-prompt", systemPrompt);
   if (model && model !== "default") args.push("--model", model);
+  if (reasoningEffort) args.push("--effort", reasoningEffort);
 
   const { stdout } = await runCli("claude", args, userPrompt);
 
@@ -51,7 +51,7 @@ export async function callClaudeCli({ model, systemPrompt, userPrompt }) {
   try {
     envelope = JSON.parse(stdout);
   } catch (parseError) {
-    throw new Error(`Claude Code returned non-JSON output (first 300 chars): ${stdout.slice(0, 300)}`);
+    throw new Error("Claude Code returned output the app could not read. Try again or choose another provider.");
   }
 
   if (envelope.is_error) {
@@ -59,7 +59,7 @@ export async function callClaudeCli({ model, systemPrompt, userPrompt }) {
     if (/not logged in|please run \/login/i.test(message)) {
       throw new Error("Claude Code is not authenticated. Run `claude auth login` and try again.");
     }
-    throw new Error(`Claude Code error: ${message}`);
+    throw new Error("Claude Code could not complete the request. Check your selected model and Claude Max access, then try again.");
   }
 
   return String(envelope.result ?? "");
@@ -67,13 +67,14 @@ export async function callClaudeCli({ model, systemPrompt, userPrompt }) {
 
 // ----- Codex CLI (codex exec) -----
 
-export async function callCodexCli({ model, systemPrompt, userPrompt }) {
+export async function callCodexCli({ model, reasoningEffort, systemPrompt, userPrompt }) {
   const combined = systemPrompt
     ? `${systemPrompt}\n\n---\n\n${userPrompt}`
     : userPrompt;
 
   const args = ["exec", "--skip-git-repo-check", "--sandbox", "read-only"];
   if (model && model !== "default") args.push("--model", model);
+  if (reasoningEffort) args.push("-c", `model_reasoning_effort="${reasoningEffort}"`);
 
   const { stdout } = await runCli("codex", args, combined);
   return extractCodexFinalOutput(stdout);
