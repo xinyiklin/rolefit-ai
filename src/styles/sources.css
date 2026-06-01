@@ -616,17 +616,28 @@ select,
   border-radius: var(--r-sm);
 }
 
-/* -------- AI settings inline form -------- */
 
-.ai-settings {
-  margin-top: var(--s3);
-  padding: var(--s3) var(--s4);
-  border: 1px solid var(--hairline);
-  border-radius: var(--r-md);
-  background: var(--card-soft);
+/* -------- Polish panel: drag-to-resize handle + pinned action footer -------- */
+.polish-resize {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 16px;
+  margin: calc(var(--s3) * -1) calc(var(--s4) * -1) var(--s1);
+  border-bottom: 1px solid var(--hairline-soft);
+  color: var(--ink-faint);
+  cursor: ns-resize;
+  touch-action: none;
+  user-select: none;
 }
 
-.ai-settings > .field { margin-top: 0; }
-.ai-settings > .settings-grid { margin-top: var(--s3); }
-.ai-settings > .micro-status { margin-top: var(--s3); }
+.polish-resize:hover { color: var(--ink-muted); background: var(--card-hover); }
+.polish-resize svg { opacity: 0.5; }
+.polish-resize:hover svg { opacity: 0.9; }
 
+/* Pinned: lives outside .polish-scroll so the Polish button is always visible. */
+.polish-actions {
+  display: grid;
+  gap: var(--s2);
+  margin-top: var(--s3);
+}

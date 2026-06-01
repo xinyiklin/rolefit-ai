@@ -293,22 +293,6 @@
   line-height: 1.5;
 }
 
-/* -------- Strict review form (sources rail) -------- */
-
-.strict-form {
-  display: grid;
-  gap: var(--s2);
-  margin-top: var(--s2);
-  padding: var(--s3) var(--s3);
-  border: 1px solid var(--hairline);
-  border-left: 3px solid var(--warm);
-  border-radius: var(--r-md);
-  background: var(--warm-veil);
-}
-
-.strict-form > .field { margin-top: 0; }
-.strict-form .field > span small { color: var(--ink-faint); font-weight: 400; }
-
 /* -------- Strict review tab content -------- */
 
 .strict-verdict {

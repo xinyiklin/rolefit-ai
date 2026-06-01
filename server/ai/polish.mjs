@@ -1,4 +1,4 @@
-import { callClaudeCli, callCodexCli } from "../ai-cli/index.mjs";
+import { callClaudeCli, callCodexCli, callGeminiCli } from "../ai-cli/index.mjs";
 import { FetchTimeoutError, fetchWithTimeout, readBody, sendJson } from "../http.mjs";
 import { chatCompletionsEndpoint } from "../network.mjs";
 
@@ -78,7 +78,8 @@ function providerLabel(provider) {
       local: "Local AI",
       "openai-compatible": "OpenAI-compatible provider",
       "claude-cli": "Claude Code",
-      "codex-cli": "Codex CLI"
+      "codex-cli": "Codex CLI",
+      "gemini-cli": "Gemini CLI"
     }[provider] ?? "AI provider"
   );
 }
@@ -126,14 +127,15 @@ export function normalizeProvider(provider) {
     "openai-compatible",
     "local",
     "claude-cli",
-    "codex-cli"
+    "codex-cli",
+    "gemini-cli"
   ].includes(normalized)
     ? normalized
     : "openai";
 }
 
 function isCliProvider(provider) {
-  return provider === "claude-cli" || provider === "codex-cli";
+  return provider === "claude-cli" || provider === "codex-cli" || provider === "gemini-cli";
 }
 
 function normalizeCliReasoningEffort(provider, effort) {
@@ -161,7 +163,8 @@ function providerDefaultModel(provider) {
       "openai-compatible": process.env.AI_MODEL ?? process.env.OPENAI_MODEL ?? "gpt-5.5",
       local: process.env.LOCAL_AI_MODEL ?? "llama3.2",
       "claude-cli": process.env.CLAUDE_CLI_MODEL ?? "",
-      "codex-cli": process.env.CODEX_CLI_MODEL ?? ""
+      "codex-cli": process.env.CODEX_CLI_MODEL ?? "",
+      "gemini-cli": process.env.GEMINI_CLI_MODEL ?? ""
     }[provider] ?? process.env.OPENAI_MODEL ?? "gpt-5.5"
   );
 }
@@ -510,6 +513,9 @@ export async function handlePolish(req, res) {
     } else if (provider === "codex-cli") {
       const raw = await callCodexCli({ model, reasoningEffort, systemPrompt, userPrompt });
       parsed = parseAiJson(raw);
+    } else if (provider === "gemini-cli") {
+      const raw = await callGeminiCli({ model, systemPrompt, userPrompt });
+      parsed = parseAiJson(raw);
     } else if (provider === "anthropic") {
       parsed = await callAnthropicMessages({ apiKey, model, systemPrompt, userPrompt });
     } else if (provider === "gemini") {
@@ -549,7 +555,9 @@ export async function handlePolish(req, res) {
       "Private-network AI base URLs are blocked. Use localhost for local AI or a public https provider URL.",
       "Claude Code is not authenticated. Run `claude auth login` and try again.",
       "codex is not installed or not on PATH.",
-      "claude is not installed or not on PATH."
+      "claude is not installed or not on PATH.",
+      "gemini is not installed or not on PATH.",
+      "Gemini CLI could not complete the request. Run `gemini` once to sign in, confirm the selected model is available, then try again."
     ]);
     if (safeConfigMessages.has(message)) {
       sendJson(res, 400, { error: message });

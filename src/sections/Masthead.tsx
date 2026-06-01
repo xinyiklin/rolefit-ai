@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { BriefcaseBusiness, FilePlus2, FileText, FolderOpen, Sparkles } from "lucide-react";
 import type { ScoreSource } from "./shared";
 
@@ -11,6 +12,8 @@ type MastheadProps = {
   onLoadResume: () => void | Promise<void>;
   onNextRole: () => void;
   nextRoleDisabled: boolean;
+  aiControl?: ReactNode;
+  polishControl?: ReactNode;
 };
 
 export function Masthead({
@@ -22,7 +25,9 @@ export function Masthead({
   baseResumeName,
   onLoadResume,
   onNextRole,
-  nextRoleDisabled
+  nextRoleDisabled,
+  aiControl,
+  polishControl
 }: MastheadProps) {
   return (
     <header className="masthead" aria-label="Workspace header">
@@ -51,6 +56,8 @@ export function Masthead({
           <Sparkles size={13} aria-hidden="true" />
           <em>{outputReady ? scoreSource?.score.overall ?? "—" : "—"}</em>
         </div>
+        {aiControl}
+        {polishControl}
         <button
           className="ghost-button"
           type="button"
