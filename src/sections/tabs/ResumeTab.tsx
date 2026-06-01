@@ -8,7 +8,7 @@ type ResumeTabProps = {
 
 export function ResumeTab({ result, resultSourceLabel, scoreContext }: ResumeTabProps) {
   return (
-    <section className="studio-card">
+    <section className="studio-card studio-card--flush">
       <div className="studio-card__head">
         <h2>Tailored resume{resultSourceLabel ? ` · ${resultSourceLabel}` : ""}</h2>
         {scoreContext ? <span className="studio-card__meta">{scoreContext}</span> : null}

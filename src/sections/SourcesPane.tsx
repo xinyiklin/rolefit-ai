@@ -9,9 +9,11 @@ import {
   AlertCircle,
   BriefcaseBusiness,
   CheckCircle2,
+  DownloadCloud,
   FileText,
   FolderOpen,
   GripHorizontal,
+  Link2,
   RefreshCw,
   Save,
   Sparkles,
@@ -49,6 +51,10 @@ type SourcesPaneProps = {
   // Job target
   jobDescription: string;
   setJobDescription: (v: string) => void;
+  jobUrl: string;
+  setJobUrl: (v: string) => void;
+  onExtractFromLink: () => void | Promise<void>;
+  isExtractingLink: boolean;
   linkStatus: string;
   jobReady: boolean;
 
@@ -67,7 +73,6 @@ type SourcesPaneProps = {
   setResumeText: (v: string) => void;
   setResult: (v: PolishedResume | null) => void;
   resumeReady: boolean;
-  onBaseResumeUpload: (event: ChangeEvent<HTMLInputElement>) => void;
   onSaveCurrentAsBase: () => void;
   onRemoveBaseResume: () => void;
   onLoadWorkspace: (apply: boolean) => Promise<void>;
@@ -93,6 +98,10 @@ export function SourcesPane(props: SourcesPaneProps) {
   const {
     jobDescription,
     setJobDescription,
+    jobUrl,
+    setJobUrl,
+    onExtractFromLink,
+    isExtractingLink,
     linkStatus,
     jobReady,
     baseResumeName,
@@ -109,7 +118,6 @@ export function SourcesPane(props: SourcesPaneProps) {
     setResumeText,
     setResult,
     resumeReady,
-    onBaseResumeUpload,
     onSaveCurrentAsBase,
     onRemoveBaseResume,
     onLoadWorkspace,
@@ -145,7 +153,7 @@ export function SourcesPane(props: SourcesPaneProps) {
     if (!dragRef.current) return;
     // Dragging the handle up grows the panel; down shrinks it.
     const delta = dragRef.current.startY - event.clientY;
-    const next = Math.max(96, Math.min(window.innerHeight * 0.72, dragRef.current.startH + delta));
+    const next = Math.max(80, Math.min(window.innerHeight * 0.72, dragRef.current.startH + delta));
     setPolishHeight(next);
   }
 
@@ -163,7 +171,7 @@ export function SourcesPane(props: SourcesPaneProps) {
     event.preventDefault();
     const el = polishScrollRef.current;
     const current = polishHeight ?? (el ? el.getBoundingClientRect().height : 240);
-    setPolishHeight(Math.max(96, Math.min(window.innerHeight * 0.72, current + step)));
+    setPolishHeight(Math.max(80, Math.min(window.innerHeight * 0.72, current + step)));
   }
 
   return (
@@ -180,13 +188,39 @@ export function SourcesPane(props: SourcesPaneProps) {
         </header>
         <label className="field">
           <span>
-            Job posting <small>(paste the full description; links alone are tracking-only)</small>
+            Job link <small>(optional — extract the posting into the box below, or just keep it for tracking)</small>
+          </span>
+          <div className="link-input-row">
+            <div className="input-with-icon">
+              <Link2 size={14} aria-hidden="true" />
+              <input
+                type="url"
+                value={jobUrl}
+                onChange={(event) => setJobUrl(event.target.value)}
+                placeholder="https://… (job posting URL)"
+              />
+            </div>
+            <button
+              type="button"
+              className="secondary-button is-compact link-extract"
+              onClick={onExtractFromLink}
+              disabled={!jobUrl.trim() || isExtractingLink}
+              title="Fetch the posting and extract the description into the box below"
+            >
+              <DownloadCloud size={13} aria-hidden="true" />
+              <span>{isExtractingLink ? "Extracting…" : "Extract"}</span>
+            </button>
+          </div>
+        </label>
+        <label className="field">
+          <span>
+            Job posting <small>(paste the full description, or extract it from the link above)</small>
           </span>
           <textarea
             className="textarea textarea--job"
             value={jobDescription}
             onChange={(event) => setJobDescription(event.target.value)}
-            placeholder="Paste responsibilities, qualifications, and preferred skills. A bare link can be tracked, but not polished by itself."
+            placeholder="Paste responsibilities, qualifications, and preferred skills."
           />
         </label>
         {linkStatus ? <p className="micro-status">{linkStatus}</p> : null}
@@ -209,11 +243,6 @@ export function SourcesPane(props: SourcesPaneProps) {
             <strong>{baseResumeName || "No base saved"}</strong>
           </div>
           <div className="workspace-actions">
-            <label className="secondary-button is-compact workspace-upload">
-              <Upload size={12} aria-hidden="true" />
-              Upload
-              <input accept=".docx,.txt,.md,.csv,.tex" type="file" onChange={onBaseResumeUpload} />
-            </label>
             <button
               className="secondary-button is-compact"
               type="button"

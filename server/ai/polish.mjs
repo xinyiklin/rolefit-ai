@@ -212,7 +212,7 @@ function aiStrictReviewInstructions() {
   return "You are a senior technical recruiter and hiring manager with 10+ years of experience screening software engineering candidates. You are NOT a cheerleader — give a blunt, honest assessment. NEVER suggest fabricating experience. If a gap cannot be honestly filled with evidence the user has provided, mark it as cannot-add and recommend skipping. Don't pad with generic advice. Don't praise the resume. If the resume is genuinely a bad fit, say DON'T APPLY with a reason. DEAL-PRIORITIZE soft skills (communication, teamwork, ownership) — only note them as required if the JD explicitly demands them. Compare on these dimensions in order: 1) required technical skills, 2) required experience domains, 3) required years/seniority, 4) preferred/nice-to-have. Also polish the resume to align with the JD using only facts present in the resume or the honest context. Keep each role to no more than five bullets. Use bracketed prompts like [add metric: volume, percentage, dollars, time saved] for unverifiable claims. Return strict JSON only.";
 }
 
-function strictReviewPrompt({ includeCoverLetter, jobUrl, jobText, preserveFormat, sourceFormat, resumeText, roleAppliedAs, honestContext, customInstructions }) {
+function strictReviewPrompt({ includeCoverLetter, jobText, preserveFormat, sourceFormat, resumeText, roleAppliedAs, honestContext, customInstructions }) {
   return `Return this JSON shape exactly:
 {
   "polishedText": "full polished resume text",
@@ -265,26 +265,23 @@ ${formatPreservationPrompt(preserveFormat, sourceFormat)}
 
 ${customInstructionsPrompt(customInstructions)}
 
-Job URL:
-${jobUrl || "Not provided"}
-
 Job description:
-${jobText || "Use the job URL text only if it contains useful role clues."}
+${jobText || "Not provided."}
 
 Current resume:
 ${resumeText}`;
 }
 
-function buildPolishPrompts({ strictReview, includeCoverLetter, jobUrl, jobText, preserveFormat, sourceFormat, resumeText, roleAppliedAs, honestContext, customInstructions }) {
+function buildPolishPrompts({ strictReview, includeCoverLetter, jobText, preserveFormat, sourceFormat, resumeText, roleAppliedAs, honestContext, customInstructions }) {
   if (strictReview) {
     return {
       systemPrompt: aiStrictReviewInstructions(),
-      userPrompt: strictReviewPrompt({ includeCoverLetter, jobUrl, jobText, preserveFormat, sourceFormat, resumeText, roleAppliedAs, honestContext, customInstructions })
+      userPrompt: strictReviewPrompt({ includeCoverLetter, jobText, preserveFormat, sourceFormat, resumeText, roleAppliedAs, honestContext, customInstructions })
     };
   }
   return {
     systemPrompt: aiInstructions(),
-    userPrompt: polishPrompt({ includeCoverLetter, jobUrl, jobText, preserveFormat, sourceFormat, resumeText, customInstructions })
+    userPrompt: polishPrompt({ includeCoverLetter, jobText, preserveFormat, sourceFormat, resumeText, customInstructions })
   };
 }
 
@@ -311,7 +308,7 @@ Preserve original formatting (modify in place):
 ${preserveFormat ? "Yes. Rewrite text only and keep the resume's existing structure, section order, and layout. Return one line per original resume paragraph where practical so the edits drop back into the original file in place." : "No. A clean, restructured text/PDF output is acceptable."}`;
 }
 
-function polishPrompt({ includeCoverLetter, jobUrl, jobText, preserveFormat, sourceFormat, resumeText, customInstructions }) {
+function polishPrompt({ includeCoverLetter, jobText, preserveFormat, sourceFormat, resumeText, customInstructions }) {
   return `Return this JSON shape exactly:
 {
   "polishedText": "full polished resume text",
@@ -327,11 +324,8 @@ ${formatPreservationPrompt(preserveFormat, sourceFormat)}
 
 ${customInstructionsPrompt(customInstructions)}
 
-Job URL:
-${jobUrl || "Not provided"}
-
 Job description:
-${jobText || "Use the job URL text only if it contains useful role clues."}
+${jobText || "Not provided."}
 
 Current resume:
 ${resumeText}`;
@@ -453,7 +447,6 @@ export async function handlePolish(req, res) {
     const body = JSON.parse(await readBody(req));
     const resumeText = String(body.resumeText ?? "").slice(0, 45_000);
     const jobText = String(body.jobText ?? "").slice(0, 35_000);
-    const jobUrl = String(body.jobUrl ?? "").slice(0, 2_000);
     provider = normalizeProvider(body.provider || getDefaultProvider());
     const requestApiKey = String(body.apiKey ?? "").trim();
     const apiKey = providerApiKey(provider, requestApiKey);
@@ -496,7 +489,6 @@ export async function handlePolish(req, res) {
     const { systemPrompt, userPrompt } = buildPolishPrompts({
       strictReview,
       includeCoverLetter,
-      jobUrl,
       jobText,
       preserveFormat,
       sourceFormat,

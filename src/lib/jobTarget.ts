@@ -29,17 +29,3 @@ export function inferCompanyFromUrl(url: string) {
     return "";
   }
 }
-
-// True only when the whole field is a single bare http(s) URL - i.e. the user
-// pasted a link rather than a description. A pasted description has whitespace,
-// so it never trips this and is treated as job text.
-export function isLikelyJobUrl(value: string): boolean {
-  const text = value.trim();
-  if (!text || /\s/.test(text) || !/^https?:\/\//i.test(text)) return false;
-  try {
-    const parsed = new URL(text);
-    return parsed.protocol === "http:" || parsed.protocol === "https:";
-  } catch {
-    return false;
-  }
-}

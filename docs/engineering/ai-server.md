@@ -22,7 +22,13 @@ careflow `5173-5180`, portfolio `5184-5185`; do not mix them up.
 - `/api/polish` AI provider routing (OpenAI, Anthropic, Google,
   OpenRouter, Groq, Together AI, Mistral, OpenAI-compatible)
 - DOCX import / export (text extraction, format-preserved updates)
-- job description import
+- job posting import (`/api/import-job`): fetch a public posting URL —
+  Workday CXS JSON when the host is recognized (`*.myworkdayjobs.com`,
+  `/job/` and `/details/` links), otherwise a generic HTML→text scrape —
+  behind SSRF guards that re-validate the host and resolved IP on every
+  redirect hop and reject private / loopback / link-local targets. The
+  imported text fills the job-description field; the link itself is kept
+  only for pipeline tracking and is never sent to the AI.
 - workspace file storage under `job-search-workspace/` (auto-load,
   upload, save, reload)
 
@@ -122,7 +128,11 @@ In the response:
 ## Document Workflow
 
 - DOCX is the format-preserving path; PDF and text-only paths are
-  text-only or clean-template exports.
+  text-only or clean-template exports. The clean-template PDF
+  (`src/pdfResume.ts`) is generated locally with real Helvetica AFM
+  metrics and `WinAnsiEncoding`, so accented characters render and the
+  text stays selectable/parseable; it writes single-byte (Latin-1) output
+  so the cross-reference offsets stay valid.
 - Treat uploaded DOCX bytes as transient — extract text, perform the
   edit, and write back without persisting unrelated copies.
 - Keep `job-search-workspace/` the canonical location for personal

@@ -138,6 +138,16 @@
   box-shadow: var(--shadow-rest);
 }
 
+/* Resume + Cover letter tabs: the textarea is already a fully styled
+   container, so flatten the wrapping card to avoid a box-in-a-box look —
+   the heading sits on the pane background and the textarea is the only frame. */
+.studio-card--flush {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
 .studio-card__head {
   display: flex;
   align-items: center;
