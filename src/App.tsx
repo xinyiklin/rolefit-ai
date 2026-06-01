@@ -11,10 +11,9 @@ import {
   polishResume
 } from "./resumeEngine";
 import { sampleResume } from "./samples";
+import { loadSettings, saveSettings } from "./lib/settings";
 
 import {
-  cliReasoningEffortOptionsByProvider,
-  modelOptionsByProvider,
   providerOptions,
   roleAppliedOptions
 } from "./config/aiOptions";
@@ -26,7 +25,9 @@ import { inferApplicationTitle, inferCompanyFromUrl, isLikelyJobUrl } from "./li
 import { blocksToText, buildResumeBlocks } from "./lib/resumeBlocks";
 import { describeResumeFormat, looksLikeLatex } from "./lib/resumeFormat";
 
+import { AiMenu } from "./sections/AiMenu";
 import { Masthead } from "./sections/Masthead";
+import { PolishMenu } from "./sections/PolishMenu";
 import { SourcesPane, type AiProviderValue } from "./sections/SourcesPane";
 import { StudioPane } from "./sections/StudioPane";
 import { ExportRail } from "./sections/ExportRail";
@@ -82,25 +83,26 @@ function App() {
   const [isDownloadingTex, setIsDownloadingTex] = useState(false);
   const [isRenderingLatexPdf, setIsRenderingLatexPdf] = useState(false);
   const [isOpeningOverleaf, setIsOpeningOverleaf] = useState(false);
-  const [aiProvider, setAiProvider] = useState<AiProviderValue>("claude-cli");
+  // Restore auto-saved preferences once on mount (API key is never persisted).
+  const saved = useMemo(() => loadSettings(), []);
+  const [aiProvider, setAiProvider] = useState<AiProviderValue>(saved.aiProvider ?? "claude-cli");
   const [apiKey, setApiKey] = useState("");
-  const [apiBaseUrl, setApiBaseUrl] = useState("");
-  const [selectedModel, setSelectedModel] = useState("opus");
-  const [cliReasoningEffort, setCliReasoningEffort] = useState("");
-  const [customModel, setCustomModel] = useState("");
+  const [apiBaseUrl, setApiBaseUrl] = useState(saved.apiBaseUrl ?? "");
+  const [selectedModel, setSelectedModel] = useState(saved.selectedModel ?? "opus");
+  const [cliReasoningEffort, setCliReasoningEffort] = useState(saved.cliReasoningEffort ?? "");
+  const [customModel, setCustomModel] = useState(saved.customModel ?? "");
   const [includeCoverLetter, setIncludeCoverLetter] = useState(false);
   const [strictReview, setStrictReview] = useState(true);
   const [preserveFormat, setPreserveFormat] = useState(true);
-  const [roleAppliedAs, setRoleAppliedAs] = useState<string>("Early Career");
-  const [honestContext, setHonestContext] = useState("");
-  const [customInstructions, setCustomInstructions] = useState("");
+  const [roleAppliedAs, setRoleAppliedAs] = useState<string>(saved.roleAppliedAs ?? "Early Career");
+  const [honestContext, setHonestContext] = useState(saved.honestContext ?? "");
+  const [customInstructions, setCustomInstructions] = useState(saved.customInstructions ?? "");
   const [activeOutputTab, setActiveOutputTab] = useState<OutputTab>("resume");
   const [workspacePath, setWorkspacePath] = useState("");
   const [workspaceFiles, setWorkspaceFiles] = useState<string[]>([]);
   const [baseResumeName, setBaseResumeName] = useState("");
   const [workspaceStatus, setWorkspaceStatus] = useState("");
   const [isSavingBaseResume, setIsSavingBaseResume] = useState(false);
-  const [showAdvanced, setShowAdvanced] = useState(false);
   const [pipelineFilter, setPipelineFilter] = useState<"all" | ApplicationStatus>("all");
   const [expandedApplicationId, setExpandedApplicationId] = useState<string | null>(null);
 
@@ -132,6 +134,34 @@ function App() {
     void loadWorkspace(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Auto-save preferences (AI selection + polish inputs) so they survive reloads.
+  // Debounced so the free-text fields (honest context, custom instructions)
+  // don't serialize + write localStorage on every keystroke.
+  useEffect(() => {
+    const id = setTimeout(() => {
+      saveSettings({
+        aiProvider,
+        selectedModel,
+        customModel,
+        cliReasoningEffort,
+        apiBaseUrl,
+        roleAppliedAs,
+        honestContext,
+        customInstructions
+      });
+    }, 400);
+    return () => clearTimeout(id);
+  }, [
+    aiProvider,
+    selectedModel,
+    customModel,
+    cliReasoningEffort,
+    apiBaseUrl,
+    roleAppliedAs,
+    honestContext,
+    customInstructions
+  ]);
 
   // ----- Derived (memos) -----
   // The job field is one box: a pasted link OR a description. When it holds a
@@ -199,10 +229,6 @@ function App() {
     ? "Live draft score"
     : "Awaiting resume and job target";
   const resultSourceLabel = result?.source === "local" ? "Local engine" : result?.source === "ai" ? "AI" : "";
-  const selectedProviderOption = providerOptions.find((option) => option.value === aiProvider);
-  const currentModelOptions = modelOptionsByProvider[aiProvider];
-  const currentCliReasoningEffortOptions = cliReasoningEffortOptionsByProvider[aiProvider] ?? [];
-  const customModelPlaceholder = selectedProviderOption?.model || "model-id";
   const resumeReady = resumeText.trim().length > 80;
   const resumeSourceFormat = describeResumeFormat(fileName, Boolean(sourceDocx), resumeText);
   const jobReady = jobTextForPolish.trim().length > 40;
@@ -776,7 +802,7 @@ function App() {
     setPolishStatus("");
     setDownloadStatus("");
     setTexStatus("");
-    setHonestContext("");
+    // Honest context + custom instructions are remembered prefs, not per-role; keep them.
     setCopied(false);
     setCoverCopied(false);
     setActiveOutputTab("resume");
@@ -881,6 +907,33 @@ function App() {
         onLoadResume={loadResume}
         onNextRole={handleNextRole}
         nextRoleDisabled={!jobUrl && !jobDescription && !result && !linkStatus}
+        aiControl={
+          <AiMenu
+            aiProvider={aiProvider}
+            onProviderChange={handleProviderChange}
+            apiKey={apiKey}
+            setApiKey={setApiKey}
+            apiBaseUrl={apiBaseUrl}
+            setApiBaseUrl={setApiBaseUrl}
+            selectedModel={selectedModel}
+            setSelectedModel={setSelectedModel}
+            customModel={customModel}
+            setCustomModel={setCustomModel}
+            cliReasoningEffort={cliReasoningEffort}
+            setCliReasoningEffort={setCliReasoningEffort}
+          />
+        }
+        polishControl={
+          <PolishMenu
+            roleAppliedAs={roleAppliedAs}
+            setRoleAppliedAs={setRoleAppliedAs}
+            roleAppliedOptions={roleAppliedOptions}
+            honestContext={honestContext}
+            setHonestContext={setHonestContext}
+            customInstructions={customInstructions}
+            setCustomInstructions={setCustomInstructions}
+          />
+        }
       />
 
       <div className="workspace-grid">
@@ -917,36 +970,10 @@ function App() {
           preserveFormat={preserveFormat}
           setPreserveFormat={setPreserveFormat}
           resumeSourceFormat={resumeSourceFormat}
-          roleAppliedAs={roleAppliedAs}
-          setRoleAppliedAs={setRoleAppliedAs}
-          honestContext={honestContext}
-          setHonestContext={setHonestContext}
-          customInstructions={customInstructions}
-          setCustomInstructions={setCustomInstructions}
-          showAdvanced={showAdvanced}
-          setShowAdvanced={setShowAdvanced}
           canPolish={canPolish}
           isPolishing={isPolishing}
           polishStatus={polishStatus}
           onPolish={handlePolish}
-          roleAppliedOptions={roleAppliedOptions}
-          aiProvider={aiProvider}
-          onProviderChange={handleProviderChange}
-          apiKey={apiKey}
-          setApiKey={setApiKey}
-          apiBaseUrl={apiBaseUrl}
-          setApiBaseUrl={setApiBaseUrl}
-          selectedModel={selectedModel}
-          setSelectedModel={setSelectedModel}
-          cliReasoningEffort={cliReasoningEffort}
-          setCliReasoningEffort={setCliReasoningEffort}
-          customModel={customModel}
-          setCustomModel={setCustomModel}
-          providerOptions={providerOptions}
-          currentModelOptions={currentModelOptions}
-          currentCliReasoningEffortOptions={currentCliReasoningEffortOptions}
-          selectedProviderOption={selectedProviderOption}
-          customModelPlaceholder={customModelPlaceholder}
         />
 
         <StudioPane

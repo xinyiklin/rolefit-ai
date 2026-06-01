@@ -1,14 +1,19 @@
-import type { ChangeEvent } from "react";
+import {
+  useRef,
+  useState,
+  type ChangeEvent,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type PointerEvent as ReactPointerEvent
+} from "react";
 import {
   AlertCircle,
   BriefcaseBusiness,
   CheckCircle2,
   FileText,
   FolderOpen,
-  KeyRound,
+  GripHorizontal,
   RefreshCw,
   Save,
-  Settings2,
   Sparkles,
   Trash2,
   Upload
@@ -26,7 +31,8 @@ export type AiProviderValue =
   | "mistral"
   | "local"
   | "claude-cli"
-  | "codex-cli";
+  | "codex-cli"
+  | "gemini-cli";
 
 export type ProviderOption = {
   readonly value: AiProviderValue;
@@ -77,38 +83,10 @@ type SourcesPaneProps = {
   preserveFormat: boolean;
   setPreserveFormat: (v: boolean) => void;
   resumeSourceFormat: string;
-  roleAppliedAs: string;
-  setRoleAppliedAs: (v: string) => void;
-  honestContext: string;
-  setHonestContext: (v: string) => void;
-  customInstructions: string;
-  setCustomInstructions: (v: string) => void;
-  showAdvanced: boolean;
-  setShowAdvanced: (next: (v: boolean) => boolean) => void;
   canPolish: boolean;
   isPolishing: boolean;
   polishStatus: string;
   onPolish: () => void | Promise<void>;
-  roleAppliedOptions: readonly RoleOption[];
-
-  // AI settings
-  aiProvider: AiProviderValue;
-  onProviderChange: (provider: AiProviderValue) => void;
-  apiKey: string;
-  setApiKey: (v: string) => void;
-  apiBaseUrl: string;
-  setApiBaseUrl: (v: string) => void;
-  selectedModel: string;
-  setSelectedModel: (v: string) => void;
-  cliReasoningEffort: string;
-  setCliReasoningEffort: (v: string) => void;
-  customModel: string;
-  setCustomModel: (v: string) => void;
-  providerOptions: readonly ProviderOption[];
-  currentModelOptions: readonly ModelOption[];
-  currentCliReasoningEffortOptions: readonly ModelOption[];
-  selectedProviderOption: ProviderOption | undefined;
-  customModelPlaceholder: string;
 };
 
 export function SourcesPane(props: SourcesPaneProps) {
@@ -145,36 +123,48 @@ export function SourcesPane(props: SourcesPaneProps) {
     preserveFormat,
     setPreserveFormat,
     resumeSourceFormat,
-    roleAppliedAs,
-    setRoleAppliedAs,
-    honestContext,
-    setHonestContext,
-    customInstructions,
-    setCustomInstructions,
-    showAdvanced,
-    setShowAdvanced,
     canPolish,
     isPolishing,
     polishStatus,
-    onPolish,
-    roleAppliedOptions,
-    aiProvider,
-    onProviderChange,
-    apiKey,
-    setApiKey,
-    apiBaseUrl,
-    setApiBaseUrl,
-    selectedModel,
-    setSelectedModel,
-    cliReasoningEffort,
-    setCliReasoningEffort,
-    customModel,
-    setCustomModel,
-    providerOptions,
-    currentModelOptions,
-    currentCliReasoningEffortOptions,
-    selectedProviderOption
+    onPolish
   } = props;
+
+  // Drag-to-resize for the Polish panel: null = use the CSS default height.
+  const [polishHeight, setPolishHeight] = useState<number | null>(null);
+  const polishScrollRef = useRef<HTMLDivElement>(null);
+  const dragRef = useRef<{ startY: number; startH: number } | null>(null);
+
+  function onResizeStart(event: ReactPointerEvent<HTMLDivElement>) {
+    const el = polishScrollRef.current;
+    if (!el) return;
+    dragRef.current = { startY: event.clientY, startH: el.getBoundingClientRect().height };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }
+
+  function onResizeMove(event: ReactPointerEvent<HTMLDivElement>) {
+    if (!dragRef.current) return;
+    // Dragging the handle up grows the panel; down shrinks it.
+    const delta = dragRef.current.startY - event.clientY;
+    const next = Math.max(96, Math.min(window.innerHeight * 0.72, dragRef.current.startH + delta));
+    setPolishHeight(next);
+  }
+
+  function onResizeEnd(event: ReactPointerEvent<HTMLDivElement>) {
+    dragRef.current = null;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+  }
+
+  // Keyboard operability for the separator: Arrow Up/Down nudges the panel height.
+  function onResizeKeyDown(event: ReactKeyboardEvent<HTMLDivElement>) {
+    const step = event.key === "ArrowUp" ? 24 : event.key === "ArrowDown" ? -24 : 0;
+    if (step === 0) return;
+    event.preventDefault();
+    const el = polishScrollRef.current;
+    const current = polishHeight ?? (el ? el.getBoundingClientRect().height : 240);
+    setPolishHeight(Math.max(96, Math.min(window.innerHeight * 0.72, current + step)));
+  }
 
   return (
     <aside className="sources-pane" aria-label="Inputs">
@@ -329,22 +319,32 @@ export function SourcesPane(props: SourcesPaneProps) {
 
       {/* Polish — one sticky panel: only the header stays fixed; toggles, inputs, and button scroll inside the capped region */}
       <section className="sources-section sources-section--action">
+        <div
+          className="polish-resize"
+          role="separator"
+          aria-orientation="horizontal"
+          aria-label="Resize Polish panel (arrow keys to resize, double-click to reset)"
+          title="Drag to resize · double-click to reset"
+          tabIndex={0}
+          onPointerDown={onResizeStart}
+          onPointerMove={onResizeMove}
+          onPointerUp={onResizeEnd}
+          onPointerCancel={onResizeEnd}
+          onKeyDown={onResizeKeyDown}
+          onDoubleClick={() => setPolishHeight(null)}
+        >
+          <GripHorizontal size={14} aria-hidden="true" />
+        </div>
         <header className="sources-section__head">
           <Sparkles size={14} aria-hidden="true" />
           <h2>Polish</h2>
-          <button
-            className="ghost-button is-compact"
-            type="button"
-            aria-expanded={showAdvanced}
-            onClick={() => setShowAdvanced((v) => !v)}
-            title={selectedProviderOption?.label ? `AI settings: ${selectedProviderOption.label}` : "AI settings"}
-          >
-            <Settings2 size={12} aria-hidden="true" />
-            <span>{showAdvanced ? "Hide settings" : "AI settings"}</span>
-          </button>
         </header>
 
-        <div className="polish-scroll">
+        <div
+          className="polish-scroll"
+          ref={polishScrollRef}
+          style={polishHeight != null ? { maxHeight: polishHeight } : undefined}
+        >
         <label className="toggle-row">
           <input
             checked={preserveFormat}
@@ -380,158 +380,33 @@ export function SourcesPane(props: SourcesPaneProps) {
           </span>
         </label>
 
-        {strictReview ? (
-          <div className="strict-form">
-            <label className="field">
-              <span>Role applying as</span>
-              <select value={roleAppliedAs} onChange={(event) => setRoleAppliedAs(event.target.value)}>
-                {roleAppliedOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="field">
-              <span>
-                Honest context <small>(true facts not on the resume — used only as evidence)</small>
-              </span>
-              <textarea
-                className="textarea"
-                value={honestContext}
-                onChange={(event) => setHonestContext(event.target.value)}
-                placeholder="e.g., shipped a PostgreSQL migration with zero downtime; led a 3-person hackathon team; merged PR to django-rest-framework."
-                rows={3}
-              />
-            </label>
-          </div>
-        ) : null}
+        </div>
 
-        <label className="field">
-          <span>
-            Custom instructions <small>(optional — steer the rewrite: tone, length, emphasis)</small>
-          </span>
-          <textarea
-            className="textarea"
-            value={customInstructions}
-            onChange={(event) => setCustomInstructions(event.target.value)}
-            placeholder="e.g., aim for one page; lead each bullet with a metric; use British spelling; don't add a summary section."
-            rows={3}
-          />
-        </label>
+        <div className="polish-actions">
+          <button
+            className="primary-button"
+            type="button"
+            disabled={!canPolish || isPolishing}
+            onClick={onPolish}
+          >
+            <Sparkles size={14} aria-hidden="true" />
+            {isPolishing
+              ? "Working…"
+              : strictReview && includeCoverLetter
+              ? "Polish + review + cover"
+              : strictReview
+              ? "Polish + review"
+              : includeCoverLetter
+              ? "Polish + cover"
+              : "Polish"}
+          </button>
 
-        {showAdvanced ? (
-          <form className="ai-settings" onSubmit={(event) => event.preventDefault()}>
-            <label className="field">
-              <span>API key</span>
-              <div className="input-with-icon">
-                <KeyRound size={15} aria-hidden="true" />
-                <input
-                  autoComplete="off"
-                  value={apiKey}
-                  onChange={(event) => setApiKey(event.target.value)}
-                  placeholder={
-                    aiProvider === "claude-cli"
-                      ? "Not used — auth via `claude auth login` (Claude Max)"
-                      : aiProvider === "codex-cli"
-                      ? "Not used — auth via `codex login` (ChatGPT/Codex Plus)"
-                      : aiProvider === "openai"
-                      ? "Uses OPENAI_API_KEY when blank"
-                      : "Uses this provider's .env key when blank"
-                  }
-                  disabled={aiProvider === "claude-cli" || aiProvider === "codex-cli"}
-                  type="password"
-                />
-              </div>
-            </label>
-            <div className="settings-grid">
-              <label className="field">
-                <span>Provider</span>
-                <select value={aiProvider} onChange={(event) => onProviderChange(event.target.value as AiProviderValue)}>
-                  {providerOptions.map((option) => (
-                    <option key={option.value || "server-default"} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="field">
-                <span>Model</span>
-                <select value={selectedModel} onChange={(event) => setSelectedModel(event.target.value)}>
-                  {currentModelOptions.map((option) => (
-                    <option key={option.value || "server-default"} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              {selectedModel === "custom" ? (
-                <label className="field field--wide">
-                  <span>Custom model</span>
-                  <input
-                    className="text-input"
-                    value={customModel}
-                    onChange={(event) => setCustomModel(event.target.value)}
-                    placeholder={props.customModelPlaceholder}
-                    type="text"
-                  />
-                </label>
-              ) : null}
-              {currentCliReasoningEffortOptions.length ? (
-                <label className="field">
-                  <span>Reasoning effort</span>
-                  <select value={cliReasoningEffort} onChange={(event) => setCliReasoningEffort(event.target.value)}>
-                    {currentCliReasoningEffortOptions.map((option) => (
-                      <option key={option.value || "cli-default-effort"} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              ) : null}
-              {["openrouter", "groq", "together", "mistral", "local"].includes(aiProvider) ? (
-                <label className="field field--wide">
-                  <span>Base URL</span>
-                  <input
-                    className="text-input"
-                    value={apiBaseUrl}
-                    onChange={(event) => setApiBaseUrl(event.target.value)}
-                    placeholder="https://provider.example/v1"
-                    type="url"
-                  />
-                </label>
-              ) : null}
+          {polishStatus ? (
+            <div className="notice notice--info" role="status">
+              <Sparkles size={15} aria-hidden="true" />
+              <span>{polishStatus}</span>
             </div>
-            <p className="micro-status">
-              Claude and Gemini use their native APIs. OpenRouter / Groq / Together / Mistral / local use OpenAI-compatible <code>/chat/completions</code>.
-            </p>
-          </form>
-        ) : null}
-
-        <button
-          className="primary-button"
-          type="button"
-          disabled={!canPolish || isPolishing}
-          onClick={onPolish}
-        >
-          <Sparkles size={14} aria-hidden="true" />
-          {isPolishing
-            ? "Working…"
-            : strictReview && includeCoverLetter
-            ? "Polish + review + cover"
-            : strictReview
-            ? "Polish + review"
-            : includeCoverLetter
-            ? "Polish + cover"
-            : "Polish"}
-        </button>
-
-        {polishStatus ? (
-          <div className="notice notice--info" role="status">
-            <Sparkles size={15} aria-hidden="true" />
-            <span>{polishStatus}</span>
-          </div>
-        ) : null}
+          ) : null}
         </div>
       </section>
     </aside>

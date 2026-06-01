@@ -1,13 +1,17 @@
 // Subscription-CLI providers. Lets the polish route use Claude Max (via
-// Claude Code) or ChatGPT/Codex Plus (via Codex CLI) without burning paid
-// API tokens. Each helper spawns the local CLI binary and returns the model
-// response as a string (the polish route then parses it as JSON).
+// Claude Code), ChatGPT/Codex Plus (via Codex CLI), or Google Gemini (via the
+// Gemini CLI / Antigravity) without burning paid API tokens. Each helper spawns
+// the local CLI binary and returns the model response as a string (the polish
+// route then parses it as JSON).
 
 import { spawn } from "node:child_process";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
-function runCli(command, args, stdinPayload, { timeoutMs = 180_000 } = {}) {
+function runCli(command, args, stdinPayload, { timeoutMs = 180_000, cwd } = {}) {
   return new Promise((resolve, reject) => {
-    const child = spawn(command, args, { stdio: ["pipe", "pipe", "pipe"] });
+    const child = spawn(command, args, { stdio: ["pipe", "pipe", "pipe"], cwd });
     let stdout = "";
     let stderr = "";
     const timer = setTimeout(() => {
@@ -78,6 +82,41 @@ export async function callCodexCli({ model, reasoningEffort, systemPrompt, userP
 
   const { stdout } = await runCli("codex", args, combined);
   return extractCodexFinalOutput(stdout);
+}
+
+// ----- Gemini CLI (Google Gemini / Antigravity, non-interactive) -----
+
+export async function callGeminiCli({ model, systemPrompt, userPrompt }) {
+  // The Gemini CLI has no separate system-prompt flag, so combine like Codex.
+  const combined = systemPrompt ? `${systemPrompt}\n\n---\n\n${userPrompt}` : userPrompt;
+
+  // --skip-trust: required for headless runs (the CLI otherwise refuses in an
+  //   untrusted workspace). -o text: print only the model's text response.
+  //   -p: non-interactive (headless) mode with the prompt (passed via argv).
+  const args = ["--skip-trust", "-o", "text"];
+  if (model && model !== "default") args.push("-m", model);
+  args.push("-p", combined);
+
+  // Run in a throwaway working dir so --skip-trust only ever trusts an empty
+  // directory: the CLI cannot pick up project context (GEMINI.md) or touch
+  // project files. Color/UX warnings go to stderr, so stdout stays clean JSON.
+  const workdir = await mkdtemp(join(tmpdir(), "rolefit-gemini-"));
+  try {
+    const { stdout } = await runCli("gemini", args, "", { cwd: workdir });
+    return stdout.trim();
+  } catch (error) {
+    // Keep the "not installed" message (it's surfaced as actionable config
+    // guidance); turn any other non-zero exit — most often an unauthenticated
+    // CLI or an inaccessible model — into a specific, actionable hint instead
+    // of the generic "did not return a usable draft" 500.
+    const message = error instanceof Error ? error.message : "";
+    if (/is not installed or not on PATH/.test(message)) throw error;
+    throw new Error(
+      "Gemini CLI could not complete the request. Run `gemini` once to sign in, confirm the selected model is available, then try again."
+    );
+  } finally {
+    await rm(workdir, { recursive: true, force: true }).catch(() => {});
+  }
 }
 
 // Codex exec writes a structured transcript: preamble → "user" → prompt →

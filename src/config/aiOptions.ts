@@ -4,8 +4,9 @@ const customModelOption: ModelOption = { value: "custom", label: "Custom model" 
 const customModelIdOption: ModelOption = { value: "custom", label: "Custom model ID" };
 
 export const providerOptions: readonly ProviderOption[] = [
-  { value: "claude-cli", label: "Claude Max · CLI (recommended)", baseUrl: "", model: "opus" },
-  { value: "codex-cli", label: "Codex Plus · CLI", baseUrl: "", model: "" },
+  { value: "claude-cli", label: "Claude · CLI", baseUrl: "", model: "opus" },
+  { value: "codex-cli", label: "Codex · CLI", baseUrl: "", model: "" },
+  { value: "gemini-cli", label: "Gemini · CLI", baseUrl: "", model: "" },
   { value: "openai", label: "OpenAI", baseUrl: "", model: "" },
   { value: "anthropic", label: "Claude", baseUrl: "", model: "claude-sonnet-4-6" },
   { value: "gemini", label: "Gemini", baseUrl: "", model: "gemini-3.5-flash" },
@@ -102,6 +103,12 @@ export const modelOptionsByProvider: Record<AiProviderValue, readonly ModelOptio
     { value: "gpt-5.5", label: "GPT-5.5" },
     { value: "gpt-5.4", label: "GPT-5.4" },
     { value: "o3", label: "o3" },
+    customModelIdOption
+  ],
+  "gemini-cli": [
+    { value: "", label: "CLI subscription default" },
+    { value: "gemini-2.5-pro", label: "Gemini 2.5 Pro" },
+    { value: "gemini-2.5-flash", label: "Gemini 2.5 Flash" },
     customModelIdOption
   ]
 };

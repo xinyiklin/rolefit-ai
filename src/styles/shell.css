@@ -16,8 +16,7 @@
   gap: var(--s4);
   padding: var(--s3) var(--s5);
   border-bottom: 1px solid var(--hairline);
-  background: linear-gradient(180deg, rgba(254, 252, 245, 0.85), rgba(254, 252, 245, 0.55));
-  backdrop-filter: blur(6px);
+  background: linear-gradient(180deg, var(--card-elev), var(--card-soft));
   position: relative;
 }
 
@@ -134,3 +133,73 @@
   overflow: hidden;
 }
 
+
+/* -------- Navbar dropdown menus (AI, Polish) -------- */
+.nav-menu { position: relative; }
+
+.nav-menu__trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s1);
+  height: 28px;
+  padding: 0 var(--s2);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-pill);
+  background: var(--card-elev);
+  color: var(--ink-muted);
+  font-family: var(--font-ui);
+  font-size: 0.74rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 140ms var(--ease), color 140ms var(--ease), background 140ms var(--ease);
+}
+
+.nav-menu__trigger:hover { border-color: var(--hairline-strong); color: var(--ink-strong); }
+.nav-menu__trigger[aria-expanded="true"] {
+  border-color: var(--accent);
+  color: var(--accent-deep);
+  background: var(--accent-soft);
+}
+.nav-menu__trigger > svg:first-child { color: var(--accent); flex: none; }
+
+.nav-menu__label { white-space: nowrap; }
+
+.nav-menu__sub {
+  max-width: 14ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  font-weight: 500;
+  color: var(--ink-faint);
+}
+
+.nav-menu__caret { color: var(--ink-faint); flex: none; }
+
+.nav-menu__popover {
+  position: absolute;
+  top: calc(100% + var(--s2));
+  right: 0;
+  z-index: 40;
+  width: min(380px, 92vw);
+  padding: var(--s3);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-lg);
+  background: var(--card-elev);
+  box-shadow: var(--shadow-lift);
+  display: grid;
+  gap: var(--s3);
+  max-height: min(78vh, 640px);
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--hairline-strong) transparent;
+  animation: nav-menu-in 140ms var(--ease) both;
+}
+
+.nav-menu__popover > .field { margin-top: 0; }
+
+@keyframes nav-menu-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
