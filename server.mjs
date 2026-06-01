@@ -388,6 +388,84 @@ async function handleSaveApplications(req, res) {
   }
 }
 
+// Decode a numeric character reference, clamping control chars (which could
+// inject fake structure into the prompt) and rejecting out-of-range values.
+// fromCodePoint (not fromCharCode) so astral code points aren't truncated.
+function fromCharRef(code) {
+  if (!Number.isFinite(code) || code <= 0 || code > 0x10ffff) return "";
+  if (code < 0x20 || (code >= 0x7f && code <= 0x9f)) return " ";
+  try {
+    return String.fromCodePoint(code);
+  } catch {
+    return "";
+  }
+}
+
+// Convert posting HTML to readable text while keeping paragraph/bullet breaks
+// (the front-end distiller and the description box both read better with them).
+function htmlToText(html) {
+  return String(html || "")
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<li[^>]*>/gi, "\n• ")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/(p|div|li|h[1-6]|ul|ol|tr|section|header|footer|article)>/gi, "\n")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;|&ldquo;|&rdquo;/gi, '"')
+    .replace(/&#39;|&rsquo;|&lsquo;|&apos;/gi, "'")
+    .replace(/&mdash;/gi, "—")
+    .replace(/&ndash;/gi, "–")
+    .replace(/&#(\d+);/g, (_, n) => fromCharRef(Number(n)))
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, n) => fromCharRef(parseInt(n, 16)))
+    .replace(/&[a-z]+;/gi, " ")
+    .replace(/[ \t]+/g, " ")
+    .split("\n")
+    .map((line) => line.trim())
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+// Workday job pages render the description client-side, but expose it via their
+// CXS JSON API. Rewrite a public job URL to that endpoint when we recognize the
+// host. Career-site links use /Site/job/Loc/Title_R123 (older) or
+// /Site/details/Title_R123 (newer share links); both map to .../wday/cxs/<tenant>/<site>/job/...
+function workdayCxsUrl(u) {
+  if (!/(^|\.)myworkdayjobs\.com$/i.test(u.hostname)) return null;
+  const tenant = u.hostname.split(".")[0];
+  const segs = u.pathname.split("/").filter(Boolean);
+  const sepIdx = segs.findIndex((seg) => seg === "job" || seg === "details");
+  if (sepIdx < 1 || sepIdx === segs.length - 1) return null; // need a site segment + a job path
+  const site = segs[sepIdx - 1];
+  const jobPath = segs.slice(sepIdx + 1).join("/");
+  if (!tenant || !site || !jobPath) return null;
+  try {
+    return new URL(`https://${u.hostname}/wday/cxs/${tenant}/${site}/job/${jobPath}`);
+  } catch {
+    return null;
+  }
+}
+
+async function importFromWorkday(apiUrl) {
+  const response = await fetchPublicHtml(apiUrl, { Accept: "application/json" });
+  if (!response.ok) return "";
+  let info;
+  try {
+    info = JSON.parse(await response.text())?.jobPostingInfo;
+  } catch {
+    return "";
+  }
+  if (!info) return "";
+  const body = htmlToText(info.jobDescription);
+  if (body.length < 200) return "";
+  const header = [info.title, info.location].filter(Boolean).join(" · ");
+  return (header ? `${header}\n\n` : "") + body;
+}
+
 async function handleImportJob(req, res) {
   if (req.method !== "POST") {
     sendJson(res, 405, { error: "Use POST." });
@@ -409,6 +487,17 @@ async function handleImportJob(req, res) {
   }
 
   try {
+    // Prefer a known ATS JSON API (Workday) since the rendered page is JS-only;
+    // fall back to a generic HTML scrape for everything else.
+    const workdayApi = workdayCxsUrl(jobUrl);
+    if (workdayApi) {
+      const workdayText = await importFromWorkday(workdayApi);
+      if (workdayText) {
+        sendJson(res, 200, { text: workdayText.slice(0, 16_000) });
+        return;
+      }
+    }
+
     const response = await fetchPublicHtml(jobUrl);
 
     if (!response.ok) {
@@ -418,19 +507,13 @@ async function handleImportJob(req, res) {
       return;
     }
 
-    const html = await response.text();
-    const text = html
-      .replace(/<script[\s\S]*?<\/script>/gi, " ")
-      .replace(/<style[\s\S]*?<\/style>/gi, " ")
-      .replace(/<[^>]+>/g, " ")
-      .replace(/\s+/g, " ")
-      .trim();
+    const text = htmlToText(await response.text());
 
     if (text.length < 200) {
       sendJson(res, 400, { error: "Job page did not expose enough readable text. Paste it instead." });
       return;
     }
-    sendJson(res, 200, { text: text.slice(0, 12_000) });
+    sendJson(res, 200, { text: text.slice(0, 16_000) });
   } catch (error) {
     if (error instanceof BlockedHostError) {
       sendJson(res, 400, { error: `${error.message} Paste the job description text instead.` });

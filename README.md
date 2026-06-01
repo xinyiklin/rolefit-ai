@@ -1,6 +1,6 @@
 # RoleFit AI
 
-A **local-first** resume tailoring webapp. Paste a job link, pull your base resume from your workspace, get a polished draft scored against the job description, and export to LaTeX / DOCX / PDF — without your data leaving your machine.
+A **local-first** resume tailoring webapp. Import a job posting (paste it, or pull it straight from the link), tailor your base resume from your workspace, score the draft against the job description, and export to LaTeX / DOCX / PDF — without your personal data leaving your machine.
 
 > Built for an entry-level SDE job hunt: tight workflow loop, blunt recruiter-style audit before applying, and a local pipeline tracker so you never lose track of a role.
 
@@ -9,11 +9,13 @@ A **local-first** resume tailoring webapp. Paste a job link, pull your base resu
 ## Highlights
 
 - **Multi-format resume I/O** — ingest `.docx`, `.pdf`, `.tex` (Jake's-style), or plain text; export back to each.
+- **Job-link import** — paste a posting URL and pull the description in one click: Workday-aware (reads its CXS JSON API for `/job/` and `/details/` links), with a generic HTML→text fallback for other boards, then distilled locally to the sections worth tailoring against. The link itself is kept only for pipeline tracking and is **never sent to the model**.
 - **Multi-provider AI** — 10 backends, including **subscription-CLI providers** (`Claude Code`, `Codex CLI`) that route through existing Claude Max / ChatGPT Plus subscriptions instead of per-token API billing.
 - **Fit scoring + 4-category keyword gap analysis** — required experience, knowledge, required skills, technical tools.
 - **Strict recruiter review mode** — verdict (STRONG FIT / REASONABLE FIT / STRETCH / DON'T APPLY), gap severity, targeted bullet rewrites, interview risk flags, cover-letter angle.
 - **LaTeX export pipeline** with three resume templates (Jake's, Awesome-CV, Deedy) + **one-click Overleaf submission** via form POST + optional local PDF compile through **Tectonic**.
 - **DOCX format preservation** through direct OpenXML paragraph edits.
+- **Clean ATS PDF export** — a dependency-free PDF generated locally with real Helvetica metrics and WinAnsi encoding, so accented names (e.g. "José Müller") render and the text stays selectable for ATS parsing.
 - **On-disk pipeline tracker** with status / source / company / role / follow-up date / notes / resume snapshot per application — survives browser wipes.
 - **Local-first** — workspace lives in `job-search-workspace/` and never touches the network; API keys stay server-side in `.env`.
 
@@ -92,8 +94,9 @@ src/
   hooks/{useApplications, useTemplates}.ts
   sections/                      # Masthead / SourcesPane / StudioPane / ExportRail
   sections/tabs/                 # Resume / Review / StrictReview / CoverLetter / Pipeline
+  lib/jobExtract.ts              # distills an imported posting to the relevant text
   resumeEngine.ts                # scoring + analysis + deterministic local fallback
-  pdfResume.ts                   # clean ATS PDF template
+  pdfResume.ts                   # clean ATS PDF (real Helvetica metrics + WinAnsi)
 docs/engineering/                # contributor notes (server, UI, git workflow, testing)
 job-search-workspace/            # local-only; gitignored except README
 ```

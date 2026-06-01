@@ -77,7 +77,7 @@ export function PipelineTab({
     .sort((a, b) => (b.updatedAt ?? "").localeCompare(a.updatedAt ?? ""));
 
   return (
-    <section className="studio-card pipeline-card">
+    <section className="studio-card studio-card--flush pipeline-card">
       <PanelHeading
         icon={<ClipboardList size={15} aria-hidden="true" />}
         title="Pipeline"

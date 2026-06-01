@@ -17,7 +17,7 @@ export function CoverLetterTab({
   onEnable
 }: CoverLetterTabProps) {
   return (
-    <section className="studio-card">
+    <section className="studio-card studio-card--flush">
       <div className="studio-card__head">
         <h2>Cover letter</h2>
         <button

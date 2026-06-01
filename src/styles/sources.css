@@ -51,7 +51,9 @@
 /* Height-capped scroll region for the optional inputs (Honest context,
    Custom instructions, AI settings). Adjust max-height to change how much shows. */
 .polish-scroll {
-  max-height: clamp(160px, 42vh, 440px);
+  /* Default: expand to the max height so all toggles show; drag the handle
+     above to shrink it down toward the min. */
+  max-height: clamp(180px, 42vh, 440px);
   overflow-y: auto;
   overflow-x: hidden;
   margin-top: var(--s2);
@@ -187,7 +189,24 @@ select,
   transition: border-color 160ms var(--ease), box-shadow 160ms var(--ease);
 }
 
-.textarea--job { min-height: 140px; }
+/* Link field + inline Extract button on one row */
+.link-input-row {
+  display: flex;
+  align-items: stretch;
+  gap: var(--s2);
+}
+
+.link-input-row .input-with-icon {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.link-input-row .link-extract {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.textarea--job { min-height: 200px; }
 .textarea--resume { min-height: 200px; }
 
 .field--wide { grid-column: 1 / -1; }
@@ -394,9 +413,6 @@ select,
 }
 
 .workspace-actions { display: flex; flex-wrap: wrap; gap: var(--s1); }
-
-.workspace-upload { position: relative; overflow: hidden; }
-.workspace-upload input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
 
 .workspace-status { color: var(--accent-deep); font-weight: 600; }
 

@@ -21,7 +21,8 @@ import { useTemplates } from "./hooks/useTemplates";
 import { useDebouncedValue } from "./hooks/useDebouncedValue";
 import { useApplications, type Application, type ApplicationStatus } from "./hooks/useApplications";
 import { arrayBufferToBase64, buildResumeFileName, downloadBlob, extractApplicantName } from "./lib/downloads";
-import { inferApplicationTitle, inferCompanyFromUrl, isLikelyJobUrl } from "./lib/jobTarget";
+import { inferApplicationTitle, inferCompanyFromUrl } from "./lib/jobTarget";
+import { extractRelevantJobText } from "./lib/jobExtract";
 import { blocksToText, buildResumeBlocks } from "./lib/resumeBlocks";
 import { describeResumeFormat, looksLikeLatex } from "./lib/resumeFormat";
 
@@ -66,6 +67,8 @@ type JobWorkspace = {
 function App() {
   // ----- State -----
   const [jobDescription, setJobDescription] = useState("");
+  const [jobUrl, setJobUrl] = useState("");
+  const [isExtractingLink, setIsExtractingLink] = useState(false);
   const [resumeText, setResumeText] = useState(sampleResume);
   const [fileName, setFileName] = useState("");
   const [sourceDocx, setSourceDocx] = useState<SourceDocx | null>(null);
@@ -164,26 +167,14 @@ function App() {
   ]);
 
   // ----- Derived (memos) -----
-  // The job field is one box: a pasted link OR a description. When it holds a
-  // bare URL we surface it as the job URL (for the prompt hint, company
-  // inference, and pipeline tracking); otherwise it's treated as job text.
-  const jobUrl = useMemo(() => {
-    const trimmed = jobDescription.trim();
-    return isLikelyJobUrl(trimmed) ? trimmed : "";
-  }, [jobDescription]);
-
-  const jobTextForPolish = useMemo(() => (jobUrl ? "" : jobDescription), [jobDescription, jobUrl]);
-  const jobUrlOnlyStatus = jobUrl
-    ? "Paste the full job description before polishing. A bare link can be tracked, but it is not enough for tailoring."
-    : "";
-
+  // The job link has its own field now: the description textarea holds the text
+  // we tailor against, while `jobUrl` is optional metadata saved with the
+  // application for pipeline tracking only — it is never sent to the model.
   const canPolish = useMemo(() => {
-    return resumeText.trim().length > 80 && jobTextForPolish.trim().length > 40;
-  }, [jobTextForPolish, resumeText]);
+    return resumeText.trim().length > 80 && jobDescription.trim().length > 40;
+  }, [jobDescription, resumeText]);
 
-  const combinedJobText = useMemo(() => {
-    return jobTextForPolish;
-  }, [jobTextForPolish]);
+  const combinedJobText = jobDescription;
 
   // Debounce the live inputs so per-keystroke synchronous scoring doesn't jank
   // typing on large resumes. The polished `result` stays immediate.
@@ -231,7 +222,7 @@ function App() {
   const resultSourceLabel = result?.source === "local" ? "Local engine" : result?.source === "ai" ? "AI" : "";
   const resumeReady = resumeText.trim().length > 80;
   const resumeSourceFormat = describeResumeFormat(fileName, Boolean(sourceDocx), resumeText);
-  const jobReady = jobTextForPolish.trim().length > 40;
+  const jobReady = jobDescription.trim().length > 40;
   const outputReady = Boolean(result);
   const selectedTemplate = templates.find((t) => t.id === selectedTemplateId) ?? null;
   const outputTabs: OutputTabDescriptor[] = [
@@ -369,32 +360,6 @@ function App() {
     }
   }
 
-  async function handleBaseResumeUpload(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    event.target.value = "";
-    if (!file) return;
-
-    if (/\.pdf$/i.test(file.name)) {
-      setWorkspaceStatus("Save a DOCX, TXT, MD, CSV, or TEX as the base resume. PDF is text-only in this app.");
-      return;
-    }
-
-    if (/\.docx$/i.test(file.name)) {
-      await saveBaseResume({ fileName: file.name, fileBase64: arrayBufferToBase64(await file.arrayBuffer()) });
-      return;
-    }
-
-    // Keep .tex as raw LaTeX so the source format stays "LaTeX" and Preserve
-    // format can rewrite it in place. Flattening to plain text (and renaming to
-    // .txt) here is what previously destroyed the formatting.
-    if (!/\.(txt|md|csv|tex)$/i.test(file.name)) {
-      setWorkspaceStatus("Save a DOCX, TXT, MD, CSV, or TEX resume as the base resume.");
-      return;
-    }
-
-    await saveBaseResume({ fileName: file.name, text: await file.text() });
-  }
-
   async function saveCurrentAsBaseResume() {
     if (sourceDocx) {
       try {
@@ -487,11 +452,6 @@ function App() {
   }
 
   async function handlePolish() {
-    if (jobUrl && !jobTextForPolish.trim()) {
-      setPolishStatus("Paste the full job description before polishing. A link alone is only useful for tracking.");
-      return;
-    }
-
     const model = selectedModel === "custom" ? customModel.trim() : selectedModel;
     const fallbackBase = polishResume(resumeText, combinedJobText);
     const fallback = includeCoverLetter
@@ -511,10 +471,7 @@ function App() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           resumeText,
-          // A bare link is kept only as tracking/prompt metadata. Polishing
-          // requires pasted job text so the AI is not tailoring from a URL slug.
-          jobText: jobTextForPolish,
-          jobUrl,
+          jobText: jobDescription,
           provider: aiProvider,
           apiKey,
           apiBaseUrl,
@@ -795,8 +752,41 @@ function App() {
     setCustomModel("");
   }
 
+  async function handleExtractFromLink() {
+    const url = jobUrl.trim();
+    if (!url || isExtractingLink) return;
+    setIsExtractingLink(true);
+    setLinkStatus("Fetching the posting…");
+    try {
+      const response = await fetch("/api/import-job", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url })
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error ?? "Could not read that link.");
+      // Local distiller trims the scraped page to the parts worth polishing against.
+      const relevant = extractRelevantJobText(String(data.text ?? ""));
+      if (relevant.trim().length < 40) {
+        setLinkStatus("Fetched the page, but found too little job text. Paste the description instead.");
+        return;
+      }
+      setJobDescription(relevant);
+      setResult(null);
+      setLinkStatus(
+        `Extracted ${relevant.length.toLocaleString()} characters into the job description below — review before polishing.`
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message.replace(/[.。]\s*$/, "") : "request failed";
+      setLinkStatus(`Couldn't extract from the link: ${message}. Paste the description instead.`);
+    } finally {
+      setIsExtractingLink(false);
+    }
+  }
+
   function handleNextRole() {
     setJobDescription("");
+    setJobUrl("");
     setResult(null);
     setLinkStatus("");
     setPolishStatus("");
@@ -858,8 +848,9 @@ function App() {
   }
 
   function handleLoadApplication(app: Application) {
-    // One field now: prefer the saved description, fall back to the saved link.
-    setJobDescription(app.jobDescription || app.jobUrl || "");
+    // Description and link are separate fields: restore each from its own slot.
+    setJobDescription(app.jobDescription || "");
+    setJobUrl(app.jobUrl || "");
     if (app.polishedText) {
       const restoredResume = app.polishedText;
       const restoredAnalysis = analyzeResumeText(restoredResume, app.jobDescription || "");
@@ -940,7 +931,11 @@ function App() {
         <SourcesPane
           jobDescription={jobDescription}
           setJobDescription={setJobDescription}
-          linkStatus={jobUrlOnlyStatus || linkStatus}
+          jobUrl={jobUrl}
+          setJobUrl={setJobUrl}
+          onExtractFromLink={handleExtractFromLink}
+          isExtractingLink={isExtractingLink}
+          linkStatus={linkStatus}
           jobReady={jobReady}
           baseResumeName={baseResumeName}
           workspacePath={workspacePath}
@@ -956,7 +951,6 @@ function App() {
           setResumeText={setResumeText}
           setResult={setResult}
           resumeReady={resumeReady}
-          onBaseResumeUpload={handleBaseResumeUpload}
           onSaveCurrentAsBase={saveCurrentAsBaseResume}
           onRemoveBaseResume={removeBaseResume}
           onLoadWorkspace={loadWorkspace}

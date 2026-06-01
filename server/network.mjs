@@ -117,7 +117,7 @@ export function chatCompletionsEndpoint(rawBaseUrl) {
 // Fetches a job page, following redirects manually and re-validating the
 // host + resolved IP of every hop. Rejects private/blocked targets instead of
 // auto-following them, so a public URL can't bounce to an internal address.
-export async function fetchPublicHtml(startUrl) {
+export async function fetchPublicHtml(startUrl, extraHeaders = {}) {
   let current = startUrl;
   for (let hop = 0; hop < 5; hop += 1) {
     if (!isPublicHttpUrl(current)) {
@@ -128,7 +128,7 @@ export async function fetchPublicHtml(startUrl) {
     const response = await fetchWithTimeout(
       current,
       {
-        headers: { "User-Agent": "Mozilla/5.0 ResumePolisher/0.1" },
+        headers: { "User-Agent": "Mozilla/5.0 ResumePolisher/0.1", ...extraHeaders },
         redirect: "manual"
       },
       10_000
