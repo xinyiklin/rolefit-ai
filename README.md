@@ -1,10 +1,12 @@
 # RoleFit AI
 
-A **local-first** resume tailoring webapp. Import a job posting (paste it, or pull it straight from the link), tailor your base resume from your workspace, score the draft against the job description, and export to LaTeX / DOCX / PDF — without your personal data leaving your machine.
+A **local-first** resume tailoring webapp. Import a job posting (paste it, or pull it straight from the link), tailor your base resume from your workspace, score the draft against the job description, and export to LaTeX / DOCX / PDF — without storing your personal data in a hosted app.
 
 > Built for an entry-level SDE job hunt: tight workflow loop, blunt recruiter-style audit before applying, and a local pipeline tracker so you never lose track of a role.
 
-![RoleFit AI workspace](docs/screenshot.png)
+![RoleFit AI pipeline workspace with demo data](docs/screenshot.png)
+
+_Screenshot uses demo workspace data._
 
 ## Highlights
 
@@ -17,11 +19,11 @@ A **local-first** resume tailoring webapp. Import a job posting (paste it, or pu
 - **DOCX format preservation** through direct OpenXML paragraph edits.
 - **Clean ATS PDF export** — a dependency-free PDF generated locally with real Helvetica metrics and WinAnsi encoding, so accented names (e.g. "José Müller") render and the text stays selectable for ATS parsing.
 - **On-disk pipeline tracker** with status / source / company / role / follow-up date / notes / resume snapshot per application — survives browser wipes.
-- **Local-first** — workspace lives in `job-search-workspace/` and never touches the network; API keys stay server-side in `.env`.
+- **Local-first storage** — workspace files live in `job-search-workspace/`; API keys stay server-side in `.env`. Cloud AI providers receive resume/job text only when you choose them for a polish request.
 
 ## Stack
 
-React 19 · TypeScript · Vite · Node.js (single-file `server.mjs` with Vite middleware in dev) · custom CSS · `lucide-react` icons
+React 19 · TypeScript · Vite · Node.js (`server.mjs` with focused helpers under `server/`) · custom CSS · `lucide-react` icons
 
 No SaaS dependencies. Optional integrations: OpenAI · Anthropic · Gemini · OpenRouter · Groq · Together · Mistral · local Ollama · Claude Code CLI · Codex CLI · Tectonic · Overleaf.
 
@@ -36,7 +38,7 @@ Visit `http://localhost:5181`.
 
 ## AI setup
 
-Pick a provider in the app's **Advanced AI settings** panel, or set a key in `.env`:
+Pick a provider/model from the top-bar AI menu, or set a key in `.env`:
 
 ```bash
 # pick one (or set multiple and switch in-app)
@@ -61,7 +63,7 @@ brew install codex
 codex login
 ```
 
-The app shells out to these CLIs for polish requests — no API key required.
+The app shells out to these CLIs for polish requests — no API key required. For fully local inference, point the Local/custom provider at a local OpenAI-compatible server such as Ollama.
 
 ## Optional local LaTeX
 
@@ -86,17 +88,23 @@ This folder is gitignored except its README. Personal resumes, PDFs, and DOCX fi
 ```
 server.mjs                       # main HTTP server
 server/
+  ai/polish.mjs                  # provider routing + prompt assembly
   ai-cli/index.mjs               # Claude Code / Codex CLI shell-out
   applications/index.mjs         # pipeline tracker storage
+  docx.mjs                       # DOCX import/export helpers
+  http.mjs                       # JSON/body/fetch utilities
   latex/                         # parser + 3 template renderers + optional Tectonic compile
+  network.mjs                    # job-link fetch + SSRF guards
 src/
   App.tsx                        # state + handlers + composition
+  config/aiOptions.ts            # provider/model/reasoning options
   hooks/{useApplications, useTemplates}.ts
+  lib/                           # downloads, job extraction, resume format/block helpers
   sections/                      # Masthead / SourcesPane / StudioPane / ExportRail
   sections/tabs/                 # Resume / Review / StrictReview / CoverLetter / Pipeline
-  lib/jobExtract.ts              # distills an imported posting to the relevant text
   resumeEngine.ts                # scoring + analysis + deterministic local fallback
   pdfResume.ts                   # clean ATS PDF (real Helvetica metrics + WinAnsi)
+  styles/                        # per-surface CSS + shared tokens
 docs/engineering/                # contributor notes (server, UI, git workflow, testing)
 job-search-workspace/            # local-only; gitignored except README
 ```
