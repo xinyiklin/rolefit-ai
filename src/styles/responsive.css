@@ -1,0 +1,145 @@
+/* -------- Responsive -------- */
+
+@media (max-width: 1280px) {
+  .score-panel {
+    grid-template-columns: 180px 1fr;
+    gap: var(--s4);
+  }
+
+  .score-panel__hero {
+    padding-right: var(--s4);
+  }
+
+  .overall-score { font-size: 3.6rem; }
+}
+
+@media (max-width: 1080px) {
+  .app-shell { height: auto; min-height: 100vh; }
+
+  .workspace-grid {
+    grid-template-columns: 1fr;
+    overflow: visible;
+  }
+
+  .sources-pane {
+    border-right: 0;
+    border-bottom: 1px solid var(--hairline);
+    max-height: none;
+    overflow: visible;
+  }
+
+  /* Page scrolls (not the pane) at this width, so un-stick the panel and let
+     everything flow inline instead of floating over the stacked output below. */
+  .sources-section--action {
+    position: static;
+    box-shadow: none;
+  }
+
+  .polish-scroll {
+    max-height: none;
+    overflow: visible;
+    padding-right: 0;
+  }
+
+  .studio-pane {
+    grid-template-rows: auto auto auto;
+  }
+
+  .studio-body {
+    overflow: visible;
+    max-height: none;
+  }
+
+  .export-rail {
+    position: static;
+  }
+
+  .score-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .score-panel__hero {
+    padding-right: 0;
+    padding-bottom: var(--s3);
+    border-right: 0;
+    border-bottom: 1px solid var(--hairline-soft);
+  }
+
+  .insights {
+    grid-template-columns: 1fr !important;
+  }
+
+  .strict-verdict { grid-template-columns: 1fr; gap: var(--s4); }
+  .strict-verdict__hero {
+    padding-right: 0;
+    padding-bottom: var(--s3);
+    border-right: 0;
+    border-bottom: 1px solid var(--hairline-soft);
+  }
+  .coverage-row { grid-template-columns: 1fr; gap: var(--s1); }
+  .rewrite-card { grid-template-columns: 1fr; }
+  .rewrite-card__before { border-right: 0; border-bottom: 1px solid var(--hairline); }
+}
+
+@media (max-width: 760px) {
+  .masthead {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: var(--s4) var(--s4);
+  }
+
+  .masthead__brand h1 { font-size: 1.6rem; }
+
+  .masthead__meta { width: 100%; }
+  .masthead::after { left: var(--s4); }
+
+  .sources-pane,
+  .studio-body,
+  .export-rail,
+  .studio-header { padding-left: var(--s4); padding-right: var(--s4); }
+
+  .studio-header {
+    flex-wrap: wrap;
+    gap: var(--s2);
+  }
+
+  .studio-score {
+    grid-template-columns: auto auto;
+  }
+
+  .studio-score__sub { display: none; }
+
+  .keyword-grid,
+  .diff-grid,
+  .breakdown-grid,
+  .settings-grid,
+  .insights {
+    grid-template-columns: 1fr !important;
+  }
+
+  .resume-block {
+    grid-template-columns: 1fr;
+  }
+
+  .resume-block textarea {
+    border-left: 0;
+    border-top: 1px solid var(--hairline-soft);
+    padding: var(--s3) 0 0;
+  }
+
+  .export-rail {
+    grid-template-columns: 1fr;
+  }
+
+  .export-rail__actions {
+    justify-content: flex-start;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    transition: none !important;
+    animation: none !important;
+  }
+}
+

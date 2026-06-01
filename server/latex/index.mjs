@@ -50,6 +50,23 @@ export function checkTectonicAvailability() {
 
 // --- Optional compile via Tectonic (no-op if unavailable) -------------
 
+// Tectonic runs the XeTeX engine, which lacks pdfTeX-only primitives that
+// common resume templates (e.g. Jake's) use — `\input{glyphtounicode}` and
+// `\pdfgentounicode`. Define them as harmless no-ops so those documents compile
+// unchanged. The shims are inert under pdfTeX too (the primitives already
+// exist), and we only apply them to the file handed to Tectonic — never to the
+// .tex a user downloads.
+function makeXetexSafe(tex) {
+  const shim =
+    "\n% Tectonic/XeTeX compatibility shims for pdfTeX-only primitives\n" +
+    "\\ifdefined\\pdfgentounicode\\else\\newcount\\pdfgentounicode\\fi\n" +
+    "\\providecommand\\pdfglyphtounicode[2]{}\n";
+  const match = tex.match(/\\documentclass[^\n]*\n/);
+  if (!match) return tex;
+  const insertAt = match.index + match[0].length;
+  return tex.slice(0, insertAt) + shim + tex.slice(insertAt);
+}
+
 export async function compileTexToPdf(tex) {
   const status = await checkTectonicAvailability();
   if (!status.available) {
@@ -63,7 +80,7 @@ export async function compileTexToPdf(tex) {
   const outputPath = join(workdir, "resume.pdf");
 
   try {
-    await writeFile(inputPath, tex, "utf8");
+    await writeFile(inputPath, makeXetexSafe(tex), "utf8");
     await new Promise((resolve, reject) => {
       const child = spawn("tectonic", ["-X", "compile", "--keep-logs", "--outdir", workdir, inputPath], {
         stdio: ["ignore", "pipe", "pipe"]

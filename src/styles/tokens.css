@@ -1,0 +1,81 @@
+/* =============================================================
+   RoleFit AI — Editorial Workbench
+   Two-pane workspace: Sources rail + Studio canvas with export rail.
+   ============================================================= */
+
+:root {
+  /* Type stacks */
+  --font-display: "Fraunces", "Iowan Old Style", "Hoefler Text", Georgia, serif;
+  --font-ui: "Geist", -apple-system, BlinkMacSystemFont, "Helvetica Neue", "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+
+  /* Paper & ink */
+  --paper: #f1ede2;
+  --paper-deep: #e7e2d2;
+  --card: #fbf8ee;
+  --card-soft: #f6f2e6;
+  --card-elev: #fefcf5;
+  --card-hover: #fdfbf3;
+
+  --ink: #161611;
+  --ink-strong: #0c0c08;
+  --ink-muted: #4a4a3f;
+  --ink-soft: #6e6c5e;
+  --ink-faint: #9a9684;
+
+  --hairline: #d9d2bf;
+  --hairline-soft: #e4dec9;
+  --hairline-strong: #c2bba2;
+
+  /* Brand accent — forest ink */
+  --accent: #1f5d4a;
+  --accent-deep: #103d30;
+  --accent-soft: #e8efe9;
+  --accent-veil: rgba(31, 93, 74, 0.10);
+  --accent-glow: rgba(31, 93, 74, 0.18);
+
+  /* Signal colors */
+  --warm: #8a5a08;
+  --warm-soft: #faecc6;
+  --warm-veil: #fbf3df;
+  --cool: #2e4f6e;
+  --cool-veil: rgba(46, 79, 110, 0.10);
+  --cool-line: rgba(46, 79, 110, 0.25);
+  --cool-faint: rgba(46, 79, 110, 0.06);
+  --danger: #7a3127;
+  --danger-soft: #f5dcd6;
+  --danger-line: rgba(122, 49, 39, 0.30);
+
+  /* Spacing scale */
+  --s1: 4px;
+  --s2: 8px;
+  --s3: 12px;
+  --s4: 16px;
+  --s5: 22px;
+  --s6: 32px;
+  --s7: 48px;
+
+  /* Radii */
+  --r-sm: 4px;
+  --r-md: 6px;
+  --r-lg: 10px;
+  --r-pill: 999px;
+
+  /* Shadows */
+  --shadow-rest: 0 1px 0 rgba(20, 20, 14, 0.04), 0 6px 20px rgba(20, 20, 14, 0.04);
+  --shadow-lift: 0 1px 0 rgba(20, 20, 14, 0.05), 0 14px 36px rgba(20, 20, 14, 0.08);
+  --shadow-inset: inset 0 1px 0 rgba(255, 252, 240, 0.6);
+  --shadow-rail: 0 -1px 0 var(--hairline), 0 -14px 32px rgba(20, 20, 14, 0.04);
+  --shadow-mast: 0 1px 0 var(--hairline);
+
+  /* Motion */
+  --ease: cubic-bezier(0.2, 0.6, 0.2, 1);
+
+  color: var(--ink);
+  background: var(--paper);
+  font-family: var(--font-ui);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}

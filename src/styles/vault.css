@@ -1,0 +1,58 @@
+/* -------- Vault -------- */
+
+.vault-panel { gap: var(--s3); }
+
+.vault-toolbar { display: flex; flex-wrap: wrap; gap: var(--s2); }
+
+.vault-status {
+  color: var(--accent-deep);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.version-list { display: grid; gap: var(--s2); }
+
+.version-item {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: var(--s2);
+  padding: var(--s3) var(--s4);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-md);
+  background: var(--card-elev);
+  transition: border-color 180ms var(--ease), box-shadow 180ms var(--ease);
+}
+
+.version-item:hover {
+  border-color: var(--hairline-strong);
+  box-shadow: var(--shadow-rest);
+}
+
+.version-item__main {
+  display: grid;
+  gap: var(--s1);
+  min-width: 0;
+  padding: 0;
+  color: inherit;
+  text-align: left;
+  background: transparent;
+  cursor: pointer;
+}
+
+.version-item__main strong {
+  overflow: hidden;
+  color: var(--ink-strong);
+  font-size: 0.88rem;
+  font-weight: 600;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.version-item__main span {
+  color: var(--ink-soft);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+}
+

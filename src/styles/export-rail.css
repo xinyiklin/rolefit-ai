@@ -1,0 +1,114 @@
+/* -------- Export rail (sticky bottom) -------- */
+
+.export-rail {
+  display: grid;
+  grid-template-columns: minmax(200px, auto) 1fr;
+  align-items: center;
+  gap: var(--s3);
+  padding: var(--s2) var(--s5);
+  border-top: 1px solid var(--hairline);
+  background: linear-gradient(180deg, rgba(254, 252, 245, 0.55), rgba(254, 252, 245, 0.95));
+  backdrop-filter: blur(8px);
+  box-shadow: var(--shadow-rail);
+  position: relative;
+}
+
+.export-rail__template {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: var(--s2);
+}
+
+.export-rail__template label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--ink-soft);
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.export-rail__template label svg { color: var(--accent); width: 13px; height: 13px; }
+
+.export-rail__template select {
+  min-height: 26px;
+  padding: 0 var(--s2);
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--ink-strong);
+  background: var(--card-elev);
+}
+
+.export-rail__hint {
+  grid-column: 1 / -1;
+  font-size: 0.68rem;
+  color: var(--ink-faint);
+  margin-top: 1px;
+}
+
+.export-rail__hint.warn { color: var(--warm); }
+
+.export-rail__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+.export-rail__actions .ghost-button {
+  min-height: 26px;
+  padding: 0 var(--s2);
+  border: 1px solid var(--hairline);
+  background: var(--card-elev);
+  color: var(--ink-strong);
+  font-weight: 500;
+  font-size: 0.74rem;
+}
+
+.export-rail__actions .ghost-button:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent-deep);
+  background: var(--accent-soft);
+}
+
+.export-rail__status,
+.export-rail__tip {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s2);
+  margin-top: 4px;
+  padding: 4px var(--s2);
+  border-radius: var(--r-sm);
+  font-size: 0.72rem;
+  line-height: 1.35;
+}
+
+.export-rail__status {
+  color: var(--accent-deep);
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-veil);
+}
+
+.export-rail__status .sep { color: var(--ink-faint); margin: 0 var(--s1); }
+
+.export-rail__tip {
+  color: var(--ink-muted);
+  background: var(--card-soft);
+  border: 1px solid var(--hairline);
+}
+
+.export-rail__tip svg { color: var(--ink-faint); margin-top: 1px; }
+
+.export-rail__tip code {
+  font-family: var(--font-mono);
+  font-size: 0.76rem;
+  color: var(--accent-deep);
+  background: var(--accent-soft);
+  padding: 1px 5px;
+  border-radius: var(--r-sm);
+}
+

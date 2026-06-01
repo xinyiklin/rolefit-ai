@@ -37,8 +37,8 @@ npm run dev
 ```
 
 When iterating on a single route, hit it directly with `curl` against
-`http://localhost:5174/api/...` rather than driving the full UI. If
-port `5174` is already bound, the server is likely already running;
+`http://localhost:5181/api/...` rather than driving the full UI. If
+port `5181` is already bound, the server is likely already running;
 reuse it instead of starting a second `npm run dev`.
 
 ## Frontend Coverage
@@ -50,7 +50,7 @@ Good frontend verification covers:
 - loading / data refresh does not cause avoidable layout shift
 - API error states show user-safe messaging (no raw provider bodies)
 - components reuse shared primitives from `src/ui.tsx` and tokens from
-  `src/styles.css` instead of one-off styles
+  `src/styles/` instead of one-off styles
 
 Useful commands:
 

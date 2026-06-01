@@ -1,4 +1,4 @@
-import type { ChangeEvent, KeyboardEvent } from "react";
+import type { ChangeEvent } from "react";
 import {
   AlertCircle,
   BriefcaseBusiness,
@@ -6,11 +6,11 @@ import {
   FileText,
   FolderOpen,
   KeyRound,
-  Link,
   RefreshCw,
   Save,
   Settings2,
   Sparkles,
+  Trash2,
   Upload
 } from "lucide-react";
 import { blockKindLabel, type ResumeBlock, type ResumeBlockKind, type SourceDocx } from "./shared";
@@ -41,14 +41,10 @@ export type RoleOption = { value: string; label: string };
 
 type SourcesPaneProps = {
   // Job target
-  jobUrl: string;
-  setJobUrl: (v: string) => void;
   jobDescription: string;
   setJobDescription: (v: string) => void;
-  isImporting: boolean;
   linkStatus: string;
   jobReady: boolean;
-  onMaybeAutoImport: () => void;
 
   // Resume source
   baseResumeName: string;
@@ -67,6 +63,7 @@ type SourcesPaneProps = {
   resumeReady: boolean;
   onBaseResumeUpload: (event: ChangeEvent<HTMLInputElement>) => void;
   onSaveCurrentAsBase: () => void;
+  onRemoveBaseResume: () => void;
   onLoadWorkspace: (apply: boolean) => Promise<void>;
   onFileUpload: (event: ChangeEvent<HTMLInputElement>) => void;
   onUpdateResumeBlock: (id: string, text: string) => void;
@@ -77,10 +74,15 @@ type SourcesPaneProps = {
   setIncludeCoverLetter: (v: boolean) => void;
   strictReview: boolean;
   setStrictReview: (v: boolean) => void;
+  preserveFormat: boolean;
+  setPreserveFormat: (v: boolean) => void;
+  resumeSourceFormat: string;
   roleAppliedAs: string;
   setRoleAppliedAs: (v: string) => void;
   honestContext: string;
   setHonestContext: (v: string) => void;
+  customInstructions: string;
+  setCustomInstructions: (v: string) => void;
   showAdvanced: boolean;
   setShowAdvanced: (next: (v: boolean) => boolean) => void;
   canPolish: boolean;
@@ -98,24 +100,23 @@ type SourcesPaneProps = {
   setApiBaseUrl: (v: string) => void;
   selectedModel: string;
   setSelectedModel: (v: string) => void;
+  cliReasoningEffort: string;
+  setCliReasoningEffort: (v: string) => void;
   customModel: string;
   setCustomModel: (v: string) => void;
   providerOptions: readonly ProviderOption[];
   currentModelOptions: readonly ModelOption[];
+  currentCliReasoningEffortOptions: readonly ModelOption[];
   selectedProviderOption: ProviderOption | undefined;
   customModelPlaceholder: string;
 };
 
 export function SourcesPane(props: SourcesPaneProps) {
   const {
-    jobUrl,
-    setJobUrl,
     jobDescription,
     setJobDescription,
-    isImporting,
     linkStatus,
     jobReady,
-    onMaybeAutoImport,
     baseResumeName,
     workspacePath,
     workspaceStatus,
@@ -132,6 +133,7 @@ export function SourcesPane(props: SourcesPaneProps) {
     resumeReady,
     onBaseResumeUpload,
     onSaveCurrentAsBase,
+    onRemoveBaseResume,
     onLoadWorkspace,
     onFileUpload,
     onUpdateResumeBlock,
@@ -140,10 +142,15 @@ export function SourcesPane(props: SourcesPaneProps) {
     setIncludeCoverLetter,
     strictReview,
     setStrictReview,
+    preserveFormat,
+    setPreserveFormat,
+    resumeSourceFormat,
     roleAppliedAs,
     setRoleAppliedAs,
     honestContext,
     setHonestContext,
+    customInstructions,
+    setCustomInstructions,
     showAdvanced,
     setShowAdvanced,
     canPolish,
@@ -159,19 +166,15 @@ export function SourcesPane(props: SourcesPaneProps) {
     setApiBaseUrl,
     selectedModel,
     setSelectedModel,
+    cliReasoningEffort,
+    setCliReasoningEffort,
     customModel,
     setCustomModel,
     providerOptions,
     currentModelOptions,
+    currentCliReasoningEffortOptions,
     selectedProviderOption
   } = props;
-
-  function handleJobUrlKeyDown(event: KeyboardEvent<HTMLInputElement>) {
-    if (event.key === "Enter") {
-      event.preventDefault();
-      onMaybeAutoImport();
-    }
-  }
 
   return (
     <aside className="sources-pane" aria-label="Inputs">
@@ -187,30 +190,16 @@ export function SourcesPane(props: SourcesPaneProps) {
         </header>
         <label className="field">
           <span>
-            Job link <small>(paste → tab away to auto-import)</small>
+            Job posting <small>(paste the full description; links alone are tracking-only)</small>
           </span>
-          <div className="input-with-icon">
-            <Link size={15} aria-hidden="true" />
-            <input
-              value={jobUrl}
-              onChange={(event) => setJobUrl(event.target.value)}
-              onBlur={onMaybeAutoImport}
-              onKeyDown={handleJobUrlKeyDown}
-              placeholder="https://company.com/careers/role"
-              type="url"
-            />
-          </div>
-        </label>
-        {isImporting || linkStatus ? <p className="micro-status">{isImporting ? "Importing…" : linkStatus}</p> : null}
-        <label className="field">
-          <span>Job description</span>
           <textarea
             className="textarea textarea--job"
             value={jobDescription}
             onChange={(event) => setJobDescription(event.target.value)}
-            placeholder="Paste responsibilities, qualifications, and preferred skills."
+            placeholder="Paste responsibilities, qualifications, and preferred skills. A bare link can be tracked, but not polished by itself."
           />
         </label>
+        {linkStatus ? <p className="micro-status">{linkStatus}</p> : null}
       </section>
 
       {/* Resume source */}
@@ -254,6 +243,16 @@ export function SourcesPane(props: SourcesPaneProps) {
             >
               <RefreshCw size={12} aria-hidden="true" />
               Reload
+            </button>
+            <button
+              className="secondary-button is-compact"
+              type="button"
+              disabled={!baseResumeName || isSavingBaseResume}
+              onClick={onRemoveBaseResume}
+              title="Remove the saved base resume from the workspace"
+            >
+              <Trash2 size={12} aria-hidden="true" />
+              Remove
             </button>
           </div>
           {workspaceStatus ? <p className="workspace-status">{workspaceStatus}</p> : null}
@@ -311,7 +310,10 @@ export function SourcesPane(props: SourcesPaneProps) {
           </div>
         ) : (
           <label className="field">
-            <span>Resume text</span>
+            <span>
+              Resume text{" "}
+              {fileName ? <small>(from {fileName}; edit text here as needed)</small> : null}
+            </span>
             <textarea
               className="textarea textarea--resume"
               value={resumeText}
@@ -325,7 +327,7 @@ export function SourcesPane(props: SourcesPaneProps) {
         )}
       </section>
 
-      {/* Polish action */}
+      {/* Polish — one sticky panel: only the header stays fixed; toggles, inputs, and button scroll inside the capped region */}
       <section className="sources-section sources-section--action">
         <header className="sources-section__head">
           <Sparkles size={14} aria-hidden="true" />
@@ -335,12 +337,25 @@ export function SourcesPane(props: SourcesPaneProps) {
             type="button"
             aria-expanded={showAdvanced}
             onClick={() => setShowAdvanced((v) => !v)}
-            title="AI settings"
+            title={selectedProviderOption?.label ? `AI settings: ${selectedProviderOption.label}` : "AI settings"}
           >
             <Settings2 size={12} aria-hidden="true" />
-            <span>{showAdvanced ? "Hide" : selectedProviderOption?.label ?? "AI"}</span>
+            <span>{showAdvanced ? "Hide settings" : "AI settings"}</span>
           </button>
         </header>
+
+        <div className="polish-scroll">
+        <label className="toggle-row">
+          <input
+            checked={preserveFormat}
+            onChange={(event) => setPreserveFormat(event.target.checked)}
+            type="checkbox"
+          />
+          <span>
+            <strong>Preserve format</strong>
+            <small>Keep source structure and order where possible. Source: {resumeSourceFormat}.</small>
+          </span>
+        </label>
 
         <label className="toggle-row">
           <input
@@ -392,30 +407,18 @@ export function SourcesPane(props: SourcesPaneProps) {
           </div>
         ) : null}
 
-        <button
-          className="primary-button"
-          type="button"
-          disabled={!canPolish || isPolishing}
-          onClick={onPolish}
-        >
-          <Sparkles size={14} aria-hidden="true" />
-          {isPolishing
-            ? "Working…"
-            : strictReview && includeCoverLetter
-            ? "Polish + review + cover"
-            : strictReview
-            ? "Polish + review"
-            : includeCoverLetter
-            ? "Polish + cover"
-            : "Polish"}
-        </button>
-
-        {polishStatus ? (
-          <div className="notice notice--info" role="status">
-            <Sparkles size={15} aria-hidden="true" />
-            <span>{polishStatus}</span>
-          </div>
-        ) : null}
+        <label className="field">
+          <span>
+            Custom instructions <small>(optional — steer the rewrite: tone, length, emphasis)</small>
+          </span>
+          <textarea
+            className="textarea"
+            value={customInstructions}
+            onChange={(event) => setCustomInstructions(event.target.value)}
+            placeholder="e.g., aim for one page; lead each bullet with a metric; use British spelling; don't add a summary section."
+            rows={3}
+          />
+        </label>
 
         {showAdvanced ? (
           <form className="ai-settings" onSubmit={(event) => event.preventDefault()}>
@@ -474,6 +477,18 @@ export function SourcesPane(props: SourcesPaneProps) {
                   />
                 </label>
               ) : null}
+              {currentCliReasoningEffortOptions.length ? (
+                <label className="field">
+                  <span>Reasoning effort</span>
+                  <select value={cliReasoningEffort} onChange={(event) => setCliReasoningEffort(event.target.value)}>
+                    {currentCliReasoningEffortOptions.map((option) => (
+                      <option key={option.value || "cli-default-effort"} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
               {["openrouter", "groq", "together", "mistral", "local"].includes(aiProvider) ? (
                 <label className="field field--wide">
                   <span>Base URL</span>
@@ -492,6 +507,32 @@ export function SourcesPane(props: SourcesPaneProps) {
             </p>
           </form>
         ) : null}
+
+        <button
+          className="primary-button"
+          type="button"
+          disabled={!canPolish || isPolishing}
+          onClick={onPolish}
+        >
+          <Sparkles size={14} aria-hidden="true" />
+          {isPolishing
+            ? "Working…"
+            : strictReview && includeCoverLetter
+            ? "Polish + review + cover"
+            : strictReview
+            ? "Polish + review"
+            : includeCoverLetter
+            ? "Polish + cover"
+            : "Polish"}
+        </button>
+
+        {polishStatus ? (
+          <div className="notice notice--info" role="status">
+            <Sparkles size={15} aria-hidden="true" />
+            <span>{polishStatus}</span>
+          </div>
+        ) : null}
+        </div>
       </section>
     </aside>
   );

@@ -178,7 +178,8 @@ Before changing UI:
 
 - Read `docs/engineering/ui-principles.md`.
 - Reuse primitives from `src/ui.tsx` and tokens / classes from
-  `src/styles.css`.
+  `src/styles/` (design tokens live in `src/styles/tokens.css`; each
+  surface has its own file, aggregated by `src/styles/index.css`).
 - Preserve the two-column workflow: job target / resume inputs on one
   side, polished output / insights on the other.
 - Prefer composition over piling more into `src/App.tsx`; split growing
@@ -348,15 +349,17 @@ Run from the project root.
 
 - **Build**: `npm run build`
 - **Dev**: `npm run dev` (starts the API-backed local server on `PORT`
-  or `5174`)
+  or `5181`)
 - **Preview**: `npm run preview` (production-mode local server)
 - **Server syntax check**: `node --check server.mjs`
 
-> Port `5174` is the canonical port for this project. If `5174` is
-> already bound, treat that as a signal the app is already running —
-> connect to `http://localhost:5174` instead of starting a second
-> `npm run dev`, and do not change the port to dodge the conflict.
-> Sibling project careflow uses port `5173`; do not confuse the two.
+> Port `5181` is the canonical port for this project (reserved range
+> `5181-5183`). If `5181` is already bound, treat that as a signal the
+> app is already running — connect to `http://localhost:5181` instead of
+> starting a second `npm run dev`, and do not change the port to dodge
+> the conflict.
+> Sibling reservations: careflow `5173-5180`, portfolio `5184-5185`. Do
+> not confuse them.
 
 Notes:
 

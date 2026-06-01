@@ -1,4 +1,5 @@
-import { Clipboard, ClipboardList, Download, ExternalLink, FileCode2 } from "lucide-react";
+import { useState } from "react";
+import { Clipboard, ClipboardList, Download, ExternalLink, FileCode2, X } from "lucide-react";
 import type { PolishedResume } from "../resumeEngine";
 import type { TectonicStatus, Template } from "../hooks/useTemplates";
 
@@ -27,7 +28,7 @@ type ExportRailProps = {
   onDownloadLatexPdf: () => void | Promise<void>;
   onDownloadPdf: () => void;
   onDownloadDocx: () => void | Promise<void>;
-  onTrack: () => void;
+  onTrack: (resumeUsed: "tailored" | "base") => void;
 };
 
 export function ExportRail({
@@ -55,6 +56,24 @@ export function ExportRail({
   onDownloadDocx,
   onTrack
 }: ExportRailProps) {
+  // When a tailored draft exists, Track asks which resume actually went out
+  // (the AI may judge the base already strong, so people sometimes send it).
+  const [askResumeUsed, setAskResumeUsed] = useState(false);
+  const aiSuggestsAsIs = Boolean(result?.strictReview?.recommendation?.applyAsIs);
+
+  function handleTrackClick() {
+    if (result?.polishedText) {
+      setAskResumeUsed(true);
+    } else {
+      onTrack("base");
+    }
+  }
+
+  function chooseResume(resumeUsed: "tailored" | "base") {
+    setAskResumeUsed(false);
+    onTrack(resumeUsed);
+  }
+
   return (
     <footer className="export-rail" aria-label="Render & export">
       <div className="export-rail__template">
@@ -149,16 +168,40 @@ export function ExportRail({
             <span>DOCX</span>
           </button>
         ) : null}
-        <button
-          className="ghost-button is-compact"
-          type="button"
-          disabled={!jobUrl.trim() && !jobDescription.trim()}
-          onClick={onTrack}
-          title="Save this role to the pipeline tracker on disk"
-        >
-          <ClipboardList size={14} aria-hidden="true" />
-          <span>Track</span>
-        </button>
+        {askResumeUsed ? (
+          <div className="track-ask" role="group" aria-label="Which resume did you send?">
+            <span className="track-ask__label">
+              Which resume did you send?
+              {aiSuggestsAsIs ? <em> AI said your base is already a strong fit.</em> : null}
+            </span>
+            <button className="ghost-button is-compact" type="button" onClick={() => chooseResume("tailored")}>
+              Tailored
+            </button>
+            <button className="ghost-button is-compact" type="button" onClick={() => chooseResume("base")}>
+              Original / base
+            </button>
+            <button
+              className="ghost-button is-compact"
+              type="button"
+              onClick={() => setAskResumeUsed(false)}
+              aria-label="Cancel"
+              title="Cancel"
+            >
+              <X size={14} aria-hidden="true" />
+            </button>
+          </div>
+        ) : (
+          <button
+            className="ghost-button is-compact"
+            type="button"
+            disabled={!jobUrl.trim() && !jobDescription.trim()}
+            onClick={handleTrackClick}
+            title="Save this role to the pipeline tracker on disk"
+          >
+            <ClipboardList size={14} aria-hidden="true" />
+            <span>Track</span>
+          </button>
+        )}
       </div>
 
       {texStatus || downloadStatus ? (
