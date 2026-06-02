@@ -24,6 +24,9 @@ Good server verification covers:
 - the affected route returns the expected JSON shape and HTTP status
 - missing / invalid API keys surface a clear, user-safe error rather
   than a silent fallback
+- prompt-honesty changes prove that JD-only skills are not injected into
+  the polished resume; when possible, use a synthetic missing-skill case
+  such as a no-Kubernetes resume against a Kubernetes-required JD
 - the deterministic local rewrite still runs when the AI call cannot
 - DOCX import / export roundtrips do not corrupt the format
 - `job-search-workspace/` reads / writes stay inside the workspace
@@ -54,8 +57,9 @@ Good frontend verification covers:
 - job-import distiller changes prove the before/after shape without
   printing raw private text: the resulting job field should keep role
   intro / responsibilities / requirements while stripping empty bullets,
-  apply/navigation furniture, duplicated titles, and trailing benefits /
-  legal boilerplate
+  apply/navigation furniture, duplicated titles, low-value Workday
+  metadata, company/culture marketing, and trailing benefits / legal
+  boilerplate
 
 Useful commands:
 

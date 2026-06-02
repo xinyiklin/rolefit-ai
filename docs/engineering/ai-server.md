@@ -89,6 +89,11 @@ The AI must:
 - strengthen wording and structure
 - preserve truthfulness — never invent employers, dates, metrics,
   education, tools, or outcomes
+- treat honest context as optional evidence; when it is blank, rely only
+  on the resume
+- never import a JD-only skill/tool into the resume or skills section
+  without exact evidence in the resume or optional honest context; surface
+  missing required skills as gaps instead
 - add bracketed placeholders where facts or metrics are missing
 - return copy-ready resume text plus concise strengths and fixes
 
@@ -106,9 +111,11 @@ Keep the import pipeline split by responsibility:
   résumé-tailoring content (role intro, responsibilities, requirements,
   preferred qualifications) and remove scrape artifacts or non-tailoring
   page furniture: empty list markers, duplicate adjacent lines, ATS title
-  furniture such as `Job Application for...`, apply/share/navigation rows,
-  salary pills, benefits/perks blocks, pay-transparency text, application
-  instructions, EEO/legal boilerplate, cookie prompts, and similar noise.
+  furniture such as `Job Application for...`, low-value Workday metadata
+  pairs, duplicated pre-description company/culture marketing blocks,
+  apply/share/navigation rows, salary pills, benefits/perks blocks,
+  pay-transparency text, application instructions, EEO/legal boilerplate,
+  cookie prompts, and similar noise.
 
 Distilling should stay conservative: do not cut trailing boilerplate until
 meaningful role content has already been seen, and keep uncertain text

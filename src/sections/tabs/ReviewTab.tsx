@@ -14,6 +14,16 @@ type ReviewTabProps = {
   result: PolishedResume | null;
 };
 
+function evidenceLabel(evidenceType: string) {
+  return (
+    {
+      exact: "Exact evidence",
+      adjacent: "Adjacent evidence",
+      none: "No evidence"
+    }[evidenceType] ?? "Evidence"
+  );
+}
+
 export function ReviewTab({
   scoreSource,
   scoreContext,
@@ -25,6 +35,7 @@ export function ReviewTab({
   result
 }: ReviewTabProps) {
   const lift = fitComparison ? fitComparison.tailored - fitComparison.base : 0;
+  const missingRequiredSkills = result?.missingRequiredSkills ?? [];
   return (
     <div className="review-stack">
       <section className="studio-card score-panel">
@@ -114,6 +125,28 @@ export function ReviewTab({
           )}
         </div>
       </section>
+
+      {missingRequiredSkills.length ? (
+        <section className="studio-card">
+          <PanelHeading icon={<ListChecks size={15} aria-hidden="true" />} title="Still missing" />
+          <div className="gap-list">
+            {missingRequiredSkills.map((item, index) => (
+              <article className="gap-card" key={`${item.keyword}-${index}`}>
+                <header className="gap-card__head">
+                  <strong>{item.keyword}</strong>
+                  <span className={`mini-chip mini-chip--${item.canHonestlyAdd ? "covered" : "missing"}`}>
+                    {item.canHonestlyAdd ? "Exact evidence" : "Leave as gap"}
+                  </span>
+                </header>
+                <p className="gap-card__line">
+                  <em>{evidenceLabel(item.evidenceType)}</em>
+                  {item.reason ? ` - ${item.reason}` : ""}
+                </p>
+              </article>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       {resumeDiff ? (
         <section className="studio-card">

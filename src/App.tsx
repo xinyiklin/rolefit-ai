@@ -8,6 +8,7 @@ import {
   draftCoverLetter,
   normalizePolishedResume,
   type PolishedResume,
+  type MissingRequiredSkill,
   polishResume
 } from "./resumeEngine";
 import { sampleResume } from "./samples";
@@ -536,6 +537,7 @@ function App() {
           : undefined,
         strengths: data.strengths?.length ? data.strengths : fallback.strengths,
         fixes: data.fixes?.length ? data.fixes : fallback.fixes,
+        missingRequiredSkills: data.missingRequiredSkills?.length ? data.missingRequiredSkills : undefined,
         aiScore: data.aiScore ?? undefined,
         strictReview: data.strictReview ?? undefined
       });
@@ -856,6 +858,7 @@ function App() {
       polishedText: sentResume,
       resumeUsed: usedBase ? "base" : "tailored",
       coverLetterText: result?.coverLetterText ?? "",
+      missingRequiredSkills: result?.missingRequiredSkills?.length ? result.missingRequiredSkills : undefined,
       // Snapshot the recruiter review so the pipeline keeps the verdict,
       // interview risks, and gaps for this application.
       review: sr
@@ -863,7 +866,14 @@ function App() {
             verdict: sr.verdict,
             verdictReason: sr.verdictReason,
             riskFlags: sr.riskFlags.map((r) => ({ risk: r.risk, suggestion: r.suggestion })),
-            gaps: sr.gaps.map((g) => ({ gap: g.gap, severity: g.severity })),
+            gaps: sr.gaps.map((g) => ({
+              gap: g.gap,
+              severity: g.severity,
+              evidenceType: g.evidenceType,
+              canHonestlyAdd: g.canHonestlyAdd,
+              evidence: g.evidence,
+              suggestedEdit: g.suggestedEdit
+            })),
             recommendation: {
               applyAsIs: sr.recommendation.applyAsIs,
               reason: sr.recommendation.reason,
@@ -877,6 +887,22 @@ function App() {
     setTexStatus(`Tracked "${title}" in the pipeline (${usedBase ? "original" : "tailored"} resume).`);
     setActiveOutputTab("pipeline");
     setExpandedApplicationId(app.id);
+  }
+
+  function missingRequiredSkillsFromApplication(app: Application): MissingRequiredSkill[] | undefined {
+    if (app.missingRequiredSkills?.length) return app.missingRequiredSkills;
+    const derived = app.review?.gaps
+      ?.filter((gap) => gap.gap)
+      .map((gap) => {
+        const evidenceType = gap.evidenceType ?? (gap.canHonestlyAdd ? "exact" : "none");
+        return {
+          keyword: gap.gap,
+          evidenceType,
+          canHonestlyAdd: evidenceType === "exact" && Boolean(gap.canHonestlyAdd),
+          reason: gap.evidence || gap.suggestedEdit || (gap.severity ? `${gap.severity} gap` : "")
+        };
+      });
+    return derived?.length ? derived : undefined;
   }
 
   function handleLoadApplication(app: Application) {
@@ -904,7 +930,8 @@ function App() {
         strengths: app.review?.verdictReason ? [app.review.verdictReason] : ["Loaded from pipeline snapshot."],
         fixes: app.review?.recommendation?.topEdits?.length
           ? app.review.recommendation.topEdits
-          : ["Review against the current job text before sending again."]
+          : ["Review against the current job text before sending again."],
+        missingRequiredSkills: missingRequiredSkillsFromApplication(app)
       });
       setLinkStatus(`Loaded "${app.title}" and its saved resume snapshot from pipeline.`);
     } else {
