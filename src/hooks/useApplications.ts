@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { EvidenceType, MissingRequiredSkill, StrictReviewSeverity } from "../resumeEngine";
 
 export type ApplicationStatus = "interested" | "applied" | "interviewing" | "offer" | "rejected" | "withdrawn";
 
@@ -25,11 +26,20 @@ export const APPLICATION_SOURCES: ApplicationSource[] = [
 
 // Snapshot of the recruiter (strict) review captured when a role is tracked, so
 // the pipeline remembers the verdict, interview risks, and gaps per application.
+export type ApplicationReviewGap = {
+  gap: string;
+  severity: StrictReviewSeverity | string;
+  evidenceType?: EvidenceType;
+  canHonestlyAdd?: boolean;
+  evidence?: string;
+  suggestedEdit?: string;
+};
+
 export type ApplicationReview = {
   verdict: string;
   verdictReason: string;
   riskFlags: { risk: string; suggestion: string }[];
-  gaps: { gap: string; severity: string }[];
+  gaps: ApplicationReviewGap[];
   recommendation: { applyAsIs: boolean; reason: string; coverLetterAngle: string; topEdits: string[] };
 };
 
@@ -59,6 +69,7 @@ export type Application = {
   polishedText?: string;
   coverLetterText?: string;
   review?: ApplicationReview;
+  missingRequiredSkills?: MissingRequiredSkill[];
   // Which resume actually went out — the AI-tailored draft or the original/base
   // (the AI may judge the base already a strong fit). Captured at Track time.
   resumeUsed?: "tailored" | "base";

@@ -17,6 +17,15 @@ export type AiFitScore = {
   liftReason: string;
 };
 
+export type EvidenceType = "exact" | "adjacent" | "none";
+
+export type MissingRequiredSkill = {
+  keyword: string;
+  evidenceType: EvidenceType;
+  canHonestlyAdd: boolean;
+  reason: string;
+};
+
 // A base/tailored comparison restored from a saved pipeline snapshot. We no
 // longer hold the original base resume to recompute locally, so the numbers and
 // their provenance ("ai" vs. "local") are carried through verbatim — a local
@@ -41,6 +50,7 @@ export type StrictReviewCoverage = {
 export type StrictReviewGap = {
   gap: string;
   severity: StrictReviewSeverity;
+  evidenceType?: EvidenceType;
   canHonestlyAdd: boolean;
   evidence: string;
   suggestedEdit: string;
@@ -87,6 +97,7 @@ export type PolishedResume = {
   missingKeywords: string[];
   strengths: string[];
   fixes: string[];
+  missingRequiredSkills?: MissingRequiredSkill[];
   trimmedBulletGroups: number;
   strictReview?: StrictReview;
 };

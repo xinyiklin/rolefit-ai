@@ -41,33 +41,68 @@ export async function writeApplications(workspaceDir, applications) {
 }
 
 const APPLICATION_SOURCES = ["LinkedIn", "Company site", "Referral", "Job board", "Recruiter", "Other"];
+const EVIDENCE_TYPES = ["exact", "adjacent", "none"];
 
 function sanitizeScore(value) {
   if (typeof value !== "number" || !Number.isFinite(value)) return null;
   return Math.max(0, Math.min(100, Math.round(value)));
 }
 
+function sanitizeString(value, maxLength) {
+  return typeof value === "string" ? value.slice(0, maxLength) : "";
+}
+
+function sanitizeEvidenceType(value) {
+  return EVIDENCE_TYPES.includes(value) ? value : undefined;
+}
+
+function sanitizeMissingRequiredSkills(raw) {
+  if (!Array.isArray(raw)) return undefined;
+  const skills = raw
+    .slice(0, 12)
+    .map((item) => {
+      const evidenceType = sanitizeEvidenceType(item?.evidenceType) ?? "none";
+      return {
+        keyword: sanitizeString(item?.keyword, 160),
+        evidenceType,
+        canHonestlyAdd: evidenceType === "exact" && Boolean(item?.canHonestlyAdd),
+        reason: sanitizeString(item?.reason, 800)
+      };
+    })
+    .filter((item) => item.keyword);
+  return skills.length ? skills : undefined;
+}
+
 function sanitizeReview(raw) {
   if (!raw || typeof raw !== "object") return undefined;
-  const str = (v, n) => (typeof v === "string" ? v.slice(0, n) : "");
   const list = (v) => (Array.isArray(v) ? v : []);
   const rec = raw.recommendation && typeof raw.recommendation === "object" ? raw.recommendation : {};
   const review = {
-    verdict: str(raw.verdict, 40),
-    verdictReason: str(raw.verdictReason, 1_000),
+    verdict: sanitizeString(raw.verdict, 40),
+    verdictReason: sanitizeString(raw.verdictReason, 1_000),
     riskFlags: list(raw.riskFlags)
       .slice(0, 12)
-      .map((r) => ({ risk: str(r?.risk, 400), suggestion: str(r?.suggestion, 400) }))
+      .map((r) => ({ risk: sanitizeString(r?.risk, 400), suggestion: sanitizeString(r?.suggestion, 400) }))
       .filter((r) => r.risk),
     gaps: list(raw.gaps)
       .slice(0, 12)
-      .map((g) => ({ gap: str(g?.gap, 400), severity: str(g?.severity, 12) }))
+      .map((g) => {
+        const evidenceType = sanitizeEvidenceType(g?.evidenceType);
+        return {
+          gap: sanitizeString(g?.gap, 400),
+          severity: sanitizeString(g?.severity, 12),
+          evidenceType,
+          canHonestlyAdd: evidenceType === "exact" && Boolean(g?.canHonestlyAdd),
+          evidence: sanitizeString(g?.evidence, 800),
+          suggestedEdit: sanitizeString(g?.suggestedEdit, 800)
+        };
+      })
       .filter((g) => g.gap),
     recommendation: {
       applyAsIs: Boolean(rec.applyAsIs),
-      reason: str(rec.reason, 1_000),
-      coverLetterAngle: str(rec.coverLetterAngle, 1_000),
-      topEdits: list(rec.topEdits).slice(0, 8).map((e) => str(e, 300)).filter(Boolean)
+      reason: sanitizeString(rec.reason, 1_000),
+      coverLetterAngle: sanitizeString(rec.coverLetterAngle, 1_000),
+      topEdits: list(rec.topEdits).slice(0, 8).map((e) => sanitizeString(e, 300)).filter(Boolean)
     }
   };
   // Drop an empty snapshot entirely so it doesn't clutter storage.
@@ -107,6 +142,7 @@ function sanitizeApplication(raw) {
     polishedText: typeof raw.polishedText === "string" ? raw.polishedText.slice(0, MAX_FIELD) : "",
     coverLetterText: typeof raw.coverLetterText === "string" ? raw.coverLetterText.slice(0, MAX_FIELD) : "",
     review: sanitizeReview(raw.review),
+    missingRequiredSkills: sanitizeMissingRequiredSkills(raw.missingRequiredSkills),
     resumeUsed: raw.resumeUsed === "base" || raw.resumeUsed === "tailored" ? raw.resumeUsed : undefined
   };
 }

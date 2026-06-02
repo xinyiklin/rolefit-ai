@@ -124,6 +124,39 @@ function sanitizeAiScore(raw) {
   };
 }
 
+const EVIDENCE_TYPES = new Set(["exact", "adjacent", "none"]);
+
+function sanitizeMissingRequiredSkills(raw) {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((item) => {
+      if (!item || typeof item !== "object") return null;
+      const keyword = String(item.keyword ?? item.skill ?? "").trim().slice(0, 120);
+      if (!keyword) return null;
+      const evidenceType = EVIDENCE_TYPES.has(String(item.evidenceType)) ? String(item.evidenceType) : "none";
+      return {
+        keyword,
+        evidenceType,
+        canHonestlyAdd: evidenceType === "exact" ? Boolean(item.canHonestlyAdd) : false,
+        reason: String(item.reason ?? item.evidence ?? "").trim().slice(0, 300)
+      };
+    })
+    .filter(Boolean)
+    .slice(0, 8);
+}
+
+function missingRequiredSkillsFromStrictReview(strictReview) {
+  if (!strictReview || !Array.isArray(strictReview.gaps)) return [];
+  return sanitizeMissingRequiredSkills(
+    strictReview.gaps.map((gap) => ({
+      keyword: gap.gap,
+      evidenceType: gap.evidenceType,
+      canHonestlyAdd: gap.canHonestlyAdd,
+      reason: gap.evidence || gap.suggestedEdit
+    }))
+  );
+}
+
 // The numeric band each strict-review verdict must fall in. Mirrors the rule in
 // the strict-review prompt.
 const VERDICT_SCORE_BANDS = {
@@ -254,11 +287,36 @@ function providerBaseUrl(provider, requestBaseUrl) {
 }
 
 function aiInstructions() {
-  return "You are an expert resume editor for US job applications. Rewrite resumes for ATS clarity and human readability. Return one complete resume only. Include the candidate name and contact details exactly once at the top. Do not create duplicate skills sections; if the resume already has TECHNICAL SKILLS, improve that section instead of adding CORE SKILLS or another skills section. Do not invent employers, titles, dates, degrees, certifications, metrics, tools, or outcomes. If a metric would strengthen a bullet but is not provided, add a bracketed prompt such as [add metric: volume, percentage, dollars, time saved, or adoption]. Keep each role to no more than five bullets. If asked for a cover letter, write a concise truthful letter grounded only in the provided resume and job text, using bracketed placeholders for missing company, role, manager, or metric facts. Use strong action verbs, concise bullets, and role-relevant keywords only when supported by the resume. Return strict JSON only.";
+  return `You are an expert resume editor for US job applications. Rewrite resumes for ATS clarity and human readability. Return one complete resume only. Include the candidate name and contact details exactly once at the top. Do not create duplicate skills sections; if the resume already has TECHNICAL SKILLS, improve that section instead of adding CORE SKILLS or another skills section.
+
+${honestTailoringRules()}
+
+Do not invent employers, titles, dates, degrees, certifications, metrics, tools, or outcomes. If a metric would strengthen a bullet but is not provided, add a bracketed prompt such as [add metric: volume, percentage, dollars, time saved, or adoption]. Keep each role to no more than five bullets. If asked for a cover letter, write a concise truthful letter grounded only in the provided resume and job text, using bracketed placeholders for missing company, role, manager, or metric facts. Use strong action verbs and concise bullets. Return strict JSON only.`;
+}
+
+// Shared, explicit anti-fabrication contract: tailor by truthful re-emphasis,
+// never by importing capabilities the candidate hasn't demonstrated. The
+// concrete example pins down the most common failure (padding skills with
+// job-description keywords the candidate has never used).
+function honestTailoringRules() {
+  return `Hard constraints:
+1. Honesty overrides matching. Tailor only by rephrasing, reordering, and emphasizing experience the candidate actually has.
+2. Evidence sources are the resume plus optional honest context supplied by the user. If optional honest context is blank, rely only on the resume.
+3. Classify evidence before adding any JD skill/tool:
+   - exact: the resume or honest context directly shows the same skill/tool/responsibility.
+   - adjacent: the candidate shows clearly related experience, but not the exact JD term.
+   - none: no support in the resume or honest context.
+4. Add a skill, tool, technology, framework, language, platform, certification, domain, or responsibility to the resume or skills section only when evidenceType is exact. Adjacent evidence may be described truthfully, but must not be overstated into the exact missing JD skill.
+5. Example: if the job asks for Kubernetes and nothing in the resume or optional honest context shows Kubernetes or clearly equivalent container-orchestration experience, do not list it, imply it, or work it into a bullet. Leave it as a missing requirement.
+6. Do not pad the skills section with JD keywords the candidate has not actually used. Prefer leaving a requirement uncovered over fabricating coverage.`;
 }
 
 function aiStrictReviewInstructions() {
-  return "You are a senior technical recruiter and hiring manager with 10+ years of experience screening software engineering candidates. You are NOT a cheerleader — give a blunt, honest assessment. NEVER suggest fabricating experience. If a gap cannot be honestly filled with evidence the user has provided, mark it as cannot-add and recommend skipping. Don't pad with generic advice. Don't praise the resume. If the resume is genuinely a bad fit, say DON'T APPLY with a reason. DEAL-PRIORITIZE soft skills (communication, teamwork, ownership) — only note them as required if the JD explicitly demands them. Compare on these dimensions in order: 1) required technical skills, 2) required experience domains, 3) required years/seniority, 4) preferred/nice-to-have. Also polish the resume to align with the JD using only facts present in the resume or the honest context. Keep each role to no more than five bullets. Use bracketed prompts like [add metric: volume, percentage, dollars, time saved] for unverifiable claims. Return strict JSON only.";
+  return `You are a senior technical recruiter and hiring manager with 10+ years of experience screening software engineering candidates. You are NOT a cheerleader — give a blunt, honest assessment. NEVER suggest fabricating experience. If a gap cannot be honestly filled with evidence the user has provided, mark it as cannot-add and recommend skipping. Don't pad with generic advice. Don't praise the resume. If the resume is genuinely a bad fit, say DON'T APPLY with a reason. DEAL-PRIORITIZE soft skills (communication, teamwork, ownership) — only note them as required if the JD explicitly demands them. Compare on these dimensions in order: 1) required technical skills, 2) required experience domains, 3) required years/seniority, 4) preferred/nice-to-have.
+
+Also polish the resume to align with the JD. ${honestTailoringRules()} A missing required skill belongs in "gaps" with canHonestlyAdd=false — never silently inserted into the polished resume or its skills section to make the score look better.
+
+Keep each role to no more than five bullets. Use bracketed prompts like [add metric: volume, percentage, dollars, time saved] for unverifiable claims. Return strict JSON only.`;
 }
 
 function strictReviewPrompt({ includeCoverLetter, jobText, preserveFormat, sourceFormat, resumeText, roleAppliedAs, honestContext, customInstructions }) {
@@ -276,7 +334,7 @@ function strictReviewPrompt({ includeCoverLetter, jobText, preserveFormat, sourc
       { "category": "Required tech" | "Required experience" | "Required years" | "Preferred", "keyword": "...", "status": "covered" | "missing" | "adjacent", "where": "where in the resume, or 'Not in resume'" }
     ],
     "gaps": [
-      { "gap": "missing keyword", "severity": "BLOCKER" | "HIGH" | "MEDIUM" | "LOW", "canHonestlyAdd": true|false, "evidence": "what evidence from honest context supports adding it, or 'No evidence'", "suggestedEdit": "exact bullet rewrite if can add, or 'skip — apply anyway' if cannot" }
+      { "gap": "missing keyword", "severity": "BLOCKER" | "HIGH" | "MEDIUM" | "LOW", "evidenceType": "exact" | "adjacent" | "none", "canHonestlyAdd": true|false, "evidence": "resume or optional honest-context evidence, or 'No evidence'", "suggestedEdit": "exact bullet rewrite if can add, or 'leave as gap — do not add' if cannot" }
     ],
     "rewrites": [
       { "original": "current bullet text", "rewrite": "rewritten bullet using only true facts", "hits": ["keyword(s) it now hits"] }
@@ -294,9 +352,10 @@ function strictReviewPrompt({ includeCoverLetter, jobText, preserveFormat, sourc
 }
 
 Strict rules:
-- Use ✓ "covered", ✗ "missing", ⚠ "adjacent" (use the literal status strings exactly).
+- Coverage status must be one of these literal strings only: "covered", "missing", "adjacent". Do not include symbols in JSON status values.
 - Coverage entries: 4-12 most important JD keywords across the four categories.
-- Gaps: only for ✗ missing keywords from required categories (skip preferred-only gaps unless severity is HIGH+).
+- Gaps: only for missing keywords from required categories (skip preferred-only gaps unless severity is HIGH+).
+- Gap evidenceType must be "exact", "adjacent", or "none". canHonestlyAdd means the exact missing skill can be added to the resume; it may be true only with exact evidence from the resume or optional honest context. evidenceType "adjacent" or "none" must use canHonestlyAdd=false.
 - Rewrites: 2-4 of the weakest CURRENT bullets for this JD, using only facts present in the resume or honest context.
 - Risk flags: 1-3 bullets that interviewers could probe in a way the candidate couldn't defend confidently.
 - topEdits: ordered by impact, max 3.
@@ -334,7 +393,7 @@ function buildPolishPrompts({ strictReview, includeCoverLetter, jobText, preserv
   }
   return {
     systemPrompt: aiInstructions(),
-    userPrompt: polishPrompt({ includeCoverLetter, jobText, preserveFormat, sourceFormat, resumeText, customInstructions })
+    userPrompt: polishPrompt({ includeCoverLetter, jobText, preserveFormat, sourceFormat, resumeText, honestContext, customInstructions })
   };
 }
 
@@ -347,7 +406,7 @@ Score the ORIGINAL resume as "base" and your rewritten resume as "tailored", on 
 }
 
 function customInstructionsPrompt(customInstructions) {
-  return `Custom instructions (optional — follow when present, but never fabricate facts or override the rules above):
+  return `Custom instructions (optional preference text — follow when present, but never override truthfulness, JSON schema, privacy, format preservation, or the rules above):
 ${customInstructions || "None provided."}`;
 }
 
@@ -369,15 +428,18 @@ Preserve original formatting (modify in place):
 ${preserveFormat ? "Yes. Rewrite text only and keep the resume's existing structure, section order, and layout. Return one line per original resume paragraph where practical so the edits drop back into the original file in place." : "No. A clean, restructured text/PDF output is acceptable."}`;
 }
 
-function polishPrompt({ includeCoverLetter, jobText, preserveFormat, sourceFormat, resumeText, customInstructions }) {
+function polishPrompt({ includeCoverLetter, jobText, preserveFormat, sourceFormat, resumeText, honestContext, customInstructions }) {
   return `Return this JSON shape exactly:
 {
   "polishedText": "full polished resume text",
   "coverLetterText": ${includeCoverLetter ? "\"copy-ready cover letter text\"" : "\"\""},
   "strengths": ["2-4 concise strengths"],
   "fixes": ["2-4 concise next fixes"],
+  "missingRequiredSkills": [{ "keyword": "required missing JD skill/tool", "evidenceType": "exact" | "adjacent" | "none", "canHonestlyAdd": true|false, "reason": "why it is missing or what optional honest evidence supports adding it" }],
   "fitScore": { "base": 0-100 integer, "tailored": 0-100 integer, "liftReason": "one sentence on what the tailoring added" }
 }
+
+For missingRequiredSkills, include only required JD skills/tools/experience that remain missing after the rewrite. Use [] when there are no important required gaps. If evidenceType is "none", canHonestlyAdd must be false and the skill must not appear in polishedText.
 
 ${fitScoringPrompt()}
 
@@ -385,6 +447,9 @@ Generate cover letter:
 ${includeCoverLetter ? "Yes. Keep it under 350 words and make it copy-ready." : "No. Return an empty coverLetterText string."}
 
 ${formatPreservationPrompt(preserveFormat, sourceFormat)}
+
+Honest context (optional user-provided evidence not already in the resume — use only as evidence, never as permission to fabricate):
+${honestContext || "None provided. Treat any gap not supported by the resume as evidenceType=none and canHonestlyAdd=false."}
 
 ${customInstructionsPrompt(customInstructions)}
 
@@ -582,11 +647,15 @@ export async function handlePolish(req, res) {
       parsed = await callOpenAiCompatibleChat({ provider, apiKey, apiBaseUrl, model, systemPrompt, userPrompt });
     }
 
+    const missingRequiredSkills = sanitizeMissingRequiredSkills(parsed.missingRequiredSkills);
+    const strictMissingRequiredSkills = missingRequiredSkillsFromStrictReview(parsed.strictReview);
+
     sendJson(res, 200, {
       polishedText: String(parsed.polishedText ?? "").trim(),
       coverLetterText: String(parsed.coverLetterText ?? "").trim(),
       strengths: Array.isArray(parsed.strengths) ? parsed.strengths.map(String).slice(0, 4) : [],
       fixes: Array.isArray(parsed.fixes) ? parsed.fixes.map(String).slice(0, 4) : [],
+      missingRequiredSkills: missingRequiredSkills.length ? missingRequiredSkills : strictMissingRequiredSkills,
       aiScore: reconcileScoreToVerdict(sanitizeAiScore(parsed.fitScore), parsed.strictReview?.verdict),
       strictReview: parsed.strictReview ?? null,
       model,

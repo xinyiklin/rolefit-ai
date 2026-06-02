@@ -37,6 +37,19 @@ const TRAILING_BOILERPLATE: RegExp[] = [
   // Application instructions and pay-transparency legalese.
   /^(how to apply|to apply\b|ready to apply)/i,
   /pay transparency/i,
+  // Closing marketing / culture CTAs and salary/benefits prose that trail the
+  // real requirements — common on Workday / large-employer postings, and they
+  // sit above the EEO line so the EEO cut alone misses them. Match the culture
+  // *header* line, not generic CTA verbs like "own your opportunity" that also
+  // open many postings ("YOUR IMPACT / Own your opportunity to ...").
+  /\bis your place\b/i, // "<Company> IS YOUR PLACE" culture block (cuts the
+  // following Growth/Support/Rewards/Community perks + closing CTA with it)
+  /^total rewards\b/i,
+  /salary range for this position/i,
+  /^the (likely|base|expected|anticipated) (salary|pay|compensation|base pay|pay range)\b/i,
+  // Workday footer metadata block (label lines whose values follow on the next
+  // line); cutting at the first one drops the whole trailing block.
+  /^(scheduled weekly hours|travel required|telecommuting options?|work location|additional work locations?)\s*:?\s*$/i,
   /equal opportunity employer/i,
   /equal employment opportunity/i,
   /^we are an equal\b/i,
@@ -67,6 +80,12 @@ const NOISE_LINE: RegExp[] = [
   /^(home|jobs|careers|search)$/i
 ];
 
+const LOW_VALUE_METADATA_LABEL: RegExp[] = [
+  /^type of requisition\s*:?\s*$/i,
+  /^public trust\/other required\s*:?\s*$/i,
+  /^job family\s*:?\s*$/i
+];
+
 // A bullet or list marker with no real text after it — empty <li> spacers,
 // icon-only items, or stray punctuation rows left over from the scraped HTML.
 // We strip leading markers and treat the line as empty if nothing alphanumeric
@@ -90,6 +109,77 @@ function normalize(raw: string): string {
     .trim();
 }
 
+function nextTextIndex(lines: string[], start: number): number {
+  for (let i = start; i < lines.length; i += 1) {
+    if (lines[i].trim()) return i;
+  }
+  return -1;
+}
+
+function isMetadataLabel(line: string): boolean {
+  return /^[A-Za-z][A-Za-z0-9 /&'’()-]+:\s*$/.test(line.trim());
+}
+
+function removeLowValueMetadata(lines: string[]): string[] {
+  const result: string[] = [];
+  for (let i = 0; i < lines.length; i += 1) {
+    const t = lines[i].trim();
+    if (!LOW_VALUE_METADATA_LABEL.some((re) => re.test(t))) {
+      result.push(lines[i]);
+      continue;
+    }
+
+    // Workday emits "Label:" on one row and the value on the next. These
+    // labels are ATS metadata, not requirements; skip the paired value too.
+    const valueIndex = nextTextIndex(lines, i + 1);
+    if (valueIndex === -1) continue;
+    i = isMetadataLabel(lines[valueIndex]) ? valueIndex - 1 : valueIndex;
+  }
+  return result;
+}
+
+function removeDuplicateClearanceMetadata(lines: string[]): string[] {
+  const currentLabelIndex = lines.findIndex((line) =>
+    /^clearance level must currently possess\s*:?\s*$/i.test(line.trim())
+  );
+  const ableLabelIndex = lines.findIndex((line) =>
+    /^clearance level must be able to obtain\s*:?\s*$/i.test(line.trim())
+  );
+  if (currentLabelIndex === -1 || ableLabelIndex === -1) return lines;
+
+  const currentValueIndex = nextTextIndex(lines, currentLabelIndex + 1);
+  const ableValueIndex = nextTextIndex(lines, ableLabelIndex + 1);
+  if (currentValueIndex === -1 || ableValueIndex === -1) return lines;
+
+  const currentValue = lines[currentValueIndex].trim().toLowerCase();
+  const ableValue = lines[ableValueIndex].trim().toLowerCase();
+  if (!currentValue || currentValue !== ableValue) return lines;
+
+  return lines.filter((_, index) => index !== ableLabelIndex && index !== ableValueIndex);
+}
+
+function removePreDescriptionMarketing(lines: string[]): string[] {
+  const firstDescription = lines.findIndex((line) => /^job description\s*:?\s*$/i.test(line.trim()));
+  if (firstDescription === -1) return lines;
+
+  const secondDescription = lines.findIndex(
+    (line, index) => index > firstDescription && /^job description\s*:?\s*$/i.test(line.trim())
+  );
+  if (secondDescription === -1 || secondDescription - firstDescription > 12) return lines;
+
+  const segment = lines.slice(firstDescription, secondDescription).join("\n");
+  const looksLikeMarketing =
+    /^our company$/im.test(segment) ||
+    (/^your impact$/im.test(segment) && /own your opportunity to/i.test(segment));
+  if (!looksLikeMarketing) return lines;
+
+  return [...lines.slice(0, firstDescription), ...lines.slice(secondDescription)];
+}
+
+function removeWorkdayFurniture(lines: string[]): string[] {
+  return removePreDescriptionMarketing(removeDuplicateClearanceMetadata(removeLowValueMetadata(lines)));
+}
+
 export function extractRelevantJobText(raw: string, maxChars = 12_000): string {
   const cleaned = normalize(String(raw ?? ""));
   if (!cleaned) return "";
@@ -103,13 +193,14 @@ export function extractRelevantJobText(raw: string, maxChars = 12_000): string {
     if (isEmptyMarker(t)) return false; // bullet/dash/number with no content
     return !NOISE_LINE.some((re) => re.test(t));
   });
+  const filtered = removeWorkdayFurniture(kept);
 
   // 2) Cut at the first trailing-boilerplate marker that appears after we've
   //    already accumulated real content, so short posts are never truncated.
-  let cut = kept.length;
+  let cut = filtered.length;
   let contentSeen = 0;
-  for (let i = 0; i < kept.length; i += 1) {
-    const t = kept[i].trim();
+  for (let i = 0; i < filtered.length; i += 1) {
+    const t = filtered[i].trim();
     // Test against content seen on PRIOR lines, so the very first line can never
     // be treated as trailing boilerplate (which would cut everything to "").
     if (t && contentSeen > 400 && TRAILING_BOILERPLATE.some((re) => re.test(t))) {
@@ -122,7 +213,7 @@ export function extractRelevantJobText(raw: string, maxChars = 12_000): string {
   // 3) Collapse consecutive duplicate lines (scraped pages often repeat the
   //    title or a bullet); blanks are exempt so paragraph breaks are preserved.
   const deduped: string[] = [];
-  for (const line of kept.slice(0, cut)) {
+  for (const line of filtered.slice(0, cut)) {
     const t = line.trim();
     if (t && t === deduped[deduped.length - 1]?.trim()) continue;
     deduped.push(line);
