@@ -11,8 +11,8 @@ _Screenshot uses demo workspace data._
 ## Highlights
 
 - **Multi-format resume I/O** — ingest `.docx`, `.pdf`, `.tex` (Jake's-style), or plain text; export back to each.
-- **Job-link import** — paste a posting URL and pull the description in one click: Workday-aware (reads its CXS JSON API for `/job/` and `/details/` links), with a generic HTML→text fallback for other boards, then distilled locally to the sections worth tailoring against. The link itself is kept only for pipeline tracking and is **never sent to the model**.
-- **Multi-provider AI** — 10 backends, including **subscription-CLI providers** (`Claude Code`, `Codex CLI`) that route through existing Claude Max / ChatGPT Plus subscriptions instead of per-token API billing.
+- **Job-link import** — paste a posting URL and pull the description in one click: Workday-aware (reads its CXS JSON API for `/job/` and `/details/` links), with a generic HTML→text fallback for other boards. The client distills the scrape before polishing, keeping role intro / responsibilities / requirements / preferred qualifications while dropping empty bullets, duplicated ATS title furniture, apply/share/navigation rows, salary pills, benefits/perks, pay-transparency, and EEO/legal boilerplate. The link itself is kept only for pipeline tracking and is **never sent to the model**.
+- **Subscription-first, multi-provider AI** — runs on **subscription-CLI tools** (`Claude Code`, `Codex CLI`, `Gemini CLI` / Antigravity) that route through existing Claude Max / ChatGPT Plus / Google subscriptions instead of per-token billing, with **hosted-API backends** (OpenAI, Anthropic, Gemini, OpenRouter, Groq, Together, Mistral, local Ollama) available behind the same interface.
 - **Fit scoring + 4-category keyword gap analysis** — required experience, knowledge, required skills, technical tools.
 - **Strict recruiter review mode** — verdict (STRONG FIT / REASONABLE FIT / STRETCH / DON'T APPLY), gap severity, targeted bullet rewrites, interview risk flags, cover-letter angle.
 - **LaTeX export pipeline** with three resume templates (Jake's, Awesome-CV, Deedy) + **one-click Overleaf submission** via form POST + optional local PDF compile through **Tectonic**.
@@ -25,7 +25,7 @@ _Screenshot uses demo workspace data._
 
 React 19 · TypeScript · Vite · Node.js (`server.mjs` with focused helpers under `server/`) · custom CSS · `lucide-react` icons
 
-No SaaS dependencies. Optional integrations: OpenAI · Anthropic · Gemini · OpenRouter · Groq · Together · Mistral · local Ollama · Claude Code CLI · Codex CLI · Tectonic · Overleaf.
+No SaaS dependencies. Optional integrations: OpenAI · Anthropic · Gemini · OpenRouter · Groq · Together · Mistral · local Ollama · Claude Code CLI · Codex CLI · Gemini CLI (Antigravity) · Tectonic · Overleaf.
 
 ## Run
 
@@ -61,6 +61,10 @@ claude auth login
 # requires ChatGPT Plus / Codex Plus
 brew install codex
 codex login
+
+# requires Google Gemini access (or drive it via Antigravity)
+# install Google's Gemini CLI, then sign in
+gemini   # run once to sign in
 ```
 
 The app shells out to these CLIs for polish requests — no API key required. For fully local inference, point the Local/custom provider at a local OpenAI-compatible server such as Ollama.
@@ -89,7 +93,7 @@ This folder is gitignored except its README. Personal resumes, PDFs, and DOCX fi
 server.mjs                       # main HTTP server
 server/
   ai/polish.mjs                  # provider routing + prompt assembly
-  ai-cli/index.mjs               # Claude Code / Codex CLI shell-out
+  ai-cli/index.mjs               # Claude Code / Codex / Gemini CLI (Antigravity) shell-out
   applications/index.mjs         # pipeline tracker storage
   docx.mjs                       # DOCX import/export helpers
   http.mjs                       # JSON/body/fetch utilities
@@ -99,7 +103,7 @@ src/
   App.tsx                        # state + handlers + composition
   config/aiOptions.ts            # provider/model/reasoning options
   hooks/{useApplications, useTemplates}.ts
-  lib/                           # downloads, job extraction, resume format/block helpers
+  lib/                           # downloads, job extraction/distilling, resume format/block helpers
   sections/                      # Masthead / SourcesPane / StudioPane / ExportRail
   sections/tabs/                 # Resume / Review / StrictReview / CoverLetter / Pipeline
   resumeEngine.ts                # scoring + analysis + deterministic local fallback
