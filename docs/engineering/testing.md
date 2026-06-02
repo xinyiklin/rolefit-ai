@@ -51,6 +51,11 @@ Good frontend verification covers:
 - API error states show user-safe messaging (no raw provider bodies)
 - components reuse shared primitives from `src/ui.tsx` and tokens from
   `src/styles/` instead of one-off styles
+- job-import distiller changes prove the before/after shape without
+  printing raw private text: the resulting job field should keep role
+  intro / responsibilities / requirements while stripping empty bullets,
+  apply/navigation furniture, duplicated titles, and trailing benefits /
+  legal boilerplate
 
 Useful commands:
 

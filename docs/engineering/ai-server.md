@@ -19,16 +19,19 @@ careflow `5173-5180`, portfolio `5184-5185`; do not mix them up.
 
 - local HTTP serving with Vite middleware in development
 - `.env` loading and process environment hygiene
-- `/api/polish` AI provider routing (OpenAI, Anthropic, Google,
-  OpenRouter, Groq, Together AI, Mistral, OpenAI-compatible)
+- `/api/polish` AI provider routing — subscription CLIs (Claude Code,
+  Codex CLI, Gemini CLI / Antigravity) shelled out to local subprocesses,
+  plus hosted APIs (OpenAI, Anthropic, Google, OpenRouter, Groq,
+  Together AI, Mistral, OpenAI-compatible)
 - DOCX import / export (text extraction, format-preserved updates)
 - job posting import (`/api/import-job`): fetch a public posting URL —
   Workday CXS JSON when the host is recognized (`*.myworkdayjobs.com`,
   `/job/` and `/details/` links), otherwise a generic HTML→text scrape —
   behind SSRF guards that re-validate the host and resolved IP on every
-  redirect hop and reject private / loopback / link-local targets. The
-  imported text fills the job-description field; the link itself is kept
-  only for pipeline tracking and is never sent to the AI.
+  redirect hop and reject private / loopback / link-local targets.
+  Client-side distilling in `src/lib/jobExtract.ts` then removes page
+  furniture before the text fills the job-description field. The link
+  itself is kept only for pipeline tracking and is never sent to the AI.
 - workspace file storage under `job-search-workspace/` (auto-load,
   upload, save, reload)
 
@@ -54,11 +57,18 @@ one large route.
 
 ## AI Provider Layer
 
-Default provider is OpenAI Responses API. The default model is
-`gpt-5.5`; allow `AI_MODEL` or `OPENAI_MODEL` to override.
+The provider is chosen per request (top-bar AI menu) or via `AI_PROVIDER`;
+absent that, the server falls back to the OpenAI Responses API with default
+model `gpt-5.5` (`AI_MODEL` / `OPENAI_MODEL` override). For **zero per-token
+cost**, the recommended path — and the project author's default — is the
+subscription CLIs (Claude Code, Codex CLI, Gemini CLI / Antigravity), which use
+existing subscriptions instead of API billing.
 
 Per-provider rules:
 
+- **Subscription CLIs** (Claude Code, Codex CLI, Gemini CLI / Antigravity)
+  shell out to local subprocesses via `server/ai-cli/` using your existing
+  subscription auth — no API key, no per-token cost.
 - Use each provider's native API (Anthropic Messages, Gemini
   `generateContent`) where supported.
 - Use compatible `/chat/completions` endpoints for OpenRouter, Groq,
@@ -84,6 +94,26 @@ The AI must:
 
 The deterministic local rewrite in `src/resumeEngine.ts` must remain
 the fallback when the AI call cannot run.
+
+## Job Posting Import
+
+Keep the import pipeline split by responsibility:
+
+- `server/network.mjs` fetches the page safely, handles Workday CXS JSON
+  when available, falls back to HTML→text extraction, enforces timeouts,
+  and applies SSRF checks on the original URL and every redirect hop.
+- `src/lib/jobExtract.ts` is the dependency-free distiller. It should keep
+  résumé-tailoring content (role intro, responsibilities, requirements,
+  preferred qualifications) and remove scrape artifacts or non-tailoring
+  page furniture: empty list markers, duplicate adjacent lines, ATS title
+  furniture such as `Job Application for...`, apply/share/navigation rows,
+  salary pills, benefits/perks blocks, pay-transparency text, application
+  instructions, EEO/legal boilerplate, cookie prompts, and similar noise.
+
+Distilling should stay conservative: do not cut trailing boilerplate until
+meaningful role content has already been seen, and keep uncertain text
+rather than risking removal of real requirements. Never log or print raw
+job-description text during routine debugging.
 
 ## Resume-Job Keyword Review
 
