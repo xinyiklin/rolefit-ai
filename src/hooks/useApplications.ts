@@ -48,6 +48,13 @@ export type Application = {
   followupAt?: string;
   notes?: string;
   fitScore?: number | null;
+  // Before/after fit captured at Track time: the original (base) resume vs. the
+  // tailored draft, so the pipeline can show the lift tailoring produced.
+  baseFitScore?: number | null;
+  tailoredFitScore?: number | null;
+  // Which engine produced the pair, so a restored local estimate isn't shown as
+  // AI-judged after reload.
+  fitScoreSource?: "ai" | "local" | null;
   templateId?: string;
   polishedText?: string;
   coverLetterText?: string;

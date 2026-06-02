@@ -1,11 +1,13 @@
-import { FileText, ListChecks } from "lucide-react";
+import { ArrowRight, FileText, ListChecks } from "lucide-react";
 import { ChipList, PanelHeading, ScoreMeter, Stat } from "../../ui";
 import type { MatchBreakdown, PolishedResume, ResumeDiff } from "../../resumeEngine";
-import { scoreLabel, type ScoreSource } from "../shared";
+import { scoreLabel, type FitComparison, type ScoreSource } from "../shared";
 
 type ReviewTabProps = {
   scoreSource: ScoreSource;
   scoreContext: string;
+  headlineScore: number | null;
+  fitComparison: FitComparison | null;
   resumeBulletCount: number;
   matchBreakdown: MatchBreakdown[];
   resumeDiff: ResumeDiff | null;
@@ -15,27 +17,36 @@ type ReviewTabProps = {
 export function ReviewTab({
   scoreSource,
   scoreContext,
+  headlineScore,
+  fitComparison,
   resumeBulletCount,
   matchBreakdown,
   resumeDiff,
   result
 }: ReviewTabProps) {
+  const lift = fitComparison ? fitComparison.tailored - fitComparison.base : 0;
   return (
     <div className="review-stack">
       <section className="studio-card score-panel">
         <div className="score-panel__hero">
           <p className="eyebrow">Fit Score</p>
-          <strong className="overall-score">{scoreSource ? scoreSource.score.overall : "--"}</strong>
+          <strong className="overall-score">{headlineScore ?? "--"}</strong>
           <span className="score-panel__label">
-            {scoreSource ? scoreLabel(scoreSource.score.overall) : "Awaiting draft"}
+            {headlineScore !== null ? scoreLabel(headlineScore) : "Awaiting draft"}
           </span>
           <small>{scoreContext}</small>
         </div>
-        <div className="score-grid">
-          <ScoreMeter label="Keywords" value={scoreSource?.score.keywordFit ?? 0} />
-          <ScoreMeter label="Bullets" value={scoreSource?.score.bulletQuality ?? 0} />
-          <ScoreMeter label="Structure" value={scoreSource?.score.structure ?? 0} />
-          <ScoreMeter label="Concision" value={scoreSource?.score.concision ?? 0} />
+        <div className="score-grid-col">
+          <p className="score-grid__caption">
+            Signal breakdown · local engine{fitComparison?.source === "ai" ? " (headline above is AI-judged)" : ""}
+          </p>
+          <div className="score-grid">
+            <ScoreMeter label="Keywords" value={scoreSource?.score.keywordFit ?? 0} />
+            <ScoreMeter label="Bullets" value={scoreSource?.score.bulletQuality ?? 0} />
+            <ScoreMeter label="Seniority" value={scoreSource?.score.seniority ?? 0} />
+            <ScoreMeter label="Structure" value={scoreSource?.score.structure ?? 0} />
+            <ScoreMeter label="Concision" value={scoreSource?.score.concision ?? 0} />
+          </div>
         </div>
         <div className="score-panel__stats">
           <Stat label="Resume bullets" value={resumeBulletCount} />
@@ -43,6 +54,34 @@ export function ReviewTab({
           <Stat label="Missing" value={scoreSource?.missingKeywords.length ?? 0} />
         </div>
       </section>
+
+      {fitComparison ? (
+        <section className="studio-card fit-compare">
+          <PanelHeading
+            icon={<ArrowRight size={15} aria-hidden="true" />}
+            title="Base vs. tailored"
+            description={fitComparison.source === "ai" ? "AI-judged on one scale" : "Local engine estimate"}
+          />
+          <div className="fit-compare__scores">
+            <div className="fit-compare__col">
+              <span className="fit-compare__cap">Base resume</span>
+              <strong className="fit-compare__num">{fitComparison.base}</strong>
+              <span className="fit-compare__lab">{scoreLabel(fitComparison.base)}</span>
+            </div>
+            <ArrowRight className="fit-compare__arrow" size={20} aria-hidden="true" />
+            <div className="fit-compare__col">
+              <span className="fit-compare__cap">Tailored</span>
+              <strong className="fit-compare__num">{fitComparison.tailored}</strong>
+              <span className="fit-compare__lab">{scoreLabel(fitComparison.tailored)}</span>
+            </div>
+            <div className={`fit-compare__delta ${lift > 0 ? "is-up" : lift < 0 ? "is-down" : "is-flat"}`}>
+              {lift > 0 ? `+${lift}` : lift}
+              <span>lift</span>
+            </div>
+          </div>
+          {fitComparison.reason ? <p className="fit-compare__reason">{fitComparison.reason}</p> : null}
+        </section>
+      ) : null}
 
       <section className="studio-card">
         <PanelHeading icon={<ListChecks size={15} aria-hidden="true" />} title="Match breakdown" />

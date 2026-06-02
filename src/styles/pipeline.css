@@ -160,6 +160,14 @@
   white-space: nowrap;
 }
 
+.pipeline-row__fit em {
+  margin-left: 4px;
+  font-style: normal;
+}
+
+.pipeline-row__fit em.is-up { color: var(--accent); }
+.pipeline-row__fit em.is-down { color: var(--danger); }
+
 .pipeline-row__meta {
   display: flex;
   flex-wrap: wrap;

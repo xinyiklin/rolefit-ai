@@ -26,6 +26,16 @@ export type ResumeBlock = {
 
 export type ScoreSource = PolishedResume | ResumeAnalysis | null;
 
+// Before/after fit numbers for the original (base) vs. tailored resume against
+// one job. `source` records whether the numbers came from the AI judge (scored
+// both in one call) or the deterministic local engine fallback.
+export type FitComparison = {
+  source: "ai" | "local";
+  base: number;
+  tailored: number;
+  reason: string;
+};
+
 export function scoreLabel(score: number) {
   if (score >= 85) return "Strong";
   if (score >= 70) return "Good";

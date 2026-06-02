@@ -104,6 +104,55 @@ function providerRequestFailed(provider, response, data) {
   );
 }
 
+function clampFitScore(value) {
+  const n = Math.round(Number(value));
+  if (!Number.isFinite(n)) return null;
+  return Math.max(0, Math.min(100, n));
+}
+
+// Validate the AI's base/tailored fit numbers. Returns null when neither score
+// is usable so the client falls back to the local engine.
+function sanitizeAiScore(raw) {
+  if (!raw || typeof raw !== "object") return null;
+  const base = clampFitScore(raw.base);
+  const tailored = clampFitScore(raw.tailored);
+  if (base === null && tailored === null) return null;
+  return {
+    base: base ?? tailored,
+    tailored: tailored ?? base,
+    liftReason: typeof raw.liftReason === "string" ? raw.liftReason.slice(0, 300) : ""
+  };
+}
+
+// The numeric band each strict-review verdict must fall in. Mirrors the rule in
+// the strict-review prompt.
+const VERDICT_SCORE_BANDS = {
+  "DON'T APPLY": [0, 45],
+  STRETCH: [46, 69],
+  "REASONABLE FIT": [70, 84],
+  "STRONG FIT": [85, 100]
+};
+
+// Enforce verdict/score agreement server-side rather than trusting the prompt:
+// if the model returns e.g. "DON'T APPLY" with a tailored 82, clamp the tailored
+// score into the verdict's band so the UI can't show a contradictory pair. The
+// verdict is the categorical judgment, so the number defers to it.
+function reconcileScoreToVerdict(aiScore, verdict) {
+  if (!aiScore || typeof verdict !== "string") return aiScore;
+  const band = VERDICT_SCORE_BANDS[verdict.trim().toUpperCase()];
+  if (!band) return aiScore;
+  const [lo, hi] = band;
+  const tailored = Math.max(lo, Math.min(hi, aiScore.tailored));
+  if (tailored !== aiScore.tailored) {
+    console.warn("[ai] reconciled tailored fit score to verdict band", {
+      verdict,
+      from: aiScore.tailored,
+      to: tailored
+    });
+  }
+  return { ...aiScore, tailored };
+}
+
 function parseAiJson(text) {
   const trimmed = text.trim();
   if (!trimmed) throw new UserSafeAiError("AI returned an empty response. Try again or switch models.", 502);
@@ -219,6 +268,7 @@ function strictReviewPrompt({ includeCoverLetter, jobText, preserveFormat, sourc
   "coverLetterText": ${includeCoverLetter ? "\"copy-ready cover letter, <350 words\"" : "\"\""},
   "strengths": ["2-4 concise strengths"],
   "fixes": ["2-4 concise next fixes"],
+  "fitScore": { "base": 0-100 integer, "tailored": 0-100 integer, "liftReason": "one sentence on what the tailoring added" },
   "strictReview": {
     "verdict": "STRONG FIT" | "REASONABLE FIT" | "STRETCH" | "DON'T APPLY",
     "verdictReason": "one-sentence reason",
@@ -251,6 +301,9 @@ Strict rules:
 - Risk flags: 1-3 bullets that interviewers could probe in a way the candidate couldn't defend confidently.
 - topEdits: ordered by impact, max 3.
 - If the resume is genuinely wrong for the role, set verdict to "DON'T APPLY" and applyAsIs to false.
+- fitScore.tailored MUST be consistent with the verdict: "DON'T APPLY" <= 45, "STRETCH" 46-69, "REASONABLE FIT" 70-84, "STRONG FIT" >= 85.
+
+${fitScoringPrompt()}
 
 Role applying as:
 ${roleAppliedAs || "Early Career / SWE I"}
@@ -285,6 +338,14 @@ function buildPolishPrompts({ strictReview, includeCoverLetter, jobText, preserv
   };
 }
 
+function fitScoringPrompt() {
+  return `Fit scoring (REQUIRED — be honest, do not inflate):
+Rate how well a resume matches THIS job on a 0-100 scale, weighting in this order:
+1) required technical skills (heaviest), 2) required experience domains, 3) required years/seniority, 4) preferred/nice-to-have (light).
+A missing REQUIRED skill or a clear seniority gap must pull the score below 70. Bands: 85-100 strong match, 70-84 reasonable, 50-69 stretch, below 50 weak.
+Score the ORIGINAL resume as "base" and your rewritten resume as "tailored", on the SAME scale so they are directly comparable. "tailored" should exceed "base" only to the extent your rewrite surfaces real, supported evidence — not keyword stuffing. If the base already covers the job, keep the two scores close and say so in "liftReason".`;
+}
+
 function customInstructionsPrompt(customInstructions) {
   return `Custom instructions (optional — follow when present, but never fabricate facts or override the rules above):
 ${customInstructions || "None provided."}`;
@@ -314,8 +375,11 @@ function polishPrompt({ includeCoverLetter, jobText, preserveFormat, sourceForma
   "polishedText": "full polished resume text",
   "coverLetterText": ${includeCoverLetter ? "\"copy-ready cover letter text\"" : "\"\""},
   "strengths": ["2-4 concise strengths"],
-  "fixes": ["2-4 concise next fixes"]
+  "fixes": ["2-4 concise next fixes"],
+  "fitScore": { "base": 0-100 integer, "tailored": 0-100 integer, "liftReason": "one sentence on what the tailoring added" }
 }
+
+${fitScoringPrompt()}
 
 Generate cover letter:
 ${includeCoverLetter ? "Yes. Keep it under 350 words and make it copy-ready." : "No. Return an empty coverLetterText string."}
@@ -523,6 +587,7 @@ export async function handlePolish(req, res) {
       coverLetterText: String(parsed.coverLetterText ?? "").trim(),
       strengths: Array.isArray(parsed.strengths) ? parsed.strengths.map(String).slice(0, 4) : [],
       fixes: Array.isArray(parsed.fixes) ? parsed.fixes.map(String).slice(0, 4) : [],
+      aiScore: reconcileScoreToVerdict(sanitizeAiScore(parsed.fitScore), parsed.strictReview?.verdict),
       strictReview: parsed.strictReview ?? null,
       model,
       reasoningEffort,

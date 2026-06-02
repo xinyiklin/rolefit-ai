@@ -38,6 +38,7 @@ import { StrictReviewTab } from "./sections/tabs/StrictReviewTab";
 import { CoverLetterTab } from "./sections/tabs/CoverLetterTab";
 import { PipelineTab } from "./sections/tabs/PipelineTab";
 import type {
+  FitComparison,
   OutputTab,
   OutputTabDescriptor,
   ResumeBlock,
@@ -202,6 +203,26 @@ function App() {
     [result, resumeText]
   );
 
+  // Base (original resume) vs. tailored (polished) fit. Prefer the AI's
+  // same-call comparison when present; otherwise score the original resume with
+  // the local engine so the before/after still works without AI. `resumeText`
+  // stays the original after a polish (the tailored copy lives in result), so it
+  // is the base to score against.
+  const fitComparison = useMemo<FitComparison | null>(() => {
+    if (!result) return null;
+    if (result.aiScore) {
+      return { source: "ai", base: result.aiScore.base, tailored: result.aiScore.tailored, reason: result.aiScore.liftReason };
+    }
+    // Restored from a pipeline snapshot — carry the saved numbers and their
+    // original provenance instead of recomputing (we no longer have the base).
+    if (result.savedFit) {
+      return { source: result.savedFit.source, base: result.savedFit.base, tailored: result.savedFit.tailored, reason: "" };
+    }
+    if (!combinedJobText.trim()) return null;
+    const baseScore = analyzeResumeText(resumeText, combinedJobText).score.overall;
+    return { source: "local", base: baseScore, tailored: result.score.overall, reason: "" };
+  }, [result, resumeText, combinedJobText]);
+
   const blockStats = useMemo(() => {
     return resumeBlocks.reduce(
       (stats, block) => {
@@ -214,7 +235,14 @@ function App() {
 
   // ----- Derived (non-memo) -----
   const scoreSource = result ?? currentAnalysis;
-  const scoreContext = result
+  // Headline FIT: the tailored score from the comparison (AI when present, else
+  // local/restored), falling back to the live-draft local overall. Same 0-100
+  // scale either way. Derived from fitComparison so headline, hero, and tab
+  // badge can never disagree.
+  const headlineScore = fitComparison?.tailored ?? scoreSource?.score.overall ?? null;
+  const scoreContext = fitComparison?.source === "ai"
+    ? "AI-judged fit (tailored)"
+    : result
     ? "Polished resume score"
     : currentAnalysis
     ? "Live draft score"
@@ -228,7 +256,7 @@ function App() {
   const outputTabs: OutputTabDescriptor[] = [
     { id: "resume", label: "Resume" },
     { id: "strict", label: "Strict review", badge: result?.strictReview?.verdict ? "•" : undefined },
-    { id: "review", label: "Review", badge: scoreSource?.score.overall ?? undefined },
+    { id: "review", label: "Review", badge: headlineScore ?? undefined },
     { id: "cover", label: "Cover letter" },
     { id: "pipeline", label: "Pipeline", badge: applications.length || undefined }
   ];
@@ -508,6 +536,7 @@ function App() {
           : undefined,
         strengths: data.strengths?.length ? data.strengths : fallback.strengths,
         fixes: data.fixes?.length ? data.fixes : fallback.fixes,
+        aiScore: data.aiScore ?? undefined,
         strictReview: data.strictReview ?? undefined
       });
       setActiveOutputTab(strictReview && data.strictReview ? "strict" : "resume");
@@ -819,7 +848,10 @@ function App() {
       status: "interested",
       createdAt: now,
       updatedAt: now,
-      fitScore: result?.score.overall ?? null,
+      fitScore: headlineScore ?? result?.score.overall ?? null,
+      baseFitScore: fitComparison?.base ?? null,
+      tailoredFitScore: fitComparison?.tailored ?? null,
+      fitScoreSource: fitComparison?.source ?? null,
       templateId: selectedTemplateId,
       polishedText: sentResume,
       resumeUsed: usedBase ? "base" : "tailored",
@@ -863,6 +895,12 @@ function App() {
         ...restoredAnalysis,
         polishedText: restoredResume,
         coverLetterText: app.coverLetterText || undefined,
+        // Restore the saved comparison with its original provenance — never
+        // relabel a local estimate as AI-judged.
+        savedFit:
+          typeof app.baseFitScore === "number" && typeof app.tailoredFitScore === "number"
+            ? { source: app.fitScoreSource === "ai" ? "ai" : "local", base: app.baseFitScore, tailored: app.tailoredFitScore }
+            : undefined,
         strengths: app.review?.verdictReason ? [app.review.verdictReason] : ["Loaded from pipeline snapshot."],
         fixes: app.review?.recommendation?.topEdits?.length
           ? app.review.recommendation.topEdits
@@ -893,7 +931,7 @@ function App() {
         jobReady={jobReady}
         outputReady={outputReady}
         resumeBulletCount={resumeBulletCount}
-        scoreSource={scoreSource}
+        headlineScore={headlineScore}
         baseResumeName={baseResumeName}
         onLoadResume={loadResume}
         onNextRole={handleNextRole}
@@ -974,7 +1012,7 @@ function App() {
           activeOutputTab={activeOutputTab}
           setActiveOutputTab={setActiveOutputTab}
           outputTabs={outputTabs}
-          scoreSource={scoreSource}
+          headlineScore={headlineScore}
           footer={
             <ExportRail
               templates={templates}
@@ -1011,6 +1049,8 @@ function App() {
             <ReviewTab
               scoreSource={scoreSource}
               scoreContext={scoreContext}
+              headlineScore={headlineScore}
+              fitComparison={fitComparison}
               resumeBulletCount={resumeBulletCount}
               matchBreakdown={matchBreakdown}
               resumeDiff={resumeDiff}
