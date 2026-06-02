@@ -1,11 +1,11 @@
 import type { ReactNode } from "react";
-import { scoreLabel, type OutputTab, type OutputTabDescriptor, type ScoreSource } from "./shared";
+import { scoreLabel, type OutputTab, type OutputTabDescriptor } from "./shared";
 
 type StudioPaneProps = {
   activeOutputTab: OutputTab;
   setActiveOutputTab: (tab: OutputTab) => void;
   outputTabs: OutputTabDescriptor[];
-  scoreSource: ScoreSource;
+  headlineScore: number | null;
   children: ReactNode;
   footer: ReactNode;
 };
@@ -14,7 +14,7 @@ export function StudioPane({
   activeOutputTab,
   setActiveOutputTab,
   outputTabs,
-  scoreSource,
+  headlineScore,
   children,
   footer
 }: StudioPaneProps) {
@@ -40,9 +40,9 @@ export function StudioPane({
         </nav>
         <div className="studio-score" aria-live="polite">
           <span className="studio-score__label">Fit</span>
-          <strong className="studio-score__value">{scoreSource?.score.overall ?? "--"}</strong>
+          <strong className="studio-score__value">{headlineScore ?? "--"}</strong>
           <span className="studio-score__sub">
-            {scoreSource ? scoreLabel(scoreSource.score.overall) : "Awaiting"}
+            {headlineScore !== null ? scoreLabel(headlineScore) : "Awaiting"}
           </span>
         </div>
       </header>

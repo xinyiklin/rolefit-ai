@@ -149,7 +149,15 @@ export function PipelineTab({
                             })()
                           : null}
                         {typeof app.fitScore === "number" ? (
-                          <span className="pipeline-row__fit">Fit {app.fitScore}</span>
+                          <span className="pipeline-row__fit">
+                            Fit {app.fitScore}
+                            {typeof app.baseFitScore === "number" && typeof app.tailoredFitScore === "number" && app.tailoredFitScore !== app.baseFitScore ? (
+                              <em className={app.tailoredFitScore > app.baseFitScore ? "is-up" : "is-down"}>
+                                {app.tailoredFitScore > app.baseFitScore ? "▲" : "▼"}
+                                {Math.abs(app.tailoredFitScore - app.baseFitScore)}
+                              </em>
+                            ) : null}
+                          </span>
                         ) : null}
                       </span>
                     </div>

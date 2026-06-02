@@ -42,6 +42,11 @@ export async function writeApplications(workspaceDir, applications) {
 
 const APPLICATION_SOURCES = ["LinkedIn", "Company site", "Referral", "Job board", "Recruiter", "Other"];
 
+function sanitizeScore(value) {
+  if (typeof value !== "number" || !Number.isFinite(value)) return null;
+  return Math.max(0, Math.min(100, Math.round(value)));
+}
+
 function sanitizeReview(raw) {
   if (!raw || typeof raw !== "object") return undefined;
   const str = (v, n) => (typeof v === "string" ? v.slice(0, n) : "");
@@ -94,7 +99,10 @@ function sanitizeApplication(raw) {
     updatedAt: typeof raw.updatedAt === "string" ? raw.updatedAt : now,
     followupAt: typeof raw.followupAt === "string" ? raw.followupAt : "",
     notes: typeof raw.notes === "string" ? raw.notes.slice(0, 8_000) : "",
-    fitScore: typeof raw.fitScore === "number" && Number.isFinite(raw.fitScore) ? Math.round(raw.fitScore) : null,
+    fitScore: sanitizeScore(raw.fitScore),
+    baseFitScore: sanitizeScore(raw.baseFitScore),
+    tailoredFitScore: sanitizeScore(raw.tailoredFitScore),
+    fitScoreSource: raw.fitScoreSource === "ai" || raw.fitScoreSource === "local" ? raw.fitScoreSource : null,
     templateId: typeof raw.templateId === "string" ? raw.templateId.slice(0, 80) : "",
     polishedText: typeof raw.polishedText === "string" ? raw.polishedText.slice(0, MAX_FIELD) : "",
     coverLetterText: typeof raw.coverLetterText === "string" ? raw.coverLetterText.slice(0, MAX_FIELD) : "",

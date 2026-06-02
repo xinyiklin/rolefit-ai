@@ -1,13 +1,12 @@
 import type { ReactNode } from "react";
 import { BriefcaseBusiness, FilePlus2, FileText, FolderOpen, Sparkles } from "lucide-react";
-import type { ScoreSource } from "./shared";
 
 type MastheadProps = {
   resumeReady: boolean;
   jobReady: boolean;
   outputReady: boolean;
   resumeBulletCount: number;
-  scoreSource: ScoreSource;
+  headlineScore: number | null;
   baseResumeName: string;
   onLoadResume: () => void | Promise<void>;
   onNextRole: () => void;
@@ -21,7 +20,7 @@ export function Masthead({
   jobReady,
   outputReady,
   resumeBulletCount,
-  scoreSource,
+  headlineScore,
   baseResumeName,
   onLoadResume,
   onNextRole,
@@ -51,10 +50,10 @@ export function Masthead({
         </div>
         <div
           className={`status-chip ${outputReady ? "is-ready" : "is-pending"}`}
-          title={outputReady ? `Fit ${scoreSource?.score.overall ?? "--"}` : "No polished draft yet"}
+          title={outputReady ? `Fit ${headlineScore ?? "--"}` : "No polished draft yet"}
         >
           <Sparkles size={13} aria-hidden="true" />
-          <em>{outputReady ? scoreSource?.score.overall ?? "—" : "—"}</em>
+          <em>{outputReady ? headlineScore ?? "—" : "—"}</em>
         </div>
         {aiControl}
         {polishControl}
