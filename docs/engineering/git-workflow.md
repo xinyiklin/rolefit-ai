@@ -112,8 +112,10 @@ form instead so merged history stays consistent.
   root-level resume / PDF / DOCX / tracker files. The `.gitignore`
   already guards these — verify with `git status --short` before
   staging.
-- Do not stage `AGENTS.md`, `CLAUDE.md`, or `CONTINUITY.md` unless the
-  user explicitly asks.
+- Stage and commit `AGENTS.md` and `CLAUDE.md` like any other tracked
+  file when they're part of the change; do not single them out to
+  exclude. `CONTINUITY.md` and `.claude/` are gitignored and won't
+  appear as staging candidates.
 
 ## Source Basis
 

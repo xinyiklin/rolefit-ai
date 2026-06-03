@@ -209,8 +209,9 @@ push, open a PR, or merge.
 - Do not stage `.env`, `job-search-workspace/` contents except
   `job-search-workspace/README.md`, or exported resumes/PDFs/DOCX files. The
   `.gitignore` already guards these; verify with `git status --short`.
-- Do not stage the tracked governance files `AGENTS.md`, `CLAUDE.md`, or
-  `CONTINUITY.md` unless the user explicitly asks.
+- Stage and commit `AGENTS.md` and `CLAUDE.md` like any other tracked file when
+  they're part of the change; do not single them out to exclude. `CONTINUITY.md`
+  and `.claude/` are gitignored and won't appear as staging candidates.
 - Use non-interactive git commands.
 
 ---
