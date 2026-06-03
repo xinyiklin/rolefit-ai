@@ -1,18 +1,12 @@
 # Git Workflow
 
-Role-Fit AI is a personal job-prep project. The workspace is not always
-a tracked git repository; when it is, the conventions below keep local
-history, future GitHub PRs, and any later changelog work easy to scan.
-
-## When Git Is Not Initialized
-
-Treat the workspace as local-only. Do not run `git init`, `git add`, or
-any other git command unless the user explicitly asks. Continue using
-`CONTINUITY.md` as the canonical workspace memory.
+Role-Fit AI is a personal job-prep project tracked in git with a GitHub
+remote. The conventions below keep local history, GitHub PRs, and any later
+changelog work easy to scan.
 
 ## Branch Names
 
-When a git repo exists, use lowercase kebab-case with a type prefix:
+Use lowercase kebab-case with a type prefix:
 
 ```text
 <type>/<short-kebab-task>
@@ -84,9 +78,14 @@ feat(api)!: rename /api/polish payload shape
 BREAKING CHANGE: /api/polish now requires `provider` instead of `mode`.
 ```
 
-## PR Workflow
+## PR Titles
 
-If / when this repo gains a GitHub remote:
+PR titles are human-readable sentence case by default (uppercase first letter,
+verb first, no trailing punctuation). When the repo squash-merges and the PR
+title becomes the squash commit subject, use the Conventional Commit subject
+form instead so merged history stays consistent.
+
+## PR Workflow
 
 - Open a PR for every change that touches the repo, including
   single-file edits and documentation. Do not commit directly to

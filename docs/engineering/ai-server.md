@@ -59,9 +59,10 @@ one large route.
 
 The provider is chosen per request (top-bar AI menu) or via `AI_PROVIDER`;
 absent that, the server falls back to the OpenAI Responses API with default
-model `gpt-5.5` (`AI_MODEL` / `OPENAI_MODEL` override). For **zero per-token
-cost**, the recommended path — and the project author's default — is the
-subscription CLIs (Claude Code, Codex CLI, Gemini CLI / Antigravity), which use
+model `gpt-5.5` (`AI_MODEL` / `OPENAI_MODEL` override) — so the technical
+default provider is OpenAI. For **zero per-token cost**, the recommended path
+is the subscription CLIs (Claude Code, Codex CLI, Gemini CLI / Antigravity),
+a preferred opt-in (set `AI_PROVIDER` or pick one in the AI menu) that uses
 existing subscriptions instead of API billing.
 
 Per-provider rules:
@@ -176,8 +177,8 @@ In the response:
   resumes, application trackers, exported drafts, and job-specific
   files. The folder is gitignored except for its `README.md`.
 - On startup, the server auto-loads `base-resume.docx` first when it
-  exists, then text fallbacks (`base-resume.txt`, `base-resume.md`,
-  `base-resume.csv`). Preserve that order.
+  exists, then text fallbacks (`base-resume.tex`, `base-resume.txt`,
+  `base-resume.md`, `base-resume.csv`). Preserve that order.
 
 ## Deployment And Infrastructure
 

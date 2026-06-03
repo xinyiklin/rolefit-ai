@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState, type ChangeEvent } from "react";
 
-import { createResumePdfBlob } from "./pdfResume";
 import {
   analyzeMatchBreakdown,
   analyzeResumeText,
@@ -33,6 +32,7 @@ import { PolishMenu } from "./sections/PolishMenu";
 import { SourcesPane, type AiProviderValue } from "./sections/SourcesPane";
 import { StudioPane } from "./sections/StudioPane";
 import { ExportRail } from "./sections/ExportRail";
+import { ResumePrintLayer } from "./sections/ResumePrintLayer";
 import { ResumeTab } from "./sections/tabs/ResumeTab";
 import { ReviewTab } from "./sections/tabs/ReviewTab";
 import { StrictReviewTab } from "./sections/tabs/StrictReviewTab";
@@ -579,12 +579,17 @@ function App() {
     );
   }
 
-  function handleDownloadPdf() {
-    if (!result) return;
-    const blob = createResumePdfBlob(result.polishedText, resumeText);
-    const fileName = resumeDownloadName("pdf");
-    downloadBlob(blob, fileName);
-    setDownloadStatus(`Downloaded ${fileName} using the clean ATS template.`);
+  // "PDF · clean": print the HTML resume document (the same one shown in the
+  // Resume tab) so the browser's Save as PDF yields selectable, ATS-readable
+  // text. document.title seeds the suggested filename, restored after printing.
+  function handlePrintResume() {
+    if (!result?.polishedText) return;
+    const fileName = resumeDownloadName("pdf").replace(/\.pdf$/i, "");
+    const previousTitle = document.title;
+    document.title = fileName;
+    window.addEventListener("afterprint", () => { document.title = previousTitle; }, { once: true });
+    window.print();
+    setDownloadStatus("Opened the print dialog — choose “Save as PDF” (uncheck “Headers and footers” for a clean page).");
   }
 
   async function handleDownloadDocx() {
@@ -1062,14 +1067,19 @@ function App() {
               onDownloadTex={handleDownloadTex}
               onOpenInOverleaf={handleOpenInOverleaf}
               onDownloadLatexPdf={handleDownloadLatexPdf}
-              onDownloadPdf={handleDownloadPdf}
+              onPrintResume={handlePrintResume}
               onDownloadDocx={handleDownloadDocx}
               onTrack={handleTrackInPipeline}
             />
           }
         >
           {activeOutputTab === "resume" ? (
-            <ResumeTab result={result} resultSourceLabel={resultSourceLabel} scoreContext={scoreContext} />
+            <ResumeTab
+              result={result}
+              resultSourceLabel={resultSourceLabel}
+              scoreContext={scoreContext}
+              sourceText={resumeText}
+            />
           ) : null}
 
           {activeOutputTab === "review" ? (
@@ -1116,6 +1126,10 @@ function App() {
           ) : null}
         </StudioPane>
       </div>
+
+      {result?.polishedText ? (
+        <ResumePrintLayer polishedText={result.polishedText} sourceText={resumeText} />
+      ) : null}
     </div>
   );
 }
