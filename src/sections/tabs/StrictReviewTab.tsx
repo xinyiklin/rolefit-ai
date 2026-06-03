@@ -32,7 +32,14 @@ export function StrictReviewTab({ result }: StrictReviewTabProps) {
           <p className="strict-verdict__reason">{sr.verdictReason}</p>
         </div>
         <div className="strict-verdict__rec">
-          <div className={`rec-pill ${sr.recommendation.applyAsIs ? "rec-pill--apply" : "rec-pill--skip"}`}>
+          <div
+            className={`rec-pill ${sr.recommendation.applyAsIs ? "rec-pill--apply" : "rec-pill--skip"}`}
+            title={
+              sr.recommendation.applyAsIs
+                ? "This tailored draft is ready to send — no further edits needed"
+                : "Make the top edits below before applying"
+            }
+          >
             {sr.recommendation.applyAsIs ? "Apply as-is" : "Edit first"}
           </div>
           <p className="muted-line">{sr.recommendation.reason}</p>

@@ -1,0 +1,161 @@
+/* =============================================================
+   Resume document — HTML render of the tailored resume.
+   The same markup is shown in the Resume tab and printed to PDF
+   (PDF · clean = window.print → Save as PDF), so the preview is
+   exactly what prints. Section rules use border-bottom (not a
+   background fill) so they print without "Background graphics".
+   ============================================================= */
+
+/* Screen: the tailored resume renders as a white "page" filling the pane width
+   within the standard studio-body padding (matching the other output tabs) —
+   no warm tray, no centered max-width card, no edge-to-edge bleed. */
+.resume-doc__viewport {
+  min-width: 0;
+  /* Query container so the document font can scale with the pane width (cqw). */
+  container-type: inline-size;
+}
+
+.resume-doc {
+  box-sizing: border-box;
+  width: 100%;
+  /* Font scales with the container (pane) width so the page stays proportionally
+     sized like a real document; everything inside is em-relative to this base. */
+  font-size: clamp(10px, 1.75cqw, 19px);
+  padding: 3.7em 4.3em;
+  background: #ffffff;
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-rest);
+  color: #1a1a1a;
+  font-family: "Helvetica Neue", Arial, system-ui, sans-serif;
+  line-height: 1.5;
+}
+
+/* Blank state is a calm placeholder on the pane background (matching the other
+   tabs) — not a white "page", since there is no document to print yet. */
+.resume-doc__empty {
+  margin: 0;
+  padding: var(--s7) var(--s5);
+  text-align: center;
+  color: var(--ink-soft);
+  font-size: 0.86rem;
+  line-height: 1.5;
+}
+
+.resume-doc__name {
+  margin: 0;
+  text-align: center;
+  font-size: 1.85em;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: #111111;
+}
+
+.resume-doc__contact {
+  margin: 0.3em 0 0;
+  text-align: center;
+  font-size: 0.88em;
+  color: #444444;
+}
+
+.resume-doc__section {
+  margin-top: 1.25em;
+}
+
+.resume-doc__heading {
+  margin: 0 0 0.5em;
+  padding-bottom: 0.25em;
+  border-bottom: 1px solid #333333;
+  font-size: 0.92em;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #111111;
+}
+
+.resume-doc__role {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.9em;
+  margin-top: 0.6em;
+  font-size: 1em;
+  font-weight: 700;
+  color: #111111;
+}
+
+.resume-doc__role-right {
+  flex: 0 0 auto;
+  font-weight: 600;
+  white-space: nowrap;
+  color: #333333;
+}
+
+.resume-doc__para {
+  margin: 0.3em 0 0;
+}
+
+.resume-doc__bullets {
+  margin: 0.3em 0 0;
+  padding-left: 1.4em;
+  list-style: disc;
+}
+
+.resume-doc__bullets li {
+  margin: 0.15em 0 0;
+}
+
+/* Off-screen by default — the print layer exists only to be printed. */
+.resume-print-layer {
+  display: none;
+}
+
+@media print {
+  /* Print only the resume: drop the whole app shell, show the isolated page. */
+  #root {
+    display: none !important;
+  }
+
+  .resume-print-layer {
+    display: block !important;
+  }
+
+  @page {
+    size: letter;
+    margin: 0.5in;
+  }
+
+  html,
+  body {
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+  }
+
+  /* The @page margin supplies the frame, so the page itself is borderless and
+     flush. The PDF page is a fixed size, so the base font is fixed (not the
+     screen's width-scaling clamp); the em-based internals scale off it. */
+  .resume-print-layer .resume-doc {
+    width: auto;
+    max-width: none;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    box-shadow: none;
+    background: #ffffff;
+    color: #000000;
+    font-size: 10.5pt;
+    line-height: 1.4;
+  }
+
+  /* Keep roles, bullets, and a heading + its first lines from splitting across
+     a page boundary. */
+  .resume-doc__role,
+  .resume-doc__bullets li {
+    break-inside: avoid;
+  }
+
+  .resume-doc__heading {
+    break-after: avoid;
+  }
+}

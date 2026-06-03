@@ -1,49 +1,41 @@
 # Role-Fit AI — Claude Overrides
 
-`AGENTS.md` is the canonical guide. Read it and `CONTINUITY.md` before
-acting. This file adds Claude-specific behavior; when it conflicts with
-`AGENTS.md`, this file wins.
+`AGENTS.md` is the canonical guide. It is imported below, so its rules load
+into context every session — no separate read step. `CONTINUITY.md` is **not**
+imported (it changes constantly); read it fresh before acting. This file adds
+only Claude-tool-specific behavior; when it conflicts with `AGENTS.md`, this
+file wins.
+
+@AGENTS.md
 
 ## Tool Use
 
-- `Read` before `Edit` / `Write`. Never `Write` without reading first.
+- `Read` before `Edit` / `Write`; never `Write` without reading first.
 - Prefer `Grep` / `Glob` over shell `grep` / `find` for codebase searches.
 - Use `Edit` for targeted changes; reserve `Write` for new files or
-  intentional full-file replacements after first reading the existing
-  file.
-- Run commands via `Bash` from the project root. The dev server uses
-  port `5181` by default (reserved range `5181-5183`). If `5181` is
-  already in use, the app is almost certainly already running — connect
-  to `http://localhost:5181` instead of launching another `npm run dev`,
-  and do not switch ports to sidestep the conflict. (Sibling
-  reservations: careflow `5173-5180`, portfolio `5184-5185`.)
+  intentional full-file replacements of a file you have already read.
+- Run commands via `Bash` from the project root. (Port `5181` rules and the
+  env/command reference live in `AGENTS.md` › Commands.)
 
 ## Visual QA
 
-For UI changes, use `mcp__Claude_in_Chrome` when available:
-`navigate` to `http://localhost:5181` after `npm run dev` (or directly
-if the server is already running on `5181`), then `get_page_text`,
-`read_page`, or `computer` (screenshot) to verify the change. Note the
-gap in the final response if Chrome tooling is unavailable.
+Verify major UI changes in a browser when feasible (`AGENTS.md` default).
+Pick the tool by what you're verifying:
+
+- **Layout / responsive / visual fidelity** → **Claude in Chrome**
+  (`mcp__Claude_in_Chrome`): real window, accurate at any width
+  (`resize_window`, e.g. 1440 / 768 / 375), faithful screenshots.
+- **Content / computed styles / tokens / console** → **Claude Preview**
+  (`mcp__Claude_Preview`): `preview_snapshot` / `preview_inspect` are
+  deterministic (no pixel-guessing); `preview_screenshot` for a glance, fall
+  back to snapshot/inspect if blank.
+- If the chosen tool's bridge isn't connected, use the other and note the gap.
+
+Default here: **Chrome**. `navigate` to `http://localhost:5181` after
+`npm run dev`, then `get_page_text` / `read_page` / `computer`.
 
 ## Resume And Job Data Handling
 
-- Do not print raw resume text, job descriptions, or AI prompts in chat
-  unless the user explicitly asks for local debugging.
-- Treat anything under `job-search-workspace/` (including `applications.json`
-  and `base-resume.*`), `.env`, and root-level `*.docx` / `*.pdf` /
-  `*resume*.*` files as sensitive local data.
-- Do not `Read` `.env` to display its contents in chat. If you need to
-  confirm a key is present, check `process.env` access patterns in
-  `server.mjs` instead.
-
-## Git
-
-The workspace is not currently a tracked git repository. If it becomes
-one, do not stage `CLAUDE.md`, `AGENTS.md`, or `CONTINUITY.md` unless
-the user explicitly asks.
-
-## Communication
-
-Think privately. Report actions, blockers, and outputs only. Skip
-preambles and reasoning unless asked.
+`AGENTS.md` covers resume/job-data privacy in full. Claude-tool-specific
+addition: do not `Read` `.env` to display its contents in chat — to confirm a
+key is present, check `process.env` access patterns in `server.mjs` instead.

@@ -8,16 +8,18 @@ A **local-first** resume tailoring webapp. Import a job posting (paste it, or pu
 
 _Screenshot uses demo workspace data._
 
+> **Recommended path:** keep your base resume as a **`.tex`** file (Jake's-style) and export with **PDF · LaTeX** (or **Overleaf**) for faithful, ATS-clean formatting. DOCX, PDF, and plain-text sources also work, but their **PDF · clean** export is a best-effort render and may need more manual editing/formatting.
+
 ## Highlights
 
 - **Multi-format resume I/O** — ingest `.docx`, `.pdf`, `.tex` (Jake's-style), or plain text; export back to each.
 - **Job-link import** — paste a posting URL and pull the description in one click: Workday-aware (reads its CXS JSON API for `/job/` and `/details/` links), with a generic HTML→text fallback for other boards. The client distills the scrape before polishing, keeping role intro / responsibilities / requirements / preferred qualifications while dropping empty bullets, duplicated ATS title furniture, low-value Workday metadata, apply/share/navigation rows, company/culture marketing, salary pills, benefits/perks, pay-transparency, and EEO/legal boilerplate. The link itself is kept only for pipeline tracking and is **never sent to the model**.
-- **Subscription-first, multi-provider AI** — runs on **subscription-CLI tools** (`Claude Code`, `Codex CLI`, `Gemini CLI` / Antigravity) that route through existing Claude Max / ChatGPT Plus / Google subscriptions instead of per-token billing, with **hosted-API backends** (OpenAI, Anthropic, Gemini, OpenRouter, Groq, Together, Mistral, local Ollama) available behind the same interface.
+- **Subscription-friendly, multi-provider AI** — the technical default is the OpenAI hosted API, but the **recommended opt-in** is the **subscription-CLI tools** (`Claude Code`, `Codex CLI`, `Gemini CLI` / Antigravity) that route through existing Claude Max / ChatGPT Plus / Google subscriptions instead of per-token billing, with **hosted-API backends** (OpenAI, Anthropic, Gemini, OpenRouter, Groq, Together, Mistral, local Ollama) available behind the same interface.
 - **Fit scoring + 4-category keyword gap analysis** — required experience, knowledge, required skills, technical tools.
-- **Strict recruiter review mode** — verdict (STRONG FIT / REASONABLE FIT / STRETCH / DON'T APPLY), gap severity, targeted bullet rewrites, interview risk flags, cover-letter angle.
-- **LaTeX export pipeline** with three resume templates (Jake's, Awesome-CV, Deedy) + **one-click Overleaf submission** via form POST + optional local PDF compile through **Tectonic**.
+- **Strict recruiter review mode** — verdict (STRONG FIT / REASONABLE FIT / STRETCH / DON'T APPLY), base-vs-tailored fit scores, gap severity, targeted bullet rewrites, interview risk flags, an apply-as-is / edit-first recommendation, and a cover-letter angle.
+- **LaTeX export pipeline (recommended)** with three resume templates (Jake's, Awesome-CV, Deedy) + **one-click Overleaf submission** via form POST + optional local PDF compile through **Tectonic** — the recommended path for faithful, ATS-clean output.
 - **DOCX format preservation** through direct OpenXML paragraph edits.
-- **Clean ATS PDF export** — a dependency-free PDF generated locally with real Helvetica metrics and WinAnsi encoding, so accented names (e.g. "José Müller") render and the text stays selectable for ATS parsing.
+- **Clean PDF export (no LaTeX needed)** — the tailored resume renders as HTML and prints through your browser's **Save as PDF**, keeping the text selectable for ATS parsing. A universal fallback for any source; for pixel-faithful formatting, prefer the LaTeX export.
 - **On-disk pipeline tracker** with status / source / company / role / follow-up date / notes / resume snapshot per application — survives browser wipes.
 - **Local-first storage** — workspace files live in `job-search-workspace/`; API keys stay server-side in `.env`. Cloud AI providers receive resume/job text only when you choose them for a polish request.
 
@@ -51,7 +53,7 @@ TOGETHER_API_KEY=...
 MISTRAL_API_KEY=...
 ```
 
-For **zero per-token cost**, use the subscription-CLI providers (default):
+For **zero per-token cost**, use the subscription-CLI providers (recommended opt-in; the technical default provider is OpenAI via `AI_PROVIDER`):
 
 ```bash
 # requires Claude Max
@@ -103,11 +105,10 @@ src/
   App.tsx                        # state + handlers + composition
   config/aiOptions.ts            # provider/model/reasoning options
   hooks/{useApplications, useTemplates}.ts
-  lib/                           # downloads, job extraction/distilling, resume format/block helpers
-  sections/                      # Masthead / SourcesPane / StudioPane / ExportRail
+  lib/                           # downloads, job extraction/distilling, resume format/block + LaTeX→HTML render helpers
+  sections/                      # Masthead / SourcesPane / StudioPane / ExportRail / ResumeDocument / ResumePrintLayer
   sections/tabs/                 # Resume / Review / StrictReview / CoverLetter / Pipeline
   resumeEngine.ts                # scoring + analysis + deterministic local fallback
-  pdfResume.ts                   # clean ATS PDF (real Helvetica metrics + WinAnsi)
   styles/                        # per-surface CSS + shared tokens
 docs/engineering/                # contributor notes (server, UI, git workflow, testing)
 job-search-workspace/            # local-only; gitignored except README

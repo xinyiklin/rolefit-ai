@@ -26,7 +26,7 @@ type ExportRailProps = {
   onDownloadTex: () => void | Promise<void>;
   onOpenInOverleaf: () => void | Promise<void>;
   onDownloadLatexPdf: () => void | Promise<void>;
-  onDownloadPdf: () => void;
+  onPrintResume: () => void;
   onDownloadDocx: () => void | Promise<void>;
   onTrack: (resumeUsed: "tailored" | "base") => void;
 };
@@ -52,7 +52,7 @@ export function ExportRail({
   onDownloadTex,
   onOpenInOverleaf,
   onDownloadLatexPdf,
-  onDownloadPdf,
+  onPrintResume,
   onDownloadDocx,
   onTrack
 }: ExportRailProps) {
@@ -150,8 +150,8 @@ export function ExportRail({
           className="ghost-button is-compact"
           type="button"
           disabled={!result}
-          onClick={onDownloadPdf}
-          title="Download with the clean ATS template (no LaTeX needed)"
+          onClick={onPrintResume}
+          title="Opens your browser’s print dialog — choose “Save as PDF” (no LaTeX needed)"
         >
           <Download size={14} aria-hidden="true" />
           <span>PDF · clean</span>
@@ -172,7 +172,7 @@ export function ExportRail({
           <div className="track-ask" role="group" aria-label="Which resume did you send?">
             <span className="track-ask__label">
               Which resume did you send?
-              {aiSuggestsAsIs ? <em> AI said your base is already a strong fit.</em> : null}
+              {aiSuggestsAsIs ? <em> AI rated it ready to send as-is.</em> : null}
             </span>
             <button className="ghost-button is-compact" type="button" onClick={() => chooseResume("tailored")}>
               Tailored
