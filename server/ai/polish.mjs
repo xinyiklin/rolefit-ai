@@ -57,12 +57,34 @@ function extractGeminiText(response) {
   );
 }
 
-class UserSafeAiError extends Error {
+export class UserSafeAiError extends Error {
   constructor(message, status = 500) {
     super(message);
     this.name = "UserSafeAiError";
     this.status = status;
   }
+}
+
+// Provider/CLI configuration errors that carry their own actionable, already
+// user-safe wording. Routes map these to a 400 (not a generic 500) so the user
+// sees the precise remediation. Shared by /api/polish and /api/application-answers.
+const SAFE_CONFIG_MESSAGES = new Set([
+  "Add an OpenAI-compatible base URL.",
+  "Enter a valid OpenAI-compatible base URL.",
+  "AI base URL must start with http:// or https://.",
+  "Use https:// for remote AI providers. http:// is only allowed for localhost.",
+  "Private-network AI base URLs are blocked. Use localhost for local AI or a public https provider URL.",
+  "Claude Code is not authenticated. Run `claude auth login` and try again.",
+  "codex is not installed or not on PATH.",
+  "claude is not installed or not on PATH.",
+  "gemini is not installed or not on PATH.",
+  "Gemini CLI could not complete the request. Run `gemini` once to sign in, confirm the selected model is available, then try again."
+]);
+
+// Returns the message verbatim when it is a known actionable config error, else
+// null. Lets each route surface a 400 with the exact remediation text.
+export function safeConfigErrorMessage(message) {
+  return SAFE_CONFIG_MESSAGES.has(message) ? message : null;
 }
 
 function providerLabel(provider) {
@@ -291,6 +313,8 @@ function aiInstructions() {
 
 ${honestTailoringRules()}
 
+${accomplishmentStyleRules()}
+
 Do not invent employers, titles, dates, degrees, certifications, metrics, tools, or outcomes. If a metric would strengthen a bullet but is not provided, add a bracketed prompt such as [add metric: volume, percentage, dollars, time saved, or adoption]. Keep each role to no more than five bullets. If asked for a cover letter, write a concise truthful letter grounded only in the provided resume and job text, using bracketed placeholders for missing company, role, manager, or metric facts. Use strong action verbs and concise bullets. Return strict JSON only.`;
 }
 
@@ -298,7 +322,7 @@ Do not invent employers, titles, dates, degrees, certifications, metrics, tools,
 // never by importing capabilities the candidate hasn't demonstrated. The
 // concrete example pins down the most common failure (padding skills with
 // job-description keywords the candidate has never used).
-function honestTailoringRules() {
+export function honestTailoringRules() {
   return `Hard constraints:
 1. Honesty overrides matching. Tailor only by rephrasing, reordering, and emphasizing experience the candidate actually has.
 2. Evidence sources are the resume plus optional honest context supplied by the user. If optional honest context is blank, rely only on the resume.
@@ -311,10 +335,23 @@ function honestTailoringRules() {
 6. Do not pad the skills section with JD keywords the candidate has not actually used. Prefer leaving a requirement uncovered over fabricating coverage.`;
 }
 
+// Resumes must read as engineering accomplishments, not as a tour of what a
+// product does. Without this rule, models tailoring a project-heavy resume
+// drift into "feature brochure" copy — listing app capabilities instead of the
+// candidate's engineering work. The concrete example pins down that failure.
+export function accomplishmentStyleRules() {
+  return `Write every bullet as an engineering accomplishment, not a product description:
+- Lead with what the candidate built, changed, or decided; then how (architecture, technique, or scale); then the result.
+- Never reduce a project to a tour of what the app does (e.g. "app with scheduling, billing, charting, and refills"). State the engineering behind those features instead.
+- Keep tech and tool mentions minimal: cite only the few technologies the work centered on; do not append long stacks or restate the skills section inside project bullets.`;
+}
+
 function aiStrictReviewInstructions() {
   return `You are a senior technical recruiter and hiring manager with 10+ years of experience screening software engineering candidates. You are NOT a cheerleader — give a blunt, honest assessment. NEVER suggest fabricating experience. If a gap cannot be honestly filled with evidence the user has provided, mark it as cannot-add and recommend skipping. Don't pad with generic advice. Don't praise the resume. If the resume is genuinely a bad fit, say DON'T APPLY with a reason. DEAL-PRIORITIZE soft skills (communication, teamwork, ownership) — only note them as required if the JD explicitly demands them. Compare on these dimensions in order: 1) required technical skills, 2) required experience domains, 3) required years/seniority, 4) preferred/nice-to-have.
 
 Also polish the resume to align with the JD. ${honestTailoringRules()} A missing required skill belongs in "gaps" with canHonestlyAdd=false — never silently inserted into the polished resume or its skills section to make the score look better.
+
+${accomplishmentStyleRules()}
 
 Keep each role to no more than five bullets. Use bracketed prompts like [add metric: volume, percentage, dollars, time saved] for unverifiable claims. Return strict JSON only.`;
 }
@@ -565,6 +602,51 @@ async function callGeminiGenerateContent({ apiKey, model, systemPrompt, userProm
   return parseAiJson(extractGeminiText(data));
 }
 
+// Resolve provider, key, base URL, model, and reasoning effort from a request
+// body, applying the same validation handlePolish used. Throws UserSafeAiError
+// (handled by each route's catch) on a missing key, bad model, or unsupported
+// CLI effort. Shared by /api/polish and /api/application-answers.
+export function resolveProviderRequest(body) {
+  const provider = normalizeProvider(body.provider || getDefaultProvider());
+  const requestApiKey = String(body.apiKey ?? "").trim();
+  const apiKey = providerApiKey(provider, requestApiKey);
+  const apiBaseUrl = providerBaseUrl(provider, body.apiBaseUrl);
+  const requestedModel = String(body.model ?? "").trim().slice(0, 80);
+  const model = requestedModel || providerDefaultModel(provider);
+  const reasoningEffort = normalizeCliReasoningEffort(provider, body.reasoningEffort);
+
+  if (!apiKey && !isCliProvider(provider)) {
+    throw new UserSafeAiError(
+      `Add an API key in AI settings or set the ${provider.toUpperCase()} API key in .env before starting the app.`,
+      401
+    );
+  }
+  if (model && !/^[a-z0-9_.:/@+-]+$/i.test(model)) {
+    throw new UserSafeAiError(
+      "Model name can only use letters, numbers, dots, dashes, underscores, slashes, at signs, pluses, or colons.",
+      400
+    );
+  }
+  if (reasoningEffort === null) {
+    throw new UserSafeAiError("Unsupported reasoning effort for the selected CLI provider.", 400);
+  }
+
+  return { provider, apiKey, apiBaseUrl, model, reasoningEffort };
+}
+
+// Dispatch a built {systemPrompt, userPrompt} pair to the configured provider
+// (API or CLI) and return the parsed JSON. Single source of truth for provider
+// routing, shared by /api/polish and /api/application-answers.
+export async function callConfiguredProvider({ provider, model, reasoningEffort, apiKey, apiBaseUrl, systemPrompt, userPrompt }) {
+  if (provider === "claude-cli") return parseAiJson(await callClaudeCli({ model, reasoningEffort, systemPrompt, userPrompt }));
+  if (provider === "codex-cli") return parseAiJson(await callCodexCli({ model, reasoningEffort, systemPrompt, userPrompt }));
+  if (provider === "gemini-cli") return parseAiJson(await callGeminiCli({ model, systemPrompt, userPrompt }));
+  if (provider === "anthropic") return callAnthropicMessages({ apiKey, model, systemPrompt, userPrompt });
+  if (provider === "gemini") return callGeminiGenerateContent({ apiKey, model, systemPrompt, userPrompt });
+  if (provider === "openai") return callOpenAiResponses({ apiKey, model, systemPrompt, userPrompt });
+  return callOpenAiCompatibleChat({ provider, apiKey, apiBaseUrl, model, systemPrompt, userPrompt });
+}
+
 export async function handlePolish(req, res) {
   if (req.method !== "POST") {
     sendJson(res, 405, { error: "Use POST." });
@@ -576,13 +658,6 @@ export async function handlePolish(req, res) {
     const body = JSON.parse(await readBody(req));
     const resumeText = String(body.resumeText ?? "").slice(0, 45_000);
     const jobText = String(body.jobText ?? "").slice(0, 35_000);
-    provider = normalizeProvider(body.provider || getDefaultProvider());
-    const requestApiKey = String(body.apiKey ?? "").trim();
-    const apiKey = providerApiKey(provider, requestApiKey);
-    const apiBaseUrl = providerBaseUrl(provider, body.apiBaseUrl);
-    const requestedModel = String(body.model ?? "").trim().slice(0, 80);
-    const model = requestedModel || providerDefaultModel(provider);
-    const reasoningEffort = normalizeCliReasoningEffort(provider, body.reasoningEffort);
     const includeCoverLetter = Boolean(body.includeCoverLetter);
     const preserveFormat = Boolean(body.preserveFormat);
     const sourceFormat = String(body.sourceFormat ?? "").slice(0, 60);
@@ -596,24 +671,9 @@ export async function handlePolish(req, res) {
       return;
     }
 
-    if (!apiKey && !isCliProvider(provider)) {
-      sendJson(res, 401, {
-        error: `Add an API key in AI settings or set the ${provider.toUpperCase()} API key in .env before starting the app.`
-      });
-      return;
-    }
-
-    if (model && !/^[a-z0-9_.:/@+-]+$/i.test(model)) {
-      sendJson(res, 400, {
-        error: "Model name can only use letters, numbers, dots, dashes, underscores, slashes, at signs, pluses, or colons."
-      });
-      return;
-    }
-
-    if (reasoningEffort === null) {
-      sendJson(res, 400, { error: "Unsupported reasoning effort for the selected CLI provider." });
-      return;
-    }
+    const resolved = resolveProviderRequest(body);
+    provider = resolved.provider;
+    const { apiKey, apiBaseUrl, model, reasoningEffort } = resolved;
 
     const { systemPrompt, userPrompt } = buildPolishPrompts({
       strictReview,
@@ -627,25 +687,7 @@ export async function handlePolish(req, res) {
       customInstructions
     });
 
-    let parsed;
-    if (provider === "claude-cli") {
-      const raw = await callClaudeCli({ model, reasoningEffort, systemPrompt, userPrompt });
-      parsed = parseAiJson(raw);
-    } else if (provider === "codex-cli") {
-      const raw = await callCodexCli({ model, reasoningEffort, systemPrompt, userPrompt });
-      parsed = parseAiJson(raw);
-    } else if (provider === "gemini-cli") {
-      const raw = await callGeminiCli({ model, systemPrompt, userPrompt });
-      parsed = parseAiJson(raw);
-    } else if (provider === "anthropic") {
-      parsed = await callAnthropicMessages({ apiKey, model, systemPrompt, userPrompt });
-    } else if (provider === "gemini") {
-      parsed = await callGeminiGenerateContent({ apiKey, model, systemPrompt, userPrompt });
-    } else if (provider === "openai") {
-      parsed = await callOpenAiResponses({ apiKey, model, systemPrompt, userPrompt });
-    } else {
-      parsed = await callOpenAiCompatibleChat({ provider, apiKey, apiBaseUrl, model, systemPrompt, userPrompt });
-    }
+    const parsed = await callConfiguredProvider({ provider, model, reasoningEffort, apiKey, apiBaseUrl, systemPrompt, userPrompt });
 
     const missingRequiredSkills = sanitizeMissingRequiredSkills(parsed.missingRequiredSkills);
     const strictMissingRequiredSkills = missingRequiredSkillsFromStrictReview(parsed.strictReview);
@@ -672,21 +714,9 @@ export async function handlePolish(req, res) {
       return;
     }
 
-    const message = error instanceof Error ? error.message : "";
-    const safeConfigMessages = new Set([
-      "Add an OpenAI-compatible base URL.",
-      "Enter a valid OpenAI-compatible base URL.",
-      "AI base URL must start with http:// or https://.",
-      "Use https:// for remote AI providers. http:// is only allowed for localhost.",
-      "Private-network AI base URLs are blocked. Use localhost for local AI or a public https provider URL.",
-      "Claude Code is not authenticated. Run `claude auth login` and try again.",
-      "codex is not installed or not on PATH.",
-      "claude is not installed or not on PATH.",
-      "gemini is not installed or not on PATH.",
-      "Gemini CLI could not complete the request. Run `gemini` once to sign in, confirm the selected model is available, then try again."
-    ]);
-    if (safeConfigMessages.has(message)) {
-      sendJson(res, 400, { error: message });
+    const configMessage = safeConfigErrorMessage(error instanceof Error ? error.message : "");
+    if (configMessage) {
+      sendJson(res, 400, { error: configMessage });
       return;
     }
 

@@ -3,6 +3,7 @@ import { mkdir, readFile, readdir, rename, writeFile } from "node:fs/promises";
 import { extname, join, resolve } from "node:path";
 import { createServer as createViteServer } from "vite";
 import { getDefaultModel, handlePolish } from "./server/ai/polish.mjs";
+import { handleApplicationAnswers } from "./server/ai/applicationAnswers.mjs";
 import {
   listTemplates,
   renderResumeTex,
@@ -576,6 +577,11 @@ const server = createServer((req, res) => {
 
   if (pathname === "/api/polish") {
     void handlePolish(req, res);
+    return;
+  }
+
+  if (pathname === "/api/application-answers") {
+    void handleApplicationAnswers(req, res);
     return;
   }
 

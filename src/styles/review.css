@@ -269,47 +269,53 @@
   color: var(--warm);
 }
 
-.diff-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--s4);
+.diff-legend {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--s2);
+  margin-bottom: var(--s3);
+  font-size: 0.82rem;
+  color: var(--ink-soft);
 }
 
-.diff-grid h3 {
-  font-family: var(--font-ui);
-  font-size: 0.84rem;
-  font-weight: 600;
-  color: var(--ink-strong);
-  margin-bottom: var(--s2);
-}
-
-.diff-list {
-  max-height: 250px;
+.diff-inline {
+  max-height: 460px;
   overflow: auto;
-  padding: 0;
-  list-style: none;
-}
-
-.diff-list li,
-.metric-prompts li {
-  position: relative;
-  padding-left: 20px;
-  color: var(--ink-muted);
-  font-size: 0.86rem;
-  line-height: 1.5;
-}
-
-.diff-list li::before,
-.metric-prompts li::before {
-  position: absolute;
-  left: 0;
-  top: 0;
+  padding: var(--s3);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-md);
+  background: var(--paper-deep);
   font-family: var(--font-mono);
-  font-weight: 700;
+  font-size: 0.82rem;
+  line-height: 1.65;
+  color: var(--ink-muted);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
-.diff-list--added li::before { content: "+"; color: var(--accent); }
-.diff-list--removed li::before { content: "−"; color: var(--warm); }
+.diff-seg {
+  border-radius: 3px;
+  padding: 0 2px;
+}
+
+.diff-seg--added {
+  background: var(--accent-veil);
+  color: var(--accent-deep);
+  text-decoration: underline;
+  text-decoration-color: var(--accent);
+}
+
+.diff-seg--removed {
+  background: var(--danger-soft);
+  color: var(--danger);
+  text-decoration: line-through;
+}
+
+.diff-empty {
+  color: var(--ink-faint);
+  font-style: italic;
+}
 
 .metric-prompts {
   margin-top: var(--s4);
@@ -326,7 +332,24 @@
 }
 
 .metric-prompts ul { padding: 0; list-style: none; }
-.metric-prompts li::before { content: "?"; color: var(--warm); }
+
+.metric-prompts li {
+  position: relative;
+  padding-left: 20px;
+  color: var(--ink-muted);
+  font-size: 0.86rem;
+  line-height: 1.5;
+}
+
+.metric-prompts li::before {
+  content: "?";
+  position: absolute;
+  left: 0;
+  top: 0;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  color: var(--warm);
+}
 
 .insights {
   display: grid !important;

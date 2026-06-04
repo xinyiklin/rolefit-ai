@@ -38,7 +38,9 @@ import { ReviewTab } from "./sections/tabs/ReviewTab";
 import { StrictReviewTab } from "./sections/tabs/StrictReviewTab";
 import { CoverLetterTab } from "./sections/tabs/CoverLetterTab";
 import { PipelineTab } from "./sections/tabs/PipelineTab";
+import { ApplicationQuestionsTab } from "./sections/tabs/ApplicationQuestionsTab";
 import type {
+  ApplicationAnswersResult,
   FitComparison,
   OutputTab,
   OutputTabDescriptor,
@@ -103,6 +105,17 @@ function App() {
   const [honestContext, setHonestContext] = useState(saved.honestContext ?? "");
   const [customInstructions, setCustomInstructions] = useState(saved.customInstructions ?? "");
   const [activeOutputTab, setActiveOutputTab] = useState<OutputTab>("resume");
+  const [answersResult, setAnswersResult] = useState<ApplicationAnswersResult>(null);
+  const [answersStatus, setAnswersStatus] = useState("");
+  const [isGeneratingAnswers, setIsGeneratingAnswers] = useState(false);
+
+  // Application-question drafts are tied to the current resume + job. When either
+  // changes the drafts (and the tab badge) are stale, so clear them — mirrors how
+  // the polish `result` is reset on every input change.
+  useEffect(() => {
+    setAnswersResult(null);
+    setAnswersStatus("");
+  }, [resumeText, jobDescription]);
   const [workspacePath, setWorkspacePath] = useState("");
   const [workspaceFiles, setWorkspaceFiles] = useState<string[]>([]);
   const [baseResumeName, setBaseResumeName] = useState("");
@@ -259,6 +272,13 @@ function App() {
     { id: "strict", label: "Strict review", badge: result?.strictReview?.verdict ? "•" : undefined },
     { id: "review", label: "Review", badge: headlineScore ?? undefined },
     { id: "cover", label: "Cover letter" },
+    {
+      id: "questions",
+      label: "Questions",
+      badge: answersResult
+        ? (answersResult.answers.length + answersResult.roleDescriptions.length) || undefined
+        : undefined
+    },
     { id: "pipeline", label: "Pipeline", badge: applications.length || undefined }
   ];
 
@@ -834,6 +854,96 @@ function App() {
     setActiveOutputTab("resume");
   }
 
+  async function handleGenerateAnswers({
+    questions,
+    includeRoleDescriptions
+  }: {
+    questions: string[];
+    includeRoleDescriptions: boolean;
+  }) {
+    const model = selectedModel === "custom" ? customModel.trim() : selectedModel;
+    setIsGeneratingAnswers(true);
+    setAnswersStatus("Drafting application answers...");
+    try {
+      const response = await fetch("/api/application-answers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          resumeText,
+          jobText: jobDescription,
+          provider: aiProvider,
+          apiKey,
+          apiBaseUrl,
+          model,
+          reasoningEffort: cliReasoningEffort,
+          honestContext,
+          customInstructions,
+          questions,
+          includeRoleDescriptions
+        })
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error ?? "Could not generate answers.");
+      setAnswersResult({
+        answers: Array.isArray(data.answers) ? data.answers : [],
+        roleDescriptions: Array.isArray(data.roleDescriptions) ? data.roleDescriptions : []
+      });
+      const count = Array.isArray(data.answers) ? data.answers.length : 0;
+      setAnswersStatus(
+        `Drafted ${count} answer${count === 1 ? "" : "s"}${data.model ? ` using ${data.model}` : ""}. Fill in any [add: …] placeholders before sending.`
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message.replace(/[.。]\s*$/, "") : "request failed";
+      setAnswersStatus(`Could not generate answers: ${message}.`);
+    } finally {
+      setIsGeneratingAnswers(false);
+    }
+  }
+
+  function handleSaveAnswers(items: { question: string; answer: string }[]) {
+    if (!items.length) return;
+    if (!jobUrl.trim() && !jobDescription.trim()) {
+      setAnswersStatus("Add a job link or description before saving answers to the pipeline.");
+      return;
+    }
+    const now = new Date().toISOString();
+    const saved = items.map((it) => ({ question: it.question, answer: it.answer, savedAt: now }));
+    const targetUrl = jobUrl.trim();
+    const targetDescription = jobDescription.trim();
+    // Match by job URL when present; for description-only jobs (no URL) fall back
+    // to the job description so repeat saves merge into one entry instead of
+    // piling up duplicate pipeline rows.
+    const existing = targetUrl
+      ? applications.find((a) => a.jobUrl && a.jobUrl === targetUrl)
+      : applications.find(
+          (a) => !a.jobUrl && (a.jobDescription ?? "").trim() === targetDescription && targetDescription
+        );
+    if (existing) {
+      const byQuestion = new Map<string, { question: string; answer: string; savedAt: string }>();
+      for (const a of existing.applicationAnswers ?? []) byQuestion.set(a.question, a);
+      for (const a of saved) byQuestion.set(a.question, a);
+      upsertApplication({ ...existing, applicationAnswers: Array.from(byQuestion.values()) });
+      setAnswersStatus(`Saved ${saved.length} answer${saved.length === 1 ? "" : "s"} to "${existing.title}" in the pipeline.`);
+      return;
+    }
+    const title = inferApplicationTitle(jobUrl, jobDescription);
+    const app: Application = {
+      id: crypto.randomUUID(),
+      title,
+      company: inferCompanyFromUrl(jobUrl),
+      role: "",
+      source: "",
+      jobUrl: targetUrl,
+      jobDescription: jobDescription.trim(),
+      status: "interested",
+      createdAt: now,
+      updatedAt: now,
+      applicationAnswers: saved
+    };
+    upsertApplication(app);
+    setAnswersStatus(`Saved ${saved.length} answer${saved.length === 1 ? "" : "s"} to a new pipeline entry, "${title}".`);
+  }
+
   function handleTrackInPipeline(resumeUsed: "tailored" | "base" = "tailored") {
     if (!jobUrl.trim() && !jobDescription.trim()) return;
     const title = inferApplicationTitle(jobUrl, jobDescription);
@@ -1122,6 +1232,18 @@ function App() {
               coverCopied={coverCopied}
               onCopy={handleCopyCoverLetter}
               onEnable={() => setIncludeCoverLetter(true)}
+            />
+          ) : null}
+
+          {activeOutputTab === "questions" ? (
+            <ApplicationQuestionsTab
+              result={answersResult}
+              status={answersStatus}
+              isGenerating={isGeneratingAnswers}
+              canGenerate={resumeText.trim().length >= 80 && jobDescription.trim().length >= 40}
+              canSave={Boolean(jobUrl.trim() || jobDescription.trim())}
+              onGenerate={handleGenerateAnswers}
+              onSaveAnswers={handleSaveAnswers}
             />
           ) : null}
         </StudioPane>

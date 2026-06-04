@@ -110,6 +110,20 @@ function sanitizeReview(raw) {
   return review;
 }
 
+function sanitizeApplicationAnswers(raw) {
+  if (!Array.isArray(raw)) return undefined;
+  const now = new Date().toISOString();
+  const answers = raw
+    .slice(0, 40)
+    .map((a) => ({
+      question: sanitizeString(a?.question, 400),
+      answer: sanitizeString(a?.answer, 4_000),
+      savedAt: typeof a?.savedAt === "string" ? a.savedAt : now
+    }))
+    .filter((a) => a.answer && a.question);
+  return answers.length ? answers : undefined;
+}
+
 function sanitizeApplication(raw) {
   if (!raw || typeof raw !== "object") return null;
   const id = typeof raw.id === "string" ? raw.id.slice(0, 80) : "";
@@ -143,6 +157,7 @@ function sanitizeApplication(raw) {
     coverLetterText: typeof raw.coverLetterText === "string" ? raw.coverLetterText.slice(0, MAX_FIELD) : "",
     review: sanitizeReview(raw.review),
     missingRequiredSkills: sanitizeMissingRequiredSkills(raw.missingRequiredSkills),
-    resumeUsed: raw.resumeUsed === "base" || raw.resumeUsed === "tailored" ? raw.resumeUsed : undefined
+    resumeUsed: raw.resumeUsed === "base" || raw.resumeUsed === "tailored" ? raw.resumeUsed : undefined,
+    applicationAnswers: sanitizeApplicationAnswers(raw.applicationAnswers)
   };
 }
