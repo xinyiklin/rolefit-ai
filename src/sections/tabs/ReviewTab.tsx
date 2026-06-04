@@ -151,23 +151,29 @@ export function ReviewTab({
       {resumeDiff ? (
         <section className="studio-card">
           <PanelHeading icon={<FileText size={15} aria-hidden="true" />} title="Before / after" />
-          <div className="diff-grid">
-            <div>
-              <h3>Added or rewritten</h3>
-              <ul className="diff-list diff-list--added">
-                {(resumeDiff.added.length ? resumeDiff.added : ["No major line-level additions detected."]).map((item, index) => (
-                  <li key={`${index}-${item}`}>{item}</li>
-                ))}
-              </ul>
-            </div>
-            <div>
-              <h3>Removed or condensed</h3>
-              <ul className="diff-list diff-list--removed">
-                {(resumeDiff.removed.length ? resumeDiff.removed : ["No major line-level removals detected."]).map((item, index) => (
-                  <li key={`${index}-${item}`}>{item}</li>
-                ))}
-              </ul>
-            </div>
+          <p className="diff-legend">
+            <span className="diff-seg diff-seg--added">added</span>
+            <span className="diff-seg diff-seg--removed">removed</span>
+            <span>Read every change before exporting — added claims are yours to defend.</span>
+          </p>
+          <div className="diff-inline" role="region" aria-label="Full resume diff, original versus tailored">
+            {resumeDiff.segments.length ? (
+              resumeDiff.segments.map((seg, index) =>
+                seg.type === "equal" ? (
+                  <span key={index}>{seg.text}</span>
+                ) : (
+                  <span
+                    key={index}
+                    className={`diff-seg diff-seg--${seg.type}`}
+                    title={seg.type === "added" ? "Added by tailoring" : "Removed by tailoring"}
+                  >
+                    {seg.text}
+                  </span>
+                )
+              )
+            ) : (
+              <span className="diff-empty">No changes between the original and tailored resume.</span>
+            )}
           </div>
           {resumeDiff.metricPrompts.length ? (
             <div className="metric-prompts">

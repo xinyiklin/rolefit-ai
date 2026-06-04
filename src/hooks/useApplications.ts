@@ -43,6 +43,14 @@ export type ApplicationReview = {
   recommendation: { applyAsIs: boolean; reason: string; coverLetterAngle: string; topEdits: string[] };
 };
 
+// A drafted application-question answer (or per-role description) the user chose
+// to save with this application from the Application Questions tab.
+export type ApplicationAnswer = {
+  question: string;
+  answer: string;
+  savedAt: string;
+};
+
 export type Application = {
   id: string;
   title: string;
@@ -73,6 +81,8 @@ export type Application = {
   // Which resume actually went out — the AI-tailored draft or the original/base
   // (the AI may judge the base already a strong fit). Captured at Track time.
   resumeUsed?: "tailored" | "base";
+  // Application-question answers the user saved from the Application Questions tab.
+  applicationAnswers?: ApplicationAnswer[];
 };
 
 type EditableField = "title" | "company" | "role" | "source" | "notes" | "followupAt" | "jobUrl";

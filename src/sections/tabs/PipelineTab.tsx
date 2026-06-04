@@ -258,6 +258,23 @@ export function PipelineTab({
                       />
                     </label>
 
+                    {app.applicationAnswers?.length ? (
+                      <section className="pipeline-answers" aria-label="Saved application answers">
+                        <h4 className="pipeline-answers__head">Saved answers ({app.applicationAnswers.length})</h4>
+                        {app.applicationAnswers.map((answer, i) => (
+                          <details className="pipeline-answer" key={`${answer.question}-${i}`}>
+                            <summary>
+                              <span>{answer.question}</span>
+                              {/\[add\b/i.test(answer.answer) ? (
+                                <span className="questions-flag">Has placeholder</span>
+                              ) : null}
+                            </summary>
+                            <p>{answer.answer}</p>
+                          </details>
+                        ))}
+                      </section>
+                    ) : null}
+
                     <div className="pipeline-detail__meta">
                       <span>Tracked {formatShortDate(app.createdAt)}</span>
                       {app.appliedAt ? <span>Applied {formatShortDate(app.appliedAt)}</span> : null}

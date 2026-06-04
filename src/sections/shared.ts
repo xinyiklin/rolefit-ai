@@ -2,13 +2,23 @@
 
 import type { PolishedResume, ResumeAnalysis } from "../resumeEngine";
 
-export type OutputTab = "resume" | "review" | "cover" | "strict" | "pipeline";
+export type OutputTab = "resume" | "review" | "cover" | "strict" | "questions" | "pipeline";
 
 export type OutputTabDescriptor = {
   id: OutputTab;
   label: string;
   badge?: string | number;
 };
+
+// Application Questions tab: drafted answers to supplemental application
+// questions, plus a short description per work-experience role. Mirrors the
+// /api/application-answers response shape.
+export type GeneratedAnswer = { question: string; answer: string; needsInput: boolean };
+export type GeneratedRoleDescription = { role: string; description: string };
+export type ApplicationAnswersResult = {
+  answers: GeneratedAnswer[];
+  roleDescriptions: GeneratedRoleDescription[];
+} | null;
 
 export type SourceDocx = {
   name: string;
