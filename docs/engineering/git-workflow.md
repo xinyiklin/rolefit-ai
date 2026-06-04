@@ -109,7 +109,7 @@ form instead so merged history stays consistent.
   without an explicit reason recorded in the PR body or commit message.
 - Do not stage `.env`, `node_modules/`, `dist/`, `outputs/`,
   `job-search-workspace/` contents (except its `README.md`), or
-  root-level resume / PDF / DOCX / tracker files. The `.gitignore`
+  root-level resume / TEX / PDF / DOCX / tracker files. The `.gitignore`
   already guards these — verify with `git status --short` before
   staging.
 - Stage and commit `AGENTS.md` and `CLAUDE.md` like any other tracked

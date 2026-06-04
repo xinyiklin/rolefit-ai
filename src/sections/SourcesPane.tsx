@@ -280,7 +280,7 @@ export function SourcesPane(props: SourcesPaneProps) {
         <label className="upload-box">
           <Upload size={18} aria-hidden="true" />
           <span>{fileName || "Choose resume file (.docx · .tex · .txt · .md · .csv)"}</span>
-          <input accept=".docx,.pdf,.txt,.md,.csv,.tex" type="file" onChange={onFileUpload} />
+          <input accept=".docx,.txt,.md,.csv,.tex" type="file" onChange={onFileUpload} />
         </label>
 
         {fileError ? (

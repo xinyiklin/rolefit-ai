@@ -169,7 +169,7 @@ File-size guidance:
   write; dry-run requested writes when possible.
 - Never run commands that delete resume/workspace data or call destructive
   remote APIs without explicit instruction.
-- Do not commit `.env`, `node_modules/`, `dist/`, exported resumes/PDFs/DOCX
+- Do not commit `.env`, `node_modules/`, `dist/`, exported resumes/TEX/PDF/DOCX
   files, root-level resume artifacts, or `job-search-workspace/` contents
   except its `README.md`.
 - Keep generated resume claims grounded in user-provided facts.
@@ -207,7 +207,7 @@ push, open a PR, or merge.
 - Check `git status --short` before staging so unrelated work is visible.
 - Stage only relevant files.
 - Do not stage `.env`, `job-search-workspace/` contents except
-  `job-search-workspace/README.md`, or exported resumes/PDFs/DOCX files. The
+  `job-search-workspace/README.md`, or exported resumes/TEX/PDF/DOCX files. The
   `.gitignore` already guards these; verify with `git status --short`.
 - Stage and commit `AGENTS.md` and `CLAUDE.md` like any other tracked file when
   they're part of the change; do not single them out to exclude. `CONTINUITY.md`

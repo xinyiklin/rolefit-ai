@@ -165,12 +165,14 @@ In the response:
 
 ## Document Workflow
 
-- DOCX is the format-preserving path; PDF and text-only paths are
-  text-only or clean-template exports. The clean-template PDF
-  (`src/pdfResume.ts`) is generated locally with real Helvetica AFM
-  metrics and `WinAnsiEncoding`, so accented characters render and the
-  text stays selectable/parseable; it writes single-byte (Latin-1) output
-  so the cross-reference offsets stay valid.
+- DOCX is the format-preserving path for uploaded Word resumes; `.tex`
+  sources preserve LaTeX in place when Preserve format is enabled. PDF-only
+  sources must be pasted as extracted text.
+- The clean PDF path is local HTML print: `src/lib/resumeDocument.ts`
+  parses the tailored text, `src/sections/ResumeDocument.tsx` renders the
+  document, and `src/sections/ResumePrintLayer.tsx` exposes that same HTML
+  to `window.print()` / browser Save as PDF. The output stays selectable,
+  ATS-readable text, but pixel-faithful formatting should use LaTeX export.
 - Treat uploaded DOCX bytes as transient — extract text, perform the
   edit, and write back without persisting unrelated copies.
 - Keep `job-search-workspace/` the canonical location for personal

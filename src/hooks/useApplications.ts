@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { EvidenceType, MissingRequiredSkill, StrictReviewSeverity } from "../resumeEngine";
+import { inferApplicationTitle, inferCompanyFromUrl } from "../lib/jobTarget";
 
 export type ApplicationStatus = "interested" | "applied" | "interviewing" | "offer" | "rejected" | "withdrawn";
 
@@ -85,6 +86,40 @@ export type Application = {
   applicationAnswers?: ApplicationAnswer[];
 };
 
+// Build the common skeleton for a new pipeline entry from the current job
+// target. Both the "Track in pipeline" and "Save answers" paths start here and
+// then add their own fields (fit scores / review, or saved answers), so the
+// shared shape — id, inferred title/company, trimmed job target, default
+// status, timestamps — lives in one place and cannot drift between them.
+export function makeApplicationDraft(jobUrl: string, jobDescription: string): Application {
+  const now = new Date().toISOString();
+  return {
+    id: crypto.randomUUID(),
+    title: inferApplicationTitle(jobUrl, jobDescription),
+    company: inferCompanyFromUrl(jobUrl),
+    role: "",
+    source: "",
+    jobUrl: jobUrl.trim(),
+    jobDescription: jobDescription.trim(),
+    status: "interested",
+    createdAt: now,
+    updatedAt: now
+  };
+}
+
+function sameApplicationTarget(a: Application, incoming: Application) {
+  const incomingUrl = incoming.jobUrl.trim();
+  if (incomingUrl && a.jobUrl.trim() === incomingUrl) return true;
+
+  const incomingDescription = (incoming.jobDescription ?? "").trim();
+  return Boolean(
+    !incomingUrl &&
+    incomingDescription &&
+    !a.jobUrl.trim() &&
+    (a.jobDescription ?? "").trim() === incomingDescription
+  );
+}
+
 type EditableField = "title" | "company" | "role" | "source" | "notes" | "followupAt" | "jobUrl";
 
 export function useApplications() {
@@ -144,11 +179,21 @@ export function useApplications() {
     (incoming: Application) => {
       setApplications((current) => {
         const now = new Date().toISOString();
-        const idx = current.findIndex(
-          (a) => a.id === incoming.id || (incoming.jobUrl && a.jobUrl === incoming.jobUrl)
-        );
+        const idx = current.findIndex((a) => a.id === incoming.id || sameApplicationTarget(a, incoming));
         const merged: Application = idx >= 0
-          ? { ...current[idx], ...incoming, id: current[idx].id, updatedAt: now, createdAt: current[idx].createdAt }
+          ? {
+              ...current[idx],
+              ...incoming,
+              id: current[idx].id,
+              title: current[idx].title || incoming.title,
+              company: current[idx].company || incoming.company,
+              role: current[idx].role || incoming.role,
+              source: current[idx].source || incoming.source,
+              jobUrl: incoming.jobUrl || current[idx].jobUrl,
+              jobDescription: incoming.jobDescription || current[idx].jobDescription,
+              updatedAt: now,
+              createdAt: current[idx].createdAt
+            }
           : { ...incoming, createdAt: now, updatedAt: now };
 
         const next = idx >= 0

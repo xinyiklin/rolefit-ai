@@ -22,6 +22,8 @@ CONTINUITY.md
 # --- Personal job-search artifacts (privacy guard) ---
 *.docx
 *.pdf
+*resume*.tex
+*Resume*.tex
 *resume*.txt
 *resume*.md
 *resume*.csv
