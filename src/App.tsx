@@ -19,9 +19,10 @@ import {
 } from "./config/aiOptions";
 import { useTemplates } from "./hooks/useTemplates";
 import { useDebouncedValue } from "./hooks/useDebouncedValue";
-import { useApplications, type Application, type ApplicationStatus } from "./hooks/useApplications";
-import { arrayBufferToBase64, buildResumeFileName, downloadBlob, extractApplicantName } from "./lib/downloads";
-import { inferApplicationTitle, inferCompanyFromUrl } from "./lib/jobTarget";
+import { useApplications, makeApplicationDraft, type Application, type ApplicationStatus } from "./hooks/useApplications";
+import { useResumeExport } from "./hooks/useResumeExport";
+import { arrayBufferToBase64 } from "./lib/downloads";
+import { buildAiRequestFields } from "./lib/aiRequest";
 import { extractRelevantJobText } from "./lib/jobExtract";
 import { blocksToText, buildResumeBlocks } from "./lib/resumeBlocks";
 import { describeResumeFormat, looksLikeLatex } from "./lib/resumeFormat";
@@ -78,18 +79,14 @@ function App() {
   const [sourceDocx, setSourceDocx] = useState<SourceDocx | null>(null);
   const [resumeBlocks, setResumeBlocks] = useState<ResumeBlock[]>([]);
   const [result, setResult] = useState<PolishedResume | null>(null);
-  const [copied, setCopied] = useState(false);
-  const [coverCopied, setCoverCopied] = useState(false);
   const [fileError, setFileError] = useState("");
   const [fileStatus, setFileStatus] = useState("");
   const [linkStatus, setLinkStatus] = useState("");
   const [isPolishing, setIsPolishing] = useState(false);
   const [polishStatus, setPolishStatus] = useState("");
-  const [downloadStatus, setDownloadStatus] = useState("");
+  // Resume export (copy/print/DOCX/LaTeX/Overleaf) state + handlers live in
+  // useResumeExport; texStatus stays here because non-export handlers write it too.
   const [texStatus, setTexStatus] = useState("");
-  const [isDownloadingTex, setIsDownloadingTex] = useState(false);
-  const [isRenderingLatexPdf, setIsRenderingLatexPdf] = useState(false);
-  const [isOpeningOverleaf, setIsOpeningOverleaf] = useState(false);
   // Restore auto-saved preferences once on mount (API key is never persisted).
   const saved = useMemo(() => loadSettings(), []);
   const [aiProvider, setAiProvider] = useState<AiProviderValue>(saved.aiProvider ?? "claude-cli");
@@ -282,6 +279,36 @@ function App() {
     { id: "pipeline", label: "Pipeline", badge: applications.length || undefined }
   ];
 
+  // ----- Resume export (copy / print / DOCX / LaTeX / Overleaf) -----
+  const {
+    copied,
+    coverCopied,
+    downloadStatus,
+    isDownloadingTex,
+    isRenderingLatexPdf,
+    isOpeningOverleaf,
+    resetStatuses: resetExportStatuses,
+    handleCopy,
+    handleCopyCoverLetter,
+    handlePrintResume,
+    handleDownloadDocx,
+    handleDownloadTex,
+    handleDownloadLatexPdf,
+    handleOpenInOverleaf
+  } = useResumeExport({
+    result,
+    sourceDocx,
+    jobUrl,
+    resumeText,
+    resumeSourceFormat,
+    selectedTemplateId,
+    selectedTemplate,
+    renderTex,
+    renderPdf,
+    tectonic,
+    setTexStatus
+  });
+
   // ----- Handlers -----
 
   function applyWorkspaceBaseResume(baseResume: WorkspaceBaseResume, status: string) {
@@ -293,7 +320,7 @@ function App() {
     setResult(null);
     setFileError("");
     setPolishStatus("");
-    setDownloadStatus("");
+    resetExportStatuses();
     setTexStatus("");
 
     if (baseResume.kind === "docx" && baseResume.docxBase64) {
@@ -501,7 +528,6 @@ function App() {
   }
 
   async function handlePolish() {
-    const model = selectedModel === "custom" ? customModel.trim() : selectedModel;
     const fallbackBase = polishResume(resumeText, combinedJobText);
     const fallback = includeCoverLetter
       ? { ...fallbackBase, coverLetterText: draftCoverLetter(resumeText, combinedJobText, fallbackBase.polishedText) }
@@ -509,9 +535,7 @@ function App() {
 
     setIsPolishing(true);
     setPolishStatus(includeCoverLetter ? "Polishing resume and drafting cover letter..." : "Polishing with AI...");
-    setCopied(false);
-    setCoverCopied(false);
-    setDownloadStatus("");
+    resetExportStatuses();
     setTexStatus("");
 
     try {
@@ -519,13 +543,16 @@ function App() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          ...buildAiRequestFields({
+            aiProvider,
+            apiKey,
+            apiBaseUrl,
+            selectedModel,
+            customModel,
+            cliReasoningEffort
+          }),
           resumeText,
           jobText: jobDescription,
-          provider: aiProvider,
-          apiKey,
-          apiBaseUrl,
-          model,
-          reasoningEffort: cliReasoningEffort,
           preserveFormat,
           sourceFormat: resumeSourceFormat,
           includeCoverLetter,
@@ -575,199 +602,6 @@ function App() {
     }
   }
 
-  async function handleCopy() {
-    if (!result?.polishedText) return;
-    await navigator.clipboard.writeText(result.polishedText);
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 1800);
-  }
-
-  async function handleCopyCoverLetter() {
-    if (!result?.coverLetterText) return;
-    await navigator.clipboard.writeText(result.coverLetterText);
-    setCoverCopied(true);
-    window.setTimeout(() => setCoverCopied(false), 1800);
-  }
-
-  // Name downloads after the applicant (+ company when a job link gives one):
-  // Xinyi_Lin_Stripe_Resume.pdf → Xinyi_Lin_Resume.pdf → Resume.pdf.
-  function resumeDownloadName(ext: string): string {
-    return buildResumeFileName(
-      extractApplicantName(result?.polishedText || resumeText),
-      inferCompanyFromUrl(jobUrl),
-      ext
-    );
-  }
-
-  // "PDF · clean": print the HTML resume document (the same one shown in the
-  // Resume tab) so the browser's Save as PDF yields selectable, ATS-readable
-  // text. document.title seeds the suggested filename, restored after printing.
-  function handlePrintResume() {
-    if (!result?.polishedText) return;
-    const fileName = resumeDownloadName("pdf").replace(/\.pdf$/i, "");
-    const previousTitle = document.title;
-    document.title = fileName;
-    window.addEventListener("afterprint", () => { document.title = previousTitle; }, { once: true });
-    window.print();
-    setDownloadStatus("Opened the print dialog — choose “Save as PDF” (uncheck “Headers and footers” for a clean page).");
-  }
-
-  async function handleDownloadDocx() {
-    if (!result || !sourceDocx) return;
-    try {
-      const response = await fetch("/api/export-resume-docx", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ docxBase64: sourceDocx.base64, polishedText: result.polishedText })
-      });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error ?? "DOCX export failed.");
-      const byteCharacters = window.atob(String(data.docxBase64 ?? ""));
-      const bytes = new Uint8Array(byteCharacters.length);
-      for (let index = 0; index < byteCharacters.length; index += 1) {
-        bytes[index] = byteCharacters.charCodeAt(index);
-      }
-      const fileName = resumeDownloadName("docx");
-      downloadBlob(
-        new Blob([bytes], {
-          type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-        }),
-        fileName
-      );
-      const appended = Number(data.appendedParagraphs ?? 0);
-      setDownloadStatus(
-        appended
-          ? `Downloaded ${fileName}. Added ${appended} extra paragraph${appended === 1 ? "" : "s"} because the polished text was longer than the source layout.`
-          : `Downloaded ${fileName} using the uploaded DOCX structure.`
-      );
-    } catch (error) {
-      setDownloadStatus(
-        error instanceof Error ? error.message : "DOCX export failed. Use the PDF export or copy the polished text."
-      );
-    }
-  }
-
-  async function handleDownloadTex() {
-    if (!result) return;
-    // In-place: the polished text already is the user's edited .tex — download it
-    // directly so the original LaTeX layout is kept (no template re-render).
-    if (resumeSourceFormat === "LaTeX" && looksLikeLatex(result.polishedText)) {
-      const fileName = resumeDownloadName("tex");
-      downloadBlob(new Blob([result.polishedText], { type: "application/x-tex" }), fileName);
-      setTexStatus(`Downloaded ${fileName} — your original LaTeX, edited in place. Paste into Overleaf or your LaTeX editor.`);
-      return;
-    }
-    setIsDownloadingTex(true);
-    setTexStatus("Rendering LaTeX source...");
-    try {
-      const tex = await renderTex(result.polishedText, selectedTemplateId);
-      const templateLabel = selectedTemplate?.name ?? selectedTemplateId;
-      const fileName = resumeDownloadName("tex");
-      downloadBlob(new Blob([tex], { type: "application/x-tex" }), fileName);
-      setTexStatus(
-        `Downloaded ${fileName} using the ${templateLabel} template. Paste into Overleaf or your local LaTeX editor.`
-      );
-    } catch (error) {
-      setTexStatus(error instanceof Error ? error.message : "TEX render failed.");
-    } finally {
-      setIsDownloadingTex(false);
-    }
-  }
-
-  async function handleDownloadLatexPdf() {
-    if (!result) return;
-    if (!tectonic.available) {
-      setTexStatus(
-        "Tectonic is not installed. Install with `brew install tectonic` to enable in-app LaTeX PDF rendering."
-      );
-      return;
-    }
-    const latexInPlace = resumeSourceFormat === "LaTeX" && looksLikeLatex(result.polishedText);
-    setIsRenderingLatexPdf(true);
-    setTexStatus(
-      latexInPlace ? "Compiling your edited LaTeX → PDF with Tectonic..." : "Compiling LaTeX → PDF with Tectonic..."
-    );
-    try {
-      const outcome = latexInPlace
-        ? await renderPdf(result.polishedText, undefined, { rawTex: true })
-        : await renderPdf(result.polishedText, selectedTemplateId);
-      if ("error" in outcome) {
-        setTexStatus(
-          outcome.missingTectonic
-            ? "Tectonic is not installed. Install with `brew install tectonic` to enable in-app LaTeX PDF rendering."
-            : `LaTeX PDF compile failed: ${outcome.error}`
-        );
-        return;
-      }
-      const fileName = resumeDownloadName("pdf");
-      downloadBlob(outcome.pdf, fileName);
-      setTexStatus(
-        latexInPlace
-          ? `Downloaded ${fileName} compiled from your edited LaTeX via Tectonic (in place, no template).`
-          : `Downloaded ${fileName} rendered via Tectonic + ${selectedTemplate?.name ?? selectedTemplateId}.`
-      );
-    } catch (error) {
-      setTexStatus(error instanceof Error ? error.message : "LaTeX PDF render failed.");
-    } finally {
-      setIsRenderingLatexPdf(false);
-    }
-  }
-
-  async function handleOpenInOverleaf() {
-    if (!result) return;
-    const overleafWindow = window.open("about:blank", "_blank");
-    if (!overleafWindow) {
-      setTexStatus("Popup blocked. Allow popups for localhost:5181 and try again.");
-      return;
-    }
-
-    const latexInPlace = resumeSourceFormat === "LaTeX" && looksLikeLatex(result.polishedText);
-    setIsOpeningOverleaf(true);
-    setTexStatus("Preparing .tex for Overleaf...");
-    try {
-      const tex = latexInPlace ? result.polishedText : await renderTex(result.polishedText, selectedTemplateId);
-      const templateLabel = latexInPlace ? "Original LaTeX" : selectedTemplate?.name ?? "Resume";
-      const snipName = `Polished resume — ${templateLabel}`;
-
-      // Build the auto-submitting form via DOM APIs so correctness never depends
-      // on a hand-rolled HTML escaper. Values are assigned, not interpolated.
-      const doc = overleafWindow.document;
-      doc.title = "Opening in Overleaf…";
-      doc.body.style.cssText = "font-family:system-ui;color:#555;padding:24px";
-      doc.body.textContent = "Sending polished resume to Overleaf…";
-
-      const form = doc.createElement("form");
-      form.action = "https://www.overleaf.com/docs";
-      form.method = "POST";
-      form.enctype = "application/x-www-form-urlencoded";
-
-      const snip = doc.createElement("textarea");
-      snip.name = "snip";
-      snip.value = tex;
-
-      const snipNameInput = doc.createElement("input");
-      snipNameInput.type = "hidden";
-      snipNameInput.name = "snip_name";
-      snipNameInput.value = snipName;
-
-      const engineInput = doc.createElement("input");
-      engineInput.type = "hidden";
-      engineInput.name = "engine";
-      engineInput.value = "pdflatex";
-
-      form.append(snip, snipNameInput, engineInput);
-      doc.body.append(form);
-      form.submit();
-
-      setTexStatus(`Opened ${templateLabel} in Overleaf. Hit Compile in the new tab to generate the PDF.`);
-    } catch (error) {
-      overleafWindow.close();
-      setTexStatus(error instanceof Error ? error.message : "Open in Overleaf failed.");
-    } finally {
-      setIsOpeningOverleaf(false);
-    }
-  }
-
   function updateResumeBlock(id: string, text: string) {
     const nextBlocks = resumeBlocks.map((block) => (block.id === id ? { ...block, text } : block));
     setResumeBlocks(nextBlocks);
@@ -795,7 +629,7 @@ function App() {
     setFileError("");
     setFileStatus("No base resume is saved yet. Upload a resume or save one in the local workspace to make it the startup default.");
     setPolishStatus("");
-    setDownloadStatus("");
+    resetExportStatuses();
     setTexStatus("");
   }
 
@@ -806,6 +640,16 @@ function App() {
     setSelectedModel(option?.model ?? "");
     setCliReasoningEffort("");
     setCustomModel("");
+  }
+
+  function findApplicationForTarget(targetUrl: string, targetDescription: string) {
+    const trimmedUrl = targetUrl.trim();
+    const trimmedDescription = targetDescription.trim();
+    return trimmedUrl
+      ? applications.find((a) => a.jobUrl.trim() === trimmedUrl)
+      : applications.find(
+          (a) => !a.jobUrl.trim() && trimmedDescription && (a.jobDescription ?? "").trim() === trimmedDescription
+        );
   }
 
   async function handleExtractFromLink() {
@@ -846,11 +690,9 @@ function App() {
     setResult(null);
     setLinkStatus("");
     setPolishStatus("");
-    setDownloadStatus("");
-    setTexStatus("");
     // Honest context + custom instructions are remembered prefs, not per-role; keep them.
-    setCopied(false);
-    setCoverCopied(false);
+    resetExportStatuses();
+    setTexStatus("");
     setActiveOutputTab("resume");
   }
 
@@ -861,7 +703,6 @@ function App() {
     questions: string[];
     includeRoleDescriptions: boolean;
   }) {
-    const model = selectedModel === "custom" ? customModel.trim() : selectedModel;
     setIsGeneratingAnswers(true);
     setAnswersStatus("Drafting application answers...");
     try {
@@ -869,13 +710,16 @@ function App() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          ...buildAiRequestFields({
+            aiProvider,
+            apiKey,
+            apiBaseUrl,
+            selectedModel,
+            customModel,
+            cliReasoningEffort
+          }),
           resumeText,
           jobText: jobDescription,
-          provider: aiProvider,
-          apiKey,
-          apiBaseUrl,
-          model,
-          reasoningEffort: cliReasoningEffort,
           honestContext,
           customInstructions,
           questions,
@@ -908,16 +752,7 @@ function App() {
     }
     const now = new Date().toISOString();
     const saved = items.map((it) => ({ question: it.question, answer: it.answer, savedAt: now }));
-    const targetUrl = jobUrl.trim();
-    const targetDescription = jobDescription.trim();
-    // Match by job URL when present; for description-only jobs (no URL) fall back
-    // to the job description so repeat saves merge into one entry instead of
-    // piling up duplicate pipeline rows.
-    const existing = targetUrl
-      ? applications.find((a) => a.jobUrl && a.jobUrl === targetUrl)
-      : applications.find(
-          (a) => !a.jobUrl && (a.jobDescription ?? "").trim() === targetDescription && targetDescription
-        );
+    const existing = findApplicationForTarget(jobUrl, jobDescription);
     if (existing) {
       const byQuestion = new Map<string, { question: string; answer: string; savedAt: string }>();
       for (const a of existing.applicationAnswers ?? []) byQuestion.set(a.question, a);
@@ -926,45 +761,26 @@ function App() {
       setAnswersStatus(`Saved ${saved.length} answer${saved.length === 1 ? "" : "s"} to "${existing.title}" in the pipeline.`);
       return;
     }
-    const title = inferApplicationTitle(jobUrl, jobDescription);
     const app: Application = {
-      id: crypto.randomUUID(),
-      title,
-      company: inferCompanyFromUrl(jobUrl),
-      role: "",
-      source: "",
-      jobUrl: targetUrl,
-      jobDescription: jobDescription.trim(),
-      status: "interested",
-      createdAt: now,
-      updatedAt: now,
+      ...makeApplicationDraft(jobUrl, jobDescription),
       applicationAnswers: saved
     };
     upsertApplication(app);
-    setAnswersStatus(`Saved ${saved.length} answer${saved.length === 1 ? "" : "s"} to a new pipeline entry, "${title}".`);
+    setAnswersStatus(`Saved ${saved.length} answer${saved.length === 1 ? "" : "s"} to a new pipeline entry, "${app.title}".`);
   }
 
   function handleTrackInPipeline(resumeUsed: "tailored" | "base" = "tailored") {
     if (!jobUrl.trim() && !jobDescription.trim()) return;
-    const title = inferApplicationTitle(jobUrl, jobDescription);
-    const company = inferCompanyFromUrl(jobUrl);
-    const now = new Date().toISOString();
     const sr = result?.strictReview;
     // Record the resume that actually went out: the tailored draft, or the
     // original/base resume the user submitted instead.
     const usedBase = resumeUsed === "base" || !result?.polishedText;
     const sentResume = usedBase ? resumeText : result?.polishedText ?? "";
+    const existing = findApplicationForTarget(jobUrl, jobDescription);
+    const draft = makeApplicationDraft(jobUrl, jobDescription);
     const app: Application = {
-      id: crypto.randomUUID(),
-      title,
-      company,
-      role: "",
-      source: "",
-      jobUrl: jobUrl.trim(),
-      jobDescription: jobDescription.trim(),
-      status: "interested",
-      createdAt: now,
-      updatedAt: now,
+      ...draft,
+      id: existing?.id ?? draft.id,
       fitScore: headlineScore ?? result?.score.overall ?? null,
       baseFitScore: fitComparison?.base ?? null,
       tailoredFitScore: fitComparison?.tailored ?? null,
@@ -999,9 +815,9 @@ function App() {
         : undefined
     };
     upsertApplication(app);
-    setTexStatus(`Tracked "${title}" in the pipeline (${usedBase ? "original" : "tailored"} resume).`);
+    setTexStatus(`Tracked "${existing?.title || app.title}" in the pipeline (${usedBase ? "original" : "tailored"} resume).`);
     setActiveOutputTab("pipeline");
-    setExpandedApplicationId(app.id);
+    setExpandedApplicationId(existing?.id ?? app.id);
   }
 
   function missingRequiredSkillsFromApplication(app: Application): MissingRequiredSkill[] | undefined {
@@ -1054,7 +870,7 @@ function App() {
       setResult(null);
     }
     setPolishStatus("");
-    setDownloadStatus("");
+    resetExportStatuses();
     setTexStatus("");
     setActiveOutputTab("resume");
   }

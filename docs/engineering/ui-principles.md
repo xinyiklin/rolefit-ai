@@ -27,8 +27,9 @@ Preserve the two-column workflow:
 
 - left column: job target (link + description) and resume source
   (DOCX upload, text paste, or workspace base-resume)
-- right column: polished output, before/after review, version vault, and
-  optional cover letter, organized into tabbed views
+- right column: polished output, strict review, before/after review,
+  application questions, cover letter, and pipeline, organized into tabbed
+  views
 
 When changing one panel or tab, preserve the others' layout and labels
 unless the task explicitly touches them.

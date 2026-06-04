@@ -8,11 +8,11 @@ A **local-first** resume tailoring webapp. Import a job posting (paste it, or pu
 
 _Screenshot uses demo workspace data._
 
-> **Recommended path:** keep your base resume as a **`.tex`** file (Jake's-style) and export with **PDF · LaTeX** (or **Overleaf**) for faithful, ATS-clean formatting. DOCX, PDF, and plain-text sources also work, but their **PDF · clean** export is a best-effort render and may need more manual editing/formatting.
+> **Recommended path:** keep your base resume as a **`.tex`** file (Jake's-style) and export with **PDF · LaTeX** (or **Overleaf**) for faithful, ATS-clean formatting. DOCX, LaTeX, and plain-text sources also work, but their **PDF · clean** export is a best-effort render and may need more manual editing/formatting.
 
 ## Highlights
 
-- **Multi-format resume I/O** — ingest `.docx`, `.pdf`, `.tex` (Jake's-style), or plain text; export back to each.
+- **Multi-format resume I/O** — ingest `.docx`, `.tex` (Jake's-style), or plain text; paste extracted PDF text when the original file is only available as PDF.
 - **Job-link import** — paste a posting URL and pull the description in one click: Workday-aware (reads its CXS JSON API for `/job/` and `/details/` links), with a generic HTML→text fallback for other boards. The client distills the scrape before polishing, keeping role intro / responsibilities / requirements / preferred qualifications while dropping empty bullets, duplicated ATS title furniture, low-value Workday metadata, apply/share/navigation rows, company/culture marketing, salary pills, benefits/perks, pay-transparency, and EEO/legal boilerplate. The link itself is kept only for pipeline tracking and is **never sent to the model**.
 - **Subscription-friendly, multi-provider AI** — the technical default is the OpenAI hosted API, but the **recommended opt-in** is the **subscription-CLI tools** (`Claude Code`, `Codex CLI`, `Gemini CLI` / Antigravity) that route through existing Claude Max / ChatGPT Plus / Google subscriptions instead of per-token billing, with **hosted-API backends** (OpenAI, Anthropic, Gemini, OpenRouter, Groq, Together, Mistral, local Ollama) available behind the same interface.
 - **Fit scoring + 4-category keyword gap analysis** — required experience, knowledge, required skills, technical tools.
@@ -87,7 +87,7 @@ The app creates `job-search-workspace/` for your private local data:
 - `applications.json` — the pipeline tracker's on-disk store
 - Anything else you drop in there
 
-This folder is gitignored except its README. Personal resumes, PDFs, and DOCX files at the repo root are also gitignored as a privacy guard.
+This folder is gitignored except its README. Personal resumes, TEX/PDF/DOCX exports, and root-level resume artifacts are also gitignored as a privacy guard.
 
 ## Project layout
 
@@ -104,10 +104,10 @@ server/
 src/
   App.tsx                        # state + handlers + composition
   config/aiOptions.ts            # provider/model/reasoning options
-  hooks/{useApplications, useTemplates}.ts
+  hooks/                          # templates, applications, resume export, and small workflow hooks
   lib/                           # downloads, job extraction/distilling, resume format/block + LaTeX→HTML render helpers
   sections/                      # Masthead / SourcesPane / StudioPane / ExportRail / ResumeDocument / ResumePrintLayer
-  sections/tabs/                 # Resume / Review / StrictReview / CoverLetter / Pipeline
+  sections/tabs/                 # Resume / Review / StrictReview / Questions / CoverLetter / Pipeline
   resumeEngine.ts                # scoring + analysis + deterministic local fallback
   styles/                        # per-surface CSS + shared tokens
 docs/engineering/                # contributor notes (server, UI, git workflow, testing)
