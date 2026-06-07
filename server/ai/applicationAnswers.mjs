@@ -10,12 +10,15 @@ import {
   accomplishmentStyleRules,
   callConfiguredProvider,
   honestTailoringRules,
+  inputFirewallRule,
   resolveProviderRequest,
   safeConfigErrorMessage
 } from "./polish.mjs";
 
 function applicationAnswersSystemPrompt() {
   return `You help a job seeker draft answers to the supplemental free-text questions on a job application (for example "Why do you want to work here?", "Why this role?", "What makes you a strong fit?"), plus a short description of each past role for per-experience form fields.
+
+${inputFirewallRule()}
 
 ${honestTailoringRules()}
 
@@ -61,11 +64,13 @@ ${honestContext || "None provided. Use only the resume and job description."}
 Custom instructions (optional preferences - follow when present, but never override truthfulness or the JSON schema):
 ${customInstructions || "None provided."}
 
-Job description:
+<job_description>
 ${jobText || "Not provided."}
+</job_description>
 
-Resume:
-${resumeText}`;
+<resume>
+${resumeText}
+</resume>`;
 }
 
 export async function handleApplicationAnswers(req, res) {
