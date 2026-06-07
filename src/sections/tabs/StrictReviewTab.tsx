@@ -30,6 +30,9 @@ export function StrictReviewTab({ result }: StrictReviewTabProps) {
             {sr.verdict}
           </strong>
           <p className="strict-verdict__reason">{sr.verdictReason}</p>
+          {result.reviewedBy ? (
+            <p className="strict-verdict__reviewer">Reviewed by {result.reviewedBy}</p>
+          ) : null}
         </div>
         <div className="strict-verdict__rec">
           <div

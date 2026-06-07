@@ -138,3 +138,16 @@ export const roleAppliedOptions: readonly RoleOption[] = [
   { value: "Senior", label: "Senior" },
   { value: "Other", label: "Other" }
 ];
+
+// Friendly display label for a provider value (falls back to the raw value).
+export function providerLabel(value: string): string {
+  return providerOptions.find((option) => option.value === value)?.label ?? value;
+}
+
+// Provider attribution string for status lines and the reviewer caption, e.g.
+// "Codex · CLI (gpt-5.5)". The model is in parens (provider labels already
+// contain "·") and omitted when blank (e.g. a CLI subscription default).
+export function describeProviderModel(provider: string, model: string): string {
+  const label = providerLabel(provider);
+  return model ? `${label} (${model})` : label;
+}
