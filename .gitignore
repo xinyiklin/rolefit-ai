@@ -12,6 +12,10 @@ dist/
 *.log
 .eslintcache
 
+# --- Scratch / temp working files (build caches, render artifacts) ---
+tmp/
+*.tmp
+
 # --- Secrets ---
 .env
 
@@ -27,5 +31,9 @@ CONTINUITY.md
 *resume*.txt
 *resume*.md
 *resume*.csv
+*resume*.png
+*Resume*.png
+*resume*.jpg
+*Resume*.jpg
 job-search-workspace/*
 !job-search-workspace/README.md
