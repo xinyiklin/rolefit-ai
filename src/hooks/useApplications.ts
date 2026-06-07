@@ -107,6 +107,25 @@ export function makeApplicationDraft(jobUrl: string, jobDescription: string): Ap
   };
 }
 
+// Derive a missing-required-skills list for a saved application: prefer the
+// explicitly stored list, else reconstruct it from the snapshotted review gaps
+// (treating an exact, addable gap as "exact" evidence and the rest as "none").
+export function missingRequiredSkillsFromApplication(app: Application): MissingRequiredSkill[] | undefined {
+  if (app.missingRequiredSkills?.length) return app.missingRequiredSkills;
+  const derived = app.review?.gaps
+    ?.filter((gap) => gap.gap)
+    .map((gap) => {
+      const evidenceType = gap.evidenceType ?? (gap.canHonestlyAdd ? "exact" : "none");
+      return {
+        keyword: gap.gap,
+        evidenceType,
+        canHonestlyAdd: evidenceType === "exact" && Boolean(gap.canHonestlyAdd),
+        reason: gap.evidence || gap.suggestedEdit || (gap.severity ? `${gap.severity} gap` : "")
+      };
+    });
+  return derived?.length ? derived : undefined;
+}
+
 function sameApplicationTarget(a: Application, incoming: Application) {
   const incomingUrl = incoming.jobUrl.trim();
   if (incomingUrl && a.jobUrl.trim() === incomingUrl) return true;
@@ -265,6 +284,23 @@ export function useApplications() {
     [persist]
   );
 
+  // Find an existing application matching the current job target — by URL when
+  // present, else by exact job-description text for link-less entries. Shared by
+  // the "Track in pipeline" and "Save answers" paths so both update in place
+  // rather than creating duplicate rows.
+  const findForTarget = useCallback(
+    (targetUrl: string, targetDescription: string) => {
+      const trimmedUrl = targetUrl.trim();
+      const trimmedDescription = targetDescription.trim();
+      return trimmedUrl
+        ? applications.find((a) => a.jobUrl.trim() === trimmedUrl)
+        : applications.find(
+            (a) => !a.jobUrl.trim() && trimmedDescription && (a.jobDescription ?? "").trim() === trimmedDescription
+          );
+    },
+    [applications]
+  );
+
   return {
     applications,
     isLoading,
@@ -274,6 +310,7 @@ export function useApplications() {
     updateStatus,
     updateNotes,
     updateField,
-    remove
+    remove,
+    findForTarget
   };
 }

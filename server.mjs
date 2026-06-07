@@ -2,7 +2,8 @@ import { createServer } from "node:http";
 import { mkdir, readFile, readdir, rename, writeFile } from "node:fs/promises";
 import { extname, join, resolve } from "node:path";
 import { createServer as createViteServer } from "vite";
-import { getDefaultModel, handlePolish } from "./server/ai/polish.mjs";
+import { handlePolish } from "./server/ai/polish.mjs";
+import { getDefaultModel, getDefaultProvider } from "./server/ai/providers.mjs";
 import { handleApplicationAnswers } from "./server/ai/applicationAnswers.mjs";
 import {
   listTemplates,
@@ -59,6 +60,10 @@ await loadLocalEnv();
 await ensureJobWorkspace();
 
 const port = Number(process.env.PORT ?? 5181);
+// Bind to loopback by default: this app has no auth and exposes URL-fetch,
+// file-storage, and LaTeX/DOCX-compile endpoints, so it must not be reachable
+// from other devices on the network. Set HOST=0.0.0.0 to opt into LAN access.
+const host = process.env.HOST || "127.0.0.1";
 
 async function ensureJobWorkspace() {
   await mkdir(jobWorkspaceDir, { recursive: true });
@@ -253,7 +258,11 @@ async function handleExportResumeDocx(req, res) {
   }
 
   try {
-    const { docxBase64, polishedText } = JSON.parse(await readBody(req));
+    const body = JSON.parse(await readBody(req));
+    const docxBase64 = body.docxBase64;
+    // Cap before the O(n·m) paragraph rewrite (applyTextToDocumentXml), matching
+    // the 45k/35k caps on the other routes, so a large body can't burn CPU.
+    const polishedText = String(body.polishedText ?? "").slice(0, 60_000);
     const result = await withUnpackedDocx(docxBase64, async ({ workspace, unpackedPath }) => {
       const documentPath = join(unpackedPath, "word", "document.xml");
       const documentXml = await readFile(documentPath, "utf8");
@@ -647,7 +656,11 @@ const server = createServer((req, res) => {
   void serveStatic(req, res);
 });
 
-server.listen(port, "0.0.0.0", () => {
+server.listen(port, host, () => {
   console.log(`RoleFit AI running at http://localhost:${port}/`);
-  console.log(`Default AI model: ${getDefaultModel()}`);
+  if (host === "0.0.0.0") {
+    console.log("⚠️  Bound to 0.0.0.0 (HOST override): reachable from your local network. This app has no auth.");
+  }
+  console.log(`Default AI provider: ${getDefaultProvider()}`);
+  console.log(`Default AI model: ${getDefaultModel() || "(CLI default)"}`);
 });

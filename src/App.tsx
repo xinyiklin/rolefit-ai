@@ -1,36 +1,38 @@
 import { useEffect, useMemo, useState, type ChangeEvent } from "react";
 
 import {
-  analyzeMatchBreakdown,
   analyzeResumeText,
-  buildResumeDiff,
   draftCoverLetter,
   normalizePolishedResume,
   type PolishedResume,
-  type MissingRequiredSkill,
   polishResume
 } from "./resumeEngine";
-import { sampleResume } from "./samples";
-import { loadSettings, saveSettings } from "./lib/settings";
 
-import {
-  providerOptions,
-  roleAppliedOptions
-} from "./config/aiOptions";
+import { roleAppliedOptions } from "./config/aiOptions";
 import { useTemplates } from "./hooks/useTemplates";
 import { useDebouncedValue } from "./hooks/useDebouncedValue";
-import { useApplications, makeApplicationDraft, type Application, type ApplicationStatus } from "./hooks/useApplications";
+import { useAiSettings } from "./hooks/useAiSettings";
+import { useApplicationAnswers } from "./hooks/useApplicationAnswers";
+import {
+  useApplications,
+  makeApplicationDraft,
+  missingRequiredSkillsFromApplication,
+  type Application,
+  type ApplicationStatus
+} from "./hooks/useApplications";
+import { useResumeAnalysis } from "./hooks/useResumeAnalysis";
 import { useResumeExport } from "./hooks/useResumeExport";
 import { arrayBufferToBase64 } from "./lib/downloads";
-import { buildAiRequestFields } from "./lib/aiRequest";
+import { buildAiRequestFields, buildAuditRequestFields } from "./lib/aiRequest";
 import { extractRelevantJobText } from "./lib/jobExtract";
 import { blocksToText, buildResumeBlocks } from "./lib/resumeBlocks";
 import { describeResumeFormat, looksLikeLatex } from "./lib/resumeFormat";
 
 import { AiMenu } from "./sections/AiMenu";
+import { ReviewerSettings } from "./sections/ReviewerSettings";
 import { Masthead } from "./sections/Masthead";
 import { PolishMenu } from "./sections/PolishMenu";
-import { SourcesPane, type AiProviderValue } from "./sections/SourcesPane";
+import { SourcesPane } from "./sections/SourcesPane";
 import { StudioPane } from "./sections/StudioPane";
 import { ExportRail } from "./sections/ExportRail";
 import { ResumePrintLayer } from "./sections/ResumePrintLayer";
@@ -41,12 +43,9 @@ import { CoverLetterTab } from "./sections/tabs/CoverLetterTab";
 import { PipelineTab } from "./sections/tabs/PipelineTab";
 import { ApplicationQuestionsTab } from "./sections/tabs/ApplicationQuestionsTab";
 import type {
-  ApplicationAnswersResult,
-  FitComparison,
   OutputTab,
   OutputTabDescriptor,
   ResumeBlock,
-  ResumeBlockKind,
   SourceDocx
 } from "./sections/shared";
 
@@ -74,7 +73,9 @@ function App() {
   const [jobDescription, setJobDescription] = useState("");
   const [jobUrl, setJobUrl] = useState("");
   const [isExtractingLink, setIsExtractingLink] = useState(false);
-  const [resumeText, setResumeText] = useState(sampleResume);
+  // Starts empty; the mount effect (loadWorkspace) auto-loads a workspace
+  // base-resume when one exists, otherwise the editor stays blank.
+  const [resumeText, setResumeText] = useState("");
   const [fileName, setFileName] = useState("");
   const [sourceDocx, setSourceDocx] = useState<SourceDocx | null>(null);
   const [resumeBlocks, setResumeBlocks] = useState<ResumeBlock[]>([]);
@@ -87,32 +88,47 @@ function App() {
   // Resume export (copy/print/DOCX/LaTeX/Overleaf) state + handlers live in
   // useResumeExport; texStatus stays here because non-export handlers write it too.
   const [texStatus, setTexStatus] = useState("");
-  // Restore auto-saved preferences once on mount (API key is never persisted).
-  const saved = useMemo(() => loadSettings(), []);
-  const [aiProvider, setAiProvider] = useState<AiProviderValue>(saved.aiProvider ?? "claude-cli");
-  const [apiKey, setApiKey] = useState("");
-  const [apiBaseUrl, setApiBaseUrl] = useState(saved.apiBaseUrl ?? "");
-  const [selectedModel, setSelectedModel] = useState(saved.selectedModel ?? "opus");
-  const [cliReasoningEffort, setCliReasoningEffort] = useState(saved.cliReasoningEffort ?? "");
-  const [customModel, setCustomModel] = useState(saved.customModel ?? "");
+  // All auto-saved AI preferences (primary provider/model, the reviewer-override
+  // audit* fields, and the polish prefs that persist with them) plus the
+  // debounced localStorage write live in useAiSettings. API keys are not
+  // persisted. Destructured into the same names the handlers + JSX already use.
+  const ai = useAiSettings();
+  const {
+    aiProvider,
+    apiKey,
+    setApiKey,
+    apiBaseUrl,
+    setApiBaseUrl,
+    selectedModel,
+    setSelectedModel,
+    cliReasoningEffort,
+    setCliReasoningEffort,
+    customModel,
+    setCustomModel,
+    handleProviderChange,
+    auditProvider,
+    auditSelectedModel,
+    setAuditSelectedModel,
+    auditCustomModel,
+    setAuditCustomModel,
+    auditCliReasoningEffort,
+    setAuditCliReasoningEffort,
+    auditApiBaseUrl,
+    setAuditApiBaseUrl,
+    auditApiKey,
+    setAuditApiKey,
+    handleAuditProviderChange,
+    roleAppliedAs,
+    setRoleAppliedAs,
+    honestContext,
+    setHonestContext,
+    customInstructions,
+    setCustomInstructions
+  } = ai;
   const [includeCoverLetter, setIncludeCoverLetter] = useState(false);
   const [strictReview, setStrictReview] = useState(true);
   const [preserveFormat, setPreserveFormat] = useState(true);
-  const [roleAppliedAs, setRoleAppliedAs] = useState<string>(saved.roleAppliedAs ?? "Early Career");
-  const [honestContext, setHonestContext] = useState(saved.honestContext ?? "");
-  const [customInstructions, setCustomInstructions] = useState(saved.customInstructions ?? "");
   const [activeOutputTab, setActiveOutputTab] = useState<OutputTab>("resume");
-  const [answersResult, setAnswersResult] = useState<ApplicationAnswersResult>(null);
-  const [answersStatus, setAnswersStatus] = useState("");
-  const [isGeneratingAnswers, setIsGeneratingAnswers] = useState(false);
-
-  // Application-question drafts are tied to the current resume + job. When either
-  // changes the drafts (and the tab badge) are stale, so clear them — mirrors how
-  // the polish `result` is reset on every input change.
-  useEffect(() => {
-    setAnswersResult(null);
-    setAnswersStatus("");
-  }, [resumeText, jobDescription]);
   const [workspacePath, setWorkspacePath] = useState("");
   const [workspaceFiles, setWorkspaceFiles] = useState<string[]>([]);
   const [baseResumeName, setBaseResumeName] = useState("");
@@ -141,42 +157,32 @@ function App() {
     updateNotes: updateApplicationNotes,
     updateField: updateApplicationField,
     remove: removeApplication,
-    storagePath: applicationsPath
+    storagePath: applicationsPath,
+    findForTarget
   } = useApplications();
+
+  const {
+    answersResult,
+    answersStatus,
+    isGeneratingAnswers,
+    handleGenerateAnswers,
+    handleSaveAnswers
+  } = useApplicationAnswers({
+    resumeText,
+    jobDescription,
+    jobUrl,
+    honestContext,
+    customInstructions,
+    aiRequest: { aiProvider, apiKey, apiBaseUrl, selectedModel, customModel, cliReasoningEffort },
+    upsertApplication,
+    findForTarget
+  });
 
   // ----- Effects -----
   useEffect(() => {
     void loadWorkspace(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  // Auto-save preferences (AI selection + polish inputs) so they survive reloads.
-  // Debounced so the free-text fields (honest context, custom instructions)
-  // don't serialize + write localStorage on every keystroke.
-  useEffect(() => {
-    const id = setTimeout(() => {
-      saveSettings({
-        aiProvider,
-        selectedModel,
-        customModel,
-        cliReasoningEffort,
-        apiBaseUrl,
-        roleAppliedAs,
-        honestContext,
-        customInstructions
-      });
-    }, 400);
-    return () => clearTimeout(id);
-  }, [
-    aiProvider,
-    selectedModel,
-    customModel,
-    cliReasoningEffort,
-    apiBaseUrl,
-    roleAppliedAs,
-    honestContext,
-    customInstructions
-  ]);
 
   // ----- Derived (memos) -----
   // The job link has its own field now: the description textarea holds the text
@@ -193,72 +199,29 @@ function App() {
   const debouncedResumeText = useDebouncedValue(resumeText);
   const debouncedCombinedJobText = useDebouncedValue(combinedJobText);
 
-  const currentAnalysis = useMemo(() => {
-    return debouncedResumeText.trim() && debouncedCombinedJobText.trim()
-      ? analyzeResumeText(debouncedResumeText, debouncedCombinedJobText)
-      : null;
-  }, [debouncedCombinedJobText, debouncedResumeText]);
-
-  const resumeBulletCount = useMemo(() => {
-    return resumeText.split("\n").filter((line) => /^\s*[-*•]\s+/.test(line)).length;
-  }, [resumeText]);
-
-  const matchBreakdown = useMemo(() => {
-    const sourceText = result?.polishedText ?? debouncedResumeText;
-    const jobText = result ? combinedJobText : debouncedCombinedJobText;
-    return jobText.trim() ? analyzeMatchBreakdown(sourceText, jobText) : [];
-  }, [combinedJobText, debouncedCombinedJobText, debouncedResumeText, result]);
-
-  const resumeDiff = useMemo(
-    () => (result ? buildResumeDiff(resumeText, result.polishedText) : null),
-    [result, resumeText]
-  );
-
-  // Base (original resume) vs. tailored (polished) fit. Prefer the AI's
-  // same-call comparison when present; otherwise score the original resume with
-  // the local engine so the before/after still works without AI. `resumeText`
-  // stays the original after a polish (the tailored copy lives in result), so it
-  // is the base to score against.
-  const fitComparison = useMemo<FitComparison | null>(() => {
-    if (!result) return null;
-    if (result.aiScore) {
-      return { source: "ai", base: result.aiScore.base, tailored: result.aiScore.tailored, reason: result.aiScore.liftReason };
-    }
-    // Restored from a pipeline snapshot — carry the saved numbers and their
-    // original provenance instead of recomputing (we no longer have the base).
-    if (result.savedFit) {
-      return { source: result.savedFit.source, base: result.savedFit.base, tailored: result.savedFit.tailored, reason: "" };
-    }
-    if (!combinedJobText.trim()) return null;
-    const baseScore = analyzeResumeText(resumeText, combinedJobText).score.overall;
-    return { source: "local", base: baseScore, tailored: result.score.overall, reason: "" };
-  }, [result, resumeText, combinedJobText]);
-
-  const blockStats = useMemo(() => {
-    return resumeBlocks.reduce(
-      (stats, block) => {
-        stats[block.kind] += 1;
-        return stats;
-      },
-      { contact: 0, section: 0, bullet: 0, text: 0 } as Record<ResumeBlockKind, number>
-    );
-  }, [resumeBlocks]);
+  // Every score/diff/match derivation the UI shows is pure (read-only) and lives
+  // in useResumeAnalysis, so it stays decoupled from App's setters.
+  const {
+    currentAnalysis,
+    resumeBulletCount,
+    matchBreakdown,
+    resumeDiff,
+    fitComparison,
+    blockStats,
+    scoreSource,
+    headlineScore,
+    scoreContext,
+    resultSourceLabel
+  } = useResumeAnalysis({
+    resumeText,
+    combinedJobText,
+    debouncedResumeText,
+    debouncedCombinedJobText,
+    result,
+    resumeBlocks
+  });
 
   // ----- Derived (non-memo) -----
-  const scoreSource = result ?? currentAnalysis;
-  // Headline FIT: the tailored score from the comparison (AI when present, else
-  // local/restored), falling back to the live-draft local overall. Same 0-100
-  // scale either way. Derived from fitComparison so headline, hero, and tab
-  // badge can never disagree.
-  const headlineScore = fitComparison?.tailored ?? scoreSource?.score.overall ?? null;
-  const scoreContext = fitComparison?.source === "ai"
-    ? "AI-judged fit (tailored)"
-    : result
-    ? "Polished resume score"
-    : currentAnalysis
-    ? "Live draft score"
-    : "Awaiting resume and job target";
-  const resultSourceLabel = result?.source === "local" ? "Local engine" : result?.source === "ai" ? "AI" : "";
   const resumeReady = resumeText.trim().length > 80;
   const resumeSourceFormat = describeResumeFormat(fileName, Boolean(sourceDocx), resumeText);
   const jobReady = jobDescription.trim().length > 40;
@@ -551,6 +514,14 @@ function App() {
             customModel,
             cliReasoningEffort
           }),
+          ...buildAuditRequestFields({
+            auditProvider,
+            auditApiKey,
+            auditApiBaseUrl,
+            auditSelectedModel,
+            auditCustomModel,
+            auditCliReasoningEffort
+          }),
           resumeText,
           jobText: jobDescription,
           preserveFormat,
@@ -633,25 +604,6 @@ function App() {
     setTexStatus("");
   }
 
-  function handleProviderChange(value: AiProviderValue) {
-    const option = providerOptions.find((item) => item.value === value);
-    setAiProvider(value);
-    setApiBaseUrl(option?.baseUrl ?? "");
-    setSelectedModel(option?.model ?? "");
-    setCliReasoningEffort("");
-    setCustomModel("");
-  }
-
-  function findApplicationForTarget(targetUrl: string, targetDescription: string) {
-    const trimmedUrl = targetUrl.trim();
-    const trimmedDescription = targetDescription.trim();
-    return trimmedUrl
-      ? applications.find((a) => a.jobUrl.trim() === trimmedUrl)
-      : applications.find(
-          (a) => !a.jobUrl.trim() && trimmedDescription && (a.jobDescription ?? "").trim() === trimmedDescription
-        );
-  }
-
   async function handleExtractFromLink() {
     const url = jobUrl.trim();
     if (!url || isExtractingLink) return;
@@ -696,79 +648,6 @@ function App() {
     setActiveOutputTab("resume");
   }
 
-  async function handleGenerateAnswers({
-    questions,
-    includeRoleDescriptions
-  }: {
-    questions: string[];
-    includeRoleDescriptions: boolean;
-  }) {
-    setIsGeneratingAnswers(true);
-    setAnswersStatus("Drafting application answers...");
-    try {
-      const response = await fetch("/api/application-answers", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...buildAiRequestFields({
-            aiProvider,
-            apiKey,
-            apiBaseUrl,
-            selectedModel,
-            customModel,
-            cliReasoningEffort
-          }),
-          resumeText,
-          jobText: jobDescription,
-          honestContext,
-          customInstructions,
-          questions,
-          includeRoleDescriptions
-        })
-      });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error ?? "Could not generate answers.");
-      setAnswersResult({
-        answers: Array.isArray(data.answers) ? data.answers : [],
-        roleDescriptions: Array.isArray(data.roleDescriptions) ? data.roleDescriptions : []
-      });
-      const count = Array.isArray(data.answers) ? data.answers.length : 0;
-      setAnswersStatus(
-        `Drafted ${count} answer${count === 1 ? "" : "s"}${data.model ? ` using ${data.model}` : ""}. Fill in any [add: …] placeholders before sending.`
-      );
-    } catch (error) {
-      const message = error instanceof Error ? error.message.replace(/[.。]\s*$/, "") : "request failed";
-      setAnswersStatus(`Could not generate answers: ${message}.`);
-    } finally {
-      setIsGeneratingAnswers(false);
-    }
-  }
-
-  function handleSaveAnswers(items: { question: string; answer: string }[]) {
-    if (!items.length) return;
-    if (!jobUrl.trim() && !jobDescription.trim()) {
-      setAnswersStatus("Add a job link or description before saving answers to the pipeline.");
-      return;
-    }
-    const now = new Date().toISOString();
-    const saved = items.map((it) => ({ question: it.question, answer: it.answer, savedAt: now }));
-    const existing = findApplicationForTarget(jobUrl, jobDescription);
-    if (existing) {
-      const byQuestion = new Map<string, { question: string; answer: string; savedAt: string }>();
-      for (const a of existing.applicationAnswers ?? []) byQuestion.set(a.question, a);
-      for (const a of saved) byQuestion.set(a.question, a);
-      upsertApplication({ ...existing, applicationAnswers: Array.from(byQuestion.values()) });
-      setAnswersStatus(`Saved ${saved.length} answer${saved.length === 1 ? "" : "s"} to "${existing.title}" in the pipeline.`);
-      return;
-    }
-    const app: Application = {
-      ...makeApplicationDraft(jobUrl, jobDescription),
-      applicationAnswers: saved
-    };
-    upsertApplication(app);
-    setAnswersStatus(`Saved ${saved.length} answer${saved.length === 1 ? "" : "s"} to a new pipeline entry, "${app.title}".`);
-  }
-
   function handleTrackInPipeline(resumeUsed: "tailored" | "base" = "tailored") {
     if (!jobUrl.trim() && !jobDescription.trim()) return;
     const sr = result?.strictReview;
@@ -776,7 +655,7 @@ function App() {
     // original/base resume the user submitted instead.
     const usedBase = resumeUsed === "base" || !result?.polishedText;
     const sentResume = usedBase ? resumeText : result?.polishedText ?? "";
-    const existing = findApplicationForTarget(jobUrl, jobDescription);
+    const existing = findForTarget(jobUrl, jobDescription);
     const draft = makeApplicationDraft(jobUrl, jobDescription);
     const app: Application = {
       ...draft,
@@ -818,22 +697,6 @@ function App() {
     setTexStatus(`Tracked "${existing?.title || app.title}" in the pipeline (${usedBase ? "original" : "tailored"} resume).`);
     setActiveOutputTab("pipeline");
     setExpandedApplicationId(existing?.id ?? app.id);
-  }
-
-  function missingRequiredSkillsFromApplication(app: Application): MissingRequiredSkill[] | undefined {
-    if (app.missingRequiredSkills?.length) return app.missingRequiredSkills;
-    const derived = app.review?.gaps
-      ?.filter((gap) => gap.gap)
-      .map((gap) => {
-        const evidenceType = gap.evidenceType ?? (gap.canHonestlyAdd ? "exact" : "none");
-        return {
-          keyword: gap.gap,
-          evidenceType,
-          canHonestlyAdd: evidenceType === "exact" && Boolean(gap.canHonestlyAdd),
-          reason: gap.evidence || gap.suggestedEdit || (gap.severity ? `${gap.severity} gap` : "")
-        };
-      });
-    return derived?.length ? derived : undefined;
   }
 
   function handleLoadApplication(app: Application) {
@@ -908,6 +771,22 @@ function App() {
             setCustomModel={setCustomModel}
             cliReasoningEffort={cliReasoningEffort}
             setCliReasoningEffort={setCliReasoningEffort}
+            reviewer={
+              <ReviewerSettings
+                auditProvider={auditProvider}
+                onAuditProviderChange={handleAuditProviderChange}
+                auditApiKey={auditApiKey}
+                setAuditApiKey={setAuditApiKey}
+                auditApiBaseUrl={auditApiBaseUrl}
+                setAuditApiBaseUrl={setAuditApiBaseUrl}
+                auditSelectedModel={auditSelectedModel}
+                setAuditSelectedModel={setAuditSelectedModel}
+                auditCustomModel={auditCustomModel}
+                setAuditCustomModel={setAuditCustomModel}
+                auditCliReasoningEffort={auditCliReasoningEffort}
+                setAuditCliReasoningEffort={setAuditCliReasoningEffort}
+              />
+            }
           />
         }
         polishControl={

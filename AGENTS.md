@@ -153,8 +153,11 @@ File-size guidance:
 - About 300 LOC for hand-written files is a soft target, not a rule.
 - Above about 400 LOC, either justify cohesion or propose a focused split if
   the task already touches that file.
-- `src/App.tsx` and `src/resumeEngine.ts` are already over the target; treat
-  continued growth as a prompt to extract focused helpers when touching them.
+- `src/App.tsx` is already over the target; treat continued growth as a prompt
+  to extract focused hooks/helpers when touching it. (`src/resumeEngine.ts` is
+  now a thin barrel re-exporting the focused modules under `src/resume/`, and
+  the `/api/polish` flow is split across `server/ai/*` — keep new logic in those
+  focused modules rather than regrowing a single file.)
 
 ---
 

@@ -94,7 +94,8 @@ This folder is gitignored except its README. Personal resumes, TEX/PDF/DOCX expo
 ```
 server.mjs                       # main HTTP server
 server/
-  ai/polish.mjs                  # provider routing + prompt assembly
+  ai/                            # /api/polish split: polish (route) + providers, clients,
+                                 #   prompts, sanitize, json, errors + applicationAnswers
   ai-cli/index.mjs               # Claude Code / Codex / Gemini CLI (Antigravity) shell-out
   applications/index.mjs         # pipeline tracker storage
   docx.mjs                       # DOCX import/export helpers
@@ -104,11 +105,12 @@ server/
 src/
   App.tsx                        # state + handlers + composition
   config/aiOptions.ts            # provider/model/reasoning options
-  hooks/                          # templates, applications, resume export, and small workflow hooks
+  hooks/                          # templates, applications, resume export/analysis, AI settings, answers
   lib/                           # downloads, job extraction/distilling, resume format/block + LaTeX→HTML render helpers
   sections/                      # Masthead / SourcesPane / StudioPane / ExportRail / ResumeDocument / ResumePrintLayer
   sections/tabs/                 # Resume / Review / StrictReview / Questions / CoverLetter / Pipeline
-  resumeEngine.ts                # scoring + analysis + deterministic local fallback
+  resume/                        # resume engine split: types, text, keywords, scoring, rewrite, diff
+  resumeEngine.ts                # barrel re-exporting src/resume/* (scoring/analysis/deterministic fallback)
   styles/                        # per-surface CSS + shared tokens
 docs/engineering/                # contributor notes (server, UI, git workflow, testing)
 job-search-workspace/            # local-only; gitignored except README

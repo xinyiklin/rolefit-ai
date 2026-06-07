@@ -82,7 +82,10 @@ export async function compileTexToPdf(tex) {
   try {
     await writeFile(inputPath, makeXetexSafe(tex), "utf8");
     await new Promise((resolve, reject) => {
-      const child = spawn("tectonic", ["-X", "compile", "--keep-logs", "--outdir", workdir, inputPath], {
+      // --untrusted disables shell-escape AND restricts \input/\openin/\openout
+      // to the input's directory, so a crafted resume (esp. the client rawTex
+      // path) can't read local files like .env into the compiled PDF.
+      const child = spawn("tectonic", ["-X", "compile", "--untrusted", "--keep-logs", "--outdir", workdir, inputPath], {
         stdio: ["ignore", "pipe", "pipe"]
       });
       let stderr = "";

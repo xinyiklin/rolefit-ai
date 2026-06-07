@@ -5,15 +5,10 @@
 // from polish.mjs so answers follow the same anti-fabrication guarantees.
 
 import { FetchTimeoutError, readBody, sendJson } from "../http.mjs";
-import {
-  UserSafeAiError,
-  accomplishmentStyleRules,
-  callConfiguredProvider,
-  honestTailoringRules,
-  inputFirewallRule,
-  resolveProviderRequest,
-  safeConfigErrorMessage
-} from "./polish.mjs";
+import { UserSafeAiError, safeConfigErrorMessage } from "./errors.mjs";
+import { resolveProviderRequest } from "./providers.mjs";
+import { accomplishmentStyleRules, honestTailoringRules, inputFirewallRule } from "./prompts.mjs";
+import { callConfiguredProvider } from "./clients.mjs";
 
 function applicationAnswersSystemPrompt() {
   return `You help a job seeker draft answers to the supplemental free-text questions on a job application (for example "Why do you want to work here?", "Why this role?", "What makes you a strong fit?"), plus a short description of each past role for per-experience form fields.

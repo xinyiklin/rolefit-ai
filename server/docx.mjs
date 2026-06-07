@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
@@ -132,6 +132,23 @@ export function assertSafeZipEntries(listing) {
   }
 }
 
+// Walk the unpacked tree and reject any symlink. The entry-name check
+// (assertSafeZipEntries) can't see this: a zip entry can carry an innocuous
+// name like `word/link` while its content is a symlink target pointing outside
+// the unpack dir, which `unzip -Z1` does not reveal. readdir(withFileTypes) uses
+// lstat semantics, so it flags links without following them.
+async function assertNoSymlinks(dir) {
+  const entries = await readdir(dir, { withFileTypes: true });
+  for (const entry of entries) {
+    if (entry.isSymbolicLink()) {
+      throw new Error("Archive contains a symbolic link entry.");
+    }
+    if (entry.isDirectory()) {
+      await assertNoSymlinks(join(dir, entry.name));
+    }
+  }
+}
+
 export async function withUnpackedDocx(docxBase64, callback) {
   const workspace = await mkdtemp(join(tmpdir(), "resume-polisher-docx-"));
   const sourcePath = join(workspace, "source.docx");
@@ -142,6 +159,9 @@ export async function withUnpackedDocx(docxBase64, callback) {
     const { stdout: listing } = await execFileAsync("unzip", ["-Z1", sourcePath]);
     assertSafeZipEntries(listing);
     await execFileAsync("unzip", ["-qq", sourcePath, "-d", unpackedPath]);
+    // Reject symlinks before any read/repack so a crafted archive can't read or
+    // write outside the temp workspace by following a planted link.
+    await assertNoSymlinks(unpackedPath);
     return await callback({ workspace, unpackedPath });
   } finally {
     await rm(workspace, { recursive: true, force: true });

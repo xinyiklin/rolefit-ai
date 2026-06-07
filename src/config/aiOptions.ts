@@ -102,7 +102,6 @@ export const modelOptionsByProvider: Record<AiProviderValue, readonly ModelOptio
     { value: "", label: "CLI subscription default" },
     { value: "gpt-5.5", label: "GPT-5.5" },
     { value: "gpt-5.4", label: "GPT-5.4" },
-    { value: "o3", label: "o3" },
     customModelIdOption
   ],
   "gemini-cli": [
