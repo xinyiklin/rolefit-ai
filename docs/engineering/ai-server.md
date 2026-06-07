@@ -22,7 +22,12 @@ careflow `5173-5180`, portfolio `5184-5185`; do not mix them up.
 - `/api/polish` AI provider routing — subscription CLIs (Claude Code,
   Codex CLI, Gemini CLI / Antigravity) shelled out to local subprocesses,
   plus hosted APIs (OpenAI, Anthropic, Google, OpenRouter, Groq,
-  Together AI, Mistral, OpenAI-compatible)
+  Together AI, Mistral, OpenAI-compatible). The route is intentionally
+  multi-pass: rewrite first, strict recruiter audit second when enabled,
+  and cover letter third only when requested, so one model response is not
+  forced to rewrite, score, audit, and draft a letter at the same time.
+  Audit and cover-letter passes use clipped copies of very long documents
+  to keep those follow-up prompts inside a predictable context budget.
 - DOCX import / export (text extraction, format-preserved updates)
 - job posting import (`/api/import-job`): fetch a public posting URL —
   Workday CXS JSON when the host is recognized (`*.myworkdayjobs.com`,
@@ -97,6 +102,8 @@ The AI must:
   missing required skills as gaps instead
 - add bracketed placeholders where facts or metrics are missing
 - return copy-ready resume text plus concise strengths and fixes
+- keep strict review as an audit of the original resume plus polished
+  resume, not as a second full rewrite
 
 The deterministic local rewrite in `src/resumeEngine.ts` must remain
 the fallback when the AI call cannot run.

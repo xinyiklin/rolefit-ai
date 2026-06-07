@@ -27,6 +27,10 @@ Good server verification covers:
 - prompt-honesty changes prove that JD-only skills are not injected into
   the polished resume; when possible, use a synthetic missing-skill case
   such as a no-Kubernetes resume against a Kubernetes-required JD
+- live prompt-eval changes can use
+  `EVAL_MODE=both node server/ai/__evals__/fabrication-eval.mjs` to check
+  strict-review and regular-polish modes, including one exact-evidence
+  positive case from honest context
 - the deterministic local rewrite still runs when the AI call cannot
 - DOCX import / export roundtrips do not corrupt the format
 - `job-search-workspace/` reads / writes stay inside the workspace

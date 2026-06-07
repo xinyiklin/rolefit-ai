@@ -278,7 +278,8 @@ const STOP_WORDS = new Set([
   "your"
 ]);
 
-const hasMetric = (text: string) => /(\d+%|\$\d+|\d+x|\d+\+|\b\d{2,}\b|hours?|days?|weeks?|months?)/i.test(text);
+const hasMetric = (text: string) =>
+  /(\$\s?\d+|\d+(?:\.\d+)?\s*%|\d+(?:\.\d+)?\s*(?:percent|x|k|m|tb|gb|mb)\b|\d+\+|\d+(?:\.\d+)?\s+(?:\w+\s+){0,2}(?:users?|requests?|records?|models?|endpoints?|apps?|patients?|facilities?|hours?|days?|weeks?|months?|ms|milliseconds?|seconds?|minutes?)\b)/i.test(text);
 const isBullet = (line: string) => /^\s*[-*•]\s+/.test(line);
 const stripBullet = (line: string) => line.replace(/^\s*[-*•]\s+/, "").trim();
 const startsWithAction = (text: string) => ACTION_VERBS.includes(text.trim().split(/\s+/)[0]?.toLowerCase() ?? "");
