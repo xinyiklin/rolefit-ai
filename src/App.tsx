@@ -8,7 +8,7 @@ import {
   polishResume
 } from "./resumeEngine";
 
-import { roleAppliedOptions } from "./config/aiOptions";
+import { describeProviderModel, roleAppliedOptions } from "./config/aiOptions";
 import { useTemplates } from "./hooks/useTemplates";
 import { useDebouncedValue } from "./hooks/useDebouncedValue";
 import { useAiSettings } from "./hooks/useAiSettings";
@@ -546,6 +546,12 @@ function App() {
         ? String(data.polishedText).trim()
         : normalizePolishedResume(data.polishedText, resumeText);
       const analysis = analyzeResumeText(polishedText, combinedJobText);
+      // Reviewer attribution: only when a DIFFERENT provider/model ran the audit
+      // (an override). The server echoes the audit identity when strict review ran.
+      const reviewedBy =
+        data.auditProvider && (data.auditProvider !== data.provider || (data.auditModel || "") !== (data.model || ""))
+          ? describeProviderModel(data.auditProvider, data.auditModel)
+          : "";
       setResult({
         ...analysis,
         polishedText,
@@ -557,11 +563,14 @@ function App() {
         fixes: data.fixes?.length ? data.fixes : fallback.fixes,
         missingRequiredSkills: data.missingRequiredSkills?.length ? data.missingRequiredSkills : undefined,
         aiScore: data.aiScore ?? undefined,
-        strictReview: data.strictReview ?? undefined
+        strictReview: data.strictReview ?? undefined,
+        reviewedBy: reviewedBy || undefined
       });
       setActiveOutputTab(strictReview && data.strictReview ? "strict" : "resume");
       setPolishStatus(
-        `${strictReview ? "Strict review" : "AI polish"} complete${data.model ? ` using ${data.model}` : ""}.`
+        reviewedBy
+          ? `Strict review complete — polished with ${describeProviderModel(data.provider, data.model)}, reviewed by ${reviewedBy}.`
+          : `${strictReview ? "Strict review" : "AI polish"} complete${data.model ? ` using ${data.model}` : ""}.`
       );
     } catch (error) {
       setResult(fallback);

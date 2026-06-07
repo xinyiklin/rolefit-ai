@@ -100,6 +100,9 @@ export type PolishedResume = {
   missingRequiredSkills?: MissingRequiredSkill[];
   trimmedBulletGroups: number;
   strictReview?: StrictReview;
+  // Friendly label of the independent reviewer that ran the strict audit, set
+  // only when it differs from the rewrite provider (i.e. an audit override).
+  reviewedBy?: string;
 };
 
 export type ResumeAnalysis = Omit<PolishedResume, "polishedText" | "strengths" | "fixes">;

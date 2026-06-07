@@ -423,6 +423,14 @@
   line-height: 1.5;
 }
 
+/* Independent-reviewer attribution, shown only on an audit override. */
+.strict-verdict__reviewer {
+  color: var(--ink-soft);
+  font-size: 0.74rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
 .strict-verdict__rec {
   display: grid;
   gap: var(--s3);
