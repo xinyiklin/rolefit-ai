@@ -27,7 +27,12 @@ careflow `5173-5180`, portfolio `5184-5185`; do not mix them up.
   and cover letter third only when requested, so one model response is not
   forced to rewrite, score, audit, and draft a letter at the same time.
   Audit and cover-letter passes use clipped copies of very long documents
-  to keep those follow-up prompts inside a predictable context budget.
+  to keep those follow-up prompts inside a predictable context budget. The
+  audit pass can optionally use an *independent reviewer* provider/model
+  (request `audit*` fields, resolved by `resolveAuditProviderRequest`); when
+  unset it reuses the primary config. The rewrite and cover-letter passes
+  always use the primary provider — only the non-rewriting audit can differ,
+  so a reviewer model can never alter the format-preserved resume output.
 - DOCX import / export (text extraction, format-preserved updates)
 - job posting import (`/api/import-job`): fetch a public posting URL —
   Workday CXS JSON when the host is recognized (`*.myworkdayjobs.com`,
@@ -48,6 +53,25 @@ When a workflow grows, split it into focused helpers (file readers,
 provider clients, request handlers) rather than packing more code into
 one large route.
 
+The `/api/polish` flow follows that rule — it is split across focused
+modules under `server/ai/` so no single file carries the whole pipeline:
+
+- `polish.mjs` — the `handlePolish` route (request parsing, the
+  rewrite → audit → cover orchestration, response assembly) only.
+- `providers.mjs` — provider identity + per-request config resolution
+  (`normalizeProvider`, default provider/model, key/base-URL lookup,
+  `resolveProviderRequest`, `resolveAuditProviderRequest`).
+- `clients.mjs` — the outbound provider clients (OpenAI Responses,
+  OpenAI-compatible chat, Anthropic Messages, Gemini) and the
+  `callConfiguredProvider` dispatch.
+- `prompts.mjs` — every system/user prompt and the shared
+  honest-tailoring / anti-fabrication rule helpers (also imported by
+  `applicationAnswers.mjs`).
+- `sanitize.mjs` — fit-score and missing-skill response validation.
+- `json.mjs` — `parseAiJson` (fenced / prose-wrapped / outermost-brace
+  + trailing-comma repair). `errors.mjs` — `UserSafeAiError` and the
+  config-error → 400 mapping.
+
 ## API Design
 
 - Keep API routes explicit and local-only. There is no auth layer
@@ -63,12 +87,15 @@ one large route.
 ## AI Provider Layer
 
 The provider is chosen per request (top-bar AI menu) or via `AI_PROVIDER`;
-absent that, the server falls back to the OpenAI Responses API with default
-model `gpt-5.5` (`AI_MODEL` / `OPENAI_MODEL` override) — so the technical
-default provider is OpenAI. For **zero per-token cost**, the recommended path
-is the subscription CLIs (Claude Code, Codex CLI, Gemini CLI / Antigravity),
-a preferred opt-in (set `AI_PROVIDER` or pick one in the AI menu) that uses
-existing subscriptions instead of API billing.
+absent that, the server defaults to the **Claude Code CLI** (`claude-cli`) — a
+**zero per-token cost** subscription path — not a hosted API
+(`getDefaultProvider()` in `server/ai/providers.mjs`). Setting `AI_PROVIDER`
+(or picking a provider in the AI menu) overrides this; an *unknown*
+`AI_PROVIDER` still coerces to OpenAI, and `AI_MODEL` / `OPENAI_MODEL` select
+the OpenAI model (`gpt-5.5` default). The other subscription CLIs (Codex CLI,
+Gemini CLI / Antigravity) are the same zero-cost path for their vendors. The
+frontend already defaults to `claude-cli`, so this only affects the
+headless / no-provider request path.
 
 Per-provider rules:
 
@@ -76,11 +103,19 @@ Per-provider rules:
   shell out to local subprocesses via `server/ai-cli/` using your existing
   subscription auth — no API key, no per-token cost.
 - Use each provider's native API (Anthropic Messages, Gemini
-  `generateContent`) where supported.
+  `generateContent`) where supported. The Anthropic Messages call sends
+  **no `temperature`** and **no trailing assistant prefill**: both return
+  a 400 on the current models this app offers (`temperature` is removed on
+  Opus 4.7/4.8; a last-assistant-turn prefill is rejected on Sonnet 4.6 and
+  Opus 4.6+). JSON is enforced by the "return strict JSON only" prompt plus
+  `parseAiJson`, not by prefilling `{`.
 - Use compatible `/chat/completions` endpoints for OpenRouter, Groq,
   Together AI, Mistral, and Local/custom.
 - Accept one-request `apiKey`, `provider`, `apiBaseUrl`, and `model`
-  values from the UI for ad-hoc use, but do not persist them.
+  values from the UI for ad-hoc use, but do not persist them. The optional
+  reviewer override accepts the parallel `auditProvider`, `auditApiKey`,
+  `auditApiBaseUrl`, `auditModel`, and `auditReasoningEffort` fields; the
+  reviewer API key is likewise never persisted.
 - Allow `.env` to set provider-specific keys (`OPENAI_API_KEY`,
   `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `OPENROUTER_API_KEY`,
   `GROQ_API_KEY`, `TOGETHER_API_KEY`, `MISTRAL_API_KEY`, `AI_API_KEY`)

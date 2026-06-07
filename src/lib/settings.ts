@@ -10,6 +10,14 @@ export type PersistedSettings = {
   customModel?: string;
   cliReasoningEffort?: string;
   apiBaseUrl?: string;
+  // Optional independent reviewer for the strict-audit pass. Empty/absent
+  // auditProvider means "same as primary". The reviewer API key, like the
+  // primary key, is never persisted.
+  auditProvider?: AiProviderValue;
+  auditSelectedModel?: string;
+  auditCustomModel?: string;
+  auditCliReasoningEffort?: string;
+  auditApiBaseUrl?: string;
   roleAppliedAs?: string;
   honestContext?: string;
   customInstructions?: string;
@@ -37,6 +45,20 @@ function coerce(settings: PersistedSettings): PersistedSettings {
       const fallback = providerOptions.find((option) => option.value === settings.aiProvider)?.model;
       if (fallback) settings.selectedModel = fallback;
       else delete settings.selectedModel;
+    }
+  }
+  // Same staleness guard for the optional reviewer provider/model.
+  if (settings.auditProvider && !validProviders.has(settings.auditProvider)) {
+    delete settings.auditProvider;
+    delete settings.auditSelectedModel;
+    delete settings.auditCliReasoningEffort;
+  }
+  if (settings.auditProvider && settings.auditSelectedModel && settings.auditSelectedModel !== "custom") {
+    const models = modelOptionsByProvider[settings.auditProvider] ?? [];
+    if (!models.some((model) => model.value === settings.auditSelectedModel)) {
+      const fallback = providerOptions.find((option) => option.value === settings.auditProvider)?.model;
+      if (fallback) settings.auditSelectedModel = fallback;
+      else delete settings.auditSelectedModel;
     }
   }
   return settings;

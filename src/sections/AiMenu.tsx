@@ -1,4 +1,5 @@
 import { KeyRound, Sparkles } from "lucide-react";
+import type { ReactNode } from "react";
 import {
   cliReasoningEffortOptionsByProvider,
   modelOptionsByProvider,
@@ -20,6 +21,9 @@ type AiMenuProps = {
   setCustomModel: (v: string) => void;
   cliReasoningEffort: string;
   setCliReasoningEffort: (v: string) => void;
+  // Optional reviewer (strict-audit) provider controls, rendered below the
+  // primary provider. The primary handles rewrite + cover letter.
+  reviewer?: ReactNode;
 };
 
 const OPENAI_COMPATIBLE = ["openrouter", "groq", "together", "mistral", "local"];
@@ -36,7 +40,8 @@ export function AiMenu({
   customModel,
   setCustomModel,
   cliReasoningEffort,
-  setCliReasoningEffort
+  setCliReasoningEffort,
+  reviewer
 }: AiMenuProps) {
   const selectedProviderOption = providerOptions.find((option) => option.value === aiProvider);
   const currentModelOptions = modelOptionsByProvider[aiProvider] ?? [];
@@ -144,6 +149,8 @@ export function AiMenu({
       <p className="micro-status">
         Claude and Gemini use their native APIs. OpenRouter / Groq / Together / Mistral / local use OpenAI-compatible <code>/chat/completions</code>.
       </p>
+
+      {reviewer}
     </NavMenu>
   );
 }

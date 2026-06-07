@@ -623,6 +623,14 @@ select,
   line-height: 1.4;
 }
 
+/* Reviewer (strict-audit) override block in the AI menu, set off from the
+   primary provider controls above it. */
+.reviewer-settings {
+  margin-top: var(--s3);
+  padding-top: var(--s3);
+  border-top: 1px solid var(--hairline-soft);
+}
+
 .micro-status code {
   font-family: var(--font-mono);
   font-size: 0.78rem;

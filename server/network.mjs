@@ -1,6 +1,7 @@
+import { request as httpRequest } from "node:http";
+import { request as httpsRequest } from "node:https";
 import { lookup as dnsLookup } from "node:dns/promises";
-
-import { fetchWithTimeout } from "./http.mjs";
+import { createBrotliDecompress, createGunzip, createInflate } from "node:zlib";
 
 export class BlockedHostError extends Error {}
 export class DnsError extends Error {}
@@ -76,6 +77,9 @@ export async function assertPublicHost(hostname) {
       throw new BlockedHostError("That URL resolves to a private or local address.");
     }
   }
+  // Return the validated addresses so the caller can pin the connection to one
+  // of them instead of letting the HTTP client re-resolve the name (rebinding).
+  return resolved;
 }
 
 export function isPublicHttpUrl(url) {
@@ -114,25 +118,103 @@ export function chatCompletionsEndpoint(rawBaseUrl) {
   return url;
 }
 
-// Fetches a job page, following redirects manually and re-validating the
-// host + resolved IP of every hop. Rejects private/blocked targets instead of
-// auto-following them, so a public URL can't bounce to an internal address.
+const MAX_FETCH_BYTES = 5_000_000;
+
+function decompressResponse(res) {
+  const encoding = String(res.headers["content-encoding"] || "").toLowerCase();
+  if (encoding === "gzip") return res.pipe(createGunzip());
+  if (encoding === "deflate") return res.pipe(createInflate());
+  if (encoding === "br") return res.pipe(createBrotliDecompress());
+  return res;
+}
+
+// Fetch `url`, connecting ONLY to `pinnedAddress` (already validated as public)
+// while keeping the real hostname for the Host header and TLS SNI. This closes
+// the DNS-rebinding TOCTOU: Node's global fetch re-resolves the hostname after
+// validation, so a short-TTL/rebinding host could swap in a private/metadata IP
+// between the check and the connection. Redirects are NOT auto-followed here —
+// fetchPublicHtml re-validates and re-pins each hop. Returns a minimal,
+// fetch-like response ({ status, ok, headers.get, text }).
+function pinnedFetch(url, { headers = {}, timeoutMs = 10_000, pinnedAddress, pinnedFamily }) {
+  const requestFn = url.protocol === "https:" ? httpsRequest : httpRequest;
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const finish = (fn, arg) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      fn(arg);
+    };
+    const req = requestFn(
+      url,
+      {
+        method: "GET",
+        servername: url.protocol === "https:" ? url.hostname : undefined,
+        headers: { "Accept-Encoding": "gzip, deflate, br", ...headers },
+        // Pin DNS to the pre-validated address; never re-resolve the name.
+        // Node's happy-eyeballs path calls lookup with { all: true } and expects
+        // the array form, so support both callback shapes.
+        lookup: (_hostname, options, cb) =>
+          options && options.all
+            ? cb(null, [{ address: pinnedAddress, family: pinnedFamily }])
+            : cb(null, pinnedAddress, pinnedFamily)
+      },
+      (res) => {
+        const stream = decompressResponse(res);
+        const chunks = [];
+        let total = 0;
+        stream.on("data", (chunk) => {
+          if (settled) return;
+          total += chunk.length;
+          if (total > MAX_FETCH_BYTES) {
+            req.destroy();
+            finish(reject, new BlockedHostError("The job page was too large to read."));
+            return;
+          }
+          chunks.push(chunk);
+        });
+        stream.on("end", () => {
+          const body = Buffer.concat(chunks).toString("utf8");
+          const status = res.statusCode ?? 0;
+          finish(resolve, {
+            status,
+            ok: status >= 200 && status < 300,
+            headers: { get: (name) => res.headers[String(name).toLowerCase()] ?? null },
+            text: async () => body
+          });
+        });
+        stream.on("error", (error) => {
+          req.destroy();
+          finish(reject, error);
+        });
+      }
+    );
+    const timer = setTimeout(() => {
+      req.destroy();
+      finish(reject, new BlockedHostError("The job page request timed out."));
+    }, timeoutMs);
+    req.on("error", (error) => finish(reject, error));
+    req.end();
+  });
+}
+
+// Fetches a job page, following redirects manually and re-validating + re-pinning
+// the host's resolved IP on every hop. Rejects private/blocked targets instead
+// of auto-following them, so a public URL can't bounce to an internal address.
 export async function fetchPublicHtml(startUrl, extraHeaders = {}) {
   let current = startUrl;
   for (let hop = 0; hop < 5; hop += 1) {
     if (!isPublicHttpUrl(current)) {
       throw new BlockedHostError("Only public http or https URLs are allowed.");
     }
-    await assertPublicHost(current.hostname);
+    const [pinned] = await assertPublicHost(current.hostname);
 
-    const response = await fetchWithTimeout(
-      current,
-      {
-        headers: { "User-Agent": "Mozilla/5.0 ResumePolisher/0.1", ...extraHeaders },
-        redirect: "manual"
-      },
-      10_000
-    );
+    const response = await pinnedFetch(current, {
+      headers: { "User-Agent": "Mozilla/5.0 ResumePolisher/0.1", ...extraHeaders },
+      timeoutMs: 10_000,
+      pinnedAddress: pinned.address,
+      pinnedFamily: pinned.family
+    });
 
     if (response.status >= 300 && response.status < 400) {
       const location = response.headers.get("location");
