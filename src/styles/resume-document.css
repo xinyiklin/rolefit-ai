@@ -1,34 +1,63 @@
 /* =============================================================
-   Resume document — HTML render of the tailored resume.
-   The same markup is shown in the Resume tab and printed to PDF
-   (PDF · clean = window.print → Save as PDF), so the preview is
-   exactly what prints. Section rules use border-bottom (not a
-   background fill) so they print without "Background graphics".
+   Resume document — print/page styling for the tailored resume.
+   The .resume-doc__* element rules style the text-parsed FALLBACK
+   (ResumeDocument), used only when no structured editor model
+   exists. The on-screen Resume tab and the primary print path
+   render the editor's .rdx-* markup (ResumeEditor /
+   ResumeReadonlyDocument, in resume-editor.css). The shared
+   .resume-doc page wrapper + .resume-print-layer rules below apply
+   to both paths. Section rules use border-bottom (not a background
+   fill) so they print without "Background graphics".
    ============================================================= */
-
-/* Screen: the tailored resume renders as a white "page" filling the pane width
-   within the standard studio-body padding (matching the other output tabs) —
-   no warm tray, no centered max-width card, no edge-to-edge bleed. */
-.resume-doc__viewport {
-  min-width: 0;
-  /* Query container so the document font can scale with the pane width (cqw). */
-  container-type: inline-size;
-}
 
 .resume-doc {
   box-sizing: border-box;
-  width: 100%;
-  /* Font scales with the container (pane) width so the page stays proportionally
-     sized like a real document; everything inside is em-relative to this base. */
-  font-size: clamp(10px, 1.75cqw, 19px);
-  padding: 3.7em 4.3em;
+  --doc-page-border-width: 1px;
+  /* Match the compiled Jake-template PDF's margins in editor coordinates:
+     0.5in (36pt) text margins on all sides. Block padding is tuned so the
+     name BASELINE lands at the PDF's 52.9pt from the page top (padding
+     reaches the top of the name's line box, not its baseline). Em values
+     resolve against the 10.95pt-equivalent base font below. */
+  --doc-page-padding-block: 2.87em;
+  --doc-page-padding-inline: 3.29em;
+  /* Page zoom (Google-Docs style): 100% = a comfortable page at 75% of the pane;
+     width and font scale by the same factor, so the page keeps true letter
+     proportions at any zoom and centers in the pane below ~133%. */
+  width: calc(var(--doc-zoom, 1) * 75%);
+  margin-inline: auto;
+  aspect-ratio: 8.5 / 11;
+  /* Font scales linearly with the pane width (cqw) so the on-screen page tracks
+     the printed page's proportions — 1.342cqw = 1.789% of the page's own width
+     = 10.95pt on a 612pt letter page, the exact \normalsize of the PDF's
+     11pt documentclass. Everything inside is em-relative to this base. No
+     upper cap (the 7px floor only guards tiny panes). */
+  font-size: max(7px, calc(1.342cqw * var(--doc-zoom, 1)));
+  /* Margins ≈ the template's ~0.5in page margins (em-relative, so they scale with
+     the font/width too). */
+  padding: var(--doc-page-padding-block) var(--doc-page-padding-inline);
   background: #ffffff;
-  border: 1px solid var(--hairline);
+  border: var(--doc-page-border-width) solid var(--hairline);
   border-radius: var(--r-md);
   box-shadow: var(--shadow-rest);
   color: #1a1a1a;
-  font-family: "Helvetica Neue", Arial, system-ui, sans-serif;
-  line-height: 1.5;
+  /* Mirror the Jake's-template PDF: Latin Modern / Computer Modern serif when
+     available (TeX installs), otherwise a close old-style serif fallback. */
+  font-family: "Latin Modern Roman", "CMU Serif", "Times New Roman", Times, Georgia, serif;
+  /* User-adjustable leading (Format menu); default mirrors the template. */
+  line-height: var(--doc-line, 1.14);
+}
+
+/* The editable resume flows with its content instead of forcing a fixed page
+   shape — short resumes aren't padded with dead space, long ones aren't clipped.
+   The read-only mirror + print layer keep the page aspect ratio. */
+.resume-doc--editable:not(.resume-doc--paged) {
+  aspect-ratio: auto;
+  /* At least one full letter page; when pagination inserts a second page, reserve
+     the full next sheet instead of ending the white page at the last line. */
+  min-height: calc(
+    (var(--doc-zoom, 1) * 75cqi * 11 / 8.5) * var(--doc-page-count, 1) +
+    (var(--doc-page-count, 1) - 1) * var(--doc-page-gap, 2em)
+  );
 }
 
 /* Blank state is a calm placeholder on the pane background (matching the other
@@ -42,35 +71,39 @@
   line-height: 1.5;
 }
 
+/* Name: Jake's \textbf{\Huge \scshape …} — big, bold, small-caps, centered. */
 .resume-doc__name {
   margin: 0;
   text-align: center;
-  font-size: 1.85em;
+  font-size: 2.25em;
   font-weight: 700;
-  letter-spacing: 0.01em;
-  color: #111111;
+  font-variant: small-caps;
+  letter-spacing: 0;
+  line-height: 1.05;
+  color: #000000;
 }
 
 .resume-doc__contact {
-  margin: 0.3em 0 0;
+  margin: 0.2em 0 0;
   text-align: center;
-  font-size: 0.88em;
-  color: #444444;
+  font-size: 0.9em;
+  color: #1a1a1a;
 }
 
 .resume-doc__section {
-  margin-top: 1.25em;
+  margin-top: 0.62em;
 }
 
+/* Section heading: ALL CAPS with a rule below. */
 .resume-doc__heading {
-  margin: 0 0 0.5em;
-  padding-bottom: 0.25em;
-  border-bottom: 1px solid #333333;
-  font-size: 0.92em;
+  margin: 0 0 0.16em;
+  padding-bottom: 0.05em;
+  border-bottom: 1px solid #000000;
+  font-size: 1.02em;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: #111111;
+  letter-spacing: 0.04em;
+  color: #000000;
 }
 
 .resume-doc__role {
@@ -78,31 +111,31 @@
   justify-content: space-between;
   align-items: baseline;
   gap: 0.9em;
-  margin-top: 0.6em;
+  margin-top: 0.18em;
   font-size: 1em;
   font-weight: 700;
-  color: #111111;
+  color: #000000;
 }
 
 .resume-doc__role-right {
   flex: 0 0 auto;
-  font-weight: 600;
+  font-weight: 400;
   white-space: nowrap;
-  color: #333333;
+  color: #000000;
 }
 
 .resume-doc__para {
-  margin: 0.3em 0 0;
+  margin: 0.12em 0 0;
 }
 
 .resume-doc__bullets {
-  margin: 0.3em 0 0;
+  margin: 0.08em 0 0;
   padding-left: 1.4em;
   list-style: disc;
 }
 
 .resume-doc__bullets li {
-  margin: 0.15em 0 0;
+  margin: 0.04em 0 0;
 }
 
 /* Off-screen by default — the print layer exists only to be printed. */
@@ -136,6 +169,7 @@
      flush. The PDF page is a fixed size, so the base font is fixed (not the
      screen's width-scaling clamp); the em-based internals scale off it. */
   .resume-print-layer .resume-doc {
+    aspect-ratio: auto;
     width: auto;
     max-width: none;
     margin: 0;
@@ -148,6 +182,12 @@
     line-height: 1.4;
   }
 
+  /* The structured-editor mirror keeps the editor's own leading (user-set via the
+     Format menu) so the printed page matches what you edit on screen. */
+  .resume-print-layer .resume-doc--readonly {
+    line-height: var(--doc-line, 1.18);
+  }
+
   /* Keep roles, bullets, and a heading + its first lines from splitting across
      a page boundary. */
   .resume-doc__role,
@@ -156,6 +196,20 @@
   }
 
   .resume-doc__heading {
+    break-after: avoid;
+  }
+
+  /* Structured-editor mirror: match the editor's pagination policy — standard
+     entries may split between bullets, while individual bullets, skill rows,
+     and summary paragraphs stay atomic. */
+  .resume-print-layer .rdx-skills-row,
+  .resume-print-layer .rdx-summary-row,
+  .resume-print-layer .rdx-bullet {
+    break-inside: avoid;
+  }
+
+  .resume-print-layer .rdx-entry__head,
+  .resume-print-layer .rdx-section__head {
     break-after: avoid;
   }
 }

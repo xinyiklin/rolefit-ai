@@ -85,6 +85,30 @@ export type StrictReview = {
   recommendation: StrictReviewRecommendation;
 };
 
+export type TailorChangeField = "bullet" | "skill" | "titleLeft" | "titleRight" | "subtitleLeft" | "subtitleRight";
+
+export type TailorChangeRisk = "low" | "medium" | "high";
+
+export type TailorChangeTarget = {
+  sectionId: string;
+  entryId?: string;
+  bulletId?: string;
+  field: TailorChangeField;
+};
+
+export type TailorSuggestion = {
+  id: string;
+  target: TailorChangeTarget;
+  sectionHeading: string;
+  currentText: string;
+  proposedText: string;
+  reason: string;
+  evidenceType: EvidenceType;
+  evidence: string;
+  hits: string[];
+  risk: TailorChangeRisk;
+};
+
 export type PolishedResume = {
   polishedText: string;
   coverLetterText?: string;
@@ -97,7 +121,11 @@ export type PolishedResume = {
   missingKeywords: string[];
   strengths: string[];
   fixes: string[];
+  // 1-3 bullets from the AI describing what changed (or why nothing needed
+  // changing). Absent on local-engine results (which still produce strengths/fixes).
+  changeSummary?: string[];
   missingRequiredSkills?: MissingRequiredSkill[];
+  suggestedChanges?: TailorSuggestion[];
   trimmedBulletGroups: number;
   strictReview?: StrictReview;
   // Friendly label of the independent reviewer that ran the strict audit, set

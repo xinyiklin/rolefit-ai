@@ -154,12 +154,21 @@ function removeSections(lines: string[], labels: Set<string>) {
 }
 
 function buildSummary(keywords: string[], resumeText: string) {
+  // Strictly evidence-bounded: the only facts we may assert are skills that
+  // appear in BOTH the source resume and the job keywords (a real
+  // resume↔JD overlap). Never hardcode an academic credential or a concrete
+  // skill list — for a non-CS / non-web candidate that fabricates both a degree
+  // and specific technical experience. With no derivable evidence, emit a
+  // bracketed placeholder the user fills in rather than a fabricated claim.
   const matched = keywords.filter((keyword) => includesKeyword(resumeText, keyword)).slice(0, 7);
-  const skills = matched.length > 0 ? matched.map(titleCase).join(", ") : "React, TypeScript, APIs, debugging, and project delivery";
+  if (matched.length === 0) {
+    return ["SUMMARY", "[add summary: your background and target role]"];
+  }
 
+  const skills = matched.map(titleCase).join(", ");
   return [
     "SUMMARY",
-    `Computer Science graduate targeting entry-level full-stack and SDE roles, with hands-on project experience across ${skills}. Focused on clear user experiences, dependable APIs, and maintainable code grounded in truthful project evidence.`
+    `Targeting the role with hands-on experience across ${skills}, grounded in truthful project evidence.`
   ];
 }
 
@@ -225,7 +234,7 @@ export function draftCoverLetter(resumeText: string, jobText: string, polishedTe
   const matchedKeywords = jobKeywords.filter((keyword) => includesKeyword(polishedText, keyword)).slice(0, 5);
   const skillLine = matchedKeywords.length
     ? matchedKeywords.map(titleCase).join(", ")
-    : "full-stack development, APIs, debugging, and practical software projects";
+    : "[add 2-3 relevant skills]";
   const evidenceBullets = polishedText
     .split("\n")
     .filter(isBullet)
@@ -235,7 +244,7 @@ export function draftCoverLetter(resumeText: string, jobText: string, polishedTe
   const evidenceLine =
     evidenceBullets.length > 0
       ? `Two examples I would bring to the role are: ${evidenceBullets.join("; ")}.`
-      : "My project work gives me practical experience turning requirements into usable software while continuing to build depth as an entry-level engineer.";
+      : "My project work gives me practical experience turning requirements into working software.";
 
   return [
     candidateName,
@@ -246,13 +255,13 @@ export function draftCoverLetter(resumeText: string, jobText: string, polishedTe
     "",
     "Dear [Hiring manager],",
     "",
-    `I am applying for the [role title] role at [Company]. I am a Computer Science graduate focused on entry-level SDE and full-stack work, and my project experience aligns with the role through ${skillLine}.`,
+    `I am applying for the [role title] role at [Company]. My background is [add your background], and my project experience aligns with the role through ${skillLine}.`,
     "",
     evidenceLine,
     "",
     "I am especially interested in roles where I can keep learning while contributing reliable code, clear API behavior, readable user-facing workflows, and steady debugging habits.",
     "",
-    "I would welcome the chance to discuss how my projects and CS foundation can support your engineering team. Thank you for your time and consideration.",
+    "I would welcome the chance to discuss how my project experience can support your engineering team. Thank you for your time and consideration.",
     "",
     "Sincerely,",
     candidateName

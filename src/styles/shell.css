@@ -3,37 +3,37 @@
 .app-shell {
   display: grid;
   grid-template-rows: auto 1fr;
+  /* `vh` first as the fallback; `dvh` overrides where supported so the bottom
+     export rail isn't clipped behind iOS Safari's dynamic toolbar. */
   min-height: 100vh;
+  min-height: 100dvh;
   height: 100vh;
+  height: 100dvh;
 }
 
 /* -------- Masthead -------- */
 
+/* Newspaper-style masthead: brand wordmark · typographic menu row · actions.
+   The double rule at the bottom is the signature print cue. */
 .masthead {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: var(--s4);
-  padding: var(--s3) var(--s5);
-  border-bottom: 1px solid var(--hairline);
-  background: linear-gradient(180deg, var(--card-elev), var(--card-soft));
+  padding: var(--s2) var(--s5);
+  /* Double rule: 1px solid (hairline-strong) + 2px gap + 1px dashed (hairline-soft).
+     Achieved with border + box-shadow below so no extra DOM node is needed. */
+  border-bottom: 1px solid var(--hairline-strong);
+  box-shadow: 0 3px 0 0 var(--hairline-soft);
+  background: var(--card);
   position: relative;
-}
-
-.masthead::after {
-  content: "";
-  position: absolute;
-  left: var(--s5);
-  bottom: -1px;
-  width: 44px;
-  height: 1px;
-  background: var(--accent);
+  z-index: 30;
 }
 
 .masthead__brand {
   display: flex;
   align-items: baseline;
   gap: var(--s3);
+  margin-right: auto;
 }
 
 .masthead__brand .eyebrow {
@@ -42,23 +42,36 @@
   letter-spacing: 0.16em;
 }
 
-.masthead__brand .eyebrow::before { content: none; }
-
+/* Serif wordmark — editorial desk identity. */
 .masthead__brand h1 {
-  font-family: var(--font-display);
-  font-variation-settings: "opsz" 72, "SOFT" 30;
-  font-weight: 400;
-  font-size: 1.3rem;
+  font-family: var(--font-serif);
+  font-weight: 700;
+  font-size: 1.1rem;
   line-height: 1;
-  letter-spacing: -0.012em;
+  letter-spacing: -0.01em;
   color: var(--ink-strong);
 }
 
-.masthead__meta {
+.masthead__menus {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  flex-wrap: wrap;
+}
+
+/* Hairline separator between the two menu groups (Resume/Job | AI/Options). */
+.masthead__menus > .menu-group + .menu-group {
+  margin-left: var(--s3);
+  padding-left: var(--s3);
+  border-left: 1px solid var(--hairline-soft);
+}
+
+.masthead__actions {
   display: flex;
   align-items: center;
   gap: var(--s2);
-  flex-wrap: wrap;
+  padding-left: var(--s3);
+  border-left: 1px solid var(--hairline-soft);
 }
 
 .eyebrow {
@@ -71,121 +84,173 @@
   text-transform: uppercase;
 }
 
-.eyebrow::before {
-  content: "— ";
-  color: var(--accent);
-  font-weight: 700;
+/* Primary Polish action in the masthead, sized to sit beside the nav menus.
+   Double-class selector outranks the base full-width .primary-button rule,
+   which loads later in the bundle (sources.css).
+   Enabled: accent-filled with a lift shadow so it reads as the primary action.
+   Disabled: flat neutral so it doesn't compete with enabled state. */
+.masthead__actions .masthead__polish.masthead__polish {
+  width: auto;
+  min-height: 30px;
+  margin: 0;
+  padding: 0 var(--s4);
+  font-size: 0.8rem;
 }
 
-/* Status chips */
-.status-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--s1);
-  min-height: 24px;
-  padding: 0 var(--s2);
-  border: 1px solid var(--hairline);
-  border-radius: var(--r-pill);
-  background: var(--card-elev);
-  font-size: 0.7rem;
-  font-weight: 500;
-  color: var(--ink-muted);
+/* Enabled Polish gets a stronger accent presence — primary action of the app. */
+.masthead__actions .masthead__polish.masthead__polish:not(:disabled) {
+  background: var(--accent);
+  border-color: var(--accent-deep);
+  color: var(--on-accent);
+  box-shadow: var(--shadow-inset), 0 2px 8px var(--accent-glow);
 }
 
-.status-chip svg { color: var(--ink-faint); flex-shrink: 0; }
-
-.status-chip span {
-  color: var(--ink-soft);
-  font-weight: 600;
-  letter-spacing: 0.02em;
-}
-
-.status-chip em {
-  font-style: normal;
-  color: var(--ink-faint);
-  font-family: var(--font-mono);
-  font-size: 0.72rem;
-  font-weight: 500;
-}
-
-.status-chip.is-ready {
-  border-color: var(--accent-veil);
-  background: var(--accent-soft);
-}
-
-.status-chip.is-ready svg,
-.status-chip.is-ready span { color: var(--accent-deep); }
-
-.status-chip.is-ready em { color: var(--accent); }
-
-.status-chip.is-pending {
-  border-color: var(--hairline);
-  background: var(--card-soft);
+.masthead__actions .masthead__polish.masthead__polish:not(:disabled):hover {
+  background: var(--accent-deep);
+  box-shadow: var(--shadow-inset), 0 4px 14px var(--accent-glow);
 }
 
 /* -------- Workspace grid -------- */
 
+/* Single full-width studio: the resume/job inputs live in navbar menus now. */
 .workspace-grid {
   display: grid;
-  grid-template-columns: minmax(360px, 380px) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: 0;
   min-height: 0;
   overflow: hidden;
 }
 
+/* -------- Navbar dropdown menus (Resume, Job, AI, Options) -------- */
 
-/* -------- Navbar dropdown menus (AI, Polish) -------- */
-.nav-menu { position: relative; }
+/* Typographic menu groups: no box, no pills — quiet inline items separated by
+   hairline verticals (handled on .masthead__menus level). */
+.menu-group {
+  display: inline-flex;
+  align-items: stretch;
+  /* Removed: border, border-radius, background — the pill box is gone. */
+}
 
+/* Light hairline between sibling menus within the same group. */
+.menu-group > .nav-menu + .nav-menu {
+  margin-left: 1px;
+  padding-left: 1px;
+  border-left: 1px solid var(--hairline-soft);
+}
+
+/* Clear the old radius overrides — triggers are no longer clipped to a pill. */
+.menu-group .nav-menu:first-child .nav-menu__trigger,
+.menu-group .nav-menu:last-child .nav-menu__trigger,
+.menu-group .nav-menu:only-child .nav-menu__trigger {
+  border-radius: var(--r-sm);
+}
+
+.nav-menu { position: relative; display: inline-flex; }
+
+/* Typographic trigger: transparent base, ink label, subtle hover underline,
+   open state = ink-strong. No border at rest. */
 .nav-menu__trigger {
   display: inline-flex;
   align-items: center;
-  gap: var(--s1);
-  height: 28px;
+  gap: 5px;
+  height: 30px;
   padding: 0 var(--s2);
-  border: 1px solid var(--hairline);
-  border-radius: var(--r-pill);
-  background: var(--card-elev);
-  color: var(--ink-muted);
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--ink-soft);
   font-family: var(--font-ui);
-  font-size: 0.74rem;
+  font-size: 0.76rem;
   font-weight: 600;
   cursor: pointer;
-  transition: border-color 140ms var(--ease), color 140ms var(--ease), background 140ms var(--ease);
+  position: relative;
+  transition: color 150ms var(--ease), background 150ms var(--ease);
 }
 
-.nav-menu__trigger:hover { border-color: var(--hairline-strong); color: var(--ink-strong); }
-.nav-menu__trigger[aria-expanded="true"] {
-  border-color: var(--accent);
-  color: var(--accent-deep);
-  background: var(--accent-soft);
+/* Hover: quiet card-soft tint + ink label. */
+.nav-menu__trigger:hover {
+  color: var(--ink);
+  background: var(--card-soft);
 }
-.nav-menu__trigger > svg:first-child { color: var(--accent); flex: none; }
+
+/* Open: ink-strong label, no colored background that competes with content. */
+.nav-menu__trigger[aria-expanded="true"] {
+  color: var(--ink-strong);
+  background: var(--card-soft);
+}
+
+/* Subtle ink underline on hover (1px, not a thick stripe).
+   Scoped to masthead so in-studio menus (Format) are unaffected. */
+.masthead .nav-menu__trigger::after {
+  content: "";
+  position: absolute;
+  bottom: 4px;
+  left: var(--s2);
+  right: var(--s2);
+  height: 1px;
+  background: var(--ink-strong);
+  opacity: 0;
+  transition: opacity 150ms var(--ease);
+}
+
+.masthead .nav-menu__trigger:hover::after { opacity: 0.18; }
+.masthead .nav-menu__trigger[aria-expanded="true"]::after { opacity: 0.35; }
+
+/* The icon-slot (svg) before the label is gone in the masthead typographic
+   triggers. Scope to .masthead so in-studio menus (Format menu) keep their icons. */
+.masthead .nav-menu__trigger > svg:first-child { display: none; }
 
 .nav-menu__label { white-space: nowrap; }
 
+/* Input-state readout beside the menu label: a small dot + quiet word. */
 .nav-menu__sub {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   max-width: 14ch;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-family: var(--font-mono);
-  font-size: 0.66rem;
+  font-size: 0.68rem;
   font-weight: 500;
   color: var(--ink-faint);
 }
+
+.nav-menu__sub::before {
+  content: "";
+  width: 5px;
+  height: 5px;
+  border-radius: var(--r-pill);
+  /* Inactive dot: use hairline-strong border + a faint fill so it is legible
+     on the card-elev trigger background without being visually loud. */
+  border: 1px solid var(--hairline-strong);
+  background: var(--hairline-strong);
+  flex: none;
+}
+
+.nav-menu__sub.is-ready { color: var(--accent-deep); }
+.nav-menu__sub.is-ready::before { background: var(--accent); border-color: var(--accent); }
+.nav-menu__sub.is-empty { color: var(--warm); }
+.nav-menu__sub.is-empty::before { border-color: var(--warm); }
+
+/* AI menu's model readout keeps the mono voice (it is an identifier). */
+.nav-menu__sub.is-meta {
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+}
+.nav-menu__sub.is-meta::before { content: none; }
 
 .nav-menu__caret { color: var(--ink-faint); flex: none; }
 
 .nav-menu__popover {
   position: absolute;
-  top: calc(100% + var(--s2));
+  top: calc(100% + var(--s2) + 1px);
   right: 0;
   z-index: 40;
   width: min(380px, 92vw);
   padding: var(--s3);
   border: 1px solid var(--hairline);
-  border-radius: var(--r-lg);
+  border-radius: var(--r-xl);
   background: var(--card-elev);
   box-shadow: var(--shadow-lift);
   display: grid;
@@ -199,7 +264,11 @@
 
 .nav-menu__popover > .field { margin-top: 0; }
 
+/* Popover enter: start at opacity 0.01 (not 0) so the opaque background is
+   composited from frame 1 — this prevents the mid-animation bleed-through
+   that appears when the OS composites a fully transparent element over the
+   underlying content. */
 @keyframes nav-menu-in {
-  from { opacity: 0; transform: translateY(-4px); }
+  from { opacity: 0.01; transform: translateY(-4px); }
   to { opacity: 1; transform: translateY(0); }
 }

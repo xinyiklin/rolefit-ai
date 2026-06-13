@@ -1,4 +1,4 @@
-import type { AiProviderValue } from "../sections/SourcesPane";
+import type { AiProviderValue } from "../config/aiOptions";
 import { modelOptionsByProvider, providerOptions } from "../config/aiOptions";
 
 // Auto-saved UI preferences (localStorage). Intentionally excludes the API key:
@@ -18,7 +18,6 @@ export type PersistedSettings = {
   auditCustomModel?: string;
   auditCliReasoningEffort?: string;
   auditApiBaseUrl?: string;
-  roleAppliedAs?: string;
   honestContext?: string;
   customInstructions?: string;
 };

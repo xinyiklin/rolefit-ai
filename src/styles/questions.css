@@ -1,236 +1,409 @@
 /* =============================================================
-   Application Questions tab — drafted answers + role descriptions
+   Materials tab — two-column plan + drafts layout
    ============================================================= */
 
-.questions-pane {
-  display: flex;
-  flex-direction: column;
+/* ---- Page layout ---- */
+
+.materials-page {
+  /* inherits .workspace-page grid + gap */
+}
+
+/* Meta line below the page title: "For {role} at {company}" */
+.materials-page__meta {
+  font-family: var(--font-ui);
+  font-size: 0.78rem;
+  color: var(--ink-faint);
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 40ch;
+  text-align: right;
+}
+
+/* Two-column grid mirrors the tracker-layout anatomy */
+.materials-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 340px);
   gap: var(--s4);
+  align-items: start;
 }
 
-.questions-hint {
-  margin: 0 0 var(--s3);
-  color: var(--ink-soft);
-  font-size: 0.82rem;
-  line-height: 1.5;
-}
+/* ---- Right rail: Plan ---- */
 
-.questions-hint code {
-  font-family: var(--font-mono);
-  font-size: 0.78em;
-  background: var(--warm-veil);
-  color: var(--warm);
-  padding: 0 var(--s1);
-  border-radius: var(--r-sm);
-}
-
-.questions-config {
+.materials-plan {
+  position: sticky;
+  top: var(--s4);
   display: flex;
   flex-direction: column;
-  gap: var(--s2);
-  margin: 0;
-  padding: var(--s3) var(--s4);
+  gap: var(--s3);
+  padding: var(--s4);
   border: 1px solid var(--hairline);
-  border-radius: var(--r-md);
-  background: var(--card-soft);
+  border-radius: var(--r-lg);
+  background: var(--card);
+  box-shadow: var(--shadow-rest);
 }
 
-.questions-config legend {
-  padding: 0 var(--s2);
-  font-size: 0.72rem;
-  letter-spacing: 0.04em;
+.materials-plan__eyebrow {
+  /* .table-eyebrow vocabulary */
+  color: var(--ink-faint);
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--ink-soft);
+  margin: 0 0 var(--s1);
 }
 
-.questions-check {
+/* Checklist rows in the plan */
+.plan-list {
   display: flex;
-  align-items: flex-start;
-  gap: var(--s2);
-  font-size: 0.86rem;
-  line-height: 1.4;
-  cursor: pointer;
+  flex-direction: column;
+  gap: 0;
 }
 
-.questions-check input,
-.questions-savebox input {
+/* Each checkbox row: 32px rhythm, left-to-right: checkbox, label, status */
+.plan-row {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  min-height: 32px;
+  padding: 2px 0;
+}
+
+.plan-row input[type="checkbox"] {
   width: 14px;
   height: 14px;
   flex: none;
-  margin-top: 2px;
   accent-color: var(--accent);
+  cursor: pointer;
 }
 
-.questions-check--toggle {
-  margin-top: var(--s2);
-  padding-top: var(--s3);
-  border-top: 1px solid var(--hairline-soft);
+.plan-row__label {
+  flex: 1;
+  font-family: var(--font-ui);
+  font-size: 0.82rem;
+  color: var(--ink);
+  line-height: 1.35;
+  cursor: pointer;
+  /* wrap wraps when label is long */
 }
 
-.questions-custom-row {
+/* Status inline: dot + word, right-aligned */
+.plan-row__status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.72rem;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.plan-row__status--drafted {
+  color: var(--accent);
+}
+
+.plan-row__status--drafted::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: var(--r-pill);
+  background: var(--accent);
+  flex-shrink: 0;
+}
+
+.plan-row__status--pending {
+  color: var(--warm);
+}
+
+.plan-row__status--pending::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: var(--r-pill);
+  background: var(--warm);
+  flex-shrink: 0;
+}
+
+/* Custom question row: indented, with remove button on the right */
+.plan-custom-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: var(--s2);
-  padding-left: calc(var(--s4) + 2px);
-  font-size: 0.86rem;
-  color: var(--ink-muted);
+  min-height: 32px;
+  padding: 2px 0 2px calc(var(--s4) + 2px);
 }
 
-.questions-custom-text {
+.plan-custom-row__text {
   flex: 1;
+  font-family: var(--font-ui);
+  font-size: 0.82rem;
+  color: var(--ink-muted);
+  line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.questions-add {
+/* Hint line under the roles row */
+.plan-row__hint {
+  margin: -4px 0 0 calc(14px + var(--s2));
+  font-size: 0.72rem;
+  color: var(--ink-faint);
+  line-height: 1.3;
+  padding-bottom: 4px;
+}
+
+/* Add-question input row */
+.plan-add {
   display: flex;
   gap: var(--s2);
   margin-top: var(--s1);
+  padding-left: 0;
 }
 
-.questions-add input {
+.plan-add input {
   flex: 1;
   min-height: 30px;
   padding: 0 var(--s3);
-  border: 1px solid var(--hairline);
-  border-radius: var(--r-sm);
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--r-md);
   background: var(--card-elev);
   color: var(--ink);
   font-family: var(--font-ui);
-  font-size: 0.84rem;
-}
-
-.questions-add input:focus-visible {
-  outline: 2px solid var(--accent-glow);
-  outline-offset: 1px;
-}
-
-.questions-note {
-  margin: var(--s3) 0 0;
-  color: var(--ink-soft);
   font-size: 0.8rem;
+  outline: none;
+  transition: border-color 160ms var(--ease), box-shadow 160ms var(--ease);
 }
 
-/* --- drafted answers --- */
+.plan-add input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-glow);
+}
 
-.questions-answer {
-  margin-top: var(--s3);
-  padding: var(--s3);
+.plan-add input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Divider in the plan rail */
+.plan-divider {
+  height: 1px;
+  background: var(--hairline-soft);
+  border: 0;
+  margin: var(--s2) 0;
+}
+
+/* Generate button: full-width primary in the plan rail */
+.plan-generate {
+  width: 100%;
+  justify-content: center;
+}
+
+/* Single aria-live status line below the generate button */
+.plan-status {
+  font-family: var(--font-ui);
+  font-size: 0.75rem;
+  color: var(--ink-soft);
+  line-height: 1.4;
+  min-height: 1em;
+}
+
+/* ---- Left column: Drafts ---- */
+
+.materials-drafts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s4);
+  min-width: 0;
+}
+
+/* Slim row above the draft sheets, only rendered when drafts exist */
+.drafts-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+}
+
+.drafts-head__label {
+  /* .studio-card__subhead vocabulary */
+  font-family: var(--font-ui);
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--ink-strong);
+  letter-spacing: -0.002em;
+}
+
+/* Draft sheet: one article per item, sits directly on the desk.
+   No wrapper card around the column — no nested cards. */
+.draft-sheet {
+  padding: var(--s5);
   border: 1px solid var(--hairline);
-  border-radius: var(--r-md);
-  background: var(--card-soft);
+  border-radius: var(--r-lg);
+  background: var(--card);
+  box-shadow: var(--shadow-rest);
+  max-width: 72ch;
 }
 
-.questions-answer header {
+/* Sheet head row */
+.draft-sheet__head {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: var(--s3);
-  margin-bottom: var(--s2);
+  margin-bottom: var(--s3);
 }
 
-.questions-answer h3 {
-  margin: 0;
+.draft-sheet__meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+/* Eyebrow kind label */
+.draft-sheet__kind {
+  /* table-eyebrow vocabulary */
   font-family: var(--font-ui);
-  font-size: 0.88rem;
+  font-size: 0.65rem;
   font-weight: 600;
-  line-height: 1.35;
-  color: var(--ink-strong);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
 }
 
-.questions-answer__actions {
+/* Item title (question text, role name) */
+.draft-sheet__title {
+  font-family: var(--font-ui);
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--ink-strong);
+  line-height: 1.3;
+  letter-spacing: -0.002em;
+  margin: 0;
+}
+
+/* Actions cluster: flag + save + copy */
+.draft-sheet__actions {
   display: flex;
   align-items: center;
   gap: var(--s2);
   flex-shrink: 0;
 }
 
-.questions-flag {
-  font-style: normal;
-  font-size: 0.68rem;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
-  color: var(--warm);
-  background: var(--warm-soft);
-  padding: 1px var(--s2);
-  border-radius: var(--r-pill);
-  white-space: nowrap;
+/* Hairline separator between head and text body */
+.draft-sheet__rule {
+  height: 1px;
+  background: var(--hairline-soft);
+  border: 0;
+  margin: 0 0 var(--s3);
 }
 
-.questions-savebox {
+/* Textarea styled as paper: sits directly on the sheet, no inner box */
+.draft-sheet__textarea {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 0.86rem;
+  line-height: 1.6;
+  resize: vertical;
+  outline: none;
+  min-height: 120px;
+}
+
+.draft-sheet__textarea:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--r-sm);
+}
+
+/* Cover letter textarea is taller */
+.draft-sheet__textarea--letter {
+  min-height: 280px;
+}
+
+/* Cover letter sheet: slightly more padding, no title needed */
+.draft-sheet--letter {
+  /* inherits draft-sheet; no additional overrides needed */
+}
+
+/* Save checkbox label */
+.draft-savebox {
   display: flex;
   align-items: center;
   gap: 4px;
+  font-family: var(--font-ui);
   font-size: 0.76rem;
   color: var(--ink-muted);
   cursor: pointer;
 }
 
-.questions-textarea {
-  width: 100%;
-  min-height: 116px;
-  padding: var(--s3);
-  border: 1px solid var(--hairline);
-  border-radius: var(--r-sm);
-  background: var(--card-elev);
-  color: var(--ink);
+.draft-savebox input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  accent-color: var(--accent);
+}
+
+/* "Needs input" dot-plus-word flag (carries forward .questions-flag) */
+.questions-flag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-style: normal;
   font-family: var(--font-ui);
-  font-size: 0.85rem;
-  line-height: 1.5;
-  resize: vertical;
-}
-
-.questions-textarea:focus-visible {
-  outline: 2px solid var(--accent-glow);
-  outline-offset: 1px;
-}
-
-.questions-empty {
-  color: var(--ink-soft);
-  font-size: 0.86rem;
-}
-
-.questions-empty p {
-  margin: 0;
-}
-
-/* --- saved answers in the pipeline detail --- */
-
-.pipeline-answers {
-  margin-top: var(--s3);
-}
-
-.pipeline-answers__head {
-  margin: 0 0 var(--s2);
   font-size: 0.72rem;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  color: var(--warm);
+  white-space: nowrap;
+}
+
+.questions-flag::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: var(--r-pill);
+  background: var(--warm);
+  flex-shrink: 0;
+}
+
+/* Empty state: centered calm block on the desk, not a sheet */
+.materials-empty {
+  display: grid;
+  justify-items: center;
+  gap: var(--s2);
+  padding: var(--s7) var(--s4);
+  text-align: center;
   color: var(--ink-soft);
 }
 
-.pipeline-answer {
-  border: 1px solid var(--hairline);
-  border-radius: var(--r-sm);
-  background: var(--card-soft);
-  margin-bottom: var(--s2);
-  padding: var(--s2) var(--s3);
-}
-
-.pipeline-answer summary {
-  cursor: pointer;
-  font-size: 0.84rem;
+.materials-empty strong {
+  display: block;
+  font-family: var(--font-ui);
+  font-size: 0.9rem;
   font-weight: 600;
   color: var(--ink-strong);
 }
 
-.pipeline-answer summary .questions-flag {
-  margin-left: var(--s2);
-  vertical-align: middle;
+.materials-empty p {
+  margin: 0;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  max-width: 40ch;
 }
 
-.pipeline-answer p {
-  margin: var(--s2) 0 0;
-  font-size: 0.84rem;
-  line-height: 1.5;
-  color: var(--ink-muted);
-  white-space: pre-wrap;
+/* ---- Responsive collapse at <=1080px ---- */
+
+@media (max-width: 1080px) {
+  .materials-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .materials-plan {
+    position: static;
+  }
 }

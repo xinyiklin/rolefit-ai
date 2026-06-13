@@ -36,7 +36,7 @@ export const ROLE_KEYWORDS: Array<{ keyword: string; aliases: string[] }> = [
   { keyword: "react", aliases: ["react", "react.js", "reactjs"] },
   { keyword: "typescript", aliases: ["typescript", "type script"] },
   { keyword: "javascript", aliases: ["javascript", "java script", "js"] },
-  { keyword: "node.js", aliases: ["node.js", "nodejs", "node"] },
+  { keyword: "node.js", aliases: ["node.js", "nodejs"] },
   { keyword: "python", aliases: ["python"] },
   { keyword: "java", aliases: ["java"] },
   { keyword: "c++", aliases: ["c++", "cpp"] },
@@ -44,7 +44,7 @@ export const ROLE_KEYWORDS: Array<{ keyword: string; aliases: string[] }> = [
   { keyword: "postgresql", aliases: ["postgresql", "postgres", "postgreSQL".toLowerCase()] },
   { keyword: "django", aliases: ["django"] },
   { keyword: "django rest framework", aliases: ["django rest framework", "drf"] },
-  { keyword: "rest api", aliases: ["rest api", "rest apis", "api", "apis"] },
+  { keyword: "rest api", aliases: ["rest api", "rest apis", "restful"] },
   { keyword: "git", aliases: ["git"] },
   { keyword: "github", aliases: ["github"] },
   { keyword: "testing", aliases: ["testing", "tests", "unit test", "integration test"] },
@@ -55,14 +55,14 @@ export const ROLE_KEYWORDS: Array<{ keyword: string; aliases: string[] }> = [
   { keyword: "full-stack", aliases: ["full-stack", "full stack"] },
   { keyword: "frontend", aliases: ["frontend", "front-end", "front end"] },
   { keyword: "backend", aliases: ["backend", "back-end", "back end"] },
-  { keyword: "database", aliases: ["database", "databases", "data models", "relational"] },
+  { keyword: "database", aliases: ["database", "databases", "data models"] },
   { keyword: "authentication", aliases: ["authentication", "auth", "jwt"] },
   { keyword: "html/css", aliases: ["html/css", "html", "css"] },
   { keyword: "tailwind css", aliases: ["tailwind css", "tailwind"] },
   { keyword: "material ui", aliases: ["material ui", "mui"] },
   { keyword: "api integration", aliases: ["api integration", "integrate api", "integrate apis"] },
   { keyword: "code reviews", aliases: ["code review", "code reviews"] },
-  { keyword: "performance", aliases: ["performance", "responsive", "latency"] }
+  { keyword: "performance", aliases: ["performance", "latency"] }
 ];
 
 const STOP_WORDS = new Set([
@@ -77,6 +77,8 @@ const STOP_WORDS = new Set([
   "based",
   "been",
   "being",
+  "build",
+  "building",
   "but",
   "can",
   "candidate",
@@ -84,26 +86,35 @@ const STOP_WORDS = new Set([
   "company",
   "design",
   "description",
+  "develop",
+  "developing",
   "engineer",
   "entry",
   "entry-level",
   "equivalent",
+  "experience",
   "for",
   "from",
   "has",
   "have",
   "application",
   "applications",
+  "improvements",
   "into",
   "job",
   "level",
+  "maintain",
+  "maintaining",
   "our",
   "per",
+  "preferred",
   "qualifications",
+  "requirements",
   "responsibilities",
   "rest",
   "role",
   "skills",
+  "strong",
   "that",
   "the",
   "their",
@@ -114,6 +125,8 @@ const STOP_WORDS = new Set([
   "with",
   "work",
   "write",
+  "written",
+  "years",
   "you",
   "your"
 ]);
@@ -160,6 +173,10 @@ export function extractKeywords(source: string, limit = 18) {
   }
 
   const extracted = Array.from(counts.entries())
+    // A bigram that occurs once is usually sentence noise ("preferred strong",
+    // a company name), and its 1.5 boost would crowd out real single-mention
+    // skills. Require a repeat (2 × 1.5 = 3) before a bigram can rank.
+    .filter(([term, count]) => !term.includes(" ") || count >= 3)
     .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
     .slice(0, limit)
     .map(([word]) => word);

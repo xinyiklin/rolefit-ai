@@ -1,30 +1,31 @@
 import type { ReactNode } from "react";
-import { BriefcaseBusiness, FilePlus2, FileText, FolderOpen, Sparkles } from "lucide-react";
+import { ClipboardCheck, Sparkles } from "lucide-react";
 
 type MastheadProps = {
-  resumeReady: boolean;
-  jobReady: boolean;
-  outputReady: boolean;
-  resumeBulletCount: number;
-  headlineScore: number | null;
-  baseResumeName: string;
-  onLoadResume: () => void | Promise<void>;
-  onNextRole: () => void;
-  nextRoleDisabled: boolean;
+  // Mark the current role as applied and save it to the pipeline, using the
+  // resume draft currently in the editor.
+  onApply: () => void;
+  applyDisabled: boolean;
+  // Primary action: run the polish. The hint explains a disabled button.
+  onPolish: () => void | Promise<void>;
+  canPolish: boolean;
+  isPolishing: boolean;
+  polishHint: string;
+  resumeControl?: ReactNode;
+  jobControl?: ReactNode;
   aiControl?: ReactNode;
   polishControl?: ReactNode;
 };
 
 export function Masthead({
-  resumeReady,
-  jobReady,
-  outputReady,
-  resumeBulletCount,
-  headlineScore,
-  baseResumeName,
-  onLoadResume,
-  onNextRole,
-  nextRoleDisabled,
+  onApply,
+  applyDisabled,
+  onPolish,
+  canPolish,
+  isPolishing,
+  polishHint,
+  resumeControl,
+  jobControl,
   aiControl,
   polishControl
 }: MastheadProps) {
@@ -33,49 +34,36 @@ export function Masthead({
       <div className="masthead__brand">
         <h1>RoleFit AI</h1>
       </div>
-      <div className="masthead__meta">
-        <div
-          className={`status-chip ${resumeReady ? "is-ready" : "is-pending"}`}
-          title={resumeReady ? `${resumeBulletCount} bullets ready` : "Resume pending"}
-        >
-          <FileText size={13} aria-hidden="true" />
-          <em>{resumeReady ? resumeBulletCount : "—"}</em>
+      <div className="masthead__menus">
+        <div className="menu-group" role="group" aria-label="Inputs">
+          {resumeControl}
+          {jobControl}
         </div>
-        <div
-          className={`status-chip ${jobReady ? "is-ready" : "is-pending"}`}
-          title={jobReady ? "Job target ready" : "Job target pending"}
-        >
-          <BriefcaseBusiness size={13} aria-hidden="true" />
-          <em>{jobReady ? "✓" : "—"}</em>
+        <div className="menu-group" role="group" aria-label="Polish setup">
+          {aiControl}
+          {polishControl}
         </div>
-        <div
-          className={`status-chip ${outputReady ? "is-ready" : "is-pending"}`}
-          title={outputReady ? `Fit ${headlineScore ?? "--"}` : "No polished draft yet"}
+      </div>
+      <div className="masthead__actions">
+        <button
+          className="primary-button is-compact masthead__polish"
+          type="button"
+          onClick={onPolish}
+          disabled={!canPolish || isPolishing}
+          title={canPolish ? "Tailor the resume to the job (AI polish + recruiter review)" : polishHint}
         >
           <Sparkles size={13} aria-hidden="true" />
-          <em>{outputReady ? headlineScore ?? "—" : "—"}</em>
-        </div>
-        {aiControl}
-        {polishControl}
-        <button
-          className="ghost-button"
-          type="button"
-          onClick={onLoadResume}
-          disabled={!baseResumeName}
-          title={baseResumeName ? `Load ${baseResumeName}` : "No base resume saved"}
-        >
-          <FolderOpen size={14} aria-hidden="true" />
-          <span>{baseResumeName ? "Load base" : "No base"}</span>
+          <span>{isPolishing ? "Working…" : "Polish"}</span>
         </button>
         <button
           className="ghost-button"
           type="button"
-          onClick={onNextRole}
-          disabled={nextRoleDisabled}
-          title="Clear job target + result, keep resume"
+          onClick={onApply}
+          disabled={applyDisabled}
+          title="Mark as applied and save to the pipeline using the current resume draft"
         >
-          <FilePlus2 size={14} aria-hidden="true" />
-          <span>Next role</span>
+          <ClipboardCheck size={14} aria-hidden="true" />
+          <span>Apply</span>
         </button>
       </div>
     </header>

@@ -1,0 +1,296 @@
+/* -------- PDF Preview Overlay -------- */
+
+.preview-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: grid;
+  place-items: center;
+  animation: preview-fade-in 0.18s var(--ease) both;
+}
+
+@keyframes preview-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.preview-overlay__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(14, 14, 17, 0.55);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+}
+
+.preview-overlay__chrome {
+  position: relative;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  width: min(96%, calc(100vw - 48px));
+  height: min(96%, calc(100vh - 48px));
+  height: min(96%, calc(100dvh - 48px));
+  border-radius: var(--r-lg, 12px);
+  background: var(--card-elev);
+  border: 1px solid var(--hairline);
+  box-shadow: 0 12px 48px rgba(20, 18, 12, 0.35), 0 0 0 1px rgba(0, 0, 0, 0.06);
+  overflow: hidden;
+}
+
+.preview-overlay__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+  padding: var(--s2) var(--s3);
+  border-bottom: 1px solid var(--hairline);
+  background: var(--card);
+}
+
+.preview-overlay__title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-ui);
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--ink-strong);
+  letter-spacing: -0.005em;
+}
+
+.preview-overlay__title svg {
+  color: var(--accent);
+}
+
+/* Right-side controls cluster: zoom + download + close */
+.preview-overlay__controls {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+}
+
+/* Zoom strip */
+.preview-overlay__zoom {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-sm);
+  background: var(--card-elev);
+  padding: 2px;
+}
+
+.preview-overlay__zoom-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-xs, 4px);
+  background: transparent;
+  color: var(--ink-soft);
+  cursor: pointer;
+  transition: background-color 0.12s var(--ease), color 0.12s var(--ease);
+}
+
+.preview-overlay__zoom-btn:hover:not(:disabled) {
+  background: var(--accent-soft);
+  color: var(--accent-deep);
+}
+
+.preview-overlay__zoom-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.preview-overlay__zoom-label {
+  min-width: 40px;
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: var(--ink-soft);
+  user-select: none;
+}
+
+/* Download button */
+.preview-overlay__download {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-sm);
+  background: var(--card-elev);
+  color: var(--ink-soft);
+  cursor: pointer;
+  transition: background-color 0.12s var(--ease), color 0.12s var(--ease), border-color 0.12s var(--ease);
+}
+
+.preview-overlay__download:hover:not(:disabled) {
+  background: var(--accent-soft);
+  border-color: var(--accent-veil);
+  color: var(--accent-deep);
+}
+
+.preview-overlay__download:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+/* Close button */
+.preview-overlay__close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-sm);
+  background: var(--card-elev);
+  color: var(--ink-soft);
+  cursor: pointer;
+  transition: background-color 0.12s var(--ease), color 0.12s var(--ease), border-color 0.12s var(--ease);
+}
+
+.preview-overlay__close:hover {
+  background: var(--accent-soft);
+  border-color: var(--accent-veil);
+  color: var(--accent-deep);
+}
+
+.preview-overlay__close:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.preview-overlay__body {
+  min-height: 0;
+  display: grid;
+  place-items: center;
+  background: oklch(0.42 0.006 220);
+  overflow: hidden;
+}
+
+/* react-pdf scroll container */
+.preview-overlay__scroll {
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 24px 0;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+}
+
+.preview-overlay__scroll::-webkit-scrollbar { width: 8px; }
+.preview-overlay__scroll::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: var(--r-pill);
+}
+
+.preview-overlay__document {
+  display: grid;
+  justify-items: center;
+  gap: 16px;
+  width: max-content;
+  max-width: 100%;
+  min-height: min-content;
+}
+
+/* Each rendered PDF page sheet */
+.preview-overlay__page {
+  position: relative;
+  display: block;
+  width: fit-content;
+  max-width: 100%;
+  overflow: hidden;
+  background: #ffffff;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.45);
+}
+
+.preview-overlay__page canvas,
+.preview-overlay__page .react-pdf__Page__canvas {
+  display: block;
+  max-width: 100%;
+  height: auto !important;
+}
+
+.preview-overlay__page .react-pdf__Page__textContent,
+.preview-overlay__page .react-pdf__Page__annotations {
+  inset: 0;
+}
+
+/* Page count badge in title */
+.preview-overlay__pages {
+  font-weight: 400;
+  font-style: normal;
+  color: var(--ink-faint);
+  font-size: 0.75rem;
+}
+
+/* Loading */
+.preview-overlay__loading {
+  display: grid;
+  place-items: center;
+  gap: var(--s3);
+  color: rgba(255, 255, 255, 0.82);
+  font-family: var(--font-ui);
+  font-size: 0.88rem;
+  font-weight: 500;
+}
+
+.preview-overlay__spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid rgba(255, 255, 255, 0.18);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: preview-spin 0.7s linear infinite;
+}
+
+@keyframes preview-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Error */
+.preview-overlay__error {
+  display: grid;
+  place-items: center;
+  gap: var(--s2);
+  max-width: 420px;
+  padding: var(--s5);
+  text-align: center;
+  color: rgba(255, 255, 255, 0.82);
+  font-family: var(--font-ui);
+}
+
+.preview-overlay__error strong {
+  font-size: 0.92rem;
+  color: oklch(0.78 0.12 80);
+}
+
+.preview-overlay__error p {
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: rgba(255, 255, 255, 0.62);
+}
+
+.preview-overlay__error .ghost-button {
+  margin-top: var(--s2);
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.2);
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.preview-overlay__error .ghost-button:hover {
+  background: rgba(255, 255, 255, 0.18);
+  border-color: rgba(255, 255, 255, 0.32);
+  color: oklch(0.97 0.005 150);
+}
