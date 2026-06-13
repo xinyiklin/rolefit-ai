@@ -120,9 +120,10 @@ ADR-style entries, for example:
 Use the relevant docs and repo surfaces by task shape:
 
 - UI work: read `docs/engineering/ui-principles.md`; reuse `src/ui.tsx` and
-  `src/styles/`; preserve the two-column job/resume to output/insights
-  workflow; keep labels and hints short; verify major UI changes visually in
-  Google Chrome when feasible.
+  `src/styles/`; preserve the navbar-inputs (Resume/Job/AI/Options menus +
+  Polish) → full-width tabbed studio workflow; keep labels and hints short;
+  visual QA is flag-first (skip by default; flag real layout/theming risk and
+  let the user decide).
 - Server / AI work: read `docs/engineering/ai-server.md`; keep API keys
   server-side; keep `server.mjs` focused on local serving, job import, DOCX
   import/export, workspace storage, and AI provider calls.
@@ -135,6 +136,30 @@ Use the relevant docs and repo surfaces by task shape:
 
 Multiple agents may work in this repo. Route by task shape and verified tool
 access, not model brand.
+
+### Subagent Orchestration
+
+When delegating to subagents (Claude's `.claude/agents/*` or any equivalent),
+the orchestrator owns this contract — subagents do not see each other's
+instructions:
+
+- Sequence: implementation agent first, adversarial review second, verifier
+  last. Docs-only or trivial copy changes may skip review, never verification.
+- Parallelize UI and server implementation agents only when their write scopes
+  are disjoint (e.g. `src/` vs `server/`); never two writers in the same files.
+- The reviewer reasons over the diff and inspects; the verifier owns builds
+  and syntax checks. Do not run the build twice across the two roles.
+- `src/resumeEngine.ts` and `src/resume/` are anti-fabrication-critical logic,
+  not UI: changes there always get an adversarial review pass before
+  finalizing, regardless of which agent implemented them.
+- Delegate multi-file implementation to the matching agent; the orchestrator
+  may handle trivial single-file edits directly.
+- Subagents do not read or update `CONTINUITY.md` (an explicit exception to
+  the read-first non-negotiable, which binds the orchestrator): the
+  orchestrator reads it before delegating, distills relevant state into the
+  task brief, and records outcomes after.
+- Subagents never stage, commit, or push, and never make live AI-provider
+  calls unless the task brief explicitly says to; they report back instead.
 
 ---
 
@@ -223,9 +248,10 @@ push, open a PR, or merge.
 
 Read `docs/engineering/testing.md` for full pass criteria.
 
-- UI: no console errors, stable layout, two-column workflow preserved. Major
-  changes: `npm run dev` plus Chrome visual QA when feasible. Minor changes:
-  use judgment and note if visual QA was skipped.
+- UI: no console errors, stable layout, navbar-inputs + studio workflow
+  preserved. Visual QA is flag-first: skip by default, flag changes with real
+  layout/theming risk for the user to decide, never run unsolicited; note when
+  it was skipped.
 - Server / AI: `node --check server.mjs` passes; affected routes return the
   expected status and JSON shape; deterministic fallback still runs when the AI
   call cannot.

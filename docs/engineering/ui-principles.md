@@ -23,15 +23,27 @@ marketing landing page, a SaaS dashboard, or a native desktop installer.
 
 ## Workflow Shape
 
-Preserve the two-column workflow:
+Preserve the navbar-inputs + full-width studio workflow (the former left
+inputs pane was folded into the masthead by explicit user request,
+2026-06-09):
 
-- left column: job target (link + description) and resume source
-  (DOCX upload, text paste, or workspace base-resume)
-- right column: polished output, strict review, before/after review,
-  application questions, cover letter, and pipeline, organized into tabbed
-  views
+- masthead (navbar): the input menus — Resume source (workspace
+  base-resume, upload, source text), Job target (link + description), AI
+  provider, polish Options — plus the primary Polish action and Apply
+- studio (full width): the tabbed output views — Resume (structured editor
+  with per-section tailor selection and the suggestion/recruiter-review rail
+  docked beside it post-polish), Materials (cover letter + application
+  questions), Applications (table / board / calendar tracker views),
+  Analytics — plus the template/export rail below
 
-When changing one panel or tab, preserve the others' layout and labels
+Polish should feel like a review queue, not a hidden overwrite. By default,
+the user selects editable resume sections in the document; identity,
+contact, and education stay out of the AI prompt unless explicitly selected.
+After AI returns, show proposed edits as accept / edit / discard cards and
+let the editor remain the final source of truth for export and pipeline
+tracking.
+
+When changing one menu or tab, preserve the others' layout and labels
 unless the task explicitly touches them.
 
 ## Visual Direction
@@ -101,9 +113,12 @@ Never show:
 
 ## AI Settings UI
 
-- Default provider is OpenAI Responses API.
-- First-class provider choices: Claude, Gemini, OpenRouter, Groq,
-  Together AI, Mistral AI, and Local/custom.
+- Default provider is the Claude Code CLI (`claude-cli`) subscription path,
+  on both the frontend and the server's no-`AI_PROVIDER` fallback (an
+  unknown `AI_PROVIDER` value still coerces to OpenAI).
+- First-class provider choices: subscription CLIs (Claude Code, Codex,
+  Gemini CLI / Antigravity) plus hosted OpenAI, Claude, Gemini, OpenRouter,
+  Groq, Together AI, Mistral AI, and Local/custom.
 - The Model control changes with the selected provider; keep a
   **Custom model** escape hatch for newer model IDs.
 - One-request `apiKey`, `provider`, `apiBaseUrl`, and `model` values
@@ -130,7 +145,7 @@ Never show:
 For meaningful UI changes:
 
 1. Run `npm run dev` and open `http://localhost:5181` in Chrome.
-2. Walk through the affected control in the normal two-column workflow.
+2. Walk through the affected control in the normal navbar-inputs + studio workflow.
 3. Confirm no console errors, overlap, unexpected layout shift, or
    broken keyboard path.
 4. Capture a screenshot or describe the visual QA in the final response.

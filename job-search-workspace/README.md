@@ -2,12 +2,15 @@
 
 Local, ignored storage for the RoleFit AI app.
 
-- Save your base resume here through the app. The server uses `base-resume.docx`
-  when it exists, then falls back to text formats such as `base-resume.txt`.
+- Keep base resume sources here as LaTeX files named `base-resume.tex` or
+  `base-resume-<name>.tex`. The app labels `base-resume.tex` as Default;
+  named variants replace dashes with spaces and title-case each word.
 - The Pipeline tracker writes `applications.json` here automatically when you
   click Track in the app.
-- Keep other local artifacts here too — exported resumes, notes, job-specific
-  drafts.
+- Sent resume artifacts are stored per application under
+  `applications/<application-id>/resume.tex` and `resume.pdf`.
+- Keep other local artifacts here too — notes, job-specific drafts, and eval
+  outputs.
 - Do not store personal resumes or job-search artifacts in the repo root unless
   you intentionally want them tracked.
 - Files in this folder are intentionally ignored by git except this README.

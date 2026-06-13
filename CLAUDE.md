@@ -31,8 +31,12 @@ Pick the tool by what you're verifying:
   back to snapshot/inspect if blank.
 - If the chosen tool's bridge isn't connected, use the other and note the gap.
 
-Default here: **Chrome**. `navigate` to `http://localhost:5181` after
-`npm run dev`, then `get_page_text` / `read_page` / `computer`.
+**Default: skip visual QA.** Only run it when the change carries real
+layout/theming risk (new components, responsive breakpoints, editor surfaces,
+token/color changes). When that threshold is met, flag it and let the user
+decide — don't run unsolicited. When running: Chrome is the default tool;
+`navigate` to `http://localhost:5181` after `npm run dev`, then
+`get_page_text` / `read_page` / `computer`.
 
 ## Resume And Job Data Handling
 

@@ -14,7 +14,7 @@ _Screenshot uses demo workspace data._
 
 - **Multi-format resume I/O** — ingest `.docx`, `.tex` (Jake's-style), or plain text; paste extracted PDF text when the original file is only available as PDF.
 - **Job-link import** — paste a posting URL and pull the description in one click: Workday-aware (reads its CXS JSON API for `/job/` and `/details/` links), with a generic HTML→text fallback for other boards. The client distills the scrape before polishing, keeping role intro / responsibilities / requirements / preferred qualifications while dropping empty bullets, duplicated ATS title furniture, low-value Workday metadata, apply/share/navigation rows, company/culture marketing, salary pills, benefits/perks, pay-transparency, and EEO/legal boilerplate. The link itself is kept only for pipeline tracking and is **never sent to the model**.
-- **Subscription-friendly, multi-provider AI** — the technical default is the OpenAI hosted API, but the **recommended opt-in** is the **subscription-CLI tools** (`Claude Code`, `Codex CLI`, `Gemini CLI` / Antigravity) that route through existing Claude Max / ChatGPT Plus / Google subscriptions instead of per-token billing, with **hosted-API backends** (OpenAI, Anthropic, Gemini, OpenRouter, Groq, Together, Mistral, local Ollama) available behind the same interface.
+- **Subscription-friendly, multi-provider AI** — the default is the **Claude Code CLI** subscription path, with the other **subscription-CLI tools** (`Codex CLI`, `Gemini CLI` / Antigravity) routing through existing Claude Max / ChatGPT Plus / Google subscriptions instead of per-token billing, and **hosted-API backends** (OpenAI, Anthropic, Gemini, OpenRouter, Groq, Together, Mistral, local Ollama) available behind the same interface.
 - **Fit scoring + 4-category keyword gap analysis** — required experience, knowledge, required skills, technical tools.
 - **Strict recruiter review mode** — verdict (STRONG FIT / REASONABLE FIT / STRETCH / DON'T APPLY), base-vs-tailored fit scores, gap severity, targeted bullet rewrites, interview risk flags, an apply-as-is / edit-first recommendation, and a cover-letter angle.
 - **LaTeX export pipeline (recommended)** with three resume templates (Jake's, Awesome-CV, Deedy) + **one-click Overleaf submission** via form POST + optional local PDF compile through **Tectonic** — the recommended path for faithful, ATS-clean output.
@@ -53,7 +53,7 @@ TOGETHER_API_KEY=...
 MISTRAL_API_KEY=...
 ```
 
-For **zero per-token cost**, use the subscription-CLI providers (recommended opt-in; the technical default provider is OpenAI via `AI_PROVIDER`):
+For **zero per-token cost**, use the subscription-CLI providers (the default is the Claude Code CLI; override with `AI_PROVIDER` or the in-app AI menu):
 
 ```bash
 # requires Claude Max
@@ -107,8 +107,9 @@ src/
   config/aiOptions.ts            # provider/model/reasoning options
   hooks/                          # templates, applications, resume export/analysis, AI settings, answers
   lib/                           # downloads, job extraction/distilling, resume format/block + LaTeX→HTML render helpers
-  sections/                      # Masthead / SourcesPane / StudioPane / ExportRail / ResumeDocument / ResumePrintLayer
-  sections/tabs/                 # Resume / Review / StrictReview / Questions / CoverLetter / Pipeline
+  sections/                      # Masthead + nav menus (Resume/Job/AI/Format/Polish) / StudioPane / ExportRail / ReviewRail / ResumeDocument / ResumePrintLayer
+  sections/editor/               # structured resume editor (sections, entries, bullets, skills rows)
+  sections/tabs/                 # Resume / Review / CoverLetter / Questions / Pipeline
   resume/                        # resume engine split: types, text, keywords, scoring, rewrite, diff
   resumeEngine.ts                # barrel re-exporting src/resume/* (scoring/analysis/deterministic fallback)
   styles/                        # per-surface CSS + shared tokens
