@@ -507,10 +507,52 @@ select,
   line-height: 1.4;
 }
 
+/* Primary provider controls: a single vertical stack with even rhythm so the
+   selects read as one group, not a scattered grid. Provider gets its own row;
+   Model pairs with Reasoning effort only when both exist (see settings-grid),
+   otherwise Model spans full width via provider-config__single. */
+.provider-config {
+  display: grid;
+  gap: var(--s3);
+}
+
+.provider-config__single {
+  display: grid;
+}
+
+/* Field margins are owned by the container gap inside the config stacks. */
+.provider-config .field,
+.reviewer-settings .field {
+  margin-top: 0;
+}
+
+/* Section header inside a menu popover (e.g. the Reviewer block). */
+.menu-subhead {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s2);
+}
+
+.menu-subhead__title {
+  font-family: var(--font-ui);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+
+.menu-subhead__note {
+  font-size: 0.68rem;
+  color: var(--ink-faint);
+}
+
 /* Reviewer (strict-audit) override block in the AI menu, set off from the
-   primary provider controls above it. */
+   primary provider controls above it with a hairline divider. The popover's
+   own grid gap handles the space above the divider. */
 .reviewer-settings {
-  margin-top: var(--s3);
+  display: grid;
+  gap: var(--s3);
   padding-top: var(--s3);
   border-top: 1px solid var(--hairline-soft);
 }

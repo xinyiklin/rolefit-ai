@@ -1,15 +1,15 @@
 import { useEffect, useRef, useState } from "react";
 import { Check, ChevronDown, Download, Eye, FileCode2, X } from "lucide-react";
 import type { TectonicStatus, Template } from "../hooks/useTemplates";
+import type { ExportFormat } from "../lib/exportPrefs";
 
 // File-saving exports route through a rename dialog: the system names the file
 // first (`defaultFileBaseName`), the user can edit it, then confirm. Preview is
 // not a file-save, so it bypasses it. `pdf-clean` prints through the browser's
 // own Save-as-PDF dialog; we still collect a name so document.title (which seeds
 // that dialog's suggested filename) reflects the user's choice.
-type ExportFormat = "pdf-latex" | "pdf-clean" | "tex";
-
-const EXPORT_META: Record<ExportFormat, { ext: string; label: string }> = {
+// `ExportFormat` is shared with the post-Apply download prompt (see exportPrefs).
+export const EXPORT_META: Record<ExportFormat, { ext: string; label: string }> = {
   "pdf-latex": { ext: "pdf", label: "PDF (LaTeX)" },
   "pdf-clean": { ext: "pdf", label: "PDF (clean)" },
   tex: { ext: "tex", label: "LaTeX source" }
