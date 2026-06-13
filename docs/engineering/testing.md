@@ -71,8 +71,8 @@ Good frontend verification covers:
 - changed controls are reachable by keyboard
 - loading / data refresh does not cause avoidable layout shift
 - API error states show user-safe messaging (no raw provider bodies)
-- components reuse shared primitives from `src/ui.tsx` and tokens from
-  `src/styles/` instead of one-off styles
+- components reuse shared CSS classes and tokens from `src/styles/` instead of
+  one-off styles
 - job-import distiller changes prove the before/after shape without
   printing raw private text: the resulting job field should keep role
   intro / responsibilities / requirements while stripping empty bullets,

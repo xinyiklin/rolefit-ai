@@ -6,8 +6,8 @@ marketing landing page, a SaaS dashboard, or a native desktop installer.
 
 ## Source Of Truth
 
-- Reuse primitives from `src/ui.tsx` (`ScoreMeter`, `Stat`, `ChipList`,
-  `PanelHeading`).
+- Reuse the per-surface CSS classes in `src/styles/` and the design tokens in
+  `src/styles/tokens.css`.
 - Prefer tokens and classes from `src/styles/` instead of one-off
   inline styles (tokens in `src/styles/tokens.css`; each surface has its
   own file under `src/styles/`, aggregated in import order by

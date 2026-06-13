@@ -18,7 +18,7 @@ Role-Fit AI turns a base resume plus a pasted job description into an honest,
 tailored resume: AI polish that never fabricates experience, a recruiter-style
 review with fit scoring and gap analysis, application-question drafts, a
 structured WYSIWYG resume editor with compiled LaTeX/PDF preview, multi-format
-export (PDF, DOCX, .tex, Overleaf), and a lightweight application pipeline
+export (PDF, DOCX, .tex), and a lightweight application pipeline
 tracker. Success = a one-page, interview-defensible resume exported in minutes
 with full confidence nothing was invented.
 
@@ -49,7 +49,7 @@ disappears into the task. Quiet competence, not salesmanship.
 4. Recovery-friendly: inline, localized, user-safe errors near the affected
    workflow; never raw provider errors, stack traces, or resume text in chrome.
 5. Restraint over systems: no global toast/banner/loading frameworks; reuse
-   `src/ui.tsx` primitives and `src/styles/tokens.css` tokens.
+   the per-surface CSS classes in `src/styles/` and `src/styles/tokens.css` tokens.
 
 ## Accessibility & Inclusion
 
