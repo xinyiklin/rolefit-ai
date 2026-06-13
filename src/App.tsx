@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ChangeEvent } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 
 import {
   analyzeResumeText,
@@ -8,9 +8,10 @@ import {
   polishResume
 } from "./resumeEngine";
 
-import { describeProviderModel, roleAppliedOptions } from "./config/aiOptions";
+import { describeProviderModel } from "./config/aiOptions";
 import { useTemplates } from "./hooks/useTemplates";
 import { useDebouncedValue } from "./hooks/useDebouncedValue";
+import { useDocStyle } from "./hooks/useDocStyle";
 import { useAiSettings } from "./hooks/useAiSettings";
 import { useApplicationAnswers } from "./hooks/useApplicationAnswers";
 import {
@@ -21,32 +22,35 @@ import {
   type ApplicationStatus
 } from "./hooks/useApplications";
 import { useResumeAnalysis } from "./hooks/useResumeAnalysis";
+import { useResumeEditor } from "./hooks/useResumeEditor";
 import { useResumeExport } from "./hooks/useResumeExport";
 import { arrayBufferToBase64 } from "./lib/downloads";
 import { buildAiRequestFields, buildAuditRequestFields } from "./lib/aiRequest";
-import { extractRelevantJobText } from "./lib/jobExtract";
-import { blocksToText, buildResumeBlocks } from "./lib/resumeBlocks";
-import { describeResumeFormat, looksLikeLatex } from "./lib/resumeFormat";
+import { extractJobPosting, type ExtractedJobTracking } from "./lib/jobExtract";
+import { buildResumeBlocks } from "./lib/resumeBlocks";
+import { serializeResumeData, toTemplateSchema } from "./lib/resumeData";
+import { buildTailorScope, defaultTailorSectionIds, tailorScopeToText } from "./lib/tailorScope";
 
 import { AiMenu } from "./sections/AiMenu";
 import { ReviewerSettings } from "./sections/ReviewerSettings";
 import { Masthead } from "./sections/Masthead";
+import { JobMenu } from "./sections/JobMenu";
 import { PolishMenu } from "./sections/PolishMenu";
-import { SourcesPane } from "./sections/SourcesPane";
+import { ResumeMenu } from "./sections/ResumeMenu";
 import { StudioPane } from "./sections/StudioPane";
-import { ExportRail } from "./sections/ExportRail";
+import { ExportMenu } from "./sections/ExportRail";
+const PreviewOverlay = lazy(() => import("./sections/PreviewOverlay"));
+import { ApplicationModal } from "./sections/ApplicationModal";
 import { ResumePrintLayer } from "./sections/ResumePrintLayer";
 import { ResumeTab } from "./sections/tabs/ResumeTab";
-import { ReviewTab } from "./sections/tabs/ReviewTab";
-import { StrictReviewTab } from "./sections/tabs/StrictReviewTab";
-import { CoverLetterTab } from "./sections/tabs/CoverLetterTab";
-import { PipelineTab } from "./sections/tabs/PipelineTab";
-import { ApplicationQuestionsTab } from "./sections/tabs/ApplicationQuestionsTab";
+import { MaterialsTab } from "./sections/tabs/MaterialsTab";
+import { TrackerTab } from "./sections/tabs/TrackerTab";
+import type { TrackerView } from "./sections/tabs/TrackerTab";
+import { AnalyticsTab } from "./sections/tabs/AnalyticsTab";
 import type {
   OutputTab,
   OutputTabDescriptor,
-  ResumeBlock,
-  SourceDocx
+  ResumeBlock
 } from "./sections/shared";
 
 // ============ Types ============
@@ -54,17 +58,71 @@ import type {
 type WorkspaceBaseResume = {
   exists: boolean;
   fileName?: string;
+  label?: string;
   kind?: string;
   text?: string;
   paragraphs?: number;
   docxBase64?: string;
 };
 
+type BaseResumeOption = {
+  fileName: string;
+  label: string;
+  kind: string;
+};
+
+type BaseResumeHistoryEntry = {
+  key: string;
+  originalName: string;
+  kind: string;
+  date: string;
+};
+
 type JobWorkspace = {
   path: string;
   baseResume: WorkspaceBaseResume;
+  baseResumeOptions?: BaseResumeOption[];
+  baseResumeHistory?: BaseResumeHistoryEntry[];
   files: string[];
 };
+
+type ImportedJobSnapshot = {
+  url: string;
+  tailoringText: string;
+  tracking: ExtractedJobTracking;
+  manualReviewFields: string[];
+};
+
+function normalizeResumeSnapshot(text: string) {
+  return text.replace(/\s+/g, " ").trim();
+}
+
+function presentTrackingFields(tracking: ExtractedJobTracking) {
+  const fields = [
+    tracking.role || tracking.title ? "role" : "",
+    tracking.company ? "company" : "",
+    tracking.location ? "location" : "",
+    tracking.jobType ? "job type" : "",
+    tracking.salaryMin != null || tracking.salaryMax != null ? "compensation" : "",
+    tracking.roleDescription ? "role summary" : ""
+  ].filter(Boolean);
+  if (!fields.length) return "no tracking fields";
+  if (fields.length === 1) return fields[0];
+  return `${fields.slice(0, -1).join(", ")} and ${fields[fields.length - 1]}`;
+}
+
+function compactManualReviewFields(fields: string[]) {
+  const unique = [...new Set(fields)].filter((field) => field !== "job description");
+  if (!unique.length) return "";
+  if (unique.length === 1) return unique[0];
+  return `${unique.slice(0, -1).join(", ")} and ${unique[unique.length - 1]}`;
+}
+
+function definedTracking(tracking: ExtractedJobTracking) {
+  return Object.fromEntries(
+    Object.entries(tracking).filter(([, value]) => value !== undefined && value !== "" && value !== null)
+  ) as ExtractedJobTracking;
+}
 
 // ============ App ============
 
@@ -72,20 +130,21 @@ function App() {
   // ----- State -----
   const [jobDescription, setJobDescription] = useState("");
   const [jobUrl, setJobUrl] = useState("");
+  const [importedJob, setImportedJob] = useState<ImportedJobSnapshot | null>(null);
   const [isExtractingLink, setIsExtractingLink] = useState(false);
   // Starts empty; the mount effect (loadWorkspace) auto-loads a workspace
   // base-resume when one exists, otherwise the editor stays blank.
   const [resumeText, setResumeText] = useState("");
   const [fileName, setFileName] = useState("");
-  const [sourceDocx, setSourceDocx] = useState<SourceDocx | null>(null);
+
   const [resumeBlocks, setResumeBlocks] = useState<ResumeBlock[]>([]);
   const [result, setResult] = useState<PolishedResume | null>(null);
   const [fileError, setFileError] = useState("");
   const [fileStatus, setFileStatus] = useState("");
   const [linkStatus, setLinkStatus] = useState("");
   const [isPolishing, setIsPolishing] = useState(false);
-  const [polishStatus, setPolishStatus] = useState("");
-  // Resume export (copy/print/DOCX/LaTeX/Overleaf) state + handlers live in
+  const [, setPolishStatus] = useState("");
+  // Resume export (print/LaTeX/preview) state + handlers live in
   // useResumeExport; texStatus stays here because non-export handlers write it too.
   const [texStatus, setTexStatus] = useState("");
   // All auto-saved AI preferences (primary provider/model, the reviewer-override
@@ -118,24 +177,36 @@ function App() {
     auditApiKey,
     setAuditApiKey,
     handleAuditProviderChange,
-    roleAppliedAs,
-    setRoleAppliedAs,
     honestContext,
     setHonestContext,
     customInstructions,
     setCustomInstructions
   } = ai;
   const [includeCoverLetter, setIncludeCoverLetter] = useState(false);
-  const [strictReview, setStrictReview] = useState(true);
-  const [preserveFormat, setPreserveFormat] = useState(true);
+  // Default OFF: strict review fires a second, slow `claude -p` audit pass after
+  // the rewrite, roughly doubling polish latency. Opt in via the Options menu
+  // toggle when you want the skeptical recruiter audit.
+  const [strictReview, setStrictReview] = useState(false);
   const [activeOutputTab, setActiveOutputTab] = useState<OutputTab>("resume");
   const [workspacePath, setWorkspacePath] = useState("");
   const [workspaceFiles, setWorkspaceFiles] = useState<string[]>([]);
   const [baseResumeName, setBaseResumeName] = useState("");
+  const [baseResumeOptions, setBaseResumeOptions] = useState<BaseResumeOption[]>([]);
+  const [baseResumeHistory, setBaseResumeHistory] = useState<BaseResumeHistoryEntry[]>([]);
   const [workspaceStatus, setWorkspaceStatus] = useState("");
   const [isSavingBaseResume, setIsSavingBaseResume] = useState(false);
   const [pipelineFilter, setPipelineFilter] = useState<"all" | ApplicationStatus>("all");
+  const [trackerView, setTrackerView] = useState<TrackerView>("table");
   const [expandedApplicationId, setExpandedApplicationId] = useState<string | null>(null);
+  const [isApplicationModalOpen, setIsApplicationModalOpen] = useState(false);
+  // null → the modal is in "add" mode; an id → it edits that application.
+  const [modalApplicationId, setModalApplicationId] = useState<string | null>(null);
+  // Controlled open state for the Options (PolishMenu) popover — lets the
+  // "Add evidence" handler open it programmatically without a new popover system.
+  const [polishMenuOpen, setPolishMenuOpen] = useState(false);
+  // Ref for the honest-context textarea inside the Options menu — focused after
+  // the menu is opened by handleAddHonestContext so the user can type immediately.
+  const honestContextTextareaRef = useRef<HTMLTextAreaElement>(null);
 
   // ----- Hooks -----
   const {
@@ -145,14 +216,37 @@ function App() {
     tectonic,
     templatesError,
     renderTex,
-    renderPdf
+    renderPdf,
+    renderPdfFromSchema,
+    renderTexFromSchema
   } = useTemplates();
+
+  // ----- Structured resume editor -----
+  // editedResume is the canonical editable model; it seeds at discrete events
+  // (a fresh polish, a loaded base resume, a restored snapshot). `currentResumeText`
+  // is its serialization (falling back to the raw polish output) — the bridge every
+  // text consumer (scoring, diff, exports, print, application snapshots) reads.
+  const {
+    editedResume,
+    dirty: resumeEdited,
+    serializedResume,
+    seed: seedResumeEditor,
+    seedData: seedResumeData,
+    actions: resumeEditorActions
+  } = useResumeEditor();
+  const currentResumeText = serializedResume || result?.polishedText || "";
+  const [tailorSectionIds, setTailorSectionIds] = useState<string[]>([]);
+  // User typography for the HTML resume page (Format menu): persisted CSS vars
+  // applied to the editor and the print mirror.
+  const docStyle = useDocStyle();
 
   const {
     applications,
     isLoading: isApplicationsLoading,
     error: applicationsError,
     upsert: upsertApplication,
+    saveApplication,
+    patchApplication,
     updateStatus: updateApplicationStatus,
     updateNotes: updateApplicationNotes,
     updateField: updateApplicationField,
@@ -184,13 +278,39 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const resumeSectionIdsKey = editedResume?.sections.map((section) => section.id).join("|") ?? "";
+  useEffect(() => {
+    if (!editedResume) {
+      setTailorSectionIds([]);
+      return;
+    }
+    const validIds = new Set(editedResume.sections.map((section) => section.id));
+    setTailorSectionIds((current) => {
+      const preserved = current.filter((id) => validIds.has(id));
+      return preserved.length ? preserved : defaultTailorSectionIds(editedResume);
+    });
+    // Only reset when sections are added/removed/reparsed. Heading/text edits
+    // should not wipe the user's explicit scope choices.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resumeSectionIdsKey]);
+
+  useEffect(() => {
+    if (!applications.length) {
+      setExpandedApplicationId(null);
+      return;
+    }
+    if (!expandedApplicationId || !applications.some((app) => app.id === expandedApplicationId)) {
+      setExpandedApplicationId(applications[0].id);
+    }
+  }, [applications, expandedApplicationId]);
+
   // ----- Derived (memos) -----
   // The job link has its own field now: the description textarea holds the text
   // we tailor against, while `jobUrl` is optional metadata saved with the
   // application for pipeline tracking only — it is never sent to the model.
   const canPolish = useMemo(() => {
-    return resumeText.trim().length > 80 && jobDescription.trim().length > 40;
-  }, [jobDescription, resumeText]);
+    return Boolean(editedResume && tailorSectionIds.length > 0 && jobDescription.trim().length > 40);
+  }, [editedResume, jobDescription, tailorSectionIds.length]);
 
   const combinedJobText = jobDescription;
 
@@ -198,17 +318,15 @@ function App() {
   // typing on large resumes. The polished `result` stays immediate.
   const debouncedResumeText = useDebouncedValue(resumeText);
   const debouncedCombinedJobText = useDebouncedValue(combinedJobText);
+  // The edited resume is debounced before the heavy match/diff/fit recompute so
+  // typing in the editor stays smooth (the editor preview itself updates live).
+  const debouncedCurrentResumeText = useDebouncedValue(currentResumeText);
 
   // Every score/diff/match derivation the UI shows is pure (read-only) and lives
   // in useResumeAnalysis, so it stays decoupled from App's setters.
   const {
-    currentAnalysis,
-    resumeBulletCount,
-    matchBreakdown,
     resumeDiff,
     fitComparison,
-    blockStats,
-    scoreSource,
     headlineScore,
     scoreContext,
     resultSourceLabel
@@ -217,57 +335,79 @@ function App() {
     combinedJobText,
     debouncedResumeText,
     debouncedCombinedJobText,
+    debouncedCurrentResumeText,
+    isEdited: resumeEdited,
+    editedResume,
     result,
     resumeBlocks
   });
 
   // ----- Derived (non-memo) -----
-  const resumeReady = resumeText.trim().length > 80;
-  const resumeSourceFormat = describeResumeFormat(fileName, Boolean(sourceDocx), resumeText);
+  const resumeReady = (currentResumeText || resumeText).trim().length > 80;
   const jobReady = jobDescription.trim().length > 40;
-  const outputReady = Boolean(result);
+  // Quiet target label for the Materials tab plan rail header.
+  // Only derived when a job description is present; never invents content.
+  const materialsJobTarget =
+    jobReady
+      ? (() => {
+          const t = currentJobTracking();
+          return t.role || t.company ? { role: t.role, company: t.company } : undefined;
+        })()
+      : undefined;
+  // Exports work from the structured editor model (the same faithful path as the
+  // compile preview), so they unlock as soon as a resume is loaded — not only
+  // after an AI polish.
+  const canExportResume = Boolean(result || editedResume);
+  // Name what is actually blocking Polish; both inputs now live in navbar menus.
+  const polishGateHint = canPolish
+    ? ""
+    : !resumeReady && !jobReady
+    ? "Add a resume (Resume menu) and the job description (Job menu) to polish."
+    : !jobReady
+    ? "Add the job description from the Job menu to polish."
+    : !editedResume || !tailorSectionIds.length
+    ? "Load a resume and select at least one resume section to tailor."
+    : "Add more resume text in the Resume menu (a few lines at least).";
   const selectedTemplate = templates.find((t) => t.id === selectedTemplateId) ?? null;
   const outputTabs: OutputTabDescriptor[] = [
     { id: "resume", label: "Resume" },
-    { id: "strict", label: "Strict review", badge: result?.strictReview?.verdict ? "•" : undefined },
-    { id: "review", label: "Review", badge: headlineScore ?? undefined },
-    { id: "cover", label: "Cover letter" },
-    {
-      id: "questions",
-      label: "Questions",
-      badge: answersResult
-        ? (answersResult.answers.length + answersResult.roleDescriptions.length) || undefined
-        : undefined
-    },
-    { id: "pipeline", label: "Pipeline", badge: applications.length || undefined }
+    { id: "materials", label: "Materials" },
+    { id: "applications", label: "Applications" },
+    { id: "analytics", label: "Analytics" }
   ];
 
-  // ----- Resume export (copy / print / DOCX / LaTeX / Overleaf) -----
+  // ----- Resume export (print / LaTeX / preview) -----
   const {
-    copied,
     coverCopied,
     downloadStatus,
     isDownloadingTex,
     isRenderingLatexPdf,
-    isOpeningOverleaf,
+    isPreviewOpen,
+    isPreviewLoading,
+    previewError,
+    previewPdfUrl,
     resetStatuses: resetExportStatuses,
-    handleCopy,
     handleCopyCoverLetter,
     handlePrintResume,
-    handleDownloadDocx,
     handleDownloadTex,
     handleDownloadLatexPdf,
-    handleOpenInOverleaf
+    handlePreview,
+    handleClosePreview,
+    resumeDownloadName,
+    getResumeArtifacts
   } = useResumeExport({
     result,
-    sourceDocx,
+    editedResume,
+    currentResumeText,
     jobUrl,
     resumeText,
-    resumeSourceFormat,
     selectedTemplateId,
     selectedTemplate,
     renderTex,
     renderPdf,
+    renderTexFromSchema,
+    renderPdfFromSchema,
+    docStyle: docStyle.style,
     tectonic,
     setTexStatus
   });
@@ -285,19 +425,15 @@ function App() {
     setPolishStatus("");
     resetExportStatuses();
     setTexStatus("");
+    // Make the loaded base resume editable straight away (pre-polish).
+    seedResumeEditor(baseResume.text, "");
 
     if (baseResume.kind === "docx" && baseResume.docxBase64) {
-      setSourceDocx({
-        name: baseResume.fileName ?? "base-resume.docx",
-        base64: baseResume.docxBase64,
-        paragraphs: Number(baseResume.paragraphs ?? 0)
-      });
       setResumeBlocks(buildResumeBlocks(baseResume.text));
-      setFileStatus(`${status} Format-preserving DOCX export is available.`);
+      setFileStatus(`${status} DOCX content parsed into the editor.`);
     } else {
-      setSourceDocx(null);
       setResumeBlocks([]);
-      setFileStatus(`${status} Text export uses the clean ATS PDF template.`);
+      setFileStatus(status);
     }
   }
 
@@ -305,6 +441,8 @@ function App() {
     setWorkspacePath(workspace.path);
     setWorkspaceFiles(workspace.files ?? []);
     setBaseResumeName(workspace.baseResume?.exists ? workspace.baseResume.fileName ?? "" : "");
+    setBaseResumeOptions(workspace.baseResumeOptions ?? []);
+    setBaseResumeHistory(workspace.baseResumeHistory ?? []);
   }
 
   async function loadWorkspace(applyBaseResume = false) {
@@ -324,6 +462,11 @@ function App() {
         }
       } else {
         setWorkspaceStatus("Local workspace ready. Save a base resume to use it automatically on startup.");
+        if (applyBaseResume && workspace.baseResume?.text) {
+          setResumeText(workspace.baseResume.text);
+          seedResumeEditor(workspace.baseResume.text, "");
+          setFileStatus("Loaded the starter template. Replace it with your own resume to get started.");
+        }
       }
     } catch (error) {
       setWorkspaceStatus(error instanceof Error ? error.message : "Local workspace could not be checked.");
@@ -332,7 +475,7 @@ function App() {
 
   async function saveBaseResume(payload: { fileName: string; fileBase64?: string; text?: string }) {
     setIsSavingBaseResume(true);
-    setWorkspaceStatus("Saving base resume to the local workspace...");
+    setWorkspaceStatus("Saving base resume to the local workspace…");
 
     try {
       const response = await fetch("/api/workspace/base-resume", {
@@ -351,6 +494,7 @@ function App() {
       updateWorkspaceState({
         path: workspace.path ?? workspacePath,
         baseResume: workspace.baseResume,
+        baseResumeOptions: workspace.baseResumeOptions,
         files: workspace.files ?? workspaceFiles
       });
       applyWorkspaceBaseResume(
@@ -375,7 +519,7 @@ function App() {
     );
     if (!confirmed) return;
     setIsSavingBaseResume(true);
-    setWorkspaceStatus("Removing the base resume from the local workspace...");
+    setWorkspaceStatus("Removing the base resume from the local workspace…");
     try {
       const response = await fetch("/api/workspace/base-resume", { method: "DELETE" });
       const workspace = (await response.json()) as Partial<JobWorkspace> & { error?: string };
@@ -383,12 +527,12 @@ function App() {
       updateWorkspaceState({
         path: workspace.path ?? workspacePath,
         baseResume: workspace.baseResume ?? { exists: false },
+        baseResumeOptions: workspace.baseResumeOptions,
         files: workspace.files ?? workspaceFiles
       });
       // Detach the file from the editor so the resume text is editable again,
       // but keep the current text so the user doesn't lose their draft.
       setFileName("");
-      setSourceDocx(null);
       setResumeBlocks([]);
       setFileStatus("");
       setWorkspaceStatus("Removed the base resume (backup saved in .trash). Save again to set a new one.");
@@ -399,30 +543,90 @@ function App() {
     }
   }
 
-  async function saveCurrentAsBaseResume() {
-    if (sourceDocx) {
-      try {
-        setIsSavingBaseResume(true);
-        setWorkspaceStatus("Preparing edited DOCX as the base resume...");
-        const response = await fetch("/api/export-resume-docx", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ docxBase64: sourceDocx.base64, polishedText: resumeText })
-        });
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.error ?? "DOCX export failed.");
-        await saveBaseResume({ fileName: sourceDocx.name, fileBase64: String(data.docxBase64 ?? "") });
-      } catch (error) {
-        setWorkspaceStatus(
-          error instanceof Error ? error.message : "Edited DOCX could not be saved as base resume."
-        );
-      } finally {
-        setIsSavingBaseResume(false);
+  async function restoreBaseResume(key: string) {
+    setIsSavingBaseResume(true);
+    setWorkspaceStatus("Restoring from history…");
+    try {
+      const response = await fetch("/api/workspace/base-resume/restore", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key })
+      });
+      const workspace = (await response.json()) as Partial<JobWorkspace> & {
+        baseResume?: WorkspaceBaseResume;
+        baseResumeHistory?: BaseResumeHistoryEntry[];
+        error?: string;
+      };
+      if (!response.ok || !workspace.baseResume) {
+        throw new Error(workspace.error ?? "Restore failed.");
       }
-      return;
+      updateWorkspaceState({
+        path: workspace.path ?? workspacePath,
+        baseResume: workspace.baseResume,
+        baseResumeOptions: workspace.baseResumeOptions,
+        baseResumeHistory: workspace.baseResumeHistory,
+        files: workspace.files ?? workspaceFiles
+      });
+      applyWorkspaceBaseResume(workspace.baseResume, `Restored ${workspace.baseResume.fileName} from history.`);
+      setWorkspaceStatus(`Restored ${workspace.baseResume.fileName} from history.`);
+    } catch (error) {
+      setWorkspaceStatus(error instanceof Error ? error.message : "Restore failed.");
+    } finally {
+      setIsSavingBaseResume(false);
+    }
+  }
+
+  async function saveCurrentAsBaseResume() {
+    const targetName = baseResumeName || fileName || "base-resume.txt";
+    let text = currentResumeText || resumeText;
+
+    if (/\.tex$/i.test(targetName) && editedResume) {
+      setIsSavingBaseResume(true);
+      setWorkspaceStatus("Rendering current resume to LaTeX before saving…");
+      try {
+        text = await renderTexFromSchema(toTemplateSchema(editedResume), selectedTemplateId, {
+          docStyle: docStyle.style
+        });
+      } catch (error) {
+        setWorkspaceStatus(error instanceof Error ? error.message : "Current resume could not be rendered to LaTeX.");
+        setIsSavingBaseResume(false);
+        return;
+      }
     }
 
-    await saveBaseResume({ fileName: fileName || "base-resume.txt", text: resumeText });
+    await saveBaseResume({ fileName: targetName, text });
+  }
+
+  async function loadBaseResumeVersion(fileName: string) {
+    setIsSavingBaseResume(true);
+    setWorkspaceStatus("Loading base resume version…");
+    try {
+      const response = await fetch("/api/workspace/base-resume/select", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fileName })
+      });
+      const workspace = (await response.json()) as Partial<JobWorkspace> & {
+        baseResume?: WorkspaceBaseResume;
+        error?: string;
+      };
+      if (!response.ok || !workspace.baseResume) {
+        throw new Error(workspace.error ?? "Base resume load failed.");
+      }
+      updateWorkspaceState({
+        path: workspace.path ?? workspacePath,
+        baseResume: workspace.baseResume,
+        baseResumeOptions: workspace.baseResumeOptions,
+        baseResumeHistory: workspace.baseResumeHistory,
+        files: workspace.files ?? workspaceFiles
+      });
+      applyWorkspaceBaseResume(workspace.baseResume, `Loaded ${workspace.baseResume.fileName} into the editor.`);
+      setWorkspaceStatus(`Loaded ${workspace.baseResume.fileName}.`);
+    } catch (error) {
+      setWorkspaceStatus(error instanceof Error ? error.message : "Base resume load failed.");
+    } finally {
+      setIsSavingBaseResume(false);
+    }
   }
 
   async function handleFileUpload(event: ChangeEvent<HTMLInputElement>) {
@@ -432,7 +636,6 @@ function App() {
     setFileName(file.name);
     setFileError("");
     setFileStatus("");
-    setSourceDocx(null);
     setResumeBlocks([]);
     setResult(null);
 
@@ -455,10 +658,8 @@ function App() {
         if (!response.ok) throw new Error(data.error ?? "DOCX import failed.");
         setResumeText(String(data.text ?? ""));
         setResumeBlocks(buildResumeBlocks(String(data.text ?? "")));
-        setSourceDocx({ name: file.name, base64, paragraphs: Number(data.paragraphs ?? 0) });
-        setFileStatus(
-          "DOCX loaded. Format-preserving DOCX export will reuse the original file structure; preview complex templates before sending."
-        );
+        seedResumeEditor(String(data.text ?? ""), "");
+        setFileStatus("DOCX parsed into the editor.");
       } catch (error) {
         setFileError(
           error instanceof Error ? error.message : "DOCX import failed. Try saving the resume from Word as a fresh DOCX."
@@ -468,11 +669,19 @@ function App() {
     }
 
     if (/\.tex$/i.test(file.name)) {
-      // Keep the raw LaTeX as the working text so Preserve format rewrites it in
-      // place as .tex. The editor shows LaTeX markup; export stays .tex/Overleaf.
-      setResumeText(await file.text());
+      // Keep the raw LaTeX as the working text so AI rewrites can preserve it in
+      // place as .tex; parse it into the structured editor for interactive edits.
+      const texText = await file.text();
+      // The local parser bounds input at 200 KB (resumeData.ts MAX_LATEX_INPUT); a
+      // larger file would parse to an empty editor while claiming success — surface it.
+      if (texText.length > 200_000) {
+        setFileError("This .tex file is too large to parse locally (over 200 KB). Paste the resume content directly instead.");
+        return;
+      }
+      setResumeText(texText);
       setResumeBlocks([]);
-      setFileStatus("LaTeX source loaded. Keep “Preserve format” on to rewrite in place; export as .tex or via Overleaf.");
+      seedResumeEditor(texText, "");
+      setFileStatus("LaTeX source loaded and parsed into the editor. Export as .tex or compile with Tectonic.");
       return;
     }
 
@@ -482,8 +691,10 @@ function App() {
     }
 
     try {
-      setResumeText(await file.text());
+      const text = await file.text();
+      setResumeText(text);
       setResumeBlocks([]);
+      seedResumeEditor(text, "");
       setFileStatus("Text file loaded. Export uses the clean ATS PDF template or any LaTeX template.");
     } catch {
       setFileError("The file could not be read. Try pasting the resume text instead.");
@@ -491,13 +702,33 @@ function App() {
   }
 
   async function handlePolish() {
-    const fallbackBase = polishResume(resumeText, combinedJobText);
+    if (!editedResume) {
+      setPolishStatus("Load a resume before polishing.");
+      return;
+    }
+    const selectedIds = tailorSectionIds.length ? tailorSectionIds : defaultTailorSectionIds(editedResume);
+    const tailorScope = buildTailorScope(editedResume, selectedIds);
+    const scopedResumeText = tailorScopeToText(tailorScope);
+    if (!tailorScope.sections.length || scopedResumeText.trim().length < 40) {
+      setPolishStatus("Select at least one editable resume section to tailor.");
+      return;
+    }
+
+    const fallbackBase = polishResume(scopedResumeText, combinedJobText);
     const fallback = includeCoverLetter
       ? { ...fallbackBase, coverLetterText: draftCoverLetter(resumeText, combinedJobText, fallbackBase.polishedText) }
       : fallbackBase;
 
     setIsPolishing(true);
-    setPolishStatus(includeCoverLetter ? "Polishing resume and drafting cover letter..." : "Polishing with AI...");
+    setPolishStatus(
+      strictReview
+        ? includeCoverLetter
+          ? "Drafting targeted suggestions, strict review, and cover letter…"
+          : "Drafting targeted suggestions and strict review…"
+        : includeCoverLetter
+          ? "Drafting targeted suggestions and cover letter…"
+          : "Drafting targeted suggestions…"
+    );
     resetExportStatuses();
     setTexStatus("");
 
@@ -522,13 +753,10 @@ function App() {
             auditCustomModel,
             auditCliReasoningEffort
           }),
-          resumeText,
+          tailorScope,
           jobText: jobDescription,
-          preserveFormat,
-          sourceFormat: resumeSourceFormat,
           includeCoverLetter,
           strictReview,
-          roleAppliedAs,
           honestContext,
           customInstructions
         })
@@ -536,16 +764,15 @@ function App() {
 
       const data = await response.json();
       if (!response.ok) throw new Error(data.error ?? "AI polish failed.");
-      if (!data.polishedText) throw new Error("AI response did not include polished resume text.");
+      const suggestedChanges = Array.isArray(data.suggestedChanges) ? data.suggestedChanges : [];
+      if (!data.polishedText && !suggestedChanges.length) {
+        throw new Error("AI response did not include usable resume suggestions.");
+      }
 
-      // For a preserved LaTeX source the model returns the full edited .tex —
-      // keep it verbatim. normalizePolishedResume reflows section text and would
-      // shred the LaTeX commands.
-      const latexInPlace = resumeSourceFormat === "LaTeX" && preserveFormat && looksLikeLatex(String(data.polishedText));
-      const polishedText = latexInPlace
-        ? String(data.polishedText).trim()
-        : normalizePolishedResume(data.polishedText, resumeText);
-      const analysis = analyzeResumeText(polishedText, combinedJobText);
+      const scopedPolishedText = data.polishedText
+        ? normalizePolishedResume(data.polishedText, scopedResumeText)
+        : scopedResumeText;
+      const analysis = analyzeResumeText(suggestedChanges.length ? currentResumeText || scopedPolishedText : scopedPolishedText, combinedJobText);
       // Reviewer attribution: only when a DIFFERENT provider/model ran the audit
       // (an override). The server echoes the audit identity when strict review ran.
       const reviewedBy =
@@ -554,63 +781,64 @@ function App() {
           : "";
       setResult({
         ...analysis,
-        polishedText,
+        polishedText: suggestedChanges.length ? currentResumeText || scopedPolishedText : scopedPolishedText,
         source: "ai",
         coverLetterText: includeCoverLetter
-          ? data.coverLetterText || draftCoverLetter(resumeText, combinedJobText, polishedText)
+          ? data.coverLetterText || draftCoverLetter(scopedResumeText, combinedJobText, scopedPolishedText)
           : undefined,
         strengths: data.strengths?.length ? data.strengths : fallback.strengths,
         fixes: data.fixes?.length ? data.fixes : fallback.fixes,
+        changeSummary: Array.isArray(data.changeSummary) && data.changeSummary.length ? data.changeSummary : undefined,
         missingRequiredSkills: data.missingRequiredSkills?.length ? data.missingRequiredSkills : undefined,
+        suggestedChanges,
         aiScore: data.aiScore ?? undefined,
         strictReview: data.strictReview ?? undefined,
         reviewedBy: reviewedBy || undefined
       });
-      setActiveOutputTab(strictReview && data.strictReview ? "strict" : "resume");
+      // Land where the user acts: the editor, with the recruiter review docked
+      // beside it as actionable edit cards.
+      setActiveOutputTab("resume");
       setPolishStatus(
         reviewedBy
-          ? `Strict review complete — polished with ${describeProviderModel(data.provider, data.model)}, reviewed by ${reviewedBy}.`
-          : `${strictReview ? "Strict review" : "AI polish"} complete${data.model ? ` using ${data.model}` : ""}.`
+          ? `Suggestions ready — drafted with ${describeProviderModel(data.provider, data.model)}, reviewed by ${reviewedBy}.`
+          : `${data.strictReview ? "Recruiter-reviewed suggestions" : "Suggestions"} ready${data.model ? ` using ${data.model}` : ""}.`
       );
     } catch (error) {
       setResult(fallback);
       setActiveOutputTab("resume");
       const message = error instanceof Error ? error.message.replace(/[.。]\s*$/, "") : "request failed";
-      setPolishStatus(`AI unavailable: ${message}. Returned local engine draft instead.`);
+      setPolishStatus(`AI unavailable: ${message}. Local engine analysis is shown; your editor was not replaced.`);
     } finally {
       setIsPolishing(false);
     }
   }
 
-  function updateResumeBlock(id: string, text: string) {
-    const nextBlocks = resumeBlocks.map((block) => (block.id === id ? { ...block, text } : block));
-    setResumeBlocks(nextBlocks);
-    setResumeText(blocksToText(nextBlocks));
-    setResult(null);
-  }
-
-  function syncBlocksFromText() {
-    const nextBlocks = buildResumeBlocks(resumeText);
-    setResumeBlocks(nextBlocks);
-    setFileStatus(`${nextBlocks.length} resume blocks synced from the text draft.`);
-  }
-
-  async function loadResume() {
-    if (baseResumeName) {
-      await loadWorkspace(true);
-      return;
+  // Called from the ReviewRail "Add evidence" button on gaps/missing-skills rows.
+  // Appends a template line to honestContext (unless the keyword is already there),
+  // then opens the Options menu so the user can fill it in and re-run Polish.
+  function handleAddHonestContext(keyword: string) {
+    const alreadyPresent = honestContext.toLowerCase().includes(keyword.toLowerCase());
+    if (!alreadyPresent) {
+      const template = `${keyword}: [describe your exact experience — what you did, where, when]`;
+      setHonestContext(honestContext ? `${honestContext}\n${template}` : template);
     }
-    setResumeText("");
-    setFileName("");
-    setSourceDocx(null);
-    setResumeBlocks([]);
-    setResult(null);
-    setActiveOutputTab("resume");
-    setFileError("");
-    setFileStatus("No base resume is saved yet. Upload a resume or save one in the local workspace to make it the startup default.");
-    setPolishStatus("");
-    resetExportStatuses();
-    setTexStatus("");
+    setPolishMenuOpen(true);
+    // Give the menu one frame to render before trying to focus the textarea.
+    window.requestAnimationFrame(() => {
+      honestContextTextareaRef.current?.focus();
+    });
+    setPolishStatus(`Added evidence prompt for "${keyword}" — fill it in, then Polish again.`);
+  }
+
+  function currentJobTracking(): ExtractedJobTracking {
+    const fresh = extractJobPosting(jobDescription, { url: jobUrl }).tracking;
+    const imported =
+      importedJob &&
+      importedJob.url === jobUrl.trim() &&
+      importedJob.tailoringText === jobDescription.trim()
+        ? importedJob.tracking
+        : null;
+    return imported ? { ...definedTracking(fresh), ...definedTracking(imported) } : definedTracking(fresh);
   }
 
   async function handleExtractFromLink() {
@@ -626,54 +854,122 @@ function App() {
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error ?? "Could not read that link.");
-      // Local distiller trims the scraped page to the parts worth polishing against.
-      const relevant = extractRelevantJobText(String(data.text ?? ""));
+      // Local distiller trims the scraped page to the parts worth polishing
+      // against while extracting tracker-only details separately.
+      const extracted = extractJobPosting(String(data.text ?? ""), { url });
+      const relevant = extracted.tailoringText;
       if (relevant.trim().length < 40) {
         setLinkStatus("Fetched the page, but found too little job text. Paste the description instead.");
+        setImportedJob(null);
         return;
       }
       setJobDescription(relevant);
+      setImportedJob({
+        url,
+        tailoringText: relevant.trim(),
+        tracking: extracted.tracking,
+        manualReviewFields: extracted.manualReviewFields
+      });
       setResult(null);
+      const missing = compactManualReviewFields(extracted.manualReviewFields);
       setLinkStatus(
-        `Extracted ${relevant.length.toLocaleString()} characters into the job description below — review before polishing.`
+        `Extracted ${relevant.length.toLocaleString()} compact characters for tailoring and captured ${presentTrackingFields(
+          extracted.tracking
+        )}${missing ? `; add ${missing} manually if needed` : ""}.`
       );
     } catch (error) {
       const message = error instanceof Error ? error.message.replace(/[.。]\s*$/, "") : "request failed";
+      setImportedJob(null);
       setLinkStatus(`Couldn't extract from the link: ${message}. Paste the description instead.`);
     } finally {
       setIsExtractingLink(false);
     }
   }
 
-  function handleNextRole() {
-    setJobDescription("");
-    setJobUrl("");
+  // Distill whatever the user pasted into the Job posting box through the same
+  // pipeline the link path uses. Covers JDs the server can't fetch (Workday
+  // wd1 tenants, ADP, anything JS-only): user copies the visible page text from
+  // their browser, pastes it in, and gets the structured brief plus tracking.
+  function handleDistillPaste() {
+    const raw = jobDescription;
+    if (!raw.trim() || isExtractingLink) return;
+    // Strip HTML tags only if the paste looks tag-shaped (text from "View
+    // source" or a copied editor block). Plain copy-paste from a rendered page
+    // doesn't need this and passes through untouched.
+    const looksLikeHtml = /<\/?[a-z][\s\S]{0,40}>/i.test(raw) && raw.split("<").length > 5;
+    const cleaned = looksLikeHtml
+      ? raw
+          .replace(/<style[\s\S]*?<\/style>/gi, " ")
+          .replace(/<script[\s\S]*?<\/script>/gi, " ")
+          .replace(/<\/(p|div|li|h[1-6]|ul|ol|tr|section|header|footer|article)>/gi, "\n")
+          .replace(/<li[^>]*>/gi, "\n• ")
+          .replace(/<br\s*\/?>/gi, "\n")
+          .replace(/<[^>]+>/g, " ")
+          .replace(/&nbsp;/gi, " ")
+          .replace(/&amp;/gi, "&")
+          .replace(/&lt;/gi, "<")
+          .replace(/&gt;/gi, ">")
+          .replace(/&quot;|&#39;/gi, '"')
+      : raw;
+    if (cleaned.trim().length < 80) {
+      setLinkStatus("Paste a bit more job text first — distillation needs a real description to work from.");
+      return;
+    }
+    const extracted = extractJobPosting(cleaned, { url: jobUrl.trim() || undefined });
+    const relevant = extracted.tailoringText;
+    if (relevant.trim().length < 40) {
+      setLinkStatus("Couldn't find enough job-relevant text in the paste. Check that you copied the description, not just the page header.");
+      return;
+    }
+    setJobDescription(relevant);
+    setImportedJob({
+      url: jobUrl.trim(),
+      tailoringText: relevant.trim(),
+      tracking: extracted.tracking,
+      manualReviewFields: extracted.manualReviewFields
+    });
     setResult(null);
-    setLinkStatus("");
-    setPolishStatus("");
-    // Honest context + custom instructions are remembered prefs, not per-role; keep them.
-    resetExportStatuses();
-    setTexStatus("");
-    setActiveOutputTab("resume");
+    const missing = compactManualReviewFields(extracted.manualReviewFields);
+    setLinkStatus(
+      `Distilled ${relevant.length.toLocaleString()} compact characters from the paste and captured ${presentTrackingFields(
+        extracted.tracking
+      )}${missing ? `; add ${missing} manually if needed` : ""}.`
+    );
   }
 
-  function handleTrackInPipeline(resumeUsed: "tailored" | "base" = "tailored") {
+  function handleApply() {
     if (!jobUrl.trim() && !jobDescription.trim()) return;
     const sr = result?.strictReview;
-    // Record the resume that actually went out: the tailored draft, or the
-    // original/base resume the user submitted instead.
-    const usedBase = resumeUsed === "base" || !result?.polishedText;
-    const sentResume = usedBase ? resumeText : result?.polishedText ?? "";
+    // Apply always sends the final draft in the resume editor — the editor model
+    // is the export/pipeline source of truth, so there's no "which resume?" prompt.
+    // We still record whether that draft reflects accepted AI changes (tailored)
+    // or is the untouched base, for honest pipeline display.
+    const hasStructuredSuggestions = Boolean(result?.suggestedChanges?.length);
+    const acceptedStructuredSuggestions =
+      hasStructuredSuggestions &&
+      Boolean(result?.polishedText) &&
+      normalizeResumeSnapshot(currentResumeText) !== normalizeResumeSnapshot(result?.polishedText ?? "");
+    const usedBase = !result?.polishedText || (hasStructuredSuggestions && !acceptedStructuredSuggestions);
+    const sentResume = currentResumeText || resumeText || result?.polishedText || "";
     const existing = findForTarget(jobUrl, jobDescription);
-    const draft = makeApplicationDraft(jobUrl, jobDescription);
+    const now = new Date().toISOString();
+    // Apply marks the role as submitted, but never regresses a role that's
+    // already further along (interviewing/offer/etc.) on re-apply.
+    const status: ApplicationStatus =
+      existing && existing.status && existing.status !== "interested" ? existing.status : "applied";
+    const draft = makeApplicationDraft(jobUrl, jobDescription, currentJobTracking());
     const app: Application = {
       ...draft,
       id: existing?.id ?? draft.id,
+      // Keep the original applied date on re-apply; stamp it now the first time.
+      status,
+      appliedAt: existing?.appliedAt ?? now,
       fitScore: headlineScore ?? result?.score.overall ?? null,
       baseFitScore: fitComparison?.base ?? null,
       tailoredFitScore: fitComparison?.tailored ?? null,
       fitScoreSource: fitComparison?.source ?? null,
       templateId: selectedTemplateId,
+      resumeData: editedResume ?? undefined,
       polishedText: sentResume,
       resumeUsed: usedBase ? "base" : "tailored",
       coverLetterText: result?.coverLetterText ?? "",
@@ -703,23 +999,55 @@ function App() {
         : undefined
     };
     upsertApplication(app);
-    setTexStatus(`Tracked "${existing?.title || app.title}" in the pipeline (${usedBase ? "original" : "tailored"} resume).`);
-    setActiveOutputTab("pipeline");
+    setTexStatus(`Applied — saved "${existing?.title || app.title}" to Applications (${usedBase ? "original" : "tailored"} resume).`);
+    setActiveOutputTab("applications");
     setExpandedApplicationId(existing?.id ?? app.id);
+    // Snapshot the resume that went out (.tex always, PDF when Tectonic is
+    // available) to the workspace so the detail modal can re-download it later.
+    void saveAppliedResumeArtifacts(existing?.id ?? app.id, existing?.title || app.title);
+  }
+
+  // Render the current resume to .tex/.pdf and persist them under the applied
+  // application, then attach the returned metadata. Best-effort: Apply has
+  // already succeeded, so a failed render/compile is swallowed (tex-only is a
+  // valid outcome when Tectonic is missing).
+  async function saveAppliedResumeArtifacts(id: string, label: string) {
+    try {
+      const artifacts = await getResumeArtifacts();
+      if (!artifacts) return;
+      const res = await fetch(`/api/applications/${encodeURIComponent(id)}/resume`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tex: artifacts.tex,
+          pdfBase64: artifacts.pdfBase64 ?? undefined,
+          fileName: artifacts.fileName,
+          templateId: artifacts.templateId
+        })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.resumeArtifacts) return;
+      patchApplication(id, { resumeArtifacts: data.resumeArtifacts });
+      setTexStatus(
+        `Applied "${label}" — saved resume ${data.resumeArtifacts.hasPdf ? ".tex + PDF" : ".tex (install Tectonic to also save the PDF)"}.`
+      );
+    } catch {
+      // Best-effort: the application is already saved.
+    }
   }
 
   function handleLoadApplication(app: Application) {
     // Description and link are separate fields: restore each from its own slot.
     setJobDescription(app.jobDescription || "");
     setJobUrl(app.jobUrl || "");
-    if (app.polishedText) {
-      const restoredResume = app.polishedText;
+    setImportedJob(null);
+    if (app.resumeData || app.polishedText) {
+      const restoredResume = app.polishedText || (app.resumeData ? serializeResumeData(app.resumeData) : "");
       const restoredAnalysis = analyzeResumeText(restoredResume, app.jobDescription || "");
       setResumeText(restoredResume);
       setFileName("");
-      setSourceDocx(null);
       setResumeBlocks([]);
-      setFileStatus("Loaded the tracked resume snapshot into the editor. Save it as base if you want it at startup.");
+      setFileStatus("Loaded the applied resume snapshot into the editor. Save it as base if you want it at startup.");
       setResult({
         ...restoredAnalysis,
         polishedText: restoredResume,
@@ -736,10 +1064,16 @@ function App() {
           : ["Review against the current job text before sending again."],
         missingRequiredSkills: missingRequiredSkillsFromApplication(app)
       });
+      if (app.resumeData) {
+        seedResumeData(app.resumeData);
+      } else {
+        seedResumeEditor(restoredResume, "");
+      }
       setLinkStatus(`Loaded "${app.title}" and its saved resume snapshot from pipeline.`);
     } else {
       setLinkStatus(`Loaded "${app.title}" job target from pipeline.`);
       setResult(null);
+      seedResumeEditor("");
     }
     setPolishStatus("");
     resetExportStatuses();
@@ -750,6 +1084,24 @@ function App() {
   function handleDeleteApplication(id: string, title: string) {
     if (!window.confirm(`Delete "${title}" from the pipeline?`)) return;
     removeApplication(id);
+    if (modalApplicationId === id) setIsApplicationModalOpen(false);
+  }
+
+  // Double-click in any tracker view opens the full detail modal for that role.
+  function handleOpenApplicationDetail(application: Application) {
+    setModalApplicationId(application.id);
+    setExpandedApplicationId(application.id);
+    setIsApplicationModalOpen(true);
+  }
+
+  function handleAddApplication() {
+    setModalApplicationId(null);
+    setIsApplicationModalOpen(true);
+  }
+
+  function handleSaveApplicationFromModal(application: Application) {
+    saveApplication(application);
+    setExpandedApplicationId(application.id);
   }
 
   // ----- Render -----
@@ -757,15 +1109,45 @@ function App() {
   return (
     <div className="app-shell">
       <Masthead
-        resumeReady={resumeReady}
-        jobReady={jobReady}
-        outputReady={outputReady}
-        resumeBulletCount={resumeBulletCount}
-        headlineScore={headlineScore}
-        baseResumeName={baseResumeName}
-        onLoadResume={loadResume}
-        onNextRole={handleNextRole}
-        nextRoleDisabled={!jobUrl && !jobDescription && !result && !linkStatus}
+        onApply={handleApply}
+        applyDisabled={!jobUrl.trim() && !jobDescription.trim()}
+        onPolish={handlePolish}
+        canPolish={canPolish}
+        isPolishing={isPolishing}
+        polishHint={polishGateHint}
+        resumeControl={
+          <ResumeMenu
+            baseResumeName={baseResumeName}
+            baseResumeOptions={baseResumeOptions}
+            baseResumeHistory={baseResumeHistory}
+            workspaceStatus={workspaceStatus}
+            isSavingBaseResume={isSavingBaseResume}
+            fileName={fileName}
+            fileError={fileError}
+            fileStatus={fileStatus}
+            resumeText={currentResumeText || resumeText}
+            resumeReady={resumeReady}
+            onSaveCurrentAsBase={saveCurrentAsBaseResume}
+            onLoadBaseResumeVersion={loadBaseResumeVersion}
+            onRemoveBaseResume={removeBaseResume}
+            onRestoreBaseResume={restoreBaseResume}
+            onLoadWorkspace={loadWorkspace}
+            onFileUpload={handleFileUpload}
+          />
+        }
+        jobControl={
+          <JobMenu
+            jobDescription={jobDescription}
+            setJobDescription={setJobDescription}
+            jobUrl={jobUrl}
+            setJobUrl={setJobUrl}
+            onExtractFromLink={handleExtractFromLink}
+            isExtractingLink={isExtractingLink}
+            onDistillPaste={handleDistillPaste}
+            linkStatus={linkStatus}
+            jobReady={jobReady}
+          />
+        }
         aiControl={
           <AiMenu
             aiProvider={aiProvider}
@@ -800,119 +1182,81 @@ function App() {
         }
         polishControl={
           <PolishMenu
-            roleAppliedAs={roleAppliedAs}
-            setRoleAppliedAs={setRoleAppliedAs}
-            roleAppliedOptions={roleAppliedOptions}
+            includeCoverLetter={includeCoverLetter}
+            setIncludeCoverLetter={setIncludeCoverLetter}
+            strictReview={strictReview}
+            setStrictReview={setStrictReview}
             honestContext={honestContext}
             setHonestContext={setHonestContext}
             customInstructions={customInstructions}
             setCustomInstructions={setCustomInstructions}
+            open={polishMenuOpen}
+            onOpenChange={setPolishMenuOpen}
+            honestContextRef={honestContextTextareaRef}
           />
         }
       />
 
       <div className="workspace-grid">
-        <SourcesPane
-          jobDescription={jobDescription}
-          setJobDescription={setJobDescription}
-          jobUrl={jobUrl}
-          setJobUrl={setJobUrl}
-          onExtractFromLink={handleExtractFromLink}
-          isExtractingLink={isExtractingLink}
-          linkStatus={linkStatus}
-          jobReady={jobReady}
-          baseResumeName={baseResumeName}
-          workspacePath={workspacePath}
-          workspaceStatus={workspaceStatus}
-          isSavingBaseResume={isSavingBaseResume}
-          fileName={fileName}
-          fileError={fileError}
-          fileStatus={fileStatus}
-          sourceDocx={sourceDocx}
-          resumeBlocks={resumeBlocks}
-          blockStats={blockStats}
-          resumeText={resumeText}
-          setResumeText={setResumeText}
-          setResult={setResult}
-          resumeReady={resumeReady}
-          onSaveCurrentAsBase={saveCurrentAsBaseResume}
-          onRemoveBaseResume={removeBaseResume}
-          onLoadWorkspace={loadWorkspace}
-          onFileUpload={handleFileUpload}
-          onUpdateResumeBlock={updateResumeBlock}
-          onSyncBlocksFromText={syncBlocksFromText}
-          includeCoverLetter={includeCoverLetter}
-          setIncludeCoverLetter={setIncludeCoverLetter}
-          strictReview={strictReview}
-          setStrictReview={setStrictReview}
-          preserveFormat={preserveFormat}
-          setPreserveFormat={setPreserveFormat}
-          resumeSourceFormat={resumeSourceFormat}
-          canPolish={canPolish}
-          isPolishing={isPolishing}
-          polishStatus={polishStatus}
-          onPolish={handlePolish}
-        />
-
         <StudioPane
           activeOutputTab={activeOutputTab}
           setActiveOutputTab={setActiveOutputTab}
           outputTabs={outputTabs}
-          headlineScore={headlineScore}
-          footer={
-            <ExportRail
-              templates={templates}
-              templatesError={templatesError}
-              selectedTemplateId={selectedTemplateId}
-              setSelectedTemplateId={setSelectedTemplateId}
-              selectedTemplate={selectedTemplate}
-              tectonic={tectonic}
-              result={result}
-              jobUrl={jobUrl}
-              jobDescription={jobDescription}
-              hasSourceDocx={Boolean(sourceDocx)}
-              copied={copied}
-              isDownloadingTex={isDownloadingTex}
-              isOpeningOverleaf={isOpeningOverleaf}
-              isRenderingLatexPdf={isRenderingLatexPdf}
-              texStatus={texStatus}
-              downloadStatus={downloadStatus}
-              onCopy={handleCopy}
-              onDownloadTex={handleDownloadTex}
-              onOpenInOverleaf={handleOpenInOverleaf}
-              onDownloadLatexPdf={handleDownloadLatexPdf}
-              onPrintResume={handlePrintResume}
-              onDownloadDocx={handleDownloadDocx}
-              onTrack={handleTrackInPipeline}
-            />
+          overlay={
+            <Suspense fallback={null}>
+              <PreviewOverlay
+                isOpen={isPreviewOpen}
+                isLoading={isPreviewLoading}
+                error={previewError}
+                pdfUrl={previewPdfUrl}
+                fileName={resumeDownloadName("pdf")}
+                onClose={handleClosePreview}
+                onRetry={handlePreview}
+              />
+            </Suspense>
           }
         >
           {activeOutputTab === "resume" ? (
             <ResumeTab
-              result={result}
+              editedResume={editedResume}
+              actions={resumeEditorActions}
+              dirty={resumeEdited}
+              hasResult={Boolean(result)}
               resultSourceLabel={resultSourceLabel}
               scoreContext={scoreContext}
-              sourceText={resumeText}
-            />
-          ) : null}
-
-          {activeOutputTab === "review" ? (
-            <ReviewTab
-              scoreSource={scoreSource}
-              scoreContext={scoreContext}
-              headlineScore={headlineScore}
-              fitComparison={fitComparison}
-              resumeBulletCount={resumeBulletCount}
-              matchBreakdown={matchBreakdown}
-              resumeDiff={resumeDiff}
               result={result}
+              resumeDiff={resumeDiff}
+              docStyle={docStyle}
+              tailorSectionIds={tailorSectionIds}
+              setTailorSectionIds={setTailorSectionIds}
+              onAddHonestContext={handleAddHonestContext}
+              exportControl={
+                <ExportMenu
+                  templates={templates}
+                  templatesError={templatesError}
+                  selectedTemplateId={selectedTemplateId}
+                  setSelectedTemplateId={setSelectedTemplateId}
+                  selectedTemplate={selectedTemplate}
+                  tectonic={tectonic}
+                  canExport={canExportResume}
+                  defaultFileBaseName={resumeDownloadName("pdf").replace(/\.pdf$/i, "")}
+                  isDownloadingTex={isDownloadingTex}
+                  isRenderingLatexPdf={isRenderingLatexPdf}
+                  isPreviewLoading={isPreviewLoading}
+                  texStatus={texStatus}
+                  downloadStatus={downloadStatus}
+                  onDownloadTex={handleDownloadTex}
+                  onDownloadLatexPdf={handleDownloadLatexPdf}
+                  onPreview={handlePreview}
+                  onPrintResume={handlePrintResume}
+                />
+              }
             />
           ) : null}
 
-          {activeOutputTab === "strict" ? <StrictReviewTab result={result} /> : null}
 
-          {activeOutputTab === "pipeline" ? (
-            <PipelineTab
+          {activeOutputTab === "applications" ? (
+            <TrackerTab
               applications={applications}
               applicationsPath={applicationsPath}
               applicationsError={applicationsError}
@@ -921,40 +1265,62 @@ function App() {
               setPipelineFilter={setPipelineFilter}
               expandedApplicationId={expandedApplicationId}
               setExpandedApplicationId={setExpandedApplicationId}
+              trackerView={trackerView}
+              setTrackerView={setTrackerView}
               onUpdateStatus={updateApplicationStatus}
               onUpdateField={updateApplicationField}
               onUpdateNotes={updateApplicationNotes}
               onLoad={handleLoadApplication}
+              onOpenApplication={handleOpenApplicationDetail}
               onDelete={handleDeleteApplication}
+              onAddApplication={handleAddApplication}
             />
           ) : null}
 
-          {activeOutputTab === "cover" ? (
-            <CoverLetterTab
+          {activeOutputTab === "materials" ? (
+            <MaterialsTab
               result={result}
               includeCoverLetter={includeCoverLetter}
+              setIncludeCoverLetter={setIncludeCoverLetter}
               coverCopied={coverCopied}
               onCopy={handleCopyCoverLetter}
-              onEnable={() => setIncludeCoverLetter(true)}
-            />
-          ) : null}
-
-          {activeOutputTab === "questions" ? (
-            <ApplicationQuestionsTab
-              result={answersResult}
-              status={answersStatus}
-              isGenerating={isGeneratingAnswers}
-              canGenerate={resumeText.trim().length >= 80 && jobDescription.trim().length >= 40}
+              answersResult={answersResult}
+              answersStatus={answersStatus}
+              isGeneratingAnswers={isGeneratingAnswers}
+              resumeReady={resumeReady}
+              jobReady={jobReady}
               canSave={Boolean(jobUrl.trim() || jobDescription.trim())}
               onGenerate={handleGenerateAnswers}
               onSaveAnswers={handleSaveAnswers}
+              jobTarget={materialsJobTarget}
             />
+          ) : null}
+
+          {activeOutputTab === "analytics" ? (
+            <AnalyticsTab applications={applications} onOpenApplications={() => setActiveOutputTab("applications")} />
           ) : null}
         </StudioPane>
       </div>
 
-      {result?.polishedText ? (
-        <ResumePrintLayer polishedText={result.polishedText} sourceText={resumeText} />
+      <ApplicationModal
+        open={isApplicationModalOpen}
+        application={modalApplicationId ? applications.find((app) => app.id === modalApplicationId) ?? null : null}
+        onClose={() => setIsApplicationModalOpen(false)}
+        onSave={handleSaveApplicationFromModal}
+        onDelete={handleDeleteApplication}
+        onLoad={(app) => {
+          setIsApplicationModalOpen(false);
+          handleLoadApplication(app);
+        }}
+      />
+
+      {currentResumeText ? (
+        <ResumePrintLayer
+          resume={editedResume}
+          polishedText={currentResumeText}
+          sourceText={resumeText}
+          docStyleVars={docStyle.cssVars}
+        />
       ) : null}
     </div>
   );

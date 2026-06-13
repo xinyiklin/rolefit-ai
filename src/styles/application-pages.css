@@ -1,0 +1,1754 @@
+/* -------- Application workspace pages -------- */
+
+.workspace-page {
+  display: grid;
+  gap: var(--s4);
+  align-content: start;
+  min-width: 0;
+}
+
+.workspace-page__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s4);
+  padding-bottom: var(--s4);
+  border-bottom: 1px solid var(--hairline);
+}
+
+/* Page titles carry .page-serif (studio.css); keep only color here as a fallback. */
+.workspace-page__head h2 {
+  color: var(--ink-strong);
+}
+
+/* Title row: h2 + optional mono path detail on the same baseline */
+.workspace-page__title-row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s3);
+  flex-wrap: wrap;
+}
+
+.workspace-page__path {
+  color: var(--ink-faint);
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  font-feature-settings: "tnum";
+}
+
+.workspace-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  flex-wrap: wrap;
+}
+
+.workspace-search,
+.workspace-select {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  min-height: 34px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-md);
+  background: var(--card-elev);
+  color: var(--ink-soft);
+  box-shadow: var(--shadow-rest);
+}
+
+.workspace-search {
+  min-width: min(360px, 100%);
+  flex: 1 1 280px;
+  padding: 0 var(--s3);
+}
+
+.workspace-search--capped {
+  max-width: 420px;
+  flex: 0 1 420px;
+}
+
+.workspace-search input,
+.workspace-select select {
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+}
+
+.workspace-search input {
+  width: 100%;
+  color: var(--ink);
+  font-size: 0.8rem;
+}
+
+.workspace-select {
+  padding: 0 var(--s2);
+}
+
+.workspace-select select {
+  color: var(--ink);
+  font-size: 0.78rem;
+}
+
+.workspace-search:focus-within,
+.workspace-select:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-veil);
+}
+
+/* -------- Shared application atoms -------- */
+
+.application-company {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  min-width: 0;
+}
+
+.application-company em,
+.application-company-mark {
+  display: inline-grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: var(--r-md);
+  background: var(--cool-veil);
+  border: 1px solid var(--cool-line);
+  color: var(--cool);
+  font-style: normal;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.application-company strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* application-stage still used in ApplicationModal documents tab — keep as a slim badge there */
+.application-stage {
+  display: inline-flex;
+  align-items: center;
+  min-height: 18px;
+  padding: 0 var(--s2);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-pill);
+  background: var(--card-soft);
+  color: var(--ink-soft);
+  font-size: 0.67rem;
+  font-weight: 600;
+}
+
+.application-stage--applied { background: var(--cool-faint); color: var(--cool); border-color: var(--cool-line); }
+.application-stage--interviewing { background: var(--accent-soft); color: var(--accent-deep); border-color: var(--accent-veil); }
+.application-stage--offer { background: var(--accent-soft); color: var(--accent-deep); border-color: var(--accent); }
+.application-stage--rejected,
+.application-stage--withdrawn { background: var(--danger-soft); color: var(--danger); border-color: var(--danger-line); }
+
+/* -------- Stage dot + plain text (table rows) -------- */
+/* No border, no pill background — dot carries the color, text is plain */
+.stage-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  margin-right: 5px;
+  flex: none;
+  background: var(--ink-faint);
+  vertical-align: middle;
+}
+
+.stage-dot--applied { background: var(--cool); }
+.stage-dot--interviewing { background: var(--accent); }
+.stage-dot--offer { background: var(--accent-deep); }
+.stage-dot--rejected { background: var(--danger); }
+.stage-dot--interested { background: var(--ink-faint); }
+.stage-dot--withdrawn { background: var(--ink-faint); }
+
+.stage-dot-label {
+  font-size: 0.74rem;
+  color: var(--ink);
+}
+
+/* -------- Priority dot + plain text -------- */
+/* Medium (default) renders as plain faint text; only High/Low deviations get a dot */
+.priority-default {
+  color: var(--ink-faint);
+  font-size: 0.74rem;
+}
+
+.priority-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  margin-right: 5px;
+  flex: none;
+  vertical-align: middle;
+}
+
+.priority-dot--high { background: var(--warm); }
+.priority-dot--low { background: var(--cool); }
+
+.priority-label {
+  font-size: 0.74rem;
+}
+
+.priority-label--high { color: var(--warm); }
+.priority-label--low { color: var(--cool); }
+
+/* -------- Default next-action muting -------- */
+.next-action-default {
+  color: var(--ink-faint);
+}
+
+/* -------- Date cells: tabular numerals -------- */
+.table-date {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+
+.application-fit {
+  display: inline-flex;
+  justify-content: center;
+  min-width: 42px;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--ink-soft);
+}
+
+.application-fit--strong,
+.application-fit--good { color: var(--accent-deep); }
+.application-fit--stretch { color: var(--warm); }
+.application-fit--weak { color: var(--danger); }
+
+/* -------- Shared placeholder tone -------- */
+.text-placeholder {
+  color: var(--ink-faint);
+}
+
+/* -------- Figures strip (replaces hero-metric card grids) -------- */
+/* Pattern: inline label+value pairs separated by hairline dividers. */
+/* Reused in Pipeline, Analytics, and side panels. */
+.figures-strip {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0;
+  padding: var(--s2) 0;
+  border-top: 1px solid var(--hairline-soft);
+  border-bottom: 1px solid var(--hairline-soft);
+}
+
+.figures-strip--compact {
+  border: 0;
+  padding: var(--s2) var(--s3);
+  background: var(--card-soft);
+  border-radius: var(--r-md);
+}
+
+.figures-strip__item {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: var(--s1) var(--s4);
+}
+
+.figures-strip--compact .figures-strip__item {
+  padding: var(--s1) var(--s3);
+}
+
+.figures-strip__item em {
+  font-style: normal;
+  color: var(--ink-faint);
+  font-size: 0.67rem;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+
+.figures-strip__item strong {
+  color: var(--ink-strong);
+  font-family: var(--font-mono);
+  font-size: 0.92rem;
+  font-feature-settings: "tnum";
+  line-height: 1.1;
+}
+
+/* Prose figure values ("Strong match") stay sans; mono is for numbers only. */
+.figures-strip__item strong.is-prose {
+  font-family: var(--font-ui);
+  font-size: 0.84rem;
+  font-weight: 600;
+}
+
+.figures-strip__lift--up { color: var(--accent-deep); }
+.figures-strip__lift--down { color: var(--danger); }
+
+.figures-strip__divider {
+  align-self: stretch;
+  width: 1px;
+  background: var(--hairline);
+  flex: none;
+}
+
+/* Side-panel inline score row (replaces donut ring). Doubled class beats the
+   later .application-detail-score base rule in the cascade. */
+.application-detail-score.application-detail-score--inline {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--s2);
+  background: none;
+  border: none;
+  padding: 0;
+}
+
+.application-detail-score__reason {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 0.72rem;
+  line-height: 1.35;
+}
+
+/* -------- Up-next docket -------- */
+/* A quiet ledger band above the toolbar: hairline rules top/bottom, no card box.
+   Each row is a full-width button: mono date tag | dot | company+role | dotted leader | label. */
+
+.tracker-docket {
+  display: grid;
+  gap: 0;
+  padding: var(--s2) 0;
+  border-top: 1px solid var(--hairline-soft);
+  border-bottom: 1px solid var(--hairline-soft);
+}
+
+.tracker-docket__eyebrow {
+  display: block;
+  margin-bottom: var(--s1);
+  color: var(--ink-faint);
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.tracker-docket__empty {
+  display: block;
+  padding: var(--s1) 0;
+  color: var(--ink-faint);
+  font-size: 0.74rem;
+}
+
+.tracker-docket__row {
+  display: grid;
+  /* Identity sizes to content; the dotted leader owns the spare width. */
+  grid-template-columns: 52px 10px auto minmax(var(--s4), 1fr) auto;
+  align-items: center;
+  gap: var(--s2);
+  min-height: 30px;
+  padding: 3px 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+  transition: background 120ms var(--ease);
+}
+
+.tracker-docket__row:hover {
+  background: var(--card-soft);
+  border-radius: var(--r-sm);
+}
+
+.tracker-docket__row:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--r-sm);
+}
+
+.tracker-docket__date {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+  color: var(--ink-muted);
+  white-space: nowrap;
+}
+
+.tracker-docket__dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex: none;
+  background: var(--ink-faint);
+}
+
+.tracker-docket__dot--overdue,
+.tracker-docket__dot--quiet { background: var(--warm); }
+.tracker-docket__dot--due { background: var(--accent); }
+
+.tracker-docket__identity {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.76rem;
+}
+
+.tracker-docket__identity strong {
+  font-weight: 600;
+  color: var(--ink-strong);
+}
+
+.tracker-docket__role {
+  color: var(--ink-soft);
+}
+
+/* Dotted leader filling the middle space */
+.tracker-docket__leader {
+  height: 0;
+  border-bottom: 1px dotted var(--hairline-strong);
+}
+
+.tracker-docket__label {
+  color: var(--ink-muted);
+  font-size: 0.72rem;
+  white-space: nowrap;
+}
+
+/* -------- Table month-group divider -------- */
+
+.applications-table__month-divider {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: var(--s3);
+  padding: var(--s2) var(--s3);
+  border-top: 1px solid var(--hairline-soft);
+  background: var(--paper-deep);
+}
+
+.applications-table__month-count {
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+  color: var(--ink-faint);
+}
+
+/* First group's divider row: suppress the top rule (table already has none there) */
+.applications-table > div[role="rowgroup"]:first-child .applications-table__month-divider {
+  border-top: 0;
+}
+
+/* -------- Inspector sent dossier -------- */
+
+.inspector-sent__eyebrow {
+  margin: 0;
+  color: var(--ink-faint);
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.inspector-sent__value {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  flex-wrap: wrap;
+}
+
+.inspector-sent__link {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--accent-deep);
+  text-decoration: none;
+  border-bottom: 1px dotted var(--accent-deep);
+}
+
+.inspector-sent__link:hover {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+.inspector-sent__link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* -------- Tracker page layout -------- */
+/* Shared two-column grid used by Table and Board views:
+   main view surface + right-rail inspector. */
+
+.tracker-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
+  gap: var(--s4);
+  align-items: start;
+}
+
+/* Calendar view: grid + right rail (no inspector needed; CalendarRail is the rail) */
+.tracker-layout--calendar {
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 330px);
+}
+
+/* -------- View switcher -------- */
+/* Quiet segmented group: hairline border, card-elev fill, raised active segment.
+   NOT accent-filled — the active segment uses card-elev + ink-strong text. */
+
+.view-toggle {
+  display: inline-flex;
+  align-items: stretch;
+  height: 28px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-md);
+  background: transparent;
+  overflow: hidden;
+}
+
+.view-toggle__btn {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 var(--s3);
+  border: 0;
+  border-right: 1px solid var(--hairline);
+  border-radius: 0;
+  background: transparent;
+  color: var(--ink-soft);
+  font-family: var(--font-ui);
+  font-size: 0.78rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 140ms var(--ease), color 140ms var(--ease);
+}
+
+.view-toggle__btn:last-child {
+  border-right: 0;
+}
+
+.view-toggle__btn:hover:not(.is-active) {
+  background: var(--card-soft);
+  color: var(--ink-strong);
+}
+
+.view-toggle__btn.is-active {
+  background: var(--card-elev);
+  color: var(--ink-strong);
+  font-weight: 600;
+}
+
+.view-toggle__btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+/* Calendar nav row above the grid (only visible in calendar view) */
+.tracker-calendar-nav {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  flex-wrap: wrap;
+}
+
+/* -------- Applications table -------- */
+
+.applications-table {
+  display: grid;
+  overflow: hidden;
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-lg);
+  background: var(--card-elev);
+  box-shadow: var(--shadow-rest);
+}
+
+.applications-table__row {
+  display: grid;
+  grid-template-columns: minmax(150px, 1.3fr) minmax(140px, 1fr) 112px 96px 82px minmax(150px, 1fr) 68px 18px;
+  align-items: center;
+  gap: var(--s3);
+  min-height: 52px;
+  padding: 0 var(--s3);
+  border-top: 1px solid var(--hairline-soft);
+  background: transparent;
+  color: var(--ink);
+  text-align: left;
+}
+
+button.applications-table__row {
+  width: 100%;
+  cursor: pointer;
+}
+
+.applications-table__row:first-child { border-top: 0; }
+
+.applications-table__row--head {
+  min-height: 36px;
+  background: var(--card-soft);
+  border-bottom: 1px solid var(--hairline);
+}
+
+/* Eyebrow: small uppercase, faint, tracked — shared by table headers, column heads, weekday row */
+.table-eyebrow {
+  color: var(--ink-faint);
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.applications-table__row:not(.applications-table__row--head):hover {
+  background: var(--card-hover);
+}
+
+.applications-table__row:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.applications-table__row.is-selected {
+  background: var(--accent-soft);
+}
+
+.applications-table__row > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.76rem;
+}
+
+.applications-empty {
+  display: grid;
+  justify-items: center;
+  gap: var(--s2);
+  padding: var(--s7);
+  color: var(--ink-soft);
+  text-align: center;
+}
+
+.applications-empty strong { color: var(--ink-strong); }
+
+.application-side-panel,
+.pipeline-inspector,
+.calendar-side {
+  display: grid;
+  gap: var(--s3);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-lg);
+  background: var(--card-elev);
+  box-shadow: var(--shadow-rest);
+}
+
+.application-side-panel,
+.pipeline-inspector {
+  position: sticky;
+  top: var(--s4);
+  padding: var(--s3);
+  /* Ensure the panel renders above board columns when sticky */
+  z-index: 2;
+}
+
+.application-side-panel__head,
+.pipeline-inspector__head {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: var(--s2);
+}
+
+.pipeline-inspector__head { grid-template-columns: auto 1fr; }
+
+.application-side-panel__head h3,
+.pipeline-inspector__head h3 {
+  color: var(--ink-strong);
+  font-size: 0.92rem;
+  font-weight: 650;
+}
+
+.application-side-panel__head p,
+.pipeline-inspector__head p {
+  margin-top: 2px;
+  color: var(--ink-soft);
+  font-size: 0.74rem;
+}
+
+.application-detail-score {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: var(--s3);
+  padding: var(--s3);
+  border: 1px solid var(--hairline-soft);
+  border-radius: var(--r-md);
+  background: var(--card-soft);
+}
+
+.application-detail-score strong {
+  display: block;
+  color: var(--accent-deep);
+  font-size: 0.82rem;
+}
+
+.application-detail-score p {
+  margin-top: 3px;
+  color: var(--ink-soft);
+  font-size: 0.72rem;
+  line-height: 1.35;
+}
+
+/* application-side-card still used in modal interview/documents tabs — keep */
+.application-side-card {
+  display: grid;
+  gap: var(--s2);
+  padding: var(--s3);
+  border: 1px solid var(--hairline-soft);
+  border-radius: var(--r-md);
+  background: var(--card);
+}
+
+.application-side-card h4 {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  color: var(--ink-strong);
+  font-size: 0.76rem;
+}
+
+/* Hairline-divided side panel sections: no nested box, content sits on the panel sheet */
+.side-section {
+  display: grid;
+  gap: var(--s1);
+  padding: var(--s2) 0;
+  border-top: 1px solid var(--hairline-soft);
+}
+
+.side-section__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin: 0;
+  color: var(--ink-faint);
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.side-section__value {
+  margin: 0;
+  color: var(--ink);
+  font-size: 0.74rem;
+  line-height: 1.4;
+}
+
+.application-side-card p,
+.application-side-empty,
+.calendar-empty-note,
+.analytics-empty {
+  color: var(--ink-soft);
+  font-size: 0.74rem;
+  line-height: 1.4;
+}
+
+.application-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s1);
+}
+
+.application-chip-list span {
+  padding: 3px 7px;
+  border-radius: var(--r-pill);
+  background: var(--paper-deep);
+  color: var(--ink-soft);
+  font-size: 0.66rem;
+}
+
+.application-side-actions {
+  display: flex;
+  gap: var(--s2);
+  flex-wrap: wrap;
+}
+
+.application-side-empty {
+  display: grid;
+  justify-items: center;
+  gap: var(--s2);
+  padding: var(--s6) var(--s3);
+  text-align: center;
+}
+
+.application-side-empty strong { color: var(--ink-strong); }
+
+/* -------- Pipeline board -------- */
+/* Hero-metric card grids (.pipeline-metrics, .analytics-metrics) replaced by .figures-strip */
+
+.pipeline-board {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(168px, 1fr));
+  gap: var(--s2);
+  min-width: 0;
+  overflow-x: auto;
+  padding-bottom: var(--s1);
+}
+
+.pipeline-column {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  min-height: 430px;
+  /* Column is a quiet well: card-soft so it still reads against the
+     paper-deep desk canvas while staying lighter than the cardlets. */
+  border: 1px solid var(--hairline-soft);
+  border-radius: var(--r-lg);
+  background: var(--card-soft);
+  overflow: hidden;
+}
+
+.pipeline-column header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  min-height: 36px;
+  padding: 0 var(--s3);
+  border-bottom: 1px solid var(--hairline-soft);
+}
+
+/* Column header uses the shared eyebrow token (uppercase, faint, tracked) */
+.pipeline-column header .table-eyebrow {
+  color: var(--ink-faint);
+}
+
+.pipeline-column header em {
+  color: var(--ink-faint);
+  font-family: var(--font-mono);
+  font-style: normal;
+  font-size: 0.67rem;
+}
+
+.pipeline-column__cards {
+  display: grid;
+  align-content: start;
+  gap: var(--s2);
+  padding: var(--s2);
+}
+
+.pipeline-cardlet {
+  position: relative;
+  display: grid;
+  gap: 5px;
+  width: 100%;
+  min-height: 124px;
+  padding: var(--s3);
+  /* Cardlet reads as a crisp white index card above the well */
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-md);
+  background: var(--card-elev);
+  color: var(--ink);
+  text-align: left;
+  box-shadow: var(--shadow-rest);
+  transition: border-color 150ms var(--ease), box-shadow 150ms var(--ease);
+}
+
+.pipeline-cardlet:hover,
+.pipeline-cardlet.is-selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-veil);
+}
+
+.pipeline-cardlet:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.pipeline-cardlet__drag {
+  position: absolute;
+  top: var(--s2);
+  right: var(--s2);
+  color: var(--ink-faint);
+}
+
+.pipeline-cardlet__role {
+  color: var(--ink-muted);
+  font-size: 0.72rem;
+}
+
+.pipeline-cardlet__meta,
+.pipeline-cardlet__foot {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--s2);
+  color: var(--ink-faint);
+  font-size: 0.66rem;
+}
+
+.pipeline-cardlet__foot {
+  margin-top: var(--s1);
+  align-items: center;
+}
+
+.pipeline-column__empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--s4) var(--s2);
+  border-top: 1px solid var(--hairline-soft);
+  color: var(--ink-faint);
+  font-size: 0.68rem;
+  opacity: 0.7;
+}
+
+/* -------- Calendar -------- */
+
+
+.calendar-nav {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-md);
+  background: var(--card-elev);
+  overflow: hidden;
+}
+
+.calendar-nav strong {
+  padding: 0 var(--s3);
+  color: var(--ink-strong);
+  font-size: 0.78rem;
+}
+
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(104px, 1fr));
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-lg);
+  background: var(--card-elev);
+  box-shadow: var(--shadow-rest);
+  overflow: hidden;
+}
+
+.calendar-grid__weekday {
+  display: grid;
+  place-items: center;
+  min-height: 34px;
+  border-bottom: 1px solid var(--hairline);
+  border-right: 1px solid var(--hairline-soft);
+  background: var(--card-soft);
+  /* Eyebrow styling is applied via .table-eyebrow class in TSX */
+}
+
+.calendar-cell {
+  display: grid;
+  align-content: start;
+  gap: var(--s2);
+  min-height: 112px;
+  padding: var(--s2);
+  border-right: 1px solid var(--hairline-soft);
+  border-bottom: 1px solid var(--hairline-soft);
+  background: var(--card-elev);
+  text-align: left;
+}
+
+.calendar-cell:hover {
+  background: var(--card-hover);
+}
+
+/* Selected: very subtle tint, not accent-strength — the today disc is the only accent element */
+.calendar-cell.is-selected {
+  background: var(--accent-soft);
+}
+
+/* Outside month: dimmer date number, slightly receded background */
+.calendar-cell.is-outside {
+  background: var(--card-soft);
+}
+
+.calendar-cell.is-outside > span {
+  color: var(--ink-faint);
+  opacity: 0.55;
+}
+
+/* Today disc: only accent-strength element in the cell */
+.calendar-cell.is-today > span {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: var(--r-pill);
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+/* Today + selected: keep disc, use only card-hover tint not double accent */
+.calendar-cell.is-today.is-selected {
+  background: var(--card-hover);
+}
+
+.calendar-cell div {
+  display: grid;
+  gap: 4px;
+}
+
+.calendar-event {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  overflow: hidden;
+  padding: 3px 5px;
+  border-radius: var(--r-sm);
+  background: var(--card-soft);
+  border: none;
+  color: var(--ink-muted);
+  font-size: 0.63rem;
+  font-style: normal;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.calendar-event--interview { background: var(--accent-soft); color: var(--accent-deep); }
+.calendar-event--followup { background: var(--warm-veil); color: var(--warm); }
+.calendar-event--applied { background: var(--cool-faint); color: var(--cool); }
+.calendar-event--offer { background: var(--accent-soft); color: var(--accent-deep); }
+
+/* Leading dot inside calendar event chips */
+.event-dot {
+  display: inline-block;
+  flex: none;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.7;
+}
+
+.calendar-side {
+  padding: var(--s3);
+}
+
+.calendar-side__today,
+.calendar-side__panel {
+  display: grid;
+  gap: var(--s2);
+}
+
+/* Eyebrow label replaces h3 in calendar side sections for lighter hierarchy */
+.calendar-side__eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s1);
+  margin: 0;
+  color: var(--ink-faint);
+  font-size: 0.67rem;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* Hairline rule between calendar side sections */
+.calendar-side__rule {
+  height: 1px;
+  background: var(--hairline-soft);
+  margin: var(--s1) 0;
+}
+
+.calendar-agenda-card {
+  display: grid;
+  gap: 4px;
+  padding: var(--s3);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-md);
+  background: var(--card-soft);
+}
+
+.calendar-agenda-card span,
+.calendar-upcoming span {
+  color: var(--accent-deep);
+  font-size: 0.68rem;
+  font-weight: 650;
+}
+
+.calendar-agenda-card strong,
+.calendar-linked-app strong {
+  color: var(--ink-strong);
+  font-size: 0.82rem;
+}
+
+.calendar-agenda-card em,
+.calendar-linked-app span,
+.calendar-linked-app em,
+.calendar-upcoming em {
+  color: var(--ink-soft);
+  font-size: 0.7rem;
+  font-style: normal;
+}
+
+.calendar-upcoming {
+  display: grid;
+  gap: 2px;
+  padding: var(--s2);
+  border-radius: var(--r-sm);
+  text-align: left;
+}
+
+.calendar-upcoming:hover {
+  background: var(--card-hover);
+}
+
+.calendar-linked-app {
+  display: grid;
+  gap: 4px;
+}
+
+/* -------- Analytics -------- */
+
+.analytics-grid {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: var(--s3);
+}
+
+/* Bounded chart panels */
+.analytics-panel {
+  grid-column: span 4;
+  display: grid;
+  gap: var(--s3);
+  min-height: 190px;
+  padding: var(--s4);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-lg);
+  background: var(--card-elev);
+  box-shadow: var(--shadow-rest);
+  align-content: start;
+}
+
+/* Pipeline funnel: wider span */
+.analytics-panel--wide {
+  grid-column: span 5;
+}
+
+/* Stage distribution and Activity: narrower */
+.analytics-panel--narrow {
+  grid-column: span 4;
+}
+
+/* When only two narrow panels, the last one stretches to fill remainder */
+.analytics-panel--wide + .analytics-panel--narrow + .analytics-panel--narrow {
+  grid-column: span 3;
+}
+
+/* Flat zones (no border/shadow, hairline-separated) for list sections */
+.analytics-panel--flat {
+  grid-column: span 6;
+  display: grid;
+  gap: var(--s2);
+  padding: var(--s3) var(--s2);
+  border-top: 1px solid var(--hairline-soft);
+  border-bottom: 1px solid var(--hairline-soft);
+  margin-top: var(--s1);
+  align-content: start;
+}
+
+.analytics-panel--half {
+  grid-column: span 6;
+}
+
+.analytics-panel header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s2);
+}
+
+.analytics-panel header h3 {
+  color: var(--ink-strong);
+  font-size: 0.84rem;
+  font-weight: 650;
+}
+
+.analytics-panel__eyebrow {
+  color: var(--ink-faint);
+  font-size: 0.67rem;
+  font-weight: 500;
+  font-style: normal;
+  letter-spacing: 0.02em;
+}
+
+/* Flat zone heading line */
+.analytics-flat__head {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  margin: 0 0 var(--s1);
+  color: var(--ink-strong);
+  font-size: 0.78rem;
+  font-weight: 650;
+}
+
+/* Best current fit inline layout */
+.analytics-best-inline {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+}
+
+.analytics-best-inline div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.analytics-best-inline div strong {
+  color: var(--ink-strong);
+  font-size: 0.84rem;
+}
+
+.analytics-best-inline div span,
+.analytics-best-inline div em {
+  color: var(--ink-soft);
+  font-size: 0.72rem;
+  font-style: normal;
+}
+
+.analytics-best-score {
+  font-size: 1.4rem;
+  min-width: 56px;
+  display: block;
+}
+
+.analytics-funnel {
+  display: grid;
+  gap: var(--s2);
+}
+
+.analytics-funnel__row {
+  display: grid;
+  grid-template-columns: 86px minmax(0, 1fr) 38px;
+  align-items: center;
+  gap: var(--s2);
+  color: var(--ink-soft);
+  font-size: 0.72rem;
+}
+
+.analytics-funnel__row i {
+  display: block;
+  height: 20px;
+  border-radius: var(--r-pill);
+  background: var(--accent-soft);
+}
+
+.analytics-funnel__row--interviewing i,
+.analytics-funnel__row--offer i { background: var(--accent-veil); }
+.analytics-funnel__row--rejected i { background: var(--danger-soft); }
+
+.analytics-bars,
+.analytics-timeline {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  align-items: end;
+  gap: var(--s2);
+  min-height: 100px;
+}
+
+.analytics-timeline {
+  grid-template-columns: repeat(auto-fill, minmax(36px, 1fr));
+}
+
+.analytics-bar,
+.analytics-tick {
+  display: grid;
+  grid-template-rows: 1fr auto auto;
+  justify-items: center;
+  gap: 4px;
+  min-height: 100px;
+  height: 138px;
+  color: var(--ink-faint);
+  font-size: 0.62rem;
+}
+
+.analytics-bar span,
+.analytics-tick span {
+  align-self: end;
+  width: 32px;
+  min-height: 12px;
+  border-radius: var(--r-sm) var(--r-sm) 0 0;
+  background: var(--accent);
+}
+
+.analytics-bar strong,
+.analytics-tick strong {
+  color: var(--ink-strong);
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+}
+
+.analytics-recs {
+  display: grid;
+  gap: var(--s2);
+}
+
+
+.analytics-recs div {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: var(--s2);
+  padding: var(--s2) 0;
+  border-bottom: 1px solid var(--hairline-soft);
+  text-align: left;
+}
+
+.analytics-recs div:last-child {
+  border-bottom: 0;
+}
+
+.analytics-recs span { color: var(--ink-strong); font-size: 0.74rem; }
+.analytics-recs em {
+  color: var(--ink-faint);
+  font-size: 0.66rem;
+  font-style: normal;
+  font-family: var(--font-mono);
+  font-feature-settings: "tnum";
+  font-variant-numeric: tabular-nums;
+}
+
+/* -------- Inspector / side-panel fact ledger -------- */
+/* Read-only fact pairs in the pipeline inspector and applications side panel.
+   Sits flush on the panel sheet; no extra padding beyond the ledger row itself. */
+.inspector-facts {
+  padding: var(--s1) 0;
+}
+
+/* Inline icon inside a dt — keep it on the baseline */
+.inspector-facts dt svg {
+  display: inline;
+  vertical-align: -0.1em;
+  margin-right: 3px;
+}
+
+/* Thin hairline rule between the read-only facts block and the editable controls */
+.inspector-divider {
+  height: 1px;
+  background: var(--hairline-soft);
+  margin: var(--s2) 0;
+}
+
+/* -------- Add application modal -------- */
+
+.application-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  padding: var(--s5);
+}
+
+.application-modal__scrim {
+  position: absolute;
+  inset: 0;
+  background: oklch(0.2 0.012 160 / 0.42);
+  cursor: default;
+}
+
+.application-modal__panel {
+  position: relative;
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  gap: var(--s3);
+  width: min(1080px, calc(100vw - 40px));
+  max-height: min(840px, calc(100vh - 40px));
+  padding: var(--s5);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-xl);
+  background: var(--card-elev);
+  box-shadow: var(--shadow-lift);
+}
+
+.application-modal__head,
+.application-modal__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+}
+
+/* Modal title uses .page-serif via class; keep only the color here as a fallback. */
+.application-modal__head h2 {
+  color: var(--ink-strong);
+}
+
+.application-modal__head p,
+.application-modal__foot span {
+  margin-top: 3px;
+  color: var(--ink-soft);
+  font-size: 0.74rem;
+}
+
+.application-modal__actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+}
+
+.application-modal__tabs {
+  display: flex;
+  gap: var(--s4);
+  border-bottom: 1px solid var(--hairline);
+}
+
+.application-modal__tabs span,
+.application-modal__tabs button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  padding: 0 0 var(--s2);
+  border: 0;
+  background: none;
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: 0.74rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.application-modal__tabs button:hover {
+  color: var(--ink-strong);
+}
+
+.application-modal__tabs .is-active {
+  color: var(--accent-deep);
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+
+.application-modal__body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 280px;
+  gap: var(--s3);
+  overflow: auto;
+}
+
+.application-form {
+  display: grid;
+  gap: var(--s3);
+  align-content: start;
+  padding: var(--s3);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-lg);
+  background: var(--card);
+}
+
+.application-form--wide {
+  grid-column: 1 / -1;
+}
+
+.application-form__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s3);
+}
+
+.application-match-card {
+  display: grid;
+  justify-items: start;
+  align-content: start;
+  gap: var(--s3);
+  padding: var(--s4);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-lg);
+  background: var(--card-soft);
+  text-align: left;
+}
+
+.application-match-card__eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s1);
+  color: var(--accent-deep);
+  font-size: 0.74rem;
+  font-weight: 650;
+}
+
+.application-match-card p {
+  color: var(--ink-soft);
+  font-size: 0.74rem;
+  line-height: 1.4;
+}
+
+.application-checks {
+  display: grid;
+  gap: var(--s2);
+  width: 100%;
+  padding: 0;
+  list-style: none;
+  text-align: left;
+}
+
+.application-checks li {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  color: var(--ink-soft);
+  font-size: 0.72rem;
+}
+
+.application-checks svg { color: var(--accent); }
+
+.application-muted {
+  color: var(--ink-soft);
+  font-size: 0.76rem;
+  line-height: 1.5;
+}
+
+/* Compensation fieldset inside Overview */
+.application-comp {
+  margin: 0;
+  padding: var(--s3);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-md);
+  background: var(--card-soft);
+}
+
+.application-comp legend {
+  padding: 0 var(--s1);
+  color: var(--ink-soft);
+  font-size: 0.72rem;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.application-comp__row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) 88px 1fr;
+  gap: var(--s3);
+}
+
+/* Match card extras */
+.application-match-card__score {
+  width: 100%;
+  text-align: left;
+}
+
+.application-match-card__score input {
+  text-align: center;
+}
+
+.application-match-card__gaps {
+  display: grid;
+  gap: var(--s2);
+  width: 100%;
+  text-align: left;
+}
+
+.application-match-card__gaps strong {
+  color: var(--ink-strong);
+  font-size: 0.74rem;
+}
+
+/* Contacts + questions editors */
+.application-contacts {
+  display: grid;
+  gap: var(--s2);
+}
+
+.application-contacts__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s2);
+}
+
+.application-contacts__head h4,
+.application-doc-card__head h4,
+.application-review h4 {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  color: var(--ink-strong);
+  font-size: 0.82rem;
+}
+
+.application-contact-row {
+  display: grid;
+  grid-template-columns: 1.1fr 1.1fr 1.3fr 0.9fr auto;
+  gap: var(--s2);
+  align-items: center;
+}
+
+.application-qa {
+  display: grid;
+  gap: var(--s2);
+  padding: var(--s3);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-md);
+  background: var(--card-soft);
+}
+
+.application-qa__head {
+  display: flex;
+  gap: var(--s2);
+  align-items: center;
+}
+
+.application-qa__head input {
+  flex: 1;
+}
+
+/* AI review snapshot (interview tab) */
+.application-review {
+  display: grid;
+  gap: var(--s2);
+  padding: var(--s3);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-md);
+  background: var(--card-soft);
+}
+
+.application-review__verdict {
+  color: var(--ink);
+  font-size: 0.8rem;
+}
+
+.application-review__list {
+  display: grid;
+  gap: var(--s2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.application-review__list li {
+  display: grid;
+  gap: 2px;
+  padding: var(--s2) var(--s3);
+  border: 1px solid var(--hairline-soft);
+  border-radius: var(--r-sm);
+  background: var(--warm-veil);
+  font-size: 0.78rem;
+}
+
+.application-review__list li strong { color: var(--ink-strong); }
+.application-review__list li span { color: var(--ink-soft); }
+
+.application-review__edits ul {
+  margin: var(--s1) 0 0;
+  padding-left: var(--s4);
+  color: var(--ink-soft);
+  font-size: 0.78rem;
+}
+
+/* Documents tab */
+.application-doc-card {
+  display: grid;
+  gap: var(--s2);
+  padding: var(--s3);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-md);
+  background: var(--card-soft);
+}
+
+.application-doc-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s2);
+}
+
+.application-doc-card__actions {
+  display: inline-flex;
+  gap: var(--s2);
+  flex-wrap: wrap;
+}
+
+.application-doc-card__text {
+  max-height: 260px;
+  margin: 0;
+  padding: var(--s3);
+  overflow: auto;
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-sm);
+  background: var(--card);
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 0.78rem;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+.calendar-linked-app__actions {
+  display: flex;
+  gap: var(--s2);
+  flex-wrap: wrap;
+}
+
+@media (max-width: 1280px) {
+  .analytics-panel { grid-column: span 6; }
+  .analytics-panel--wide,
+  .analytics-panel--narrow { grid-column: span 6; }
+  .analytics-panel--wide + .analytics-panel--narrow + .analytics-panel--narrow { grid-column: span 6; }
+  .pipeline-board { grid-template-columns: repeat(6, minmax(178px, 220px)); }
+}
+
+@media (max-width: 1080px) {
+  .tracker-layout,
+  .tracker-layout--calendar,
+  .application-modal__body {
+    grid-template-columns: 1fr;
+  }
+
+  .pipeline-inspector {
+    position: static;
+  }
+
+  .applications-table {
+    overflow-x: auto;
+  }
+
+  .applications-table__row {
+    min-width: 920px;
+  }
+
+  .calendar-grid {
+    grid-template-columns: repeat(7, minmax(92px, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .workspace-page__head,
+  .application-modal__head,
+  .application-modal__foot {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .figures-strip {
+    flex-wrap: wrap;
+  }
+
+  .figures-strip__item {
+    padding: var(--s1) var(--s3);
+  }
+
+  .analytics-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .analytics-panel,
+  .analytics-panel--wide,
+  .analytics-panel--narrow,
+  .analytics-panel--flat,
+  .analytics-panel--half { grid-column: 1 / -1; }
+
+  .application-form__grid { grid-template-columns: 1fr; }
+  .application-modal { padding: var(--s3); }
+  .application-modal__panel { width: 100%; max-height: calc(100vh - 24px); padding: var(--s4); }
+}

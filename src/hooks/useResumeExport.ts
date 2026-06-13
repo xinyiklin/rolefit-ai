@@ -1,25 +1,39 @@
 import { useState } from "react";
 
+import type { DocStyle } from "./useDocStyle";
 import type { PolishedResume } from "../resumeEngine";
-import type { SourceDocx } from "../sections/shared";
 import type { RenderPdfResult, Template } from "./useTemplates";
-import { buildResumeFileName, downloadBlob, extractApplicantName } from "../lib/downloads";
+import { buildResumeFileName, downloadBlob, extractApplicantName, sanitizeFileBase } from "../lib/downloads";
 import { inferCompanyFromUrl } from "../lib/jobTarget";
-import { looksLikeLatex } from "../lib/resumeFormat";
+import { toTemplateSchema, type ResumeData, type ResumeTemplateSchema } from "../lib/resumeData";
 
-type RenderTex = (resumeText: string, templateId?: string, options?: { rawTex?: boolean }) => Promise<string>;
-type RenderPdf = (resumeText: string, templateId?: string, options?: { rawTex?: boolean }) => Promise<RenderPdfResult>;
+type RenderTex = (resumeText: string, templateId?: string, options?: { rawTex?: boolean; docStyle?: DocStyle }) => Promise<string>;
+type RenderPdf = (resumeText: string, templateId?: string, options?: { rawTex?: boolean; docStyle?: DocStyle }) => Promise<RenderPdfResult>;
+type RenderTexFromSchema = (schema: ResumeTemplateSchema, templateId?: string, options?: { docStyle?: DocStyle }) => Promise<string>;
+type RenderPdfFromSchema = (schema: ResumeTemplateSchema, templateId?: string, options?: { docStyle?: DocStyle }) => Promise<RenderPdfResult>;
 
 type UseResumeExportArgs = {
   result: PolishedResume | null;
-  sourceDocx: SourceDocx | null;
+  // The structured editor model. When present, LaTeX exports (.tex / PDF·LaTeX)
+  // render straight from it through the template — the SAME faithful path the
+  // on-screen compile preview uses — instead of the lossy serialize→reparse text
+  // round-trip, so the download matches the preview byte-for-structure.
+  editedResume: ResumeData | null;
+  // The current resume text as shown in the editor (structured model serialized),
+  // falling back to the raw polish output. Clean-print operates on THIS; it is
+  // also the LaTeX fallback when no structured model exists.
+  currentResumeText: string;
   jobUrl: string;
   resumeText: string;
-  resumeSourceFormat: string;
   selectedTemplateId: string;
   selectedTemplate: Template | null;
   renderTex: RenderTex;
   renderPdf: RenderPdf;
+  renderTexFromSchema: RenderTexFromSchema;
+  renderPdfFromSchema: RenderPdfFromSchema;
+  // The editor's Format-menu values. Forwarded to the LaTeX renderer so the
+  // compiled PDF mirrors the on-screen typography (spacing + leading).
+  docStyle: DocStyle;
   tectonic: { available: boolean };
   // The LaTeX/download status line is owned by App because several non-export
   // handlers (polish, workspace, track) also write to it; this hook reports
@@ -27,48 +41,56 @@ type UseResumeExportArgs = {
   setTexStatus: (value: string) => void;
 };
 
-// Owns the resume export surface: copy, clean-PDF print, DOCX export, LaTeX
-// .tex / PDF render, and Open-in-Overleaf, plus the per-action status/flag
-// state those buttons read. Pulled out of App.tsx so the orchestrator stays
-// focused on workflow state; behavior is unchanged from the inline handlers.
+// Owns the resume export surface: clean-PDF print, LaTeX .tex / PDF render,
+// and in-app PDF preview, plus the per-action status/flag state those buttons
+// read. Pulled out of App.tsx so the orchestrator stays focused on workflow
+// state; behavior is unchanged from the inline handlers.
 export function useResumeExport({
   result,
-  sourceDocx,
+  editedResume,
+  currentResumeText,
   jobUrl,
   resumeText,
-  resumeSourceFormat,
   selectedTemplateId,
   selectedTemplate,
   renderTex,
   renderPdf,
+  renderTexFromSchema,
+  renderPdfFromSchema,
+  docStyle,
   tectonic,
   setTexStatus
 }: UseResumeExportArgs) {
-  const [copied, setCopied] = useState(false);
+  // Render the CURRENT resume to LaTeX/PDF. With a structured model, go straight
+  // through the template (faithful — matches the compile preview); otherwise fall
+  // back to the serialize→reparse text path.
+  function renderCurrentTex(): Promise<string> {
+    return editedResume
+      ? renderTexFromSchema(toTemplateSchema(editedResume), selectedTemplateId, { docStyle })
+      : renderTex(currentResumeText, selectedTemplateId, { docStyle });
+  }
+  function renderCurrentPdf(): Promise<RenderPdfResult> {
+    return editedResume
+      ? renderPdfFromSchema(toTemplateSchema(editedResume), selectedTemplateId, { docStyle })
+      : renderPdf(currentResumeText, selectedTemplateId, { docStyle });
+  }
+
   const [coverCopied, setCoverCopied] = useState(false);
   const [downloadStatus, setDownloadStatus] = useState("");
   const [isDownloadingTex, setIsDownloadingTex] = useState(false);
   const [isRenderingLatexPdf, setIsRenderingLatexPdf] = useState(false);
-  const [isOpeningOverleaf, setIsOpeningOverleaf] = useState(false);
 
-  // Clear stale copy/download confirmations when a new polish starts. The shared
+  // In-app PDF preview state (Tectonic compile → blob URL → overlay).
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const [isPreviewLoading, setIsPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState("");
+  const [previewPdfUrl, setPreviewPdfUrl] = useState("");
+
+  // Clear stale download confirmations when a new polish starts. The shared
   // texStatus line is reset by App alongside this call.
   function resetStatuses() {
-    setCopied(false);
     setCoverCopied(false);
     setDownloadStatus("");
-  }
-
-  async function handleCopy() {
-    if (!result?.polishedText) return;
-    try {
-      await navigator.clipboard.writeText(result.polishedText);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 1800);
-      setDownloadStatus("");
-    } catch {
-      setDownloadStatus("Clipboard is unavailable in this browser context. Select the resume text and copy it manually.");
-    }
   }
 
   async function handleCopyCoverLetter() {
@@ -84,21 +106,28 @@ export function useResumeExport({
   }
 
   // Name downloads after the applicant (+ company when a job link gives one):
-  // Xinyi_Lin_Stripe_Resume.pdf → Xinyi_Lin_Resume.pdf → Resume.pdf.
-  function resumeDownloadName(ext: string): string {
+  // Xinyi_Lin_Stripe_Resume.pdf → Xinyi_Lin_Resume.pdf → Resume.pdf. The export
+  // rail offers this as the pre-filled default in a rename dialog; when the user
+  // edits it, `overrideBase` carries their chosen base name (extension excluded)
+  // and we sanitize + re-attach the correct extension so they cannot break it.
+  function resumeDownloadName(ext: string, overrideBase?: string): string {
+    if (overrideBase && overrideBase.trim()) {
+      return `${sanitizeFileBase(overrideBase)}.${ext}`;
+    }
     return buildResumeFileName(
-      extractApplicantName(result?.polishedText || resumeText),
+      extractApplicantName(currentResumeText || resumeText),
       inferCompanyFromUrl(jobUrl),
       ext
     );
   }
 
-  // "PDF · clean": print the HTML resume document (the same one shown in the
-  // Resume tab) so the browser's Save as PDF yields selectable, ATS-readable
-  // text. document.title seeds the suggested filename, restored after printing.
-  function handlePrintResume() {
-    if (!result?.polishedText) return;
-    const fileName = resumeDownloadName("pdf").replace(/\.pdf$/i, "");
+  // "PDF · clean": print the off-screen ResumePrintLayer — the read-only .rdx-*
+  // mirror of the structured resume (text-parsed fallback when no model exists) — so
+  // the browser's Save as PDF yields selectable, ATS-readable text. document.title
+  // seeds the suggested filename, restored after printing.
+  function handlePrintResume(overrideBase?: string) {
+    if (!currentResumeText) return;
+    const fileName = resumeDownloadName("pdf", overrideBase).replace(/\.pdf$/i, "");
     const previousTitle = document.title;
     document.title = fileName;
     window.addEventListener("afterprint", () => { document.title = previousTitle; }, { once: true });
@@ -106,60 +135,20 @@ export function useResumeExport({
     setDownloadStatus("Opened the print dialog — choose “Save as PDF” (uncheck “Headers and footers” for a clean page).");
   }
 
-  async function handleDownloadDocx() {
-    if (!result || !sourceDocx) return;
-    try {
-      const response = await fetch("/api/export-resume-docx", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ docxBase64: sourceDocx.base64, polishedText: result.polishedText })
-      });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error ?? "DOCX export failed.");
-      const byteCharacters = window.atob(String(data.docxBase64 ?? ""));
-      const bytes = new Uint8Array(byteCharacters.length);
-      for (let index = 0; index < byteCharacters.length; index += 1) {
-        bytes[index] = byteCharacters.charCodeAt(index);
-      }
-      const fileName = resumeDownloadName("docx");
-      downloadBlob(
-        new Blob([bytes], {
-          type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-        }),
-        fileName
-      );
-      const appended = Number(data.appendedParagraphs ?? 0);
-      setDownloadStatus(
-        appended
-          ? `Downloaded ${fileName}. Added ${appended} extra paragraph${appended === 1 ? "" : "s"} because the polished text was longer than the source layout.`
-          : `Downloaded ${fileName} using the uploaded DOCX structure.`
-      );
-    } catch (error) {
-      setDownloadStatus(
-        error instanceof Error ? error.message : "DOCX export failed. Use the PDF export or copy the polished text."
-      );
-    }
-  }
-
-  async function handleDownloadTex() {
-    if (!result) return;
-    // In-place: the polished text already is the user's edited .tex — download it
-    // directly so the original LaTeX layout is kept (no template re-render).
-    if (resumeSourceFormat === "LaTeX" && looksLikeLatex(result.polishedText)) {
-      const fileName = resumeDownloadName("tex");
-      downloadBlob(new Blob([result.polishedText], { type: "application/x-tex" }), fileName);
-      setTexStatus(`Downloaded ${fileName} — your original LaTeX, edited in place. Paste into Overleaf or your LaTeX editor.`);
-      return;
-    }
+  async function handleDownloadTex(overrideBase?: string) {
+    // Exports need a renderable resume, not an AI result: the structured editor
+    // is the source of truth, so .tex is always rendered from the current
+    // resume data through the selected template.
+    if (!result && !editedResume) return;
     setIsDownloadingTex(true);
-    setTexStatus("Rendering LaTeX source...");
+    setTexStatus("Rendering LaTeX source…");
     try {
-      const tex = await renderTex(result.polishedText, selectedTemplateId);
+      const tex = await renderCurrentTex();
       const templateLabel = selectedTemplate?.name ?? selectedTemplateId;
-      const fileName = resumeDownloadName("tex");
+      const fileName = resumeDownloadName("tex", overrideBase);
       downloadBlob(new Blob([tex], { type: "application/x-tex" }), fileName);
       setTexStatus(
-        `Downloaded ${fileName} using the ${templateLabel} template. Paste into Overleaf or your local LaTeX editor.`
+        `Downloaded ${fileName} using the ${templateLabel} template.`
       );
     } catch (error) {
       setTexStatus(error instanceof Error ? error.message : "TEX render failed.");
@@ -168,23 +157,18 @@ export function useResumeExport({
     }
   }
 
-  async function handleDownloadLatexPdf() {
-    if (!result) return;
+  async function handleDownloadLatexPdf(overrideBase?: string) {
+    if (!result && !editedResume) return;
     if (!tectonic.available) {
       setTexStatus(
         "Tectonic is not installed. Install with `brew install tectonic` to enable in-app LaTeX PDF rendering."
       );
       return;
     }
-    const latexInPlace = resumeSourceFormat === "LaTeX" && looksLikeLatex(result.polishedText);
     setIsRenderingLatexPdf(true);
-    setTexStatus(
-      latexInPlace ? "Compiling your edited LaTeX → PDF with Tectonic..." : "Compiling LaTeX → PDF with Tectonic..."
-    );
+    setTexStatus("Compiling LaTeX → PDF with Tectonic…");
     try {
-      const outcome = latexInPlace
-        ? await renderPdf(result.polishedText, undefined, { rawTex: true })
-        : await renderPdf(result.polishedText, selectedTemplateId);
+      const outcome = await renderCurrentPdf();
       if ("error" in outcome) {
         setTexStatus(
           outcome.missingTectonic
@@ -193,13 +177,9 @@ export function useResumeExport({
         );
         return;
       }
-      const fileName = resumeDownloadName("pdf");
+      const fileName = resumeDownloadName("pdf", overrideBase);
       downloadBlob(outcome.pdf, fileName);
-      setTexStatus(
-        latexInPlace
-          ? `Downloaded ${fileName} compiled from your edited LaTeX via Tectonic (in place, no template).`
-          : `Downloaded ${fileName} rendered via Tectonic + ${selectedTemplate?.name ?? selectedTemplateId}.`
-      );
+      setTexStatus(`Downloaded ${fileName} rendered via Tectonic + ${selectedTemplate?.name ?? selectedTemplateId}.`);
     } catch (error) {
       setTexStatus(error instanceof Error ? error.message : "LaTeX PDF render failed.");
     } finally {
@@ -207,76 +187,111 @@ export function useResumeExport({
     }
   }
 
-  async function handleOpenInOverleaf() {
-    if (!result) return;
-    const overleafWindow = window.open("about:blank", "_blank");
-    if (!overleafWindow) {
-      setTexStatus("Popup blocked. Allow popups for localhost:5181 and try again.");
+  async function handlePreview() {
+    if (!result && !editedResume) return;
+    if (!tectonic.available) {
+      setTexStatus(
+        "Tectonic is not installed. Install with `brew install tectonic` to enable PDF preview."
+      );
       return;
     }
-
-    const latexInPlace = resumeSourceFormat === "LaTeX" && looksLikeLatex(result.polishedText);
-    setIsOpeningOverleaf(true);
-    setTexStatus("Preparing .tex for Overleaf...");
+    // Revoke any previous blob URL before creating a new one.
+    if (previewPdfUrl) {
+      URL.revokeObjectURL(previewPdfUrl);
+      setPreviewPdfUrl("");
+    }
+    setIsPreviewOpen(true);
+    setIsPreviewLoading(true);
+    setPreviewError("");
     try {
-      const tex = latexInPlace ? result.polishedText : await renderTex(result.polishedText, selectedTemplateId);
-      const templateLabel = latexInPlace ? "Original LaTeX" : selectedTemplate?.name ?? "Resume";
-      const snipName = `Polished resume — ${templateLabel}`;
-
-      // Build the auto-submitting form via DOM APIs so correctness never depends
-      // on a hand-rolled HTML escaper. Values are assigned, not interpolated.
-      const doc = overleafWindow.document;
-      doc.title = "Opening in Overleaf…";
-      doc.body.style.cssText = "font-family:system-ui;color:#555;padding:24px";
-      doc.body.textContent = "Sending polished resume to Overleaf…";
-
-      const form = doc.createElement("form");
-      form.action = "https://www.overleaf.com/docs";
-      form.method = "POST";
-      form.enctype = "application/x-www-form-urlencoded";
-
-      const snip = doc.createElement("textarea");
-      snip.name = "snip";
-      snip.value = tex;
-
-      const snipNameInput = doc.createElement("input");
-      snipNameInput.type = "hidden";
-      snipNameInput.name = "snip_name";
-      snipNameInput.value = snipName;
-
-      const engineInput = doc.createElement("input");
-      engineInput.type = "hidden";
-      engineInput.name = "engine";
-      engineInput.value = "pdflatex";
-
-      form.append(snip, snipNameInput, engineInput);
-      doc.body.append(form);
-      form.submit();
-
-      setTexStatus(`Opened ${templateLabel} in Overleaf. Hit Compile in the new tab to generate the PDF.`);
+      const outcome = await renderCurrentPdf();
+      if ("error" in outcome) {
+        setPreviewError(
+          outcome.missingTectonic
+            ? "Tectonic is not installed. Install with `brew install tectonic`."
+            : outcome.error
+        );
+        return;
+      }
+      const url = URL.createObjectURL(outcome.pdf);
+      setPreviewPdfUrl(url);
     } catch (error) {
-      overleafWindow.close();
-      setTexStatus(error instanceof Error ? error.message : "Open in Overleaf failed.");
+      setPreviewError(error instanceof Error ? error.message : "PDF preview failed.");
     } finally {
-      setIsOpeningOverleaf(false);
+      setIsPreviewLoading(false);
     }
   }
 
+  function handleClosePreview() {
+    setIsPreviewOpen(false);
+    if (previewPdfUrl) {
+      URL.revokeObjectURL(previewPdfUrl);
+      setPreviewPdfUrl("");
+    }
+    setPreviewError("");
+  }
+
+  // Render the CURRENT resume to artifacts for pipeline tracking: the .tex source
+  // (always, deterministic from the model/template) plus the compiled PDF as
+  // base64 when Tectonic is available. Returns null when there is nothing to
+  // render; degrades to tex-only when the PDF compile is unavailable or fails,
+  // so tracking never blocks on a missing Tectonic install.
+  async function getResumeArtifacts(): Promise<
+    { tex: string; pdfBase64: string | null; fileName: string; templateId: string } | null
+  > {
+    if (!result && !editedResume) return null;
+    let tex = "";
+    try {
+      tex = await renderCurrentTex();
+    } catch {
+      return null;
+    }
+    if (!tex.trim()) return null;
+    let pdfBase64: string | null = null;
+    if (tectonic.available) {
+      try {
+        const outcome = await renderCurrentPdf();
+        if (!("error" in outcome)) {
+          pdfBase64 = await blobToBase64(outcome.pdf);
+        }
+      } catch {
+        // Keep tex-only; a failed compile must not abort tracking.
+      }
+    }
+    return { tex, pdfBase64, fileName: resumeDownloadName("pdf"), templateId: selectedTemplateId };
+  }
+
   return {
-    copied,
     coverCopied,
     downloadStatus,
     isDownloadingTex,
     isRenderingLatexPdf,
-    isOpeningOverleaf,
+    isPreviewOpen,
+    isPreviewLoading,
+    previewError,
+    previewPdfUrl,
     resetStatuses,
-    handleCopy,
     handleCopyCoverLetter,
     resumeDownloadName,
     handlePrintResume,
-    handleDownloadDocx,
     handleDownloadTex,
     handleDownloadLatexPdf,
-    handleOpenInOverleaf
+    handlePreview,
+    handleClosePreview,
+    getResumeArtifacts
   };
+}
+
+// Blob → bare base64 (no data: prefix), for posting the compiled PDF to the
+// application-resume save endpoint.
+function blobToBase64(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const value = typeof reader.result === "string" ? reader.result : "";
+      resolve(value.includes(",") ? value.slice(value.indexOf(",") + 1) : "");
+    };
+    reader.onerror = () => reject(reader.error ?? new Error("Could not encode PDF."));
+    reader.readAsDataURL(blob);
+  });
 }

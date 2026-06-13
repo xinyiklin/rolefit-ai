@@ -1,10 +1,32 @@
-import type { AiProviderValue, ModelOption, ProviderOption, RoleOption } from "../sections/SourcesPane";
+// Shared AI option types (moved here from the former SourcesPane so the
+// provider tables and their types live together).
+export type AiProviderValue =
+  | "openai"
+  | "anthropic"
+  | "gemini"
+  | "openrouter"
+  | "groq"
+  | "together"
+  | "mistral"
+  | "local"
+  | "claude-cli"
+  | "codex-cli"
+  | "gemini-cli";
+
+export type ProviderOption = {
+  readonly value: AiProviderValue;
+  readonly label: string;
+  readonly baseUrl: string;
+  readonly model: string;
+};
+
+export type ModelOption = { value: string; label: string };
 
 const customModelOption: ModelOption = { value: "custom", label: "Custom model" };
 const customModelIdOption: ModelOption = { value: "custom", label: "Custom model ID" };
 
 export const providerOptions: readonly ProviderOption[] = [
-  { value: "claude-cli", label: "Claude · CLI", baseUrl: "", model: "opus" },
+  { value: "claude-cli", label: "Claude · CLI", baseUrl: "", model: "sonnet" },
   { value: "codex-cli", label: "Codex · CLI", baseUrl: "", model: "" },
   { value: "gemini-cli", label: "Gemini · CLI", baseUrl: "", model: "" },
   { value: "openai", label: "OpenAI", baseUrl: "", model: "" },
@@ -129,15 +151,6 @@ export const cliReasoningEffortOptionsByProvider: Partial<Record<AiProviderValue
     { value: "xhigh", label: "Extra high" }
   ]
 };
-
-export const roleAppliedOptions: readonly RoleOption[] = [
-  { value: "New Grad", label: "New Grad" },
-  { value: "Early Career", label: "Early Career" },
-  { value: "SWE I", label: "SWE I" },
-  { value: "SWE II", label: "SWE II" },
-  { value: "Senior", label: "Senior" },
-  { value: "Other", label: "Other" }
-];
 
 // Friendly display label for a provider value (falls back to the raw value).
 export function providerLabel(value: string): string {

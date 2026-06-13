@@ -1,4 +1,4 @@
-import type { AiProviderValue } from "../sections/SourcesPane";
+import type { AiProviderValue } from "../config/aiOptions";
 
 export type AiRequestSettings = {
   aiProvider: AiProviderValue;

@@ -5,13 +5,27 @@ type NavMenuProps = {
   icon: ReactNode;
   label: ReactNode;
   ariaLabel: string;
+  // Extra class on the wrapper, for context-specific trigger/popover styling.
+  className?: string;
   children: ReactNode;
+  // Controlled mode: when provided, the caller owns open state.
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 };
 
-// A navbar dropdown: a pill trigger plus a popover, closing on outside click or
-// Escape. Shared by the AI and Polish menus.
-export function NavMenu({ icon, label, ariaLabel, children }: NavMenuProps) {
-  const [open, setOpen] = useState(false);
+// A dropdown: a pill trigger plus a popover, closing on outside click or
+// Escape. Shared by the masthead menus, the Format menu, and the Fit popover.
+export function NavMenu({ icon, label, ariaLabel, className, children, open: controlledOpen, onOpenChange }: NavMenuProps) {
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
+  const isControlled = controlledOpen !== undefined;
+  const open = isControlled ? controlledOpen : uncontrolledOpen;
+  function setOpen(value: boolean) {
+    if (isControlled) {
+      onOpenChange?.(value);
+    } else {
+      setUncontrolledOpen(value);
+    }
+  }
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -31,13 +45,13 @@ export function NavMenu({ icon, label, ariaLabel, children }: NavMenuProps) {
   }, [open]);
 
   return (
-    <div className="nav-menu" ref={ref}>
+    <div className={`nav-menu${className ? ` ${className}` : ""}`} ref={ref}>
       <button
         type="button"
         className="nav-menu__trigger"
         aria-expanded={open}
         aria-haspopup="dialog"
-        onClick={() => setOpen((value) => !value)}
+        onClick={() => setOpen(!open)}
       >
         {icon}
         {label}

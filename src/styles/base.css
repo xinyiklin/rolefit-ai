@@ -9,11 +9,7 @@ html, body {
 
 body {
   min-height: 100vh;
-  background:
-    radial-gradient(900px 540px at 92% -8%, rgba(31, 93, 74, 0.05), transparent 60%),
-    radial-gradient(800px 420px at -8% 110%, rgba(138, 90, 8, 0.04), transparent 55%),
-    linear-gradient(180deg, var(--paper) 0%, var(--paper-deep) 100%);
-  background-attachment: fixed;
+  background: var(--paper);
   color: var(--ink);
 }
 

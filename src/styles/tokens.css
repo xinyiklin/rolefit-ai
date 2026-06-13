@@ -1,50 +1,55 @@
 /* =============================================================
-   RoleFit AI — Editorial Workbench
-   Two-pane workspace: Sources rail + Studio canvas with export rail.
+   RoleFit AI — Drafting desk
+   Single-pane studio: navbar-input menus + tabbed canvas + export rail.
+   Palette: paper-warm neutrals tinted toward the forest brand hue (OKLCH),
+   one committed accent for actions and selection, quiet semantic states.
    ============================================================= */
 
 :root {
-  /* Type stacks */
-  --font-display: "Fraunces", "Iowan Old Style", "Hoefler Text", Georgia, serif;
+  /* Type stacks — single sans family for tool chrome */
+  --font-display: "Geist", -apple-system, BlinkMacSystemFont, "Helvetica Neue", "Segoe UI", sans-serif;
   --font-ui: "Geist", -apple-system, BlinkMacSystemFont, "Helvetica Neue", "Segoe UI", sans-serif;
   --font-mono: "JetBrains Mono", "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  /* Serif — system-only; used for the brand wordmark, page h2, and print-desk identity chrome */
+  --font-serif: "Charter", "Bitstream Charter", "Iowan Old Style", "Georgia", "Cambria", "Times New Roman", serif;
 
-  /* Paper & ink */
-  --paper: #f1ede2;
-  --paper-deep: #e7e2d2;
-  --card: #fbf8ee;
-  --card-soft: #f6f2e6;
-  --card-elev: #fefcf5;
-  --card-hover: #fdfbf3;
+  /* Surface — green-tinted paper neutrals (never pure white/black) */
+  --paper: oklch(0.956 0.006 150);
+  --paper-deep: oklch(0.934 0.008 150);
+  --card: oklch(0.992 0.002 150);
+  --card-soft: oklch(0.963 0.005 150);
+  --card-elev: oklch(0.997 0.001 150);
+  --card-hover: oklch(0.976 0.004 150);
 
-  --ink: #161611;
-  --ink-strong: #0c0c08;
-  --ink-muted: #4a4a3f;
-  --ink-soft: #6e6c5e;
-  --ink-faint: #9a9684;
+  --ink: oklch(0.25 0.012 160);
+  --ink-strong: oklch(0.18 0.014 160);
+  --ink-muted: oklch(0.41 0.014 160);
+  --ink-soft: oklch(0.5 0.014 160);
+  --ink-faint: oklch(0.58 0.012 160);
 
-  --hairline: #d9d2bf;
-  --hairline-soft: #e4dec9;
-  --hairline-strong: #c2bba2;
+  --hairline: oklch(0.885 0.008 150);
+  --hairline-soft: oklch(0.925 0.006 150);
+  --hairline-strong: oklch(0.81 0.01 150);
 
   /* Brand accent — forest ink */
-  --accent: #1f5d4a;
-  --accent-deep: #103d30;
-  --accent-soft: #e8efe9;
-  --accent-veil: rgba(31, 93, 74, 0.10);
-  --accent-glow: rgba(31, 93, 74, 0.18);
+  --accent: oklch(0.46 0.085 165);
+  --accent-deep: oklch(0.36 0.075 168);
+  --accent-soft: oklch(0.945 0.024 162);
+  --accent-veil: oklch(0.46 0.085 165 / 0.12);
+  --accent-glow: oklch(0.46 0.085 165 / 0.2);
+  --on-accent: oklch(0.975 0.008 150);
 
   /* Signal colors */
-  --warm: #8a5a08;
-  --warm-soft: #faecc6;
-  --warm-veil: #fbf3df;
-  --cool: #2e4f6e;
-  --cool-veil: rgba(46, 79, 110, 0.10);
-  --cool-line: rgba(46, 79, 110, 0.25);
-  --cool-faint: rgba(46, 79, 110, 0.06);
-  --danger: #7a3127;
-  --danger-soft: #f5dcd6;
-  --danger-line: rgba(122, 49, 39, 0.30);
+  --warm: oklch(0.52 0.1 75);
+  --warm-soft: oklch(0.92 0.05 85);
+  --warm-veil: oklch(0.965 0.025 85);
+  --cool: oklch(0.45 0.06 250);
+  --cool-veil: oklch(0.45 0.06 250 / 0.1);
+  --cool-line: oklch(0.45 0.06 250 / 0.25);
+  --cool-faint: oklch(0.45 0.06 250 / 0.06);
+  --danger: oklch(0.45 0.12 30);
+  --danger-soft: oklch(0.92 0.04 25);
+  --danger-line: oklch(0.45 0.12 30 / 0.3);
 
   /* Spacing scale */
   --s1: 4px;
@@ -59,13 +64,14 @@
   --r-sm: 4px;
   --r-md: 6px;
   --r-lg: 10px;
+  --r-xl: 14px;
   --r-pill: 999px;
 
-  /* Shadows */
-  --shadow-rest: 0 1px 0 rgba(20, 20, 14, 0.04), 0 6px 20px rgba(20, 20, 14, 0.04);
-  --shadow-lift: 0 1px 0 rgba(20, 20, 14, 0.05), 0 14px 36px rgba(20, 20, 14, 0.08);
-  --shadow-inset: inset 0 1px 0 rgba(255, 252, 240, 0.6);
-  --shadow-rail: 0 -1px 0 var(--hairline), 0 -14px 32px rgba(20, 20, 14, 0.04);
+  /* Shadows — neutral tint */
+  --shadow-rest: 0 1px 0 oklch(0.2 0.01 160 / 0.04), 0 6px 20px oklch(0.2 0.01 160 / 0.03);
+  --shadow-lift: 0 1px 0 oklch(0.2 0.01 160 / 0.05), 0 14px 36px oklch(0.2 0.01 160 / 0.08);
+  --shadow-inset: inset 0 1px 0 oklch(1 0 0 / 0.6);
+  --shadow-rail: 0 -1px 0 var(--hairline), 0 -14px 32px oklch(0.2 0.01 160 / 0.03);
   --shadow-mast: 0 1px 0 var(--hairline);
 
   /* Motion */

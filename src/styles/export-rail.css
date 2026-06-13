@@ -1,114 +1,337 @@
-/* -------- Export rail (sticky bottom) -------- */
+/* -------- Resume export menu -------- */
 
-.export-rail {
-  display: grid;
-  grid-template-columns: minmax(200px, auto) 1fr;
-  align-items: center;
-  gap: var(--s3);
-  padding: var(--s2) var(--s5);
-  border-top: 1px solid var(--hairline);
-  background: linear-gradient(180deg, rgba(254, 252, 245, 0.55), rgba(254, 252, 245, 0.95));
-  backdrop-filter: blur(8px);
-  box-shadow: var(--shadow-rail);
+.export-menu {
   position: relative;
-}
-
-.export-rail__template {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  align-items: center;
-  gap: var(--s2);
-}
-
-.export-rail__template label {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  color: var(--ink-soft);
-  font-size: 0.66rem;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  gap: var(--s1);
 }
 
-.export-rail__template label svg { color: var(--accent); width: 13px; height: 13px; }
+.export-menu__trigger svg:last-child {
+  margin-left: -5px;
+}
 
-.export-rail__template select {
-  min-height: 26px;
+.export-menu__trigger {
+  min-width: 42px;
+  padding-inline: 6px;
+}
+
+.export-menu__popover {
+  position: absolute;
+  top: calc(100% + var(--s1));
+  right: 0;
+  z-index: 30;
+  width: min(180px, calc(100vw - var(--s6)));
+  display: grid;
+  gap: var(--s2);
+  padding: var(--s2);
+  background: var(--card);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-lift);
+}
+
+.export-menu__template {
+  display: grid;
+  gap: var(--s1);
+}
+
+.export-menu__template > span {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s1);
+  /* Label: ink-faint, harmonized with ledger vocabulary */
+  color: var(--ink-faint);
+  font-size: 0.72rem;
+  font-weight: 500;
+}
+
+.export-menu__template > span svg {
+  color: var(--ink-faint);
+  width: 13px;
+  height: 13px;
+  flex-shrink: 0;
+}
+
+.export-menu__template select {
+  width: 100%;
+  min-height: 30px;
   padding: 0 var(--s2);
   font-size: 0.78rem;
   font-weight: 500;
   color: var(--ink-strong);
   background: var(--card-elev);
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--r-md);
+  /* Pin to light color-scheme so the native select chrome (arrow, option bg)
+     stays legible on the light popover surface regardless of OS dark mode. */
+  color-scheme: light;
 }
 
-.export-rail__hint {
-  grid-column: 1 / -1;
-  font-size: 0.68rem;
+.export-menu__template small,
+.export-menu__hint {
+  font-size: 0.7rem;
+  line-height: 1.35;
   color: var(--ink-faint);
-  margin-top: 1px;
 }
 
-.export-rail__hint.warn { color: var(--warm); }
+.export-menu__hint.warn { color: var(--warm); }
 
-.export-rail__actions {
+.export-menu__actions {
+  display: grid;
+  gap: var(--s1);
+}
+
+.export-menu__actions .ghost-button.is-compact {
+  justify-content: flex-start;
+  min-height: 30px;
+  padding: 0 var(--s1);
+}
+
+.export-menu__status,
+.export-menu__tip {
   display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 4px;
-}
-
-.export-rail__actions .ghost-button {
-  min-height: 26px;
-  padding: 0 var(--s2);
-  border: 1px solid var(--hairline);
-  background: var(--card-elev);
-  color: var(--ink-strong);
-  font-weight: 500;
-  font-size: 0.74rem;
-}
-
-.export-rail__actions .ghost-button:hover:not(:disabled) {
-  border-color: var(--accent);
-  color: var(--accent-deep);
-  background: var(--accent-soft);
-}
-
-.export-rail__status,
-.export-rail__tip {
-  grid-column: 1 / -1;
-  display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: var(--s2);
-  margin-top: 4px;
-  padding: 4px var(--s2);
-  border-radius: var(--r-sm);
-  font-size: 0.72rem;
+  padding-top: var(--s1);
+  border-top: 1px solid var(--hairline-soft);
+  font-size: 0.71rem;
   line-height: 1.35;
 }
 
-.export-rail__status {
+.export-menu__status {
   color: var(--accent-deep);
-  background: var(--accent-soft);
-  border: 1px solid var(--accent-veil);
 }
 
-.export-rail__status .sep { color: var(--ink-faint); margin: 0 var(--s1); }
-
-.export-rail__tip {
-  color: var(--ink-muted);
-  background: var(--card-soft);
-  border: 1px solid var(--hairline);
+.export-menu__status .sep {
+  color: var(--ink-faint);
+  margin: 0 var(--s1);
 }
 
-.export-rail__tip svg { color: var(--ink-faint); margin-top: 1px; }
+.export-menu__tip {
+  color: var(--ink-faint);
+}
 
-.export-rail__tip code {
+.export-menu__tip code {
   font-family: var(--font-mono);
-  font-size: 0.76rem;
+  font-size: 0.72rem;
   color: var(--accent-deep);
   background: var(--accent-soft);
   padding: 1px 5px;
   border-radius: var(--r-sm);
 }
 
+/* -------- Base action button overrides (ghost-button.is-compact inside menu) -------- */
+
+/*
+  "quiet ghosts": Copy, .tex, Preview
+  These inherit the base ghost-button style — transparent bg, hairline border
+  on hover. We only tweak size to match the compact rail chrome.
+*/
+.export-menu__actions .ghost-button.is-compact {
+  min-height: 26px;
+  padding: 0 var(--s1);
+  font-size: 0.74rem;
+  font-weight: 500;
+  /* Reset any overrides from old style that made disabled look enabled */
+  background: transparent;
+  border-color: transparent;
+  color: var(--ink-muted);
+}
+
+.export-menu__actions .ghost-button.is-compact:hover:not(:disabled) {
+  color: var(--ink-strong);
+  background: var(--card-soft);
+  border-color: var(--hairline);
+}
+
+/*
+  CRITICAL BUG FIX: explicit :disabled for rail ghost buttons.
+  The old rule set background/color/border on all states (even disabled),
+  making disabled buttons look identical to enabled ones.
+  Now disabled = flat neutral: ink-faint text, hairline-soft border,
+  transparent bg, no hover, not-allowed cursor.
+*/
+.export-menu__actions .ghost-button.is-compact:disabled {
+  color: var(--ink-faint);
+  background: transparent;
+  border-color: transparent;
+  cursor: not-allowed;
+  opacity: 1; /* don't double-fade; ink-faint already communicates inertness */
+}
+
+.export-menu__actions .ghost-button.is-compact:disabled svg {
+  opacity: 0.45;
+}
+
+/* -------- PDF export buttons — "destination actions" (slightly stronger) -------- */
+
+/*
+  PDF buttons sit at the destination end of the export workflow and deserve
+  more visual weight than the utility ghosts. They get a card-elev bg and a
+  hairline-strong border so they read as actionable surfaces, not just text.
+*/
+.export-menu__actions .pdf-action {
+  background: var(--card-elev);
+  border-color: var(--hairline-strong);
+  color: var(--ink-strong);
+}
+
+.export-menu__actions .pdf-action:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent-deep);
+  background: var(--accent-soft);
+}
+
+/* PDF·LaTeX is the canonical export — accent-deep text + accent-tinted border */
+.export-menu__actions .pdf-action--canonical {
+  color: var(--accent-deep);
+  border-color: oklch(0.46 0.085 165 / 0.35);
+  background: var(--card-elev);
+}
+
+.export-menu__actions .pdf-action--canonical:hover:not(:disabled) {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent-deep);
+}
+
+/* Disabled state for pdf-action mirrors quiet ghost pattern */
+.export-menu__actions .pdf-action:disabled,
+.export-menu__actions .pdf-action--canonical:disabled {
+  color: var(--ink-faint);
+  background: transparent;
+  border-color: var(--hairline-soft);
+  cursor: not-allowed;
+}
+
+.export-menu__actions .pdf-action:disabled svg,
+.export-menu__actions .pdf-action--canonical:disabled svg {
+  opacity: 0.45;
+}
+
+.export-menu__actions .ghost-button.is-compact {
+  justify-content: flex-start;
+  min-height: 30px;
+}
+
+/* -------- Rename-at-save dialog -------- */
+
+/*
+  Fires when a file-saving export (PDF·LaTeX / PDF·clean / .tex / DOCX) is
+  requested: the system pre-fills the name, the user can edit it, then confirm.
+  Centered modal over a dimmed backdrop, matching the preview overlay's chrome.
+*/
+.rename-dialog {
+  position: fixed;
+  inset: 0;
+  /* z-index 50: above .nav-menu__popover / .export-menu__popover (z-index 40)
+     and any other panel-level layers so stacking is deterministic. */
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  padding: var(--s4);
+  animation: rename-dialog-fade 0.16s var(--ease) both;
+}
+
+@keyframes rename-dialog-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.rename-dialog__backdrop {
+  position: absolute;
+  inset: 0;
+  background: oklch(0.2 0.01 160 / 0.45);
+  -webkit-backdrop-filter: blur(3px);
+  backdrop-filter: blur(3px);
+}
+
+.rename-dialog__card {
+  position: relative;
+  width: min(420px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+  padding: var(--s4);
+  background: var(--card);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-xl);
+  box-shadow: var(--shadow-lift);
+}
+
+.rename-dialog__head {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--ink-strong);
+}
+
+.rename-dialog__head svg {
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+.rename-dialog__field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.rename-dialog__label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+
+.rename-dialog__input-wrap {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 var(--s2);
+  background: var(--card-elev);
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--r-md);
+}
+
+.rename-dialog__input-wrap:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-veil);
+}
+
+.rename-dialog__input {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 32px;
+  border: none;
+  background: transparent;
+  font-size: 0.82rem;
+  color: var(--ink-strong);
+  font-family: var(--font-mono);
+}
+
+.rename-dialog__input:focus {
+  outline: none;
+}
+
+.rename-dialog__ext {
+  flex-shrink: 0;
+  font-size: 0.82rem;
+  font-family: var(--font-mono);
+  color: var(--ink-faint);
+}
+
+.rename-dialog__hint {
+  margin: 0;
+  font-size: 0.71rem;
+  line-height: 1.4;
+  color: var(--ink-faint);
+}
+
+.rename-dialog__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--s2);
+}

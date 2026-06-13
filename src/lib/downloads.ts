@@ -16,7 +16,11 @@ export function downloadBlob(blob: Blob, fileName: string) {
   document.body.append(link);
   link.click();
   link.remove();
-  URL.revokeObjectURL(url);
+  // Defer revoke so Gecko (Firefox) can start reading the blob from the object
+  // URL after the click event finishes. Revoking in the same synchronous tick
+  // races that fetch and can cancel the download or produce a 0-byte file.
+  // Behavior-preserving in Chromium, which queues the download before returning.
+  setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
 // Pull the applicant's name from a resume so downloads can be named after the
@@ -47,7 +51,8 @@ export function extractApplicantName(text: string): string {
 }
 
 // Filesystem-safe slug: keep letters/digits, collapse the rest to underscores.
-export function slugForFile(value: string): string {
+// Internal to buildResumeFileName below.
+function slugForFile(value: string): string {
   return value
     .normalize("NFKD")
     .replace(/[^A-Za-z0-9]+/g, "_")
@@ -60,4 +65,22 @@ export function buildResumeFileName(name: string, company: string, ext: string):
   const parts = [slugForFile(name), slugForFile(company)].filter(Boolean);
   parts.push("Resume");
   return `${parts.join("_")}.${ext}`;
+}
+
+// Sanitize a user-typed file name into a safe base (extension excluded): the
+// rename dialog pre-fills the system name, but the user can edit it freely, so
+// we strip path separators and characters illegal on common filesystems, drop
+// trailing dots (Windows), collapse whitespace, and cap length. Falls back to
+// "Resume" when nothing usable remains. Spaces, hyphens, and underscores are
+// intentionally preserved — they are valid, common parts of a file name.
+export function sanitizeFileBase(value: string): string {
+  const cleaned = value
+    .normalize("NFKD")
+    .replace(/[\\/:*?"<>|]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/\.+$/g, "")
+    .trim()
+    .slice(0, 80);
+  return cleaned || "Resume";
 }

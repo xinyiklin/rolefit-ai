@@ -1,9 +1,10 @@
 import { looksLikeLatex } from "./resumeFormat";
 
-// Structured model the Resume tab renders as HTML and the print layer prints to
-// PDF. The same plain-text heuristics the old hand-rolled PDF used (section
-// headings, name/contact, role lines, bullets) decide the structure, so detection
-// is unchanged — only the renderer differs.
+// Fallback print model, used by ResumePrintLayer ONLY when no structured editor
+// model exists (resume === null). The Resume tab and the primary print path now use
+// the structured editor model (ResumeEditor / ResumeReadonlyDocument, .rdx-* markup).
+// The same plain-text heuristics the old hand-rolled PDF used (section headings,
+// name/contact, role lines, bullets) still decide this fallback's structure.
 
 export type ResumeBlock =
   | { kind: "bullet"; text: string }

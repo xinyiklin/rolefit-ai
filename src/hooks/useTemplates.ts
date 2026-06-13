@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 
+import type { DocStyle } from "./useDocStyle";
+import type { ResumeTemplateSchema } from "../lib/resumeData";
+
 export type Template = {
   id: string;
   name: string;
@@ -58,7 +61,7 @@ export function useTemplates() {
   }, []);
 
   const renderTex = useCallback(
-    async (resumeText: string, templateId?: string, options?: { rawTex?: boolean }): Promise<string> => {
+    async (resumeText: string, templateId?: string, options?: { rawTex?: boolean; docStyle?: DocStyle }): Promise<string> => {
       const response = await fetch("/api/render-resume-latex", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -66,7 +69,8 @@ export function useTemplates() {
           resumeText,
           templateId: templateId ?? selectedTemplateId,
           wantsPdf: false,
-          rawTex: options?.rawTex ?? false
+          rawTex: options?.rawTex ?? false,
+          docStyle: options?.docStyle
         })
       });
       const data = await response.json();
@@ -77,7 +81,7 @@ export function useTemplates() {
   );
 
   const renderPdf = useCallback(
-    async (resumeText: string, templateId?: string, options?: { rawTex?: boolean }): Promise<RenderPdfResult> => {
+    async (resumeText: string, templateId?: string, options?: { rawTex?: boolean; docStyle?: DocStyle }): Promise<RenderPdfResult> => {
       const response = await fetch("/api/render-resume-latex", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -85,7 +89,8 @@ export function useTemplates() {
           resumeText,
           templateId: templateId ?? selectedTemplateId,
           wantsPdf: true,
-          rawTex: options?.rawTex ?? false
+          rawTex: options?.rawTex ?? false,
+          docStyle: options?.docStyle
         })
       });
       const data = await response.json();
@@ -103,6 +108,58 @@ export function useTemplates() {
       }
       const bytes = Uint8Array.from(atob(String(data.pdfBase64)), (c) => c.charCodeAt(0));
       return { pdf: new Blob([bytes], { type: "application/pdf" }) };
+    },
+    [selectedTemplateId]
+  );
+
+  // Compile Preview: render straight from the structured editor schema, so the
+  // PDF reflects exactly what the editor holds (no plain-text round trip).
+  const renderPdfFromSchema = useCallback(
+    async (schema: ResumeTemplateSchema, templateId?: string, options?: { docStyle?: DocStyle }): Promise<RenderPdfResult> => {
+      const response = await fetch("/api/render-resume-latex", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          resume: schema,
+          templateId: templateId ?? selectedTemplateId,
+          wantsPdf: true,
+          docStyle: options?.docStyle
+        })
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        return { error: data.error ?? "LaTeX PDF render failed." };
+      }
+      if (data.pdfError) {
+        return {
+          error: data.pdfError.message ?? "PDF compile failed.",
+          missingTectonic: data.pdfError.code === "TECTONIC_MISSING"
+        };
+      }
+      if (!data.pdfBase64) {
+        return { error: "No PDF returned." };
+      }
+      const bytes = Uint8Array.from(atob(String(data.pdfBase64)), (c) => c.charCodeAt(0));
+      return { pdf: new Blob([bytes], { type: "application/pdf" }) };
+    },
+    [selectedTemplateId]
+  );
+
+  const renderTexFromSchema = useCallback(
+    async (schema: ResumeTemplateSchema, templateId?: string, options?: { docStyle?: DocStyle }): Promise<string> => {
+      const response = await fetch("/api/render-resume-latex", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          resume: schema,
+          templateId: templateId ?? selectedTemplateId,
+          wantsPdf: false,
+          docStyle: options?.docStyle
+        })
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error ?? "LaTeX render failed.");
+      return String(data.tex ?? "");
     },
     [selectedTemplateId]
   );
@@ -127,6 +184,8 @@ export function useTemplates() {
     templatesError,
     renderTex,
     renderPdf,
+    renderPdfFromSchema,
+    renderTexFromSchema,
     importTex
   };
 }

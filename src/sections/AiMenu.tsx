@@ -6,7 +6,7 @@ import {
   providerOptions
 } from "../config/aiOptions";
 import { NavMenu } from "./NavMenu";
-import type { AiProviderValue } from "./SourcesPane";
+import type { AiProviderValue } from "../config/aiOptions";
 
 type AiMenuProps = {
   aiProvider: AiProviderValue;
@@ -57,7 +57,7 @@ export function AiMenu({
       label={
         <>
           <span className="nav-menu__label">{selectedProviderOption?.label ?? aiProvider}</span>
-          <span className="nav-menu__sub">{modelLabel}</span>
+          <span className="nav-menu__sub is-meta">{modelLabel}</span>
         </>
       }
     >

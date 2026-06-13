@@ -1,48 +1,72 @@
+import type { Ref } from "react";
 import { SlidersHorizontal } from "lucide-react";
 import { NavMenu } from "./NavMenu";
-import type { RoleOption } from "./SourcesPane";
 
 type PolishMenuProps = {
-  roleAppliedAs: string;
-  setRoleAppliedAs: (v: string) => void;
-  roleAppliedOptions: readonly RoleOption[];
+  includeCoverLetter: boolean;
+  setIncludeCoverLetter: (v: boolean) => void;
+  strictReview: boolean;
+  setStrictReview: (v: boolean) => void;
   honestContext: string;
   setHonestContext: (v: string) => void;
   customInstructions: string;
   setCustomInstructions: (v: string) => void;
+  // Controlled open state — lets App.tsx open the menu programmatically.
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  // Forwarded ref for the honest-context textarea so App.tsx can focus it.
+  honestContextRef?: Ref<HTMLTextAreaElement>;
 };
 
-// Navbar dropdown for the inputs that steer the rewrite content (as opposed to
-// the AiMenu, which picks the model/provider).
+// Navbar dropdown for the optional inputs that steer a polish run. The AiMenu,
+// separately, picks the model/provider.
 export function PolishMenu({
-  roleAppliedAs,
-  setRoleAppliedAs,
-  roleAppliedOptions,
+  includeCoverLetter,
+  setIncludeCoverLetter,
+  strictReview,
+  setStrictReview,
   honestContext,
   setHonestContext,
   customInstructions,
-  setCustomInstructions
+  setCustomInstructions,
+  open,
+  onOpenChange,
+  honestContextRef
 }: PolishMenuProps) {
   return (
     <NavMenu
       icon={<SlidersHorizontal size={13} aria-hidden={true} />}
-      ariaLabel="Polish inputs"
+      ariaLabel="Polish options"
       label={
         <>
-          <span className="nav-menu__label">Polish</span>
-          <span className="nav-menu__sub">{roleAppliedAs}</span>
+          <span className="nav-menu__label">Options</span>
         </>
       }
+      open={open}
+      onOpenChange={onOpenChange}
     >
-      <label className="field">
-        <span>Role applying as</span>
-        <select value={roleAppliedAs} onChange={(event) => setRoleAppliedAs(event.target.value)}>
-          {roleAppliedOptions.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
+      <label className="toggle-row">
+        <input
+          checked={includeCoverLetter}
+          onChange={(event) => setIncludeCoverLetter(event.target.checked)}
+          type="checkbox"
+        />
+        <span>
+          <strong>Cover letter</strong>
+          <small>Draft a matching cover letter alongside the polish.</small>
+        </span>
+      </label>
+
+      <label className="toggle-row">
+        <input
+          checked={strictReview}
+          onChange={(event) => setStrictReview(event.target.checked)}
+          type="checkbox"
+        />
+        <span>
+          <strong>Strict review</strong>
+          <small>Run a skeptical recruiter audit after the edit pass.</small>
+        </span>
       </label>
 
       <label className="field">
@@ -50,6 +74,7 @@ export function PolishMenu({
           Honest context <small>(true facts not on the resume — used only as evidence)</small>
         </span>
         <textarea
+          ref={honestContextRef}
           className="textarea"
           value={honestContext}
           onChange={(event) => setHonestContext(event.target.value)}

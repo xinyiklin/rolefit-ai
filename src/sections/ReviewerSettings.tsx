@@ -4,7 +4,7 @@ import {
   modelOptionsByProvider,
   providerOptions
 } from "../config/aiOptions";
-import type { AiProviderValue } from "./SourcesPane";
+import type { AiProviderValue } from "../config/aiOptions";
 
 // Optional independent reviewer for the strict-audit pass. The primary provider
 // rewrites (and drafts the cover letter); this lets a *different* model audit

@@ -1,113 +1,143 @@
-/* -------- Studio pane (right) -------- */
+/* -------- Studio pane -------- */
 
 .studio-pane {
   display: grid;
-  grid-template-rows: auto 1fr auto;
+  grid-template-columns: clamp(168px, 13vw, 208px) minmax(0, 1fr);
   min-height: 0;
-  background: linear-gradient(180deg, rgba(254, 252, 245, 0.45), rgba(247, 244, 234, 0.35));
+  background: var(--paper);
 }
 
-/* -------- Studio header -------- */
-
-.studio-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--s3);
-  padding: 0 var(--s5);
-  border-bottom: 1px solid var(--hairline);
-  background: linear-gradient(180deg, rgba(254, 252, 245, 0.82), rgba(254, 252, 245, 0.55));
-  backdrop-filter: blur(6px);
+.studio-main {
+  position: relative;
+  display: grid;
+  grid-template-rows: 1fr auto;
+  min-width: 0;
+  min-height: 0;
 }
 
+/* -------- Tab rail (numbered table of contents) -------- */
+
+/* The rail reads as a printed index: numbered entries grouped by DRAFT / TRACK,
+   with mono two-digit indices instead of icons. */
 .studio-tabs {
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  align-items: stretch;
   gap: 0;
-  flex: 1;
-  margin-bottom: -1px;
+  min-width: 0;
+  min-height: 0;
+  padding: var(--s4) var(--s3);
+  border-right: 1px solid var(--hairline);
+  background: var(--card-soft);
 }
 
+/* Group eyebrow — mono small-caps label above each entry group, hairline above. */
+.studio-tabs__group {
+  margin-top: var(--s3);
+  padding-top: var(--s3);
+  border-top: 1px solid var(--hairline-soft);
+}
+
+/* First group has no top rule. */
+.studio-tabs__group:first-child {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+
+.studio-tabs__group-label {
+  display: block;
+  margin-bottom: var(--s1);
+  padding: 0 var(--s2);
+  color: var(--ink-faint);
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  font-variant: small-caps;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 500;
+}
+
+/* Each tab row: [two-digit index] [label] [badge?] — no icon slot. */
 .studio-tab {
-  display: inline-flex;
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) auto;
   align-items: center;
-  gap: var(--s1);
-  min-height: 34px;
-  padding: 0 var(--s3);
+  gap: var(--s2);
+  min-height: 30px;
+  padding: 0 var(--s2);
   border: 0;
-  border-bottom: 2px solid transparent;
-  border-radius: 0;
+  border-radius: var(--r-sm);
   background: transparent;
   color: var(--ink-soft);
   font-family: var(--font-ui);
-  font-size: 0.82rem;
+  font-size: 0.8rem;
   font-weight: 500;
+  text-align: left;
   cursor: pointer;
-  transition: color 160ms var(--ease), border-color 160ms var(--ease);
+  transition: color 160ms var(--ease), background 160ms var(--ease);
 }
 
-.studio-tab:hover { color: var(--ink); }
+/* The icon slot is suppressed in the new numbered rail; icons are hidden via
+   CSS so the JSX prop signature is unchanged. */
+.studio-tab > svg { display: none; }
+
+/* Two-digit mono index — generated via the data-index attribute set by StudioPane. */
+.studio-tab__index {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-faint);
+  line-height: 1;
+  transition: color 160ms var(--ease);
+}
+
+.studio-tab span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.studio-tab:hover {
+  color: var(--ink);
+  background: var(--card-hover);
+}
 
 .studio-tab em {
   display: inline-flex;
   align-items: center;
-  height: 19px;
-  padding: 0 var(--s2);
+  height: 16px;
+  padding: 0 5px;
   border-radius: var(--r-pill);
-  background: var(--card-soft);
-  border: 1px solid var(--hairline);
-  color: var(--ink-faint);
+  background: var(--paper-deep);
+  color: var(--ink-soft);
   font-family: var(--font-mono);
-  font-size: 0.66rem;
+  font-size: 0.64rem;
   font-style: normal;
   font-weight: 500;
 }
 
+/* Active: ink-strong label, accent index, hairline underline — no card background. */
 .studio-tab[aria-selected="true"] {
   color: var(--ink-strong);
-  border-bottom-color: var(--accent);
   font-weight: 600;
+  background: transparent;
+}
+
+.studio-tab[aria-selected="true"] .studio-tab__index {
+  color: var(--accent);
 }
 
 .studio-tab[aria-selected="true"] em {
   background: var(--accent-soft);
-  border-color: var(--accent-veil);
   color: var(--accent-deep);
 }
 
-.studio-score {
-  display: inline-flex;
-  align-items: baseline;
-  gap: var(--s2);
-  padding: 4px var(--s3);
-  border: 1px solid var(--hairline);
-  border-radius: var(--r-pill);
-  background: var(--card-elev);
-}
-
-.studio-score__label {
-  color: var(--ink-soft);
-  font-size: 0.62rem;
-  font-weight: 600;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-}
-
-.studio-score__value {
-  font-family: var(--font-display);
-  font-variation-settings: "opsz" 48;
-  font-weight: 500;
-  font-size: 1.05rem;
-  line-height: 1;
-  color: var(--ink-strong);
-  font-feature-settings: "tnum", "lnum";
-}
-
-.studio-score__sub {
-  color: var(--ink-soft);
-  font-size: 0.68rem;
-  font-weight: 500;
-  letter-spacing: 0.01em;
+/* Active hairline underline indicator (subtle; replaces the card-box approach). */
+.studio-tab[aria-selected="true"]::after {
+  content: none; /* using index color as the sole indicator — no underline */
 }
 
 /* -------- Studio body -------- */
@@ -118,13 +148,42 @@
   align-content: start;
   min-height: 0;
   overflow: auto;
-  padding: var(--s3) var(--s5);
+  padding: var(--s4) var(--s5);
   scrollbar-width: thin;
   scrollbar-color: var(--hairline-strong) transparent;
 }
 
 .studio-body::-webkit-scrollbar { width: 8px; }
 .studio-body::-webkit-scrollbar-thumb { background: var(--hairline-strong); border-radius: var(--r-pill); }
+
+/* Non-resume tabs: deeper paper tone so content reads as sheets on a desk.
+   Matches the paper-warm palette; the Resume tab keeps its own override below. */
+.studio-body[data-tab="applications"],
+.studio-body[data-tab="analytics"],
+.studio-body[data-tab="materials"] {
+  background: var(--paper-deep);
+}
+
+/* Resume tab: no page scroll — the editor canvas fills edge-to-edge from
+   toolbar to export rail, like the Google Docs workspace. */
+.studio-body[data-tab="resume"] {
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+}
+
+.studio-body[data-tab="resume"] > .studio-card--flush {
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/* Restore the toolbar inset so it aligns with other tabs' content. */
+.studio-body[data-tab="resume"] .studio-card__head {
+  padding: var(--s4) var(--s5) 0;
+}
 
 /* -------- Studio card -------- */
 
@@ -133,7 +192,7 @@
   gap: var(--s2);
   padding: var(--s3) var(--s4);
   border: 1px solid var(--hairline);
-  border-radius: var(--r-md);
+  border-radius: var(--r-lg);
   background: var(--card);
   box-shadow: var(--shadow-rest);
 }
@@ -156,27 +215,52 @@
   margin-bottom: 0;
 }
 
+/* Right-side cluster in a card head (e.g. the Resume tab's Format menu next to
+   the score-context note). */
+.studio-card__tools {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: var(--s2);
+  min-width: 0;
+}
+
 .studio-card__head h2 {
-  font-family: var(--font-ui);
+  font-family: var(--font-serif);
   font-weight: 600;
-  font-size: 0.98rem;
+  font-size: 1.3rem;
   line-height: 1.2;
   color: var(--ink-strong);
   letter-spacing: -0.005em;
   margin-top: 0;
 }
 
+/* Secondary card heading: stays sans and smaller so the serif page title
+   keeps rank within the same tab. */
+.studio-card__head h2.studio-card__subhead {
+  font-family: var(--font-ui);
+  font-size: 0.9rem;
+  letter-spacing: 0;
+}
+
+/* Quiet status note, not a badge: sentence case with a small leading dot. */
 .studio-card__meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   color: var(--ink-soft);
-  font-family: var(--font-mono);
-  font-size: 0.72rem;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  padding: var(--s1) var(--s2);
-  border: 1px solid var(--hairline);
-  border-radius: var(--r-sm);
-  background: var(--card-soft);
+  font-size: 0.76rem;
   white-space: nowrap;
+}
+
+.studio-card__meta::before {
+  content: "";
+  width: 5px;
+  height: 5px;
+  border-radius: var(--r-pill);
+  background: var(--warm);
+  flex: none;
 }
 
 /* PanelHeading (reused inside studio cards) */
@@ -214,7 +298,6 @@
   gap: var(--s4);
   padding: var(--s3) var(--s4);
   border: 1px solid var(--hairline);
-  border-left: 3px solid var(--accent);
   border-radius: var(--r-md);
   background: var(--card-soft);
 }
@@ -246,15 +329,7 @@
   border: 1px solid var(--hairline);
   border-radius: var(--r-md);
   padding: var(--s5);
-  background:
-    repeating-linear-gradient(
-      to bottom,
-      transparent 0,
-      transparent 23px,
-      rgba(217, 210, 191, 0.16) 23px,
-      rgba(217, 210, 191, 0.16) 24px
-    ),
-    #fcfaf2;
+  background: var(--card);
   color: var(--ink);
   font-family: var(--font-mono);
   font-size: 0.86rem;
@@ -276,4 +351,116 @@
   font-size: 0.92rem;
   line-height: 1.6;
   background: var(--card-elev);
+}
+
+/* Page-zoom select beside the Format menu (Google-Docs style). */
+.doc-zoom {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s1);
+}
+
+.doc-zoom__label {
+  color: var(--ink-soft);
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.doc-zoom select {
+  width: auto;
+  min-height: 26px;
+  padding: 0 var(--s1) 0 var(--s2);
+  font-size: 0.76rem;
+}
+
+/* -------- Page-title vocabulary -------- */
+
+/* .page-serif — serif h2 for page-level titles in the studio body.
+   Usage: <h2 className="page-serif">Resume draft</h2>
+   The studio-card__head h2 rule already applies equivalent styles; this class
+   lets page agents apply the same treatment to standalone headings. */
+.page-serif {
+  font-family: var(--font-serif);
+  font-weight: 600;
+  font-size: 1.45rem;
+  line-height: 1.2;
+  letter-spacing: -0.005em;
+  color: var(--ink-strong);
+  margin-top: 0;
+}
+
+/* -------- Ledger row vocabulary -------- */
+
+/* .ledger-rows — container for a set of label/value pairs in print-ledger style.
+   Usage:
+     <dl className="ledger-rows">
+       <div className="ledger-row">
+         <dt>Keyword match</dt>
+         <dd>87 %</dd>
+       </div>
+     </dl>
+   Or with a plain div structure when dl semantics are not appropriate.
+
+   .ledger-row — flex row with:
+     - label (dt or .ledger-row__label): ink-soft, 0.78rem
+     - dotted leader (auto-generated via flex: 1 + border-bottom): fills the gap
+     - value (dd or .ledger-row__value): mono, tabular-nums, ink-strong
+   Compact vertical rhythm; min-height 26px. */
+
+.ledger-rows {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ledger-row {
+  display: flex;
+  align-items: baseline;
+  min-height: 26px;
+  gap: var(--s2);
+}
+
+/* Label — left side, ink-soft, slightly condensed. */
+.ledger-row dt,
+.ledger-row__label {
+  flex: none;
+  color: var(--ink-soft);
+  font-size: 0.78rem;
+  font-weight: 500;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+
+/* Dotted leader — flex fill between label and value. */
+.ledger-row__leader {
+  flex: 1;
+  min-width: var(--s3);
+  border-bottom: 1px dotted var(--hairline-strong);
+  /* Nudge upward from the baseline so the dots sit mid-gap visually. */
+  margin-bottom: 0.32em;
+  align-self: flex-end;
+}
+
+/* Value — right side, mono, tabular-nums, ink-strong. */
+.ledger-row dd,
+.ledger-row__value {
+  flex: none;
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: var(--ink-strong);
+  line-height: 1.3;
+  white-space: nowrap;
+}
+
+/* Prose ledger values ("Awaiting response") stay sans; mono is for data only. */
+.ledger-row dd.is-prose {
+  font-family: var(--font-ui);
+  font-size: 0.76rem;
+  font-weight: 500;
 }

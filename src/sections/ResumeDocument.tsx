@@ -1,9 +1,10 @@
 import type { ReactNode } from "react";
 import type { ResumeBlock, ResumeDocumentModel } from "../lib/resumeDocument";
 
-// Presentational render of the parsed resume model as semantic HTML. The same
-// component renders the on-screen Resume tab and the off-screen print layer, so
-// what you read is exactly what window.print() produces.
+// Presentational render of the text-parsed resume model as semantic HTML. This is
+// now the FALLBACK print renderer only — used when no structured editor model is
+// available. The normal print path renders `ResumeReadonlyDocument` (the structured
+// model with the editor's own `.rdx-*` markup) so print matches the editor exactly.
 
 function renderBlocks(blocks: ResumeBlock[]): ReactNode[] {
   const out: ReactNode[] = [];

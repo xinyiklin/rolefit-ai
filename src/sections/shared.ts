@@ -2,12 +2,36 @@
 
 import type { PolishedResume, ResumeAnalysis } from "../resumeEngine";
 
-export type OutputTab = "resume" | "review" | "cover" | "strict" | "questions" | "pipeline";
+// "review" is gone as a tab: the recruiter review docks in the Resume tab's
+// rail, and the local fit analytics live in the header's Fit popover.
+// "pipeline" and "calendar" are gone as top-level tabs: they merged into
+// "applications" as Table / Board / Calendar view switcher (TrackerTab).
+// "cover" and "questions" are gone as separate tabs: they merged into
+// "materials" (cover letter + application questions, step 2 of tab IA consolidation).
+export type OutputTab = "resume" | "materials" | "applications" | "analytics";
+
+// Rail groups for the numbered table-of-contents sidebar.
+export type OutputTabGroup = "DRAFT" | "TRACK";
 
 export type OutputTabDescriptor = {
   id: OutputTab;
   label: string;
   badge?: string | number;
+  /** Two-digit index displayed in the numbered rail, e.g. "01".
+   *  When absent, StudioPane derives it from the tab's position (1-based). */
+  index?: string;
+  /** Rail group this tab belongs to ("DRAFT" or "TRACK").
+   *  When absent, StudioPane derives it from the tab id. */
+  group?: OutputTabGroup;
+};
+
+// Canonical group membership for the numbered rail.
+// DRAFT: Resume + Materials (cover letter + application questions); TRACK: tracker + analytics.
+export const TAB_GROUPS: Record<OutputTab, OutputTabGroup> = {
+  resume:       "DRAFT",
+  materials:    "DRAFT",
+  applications: "TRACK",
+  analytics:    "TRACK",
 };
 
 // Application Questions tab: drafted answers to supplemental application
@@ -19,12 +43,6 @@ export type ApplicationAnswersResult = {
   answers: GeneratedAnswer[];
   roleDescriptions: GeneratedRoleDescription[];
 } | null;
-
-export type SourceDocx = {
-  name: string;
-  base64: string;
-  paragraphs: number;
-};
 
 export type ResumeBlockKind = "contact" | "section" | "bullet" | "text";
 
