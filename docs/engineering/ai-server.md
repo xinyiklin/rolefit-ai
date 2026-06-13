@@ -23,25 +23,44 @@ careflow `5173-5180`, portfolio `5184-5185`; do not mix them up.
   Codex CLI, Gemini CLI / Antigravity) shelled out to local subprocesses,
   plus hosted APIs (OpenAI, Anthropic, Google, OpenRouter, Groq,
   Together AI, Mistral, OpenAI-compatible). The route is intentionally
-  multi-pass: rewrite first, strict recruiter audit second when enabled,
-  and cover letter third only when requested, so one model response is not
-  forced to rewrite, score, audit, and draft a letter at the same time.
-  Audit and cover-letter passes use clipped copies of very long documents
-  to keep those follow-up prompts inside a predictable context budget. The
-  audit pass can optionally use an *independent reviewer* provider/model
-  (request `audit*` fields, resolved by `resolveAuditProviderRequest`); when
-  unset it reuses the primary config. The rewrite and cover-letter passes
-  always use the primary provider — only the non-rewriting audit can differ,
-  so a reviewer model can never alter the format-preserved resume output.
+  multi-pass: targeted suggestion generation first, then the strict
+  recruiter audit (when enabled) and the cover letter (when requested)
+  run in parallel, so one model response is not forced to suggest edits,
+  score, audit, and draft a letter at the same time. The suggestion pass
+  returns only structured `suggestedChanges` (no full-text rewrite, no fit
+  score — scoring belongs to the audit pass, with the local engine as
+  fallback); the `polishedText` preview is derived server-side by applying
+  the sanitized suggestions to the scoped text, so every tailored
+  character has passed the exact-evidence gate before the audit, the
+  cover letter, or the UI diff sees it. The polish request sends a structured
+  `tailorScope` of user-selected editable sections instead of the full
+  resume; identity, contact, education, and any omitted sections remain
+  locked out of the rewrite prompt unless the user selects them. The audit
+  pass receives the clipped original sections plus the SANITIZED proposed
+  changes (`<proposed_changes>`, slim JSON) instead of a second full resume
+  copy — the polished resume is derivable from them, and dropping the
+  redundant copy cuts the audit prompt by up to ~28k chars; the cover pass
+  uses a clipped copy of the tailored sections. The audit pass can
+  optionally use an *independent reviewer* provider/model (request `audit*`
+  fields, resolved by `resolveAuditProviderRequest`); when unset it reuses
+  the primary config. The suggestion and cover-letter passes always use the
+  primary provider — only the non-rewriting audit can differ, so a reviewer
+  model can never alter the editor's resume output.
 - DOCX import / export (text extraction, format-preserved updates)
 - job posting import (`/api/import-job`): fetch a public posting URL —
   Workday CXS JSON when the host is recognized (`*.myworkdayjobs.com`,
-  `/job/` and `/details/` links), otherwise a generic HTML→text scrape —
-  behind SSRF guards that re-validate the host and resolved IP on every
-  redirect hop and reject private / loopback / link-local targets.
-  Client-side distilling in `src/lib/jobExtract.ts` then removes page
-  furniture before the text fills the job-description field. The link
-  itself is kept only for pipeline tracking and is never sent to the AI.
+  `/job/` and `/details/` links), LinkedIn visible job body + criteria
+  rows when present, otherwise a generic HTML→text scrape — behind SSRF
+  guards that re-validate the host and resolved IP on every redirect hop
+  and reject private / loopback / link-local targets. Client-side
+  distilling in `src/lib/jobExtract.ts` then splits the result into compact
+  model-facing tailoring text and tracking-only facts (role summary,
+  company, location, job type, work-auth note, compensation). The visible
+  job-description field is a structured brief with Job Title,
+  Company/Product Context, Core Responsibilities, Required Qualifications,
+  Preferred Qualifications, Tech Stack/Keywords, Seniority Signals, and
+  Domain Signals. The link itself is kept only for pipeline tracking and is
+  never sent to the AI.
 - workspace file storage under `job-search-workspace/` (auto-load,
   upload, save, reload)
 
@@ -57,7 +76,8 @@ The `/api/polish` flow follows that rule — it is split across focused
 modules under `server/ai/` so no single file carries the whole pipeline:
 
 - `polish.mjs` — the `handlePolish` route (request parsing, the
-  rewrite → audit → cover orchestration, response assembly) only.
+  suggest → parallel audit + cover orchestration, derived `polishedText`
+  assembly) only.
 - `providers.mjs` — provider identity + per-request config resolution
   (`normalizeProvider`, default provider/model, key/base-URL lookup,
   `resolveProviderRequest`, `resolveAuditProviderRequest`).
@@ -66,8 +86,38 @@ modules under `server/ai/` so no single file carries the whole pipeline:
   `callConfiguredProvider` dispatch.
 - `prompts.mjs` — every system/user prompt and the shared
   honest-tailoring / anti-fabrication rule helpers (also imported by
-  `applicationAnswers.mjs`).
-- `sanitize.mjs` — fit-score and missing-skill response validation.
+  `applicationAnswers.mjs`). Untrusted text (job description, resume,
+  honest context, custom instructions, pass-1 output) is interpolated
+  through `fenceUntrusted`, which neutralizes literal fence-tag
+  look-alikes so pasted content cannot escape its `<job_description>`-style
+  delimiters; the input-firewall rule tells the model fenced content is
+  data, never instructions.
+- `sanitize.mjs` — fit-score, missing-skill, structured suggestion, and
+  strict-review response validation (`sanitizeStrictReview`: enum
+  fallbacks, string clips, array caps, markup rejection on rewrites).
+  The markup gate allows exactly the editor's inline-mark vocabulary
+  (`<b>`/`<i>`/`<u>`, no attributes) because formatted bullets carry those
+  tokens in `currentText` and a faithful suggestion echoes them; all other
+  tags, LaTeX commands, and newlines still reject. `sanitizeTailorSuggestions`
+  takes an optional drop-stats collector and the route warns (shape-only)
+  when a reply's suggestions are ALL dropped — a silent all-drop is
+  otherwise indistinguishable from "no changes needed".
+  `reconcileFitVerdict` enforces verdict/score agreement conservatively:
+  scores (base AND tailored) clamp DOWN to a pessimistic verdict's band,
+  optimistic verdicts downgrade to the score's band — neither signal is
+  ever inflated. Hit-keyword grounding: a suggestion whose claimed JD
+  keyword appears in `proposedText` but whose significant words exist
+  nowhere in the scope text or honest context is dropped
+  (`ungroundedKeyword`) — the model-prose evidence field cannot launder an
+  inferred fact (e.g. "clinics run Windows") into the resume.
+- `grounding.mjs` — `findUngroundedJdTerm`: the proposedText-level JD-term
+  gate behind `ungroundedJdTerm` drops. Detector 1 catches capitalized
+  tokens (incl. a non-verb first word); detector 2 catches a curated
+  lowercase tech-concept lexicon (microservices, machine learning, ci/cd…)
+  that deliberately mirrors the concept-class entries of
+  `src/resume/keywords.ts` (the TS module can't be imported from Node due
+  to its extensionless TS import chain). Matching is fuzzy (60% prefix) so
+  honest inflections survive.
 - `json.mjs` — `parseAiJson` (fenced / prose-wrapped / outermost-brace
   + trailing-comma repair). `errors.mjs` — `UserSafeAiError` and the
   config-error → 400 mapping.
@@ -124,19 +174,42 @@ Per-provider rules:
 
 The AI must:
 
-- tailor the resume to the provided job description
+- tailor only the provided `tailorScope` sections to the job description
 - keep each role to no more than five bullets
 - emphasize entry-level SDE / full-stack fit
 - strengthen wording and structure
+- return structured `suggestedChanges` that target existing section,
+  entry, and bullet IDs, so the user can accept, edit, or discard changes
+  in the resume editor
 - preserve truthfulness — never invent employers, dates, metrics,
   education, tools, or outcomes
+- never edit identity, contact, education, or omitted sections unless the
+  user explicitly selects those sections in the editor
 - treat honest context as optional evidence; when it is blank, rely only
   on the resume
 - never import a JD-only skill/tool into the resume or skills section
   without exact evidence in the resume or optional honest context; surface
   missing required skills as gaps instead
 - add bracketed placeholders where facts or metrics are missing
-- return copy-ready resume text plus concise strengths and fixes
+- return a concise `changeSummary` (what changed and why, or why nothing
+  needed to); the selected-section text preview used for scoring/audit is
+  derived server-side from the sanitized suggestions, and the editor
+  remains the final source of truth
+- score fit arithmetically: the strict reviewer returns per-bucket
+  subtotals (`fitBuckets`: required tech 0-40 / domains 0-25 / seniority
+  0-15 / preferred 0-10 / evidence clarity 0-10) and the SERVER sums them,
+  caps for the reviewer's own reported gaps (HIGH gap < 70, BLOCKER gap →
+  DON'T APPLY band), and derives the verdict from the total
+  (`scoreFromBuckets` + `applyGapCapsAndVerdict` in `sanitize.mjs`) — the
+  model judges facts, the server does the math, so verdict and score
+  cannot disagree. A legacy holistic `fitScore` reply falls back to
+  `reconcileFitVerdict`. The reviewer acts as a validator of the polish
+  pass — unsupported inserted terms lower the tailored buckets, never
+  raise them
+- write bullets as engineering accomplishments in plain language — no
+  brochure vocabulary, no claims the candidate could not defend in an
+  interview, and proposed text stays close to the current field's length
+  so the one-page layout survives
 - keep strict review as an audit of the original resume plus polished
   resume, not as a second full rewrite
 
@@ -151,19 +224,24 @@ Keep the import pipeline split by responsibility:
   when available, falls back to HTML→text extraction, enforces timeouts,
   and applies SSRF checks on the original URL and every redirect hop.
 - `src/lib/jobExtract.ts` is the dependency-free distiller. It should keep
-  résumé-tailoring content (role intro, responsibilities, requirements,
-  preferred qualifications) and remove scrape artifacts or non-tailoring
-  page furniture: empty list markers, duplicate adjacent lines, ATS title
+  résumé-tailoring content (role intro, seniority/employment metadata,
+  responsibilities, requirements, preferred qualifications) in a compact
+  structured prompt payload and remove scrape artifacts or non-tailoring page
+  furniture: empty list markers, duplicate adjacent lines, ATS title
   furniture such as `Job Application for...`, low-value Workday metadata
   pairs, duplicated pre-description company/culture marketing blocks,
   apply/share/navigation rows, salary pills, benefits/perks blocks,
   pay-transparency text, application instructions, EEO/legal boilerplate,
-  cookie prompts, and similar noise.
+  cookie prompts, and similar noise. Extract tracking-only facts separately
+  instead of leaving compensation and boilerplate in the model-facing job
+  description.
 
 Distilling should stay conservative: do not cut trailing boilerplate until
 meaningful role content has already been seen, and keep uncertain text
-rather than risking removal of real requirements. Never log or print raw
-job-description text during routine debugging.
+rather than risking removal of real requirements. If role title, company,
+role summary, location, compensation, or the job description itself cannot
+be extracted, surface manual review/input instead of guessing. Never log or
+print raw job-description text during routine debugging.
 
 ## Resume-Job Keyword Review
 
@@ -208,8 +286,8 @@ In the response:
 ## Document Workflow
 
 - DOCX is the format-preserving path for uploaded Word resumes; `.tex`
-  sources preserve LaTeX in place when Preserve format is enabled. PDF-only
-  sources must be pasted as extracted text.
+  sources preserve LaTeX in place automatically. PDF-only sources must be
+  pasted as extracted text.
 - The clean PDF path is local HTML print: `src/lib/resumeDocument.ts`
   parses the tailored text, `src/sections/ResumeDocument.tsx` renders the
   document, and `src/sections/ResumePrintLayer.tsx` exposes that same HTML
@@ -220,9 +298,11 @@ In the response:
 - Keep `job-search-workspace/` the canonical location for personal
   resumes, application trackers, exported drafts, and job-specific
   files. The folder is gitignored except for its `README.md`.
-- On startup, the server auto-loads `base-resume.docx` first when it
-  exists, then text fallbacks (`base-resume.tex`, `base-resume.txt`,
-  `base-resume.md`, `base-resume.csv`). Preserve that order.
+- On startup, the server discovers root-level LaTeX base resumes named
+  `base-resume.tex` or `base-resume-*.tex`, loads `base-resume.tex`
+  first when present, then named variants. Legacy `base-resume.docx`,
+  `.txt`, `.md`, and `.csv` files remain fallback-only for old local
+  workspaces.
 
 ## Deployment And Infrastructure
 

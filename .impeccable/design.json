@@ -1,0 +1,258 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-06-12T13:10:31Z",
+  "title": "Design System: Role-Fit AI",
+  "extensions": {
+    "colorMeta": {
+      "accent": {
+        "role": "primary",
+        "displayName": "Forest Ink",
+        "canonical": "oklch(0.46 0.085 165)",
+        "tonalRamp": [
+          "oklch(0.15 0.04 165)",
+          "oklch(0.25 0.06 166)",
+          "oklch(0.36 0.075 168)",
+          "oklch(0.46 0.085 165)",
+          "oklch(0.58 0.07 165)",
+          "oklch(0.72 0.05 164)",
+          "oklch(0.86 0.035 163)",
+          "oklch(0.945 0.024 162)"
+        ]
+      },
+      "paper": {
+        "role": "neutral",
+        "displayName": "Paper",
+        "canonical": "oklch(0.956 0.006 150)",
+        "tonalRamp": [
+          "oklch(0.15 0.008 150)",
+          "oklch(0.3 0.01 150)",
+          "oklch(0.45 0.01 150)",
+          "oklch(0.6 0.01 150)",
+          "oklch(0.75 0.009 150)",
+          "oklch(0.885 0.008 150)",
+          "oklch(0.934 0.008 150)",
+          "oklch(0.956 0.006 150)"
+        ]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Ink",
+        "canonical": "oklch(0.25 0.012 160)",
+        "tonalRamp": [
+          "oklch(0.18 0.014 160)",
+          "oklch(0.25 0.012 160)",
+          "oklch(0.33 0.013 160)",
+          "oklch(0.41 0.014 160)",
+          "oklch(0.5 0.014 160)",
+          "oklch(0.58 0.012 160)",
+          "oklch(0.72 0.01 160)",
+          "oklch(0.9 0.006 160)"
+        ]
+      },
+      "hairline": {
+        "role": "neutral",
+        "displayName": "Hairline",
+        "canonical": "oklch(0.885 0.008 150)",
+        "tonalRamp": [
+          "oklch(0.4 0.012 150)",
+          "oklch(0.5 0.012 150)",
+          "oklch(0.6 0.012 150)",
+          "oklch(0.7 0.011 150)",
+          "oklch(0.81 0.01 150)",
+          "oklch(0.885 0.008 150)",
+          "oklch(0.925 0.006 150)",
+          "oklch(0.95 0.005 150)"
+        ]
+      },
+      "warm": {
+        "role": "signal",
+        "displayName": "Warm Amber",
+        "canonical": "oklch(0.52 0.1 75)",
+        "tonalRamp": [
+          "oklch(0.2 0.05 75)",
+          "oklch(0.3 0.07 75)",
+          "oklch(0.4 0.09 75)",
+          "oklch(0.52 0.1 75)",
+          "oklch(0.64 0.09 78)",
+          "oklch(0.76 0.08 82)",
+          "oklch(0.86 0.06 84)",
+          "oklch(0.92 0.05 85)"
+        ]
+      },
+      "cool": {
+        "role": "signal",
+        "displayName": "Archival Blue",
+        "canonical": "oklch(0.45 0.06 250)",
+        "tonalRamp": [
+          "oklch(0.18 0.04 250)",
+          "oklch(0.27 0.05 250)",
+          "oklch(0.36 0.06 250)",
+          "oklch(0.45 0.06 250)",
+          "oklch(0.58 0.05 250)",
+          "oklch(0.72 0.04 250)",
+          "oklch(0.85 0.025 250)",
+          "oklch(0.94 0.015 250)"
+        ]
+      },
+      "danger": {
+        "role": "signal",
+        "displayName": "Brick",
+        "canonical": "oklch(0.45 0.12 30)",
+        "tonalRamp": [
+          "oklch(0.18 0.06 30)",
+          "oklch(0.27 0.09 30)",
+          "oklch(0.36 0.11 30)",
+          "oklch(0.45 0.12 30)",
+          "oklch(0.58 0.1 28)",
+          "oklch(0.72 0.08 27)",
+          "oklch(0.85 0.05 26)",
+          "oklch(0.92 0.04 25)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display (serif)", "purpose": "Page titles and the masthead wordmark only; identity chrome, never controls or body." },
+      "title": { "displayName": "Title (sans)", "purpose": "Panel headings and secondary card heads; stays sans so the serif keeps rank." },
+      "body": { "displayName": "Body (sans)", "purpose": "Controls, prose, table text; 0.82-0.88rem, prose capped near 75ch." },
+      "label": { "displayName": "Eyebrow label", "purpose": "Uppercase tracked field labels, table headers, group eyebrows." },
+      "data": { "displayName": "Data (mono)", "purpose": "Numbers, dates, scores, indices, identifiers; always tabular-nums, never sentences." }
+    },
+    "shadows": [
+      { "name": "shadow-rest", "value": "0 1px 0 oklch(0.2 0.01 160 / 0.04), 0 6px 20px oklch(0.2 0.01 160 / 0.03)", "purpose": "Default studio-card sit on the desk." },
+      { "name": "shadow-lift", "value": "0 1px 0 oklch(0.2 0.01 160 / 0.05), 0 14px 36px oklch(0.2 0.01 160 / 0.08)", "purpose": "Popovers and overlays; maximum elevation in the app." },
+      { "name": "shadow-inset", "value": "inset 0 1px 0 oklch(1 0 0 / 0.6)", "purpose": "Top inner highlight on accent-filled buttons." },
+      { "name": "shadow-rail", "value": "0 -1px 0 var(--hairline), 0 -14px 32px oklch(0.2 0.01 160 / 0.03)", "purpose": "Upward hairline plus faint haze under the export rail." },
+      { "name": "shadow-mast", "value": "0 1px 0 var(--hairline)", "purpose": "Masthead hairline edge; the signature double rule adds a 3px offset hairline shadow with zero blur." }
+    ],
+    "motion": [
+      { "name": "ease", "value": "cubic-bezier(0.2, 0.6, 0.2, 1)", "purpose": "House ease for every transition." },
+      { "name": "duration-press", "value": "120ms", "purpose": "Button press transform." },
+      { "name": "duration-state", "value": "150-160ms", "purpose": "Hover/color/border state changes." },
+      { "name": "duration-enter", "value": "140ms", "purpose": "Popover slide-fade enter (4px translate, opacity from 0.01 to avoid composite bleed)." },
+      { "name": "duration-meter", "value": "380ms", "purpose": "Score-meter fill width; the slowest motion in the app." }
+    ],
+    "breakpoints": [
+      { "name": "xl", "value": "1280px" },
+      { "name": "lg", "value": "1180px" },
+      { "name": "md", "value": "1080px" },
+      { "name": "sm", "value": "900px" },
+      { "name": "xs", "value": "820px" },
+      { "name": "xxs", "value": "760px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button (Polish)",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The one accent-filled action per view; Forest Ink fill, paper text, inset highlight plus faint glow.",
+      "html": "<button class=\"ds-btn-primary\">Polish resume</button>",
+      "css": ".ds-btn-primary { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 38px; padding: 0 16px; border: 1px solid var(--accent-deep); border-radius: 6px; background: var(--accent); color: var(--on-accent); font-family: var(--font-ui); font-weight: 600; font-size: 0.84rem; letter-spacing: 0.005em; cursor: pointer; box-shadow: var(--shadow-inset), 0 1px 2px var(--accent-veil); transition: background 160ms var(--ease), box-shadow 160ms var(--ease), transform 120ms var(--ease); } .ds-btn-primary:hover { background: var(--accent-deep); box-shadow: var(--shadow-inset), 0 6px 16px var(--accent-glow); } .ds-btn-primary:active { transform: translateY(1px); } .ds-btn-primary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; } .ds-btn-primary:disabled { background: var(--card-soft); border-color: var(--hairline); box-shadow: none; color: var(--ink-faint); cursor: not-allowed; }"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Raised-sheet workhorse button; hover tints toward the accent.",
+      "html": "<button class=\"ds-btn-secondary\">Export DOCX</button>",
+      "css": ".ds-btn-secondary { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 32px; padding: 0 12px; border: 1px solid var(--hairline-strong); border-radius: 6px; background: var(--card-elev); color: var(--ink-strong); font-family: var(--font-ui); font-weight: 600; font-size: 0.8rem; cursor: pointer; transition: border-color 160ms var(--ease), background 160ms var(--ease), color 160ms var(--ease), transform 120ms var(--ease); } .ds-btn-secondary:hover { border-color: var(--accent); color: var(--accent-deep); background: var(--accent-soft); } .ds-btn-secondary:active { transform: translateY(1px); } .ds-btn-secondary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }"
+    },
+    {
+      "name": "Masthead Menu Trigger",
+      "kind": "nav",
+      "refersTo": "nav-trigger",
+      "description": "Typographic menu trigger with dot-plus-word state readout and a 1px ink hover underline; no box, no pill.",
+      "html": "<button class=\"ds-nav-trigger\" aria-expanded=\"false\"><span class=\"ds-nav-trigger__label\">Resume</span><span class=\"ds-nav-trigger__sub is-ready\">loaded</span><svg class=\"ds-nav-trigger__caret\" width=\"10\" height=\"10\" viewBox=\"0 0 10 10\" fill=\"none\"><path d=\"M2 3.5l3 3 3-3\" stroke=\"currentColor\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></svg></button>",
+      "css": ".ds-nav-trigger { position: relative; display: inline-flex; align-items: center; gap: 5px; height: 30px; padding: 0 8px; border: 0; border-radius: 4px; background: transparent; color: var(--ink-soft); font-family: var(--font-ui); font-size: 0.76rem; font-weight: 600; cursor: pointer; transition: color 150ms var(--ease), background 150ms var(--ease); } .ds-nav-trigger:hover { color: var(--ink); background: var(--card-soft); } .ds-nav-trigger::after { content: \"\"; position: absolute; bottom: 4px; left: 8px; right: 8px; height: 1px; background: var(--ink-strong); opacity: 0; transition: opacity 150ms var(--ease); } .ds-nav-trigger:hover::after { opacity: 0.18; } .ds-nav-trigger:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; } .ds-nav-trigger__sub { display: inline-flex; align-items: center; gap: 5px; font-size: 0.68rem; font-weight: 500; color: var(--ink-faint); } .ds-nav-trigger__sub::before { content: \"\"; width: 5px; height: 5px; border-radius: 999px; border: 1px solid var(--hairline-strong); background: var(--hairline-strong); } .ds-nav-trigger__sub.is-ready { color: var(--accent-deep); } .ds-nav-trigger__sub.is-ready::before { background: var(--accent); border-color: var(--accent); } .ds-nav-trigger__caret { color: var(--ink-faint); }"
+    },
+    {
+      "name": "Tab Rail Row",
+      "kind": "nav",
+      "refersTo": "studio-tab",
+      "description": "Numbered table-of-contents tab: mono two-digit index, no icon; active state is ink-strong text with a Forest Ink index.",
+      "html": "<div class=\"ds-tab-rail\"><span class=\"ds-tab-group-label\">Draft</span><button class=\"ds-studio-tab\" aria-selected=\"true\"><span class=\"ds-studio-tab__index\">01</span><span>Resume</span></button><button class=\"ds-studio-tab\" aria-selected=\"false\"><span class=\"ds-studio-tab__index\">02</span><span>Cover letter</span></button></div>",
+      "css": ".ds-tab-rail { display: flex; flex-direction: column; width: 188px; padding: 16px 12px; background: var(--card-soft); border-right: 1px solid var(--hairline); } .ds-tab-group-label { display: block; margin-bottom: 4px; padding: 0 8px; color: var(--ink-faint); font-family: var(--font-mono); font-size: 0.62rem; font-variant: small-caps; letter-spacing: 0.08em; text-transform: uppercase; font-weight: 500; } .ds-studio-tab { display: grid; grid-template-columns: 22px minmax(0, 1fr); align-items: center; gap: 8px; min-height: 30px; padding: 0 8px; border: 0; border-radius: 4px; background: transparent; color: var(--ink-soft); font-family: var(--font-ui); font-size: 0.8rem; font-weight: 500; text-align: left; cursor: pointer; transition: color 160ms var(--ease), background 160ms var(--ease); } .ds-studio-tab:hover { color: var(--ink); background: var(--card-hover); } .ds-studio-tab:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; } .ds-studio-tab__index { font-family: var(--font-mono); font-size: 0.7rem; font-variant-numeric: tabular-nums; color: var(--ink-faint); line-height: 1; } .ds-studio-tab[aria-selected=\"true\"] { color: var(--ink-strong); font-weight: 600; } .ds-studio-tab[aria-selected=\"true\"] .ds-studio-tab__index { color: var(--accent); }"
+    },
+    {
+      "name": "Text Input",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Raised-sheet field with an eyebrow label and a Forest Ink focus ring.",
+      "html": "<label class=\"ds-field\"><span>Job posting link</span><input class=\"ds-text-input\" type=\"text\" placeholder=\"https://…\" /></label>",
+      "css": ".ds-field { display: grid; gap: 4px; font-family: var(--font-ui); } .ds-field > span { color: var(--ink-muted); font-size: 0.72rem; font-weight: 600; letter-spacing: 0.02em; } .ds-text-input { width: 100%; min-height: 32px; border: 1px solid var(--hairline-strong); border-radius: 6px; outline: none; padding: 0 8px; color: var(--ink); background: var(--card-elev); font-family: var(--font-ui); font-size: 0.82rem; -webkit-appearance: none; appearance: none; transition: border-color 160ms var(--ease), box-shadow 160ms var(--ease); } .ds-text-input::placeholder { color: var(--ink-faint); } .ds-text-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }"
+    },
+    {
+      "name": "Keyword Chip",
+      "kind": "chip",
+      "refersTo": "chip",
+      "description": "Mono pill for keyword lists; quiet raised sheet, never a status badge.",
+      "html": "<span class=\"ds-chip\">postgresql</span>",
+      "css": ".ds-chip { display: inline-flex; align-items: center; min-height: 26px; padding: 0 12px; border: 1px solid var(--hairline-strong); border-radius: 999px; background: var(--card-elev); color: var(--ink-muted); font-family: var(--font-mono); font-size: 0.74rem; font-weight: 500; }"
+    },
+    {
+      "name": "Ledger Row",
+      "kind": "custom",
+      "refersTo": "studio-card",
+      "description": "Signature label/value line: sans label, dotted leader, mono tabular value. The default way to show named numbers.",
+      "html": "<dl class=\"ds-ledger-rows\"><div class=\"ds-ledger-row\"><dt>Keyword match</dt><span class=\"ds-ledger-row__leader\"></span><dd>87 %</dd></div><div class=\"ds-ledger-row\"><dt>Applications</dt><span class=\"ds-ledger-row__leader\"></span><dd>14</dd></div></dl>",
+      "css": ".ds-ledger-rows { display: grid; margin: 0; padding: 0; min-width: 260px; } .ds-ledger-row { display: flex; align-items: baseline; min-height: 26px; gap: 8px; } .ds-ledger-row dt { flex: none; color: var(--ink-soft); font-family: var(--font-ui); font-size: 0.78rem; font-weight: 500; line-height: 1.3; white-space: nowrap; } .ds-ledger-row__leader { flex: 1; min-width: 12px; border-bottom: 1px dotted var(--hairline-strong); margin-bottom: 0.32em; align-self: flex-end; } .ds-ledger-row dd { flex: none; margin: 0; font-family: var(--font-mono); font-size: 0.78rem; font-variant-numeric: tabular-nums; font-weight: 600; color: var(--ink-strong); line-height: 1.3; white-space: nowrap; }"
+    },
+    {
+      "name": "Figures Strip",
+      "kind": "custom",
+      "refersTo": "studio-card",
+      "description": "Inline summary figures in one hairline-bounded strip; replaces hero-metric card grids.",
+      "html": "<div class=\"ds-figures-strip\"><div class=\"ds-figures-strip__item\"><em>Active</em><strong>9</strong></div><span class=\"ds-figures-strip__divider\"></span><div class=\"ds-figures-strip__item\"><em>Interviews</em><strong>3</strong></div><span class=\"ds-figures-strip__divider\"></span><div class=\"ds-figures-strip__item\"><em>Avg fit</em><strong>76</strong></div></div>",
+      "css": ".ds-figures-strip { display: flex; align-items: center; flex-wrap: wrap; padding: 8px 0; border-top: 1px solid var(--hairline-soft); border-bottom: 1px solid var(--hairline-soft); } .ds-figures-strip__item { display: inline-flex; flex-direction: column; gap: 1px; padding: 4px 16px; } .ds-figures-strip__item em { font-style: normal; color: var(--ink-faint); font-family: var(--font-ui); font-size: 0.67rem; font-weight: 500; letter-spacing: 0.02em; } .ds-figures-strip__item strong { color: var(--ink-strong); font-family: var(--font-mono); font-size: 0.92rem; font-feature-settings: \"tnum\"; line-height: 1.1; } .ds-figures-strip__divider { align-self: stretch; width: 1px; background: var(--hairline); }"
+    },
+    {
+      "name": "Stage Dot",
+      "kind": "custom",
+      "refersTo": "studio-card",
+      "description": "Dot-plus-word status vocabulary: a 7px colored dot beside plain text; no pill, no border, color never alone.",
+      "html": "<div class=\"ds-stage-list\"><span class=\"ds-stage\"><span class=\"ds-stage-dot\" style=\"background: var(--cool)\"></span><span class=\"ds-stage-label\">Applied</span></span><span class=\"ds-stage\"><span class=\"ds-stage-dot\" style=\"background: var(--accent)\"></span><span class=\"ds-stage-label\">Interviewing</span></span><span class=\"ds-stage\"><span class=\"ds-stage-dot\" style=\"background: var(--danger)\"></span><span class=\"ds-stage-label\">Rejected</span></span></div>",
+      "css": ".ds-stage-list { display: flex; gap: 16px; font-family: var(--font-ui); } .ds-stage { display: inline-flex; align-items: center; } .ds-stage-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 5px; } .ds-stage-label { font-size: 0.74rem; color: var(--ink); }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Drafting Desk",
+    "overview": "Role-Fit AI is a drafting desk, not a dashboard. Content surfaces read as paper sheets laid on a deeper desk tone; the chrome around them borrows from print production: a newspaper masthead with a double rule, a numbered table-of-contents tab rail, dotted-leader ledger rows, mono indices and tabular figures. The serif voice appears only in identity chrome (wordmark, page titles), the way a paper's nameplate differs from its body type. The tool is calm, dense, and trustworthy; it disappears into the task of tailoring a resume.\n\nThe system explicitly rejects what PRODUCT.md rejects: marketing landing pages and oversized heroes, gradient-heavy surfaces, SaaS dashboard clichés (hero metrics, identical card grids), sales-style copy, fake loading states, shimmer, decorative motion, and nested card-in-card containers. Status is stated quietly (a small dot beside a word), never shouted (filled pills, banners, badges everywhere).",
+    "keyCharacteristics": [
+      "Paper-on-desk depth: tonal layers and hairlines, not shadows.",
+      "Three type voices with strict jobs: sans chrome, serif identity, mono data.",
+      "One committed accent (Forest Ink) reserved for action and selection.",
+      "Dot-plus-word status vocabulary; ledger rows for label/value facts.",
+      "Density with calm: compact spacing, short labels, restrained contrast."
+    ],
+    "rules": [
+      { "name": "The One Ink Rule", "body": "Forest Ink touches at most ~10% of any screen: primary actions, selection, ready states, focus. It is never decoration, never a section background, never a heading color.", "section": "colors" },
+      { "name": "The Tinted Neutral Rule", "body": "Pure #fff and #000 are forbidden. Every neutral carries the paper hue (150) or ink hue (160) at chroma 0.001–0.014.", "section": "colors" },
+      { "name": "The Dot-Plus-Word Rule", "body": "Stage, priority, and readiness are a 5–7px dot beside plain text. Color never carries meaning alone, and filled pill badges are not the default status vocabulary.", "section": "colors" },
+      { "name": "The Serif Is Chrome Rule", "body": "Charter appears only in identity chrome: wordmark and page-level titles. Never in buttons, labels, body copy, inputs, or data.", "section": "typography" },
+      { "name": "The Mono Means Data Rule", "body": "If it is a number, count, date, score, index, or identifier, it is mono with tabular-nums. If it is a sentence, it is never mono.", "section": "typography" },
+      { "name": "The Whisper Shadow Rule", "body": "No shadow exceeds ~8% alpha. If a surface needs more separation, change its paper tone or add a hairline; never darken the shadow.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do use only src/styles/tokens.css variables and src/ui.tsx primitives; if a value is not a token, it does not ship.",
+      "Do state status as a small dot beside plain sentence-case text (.stage-dot, .nav-menu__sub, .studio-card__meta).",
+      "Do set numbers, dates, scores, and indices in JetBrains Mono with tabular-nums (The Mono Means Data Rule).",
+      "Do keep errors inline, localized, and user-safe, near the affected workflow; surface gaps and bracketed placeholders for human review.",
+      "Do keep keyboard access first-class: APG tabs model, visible :focus-visible rings (2px accent, 2px offset), 24px minimum icon hit targets, aria-live for async status; honor prefers-reduced-motion.",
+      "Do keep motion 120–250ms with the house ease (cubic-bezier(0.2, 0.6, 0.2, 1)), state-driven only.",
+      "Do make disabled controls flat and neutral, never a faded tint of the enabled state."
+    ],
+    "donts": [
+      "Don't build marketing landing pages, oversized heroes, or gradient-heavy surfaces (PRODUCT.md anti-reference, verbatim).",
+      "Don't reach for SaaS dashboard clichés: hero metrics and identical card grids are banned; use the figures strip and ledger rows.",
+      "Don't write sales-style or hype copy, in-product manuals, or multi-sentence help essays; labels and hints stay short.",
+      "Don't ship fake loading states, shimmer, or decorative motion.",
+      "Don't nest cards inside cards; use the flush card variant or drop the wrapper.",
+      "Don't use border-left/border-right thicker than 1px as a colored accent stripe, gradient text, or glassmorphism.",
+      "Don't reshape the masthead-inputs + tabbed-studio workflow; changes refine it, never restructure it.",
+      "Don't introduce global toast/banner/loading frameworks, new fonts, new hues, or pure black/white.",
+      "Don't put the serif in controls or body copy, or mono in sentences.",
+      "Don't print raw provider errors, stack traces, or resume text in chrome.",
+      "Don't lighten --ink-faint or lower text contrast below WCAG AA."
+    ]
+  }
+}
