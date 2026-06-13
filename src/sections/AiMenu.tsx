@@ -61,7 +61,7 @@ export function AiMenu({
         </>
       }
     >
-      <div className="settings-grid">
+      <div className="provider-config">
         <label className="field">
           <span>Provider</span>
           <select value={aiProvider} onChange={(event) => onProviderChange(event.target.value as AiProviderValue)}>
@@ -72,18 +72,36 @@ export function AiMenu({
             ))}
           </select>
         </label>
-        <label className="field">
-          <span>Model</span>
-          <select value={selectedModel} onChange={(event) => setSelectedModel(event.target.value)}>
-            {currentModelOptions.map((option) => (
-              <option key={option.value || "server-default"} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </label>
+
+        {/* Model + effort share a balanced row only when both exist; otherwise
+            Model takes the full width so no orphaned half-width select appears. */}
+        <div className={currentCliReasoningEffortOptions.length ? "settings-grid" : "provider-config__single"}>
+          <label className="field">
+            <span>Model</span>
+            <select value={selectedModel} onChange={(event) => setSelectedModel(event.target.value)}>
+              {currentModelOptions.map((option) => (
+                <option key={option.value || "server-default"} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          {currentCliReasoningEffortOptions.length ? (
+            <label className="field">
+              <span>Reasoning effort</span>
+              <select value={cliReasoningEffort} onChange={(event) => setCliReasoningEffort(event.target.value)}>
+                {currentCliReasoningEffortOptions.map((option) => (
+                  <option key={option.value || "cli-default-effort"} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
+        </div>
+
         {selectedModel === "custom" ? (
-          <label className="field field--wide">
+          <label className="field">
             <span>Custom model</span>
             <input
               className="text-input"
@@ -94,61 +112,49 @@ export function AiMenu({
             />
           </label>
         ) : null}
-        {currentCliReasoningEffortOptions.length ? (
+
+        <label className="field">
+          <span>API key</span>
+          <div className="input-with-icon">
+            <KeyRound size={15} aria-hidden="true" />
+            <input
+              autoComplete="off"
+              value={apiKey}
+              onChange={(event) => setApiKey(event.target.value)}
+              placeholder={
+                aiProvider === "claude-cli"
+                  ? "Not used — auth via `claude auth login`"
+                  : aiProvider === "codex-cli"
+                  ? "Not used — auth via `codex login`"
+                  : aiProvider === "gemini-cli"
+                  ? "Not used — auth via the `gemini` CLI login"
+                  : aiProvider === "openai"
+                  ? "Uses OPENAI_API_KEY when blank"
+                  : "Uses this provider's .env key when blank"
+              }
+              disabled={isCliProvider}
+              type="password"
+            />
+          </div>
+        </label>
+
+        {OPENAI_COMPATIBLE.includes(aiProvider) ? (
           <label className="field">
-            <span>Reasoning effort</span>
-            <select value={cliReasoningEffort} onChange={(event) => setCliReasoningEffort(event.target.value)}>
-              {currentCliReasoningEffortOptions.map((option) => (
-                <option key={option.value || "cli-default-effort"} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
+            <span>Base URL</span>
+            <input
+              className="text-input"
+              value={apiBaseUrl}
+              onChange={(event) => setApiBaseUrl(event.target.value)}
+              placeholder="https://provider.example/v1"
+              type="url"
+            />
           </label>
         ) : null}
+
+        <p className="micro-status">
+          Claude and Gemini use their native APIs. OpenRouter / Groq / Together / Mistral / local use OpenAI-compatible <code>/chat/completions</code>.
+        </p>
       </div>
-
-      <label className="field">
-        <span>API key</span>
-        <div className="input-with-icon">
-          <KeyRound size={15} aria-hidden="true" />
-          <input
-            autoComplete="off"
-            value={apiKey}
-            onChange={(event) => setApiKey(event.target.value)}
-            placeholder={
-              aiProvider === "claude-cli"
-                ? "Not used — auth via `claude auth login`"
-                : aiProvider === "codex-cli"
-                ? "Not used — auth via `codex login`"
-                : aiProvider === "gemini-cli"
-                ? "Not used — auth via the `gemini` CLI login"
-                : aiProvider === "openai"
-                ? "Uses OPENAI_API_KEY when blank"
-                : "Uses this provider's .env key when blank"
-            }
-            disabled={isCliProvider}
-            type="password"
-          />
-        </div>
-      </label>
-
-      {OPENAI_COMPATIBLE.includes(aiProvider) ? (
-        <label className="field">
-          <span>Base URL</span>
-          <input
-            className="text-input"
-            value={apiBaseUrl}
-            onChange={(event) => setApiBaseUrl(event.target.value)}
-            placeholder="https://provider.example/v1"
-            type="url"
-          />
-        </label>
-      ) : null}
-
-      <p className="micro-status">
-        Claude and Gemini use their native APIs. OpenRouter / Groq / Together / Mistral / local use OpenAI-compatible <code>/chat/completions</code>.
-      </p>
 
       {reviewer}
     </NavMenu>

@@ -56,7 +56,7 @@ export function Masthead({
           <span>{isPolishing ? "Working…" : "Polish"}</span>
         </button>
         <button
-          className="ghost-button"
+          className="secondary-button is-compact masthead__apply"
           type="button"
           onClick={onApply}
           disabled={applyDisabled}

@@ -51,8 +51,13 @@ export function ReviewerSettings({
 
   return (
     <div className="reviewer-settings">
+      <div className="menu-subhead">
+        <span className="menu-subhead__title">Reviewer</span>
+        <span className="menu-subhead__note">optional · independent audit</span>
+      </div>
+
       <label className="field">
-        <span>Reviewer · strict audit</span>
+        <span>Audit provider</span>
         <select
           value={auditProvider}
           onChange={(event) => onAuditProviderChange(event.target.value as AiProviderValue | "")}
@@ -68,7 +73,8 @@ export function ReviewerSettings({
 
       {auditProvider ? (
         <>
-          <div className="settings-grid">
+          {/* Model + effort pair only when both exist; else model is full width. */}
+          <div className={effortOptions.length ? "settings-grid" : "provider-config__single"}>
             <label className="field">
               <span>Reviewer model</span>
               <select value={auditSelectedModel} onChange={(event) => setAuditSelectedModel(event.target.value)}>
@@ -79,18 +85,6 @@ export function ReviewerSettings({
                 ))}
               </select>
             </label>
-            {auditSelectedModel === "custom" ? (
-              <label className="field field--wide">
-                <span>Reviewer model ID</span>
-                <input
-                  className="text-input"
-                  value={auditCustomModel}
-                  onChange={(event) => setAuditCustomModel(event.target.value)}
-                  placeholder={customModelPlaceholder}
-                  type="text"
-                />
-              </label>
-            ) : null}
             {effortOptions.length ? (
               <label className="field">
                 <span>Reasoning effort</span>
@@ -107,6 +101,19 @@ export function ReviewerSettings({
               </label>
             ) : null}
           </div>
+
+          {auditSelectedModel === "custom" ? (
+            <label className="field">
+              <span>Reviewer model ID</span>
+              <input
+                className="text-input"
+                value={auditCustomModel}
+                onChange={(event) => setAuditCustomModel(event.target.value)}
+                placeholder={customModelPlaceholder}
+                type="text"
+              />
+            </label>
+          ) : null}
 
           {!isCliProvider ? (
             <label className="field">

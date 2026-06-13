@@ -110,6 +110,15 @@
   box-shadow: var(--shadow-inset), 0 4px 14px var(--accent-glow);
 }
 
+/* Apply is the secondary partner to Polish — same box size so the pair reads as
+   a matched primary/secondary set, with secondary-button's neutral fill keeping
+   the accent reserved for Polish. Double class outranks .is-compact's sizing. */
+.masthead__actions .masthead__apply.masthead__apply {
+  min-height: 30px;
+  padding: 0 var(--s4);
+  font-size: 0.8rem;
+}
+
 /* -------- Workspace grid -------- */
 
 /* Single full-width studio: the resume/job inputs live in navbar menus now. */
@@ -240,7 +249,18 @@
 }
 .nav-menu__sub.is-meta::before { content: none; }
 
-.nav-menu__caret { color: var(--ink-faint); flex: none; }
+/* Caret rotates to point up when the menu is open — a quiet open/close cue. */
+.nav-menu__caret {
+  color: var(--ink-faint);
+  flex: none;
+  transition: transform 180ms var(--ease), color 150ms var(--ease);
+}
+
+.nav-menu__trigger:hover .nav-menu__caret { color: var(--ink-soft); }
+.nav-menu__trigger[aria-expanded="true"] .nav-menu__caret {
+  transform: rotate(180deg);
+  color: var(--ink);
+}
 
 .nav-menu__popover {
   position: absolute;
@@ -248,18 +268,29 @@
   right: 0;
   z-index: 40;
   width: min(380px, 92vw);
-  padding: var(--s3);
+  padding: var(--s4);
   border: 1px solid var(--hairline);
   border-radius: var(--r-xl);
   background: var(--card-elev);
-  box-shadow: var(--shadow-lift);
+  /* Layered: ambient lift + a crisp hairline ring so the panel reads as a
+     distinct surface above the masthead, not a flat box. */
+  box-shadow: var(--shadow-lift), 0 0 0 1px oklch(0.2 0.01 160 / 0.02);
   display: grid;
   gap: var(--s3);
   max-height: min(78vh, 640px);
   overflow-y: auto;
   scrollbar-width: thin;
   scrollbar-color: var(--hairline-strong) transparent;
-  animation: nav-menu-in 140ms var(--ease) both;
+  transform-origin: top right;
+  animation: nav-menu-in 150ms var(--ease) both;
+}
+
+/* Subtle scrollbar styling for WebKit so long popovers (Job/AI) read clean. */
+.nav-menu__popover::-webkit-scrollbar { width: 8px; }
+.nav-menu__popover::-webkit-scrollbar-thumb {
+  background: var(--hairline-strong);
+  border-radius: var(--r-pill);
+  border: 2px solid var(--card-elev);
 }
 
 .nav-menu__popover > .field { margin-top: 0; }
@@ -269,6 +300,6 @@
    that appears when the OS composites a fully transparent element over the
    underlying content. */
 @keyframes nav-menu-in {
-  from { opacity: 0.01; transform: translateY(-4px); }
-  to { opacity: 1; transform: translateY(0); }
+  from { opacity: 0.01; transform: translateY(-6px) scale(0.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
 }

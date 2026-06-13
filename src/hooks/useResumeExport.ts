@@ -24,6 +24,11 @@ type UseResumeExportArgs = {
   // also the LaTeX fallback when no structured model exists.
   currentResumeText: string;
   jobUrl: string;
+  // Resolver for the employer name used in download file names. Returns the
+  // distilled/tracked company (the same value the application is saved with) so
+  // the file name matches the application; falls back to the URL-derived guess
+  // only when this is empty. A thunk so the distiller runs lazily at save time.
+  resolveJobCompany?: () => string;
   resumeText: string;
   selectedTemplateId: string;
   selectedTemplate: Template | null;
@@ -50,6 +55,7 @@ export function useResumeExport({
   editedResume,
   currentResumeText,
   jobUrl,
+  resolveJobCompany,
   resumeText,
   selectedTemplateId,
   selectedTemplate,
@@ -114,9 +120,12 @@ export function useResumeExport({
     if (overrideBase && overrideBase.trim()) {
       return `${sanitizeFileBase(overrideBase)}.${ext}`;
     }
+    // Prefer the distilled/tracked company (matches the saved application) and
+    // fall back to the URL-derived guess only when it is empty.
+    const company = (resolveJobCompany?.() || "").trim() || inferCompanyFromUrl(jobUrl);
     return buildResumeFileName(
       extractApplicantName(currentResumeText || resumeText),
-      inferCompanyFromUrl(jobUrl),
+      company,
       ext
     );
   }

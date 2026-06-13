@@ -39,6 +39,8 @@ import { PolishMenu } from "./sections/PolishMenu";
 import { ResumeMenu } from "./sections/ResumeMenu";
 import { StudioPane } from "./sections/StudioPane";
 import { ExportMenu } from "./sections/ExportRail";
+import { ApplyDownloadDialog } from "./sections/ApplyDownloadDialog";
+import { loadDefaultExportFormat, saveDefaultExportFormat, type ExportFormat } from "./lib/exportPrefs";
 const PreviewOverlay = lazy(() => import("./sections/PreviewOverlay"));
 import { ApplicationModal } from "./sections/ApplicationModal";
 import { ResumePrintLayer } from "./sections/ResumePrintLayer";
@@ -201,6 +203,10 @@ function App() {
   const [isApplicationModalOpen, setIsApplicationModalOpen] = useState(false);
   // null → the modal is in "add" mode; an id → it edits that application.
   const [modalApplicationId, setModalApplicationId] = useState<string | null>(null);
+  // Post-Apply download prompt: holds the just-applied role's label while open.
+  const [applyDownloadPrompt, setApplyDownloadPrompt] = useState<{ label: string } | null>(null);
+  // The user's remembered "download this format on Apply" choice (localStorage).
+  const [defaultExportFormat, setDefaultExportFormat] = useState<ExportFormat | null>(loadDefaultExportFormat);
   // Controlled open state for the Options (PolishMenu) popover — lets the
   // "Add evidence" handler open it programmatically without a new popover system.
   const [polishMenuOpen, setPolishMenuOpen] = useState(false);
@@ -400,6 +406,10 @@ function App() {
     editedResume,
     currentResumeText,
     jobUrl,
+    // Name downloads after the same company the application is saved with
+    // (distilled from the posting), not just a URL guess. Thunk: currentJobTracking
+    // is a hoisted declaration, evaluated lazily at save time.
+    resolveJobCompany: () => currentJobTracking().company ?? "",
     resumeText,
     selectedTemplateId,
     selectedTemplate,
@@ -1005,6 +1015,25 @@ function App() {
     // Snapshot the resume that went out (.tex always, PDF when Tectonic is
     // available) to the workspace so the detail modal can re-download it later.
     void saveAppliedResumeArtifacts(existing?.id ?? app.id, existing?.title || app.title);
+    // Offer to download a copy of the resume that just went out, in the user's
+    // preferred format (only when there is a renderable resume to export).
+    if (canExportResume) setApplyDownloadPrompt({ label: existing?.title || app.title });
+  }
+
+  // Dispatch the post-Apply download to the matching export handler, passing the
+  // file name the user chose in the prompt (export handlers sanitize + re-attach
+  // the extension; an empty name falls back to the system name). When the user
+  // opts in, remember the chosen format as their default for next time.
+  function handleApplyDownloadPick(format: ExportFormat, makeDefault: boolean, fileBaseName: string) {
+    if (makeDefault) {
+      saveDefaultExportFormat(format);
+      setDefaultExportFormat(format);
+    }
+    const base = fileBaseName || undefined;
+    setApplyDownloadPrompt(null);
+    if (format === "pdf-latex") void handleDownloadLatexPdf(base);
+    else if (format === "pdf-clean") handlePrintResume(base);
+    else handleDownloadTex(base);
   }
 
   // Render the current resume to .tex/.pdf and persist them under the applied
@@ -1313,6 +1342,17 @@ function App() {
           handleLoadApplication(app);
         }}
       />
+
+      {applyDownloadPrompt ? (
+        <ApplyDownloadDialog
+          label={applyDownloadPrompt.label}
+          tectonicAvailable={tectonic.available}
+          defaultFormat={defaultExportFormat}
+          defaultFileBaseName={resumeDownloadName("pdf").replace(/\.pdf$/i, "")}
+          onDownload={handleApplyDownloadPick}
+          onSkip={() => setApplyDownloadPrompt(null)}
+        />
+      ) : null}
 
       {currentResumeText ? (
         <ResumePrintLayer
