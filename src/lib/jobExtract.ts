@@ -115,11 +115,13 @@ const NON_TAILORING_SECTION: RegExp[] = [
   /^(compensation|salary|pay range|base pay|total rewards)\b/i,
   /^(benefits|perks|our benefits|what we offer|what['']?s in it for you)\b/i,
   /^(how to apply|application instructions|about (us|the company|our company))\b/i,
-  /^(equal opportunity|eeo|privacy notice|cookie notice)\b/i
+  /^(equal opportunity|eeo|privacy notice|cookie notice)\b/i,
+  // Fix #19: filter culture/values nav sections that appear before actual job content
+  /^(our values|living our values|company values|core values|win together)\b/i
 ];
 
 const TAILORING_SECTION: RegExp[] = [
-  /^(job description|overview|role overview|about the role|the role|your impact)\b/i,
+  /^(job description|position description|overview|role overview|about the role|the role|your impact)\b/i,
   /^(responsibilities|what you['']?ll do|what you will do|day to day)\b/i,
   /^you will:?\s*$/i,
   /^(requirements|qualifications|minimum qualifications|required qualifications|preferred qualifications)\b/i,
@@ -146,11 +148,13 @@ const RESPONSIBILITY_HEADING: RegExp[] = [
   /^((core|key) )?responsibilit(y|ies)\b/i,  // Fix #1: covers "core/key responsibilities" + bare form
   /^what you['']?ll do\b/i,
   /^what you will do\b/i,
+  /^what you will be doing\b/i,  // Fix #19: covers "What you will be doing and owning"
   /^your impact\b/i,
   /^you will:?\s*$/i,  // only bare "You will" or "You will:" — not "You will work alongside..."
   /^day[- ]to[- ]day\b/i,
   /^job duties\b/i,           // Fix #1: added
-  /^example projects?\b/i     // Fix #1: added
+  /^example projects?\b/i,    // Fix #1: added
+  /^unleash your potential\b/i  // Fix #19: PAR/Ashby-style heading
 ];
 
 const REQUIRED_HEADING: RegExp[] = [
@@ -176,6 +180,7 @@ const PREFERRED_HEADING: RegExp[] = [
   /^nice[- ]to[- ]have\b/i,
   /^bonus\b/i,
   /^plus(es)?\b/i,
+  /^additional skills?\b/i,   // Fix #19: "Additional skills:" is typically a preferred/bonus section
   /^preferred\b/i  // Fix #1: added as LAST entry so longer required variants win
 ];
 
@@ -818,6 +823,209 @@ function extractReviewMetadata(lines: string[]) {
   };
 }
 
+// --- Fix #20: prose-based company/role extraction --------------------------
+// Page chrome (title tag, URL, breadcrumb headings) is an unreliable source for
+// the employer and role: many ATS render a generic page title or bury the name
+// in nav. The posting *body* is more dependable — the company names itself in a
+// "Who we are"/"About us" opener, a stock-ticker parenthesis, or an "At X, we…"
+// sentence; the role appears in a "looking for a <Role>" line. These helpers
+// read those signals, each gated so a generic phrase can never pass as a name.
+
+// First word of a company candidate that is a real name, not a sentence opener.
+const COMPANY_STOPWORDS = new Set([
+  "we", "our", "the", "this", "that", "you", "your", "us", "about", "who", "what",
+  "join", "welcome", "team", "company", "role", "position", "job", "here", "as",
+  "at", "in", "for", "a", "an", "it", "they", "work", "working", "apply", "please",
+  "note", "summary", "overview", "description", "responsibilities", "requirements",
+  "qualifications", "benefits", "compensation", "salary", "location", "remote",
+  "hybrid", "onsite", "their", "his", "her", "its", "these", "those", "founded"
+]);
+
+// Role-name nouns: a prose role candidate's HEAD word must be one of these so
+// candidate-facing copy ("looking for a new challenge") and vague phrases
+// ("Operations Partner Across Regions") can't be mistaken for a job title.
+// Deliberately excludes ambiguous bare words (lead/head/partner/operations/
+// sales/support) that read as common nouns more often than as a title head.
+const ROLE_NOUN =
+  /\b(engineer(?:ing)?|developer|programmer|manager|designer|analyst|scientist|architect|administrator|specialist|consultant|director|officer|coordinator|associate|intern|representative|recruiter|strategist|marketer|writer|researcher|technician|devops|sre|product manager|accountant|controller|counsel|attorney|nurse|teacher|advisor|agent|generalist)\b/i;
+
+const ROLE_FLUFF =
+  /^(experienced|talented|passionate|motivated|skilled|seasoned|exceptional|dynamic|enthusiastic|highly[- ]motivated|results[- ]driven|hands[- ]on|world[- ]class|rockstar|ninja|self[- ]starter)\s+/i;
+
+function cleanCompanyName(name: string): string {
+  return name
+    .replace(/^[\s,;:.()-]+/, "")
+    .replace(/[\s,;:.()-]+$/, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function isPlausibleCompany(name: string): boolean {
+  const t = cleanCompanyName(name);
+  if (t.length < 2 || t.length > 60) return false;
+  if (!/^[A-Z0-9]/.test(t)) return false;
+  const words = t.split(/\s+/);
+  if (words.length > 6) return false;
+  // Reject when every word is a generic sentence/stopword (e.g. "Our Team").
+  if (words.every((w) => COMPANY_STOPWORDS.has(w.replace(/[^a-z0-9]/gi, "").toLowerCase()))) return false;
+  // A role title is not a company.
+  if (ROLE_NOUN.test(t)) return false;
+  return true;
+}
+
+function isPlausibleRole(role: string): boolean {
+  const t = role.trim();
+  if (t.length < 3 || t.length > 60) return false;
+  const words = t.split(/\s+/);
+  if (words.length > 6) return false;
+  // A role names a person, not a collective — reject org/unit tails.
+  if (/\b(team|group|org|organi[sz]ation|department|division|function|unit)$/i.test(t)) return false;
+  // The role noun must be the HEAD (last one or two words), so "Operations
+  // Partner Across Regions" (tail "Across Regions") is rejected while
+  // "Senior Backend Engineer" (tail "Backend Engineer") passes.
+  return ROLE_NOUN.test(words.slice(-2).join(" "));
+}
+
+// Lower-case prose roles get title-cased; a role that already carries caps
+// (e.g. "iOS Engineer") is trusted as written.
+function titleCaseRole(role: string): string {
+  if (/[A-Z]/.test(role)) return role;
+  return role.replace(/\b([a-z])/g, (c) => c.toUpperCase());
+}
+
+const COMPANY_NAME = "([A-Z][A-Za-z0-9&.'-]*(?:\\s+[A-Z][A-Za-z0-9&.'-]*){0,5}?)";
+
+// Grammatically self-naming openers — safe ANYWHERE in the body because the
+// sentence structure makes the employer its own subject. A partner/competitor
+// named in the duties section does not match these forms.
+function companyFromSelfCue(sentence: string): string {
+  const s = sentence.trim();
+  const patterns: RegExp[] = [
+    // "At <Company>, we/our/you …"
+    new RegExp(`^At\\s+${COMPANY_NAME}\\s*,\\s+(?:we|our|you|the team|employees|everyone)\\b`),
+    // "We are <Company>, a …" (not "We are looking/seeking/hiring …")
+    new RegExp(`^We are\\s+${COMPANY_NAME}\\s*,`),
+    // "Join <Company> …" / "Welcome to <Company> …" (employer CTA)
+    new RegExp(`^(?:Join|Welcome to)\\s+${COMPANY_NAME}\\b`)
+  ];
+  for (const re of patterns) {
+    const m = s.match(re);
+    if (m) {
+      const name = cleanCompanyName(m[1]);
+      if (isPlausibleCompany(name)) return name;
+    }
+  }
+  return "";
+}
+
+// "<Company> is/was/has been a/the …" — descriptive, NOT self-cued, so a tool or
+// customer ("Slack is the tool we use") could match. Only trusted inside a
+// self-description zone (see extractCompanyFromProse), where the subject is the
+// employer by construction.
+function companyFromIsClause(sentence: string): string {
+  const re = new RegExp(
+    `^${COMPANY_NAME}\\s+(?:is|was|has been)\\s+(?:a|an|the|one of|now|currently|looking|seeking|hiring|building|on a mission|proud|growing|redefining|reinventing|transforming|headquartered|a leading|a global|the world)\\b`
+  );
+  const m = sentence.trim().match(re);
+  if (m) {
+    const name = cleanCompanyName(m[1]);
+    if (isPlausibleCompany(name)) return name;
+  }
+  return "";
+}
+
+// Stock-ticker company: the legal name precedes the exchange parenthesis, e.g.
+// "PAR Technology Corporation (NYSE: PAR)". Reliable only within a
+// self-description zone — the body may cite other public companies.
+function tickerCompany(sentence: string): string {
+  const m = sentence.match(
+    /([A-Z][A-Za-z0-9&.'-]*(?:\s+[A-Z][A-Za-z0-9&.'-]*){0,5})\s*\(\s*(?:NYSE|NASDAQ|Nasdaq|NYSE American|AMEX|LSE|TSX|TSXV|ASX|Euronext|FTSE|ticker|symbol)\s*[:\s]/
+  );
+  if (m) {
+    const name = cleanCompanyName(m[1]);
+    if (isPlausibleCompany(name)) return name;
+  }
+  return "";
+}
+
+// Where the employer describes itself: the opening intro (everything before the
+// first responsibilities/requirements heading, capped) plus any "About us" /
+// "Who we are" section. Confining the weak ticker / "X is a…" signals here
+// prevents capturing a partner, competitor, client, or tool named in the duties.
+function introZoneEnd(lines: string[]): number {
+  let nonEmpty = 0;
+  // End the intro at the first *job-content* heading only. Marketing/values/
+  // about headings are themselves self-description, so they don't close the zone.
+  const jobHeadings = [...RESPONSIBILITY_HEADING, ...REQUIRED_HEADING, ...PREFERRED_HEADING];
+  for (let i = 0; i < lines.length; i += 1) {
+    const t = lines[i].trim();
+    if (!t) continue;
+    if (matchesHeading(t, jobHeadings)) return i;
+    nonEmpty += 1;
+    if (nonEmpty >= 12) return i + 1;
+  }
+  return lines.length;
+}
+
+function aboutZoneRange(lines: string[]): [number, number] | null {
+  const idx = lines.findIndex((l) =>
+    /^(who we are|who are we|about us|about the company|about our company|our company|company overview|our story)\b/i.test(
+      l.trim()
+    )
+  );
+  if (idx === -1) return null;
+  let end = Math.min(idx + 7, lines.length);
+  for (let j = idx + 1; j < end; j += 1) {
+    if (lines[j].trim() && isStructureHeading(lines[j].trim())) {
+      end = j;
+      break;
+    }
+  }
+  return [idx + 1, end];
+}
+
+function extractCompanyFromProse(lines: string[]): string {
+  // (A) Self-cued openers are reliable anywhere — the grammar names the employer.
+  for (const raw of lines) {
+    const line = cleanSummaryLine(raw);
+    if (!line || !isLikelyProse(line)) continue;
+    const name = companyFromSelfCue(line);
+    if (name) return name;
+  }
+
+  // (B) Weaker signals (ticker, "X is a…") only inside a self-description zone.
+  const introEnd = introZoneEnd(lines);
+  const about = aboutZoneRange(lines);
+  const inZone = (i: number) => i < introEnd || (about !== null && i >= about[0] && i < about[1]);
+
+  for (let i = 0; i < lines.length; i += 1) {
+    if (!inZone(i)) continue;
+    const line = cleanSummaryLine(lines[i]);
+    if (!line || !isLikelyProse(line) || isStructureHeading(line)) continue;
+    const ticker = tickerCompany(line);
+    if (ticker) return ticker;
+    const named = companyFromIsClause(line);
+    if (named) return named;
+  }
+  return "";
+}
+
+function extractRoleFromProse(lines: string[]): string {
+  for (const raw of lines) {
+    const line = cleanSummaryLine(raw);
+    if (!line) continue;
+    const m = line.match(
+      /\b(?:looking for|seeking|hiring|recruiting|searching for|in search of)\s+(?:a|an|our\s+(?:next|new)|your\s+next)\s+(.+?)(?=\s+(?:to|who|that|which|with|in|at|for|on|based|located|join|across|within|reporting|team)\b|[—–(.,;:]|$)/i
+    );
+    if (!m) continue;
+    const role = cleanSummaryLine(m[1].replace(ROLE_FLUFF, ""))
+      .replace(/[\s,;:.]+$/, "")
+      .trim();
+    if (isPlausibleRole(role)) return titleCaseRole(role);
+  }
+  return "";
+}
+
 function extractTracking(lines: string[], url?: string): ExtractedJobTracking {
   const linkedInTitle = parseLinkedInTitleLine(lines);
   // Fix #5e: added "Work Location" to location label list
@@ -887,6 +1095,41 @@ function extractTracking(lines: string[], url?: string): ExtractedJobTracking {
     }
   }
 
+  // Fix #20: company from posting prose (ticker / "Who we are" opener / "At X,
+  // we…") — more reliable than the page title or the "About X" heading below.
+  if (!resolvedCompany) {
+    const fromProse = extractCompanyFromProse(lines);
+    if (fromProse) resolvedCompany = fromProse;
+  }
+
+  // Fix #19: "As a [Job Title] at/with/in [Company]" — common intro sentence,
+  // and a chance to also recover the company from "...at <Company>,".
+  if (!resolvedTitle || !resolvedCompany) {
+    for (const line of lines) {
+      const m = line.match(
+        /\bAs (?:a|an) ((?:[A-Z][A-Za-z]+[ ]){0,4}[A-Z][A-Za-z]+) (?:at|with|for) ([A-Z][A-Za-z0-9&.'-]*(?:\s+[A-Z][A-Za-z0-9&.'-]*){0,4})/
+      );
+      if (m) {
+        const candidate = m[1].trim();
+        // Gate the title through isPlausibleRole so "As a Global Leader at…" or
+        // "As a Trusted Partner with…" can't pass as a job title.
+        if (!resolvedTitle && isPlausibleRole(candidate)) resolvedTitle = candidate;
+        if (!resolvedCompany) {
+          const co = cleanCompanyName(m[2]);
+          if (isPlausibleCompany(co)) resolvedCompany = co;
+        }
+        if (resolvedTitle && resolvedCompany) break;
+      }
+    }
+  }
+
+  // Fix #20: role from posting prose ("looking for a <Role>") — ranks above the
+  // generic-heading guess below, which the page title can mislead.
+  if (!resolvedTitle) {
+    const fromProse = extractRoleFromProse(lines);
+    if (fromProse) resolvedTitle = fromProse;
+  }
+
   // Fix #5c: Generic title fallback — first raw line 8-70 chars, no sentence
   // punctuation, not furniture, reappears later in the document (case-insensitive).
   // Secondary: a short non-furniture line immediately before a section/metadata heading
@@ -900,6 +1143,8 @@ function extractTracking(lines: string[], url?: string): ExtractedJobTracking {
       if (!candidate) continue;
       if (candidate.length < 8 || candidate.length > 70) continue;
       if (/[.!?;,]/.test(candidate)) continue;
+      // Skip bullet-prefixed lines — these are list items from navigation, not titles
+      if (/^[•·‣◦▪●○]/.test(candidate)) continue;
       // Skip common page-chrome / navigation strings that aren't job titles
       if (/^(skip to (content|main)|accessibility|navigation|menu|home|page|click here|log(in| in)|register|sign up|get started|contact( us)?|learn more|view (all|more)|search|explore|discover|download|browse)\b/i.test(candidate)) continue;
       if (
@@ -1021,7 +1266,7 @@ function buildRoleDescription(lines: string[], maxChars = 900): string {
   };
 
   const introHeading = lines.findIndex((line) =>
-    /^(about the role|the role|role overview|overview|job description|your impact)\b/i.test(line.trim())
+    /^(about the role|the role|role overview|overview|job description|position description|your impact)\b/i.test(line.trim())
   );
   if (introHeading !== -1) {
     const text = collectFrom(introHeading + 1);
@@ -1079,20 +1324,22 @@ function extractCompanyProductContext(
   rawLines: string[],
   tracking: ExtractedJobTracking
 ): string {
+  // Fix #19: context quality gate — reject heading-based results that look like
+  // concatenated nav items (e.g. "Win Together at PAR Sustainability at PAR Living Our Values"):
+  // must be >=80 chars OR contain sentence-ending punctuation.
+  const isQualityContext = (s: string) => s.length >= 80 || /[.!?]/.test(s);
+
   // Try tailoring lines first
   const fromHeadingTailoring = collectUnderHeadings(tailoringLines, COMPANY_CONTEXT_HEADING, 3);
   const headingContextTailoring = stripCompensationLanguage(fromHeadingTailoring.join(" "));
-  if (headingContextTailoring) {
-    // Fix #8: guard against prose
-    if (isLikelyProse(headingContextTailoring)) {
-      return clipSentence(headingContextTailoring, 520);
-    }
+  if (headingContextTailoring && isLikelyProse(headingContextTailoring) && isQualityContext(headingContextTailoring)) {
+    return clipSentence(headingContextTailoring, 520);
   }
 
   // Fall back to rawLines
   const fromHeading = collectUnderHeadings(rawLines, COMPANY_CONTEXT_HEADING, 3);
   const headingContext = stripCompensationLanguage(fromHeading.join(" "));
-  if (headingContext && isLikelyProse(headingContext)) return clipSentence(headingContext, 520);
+  if (headingContext && isLikelyProse(headingContext) && isQualityContext(headingContext)) return clipSentence(headingContext, 520);
 
   if (tracking.roleDescription && isLikelyProse(tracking.roleDescription)) {
     return clipSentence(stripCompensationLanguage(tracking.roleDescription), 520);
