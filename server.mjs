@@ -1,6 +1,6 @@
 import { createServer } from "node:http";
 import { mkdir, readFile, readdir, rename, writeFile } from "node:fs/promises";
-import { extname, join, resolve } from "node:path";
+import { extname, join, resolve, sep } from "node:path";
 import { createServer as createViteServer } from "vite";
 import { handlePolish } from "./server/ai/polish.mjs";
 import { getDefaultModel, getDefaultProvider } from "./server/ai/providers.mjs";
@@ -8,6 +8,7 @@ import { handleApplicationAnswers } from "./server/ai/applicationAnswers.mjs";
 import {
   listTemplates,
   renderResumeTex,
+  renderResumeTexFromSchema,
   extractPlainTextFromLatex,
   checkTectonicAvailability,
   compileTexToPdf,
@@ -19,13 +20,9 @@ import {
   applicationsFilePath
 } from "./server/applications/index.mjs";
 import {
-  applyTextToDocumentXml,
-  assertSafeZipEntries,
   base64ToBuffer,
   bufferToBase64,
-  execFileAsync,
-  extractDocxResume,
-  withUnpackedDocx
+  extractDocxResume
 } from "./server/docx.mjs";
 import { FetchTimeoutError, readBody, sendJson } from "./server/http.mjs";
 import { BlockedHostError, DnsError, fetchPublicHtml, isPublicHttpUrl } from "./server/network.mjs";
@@ -34,12 +31,13 @@ const root = process.cwd();
 const isProduction = process.env.NODE_ENV === "production";
 const jobWorkspaceDir = join(root, "job-search-workspace");
 const baseResumeCandidates = [
-  "base-resume.docx",
   "base-resume.tex",
+  "base-resume.docx",
   "base-resume.txt",
   "base-resume.md",
   "base-resume.csv"
 ];
+const baseResumeTexPattern = /^base-resume(?:-[A-Za-z0-9][A-Za-z0-9_-]*)?\.tex$/;
 
 async function loadLocalEnv() {
   try {
@@ -67,6 +65,17 @@ const host = process.env.HOST || "127.0.0.1";
 
 async function ensureJobWorkspace() {
   await mkdir(jobWorkspaceDir, { recursive: true });
+}
+
+const APPLICATION_ID_RE = /^[A-Za-z0-9_-]{1,80}$/;
+
+function applicationResumeDir(id) {
+  if (!APPLICATION_ID_RE.test(id)) return null;
+  const dir = join(jobWorkspaceDir, "applications", id);
+  // Defense in depth: ensure the resolved path stays inside the workspace.
+  const base = resolve(jobWorkspaceDir, "applications");
+  if (!resolve(dir).startsWith(base + "/") && resolve(dir) !== base) return null;
+  return dir;
 }
 
 async function handleImportResumeDocx(req, res) {
@@ -98,8 +107,45 @@ async function readWorkspaceFiles() {
   }
 }
 
-async function readWorkspaceBaseResume() {
-  for (const fileName of baseResumeCandidates) {
+function assertBaseResumeFileName(fileName) {
+  const name = String(fileName ?? "").trim();
+  if (!baseResumeTexPattern.test(name) || name.includes("/") || name.includes("..")) {
+    throw new Error("Choose a valid base resume version.");
+  }
+  return name;
+}
+
+function baseResumeLabel(fileName) {
+  const base = fileName.replace(/\.(docx|tex|txt|md|csv)$/i, "");
+  if (base === "base-resume") return "Default";
+  const friendlyWords = new Map([
+    ["ai", "AI"],
+    ["api", "API"],
+    ["ats", "ATS"],
+    ["llm", "LLM"],
+    ["sde", "SDE"],
+    ["swe", "SWE"],
+    ["ui", "UI"],
+    ["ux", "UX"]
+  ]);
+  return base
+    .replace(/^base-resume-/, "")
+    .split(/[-_]+/)
+    .filter(Boolean)
+    .map((part) => friendlyWords.get(part.toLowerCase()) ?? part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+async function readWorkspaceBaseResume(requestedFileName) {
+  const candidates = requestedFileName
+    ? [assertBaseResumeFileName(requestedFileName)]
+    : [
+        ...(await readBaseResumeOptions()).map((option) => option.fileName),
+        ...baseResumeCandidates.filter((name) => !baseResumeTexPattern.test(name))
+      ];
+
+  const uniqueCandidates = [...new Set(candidates)];
+  for (const fileName of uniqueCandidates) {
     const filePath = join(jobWorkspaceDir, fileName);
     try {
       const data = await readFile(filePath);
@@ -110,6 +156,7 @@ async function readWorkspaceBaseResume() {
         return {
           exists: true,
           fileName,
+          label: baseResumeLabel(fileName),
           kind: "docx",
           text: parsed.text,
           paragraphs: parsed.paragraphs,
@@ -122,6 +169,7 @@ async function readWorkspaceBaseResume() {
       return {
         exists: true,
         fileName,
+        label: baseResumeLabel(fileName),
         kind: extension.replace(".", "") || "text",
         text
       };
@@ -130,12 +178,37 @@ async function readWorkspaceBaseResume() {
     }
   }
 
-  return { exists: false };
+  // No workspace file found — fall back to the bundled Jake's starter template so
+  // the editor is never empty on a fresh install.
+  try {
+    const starterPath = join(root, "server/latex/templates/jakes-starter.tex");
+    const starterText = await readFile(starterPath, "utf8");
+    return { exists: false, text: starterText, kind: "tex", fileName: "jakes-starter.tex" };
+  } catch {
+    return { exists: false };
+  }
 }
 
-// Keep exactly one base resume on disk, but never hard-delete: move every known
-// variant into job-search-workspace/.trash/ with a timestamp so a removed or
-// replaced base resume is always recoverable. Missing files are skipped.
+async function readBaseResumeOptions() {
+  const files = await readWorkspaceFiles();
+  return files
+    .filter((name) => baseResumeTexPattern.test(name))
+    .map((fileName) => ({
+      fileName,
+      label: baseResumeLabel(fileName),
+      kind: "tex"
+    }))
+    .sort((a, b) => {
+      if (a.fileName === "base-resume.tex") return -1;
+      if (b.fileName === "base-resume.tex") return 1;
+      return a.label.localeCompare(b.label);
+    });
+}
+
+// Clear the app-managed default base resume, but never hard-delete: move every
+// known default format into job-search-workspace/.trash/ with a timestamp so a
+// removed or replaced base resume is always recoverable. Named variants such as
+// base-resume-fullstack.tex stay in place.
 async function clearBaseResumeFiles() {
   const trashDir = join(jobWorkspaceDir, ".trash");
   await mkdir(trashDir, { recursive: true });
@@ -151,6 +224,39 @@ async function clearBaseResumeFiles() {
   );
 }
 
+// List the most recent base-resume versions from .trash/ (up to `limit`).
+// Each entry has a timestamp, original file name, and a key for restoring.
+async function readBaseResumeHistory(limit = 5) {
+  const trashDir = join(jobWorkspaceDir, ".trash");
+  let entries;
+  try {
+    entries = await readdir(trashDir);
+  } catch {
+    return [];
+  }
+  // Files follow the pattern: 2026-06-10T16-30-45-123Z__base-resume.txt
+  const baseResumePattern = /^(.+?)__base-resume\.(docx|tex|txt|md|csv)$/;
+  const matched = entries
+    .map((name) => {
+      const m = name.match(baseResumePattern);
+      if (!m) return null;
+      const stamp = m[1].replace(/-(?=\d{2}-\d{2}-\d{3}Z)/g, ":").replace(/-(?=\d{2}:)/g, ":").replace("Z", ".000Z");
+      // Reconstruct a rough ISO date for display; the raw stamp is authoritative.
+      const date = new Date(m[1].replace(/T(\d{2})-(\d{2})-(\d{2})-(\d{3})Z/, "T$1:$2:$3.$4Z"));
+      return { fileName: name, originalName: `base-resume.${m[2]}`, kind: m[2], stamp: m[1], date };
+    })
+    .filter(Boolean)
+    .sort((a, b) => b.stamp.localeCompare(a.stamp))
+    .slice(0, limit);
+
+  return matched.map((entry) => ({
+    key: entry.fileName,
+    originalName: entry.originalName,
+    kind: entry.kind,
+    date: isNaN(entry.date.getTime()) ? entry.stamp : entry.date.toISOString()
+  }));
+}
+
 async function handleWorkspace(req, res) {
   if (req.method !== "GET") {
     sendJson(res, 405, { error: "Use GET." });
@@ -162,10 +268,39 @@ async function handleWorkspace(req, res) {
     sendJson(res, 200, {
       path: jobWorkspaceDir,
       baseResume: await readWorkspaceBaseResume(),
+      baseResumeOptions: await readBaseResumeOptions(),
+      baseResumeHistory: await readBaseResumeHistory(),
       files: await readWorkspaceFiles()
     });
   } catch (error) {
     sendJson(res, 500, { error: error instanceof Error ? error.message : "Workspace check failed." });
+  }
+}
+
+async function handleSelectBaseResume(req, res) {
+  if (req.method !== "POST") {
+    sendJson(res, 405, { error: "Use POST." });
+    return;
+  }
+
+  try {
+    await ensureJobWorkspace();
+    const body = JSON.parse(await readBody(req, 2_000));
+    const fileName = assertBaseResumeFileName(body.fileName);
+    const baseResume = await readWorkspaceBaseResume(fileName);
+    if (!baseResume.exists) {
+      sendJson(res, 404, { error: "Base resume version not found." });
+      return;
+    }
+    sendJson(res, 200, {
+      path: jobWorkspaceDir,
+      baseResume,
+      baseResumeOptions: await readBaseResumeOptions(),
+      baseResumeHistory: await readBaseResumeHistory(),
+      files: await readWorkspaceFiles()
+    });
+  } catch (error) {
+    sendJson(res, 400, { error: error instanceof Error ? error.message : "Base resume load failed." });
   }
 }
 
@@ -178,6 +313,7 @@ async function handleWorkspaceBaseResume(req, res) {
         removed: true,
         path: jobWorkspaceDir,
         baseResume: { exists: false },
+        baseResumeOptions: await readBaseResumeOptions(),
         files: await readWorkspaceFiles()
       });
     } catch (error) {
@@ -213,6 +349,7 @@ async function handleWorkspaceBaseResume(req, res) {
           paragraphs: parsed.paragraphs,
           docxBase64
         },
+        baseResumeOptions: await readBaseResumeOptions(),
         files: await readWorkspaceFiles()
       });
       return;
@@ -229,11 +366,16 @@ async function handleWorkspaceBaseResume(req, res) {
       return;
     }
 
-    // Preserve the LaTeX source under a .tex name so it loads back as "LaTeX",
-    // not flattened to plain text. Everything else stores as base-resume.txt.
+    // Preserve active workspace LaTeX variants in place. Arbitrary uploaded
+    // .tex names still normalize to the default base-resume.tex.
     const isTex = extension === ".tex";
-    const targetName = isTex ? "base-resume.tex" : "base-resume.txt";
-    await clearBaseResumeFiles();
+    let targetName = "base-resume.txt";
+    if (isTex) {
+      targetName = baseResumeTexPattern.test(fileName) ? assertBaseResumeFileName(fileName) : "base-resume.tex";
+    }
+    if (targetName === "base-resume.tex" || !isTex) {
+      await clearBaseResumeFiles();
+    }
     await writeFile(join(jobWorkspaceDir, targetName), text, "utf8");
     sendJson(res, 200, {
       saved: true,
@@ -244,6 +386,7 @@ async function handleWorkspaceBaseResume(req, res) {
         kind: isTex ? "tex" : "txt",
         text
       },
+      baseResumeOptions: await readBaseResumeOptions(),
       files: await readWorkspaceFiles()
     });
   } catch (error) {
@@ -251,41 +394,40 @@ async function handleWorkspaceBaseResume(req, res) {
   }
 }
 
-async function handleExportResumeDocx(req, res) {
+async function handleRestoreBaseResume(req, res) {
   if (req.method !== "POST") {
     sendJson(res, 405, { error: "Use POST." });
     return;
   }
-
   try {
-    const body = JSON.parse(await readBody(req));
-    const docxBase64 = body.docxBase64;
-    // Cap before the O(n·m) paragraph rewrite (applyTextToDocumentXml), matching
-    // the 45k/35k caps on the other routes, so a large body can't burn CPU.
-    const polishedText = String(body.polishedText ?? "").slice(0, 60_000);
-    const result = await withUnpackedDocx(docxBase64, async ({ workspace, unpackedPath }) => {
-      const documentPath = join(unpackedPath, "word", "document.xml");
-      const documentXml = await readFile(documentPath, "utf8");
-      const applied = applyTextToDocumentXml(documentXml, polishedText);
-      const outputPath = join(workspace, "polished.docx");
+    await ensureJobWorkspace();
+    const body = JSON.parse(await readBody(req, 1_000));
+    const key = String(body.key ?? "");
+    if (!key || key.includes("/") || key.includes("..")) {
+      sendJson(res, 400, { error: "Invalid history key." });
+      return;
+    }
+    const trashDir = join(jobWorkspaceDir, ".trash");
+    const sourcePath = join(trashDir, key);
+    const ext = extname(key).toLowerCase();
+    const targetName = ext === ".docx" ? "base-resume.docx" : ext === ".tex" ? "base-resume.tex" : "base-resume.txt";
 
-      await writeFile(documentPath, applied.documentXml);
-      // Confine the re-zip to the unpack dir, then re-verify the resulting entry
-      // names so a crafted source archive can't smuggle traversal paths through.
-      await execFileAsync("zip", ["-qr", outputPath, "."], { cwd: unpackedPath });
-      const { stdout: repackListing } = await execFileAsync("unzip", ["-Z1", outputPath]);
-      assertSafeZipEntries(repackListing);
+    // Read the archived file, clear current base, write the restored version.
+    const data = await readFile(sourcePath);
+    await clearBaseResumeFiles();
+    await writeFile(join(jobWorkspaceDir, targetName), data);
 
-      return {
-        docxBase64: bufferToBase64(await readFile(outputPath)),
-        replacedParagraphs: applied.replacedParagraphs,
-        appendedParagraphs: applied.appendedParagraphs
-      };
+    sendJson(res, 200, {
+      restored: true,
+      path: jobWorkspaceDir,
+      baseResume: await readWorkspaceBaseResume(),
+      baseResumeOptions: await readBaseResumeOptions(),
+      baseResumeHistory: await readBaseResumeHistory(),
+      files: await readWorkspaceFiles()
     });
-
-    sendJson(res, 200, result);
   } catch (error) {
-    sendJson(res, 400, { error: error instanceof Error ? error.message : "DOCX export failed." });
+    const msg = error?.code === "ENOENT" ? "History entry not found." : error instanceof Error ? error.message : "Restore failed.";
+    sendJson(res, 400, { error: msg });
   }
 }
 
@@ -321,15 +463,43 @@ async function handleRenderResumeLatex(req, res) {
     // rawTex: the text already IS a full LaTeX document (preserve-format on a
     // .tex source) — compile it as-is instead of pouring it into a template.
     const rawTex = Boolean(body.rawTex);
+    // resume: structured editor data — render straight through the template,
+    // skipping the lossy plain-text parse (Compile Preview path).
+    const structured = body.resume && typeof body.resume === "object" ? body.resume : null;
+    // docStyle: editor's Format menu values (spacing/leading) — when present, the
+    // template renders with matching pt overrides so the PDF mirrors the editor.
+    const docStyle = body.docStyle && typeof body.docStyle === "object" ? body.docStyle : null;
 
-    if (!resumeText.trim()) {
+    // Cap the structured payload before rendering (defense-in-depth, mirrors the
+    // DOCX export cap) so a pathological client body can't blow up the renderer.
+    if (structured && JSON.stringify(structured).length > 400_000) {
+      sendJson(res, 400, { error: "Resume data is too large to render." });
+      return;
+    }
+
+    if (!structured && !rawTex && !resumeText.trim()) {
       sendJson(res, 400, { error: "Resume text is empty." });
       return;
     }
 
-    const { tex, templateId: resolvedTemplateId } = rawTex
-      ? { tex: resumeText, templateId: "raw" }
-      : renderResumeTex({ resumeText, templateId });
+    // Cap the text (template) and rawTex branches too — reject rather than slice,
+    // since truncating LaTeX mid-document would corrupt the Tectonic compile.
+    // Mirrors the import-resume-tex guard.
+    if (resumeText.length > 200_000) {
+      sendJson(res, 400, { error: "Resume text is too large to render." });
+      return;
+    }
+
+    let tex;
+    let resolvedTemplateId;
+    if (structured) {
+      ({ tex, templateId: resolvedTemplateId } = renderResumeTexFromSchema({ schema: structured, templateId, docStyle }));
+    } else if (rawTex) {
+      tex = resumeText;
+      resolvedTemplateId = "raw";
+    } else {
+      ({ tex, templateId: resolvedTemplateId } = renderResumeTex({ resumeText, templateId, docStyle }));
+    }
 
     let pdfBase64 = null;
     let pdfError = null;
@@ -364,6 +534,13 @@ async function handleImportResumeTex(req, res) {
       sendJson(res, 400, { error: "LaTeX source is empty." });
       return;
     }
+    // A real résumé .tex is a few KB. The brace-balanced reader is worst-case
+    // O(n²) on pathological unbalanced-brace input, so reject oversized payloads
+    // before parsing to keep one cheap upload from freezing the event loop.
+    if (tex.length > 200_000) {
+      sendJson(res, 400, { error: "LaTeX source is too large to import." });
+      return;
+    }
     const text = extractPlainTextFromLatex(tex);
     if (!text.trim()) {
       sendJson(res, 422, { error: "Could not extract text from the LaTeX source. Paste the resume content directly instead." });
@@ -395,6 +572,63 @@ async function handleSaveApplications(req, res) {
     sendJson(res, 200, { applications });
   } catch (error) {
     sendJson(res, 400, { error: error instanceof Error ? error.message : "Application save failed." });
+  }
+}
+
+// Persist a tailored resume's .tex source and/or compiled PDF for one
+// application under job-search-workspace/applications/<id>/ (gitignored). The
+// returned resumeArtifacts mirrors the shape the application sanitizer stores.
+async function handleSaveApplicationResume(req, res, id) {
+  if (req.method !== "POST") { sendJson(res, 405, { error: "Use POST." }); return; }
+  const dir = applicationResumeDir(id);
+  if (!dir) { sendJson(res, 400, { error: "Invalid application id." }); return; }
+  try {
+    const body = JSON.parse(await readBody(req));
+    const tex = typeof body.tex === "string" ? body.tex : "";
+    const pdfBase64 = typeof body.pdfBase64 === "string" ? body.pdfBase64 : "";
+    const fileName = typeof body.fileName === "string" ? body.fileName.slice(0, 200) : "";
+    const templateId = typeof body.templateId === "string" ? body.templateId.slice(0, 80) : "";
+    if (!tex && !pdfBase64) { sendJson(res, 400, { error: "No resume artifacts to save." }); return; }
+    // Size caps: tex ~1MB of chars, pdf ~8MB decoded.
+    if (tex.length > 1_000_000) { sendJson(res, 413, { error: "TeX source too large." }); return; }
+    await mkdir(dir, { recursive: true });
+    let hasTex = false;
+    let hasPdf = false;
+    if (tex) { await writeFile(join(dir, "resume.tex"), tex, "utf8"); hasTex = true; }
+    if (pdfBase64) {
+      const buf = base64ToBuffer(pdfBase64);
+      if (buf.length > 8_000_000) { sendJson(res, 413, { error: "PDF too large." }); return; }
+      await writeFile(join(dir, "resume.pdf"), buf);
+      hasPdf = true;
+    }
+    sendJson(res, 200, {
+      resumeArtifacts: { hasTex, hasPdf, fileName, templateId, savedAt: new Date().toISOString() }
+    });
+  } catch (error) {
+    sendJson(res, 400, { error: error instanceof Error ? error.message : "Saving resume artifacts failed." });
+  }
+}
+
+// Stream a saved resume artifact (.tex or .pdf) back as a file download. The
+// browser names it via the <a download> attribute; the Content-Disposition
+// filename is only a fallback, so a fixed "resume" name is fine here.
+async function handleApplicationResumeFile(req, res, id, ext) {
+  if (req.method !== "GET") { sendJson(res, 405, { error: "Use GET." }); return; }
+  const dir = applicationResumeDir(id);
+  if (!dir) { sendJson(res, 400, { error: "Invalid application id." }); return; }
+  const isPdf = ext === "pdf";
+  const filePath = join(dir, isPdf ? "resume.pdf" : "resume.tex");
+  try {
+    const data = await readFile(filePath);
+    res.writeHead(200, {
+      "Content-Type": isPdf ? "application/pdf" : "application/x-tex; charset=utf-8",
+      "Content-Disposition": `attachment; filename="resume.${isPdf ? "pdf" : "tex"}"`,
+      "Content-Length": data.length,
+      "Cache-Control": "no-store"
+    });
+    res.end(data);
+  } catch {
+    sendJson(res, 404, { error: "Resume artifact not found." });
   }
 }
 
@@ -440,6 +674,56 @@ function htmlToText(html) {
     .trim();
 }
 
+function htmlAttr(tag, attr) {
+  const match = String(tag || "").match(new RegExp(`${attr}=["']([^"']*)["']`, "i"));
+  return match?.[1] ?? "";
+}
+
+function metaContent(html, name) {
+  const meta = String(html || "")
+    .match(/<meta\b[^>]*>/gi)
+    ?.find((tag) => {
+      const key = htmlAttr(tag, "name") || htmlAttr(tag, "property");
+      return key.toLowerCase() === name.toLowerCase();
+    });
+  return meta ? htmlToText(htmlAttr(meta, "content")) : "";
+}
+
+function linkedInHeaderLines(html) {
+  const title = metaContent(html, "og:title") || metaContent(html, "twitter:title");
+  const match = title.match(/^(.+?)\s+hiring\s+(.+?)\s+in\s+(.+?)\s*\|\s*LinkedIn\b/i);
+  if (!match) return [];
+  return [
+    `Company: ${match[1].trim()}`,
+    `Role: ${match[2].trim()}`,
+    `Location: ${match[3].trim()}`
+  ];
+}
+
+function linkedInCriteriaLines(html) {
+  const items = [...String(html || "").matchAll(/<li[^>]*class=["'][^"']*description__job-criteria-item[^"']*["'][^>]*>([\s\S]*?)<\/li>/gi)];
+  return items
+    .map((item) => htmlToText(item[1]).split("\n").map((line) => line.trim()).filter(Boolean))
+    .map((parts) => {
+      if (parts.length < 2) return "";
+      return `${parts[0].replace(/:$/, "")}: ${parts.slice(1).join(" ")}`;
+    })
+    .filter(Boolean);
+}
+
+function linkedInJobText(html) {
+  if (!/(\bshow-more-less-html__markup\b|\bdescription__job-criteria-item\b)/i.test(String(html || ""))) {
+    return "";
+  }
+  const body = [...String(html || "").matchAll(/<div[^>]*class=["'][^"']*show-more-less-html__markup[^"']*["'][^>]*>([\s\S]*?)<\/div>/gi)]
+    .map((match) => htmlToText(match[1]))
+    .filter((text) => text.length > 80);
+  if (!body.length) return "";
+
+  const lines = [...linkedInHeaderLines(html), ...linkedInCriteriaLines(html), body.join("\n\n")];
+  return htmlToText(lines.join("\n\n"));
+}
+
 // Workday job pages render the description client-side, but expose it via their
 // CXS JSON API. Rewrite a public job URL to that endpoint when we recognize the
 // host. Career-site links use /Site/job/Loc/Title_R123 (older) or
@@ -474,6 +758,31 @@ async function importFromWorkday(apiUrl) {
   if (body.length < 200) return "";
   const header = [info.title, info.location].filter(Boolean).join(" · ");
   return (header ? `${header}\n\n` : "") + body;
+}
+
+// Mirrors isLikelyProse in src/lib/jobExtract.ts. "$" stays out of the char
+// class so salary lines like "$90k-$110k" are not penalized; "$(...)" jQuery
+// calls are still caught by the JS-pattern test.
+function isCodeShapedLine(t) {
+  const codeChars = (t.match(/[{}();=<>|]/g) ?? []).length;
+  if (codeChars / t.length > 0.08) return true;
+  return /function\s*\(|=>|==|\bvar\s|\$\(/.test(t);
+}
+
+// JS-only ATS pages (e.g. UltiPro) can clear the length gate with script and
+// template junk. Weigh by characters, not lines: such pages hide a few huge
+// code lines among dozens of one-char bullet/punctuation lines, so a
+// line-count majority misses them. Letter-free lines count as unreadable too.
+function isMostlyCodeShaped(text) {
+  let readable = 0;
+  let unreadable = 0;
+  for (const line of text.split("\n")) {
+    const t = line.trim();
+    if (!t) continue;
+    if (isCodeShapedLine(t) || !/[a-zA-Z]/.test(t)) unreadable += t.length;
+    else readable += t.length;
+  }
+  return unreadable >= readable;
 }
 
 async function handleImportJob(req, res) {
@@ -517,9 +826,10 @@ async function handleImportJob(req, res) {
       return;
     }
 
-    const text = htmlToText(await response.text());
+    const html = await response.text();
+    const text = linkedInJobText(html) || htmlToText(html);
 
-    if (text.length < 200) {
+    if (text.length < 200 || isMostlyCodeShaped(text)) {
       sendJson(res, 400, { error: "Job page did not expose enough readable text. Paste it instead." });
       return;
     }
@@ -544,9 +854,13 @@ async function handleImportJob(req, res) {
 async function serveStatic(req, res) {
   const url = new URL(req.url ?? "/", `http://${req.headers.host}`);
   const pathname = url.pathname === "/" ? "/index.html" : url.pathname;
-  const filePath = resolve(join(root, "dist", pathname));
+  const distRoot = resolve(join(root, "dist"));
+  const filePath = resolve(join(distRoot, pathname));
 
-  if (!filePath.startsWith(resolve(join(root, "dist")))) {
+  // Require the dist root PLUS a trailing separator so a sibling like
+  // <root>/dist-leak/x can't satisfy a bare startsWith prefix. (URL
+  // normalization already collapses `..`, so this is defense in depth.)
+  if (filePath !== distRoot && !filePath.startsWith(distRoot + sep)) {
     res.writeHead(403);
     res.end("Forbidden");
     return;
@@ -584,6 +898,31 @@ const vite = isProduction
 const server = createServer((req, res) => {
   const pathname = new URL(req.url ?? "/", `http://${req.headers.host}`).pathname;
 
+  // Same-origin/Host guard for the local API (default 127.0.0.1 mode): a website the
+  // user visits must not be able to drive this server cross-origin (CSRF) or read the
+  // resume via DNS-rebinding. A rebind/cross-site request carries a foreign Host or
+  // Origin. Skipped under an explicit HOST override (LAN access is already an opt-in
+  // "no auth, reachable" mode). Static asset requests are unaffected.
+  if (pathname.startsWith("/api/") && host === "127.0.0.1") {
+    const allowedHosts = new Set([`localhost:${port}`, `127.0.0.1:${port}`, `[::1]:${port}`]);
+    if (!allowedHosts.has(req.headers.host ?? "")) {
+      sendJson(res, 403, { error: "Forbidden host." });
+      return;
+    }
+    if (req.headers.origin) {
+      let originHost = ""; // malformed Origin → never matches → blocked
+      try {
+        originHost = new URL(req.headers.origin).host;
+      } catch {
+        /* keep sentinel */
+      }
+      if (!allowedHosts.has(originHost)) {
+        sendJson(res, 403, { error: "Cross-origin request blocked." });
+        return;
+      }
+    }
+  }
+
   if (pathname === "/api/polish") {
     void handlePolish(req, res);
     return;
@@ -609,13 +948,18 @@ const server = createServer((req, res) => {
     return;
   }
 
-  if (pathname === "/api/import-resume-docx") {
-    void handleImportResumeDocx(req, res);
+  if (pathname === "/api/workspace/base-resume/select") {
+    void handleSelectBaseResume(req, res);
     return;
   }
 
-  if (pathname === "/api/export-resume-docx") {
-    void handleExportResumeDocx(req, res);
+  if (pathname === "/api/workspace/base-resume/restore") {
+    void handleRestoreBaseResume(req, res);
+    return;
+  }
+
+  if (pathname === "/api/import-resume-docx") {
+    void handleImportResumeDocx(req, res);
     return;
   }
 
@@ -642,6 +986,18 @@ const server = createServer((req, res) => {
     } else {
       sendJson(res, 405, { error: "Use GET or PUT." });
     }
+    return;
+  }
+
+  const resumeFileMatch = pathname.match(/^\/api\/applications\/([^/]+)\/resume\.(tex|pdf)$/);
+  if (resumeFileMatch) {
+    void handleApplicationResumeFile(req, res, decodeURIComponent(resumeFileMatch[1]), resumeFileMatch[2]);
+    return;
+  }
+
+  const resumeSaveMatch = pathname.match(/^\/api\/applications\/([^/]+)\/resume$/);
+  if (resumeSaveMatch) {
+    void handleSaveApplicationResume(req, res, decodeURIComponent(resumeSaveMatch[1]));
     return;
   }
 

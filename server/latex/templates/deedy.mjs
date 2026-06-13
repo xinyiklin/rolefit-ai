@@ -6,7 +6,7 @@
 //
 // Original (XeLaTeX, Open Sans): https://github.com/deedy/Deedy-Resume
 
-import { escapeTex, escapeTexUrl, titleCase, linkify } from "../util.mjs";
+import { escapeTex, escapeTexUrl, titleCase, linkify, isSummarySection } from "../util.mjs";
 
 const PREAMBLE = String.raw`\documentclass[10pt,letterpaper]{article}
 
@@ -77,7 +77,9 @@ ${bullets}`;
 
 function isRailSection(section) {
   // Rail sections: short, no per-item headers (e.g., Skills, Languages,
-  // Coursework, Interests).
+  // Coursework, Interests). Summaries are headerless too but belong in the
+  // wide main column, never the narrow rail.
+  if (isSummarySection(section)) return false;
   const heading = (section.heading || "").toLowerCase();
   if (/(skill|tools|languages|interests|coursework|technical)/.test(heading)) return true;
   return section.items.every((item) => !item.title && !item.subtitle);
@@ -85,6 +87,20 @@ function isRailSection(section) {
 
 function renderSection(section, opts = {}) {
   const heading = titleCase(section.heading);
+  const hasAnyHeader = section.items.some((item) => item.title || item.subtitle || item.meta || item.location);
+
+  // Summary-like sections: one paragraph per row (the flat render would join
+  // paragraphs with inline bullet separators).
+  if (!hasAnyHeader && section.items.length && isSummarySection(section)) {
+    const paragraphs = section.items
+      .flatMap((item) => item.bullets)
+      .map((text) => String(text ?? "").trim())
+      .filter(Boolean);
+    if (!paragraphs.length) return "";
+    return `\\section{${escapeTex(heading)}}
+${paragraphs.map((text) => `\\drail{${escapeTex(text)}}`).join("\n")}`;
+  }
+
   const items = section.items.map((item) => renderItem(item, opts)).filter(Boolean).join("\n\n");
   return `\\section{${escapeTex(heading)}}
 ${items}`;

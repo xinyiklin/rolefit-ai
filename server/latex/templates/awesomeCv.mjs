@@ -4,7 +4,7 @@
 //
 // Original (XeLaTeX, custom fonts): https://github.com/posquit0/Awesome-CV
 
-import { escapeTex, escapeTexUrl, titleCase, linkify } from "../util.mjs";
+import { escapeTex, escapeTexUrl, titleCase, linkify, isSummarySection } from "../util.mjs";
 
 const PREAMBLE = String.raw`\documentclass[10pt,a4paper]{article}
 
@@ -78,6 +78,20 @@ ${bullets}`;
 
 function renderSection(section) {
   const heading = titleCase(section.heading);
+  const hasAnyHeader = section.items.some((item) => item.title || item.subtitle || item.meta || item.location);
+
+  // Summary-like sections: one \cvinline per paragraph (the flat skills render
+  // would join paragraphs with inline bullet separators).
+  if (!hasAnyHeader && section.items.length && isSummarySection(section)) {
+    const paragraphs = section.items
+      .flatMap((item) => item.bullets)
+      .map((text) => String(text ?? "").trim())
+      .filter(Boolean);
+    if (!paragraphs.length) return "";
+    return `\\section{${escapeTex(heading)}}
+${paragraphs.map((text) => `\\cvinline{${escapeTex(text)}}`).join("\n")}`;
+  }
+
   const items = section.items.map(renderItem).filter(Boolean).join("\n\n");
   return `\\section{${escapeTex(heading)}}
 ${items}`;
