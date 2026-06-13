@@ -31,6 +31,8 @@
 //   - non-bullet lines inside a section are interpreted as item headings,
 //     split on | (or " — ") for title / subtitle / dates / location
 
+import { isSummaryHeading } from "./util.mjs";
+
 const BULLET_RE = /^\s*(?:[-*•◦▪‣]|\d+[.)])\s+/;
 const SECTION_RE = /^[A-Z0-9][A-Z0-9 &/\-]+$/;
 const HEADING_SPLIT_RE = /\s*[|•·]\s+/;
@@ -80,8 +82,11 @@ export function parseResumeText(text) {
   let i = 0;
   while (i < lines.length && !lines[i]) i += 1;
 
-  const name = lines[i] || "";
-  i += 1;
+  let name = "";
+  if (i < lines.length && !isSectionHeader(lines[i])) {
+    name = lines[i] || "";
+    i += 1;
+  }
 
   // Collect contact lines until first section header (or first bullet)
   const contactBuffer = [];
@@ -122,6 +127,17 @@ export function parseResumeText(text) {
       continue;
     }
 
+    // Summary-style sections hold paragraphs, not item headings — never
+    // pipe-split a paragraph into title/subtitle/meta slots.
+    if (isSummaryHeading(currentSection.heading)) {
+      if (!currentItem || currentItem.title) {
+        currentItem = { title: "", subtitle: "", meta: "", location: "", bullets: [] };
+        currentSection.items.push(currentItem);
+      }
+      currentItem.bullets.push(line);
+      continue;
+    }
+
     // Non-bullet, non-section-header line inside a section: new item heading
     currentItem = parseItemHeading(line);
     currentSection.items.push(currentItem);
@@ -130,128 +146,182 @@ export function parseResumeText(text) {
   return { name, contact, sections };
 }
 
-// Extract a plain-text resume from a Jake's-style .tex source so the AI can
-// polish it the same way it polishes DOCX/text uploads.
-export function extractPlainTextFromLatex(tex) {
-  const source = String(tex ?? "");
-
-  // Drop everything before \begin{document}
-  const docStart = source.indexOf("\\begin{document}");
-  const body = docStart >= 0 ? source.slice(docStart + "\\begin{document}".length) : source;
-  const trimmedBody = body.replace(/\\end\{document\}[\s\S]*$/, "");
-
-  const lines = [];
-
-  // Pull the name from \textbf{\Huge \scshape NAME}, \Huge NAME, or {\Huge NAME}.
-  const nameMatch = trimmedBody.match(/\\textbf\{\s*\\(?:Huge|huge|LARGE)\s*(?:\\scshape\s*)?([^{}\\]+)\}/) ||
-    trimmedBody.match(/\\(?:Huge|huge|LARGE)\s*(?:\\scshape\s*)?\{?([A-Za-z][^{}\\\n]+)/);
-  if (nameMatch) lines.push(stripLatexInline(nameMatch[1]));
-
-  // Pull contact info from the center block right after the name.
-  // Jake's uses: \small phone $|$ \href{mailto:..}{..} $|$ \href{..}{..}
-  const centerMatch = trimmedBody.match(/\\begin\{center\}([\s\S]*?)\\end\{center\}/);
-  if (centerMatch) {
-    const contactText = stripLatexInline(centerMatch[1])
-      .replace(/\$\|\$/g, " | ")
-      .replace(/\$\\bullet\$/g, " | ")
-      .replace(/\\\\/g, " ")
-      .trim();
-    // Take the part after the name, if name was in the center block.
-    let cleaned = contactText;
-    if (nameMatch && contactText.startsWith(stripLatexInline(nameMatch[1]))) {
-      cleaned = contactText.slice(stripLatexInline(nameMatch[1]).length).trim();
-    }
-    if (cleaned) lines.push(cleaned);
-  }
-
-  // Walk \section{...} blocks
-  const sectionRe = /\\section\*?\{([^}]+)\}/g;
-  const sectionStarts = [];
-  let match;
-  while ((match = sectionRe.exec(trimmedBody)) !== null) {
-    sectionStarts.push({ heading: stripLatexInline(match[1]), index: match.index, after: match.index + match[0].length });
-  }
-
-  for (let s = 0; s < sectionStarts.length; s += 1) {
-    const start = sectionStarts[s];
-    const end = s + 1 < sectionStarts.length ? sectionStarts[s + 1].index : trimmedBody.length;
-    const segment = trimmedBody.slice(start.after, end);
-
-    lines.push("");
-    lines.push(start.heading.toUpperCase());
-
-    // Subheadings: \resumeSubheading{a}{b}{c}{d} or \resumeProjectHeading{a}{b}
-    const subRe = /\\resume(?:Sub)?heading\s*\{([^}]*)\}\s*\{([^}]*)\}\s*\{([^}]*)\}\s*\{([^}]*)\}/g;
-    const projectRe = /\\resumeProjectHeading\s*\{([^}]*)\}\s*\{([^}]*)\}/g;
-    const itemRe = /\\resumeItem\s*\{([^}]*)\}/g;
-
-    const events = [];
-    let m;
-    while ((m = subRe.exec(segment)) !== null) {
-      events.push({
-        index: m.index,
-        kind: "sub",
-        text: `${stripLatexInline(m[1])} | ${stripLatexInline(m[3])} | ${stripLatexInline(m[2])} | ${stripLatexInline(m[4])}`
-      });
-    }
-    while ((m = projectRe.exec(segment)) !== null) {
-      events.push({
-        index: m.index,
-        kind: "sub",
-        text: `${stripLatexInline(m[1])} | ${stripLatexInline(m[2])}`
-      });
-    }
-    while ((m = itemRe.exec(segment)) !== null) {
-      events.push({ index: m.index, kind: "item", text: stripLatexInline(m[1]) });
-    }
-
-    events.sort((a, b) => a.index - b.index);
-    for (const event of events) {
-      if (event.kind === "sub") {
-        lines.push(event.text.replace(/\s+\|\s+(?=\|)/g, " | ").replace(/\|\s+$/, "").trim());
-      } else {
-        lines.push(`- ${event.text}`);
-      }
-    }
-
-    // Fallback for skills-style sections: pull any \item or bare text.
-    if (!events.length) {
-      const itemsRe = /\\item\b\s*([^\n\\]+)/g;
-      while ((m = itemsRe.exec(segment)) !== null) {
-        lines.push(`- ${stripLatexInline(m[1])}`);
-      }
-      // Capture body text outside of macros
-      const stripped = segment
-        .replace(/\\begin\{[^}]+\}/g, "")
-        .replace(/\\end\{[^}]+\}/g, "")
-        .replace(/\\[A-Za-z]+\*?\s*(\[[^\]]*\])?\s*\{[^}]*\}/g, "")
-        .replace(/\\[A-Za-z]+\*?/g, "")
-        .replace(/[\{\}]/g, "")
-        .trim();
-      if (stripped) {
-        for (const piece of stripped.split(/\r?\n/)) {
-          const p = piece.trim();
-          if (p && !lines.includes(p)) lines.push(p);
+// Extract a plain-text resume from Jake's-style .tex sources so the AI and the
+// structured editor can seed from the same section model. The reader is
+// brace-aware because real Jake variants commonly nest \textbf{} / \emph{} in
+// project headings and skills rows.
+function stripLatexComments(value) {
+  return String(value ?? "")
+    .split(/\r?\n/)
+    .map((line) => {
+      let escaped = false;
+      for (let i = 0; i < line.length; i += 1) {
+        const char = line[i];
+        if (char === "\\" && !escaped) {
+          escaped = true;
+          continue;
         }
+        if (char === "%" && !escaped) return line.slice(0, i);
+        escaped = false;
+      }
+      return line;
+    })
+    .join("\n");
+}
+
+function readBracedGroup(source, start) {
+  if (source[start] !== "{") return null;
+
+  let depth = 0;
+  for (let i = start; i < source.length; i += 1) {
+    const char = source[i];
+    const escaped = i > 0 && source[i - 1] === "\\";
+    if (char === "{" && !escaped) {
+      depth += 1;
+      continue;
+    }
+    if (char === "}" && !escaped) {
+      depth -= 1;
+      if (depth === 0) {
+        return { value: source.slice(start + 1, i), end: i + 1 };
       }
     }
   }
 
-  return lines.join("\n");
+  return null;
+}
+
+function readCommandArgs(source, command, index, maxArgs = 8) {
+  const prefix = `\\${command}`;
+  if (!source.startsWith(prefix, index)) return null;
+
+  const next = source[index + prefix.length] ?? "";
+  if (/[A-Za-z]/.test(next)) return null;
+
+  const args = [];
+  let cursor = index + prefix.length;
+  if (source[cursor] === "*") cursor += 1;
+  while (args.length < maxArgs) {
+    while (/\s/.test(source[cursor] ?? "")) cursor += 1;
+    if (source[cursor] !== "{") break;
+    const group = readBracedGroup(source, cursor);
+    if (!group) break;
+    args.push(group.value);
+    cursor = group.end;
+  }
+
+  return { index, end: cursor, args };
+}
+
+function findCommandCalls(source, command, maxArgs = 8) {
+  const calls = [];
+  const prefix = `\\${command}`;
+  let cursor = 0;
+
+  while (cursor < source.length) {
+    const index = source.indexOf(prefix, cursor);
+    if (index < 0) break;
+    const call = readCommandArgs(source, command, index, maxArgs);
+    if (call) {
+      calls.push(call);
+      cursor = Math.max(call.end, index + prefix.length);
+    } else {
+      cursor = index + prefix.length;
+    }
+  }
+
+  return calls;
+}
+
+function replaceCommandWithArg(source, command, argIndex = 0) {
+  let result = "";
+  let cursor = 0;
+  // Read only the arg we need (argIndex + 1), not a forced 2. `Math.max(…, 2)`
+  // greedily consumed a second brace group, so `\textbf{Languages}{: Python…}`
+  // swallowed the skills payload. (Matches the client fix in src/lib/resumeData.ts;
+  // \href at argIndex 1 still reads {url}{label} since argIndex + 1 === 2.)
+  const calls = findCommandCalls(source, command, argIndex + 1);
+
+  for (const call of calls) {
+    if (call.args.length <= argIndex) continue;
+    result += source.slice(cursor, call.index);
+    result += call.args[argIndex];
+    cursor = call.end;
+  }
+
+  return result + source.slice(cursor);
+}
+
+function replaceCommandWithFormattedArg(source, command, tag, argIndex = 0) {
+  let result = "";
+  let cursor = 0;
+  const calls = findCommandCalls(source, command, argIndex + 1);
+
+  for (const call of calls) {
+    if (call.args.length <= argIndex) continue;
+    result += source.slice(cursor, call.index);
+    result += `<${tag}>${call.args[argIndex]}</${tag}>`;
+    cursor = call.end;
+  }
+
+  return result + source.slice(cursor);
+}
+
+function unwrapLatexInlineCommands(value) {
+  let text = value;
+  for (let i = 0; i < 6; i += 1) {
+    const next = [
+      ["href", 1],
+      ["underline", 0],
+      ["textbf", 0],
+      ["textit", 0],
+      ["emph", 0],
+      ["textsc", 0],
+      ["texttt", 0],
+      ["textrm", 0],
+      ["textsf", 0],
+      ["small", 0],
+      ["footnotesize", 0]
+    ].reduce((current, [command, argIndex]) => replaceCommandWithArg(current, command, argIndex), text);
+    if (next === text) break;
+    text = next;
+  }
+  return text;
+}
+
+function preserveLatexInlineCommands(value) {
+  let text = value;
+  for (let i = 0; i < 6; i += 1) {
+    let next = replaceCommandWithArg(text, "href", 1);
+    next = replaceCommandWithFormattedArg(next, "underline", "u");
+    next = replaceCommandWithFormattedArg(next, "textbf", "b");
+    next = replaceCommandWithFormattedArg(next, "textit", "i");
+    next = replaceCommandWithFormattedArg(next, "emph", "i");
+    next = [
+      ["textsc", 0],
+      ["texttt", 0],
+      ["textrm", 0],
+      ["textsf", 0],
+      ["small", 0],
+      ["footnotesize", 0]
+    ].reduce((current, [command, argIndex]) => replaceCommandWithArg(current, command, argIndex), next);
+    if (next === text) break;
+    text = next;
+  }
+  return text;
 }
 
 function stripLatexInline(value) {
-  return String(value ?? "")
-    .replace(/\\href\{[^}]*\}\{([^}]*)\}/g, "$1")
-    .replace(/\\underline\{([^}]*)\}/g, "$1")
-    .replace(/\\textbf\{([^}]*)\}/g, "$1")
-    .replace(/\\textit\{([^}]*)\}/g, "$1")
-    .replace(/\\emph\{([^}]*)\}/g, "$1")
-    .replace(/\\text(?:sc|tt|rm|sf)\{([^}]*)\}/g, "$1")
-    .replace(/\\(?:Huge|huge|LARGE|Large|large|small|footnotesize|tiny|normalsize|scshape)\s*/g, "")
-    .replace(/\\v?h?space\*?\{[^}]*\}/g, " ")
-    .replace(/\\(?:hfill|vfill|noindent|par|newline|newpage|pagebreak|linebreak|bigskip|medskip|smallskip)\b/g, " ")
-    .replace(/\\\\/g, " ")
+  return unwrapLatexInlineCommands(String(value ?? ""))
+    .replace(/\\\\(?:\[[^\]]*\])?/g, "\n")
+    .replace(/\\(?:begin|end)\{[^}]+\}/g, " ")
+    .replace(/\\item\b/g, " ")
+    .replace(/\\(?:Huge|huge|LARGE|Large|large|small|footnotesize|tiny|normalsize|scshape|bfseries|itshape)\b/g, " ")
+    // Discard spacing/layout braced args (e.g. \needspace{4\baselineskip}) so the
+    // dimension's literal digits don't leak into the parsed text.
+    .replace(/\\(?:v?h?space|needspace|addvspace|vskip|hskip)\*?\s*\{[^}]*\}/g, " ")
+    .replace(/\\(?:quad|qquad|hfill|vfill|noindent|par|newline|newpage|pagebreak|linebreak|bigskip|medskip|smallskip)\b/g, " ")
+    .replace(/\$\\bullet\$/g, " | ")
     .replace(/\$([^$]*)\$/g, "$1")
     .replace(/\\&/g, "&")
     .replace(/\\%/g, "%")
@@ -261,6 +331,175 @@ function stripLatexInline(value) {
     .replace(/\\\{/g, "{")
     .replace(/\\\}/g, "}")
     .replace(/\\,|\\ /g, " ")
+    .replace(/\\[A-Za-z]+\*?(?:\[[^\]]*\])?/g, " ")
+    .replace(/[{}]/g, "")
+    .replace(/[ \t]*\n[ \t]*/g, "\n")
+    .replace(/[ \t]+/g, " ")
+    .trim();
+}
+
+function formatLatexInline(value) {
+  return preserveLatexInlineCommands(String(value ?? ""))
+    .replace(/\\\\(?:\[[^\]]*\])?/g, "\n")
+    .replace(/\\(?:begin|end)\{[^}]+\}/g, " ")
+    .replace(/\\item\b/g, " ")
+    .replace(/\\(?:Huge|huge|LARGE|Large|large|small|footnotesize|tiny|normalsize|scshape|bfseries|itshape)\b/g, " ")
+    .replace(/\\(?:v?h?space|needspace|addvspace|vskip|hskip)\*?\s*\{[^}]*\}/g, " ")
+    .replace(/\\(?:quad|qquad|hfill|vfill|noindent|par|newline|newpage|pagebreak|linebreak|bigskip|medskip|smallskip)\b/g, " ")
+    .replace(/\$\\bullet\$/g, " | ")
+    .replace(/\$([^$]*)\$/g, "$1")
+    .replace(/\\&/g, "&")
+    .replace(/\\%/g, "%")
+    .replace(/\\\$/g, "$")
+    .replace(/\\#/g, "#")
+    .replace(/\\_/g, "_")
+    .replace(/\\\{/g, "{")
+    .replace(/\\\}/g, "}")
+    .replace(/\\,|\\ /g, " ")
+    .replace(/\\[A-Za-z]+\*?(?:\[[^\]]*\])?/g, " ")
+    .replace(/[{}]/g, "")
+    .replace(/[ \t]*\n[ \t]*/g, "\n")
+    .replace(/[ \t]+/g, " ")
+    .trim();
+}
+
+function splitLatexRows(value) {
+  return String(value ?? "")
+    .split(/\\\\(?:\[[^\]]*\])?|\r?\n/)
+    .map((piece) => formatLatexInline(piece))
+    .map((piece) => piece.replace(/\s*:\s*/g, ": ").replace(/\s*\|\s*/g, " | ").trim())
+    .filter(Boolean);
+}
+
+function extractHeaderName(headerSource) {
+  const match = headerSource.match(/\\textbf\{\s*\\(?:Huge|huge|LARGE|Large)\s*(?:\\(?:scshape|bfseries)\s*)*([^{}\\]+)\}/) ||
+    headerSource.match(/\\(?:Huge|huge|LARGE|Large)\s*(?:\\(?:scshape|bfseries)\s*)*([^{}\\\n]+)/);
+  return match ? stripLatexInline(match[1]) : "";
+}
+
+function extractHeaderContact(headerSource, name) {
+  const text = stripLatexInline(headerSource)
+    .replace(/\$\|\$/g, " | ")
+    .replace(/\$\\bullet\$/g, " | ")
+    .replace(/\s*\|\s*/g, " | ")
     .replace(/\s+/g, " ")
     .trim();
+  const withoutName = name && text.startsWith(name) ? text.slice(name.length).trim() : text;
+  return withoutName.replace(/^\|+|\|+$/g, "").trim();
+}
+
+function formatSubheading(args) {
+  return [args[0], args[2], args[1], args[3]]
+    .map((arg) => formatLatexInline(arg))
+    .filter(Boolean)
+    .join(" | ");
+}
+
+function formatProjectHeading(args) {
+  if (args.length >= 3) {
+    return [args[0], args[1], args[2]].map((arg) => formatLatexInline(arg)).filter(Boolean).join(" | ");
+  }
+
+  const titleParts = formatLatexInline(args[0] ?? "")
+    .split(/\s*\|\s*/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+  const meta = formatLatexInline(args[1] ?? "");
+  return [...titleParts, meta].filter(Boolean).join(" | ");
+}
+
+function pushItemRows(events, index, orderRef, raw) {
+  for (const text of splitLatexRows(raw)) {
+    events.push({ index, order: orderRef.value, kind: "item", text });
+    orderRef.value += 1;
+  }
+}
+
+// A real résumé .tex is a few KB. The brace readers are worst-case O(n²) on
+// pathological unbalanced-brace input, so bound the length to keep a huge crafted
+// .tex from freezing the event loop (self-DoS). Mirrors the client cap.
+const MAX_LATEX_INPUT = 200_000;
+
+export function extractPlainTextFromLatex(tex) {
+  const raw = String(tex ?? "");
+  if (raw.length > MAX_LATEX_INPUT) return "";
+  const source = stripLatexComments(raw);
+  const docStart = source.indexOf("\\begin{document}");
+  const body = docStart >= 0 ? source.slice(docStart + "\\begin{document}".length) : source;
+  const trimmedBody = body.replace(/\\end\{document\}[\s\S]*$/, "");
+
+  const sectionStarts = [];
+  for (const call of findCommandCalls(trimmedBody, "section", 1)) {
+    if (!call.args[0]) continue;
+    sectionStarts.push({ heading: stripLatexInline(call.args[0]), index: call.index, after: call.end });
+  }
+
+  const headerSource = sectionStarts.length ? trimmedBody.slice(0, sectionStarts[0].index) : trimmedBody;
+  const lines = [];
+  const name = extractHeaderName(headerSource);
+  if (name) lines.push(name);
+  const contact = extractHeaderContact(headerSource, name);
+  if (contact) lines.push(contact);
+
+  for (let s = 0; s < sectionStarts.length; s += 1) {
+    const start = sectionStarts[s];
+    const end = s + 1 < sectionStarts.length ? sectionStarts[s + 1].index : trimmedBody.length;
+    const segment = trimmedBody.slice(start.after, end);
+
+    lines.push("");
+    lines.push(start.heading.toUpperCase());
+
+    const events = [];
+    const orderRef = { value: 0 };
+
+    for (const call of findCommandCalls(segment, "resumeSubheading", 4)) {
+      if (call.args.length < 4) continue;
+      events.push({ index: call.index, order: orderRef.value, kind: "sub", text: formatSubheading(call.args) });
+      orderRef.value += 1;
+    }
+
+    for (const call of findCommandCalls(segment, "resumeSubSubheading", 2)) {
+      if (call.args.length < 2) continue;
+      events.push({
+        index: call.index,
+        order: orderRef.value,
+        kind: "sub",
+        text: [call.args[0], call.args[1]].map((arg) => formatLatexInline(arg)).filter(Boolean).join(" | ")
+      });
+      orderRef.value += 1;
+    }
+
+    for (const call of findCommandCalls(segment, "resumeProjectHeading", 3)) {
+      if (call.args.length < 2) continue;
+      events.push({ index: call.index, order: orderRef.value, kind: "sub", text: formatProjectHeading(call.args) });
+      orderRef.value += 1;
+    }
+
+    for (const call of findCommandCalls(segment, "resumeItem", 1)) {
+      if (!call.args[0]) continue;
+      pushItemRows(events, call.index, orderRef, call.args[0]);
+    }
+
+    if (!events.length) {
+      for (const call of findCommandCalls(segment, "item", 1)) {
+        if (!call.args[0]) continue;
+        pushItemRows(events, call.index, orderRef, call.args[0]);
+      }
+    }
+
+    events.sort((a, b) => a.index - b.index || a.order - b.order);
+    for (const event of events) {
+      const text = event.text.replace(/\s+\|\s+(?=\|)/g, " | ").replace(/\|\s+$/, "").trim();
+      if (!text) continue;
+      lines.push(event.kind === "sub" ? text : `- ${text}`);
+    }
+
+    if (!events.length) {
+      for (const piece of splitLatexRows(segment)) {
+        if (piece && !lines.includes(piece)) lines.push(piece);
+      }
+    }
+  }
+
+  return lines.join("\n");
 }

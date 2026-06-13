@@ -10,19 +10,26 @@ export function sendJson(res, status, payload) {
   res.end(JSON.stringify(payload));
 }
 
-export function readBody(req) {
+// Reads the request body as UTF-8, enforcing a true BYTE cap (default 8 MB).
+// Accumulates Buffers and decodes once at the end so the cap is accurate and
+// multibyte characters are never split across chunk boundaries. Pass a smaller
+// `maxBytes` for JSON/AI routes that never need the full DOCX-sized budget.
+export function readBody(req, maxBytes = maxRequestBytes) {
   return new Promise((resolveBody, reject) => {
-    let body = "";
+    const chunks = [];
+    let total = 0;
 
     req.on("data", (chunk) => {
-      body += chunk;
-      if (body.length > maxRequestBytes) {
+      total += chunk.length; // Buffer.length is the byte length
+      if (total > maxBytes) {
         reject(new Error("Request is too large."));
         req.destroy();
+        return;
       }
+      chunks.push(chunk);
     });
 
-    req.on("end", () => resolveBody(body));
+    req.on("end", () => resolveBody(Buffer.concat(chunks).toString("utf8")));
     req.on("error", reject);
   });
 }

@@ -262,10 +262,7 @@ async function callGeminiGenerateContent({ apiKey, model, systemPrompt, userProm
   return parseAiJson(extractGeminiText(data));
 }
 
-// Dispatch a built {systemPrompt, userPrompt} pair to the configured provider
-// (API or CLI) and return the parsed JSON. Single source of truth for provider
-// routing, shared by /api/polish and /api/application-answers.
-export async function callConfiguredProvider({ provider, model, reasoningEffort, apiKey, apiBaseUrl, systemPrompt, userPrompt }) {
+async function dispatchProvider({ provider, model, reasoningEffort, apiKey, apiBaseUrl, systemPrompt, userPrompt }) {
   if (provider === "claude-cli") return parseAiJson(await callClaudeCli({ model, reasoningEffort, systemPrompt, userPrompt }));
   if (provider === "codex-cli") return parseAiJson(await callCodexCli({ model, reasoningEffort, systemPrompt, userPrompt }));
   if (provider === "gemini-cli") return parseAiJson(await callGeminiCli({ model, systemPrompt, userPrompt }));
@@ -273,4 +270,29 @@ export async function callConfiguredProvider({ provider, model, reasoningEffort,
   if (provider === "gemini") return callGeminiGenerateContent({ apiKey, model, systemPrompt, userPrompt });
   if (provider === "openai") return callOpenAiResponses({ apiKey, model, systemPrompt, userPrompt });
   return callOpenAiCompatibleChat({ provider, apiKey, apiBaseUrl, model, systemPrompt, userPrompt });
+}
+
+// Dispatch a built {systemPrompt, userPrompt} pair to the configured provider
+// (API or CLI) and return the parsed JSON. Single source of truth for provider
+// routing, shared by /api/polish and /api/application-answers.
+//
+// Retry policy: exactly one retry, and only for unreadable model OUTPUT (the
+// "AI returned ..." 502s from parseAiJson — empty reply or JSON the repair
+// passes can't extract). Models occasionally wrap their JSON in commentary,
+// most often when the input contains an injection attempt they feel compelled
+// to narrate; a single reinforced JSON-only retry converts those one-off parse
+// failures into successes instead of surfacing a 502. Network, HTTP, timeout,
+// and config errors are NOT retried — those callers should see immediately.
+export async function callConfiguredProvider(args) {
+  try {
+    return await dispatchProvider(args);
+  } catch (error) {
+    const unreadableOutput =
+      error instanceof UserSafeAiError && error.status === 502 && /^AI returned/.test(error.message);
+    if (!unreadableOutput) throw error;
+    return dispatchProvider({
+      ...args,
+      userPrompt: `${args.userPrompt}\n\nREMINDER: Respond with exactly one JSON object and nothing else — no commentary, no markdown fences, no notes about the input.`
+    });
+  }
 }

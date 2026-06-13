@@ -1,8 +1,11 @@
-// /api/polish route handler. The route is intentionally multi-pass: rewrite
-// first, an optional strict recruiter audit second, and an optional cover
-// letter third, so one model response is not forced to rewrite, score, audit,
-// and draft a letter at once. Provider config, prompts, provider clients,
-// response sanitizing, and error types live in sibling modules under server/ai/.
+// /api/polish route handler. The route is intentionally multi-pass: a
+// suggestion pass first, then the optional strict recruiter audit and optional
+// cover letter IN PARALLEL, so one model response is not forced to rewrite,
+// score, audit, and draft a letter at once. The polished preview is never
+// model-authored: it is derived by applying the sanitized suggestions to the
+// scoped text, so every tailored character has passed the exact-evidence gate.
+// Provider config, prompts, provider clients, response sanitizing, and error
+// types live in sibling modules under server/ai/.
 
 import { FetchTimeoutError, readBody, sendJson } from "../http.mjs";
 import { UserSafeAiError, safeConfigErrorMessage } from "./errors.mjs";
@@ -25,11 +28,122 @@ import {
 } from "./prompts.mjs";
 import { callConfiguredProvider } from "./clients.mjs";
 import {
+  applyGapCapsAndVerdict,
   missingRequiredSkillsFromStrictReview,
-  reconcileScoreToVerdict,
+  reconcileFitVerdict,
   sanitizeAiScore,
-  sanitizeMissingRequiredSkills
+  sanitizeMissingRequiredSkills,
+  sanitizeStrictReview,
+  sanitizeTailorSuggestions,
+  scoreFromBuckets
 } from "./sanitize.mjs";
+
+function trimText(value, max = 1200) {
+  return String(value ?? "").trim().slice(0, max);
+}
+
+function normalizeTailorScope(raw) {
+  const sections = Array.isArray(raw?.sections) ? raw.sections : [];
+  return {
+    version: 1,
+    locked: {
+      omittedIdentity: true,
+      omittedContact: true,
+      omittedSections: Array.isArray(raw?.locked?.omittedSections)
+        ? raw.locked.omittedSections.map((item) => trimText(item, 120)).filter(Boolean).slice(0, 20)
+        : []
+    },
+    sections: sections
+      .map((section) => {
+        const id = trimText(section?.id, 120);
+        const heading = trimText(section?.heading, 120);
+        if (!id || !heading) return null;
+        const type = section?.type === "skills" ? "skills" : section?.type === "summary" ? "summary" : "standard";
+        const entries = Array.isArray(section?.entries) ? section.entries : [];
+        return {
+          id,
+          heading,
+          type,
+          entries: entries
+            .map((entry) => {
+              const entryId = trimText(entry?.id, 120);
+              if (!entryId) return null;
+              return {
+                id: entryId,
+                titleLeft: trimText(entry?.titleLeft),
+                titleRight: trimText(entry?.titleRight),
+                subtitleLeft: trimText(entry?.subtitleLeft),
+                subtitleRight: trimText(entry?.subtitleRight),
+                bullets: Array.isArray(entry?.bullets)
+                  ? entry.bullets
+                      .map((bullet) => {
+                        const bulletId = trimText(bullet?.id, 120);
+                        if (!bulletId) return null;
+                        return { id: bulletId, text: trimText(bullet?.text) };
+                      })
+                      .filter(Boolean)
+                      .slice(0, 20)
+                  : []
+              };
+            })
+            .filter(Boolean)
+            .slice(0, 20)
+        };
+      })
+      .filter(Boolean)
+      .slice(0, 12)
+  };
+}
+
+function scopeToText(scope, suggestions = []) {
+  const replacements = new Map(
+    suggestions.map((suggestion) => [
+      [
+        suggestion.target.sectionId,
+        suggestion.target.entryId ?? "",
+        suggestion.target.bulletId ?? "",
+        suggestion.target.field
+      ].join("::"),
+      suggestion.proposedText
+    ])
+  );
+  const valueFor = (sectionId, entryId, bulletId, field, current) =>
+    replacements.get([sectionId, entryId ?? "", bulletId ?? "", field].join("::")) ?? current;
+  const lines = [];
+  for (const section of scope.sections) {
+    lines.push(String(section.heading).toUpperCase());
+    for (const entry of section.entries) {
+      if (section.type === "skills") {
+        const label = valueFor(section.id, entry.id, "", "titleLeft", entry.titleLeft).trim();
+        const skills = valueFor(section.id, entry.id, "", "skill", entry.subtitleLeft).trim();
+        if (label || skills) lines.push(label ? `${label}: ${skills}` : skills);
+        continue;
+      }
+      if (section.type === "summary") {
+        // Summary paragraphs live in bullets but serialize as plain lines.
+        for (const bullet of entry.bullets) {
+          const text = valueFor(section.id, entry.id, bullet.id, "bullet", bullet.text).trim();
+          if (text) lines.push(text);
+        }
+        continue;
+      }
+      const titleLeft = valueFor(section.id, entry.id, "", "titleLeft", entry.titleLeft).trim();
+      const titleRight = valueFor(section.id, entry.id, "", "titleRight", entry.titleRight).trim();
+      const subtitleLeft = valueFor(section.id, entry.id, "", "subtitleLeft", entry.subtitleLeft).trim();
+      const subtitleRight = valueFor(section.id, entry.id, "", "subtitleRight", entry.subtitleRight).trim();
+      const title = [titleLeft, titleRight].filter(Boolean).join(" | ");
+      const subtitle = [subtitleLeft, subtitleRight].filter(Boolean).join(" | ");
+      if (title) lines.push(title);
+      if (subtitle) lines.push(subtitle);
+      for (const bullet of entry.bullets) {
+        const text = valueFor(section.id, entry.id, bullet.id, "bullet", bullet.text).trim();
+        if (text) lines.push(`- ${text}`);
+      }
+    }
+    lines.push("");
+  }
+  return lines.join("\n").trim();
+}
 
 export async function handlePolish(req, res) {
   if (req.method !== "POST") {
@@ -39,19 +153,17 @@ export async function handlePolish(req, res) {
 
   let provider = normalizeProvider(getDefaultProvider());
   try {
-    const body = JSON.parse(await readBody(req));
-    const resumeText = String(body.resumeText ?? "").slice(0, 45_000);
+    const body = JSON.parse(await readBody(req, 1_000_000));
+    const tailorScope = normalizeTailorScope(body.tailorScope);
+    const scopeText = scopeToText(tailorScope);
     const jobText = String(body.jobText ?? "").slice(0, 35_000);
     const includeCoverLetter = Boolean(body.includeCoverLetter);
-    const preserveFormat = Boolean(body.preserveFormat);
-    const sourceFormat = String(body.sourceFormat ?? "").slice(0, 60);
     const strictReview = Boolean(body.strictReview);
-    const roleAppliedAs = String(body.roleAppliedAs ?? "").slice(0, 80);
     const honestContext = String(body.honestContext ?? "").slice(0, 8_000);
     const customInstructions = String(body.customInstructions ?? "").slice(0, 4_000);
 
-    if (resumeText.trim().length < 80 || jobText.trim().length < 40) {
-      sendJson(res, 400, { error: "Add a resume and job description before polishing." });
+    if (scopeText.trim().length < 40 || jobText.trim().length < 40) {
+      sendJson(res, 400, { error: "Select at least one editable resume section and add a job description before polishing." });
       return;
     }
 
@@ -61,81 +173,158 @@ export async function handlePolish(req, res) {
 
     const { systemPrompt, userPrompt } = buildPolishPrompts({
       jobText,
-      preserveFormat,
-      sourceFormat,
-      resumeText,
+      tailorScope,
       honestContext,
       customInstructions
     });
 
     const parsed = await callConfiguredProvider({ provider, model, reasoningEffort, apiKey, apiBaseUrl, systemPrompt, userPrompt });
-    const polishedText = String(parsed.polishedText ?? "").trim();
-    if (!polishedText) {
-      throw new UserSafeAiError("AI response did not include polished resume text. Try again or switch models.", 502);
+    const suggestionDropStats = {};
+    const suggestedChanges = sanitizeTailorSuggestions(parsed.suggestedChanges, tailorScope, suggestionDropStats, honestContext, jobText);
+    const rawSuggestionCount = Array.isArray(parsed.suggestedChanges) ? parsed.suggestedChanges.length : 0;
+    if (rawSuggestionCount > 0 && suggestedChanges.length === 0) {
+      // Shape-only: reason counts, never suggestion text. An all-drop reaching
+      // the user as "no suggestions" is indistinguishable from a clean pass
+      // without this.
+      console.warn("[ai] every tailor suggestion was dropped in sanitization", {
+        provider,
+        rawSuggestionCount,
+        ...suggestionDropStats
+      });
     }
+    const missingRequiredSkills = sanitizeMissingRequiredSkills(parsed.missingRequiredSkills);
+    // changeSummary replaced the old strengths/fixes arrays (which no UI surface
+    // ever rendered): 1-3 bullets on what changed or why nothing needed to. It
+    // doubles as the usable-response signal — a reply with no suggestions, no
+    // gaps, AND no summary is an unusable shape, not an "already strong" verdict.
+    const changeSummary = Array.isArray(parsed.changeSummary)
+      ? parsed.changeSummary.map((item) => String(item).trim()).filter(Boolean).slice(0, 4)
+      : [];
+    if (!suggestedChanges.length && !missingRequiredSkills.length && !changeSummary.length) {
+      throw new UserSafeAiError("AI response did not include usable resume suggestions. Try again or switch models.", 502);
+    }
+    // The polished preview is DERIVED, never model-authored: apply only the
+    // sanitized suggestions to the scoped text. Every tailored character has
+    // passed the exact-evidence gate, and the audit/cover passes judge exactly
+    // the text the editor can end up with. Zero sanitized suggestions is a
+    // valid outcome (the scope already fits) — the preview is then the
+    // unchanged scope.
+    const polishedText = scopeToText(tailorScope, suggestedChanges);
 
-    let strictReviewResult = null;
-    let strictFitScore = null;
     // The audit reuses the primary config unless the request assigns an
     // independent reviewer provider. A different reviewer audits what the
     // rewrite produced without the rewriting model's self-consistency bias; the
     // audit pass never rewrites the resume, so a different reviewer model cannot
-    // alter the format-preserved output.
+    // alter the format-preserved output. Audit and cover letter both depend
+    // only on the derived polished text, so they run in parallel.
     const audit = strictReview ? resolveAuditProviderRequest(body, resolved) : resolved;
-    if (strictReview) {
-      const reviewPrompts = buildStrictReviewPrompts({
-        jobText: clipForPrompt(jobText, STRICT_REVIEW_JOB_CHAR_LIMIT, "job description"),
-        resumeText: clipForPrompt(resumeText, STRICT_REVIEW_RESUME_CHAR_LIMIT, "original resume"),
-        polishedText: clipForPrompt(polishedText, STRICT_REVIEW_RESUME_CHAR_LIMIT, "polished resume"),
-        roleAppliedAs,
-        honestContext,
-        customInstructions
-      });
-      const reviewParsed = await callConfiguredProvider({
+    const reviewPromise = !strictReview
+      ? Promise.resolve(null)
+      : (async () => {
+          const reviewPrompts = buildStrictReviewPrompts({
+            jobText: clipForPrompt(jobText, STRICT_REVIEW_JOB_CHAR_LIMIT, "job description"),
+            resumeText: clipForPrompt(scopeText, STRICT_REVIEW_RESUME_CHAR_LIMIT, "original selected resume sections"),
+            // The audit judges original + the sanitized change list (the
+            // polished resume is derivable from them); sending the polished
+            // copy too nearly doubled the audit prompt for no information.
+            suggestedChanges,
+            honestContext,
+            customInstructions
+          });
+          return callConfiguredProvider({
+            provider: audit.provider,
+            model: audit.model,
+            reasoningEffort: audit.reasoningEffort,
+            apiKey: audit.apiKey,
+            apiBaseUrl: audit.apiBaseUrl,
+            systemPrompt: reviewPrompts.systemPrompt,
+            userPrompt: reviewPrompts.userPrompt
+          });
+        })();
+    const coverPromise = !includeCoverLetter
+      ? Promise.resolve(null)
+      : (async () => {
+          const coverPrompts = buildCoverLetterPrompts({
+            jobText: clipForPrompt(jobText, COVER_JOB_CHAR_LIMIT, "job description"),
+            resumeText: clipForPrompt(polishedText, COVER_RESUME_CHAR_LIMIT, "tailored resume"),
+            honestContext,
+            customInstructions
+          });
+          const coverParsed = await callConfiguredProvider({
+            provider,
+            model,
+            reasoningEffort,
+            apiKey,
+            apiBaseUrl,
+            systemPrompt: coverPrompts.systemPrompt,
+            userPrompt: coverPrompts.userPrompt
+          });
+          return String(coverParsed.coverLetterText ?? "").trim();
+        })();
+    // Secondary passes are OPTIONAL enhancements over an already-usable primary
+    // rewrite. A failure in either (provider 5xx, timeout, unreadable JSON
+    // surviving retry) must NOT sink the request and discard the computed
+    // suggestions/polishedText — especially with an independent reviewer that
+    // can run on a different provider/key. allSettled isolates each: a rejected
+    // review falls back to strictReview:null (pane omitted); a rejected cover
+    // falls back to "" (the same shape used when cover generation is disabled).
+    const [reviewSettled, coverSettled] = await Promise.allSettled([reviewPromise, coverPromise]);
+    let reviewParsed = null;
+    if (reviewSettled.status === "fulfilled") {
+      reviewParsed = reviewSettled.value;
+    } else {
+      console.warn("[ai] strict review pass failed; returning primary rewrite without it", {
         provider: audit.provider,
-        model: audit.model,
-        reasoningEffort: audit.reasoningEffort,
-        apiKey: audit.apiKey,
-        apiBaseUrl: audit.apiBaseUrl,
-        systemPrompt: reviewPrompts.systemPrompt,
-        userPrompt: reviewPrompts.userPrompt
+        errorName: reviewSettled.reason instanceof Error ? reviewSettled.reason.name : typeof reviewSettled.reason,
+        errorMessage: reviewSettled.reason instanceof Error ? reviewSettled.reason.message : String(reviewSettled.reason)
       });
-      strictReviewResult = reviewParsed.strictReview ?? null;
-      strictFitScore = reviewParsed.fitScore ?? null;
     }
-
     let coverLetterText = "";
-    if (includeCoverLetter) {
-      const coverPrompts = buildCoverLetterPrompts({
-        jobText: clipForPrompt(jobText, COVER_JOB_CHAR_LIMIT, "job description"),
-        resumeText: clipForPrompt(resumeText, COVER_RESUME_CHAR_LIMIT, "original resume"),
-        polishedText: clipForPrompt(polishedText, COVER_RESUME_CHAR_LIMIT, "polished resume"),
-        roleAppliedAs,
-        honestContext,
-        customInstructions
-      });
-      const coverParsed = await callConfiguredProvider({
+    if (coverSettled.status === "fulfilled") {
+      coverLetterText = coverSettled.value ?? "";
+    } else {
+      console.warn("[ai] cover letter pass failed; returning primary rewrite without it", {
         provider,
-        model,
-        reasoningEffort,
-        apiKey,
-        apiBaseUrl,
-        systemPrompt: coverPrompts.systemPrompt,
-        userPrompt: coverPrompts.userPrompt
+        errorName: coverSettled.reason instanceof Error ? coverSettled.reason.name : typeof coverSettled.reason,
+        errorMessage: coverSettled.reason instanceof Error ? coverSettled.reason.message : String(coverSettled.reason)
       });
-      coverLetterText = String(coverParsed.coverLetterText ?? "").trim();
+    }
+    let strictReviewResult = reviewParsed ? sanitizeStrictReview(reviewParsed.strictReview) : null;
+
+    // Scoring: prefer the arithmetic path — the reviewer reports per-bucket
+    // subtotals, the server sums them, caps for the reviewer's own reported
+    // gaps (HIGH < 70, BLOCKER -> DON'T APPLY band), and derives the verdict
+    // from the total, so verdict and score cannot disagree. When buckets are
+    // missing but the reviewer still ran, the SAME gap caps + verdict-from-score
+    // derivation must apply to the holistic fitScore — otherwise a reviewer that
+    // reports a BLOCKER gap with no usable buckets and an inflated verdict
+    // (STRONG FIT / 90) would slip past, since reconcileFitVerdict never
+    // inspects gaps. Only when there is no strict review at all do we fall back
+    // to plain verdict/score reconciliation.
+    const bucketScore = scoreFromBuckets(reviewParsed?.fitBuckets);
+    let reconciled;
+    if (strictReviewResult) {
+      const baseScore = bucketScore ?? sanitizeAiScore(reviewParsed?.fitScore ?? parsed.fitScore);
+      reconciled = applyGapCapsAndVerdict(baseScore, strictReviewResult);
+    } else {
+      reconciled = reconcileFitVerdict(
+        bucketScore ?? sanitizeAiScore(reviewParsed?.fitScore ?? parsed.fitScore),
+        strictReviewResult?.verdict
+      );
+    }
+    if (strictReviewResult && reconciled.verdict && reconciled.verdict !== strictReviewResult.verdict) {
+      strictReviewResult = { ...strictReviewResult, verdict: reconciled.verdict };
     }
 
-    const missingRequiredSkills = sanitizeMissingRequiredSkills(parsed.missingRequiredSkills);
     const strictMissingRequiredSkills = missingRequiredSkillsFromStrictReview(strictReviewResult);
 
     sendJson(res, 200, {
       polishedText,
-      coverLetterText,
-      strengths: Array.isArray(parsed.strengths) ? parsed.strengths.map(String).slice(0, 4) : [],
-      fixes: Array.isArray(parsed.fixes) ? parsed.fixes.map(String).slice(0, 4) : [],
+      coverLetterText: coverLetterText ?? "",
+      changeSummary,
       missingRequiredSkills: missingRequiredSkills.length ? missingRequiredSkills : strictMissingRequiredSkills,
-      aiScore: reconcileScoreToVerdict(sanitizeAiScore(strictFitScore ?? parsed.fitScore), strictReviewResult?.verdict),
+      suggestedChanges,
+      aiScore: reconciled.aiScore,
       strictReview: strictReviewResult,
       model,
       reasoningEffort,
@@ -147,8 +336,12 @@ export async function handlePolish(req, res) {
       sendJson(res, error.status, { error: error.message });
       return;
     }
-    if (error instanceof FetchTimeoutError) {
+    if (error instanceof FetchTimeoutError || (error instanceof Error && /timed out after/i.test(error.message))) {
       sendJson(res, 504, { error: `${providerLabel(provider)} timed out. Try again or switch providers.` });
+      return;
+    }
+    if (error instanceof Error && error.message === "Request is too large.") {
+      sendJson(res, 413, { error: "Request is too large. Shorten the resume or job text." });
       return;
     }
 
@@ -160,7 +353,8 @@ export async function handlePolish(req, res) {
 
     console.warn("[ai] polish failed", {
       provider,
-      errorName: error instanceof Error ? error.name : typeof error
+      errorName: error instanceof Error ? error.name : typeof error,
+      errorMessage: error instanceof Error ? error.message : String(error)
     });
     sendJson(res, 500, {
       error: `${providerLabel(provider)} did not return a usable draft. Check the selected provider and model, then try again.`

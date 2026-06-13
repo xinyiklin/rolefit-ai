@@ -11,7 +11,13 @@ export function base64ToBuffer(value) {
   if (!base64 || !/^[a-z0-9+/=\s]+$/i.test(base64)) {
     throw new Error("DOCX data was not valid base64.");
   }
-  return Buffer.from(base64, "base64");
+  const buffer = Buffer.from(base64, "base64");
+  // Bound the decoded DOCX (real resumes are well under 1 MB) so a crafted body
+  // can't exhaust memory/temp disk via import, base-resume save, or export.
+  if (buffer.length > 10_000_000) {
+    throw new Error("DOCX file is too large.");
+  }
+  return buffer;
 }
 
 export function bufferToBase64(buffer) {
@@ -25,18 +31,6 @@ function decodeXmlText(text) {
     .replace(/&quot;/g, "\"")
     .replace(/&apos;/g, "'")
     .replace(/&amp;/g, "&");
-}
-
-function escapeXmlText(text) {
-  return text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
-
-function stripListMarker(line) {
-  return line.replace(/^\s*(?:[-*•]|\d+[.)])\s+/, "");
 }
 
 function paragraphText(paragraphXml) {
@@ -58,63 +52,6 @@ function extractDocumentText(documentXml) {
     .filter(Boolean);
 
   return lines.join("\n");
-}
-
-function replaceParagraphText(paragraphXml, replacementText) {
-  let wroteText = false;
-  const escapedText = escapeXmlText(replacementText);
-  return paragraphXml.replace(/<w:t\b([^>]*)>([\s\S]*?)<\/w:t>/g, (match, attributes) => {
-    if (wroteText) return `<w:t${attributes}></w:t>`;
-    wroteText = true;
-    const hasSpacePreserve = /\bxml:space=/.test(attributes);
-    const needsSpacePreserve = /^\s|\s$/.test(replacementText);
-    const nextAttributes = needsSpacePreserve && !hasSpacePreserve ? `${attributes} xml:space="preserve"` : attributes;
-    return `<w:t${nextAttributes}>${escapedText}</w:t>`;
-  });
-}
-
-export function applyTextToDocumentXml(documentXml, polishedText) {
-  const replacementLines = String(polishedText ?? "")
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean);
-
-  if (!replacementLines.length) throw new Error("Polished resume text is empty.");
-
-  let textParagraphIndex = 0;
-  let lastTextParagraph = "";
-  const nextXml = documentXml.replace(/<w:p\b[\s\S]*?<\/w:p>/g, (paragraphXml) => {
-    if (!paragraphText(paragraphXml)) return paragraphXml;
-
-    const isListItem = /<w:numPr\b[\s\S]*?<\/w:numPr>/.test(paragraphXml);
-    const rawReplacement = replacementLines[textParagraphIndex] ?? "";
-    const replacement = isListItem ? stripListMarker(rawReplacement) : rawReplacement;
-    textParagraphIndex += 1;
-    lastTextParagraph = paragraphXml;
-    return replaceParagraphText(paragraphXml, replacement);
-  });
-
-  if (textParagraphIndex >= replacementLines.length || !lastTextParagraph) {
-    return {
-      documentXml: nextXml,
-      replacedParagraphs: textParagraphIndex,
-      appendedParagraphs: 0
-    };
-  }
-
-  const appended = replacementLines
-    .slice(textParagraphIndex)
-    .map((line) => replaceParagraphText(lastTextParagraph, stripListMarker(line)))
-    .join("");
-  const documentXmlWithAppend = /<w:sectPr\b/.test(nextXml)
-    ? nextXml.replace(/(<w:sectPr\b[\s\S]*?<\/w:sectPr>|<w:sectPr\b[^>]*\/>)(\s*<\/w:body>)/, `${appended}$1$2`)
-    : nextXml.replace(/<\/w:body>/, `${appended}</w:body>`);
-
-  return {
-    documentXml: documentXmlWithAppend,
-    replacedParagraphs: textParagraphIndex,
-    appendedParagraphs: replacementLines.length - textParagraphIndex
-  };
 }
 
 // Rejects archive entry names that are absolute or contain a `..` traversal
@@ -158,6 +95,15 @@ export async function withUnpackedDocx(docxBase64, callback) {
     await writeFile(sourcePath, base64ToBuffer(docxBase64));
     const { stdout: listing } = await execFileAsync("unzip", ["-Z1", sourcePath]);
     assertSafeZipEntries(listing);
+    // Reject a decompression bomb by its reported uncompressed total BEFORE
+    // extracting to disk. `unzip -l`'s final summary line starts with the total
+    // uncompressed byte count; if it is unparseable, treat the archive as hostile.
+    const { stdout: sizeListing } = await execFileAsync("unzip", ["-l", sourcePath]);
+    const summaryLine = sizeListing.trim().split("\n").pop() ?? "";
+    const totalUncompressed = Number.parseInt(summaryLine.trim().split(/\s+/)[0], 10);
+    if (!Number.isFinite(totalUncompressed) || totalUncompressed > 50_000_000) {
+      throw new Error("Archive expands beyond the allowed size.");
+    }
     await execFileAsync("unzip", ["-qq", sourcePath, "-d", unpackedPath]);
     // Reject symlinks before any read/repack so a crafted archive can't read or
     // write outside the temp workspace by following a planted link.

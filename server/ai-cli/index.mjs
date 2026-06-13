@@ -9,14 +9,15 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-function runCli(command, args, stdinPayload, { timeoutMs = 180_000, cwd } = {}) {
+function runCli(command, args, stdinPayload, { timeoutMs = 240_000, cwd } = {}) {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, { stdio: ["pipe", "pipe", "pipe"], cwd });
     let stdout = "";
     let stderr = "";
     const timer = setTimeout(() => {
       child.kill("SIGTERM");
-      reject(new Error(`${command} timed out after ${Math.round(timeoutMs / 1000)}s.`));
+      setTimeout(() => child.kill("SIGKILL"), 2_000).unref?.();
+      reject(new Error(`${command} timed out after ${Math.round(timeoutMs / 1000)}s. Try again or switch to a faster model.`));
     }, timeoutMs);
     child.stdout.on("data", (chunk) => { stdout += chunk.toString(); });
     child.stderr.on("data", (chunk) => { stderr += chunk.toString(); });
@@ -33,9 +34,16 @@ function runCli(command, args, stdinPayload, { timeoutMs = 180_000, cwd } = {}) 
       if (code === 0) {
         resolve({ stdout, stderr });
       } else {
-        reject(new Error(`${command} exited with code ${code}. Check CLI authentication and model access, then try again.`));
+        // Include the first line of stderr so the actual CLI error is visible in logs.
+        const hint = stderr.trim().split("\n")[0]?.slice(0, 200) ?? "";
+        const detail = hint ? ` (${hint})` : "";
+        reject(new Error(`${command} exited with code ${code}${detail}. Check CLI authentication and model access, then try again.`));
       }
     });
+    // Swallow EPIPE if the child exits before draining stdin — the real failure is
+    // already surfaced by the 'error'/'close' handlers above. Without this handler
+    // the unhandled stream error would crash the whole server process.
+    child.stdin.on("error", () => {});
     if (stdinPayload) child.stdin.write(stdinPayload);
     child.stdin.end();
   });
@@ -47,7 +55,12 @@ export async function callClaudeCli({ model, reasoningEffort, systemPrompt, user
   const args = ["-p", "--tools", "", "--output-format", "json"];
   if (systemPrompt) args.push("--append-system-prompt", systemPrompt);
   if (model && model !== "default") args.push("--model", model);
-  if (reasoningEffort) args.push("--effort", reasoningEffort);
+  // Default to LOW reasoning effort. With no --effort flag the CLI runs at its
+  // session default (high), which spends ~17K thinking tokens on a structured
+  // resume rewrite and pushes a single call past 5 minutes. Polish is a bounded
+  // rewrite/audit, not open-ended reasoning — low effort cuts each call to ~70s
+  // with no loss in suggestion quality. An explicit reasoningEffort still wins.
+  args.push("--effort", reasoningEffort || "low");
 
   const { stdout } = await runCli("claude", args, userPrompt);
 

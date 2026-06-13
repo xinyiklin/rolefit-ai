@@ -1,5 +1,27 @@
 // Helpers shared across LaTeX template renderers.
 
+// Section-heading classifier shared by the templates and the text parser:
+// summary-like sections hold plain paragraphs, not skill rows or entries.
+// Skills wins over summary so "Skills Summary" keeps its label-colon rows
+// (mirrors inferSectionType in src/lib/resumeData.ts).
+const SKILLS_HEADING_RE = /\b(?:technical\s+skills|skills|core\s+skills)\b/i;
+const SUMMARY_HEADING_RE = /\b(?:summary|objective|profile|about\s+me|highlights)\b/i;
+
+export function isSummaryHeading(heading) {
+  const trimmed = String(heading ?? "").trim();
+  return SUMMARY_HEADING_RE.test(trimmed) && !SKILLS_HEADING_RE.test(trimmed);
+}
+
+// Templates classify sections by the editor's explicit type when the schema
+// carries one (a renamed summary still renders as paragraphs); heading text is
+// only a fallback for text-parsed schemas that never had a type.
+export function isSummarySection(section) {
+  const type = section?.type;
+  if (type === "summary") return true;
+  if (type === "skills" || type === "standard") return false;
+  return isSummaryHeading(section?.heading);
+}
+
 const LATEX_ESCAPES = [
   [/\\/g, "\\textbackslash{}"],
   [/&/g, "\\&"],
@@ -13,12 +35,48 @@ const LATEX_ESCAPES = [
   [/\^/g, "\\textasciicircum{}"]
 ];
 
+function inlineMarkupToTex(value) {
+  let out = String(value ?? "");
+
+  for (let i = 0; i < 6; i += 1) {
+    const next = out
+      .replace(/<u>([\s\S]*?)<\/u>/gi, "\\underline{$1}")
+      .replace(/<i>([\s\S]*?)<\/i>/gi, "\\textit{$1}")
+      .replace(/<b>([\s\S]*?)<\/b>/gi, "\\textbf{$1}");
+    if (next === out) break;
+    out = next;
+  }
+
+  return out.replace(/<\/?(?:b|i|u)>/gi, "");
+}
+
+// Unicode chars that lmodern + T1 can't render natively under XeTeX/Tectonic.
+// Replace BEFORE TeX escaping so the output is pure ASCII or standard TeX.
+const UNICODE_NORMALIZATIONS = [
+  [/—/g, "---"],    // em dash
+  [/–/g, "--"],     // en dash
+  [/‘/g, "`"],      // left single quote
+  [/’/g, "'"],      // right single quote / apostrophe
+  [/“/g, "``"],     // left double quote
+  [/”/g, "''"],     // right double quote
+  [/…/g, "..."],    // ellipsis
+  [/•/g, ""],       // bullet (stripped — only appears in raw list prefixes)
+  [/ /g, "~"],      // non-breaking space
+  [/​/g, ""],       // zero-width space
+];
+
 export function escapeTex(value) {
   let out = String(value ?? "");
+  for (const [pattern, replacement] of UNICODE_NORMALIZATIONS) {
+    out = out.replace(pattern, replacement);
+  }
   for (const [pattern, replacement] of LATEX_ESCAPES) {
     out = out.replace(pattern, replacement);
   }
-  return out;
+  // Inline formatting from the structured editor becomes real LaTeX emphasis.
+  // Runs AFTER escaping, so wrapped text is already safe for TeX. Rich-editor
+  // edits use <b>/<i>/<u> internally.
+  return inlineMarkupToTex(out);
 }
 
 // Escapes for the FIRST argument of \href{...}. Neutralizes the characters that
@@ -56,15 +114,15 @@ export function titleCase(value) {
     .replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
-// Markdown-style **bold** -> \textbf{bold} (escaped)
-export function richInline(value) {
-  const escaped = escapeTex(value);
-  return escaped.replace(/\\\*\\\*(.+?)\\\*\\\*/g, "\\textbf{$1}");
-}
-
 // Pull the URL out of "github.com/foo" or "https://github.com/foo" patterns so
-// we can wrap contact items in \href{}.
+// we can wrap contact items / project links in \href{}.
 const LINK_HOSTS = ["github.com", "linkedin.com", "gitlab.com", "twitter.com", "x.com", "behance.net", "dribbble.com"];
+
+// Generic bare-domain detector: a label (subdomains allowed) followed by a 2-24
+// letter TLD, with an optional path. Matches "xinyiklin.com",
+// "careflow.xinyiklin.com", "github.com/user/repo". Does NOT match "Jan. 2024"
+// (digits in TLD), "John D." (no TLD), or anything with whitespace.
+const BARE_DOMAIN_RE = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)*\.[a-z]{2,24}(?:\/[^\s]*)?$/i;
 
 export function linkify(contactItem) {
   const raw = String(contactItem ?? "").trim();
@@ -91,6 +149,10 @@ export function linkify(contactItem) {
   // Email
   if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(raw)) {
     return { url: `mailto:${raw}`, label: raw };
+  }
+  // Generic bare domain: personal sites, project URLs, etc.
+  if (BARE_DOMAIN_RE.test(raw)) {
+    return { url: `https://${raw}`, label: raw };
   }
   return null;
 }

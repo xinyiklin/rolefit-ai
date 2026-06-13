@@ -84,6 +84,10 @@ export async function assertPublicHost(hostname) {
 
 export function isPublicHttpUrl(url) {
   if (!["http:", "https:"].includes(url.protocol)) return false;
+  // Only the protocol-default port (URL.port is "" for 80/443). A redirect to a
+  // non-standard port (e.g. :8080, :22) would turn a job-page fetch into an
+  // arbitrary-port probe from the user's IP; real job postings use default ports.
+  if (url.port !== "") return false;
 
   return !isPrivateHost(url.hostname);
 }

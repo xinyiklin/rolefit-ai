@@ -1,10 +1,8 @@
 // Template registry. Add new renderers here.
 
 import jakes from "./jakes.mjs";
-import awesomeCv from "./awesomeCv.mjs";
-import deedy from "./deedy.mjs";
 
-const TEMPLATES = [jakes, awesomeCv, deedy];
+const TEMPLATES = [jakes];
 
 export function listTemplates() {
   return TEMPLATES.map(({ id, name, description, source }) => ({ id, name, description, source }));
