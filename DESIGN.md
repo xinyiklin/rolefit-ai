@@ -386,8 +386,8 @@ The table reads as a logbook register, not a CRM grid.
 
 ### Do:
 
-- **Do** use only `src/styles/tokens.css` variables and `src/ui.tsx`
-  primitives; if a value is not a token, it does not ship.
+- **Do** use only `src/styles/tokens.css` variables and the per-surface CSS
+  classes in `src/styles/`; if a value is not a token, it does not ship.
 - **Do** state status as a small dot beside plain sentence-case text
   (`.stage-dot`, `.nav-menu__sub`, `.studio-card__meta`).
 - **Do** set numbers, dates, scores, and indices in JetBrains Mono with

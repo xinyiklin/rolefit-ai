@@ -4,11 +4,11 @@ A **local-first** resume tailoring webapp. Import a job posting (paste it, or pu
 
 > Built for an entry-level SDE job hunt: tight workflow loop, blunt recruiter-style audit before applying, and a local pipeline tracker so you never lose track of a role.
 
-![RoleFit AI pipeline workspace with demo data](docs/screenshot.png)
+![RoleFit AI resume workspace with demo data](docs/screenshot.png)
 
 _Screenshot uses demo workspace data._
 
-> **Recommended path:** keep your base resume as a **`.tex`** file (Jake's-style) and export with **PDF · LaTeX** (or **Overleaf**) for faithful, ATS-clean formatting. DOCX, LaTeX, and plain-text sources also work, but their **PDF · clean** export is a best-effort render and may need more manual editing/formatting.
+> **Recommended path:** keep your base resume as a **`.tex`** file (Jake's-style) and export with **PDF · LaTeX** for faithful, ATS-clean formatting. DOCX, LaTeX, and plain-text sources also work, but their **PDF · clean** export is a best-effort render and may need more manual editing/formatting.
 
 ## Highlights
 
@@ -17,7 +17,7 @@ _Screenshot uses demo workspace data._
 - **Subscription-friendly, multi-provider AI** — the default is the **Claude Code CLI** subscription path, with the other **subscription-CLI tools** (`Codex CLI`, `Gemini CLI` / Antigravity) routing through existing Claude Max / ChatGPT Plus / Google subscriptions instead of per-token billing, and **hosted-API backends** (OpenAI, Anthropic, Gemini, OpenRouter, Groq, Together, Mistral, local Ollama) available behind the same interface.
 - **Fit scoring + 4-category keyword gap analysis** — required experience, knowledge, required skills, technical tools.
 - **Strict recruiter review mode** — verdict (STRONG FIT / REASONABLE FIT / STRETCH / DON'T APPLY), base-vs-tailored fit scores, gap severity, targeted bullet rewrites, interview risk flags, an apply-as-is / edit-first recommendation, and a cover-letter angle.
-- **LaTeX export pipeline (recommended)** with three resume templates (Jake's, Awesome-CV, Deedy) + **one-click Overleaf submission** via form POST + optional local PDF compile through **Tectonic** — the recommended path for faithful, ATS-clean output.
+- **LaTeX export pipeline (recommended)** built on a Jake's-style resume template + optional local PDF compile through **Tectonic** — the recommended path for faithful, ATS-clean output.
 - **DOCX format preservation** through direct OpenXML paragraph edits.
 - **Clean PDF export (no LaTeX needed)** — the tailored resume renders as HTML and prints through your browser's **Save as PDF**, keeping the text selectable for ATS parsing. A universal fallback for any source; for pixel-faithful formatting, prefer the LaTeX export.
 - **On-disk pipeline tracker** with status / source / company / role / follow-up date / notes / resume snapshot per application — survives browser wipes.
@@ -27,7 +27,7 @@ _Screenshot uses demo workspace data._
 
 React 19 · TypeScript · Vite · Node.js (`server.mjs` with focused helpers under `server/`) · custom CSS · `lucide-react` icons
 
-No SaaS dependencies. Optional integrations: OpenAI · Anthropic · Gemini · OpenRouter · Groq · Together · Mistral · local Ollama · Claude Code CLI · Codex CLI · Gemini CLI (Antigravity) · Tectonic · Overleaf.
+No SaaS dependencies. Optional integrations: OpenAI · Anthropic · Gemini · OpenRouter · Groq · Together · Mistral · local Ollama · Claude Code CLI · Codex CLI · Gemini CLI (Antigravity) · Tectonic.
 
 ## Run
 
@@ -77,7 +77,7 @@ The app shells out to these CLIs for polish requests — no API key required. Fo
 brew install tectonic
 ```
 
-When installed, the `PDF · LaTeX` button in the export rail compiles your polished `.tex` directly to PDF in-app. Without it, use the **Overleaf** button instead — one click sends the `.tex` to a new Overleaf tab for compile.
+When installed, the `PDF · LaTeX` button in the export rail compiles your polished `.tex` directly to PDF in-app. Without it, use **PDF · clean** (the tailored resume prints through your browser's Save as PDF) or download the `.tex` to compile in your own LaTeX toolchain.
 
 ## Workspace
 
@@ -100,16 +100,16 @@ server/
   applications/index.mjs         # pipeline tracker storage
   docx.mjs                       # DOCX import/export helpers
   http.mjs                       # JSON/body/fetch utilities
-  latex/                         # parser + 3 template renderers + optional Tectonic compile
+  latex/                         # parser + Jake's template renderer + optional Tectonic compile
   network.mjs                    # job-link fetch + SSRF guards
 src/
   App.tsx                        # state + handlers + composition
   config/aiOptions.ts            # provider/model/reasoning options
   hooks/                          # templates, applications, resume export/analysis, AI settings, answers
   lib/                           # downloads, job extraction/distilling, resume format/block + LaTeX→HTML render helpers
-  sections/                      # Masthead + nav menus (Resume/Job/AI/Format/Polish) / StudioPane / ExportRail / ReviewRail / ResumeDocument / ResumePrintLayer
+  sections/                      # Masthead + nav menus (Resume/Job/AI/Options/Polish) / StudioPane / ExportRail / ReviewRail / ResumeDocument / ResumePrintLayer
   sections/editor/               # structured resume editor (sections, entries, bullets, skills rows)
-  sections/tabs/                 # Resume / Review / CoverLetter / Questions / Pipeline
+  sections/tabs/                 # Resume / Materials / Tracker / Analytics
   resume/                        # resume engine split: types, text, keywords, scoring, rewrite, diff
   resumeEngine.ts                # barrel re-exporting src/resume/* (scoring/analysis/deterministic fallback)
   styles/                        # per-surface CSS + shared tokens
