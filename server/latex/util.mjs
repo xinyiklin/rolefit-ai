@@ -23,7 +23,11 @@ export function isSummarySection(section) {
 }
 
 const LATEX_ESCAPES = [
-  [/\\/g, "\\textbackslash{}"],
+  // Backslash first, and brace-free: a `{}`-bearing replacement here would be
+  // re-escaped by the `{`/`}` rules below into `\textbackslash\{\}` (renders a
+  // literal "\{}"). `\textbackslash ` (trailing space terminates the control
+  // word) carries no braces, so the brace rules leave it intact.
+  [/\\/g, "\\textbackslash "],
   [/&/g, "\\&"],
   [/%/g, "\\%"],
   [/\$/g, "\\$"],
@@ -83,10 +87,10 @@ export function escapeTex(value) {
 // let a crafted URL break out of the brace group and inject arbitrary LaTeX
 // (e.g. "...}{}\input{/etc/passwd}%"). Unlike escapeTex we do NOT escape "_",
 // "/", ":" etc., which are legal, common URL characters and are safe inside the
-// \href target. Backslash must be replaced first so we don't double-escape the
-// replacements below.
+// \href target. Backslash first and brace-free (see escapeTex note) so the
+// `{`/`}` rules below don't turn it into `\textbackslash\{\}`.
 const LATEX_URL_ESCAPES = [
-  [/\\/g, "\\textbackslash{}"],
+  [/\\/g, "\\textbackslash "],
   [/\{/g, "\\{"],
   [/\}/g, "\\}"],
   [/%/g, "\\%"],
@@ -155,4 +159,22 @@ export function linkify(contactItem) {
     return { url: `https://${raw}`, label: raw };
   }
   return null;
+}
+
+// Split a meta/link field on whitespace-padded delimiters (" / ", " | ", " , ",
+// " ; ") so a "site-a.com / site-b.com" field can linkify BOTH halves instead of
+// failing linkify() outright on the embedded whitespace. Returns ordered
+// segments — { link } for a linkifiable token, { text } for delimiters and any
+// non-link tokens — which templates render with their own \href markup. The
+// surrounding whitespace is required so genuine URL paths ("github.com/u/repo")
+// and bare dates are never split. A field with no such delimiter yields a single
+// segment, so existing single-link / plain-text behavior is unchanged.
+export function splitLinkSegments(text) {
+  const raw = String(text ?? "");
+  const parts = raw.split(/(\s+[/|,;]\s+)/);
+  return parts.map((part, index) => {
+    if (index % 2 === 1) return { text: part };
+    const link = linkify(part.trim());
+    return link ? { link } : { text: part };
+  });
 }
