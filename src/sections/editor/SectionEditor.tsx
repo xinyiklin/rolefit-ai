@@ -1,6 +1,7 @@
 import { Fragment, memo } from "react";
 
 import type { ResumeSectionData } from "../../lib/resumeData";
+import type { TailorMode } from "../../lib/tailorScope";
 import type { ResumeEditorActions } from "../../hooks/useResumeEditor";
 import { EditableInput } from "./fields";
 import { pageBreakId, type ResumePageBreaks } from "./pagination";
@@ -15,14 +16,17 @@ type SectionEditorProps = {
   index: number;
   siblingCount: number;
   actions: ResumeEditorActions;
-  tailorSelected?: boolean;
-  onToggleTailor?: (sectionId: string, selected: boolean) => void;
+  tailorMode?: TailorMode;
+  onSetTailorMode?: (sectionId: string, mode: TailorMode) => void;
   highlightedEntryId?: string | null;
   highlightedBulletId?: string | null;
   pageBreaks?: ResumePageBreaks;
 };
 
-function SectionEditorImpl({ section, index, siblingCount, actions, tailorSelected = false, onToggleTailor, highlightedEntryId = null, highlightedBulletId = null, pageBreaks = {} }: SectionEditorProps) {
+const TAILOR_MODES: TailorMode[] = ["tailor", "include", "off"];
+const TAILOR_MODE_LABEL: Record<TailorMode, string> = { tailor: "Tailor", include: "Include", off: "Off" };
+
+function SectionEditorImpl({ section, index, siblingCount, actions, tailorMode = "off", onSetTailorMode, highlightedEntryId = null, highlightedBulletId = null, pageBreaks = {} }: SectionEditorProps) {
   const { setNodeRef, style, isDragging, handle } = useSortableRow(section.id, "section");
   const isSkills = section.type === "skills";
   const isSummary = section.type === "summary";
@@ -42,15 +46,41 @@ function SectionEditorImpl({ section, index, siblingCount, actions, tailorSelect
           aria-label="Section title"
           onChange={(value) => actions.setHeading(section.id, value)}
         />
-        {onToggleTailor ? (
-          <label className={`rdx-tailor-toggle${tailorSelected ? " is-selected" : ""}`}>
-            <input
-              type="checkbox"
-              checked={tailorSelected}
-              onChange={(event) => onToggleTailor(section.id, event.target.checked)}
-            />
-            <span>Tailor</span>
-          </label>
+        {onSetTailorMode ? (
+          <div
+            className="rdx-tailor-seg"
+            role="radiogroup"
+            aria-label={`Tailoring for ${section.heading.trim() || "section"}`}
+          >
+            {TAILOR_MODES.map((mode, i) => (
+              <button
+                key={mode}
+                type="button"
+                role="radio"
+                aria-checked={tailorMode === mode}
+                tabIndex={tailorMode === mode ? 0 : -1}
+                className={`rdx-tailor-seg__opt rdx-tailor-seg__opt--${mode}${tailorMode === mode ? " is-active" : ""}`}
+                title={
+                  mode === "tailor"
+                    ? "AI suggests edits to this section"
+                    : mode === "include"
+                    ? "Keep as-is, but let the AI use it for fit and grounding"
+                    : "Leave this section out of tailoring"
+                }
+                onClick={() => onSetTailorMode(section.id, mode)}
+                onKeyDown={(event) => {
+                  if (event.key !== "ArrowRight" && event.key !== "ArrowLeft") return;
+                  event.preventDefault();
+                  const delta = event.key === "ArrowRight" ? 1 : TAILOR_MODES.length - 1;
+                  const next = (i + delta) % TAILOR_MODES.length;
+                  onSetTailorMode(section.id, TAILOR_MODES[next]);
+                  (event.currentTarget.parentElement?.children[next] as HTMLElement | undefined)?.focus();
+                }}
+              >
+                {TAILOR_MODE_LABEL[mode]}
+              </button>
+            ))}
+          </div>
         ) : null}
         <RowControls
           label="section"

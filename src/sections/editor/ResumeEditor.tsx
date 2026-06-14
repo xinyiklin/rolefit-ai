@@ -2,6 +2,7 @@ import { Fragment, useEffect, useLayoutEffect, useRef, useState, type CSSPropert
 import { Plus, X } from "lucide-react";
 
 import type { ResumeData, ResumeSectionType } from "../../lib/resumeData";
+import type { TailorMode } from "../../lib/tailorScope";
 import type { ResumeEditorActions } from "../../hooks/useResumeEditor";
 import type { TailorChangeTarget } from "../../resume/types";
 import { EditableInput } from "./fields";
@@ -14,14 +15,14 @@ type ResumeEditorProps = {
   actions: ResumeEditorActions;
   // Doc-style CSS variables from the Format menu (line spacing, weights, etc.).
   style?: CSSProperties;
-  tailorSectionIds?: string[];
-  onToggleTailorSection?: (sectionId: string, selected: boolean) => void;
+  tailorModes?: Record<string, TailorMode>;
+  onSetTailorMode?: (sectionId: string, mode: TailorMode) => void;
   highlightTarget?: TailorChangeTarget | null;
 };
 
 // The editable on-page resume. Shares the `.resume-doc` look so it reads like the
 // document it produces; every field is a live control wired to the editor reducer.
-export function ResumeEditor({ data, actions, style, tailorSectionIds = [], onToggleTailorSection, highlightTarget = null }: ResumeEditorProps) {
+export function ResumeEditor({ data, actions, style, tailorModes = {}, onSetTailorMode, highlightTarget = null }: ResumeEditorProps) {
   // "Add section" opens a small picker so the user chooses the section type up
   // front (bulleted entries vs skill list) rather than relying on heading text.
   const [pickingType, setPickingType] = useState(false);
@@ -260,8 +261,8 @@ export function ResumeEditor({ data, actions, style, tailorSectionIds = [], onTo
                   siblingCount={data.sections.length}
                   actions={actions}
                   pageBreaks={pageBreaks}
-                  tailorSelected={tailorSectionIds.includes(section.id)}
-                  onToggleTailor={onToggleTailorSection}
+                  tailorMode={tailorModes[section.id] ?? "off"}
+                  onSetTailorMode={onSetTailorMode}
                   highlightedEntryId={isTarget ? (highlightTarget?.entryId ?? null) : null}
                   highlightedBulletId={isTarget ? (highlightTarget?.bulletId ?? null) : null}
                 />
