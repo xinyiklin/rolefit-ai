@@ -66,7 +66,10 @@ function knobs(tex) {
   return {
     baseline: Number(first(tex, /renewcommand\{\\baselinestretch\}\{([^}]+)\}/)),
     sectionPre: Number(first(tex, /titleformat\{\\section\}\{\\vspace\{(-?\d+)pt\}/)),
-    subheadingTrail: Number(first(tex, /end\{tabular\*\}\\vspace\{(-?\d+)pt\}/)),
+    // The entry-gap knob is the trailing \vspace after a heading's last \resumeRow
+    // (read from \resumeProjectHeading, the unambiguous single-row macro). It was
+    // \end{tabular*}\vspace before the per-row tabularx refactor.
+    subheadingTrail: Number(first(tex, /\\resumeRow\{\\small#1\}\{#2\}%\s*\\vspace\{(-?\d+)pt\}/)),
     itemTrail: Number(first(tex, /newcommand\{\\resumeItem\}\[1\]\{\\item\\small\{\{#1 \\vspace\{(-?\d+)pt\}/))
   };
 }

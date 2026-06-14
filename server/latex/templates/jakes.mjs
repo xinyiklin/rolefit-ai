@@ -2,7 +2,7 @@
 // Single-column, compact, ATS-friendly. Uses only packages that ship with
 // Tectonic / TeX Live by default.
 
-import { escapeTex, escapeTexUrl, titleCase, linkify, isSummarySection } from "../util.mjs";
+import { escapeTex, escapeTexUrl, titleCase, linkify, splitLinkSegments, isSummarySection } from "../util.mjs";
 
 // Map the editor's DocStyle (em values, 11pt base font) → LaTeX pt overrides
 // for the four template knobs. Mirrors the CSS variables consumed by the HTML
@@ -129,26 +129,38 @@ function buildPreamble(style) {
 
 \newcommand{\resumeItem}[1]{\item\small{{#1 \vspace{${fmtPt(style.itemTrailVSpacePt)}}}}}
 
+% The right column is a right-aligned tabularx X cell (not a single-line r): it
+% claims the space left of the title and WRAPS, so a long link — or two links
+% split by " / " — breaks into the empty space on that row instead of running
+% off the page margin. A short date/link still sits flush-right, unchanged.
+\newcolumntype{R}{>{\raggedleft\arraybackslash}X}
+
+% Each row is its OWN tabularx so the left column on the title row is sized only
+% by the (short) title — not by a long subtitle on the row below. Sharing one
+% tabular would let a wide subtitle inflate the shared left column and needlessly
+% squeeze/wrap the title row's link. \resumeRow stacks rows with the list's
+% natural leading via \par so the two-line rhythm matches the old tabular.
+\newcommand{\resumeRow}[2]{%
+  \begin{tabularx}{0.97\textwidth}{@{}l R@{}}#1 & #2 \\\end{tabularx}\par}
+
 \newcommand{\resumeSubheading}[4]{%
   \vspace{-2pt}\item
-    \begin{tabular*}{0.97\textwidth}[t]{l@{\extracolsep{\fill}}r}
-      ${bf("#1", style.boldTitles)} & #2 \\
-      ${it("\\small#3", style.italicSubtitles)} & ${it("\\small #4", style.italicDates)} \\
-    \end{tabular*}\vspace{${fmtPt(style.subheadingTrailVSpacePt)}}
+    \resumeRow{${bf("#1", style.boldTitles)}}{#2}%
+    \vspace{-7pt}%
+    \resumeRow{${it("\\small#3", style.italicSubtitles)}}{${it("\\small #4", style.italicDates)}}%
+    \vspace{${fmtPt(style.subheadingTrailVSpacePt)}}
 }
 
 \newcommand{\resumeSubSubheading}[2]{%
     \item
-    \begin{tabular*}{0.97\textwidth}{l@{\extracolsep{\fill}}r}
-      ${it("\\small#1", style.italicSubtitles)} & ${it("\\small #2", style.italicDates)} \\
-    \end{tabular*}\vspace{${fmtPt(style.subheadingTrailVSpacePt)}}
+    \resumeRow{${it("\\small#1", style.italicSubtitles)}}{${it("\\small #2", style.italicDates)}}%
+    \vspace{${fmtPt(style.subheadingTrailVSpacePt)}}
 }
 
 \newcommand{\resumeProjectHeading}[2]{%
     \item
-    \begin{tabular*}{0.97\textwidth}{l@{\extracolsep{\fill}}r}
-      \small#1 & #2 \\
-    \end{tabular*}\vspace{${fmtPt(style.subheadingTrailVSpacePt)}}
+    \resumeRow{\small#1}{#2}%
+    \vspace{${fmtPt(style.subheadingTrailVSpacePt)}}
 }
 
 \newcommand{\resumeSubItem}[1]{\resumeItem{#1}\vspace{-4pt}}
@@ -177,11 +189,19 @@ function renderHeader(resume) {
 
 // If the field looks like a URL or domain, render as an underlined \href so the
 // PDF link is clickable; otherwise plain escape. Used for the project meta slot
-// (right-aligned link/date) where users commonly drop "myproject.com".
+// (right-aligned link/date) where users commonly drop "myproject.com". A field
+// holding two links split by " / " (or " | ", " , ", " ; ") linkifies each half
+// independently so both stay clickable; the delimiter is escaped as plain text.
 function renderMaybeLink(text) {
-  const link = linkify(text);
-  if (!link) return escapeTex(text);
-  return `\\href{${escapeTexUrl(link.url)}}{\\underline{${escapeTex(link.label)}}}`;
+  const segments = splitLinkSegments(text);
+  if (segments.length === 1 && !segments[0].link) return escapeTex(text);
+  return segments
+    .map((segment) =>
+      segment.link
+        ? `\\href{${escapeTexUrl(segment.link.url)}}{\\underline{${escapeTex(segment.link.label)}}}`
+        : escapeTex(segment.text)
+    )
+    .join("");
 }
 
 // Skills bullets arrive as a single string "Languages: Python, JS, ..."; split
