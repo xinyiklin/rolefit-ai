@@ -8,7 +8,19 @@ import {
 import { extractPlainTextFromLatex, type ResumeData } from "../lib/resumeData";
 import { stripInlineMarks } from "../lib/inlineMarks";
 import { looksLikeLatex } from "../lib/resumeFormat";
+import { extractJobConstraints } from "../lib/jobConstraints";
+import { VERDICT_LABEL, verdictFromScore, verdictPillClass } from "../lib/fitVerdict";
+import type { StrictReviewVerdict } from "../resume/types";
 import type { FitComparison, ResumeBlock, ResumeBlockKind } from "../sections/shared";
+
+export { verdictPillClass };
+
+// What the user actually needs at a glance: a fit VERDICT, not a number. The
+// header shows the same four bands the review rail and tracker use — one shared
+// vocabulary (lib/fitVerdict.ts). When strict review ran we surface its real
+// (gap-capped, blocker-aware) verdict; otherwise we derive a band from the score
+// — qualified as "Estimated" so the weaker local-keyword provenance is honest.
+export type FitVerdict = { verdict: StrictReviewVerdict; label: string; source: "AI-judged" | "Estimated" };
 
 type UseResumeAnalysisArgs = {
   resumeText: string;
@@ -158,6 +170,22 @@ export function useResumeAnalysis({
     : "Add a resume and a job target";
   const resultSourceLabel = result?.source === "local" ? "Local engine" : result?.source === "ai" ? "AI" : "";
 
+  // Fit verdict band for the header — the qualitative "are they a fit?" signal.
+  const fitVerdict = useMemo<FitVerdict | null>(() => {
+    const aiVerdict = result?.strictReview?.verdict;
+    if (aiVerdict && VERDICT_LABEL[aiVerdict]) {
+      return { verdict: aiVerdict, label: VERDICT_LABEL[aiVerdict], source: "AI-judged" };
+    }
+    const derived = verdictFromScore(headlineScore);
+    return derived ? { verdict: derived, label: VERDICT_LABEL[derived], source: "Estimated" } : null;
+  }, [result, headlineScore]);
+
+  // Lifestyle/logistical conditions in the JD — surfaced as a pre-apply advisory,
+  // deliberately NOT a fit input (the prompt rules keep the verdict about
+  // qualifications). Deterministic from the job text, so it's available whether
+  // or not strict review ran.
+  const jobConstraints = useMemo(() => extractJobConstraints(combinedJobText), [combinedJobText]);
+
   return {
     currentAnalysis,
     resumeBulletCount,
@@ -168,6 +196,8 @@ export function useResumeAnalysis({
     scoreSource,
     headlineScore,
     scoreContext,
+    fitVerdict,
+    jobConstraints,
     resultSourceLabel
   };
 }

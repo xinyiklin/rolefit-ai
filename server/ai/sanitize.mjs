@@ -146,6 +146,13 @@ function buildTailorTargetMap(scope) {
   return targets;
 }
 
+// Structural diagnostic: the list of valid target keys for a scope, so an
+// all-drop log can show how the model's emitted targets diverge from the real
+// ones. Keys are ids+field only — no resume text.
+export function tailorTargetKeys(scope) {
+  return [...buildTailorTargetMap(scope).keys()];
+}
+
 // dropStats (optional) collects WHY suggestions were rejected, keyed by reason.
 // The route logs it (shape-only, no resume text) when a reply's suggestions all
 // die in sanitization — a silent all-drop looks identical to "the model had
@@ -177,10 +184,17 @@ export function sanitizeTailorSuggestions(raw, scope, dropStats, honestContext, 
     const rawTarget = item.target && typeof item.target === "object" ? item.target : item;
     const field = clippedString(rawTarget.field ?? item.field, 40);
     if (!TAILOR_FIELDS.has(field)) { drop("badField"); continue; }
+    // bulletId is only meaningful for field "bullet"; the target map keys every
+    // non-bullet field (skill, titleLeft/Right, subtitleLeft/Right) with "".
+    // A model that attaches a stray or invented bulletId to a non-bullet target
+    // — observed on skills-row adds, where the summary claimed the edit but the
+    // suggestion silently dropped as unknownTarget — would otherwise never match.
+    // Normalize it out so the target resolves on (sectionId, entryId, field).
+    const bulletId = field === "bullet" ? (rawTarget.bulletId ?? item.bulletId) : "";
     const key = targetKey({
       sectionId: rawTarget.sectionId ?? item.sectionId,
       entryId: rawTarget.entryId ?? item.entryId,
-      bulletId: rawTarget.bulletId ?? item.bulletId,
+      bulletId,
       field
     });
     const allowed = targets.get(key);
@@ -256,6 +270,7 @@ export function sanitizeTailorSuggestions(raw, scope, dropStats, honestContext, 
 const VERDICTS = new Set(["STRONG FIT", "REASONABLE FIT", "STRETCH", "DON'T APPLY"]);
 const GAP_SEVERITIES = new Set(["BLOCKER", "HIGH", "MEDIUM", "LOW"]);
 const COVERAGE_STATUSES = new Set(["covered", "missing", "adjacent"]);
+const REQUIREMENT_IMPORTANCE = new Set(["critical", "high", "medium", "low"]);
 
 function enumValue(value, allowed, fallback) {
   const candidate = String(value ?? "").trim().toUpperCase();
@@ -419,6 +434,115 @@ const BUCKET_MAX = {
   clarity: 10
 };
 
+const STATUS_POINTS = {
+  covered: 1,
+  adjacent: 0.45,
+  missing: 0
+};
+
+const IMPORTANCE_POINTS = {
+  critical: 3,
+  high: 2,
+  medium: 1,
+  low: 0.5
+};
+
+const MISSING_BUCKET_DEFAULTS = {
+  requiredTech: 0.5,
+  requiredDomains: 0.75,
+  seniority: 0.75,
+  preferred: 1
+};
+
+function requirementBucket(category) {
+  const text = String(category ?? "").toLowerCase();
+  if (/\bprefer|nice|bonus|plus\b/.test(text)) return "preferred";
+  if (/\byear|senior|level|degree|certif|clearance|citizen|authorization|authorisation|sponsor|visa|license|licence\b/.test(text)) {
+    return "seniority";
+  }
+  if (/\btech|skill|tool|language|framework|platform|stack\b/.test(text)) return "requiredTech";
+  if (/\bexperience|domain|responsibilit|work|practice|project|deliver|build|design|develop\b/.test(text)) return "requiredDomains";
+  return null;
+}
+
+function sanitizeRequirementCoverage(raw) {
+  if (!Array.isArray(raw)) return [];
+  const output = [];
+  const seen = new Set();
+  for (const row of raw) {
+    if (!row || typeof row !== "object") continue;
+    const requirement = clippedString(row.requirement ?? row.keyword ?? row.gap, 180);
+    if (!requirement) continue;
+    const category = clippedString(row.category, 80);
+    const bucket = requirementBucket(category);
+    if (!bucket) continue;
+    const importance = enumValue(row.importance, REQUIREMENT_IMPORTANCE, bucket === "preferred" ? "low" : "medium");
+    const baseStatus = enumValue(row.baseStatus ?? row.status, COVERAGE_STATUSES, "missing");
+    const tailoredStatus = enumValue(row.tailoredStatus ?? row.status, COVERAGE_STATUSES, baseStatus);
+    const key = `${bucket}:${requirement.toLowerCase()}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    output.push({
+      bucket,
+      category,
+      requirement,
+      importance,
+      baseStatus,
+      tailoredStatus,
+      baseEvidence: clippedString(row.baseEvidence ?? row.where, 300),
+      tailoredEvidence: clippedString(row.tailoredEvidence ?? row.where, 300)
+    });
+    if (output.length >= 20) break;
+  }
+  return output;
+}
+
+function scoreRequirementBucket(rows, bucket, statusField) {
+  const relevant = rows.filter((row) => row.bucket === bucket);
+  if (!relevant.length) return Math.round(BUCKET_MAX[bucket] * MISSING_BUCKET_DEFAULTS[bucket]);
+  let total = 0;
+  let earned = 0;
+  for (const row of relevant) {
+    const weight = IMPORTANCE_POINTS[row.importance] ?? 1;
+    total += weight;
+    earned += weight * (STATUS_POINTS[row[statusField]] ?? 0);
+  }
+  return total ? Math.round(BUCKET_MAX[bucket] * (earned / total)) : 0;
+}
+
+function scoreRequirementClarity(rows, statusField, strictReview) {
+  const relevant = rows.filter((row) => row.bucket !== "preferred");
+  if (!relevant.length) return 8;
+  let total = 0;
+  let earned = 0;
+  for (const row of relevant) {
+    const weight = IMPORTANCE_POINTS[row.importance] ?? 1;
+    total += weight;
+    earned += weight * (STATUS_POINTS[row[statusField]] ?? 0);
+  }
+  const riskPenalty = Math.min(3, Array.isArray(strictReview?.riskFlags) ? strictReview.riskFlags.length : 0);
+  return Math.max(0, Math.min(10, Math.round(10 * (earned / Math.max(1, total))) - riskPenalty));
+}
+
+function scoreRequirements(rows, statusField, strictReview) {
+  return Math.min(100, (
+    scoreRequirementBucket(rows, "requiredTech", statusField) +
+    scoreRequirementBucket(rows, "requiredDomains", statusField) +
+    scoreRequirementBucket(rows, "seniority", statusField) +
+    scoreRequirementBucket(rows, "preferred", statusField) +
+    scoreRequirementClarity(rows, statusField, strictReview)
+  ));
+}
+
+function requirementLiftReason(rows) {
+  const improved = rows
+    .filter((row) => (STATUS_POINTS[row.tailoredStatus] ?? 0) > (STATUS_POINTS[row.baseStatus] ?? 0))
+    .map((row) => row.requirement)
+    .slice(0, 2);
+  if (!improved.length) return "Tailoring did not materially change requirement coverage.";
+  return `Tailoring improved evidence for ${improved.join(improved.length > 1 ? " and " : "")}.`;
+}
+
 function sumBuckets(raw) {
   if (!raw || typeof raw !== "object") return null;
   let total = 0;
@@ -448,6 +572,22 @@ export function scoreFromBuckets(rawBuckets) {
     base: base ?? tailored,
     tailored: tailored ?? base,
     liftReason: typeof rawBuckets.liftReason === "string" ? rawBuckets.liftReason.slice(0, 300) : ""
+  };
+}
+
+// Primary strict-review scoring path: the model extracts requirement coverage,
+// but the server owns every point calculation. This removes model-authored
+// numeric bucket wobble while keeping the reviewer responsible for evidence
+// classification.
+export function scoreFromRequirementCoverage(rawCoverage, strictReview) {
+  const rows = sanitizeRequirementCoverage(rawCoverage);
+  // Require enough rows that the score is based on an actual requirement table,
+  // not one or two vague bullets. Fallback callers may still use legacy buckets.
+  if (rows.length < 4) return null;
+  return {
+    base: scoreRequirements(rows, "baseStatus", strictReview),
+    tailored: scoreRequirements(rows, "tailoredStatus", strictReview),
+    liftReason: requirementLiftReason(rows)
   };
 }
 

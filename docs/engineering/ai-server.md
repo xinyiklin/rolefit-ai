@@ -195,17 +195,19 @@ The AI must:
   needed to); the selected-section text preview used for scoring/audit is
   derived server-side from the sanitized suggestions, and the editor
   remains the final source of truth
-- score fit arithmetically: the strict reviewer returns per-bucket
-  subtotals (`fitBuckets`: required tech 0-40 / domains 0-25 / seniority
-  0-15 / preferred 0-10 / evidence clarity 0-10) and the SERVER sums them,
-  caps for the reviewer's own reported gaps (HIGH gap < 70, BLOCKER gap →
-  DON'T APPLY band), and derives the verdict from the total
-  (`scoreFromBuckets` + `applyGapCapsAndVerdict` in `sanitize.mjs`) — the
-  model judges facts, the server does the math, so verdict and score
-  cannot disagree. A legacy holistic `fitScore` reply falls back to
-  `reconcileFitVerdict`. The reviewer acts as a validator of the polish
-  pass — unsupported inserted terms lower the tailored buckets, never
-  raise them
+- score fit from evidence, not model-authored numbers: the strict reviewer
+  returns `requirementCoverage` rows with base/tailored coverage status,
+  importance, and evidence for each decision-relevant JD requirement. The
+  SERVER maps those rows into fixed buckets (required tech 40 / domains 25 /
+  seniority and hard filters 15 / preferred 10 / evidence clarity 10), caps
+  for the reviewer's own reported gaps (HIGH gaps cap at 79 / 69 / 60 by
+  count, BLOCKER gap → DON'T APPLY band), and derives the verdict from the
+  total (`scoreFromRequirementCoverage` + `applyGapCapsAndVerdict` in
+  `sanitize.mjs`) — the model extracts evidence, the server does the math, so
+  verdict and score cannot disagree. Legacy `fitBuckets` and holistic
+  `fitScore` replies remain compatibility fallbacks. The reviewer acts as a
+  validator of the polish pass — unsupported inserted terms lower the
+  tailored coverage, never raise it
 - write bullets as engineering accomplishments in plain language — no
   brochure vocabulary, no claims the candidate could not defend in an
   interview, and proposed text stays close to the current field's length

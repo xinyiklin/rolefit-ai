@@ -28,7 +28,8 @@ import {
   type ApplicationStatus,
   type SalaryPeriod
 } from "../hooks/useApplications";
-import { STATUS_LABEL, fitLabel, fitTone, formatSalary } from "../lib/applicationDisplay";
+import { STATUS_LABEL, fitTone, formatSalary } from "../lib/applicationDisplay";
+import { VERDICT_LABEL, verdictFromScore } from "../lib/fitVerdict";
 
 type ApplicationModalProps = {
   open: boolean;
@@ -288,6 +289,7 @@ export function ApplicationModal({ open, application, onClose, onSave, onDelete,
   const canSave =
     form.company.trim().length > 1 || form.role.trim().length > 1 || form.jobUrl.trim().length > 6;
   const ringTone = fitTone(fitNumber);
+  const fitVerdictDerived = verdictFromScore(fitNumber);
   const review = application?.review;
   const gaps = application?.missingRequiredSkills ?? [];
   const headerName = [form.company.trim(), form.role.trim()].filter(Boolean).join(" · ") || "New application";
@@ -477,8 +479,8 @@ export function ApplicationModal({ open, application, onClose, onSave, onDelete,
                     <>
                       <span className="figures-strip__divider" aria-hidden="true" />
                       <span className="figures-strip__item">
-                        <em>Match</em>
-                        <strong className="is-prose">{fitLabel(fitNumber)}</strong>
+                        <em>Verdict</em>
+                        <strong className="is-prose">{fitVerdictDerived ? VERDICT_LABEL[fitVerdictDerived] : "Not scored"}</strong>
                       </span>
                     </>
                   ) : null}

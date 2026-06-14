@@ -1,7 +1,7 @@
 // Structured, editable resume model — the canonical shape the interactive editor
 // mutates and the LaTeX/Tectonic "Compile Preview" renders. It mirrors the schema
 // the server templates already consume (server/latex/parseResumeText.mjs →
-// jakes/awesome-cv/deedy `render(resume)`), plus stable ids for React keys:
+// the jakes template's `render(resume)`), plus stable ids for React keys:
 //
 //   { name, contact: string[],
 //     sections: [
@@ -38,7 +38,7 @@ export type ResumeSectionData = { id: string; heading: string; type: ResumeSecti
 export type ResumeData = { name: string; contact: string[]; sections: ResumeSectionData[] };
 
 // Id-free shape sent to the server template renderer. Matches exactly what
-// jakes.mjs / awesomeCv.mjs / deedy.mjs destructure in their `render(resume)`.
+// jakes.mjs destructures in its `render(resume)`.
 export type ResumeTemplateSchema = {
   name: string;
   contact: string[];

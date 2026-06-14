@@ -36,7 +36,9 @@ import {
   sanitizeMissingRequiredSkills,
   sanitizeStrictReview,
   sanitizeTailorSuggestions,
-  scoreFromBuckets
+  scoreFromBuckets,
+  scoreFromRequirementCoverage,
+  tailorTargetKeys
 } from "./sanitize.mjs";
 
 function trimText(value, max = 1200) {
@@ -214,11 +216,21 @@ export async function handlePolish(req, res) {
     if (rawSuggestionCount > 0 && suggestedChanges.length === 0) {
       // Shape-only: reason counts, never suggestion text. An all-drop reaching
       // the user as "no suggestions" is indistinguishable from a clean pass
-      // without this.
+      // without this. The target shapes (ids/field only — structural, never
+      // proposedText/evidence/resume content) reveal HOW the model mis-targeted
+      // (e.g. heading/label in place of the section/entry id) so the resolver
+      // and prompt can be corrected against real failures, not guesses.
+      const droppedTargets = (Array.isArray(parsed.suggestedChanges) ? parsed.suggestedChanges : [])
+        .map((c) => {
+          const t = c && typeof c === "object" && c.target && typeof c.target === "object" ? c.target : (c ?? {});
+          return { sectionId: t.sectionId, entryId: t.entryId, bulletId: t.bulletId, field: t.field };
+        });
       console.warn("[ai] every tailor suggestion was dropped in sanitization", {
         provider,
         rawSuggestionCount,
-        ...suggestionDropStats
+        ...suggestionDropStats,
+        droppedTargets,
+        validTargetKeys: tailorTargetKeys(tailorScope)
       });
     }
     const missingRequiredSkills = sanitizeMissingRequiredSkills(parsed.missingRequiredSkills);
@@ -336,17 +348,12 @@ export async function handlePolish(req, res) {
     }
     let strictReviewResult = reviewParsed ? sanitizeStrictReview(reviewParsed.strictReview, jobText, groundingText) : null;
 
-    // Scoring: prefer the arithmetic path — the reviewer reports per-bucket
-    // subtotals, the server sums them, caps for the reviewer's own reported
-    // gaps (HIGH < 70, BLOCKER -> DON'T APPLY band), and derives the verdict
-    // from the total, so verdict and score cannot disagree. When buckets are
-    // missing but the reviewer still ran, the SAME gap caps + verdict-from-score
-    // derivation must apply to the holistic fitScore — otherwise a reviewer that
-    // reports a BLOCKER gap with no usable buckets and an inflated verdict
-    // (STRONG FIT / 90) would slip past, since reconcileFitVerdict never
-    // inspects gaps. Only when there is no strict review at all do we fall back
-    // to plain verdict/score reconciliation.
-    const bucketScore = scoreFromBuckets(reviewParsed?.fitBuckets);
+    // Scoring: prefer the requirement-coverage path — the reviewer extracts
+    // per-requirement evidence/statuses, then the server calculates every point.
+    // Legacy fitBuckets remain as a rollout fallback, and gap caps still apply
+    // to whichever score shape is available.
+    const coverageScore = scoreFromRequirementCoverage(reviewParsed?.requirementCoverage, strictReviewResult);
+    const bucketScore = coverageScore ?? scoreFromBuckets(reviewParsed?.fitBuckets);
     let reconciled;
     if (strictReviewResult) {
       const baseScore = bucketScore ?? sanitizeAiScore(reviewParsed?.fitScore ?? parsed.fitScore);

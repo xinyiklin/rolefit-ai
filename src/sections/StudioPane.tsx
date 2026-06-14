@@ -2,9 +2,6 @@ import { useRef, type KeyboardEvent, type ReactNode } from "react";
 import type { OutputTab, OutputTabDescriptor, OutputTabGroup } from "./shared";
 import { TAB_GROUPS } from "./shared";
 
-// Icons removed from the rail; imports kept for any future use in other surfaces.
-// import { BarChart3, BriefcaseBusiness, CalendarDays, FileText, ListChecks, Mail, SquareKanban } from "lucide-react";
-
 type StudioPaneProps = {
   activeOutputTab: OutputTab;
   setActiveOutputTab: (tab: OutputTab) => void;

@@ -375,6 +375,8 @@ function App() {
     fitComparison,
     headlineScore,
     scoreContext,
+    fitVerdict,
+    jobConstraints,
     resultSourceLabel
   } = useResumeAnalysis({
     resumeText,
@@ -1366,6 +1368,8 @@ function App() {
               hasResult={Boolean(result)}
               resultSourceLabel={resultSourceLabel}
               scoreContext={scoreContext}
+              fitVerdict={fitVerdict}
+              jobConstraints={jobConstraints}
               result={result}
               resumeDiff={resumeDiff}
               docStyle={docStyle}

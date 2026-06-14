@@ -53,6 +53,8 @@ ${accomplishmentStyleRules()}
 
 ${bulletRewriteExample()}
 
+${skillsAdditionExample()}
+
 Do not invent employers, titles, dates, degrees, certifications, metrics, tools, or outcomes. If a metric would strengthen a bullet but is not provided, add a bracketed prompt such as [add metric: volume, percentage, dollars, time saved, or adoption]. Use strong action verbs and concise bullets.`;
 }
 
@@ -73,6 +75,24 @@ export function honestTailoringRules() {
    - allowed (adjacent, described truthfully): strengthen the existing "containerized services with Docker" bullet so the real containerization work is visible.
    - not allowed: listing Kubernetes in skills, writing "container orchestration (Kubernetes-style)", or any phrasing that implies cluster operation experience. Kubernetes stays a missing requirement.
 6. Do not pad the skills section with JD keywords the candidate has not actually used. Prefer leaving a requirement uncovered over fabricating coverage.`;
+}
+
+// Fit must reflect REAL qualification fit — can the candidate do the work —
+// neither inflated nor deflated by the job's lifestyle/logistical conditions.
+// Those conditions (travel, relocation, on-site/remote, shifts, on-call,
+// overtime, weekends, physical demands, commute) are candidate PREFERENCES the
+// app surfaces separately as a pre-apply advisory; they are not a measure of
+// whether the candidate is qualified, so they must never move the score, the
+// verdict, or appear as a fit gap. This is distinct from eligibility BLOCKERS
+// (clearance, license, certification, required degree, citizenship, work
+// authorization), which DO determine fit because the candidate cannot legally
+// or formally do the job without them.
+export function fitScopeRules() {
+  return `Fit scope — score REAL qualification fit only:
+- Fit measures whether the candidate can do the job: required skills, tools, experience domains, and seniority. Judge only these.
+- DO NOT raise or lower the fit score or verdict, and DO NOT create a gap, for the job's lifestyle or logistical CONDITIONS: travel, relocation, on-site/in-office/remote/hybrid expectations, shift/overnight/weekend work, on-call rotations, overtime/extended hours, physical demands (lifting, standing), or commute/driver's-license requirements. These are the candidate's personal choice, surfaced to them separately — they are NOT qualification gaps. A candidate can be a STRONG FIT for a job that requires 50% travel.
+- This does NOT apply to eligibility blockers (security clearance, professional license, certification, required degree, citizenship, work authorization): those genuinely determine fit and the existing hard-blocker rule still governs them.
+- Do not reward fit for meeting a logistical condition either: "open to relocation" is not evidence of qualification.`;
 }
 
 // Resumes must read as engineering accomplishments, not as a tour of what a
@@ -109,12 +129,26 @@ function bulletRewriteExample() {
 Lead with the engineering decision, then scale or technique, then a result or a bracketed metric prompt.`;
 }
 
+// Skills-row additions are the second most common failure: the model either
+// puts the gap in missingRequiredSkills instead of suggestedChanges, or uses
+// a text label instead of the verbatim UUID for entryId. This example pins
+// the correct pattern — field="skill", entryId copied verbatim from the scope.
+function skillsAdditionExample() {
+  return `Example — the job requires Microsoft Office and honest context says the candidate uses it daily:
+Correct: add a suggestedChanges entry targeting the matching skills row with field "skill".
+{ "target": { "sectionId": "<exact sectionId from scope>", "entryId": "<exact entryId from scope>", "bulletId": "", "field": "skill" }, "proposedText": "Git, Docker, ..., Microsoft Office (Word, Excel, PowerPoint)", "evidenceType": "exact", "evidence": "honest context: 'I use Microsoft Office daily for documentation and reports'" }
+Wrong: only listing it in missingRequiredSkills with canHonestlyAdd=true — that reports it as a gap the user must add manually. When evidenceType is exact, generate a suggestedChanges entry.
+IDs must be copied verbatim from <tailor_scope> — do not substitute a text label like "Tooling & Cloud" for the entryId UUID.`;
+}
+
 function aiStrictReviewInstructions() {
   return `You are a senior technical recruiter and hiring manager with 10+ years of experience screening software engineering candidates. Audit the original resume, the proposed tailoring changes, and the job description. The polished resume is the original with each change's currentText replaced by its proposedText — judge that result. Do not rewrite the full resume in this pass. You are NOT a cheerleader: give a blunt, honest assessment. NEVER suggest fabricating experience. If a gap cannot be honestly filled with evidence the user has provided, mark it as cannot-add and recommend skipping. Don't pad with generic advice. Don't praise the resume. If the resume is genuinely a bad fit, say DON'T APPLY with a reason. DE-PRIORITIZE soft skills (communication, teamwork, ownership): flag them as required only when the JD explicitly demands them. Compare on these dimensions in order: 1) required technical skills, 2) required experience domains, 3) required years/seniority, 4) preferred/nice-to-have.
 
 ${inputFirewallRule()}
 
 ${honestTailoringRules()}
+
+${fitScopeRules()}
 
 ${accomplishmentStyleRules()}
 
@@ -151,11 +185,17 @@ function formatProposedChanges(suggestedChanges) {
 function strictReviewPrompt({ jobText, resumeText, suggestedChanges, honestContext, customInstructions }) {
   return `Return this JSON shape exactly:
 {
-  "fitBuckets": {
-    "base": { "requiredTech": 0-40, "requiredDomains": 0-25, "seniority": 0-15, "preferred": 0-10, "clarity": 0-10 },
-    "tailored": { "requiredTech": 0-40, "requiredDomains": 0-25, "seniority": 0-15, "preferred": 0-10, "clarity": 0-10 },
-    "liftReason": "one sentence on what the tailoring added"
-  },
+  "requirementCoverage": [
+    {
+      "category": "Required tech" | "Required experience" | "Required years" | "Preferred",
+      "requirement": "one concrete JD requirement",
+      "importance": "critical" | "high" | "medium" | "low",
+      "baseStatus": "covered" | "adjacent" | "missing",
+      "tailoredStatus": "covered" | "adjacent" | "missing",
+      "baseEvidence": "where the original resume supports it, or 'Not in resume'",
+      "tailoredEvidence": "where the polished resume supports it, or 'Not in resume'"
+    }
+  ],
   "strictReview": {
     "verdict": "STRONG FIT" | "REASONABLE FIT" | "STRETCH" | "DON'T APPLY",
     "verdictReason": "one-sentence reason",
@@ -181,15 +221,19 @@ function strictReviewPrompt({ jobText, resumeText, suggestedChanges, honestConte
 }
 
 Strict rules:
+- requirementCoverage: 6-16 most decision-relevant JD requirements. Include every hard requirement, every stated hard filter, and the few highest-impact preferred items. Do not include generic soft skills unless the JD makes them explicit requirements.
+- requirementCoverage.category must describe the requirement, not the resume section. Use "Required tech" for tools/languages/frameworks/platforms, "Required experience" for responsibilities/domain/work type, "Required years" for seniority/degree/certification/authorization/clearance filters, and "Preferred" for nice-to-have items only.
+- requirementCoverage.importance: "critical" for hard filters or must-haves that decide apply/skip; "high" for core required qualifications; "medium" for normal requirements; "low" for minor or preferred items.
+- requirementCoverage baseStatus and tailoredStatus compare the ORIGINAL selected resume scope vs. the polished resume after proposed changes. Use "covered" only for exact evidence, "adjacent" for related-but-not-exact evidence, and "missing" when unsupported.
 - Coverage status must be one of these literal strings only: "covered", "missing", "adjacent". Do not include symbols in JSON status values.
-- Coverage entries: 4-12 most important JD keywords across the four categories.
-- Gaps: only for missing keywords from required categories (skip preferred-only gaps unless severity is HIGH+).
+- Coverage entries: 4-12 most important JD keywords across the four categories, mirroring the tailoredStatus values from requirementCoverage for the user-visible review.
+- Gaps: only for missing keywords from required categories (skip preferred-only gaps unless severity is HIGH+). Never list a lifestyle/logistical condition (travel, relocation, on-site/remote, shift, on-call, overtime, weekends, physical, commute) as a gap — those are not qualification gaps and must not cap the score.
 - Gap evidenceType must be "exact", "adjacent", or "none". canHonestlyAdd means the exact missing skill can be added to the resume; it may be true only with exact evidence from the resume or optional honest context. evidenceType "adjacent" or "none" must use canHonestlyAdd=false.
 - Rewrites: 2-4 of the weakest original or polished bullets for this JD, using only facts present in the original resume or honest context.
 - Risk flags: 1-3 bullets that interviewers could probe in a way the candidate couldn't defend confidently.
 - topEdits: ordered by impact, max 3.
 - If the resume is genuinely wrong for the role, set verdict to "DON'T APPLY" and applyAsIs to false.
-- The app SUMS your fitBuckets and derives the final verdict from the total (<=45 DON'T APPLY, 46-69 STRETCH, 70-84 REASONABLE FIT, >=85 STRONG FIT), capping for the gaps you report (one HIGH gap caps the total at 79, two HIGH gaps at 69, three or more at 60; any BLOCKER gap forces DON'T APPLY). Make your verdict match what your own buckets and gaps imply.
+- The app derives numeric fit from requirementCoverage server-side. Do NOT provide numeric score buckets. The app converts statuses into scores, then caps for the gaps you report (one HIGH gap caps the total at 79, two HIGH gaps at 69, three or more at 60; any BLOCKER gap forces DON'T APPLY). Make your verdict match that evidence.
 
 ${fitScoringPrompt()}
 
@@ -230,14 +274,14 @@ export function buildStrictReviewPrompts({ jobText, resumeText, suggestedChanges
 }
 
 function fitScoringPrompt() {
-  return `Fit scoring (REQUIRED — be honest, do not inflate):
-Report fitBuckets as per-bucket integer subtotals; the app sums them and derives the verdict, so the same coverage judgments always produce the same score. Buckets and maxima:
-- requiredTech (0-40): required technical skills
-- requiredDomains (0-25): required experience domains
-- seniority (0-15): required years/seniority
-- preferred (0-10): preferred/nice-to-have
-- clarity (0-10): how directly the bullets prove the above
-Award each bucket in proportion to its covered vs missing keywords from your coverage table — count, don't vibe. Score the ORIGINAL selected resume scope as "base" and the polished resume as "tailored", bucket by bucket on the SAME scale. "tailored" may exceed "base" only where the applied edits surface real, supported evidence; an inserted JD term without exact evidence must DECREASE the tailored buckets, never increase them. If the base already covers the job, keep the two close and say so in "liftReason".`;
+  return `Fit scoring (REQUIRED — evidence only, no model-authored numbers):
+Return requirementCoverage rows only. The server calculates the score from those rows using fixed buckets:
+- requiredTech (40 pts): required tools, languages, frameworks, platforms, technical skills.
+- requiredDomains (25 pts): required work type, responsibilities, product/domain experience, engineering practices.
+- seniority (15 pts): required years, level, degree/certification, clearance, citizenship, or work authorization filters.
+- preferred (10 pts): preferred/nice-to-have items only.
+- clarity (10 pts): derived from how directly the tailored resume proves the covered/adjacent requirements and from risk flags.
+The same requirementCoverage must support both the numeric score and the verdict. "tailoredStatus" may improve over "baseStatus" only when the proposed changes surface real, supported evidence. Unsupported inserted JD terms must count as missing or adjacent, never covered.`;
 }
 
 function customInstructionsPrompt(customInstructions) {
@@ -291,10 +335,10 @@ function polishPrompt({ jobText, tailorScope, honestContext, customInstructions 
 For missingRequiredSkills, include only required JD skills/tools/experience that remain missing after your suggested changes. Use [] when there are no important required gaps. If evidenceType is "none", canHonestlyAdd must be false and the skill must not appear in any proposedText.
 For suggestedChanges:
 - Suggest only changes that materially improve fit or clarity for THIS job — typically 3-8, max 12. If the selected scope already covers the job well, return fewer, even zero; never rewrite a bullet just to reword it.
-- Target only IDs and fields present in <tailor_scope>. Only those are editable.
+- Target only IDs and fields present in <tailor_scope>. Only those are editable. Copy sectionId and entryId verbatim from the scope JSON — do not substitute the heading text or entry label for the id value.
 - Do not target omitted sections, identity, contact, education, or anything in <context_sections>.
 - <context_sections> is READ-ONLY supporting evidence (e.g. the candidate's Education kept in the resume but not tailored). You MAY cite it in an "evidence" field to support a change to a <tailor_scope> field, but you must NEVER propose a change to it and never restate it as a new suggestion. Any suggestion targeting a context section is discarded.
-- Use evidenceType "exact" only. If a useful JD keyword has adjacent or no evidence, report it under missingRequiredSkills instead of suggestedChanges.
+- Use evidenceType "exact" only. If a useful JD keyword has adjacent or no evidence, report it under missingRequiredSkills instead of suggestedChanges. If a missing required skill has exact evidence (resume or honest context), generate a suggestedChanges entry — do NOT only put it in missingRequiredSkills with canHonestlyAdd=true.
 - The evidence field must quote or closely paraphrase text that literally appears in the resume scope, the context sections, or honest context. Never infer environments, platforms, tools, or versions from plausibility (a clinic's workstations are not "Windows experience" unless the resume says Windows).
 - proposedText replaces exactly one field. Do not include bullets, markdown, JSON, LaTeX, or commentary inside proposedText.
 - Field text may contain <b>, <i>, or <u> inline formatting tokens. Keep those tokens around the spans you preserve; do not add new ones or any other tags.

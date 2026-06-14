@@ -19,10 +19,3 @@ export function buildResumeBlocks(text: string): ResumeBlock[] {
       text: line
     }));
 }
-
-export function blocksToText(blocks: ResumeBlock[]) {
-  return blocks
-    .map((block) => block.text.trim())
-    .filter(Boolean)
-    .join("\n");
-}

@@ -7,9 +7,7 @@ import {
   companyInitials,
   displayCompany,
   displayRole,
-  fitLabel,
-  fitScore,
-  fitTone,
+  appFitVerdict,
   nextAction
 } from "../../lib/applicationDisplay";
 
@@ -42,7 +40,12 @@ export function TrackerInspector({
     );
   }
 
-  const score = fitScore(selected);
+  const verdict = appFitVerdict(selected);
+  const verdictSource = selected.review?.verdict
+    ? "AI-judged"
+    : verdict
+    ? "Estimated"
+    : "Not scored";
 
   return (
     <>
@@ -66,14 +69,14 @@ export function TrackerInspector({
         <div className="figures-strip figures-strip--compact">
           <span className="figures-strip__item">
             <em>Fit</em>
-            <strong className={`application-fit application-fit--${fitTone(score)}`}>
-              {score === null ? "--" : `${score}%`}
+            <strong className={`application-fit application-fit--${verdict?.tone ?? "neutral"}`}>
+              {verdict ? verdict.label : "Not scored"}
             </strong>
           </span>
           <span className="figures-strip__divider" aria-hidden="true" />
           <span className="figures-strip__item">
-            <em>Match</em>
-            <strong className="is-prose">{fitLabel(score)}</strong>
+            <em>Source</em>
+            <strong className="is-prose">{verdictSource}</strong>
           </span>
         </div>
         <p className="application-detail-score__reason">

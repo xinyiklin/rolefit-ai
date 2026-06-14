@@ -6,6 +6,8 @@ import type { TailorMode } from "../../lib/tailorScope";
 import type { ResumeEditorActions } from "../../hooks/useResumeEditor";
 import type { TailorChangeTarget } from "../../resume/types";
 import { DOC_ZOOM_OPTIONS, type DocStyleControls } from "../../hooks/useDocStyle";
+import { verdictPillClass, type FitVerdict } from "../../hooks/useResumeAnalysis";
+import type { JobConstraint } from "../../lib/jobConstraints";
 import { FormatMenu } from "../FormatMenu";
 import { ResumeEditor } from "../editor/ResumeEditor";
 import { ReviewRail } from "../ReviewRail";
@@ -19,6 +21,12 @@ type ResumeTabProps = {
   hasResult: boolean;
   resultSourceLabel: string;
   scoreContext: string;
+  // Qualitative fit band (Strong fit / Reasonable fit / Stretch / Don't apply)
+  // + provenance. Null until a resume and job are loaded. Replaces the raw score
+  // number: the user wants the verdict, not a figure.
+  fitVerdict: FitVerdict | null;
+  // JD lifestyle/logistical conditions for the pre-apply advisory (not fit).
+  jobConstraints?: JobConstraint[];
   result: PolishedResume | null;
   resumeDiff: ResumeDiff | null;
   docStyle: DocStyleControls;
@@ -39,6 +47,8 @@ export function ResumeTab({
   hasResult,
   resultSourceLabel,
   scoreContext,
+  fitVerdict,
+  jobConstraints,
   result,
   resumeDiff,
   docStyle,
@@ -108,7 +118,16 @@ export function ResumeTab({
           </label>
           <FormatMenu docStyle={docStyle} />
           {exportControl}
-          {scoreContext ? <span className="studio-card__meta">{scoreContext}</span> : null}
+          {fitVerdict ? (
+            <span className="fit-readout" title={`${fitVerdict.label} — ${fitVerdict.source}`}>
+              <strong className={`verdict-pill verdict-pill--inline ${verdictPillClass(fitVerdict.verdict)}`}>
+                {fitVerdict.label}
+              </strong>
+              <span className="fit-readout__source">{fitVerdict.source}</span>
+            </span>
+          ) : scoreContext ? (
+            <span className="studio-card__meta">{scoreContext}</span>
+          ) : null}
         </div>
       </div>
 
@@ -137,7 +156,7 @@ export function ResumeTab({
 
         {hasReview && result ? (
           <div className="resume-workbench__rail">
-            <ReviewRail result={result} resume={editedResume} actions={actions} resumeDiff={resumeDiff} onHighlight={setHighlightTarget} onAddHonestContext={onAddHonestContext} />
+            <ReviewRail result={result} resume={editedResume} actions={actions} resumeDiff={resumeDiff} jobConstraints={jobConstraints} onHighlight={setHighlightTarget} onAddHonestContext={onAddHonestContext} />
           </div>
         ) : null}
       </div>
