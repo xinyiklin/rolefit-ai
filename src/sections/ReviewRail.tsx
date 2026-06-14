@@ -5,6 +5,7 @@ import type { ResumeData, ResumeEntry } from "../lib/resumeData";
 import { renderInlineMarks, stripInlineMarks } from "../lib/inlineMarks";
 import type { ResumeEditorActions } from "../hooks/useResumeEditor";
 import type { TailorChangeTarget } from "../resume/types";
+import type { JobConstraint } from "../lib/jobConstraints";
 
 type BulletTarget = { sectionId: string; entryId: string; bulletId: string };
 
@@ -14,6 +15,9 @@ type ReviewRailProps = {
   actions: ResumeEditorActions;
   // Whole-resume original-vs-tailored diff — the anti-fabrication read-through.
   resumeDiff: ResumeDiff | null;
+  // Lifestyle/logistical conditions in the JD — shown as a pre-apply advisory,
+  // separate from fit (they never move the verdict).
+  jobConstraints?: JobConstraint[];
   onHighlight?: (target: TailorChangeTarget | null) => void;
   // Called when the user clicks "Add evidence" on a gap or missing-skill row.
   // Opens the Options menu so they can fill in honest context and re-run Polish.
@@ -96,7 +100,7 @@ function applySuggestionTarget(actions: ResumeEditorActions, suggestion: TailorS
 // bullet rewrite as an actionable card — accept it, modify it before applying,
 // undo it, or apply everything that still matches. A card goes stale when its
 // bullet was hand-edited away (apply manually via Copy in that case).
-export function ReviewRail({ result, resume, actions, resumeDiff, onHighlight, onAddHonestContext }: ReviewRailProps) {
+export function ReviewRail({ result, resume, actions, resumeDiff, jobConstraints, onHighlight, onAddHonestContext }: ReviewRailProps) {
   const sr = result.strictReview;
   const suggestions = result.suggestedChanges ?? [];
   // Text applied per rewrite index (Accept stores the suggestion, Apply after
@@ -274,6 +278,28 @@ export function ReviewRail({ result, resume, actions, resumeDiff, onHighlight, o
         </div>
       )}
       {result.reviewedBy ? <p className="review-rail__byline">Reviewed by {result.reviewedBy}</p> : null}
+
+      {jobConstraints?.length ? (
+        <section className="review-rail__section rr-advisory" aria-label="Before you apply">
+          <header className="review-rail__head">
+            <h3>Before you apply</h3>
+          </header>
+          <p className="rr-advisory__note">
+            These are the job's conditions, not fit factors — check they work for you.
+          </p>
+          <ul className="rr-advisory__list">
+            {jobConstraints.map((c) => (
+              <li key={c.kind} className="rr-advisory__item">
+                <AlertCircle size={13} aria-hidden="true" />
+                <span>
+                  <strong>{c.label}</strong>
+                  <span className="rr-advisory__detail">{c.detail}</span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
 
       {result.changeSummary?.length ? (
         <section className="review-rail__section review-rail__change-summary" aria-label="What changed">

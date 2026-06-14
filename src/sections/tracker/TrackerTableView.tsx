@@ -5,8 +5,7 @@ import {
   companyInitials,
   displayCompany,
   displayRole,
-  fitScore,
-  fitTone,
+  appFitVerdict,
   formatCompactDate,
   nextAction,
   priorityFor
@@ -77,7 +76,7 @@ export function TrackerTableView({
               <span className="applications-table__month-count">{rows.length}</span>
             </div>
             {rows.map((app) => {
-              const score = fitScore(app);
+              const verdict = appFitVerdict(app);
               const isSelected = selectedId === app.id;
               return (
                 <button
@@ -119,8 +118,8 @@ export function TrackerTableView({
                     {nextAction(app)}
                   </span>
                   <span role="cell">
-                    <span className={`application-fit application-fit--${fitTone(score)}`}>
-                      {score === null ? "--" : `${score}%`}
+                    <span className={`application-fit application-fit--${verdict?.tone ?? "neutral"}`}>
+                      {verdict ? verdict.label : "--"}
                     </span>
                   </span>
                   <ChevronRight size={14} aria-hidden="true" />

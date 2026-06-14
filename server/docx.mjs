@@ -127,5 +127,3 @@ export async function extractDocxResume(docxBase64) {
     };
   });
 }
-
-export { execFileAsync };

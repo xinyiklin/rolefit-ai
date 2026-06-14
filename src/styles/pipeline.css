@@ -1,7 +1,5 @@
 /* -------- Pipeline tab -------- */
 
-.pipeline-card { gap: var(--s3); }
-
 .pipeline-note {
   margin: 0;
   color: var(--ink-faint);

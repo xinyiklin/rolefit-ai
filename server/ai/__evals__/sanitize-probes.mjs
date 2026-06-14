@@ -15,7 +15,8 @@ import {
   applyGapCapsAndVerdict,
   reconcileFitVerdict,
   sanitizeTailorSuggestions,
-  scoreFromBuckets
+  scoreFromBuckets,
+  scoreFromRequirementCoverage
 } from "../sanitize.mjs";
 
 const scope = {
@@ -119,6 +120,38 @@ const checks = [
     ).length === 0;
   })()],
 
+  // --- skills-row targets: bulletId is meaningless for non-bullet fields and
+  // --- must not block the target match (regression: a model attaching a stray
+  // --- bulletId to a skill add silently dropped as unknownTarget, while the
+  // --- changeSummary still claimed the edit landed) ---
+  ["skill add with stray bulletId still resolves", (() => {
+    const skillScope = { sections: [{ id: "sk", heading: "Technical Skills", type: "skills", entries: [
+      { id: "row-tool", titleLeft: "Tooling & Cloud", titleRight: "", subtitleLeft: "Git, Docker, Render", subtitleRight: "", bullets: [] }
+    ] }] };
+    return sanitizeTailorSuggestions(
+      [{ target: { sectionId: "sk", entryId: "row-tool", bulletId: "b1", field: "skill" }, proposedText: "Git, Docker, Render, Microsoft Office (Word, Excel, PowerPoint)", evidenceType: "exact", evidence: "honest context: uses Microsoft Office daily for documentation", hits: ["Microsoft Office"] }],
+      skillScope, {}, "Exact evidence: I use Microsoft Office (Word, Excel, PowerPoint) daily.", "Requirements: Microsoft Office for documentation and reporting."
+    ).length === 1;
+  })()],
+  ["skill add with no bulletId resolves", (() => {
+    const skillScope = { sections: [{ id: "sk", heading: "Technical Skills", type: "skills", entries: [
+      { id: "row-tool", titleLeft: "Tooling & Cloud", titleRight: "", subtitleLeft: "Git, Docker, Render", subtitleRight: "", bullets: [] }
+    ] }] };
+    return sanitizeTailorSuggestions(
+      [{ target: { sectionId: "sk", entryId: "row-tool", field: "skill" }, proposedText: "Git, Docker, Render, Microsoft Office (Word, Excel, PowerPoint)", evidenceType: "exact", evidence: "honest context: uses Microsoft Office daily for documentation", hits: ["Microsoft Office"] }],
+      skillScope, {}, "Exact evidence: I use Microsoft Office (Word, Excel, PowerPoint) daily.", "Requirements: Microsoft Office for documentation and reporting."
+    ).length === 1;
+  })()],
+  ["skill add with label text as entryId still drops (not auto-correctable)", (() => {
+    const skillScope = { sections: [{ id: "sk", heading: "Technical Skills", type: "skills", entries: [
+      { id: "row-tool", titleLeft: "Tooling & Cloud", titleRight: "", subtitleLeft: "Git, Docker, Render", subtitleRight: "", bullets: [] }
+    ] }] };
+    return sanitizeTailorSuggestions(
+      [{ target: { sectionId: "sk", entryId: "Tooling & Cloud", field: "skill" }, proposedText: "Git, Docker, Render, Microsoft Office (Word, Excel, PowerPoint)", evidenceType: "exact", evidence: "honest context: uses Microsoft Office daily for documentation", hits: ["Microsoft Office"] }],
+      skillScope, {}, "Exact evidence: I use Microsoft Office (Word, Excel, PowerPoint) daily.", "Requirements: Microsoft Office for documentation and reporting."
+    ).length === 0;
+  })()],
+
   // --- conservative verdict/score reconciliation (no-buckets fallback path) ---
   ["pessimistic verdict clamps base AND tailored down", JSON.stringify(reconcileFitVerdict({ base: 58, tailored: 59, liftReason: "" }, DONT).aiScore) === JSON.stringify({ base: 45, tailored: 45, liftReason: "" })],
   ["optimistic verdict downgrades, scores intact", (() => {
@@ -141,6 +174,28 @@ const checks = [
   })()],
   ["sparse buckets rejected (needs >=3)", scoreFromBuckets({ base: { requiredTech: 40 }, tailored: { requiredTech: 40 } }) === null],
   ["missing buckets falls back to null", scoreFromBuckets(undefined) === null],
+  ["requirement coverage derives base/tailored without model numbers", (() => {
+    const s = scoreFromRequirementCoverage([
+      { category: "Required tech", requirement: "React", importance: "high", baseStatus: "covered", tailoredStatus: "covered" },
+      { category: "Required tech", requirement: "TypeScript", importance: "high", baseStatus: "adjacent", tailoredStatus: "covered" },
+      { category: "Required experience", requirement: "REST API development", importance: "high", baseStatus: "covered", tailoredStatus: "covered" },
+      { category: "Required years", requirement: "Entry level", importance: "medium", baseStatus: "covered", tailoredStatus: "covered" },
+      { category: "Preferred", requirement: "Healthcare domain", importance: "low", baseStatus: "missing", tailoredStatus: "adjacent" }
+    ], { riskFlags: [] });
+    return s.base === 77 && s.tailored === 95 && /TypeScript/.test(s.liftReason);
+  })()],
+  ["requirement coverage weighting makes critical misses hurt more", (() => {
+    const s = scoreFromRequirementCoverage([
+      { category: "Required tech", requirement: "Java", importance: "critical", baseStatus: "missing", tailoredStatus: "missing" },
+      { category: "Required tech", requirement: "Git", importance: "low", baseStatus: "covered", tailoredStatus: "covered" },
+      { category: "Required experience", requirement: "Backend APIs", importance: "high", baseStatus: "covered", tailoredStatus: "covered" },
+      { category: "Required years", requirement: "New grad", importance: "medium", baseStatus: "covered", tailoredStatus: "covered" }
+    ], { riskFlags: [] });
+    return s.tailored === 61;
+  })()],
+  ["sparse requirement coverage falls back to null", scoreFromRequirementCoverage([
+    { category: "Required tech", requirement: "React", importance: "high", baseStatus: "covered", tailoredStatus: "covered" }
+  ], { riskFlags: [] }) === null],
   ["BLOCKER gap caps both scores into DON'T-APPLY band", (() => {
     const r = applyGapCapsAndVerdict({ base: 73, tailored: 83, liftReason: "" }, { gaps: [{ severity: "BLOCKER" }] });
     return r.aiScore.base === 45 && r.aiScore.tailored === 45 && r.verdict === DONT;

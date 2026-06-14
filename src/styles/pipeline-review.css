@@ -1,25 +1,6 @@
-/* ----- Pipeline: recruiter-review snapshot (captured on Apply) ----- */
-.pipeline-review {
-  display: grid;
-  gap: var(--s2);
-}
-
-.pipeline-review__head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: var(--s2);
-  margin: 0;
-}
-
-.pipeline-review__reason {
-  font-size: 0.8rem;
-  line-height: 1.45;
-  color: var(--ink-muted);
-}
-
 /* Verdict badge — tinted pill, sentence case (no uppercase-mono shouty text).
-   Matches the status-chip vocabulary: full border, tinted fill, no side-stripe. */
+   Matches the status-chip vocabulary: full border, tinted fill, no side-stripe.
+   Loaded after review.css so this definition wins for the shared verdict-pill. */
 .verdict-pill {
   display: inline-flex;
   align-items: center;
@@ -59,91 +40,4 @@
   background: var(--card-soft);
   color: var(--ink-muted);
   border-color: var(--hairline);
-}
-
-.pipeline-review__list {
-  margin: 0;
-  list-style: none;
-  padding: var(--s2) var(--s3) var(--s3);
-  display: grid;
-  gap: var(--s2);
-}
-
-.pipeline-review__item {
-  display: grid;
-  gap: 1px;
-  font-size: 0.8rem;
-  line-height: 1.4;
-}
-
-.pipeline-review__item-main { color: var(--ink-strong); font-weight: 500; }
-.pipeline-review__item-sub { color: var(--ink-muted); }
-
-.pipeline-review__gap {
-  display: flex;
-  align-items: baseline;
-  gap: var(--s2);
-  font-size: 0.8rem;
-  line-height: 1.4;
-  color: var(--ink-muted);
-}
-
-/* Gap severity chip — sentence case labels; mono only for the identifier badge */
-.gap-sev {
-  flex: none;
-  display: inline-block;
-  min-width: 52px;
-  text-align: center;
-  padding: 0 6px;
-  border-radius: var(--r-pill);
-  border: 1px solid transparent;
-  font-family: var(--font-ui);
-  font-size: 0.67rem;
-  font-weight: 500;
-  /* Sentence case */
-  background: var(--card-soft);
-  color: var(--ink-faint);
-  border-color: var(--hairline);
-}
-
-.gap-sev--blocker,
-.gap-sev--high {
-  background: var(--danger-soft);
-  color: var(--danger);
-  border-color: var(--danger-line);
-}
-
-.gap-sev--medium {
-  background: var(--warm-veil);
-  color: var(--warm);
-  border-color: var(--warm-soft);
-}
-
-.pipeline-review__angle {
-  margin: 0;
-  font-size: 0.8rem;
-  line-height: 1.45;
-  color: var(--ink-muted);
-}
-
-/* "Cover-letter angle" label — sentence case, NOT uppercase-mono */
-.pipeline-review__angle-label {
-  margin-right: 6px;
-  font-size: 0.72rem;
-  font-weight: 600;
-  color: var(--accent-deep);
-}
-
-/* "Sent tailored / original" chip in the pipeline detail meta */
-.pipeline-tag {
-  font-family: var(--font-ui);
-  font-size: 0.66rem;
-  font-weight: 600;
-  letter-spacing: 0.01em;
-  color: var(--accent-deep);
-  background: var(--accent-soft);
-  border: 1px solid var(--accent-veil);
-  padding: 1px var(--s2);
-  border-radius: var(--r-pill);
-  text-transform: none;
 }

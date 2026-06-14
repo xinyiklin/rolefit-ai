@@ -263,6 +263,30 @@
   flex: none;
 }
 
+/* Fit verdict readout in the resume header: the same color-coded band the
+   review rail uses (verdict-pill), shrunk to toolbar scale, with a quiet
+   provenance note (AI-judged vs Estimated) beside it. The user wants the
+   verdict at a glance, not a raw number. */
+.fit-readout {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+/* Scoped under .fit-readout so this wins over the base .verdict-pill rules in
+   review.css / pipeline-review.css, which import after studio.css. */
+.fit-readout .verdict-pill--inline {
+  min-height: 22px;
+  padding: 0 var(--s2);
+  font-size: 0.72rem;
+}
+
+.fit-readout__source {
+  color: var(--ink-soft);
+  font-size: 0.72rem;
+}
+
 /* PanelHeading (reused inside studio cards) */
 .panel__heading {
   display: flex;
@@ -345,14 +369,6 @@
   box-shadow: 0 0 0 3px var(--accent-glow);
 }
 
-.cover-letter-output {
-  min-height: 320px;
-  font-family: var(--font-ui);
-  font-size: 0.92rem;
-  line-height: 1.6;
-  background: var(--card-elev);
-}
-
 /* Page-zoom select beside the Format menu (Google-Docs style). */
 .doc-zoom {
   display: inline-flex;
@@ -424,8 +440,7 @@
 }
 
 /* Label — left side, ink-soft, slightly condensed. */
-.ledger-row dt,
-.ledger-row__label {
+.ledger-row dt {
   flex: none;
   color: var(--ink-soft);
   font-size: 0.78rem;
@@ -445,8 +460,7 @@
 }
 
 /* Value — right side, mono, tabular-nums, ink-strong. */
-.ledger-row dd,
-.ledger-row__value {
+.ledger-row dd {
   flex: none;
   margin: 0;
   font-family: var(--font-mono);

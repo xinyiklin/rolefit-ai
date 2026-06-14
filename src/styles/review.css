@@ -1,69 +1,5 @@
 
 
-.score-meter { display: grid; gap: var(--s1); }
-
-.score-meter__label {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--s3);
-  /* Label side: ink-faint, harmonized with ledger vocabulary */
-  color: var(--ink-faint);
-  font-size: 0.78rem;
-  font-weight: 500;
-}
-
-.score-meter__label > :last-child {
-  /* Value side: mono tabular-nums, ink-strong — ledger vocabulary */
-  font-family: var(--font-mono);
-  font-variant-numeric: tabular-nums;
-  font-feature-settings: "tnum";
-  color: var(--ink-strong);
-  font-weight: 600;
-}
-
-.score-meter__track {
-  height: 5px;
-  overflow: hidden;
-  border-radius: var(--r-pill);
-  background: var(--hairline-soft);
-}
-
-.score-meter__fill {
-  height: 100%;
-  border-radius: inherit;
-  background: linear-gradient(90deg, var(--accent) 0%, var(--accent-deep) 100%);
-  transition: width 380ms var(--ease);
-}
-
-.stat {
-  min-height: 64px;
-  padding: var(--s3);
-  border: 1px solid var(--hairline);
-  border-radius: var(--r-md);
-  background: var(--card-elev);
-}
-
-.stat span {
-  margin: 0;
-  color: var(--ink-soft);
-  font-size: 0.68rem;
-  font-weight: 600;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-}
-
-.stat strong {
-  display: block;
-  margin-top: var(--s1);
-  color: var(--ink-strong);
-  font-family: var(--font-ui);
-  font-weight: 600;
-  font-size: 1.4rem;
-  line-height: 1;
-  font-feature-settings: "tnum", "lnum";
-}
-
 .mini-chip-list { display: flex; flex-wrap: wrap; gap: var(--s1); }
 
 .mini-chip {
@@ -171,8 +107,6 @@
   color: var(--warm);
 }
 
-.chip-list { display: flex; flex-wrap: wrap; gap: var(--s1); }
-
 .chip {
   display: inline-flex;
   align-items: center;
@@ -260,8 +194,6 @@
 }
 
 /* Gap cards */
-.gap-list { display: grid; gap: var(--s3); }
-
 .severity-tag {
   display: inline-flex;
   align-items: center;
@@ -336,6 +268,49 @@
   margin: 0;
   color: var(--ink-soft);
   font-size: 0.8rem;
+}
+
+/* "Before you apply" advisory — the job's lifestyle/logistical conditions.
+   Warm caution tone (not danger): these don't block, they're for the user to
+   weigh personally. Kept visually distinct from fit gaps so it's never read as
+   a fit penalty. */
+.rr-advisory__note {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 0.74rem;
+}
+
+.rr-advisory__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--s2);
+}
+
+.rr-advisory__item {
+  display: grid;
+  grid-template-columns: 14px 1fr;
+  align-items: start;
+  gap: var(--s2);
+  font-size: 0.8rem;
+  color: var(--ink);
+}
+
+.rr-advisory__item svg {
+  color: var(--warm);
+  margin-top: 2px;
+}
+
+.rr-advisory__item strong {
+  font-weight: 600;
+}
+
+.rr-advisory__detail {
+  display: block;
+  color: var(--ink-soft);
+  font-size: 0.74rem;
+  text-transform: lowercase;
 }
 
 .review-rail__list {

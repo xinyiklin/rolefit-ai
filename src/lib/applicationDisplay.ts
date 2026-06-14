@@ -1,4 +1,6 @@
 import type { Application, ApplicationStatus } from "../hooks/useApplications";
+import type { StrictReviewVerdict } from "../resume/types";
+import { VERDICT_LABEL, VERDICT_TONE, verdictFromScore } from "./fitVerdict";
 
 export const STATUS_LABEL: Record<ApplicationStatus, string> = {
   interested: "Saved",
@@ -26,12 +28,6 @@ export function displayRole(app: Application) {
   return app.role?.trim() || "Role not set";
 }
 
-export function displayTitle(app: Application) {
-  const company = displayCompany(app);
-  const role = displayRole(app);
-  return role === "Role not set" ? company : `${company} - ${role}`;
-}
-
 export function companyInitials(name: string) {
   const words = name
     .replace(/[^a-z0-9\s]/gi, " ")
@@ -52,26 +48,33 @@ export function fitScore(app: Application) {
     : null;
 }
 
-// Score -> band. Thresholds MIRROR verdictForScore / VERDICT_SCORE_BANDS in
-// server/ai/sanitize.mjs (the single source of truth: STRONG FIT >=85,
-// REASONABLE FIT >=70, STRETCH >=46, DON'T APPLY <46). They MUST stay in sync —
-// server .mjs and client .ts can't import each other. Previously these used
-// 85/75/60, so a STRETCH-band score (46-69) showed "Weak match" on Apply while
-// the polish pane showed "STRETCH" for the identical number.
-export function fitLabel(score: number | null) {
-  if (score === null) return "Not scored";
-  if (score >= 85) return "Strong match";
-  if (score >= 70) return "Good match";
-  if (score >= 46) return "Stretch";
-  return "Weak match";
-}
-
+// Score -> tone (fit-color class only). Thresholds MIRROR verdictForScore in
+// server/ai/sanitize.mjs (STRONG FIT >=85, REASONABLE FIT >=70, STRETCH >=46,
+// DON'T APPLY <46) and verdictFromScore in lib/fitVerdict.ts — keep in sync. The
+// fit LABEL now always comes from the shared verdict vocabulary (appFitVerdict /
+// fitVerdict.ts) so the tracker, review pane, and resume header never disagree.
+// The old fitLabel "Strong/Good/Stretch/Weak match" vocabulary was removed — it
+// was the source of the tracker-vs-review mismatch.
 export function fitTone(score: number | null) {
   if (score === null) return "neutral";
   if (score >= 85) return "strong";
   if (score >= 70) return "good";
   if (score >= 46) return "stretch";
   return "weak";
+}
+
+// The application's fit as a VERDICT band, in the SAME vocabulary the review
+// pane and resume header use — so the tracker can never show "Good match" while
+// strict review says "Reasonable fit". Prefer the verdict captured at apply time
+// (the real, gap-capped strict-review verdict); otherwise derive it from the
+// stored score. Label AND tone come from the same verdict so they agree.
+export function appFitVerdict(
+  app: Application
+): { verdict: StrictReviewVerdict; label: string; tone: "strong" | "good" | "stretch" | "weak" } | null {
+  const stored = app.review?.verdict as StrictReviewVerdict | undefined;
+  const verdict = stored && VERDICT_LABEL[stored] ? stored : verdictFromScore(fitScore(app));
+  if (!verdict) return null;
+  return { verdict, label: VERDICT_LABEL[verdict], tone: VERDICT_TONE[verdict] };
 }
 
 export function nextAction(app: Application) {

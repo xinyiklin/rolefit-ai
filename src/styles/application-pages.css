@@ -222,13 +222,16 @@
   font-feature-settings: "tnum";
 }
 
+/* Now a fit VERDICT word (Reasonable fit / Don't apply), not a "76%" figure —
+   so it uses the UI font, not mono ("Mono Means Data" is for numbers). */
 .application-fit {
   display: inline-flex;
   justify-content: center;
   min-width: 42px;
-  font-family: var(--font-mono);
-  font-size: 0.72rem;
-  font-weight: 700;
+  font-family: var(--font-ui);
+  font-size: 0.74rem;
+  font-weight: 600;
+  white-space: nowrap;
   color: var(--ink-soft);
 }
 
@@ -584,7 +587,10 @@
 
 .applications-table__row {
   display: grid;
-  grid-template-columns: minmax(150px, 1.3fr) minmax(140px, 1fr) 112px 96px 82px minmax(150px, 1fr) 68px 18px;
+  /* Flexible TEXT columns (company / role / next-action) carry low mins so they
+     ellipsis-truncate and yield space when the inspector narrows the table —
+     the fixed FIT verdict column must never be the one clipped. */
+  grid-template-columns: minmax(120px, 1.3fr) minmax(112px, 1fr) 104px 88px 78px minmax(120px, 1fr) 104px 18px;
   align-items: center;
   gap: var(--s3);
   min-height: 52px;
@@ -717,24 +723,6 @@ button.applications-table__row {
   line-height: 1.35;
 }
 
-/* application-side-card still used in modal interview/documents tabs — keep */
-.application-side-card {
-  display: grid;
-  gap: var(--s2);
-  padding: var(--s3);
-  border: 1px solid var(--hairline-soft);
-  border-radius: var(--r-md);
-  background: var(--card);
-}
-
-.application-side-card h4 {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--s2);
-  color: var(--ink-strong);
-  font-size: 0.76rem;
-}
-
 /* Hairline-divided side panel sections: no nested box, content sits on the panel sheet */
 .side-section {
   display: grid;
@@ -762,7 +750,6 @@ button.applications-table__row {
   line-height: 1.4;
 }
 
-.application-side-card p,
 .application-side-empty,
 .calendar-empty-note,
 .analytics-empty {

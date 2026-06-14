@@ -7,8 +7,7 @@ import {
   companyInitials,
   displayCompany,
   displayRole,
-  fitScore,
-  fitTone,
+  appFitVerdict,
   formatCompactDate,
   nextAction
 } from "../../lib/applicationDisplay";
@@ -59,7 +58,7 @@ export function TrackerBoardView({
             <div className="pipeline-column__cards">
               {cards.length ? (
                 cards.map((app) => {
-                  const score = fitScore(app);
+                  const verdict = appFitVerdict(app);
                   return (
                     <button
                       type="button"
@@ -90,8 +89,8 @@ export function TrackerBoardView({
                       </span>
                       <span className="pipeline-cardlet__foot">
                         <span>{app.source || "Local"}</span>
-                        <strong className={`application-fit application-fit--${fitTone(score)}`}>
-                          {score === null ? "--" : `${score}%`}
+                        <strong className={`application-fit application-fit--${verdict?.tone ?? "neutral"}`}>
+                          {verdict ? verdict.label : "--"}
                         </strong>
                       </span>
                     </button>

@@ -28,12 +28,3 @@ export function saveDefaultExportFormat(format: ExportFormat): void {
     // Storage unavailable or over quota — the choice just won't persist.
   }
 }
-
-export function clearDefaultExportFormat(): void {
-  if (typeof localStorage === "undefined") return;
-  try {
-    localStorage.removeItem(KEY);
-  } catch {
-    // Ignore — nothing to clear if storage is unavailable.
-  }
-}

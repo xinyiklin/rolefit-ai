@@ -136,7 +136,6 @@ select,
 .textarea--job { min-height: 200px; }
 .textarea--resume { min-height: 200px; }
 
-.field--wide { grid-column: 1 / -1; }
 .field--inline {
   display: flex;
   align-items: center;
