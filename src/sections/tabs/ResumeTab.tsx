@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 
 import type { PolishedResume, ResumeDiff } from "../../resumeEngine";
 import type { ResumeData } from "../../lib/resumeData";
+import type { TailorMode } from "../../lib/tailorScope";
 import type { ResumeEditorActions } from "../../hooks/useResumeEditor";
 import type { TailorChangeTarget } from "../../resume/types";
 import { DOC_ZOOM_OPTIONS, type DocStyleControls } from "../../hooks/useDocStyle";
@@ -21,8 +22,8 @@ type ResumeTabProps = {
   result: PolishedResume | null;
   resumeDiff: ResumeDiff | null;
   docStyle: DocStyleControls;
-  tailorSectionIds: string[];
-  setTailorSectionIds: (ids: string[] | ((current: string[]) => string[])) => void;
+  tailorModes: Record<string, TailorMode>;
+  onSetTailorMode: (sectionId: string, mode: TailorMode) => void;
   exportControl?: ReactNode;
   onAddHonestContext?: (keyword: string) => void;
 };
@@ -41,8 +42,8 @@ export function ResumeTab({
   result,
   resumeDiff,
   docStyle,
-  tailorSectionIds,
-  setTailorSectionIds,
+  tailorModes,
+  onSetTailorMode,
   exportControl,
   onAddHonestContext
 }: ResumeTabProps) {
@@ -75,12 +76,6 @@ export function ResumeTab({
   const hasSuggestions = Boolean(result?.suggestedChanges?.length);
   const title = hasSuggestions || result?.source === "local" ? "Resume draft" : hasResult ? "Tailored resume" : "Resume draft";
   const sourceLabel = hasSuggestions ? "AI suggestions" : result?.source === "local" ? "Local analysis" : resultSourceLabel;
-  function toggleTailorSection(sectionId: string, selected: boolean) {
-    setTailorSectionIds((current) => {
-      if (selected) return current.includes(sectionId) ? current : [...current, sectionId];
-      return current.filter((id) => id !== sectionId);
-    });
-  }
   return (
     <section className="studio-card studio-card--flush">
       <div className="studio-card__head">
@@ -129,8 +124,8 @@ export function ResumeTab({
               data={editedResume}
               actions={actions}
               style={docStyle.cssVars}
-              tailorSectionIds={tailorSectionIds}
-              onToggleTailorSection={toggleTailorSection}
+              tailorModes={tailorModes}
+              onSetTailorMode={onSetTailorMode}
               highlightTarget={highlightTarget}
             />
           ) : (

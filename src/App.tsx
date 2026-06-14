@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 
 import {
   analyzeResumeText,
@@ -31,7 +31,7 @@ import { buildCandidateFactsContext, mergeHonestContext } from "./lib/candidateF
 import { extractJobPosting, type ExtractedJobTracking } from "./lib/jobExtract";
 import { buildResumeBlocks } from "./lib/resumeBlocks";
 import { serializeResumeData, toTemplateSchema } from "./lib/resumeData";
-import { buildTailorScope, defaultTailorSectionIds, tailorScopeToText } from "./lib/tailorScope";
+import { buildTailorScope, defaultTailorModes, tailorScopeToText, type TailorMode } from "./lib/tailorScope";
 
 import { AiMenu } from "./sections/AiMenu";
 import { ReviewerSettings } from "./sections/ReviewerSettings";
@@ -261,7 +261,20 @@ function App() {
     actions: resumeEditorActions
   } = useResumeEditor();
   const currentResumeText = serializedResume || result?.polishedText || "";
-  const [tailorSectionIds, setTailorSectionIds] = useState<string[]>([]);
+  // Per-section tailoring choice. Off is the implicit default (absent key); the
+  // map stores only "tailor"/"include" so the three states are mutually exclusive
+  // by construction.
+  const [tailorModes, setTailorModes] = useState<Record<string, TailorMode>>({});
+  // Stable identity so the memoized SectionEditor isn't re-rendered for every
+  // section on each App render (setTailorModes is itself stable).
+  const setTailorMode = useCallback((sectionId: string, mode: TailorMode) => {
+    setTailorModes((current) => {
+      const next = { ...current };
+      if (mode === "off") delete next[sectionId];
+      else next[sectionId] = mode;
+      return next;
+    });
+  }, []);
   // User typography for the HTML resume page (Format menu): persisted CSS vars
   // applied to the editor and the print mirror.
   const docStyle = useDocStyle();
@@ -307,13 +320,16 @@ function App() {
   const resumeSectionIdsKey = editedResume?.sections.map((section) => section.id).join("|") ?? "";
   useEffect(() => {
     if (!editedResume) {
-      setTailorSectionIds([]);
+      setTailorModes({});
       return;
     }
     const validIds = new Set(editedResume.sections.map((section) => section.id));
-    setTailorSectionIds((current) => {
-      const preserved = current.filter((id) => validIds.has(id));
-      return preserved.length ? preserved : defaultTailorSectionIds(editedResume);
+    setTailorModes((current) => {
+      const preserved: Record<string, TailorMode> = {};
+      for (const [id, mode] of Object.entries(current)) {
+        if (validIds.has(id)) preserved[id] = mode;
+      }
+      return Object.keys(preserved).length ? preserved : defaultTailorModes(editedResume);
     });
     // Only reset when sections are added/removed/reparsed. Heading/text edits
     // should not wipe the user's explicit scope choices.
@@ -335,8 +351,12 @@ function App() {
   // we tailor against, while `jobUrl` is optional metadata saved with the
   // application for pipeline tracking only — it is never sent to the model.
   const canPolish = useMemo(() => {
-    return Boolean(editedResume && tailorSectionIds.length > 0 && jobDescription.trim().length > 40);
-  }, [editedResume, jobDescription, tailorSectionIds.length]);
+    return Boolean(
+      editedResume &&
+        Object.values(tailorModes).some((mode) => mode === "tailor") &&
+        jobDescription.trim().length > 40
+    );
+  }, [editedResume, jobDescription, tailorModes]);
 
   const combinedJobText = jobDescription;
 
@@ -404,8 +424,8 @@ function App() {
     ? "Add a resume (Resume menu) and the job description (Job menu) to polish."
     : !jobReady
     ? "Add the job description from the Job menu to polish."
-    : !editedResume || !tailorSectionIds.length
-    ? "Load a resume and select at least one resume section to tailor."
+    : !editedResume || !Object.values(tailorModes).some((mode) => mode === "tailor")
+    ? "Load a resume and set at least one section to Tailor."
     : "Add more resume text in the Resume menu (a few lines at least).";
   const selectedTemplate = templates.find((t) => t.id === selectedTemplateId) ?? null;
   const outputTabs: OutputTabDescriptor[] = [
@@ -773,15 +793,27 @@ function App() {
       setPolishStatus("Load a resume before polishing.");
       return;
     }
-    const selectedIds = tailorSectionIds.length ? tailorSectionIds : defaultTailorSectionIds(editedResume);
-    const tailorScope = buildTailorScope(editedResume, selectedIds);
+    // Fall back to the default modes if the user never touched the controls.
+    const modes = Object.keys(tailorModes).length ? tailorModes : defaultTailorModes(editedResume);
+    const tailorIds = Object.keys(modes).filter((id) => modes[id] === "tailor");
+    const contextIds = Object.keys(modes).filter((id) => modes[id] === "include");
+    const tailorScope = buildTailorScope(editedResume, tailorIds, contextIds);
+    // Context-inclusive text (read-only Include sections appended) — used by the
+    // AI-path polished/fit/cover derivations so those sections count and can be
+    // cited. The editable-only variant powers the gate and the LOCAL fallback,
+    // which rewrites its input: feeding it editable-only keeps the deterministic
+    // fallback from rewording an Include section (the read-only promise holds on
+    // every path, not just the AI one).
     const scopedResumeText = tailorScopeToText(tailorScope);
-    if (!tailorScope.sections.length || scopedResumeText.trim().length < 40) {
-      setPolishStatus("Select at least one editable resume section to tailor.");
+    const editableResumeText = tailorScopeToText(tailorScope, true);
+    // Gate on EDITABLE sections: a context-only scope (Include but nothing to
+    // Tailor) has no targets, so it cannot be polished.
+    if (!tailorScope.sections.length || editableResumeText.trim().length < 40) {
+      setPolishStatus("Set at least one resume section to Tailor.");
       return;
     }
 
-    const fallbackBase = polishResume(scopedResumeText, combinedJobText);
+    const fallbackBase = polishResume(editableResumeText, combinedJobText);
     const fallback = includeCoverLetter
       ? { ...fallbackBase, coverLetterText: draftCoverLetter(resumeText, combinedJobText, fallbackBase.polishedText) }
       : fallbackBase;
@@ -1337,8 +1369,8 @@ function App() {
               result={result}
               resumeDiff={resumeDiff}
               docStyle={docStyle}
-              tailorSectionIds={tailorSectionIds}
-              setTailorSectionIds={setTailorSectionIds}
+              tailorModes={tailorModes}
+              onSetTailorMode={setTailorMode}
               onAddHonestContext={handleAddHonestContext}
               exportControl={
                 <ExportMenu

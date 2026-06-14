@@ -43,8 +43,58 @@ function trimText(value, max = 1200) {
   return String(value ?? "").trim().slice(0, max);
 }
 
+function normalizeScopeSection(section) {
+  const id = trimText(section?.id, 120);
+  const heading = trimText(section?.heading, 120);
+  if (!id || !heading) return null;
+  const type = section?.type === "skills" ? "skills" : section?.type === "summary" ? "summary" : "standard";
+  const entries = Array.isArray(section?.entries) ? section.entries : [];
+  return {
+    id,
+    heading,
+    type,
+    entries: entries
+      .map((entry) => {
+        const entryId = trimText(entry?.id, 120);
+        if (!entryId) return null;
+        return {
+          id: entryId,
+          titleLeft: trimText(entry?.titleLeft),
+          titleRight: trimText(entry?.titleRight),
+          subtitleLeft: trimText(entry?.subtitleLeft),
+          subtitleRight: trimText(entry?.subtitleRight),
+          bullets: Array.isArray(entry?.bullets)
+            ? entry.bullets
+                .map((bullet) => {
+                  const bulletId = trimText(bullet?.id, 120);
+                  if (!bulletId) return null;
+                  return { id: bulletId, text: trimText(bullet?.text) };
+                })
+                .filter(Boolean)
+                .slice(0, 20)
+            : []
+        };
+      })
+      .filter(Boolean)
+      .slice(0, 20)
+  };
+}
+
 function normalizeTailorScope(raw) {
-  const sections = Array.isArray(raw?.sections) ? raw.sections : [];
+  const sections = (Array.isArray(raw?.sections) ? raw.sections : [])
+    .map(normalizeScopeSection)
+    .filter(Boolean)
+    .slice(0, 12);
+  // Disjointness firewall: a section can never be both editable and read-only.
+  // If a client (or a crafted payload) lists the same id in both, TAILOR wins and
+  // the context copy is dropped — so an editable section is never silently demoted,
+  // and a context section is never promoted into the editable target map.
+  const sectionIds = new Set(sections.map((section) => section.id));
+  const contextSections = (Array.isArray(raw?.contextSections) ? raw.contextSections : [])
+    .map(normalizeScopeSection)
+    .filter(Boolean)
+    .filter((section) => !sectionIds.has(section.id))
+    .slice(0, 12);
   return {
     version: 1,
     locked: {
@@ -54,49 +104,50 @@ function normalizeTailorScope(raw) {
         ? raw.locked.omittedSections.map((item) => trimText(item, 120)).filter(Boolean).slice(0, 20)
         : []
     },
-    sections: sections
-      .map((section) => {
-        const id = trimText(section?.id, 120);
-        const heading = trimText(section?.heading, 120);
-        if (!id || !heading) return null;
-        const type = section?.type === "skills" ? "skills" : section?.type === "summary" ? "summary" : "standard";
-        const entries = Array.isArray(section?.entries) ? section.entries : [];
-        return {
-          id,
-          heading,
-          type,
-          entries: entries
-            .map((entry) => {
-              const entryId = trimText(entry?.id, 120);
-              if (!entryId) return null;
-              return {
-                id: entryId,
-                titleLeft: trimText(entry?.titleLeft),
-                titleRight: trimText(entry?.titleRight),
-                subtitleLeft: trimText(entry?.subtitleLeft),
-                subtitleRight: trimText(entry?.subtitleRight),
-                bullets: Array.isArray(entry?.bullets)
-                  ? entry.bullets
-                      .map((bullet) => {
-                        const bulletId = trimText(bullet?.id, 120);
-                        if (!bulletId) return null;
-                        return { id: bulletId, text: trimText(bullet?.text) };
-                      })
-                      .filter(Boolean)
-                      .slice(0, 20)
-                  : []
-              };
-            })
-            .filter(Boolean)
-            .slice(0, 20)
-        };
-      })
-      .filter(Boolean)
-      .slice(0, 12)
+    sections,
+    contextSections
   };
 }
 
-function scopeToText(scope, suggestions = []) {
+function appendScopeSection(lines, section, valueFor) {
+  lines.push(String(section.heading).toUpperCase());
+  for (const entry of section.entries) {
+    if (section.type === "skills") {
+      const label = valueFor(section.id, entry.id, "", "titleLeft", entry.titleLeft).trim();
+      const skills = valueFor(section.id, entry.id, "", "skill", entry.subtitleLeft).trim();
+      if (label || skills) lines.push(label ? `${label}: ${skills}` : skills);
+      continue;
+    }
+    if (section.type === "summary") {
+      // Summary paragraphs live in bullets but serialize as plain lines.
+      for (const bullet of entry.bullets) {
+        const text = valueFor(section.id, entry.id, bullet.id, "bullet", bullet.text).trim();
+        if (text) lines.push(text);
+      }
+      continue;
+    }
+    const titleLeft = valueFor(section.id, entry.id, "", "titleLeft", entry.titleLeft).trim();
+    const titleRight = valueFor(section.id, entry.id, "", "titleRight", entry.titleRight).trim();
+    const subtitleLeft = valueFor(section.id, entry.id, "", "subtitleLeft", entry.subtitleLeft).trim();
+    const subtitleRight = valueFor(section.id, entry.id, "", "subtitleRight", entry.subtitleRight).trim();
+    const title = [titleLeft, titleRight].filter(Boolean).join(" | ");
+    const subtitle = [subtitleLeft, subtitleRight].filter(Boolean).join(" | ");
+    if (title) lines.push(title);
+    if (subtitle) lines.push(subtitle);
+    for (const bullet of entry.bullets) {
+      const text = valueFor(section.id, entry.id, bullet.id, "bullet", bullet.text).trim();
+      if (text) lines.push(`- ${text}`);
+    }
+  }
+  lines.push("");
+}
+
+// Serialize the scope to plain text. Editable `sections` apply the sanitized
+// suggestions; read-only `contextSections` are emitted VERBATIM (identity
+// valueFor — suggestions can't target them anyway, since the sanitizer's target
+// map is built from `sections` only). `editableOnly` (the polish gate) limits
+// output to the editable sections.
+function scopeToText(scope, suggestions = [], editableOnly = false) {
   const replacements = new Map(
     suggestions.map((suggestion) => [
       [
@@ -110,38 +161,11 @@ function scopeToText(scope, suggestions = []) {
   );
   const valueFor = (sectionId, entryId, bulletId, field, current) =>
     replacements.get([sectionId, entryId ?? "", bulletId ?? "", field].join("::")) ?? current;
+  const verbatim = (sectionId, entryId, bulletId, field, current) => current;
   const lines = [];
-  for (const section of scope.sections) {
-    lines.push(String(section.heading).toUpperCase());
-    for (const entry of section.entries) {
-      if (section.type === "skills") {
-        const label = valueFor(section.id, entry.id, "", "titleLeft", entry.titleLeft).trim();
-        const skills = valueFor(section.id, entry.id, "", "skill", entry.subtitleLeft).trim();
-        if (label || skills) lines.push(label ? `${label}: ${skills}` : skills);
-        continue;
-      }
-      if (section.type === "summary") {
-        // Summary paragraphs live in bullets but serialize as plain lines.
-        for (const bullet of entry.bullets) {
-          const text = valueFor(section.id, entry.id, bullet.id, "bullet", bullet.text).trim();
-          if (text) lines.push(text);
-        }
-        continue;
-      }
-      const titleLeft = valueFor(section.id, entry.id, "", "titleLeft", entry.titleLeft).trim();
-      const titleRight = valueFor(section.id, entry.id, "", "titleRight", entry.titleRight).trim();
-      const subtitleLeft = valueFor(section.id, entry.id, "", "subtitleLeft", entry.subtitleLeft).trim();
-      const subtitleRight = valueFor(section.id, entry.id, "", "subtitleRight", entry.subtitleRight).trim();
-      const title = [titleLeft, titleRight].filter(Boolean).join(" | ");
-      const subtitle = [subtitleLeft, subtitleRight].filter(Boolean).join(" | ");
-      if (title) lines.push(title);
-      if (subtitle) lines.push(subtitle);
-      for (const bullet of entry.bullets) {
-        const text = valueFor(section.id, entry.id, bullet.id, "bullet", bullet.text).trim();
-        if (text) lines.push(`- ${text}`);
-      }
-    }
-    lines.push("");
+  for (const section of scope.sections) appendScopeSection(lines, section, valueFor);
+  if (!editableOnly) {
+    for (const section of scope.contextSections ?? []) appendScopeSection(lines, section, verbatim);
   }
   return lines.join("\n").trim();
 }
@@ -156,14 +180,18 @@ export async function handlePolish(req, res) {
   try {
     const body = JSON.parse(await readBody(req, 1_000_000));
     const tailorScope = normalizeTailorScope(body.tailorScope);
+    // scopeText feeds the strict-review/context picture and includes read-only
+    // context sections; the GATE below measures editable text only so a
+    // context-only request (no tailorable sections) is rejected.
     const scopeText = scopeToText(tailorScope);
+    const editableText = scopeToText(tailorScope, [], true);
     const jobText = String(body.jobText ?? "").slice(0, 35_000);
     const includeCoverLetter = Boolean(body.includeCoverLetter);
     const strictReview = Boolean(body.strictReview);
     const honestContext = String(body.honestContext ?? "").slice(0, 8_000);
     const customInstructions = String(body.customInstructions ?? "").slice(0, 4_000);
 
-    if (scopeText.trim().length < 40 || jobText.trim().length < 40) {
+    if (!tailorScope.sections.length || editableText.trim().length < 40 || jobText.trim().length < 40) {
       sendJson(res, 400, { error: "Select at least one editable resume section and add a job description before polishing." });
       return;
     }

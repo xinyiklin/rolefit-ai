@@ -73,6 +73,28 @@ function targetKey(target) {
   return [sectionId, entryId, bulletId, field].join("::");
 }
 
+// Flatten read-only context ("Include") sections into one text blob for
+// grounding ONLY. They are never added to the target map below — that is what
+// keeps them read-only — but their text is legitimate on-resume evidence, so a
+// tailored claim citing a real fact from (say) Education must not drop as
+// ungrounded.
+function contextSectionsText(scope) {
+  if (!scope || !Array.isArray(scope.contextSections)) return "";
+  const parts = [];
+  for (const section of scope.contextSections) {
+    parts.push(section.heading ?? "");
+    for (const entry of section.entries ?? []) {
+      parts.push(entry.titleLeft, entry.titleRight, entry.subtitleLeft, entry.subtitleRight);
+      for (const bullet of entry.bullets ?? []) parts.push(bullet.text);
+    }
+  }
+  return parts.filter(Boolean).join("\n");
+}
+
+// Reads scope.sections ONLY — never scope.contextSections. This is the structural
+// guarantee that read-only "Include" sections can never become editable targets:
+// a suggestion against a context section finds no entry here and is dropped as
+// "unknownTarget". Do not fold contextSections in.
 function buildTailorTargetMap(scope) {
   const targets = new Map();
   if (!scope || !Array.isArray(scope.sections)) return targets;
@@ -142,6 +164,7 @@ export function sanitizeTailorSuggestions(raw, scope, dropStats, honestContext, 
   // it cannot conjure the term into the source text.
   const grounding = [
     ...[...targets.values()].map((t) => t.currentText),
+    contextSectionsText(scope),
     String(honestContext ?? "")
   ].join("\n").toLowerCase();
   const seen = new Set();

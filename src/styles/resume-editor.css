@@ -407,56 +407,65 @@
   field-sizing: content;
 }
 
-.rdx-tailor-toggle {
+/* Per-section tailoring choice: a segmented Tailor | Include | Off control.
+   Visual hierarchy mirrors semantics — Tailor loudest (editable, accent),
+   Include muted (present/read-only), Off blank. */
+.rdx-tailor-seg {
   display: inline-flex;
-  align-items: center;
+  align-items: stretch;
   flex: 0 0 auto;
-  gap: 0.28em;
-  min-height: 1.55em;
   margin-left: auto;
-  padding: 0 0.45em;
   border: 1px solid var(--hairline);
   border-radius: var(--r-pill);
   background: rgba(255, 255, 255, 0.72);
-  color: var(--ink-faint);
+  overflow: hidden;
   font-family: var(--font-ui);
   font-size: 0.46em;
   font-weight: 650;
   line-height: 1;
-  text-transform: none;
   white-space: nowrap;
+}
+
+.rdx-tailor-seg__opt {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--ink-faint);
+  padding: 0.42em 0.62em;
+  min-height: 1.55em;
   cursor: pointer;
-  opacity: 1;
-  pointer-events: auto;
-  transition: opacity 0.12s var(--ease), border-color 0.12s var(--ease), background-color 0.12s var(--ease),
-    color 0.12s var(--ease);
+  font: inherit;
+  transition: background-color 0.12s var(--ease), color 0.12s var(--ease);
 }
 
-.rdx-tailor-toggle input {
-  width: 0.9em;
-  height: 0.9em;
-  accent-color: var(--accent);
-  margin: 0;
+.rdx-tailor-seg__opt + .rdx-tailor-seg__opt {
+  border-left: 1px solid var(--hairline);
 }
 
-.rdx-tailor-toggle.is-selected {
-  border-color: var(--accent-veil);
+.rdx-tailor-seg__opt:hover {
+  color: var(--ink);
+}
+
+.rdx-tailor-seg__opt--tailor.is-active {
   background: var(--accent-soft);
   color: var(--accent-deep);
 }
 
-.rdx-section__head:hover .rdx-tailor-toggle,
-.rdx-section__head:focus-within .rdx-tailor-toggle,
-.rdx-tailor-toggle:hover,
-.rdx-tailor-toggle:focus-within,
-.rdx-tailor-toggle.is-selected {
-  opacity: 1;
-  pointer-events: auto;
+.rdx-tailor-seg__opt--include.is-active {
+  background: var(--accent-veil);
+  color: var(--ink);
 }
 
-.rdx-tailor-toggle:focus-within {
+.rdx-tailor-seg__opt--off.is-active {
+  background: var(--hairline-soft);
+  color: var(--ink-soft);
+}
+
+.rdx-tailor-seg__opt:focus-visible {
   outline: 2px solid var(--accent-glow);
-  outline-offset: 2px;
+  outline-offset: -2px;
+  position: relative;
+  z-index: 1;
 }
 
 /* Entries */
