@@ -149,6 +149,7 @@ export function ApplicationModal({ open, application, onClose, onSave, onDelete,
   const [tab, setTab] = useState<ModalTab>("overview");
   const [form, setForm] = useState<FormState>(() => formFromApplication(application));
   const [copied, setCopied] = useState("");
+  const [copyFailed, setCopyFailed] = useState("");
 
   // Re-seed whenever the modal opens or targets a different application.
   useEffect(() => {
@@ -217,9 +218,14 @@ export function ApplicationModal({ open, application, onClose, onSave, onDelete,
     try {
       await navigator.clipboard.writeText(value);
       setCopied(key);
+      setCopyFailed("");
       window.setTimeout(() => setCopied(""), 1600);
     } catch {
+      // Surface the failure instead of silently clearing — the text stays on
+      // screen so the user can copy it manually.
       setCopied("");
+      setCopyFailed(key);
+      window.setTimeout(() => setCopyFailed((k) => (k === key ? "" : k)), 2500);
     }
   }
 
@@ -615,7 +621,7 @@ export function ApplicationModal({ open, application, onClose, onSave, onDelete,
                   <h4><FileText size={14} aria-hidden="true" /> Cover letter</h4>
                   {application?.coverLetterText ? (
                     <button type="button" className="ghost-button is-compact" onClick={() => copyText(application.coverLetterText ?? "", "cover")}>
-                      <Copy size={13} aria-hidden="true" /> {copied === "cover" ? "Copied" : "Copy"}
+                      <Copy size={13} aria-hidden="true" /> {copied === "cover" ? "Copied" : copyFailed === "cover" ? "Copy failed" : "Copy"}
                     </button>
                   ) : null}
                 </div>

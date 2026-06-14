@@ -76,7 +76,7 @@ export function TrackerBoardView({
                         <GripVertical size={13} aria-hidden="true" />
                       </span>
                       <span className="application-company">
-                        <em>{companyInitials(displayCompany(app))}</em>
+                        <em data-len={companyInitials(displayCompany(app)).length}>{companyInitials(displayCompany(app))}</em>
                         <strong>{displayCompany(app)}</strong>
                       </span>
                       <span className="pipeline-cardlet__role">{displayRole(app)}</span>

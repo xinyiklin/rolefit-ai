@@ -128,7 +128,32 @@ const STOP_WORDS = new Set([
   "written",
   "years",
   "you",
-  "your"
+  "your",
+  // Generic JD-prose filler that is not a skill and forms no useful skill bigram.
+  // keywordFit (40% of the score) is coverage of extractKeywords(jobText); these
+  // padded into the keyword set as guaranteed "misses", deflating a genuinely
+  // strong resume's fit purely from verbose postings. Removing them never invents
+  // coverage — it only stops counting prose noise as a missing requirement.
+  "ability",
+  "code",
+  "deep",
+  "discipline",
+  "etc",
+  "exposure",
+  "familiarity",
+  "help",
+  "ideal",
+  "including",
+  "join",
+  "looking",
+  "mentor",
+  "passion",
+  "passionate",
+  "professional",
+  "such",
+  "team",
+  "teams",
+  "within"
 ]);
 
 export const startsWithAction = (text: string) =>
@@ -139,7 +164,12 @@ function keywordAliases(keyword: string) {
 }
 
 export function includesKeyword(source: string, keyword: string) {
-  const normalized = ` ${normalizeText(source)} `;
+  // normalizeText keeps '.' so internal-period terms survive (node.js, .net,
+  // 3.5). But a sentence-ending period stays glued to the word ("Used Python.")
+  // and, because matching is space-boundary anchored, blocked an honest match.
+  // Turn a period at a token boundary (followed by whitespace) into a space;
+  // internal periods are followed by a non-space char and are left intact.
+  const normalized = ` ${normalizeText(source)} `.replace(/\.(?=\s)/g, " ");
   return keywordAliases(keyword).some((alias) => {
     const cleaned = normalizeText(alias);
     return cleaned.length > 0 && normalized.includes(` ${cleaned} `);

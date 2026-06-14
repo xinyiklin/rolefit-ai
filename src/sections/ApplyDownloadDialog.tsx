@@ -3,9 +3,9 @@ import { Check, Download, FileCode2, FileText, Star, X } from "lucide-react";
 import type { ExportFormat } from "../lib/exportPrefs";
 import { EXPORT_META } from "./ExportRail";
 
-// Shown right after Apply: offers to download a copy of the resume that just went
-// out, in one of the three export formats, lets the user name the file, and
-// remember the format as their default. Reuses the rename-dialog visual shell.
+// Pre-apply confirmation: pick a format and file name, then Apply+Download in
+// one step. "Use base" applies without downloading and suppresses this dialog
+// on future applies. The close button (×) cancels without applying.
 type ApplyDownloadDialogProps = {
   // Application title, for context in the header ("Stripe — Software Engineer").
   label: string;
@@ -17,6 +17,7 @@ type ApplyDownloadDialogProps = {
   defaultFileBaseName: string;
   onDownload: (format: ExportFormat, makeDefault: boolean, fileBaseName: string) => void;
   onSkip: () => void;
+  onUseBase: () => void;
 };
 
 const FORMAT_ORDER: ExportFormat[] = ["pdf-latex", "pdf-clean", "tex"];
@@ -39,7 +40,8 @@ export function ApplyDownloadDialog({
   defaultFormat,
   defaultFileBaseName,
   onDownload,
-  onSkip
+  onSkip,
+  onUseBase
 }: ApplyDownloadDialogProps) {
   // Pre-select the remembered default; fall back to the first enabled option so
   // there is always a valid selection. PDF·LaTeX is unavailable without Tectonic.
@@ -73,7 +75,7 @@ export function ApplyDownloadDialog({
   const isCleanPdf = selected === "pdf-clean";
 
   return (
-    <div className="rename-dialog" role="dialog" aria-modal="true" aria-label="Download the resume you applied with">
+    <div className="rename-dialog" role="dialog" aria-modal="true" aria-label="Apply and download resume">
       <div className="rename-dialog__backdrop" onClick={onSkip} />
       <form
         className="rename-dialog__card apply-download"
@@ -82,12 +84,11 @@ export function ApplyDownloadDialog({
           onDownload(selected, makeDefault, fileName.trim());
         }}
       >
-        <header className="rename-dialog__head">
-          <Download size={14} aria-hidden="true" />
-          <span>Download a copy</span>
-        </header>
+        <button type="button" className="apply-download__close" onClick={onSkip} aria-label="Cancel" title="Cancel without applying">
+          <X size={14} />
+        </button>
         <p className="rename-dialog__hint">
-          Applied to <strong>{label}</strong>. Pick a format and name the file you're saving.
+          Apply to <strong>{label}</strong>. Pick a format and name the file.
         </p>
 
         <div className="apply-download__field-label">Format</div>
@@ -167,13 +168,12 @@ export function ApplyDownloadDialog({
         </label>
 
         <footer className="rename-dialog__actions">
-          <button type="button" className="ghost-button is-compact" onClick={onSkip}>
-            <X size={12} aria-hidden="true" />
-            Not now
+          <button type="button" className="ghost-button is-compact" onClick={onUseBase} title="Apply without downloading — skip this prompt on future applies">
+            Use base
           </button>
           <button type="submit" className="primary-button is-compact">
             <Download size={13} aria-hidden="true" />
-            Download
+            Apply &amp; download
           </button>
         </footer>
       </form>

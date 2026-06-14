@@ -224,9 +224,26 @@ async function clearBaseResumeFiles() {
   );
 }
 
-// List the most recent base-resume versions from .trash/ (up to `limit`).
-// Each entry has a timestamp, original file name, and a key for restoring.
-async function readBaseResumeHistory(limit = 5) {
+// Back up a single base-resume file (including named variants) to .trash/.
+async function trashBaseFile(name) {
+  const trashDir = join(jobWorkspaceDir, ".trash");
+  await mkdir(trashDir, { recursive: true });
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+  try {
+    await rename(join(jobWorkspaceDir, name), join(trashDir, `${stamp}__${name}`));
+  } catch (error) {
+    if (error?.code !== "ENOENT") throw error;
+  }
+}
+
+// List the most recent base-resume versions from .trash/, grouped by variant so
+// the UI can show one expandable group per variant. Each group keeps only the
+// `perVariant` most recent entries (default 3); older backups stay in .trash and
+// remain restorable by hand — this is a display cap, not a destructive prune.
+// The variant identity is the file stem (extension-agnostic) so a Default whose
+// history spans base-resume.tex and base-resume.txt consolidates into one group.
+// Matches both default (base-resume.tex) and named variants (base-resume-fullstack.tex).
+async function readBaseResumeHistory(perVariant = 3) {
   const trashDir = join(jobWorkspaceDir, ".trash");
   let entries;
   try {
@@ -234,27 +251,44 @@ async function readBaseResumeHistory(limit = 5) {
   } catch {
     return [];
   }
-  // Files follow the pattern: 2026-06-10T16-30-45-123Z__base-resume.txt
-  const baseResumePattern = /^(.+?)__base-resume\.(docx|tex|txt|md|csv)$/;
+  // Matches: 2026-06-10T16-30-45-123Z__base-resume[-variant].(docx|tex|txt|md|csv)
+  const baseResumePattern = /^(.+?)__(base-resume(?:-[A-Za-z0-9][A-Za-z0-9_-]*)?)\.(docx|tex|txt|md|csv)$/;
   const matched = entries
     .map((name) => {
       const m = name.match(baseResumePattern);
       if (!m) return null;
-      const stamp = m[1].replace(/-(?=\d{2}-\d{2}-\d{3}Z)/g, ":").replace(/-(?=\d{2}:)/g, ":").replace("Z", ".000Z");
+      const stem = m[2]; // e.g. "base-resume" or "base-resume-frontend"
+      const originalName = `${stem}.${m[3]}`;
       // Reconstruct a rough ISO date for display; the raw stamp is authoritative.
       const date = new Date(m[1].replace(/T(\d{2})-(\d{2})-(\d{2})-(\d{3})Z/, "T$1:$2:$3.$4Z"));
-      return { fileName: name, originalName: `base-resume.${m[2]}`, kind: m[2], stamp: m[1], date };
+      return { fileName: name, stem, originalName, kind: m[3], stamp: m[1], date };
     })
     .filter(Boolean)
-    .sort((a, b) => b.stamp.localeCompare(a.stamp))
-    .slice(0, limit);
+    .sort((a, b) => b.stamp.localeCompare(a.stamp));
 
-  return matched.map((entry) => ({
-    key: entry.fileName,
-    originalName: entry.originalName,
-    kind: entry.kind,
-    date: isNaN(entry.date.getTime()) ? entry.stamp : entry.date.toISOString()
-  }));
+  // Group newest-first by variant stem, then cap each group to `perVariant`.
+  const groups = new Map();
+  for (const entry of matched) {
+    let group = groups.get(entry.stem);
+    if (!group) {
+      group = { variant: entry.stem, label: baseResumeLabel(entry.originalName), entries: [] };
+      groups.set(entry.stem, group);
+    }
+    if (group.entries.length >= perVariant) continue;
+    group.entries.push({
+      key: entry.fileName,
+      originalName: entry.originalName,
+      kind: entry.kind,
+      date: isNaN(entry.date.getTime()) ? entry.stamp : entry.date.toISOString()
+    });
+  }
+
+  // Default variant first, then alphabetical by label — mirrors readBaseResumeOptions.
+  return [...groups.values()].sort((a, b) => {
+    if (a.variant === "base-resume") return -1;
+    if (b.variant === "base-resume") return 1;
+    return a.label.localeCompare(b.label);
+  });
 }
 
 async function handleWorkspace(req, res) {
@@ -314,6 +348,7 @@ async function handleWorkspaceBaseResume(req, res) {
         path: jobWorkspaceDir,
         baseResume: { exists: false },
         baseResumeOptions: await readBaseResumeOptions(),
+        baseResumeHistory: await readBaseResumeHistory(),
         files: await readWorkspaceFiles()
       });
     } catch (error) {
@@ -350,6 +385,7 @@ async function handleWorkspaceBaseResume(req, res) {
           docxBase64
         },
         baseResumeOptions: await readBaseResumeOptions(),
+        baseResumeHistory: await readBaseResumeHistory(),
         files: await readWorkspaceFiles()
       });
       return;
@@ -375,6 +411,9 @@ async function handleWorkspaceBaseResume(req, res) {
     }
     if (targetName === "base-resume.tex" || !isTex) {
       await clearBaseResumeFiles();
+    } else {
+      // Named variant: back it up before overwriting so it appears in version history.
+      await trashBaseFile(targetName);
     }
     await writeFile(join(jobWorkspaceDir, targetName), text, "utf8");
     sendJson(res, 200, {
@@ -387,6 +426,7 @@ async function handleWorkspaceBaseResume(req, res) {
         text
       },
       baseResumeOptions: await readBaseResumeOptions(),
+      baseResumeHistory: await readBaseResumeHistory(),
       files: await readWorkspaceFiles()
     });
   } catch (error) {
@@ -409,12 +449,23 @@ async function handleRestoreBaseResume(req, res) {
     }
     const trashDir = join(jobWorkspaceDir, ".trash");
     const sourcePath = join(trashDir, key);
-    const ext = extname(key).toLowerCase();
-    const targetName = ext === ".docx" ? "base-resume.docx" : ext === ".tex" ? "base-resume.tex" : "base-resume.txt";
 
-    // Read the archived file, clear current base, write the restored version.
+    // Extract the original filename from the key (after the stamp prefix).
+    const keyMatch = key.match(/^.+?__(base-resume(?:-[A-Za-z0-9][A-Za-z0-9_-]*)?\.(?:docx|tex|txt|md|csv))$/);
+    if (!keyMatch) {
+      sendJson(res, 400, { error: "Invalid history key." });
+      return;
+    }
+    const targetName = keyMatch[1];
+    const isNamedVariant = baseResumeTexPattern.test(targetName) && targetName !== "base-resume.tex";
+
+    // Read the archived file, back up the current version, write the restored version.
     const data = await readFile(sourcePath);
-    await clearBaseResumeFiles();
+    if (isNamedVariant) {
+      await trashBaseFile(targetName);
+    } else {
+      await clearBaseResumeFiles();
+    }
     await writeFile(join(jobWorkspaceDir, targetName), data);
 
     sendJson(res, 200, {

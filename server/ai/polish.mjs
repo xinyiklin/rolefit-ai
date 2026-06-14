@@ -27,6 +27,7 @@ import {
   clipForPrompt
 } from "./prompts.mjs";
 import { callConfiguredProvider } from "./clients.mjs";
+import { findUngroundedJdTerm } from "./grounding.mjs";
 import {
   applyGapCapsAndVerdict,
   missingRequiredSkillsFromStrictReview,
@@ -211,6 +212,12 @@ export async function handlePolish(req, res) {
     // unchanged scope.
     const polishedText = scopeToText(tailorScope, suggestedChanges);
 
+    // Grounding corpus for the secondary passes: the resume the user actually
+    // ends up with (every char already past the exact-evidence gate) plus the
+    // honest context. A JD skill term the audit's rewrites or the cover letter
+    // introduce that is absent from here is unsupported.
+    const groundingText = `${polishedText}\n${honestContext}`;
+
     // The audit reuses the primary config unless the request assigns an
     // independent reviewer provider. A different reviewer audits what the
     // rewrite produced without the rewriting model's self-consistency bias; the
@@ -259,7 +266,17 @@ export async function handlePolish(req, res) {
             systemPrompt: coverPrompts.systemPrompt,
             userPrompt: coverPrompts.userPrompt
           });
-          return String(coverParsed.coverLetterText ?? "").trim();
+          const letter = String(coverParsed.coverLetterText ?? "").trim();
+          // Prose-mode grounding backstop: the letter may freely name the target
+          // company/role (proper nouns are not flagged), but a JD SKILL term it
+          // claims that is absent from the polished resume + honest context is
+          // unsupported. Blank it so the client falls back to the local,
+          // strictly-grounded draftCoverLetter rather than shipping the claim.
+          if (letter && findUngroundedJdTerm(letter, jobText.toLowerCase(), groundingText.toLowerCase(), { proseMode: true })) {
+            console.warn("[ai] cover letter introduced an ungrounded JD skill term; falling back to local draft", { provider });
+            return "";
+          }
+          return letter;
         })();
     // Secondary passes are OPTIONAL enhancements over an already-usable primary
     // rewrite. A failure in either (provider 5xx, timeout, unreadable JSON
@@ -289,7 +306,7 @@ export async function handlePolish(req, res) {
         errorMessage: coverSettled.reason instanceof Error ? coverSettled.reason.message : String(coverSettled.reason)
       });
     }
-    let strictReviewResult = reviewParsed ? sanitizeStrictReview(reviewParsed.strictReview) : null;
+    let strictReviewResult = reviewParsed ? sanitizeStrictReview(reviewParsed.strictReview, jobText, groundingText) : null;
 
     // Scoring: prefer the arithmetic path — the reviewer reports per-bucket
     // subtotals, the server sums them, caps for the reviewer's own reported

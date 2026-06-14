@@ -192,8 +192,15 @@ export function scoreResume(resumeText: string, jobKeywords: string[], jobText: 
   // of "reasonable" territory regardless of how strong keywords/formatting are.
   // Seniority's 15% weight alone can't enforce this — a polished new-grad resume
   // would otherwise score in the high 70s against a senior role.
+  // Graduated seniority guardrail. The old flat min(overall, 69) pinned EVERY
+  // near-miss to exactly 69 — the brittle top edge of STRETCH. Now the cap
+  // scales with the seniority gap (clearly-underqualified caps lower than a
+  // one-level-junior candidate), and the trigger drops to <65 so a candidate
+  // within ~a year of the bar isn't capped at all.
   const seniorityRequired = requiredYears(jobText) !== null || isSeniorRole(jobText);
-  if (seniorityRequired && seniority < 70) overall = Math.min(overall, 69);
+  if (seniorityRequired && seniority < 65) {
+    overall = Math.min(overall, 55 + Math.round(seniority * 0.2));
+  }
 
   return { overall, keywordFit, bulletQuality, structure, concision, seniority };
 }

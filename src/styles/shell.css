@@ -36,6 +36,86 @@
   margin-right: auto;
 }
 
+/* Polish-flow status/error toast — fixed so it never reflows the studio grid.
+   Surfaces AI-failure reasons and pre-flight guards (otherwise written to dead
+   state). Sits just under the masthead, dismissable, capped width. */
+.polish-toast {
+  position: fixed;
+  top: calc(var(--s5) + 2.5rem);
+  left: 50%;
+  transform: translateX(-50%);
+  /* Below the masthead nav popovers (z-index 40) so an open Job/AI menu paints
+     over the toast where they intersect, not the other way around. */
+  z-index: 35;
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  max-width: min(560px, calc(100vw - var(--s5) * 2));
+  padding: var(--s2) var(--s3);
+  border: 1px solid var(--hairline-strong);
+  border-radius: 8px;
+  background: var(--card);
+  box-shadow: 0 6px 24px -8px rgba(0, 0, 0, 0.25);
+  font-size: 0.82rem;
+  color: var(--ink);
+}
+
+.polish-toast__text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.polish-toast__dismiss {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--ink-faint);
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: background-color 0.12s var(--ease), color 0.12s var(--ease);
+}
+
+.polish-toast__dismiss:hover {
+  background: var(--accent-veil);
+  color: var(--ink);
+}
+
+/* Animated "rotating dots" for in-progress labels — cycles . / .. / ... inside a
+   fixed-width box so the preceding text never reflows. Static "…" is the
+   no-animation fallback (engines that don't animate `content`, and reduced-motion). */
+.loading-dots {
+  display: inline-block;
+  width: 1.25em;
+  text-align: left;
+  white-space: pre;
+}
+
+.loading-dots::after {
+  content: "…";
+  animation: loading-dots-cycle 1.2s steps(1, end) infinite;
+}
+
+@keyframes loading-dots-cycle {
+  0% { content: "."; }
+  33% { content: ".."; }
+  66% { content: "..."; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loading-dots::after {
+    content: "…";
+    animation: none;
+  }
+}
+
 .masthead__brand .eyebrow {
   margin: 0;
   font-size: 0.62rem;

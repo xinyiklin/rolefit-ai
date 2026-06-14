@@ -61,7 +61,11 @@ const TRAILING_BOILERPLATE: RegExp[] = [
   // only when the user copies them manually; they do not help tailor a resume.
   /^(benefits|perks|our benefits|the benefits|what we offer|what['']?s in it for you)\b/i,
   /^(what you['']?ll (receive|get)|what you get|compensation (and|&) benefits)\b/i,
-  /^(why (you['']?ll love|join|work)|perks (and|&) benefits)\b/i,
+  // "Why you'll love this job" often introduces the actual role (American
+  // Airlines-style pages); benefits sections use "What you'll get/receive" or
+  // explicit perks/benefits language below.
+  /^(why (join|work)|perks (and|&) benefits)\b/i,
+  /^what you['']?ll get\b/i,
   // Application instructions and pay-transparency legalese.
   /^(how to apply|to apply\b|ready to apply)/i,
   /pay transparency/i,
@@ -96,6 +100,7 @@ const NOISE_LINE: RegExp[] = [
   /^(show|read|see) (more|less)$/i,
   /^we use cookies/i,
   /^(accept|accept all|reject|manage) cookies?$/i,
+  /^as noted above,\s*this list is intended\b/i,
   /^\d+\+? (days?|hours?|weeks?|months?) ago$/i,
   /^(just posted|new)$/i,
   // Standalone salary/comp pill (e.g. "$120,000 - $150,000 / yr"). Salary is
@@ -125,6 +130,7 @@ const TAILORING_SECTION: RegExp[] = [
   /^(responsibilities|what you['']?ll do|what you will do|day to day)\b/i,
   /^you will:?\s*$/i,
   /^(requirements|qualifications|minimum qualifications|required qualifications|preferred qualifications)\b/i,
+  /^all you['']?ll need for success\b/i,
   // Fix #2 (TAILORING_SECTION): narrow "skills" and "experience" to bare heading only
   // so "Experience with Git..." and "Skills in Python" are not treated as section headings.
   /^(technical skills|what we['']?re looking for|who you are)\b/i,
@@ -165,6 +171,8 @@ const REQUIRED_HEADING: RegExp[] = [
   /^what we['']?re looking for\b/i,
   /^who you are\b/i,
   /^required skills?\b/i,              // Fix #1: added
+  /^all you['']?ll need for success\b/i,
+  /^skills,\s*licenses?\s*(?:&|and)\s*certifications?\b/i,
   /^what you[\u0027\u2018\u2019]?ll need( to succeed)?\b/i,  // Fix #1: added
   // Fix #2: narrow bare "skills" and "experience" to ONLY the standalone heading,
   // not lines like "Experience: 0-3 years…" or "Experience with Git…".
@@ -249,6 +257,7 @@ const DOMAIN_SIGNALS: Array<[string, RegExp]> = [
   ["security", /\bsecurity\b|\bcybersecurity\b|\bcompliance\b|\bsoc 2\b/i],
   ["data", /\bdata\b|\banalytics\b|\bbi\b|\bwarehouse\b|\bpipeline\b/i],
   ["e-commerce", /\be-?commerce\b|\bretail\b|\bmarketplace\b/i],
+  ["aviation", /\bairline\b|\baviation\b|\bflights?\b|\bairports?\b/i],
   // Fix #17: narrow education domain to avoid "continuous learning" or bare "Education:" label
   ["education", /\bedtech\b|\be-?learning\b|\beducation(al)? (technology|platform|company|sector)\b/i],
   ["government", /\bgovernment\b|\bpublic sector\b|\bfederal\b/i]
@@ -345,7 +354,7 @@ function isLowValueLine(line: string): boolean {
 }
 
 function isPromptMetadataLine(line: string): boolean {
-  return /^(company|role|title|job title|position|location|job location|employment type|job type|seniority level|experience level|job function|industries)\s*[:|]/i.test(
+  return /^(company|role|title|job title|position|posting start date|requisition id|job id|job number|location|job location|work location|cities|employment type|job type|seniority level|experience level|job function|industries)\s*[:|]/i.test(
     line.trim()
   );
 }
@@ -905,6 +914,8 @@ function companyFromSelfCue(sentence: string): string {
     new RegExp(`^At\\s+${COMPANY_NAME}\\s*,\\s+(?:we|our|you|the team|employees|everyone)\\b`),
     // "We are <Company>, a …" (not "We are looking/seeking/hiring …")
     new RegExp(`^We are\\s+${COMPANY_NAME}\\s*,`),
+    // "Join our American Airlines family…" — employer-brand intro copy.
+    new RegExp(`\\bJoin\\s+our\\s+${COMPANY_NAME}\\s+(?:family|team)\\b`),
     // "Join <Company> …" / "Welcome to <Company> …" (employer CTA)
     new RegExp(`^(?:Join|Welcome to)\\s+${COMPANY_NAME}\\b`)
   ];
@@ -1137,8 +1148,12 @@ function extractTracking(lines: string[], url?: string): ExtractedJobTracking {
   if (!resolvedTitle) {
     const lowerLines = lines.map((l) => l.trim().toLowerCase());
     let proximityCandidate: string | undefined;
+    const titleSearchEnd = lines.findIndex((line) =>
+      matchesHeading(line, [...RESPONSIBILITY_HEADING, ...REQUIRED_HEADING, ...PREFERRED_HEADING])
+    );
+    const end = titleSearchEnd === -1 ? Math.min(lines.length, 25) : Math.min(titleSearchEnd, 25);
 
-    for (let i = 0; i < lines.length; i += 1) {
+    for (let i = 0; i < end; i += 1) {
       const candidate = lines[i].trim();
       if (!candidate) continue;
       if (candidate.length < 8 || candidate.length > 70) continue;
@@ -1550,8 +1565,4 @@ export function extractJobPosting(raw: string, options: ExtractOptions = {}): Ex
   };
   result.manualReviewFields = manualReviewFields(result);
   return result;
-}
-
-export function extractRelevantJobText(raw: string, maxChars = 9_000): string {
-  return extractJobPosting(raw, { maxChars }).tailoringText;
 }

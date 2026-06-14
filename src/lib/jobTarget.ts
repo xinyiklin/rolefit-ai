@@ -21,6 +21,12 @@ export function inferApplicationTitle(url: string, jobDescription: string) {
 const ATS_PATH_HOSTS =
   /(^|\.)(greenhouse\.io|lever\.co|ashbyhq\.com|smartrecruiters\.com|workable\.com|breezy\.hr|recruitee\.com|teamtailor\.com|bamboohr\.com|myworkdayjobs\.com)$/i;
 
+// Job boards / aggregators: the employer is NEVER the host (they list many
+// companies), so the URL can't yield a company name — it must come from the
+// posting text. Returning the board name ("Linkedin") would be a wrong guess.
+const JOB_BOARD_HOSTS =
+  /(^|\.)(linkedin\.com|indeed\.com|glassdoor\.com|ziprecruiter\.com|monster\.com|dice\.com|simplyhired\.com|wellfound\.com|angel\.co|builtin\.com|themuse\.com|stackoverflow\.com|jobs\.com)$/i;
+
 // Hostname labels / path slugs that are ATS chrome, not an employer name.
 const GENERIC_URL_TOKENS = new Set([
   "job", "jobs", "job-boards", "jobboards", "boards", "board", "careers", "career",
@@ -46,6 +52,10 @@ export function inferCompanyFromUrl(url: string) {
     const u = new URL(url);
     const host = u.hostname.replace(/^www\./, "").toLowerCase();
     const segments = u.pathname.split("/").filter(Boolean);
+
+    // Job boards never encode the employer in the URL — leave it to the distiller
+    // (the posting text) or manual review rather than guessing the board's name.
+    if (JOB_BOARD_HOSTS.test(host)) return "";
 
     // Workday is the exception: the employer is always the sub-domain tenant
     // (nvidia.wd5.myworkdayjobs.com → Nvidia); the first path segment is the

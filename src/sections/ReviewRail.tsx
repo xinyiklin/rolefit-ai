@@ -2,7 +2,7 @@ import { useState } from "react";
 import { AlertCircle, Check, CheckCheck, Clipboard, PlusCircle, Pencil, RotateCcw, X } from "lucide-react";
 import type { PolishedResume, ResumeDiff, StrictReviewRewrite, TailorSuggestion } from "../resumeEngine";
 import type { ResumeData, ResumeEntry } from "../lib/resumeData";
-import { stripInlineMarks } from "../lib/inlineMarks";
+import { renderInlineMarks, stripInlineMarks } from "../lib/inlineMarks";
 import type { ResumeEditorActions } from "../hooks/useResumeEditor";
 import type { TailorChangeTarget } from "../resume/types";
 
@@ -106,6 +106,7 @@ export function ReviewRail({ result, resume, actions, resumeDiff, onHighlight, o
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
+  const [copyFailedIndex, setCopyFailedIndex] = useState<number | null>(null);
 
   if (!sr && !suggestions.length) return null;
   const rewrites = suggestions.length ? [] : sr?.rewrites ?? [];
@@ -243,7 +244,10 @@ export function ReviewRail({ result, resume, actions, resumeDiff, onHighlight, o
       setCopiedIndex(index);
       window.setTimeout(() => setCopiedIndex((current) => (current === index ? null : current)), 1500);
     } catch {
-      // Clipboard unavailable — the suggestion text stays visible on the card.
+      // Clipboard unavailable — flag the failure so the user knows nothing was
+      // copied (the suggestion text stays visible on the card to copy manually).
+      setCopyFailedIndex(index);
+      window.setTimeout(() => setCopyFailedIndex((current) => (current === index ? null : current)), 2500);
     }
   }
 
@@ -278,7 +282,7 @@ export function ReviewRail({ result, resume, actions, resumeDiff, onHighlight, o
           </header>
           <ul className="rr-change-list">
             {result.changeSummary.map((bullet, index) => (
-              <li key={index}>{bullet}</li>
+              <li key={index}>{renderInlineMarks(bullet)}</li>
             ))}
           </ul>
         </section>
@@ -315,7 +319,7 @@ export function ReviewRail({ result, resume, actions, resumeDiff, onHighlight, o
                 {status.kind === "stale" ? (
                   <span className="rr-edit__stale-badge" aria-label="Suggestion is stale">stale</span>
                 ) : null}
-                <p className="rr-edit__original">{suggestion.currentText}</p>
+                <p className="rr-edit__original">{renderInlineMarks(suggestion.currentText)}</p>
                 {isEditing ? (
                   <textarea
                     className="textarea rr-edit__draft"
@@ -326,7 +330,7 @@ export function ReviewRail({ result, resume, actions, resumeDiff, onHighlight, o
                   />
                 ) : (
                   <p className="rr-edit__rewrite">
-                    {status.kind === "applied" ? status.appliedText : suggestion.proposedText}
+                    {renderInlineMarks(status.kind === "applied" ? status.appliedText : suggestion.proposedText)}
                   </p>
                 )}
                 {!isEditing ? (
@@ -343,7 +347,7 @@ export function ReviewRail({ result, resume, actions, resumeDiff, onHighlight, o
                     ))}
                   </div>
                 ) : null}
-                {suggestion.reason && !isEditing ? <p className="rr-edit__note">{suggestion.reason}</p> : null}
+                {suggestion.reason && !isEditing ? <p className="rr-edit__note">{renderInlineMarks(suggestion.reason)}</p> : null}
                 <footer className="rr-edit__actions">
                   {status.kind === "pending" && !isEditing ? (
                     <>
@@ -422,7 +426,7 @@ export function ReviewRail({ result, resume, actions, resumeDiff, onHighlight, o
                         onClick={() => copySuggestion(index)}
                       >
                         <Clipboard size={12} aria-hidden="true" />
-                        {copiedIndex === index ? "Copied" : "Copy"}
+                        {copiedIndex === index ? "Copied" : copyFailedIndex === index ? "Copy failed" : "Copy"}
                       </button>
                     </>
                   ) : null}
@@ -442,7 +446,7 @@ export function ReviewRail({ result, resume, actions, resumeDiff, onHighlight, o
                 {status.kind === "stale" ? (
                   <span className="rr-edit__stale-badge" aria-label="Suggestion is stale">stale</span>
                 ) : null}
-                <p className="rr-edit__original">{rewrite.original}</p>
+                <p className="rr-edit__original">{renderInlineMarks(rewrite.original)}</p>
                 {isEditing ? (
                   <textarea
                     className="textarea rr-edit__draft"
@@ -453,7 +457,7 @@ export function ReviewRail({ result, resume, actions, resumeDiff, onHighlight, o
                   />
                 ) : (
                   <p className="rr-edit__rewrite">
-                    {status.kind === "applied" ? status.appliedText : rewrite.rewrite}
+                    {renderInlineMarks(status.kind === "applied" ? status.appliedText : rewrite.rewrite)}
                   </p>
                 )}
                 {rewrite.hits.length && !isEditing ? (
@@ -534,7 +538,7 @@ export function ReviewRail({ result, resume, actions, resumeDiff, onHighlight, o
                         onClick={() => copySuggestion(index)}
                       >
                         <Clipboard size={12} aria-hidden="true" />
-                        {copiedIndex === index ? "Copied" : "Copy"}
+                        {copiedIndex === index ? "Copied" : copyFailedIndex === index ? "Copy failed" : "Copy"}
                       </button>
                     </>
                   ) : null}

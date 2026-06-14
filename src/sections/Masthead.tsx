@@ -6,6 +6,8 @@ type MastheadProps = {
   // resume draft currently in the editor.
   onApply: () => void;
   applyDisabled: boolean;
+  // Explains why Apply is greyed out (mirrors polishHint).
+  applyHint: string;
   // Primary action: run the polish. The hint explains a disabled button.
   onPolish: () => void | Promise<void>;
   canPolish: boolean;
@@ -20,6 +22,7 @@ type MastheadProps = {
 export function Masthead({
   onApply,
   applyDisabled,
+  applyHint,
   onPolish,
   canPolish,
   isPolishing,
@@ -53,14 +56,14 @@ export function Masthead({
           title={canPolish ? "Tailor the resume to the job (AI polish + recruiter review)" : polishHint}
         >
           <Sparkles size={13} aria-hidden="true" />
-          <span>{isPolishing ? "Working…" : "Polish"}</span>
+          <span>{isPolishing ? <>Working<span className="loading-dots" aria-hidden="true" /></> : "Polish"}</span>
         </button>
         <button
           className="secondary-button is-compact masthead__apply"
           type="button"
           onClick={onApply}
           disabled={applyDisabled}
-          title="Mark as applied and save to the pipeline using the current resume draft"
+          title={applyDisabled ? applyHint : "Mark as applied and save to the pipeline using the current resume draft"}
         >
           <ClipboardCheck size={14} aria-hidden="true" />
           <span>Apply</span>

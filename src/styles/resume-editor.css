@@ -249,11 +249,21 @@
   position: relative;
   display: inline-flex;
   align-items: center;
+  /* Don't let a chip shrink: when the contact line is tight it must wrap WHOLE
+     chips to the next row (flex-wrap on .rdx-contact), not shrink a chip and
+     break its contact text mid-token ("xinyiklin@gmail." / "com"). */
+  flex-shrink: 0;
   --contact-divider-width: 0px;
 }
 
 .rdx-contact__chip:not(:first-child) {
-  --contact-divider-width: 0.85em;
+  /* Must equal the divider's RENDERED footprint: the ::before below is a
+     fixed-width flex item of exactly this size (no margins), so the absolutely
+     positioned remove "×" and hover bridge — which both subtract this var to
+     sit under the INPUT, not the divider — stay centered. A margin-based
+     divider made the real footprint (~2em) drift from this value (was 0.85em),
+     shifting the × off-center. */
+  --contact-divider-width: 1.82em;
 }
 
 .rdx-contact__chip::after {
@@ -267,12 +277,19 @@
 }
 
 /* Visual " | " divider between contact items, like the PDF's \quad$|$\quad
-   separators (a \quad = 1em of the \small font on each side). */
+   separators. A plain inline-block of fixed width (NOT an inline-flex item with
+   flex-basis — Firefox doesn't size that reliably as a flex child, collapsing it
+   so the glyph overlapped the text). The footprint is EXACTLY
+   --contact-divider-width, the value the × button + hover bridge subtract, and
+   text-align centers the glyph for the ~0.9em-a-side gap. flex:none keeps the
+   chip's flex layout from shrinking it. */
 .rdx-contact__chip:not(:first-child)::before {
   content: "|";
-  margin: 0 0.91em;
+  flex: none;
+  display: inline-block;
+  width: var(--contact-divider-width);
+  text-align: center;
   color: var(--ink-faint);
-  align-self: center;
 }
 
 /* Collapse each contact/link to its content width (field-sizing) with just a
@@ -283,6 +300,10 @@
   max-width: 100%;
   text-align: center;
   field-sizing: content;
+  /* A contact token (email/URL/path) is one unit — never break it mid-word.
+     Overrides the base .rdx-input white-space:pre-wrap + overflow-wrap:anywhere
+     so a tight row wraps the whole chip instead (see .rdx-contact__chip). */
+  white-space: nowrap;
 }
 
 .rdx-contact__remove {
@@ -500,9 +521,9 @@
 /* Entry rows mirror \resumeSubheading: bold title + plain date (row 1), italic
    subtitle + italic location (row 2). */
 .rdx-entry__title {
-  flex: 1 1 0;
+  flex: 0 1 auto;
   width: auto;
-  min-width: 0;
+  min-width: 4ch;
   font-weight: var(--doc-title-weight, 700);
   color: #000000;
 }
@@ -511,7 +532,6 @@
   flex: 0 0 auto;
   width: auto;
   min-width: 6ch;
-  max-width: 42%;
   text-align: right;
   font-weight: 400;
   font-style: var(--doc-date-style, normal);
@@ -520,9 +540,9 @@
 }
 
 .rdx-entry__subtitle {
-  flex: 1 1 0;
+  flex: 0 1 auto;
   width: auto;
-  min-width: 0;
+  min-width: 4ch;
   /* \small = 10pt = 0.913em (the PDF subtitle row is \small). */
   font-size: 0.91em;
   font-style: var(--doc-subtitle-style, italic);
@@ -533,7 +553,6 @@
   flex: 0 0 auto;
   width: auto;
   min-width: 5ch;
-  max-width: 36%;
   text-align: right;
   font-size: 0.91em;
   font-style: var(--doc-subtitle-style, italic);

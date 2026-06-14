@@ -38,7 +38,7 @@ export const TAB_GROUPS: Record<OutputTab, OutputTabGroup> = {
 // questions, plus a short description per work-experience role. Mirrors the
 // /api/application-answers response shape.
 export type GeneratedAnswer = { question: string; answer: string; needsInput: boolean };
-export type GeneratedRoleDescription = { role: string; description: string };
+export type GeneratedRoleDescription = { role: string; description: string; needsInput: boolean };
 export type ApplicationAnswersResult = {
   answers: GeneratedAnswer[];
   roleDescriptions: GeneratedRoleDescription[];
@@ -63,13 +63,6 @@ export type FitComparison = {
   tailored: number;
   reason: string;
 };
-
-export function scoreLabel(score: number) {
-  if (score >= 85) return "Strong";
-  if (score >= 70) return "Good";
-  if (score >= 55) return "Needs polish";
-  return "Needs work";
-}
 
 export function blockKindLabel(kind: ResumeBlockKind) {
   return (

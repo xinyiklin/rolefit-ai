@@ -109,15 +109,26 @@
 .application-company-mark {
   display: inline-grid;
   place-items: center;
+  flex-shrink: 0;
   width: 26px;
+  min-width: 26px;
   height: 26px;
   border-radius: var(--r-md);
   background: var(--cool-veil);
   border: 1px solid var(--cool-line);
   color: var(--cool);
   font-style: normal;
-  font-size: 0.72rem;
+  font-size: 0.64rem;
   font-weight: 700;
+  letter-spacing: 0.01em;
+  overflow: hidden;
+}
+
+/* Single-char initials scale up to match the visual weight of two-char pairs. */
+.application-company em[data-len="1"],
+.application-company-mark[data-len="1"] {
+  font-size: 0.8rem;
+  letter-spacing: 0;
 }
 
 .application-company strong {

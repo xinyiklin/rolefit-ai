@@ -2,6 +2,7 @@ import type { ChangeEvent } from "react";
 import {
   AlertCircle,
   CheckCircle2,
+  ChevronRight,
   FileText,
   FolderOpen,
   History,
@@ -20,6 +21,13 @@ type HistoryEntry = {
   date: string;
 };
 
+// Recent versions arrive grouped by variant; each group is an expandable row.
+type HistoryGroup = {
+  variant: string;
+  label: string;
+  entries: HistoryEntry[];
+};
+
 type BaseResumeOption = {
   fileName: string;
   label: string;
@@ -29,7 +37,7 @@ type BaseResumeOption = {
 type ResumeMenuProps = {
   baseResumeName: string;
   baseResumeOptions: BaseResumeOption[];
-  baseResumeHistory: HistoryEntry[];
+  baseResumeHistory: HistoryGroup[];
   workspaceStatus: string;
   isSavingBaseResume: boolean;
   fileName: string;
@@ -98,65 +106,63 @@ export function ResumeMenu({
         </>
       }
     >
-      <div className="workspace-card">
-        <div className="workspace-card__heading">
-          <FolderOpen size={14} aria-hidden="true" />
-          <span>
-            <strong>{baseResumeDisplayName || "No base saved"}</strong>
-            {baseResumeName ? <span>{baseResumeName}</span> : null}
-          </span>
+      {/* Flat source header — no card wrapper */}
+      <div className="resume-source-head">
+        <FolderOpen size={14} aria-hidden="true" />
+        <div className="resume-source-head__info">
+          <strong>{baseResumeDisplayName || "No base saved"}</strong>
         </div>
-        <div className="workspace-actions">
-          <button
-            className="secondary-button is-compact"
-            type="button"
-            disabled={resumeText.trim().length < 80 || isSavingBaseResume}
-            onClick={onSaveCurrentAsBase}
-            title="Save current resume as workspace base"
-          >
-            <Save size={12} aria-hidden="true" />
-            Save
-          </button>
-          <button
-            className="secondary-button is-compact"
-            type="button"
-            disabled={!baseResumeName}
-            onClick={() => onLoadWorkspace(true)}
-            title="Reload base from workspace"
-          >
-            <RefreshCw size={12} aria-hidden="true" />
-            Reload
-          </button>
-          <button
-            className="secondary-button is-compact"
-            type="button"
-            disabled={!baseResumeName || isSavingBaseResume}
-            onClick={onRemoveBaseResume}
-            title="Remove the saved base resume from the workspace"
-          >
-            <Trash2 size={12} aria-hidden="true" />
-            Remove
-          </button>
-        </div>
-        {workspaceStatus ? <p className="workspace-status">{workspaceStatus}</p> : null}
       </div>
+      <div className="workspace-actions">
+        <button
+          className="secondary-button is-compact"
+          type="button"
+          disabled={resumeText.trim().length < 80 || isSavingBaseResume}
+          onClick={onSaveCurrentAsBase}
+          title="Save current resume as workspace base"
+        >
+          <Save size={12} aria-hidden="true" />
+          Save
+        </button>
+        <button
+          className="secondary-button is-compact"
+          type="button"
+          disabled={!baseResumeName}
+          onClick={() => onLoadWorkspace(true)}
+          title="Reload base from workspace"
+        >
+          <RefreshCw size={12} aria-hidden="true" />
+          Reload
+        </button>
+        <button
+          className="secondary-button is-compact"
+          type="button"
+          disabled={!baseResumeName || isSavingBaseResume}
+          onClick={onRemoveBaseResume}
+          title="Remove the saved base resume from the workspace"
+        >
+          <Trash2 size={12} aria-hidden="true" />
+          Remove
+        </button>
+      </div>
+      {workspaceStatus ? <p className="micro-status">{workspaceStatus}</p> : null}
 
+      {/* Base versions section */}
       {baseResumeOptions.length > 1 ? (
-        <div className="resume-versions">
-          <div className="resume-history__heading">
-            <FileText size={12} aria-hidden="true" />
+        <div className="resume-section">
+          <div className="resume-section__head">
+            <FileText size={11} aria-hidden="true" />
             <span>Base versions</span>
           </div>
-          <ul className="resume-history__list">
+          <ul className="resume-list">
             {baseResumeOptions.map((option) => {
               const isActive = option.fileName === baseResumeName;
               return (
-                <li key={option.fileName} className={`resume-history__item resume-version${isActive ? " is-active" : ""}`}>
-                  <span className="resume-history__name">
+                <li key={option.fileName} className={`resume-list__item${isActive ? " is-active" : ""}`}>
+                  <span className="resume-list__name">
                     {option.label}
                     <small>{option.fileName}</small>
                   </span>
-                  <span className="resume-history__date">{option.kind.toUpperCase()}</span>
                   <button
                     className="ghost-button is-compact"
                     type="button"
@@ -164,7 +170,7 @@ export function ResumeMenu({
                     onClick={() => onLoadBaseResumeVersion(option.fileName)}
                     title={`Load ${option.fileName}`}
                   >
-                    {isActive ? "Loaded" : "Load"}
+                    {isActive ? "Active" : "Load"}
                   </button>
                 </li>
               );
@@ -173,30 +179,51 @@ export function ResumeMenu({
         </div>
       ) : null}
 
+      {/* Recent versions — grouped by variant, each group expandable (up to 3 each) */}
       {baseResumeHistory.length > 0 ? (
-        <div className="resume-history">
-          <div className="resume-history__heading">
-            <History size={12} aria-hidden="true" />
-            <span>Recent versions</span>
+        <div className="resume-section">
+          <div className="resume-section__head">
+            <History size={11} aria-hidden="true" />
+            <span>Recent</span>
           </div>
-          <ul className="resume-history__list">
-            {baseResumeHistory.map((entry) => (
-              <li key={entry.key} className="resume-history__item">
-                <span className="resume-history__name">{entry.originalName}</span>
-                <span className="resume-history__date">{formatHistoryDate(entry.date)}</span>
-                <button
-                  className="ghost-button is-compact"
-                  type="button"
-                  disabled={isSavingBaseResume}
-                  onClick={() => onRestoreBaseResume(entry.key)}
-                  title={`Restore ${entry.originalName} from ${entry.date}`}
+          <div className="resume-history">
+            {baseResumeHistory.map((group) => {
+              const isActiveVariant = baseResumeName.replace(/\.[a-z]+$/i, "") === group.variant;
+              return (
+                <details
+                  key={group.variant}
+                  className="resume-history__group"
+                  open={isActiveVariant || baseResumeHistory.length === 1}
                 >
-                  <RotateCcw size={11} aria-hidden="true" />
-                  Restore
-                </button>
-              </li>
-            ))}
-          </ul>
+                  <summary className="resume-history__summary">
+                    <ChevronRight size={12} aria-hidden="true" className="resume-history__chevron" />
+                    <span className="resume-history__label">{group.label}</span>
+                    <span className="resume-history__count">{group.entries.length}</span>
+                  </summary>
+                  <ul className="resume-list">
+                    {group.entries.map((entry) => (
+                      <li key={entry.key} className="resume-list__item">
+                        <span className="resume-list__name">
+                          {formatHistoryDate(entry.date)}
+                          <small>{entry.kind.toUpperCase()}</small>
+                        </span>
+                        <button
+                          className="ghost-button is-compact"
+                          type="button"
+                          disabled={isSavingBaseResume}
+                          onClick={() => onRestoreBaseResume(entry.key)}
+                          title={`Restore ${entry.originalName} from ${entry.date}`}
+                        >
+                          <RotateCcw size={11} aria-hidden="true" />
+                          Restore
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              );
+            })}
+          </div>
         </div>
       ) : null}
 
