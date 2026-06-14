@@ -250,8 +250,17 @@ function enumValue(value, allowed, fallback) {
 // value, arrays are capped, and rewrite/suggestedEdit text that smuggles
 // LaTeX/HTML/newlines is dropped via the same containsStructuredMarkup gate the
 // applyable tailor suggestions use.
-export function sanitizeStrictReview(raw) {
+//
+// jobText + grounding gate the APPLYABLE rewrite/suggestedEdit text through the
+// same findUngroundedJdTerm check the tailor path uses: a one-click rewrite is
+// written straight into a resume bullet, so a JD skill it introduces that is
+// absent from the polished resume + honest context is fabrication. An ungrounded
+// rewrite is dropped entirely; an ungrounded suggestedEdit is blanked (the gap
+// itself still shows, just without the unsupported paste-ready copy).
+export function sanitizeStrictReview(raw, jobText = "", grounding = "") {
   if (!raw || typeof raw !== "object") return null;
+  const jobLower = String(jobText ?? "").toLowerCase();
+  const groundingLower = String(grounding ?? "").toLowerCase();
 
   const coverage = (Array.isArray(raw.coverage) ? raw.coverage : [])
     .map((row) => {
@@ -273,10 +282,13 @@ export function sanitizeStrictReview(raw) {
       if (!gap || typeof gap !== "object") return null;
       const gapText = clippedString(gap.gap, 300);
       if (!gapText) return null;
-      const suggestedEdit = clippedString(gap.suggestedEdit, 1400);
+      let suggestedEdit = clippedString(gap.suggestedEdit, 1400);
       // A suggestedEdit is rendered as inline copy the user may paste into a
       // bullet; reject smuggled markup the same way tailor suggestions do.
       if (suggestedEdit && containsStructuredMarkup(gap.suggestedEdit)) return null;
+      // Blank a paste-ready edit that introduces an ungrounded JD skill term —
+      // the gap stays visible, but we don't hand the user unsupported copy.
+      if (suggestedEdit && findUngroundedJdTerm(suggestedEdit, jobLower, groundingLower)) suggestedEdit = "";
       const evidenceType = EVIDENCE_TYPES.has(String(gap.evidenceType)) ? String(gap.evidenceType) : "none";
       return {
         gap: gapText,
@@ -299,6 +311,9 @@ export function sanitizeStrictReview(raw) {
       // The client offers a one-click "apply" of rewrite text into the resume;
       // it must be plain prose, never LaTeX/HTML/multi-line markup.
       if (containsStructuredMarkup(item.rewrite)) return null;
+      // Same JD-term grounding the tailor path enforces: a rewrite is applied
+      // directly into a bullet, so an ungrounded JD skill in it is fabrication.
+      if (findUngroundedJdTerm(rewrite, jobLower, groundingLower)) return null;
       const hits = Array.isArray(item.hits)
         ? item.hits.map((hit) => clippedString(hit, 80)).filter(Boolean).slice(0, 6)
         : [];
@@ -421,8 +436,16 @@ export function scoreFromBuckets(rawBuckets) {
 export function applyGapCapsAndVerdict(aiScore, strictReview) {
   if (!aiScore) return { aiScore, verdict: strictReview?.verdict ?? null };
   const gaps = Array.isArray(strictReview?.gaps) ? strictReview.gaps : [];
+  // Graduated HIGH-gap cap. A single missing required skill is near-universal on
+  // an honest pass against an 8-15 skill JD; the old binary "any HIGH -> 69"
+  // pinned otherwise-strong matches to the STRETCH ceiling, which is why almost
+  // everything read STRETCH. Now the cap scales with how many required skills are
+  // genuinely missing. A BLOCKER still forces DON'T APPLY (unchanged).
+  const highGaps = gaps.filter((gap) => gap.severity === "HIGH").length;
   let cap = 100;
-  if (gaps.some((gap) => gap.severity === "HIGH")) cap = 69;
+  if (highGaps >= 1) cap = 79; // 1 missing required skill: top of REASONABLE FIT
+  if (highGaps >= 2) cap = 69; // 2: STRETCH ceiling (the old flat behavior)
+  if (highGaps >= 3) cap = 60; // 3+: solidly STRETCH
   if (gaps.some((gap) => gap.severity === "BLOCKER")) cap = 45;
   const base = Math.min(aiScore.base, cap);
   const tailored = Math.min(aiScore.tailored, cap);

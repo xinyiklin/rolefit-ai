@@ -26,6 +26,8 @@ import { useResumeEditor } from "./hooks/useResumeEditor";
 import { useResumeExport } from "./hooks/useResumeExport";
 import { arrayBufferToBase64 } from "./lib/downloads";
 import { buildAiRequestFields, buildAuditRequestFields } from "./lib/aiRequest";
+import { loadLastBaseResumeName, saveLastBaseResumeName } from "./lib/baseResumePrefs";
+import { buildCandidateFactsContext, mergeHonestContext } from "./lib/candidateFacts";
 import { extractJobPosting, type ExtractedJobTracking } from "./lib/jobExtract";
 import { buildResumeBlocks } from "./lib/resumeBlocks";
 import { serializeResumeData, toTemplateSchema } from "./lib/resumeData";
@@ -80,11 +82,19 @@ type BaseResumeHistoryEntry = {
   date: string;
 };
 
+// Recent versions are grouped by variant (one expandable group per variant),
+// each capped server-side to its most recent entries.
+type BaseResumeHistoryGroup = {
+  variant: string;
+  label: string;
+  entries: BaseResumeHistoryEntry[];
+};
+
 type JobWorkspace = {
   path: string;
   baseResume: WorkspaceBaseResume;
   baseResumeOptions?: BaseResumeOption[];
-  baseResumeHistory?: BaseResumeHistoryEntry[];
+  baseResumeHistory?: BaseResumeHistoryGroup[];
   files: string[];
 };
 
@@ -145,7 +155,11 @@ function App() {
   const [fileStatus, setFileStatus] = useState("");
   const [linkStatus, setLinkStatus] = useState("");
   const [isPolishing, setIsPolishing] = useState(false);
-  const [, setPolishStatus] = useState("");
+  // Surfaces polish-flow feedback the user otherwise never sees: AI-failure
+  // reasons (the local fallback still renders) and the pre-flight guards
+  // ("load a resume", "select a section to tailor"). Rendered in an aria-live
+  // banner below the masthead.
+  const [polishStatus, setPolishStatus] = useState("");
   // Resume export (print/LaTeX/preview) state + handlers live in
   // useResumeExport; texStatus stays here because non-export handlers write it too.
   const [texStatus, setTexStatus] = useState("");
@@ -181,20 +195,26 @@ function App() {
     handleAuditProviderChange,
     honestContext,
     setHonestContext,
+    strictReview,
+    setStrictReview,
+    citizenshipStatus,
+    setCitizenshipStatus,
+    legallyAuthorizedToWork,
+    setLegallyAuthorizedToWork,
+    requiresSponsorship,
+    setRequiresSponsorship,
     customInstructions,
     setCustomInstructions
   } = ai;
+  const candidateFactsContext = buildCandidateFactsContext({ citizenshipStatus, legallyAuthorizedToWork, requiresSponsorship });
+  const requestHonestContext = mergeHonestContext(honestContext, candidateFactsContext);
   const [includeCoverLetter, setIncludeCoverLetter] = useState(false);
-  // Default OFF: strict review fires a second, slow `claude -p` audit pass after
-  // the rewrite, roughly doubling polish latency. Opt in via the Options menu
-  // toggle when you want the skeptical recruiter audit.
-  const [strictReview, setStrictReview] = useState(false);
   const [activeOutputTab, setActiveOutputTab] = useState<OutputTab>("resume");
   const [workspacePath, setWorkspacePath] = useState("");
   const [workspaceFiles, setWorkspaceFiles] = useState<string[]>([]);
   const [baseResumeName, setBaseResumeName] = useState("");
   const [baseResumeOptions, setBaseResumeOptions] = useState<BaseResumeOption[]>([]);
-  const [baseResumeHistory, setBaseResumeHistory] = useState<BaseResumeHistoryEntry[]>([]);
+  const [baseResumeHistory, setBaseResumeHistory] = useState<BaseResumeHistoryGroup[]>([]);
   const [workspaceStatus, setWorkspaceStatus] = useState("");
   const [isSavingBaseResume, setIsSavingBaseResume] = useState(false);
   const [pipelineFilter, setPipelineFilter] = useState<"all" | ApplicationStatus>("all");
@@ -271,7 +291,7 @@ function App() {
     resumeText,
     jobDescription,
     jobUrl,
-    honestContext,
+    honestContext: requestHonestContext,
     customInstructions,
     aiRequest: { aiProvider, apiKey, apiBaseUrl, selectedModel, customModel, cliReasoningEffort },
     upsertApplication,
@@ -348,17 +368,30 @@ function App() {
     resumeBlocks
   });
 
+  // Distill the job once per (description, url, import) instead of on every
+  // render. The full extractJobPosting parser is ~1500 LOC; running it in the
+  // component body (materialsJobTarget + the apply/export callers below) re-parsed
+  // the JD on every keystroke-driven re-render. Memoizing matches the debounce
+  // discipline the scoring path already uses, with no behavior change.
+  const jobTracking = useMemo((): ExtractedJobTracking => {
+    const fresh = extractJobPosting(jobDescription, { url: jobUrl }).tracking;
+    const imported =
+      importedJob &&
+      importedJob.url === jobUrl.trim() &&
+      importedJob.tailoringText === jobDescription.trim()
+        ? importedJob.tracking
+        : null;
+    return imported ? { ...definedTracking(fresh), ...definedTracking(imported) } : definedTracking(fresh);
+  }, [jobDescription, jobUrl, importedJob]);
+
   // ----- Derived (non-memo) -----
   const resumeReady = (currentResumeText || resumeText).trim().length > 80;
   const jobReady = jobDescription.trim().length > 40;
   // Quiet target label for the Materials tab plan rail header.
   // Only derived when a job description is present; never invents content.
   const materialsJobTarget =
-    jobReady
-      ? (() => {
-          const t = currentJobTracking();
-          return t.role || t.company ? { role: t.role, company: t.company } : undefined;
-        })()
+    jobReady && (jobTracking.role || jobTracking.company)
+      ? { role: jobTracking.role, company: jobTracking.company }
       : undefined;
   // Exports work from the structured editor model (the same faithful path as the
   // compile preview), so they unlock as soon as a resume is loaded — not only
@@ -427,6 +460,7 @@ function App() {
   function applyWorkspaceBaseResume(baseResume: WorkspaceBaseResume, status: string) {
     if (!baseResume.exists || !baseResume.text) return;
 
+    saveLastBaseResumeName(baseResume.fileName ?? "");
     setResumeText(baseResume.text);
     setFileName(baseResume.fileName ?? "base-resume");
     setBaseResumeName(baseResume.fileName ?? "");
@@ -452,7 +486,10 @@ function App() {
     setWorkspaceFiles(workspace.files ?? []);
     setBaseResumeName(workspace.baseResume?.exists ? workspace.baseResume.fileName ?? "" : "");
     setBaseResumeOptions(workspace.baseResumeOptions ?? []);
-    setBaseResumeHistory(workspace.baseResumeHistory ?? []);
+    // Only overwrite history when the response actually carries it. A partial
+    // response (e.g. a caller that forgets the field) must not silently wipe the
+    // Recent list — that was the "history disappears on save" bug.
+    if (workspace.baseResumeHistory !== undefined) setBaseResumeHistory(workspace.baseResumeHistory);
   }
 
   async function loadWorkspace(applyBaseResume = false) {
@@ -463,14 +500,31 @@ function App() {
 
       updateWorkspaceState(workspace);
       if (workspace.baseResume?.exists) {
-        setWorkspaceStatus(`Local workspace ready with ${workspace.baseResume.fileName}.`);
         if (applyBaseResume) {
-          applyWorkspaceBaseResume(
-            workspace.baseResume,
-            `Auto-loaded ${workspace.baseResume.fileName} from the local workspace.`
-          );
+          const rememberedName = loadLastBaseResumeName();
+          const availableBaseNames = new Set([
+            workspace.baseResume.fileName ?? "",
+            ...(workspace.baseResumeOptions ?? []).map((option) => option.fileName)
+          ]);
+          const rememberedExists = availableBaseNames.has(rememberedName);
+          if (
+            rememberedName &&
+            rememberedExists &&
+            rememberedName !== workspace.baseResume.fileName
+          ) {
+            await loadBaseResumeVersion(rememberedName);
+            return;
+          }
+          if (rememberedName && !rememberedExists) {
+            saveLastBaseResumeName("");
+          }
+          setWorkspaceStatus("");
+          applyWorkspaceBaseResume(workspace.baseResume, "");
+          return;
         }
+        setWorkspaceStatus("");
       } else {
+        saveLastBaseResumeName("");
         setWorkspaceStatus("Local workspace ready. Save a base resume to use it automatically on startup.");
         if (applyBaseResume && workspace.baseResume?.text) {
           setResumeText(workspace.baseResume.text);
@@ -505,13 +559,11 @@ function App() {
         path: workspace.path ?? workspacePath,
         baseResume: workspace.baseResume,
         baseResumeOptions: workspace.baseResumeOptions,
+        baseResumeHistory: workspace.baseResumeHistory,
         files: workspace.files ?? workspaceFiles
       });
-      applyWorkspaceBaseResume(
-        workspace.baseResume,
-        `Saved and loaded ${workspace.baseResume.fileName} as the base resume.`
-      );
-      setWorkspaceStatus(`Saved ${workspace.baseResume.fileName} in the local workspace.`);
+      applyWorkspaceBaseResume(workspace.baseResume, "");
+      setWorkspaceStatus("Saved.");
     } catch (error) {
       setWorkspaceStatus(error instanceof Error ? error.message : "Base resume save failed.");
     } finally {
@@ -538,10 +590,12 @@ function App() {
         path: workspace.path ?? workspacePath,
         baseResume: workspace.baseResume ?? { exists: false },
         baseResumeOptions: workspace.baseResumeOptions,
+        baseResumeHistory: workspace.baseResumeHistory,
         files: workspace.files ?? workspaceFiles
       });
       // Detach the file from the editor so the resume text is editable again,
       // but keep the current text so the user doesn't lose their draft.
+      saveLastBaseResumeName("");
       setFileName("");
       setResumeBlocks([]);
       setFileStatus("");
@@ -564,7 +618,7 @@ function App() {
       });
       const workspace = (await response.json()) as Partial<JobWorkspace> & {
         baseResume?: WorkspaceBaseResume;
-        baseResumeHistory?: BaseResumeHistoryEntry[];
+        baseResumeHistory?: BaseResumeHistoryGroup[];
         error?: string;
       };
       if (!response.ok || !workspace.baseResume) {
@@ -577,8 +631,8 @@ function App() {
         baseResumeHistory: workspace.baseResumeHistory,
         files: workspace.files ?? workspaceFiles
       });
-      applyWorkspaceBaseResume(workspace.baseResume, `Restored ${workspace.baseResume.fileName} from history.`);
-      setWorkspaceStatus(`Restored ${workspace.baseResume.fileName} from history.`);
+      applyWorkspaceBaseResume(workspace.baseResume, "");
+      setWorkspaceStatus("Restored.");
     } catch (error) {
       setWorkspaceStatus(error instanceof Error ? error.message : "Restore failed.");
     } finally {
@@ -630,8 +684,8 @@ function App() {
         baseResumeHistory: workspace.baseResumeHistory,
         files: workspace.files ?? workspaceFiles
       });
-      applyWorkspaceBaseResume(workspace.baseResume, `Loaded ${workspace.baseResume.fileName} into the editor.`);
-      setWorkspaceStatus(`Loaded ${workspace.baseResume.fileName}.`);
+      applyWorkspaceBaseResume(workspace.baseResume, "");
+      setWorkspaceStatus("");
     } catch (error) {
       setWorkspaceStatus(error instanceof Error ? error.message : "Base resume load failed.");
     } finally {
@@ -646,6 +700,9 @@ function App() {
     setFileName(file.name);
     setFileError("");
     setFileStatus("");
+    // Clear any stale "Load a resume before polishing." guard — uploading is
+    // exactly the action that resolves it.
+    setPolishStatus("");
     setResumeBlocks([]);
     setResult(null);
 
@@ -730,14 +787,15 @@ function App() {
       : fallbackBase;
 
     setIsPolishing(true);
+    // No trailing "…": while isPolishing, the toast appends animated dots.
     setPolishStatus(
       strictReview
         ? includeCoverLetter
-          ? "Drafting targeted suggestions, strict review, and cover letter…"
-          : "Drafting targeted suggestions and strict review…"
+          ? "Drafting targeted suggestions, strict review, and cover letter"
+          : "Drafting targeted suggestions and strict review"
         : includeCoverLetter
-          ? "Drafting targeted suggestions and cover letter…"
-          : "Drafting targeted suggestions…"
+          ? "Drafting targeted suggestions and cover letter"
+          : "Drafting targeted suggestions"
     );
     resetExportStatuses();
     setTexStatus("");
@@ -767,7 +825,7 @@ function App() {
           jobText: jobDescription,
           includeCoverLetter,
           strictReview,
-          honestContext,
+          honestContext: requestHonestContext,
           customInstructions
         })
       });
@@ -840,15 +898,10 @@ function App() {
     setPolishStatus(`Added evidence prompt for "${keyword}" — fill it in, then Polish again.`);
   }
 
+  // Reads the memoized distillation above (apply/export callers run at click time,
+  // so the value is always current); kept as a function for call-site stability.
   function currentJobTracking(): ExtractedJobTracking {
-    const fresh = extractJobPosting(jobDescription, { url: jobUrl }).tracking;
-    const imported =
-      importedJob &&
-      importedJob.url === jobUrl.trim() &&
-      importedJob.tailoringText === jobDescription.trim()
-        ? importedJob.tracking
-        : null;
-    return imported ? { ...definedTracking(fresh), ...definedTracking(imported) } : definedTracking(fresh);
+    return jobTracking;
   }
 
   async function handleExtractFromLink() {
@@ -947,13 +1000,12 @@ function App() {
     );
   }
 
-  function handleApply() {
+  // The actual apply: save the application, snapshot artifacts, update UI.
+  // Called directly when the user has opted to skip the download dialog, or
+  // from the dialog's Download / Use-base callbacks.
+  function commitApply() {
     if (!jobUrl.trim() && !jobDescription.trim()) return;
     const sr = result?.strictReview;
-    // Apply always sends the final draft in the resume editor — the editor model
-    // is the export/pipeline source of truth, so there's no "which resume?" prompt.
-    // We still record whether that draft reflects accepted AI changes (tailored)
-    // or is the untouched base, for honest pipeline display.
     const hasStructuredSuggestions = Boolean(result?.suggestedChanges?.length);
     const acceptedStructuredSuggestions =
       hasStructuredSuggestions &&
@@ -963,15 +1015,12 @@ function App() {
     const sentResume = currentResumeText || resumeText || result?.polishedText || "";
     const existing = findForTarget(jobUrl, jobDescription);
     const now = new Date().toISOString();
-    // Apply marks the role as submitted, but never regresses a role that's
-    // already further along (interviewing/offer/etc.) on re-apply.
     const status: ApplicationStatus =
       existing && existing.status && existing.status !== "interested" ? existing.status : "applied";
     const draft = makeApplicationDraft(jobUrl, jobDescription, currentJobTracking());
     const app: Application = {
       ...draft,
       id: existing?.id ?? draft.id,
-      // Keep the original applied date on re-apply; stamp it now the first time.
       status,
       appliedAt: existing?.appliedAt ?? now,
       fitScore: headlineScore ?? result?.score.overall ?? null,
@@ -984,8 +1033,6 @@ function App() {
       resumeUsed: usedBase ? "base" : "tailored",
       coverLetterText: result?.coverLetterText ?? "",
       missingRequiredSkills: result?.missingRequiredSkills?.length ? result.missingRequiredSkills : undefined,
-      // Snapshot the recruiter review so the pipeline keeps the verdict,
-      // interview risks, and gaps for this application.
       review: sr
         ? {
             verdict: sr.verdict,
@@ -1012,28 +1059,38 @@ function App() {
     setTexStatus(`Applied — saved "${existing?.title || app.title}" to Applications (${usedBase ? "original" : "tailored"} resume).`);
     setActiveOutputTab("applications");
     setExpandedApplicationId(existing?.id ?? app.id);
-    // Snapshot the resume that went out (.tex always, PDF when Tectonic is
-    // available) to the workspace so the detail modal can re-download it later.
     void saveAppliedResumeArtifacts(existing?.id ?? app.id, existing?.title || app.title);
-    // Offer to download a copy of the resume that just went out, in the user's
-    // preferred format (only when there is a renderable resume to export).
-    if (canExportResume) setApplyDownloadPrompt({ label: existing?.title || app.title });
   }
 
-  // Dispatch the post-Apply download to the matching export handler, passing the
-  // file name the user chose in the prompt (export handlers sanitize + re-attach
-  // the extension; an empty name falls back to the system name). When the user
-  // opts in, remember the chosen format as their default for next time.
+  // Apply button handler: if the user has opted to skip the dialog, commit
+  // immediately; otherwise show the pre-apply dialog for format/base choice.
+  function handleApply() {
+    if (!jobUrl.trim() && !jobDescription.trim()) return;
+    if (!canExportResume) {
+      commitApply();
+      return;
+    }
+    const existing = findForTarget(jobUrl, jobDescription);
+    const draft = makeApplicationDraft(jobUrl, jobDescription, currentJobTracking());
+    setApplyDownloadPrompt({ label: existing?.title || draft.title });
+  }
+
   function handleApplyDownloadPick(format: ExportFormat, makeDefault: boolean, fileBaseName: string) {
     if (makeDefault) {
       saveDefaultExportFormat(format);
       setDefaultExportFormat(format);
     }
-    const base = fileBaseName || undefined;
     setApplyDownloadPrompt(null);
+    commitApply();
+    const base = fileBaseName || undefined;
     if (format === "pdf-latex") void handleDownloadLatexPdf(base);
     else if (format === "pdf-clean") handlePrintResume(base);
     else handleDownloadTex(base);
+  }
+
+  function handleUseBase() {
+    setApplyDownloadPrompt(null);
+    commitApply();
   }
 
   // Render the current resume to .tex/.pdf and persist them under the applied
@@ -1140,6 +1197,7 @@ function App() {
       <Masthead
         onApply={handleApply}
         applyDisabled={!jobUrl.trim() && !jobDescription.trim()}
+        applyHint="Add a job link or description (Job menu) before applying."
         onPolish={handlePolish}
         canPolish={canPolish}
         isPolishing={isPolishing}
@@ -1217,6 +1275,12 @@ function App() {
             setStrictReview={setStrictReview}
             honestContext={honestContext}
             setHonestContext={setHonestContext}
+            citizenshipStatus={citizenshipStatus}
+            setCitizenshipStatus={setCitizenshipStatus}
+            legallyAuthorizedToWork={legallyAuthorizedToWork}
+            setLegallyAuthorizedToWork={setLegallyAuthorizedToWork}
+            requiresSponsorship={requiresSponsorship}
+            setRequiresSponsorship={setRequiresSponsorship}
             customInstructions={customInstructions}
             setCustomInstructions={setCustomInstructions}
             open={polishMenuOpen}
@@ -1225,6 +1289,23 @@ function App() {
           />
         }
       />
+
+      {polishStatus ? (
+        <div className="polish-toast" role="status" aria-live="polite">
+          <span className="polish-toast__text">
+            {polishStatus}
+            {isPolishing ? <span className="loading-dots" aria-hidden="true" /> : null}
+          </span>
+          <button
+            type="button"
+            className="polish-toast__dismiss"
+            onClick={() => setPolishStatus("")}
+            aria-label="Dismiss message"
+          >
+            ×
+          </button>
+        </div>
+      ) : null}
 
       <div className="workspace-grid">
         <StudioPane
@@ -1351,6 +1432,7 @@ function App() {
           defaultFileBaseName={resumeDownloadName("pdf").replace(/\.pdf$/i, "")}
           onDownload={handleApplyDownloadPick}
           onSkip={() => setApplyDownloadPrompt(null)}
+          onUseBase={handleUseBase}
         />
       ) : null}
 

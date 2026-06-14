@@ -90,7 +90,7 @@ export function TrackerTableView({
                   onDoubleClick={() => onDoubleClick(app)}
                 >
                   <span className="application-company" role="cell">
-                    <em>{companyInitials(displayCompany(app))}</em>
+                    <em data-len={companyInitials(displayCompany(app)).length}>{companyInitials(displayCompany(app))}</em>
                     <strong>{displayCompany(app)}</strong>
                   </span>
                   <span role="cell" className={displayRole(app) === "Role not set" ? "text-placeholder" : ""}>

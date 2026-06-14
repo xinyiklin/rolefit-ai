@@ -52,19 +52,25 @@ export function fitScore(app: Application) {
     : null;
 }
 
+// Score -> band. Thresholds MIRROR verdictForScore / VERDICT_SCORE_BANDS in
+// server/ai/sanitize.mjs (the single source of truth: STRONG FIT >=85,
+// REASONABLE FIT >=70, STRETCH >=46, DON'T APPLY <46). They MUST stay in sync —
+// server .mjs and client .ts can't import each other. Previously these used
+// 85/75/60, so a STRETCH-band score (46-69) showed "Weak match" on Apply while
+// the polish pane showed "STRETCH" for the identical number.
 export function fitLabel(score: number | null) {
   if (score === null) return "Not scored";
   if (score >= 85) return "Strong match";
-  if (score >= 75) return "Good match";
-  if (score >= 60) return "Stretch";
+  if (score >= 70) return "Good match";
+  if (score >= 46) return "Stretch";
   return "Weak match";
 }
 
 export function fitTone(score: number | null) {
   if (score === null) return "neutral";
   if (score >= 85) return "strong";
-  if (score >= 75) return "good";
-  if (score >= 60) return "stretch";
+  if (score >= 70) return "good";
+  if (score >= 46) return "stretch";
   return "weak";
 }
 
@@ -83,7 +89,9 @@ export function priorityFor(app: Application) {
   const score = fitScore(app);
   if (score !== null && score >= 85) return "High";
   if (app.status === "interviewing" || app.status === "offer") return "High";
-  if (score !== null && score < 65) return "Low";
+  // Below the STRETCH floor (46, the DON'T APPLY boundary) — not just below 65 —
+  // so a 46-64 "Stretch" reads Medium priority, consistent with its label.
+  if (score !== null && score < 46) return "Low";
   return "Medium";
 }
 

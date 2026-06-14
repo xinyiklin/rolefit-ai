@@ -85,6 +85,15 @@ const LOWERCASE_TOOL_NAMES = new Set([
   "playwright", "selenium", "pytest", "twilio", "kubernetes"
 ]);
 
+// Detector 4: curated SHORT (1-3 char) tech tokens that detector 1's 3+ char
+// minimum structurally misses. Only DISTINCTIVE, non-colliding tokens are
+// included — the deliberate call the coverage gap requires. Collision-prone
+// short tokens are EXCLUDED on purpose: bare "go" doubles as the English verb
+// and the "go-to-market" compound, and single letters "r"/"c" appear constantly
+// in ordinary prose; including them would false-positive and risk dropping honest
+// content. "#"/"+" survive the token regex so "c#"/"c++" match token-anchored.
+const SHORT_TECH_TOKENS = new Set(["c#", "c++", "ml", "nlp"]);
+
 const LEADING_ACTION_VERBS = new Set([
   "built", "led", "designed", "implemented", "created", "developed",
   "automated", "migrated", "reduced", "shipped", "integrated", "engineered",
@@ -100,6 +109,15 @@ const LEADING_ACTION_VERBS = new Set([
 
 function normalizePhrase(text) {
   return text.replace(/[-/]+/g, " ");
+}
+
+// The token regex keeps '.' (so node.js / .net survive), which means a
+// sentence-final token glues its period: "C#." -> "c#.". Free a boundary period
+// (followed by whitespace or end) into a space before tokenizing so a short
+// token at a sentence end still matches the bare SHORT_TECH_TOKENS form — while
+// internal periods (node.js, .net) stay intact. Mirrors keywords.ts includesKeyword.
+function stripBoundaryDots(text) {
+  return text.replace(/\.(?=\s|$)/g, " ");
 }
 
 // Common shorthand families where the long and short forms are the SAME
@@ -136,27 +154,42 @@ function isGrounded(groundingText, groundingTokens, term) {
 // Returns the first ungrounded JD term found in proposedText, or null.
 // All inputs are matched case-insensitively; `jobLower` and `grounding` must
 // already be lower-cased by the caller.
-export function findUngroundedJdTerm(proposedText, jobLower, grounding) {
+//
+// options.proseMode — for free-form prose surfaces (cover letter, application
+// answers) where naming the target company/role/product FROM the JD is expected
+// and legitimate. It skips detector 1 (which flags every capitalized JD token,
+// company and role names included) and relies on the curated tech-skill lexicons
+// (detectors 2-4) instead, so "excited about Acme's roadmap" is NOT flagged while
+// "I have Kubernetes/Terraform/ML experience" still is. Resume-field surfaces
+// (tailor + strict-review rewrites) leave it off and run all detectors.
+export function findUngroundedJdTerm(proposedText, jobLower, grounding, options = {}) {
   if (!jobLower) return null;
+  const proseMode = Boolean(options.proseMode);
   const markStripped = String(proposedText ?? "").replace(/<\/?(?:b|i|u)>/gi, " ");
   const proposedLower = markStripped.toLowerCase();
-  const groundingTokens = new Set(grounding.match(/[a-z0-9.#+]+/g) ?? []);
-  // Token sets used by the bounded lexicon sweep (detector 3). Matching is
+  // Boundary periods are freed before tokenizing (see stripBoundaryDots) so a
+  // sentence-final "C#."/"ML." still produces the bare "c#"/"ml" token, for both
+  // the lexicon sweeps below AND the grounding corpus that must ground them.
+  const groundingTokens = new Set(stripBoundaryDots(grounding).match(/[a-z0-9.#+]+/g) ?? []);
+  // Token sets used by the bounded lexicon sweeps (detectors 3-4). Matching is
   // token-anchored (set membership) on BOTH the JD and the proposed text,
   // never substring, so "java" cannot match inside "javascript" — the same
   // discipline as isGrounded.
-  const proposedTokens = new Set(proposedLower.match(/[a-z0-9.#+]+/g) ?? []);
-  const jobTokens = new Set(jobLower.match(/[a-z0-9.#+]+/g) ?? []);
+  const proposedTokens = new Set(stripBoundaryDots(proposedLower).match(/[a-z0-9.#+]+/g) ?? []);
+  const jobTokens = new Set(stripBoundaryDots(jobLower).match(/[a-z0-9.#+]+/g) ?? []);
 
   // Detector 1: capitalized tokens of 3+ chars, including a non-verb first
-  // word. 1-2 char tokens (Go, ML, QA, C#) are out of scope — substring
-  // checks against the JD are too noisy at that length; concept coverage for
-  // some of them comes from the lexicon (golang, machine learning).
-  for (const match of markStripped.matchAll(/\b[A-Z][A-Za-z0-9.+#]{2,}\b/g)) {
-    const token = match[0].toLowerCase();
-    if (match.index === 0 && LEADING_ACTION_VERBS.has(token)) continue;
-    if (!jobLower.includes(token)) continue;
-    if (!isGrounded(grounding, groundingTokens, token)) return match[0];
+  // word. Distinctive short tokens (C#, ML, NLP) are picked up by detector 4;
+  // the rest are out of scope here — substring checks at 1-2 chars are too noisy.
+  // Skipped in proseMode: it flags every capitalized JD token (company/role names
+  // included), which is exactly what legitimate cover-letter/answer prose says.
+  if (!proseMode) {
+    for (const match of markStripped.matchAll(/\b[A-Z][A-Za-z0-9.+#]{2,}\b/g)) {
+      const token = match[0].toLowerCase();
+      if (match.index === 0 && LEADING_ACTION_VERBS.has(token)) continue;
+      if (!jobLower.includes(token)) continue;
+      if (!isGrounded(grounding, groundingTokens, token)) return match[0];
+    }
   }
 
   // Detector 2: lowercase concept terms present in both the JD and the
@@ -180,6 +213,17 @@ export function findUngroundedJdTerm(proposedText, jobLower, grounding) {
     if (!jobTokens.has(name)) continue;
     if (!proposedTokens.has(name)) continue;
     if (!isGrounded(grounding, groundingTokens, name)) return name;
+  }
+
+  // Detector 4: distinctive short tech tokens (C#, C++, ML, NLP) below detector
+  // 1's 3-char floor. Token-anchored set membership on BOTH the JD and the
+  // proposed text, routed through isGrounded — identical discipline to detector 3,
+  // so no ordinary word is ever a candidate (the set excludes collision-prone
+  // short tokens). Runs in prose mode too: these are unambiguous skill tokens.
+  for (const token of SHORT_TECH_TOKENS) {
+    if (!jobTokens.has(token)) continue;
+    if (!proposedTokens.has(token)) continue;
+    if (!isGrounded(grounding, groundingTokens, token)) return token;
   }
 
   return null;

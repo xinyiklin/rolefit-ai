@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { providerOptions } from "../config/aiOptions";
 import { loadSettings, saveSettings } from "../lib/settings";
 import type { AiProviderValue } from "../config/aiOptions";
+import type { CitizenshipStatus } from "../lib/candidateFacts";
 
 // Owns every auto-saved AI preference: the primary provider/model/key/base-URL/
 // reasoning-effort, the optional independent-reviewer (audit*) overrides, and
@@ -30,6 +31,12 @@ export function useAiSettings() {
 
   const [honestContext, setHonestContext] = useState(saved.honestContext ?? "");
   const [customInstructions, setCustomInstructions] = useState(saved.customInstructions ?? "");
+  // Default off because strict review runs the slower skeptical audit pass, but
+  // preserve the user's choice once they opt in.
+  const [strictReview, setStrictReview] = useState(saved.strictReview ?? false);
+  const [citizenshipStatus, setCitizenshipStatus] = useState<CitizenshipStatus>(saved.citizenshipStatus ?? "unspecified");
+  const [legallyAuthorizedToWork, setLegallyAuthorizedToWork] = useState(saved.legallyAuthorizedToWork ?? true);
+  const [requiresSponsorship, setRequiresSponsorship] = useState(saved.requiresSponsorship ?? false);
 
   // Auto-save preferences so they survive reloads. Debounced so the free-text
   // fields (honest context, custom instructions) don't serialize + write
@@ -48,7 +55,11 @@ export function useAiSettings() {
         auditCliReasoningEffort,
         auditApiBaseUrl,
         honestContext,
-        customInstructions
+        customInstructions,
+        strictReview,
+        citizenshipStatus,
+        legallyAuthorizedToWork,
+        requiresSponsorship
       });
     }, 400);
     return () => clearTimeout(id);
@@ -64,7 +75,11 @@ export function useAiSettings() {
     auditCliReasoningEffort,
     auditApiBaseUrl,
     honestContext,
-    customInstructions
+    customInstructions,
+    strictReview,
+    citizenshipStatus,
+    legallyAuthorizedToWork,
+    requiresSponsorship
   ]);
 
   function handleProviderChange(value: AiProviderValue) {
@@ -116,6 +131,14 @@ export function useAiSettings() {
     handleAuditProviderChange,
     honestContext,
     setHonestContext,
+    strictReview,
+    setStrictReview,
+    citizenshipStatus,
+    setCitizenshipStatus,
+    legallyAuthorizedToWork,
+    setLegallyAuthorizedToWork,
+    requiresSponsorship,
+    setRequiresSponsorship,
     customInstructions,
     setCustomInstructions
   };

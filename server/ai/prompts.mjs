@@ -189,7 +189,7 @@ Strict rules:
 - Risk flags: 1-3 bullets that interviewers could probe in a way the candidate couldn't defend confidently.
 - topEdits: ordered by impact, max 3.
 - If the resume is genuinely wrong for the role, set verdict to "DON'T APPLY" and applyAsIs to false.
-- The app SUMS your fitBuckets and derives the final verdict from the total (<=45 DON'T APPLY, 46-69 STRETCH, 70-84 REASONABLE FIT, >=85 STRONG FIT), capping for the gaps you report (any HIGH gap caps below 70; any BLOCKER gap forces DON'T APPLY). Make your verdict match what your own buckets and gaps imply.
+- The app SUMS your fitBuckets and derives the final verdict from the total (<=45 DON'T APPLY, 46-69 STRETCH, 70-84 REASONABLE FIT, >=85 STRONG FIT), capping for the gaps you report (one HIGH gap caps the total at 79, two HIGH gaps at 69, three or more at 60; any BLOCKER gap forces DON'T APPLY). Make your verdict match what your own buckets and gaps imply.
 
 ${fitScoringPrompt()}
 

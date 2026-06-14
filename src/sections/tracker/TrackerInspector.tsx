@@ -47,7 +47,7 @@ export function TrackerInspector({
   return (
     <>
       <header className="pipeline-inspector__head">
-        <span className="application-company-mark">{companyInitials(displayCompany(selected))}</span>
+        <span className="application-company-mark" data-len={companyInitials(displayCompany(selected)).length}>{companyInitials(displayCompany(selected))}</span>
         <div>
           <h3>{displayCompany(selected)}</h3>
           <p>{displayRole(selected)}</p>

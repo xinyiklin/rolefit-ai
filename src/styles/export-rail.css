@@ -336,11 +336,35 @@
   gap: var(--s2);
 }
 
-/* -------- Post-Apply download prompt (reuses the rename-dialog shell) -------- */
+/* -------- Pre-apply download prompt (reuses the rename-dialog shell) -------- */
 
 .apply-download {
+  position: relative;
   width: min(460px, 100%);
   gap: var(--s2);
+}
+
+.apply-download__close {
+  position: absolute;
+  top: var(--s2);
+  right: var(--s2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: var(--r1);
+  background: transparent;
+  color: var(--ink-soft);
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+
+.apply-download__close:hover {
+  background: var(--surface-hover);
+  color: var(--ink);
 }
 
 /* Small section eyebrow above the format group and the file-name field. */

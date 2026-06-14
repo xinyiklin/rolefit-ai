@@ -1,5 +1,6 @@
 import type { Ref } from "react";
 import { SlidersHorizontal } from "lucide-react";
+import { CITIZENSHIP_OPTIONS, type CitizenshipStatus } from "../lib/candidateFacts";
 import { NavMenu } from "./NavMenu";
 
 type PolishMenuProps = {
@@ -9,6 +10,12 @@ type PolishMenuProps = {
   setStrictReview: (v: boolean) => void;
   honestContext: string;
   setHonestContext: (v: string) => void;
+  citizenshipStatus: CitizenshipStatus;
+  setCitizenshipStatus: (v: CitizenshipStatus) => void;
+  legallyAuthorizedToWork: boolean;
+  setLegallyAuthorizedToWork: (v: boolean) => void;
+  requiresSponsorship: boolean;
+  setRequiresSponsorship: (v: boolean) => void;
   customInstructions: string;
   setCustomInstructions: (v: string) => void;
   // Controlled open state — lets App.tsx open the menu programmatically.
@@ -27,6 +34,12 @@ export function PolishMenu({
   setStrictReview,
   honestContext,
   setHonestContext,
+  citizenshipStatus,
+  setCitizenshipStatus,
+  legallyAuthorizedToWork,
+  setLegallyAuthorizedToWork,
+  requiresSponsorship,
+  setRequiresSponsorship,
   customInstructions,
   setCustomInstructions,
   open,
@@ -45,7 +58,7 @@ export function PolishMenu({
       open={open}
       onOpenChange={onOpenChange}
     >
-      <label className="toggle-row">
+      <label className="check-row">
         <input
           checked={includeCoverLetter}
           onChange={(event) => setIncludeCoverLetter(event.target.checked)}
@@ -57,7 +70,7 @@ export function PolishMenu({
         </span>
       </label>
 
-      <label className="toggle-row">
+      <label className="check-row">
         <input
           checked={strictReview}
           onChange={(event) => setStrictReview(event.target.checked)}
@@ -68,6 +81,57 @@ export function PolishMenu({
           <small>Run a skeptical recruiter audit after the edit pass.</small>
         </span>
       </label>
+
+      {/* Work authorization group */}
+      <div className="menu-subhead" style={{ marginTop: 'var(--s2)' }}>
+        <span className="menu-subhead__title">Work authorization</span>
+      </div>
+
+      <label className="field field--inline">
+        <span><strong>Citizenship</strong></span>
+        <select
+          className="select--compact"
+          value={citizenshipStatus}
+          onChange={(event) => setCitizenshipStatus(event.target.value as CitizenshipStatus)}
+        >
+          {CITIZENSHIP_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value}>{opt.label}</option>
+          ))}
+        </select>
+      </label>
+
+      {/* Work-auth facts are sent to the AI only once a citizenship is chosen, so
+          the checkboxes stay hidden (and inert) until then — nothing about
+          citizenship/authorization is asserted by default. */}
+      {citizenshipStatus === "unspecified" ? (
+        <p className="micro-status">Pick a citizenship status to include work-authorization facts when tailoring.</p>
+      ) : (
+        <>
+          <label className="check-row">
+            <input
+              checked={legallyAuthorizedToWork}
+              onChange={(event) => setLegallyAuthorizedToWork(event.target.checked)}
+              type="checkbox"
+            />
+            <span>
+              <strong>Legally authorized to work in U.S.</strong>
+              <small>Use this as a hard filter when a posting mentions work authorization.</small>
+            </span>
+          </label>
+
+          <label className="check-row">
+            <input
+              checked={requiresSponsorship}
+              onChange={(event) => setRequiresSponsorship(event.target.checked)}
+              type="checkbox"
+            />
+            <span>
+              <strong>Will require sponsorship</strong>
+              <small>Flags no-sponsorship postings as a blocker during review.</small>
+            </span>
+          </label>
+        </>
+      )}
 
       <label className="field">
         <span>

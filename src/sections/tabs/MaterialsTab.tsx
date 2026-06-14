@@ -11,7 +11,7 @@ const DEFAULT_QUESTIONS = [
 ];
 
 type AnswerDraft = { question: string; answer: string; needsInput: boolean; save: boolean };
-type RoleDraft = { role: string; description: string; save: boolean };
+type RoleDraft = { role: string; description: string; needsInput: boolean; save: boolean };
 
 export type MaterialsTabProps = {
   result: PolishedResume | null;
@@ -47,7 +47,8 @@ export function MaterialsTab({
   jobTarget
 }: MaterialsTabProps) {
   // ---- Plan state ----
-  const [selected, setSelected] = useState<boolean[]>(() => DEFAULT_QUESTIONS.map(() => true));
+  // Questions start unchecked — the user opts in to the ones they want to draft.
+  const [selected, setSelected] = useState<boolean[]>(() => DEFAULT_QUESTIONS.map(() => false));
   const [customs, setCustoms] = useState<string[]>([]);
   const [newCustom, setNewCustom] = useState("");
   const [includeRoles, setIncludeRoles] = useState(true);
@@ -56,6 +57,7 @@ export function MaterialsTab({
   const [drafts, setDrafts] = useState<AnswerDraft[]>([]);
   const [roleDrafts, setRoleDrafts] = useState<RoleDraft[]>([]);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const [copyFailedKey, setCopyFailedKey] = useState<string | null>(null);
 
   // Reset when a fresh generation arrives
   useEffect(() => {
@@ -88,7 +90,10 @@ export function MaterialsTab({
       setCopiedKey(key);
       window.setTimeout(() => setCopiedKey((k) => (k === key ? null : k)), 1500);
     } catch {
-      // Clipboard API unavailable (non-secure context); leave text on screen.
+      // Clipboard API unavailable (non-secure context): tell the user it didn't
+      // land so they don't paste stale content into a real application.
+      setCopyFailedKey(key);
+      window.setTimeout(() => setCopyFailedKey((k) => (k === key ? null : k)), 2500);
     }
   }
 
@@ -232,7 +237,7 @@ export function MaterialsTab({
                           aria-label={`Copy answer to: ${d.question}`}
                         >
                           <Clipboard size={12} aria-hidden="true" />
-                          <span>{copiedKey === key ? "Copied" : "Copy"}</span>
+                          <span>{copiedKey === key ? "Copied" : copyFailedKey === key ? "Copy failed" : "Copy"}</span>
                         </button>
                       </div>
                     </div>
@@ -264,6 +269,9 @@ export function MaterialsTab({
                         <h3 className="draft-sheet__title">{r.role}</h3>
                       </div>
                       <div className="draft-sheet__actions">
+                        {r.needsInput ? (
+                          <em className="questions-flag">Needs your input</em>
+                        ) : null}
                         <label className="draft-savebox">
                           <input
                             type="checkbox"
@@ -285,7 +293,7 @@ export function MaterialsTab({
                           aria-label={`Copy description for ${r.role}`}
                         >
                           <Clipboard size={12} aria-hidden="true" />
-                          <span>{copiedKey === key ? "Copied" : "Copy"}</span>
+                          <span>{copiedKey === key ? "Copied" : copyFailedKey === key ? "Copy failed" : "Copy"}</span>
                         </button>
                       </div>
                     </div>
@@ -414,10 +422,10 @@ export function MaterialsTab({
             type="button"
             onClick={handleGenerate}
             disabled={!canGenerate || isGeneratingAnswers || nothingChosen}
-            title={!canGenerate ? gateHint : undefined}
+            title={!canGenerate ? gateHint : nothingChosen ? "Pick at least one question or Role descriptions to draft." : undefined}
           >
             <Sparkles size={12} aria-hidden="true" />
-            <span>{isGeneratingAnswers ? "Drafting…" : "Generate drafts"}</span>
+            <span>{isGeneratingAnswers ? <>Drafting<span className="loading-dots" aria-hidden="true" /></> : "Generate drafts"}</span>
           </button>
 
           <p className="plan-status" aria-live="polite">

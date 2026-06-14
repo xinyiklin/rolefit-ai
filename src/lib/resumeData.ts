@@ -186,7 +186,10 @@ function parseSkillEntry(line: string): ResumeEntry {
   const label = colonIndex > 0 ? stripped.slice(0, colonIndex).trim() : "";
   const isLabel = colonIndex > 0 && colonIndex <= 40 && !/^https?$/i.test(label) && stripped.slice(colonIndex + 1).trim().length > 0;
   if (isLabel) {
-    return newSkillEntry(label, cleanSkillText(stripped.slice(colonIndex + 1)));
+    // The template bolds every skills label, so a parsed label must not carry
+    // inline marks — otherwise an imported `\textbf{Languages}` round-trips to
+    // `\textbf{\textbf{Languages}}`. (Mirrors the link-underline chrome fix.)
+    return newSkillEntry(stripInlineMarks(label), cleanSkillText(stripped.slice(colonIndex + 1)));
   }
   return newSkillEntry("", stripped);
 }
@@ -519,11 +522,63 @@ function replaceCommandWithFormattedArg(source: string, command: string, tag: "b
   return result + source.slice(cursor);
 }
 
+// Filesystem/LaTeX-safe URL text: drop braces, whitespace, and control chars
+// (none are valid in a real link) and cap length.
+function cleanUrlForText(url: string): string {
+  return String(url ?? "")
+    .replace(/[\s{}\\]+/g, "")
+    .replace(/[\x00-\x1f\x7f]/g, "")
+    .trim()
+    .slice(0, 300);
+}
+
+// Does the visible label already encode the URL (so linkify can rebuild the link
+// on serialize)? True for domain-style labels like "github.com/x"; false for a
+// friendly label like "My Portfolio" whose URL would otherwise be lost.
+function labelImpliesUrl(label: string, url: string): boolean {
+  const cleanLabel = String(label ?? "")
+    .replace(/<\/?[a-z]+>/gi, "")
+    .replace(/\\[a-zA-Z]+\b/g, "")
+    .replace(/[{}\\]/g, "")
+    .trim()
+    .toLowerCase();
+  const bare = String(url ?? "")
+    .replace(/^\s*(?:https?:\/\/|mailto:)/i, "")
+    .replace(/\/+$/, "")
+    .trim()
+    .toLowerCase();
+  if (!cleanLabel || !bare) return true; // nothing comparable — keep current behavior
+  if (cleanLabel === bare) return true;
+  if (bare.startsWith(cleanLabel) || cleanLabel.startsWith(bare)) return true;
+  // A spaceless label that contains the URL's domain is link-like enough.
+  const domain = bare.split("/")[0];
+  return !/\s/.test(cleanLabel) && cleanLabel.includes(domain);
+}
+
+// Replace each \href{url}{label}. When the label implies the URL, keep just the
+// label (the serializer's linkify rebuilds the clickable link, preserving the
+// historical round-trip). Otherwise append the URL as text — "label (url)" — so
+// a friendly-labelled link's destination is never silently lost on parse.
+function replaceHrefPreservingUrl(source: string): string {
+  let result = "";
+  let cursor = 0;
+  for (const call of findCommandCalls(source, "href", 2)) {
+    if (!call.args.length) continue;
+    const url = cleanUrlForText(call.args[0] ?? "");
+    const label = call.args.length >= 2 ? call.args[1] : "";
+    result += source.slice(cursor, call.index);
+    if (!label.trim()) result += url;
+    else if (!url || labelImpliesUrl(label, url)) result += label;
+    else result += `${label} (${url})`;
+    cursor = call.end;
+  }
+  return result + source.slice(cursor);
+}
+
 function unwrapLatexInlineCommands(value: string): string {
-  let text = value;
+  let text = replaceHrefPreservingUrl(value);
   for (let i = 0; i < 6; i += 1) {
     const next = [
-      ["href", 1],
       ["underline", 0],
       ["textbf", 0],
       ["textit", 0],
@@ -541,10 +596,50 @@ function unwrapLatexInlineCommands(value: string): string {
   return text;
 }
 
-function preserveLatexInlineCommands(value: string): string {
+// A link's underline is template chrome — Jake's template wraps every \href
+// label in \underline — not user formatting. Strip the underline bound to an
+// \href so parsed links don't render underlined and don't double-wrap
+// (\underline{\underline{…}}) when re-serialized (the template re-adds it). A
+// standalone \underline{…} not tied to a link is left intact and still becomes <u>.
+function dropLinkUnderlines(value: string): string {
   let text = value;
   for (let i = 0; i < 6; i += 1) {
-    let next = replaceCommandWithArg(text, "href", 1);
+    // \underline{\href{…}{…}} -> \href{…}{…}
+    let next = "";
+    let cursor = 0;
+    for (const call of findCommandCalls(text, "underline", 1)) {
+      const inner = call.args[0] ?? "";
+      if (call.args.length >= 1 && /^\s*\\href\b/.test(inner)) {
+        next += text.slice(cursor, call.index) + inner;
+        cursor = call.end;
+      }
+    }
+    next += text.slice(cursor);
+
+    // \href{url}{\underline{label}} -> \href{url}{label} (whole label is one underline)
+    let after = "";
+    cursor = 0;
+    for (const call of findCommandCalls(next, "href", 2)) {
+      if (call.args.length < 2) continue;
+      const label = call.args[1].trim();
+      const u = findCommandCalls(label, "underline", 1);
+      if (u.length === 1 && u[0].index === 0 && u[0].end === label.length && u[0].args.length >= 1) {
+        after += next.slice(cursor, call.index) + `\\href{${call.args[0]}}{${u[0].args[0]}}`;
+        cursor = call.end;
+      }
+    }
+    after += next.slice(cursor);
+
+    if (after === text) break;
+    text = after;
+  }
+  return text;
+}
+
+function preserveLatexInlineCommands(value: string): string {
+  let text = dropLinkUnderlines(value);
+  for (let i = 0; i < 6; i += 1) {
+    let next = replaceHrefPreservingUrl(text);
     next = replaceCommandWithFormattedArg(next, "underline", "u");
     next = replaceCommandWithFormattedArg(next, "textbf", "b");
     next = replaceCommandWithFormattedArg(next, "textit", "i");
@@ -616,18 +711,34 @@ function formatLatexInline(value: string): string {
     .trim();
 }
 
+const URL_SCHEME_RE = /(?:https?|mailto|ftps?|tel|file|ssh|sftp)$/i;
+
+// Tidy spacing around a label colon ("Label:skills" → "Label: skills") WITHOUT
+// breaking URL schemes ("https://", "mailto:x") or digit ratios/times ("12:30").
+function normalizeColon(match: string, offset: number, full: string): string {
+  const before = full[offset - 1] ?? "";
+  const after = full[offset + match.length] ?? "";
+  if (after === "/") return match; // "://"
+  if (/\d/.test(before) && /\d/.test(after)) return match; // "12:30"
+  if (URL_SCHEME_RE.test(full.slice(Math.max(0, offset - 7), offset))) return match; // "mailto:x"
+  return ": ";
+}
+
 function splitLatexRows(value: string): string[] {
   return String(value ?? "")
     .split(/\\\\(?:\[[^\]]*\])?|\r?\n/)
     .map((piece) => formatLatexInline(piece))
-    .map((piece) => piece.replace(/\s*:\s*/g, ": ").replace(/\s*\|\s*/g, " | ").trim())
+    .map((piece) => piece.replace(/\s*:\s*/g, normalizeColon).replace(/\s*\|\s*/g, " | ").trim())
     .filter(Boolean);
 }
 
 function extractHeaderName(headerSource: string): string {
+  // Capture allows escaped specials (\& \_ \% \# \$) so a name like
+  // "OReilly \& Sons" isn't truncated at the backslash; it still stops at a
+  // line break (\\) or a real command, and stripLatexInline un-escapes after.
   const match =
-    headerSource.match(/\\textbf\{\s*\\(?:Huge|huge|LARGE|Large)\s*(?:\\(?:scshape|bfseries)\s*)*([^{}\\]+)\}/) ||
-    headerSource.match(/\\(?:Huge|huge|LARGE|Large)\s*(?:\\(?:scshape|bfseries)\s*)*([^{}\\\n]+)/);
+    headerSource.match(/\\textbf\{\s*\\(?:Huge|huge|LARGE|Large)\s*(?:\\(?:scshape|bfseries)\s*)*((?:[^{}\\\n]|\\[&_%#$])+)\}/) ||
+    headerSource.match(/\\(?:Huge|huge|LARGE|Large)\s*(?:\\(?:scshape|bfseries)\s*)*((?:[^{}\\\n]|\\[&_%#$])+)/);
   return match ? stripLatexInline(match[1]) : "";
 }
 

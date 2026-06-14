@@ -6,6 +6,7 @@ import {
   type PolishedResume
 } from "../resumeEngine";
 import { extractPlainTextFromLatex, type ResumeData } from "../lib/resumeData";
+import { stripInlineMarks } from "../lib/inlineMarks";
 import { looksLikeLatex } from "../lib/resumeFormat";
 import type { FitComparison, ResumeBlock, ResumeBlockKind } from "../sections/shared";
 
@@ -85,8 +86,12 @@ export function useResumeAnalysis({
     [resumeText]
   );
 
+  // Strip inline marks (<b>/<i>/<u>) from both sides so the diff reads as
+  // wording changes, not markup noise, and a tag split across diff segments
+  // can't leak a raw "<b>" (or an unclosed bold) into the rendered diff.
   const resumeDiff = useMemo(
-    () => (result ? buildResumeDiff(basePlainText, tailoredText) : null),
+    () =>
+      result ? buildResumeDiff(stripInlineMarks(basePlainText), stripInlineMarks(tailoredText)) : null,
     [result, basePlainText, tailoredText]
   );
 

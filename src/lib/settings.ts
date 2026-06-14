@@ -1,5 +1,6 @@
 import type { AiProviderValue } from "../config/aiOptions";
 import { modelOptionsByProvider, providerOptions } from "../config/aiOptions";
+import { CITIZENSHIP_OPTIONS, type CitizenshipStatus } from "./candidateFacts";
 
 // Auto-saved UI preferences (localStorage). Intentionally excludes the API key:
 // the app never persists secrets — CLI providers need no key, and API keys come
@@ -20,6 +21,14 @@ export type PersistedSettings = {
   auditApiBaseUrl?: string;
   honestContext?: string;
   customInstructions?: string;
+  strictReview?: boolean;
+  citizenshipStatus?: CitizenshipStatus;
+  legallyAuthorizedToWork?: boolean;
+  requiresSponsorship?: boolean;
+  // Legacy values from the short-lived tri-state version. Coerced to booleans
+  // on load so old localStorage cannot leave the UI in an impossible state.
+  workAuthorization?: "unspecified" | "authorized-us" | "not-authorized-us";
+  sponsorship?: "unspecified" | "not-required" | "required";
 };
 
 const KEY = "rolefit:settings";
@@ -60,6 +69,29 @@ function coerce(settings: PersistedSettings): PersistedSettings {
       else delete settings.auditSelectedModel;
     }
   }
+  if (settings.strictReview !== undefined && typeof settings.strictReview !== "boolean") {
+    delete settings.strictReview;
+  }
+  const validCitizenship = new Set<string>(CITIZENSHIP_OPTIONS.map((option) => option.value));
+  if (settings.citizenshipStatus && !validCitizenship.has(settings.citizenshipStatus)) {
+    delete settings.citizenshipStatus;
+  }
+  if (settings.legallyAuthorizedToWork !== undefined && typeof settings.legallyAuthorizedToWork !== "boolean") {
+    delete settings.legallyAuthorizedToWork;
+  }
+  if (settings.requiresSponsorship !== undefined && typeof settings.requiresSponsorship !== "boolean") {
+    delete settings.requiresSponsorship;
+  }
+  if (settings.legallyAuthorizedToWork === undefined && settings.workAuthorization) {
+    if (settings.workAuthorization === "authorized-us") settings.legallyAuthorizedToWork = true;
+    if (settings.workAuthorization === "not-authorized-us") settings.legallyAuthorizedToWork = false;
+  }
+  if (settings.requiresSponsorship === undefined && settings.sponsorship) {
+    if (settings.sponsorship === "required") settings.requiresSponsorship = true;
+    if (settings.sponsorship === "not-required") settings.requiresSponsorship = false;
+  }
+  delete settings.workAuthorization;
+  delete settings.sponsorship;
   return settings;
 }
 

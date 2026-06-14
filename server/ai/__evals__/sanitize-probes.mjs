@@ -145,9 +145,22 @@ const checks = [
     const r = applyGapCapsAndVerdict({ base: 73, tailored: 83, liftReason: "" }, { gaps: [{ severity: "BLOCKER" }] });
     return r.aiScore.base === 45 && r.aiScore.tailored === 45 && r.verdict === DONT;
   })()],
-  ["HIGH gap caps below 70 and derives STRETCH", (() => {
+  // Graduated HIGH-gap cap: one missing required skill no longer pins to 69.
+  ["1 HIGH gap caps at 79 -> REASONABLE FIT", (() => {
     const r = applyGapCapsAndVerdict({ base: 60, tailored: 83, liftReason: "" }, { gaps: [{ severity: "HIGH" }] });
-    return r.aiScore.tailored === 69 && r.verdict === "STRETCH" && r.aiScore.base === 60;
+    return r.aiScore.tailored === 79 && r.verdict === "REASONABLE FIT" && r.aiScore.base === 60;
+  })()],
+  ["2 HIGH gaps cap at 69 -> STRETCH (old flat behavior)", (() => {
+    const r = applyGapCapsAndVerdict({ base: 90, tailored: 88, liftReason: "" }, { gaps: [{ severity: "HIGH" }, { severity: "HIGH" }] });
+    return r.aiScore.tailored === 69 && r.verdict === "STRETCH";
+  })()],
+  ["3+ HIGH gaps cap at 60 -> STRETCH", (() => {
+    const r = applyGapCapsAndVerdict({ base: 90, tailored: 88, liftReason: "" }, { gaps: [{ severity: "HIGH" }, { severity: "HIGH" }, { severity: "HIGH" }] });
+    return r.aiScore.tailored === 60 && r.verdict === "STRETCH";
+  })()],
+  ["BLOCKER still overrides HIGH count -> DON'T APPLY", (() => {
+    const r = applyGapCapsAndVerdict({ base: 90, tailored: 88, liftReason: "" }, { gaps: [{ severity: "HIGH" }, { severity: "BLOCKER" }] });
+    return r.aiScore.tailored === 45 && r.verdict === DONT;
   })()],
   ["no qualifying gaps: verdict derived from sum", (() => {
     const r = applyGapCapsAndVerdict({ base: 73, tailored: 86, liftReason: "" }, { gaps: [{ severity: "MEDIUM" }] });

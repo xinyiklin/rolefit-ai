@@ -95,6 +95,7 @@ function RichEditableField({
       role="textbox"
       aria-multiline={multiline || undefined}
       aria-label={ariaLabel}
+      aria-placeholder={placeholder}
       data-placeholder={placeholder}
       spellCheck={multiline}
       tabIndex={0}
