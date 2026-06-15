@@ -17,7 +17,12 @@ export async function fileToText(file: File): Promise<string> {
     } catch {
       throw new Error("DOCX import requires the local server. Use a .txt, .md, or .tex file instead, or paste the text.");
     }
-    const data = await response.json();
+    let data: any;
+    try {
+      data = JSON.parse(await response.text());
+    } catch {
+      throw new Error(response.ok ? "Server returned non-JSON response." : `DOCX import failed (${response.status}).`);
+    }
     if (!response.ok) throw new Error(data.error ?? "DOCX import failed.");
     return String(data.text ?? "");
   }

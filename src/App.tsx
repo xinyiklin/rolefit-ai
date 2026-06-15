@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ChangeEvent, type DragEvent } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ChangeEvent, type DragEvent } from "react";
 import { Eye, FileCode2, FileDown, RotateCcw, Upload } from "lucide-react";
 
 import { useResumeEditor } from "./hooks/useResumeEditor";
@@ -71,6 +71,54 @@ function SpacingSlider({
         aria-label={label}
       />
     </label>
+  );
+}
+
+function AnimatedSeg<K extends string>({
+  items,
+  activeKey,
+  onSelect
+}: {
+  items: { key: K; label: string }[];
+  activeKey: K | null;
+  onSelect: (key: K) => void;
+}) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const btnRefs = useRef<Map<K, HTMLButtonElement>>(new Map());
+  const [pill, setPill] = useState<{ left: number; width: number } | null>(null);
+
+  const measure = useCallback(() => {
+    if (!activeKey || !containerRef.current) { setPill(null); return; }
+    const btn = btnRefs.current.get(activeKey);
+    if (!btn) { setPill(null); return; }
+    const cr = containerRef.current.getBoundingClientRect();
+    const br = btn.getBoundingClientRect();
+    setPill({ left: br.left - cr.left, width: br.width });
+  }, [activeKey]);
+
+  useLayoutEffect(measure, [measure]);
+  useEffect(() => { window.addEventListener("resize", measure); return () => window.removeEventListener("resize", measure); }, [measure]);
+
+  return (
+    <div className="seg" ref={containerRef}>
+      {pill && (
+        <span
+          className="seg__pill"
+          style={{ transform: `translateX(${pill.left}px)`, width: pill.width }}
+        />
+      )}
+      {items.map(({ key, label }) => (
+        <button
+          key={key}
+          type="button"
+          ref={(el) => { if (el) btnRefs.current.set(key, el); else btnRefs.current.delete(key); }}
+          className={`seg__opt${activeKey === key ? " is-active" : ""}`}
+          onClick={() => onSelect(key)}
+        >
+          {label}
+        </button>
+      ))}
+    </div>
   );
 }
 
@@ -225,6 +273,12 @@ export default function App() {
     docStyle.style.entryGap === values.entryGap &&
     docStyle.style.bulletGap === values.bulletGap;
 
+  const activePresetKey = Object.entries(DOC_SPACING_PRESETS).find(
+    ([, p]) => spacingActive({ ...docStyle.style, ...p.values })
+  )?.[0] as string | null ?? null;
+
+  const presetItems = Object.entries(DOC_SPACING_PRESETS).map(([key, p]) => ({ key, label: p.label }));
+
   const tectonicOff = !templates.tectonic.available;
 
   // Rename-before-download. The export handlers take a base name (no extension);
@@ -347,18 +401,11 @@ export default function App() {
           </label>
           <div className="ctl-row">
             <span>Preset</span>
-            <div className="seg">
-              {Object.entries(DOC_SPACING_PRESETS).map(([key, preset]) => (
-                <button
-                  key={key}
-                  type="button"
-                  className={`seg__opt${spacingActive({ ...docStyle.style, ...preset.values }) ? " is-active" : ""}`}
-                  onClick={() => docStyle.applySpacingPreset(preset.values)}
-                >
-                  {preset.label}
-                </button>
-              ))}
-            </div>
+            <AnimatedSeg
+              items={presetItems}
+              activeKey={activePresetKey}
+              onSelect={(key) => docStyle.applySpacingPreset(DOC_SPACING_PRESETS[key as keyof typeof DOC_SPACING_PRESETS].values)}
+            />
           </div>
           <div className="panel__stack">
             {SPACING_SLIDERS.map(({ key, label, min, max, unit }) => (

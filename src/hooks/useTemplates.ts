@@ -3,6 +3,15 @@ import { useCallback, useEffect, useState } from "react";
 import type { DocStyle } from "./useDocStyle";
 import type { ResumeTemplateSchema } from "../lib/resumeData";
 
+async function safeJson(response: Response): Promise<any> {
+  const text = await response.text();
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error(response.ok ? "Server returned non-JSON response." : `Request failed (${response.status}).`);
+  }
+}
+
 export type Template = {
   id: string;
   name: string;
@@ -30,7 +39,7 @@ export function useTemplates() {
     (async () => {
       try {
         const response = await fetch("/api/templates");
-        const data = await response.json();
+        const data = await safeJson(response);
         if (cancelled) return;
         if (!response.ok) throw new Error(data.error ?? "Failed to load LaTeX templates.");
         const list = Array.isArray(data.templates) ? (data.templates as Template[]) : [];
@@ -48,12 +57,13 @@ export function useTemplates() {
         }
       } catch (error) {
         if (!cancelled) {
-          // Network error (e.g. static GitHub Pages deploy with no server) —
-          // leave tectonic unavailable and templates empty; the editor still
-          // works, LaTeX export buttons just stay disabled.
-          if (error instanceof TypeError) {
-            // fetch itself failed (no server) — not a user-actionable error.
-          } else {
+          // Static deploy (GitHub Pages) or no server — the fetch either fails
+          // outright (TypeError) or succeeds with a non-JSON HTML page. Either
+          // way, degrade silently: leave templates empty and tectonic unavailable;
+          // the editor still works, LaTeX export buttons just stay disabled.
+          const isNoServer = error instanceof TypeError
+            || (error instanceof Error && /non-JSON|Request failed/.test(error.message));
+          if (!isNoServer) {
             setTemplatesError(error instanceof Error ? error.message : "Failed to load LaTeX templates.");
           }
         }
@@ -80,7 +90,7 @@ export function useTemplates() {
           docStyle: options?.docStyle
         })
       });
-      const data = await response.json();
+      const data = await safeJson(response);
       if (!response.ok) throw new Error(data.error ?? "LaTeX render failed.");
       return String(data.tex ?? "");
     },
@@ -100,7 +110,7 @@ export function useTemplates() {
           docStyle: options?.docStyle
         })
       });
-      const data = await response.json();
+      const data = await safeJson(response);
       if (!response.ok) {
         return { error: data.error ?? "LaTeX PDF render failed." };
       }
@@ -133,7 +143,7 @@ export function useTemplates() {
           docStyle: options?.docStyle
         })
       });
-      const data = await response.json();
+      const data = await safeJson(response);
       if (!response.ok) {
         return { error: data.error ?? "LaTeX PDF render failed." };
       }
@@ -164,7 +174,7 @@ export function useTemplates() {
           docStyle: options?.docStyle
         })
       });
-      const data = await response.json();
+      const data = await safeJson(response);
       if (!response.ok) throw new Error(data.error ?? "LaTeX render failed.");
       return String(data.tex ?? "");
     },
@@ -177,7 +187,7 @@ export function useTemplates() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ tex: texSource })
     });
-    const data = await response.json();
+    const data = await safeJson(response);
     if (!response.ok) throw new Error(data.error ?? "LaTeX import failed.");
     return String(data.text ?? "");
   }, []);

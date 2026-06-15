@@ -458,24 +458,38 @@
 }
 
 .seg {
+  position: relative;
   display: inline-flex;
   padding: 2px;
   background: var(--paper-deep);
   border-radius: var(--r-pill);
 }
 
+.seg__pill {
+  position: absolute;
+  top: 2px;
+  left: 0;
+  height: calc(100% - 4px);
+  background: var(--card-elev);
+  border-radius: var(--r-pill);
+  box-shadow: var(--shadow-rest);
+  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), width 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  pointer-events: none;
+}
+
 .seg__opt {
+  position: relative;
+  z-index: 1;
   padding: 4px 12px;
   font-size: 0.78rem;
   font-weight: 600;
   color: var(--ink-soft);
   border-radius: var(--r-pill);
+  transition: color 0.2s ease;
 }
 
 .seg__opt.is-active {
   color: var(--accent-deep);
-  background: var(--card-elev);
-  box-shadow: var(--shadow-rest);
 }
 
 /* ===== Editor canvas ===== */
