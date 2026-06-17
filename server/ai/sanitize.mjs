@@ -591,12 +591,56 @@ export function scoreFromRequirementCoverage(rawCoverage, strictReview) {
   };
 }
 
+// ELIGIBILITY sub-lexicon: the subset of requirementBucket's "seniority" regex
+// that represents a HARD eligibility gate (clearance/work-auth/license/cert/
+// degree), NOT soft seniority. Deliberately EXCLUDES bare year/senior/level — a
+// missing "5+ years" is a HIGH gap at most, never a hard DON'T-APPLY blocker.
+const ELIGIBILITY_BLOCKER =
+  /clearance|citizen|authorization|authorisation|sponsor|visa|license|licence|certif|degree/i;
+
+// The model often reports a hard eligibility blocker as a requirementCoverage
+// ROW ("Active Secret clearance required", tailoredStatus "missing") rather than
+// as a gap with severity BLOCKER. Without this, a role the candidate is formally
+// ineligible for can score 80-90 / "Strong fit", defeating the prompt's hard-
+// blocker guarantee. Returns true when ANY sanitized coverage row is an
+// eligibility requirement (category or requirement text matches ELIGIBILITY_
+// BLOCKER) that is strong-importance (critical/high) AND still MISSING after
+// tailoring. Only a "missing" tailoredStatus escalates, so a satisfied
+// requirement never caps.
+export function coverageHasEligibilityBlocker(rawCoverage) {
+  if (!Array.isArray(rawCoverage)) return false;
+  // Scan the RAW rows, NOT sanitizeRequirementCoverage's output: that helper
+  // drops any row whose `category` does not match a scoring bucket, so a hard
+  // gate filed under a non-bucketing label ("Eligibility", "Education",
+  // "Compliance", "Legal", "Security") would never reach this test and the cap
+  // would silently fail to fire. Read the same raw fields the sanitizer reads
+  // (requirement/keyword/gap + category) and gate conservatively: an explicit
+  // critical/high importance AND a still-"missing" tailored status, so a
+  // satisfied or vaguely-rated requirement never over-caps an applicable role.
+  return rawCoverage.some((row) => {
+    if (!row || typeof row !== "object") return false;
+    const requirement = String(row.requirement ?? row.keyword ?? row.gap ?? "");
+    const category = String(row.category ?? "");
+    if (!ELIGIBILITY_BLOCKER.test(`${category} ${requirement}`)) return false;
+    const importance = enumValue(row.importance, REQUIREMENT_IMPORTANCE, "medium");
+    if (importance !== "critical" && importance !== "high") return false;
+    const tailoredStatus = enumValue(row.tailoredStatus ?? row.status, COVERAGE_STATUSES, "missing");
+    return tailoredStatus === "missing";
+  });
+}
+
 // Deterministic caps + verdict from the sanitized gaps the reviewer itself
 // reported: a BLOCKER gap (clearance/license/degree-class) caps both scores in
 // the DON'T APPLY band; a HIGH gap (missing required skill) caps below 70. The
 // verdict is then a pure function of the capped tailored score — never a
 // second model opinion that can disagree with the number.
-export function applyGapCapsAndVerdict(aiScore, strictReview) {
+//
+// hasCoverageBlocker (default false to preserve every existing caller/signature)
+// is the synthetic BLOCKER signal derived from the requirementCoverage table via
+// coverageHasEligibilityBlocker: when true, cap=45 + DON'T APPLY fire exactly
+// like a BLOCKER gap, so an eligibility gate reported only as a coverage row
+// still governs fit.
+export function applyGapCapsAndVerdict(aiScore, strictReview, hasCoverageBlocker = false) {
   if (!aiScore) return { aiScore, verdict: strictReview?.verdict ?? null };
   const gaps = Array.isArray(strictReview?.gaps) ? strictReview.gaps : [];
   // Graduated HIGH-gap cap. A single missing required skill is near-universal on
@@ -609,7 +653,10 @@ export function applyGapCapsAndVerdict(aiScore, strictReview) {
   if (highGaps >= 1) cap = 79; // 1 missing required skill: top of REASONABLE FIT
   if (highGaps >= 2) cap = 69; // 2: STRETCH ceiling (the old flat behavior)
   if (highGaps >= 3) cap = 60; // 3+: solidly STRETCH
-  if (gaps.some((gap) => gap.severity === "BLOCKER")) cap = 45;
+  // A BLOCKER gap OR a synthetic eligibility blocker from the coverage table
+  // (missing critical/high clearance/work-auth/license/cert/degree row) forces
+  // the DON'T APPLY band, regardless of HIGH-gap count.
+  if (hasCoverageBlocker || gaps.some((gap) => gap.severity === "BLOCKER")) cap = 45;
   const base = Math.min(aiScore.base, cap);
   const tailored = Math.min(aiScore.tailored, cap);
   if (cap < 100 && (base !== aiScore.base || tailored !== aiScore.tailored)) {

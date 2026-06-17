@@ -23,7 +23,12 @@ function newEntryForSection(section: ResumeSectionData): ResumeEntry {
 
 export type EntryField = "titleLeft" | "titleRight" | "subtitleLeft" | "subtitleRight";
 
-type State = { data: ResumeData | null; dirty: boolean };
+// `dirty` = the model differs from the last seed (drives autosave, the
+// before-unload guard, and reseed confirms). `manualEdited` = the user made a
+// FREE-FORM edit, as opposed to accepting/undoing an AI suggestion from the
+// review rail. Only manual edits invalidate the AI verdict's provenance, so the
+// fit band stays "AI-judged" after applying the very suggestions it reviewed.
+type State = { data: ResumeData | null; dirty: boolean; manualEdited: boolean };
 
 type Action =
   | { type: "seed"; data: ResumeData | null }
@@ -39,12 +44,12 @@ type Action =
   | { type: "insertEntry"; sectionId: string; afterEntryId: string }
   | { type: "removeEntry"; sectionId: string; entryId: string }
   | { type: "reorderEntries"; sectionId: string; from: number; to: number }
-  | { type: "updateEntry"; sectionId: string; entryId: string; field: EntryField; value: string }
+  | { type: "updateEntry"; sectionId: string; entryId: string; field: EntryField; value: string; viaSuggestion?: boolean }
   | { type: "addBullet"; sectionId: string; entryId: string }
   | { type: "insertBullet"; sectionId: string; entryId: string; afterBulletId: string }
   | { type: "removeBullet"; sectionId: string; entryId: string; bulletId: string }
   | { type: "reorderBullets"; sectionId: string; entryId: string; from: number; to: number }
-  | { type: "updateBullet"; sectionId: string; entryId: string; bulletId: string; value: string };
+  | { type: "updateBullet"; sectionId: string; entryId: string; bulletId: string; value: string; viaSuggestion?: boolean };
 
 // ----- immutable array helpers -----
 
@@ -166,18 +171,25 @@ function reduce(data: ResumeData, action: Action): ResumeData {
 }
 
 function rootReducer(state: State, action: Action): State {
-  if (action.type === "seed") return { data: action.data, dirty: false };
+  if (action.type === "seed") return { data: action.data, dirty: false, manualEdited: false };
   if (!state.data) return state;
   const data = reduce(state.data, action);
-  return data === state.data ? state : { data, dirty: true };
+  if (data === state.data) return state;
+  // A change is "manual" unless it is the application of an AI suggestion from
+  // the review rail (updateBullet/updateEntry with viaSuggestion). Accepting or
+  // undoing a reviewed suggestion must not flip the AI verdict to "Estimated".
+  const viaSuggestion =
+    (action.type === "updateBullet" || action.type === "updateEntry") && action.viaSuggestion === true;
+  return { data, dirty: true, manualEdited: state.manualEdited || !viaSuggestion };
 }
 
 // Owns the structured, editable resume model. App seeds it at discrete events
 // (a fresh polish, a loaded base resume, a restored pipeline snapshot); every
-// inline edit dispatches a mutation and flips `dirty`. `serializedResume` is the
+// inline edit dispatches a mutation and flips `dirty` (and `manualEdited`, unless
+// it is a review-rail suggestion application). `serializedResume` is the
 // plain-text bridge the scoring/diff/export/print consumers read.
 export function useResumeEditor() {
-  const [state, dispatch] = useReducer(rootReducer, { data: null, dirty: false });
+  const [state, dispatch] = useReducer(rootReducer, { data: null, dirty: false, manualEdited: false });
 
   // Seed from existing plain-text / LaTeX. Pass empty text to clear the editor.
   const seed = useCallback((text: string, sourceText?: string) => {
@@ -207,8 +219,8 @@ export function useResumeEditor() {
       removeEntry: (sectionId: string, entryId: string) => dispatch({ type: "removeEntry", sectionId, entryId }),
       reorderEntries: (sectionId: string, from: number, to: number) =>
         dispatch({ type: "reorderEntries", sectionId, from, to }),
-      updateEntry: (sectionId: string, entryId: string, field: EntryField, value: string) =>
-        dispatch({ type: "updateEntry", sectionId, entryId, field, value }),
+      updateEntry: (sectionId: string, entryId: string, field: EntryField, value: string, viaSuggestion?: boolean) =>
+        dispatch({ type: "updateEntry", sectionId, entryId, field, value, viaSuggestion }),
       addBullet: (sectionId: string, entryId: string) => dispatch({ type: "addBullet", sectionId, entryId }),
       insertBullet: (sectionId: string, entryId: string, afterBulletId: string) =>
         dispatch({ type: "insertBullet", sectionId, entryId, afterBulletId }),
@@ -216,13 +228,13 @@ export function useResumeEditor() {
         dispatch({ type: "removeBullet", sectionId, entryId, bulletId }),
       reorderBullets: (sectionId: string, entryId: string, from: number, to: number) =>
         dispatch({ type: "reorderBullets", sectionId, entryId, from, to }),
-      updateBullet: (sectionId: string, entryId: string, bulletId: string, value: string) =>
-        dispatch({ type: "updateBullet", sectionId, entryId, bulletId, value })
+      updateBullet: (sectionId: string, entryId: string, bulletId: string, value: string, viaSuggestion?: boolean) =>
+        dispatch({ type: "updateBullet", sectionId, entryId, bulletId, value, viaSuggestion })
     }),
     []
   );
 
-  return { editedResume: state.data, dirty: state.dirty, serializedResume, seed, seedData, actions };
+  return { editedResume: state.data, dirty: state.dirty, manualEdited: state.manualEdited, serializedResume, seed, seedData, actions };
 }
 
 export type ResumeEditorActions = ReturnType<typeof useResumeEditor>["actions"];

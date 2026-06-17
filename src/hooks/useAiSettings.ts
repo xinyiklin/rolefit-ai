@@ -31,9 +31,12 @@ export function useAiSettings() {
 
   const [honestContext, setHonestContext] = useState(saved.honestContext ?? "");
   const [customInstructions, setCustomInstructions] = useState(saved.customInstructions ?? "");
-  // Default off because strict review runs the slower skeptical audit pass, but
-  // preserve the user's choice once they opt in.
-  const [strictReview, setStrictReview] = useState(saved.strictReview ?? false);
+  // Default "tailor" (no review) — preserve the user's choice once they opt in.
+  // Legacy strictReview boolean is migrated to polishStages in settings.ts coerce().
+  const [polishStages, setPolishStages] = useState<"tailor" | "review" | "both">(saved.polishStages ?? "tailor");
+  // Keep strictReview for back-compat: derived from polishStages so any code
+  // reading it still gets a sensible boolean. Not persisted directly any more.
+  const strictReview = polishStages === "both" || polishStages === "review";
   const [citizenshipStatus, setCitizenshipStatus] = useState<CitizenshipStatus>(saved.citizenshipStatus ?? "unspecified");
   const [legallyAuthorizedToWork, setLegallyAuthorizedToWork] = useState(saved.legallyAuthorizedToWork ?? true);
   const [requiresSponsorship, setRequiresSponsorship] = useState(saved.requiresSponsorship ?? false);
@@ -57,6 +60,7 @@ export function useAiSettings() {
         honestContext,
         customInstructions,
         strictReview,
+        polishStages,
         citizenshipStatus,
         legallyAuthorizedToWork,
         requiresSponsorship
@@ -76,7 +80,7 @@ export function useAiSettings() {
     auditApiBaseUrl,
     honestContext,
     customInstructions,
-    strictReview,
+    polishStages,
     citizenshipStatus,
     legallyAuthorizedToWork,
     requiresSponsorship
@@ -131,8 +135,9 @@ export function useAiSettings() {
     handleAuditProviderChange,
     honestContext,
     setHonestContext,
+    polishStages,
+    setPolishStages,
     strictReview,
-    setStrictReview,
     citizenshipStatus,
     setCitizenshipStatus,
     legallyAuthorizedToWork,

@@ -29,7 +29,9 @@ type UseResumeAnalysisArgs = {
   debouncedCombinedJobText: string;
   // The current resume as edited in the structured editor (serialized + debounced),
   // falling back to the raw polish output. Drives match/diff/fit so manual edits
-  // are scored live. `isEdited` is true once the user has hand-edited the model.
+  // are scored live. `isEdited` is true once the user has FREELY hand-edited the
+  // model — accepting/undoing a reviewed suggestion does NOT set it, since the AI
+  // verdict still describes that proposal (see useResumeEditor `manualEdited`).
   debouncedCurrentResumeText: string;
   isEdited: boolean;
   // The structured editor model, when seeded. Bullet counts and live-draft
@@ -114,9 +116,10 @@ export function useResumeAnalysis({
   // is the base to score against.
   const fitComparison = useMemo<FitComparison | null>(() => {
     if (!result) return null;
-    // Once the resume is hand-edited, the AI/saved tailored numbers no longer
-    // describe the current text — recompute the tailored score locally so the
-    // headline tracks edits and never relabels an edited resume as AI-judged.
+    // Once the resume is FREELY hand-edited, the AI/saved tailored numbers no
+    // longer describe the current text — recompute the tailored score locally so
+    // the headline tracks edits and never relabels a freely-edited resume as
+    // AI-judged. Applying the AI's own reviewed suggestions is not a free edit.
     if (!isEdited) {
       if (result.aiScore) {
         return { source: "ai", base: result.aiScore.base, tailored: result.aiScore.tailored, reason: result.aiScore.liftReason };
@@ -171,14 +174,20 @@ export function useResumeAnalysis({
   const resultSourceLabel = result?.source === "local" ? "Local engine" : result?.source === "ai" ? "AI" : "";
 
   // Fit verdict band for the header — the qualitative "are they a fit?" signal.
+  // When the user FREELY hand-edits the resume after the AI reviewed it, the
+  // stored AI verdict no longer describes the current text (the score already
+  // re-derives from the edited content via fitComparison). Mirror the same
+  // isEdited gate that fitComparison uses so the label source stays honest.
+  // Accepting the AI's reviewed suggestions keeps "AI-judged" — the verdict
+  // describes that very proposal, so applying it does not flip to "Estimated".
   const fitVerdict = useMemo<FitVerdict | null>(() => {
     const aiVerdict = result?.strictReview?.verdict;
-    if (aiVerdict && VERDICT_LABEL[aiVerdict]) {
+    if (aiVerdict && VERDICT_LABEL[aiVerdict] && !isEdited) {
       return { verdict: aiVerdict, label: VERDICT_LABEL[aiVerdict], source: "AI-judged" };
     }
     const derived = verdictFromScore(headlineScore);
     return derived ? { verdict: derived, label: VERDICT_LABEL[derived], source: "Estimated" } : null;
-  }, [result, headlineScore]);
+  }, [result, headlineScore, isEdited]);
 
   // Lifestyle/logistical conditions in the JD — surfaced as a pre-apply advisory,
   // deliberately NOT a fit input (the prompt rules keep the verdict about

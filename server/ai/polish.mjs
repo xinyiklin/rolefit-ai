@@ -30,6 +30,7 @@ import { callConfiguredProvider } from "./clients.mjs";
 import { findUngroundedJdTerm } from "./grounding.mjs";
 import {
   applyGapCapsAndVerdict,
+  coverageHasEligibilityBlocker,
   missingRequiredSkillsFromStrictReview,
   reconcileFitVerdict,
   sanitizeAiScore,
@@ -190,6 +191,20 @@ export async function handlePolish(req, res) {
     const jobText = String(body.jobText ?? "").slice(0, 35_000);
     const includeCoverLetter = Boolean(body.includeCoverLetter);
     const strictReview = Boolean(body.strictReview);
+    // `stages` lets the client run the tailor pass and the strict-review pass
+    // independently. Back-compat: callers that only send `strictReview`
+    // (e.g. the fabrication eval) still get the legacy mapping —
+    // strictReview:true ≡ "both", strictReview:false ≡ "tailor".
+    //   tailor: run the tailor provider call, skip the review pass (today's
+    //           strictReview:false behavior).
+    //   both:   tailor + review (today's strictReview:true behavior).
+    //   review: skip the tailor provider call; audit prior (untrusted) client
+    //           suggestions re-sanitized against the scope. No cover letter.
+    const stages = (body.stages === "tailor" || body.stages === "review" || body.stages === "both")
+      ? body.stages
+      : (strictReview ? "both" : "tailor");
+    const runTailor = stages !== "review";
+    const runReview = stages !== "tailor";
     const honestContext = String(body.honestContext ?? "").slice(0, 8_000);
     const customInstructions = String(body.customInstructions ?? "").slice(0, 4_000);
 
@@ -209,11 +224,18 @@ export async function handlePolish(req, res) {
       customInstructions
     });
 
-    const parsed = await callConfiguredProvider({ provider, model, reasoningEffort, apiKey, apiBaseUrl, systemPrompt, userPrompt });
+    // Tailor pass. In review-only mode there are no model-authored suggestions
+    // to generate, so the provider call is skipped and the suggestions come from
+    // the request body (a prior tailor response round-tripped through the client,
+    // hence UNTRUSTED). Both paths feed the SAME sanitizer against the scope, so
+    // client-provided suggestions are never trusted unsanitized.
+    const parsed = runTailor
+      ? await callConfiguredProvider({ provider, model, reasoningEffort, apiKey, apiBaseUrl, systemPrompt, userPrompt })
+      : { suggestedChanges: Array.isArray(body.suggestedChanges) ? body.suggestedChanges : [] };
     const suggestionDropStats = {};
     const suggestedChanges = sanitizeTailorSuggestions(parsed.suggestedChanges, tailorScope, suggestionDropStats, honestContext, jobText);
     const rawSuggestionCount = Array.isArray(parsed.suggestedChanges) ? parsed.suggestedChanges.length : 0;
-    if (rawSuggestionCount > 0 && suggestedChanges.length === 0) {
+    if (runTailor && rawSuggestionCount > 0 && suggestedChanges.length === 0) {
       // Shape-only: reason counts, never suggestion text. An all-drop reaching
       // the user as "no suggestions" is indistinguishable from a clean pass
       // without this. The target shapes (ids/field only — structural, never
@@ -241,7 +263,11 @@ export async function handlePolish(req, res) {
     const changeSummary = Array.isArray(parsed.changeSummary)
       ? parsed.changeSummary.map((item) => String(item).trim()).filter(Boolean).slice(0, 4)
       : [];
-    if (!suggestedChanges.length && !missingRequiredSkills.length && !changeSummary.length) {
+    // Usable-response guard is a TAILOR-pass check: a model reply with no
+    // suggestions, no gaps, AND no summary is an unusable shape. In review-only
+    // mode an empty change list is valid (audit the base resume as-is), so the
+    // guard must not fire.
+    if (runTailor && !suggestedChanges.length && !missingRequiredSkills.length && !changeSummary.length) {
       throw new UserSafeAiError("AI response did not include usable resume suggestions. Try again or switch models.", 502);
     }
     // The polished preview is DERIVED, never model-authored: apply only the
@@ -264,8 +290,8 @@ export async function handlePolish(req, res) {
     // audit pass never rewrites the resume, so a different reviewer model cannot
     // alter the format-preserved output. Audit and cover letter both depend
     // only on the derived polished text, so they run in parallel.
-    const audit = strictReview ? resolveAuditProviderRequest(body, resolved) : resolved;
-    const reviewPromise = !strictReview
+    const audit = runReview ? resolveAuditProviderRequest(body, resolved) : resolved;
+    const reviewPromise = !runReview
       ? Promise.resolve(null)
       : (async () => {
           const reviewPrompts = buildStrictReviewPrompts({
@@ -288,7 +314,9 @@ export async function handlePolish(req, res) {
             userPrompt: reviewPrompts.userPrompt
           });
         })();
-    const coverPromise = !includeCoverLetter
+    // No cover letter in review-only mode: the cover pass tailors prose off the
+    // polished resume, which is purely a tailor-pass artifact.
+    const coverPromise = !(runTailor && includeCoverLetter)
       ? Promise.resolve(null)
       : (async () => {
           const coverPrompts = buildCoverLetterPrompts({
@@ -357,7 +385,12 @@ export async function handlePolish(req, res) {
     let reconciled;
     if (strictReviewResult) {
       const baseScore = bucketScore ?? sanitizeAiScore(reviewParsed?.fitScore ?? parsed.fitScore);
-      reconciled = applyGapCapsAndVerdict(baseScore, strictReviewResult);
+      // A hard eligibility gate (clearance/work-auth/license/cert/degree) the
+      // model reports only as a missing critical/high requirementCoverage row —
+      // not as a BLOCKER gap — must still force the DON'T APPLY band. Derive that
+      // synthetic blocker from the same coverage table the score is built from.
+      const hasCoverageBlocker = coverageHasEligibilityBlocker(reviewParsed?.requirementCoverage);
+      reconciled = applyGapCapsAndVerdict(baseScore, strictReviewResult, hasCoverageBlocker);
     } else {
       reconciled = reconcileFitVerdict(
         bucketScore ?? sanitizeAiScore(reviewParsed?.fitScore ?? parsed.fitScore),
@@ -370,6 +403,29 @@ export async function handlePolish(req, res) {
 
     const strictMissingRequiredSkills = missingRequiredSkillsFromStrictReview(strictReviewResult);
 
+    // The audit echo (auditProvider/auditModel) accompanies any response that
+    // ran the review pass — both "both" and review-only.
+    const auditEcho = runReview ? { auditProvider: audit.provider, auditModel: audit.model } : {};
+
+    if (!runTailor) {
+      // Review-only: no model-authored tailor output, no cover letter. Report
+      // the audit plus the re-sanitized suggestions and the derived (unchanged)
+      // scope text the audit judged.
+      sendJson(res, 200, {
+        polishedText,
+        suggestedChanges,
+        changeSummary: [],
+        missingRequiredSkills: strictMissingRequiredSkills,
+        aiScore: reconciled.aiScore,
+        strictReview: strictReviewResult,
+        model,
+        reasoningEffort,
+        provider,
+        ...auditEcho
+      });
+      return;
+    }
+
     sendJson(res, 200, {
       polishedText,
       coverLetterText: coverLetterText ?? "",
@@ -381,7 +437,7 @@ export async function handlePolish(req, res) {
       model,
       reasoningEffort,
       provider,
-      ...(strictReview ? { auditProvider: audit.provider, auditModel: audit.model } : {})
+      ...auditEcho
     });
   } catch (error) {
     if (error instanceof UserSafeAiError) {

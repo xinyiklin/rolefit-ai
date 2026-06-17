@@ -18,6 +18,9 @@ type ReviewRailProps = {
   // Lifestyle/logistical conditions in the JD — shown as a pre-apply advisory,
   // separate from fit (they never move the verdict).
   jobConstraints?: JobConstraint[];
+  // True when the JD changed since this review was generated — the verdict and
+  // gaps describe an older posting. Does NOT discard the review; just flags it.
+  reviewStale?: boolean;
   onHighlight?: (target: TailorChangeTarget | null) => void;
   // Called when the user clicks "Add evidence" on a gap or missing-skill row.
   // Opens the Options menu so they can fill in honest context and re-run Polish.
@@ -89,18 +92,20 @@ function applySuggestionTarget(actions: ResumeEditorActions, suggestion: TailorS
   if (!entryId) return;
   if (suggestion.target.field === "bullet") {
     if (!suggestion.target.bulletId) return;
-    actions.updateBullet(sectionId, entryId, suggestion.target.bulletId, value);
+    // viaSuggestion: applying a reviewed suggestion must not downgrade the AI
+    // fit verdict to "Estimated" (only free-form hand-edits do).
+    actions.updateBullet(sectionId, entryId, suggestion.target.bulletId, value, true);
     return;
   }
   const field = suggestion.target.field === "skill" ? "subtitleLeft" : suggestion.target.field;
-  actions.updateEntry(sectionId, entryId, field, value);
+  actions.updateEntry(sectionId, entryId, field, value, true);
 }
 
 // The recruiter review beside the editor: the verdict plus each suggested
 // bullet rewrite as an actionable card — accept it, modify it before applying,
 // undo it, or apply everything that still matches. A card goes stale when its
 // bullet was hand-edited away (apply manually via Copy in that case).
-export function ReviewRail({ result, resume, actions, resumeDiff, jobConstraints, onHighlight, onAddHonestContext }: ReviewRailProps) {
+export function ReviewRail({ result, resume, actions, resumeDiff, jobConstraints, reviewStale, onHighlight, onAddHonestContext }: ReviewRailProps) {
   const sr = result.strictReview;
   const suggestions = result.suggestedChanges ?? [];
   // Text applied per rewrite index (Accept stores the suggestion, Apply after
@@ -209,7 +214,7 @@ export function ReviewRail({ result, resume, actions, resumeDiff, jobConstraints
     if (status.kind !== "pending") return;
     const value = text.trim();
     if (!value) return;
-    actions.updateBullet(status.target.sectionId, status.target.entryId, status.target.bulletId, value);
+    actions.updateBullet(status.target.sectionId, status.target.entryId, status.target.bulletId, value, true);
     setAppliedTexts((current) => ({ ...current, [`rewrite-${index}`]: value }));
     setEditingKey(null);
   }
@@ -219,7 +224,7 @@ export function ReviewRail({ result, resume, actions, resumeDiff, jobConstraints
     if (status.kind !== "applied") return;
     const target = findBullet(resume, status.appliedText);
     if (!target) return;
-    actions.updateBullet(target.sectionId, target.entryId, target.bulletId, rewrites[index].original);
+    actions.updateBullet(target.sectionId, target.entryId, target.bulletId, rewrites[index].original, true);
     setAppliedTexts((current) => {
       const next = { ...current };
       delete next[`rewrite-${index}`];
@@ -257,9 +262,14 @@ export function ReviewRail({ result, resume, actions, resumeDiff, jobConstraints
 
   return (
     <aside className="review-rail" aria-label="Recruiter review">
+      {reviewStale ? (
+        <p className="rr-stale-notice" role="status">
+          This review reflects a previous job description — re-Polish to refresh.
+        </p>
+      ) : null}
       {sr ? (
         <>
-          <div className="review-rail__verdict">
+          <div className={`review-rail__verdict${reviewStale ? " review-rail__verdict--stale" : ""}`}>
             <strong className={`verdict-pill verdict-pill--${sr.verdict.replace(/['\s]+/g, "-").toLowerCase()}`}>
               {sr.verdict}
             </strong>
@@ -273,7 +283,7 @@ export function ReviewRail({ result, resume, actions, resumeDiff, jobConstraints
           <p className="review-rail__reason">{sr.verdictReason}</p>
         </>
       ) : (
-        <div className="review-rail__verdict">
+        <div className={`review-rail__verdict${reviewStale ? " review-rail__verdict--stale" : ""}`}>
           <strong className="verdict-pill verdict-pill--reasonable-fit">Tailor suggestions</strong>
         </div>
       )}

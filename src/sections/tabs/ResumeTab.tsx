@@ -8,6 +8,7 @@ import type { TailorChangeTarget } from "../../resume/types";
 import { DOC_ZOOM_OPTIONS, type DocStyleControls } from "../../hooks/useDocStyle";
 import { verdictPillClass, type FitVerdict } from "../../hooks/useResumeAnalysis";
 import type { JobConstraint } from "../../lib/jobConstraints";
+import type { AutosavedDraft } from "../../hooks/useAutosaveDraft";
 import { FormatMenu } from "../FormatMenu";
 import { ResumeEditor } from "../editor/ResumeEditor";
 import { ReviewRail } from "../ReviewRail";
@@ -34,6 +35,13 @@ type ResumeTabProps = {
   onSetTailorMode: (sectionId: string, mode: TailorMode) => void;
   exportControl?: ReactNode;
   onAddHonestContext?: (keyword: string) => void;
+  // Autosave recovery: non-null when a draft from a previous session was found.
+  pendingAutosaveDraft?: AutosavedDraft | null;
+  onRestoreAutosaveDraft?: (draft: AutosavedDraft) => void;
+  onDismissAutosaveDraft?: () => void;
+  // True when the JD changed since the last polish — the ReviewRail describes
+  // an old posting and should be flagged as stale.
+  reviewStale?: boolean;
 };
 
 // The resume surface is edit-and-check: the structured editor carries the
@@ -55,7 +63,11 @@ export function ResumeTab({
   tailorModes,
   onSetTailorMode,
   exportControl,
-  onAddHonestContext
+  onAddHonestContext,
+  pendingAutosaveDraft,
+  onRestoreAutosaveDraft,
+  onDismissAutosaveDraft,
+  reviewStale
 }: ResumeTabProps) {
   // Intercept Ctrl/Cmd +/- to control editor zoom instead of browser zoom.
   useEffect(() => {
@@ -131,6 +143,34 @@ export function ResumeTab({
         </div>
       </div>
 
+      {pendingAutosaveDraft && onRestoreAutosaveDraft && onDismissAutosaveDraft ? (
+        <div className="draft-restore-bar" role="alert">
+          <span className="draft-restore-bar__text">
+            Unsaved draft found
+            {pendingAutosaveDraft.jobLabel ? ` · ${pendingAutosaveDraft.jobLabel}` : ""}
+            {" "}
+            <span className="draft-restore-bar__time">
+              {new Date(pendingAutosaveDraft.savedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+            </span>
+          </span>
+          <button
+            type="button"
+            className="ghost-button is-compact draft-restore-bar__action"
+            onClick={() => onRestoreAutosaveDraft(pendingAutosaveDraft)}
+          >
+            Restore
+          </button>
+          <button
+            type="button"
+            className="ghost-button is-compact draft-restore-bar__dismiss"
+            aria-label="Dismiss"
+            onClick={onDismissAutosaveDraft}
+          >
+            ×
+          </button>
+        </div>
+      ) : null}
+
       <div className={`resume-workbench${hasReview ? " has-rail" : ""}`}>
         <div
           className="resume-workbench__editor"
@@ -156,7 +196,7 @@ export function ResumeTab({
 
         {hasReview && result ? (
           <div className="resume-workbench__rail">
-            <ReviewRail result={result} resume={editedResume} actions={actions} resumeDiff={resumeDiff} jobConstraints={jobConstraints} onHighlight={setHighlightTarget} onAddHonestContext={onAddHonestContext} />
+            <ReviewRail result={result} resume={editedResume} actions={actions} resumeDiff={resumeDiff} jobConstraints={jobConstraints} reviewStale={reviewStale} onHighlight={setHighlightTarget} onAddHonestContext={onAddHonestContext} />
           </div>
         ) : null}
       </div>

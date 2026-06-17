@@ -13,11 +13,13 @@
 
 import {
   applyGapCapsAndVerdict,
+  coverageHasEligibilityBlocker,
   reconcileFitVerdict,
   sanitizeTailorSuggestions,
   scoreFromBuckets,
   scoreFromRequirementCoverage
 } from "../sanitize.mjs";
+import { findUngroundedJdTerm } from "../grounding.mjs";
 
 const scope = {
   sections: [
@@ -152,6 +154,58 @@ const checks = [
     ).length === 0;
   })()],
 
+  // --- prose-mode brand grounding (cover letters / application answers) ---
+  // findUngroundedJdTerm(proposedText, jobLower, grounding) — caller lowercases
+  // jobLower + grounding. Prose mode skips detector 1 (capitalized tokens) so
+  // company/role proper nouns are NOT flagged, but curated branded tools routed
+  // through detector 3 (LOWERCASE_TOOL_NAMES) still are.
+  ["prose: ungrounded branded tool (Salesforce) in JD + letter, not in resume -> FLAGGED", (() => {
+    const letter = "I am excited to bring my Salesforce administration experience to your team.";
+    const job = "We need a Salesforce admin to manage our CRM workflows.".toLowerCase();
+    const grounding = "Built reporting dashboards and managed a clinic intake workflow.".toLowerCase();
+    return findUngroundedJdTerm(letter, job, grounding, { proseMode: true }) === "salesforce";
+  })()],
+  ["prose: branded tool present in grounding -> NOT flagged (grounded passes)", (() => {
+    const letter = "My Salesforce administration experience maps directly to this role.";
+    const job = "We need a Salesforce admin to manage our CRM workflows.".toLowerCase();
+    const grounding = "Administered Salesforce for a 30-person sales org and built CRM reports.".toLowerCase();
+    return findUngroundedJdTerm(letter, job, grounding, { proseMode: true }) === null;
+  })()],
+  ["prose: company proper noun (Acme) in JD -> NOT flagged (not in lexicon)", (() => {
+    const letter = "I am excited about Acme's mission to modernize healthcare logistics.";
+    const job = "Acme is hiring an operations analyst for our logistics team.".toLowerCase();
+    const grounding = "Coordinated logistics for a regional distribution team.".toLowerCase();
+    return findUngroundedJdTerm(letter, job, grounding, { proseMode: true }) === null;
+  })()],
+  // English-collision decision: "Excel" (the tool) is OMITTED from the lexicon
+  // because "excel" doubles as the common verb ("excel at"). The honest prose
+  // "I excel at..." must survive even with "Excel" present in the JD — a false
+  // drop here would break an honest application, the worse failure.
+  ["prose: honest 'I excel at' with Excel (tool) in JD -> NOT flagged (Excel excluded)", (() => {
+    const letter = "I excel at cross-team collaboration and clear written communication.";
+    const job = "Proficiency with Microsoft Excel and reporting is required.".toLowerCase();
+    const grounding = "Coordinated cross-functional teams and wrote weekly status reports.".toLowerCase();
+    return findUngroundedJdTerm(letter, job, grounding, { proseMode: true }) === null;
+  })()],
+  // Resume-mode (proseMode OFF) regression: detector 1 still flags a capitalized
+  // ungrounded JD proper noun, so existing tailor-path behavior is unchanged.
+  ["resume-mode regression: capitalized ungrounded JD term still flagged (proseMode off)", (() => {
+    const proposed = "Coordinated rollout across Linux servers.";
+    const job = "Requires Linux administration for the platform team.".toLowerCase();
+    const grounding = "Coordinated a clinic reporting rollout with validation checks.".toLowerCase();
+    return findUngroundedJdTerm(proposed, job, grounding) === "Linux";
+  })()],
+  ["resume-mode regression: branded tool (Salesforce) flagged in resume mode too", (() => {
+    // In resume mode detector 1 (capitalized tokens) fires first and returns the
+    // surface form "Salesforce"; prose mode would instead catch the lowercase
+    // "salesforce" via detector 3. Either way the brand is flagged when ungrounded.
+    const proposed = "Administered Salesforce for the reporting workflow.";
+    const job = "We need a Salesforce admin.".toLowerCase();
+    const grounding = "Maintained the reporting workflow and intake forms.".toLowerCase();
+    const flagged = findUngroundedJdTerm(proposed, job, grounding);
+    return typeof flagged === "string" && flagged.toLowerCase() === "salesforce";
+  })()],
+
   // --- conservative verdict/score reconciliation (no-buckets fallback path) ---
   ["pessimistic verdict clamps base AND tailored down", JSON.stringify(reconcileFitVerdict({ base: 58, tailored: 59, liftReason: "" }, DONT).aiScore) === JSON.stringify({ base: 45, tailored: 45, liftReason: "" })],
   ["optimistic verdict downgrades, scores intact", (() => {
@@ -220,6 +274,93 @@ const checks = [
   ["no qualifying gaps: verdict derived from sum", (() => {
     const r = applyGapCapsAndVerdict({ base: 73, tailored: 86, liftReason: "" }, { gaps: [{ severity: "MEDIUM" }] });
     return r.aiScore.tailored === 86 && r.verdict === "STRONG FIT";
+  })()],
+
+  // --- coverage-table eligibility blocker (Fix 2): a hard gate reported only as
+  // --- a missing critical/high requirementCoverage row, NOT as a BLOCKER gap,
+  // --- must still force the DON'T APPLY band ---
+  ["coverage: missing critical clearance row (no BLOCKER gap) -> caps base+tailored <=45, DON'T APPLY", (() => {
+    // The reviewer reports the hard gate as a coverage ROW (category carries the
+    // "clearance" keyword), tailoredStatus "missing", and NO gap at severity
+    // BLOCKER. Category must carry a bucketable token (sanitizeRequirementCoverage
+    // drops un-bucketable rows) — "Active Secret clearance required" buckets as
+    // seniority AND matches the eligibility sub-lexicon.
+    const coverage = [
+      { category: "Active Secret clearance required", requirement: "TS/SCI clearance", importance: "critical", baseStatus: "missing", tailoredStatus: "missing" },
+      { category: "Required tech", requirement: "React", importance: "high", baseStatus: "covered", tailoredStatus: "covered" },
+      { category: "Required experience", requirement: "Backend APIs", importance: "high", baseStatus: "covered", tailoredStatus: "covered" },
+      { category: "Required years", requirement: "Entry level", importance: "medium", baseStatus: "covered", tailoredStatus: "covered" }
+    ];
+    const hasBlocker = coverageHasEligibilityBlocker(coverage);
+    const r = applyGapCapsAndVerdict({ base: 88, tailored: 90, liftReason: "" }, { gaps: [] }, hasBlocker);
+    return hasBlocker && r.aiScore.base <= 45 && r.aiScore.tailored <= 45 && r.verdict === DONT;
+  })()],
+  ["coverage: missing work-auth/license rows also trigger the blocker", (() => {
+    const visa = coverageHasEligibilityBlocker([
+      { category: "Work authorization", requirement: "Must be authorized to work in the US without sponsorship", importance: "critical", baseStatus: "missing", tailoredStatus: "missing" },
+      { category: "Required tech", requirement: "Python", importance: "high", baseStatus: "covered", tailoredStatus: "covered" },
+      { category: "Required experience", requirement: "Data pipelines", importance: "high", baseStatus: "covered", tailoredStatus: "covered" },
+      { category: "Required years", requirement: "Mid level", importance: "medium", baseStatus: "covered", tailoredStatus: "covered" }
+    ]);
+    const license = coverageHasEligibilityBlocker([
+      { category: "Certification", requirement: "Active RN license required", importance: "high", baseStatus: "missing", tailoredStatus: "missing" },
+      { category: "Required tech", requirement: "EHR systems", importance: "high", baseStatus: "covered", tailoredStatus: "covered" },
+      { category: "Required experience", requirement: "Patient intake", importance: "high", baseStatus: "covered", tailoredStatus: "covered" },
+      { category: "Required years", requirement: "Entry level", importance: "medium", baseStatus: "covered", tailoredStatus: "covered" }
+    ]);
+    return visa && license;
+  })()],
+  ["coverage: missing '5+ years experience' seniority row (NOT eligibility) -> NOT a blocker", (() => {
+    const coverage = [
+      { category: "Required years", requirement: "5+ years of experience", importance: "high", baseStatus: "missing", tailoredStatus: "missing" },
+      { category: "Required tech", requirement: "React", importance: "high", baseStatus: "covered", tailoredStatus: "covered" },
+      { category: "Required experience", requirement: "Frontend work", importance: "high", baseStatus: "covered", tailoredStatus: "covered" },
+      { category: "Preferred", requirement: "GraphQL", importance: "low", baseStatus: "covered", tailoredStatus: "covered" }
+    ];
+    const hasBlocker = coverageHasEligibilityBlocker(coverage);
+    // No coverage blocker, no gaps -> applyGapCapsAndVerdict leaves the score
+    // uncapped (only normal scoring / HIGH-gap caps would apply elsewhere).
+    const r = applyGapCapsAndVerdict({ base: 70, tailored: 78, liftReason: "" }, { gaps: [] }, hasBlocker);
+    return hasBlocker === false && r.aiScore.tailored === 78 && r.verdict === "REASONABLE FIT";
+  })()],
+  ["coverage: COVERED clearance row (satisfied) -> NOT a blocker", (() => {
+    const hasBlocker = coverageHasEligibilityBlocker([
+      { category: "Eligibility", requirement: "Active Secret clearance", importance: "critical", baseStatus: "covered", tailoredStatus: "covered" },
+      { category: "Required tech", requirement: "Java", importance: "high", baseStatus: "covered", tailoredStatus: "covered" },
+      { category: "Required experience", requirement: "Backend services", importance: "high", baseStatus: "covered", tailoredStatus: "covered" },
+      { category: "Required years", requirement: "Mid level", importance: "medium", baseStatus: "covered", tailoredStatus: "covered" }
+    ]);
+    return hasBlocker === false;
+  })()],
+  ["coverage: low-importance missing eligibility row -> NOT a blocker (only critical/high escalate)", (() => {
+    const hasBlocker = coverageHasEligibilityBlocker([
+      { category: "Preferred certification", requirement: "AWS certification a plus", importance: "low", baseStatus: "missing", tailoredStatus: "missing" },
+      { category: "Required tech", requirement: "Node.js", importance: "high", baseStatus: "covered", tailoredStatus: "covered" },
+      { category: "Required experience", requirement: "API design", importance: "high", baseStatus: "covered", tailoredStatus: "covered" },
+      { category: "Required years", requirement: "Entry level", importance: "medium", baseStatus: "covered", tailoredStatus: "covered" }
+    ]);
+    return hasBlocker === false;
+  })()],
+  ["coverage: eligibility keyword only in requirement under a NON-bucketing category ('Eligibility'/'Education') -> still fires the blocker + caps", (() => {
+    // The gate keyword lives in `requirement`; the `category` ("Eligibility",
+    // "Education") does NOT match any scoring bucket, so sanitizeRequirementCoverage
+    // would DROP these rows. The raw-row scan must still catch them — otherwise an
+    // ineligible role keeps a Strong-fit verdict. Locks the adversarial-review fix.
+    const clearance = coverageHasEligibilityBlocker([
+      { category: "Eligibility", requirement: "Must hold an active Top Secret/SCI clearance", importance: "critical", baseStatus: "missing", tailoredStatus: "missing" },
+      { category: "Skills", requirement: "Go", importance: "high", baseStatus: "covered", tailoredStatus: "covered" }
+    ]);
+    const degree = coverageHasEligibilityBlocker([
+      { category: "Education", requirement: "Bachelor's degree in Nursing required", importance: "critical", baseStatus: "missing", tailoredStatus: "missing" }
+    ]);
+    const r = applyGapCapsAndVerdict({ base: 84, tailored: 88, liftReason: "" }, { gaps: [] }, clearance);
+    return clearance === true && degree === true && r.aiScore.tailored <= 45 && r.verdict === DONT;
+  })()],
+  ["applyGapCapsAndVerdict default hasCoverageBlocker preserves existing gap-only behavior", (() => {
+    // Two-arg call (legacy signature) must behave exactly as before: no coverage
+    // blocker, gap-based caps only.
+    const r = applyGapCapsAndVerdict({ base: 73, tailored: 86, liftReason: "" }, { gaps: [{ severity: "HIGH" }] });
+    return r.aiScore.tailored === 79 && r.verdict === "REASONABLE FIT";
   })()]
 ];
 

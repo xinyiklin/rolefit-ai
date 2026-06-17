@@ -6,8 +6,8 @@ import { NavMenu } from "./NavMenu";
 type PolishMenuProps = {
   includeCoverLetter: boolean;
   setIncludeCoverLetter: (v: boolean) => void;
-  strictReview: boolean;
-  setStrictReview: (v: boolean) => void;
+  polishStages: "tailor" | "review" | "both";
+  setPolishStages: (v: "tailor" | "review" | "both") => void;
   honestContext: string;
   setHonestContext: (v: string) => void;
   citizenshipStatus: CitizenshipStatus;
@@ -25,13 +25,19 @@ type PolishMenuProps = {
   honestContextRef?: Ref<HTMLTextAreaElement>;
 };
 
+const STAGE_OPTIONS: { value: "tailor" | "review" | "both"; label: string }[] = [
+  { value: "tailor", label: "Tailor only" },
+  { value: "review", label: "Review only" },
+  { value: "both", label: "Both" }
+];
+
 // Navbar dropdown for the optional inputs that steer a polish run. The AiMenu,
 // separately, picks the model/provider.
 export function PolishMenu({
   includeCoverLetter,
   setIncludeCoverLetter,
-  strictReview,
-  setStrictReview,
+  polishStages,
+  setPolishStages,
   honestContext,
   setHonestContext,
   citizenshipStatus,
@@ -70,17 +76,30 @@ export function PolishMenu({
         </span>
       </label>
 
-      <label className="check-row">
-        <input
-          checked={strictReview}
-          onChange={(event) => setStrictReview(event.target.checked)}
-          type="checkbox"
-        />
-        <span>
-          <strong>Strict review</strong>
-          <small>Run a skeptical recruiter audit after the edit pass.</small>
+      <div role="group" aria-labelledby="polish-stages-label" className="field">
+        <span id="polish-stages-label">
+          <strong>Polish stages</strong>
+          <small>Tailor rewrites; Review runs a recruiter audit; Both runs tailor then review.</small>
         </span>
-      </label>
+        <div className="segmented-control" role="radiogroup" aria-labelledby="polish-stages-label">
+          {STAGE_OPTIONS.map((opt) => (
+            <label
+              key={opt.value}
+              className={`segmented-control__option${polishStages === opt.value ? " is-selected" : ""}`}
+            >
+              <input
+                type="radio"
+                name="polish-stages"
+                value={opt.value}
+                checked={polishStages === opt.value}
+                onChange={() => setPolishStages(opt.value)}
+                className="sr-only"
+              />
+              {opt.label}
+            </label>
+          ))}
+        </div>
+      </div>
 
       {/* Work authorization group */}
       <div className="menu-subhead" style={{ marginTop: 'var(--s2)' }}>

@@ -76,7 +76,12 @@ function providerRequestFailed(provider, response, data) {
 }
 
 function isMaxTokenFinishReason(reason) {
-  return ["length", "max_tokens", "MAX_TOKENS"].includes(String(reason ?? ""));
+  // "max_output_tokens" is the OpenAI Responses API's incomplete_details.reason
+  // for output truncation; without it the actionable "shorten / larger model"
+  // error never fires for that provider. The other providers use distinct
+  // reasons (length / max_tokens / MAX_TOKENS / stop_reason), so this is inert
+  // for them.
+  return ["length", "max_tokens", "MAX_TOKENS", "max_output_tokens"].includes(String(reason ?? ""));
 }
 
 // Turn a truncated reply (the model hit its output-token limit) into a clear,

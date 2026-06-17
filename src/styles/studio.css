@@ -478,3 +478,43 @@
   font-size: 0.76rem;
   font-weight: 500;
 }
+
+/* -------- Draft-restore affordance (Resume tab head) -------- */
+/* Quiet inline bar shown when an autosaved draft is available. One line,
+   no visual noise, dismissible. Sits between the card head and the workbench. */
+.draft-restore-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  padding: var(--s2) var(--s3);
+  border-radius: var(--r-md);
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-veil);
+  font-size: 0.78rem;
+  color: var(--accent-deep);
+  margin-bottom: var(--s3);
+}
+
+.draft-restore-bar__text {
+  flex: 1;
+  min-width: 0;
+}
+
+.draft-restore-bar__time {
+  color: var(--ink-soft);
+  font-size: 0.74rem;
+}
+
+.draft-restore-bar__action {
+  flex-shrink: 0;
+  font-size: 0.76rem;
+  color: var(--accent-deep);
+}
+
+.draft-restore-bar__dismiss {
+  flex-shrink: 0;
+  font-size: 0.9rem;
+  line-height: 1;
+  color: var(--ink-soft);
+  padding: 0 var(--s1);
+}
