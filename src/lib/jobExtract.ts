@@ -129,7 +129,7 @@ const TAILORING_SECTION: RegExp[] = [
   /^(job description|position description|overview|role overview|about the role|the role|your impact)\b/i,
   /^(responsibilities|what you['']?ll do|what you will do|day to day)\b/i,
   /^you will:?\s*$/i,
-  /^(requirements|qualifications|minimum qualifications|required qualifications|preferred qualifications)\b/i,
+  /^(requirements|qualifications|minimum qualifications|basic qualifications|required qualifications|preferred qualifications)\b/i,
   /^all you['']?ll need for success\b/i,
   // Fix #2 (TAILORING_SECTION): narrow "skills" and "experience" to bare heading only
   // so "Experience with Git..." and "Skills in Python" are not treated as section headings.
@@ -166,6 +166,8 @@ const RESPONSIBILITY_HEADING: RegExp[] = [
 const REQUIRED_HEADING: RegExp[] = [
   /^required qualifications?\b/i,
   /^minimum qualifications?\b/i,
+  /^basic qualifications?\b/i,       // AWS / Northwood-style "Basic Qualifications"
+  /^basic requirements?\b/i,
   /^requirements?\b/i,
   /^qualifications?\b/i,
   /^what we['']?re looking for\b/i,
@@ -318,6 +320,18 @@ function nextTextIndex(lines: string[], start: number): number {
 
 function isMetadataLabel(line: string): boolean {
   return /^[A-Za-z][A-Za-z0-9 /&''()-]+:\s*$/.test(line.trim());
+}
+
+// Bare ATS field labels that sit on their own line ABOVE their value
+// ("Job Category"\n"Technology"). They carry no trailing colon, so isMetadataLabel
+// misses them — and then the title fallback mistakes the label (or the value
+// stacked beneath it) for the job title.
+const ATS_FIELD_LABEL =
+  /^(job (id|category|function|level|type|family|req(uisition)?(\s*id)?)|posting date|expiration date|date posted|workplace expectation|work(place)? type|worker type|pay|salary|compensation|seniority level|experience level|employment type|requisition(\s*id)?|req id|department|division|business unit|schedule|shift)\s*:?\s*$/i;
+
+function isBareFieldLabel(line: string): boolean {
+  const t = line.trim();
+  return isMetadataLabel(t) || ATS_FIELD_LABEL.test(t);
 }
 
 function isSectionHeading(line: string): boolean {
@@ -720,26 +734,51 @@ function extractSalary(lines: string[]): Pick<
   const money =
     /(?:\b(USD|US\$)\s*)?(\$)?\s*(\d[\d,.]*(?:\s?[kK])?)(?:\s*(?:-|–|—|to)\s*(?:USD|US\$|\$)?\s*(\d[\d,.]*(?:\s?[kK])?))?(?:\s*(?:\/|per)?\s*(year|yr|annum|annual|annually|hour|hr|month|mo))?/gi;
 
+  // A comp keyword counts only when it's on the SAME line as the amount, or on a
+  // BARE label line directly above it ("Pay"\n"111000-185000"). A keyword buried
+  // in an adjacent prose sentence does NOT: the old 3-line join bled "200 hours"
+  // from a benefits paragraph into the next paragraph's "base pay" sentence and
+  // reported $200/hr. Matching per-line (not a join) closes that leak in both
+  // directions while still reading the label→value pattern.
+  const COMP_LABEL =
+    /^(pay|salary|compensation|base (pay|salary)|pay range|salary range|target (pay|salary)|annual (pay|salary)|total (rewards|compensation))\s*:?\s*$/i;
+  const SAME_LINE_COMP = /salary|compensation|base pay|pay range|total rewards/i;
+
   for (let i = 0; i < lines.length; i += 1) {
-    const context = [lines[i - 1], lines[i], lines[i + 1]].filter(Boolean).join(" ");
-    const compContext = /salary|compensation|base pay|pay range|total rewards/i.test(context);
-    for (const match of context.matchAll(money)) {
+    const line = lines[i] ?? "";
+    if (!line.trim()) continue;
+    let prev = "";
+    for (let j = i - 1; j >= 0; j -= 1) {
+      if (lines[j]?.trim()) {
+        prev = lines[j].trim();
+        break;
+      }
+    }
+    const compContext = SAME_LINE_COMP.test(line) || COMP_LABEL.test(prev);
+    for (const match of line.matchAll(money)) {
       const min = parseAmount(match[3] ?? "");
       const max = match[4] ? parseAmount(match[4]) : null;
       const period = normalizePeriod(match[5] ?? "");
       if (!min) continue;
 
-      // Anti-fabrication gate: a bare number ("10,000 employees", "50,000 users")
-      // is never a salary. Require an explicit currency token or comp wording
-      // near the match before treating it as compensation.
       const currency = Boolean(match[1] || match[2]);
-      if (!currency && !compContext) continue;
+      const range = max !== null && max !== min;
+      const hasPeriod = Boolean(period);
+
+      // Anti-fabrication gate. Outside an explicit comp context, a number is only
+      // compensation when it has the SHAPE of pay: a currency token AND either a
+      // range or an explicit period. This rejects lone perk figures with a "$"
+      // ("$6,000 adoption assistance", "$2,500 training budget") and bare counts
+      // ("10,000 employees") that the currency-OR-comp gate used to let through.
+      if (!compContext) {
+        if (!currency) continue;
+        if (!range && !hasPeriod) continue;
+      }
 
       const highValue = min >= 1000 || (max ?? 0) >= 1000;
       const hourly = period === "hr" && min >= 8 && min <= 500;
       if (!highValue && !hourly) continue;
 
-      const range = max !== null && max !== min;
       let score = 0;
       if (compContext) score += 5;
       if (range) score += 4;
@@ -895,6 +934,21 @@ function isPlausibleRole(role: string): boolean {
   return ROLE_NOUN.test(words.slice(-2).join(" "));
 }
 
+// A "Role:" or "Title:" label sometimes heads a prose paragraph (a "Role:"
+// section describing the job) rather than naming the position. A real job title
+// is a short noun phrase, never a sentence/paragraph — gate the labelled value so
+// "As a Software Engineer at X, you will be pivotal in designing… our customers."
+// is rejected (and a cleaner path can recover the actual title).
+function looksLikeJobTitle(value: string): boolean {
+  const t = value.trim();
+  if (t.length < 2 || t.length > 90) return false;
+  // Sentence punctuation as a break ("…X. You…") or a trailing stop signals prose,
+  // not a title. A mid-token dot ("Node.js Developer") is fine — require a space
+  // after the stop, or end-of-string.
+  if (/[.!?]\s/.test(t) || /[.!?]$/.test(t)) return false;
+  return true;
+}
+
 // Lower-case prose roles get title-cased; a role that already carries caps
 // (e.g. "iOS Engineer") is trusted as written.
 function titleCaseRole(role: string): string {
@@ -1040,8 +1094,9 @@ function extractRoleFromProse(lines: string[]): string {
 function extractTracking(lines: string[], url?: string): ExtractedJobTracking {
   const linkedInTitle = parseLinkedInTitleLine(lines);
   // Fix #5e: added "Work Location" to location label list
+  const labelledTitle = valueForLabel(lines, ["Role", "Title", "Job title", "Position"]);
   const title =
-    valueForLabel(lines, ["Role", "Title", "Job title", "Position"]) ||
+    (looksLikeJobTitle(labelledTitle) ? labelledTitle : "") ||
     linkedInTitle.title ||
     "";
   const company = valueForLabel(lines, ["Company", "Organization", "Employer"]) || linkedInTitle.company || "";
@@ -1165,9 +1220,22 @@ function extractTracking(lines: string[], url?: string): ExtractedJobTracking {
       if (
         NOISE_LINE.some((re) => re.test(candidate)) ||
         isPromptMetadataLine(candidate) ||
+        isBareFieldLabel(candidate) ||
         isStructureHeading(candidate) ||
         isEmptyMarker(candidate)
       ) continue;
+
+      // A value stacked under a bare ATS label ("Job Category"\n"Technology",
+      // "Job Function"\n"Software Engineering") is metadata, not a title — the
+      // proximity heuristic below otherwise reads every such value as a title.
+      let prevNonEmpty = "";
+      for (let p = i - 1; p >= 0; p -= 1) {
+        if (lines[p].trim()) {
+          prevNonEmpty = lines[p].trim();
+          break;
+        }
+      }
+      if (isBareFieldLabel(prevNonEmpty)) continue;
 
       const lc = candidate.toLowerCase();
       // Preferred: reappears later
