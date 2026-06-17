@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { AlertCircle, Check, RotateCcw, X } from "lucide-react";
+import { AlertCircle, Check, RotateCcw, Square, X } from "lucide-react";
 
 export type StageStatus = "idle" | "running" | "done" | "failed";
 
@@ -17,6 +17,7 @@ type PolishProgressProps = {
   stages: "tailor" | "review" | "both";
   progress: PolishProgressState;
   onRetry: (stage: "tailor" | "review") => void;
+  onStop: () => void;
   onDismiss: () => void;
   busy: boolean;
 };
@@ -50,6 +51,7 @@ function StageCard({
   step,
   total,
   onRetry,
+  onStop,
   onDismiss,
   busy
 }: {
@@ -58,6 +60,7 @@ function StageCard({
   step: number;
   total: number;
   onRetry: (stage: "tailor" | "review") => void;
+  onStop: () => void;
   onDismiss: () => void;
   busy: boolean;
 }) {
@@ -132,8 +135,18 @@ function StageCard({
         {meta ? <span className="polish-stage__meta">{meta}</span> : null}
         {status === "failed" && error ? <span className="polish-stage__error">{error}</span> : null}
       </div>
-      {status === "failed" ? (
-        <div className="polish-stage__actions">
+      <div className="polish-stage__actions">
+        {status === "running" ? (
+          <button
+            type="button"
+            className="ghost-button is-compact polish-stage__stop"
+            onClick={onStop}
+          >
+            <Square size={10} fill="currentColor" strokeWidth={0} aria-hidden="true" />
+            Stop
+          </button>
+        ) : null}
+        {status === "failed" ? (
           <button
             type="button"
             className="ghost-button is-compact polish-stage__retry"
@@ -143,23 +156,26 @@ function StageCard({
             <RotateCcw size={12} aria-hidden="true" />
             Retry
           </button>
-          <button
-            type="button"
-            className="polish-stage__dismiss"
-            onClick={onDismiss}
-            aria-label={`Dismiss ${STAGE_COPY[stageKey].failed}`}
-          >
-            <X size={13} aria-hidden="true" />
-          </button>
-        </div>
-      ) : null}
+        ) : null}
+        {/* Close the indicator from any state. While running this only HIDES the
+            card — the polish keeps running and its result still lands; use Stop
+            to actually cancel. */}
+        <button
+          type="button"
+          className="polish-stage__dismiss"
+          onClick={onDismiss}
+          aria-label={status === "running" ? "Hide polish progress (polish keeps running)" : "Dismiss polish progress"}
+        >
+          <X size={13} aria-hidden="true" />
+        </button>
+      </div>
     </div>
   );
 }
 
 // A fixed, transparent stack of per-stage cards (Tailor above Review). The stack
 // has no chrome, so once every stage has finished and faded out nothing remains.
-export function PolishProgress({ stages, progress, onRetry, onDismiss, busy }: PolishProgressProps) {
+export function PolishProgress({ stages, progress, onRetry, onStop, onDismiss, busy }: PolishProgressProps) {
   const showTailor = stages === "tailor" || stages === "both";
   const showReview = stages === "review" || stages === "both";
   const total = stages === "both" ? 2 : 1;
@@ -173,6 +189,7 @@ export function PolishProgress({ stages, progress, onRetry, onDismiss, busy }: P
           step={1}
           total={total}
           onRetry={onRetry}
+          onStop={onStop}
           onDismiss={onDismiss}
           busy={busy}
         />
@@ -184,6 +201,7 @@ export function PolishProgress({ stages, progress, onRetry, onDismiss, busy }: P
           step={stages === "both" ? 2 : 1}
           total={total}
           onRetry={onRetry}
+          onStop={onStop}
           onDismiss={onDismiss}
           busy={busy}
         />
