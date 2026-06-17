@@ -518,3 +518,21 @@
     scrollbar-color: var(--hairline-strong) transparent;
   }
 }
+
+/* Stale-review notice: quiet inline text at the top of the rail when the JD
+   has changed since the last polish. Does not discard the review. */
+.rr-stale-notice {
+  margin: 0;
+  padding: var(--s2) var(--s3);
+  border-radius: var(--r-md);
+  background: var(--warm-veil);
+  border: 1px solid var(--warm-soft);
+  color: var(--warm);
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+/* De-emphasize the verdict pill while stale. */
+.review-rail__verdict--stale .verdict-pill {
+  opacity: 0.65;
+}

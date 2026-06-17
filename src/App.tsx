@@ -24,6 +24,14 @@ import {
 import { useResumeAnalysis } from "./hooks/useResumeAnalysis";
 import { useResumeEditor } from "./hooks/useResumeEditor";
 import { useResumeExport } from "./hooks/useResumeExport";
+import { useDialog } from "./hooks/useDialog";
+import {
+  useAutosaveDraft,
+  useBeforeUnloadGuard,
+  loadAutosaveDraft,
+  clearAutosaveDraft,
+  type AutosavedDraft
+} from "./hooks/useAutosaveDraft";
 import { arrayBufferToBase64 } from "./lib/downloads";
 import { buildAiRequestFields, buildAuditRequestFields } from "./lib/aiRequest";
 import { loadLastBaseResumeName, saveLastBaseResumeName } from "./lib/baseResumePrefs";
@@ -38,6 +46,7 @@ import { ReviewerSettings } from "./sections/ReviewerSettings";
 import { Masthead } from "./sections/Masthead";
 import { JobMenu } from "./sections/JobMenu";
 import { PolishMenu } from "./sections/PolishMenu";
+import { PolishProgress, type PolishProgressState } from "./sections/PolishProgress";
 import { ResumeMenu } from "./sections/ResumeMenu";
 import { StudioPane } from "./sections/StudioPane";
 import { ExportMenu } from "./sections/ExportRail";
@@ -139,6 +148,17 @@ function definedTracking(tracking: ExtractedJobTracking) {
 // ============ App ============
 
 function App() {
+  // ----- Dialog system -----
+  const { confirm } = useDialog();
+
+  // Shared helper for the 6 identical "replace editor" confirms.
+  const confirmReplaceEditor = () =>
+    confirm({
+      title: "Replace resume?",
+      message: "Replace the resume in the editor? Unsaved edits will be lost.",
+      confirmLabel: "Replace"
+    });
+
   // ----- State -----
   const [jobDescription, setJobDescription] = useState("");
   const [jobUrl, setJobUrl] = useState("");
@@ -155,6 +175,17 @@ function App() {
   const [fileStatus, setFileStatus] = useState("");
   const [linkStatus, setLinkStatus] = useState("");
   const [isPolishing, setIsPolishing] = useState(false);
+  // Per-stage progress state for the two-stage polish flow (Tailor / Review).
+  // Shown in the PolishProgress component while a polish is in-flight or has
+  // a failed stage. Reset to all-idle on every new polish run.
+  const idleProgress = (): PolishProgressState => ({
+    tailor: { status: "idle" },
+    review: { status: "idle" }
+  });
+  const [polishProgress, setPolishProgress] = useState<PolishProgressState>(idleProgress);
+  // True once a polish has been initiated — keeps PolishProgress visible after
+  // the run completes (including failures) until the user dismisses it.
+  const [polishProgressVisible, setPolishProgressVisible] = useState(false);
   // Surfaces polish-flow feedback the user otherwise never sees: AI-failure
   // reasons (the local fallback still renders) and the pre-flight guards
   // ("load a resume", "select a section to tailor"). Rendered in an aria-live
@@ -195,8 +226,8 @@ function App() {
     handleAuditProviderChange,
     honestContext,
     setHonestContext,
-    strictReview,
-    setStrictReview,
+    polishStages,
+    setPolishStages,
     citizenshipStatus,
     setCitizenshipStatus,
     legallyAuthorizedToWork,
@@ -234,6 +265,13 @@ function App() {
   // the menu is opened by handleAddHonestContext so the user can type immediately.
   const honestContextTextareaRef = useRef<HTMLTextAreaElement>(null);
 
+  // Autosave draft recovery: on mount, check whether a draft was saved that
+  // the user may want to restore. Null = no draft; non-null = prompt visible.
+  const [pendingAutosaveDraft, setPendingAutosaveDraft] = useState<AutosavedDraft | null>(null);
+  // Track whether the JD has changed since the last polish result. When true,
+  // show a quiet "review is stale" notice in the ReviewRail.
+  const [reviewStale, setReviewStale] = useState(false);
+
   // ----- Hooks -----
   const {
     templates,
@@ -255,6 +293,10 @@ function App() {
   const {
     editedResume,
     dirty: resumeEdited,
+    // Free-form hand-edits only (NOT accepting/undoing a reviewed suggestion).
+    // Gates AI fit provenance so applying the AI's own suggestions keeps the
+    // verdict "AI-judged"; arbitrary typing downgrades it to "Estimated".
+    manualEdited: resumeManuallyEdited,
     serializedResume,
     seed: seedResumeEditor,
     seedData: seedResumeData,
@@ -278,6 +320,22 @@ function App() {
   // User typography for the HTML resume page (Format menu): persisted CSS vars
   // applied to the editor and the print mirror.
   const docStyle = useDocStyle();
+
+  // Derive a short job-label for the autosave context (role + company only —
+  // never the full JD body). Evaluated inline; will be stable enough for the
+  // 1200 ms debounce window.
+  const _autosaveJobLabel = useMemo(() => {
+    if (!jobDescription.trim()) return "";
+    const { tracking } = extractJobPosting(jobDescription, { url: jobUrl });
+    const parts = [tracking.role, tracking.company].filter(Boolean);
+    return parts.join(" · ");
+  }, [jobDescription, jobUrl]);
+
+  // Debounced autosave to localStorage whenever the editor has unsaved edits.
+  useAutosaveDraft({ editedResume, dirty: resumeEdited, jobLabel: _autosaveJobLabel });
+
+  // Warn before close/reload when there are unsaved edits.
+  useBeforeUnloadGuard(resumeEdited);
 
   const {
     applications,
@@ -314,8 +372,20 @@ function App() {
   // ----- Effects -----
   useEffect(() => {
     void loadWorkspace(true);
+    // Check for a recoverable autosaved draft on mount. We surface it AFTER the
+    // workspace load so we know whether the user already has a base resume seeded.
+    // The draft prompt is shown in ResumeTab; the user clicks to restore or dismiss.
+    const draft = loadAutosaveDraft();
+    if (draft) setPendingAutosaveDraft(draft);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Once the user starts editing, the on-mount restore bar is offering a draft
+  // the autosave has since overwritten — dismiss it so it can't advertise (and,
+  // on click, reseed) stale text over the fresher edits.
+  useEffect(() => {
+    if (resumeEdited) setPendingAutosaveDraft(null);
+  }, [resumeEdited]);
 
   const resumeSectionIdsKey = editedResume?.sections.map((section) => section.id).join("|") ?? "";
   useEffect(() => {
@@ -345,6 +415,37 @@ function App() {
       setExpandedApplicationId(applications[0].id);
     }
   }, [applications, expandedApplicationId]);
+
+  // Stale-review: when the JD changes after a polish, the review describes the
+  // old posting. Track whether the text matches what the result was based on.
+  // We store the JD text at the time Polish ran, then compare on JD edits.
+  const lastPolishedJobRef = useRef<string>("");
+  useEffect(() => {
+    if (!result) return;
+    // result changed (new polish) — record the current JD as "last polished JD".
+    lastPolishedJobRef.current = jobDescription;
+    setReviewStale(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [result]);
+  useEffect(() => {
+    // JD changed after a polish — mark stale if the review has substance.
+    if (!result) return;
+    const hasReview = Boolean(result.strictReview || result.suggestedChanges?.length);
+    if (!hasReview) return;
+    setReviewStale(jobDescription !== lastPolishedJobRef.current);
+  }, [jobDescription, result]);
+  useEffect(() => {
+    // Resume FREELY edited after a review completed — mark stale so the user
+    // understands why the AI fit numbers are hidden (useResumeAnalysis gates
+    // them behind !isEdited). Accepting a reviewed suggestion is not a free edit
+    // (the verdict still describes that proposal), so it does not mark stale.
+    // Only fires when there is an AI review to flag.
+    if (!result?.strictReview) return;
+    if (resumeManuallyEdited) setReviewStale(true);
+    // We deliberately do NOT reset on !resumeManuallyEdited — the stale flag
+    // should clear only when a new polish result lands (the result effect above).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resumeManuallyEdited]);
 
   // ----- Derived (memos) -----
   // The job link has its own field now: the description textarea holds the text
@@ -384,7 +485,9 @@ function App() {
     debouncedResumeText,
     debouncedCombinedJobText,
     debouncedCurrentResumeText,
-    isEdited: resumeEdited,
+    // Gate AI fit provenance on FREE edits only — accepting the AI's reviewed
+    // suggestions keeps the verdict "AI-judged" (it describes that proposal).
+    isEdited: resumeManuallyEdited,
     editedResume,
     result,
     resumeBlocks
@@ -479,8 +582,20 @@ function App() {
 
   // ----- Handlers -----
 
-  function applyWorkspaceBaseResume(baseResume: WorkspaceBaseResume, status: string) {
+  // `skipConfirm` is true on paths that PRESERVE the user's work (Save) or are
+  // triggered on first mount before the user has made any edits. It is false on
+  // explicit Reload, Load-version, and Restore actions where the user could have
+  // unsaved edits they'd lose.
+  async function applyWorkspaceBaseResume(baseResume: WorkspaceBaseResume, status: string, skipConfirm = false) {
     if (!baseResume.exists || !baseResume.text) return;
+
+    if (!skipConfirm && resumeEdited) {
+      if (!(await confirmReplaceEditor())) return;
+      // User confirmed the replace — the autosaved draft of the old edits is
+      // now superseded; clear it so the restore bar doesn't linger.
+      clearAutosaveDraft();
+      setPendingAutosaveDraft(null);
+    }
 
     saveLastBaseResumeName(baseResume.fileName ?? "");
     setResumeText(baseResume.text);
@@ -541,7 +656,7 @@ function App() {
             saveLastBaseResumeName("");
           }
           setWorkspaceStatus("");
-          applyWorkspaceBaseResume(workspace.baseResume, "");
+          await applyWorkspaceBaseResume(workspace.baseResume, "");
           return;
         }
         setWorkspaceStatus("");
@@ -584,7 +699,10 @@ function App() {
         baseResumeHistory: workspace.baseResumeHistory,
         files: workspace.files ?? workspaceFiles
       });
-      applyWorkspaceBaseResume(workspace.baseResume, "");
+      // Save preserves the user's work — no confirm needed; also clear the
+      // autosave since the edits are now persisted to the workspace file.
+      clearAutosaveDraft();
+      await applyWorkspaceBaseResume(workspace.baseResume, "", true);
       setWorkspaceStatus("Saved.");
     } catch (error) {
       setWorkspaceStatus(error instanceof Error ? error.message : "Base resume save failed.");
@@ -598,10 +716,15 @@ function App() {
     // Destructive + irreversible-looking action: confirm first. The server keeps
     // a timestamped backup in .trash, so this is recoverable, but a stray click
     // shouldn't wipe a base resume.
-    const confirmed = window.confirm(
-      `Remove the base resume "${baseResumeName}"?\n\nA backup is kept in job-search-workspace/.trash, and the resume text stays in the editor.`
-    );
-    if (!confirmed) return;
+    if (
+      !(await confirm({
+        title: "Remove base resume?",
+        message: `Remove the base resume "${baseResumeName}"? A backup is kept in job-search-workspace/.trash, and the resume text stays in the editor.`,
+        confirmLabel: "Remove",
+        tone: "danger"
+      }))
+    )
+      return;
     setIsSavingBaseResume(true);
     setWorkspaceStatus("Removing the base resume from the local workspace…");
     try {
@@ -630,6 +753,11 @@ function App() {
   }
 
   async function restoreBaseResume(key: string) {
+    if (resumeEdited) {
+      if (!(await confirmReplaceEditor())) return;
+      clearAutosaveDraft();
+      setPendingAutosaveDraft(null);
+    }
     setIsSavingBaseResume(true);
     setWorkspaceStatus("Restoring from history…");
     try {
@@ -653,7 +781,7 @@ function App() {
         baseResumeHistory: workspace.baseResumeHistory,
         files: workspace.files ?? workspaceFiles
       });
-      applyWorkspaceBaseResume(workspace.baseResume, "");
+      await applyWorkspaceBaseResume(workspace.baseResume, "", true); // confirmed above
       setWorkspaceStatus("Restored.");
     } catch (error) {
       setWorkspaceStatus(error instanceof Error ? error.message : "Restore failed.");
@@ -684,6 +812,11 @@ function App() {
   }
 
   async function loadBaseResumeVersion(fileName: string) {
+    if (resumeEdited) {
+      if (!(await confirmReplaceEditor())) return;
+      clearAutosaveDraft();
+      setPendingAutosaveDraft(null);
+    }
     setIsSavingBaseResume(true);
     setWorkspaceStatus("Loading base resume version…");
     try {
@@ -706,7 +839,7 @@ function App() {
         baseResumeHistory: workspace.baseResumeHistory,
         files: workspace.files ?? workspaceFiles
       });
-      applyWorkspaceBaseResume(workspace.baseResume, "");
+      await applyWorkspaceBaseResume(workspace.baseResume, "", true); // confirmed above
       setWorkspaceStatus("");
     } catch (error) {
       setWorkspaceStatus(error instanceof Error ? error.message : "Base resume load failed.");
@@ -718,6 +851,19 @@ function App() {
   async function handleFileUpload(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
+
+    if (resumeEdited) {
+      // Capture the input element before the await — the synthetic event may be
+      // recycled by React and event.target will be null after an async boundary.
+      const input = event.target;
+      if (!(await confirmReplaceEditor())) {
+        // Reset the file input so the same file can be chosen again later.
+        input.value = "";
+        return;
+      }
+      clearAutosaveDraft();
+      setPendingAutosaveDraft(null);
+    }
 
     setFileName(file.name);
     setFileError("");
@@ -790,10 +936,27 @@ function App() {
     }
   }
 
-  async function handlePolish() {
+  // ----- Polish flow (shared) -----
+  // handlePolish and retryStage both run the two-stage polish (Tailor → Review)
+  // against /api/polish. The per-run context (scoped resume text, local fallback,
+  // common request body), the reviewer-attribution + merge helpers, and the two
+  // stage runners are hoisted to component scope so the initial run and a
+  // per-stage retry share ONE implementation. The two copies had drifted (e.g. a
+  // stale provenance path in retry); consolidating removes that hazard.
+
+  type PolishContext = {
+    scopedResumeText: string;
+    fallback: PolishedResume;
+    commonBody: Record<string, unknown>;
+  };
+
+  // Build the per-run context, or return null after setting a guard status.
+  // Guards (no editable resume, empty/too-short tailor scope) match the original
+  // handlePolish pre-flight checks; the `isPolishing` guard stays in each caller.
+  function buildPolishContext(): PolishContext | null {
     if (!editedResume) {
       setPolishStatus("Load a resume before polishing.");
-      return;
+      return null;
     }
     // Fall back to the default modes if the user never touched the controls.
     const modes = Object.keys(tailorModes).length ? tailorModes : defaultTailorModes(editedResume);
@@ -812,7 +975,7 @@ function App() {
     // Tailor) has no targets, so it cannot be polished.
     if (!tailorScope.sections.length || editableResumeText.trim().length < 40) {
       setPolishStatus("Set at least one resume section to Tailor.");
-      return;
+      return null;
     }
 
     const fallbackBase = polishResume(editableResumeText, combinedJobText);
@@ -820,96 +983,220 @@ function App() {
       ? { ...fallbackBase, coverLetterText: draftCoverLetter(resumeText, combinedJobText, fallbackBase.polishedText) }
       : fallbackBase;
 
-    setIsPolishing(true);
-    // No trailing "…": while isPolishing, the toast appends animated dots.
-    setPolishStatus(
-      strictReview
-        ? includeCoverLetter
-          ? "Drafting targeted suggestions, strict review, and cover letter"
-          : "Drafting targeted suggestions and strict review"
-        : includeCoverLetter
-          ? "Drafting targeted suggestions and cover letter"
-          : "Drafting targeted suggestions"
-    );
-    resetExportStatuses();
-    setTexStatus("");
+    // Common request body shared by both stages.
+    const commonBody = {
+      ...buildAiRequestFields({ aiProvider, apiKey, apiBaseUrl, selectedModel, customModel, cliReasoningEffort }),
+      ...buildAuditRequestFields({ auditProvider, auditApiKey, auditApiBaseUrl, auditSelectedModel, auditCustomModel, auditCliReasoningEffort }),
+      tailorScope,
+      jobText: jobDescription,
+      includeCoverLetter,
+      honestContext: requestHonestContext,
+      customInstructions
+    };
 
+    return { scopedResumeText, fallback, commonBody };
+  }
+
+  // Compute the reviewer attribution string from a server response (non-empty
+  // only when the audit ran on a different provider/model than the tailor).
+  function computePolishReviewedBy(data: Record<string, unknown>): string {
+    if (
+      typeof data.auditProvider === "string" &&
+      data.auditProvider &&
+      (data.auditProvider !== data.provider || (data.auditModel || "") !== (data.model || ""))
+    ) {
+      return describeProviderModel(data.auditProvider as string, (data.auditModel as string | undefined) ?? "");
+    }
+    return "";
+  }
+
+  // Merge review data (aiScore, strictReview, reviewedBy) from a server response
+  // into the current result, preferring any missing-skills the prior result held.
+  // `fallback` is the base when there is no prior result (review-only with no tailor).
+  function mergeReviewIntoResult(
+    prev: PolishedResume | null,
+    data: Record<string, unknown>,
+    reviewedBy: string,
+    fallback: PolishedResume
+  ): PolishedResume {
+    const base = prev ?? fallback;
+    const prevMissing = base.missingRequiredSkills;
+    const dataMissing = Array.isArray(data.missingRequiredSkills) ? data.missingRequiredSkills : undefined;
+    return {
+      ...base,
+      aiScore: (data.aiScore as PolishedResume["aiScore"]) ?? undefined,
+      strictReview: (data.strictReview as PolishedResume["strictReview"]) ?? undefined,
+      reviewedBy: reviewedBy || undefined,
+      missingRequiredSkills: (prevMissing?.length ? prevMissing : dataMissing) ?? undefined
+    };
+  }
+
+  // Stage runner: Tailor. Sets progress.tailor=running, posts to /api/polish
+  // with stages:"tailor", builds a result WITHOUT aiScore/strictReview (so the
+  // fit verdict shows "Estimated"/local, not "AI-judged"). Returns the
+  // server-sanitized suggestedChanges array on success, null on failure.
+  async function runTailorStage(ctx: PolishContext): Promise<PolishedResume["suggestedChanges"] | null> {
+    const { scopedResumeText, fallback, commonBody } = ctx;
+    setPolishProgress((prev) => ({ ...prev, tailor: { status: "running" }, review: { status: "idle" } }));
     try {
       const response = await fetch("/api/polish", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...buildAiRequestFields({
-            aiProvider,
-            apiKey,
-            apiBaseUrl,
-            selectedModel,
-            customModel,
-            cliReasoningEffort
-          }),
-          ...buildAuditRequestFields({
-            auditProvider,
-            auditApiKey,
-            auditApiBaseUrl,
-            auditSelectedModel,
-            auditCustomModel,
-            auditCliReasoningEffort
-          }),
-          tailorScope,
-          jobText: jobDescription,
-          includeCoverLetter,
-          strictReview,
-          honestContext: requestHonestContext,
-          customInstructions
-        })
+        body: JSON.stringify({ ...commonBody, stages: "tailor" })
       });
-
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error ?? "AI polish failed.");
-      const suggestedChanges = Array.isArray(data.suggestedChanges) ? data.suggestedChanges : [];
+      const data = await response.json() as Record<string, unknown>;
+      if (!response.ok) throw new Error((data.error as string) ?? "AI tailor failed.");
+      const suggestedChanges: PolishedResume["suggestedChanges"] = Array.isArray(data.suggestedChanges) ? data.suggestedChanges : [];
       if (!data.polishedText && !suggestedChanges.length) {
         throw new Error("AI response did not include usable resume suggestions.");
       }
-
       const scopedPolishedText = data.polishedText
-        ? normalizePolishedResume(data.polishedText, scopedResumeText)
+        ? normalizePolishedResume(data.polishedText as string, scopedResumeText)
         : scopedResumeText;
-      const analysis = analyzeResumeText(suggestedChanges.length ? currentResumeText || scopedPolishedText : scopedPolishedText, combinedJobText);
-      // Reviewer attribution: only when a DIFFERENT provider/model ran the audit
-      // (an override). The server echoes the audit identity when strict review ran.
-      const reviewedBy =
-        data.auditProvider && (data.auditProvider !== data.provider || (data.auditModel || "") !== (data.model || ""))
-          ? describeProviderModel(data.auditProvider, data.auditModel)
-          : "";
+      const analysis = analyzeResumeText(
+        suggestedChanges.length ? currentResumeText || scopedPolishedText : scopedPolishedText,
+        combinedJobText
+      );
       setResult({
         ...analysis,
         polishedText: suggestedChanges.length ? currentResumeText || scopedPolishedText : scopedPolishedText,
         source: "ai",
         coverLetterText: includeCoverLetter
-          ? data.coverLetterText || draftCoverLetter(scopedResumeText, combinedJobText, scopedPolishedText)
+          ? (data.coverLetterText as string | undefined) || draftCoverLetter(scopedResumeText, combinedJobText, scopedPolishedText)
           : undefined,
-        strengths: data.strengths?.length ? data.strengths : fallback.strengths,
-        fixes: data.fixes?.length ? data.fixes : fallback.fixes,
-        changeSummary: Array.isArray(data.changeSummary) && data.changeSummary.length ? data.changeSummary : undefined,
-        missingRequiredSkills: data.missingRequiredSkills?.length ? data.missingRequiredSkills : undefined,
+        strengths: Array.isArray(data.strengths) && data.strengths.length ? data.strengths as string[] : fallback.strengths,
+        fixes: Array.isArray(data.fixes) && data.fixes.length ? data.fixes as string[] : fallback.fixes,
+        changeSummary: Array.isArray(data.changeSummary) && data.changeSummary.length ? data.changeSummary as string[] : undefined,
+        missingRequiredSkills: Array.isArray(data.missingRequiredSkills) && data.missingRequiredSkills.length
+          ? data.missingRequiredSkills as PolishedResume["missingRequiredSkills"]
+          : undefined,
         suggestedChanges,
-        aiScore: data.aiScore ?? undefined,
-        strictReview: data.strictReview ?? undefined,
-        reviewedBy: reviewedBy || undefined
+        // Tailor-only: no AI review fields — useResumeAnalysis must see these
+        // as undefined so the fit verdict shows "Estimated"/local, not "AI-judged".
+        aiScore: undefined,
+        strictReview: undefined,
+        reviewedBy: undefined
       });
-      // Land where the user acts: the editor, with the recruiter review docked
-      // beside it as actionable edit cards.
       setActiveOutputTab("resume");
-      setPolishStatus(
-        reviewedBy
-          ? `Suggestions ready — drafted with ${describeProviderModel(data.provider, data.model)}, reviewed by ${reviewedBy}.`
-          : `${data.strictReview ? "Recruiter-reviewed suggestions" : "Suggestions"} ready${data.model ? ` using ${data.model}` : ""}.`
-      );
+      setPolishProgress((prev) => ({ ...prev, tailor: { status: "done" } }));
+      return suggestedChanges;
     } catch (error) {
       setResult(fallback);
       setActiveOutputTab("resume");
       const message = error instanceof Error ? error.message.replace(/[.。]\s*$/, "") : "request failed";
-      setPolishStatus(`AI unavailable: ${message}. Local engine analysis is shown; your editor was not replaced.`);
+      setPolishProgress((prev) => ({
+        ...prev,
+        tailor: { status: "failed", error: `AI unavailable: ${message}. Local analysis shown.` }
+      }));
+      return null;
+    }
+  }
+
+  // Stage runner: Review. Sets progress.review=running, posts with stages:"review"
+  // and the sanitized suggestedChanges (from the prior tailor, or [] for
+  // review-only). Merges review data (aiScore, strictReview) into the current
+  // result via setResult; for review-only with no prior result it synthesizes a
+  // base result first so the verdict describes the displayed resume.
+  async function runReviewStage(ctx: PolishContext, suggestions: PolishedResume["suggestedChanges"]): Promise<void> {
+    const { scopedResumeText, fallback, commonBody } = ctx;
+    setPolishProgress((prev) => ({ ...prev, review: { status: "running" } }));
+    try {
+      const response = await fetch("/api/polish", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...commonBody, stages: "review", suggestedChanges: suggestions ?? [] })
+      });
+      const data = await response.json() as Record<string, unknown>;
+      if (!response.ok) throw new Error((data.error as string) ?? "AI review failed.");
+      const reviewedBy = computePolishReviewedBy(data);
+      setResult((prev) => {
+        // review-only (no prior tailor): synthesize a base result first.
+        if (!prev) {
+          const baseAnalysis = analyzeResumeText(currentResumeText || scopedResumeText, combinedJobText);
+          const baseResult: PolishedResume = {
+            ...baseAnalysis,
+            polishedText: currentResumeText || scopedResumeText,
+            source: "ai",
+            strengths: fallback.strengths,
+            fixes: fallback.fixes,
+            suggestedChanges: []
+          };
+          return mergeReviewIntoResult(baseResult, data, reviewedBy, fallback);
+        }
+        return mergeReviewIntoResult(prev, data, reviewedBy, fallback);
+      });
+      setActiveOutputTab("resume");
+      setPolishProgress((prev) => ({ ...prev, review: { status: "done" } }));
+    } catch (error) {
+      const message = error instanceof Error ? error.message.replace(/[.。]\s*$/, "") : "request failed";
+      setPolishProgress((prev) => ({
+        ...prev,
+        review: { status: "failed", error: `AI review unavailable: ${message}.` }
+      }));
+      // Keep the existing result — don't clobber a successful tailor result.
+    }
+  }
+
+  async function handlePolish() {
+    if (isPolishing) return;
+    const ctx = buildPolishContext();
+    if (!ctx) return;
+
+    setIsPolishing(true);
+    setPolishProgress(idleProgress());
+    setPolishProgressVisible(true);
+    setPolishStatus("");
+    resetExportStatuses();
+    setTexStatus("");
+
+    try {
+      if (polishStages === "tailor") {
+        await runTailorStage(ctx);
+      } else if (polishStages === "review") {
+        // Standalone review audits the current proposal when one exists (so the
+        // verdict describes the displayed resume), else the base resume.
+        await runReviewStage(ctx, result?.suggestedChanges ?? []);
+      } else {
+        // both: tailor first, then review only if tailor succeeded.
+        const suggestions = await runTailorStage(ctx);
+        if (suggestions !== null) {
+          await runReviewStage(ctx, suggestions);
+        } else {
+          // Tailor failed — mark review as skipped/failed so the user knows.
+          setPolishProgress((prev) => ({
+            ...prev,
+            review: { status: "failed", error: "Tailor failed — retry Tailor to enable Review." }
+          }));
+        }
+      }
+    } finally {
+      setIsPolishing(false);
+    }
+  }
+
+  // Retry a failed stage — a thin dispatcher over the shared stage runners. For
+  // "tailor": re-runs the tailor stage (and if polishStages === "both" and it
+  // succeeds, runs review). For "review": re-runs review with the current
+  // result's suggestedChanges (the server-sanitized list from the prior tailor —
+  // never re-derives from scope).
+  async function retryStage(stage: "tailor" | "review") {
+    if (isPolishing) return;
+    const ctx = buildPolishContext();
+    if (!ctx) return;
+
+    setIsPolishing(true);
+    try {
+      if (stage === "tailor") {
+        const suggestions = await runTailorStage(ctx);
+        // If polishStages === "both", auto-run review after a successful tailor retry.
+        if (suggestions !== null && polishStages === "both") {
+          await runReviewStage(ctx, suggestions);
+        }
+      } else {
+        // stage === "review": reuse the server-sanitized suggestedChanges from
+        // the current result (never re-derives from tailorScope).
+        await runReviewStage(ctx, result?.suggestedChanges ?? []);
+      }
     } finally {
       setIsPolishing(false);
     }
@@ -1090,6 +1377,8 @@ function App() {
         : undefined
     };
     upsertApplication(app);
+    // Edits are now tracked in the application record — clear the recovery draft.
+    clearAutosaveDraft();
     setTexStatus(`Applied — saved "${existing?.title || app.title}" to Applications (${usedBase ? "original" : "tailored"} resume).`);
     setActiveOutputTab("applications");
     setExpandedApplicationId(existing?.id ?? app.id);
@@ -1156,7 +1445,12 @@ function App() {
     }
   }
 
-  function handleLoadApplication(app: Application) {
+  async function handleLoadApplication(app: Application) {
+    if (resumeEdited) {
+      if (!(await confirmReplaceEditor())) return;
+      clearAutosaveDraft();
+      setPendingAutosaveDraft(null);
+    }
     // Description and link are separate fields: restore each from its own slot.
     setJobDescription(app.jobDescription || "");
     setJobUrl(app.jobUrl || "");
@@ -1201,8 +1495,33 @@ function App() {
     setActiveOutputTab("resume");
   }
 
-  function handleDeleteApplication(id: string, title: string) {
-    if (!window.confirm(`Delete "${title}" from the pipeline?`)) return;
+  // Restore the autosaved draft into the editor, then clear the prompt and the
+  // stored key so the affordance doesn't reappear.
+  async function handleRestoreAutosaveDraft(draft: AutosavedDraft) {
+    if (resumeEdited) {
+      if (!(await confirmReplaceEditor())) return;
+    }
+    seedResumeEditor(draft.resumeText, "");
+    clearAutosaveDraft();
+    setPendingAutosaveDraft(null);
+    setFileStatus(`Restored unsaved draft${draft.jobLabel ? ` (${draft.jobLabel})` : ""}.`);
+  }
+
+  function handleDismissAutosaveDraft() {
+    clearAutosaveDraft();
+    setPendingAutosaveDraft(null);
+  }
+
+  async function handleDeleteApplication(id: string, title: string) {
+    if (
+      !(await confirm({
+        title: "Delete application?",
+        message: `Delete "${title}" from the pipeline?`,
+        confirmLabel: "Delete",
+        tone: "danger"
+      }))
+    )
+      return;
     removeApplication(id);
     if (modalApplicationId === id) setIsApplicationModalOpen(false);
   }
@@ -1305,8 +1624,8 @@ function App() {
           <PolishMenu
             includeCoverLetter={includeCoverLetter}
             setIncludeCoverLetter={setIncludeCoverLetter}
-            strictReview={strictReview}
-            setStrictReview={setStrictReview}
+            polishStages={polishStages}
+            setPolishStages={setPolishStages}
             honestContext={honestContext}
             setHonestContext={setHonestContext}
             citizenshipStatus={citizenshipStatus}
@@ -1326,10 +1645,7 @@ function App() {
 
       {polishStatus ? (
         <div className="polish-toast" role="status" aria-live="polite">
-          <span className="polish-toast__text">
-            {polishStatus}
-            {isPolishing ? <span className="loading-dots" aria-hidden="true" /> : null}
-          </span>
+          <span className="polish-toast__text">{polishStatus}</span>
           <button
             type="button"
             className="polish-toast__dismiss"
@@ -1339,6 +1655,16 @@ function App() {
             ×
           </button>
         </div>
+      ) : null}
+
+      {polishProgressVisible ? (
+        <PolishProgress
+          stages={polishStages}
+          progress={polishProgress}
+          onRetry={retryStage}
+          onDismiss={() => setPolishProgressVisible(false)}
+          busy={isPolishing}
+        />
       ) : null}
 
       <div className="workspace-grid">
@@ -1376,6 +1702,10 @@ function App() {
               tailorModes={tailorModes}
               onSetTailorMode={setTailorMode}
               onAddHonestContext={handleAddHonestContext}
+              pendingAutosaveDraft={pendingAutosaveDraft}
+              onRestoreAutosaveDraft={handleRestoreAutosaveDraft}
+              onDismissAutosaveDraft={handleDismissAutosaveDraft}
+              reviewStale={reviewStale}
               exportControl={
                 <ExportMenu
                   templates={templates}

@@ -383,3 +383,176 @@
   from { opacity: 0.01; transform: translateY(-6px) scale(0.985); }
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
+
+/* -------- Two-stage polish progress -------- */
+
+/* Shares position/shell with .polish-toast so it renders in the same fixed
+   slot. Both are mutually exclusive in practice: polishProgress replaces the
+   in-flight status; polishStatus is now only for ancillary messages. */
+.polish-progress {
+  position: fixed;
+  top: calc(var(--s5) + 2.5rem);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 35;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s2);
+  max-width: min(480px, calc(100vw - var(--s5) * 2));
+  padding: var(--s2) var(--s3);
+  border: 1px solid var(--hairline-strong);
+  border-radius: 8px;
+  background: var(--card);
+  box-shadow: 0 6px 24px -8px rgba(0, 0, 0, 0.25);
+  font-size: 0.82rem;
+  color: var(--ink);
+}
+
+.polish-progress__rows {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+}
+
+/* Each stage row: label · status icon · optional error · optional retry button */
+.polish-progress__row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--s2);
+  min-height: 22px;
+}
+
+.polish-progress__label {
+  font-weight: 600;
+  color: var(--ink-strong);
+  min-width: 4.5rem;
+  flex: none;
+}
+
+.polish-progress__status {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  color: var(--ink-soft);
+}
+
+/* Running: inherit the animated dots color */
+.polish-progress__row--running .polish-progress__status { color: var(--ink); }
+
+/* Done: accent check */
+.polish-progress__row--done .polish-progress__status { color: var(--accent); }
+
+/* Failed: warm/danger alert */
+.polish-progress__icon--fail { color: var(--warm); }
+
+/* Optional error message — wraps, stays compact, is faint */
+.polish-progress__error {
+  flex: 1 1 100%;
+  font-size: 0.76rem;
+  color: var(--ink-soft);
+  line-height: 1.35;
+  margin-top: 1px;
+}
+
+/* Retry button — same ghost-button pattern, a bit more compact */
+.polish-progress__retry {
+  flex: none;
+  font-size: 0.74rem;
+}
+
+/* -------- Segmented control (Polish stages) -------- */
+
+/* Inline row of radio-backed labels that behaves like a button group.
+   Used in the Options menu for "Tailor only / Review only / Both". */
+.segmented-control {
+  display: inline-flex;
+  align-items: stretch;
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--r-sm);
+  overflow: hidden;
+  margin-top: var(--s1);
+}
+
+.segmented-control__option {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px var(--s2);
+  font-size: 0.76rem;
+  font-weight: 500;
+  color: var(--ink-soft);
+  background: var(--card-soft);
+  cursor: pointer;
+  border-right: 1px solid var(--hairline-strong);
+  transition: color 120ms var(--ease), background 120ms var(--ease);
+  white-space: nowrap;
+  user-select: none;
+}
+
+.segmented-control__option:last-child { border-right: 0; }
+
+.segmented-control__option:hover {
+  color: var(--ink);
+  background: var(--card-hover);
+}
+
+.segmented-control__option.is-selected {
+  color: var(--accent-deep);
+  background: var(--accent-soft);
+  font-weight: 600;
+}
+
+/* Stack the "Polish stages" label above its helper line (the field span keeps
+   strong + small inline by default, unlike .check-row). Scoped by id so other
+   fields' inline parenthetical hints are unaffected. */
+#polish-stages-label strong,
+#polish-stages-label small {
+  display: block;
+}
+#polish-stages-label small {
+  margin-top: 1px;
+}
+
+/* Visually hide the radio input — the label is the interactive target. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* -------- App-styled confirm / alert dialog (useDialog system) -------- */
+
+/* Body text inside the ConfirmDialog card. Kept calm and readable — no noise. */
+.confirm-dialog__message {
+  margin: 0;
+  font-size: 0.86rem;
+  line-height: 1.5;
+  color: var(--ink);
+}
+
+/* Danger variant for destructive actions (Delete / Remove). Overrides the
+   accent-green fill with the app's danger token so the button reads as
+   "irreversible" without inventing a new pattern. Double-class selector
+   outranks the single-class .primary-button rules in sources.css even though
+   shell.css loads earlier in the bundle (same pattern the masthead uses). */
+.primary-button.primary-button--danger {
+  background: var(--danger);
+  border-color: oklch(0.35 0.1 30);
+  box-shadow: var(--shadow-inset), 0 1px 2px oklch(0.45 0.12 30 / 0.25);
+}
+
+.primary-button.primary-button--danger:hover:not(:disabled) {
+  background: oklch(0.38 0.11 30);
+  border-color: oklch(0.32 0.1 30);
+  box-shadow: var(--shadow-inset), 0 4px 12px oklch(0.45 0.12 30 / 0.3);
+}

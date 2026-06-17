@@ -73,6 +73,23 @@ const LOWERCASE_TECH_CONCEPTS = [
 // review + the prompt input-firewall. This is a representative, extensible
 // starter set, not exhaustive; human review remains the backstop for anything
 // it misses. Add new tool names here — but never a plain-English word.
+//
+// PROSE-MODE BRAND COVERAGE (cover letters / application answers): prose mode
+// skips detector 1 (capitalized tokens) because legitimate prose names the
+// target company/role/product from the JD. That left CAPITALIZED BRANDED TOOLS
+// not in any lexicon (Salesforce, Tableau, AWS, Java, Figma…) ungated, so a
+// generated letter could claim a branded skill the candidate never used — the
+// exact D002 failure. The simplest SAFE fix routes them through THIS set:
+// detector 3 already lowercase-matches and runs in prose mode with token-anchored
+// isGrounded discipline (so "java" cannot match inside "javascript", and a
+// company proper noun like "Acme" / "Remodel Health" is never in the lexicon, so
+// it is never flagged). The brands below are the vetted, NON-English-collision
+// capitalized tool names. Deliberately OMITTED as plain-English-collision risks
+// (a false drop would break an honest application — worse than missing one
+// brand): Excel ("excel at"), Word, Access, Spark, Swift, Rust, Go, and Workday
+// ("a long workday"). "azure" can mean the color but is overwhelmingly the cloud
+// platform in this domain. "powerbi" only matches the solid-cased form ("power
+// bi" tokenizes as two words) — harmless, kept for the solid form.
 const LOWERCASE_TOOL_NAMES = new Set([
   "terraform", "ansible", "jenkins", "gitlab", "argocd", "istio", "kafka",
   "rabbitmq", "redis", "memcached", "elasticsearch", "opensearch", "mongodb",
@@ -82,7 +99,12 @@ const LOWERCASE_TOOL_NAMES = new Set([
   "elixir", "erlang", "clojure", "pytorch", "tensorflow", "keras", "pandas",
   "numpy", "jupyter", "docker", "podman", "prometheus", "grafana", "datadog",
   "splunk", "kibana", "webpack", "vite", "eslint", "jest", "vitest", "cypress",
-  "playwright", "selenium", "pytest", "twilio", "kubernetes"
+  "playwright", "selenium", "pytest", "twilio", "kubernetes",
+  // Prose-mode capitalized brand additions (vetted non-English-collision).
+  // "databricks"/"snowflake" already appear above. OMITTED here too: "sap"
+  // ("sap the energy"), "looker" ("a good looker") — both plain-English nouns.
+  "salesforce", "tableau", "aws", "azure", "gcp", "java", "figma", "jira",
+  "hubspot", "powerbi", "servicenow", "netsuite", "marketo", "zendesk", "okta"
 ]);
 
 // Detector 4: curated SHORT (1-3 char) tech tokens that detector 1's 3+ char

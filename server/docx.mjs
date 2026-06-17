@@ -33,21 +33,71 @@ function decodeXmlText(text) {
     .replace(/&amp;/g, "&");
 }
 
+// Sentinels for inline run-level whitespace markers (<w:tab/>, <w:br/>,
+// <w:cr/>), which carry no <w:t> text. A naive <w:t>-only join fuses
+// "Title<tab>Date" into "TitleDate" and drops every soft line break. We replace
+// those markers with U+0001 (tab stop) / U+0002 (line break) — control chars
+// that never occur in decoded resume text — then re-thread them around the
+// <w:t> runs. A tab resolves to the parser's heading/field delimiter (" | ",
+// matching parseResumeText); a break resolves to a newline. Whitespace-collapse
+// runs PER CELL so it never deletes the sentinels.
+const TAB_SENTINEL = String.fromCharCode(1);
+const BREAK_SENTINEL = String.fromCharCode(2);
+const SENTINEL_CHARS = new RegExp(`[${TAB_SENTINEL}${BREAK_SENTINEL}]`, "g");
+
 function paragraphText(paragraphXml) {
-  return Array.from(paragraphXml.matchAll(/<w:t\b[^>]*>([\s\S]*?)<\/w:t>/g))
-    .map((match) => decodeXmlText(match[1]))
+  const normalized = paragraphXml
+    .replace(/<w:tab\b[^>]*\/>/g, TAB_SENTINEL)
+    .replace(/<w:(?:br|cr)\b[^>]*\/>/g, BREAK_SENTINEL);
+  // Walk the normalized XML in order, alternating <w:t> content with any
+  // tab/break sentinels that sit between runs, so a tab/break is never dropped.
+  const pieces = [];
+  let lastIndex = 0;
+  for (const match of normalized.matchAll(/<w:t\b[^>]*>([\s\S]*?)<\/w:t>/g)) {
+    for (const ch of normalized.slice(lastIndex, match.index)) {
+      if (ch === TAB_SENTINEL || ch === BREAK_SENTINEL) pieces.push(ch);
+    }
+    // Strip any stray sentinel chars from real text so they can never be
+    // mistaken for an injected tab/break separator.
+    pieces.push(decodeXmlText(match[1]).replace(SENTINEL_CHARS, " "));
+    lastIndex = match.index + match[0].length;
+  }
+  for (const ch of normalized.slice(lastIndex)) {
+    if (ch === TAB_SENTINEL || ch === BREAK_SENTINEL) pieces.push(ch);
+  }
+  // A break splits the paragraph into multiple logical lines (a paragraph with
+  // an internal <w:br/> legitimately yields >1 line); a tab joins fields with
+  // the " | " delimiter. Collapse ordinary whitespace per cell so the injected
+  // separators survive.
+  return pieces
     .join("")
-    .replace(/\s+/g, " ")
+    .split(BREAK_SENTINEL)
+    .map((line) =>
+      line
+        .split(TAB_SENTINEL)
+        .map((cell) => cell.replace(/\s+/g, " ").trim())
+        .filter(Boolean)
+        .join(" | ")
+        .trim()
+    )
+    .filter(Boolean)
+    .join("\n")
     .trim();
 }
 
 function extractDocumentText(documentXml) {
   const lines = Array.from(documentXml.matchAll(/<w:p\b[\s\S]*?<\/w:p>/g))
-    .map((match) => {
+    .flatMap((match) => {
       const text = paragraphText(match[0]);
-      if (!text) return "";
+      if (!text) return [];
       const isListItem = /<w:numPr\b[\s\S]*?<\/w:numPr>/.test(match[0]);
-      return isListItem ? `- ${text}` : text;
+      // A paragraph with an internal <w:br/> now yields multiple lines; apply
+      // the list-item prefix to each so a bulleted multi-line paragraph stays a
+      // bulleted list rather than fusing back into one run.
+      return text
+        .split("\n")
+        .filter(Boolean)
+        .map((line) => (isListItem ? `- ${line}` : line));
     })
     .filter(Boolean);
 

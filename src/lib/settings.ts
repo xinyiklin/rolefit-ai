@@ -22,6 +22,7 @@ export type PersistedSettings = {
   honestContext?: string;
   customInstructions?: string;
   strictReview?: boolean;
+  polishStages?: "tailor" | "review" | "both";
   citizenshipStatus?: CitizenshipStatus;
   legallyAuthorizedToWork?: boolean;
   requiresSponsorship?: boolean;
@@ -71,6 +72,15 @@ function coerce(settings: PersistedSettings): PersistedSettings {
   }
   if (settings.strictReview !== undefined && typeof settings.strictReview !== "boolean") {
     delete settings.strictReview;
+  }
+  // Validate polishStages — only the 3 literal values are valid.
+  const validStages = new Set(["tailor", "review", "both"]);
+  if (settings.polishStages !== undefined && !validStages.has(settings.polishStages)) {
+    delete settings.polishStages;
+  }
+  // Migrate legacy strictReview → polishStages when polishStages is absent.
+  if (settings.polishStages === undefined && typeof settings.strictReview === "boolean") {
+    settings.polishStages = settings.strictReview ? "both" : "tailor";
   }
   const validCitizenship = new Set<string>(CITIZENSHIP_OPTIONS.map((option) => option.value));
   if (settings.citizenshipStatus && !validCitizenship.has(settings.citizenshipStatus)) {
