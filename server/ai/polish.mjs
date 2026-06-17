@@ -17,17 +17,14 @@ import {
   resolveProviderRequest
 } from "./providers.mjs";
 import {
-  COVER_JOB_CHAR_LIMIT,
-  COVER_RESUME_CHAR_LIMIT,
   STRICT_REVIEW_JOB_CHAR_LIMIT,
   STRICT_REVIEW_RESUME_CHAR_LIMIT,
-  buildCoverLetterPrompts,
   buildPolishPrompts,
   buildStrictReviewPrompts,
   clipForPrompt
 } from "./prompts.mjs";
 import { callConfiguredProvider } from "./clients.mjs";
-import { findUngroundedJdTerm } from "./grounding.mjs";
+import { generateGroundedCoverLetter } from "./coverLetter.mjs";
 import {
   applyGapCapsAndVerdict,
   coverageHasEligibilityBlocker,
@@ -315,37 +312,23 @@ export async function handlePolish(req, res) {
           });
         })();
     // No cover letter in review-only mode: the cover pass tailors prose off the
-    // polished resume, which is purely a tailor-pass artifact.
+    // polished resume, which is purely a tailor-pass artifact. Shares the
+    // grounded generator with the standalone /api/cover-letter path; grounding
+    // against polishedText matches the prior `${polishedText}\n${honestContext}`
+    // corpus (the grounding backstop now lives in one place).
     const coverPromise = !(runTailor && includeCoverLetter)
       ? Promise.resolve(null)
-      : (async () => {
-          const coverPrompts = buildCoverLetterPrompts({
-            jobText: clipForPrompt(jobText, COVER_JOB_CHAR_LIMIT, "job description"),
-            resumeText: clipForPrompt(polishedText, COVER_RESUME_CHAR_LIMIT, "tailored resume"),
-            honestContext,
-            customInstructions
-          });
-          const coverParsed = await callConfiguredProvider({
-            provider,
-            model,
-            reasoningEffort,
-            apiKey,
-            apiBaseUrl,
-            systemPrompt: coverPrompts.systemPrompt,
-            userPrompt: coverPrompts.userPrompt
-          });
-          const letter = String(coverParsed.coverLetterText ?? "").trim();
-          // Prose-mode grounding backstop: the letter may freely name the target
-          // company/role (proper nouns are not flagged), but a JD SKILL term it
-          // claims that is absent from the polished resume + honest context is
-          // unsupported. Blank it so the client falls back to the local,
-          // strictly-grounded draftCoverLetter rather than shipping the claim.
-          if (letter && findUngroundedJdTerm(letter, jobText.toLowerCase(), groundingText.toLowerCase(), { proseMode: true })) {
-            console.warn("[ai] cover letter introduced an ungrounded JD skill term; falling back to local draft", { provider });
-            return "";
-          }
-          return letter;
-        })();
+      : generateGroundedCoverLetter({
+          provider,
+          model,
+          reasoningEffort,
+          apiKey,
+          apiBaseUrl,
+          jobText,
+          resumeText: polishedText,
+          honestContext,
+          customInstructions
+        });
     // Secondary passes are OPTIONAL enhancements over an already-usable primary
     // rewrite. A failure in either (provider 5xx, timeout, unreadable JSON
     // surviving retry) must NOT sink the request and discard the computed

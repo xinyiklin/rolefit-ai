@@ -153,6 +153,16 @@
   padding-bottom: 4px;
 }
 
+/* On-demand "Generate cover letter" action, indented under the cover-letter row */
+.plan-cover-actions {
+  margin: 2px 0 var(--s2) calc(14px + var(--s2));
+}
+
+/* Generation status message under the cover button (overrides the hint's pull-up) */
+.plan-cover-status {
+  margin-top: 0;
+}
+
 /* Add-question input row */
 .plan-add {
   display: flex;

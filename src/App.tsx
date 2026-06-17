@@ -24,6 +24,7 @@ import {
 import { useResumeAnalysis } from "./hooks/useResumeAnalysis";
 import { useResumeEditor } from "./hooks/useResumeEditor";
 import { useResumeExport } from "./hooks/useResumeExport";
+import { useCoverLetter } from "./hooks/useCoverLetter";
 import { useDialog } from "./hooks/useDialog";
 import {
   useAutosaveDraft,
@@ -369,6 +370,24 @@ function App() {
     findForTarget
   });
 
+  // On-demand cover letter (no full polish required). Generates from the CURRENT
+  // resume; the polish path also feeds this state (see runTailorStage) so the
+  // Materials view, Copy, and save-to-application all read one source.
+  const {
+    coverLetterText,
+    applyCoverLetter,
+    coverStatus,
+    isGeneratingCover,
+    handleGenerateCoverLetter
+  } = useCoverLetter({
+    currentResumeText,
+    jobText: jobDescription,
+    honestContext: requestHonestContext,
+    customInstructions,
+    aiRequest: { aiProvider, apiKey, apiBaseUrl, selectedModel, customModel, cliReasoningEffort },
+    resumeText
+  });
+
   // ----- Effects -----
   useEffect(() => {
     void loadWorkspace(true);
@@ -568,6 +587,7 @@ function App() {
     // (distilled from the posting), not just a URL guess. Thunk: currentJobTracking
     // is a hoisted declaration, evaluated lazily at save time.
     resolveJobCompany: () => currentJobTracking().company ?? "",
+    coverLetterText,
     resumeText,
     selectedTemplateId,
     selectedTemplate,
@@ -602,6 +622,7 @@ function App() {
     setFileName(baseResume.fileName ?? "base-resume");
     setBaseResumeName(baseResume.fileName ?? "");
     setResult(null);
+    applyCoverLetter("");
     setFileError("");
     setPolishStatus("");
     resetExportStatuses();
@@ -873,6 +894,7 @@ function App() {
     setPolishStatus("");
     setResumeBlocks([]);
     setResult(null);
+    applyCoverLetter("");
 
     if (/\.pdf$/i.test(file.name)) {
       setFileError(
@@ -1057,13 +1079,14 @@ function App() {
         suggestedChanges.length ? currentResumeText || scopedPolishedText : scopedPolishedText,
         combinedJobText
       );
+      const coverText = includeCoverLetter
+        ? (data.coverLetterText as string | undefined) || draftCoverLetter(scopedResumeText, combinedJobText, scopedPolishedText)
+        : undefined;
       setResult({
         ...analysis,
         polishedText: suggestedChanges.length ? currentResumeText || scopedPolishedText : scopedPolishedText,
         source: "ai",
-        coverLetterText: includeCoverLetter
-          ? (data.coverLetterText as string | undefined) || draftCoverLetter(scopedResumeText, combinedJobText, scopedPolishedText)
-          : undefined,
+        coverLetterText: coverText,
         strengths: Array.isArray(data.strengths) && data.strengths.length ? data.strengths as string[] : fallback.strengths,
         fixes: Array.isArray(data.fixes) && data.fixes.length ? data.fixes as string[] : fallback.fixes,
         changeSummary: Array.isArray(data.changeSummary) && data.changeSummary.length ? data.changeSummary as string[] : undefined,
@@ -1077,11 +1100,17 @@ function App() {
         strictReview: undefined,
         reviewedBy: undefined
       });
+      // Feed the shared cover-letter state so Materials/Copy/save read one source
+      // whether the letter came from the polish pass or on-demand generation.
+      if (coverText) applyCoverLetter(coverText);
       setActiveOutputTab("resume");
       setPolishProgress((prev) => ({ ...prev, tailor: { status: "done" } }));
       return suggestedChanges;
     } catch (error) {
       setResult(fallback);
+      // The local fallback carries a cover letter when one was requested; feed
+      // it to the single-owner state so Materials/Copy/save still show it.
+      if (fallback.coverLetterText) applyCoverLetter(fallback.coverLetterText);
       setActiveOutputTab("resume");
       const message = error instanceof Error ? error.message.replace(/[.。]\s*$/, "") : "request failed";
       setPolishProgress((prev) => ({
@@ -1255,6 +1284,7 @@ function App() {
         manualReviewFields: extracted.manualReviewFields
       });
       setResult(null);
+      applyCoverLetter("");
       const missing = compactManualReviewFields(extracted.manualReviewFields);
       setLinkStatus(
         `Extracted ${relevant.length.toLocaleString()} compact characters for tailoring and captured ${presentTrackingFields(
@@ -1313,6 +1343,7 @@ function App() {
       manualReviewFields: extracted.manualReviewFields
     });
     setResult(null);
+    applyCoverLetter("");
     const missing = compactManualReviewFields(extracted.manualReviewFields);
     setLinkStatus(
       `Distilled ${relevant.length.toLocaleString()} compact characters from the paste and captured ${presentTrackingFields(
@@ -1352,7 +1383,7 @@ function App() {
       resumeData: editedResume ?? undefined,
       polishedText: sentResume,
       resumeUsed: usedBase ? "base" : "tailored",
-      coverLetterText: result?.coverLetterText ?? "",
+      coverLetterText: coverLetterText || "",
       missingRequiredSkills: result?.missingRequiredSkills?.length ? result.missingRequiredSkills : undefined,
       review: sr
         ? {
@@ -1462,6 +1493,9 @@ function App() {
       setFileName("");
       setResumeBlocks([]);
       setFileStatus("Loaded the applied resume snapshot into the editor. Save it as base if you want it at startup.");
+      // Single-owner cover letter: show the saved letter alongside its restored
+      // resume (Materials/Copy/save read this hook state, not result).
+      applyCoverLetter(app.coverLetterText || "");
       setResult({
         ...restoredAnalysis,
         polishedText: restoredResume,
@@ -1487,6 +1521,7 @@ function App() {
     } else {
       setLinkStatus(`Loaded "${app.title}" job target from pipeline.`);
       setResult(null);
+      applyCoverLetter(""); // no resume restored → no orphan cover letter
       seedResumeEditor("");
     }
     setPolishStatus("");
@@ -1502,6 +1537,7 @@ function App() {
       if (!(await confirmReplaceEditor())) return;
     }
     seedResumeEditor(draft.resumeText, "");
+    applyCoverLetter(""); // resume swapped — clear any cover from a prior context
     clearAutosaveDraft();
     setPendingAutosaveDraft(null);
     setFileStatus(`Restored unsaved draft${draft.jobLabel ? ` (${draft.jobLabel})` : ""}.`);
@@ -1755,7 +1791,10 @@ function App() {
 
           {activeOutputTab === "materials" ? (
             <MaterialsTab
-              result={result}
+              coverLetterText={coverLetterText}
+              onGenerateCoverLetter={handleGenerateCoverLetter}
+              isGeneratingCover={isGeneratingCover}
+              coverStatus={coverStatus}
               includeCoverLetter={includeCoverLetter}
               setIncludeCoverLetter={setIncludeCoverLetter}
               coverCopied={coverCopied}

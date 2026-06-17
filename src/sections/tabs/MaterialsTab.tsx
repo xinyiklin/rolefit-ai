@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { Clipboard, Plus, Sparkles, X } from "lucide-react";
-import type { PolishedResume } from "../../resumeEngine";
 import type { ApplicationAnswersResult } from "../shared";
 
 const DEFAULT_QUESTIONS = [
@@ -14,7 +13,11 @@ type AnswerDraft = { question: string; answer: string; needsInput: boolean; save
 type RoleDraft = { role: string; description: string; needsInput: boolean; save: boolean };
 
 export type MaterialsTabProps = {
-  result: PolishedResume | null;
+  // The current cover letter (from polish OR on-demand generation) — one source.
+  coverLetterText: string;
+  onGenerateCoverLetter: () => void;
+  isGeneratingCover: boolean;
+  coverStatus: string;
   includeCoverLetter: boolean;
   setIncludeCoverLetter: (v: boolean) => void;
   coverCopied: boolean;
@@ -31,7 +34,10 @@ export type MaterialsTabProps = {
 };
 
 export function MaterialsTab({
-  result,
+  coverLetterText,
+  onGenerateCoverLetter,
+  isGeneratingCover,
+  coverStatus,
   includeCoverLetter,
   setIncludeCoverLetter,
   coverCopied,
@@ -110,7 +116,7 @@ export function MaterialsTab({
   }
 
   // ---- Derived ----
-  const hasCoverDraft = Boolean(result?.coverLetterText);
+  const hasCoverDraft = Boolean(coverLetterText);
   const canGenerate = resumeReady && jobReady;
   const gateHint = canGenerate
     ? ""
@@ -124,13 +130,13 @@ export function MaterialsTab({
   const selectedToSave =
     drafts.filter((d) => d.save).length + roleDrafts.filter((r) => r.save).length;
 
-  // Cover letter plan-row status
-  function coverLetterStatus() {
+  // Cover letter plan-row badge (separate from the generation status message).
+  function coverLetterBadge() {
     if (hasCoverDraft) return "drafted";
     if (includeCoverLetter) return "pending";
     return null;
   }
-  const coverStatus = coverLetterStatus();
+  const coverBadge = coverLetterBadge();
 
   // Target meta line
   const targetLine =
@@ -199,7 +205,7 @@ export function MaterialsTab({
                     className="draft-sheet__textarea draft-sheet__textarea--letter"
                     readOnly
                     aria-label="Copy-ready cover letter"
-                    value={result?.coverLetterText ?? ""}
+                    value={coverLetterText}
                   />
                 </article>
               ) : null}
@@ -319,8 +325,8 @@ export function MaterialsTab({
             <div className="materials-empty">
               <strong>Nothing drafted yet.</strong>
               <p>
-                Pick items in the plan, then generate; the cover letter drafts with your next
-                Polish.
+                Pick items in the plan, then generate. The cover letter can be generated on its
+                own here, or drafted alongside your next Polish.
               </p>
             </div>
           )}
@@ -331,7 +337,7 @@ export function MaterialsTab({
           <p className="materials-plan__eyebrow">Plan</p>
 
           <div className="plan-list" role="group" aria-label="Items to draft">
-            {/* Cover letter row */}
+            {/* Cover letter row + on-demand generate (no full polish required) */}
             <label className="plan-row">
               <input
                 type="checkbox"
@@ -339,12 +345,37 @@ export function MaterialsTab({
                 onChange={(e) => setIncludeCoverLetter(e.target.checked)}
               />
               <span className="plan-row__label">Cover letter</span>
-              {coverStatus === "drafted" ? (
+              {coverBadge === "drafted" ? (
                 <span className="plan-row__status plan-row__status--drafted">Drafted</span>
-              ) : coverStatus === "pending" ? (
+              ) : coverBadge === "pending" ? (
                 <span className="plan-row__status plan-row__status--pending">With next polish</span>
               ) : null}
             </label>
+            <div className="plan-cover-actions">
+              <button
+                className="secondary-button is-compact"
+                type="button"
+                onClick={onGenerateCoverLetter}
+                disabled={!canGenerate || isGeneratingCover}
+                title={!canGenerate ? gateHint : undefined}
+              >
+                <Sparkles size={12} aria-hidden="true" />
+                <span>
+                  {isGeneratingCover ? (
+                    <>Drafting<span className="loading-dots" aria-hidden="true" /></>
+                  ) : hasCoverDraft ? (
+                    "Regenerate cover letter"
+                  ) : (
+                    "Generate cover letter"
+                  )}
+                </span>
+              </button>
+            </div>
+            {coverStatus ? (
+              <p className="plan-row__hint plan-cover-status" aria-live="polite">
+                {coverStatus}
+              </p>
+            ) : null}
 
             {/* Standard questions */}
             {DEFAULT_QUESTIONS.map((q, i) => (

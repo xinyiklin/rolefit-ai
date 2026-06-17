@@ -5,6 +5,7 @@ import { createServer as createViteServer } from "vite";
 import { handlePolish } from "./server/ai/polish.mjs";
 import { getDefaultModel, getDefaultProvider } from "./server/ai/providers.mjs";
 import { handleApplicationAnswers } from "./server/ai/applicationAnswers.mjs";
+import { handleCoverLetter } from "./server/ai/coverLetter.mjs";
 import {
   listTemplates,
   renderResumeTex,
@@ -981,6 +982,11 @@ const server = createServer((req, res) => {
 
   if (pathname === "/api/application-answers") {
     void handleApplicationAnswers(req, res);
+    return;
+  }
+
+  if (pathname === "/api/cover-letter") {
+    void handleCoverLetter(req, res);
     return;
   }
 
