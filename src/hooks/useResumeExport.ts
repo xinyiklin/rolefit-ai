@@ -14,6 +14,9 @@ type RenderPdfFromSchema = (schema: ResumeTemplateSchema, templateId?: string, o
 
 type UseResumeExportArgs = {
   result: PolishedResume | null;
+  // The current cover letter — single owner, from polish OR on-demand
+  // generation (App's useCoverLetter state). The Copy button reads this.
+  coverLetterText?: string;
   // The structured editor model. When present, LaTeX exports (.tex / PDF·LaTeX)
   // render straight from it through the template — the SAME faithful path the
   // on-screen compile preview uses — instead of the lossy serialize→reparse text
@@ -52,6 +55,7 @@ type UseResumeExportArgs = {
 // state; behavior is unchanged from the inline handlers.
 export function useResumeExport({
   result,
+  coverLetterText,
   editedResume,
   currentResumeText,
   jobUrl,
@@ -100,9 +104,10 @@ export function useResumeExport({
   }
 
   async function handleCopyCoverLetter() {
-    if (!result?.coverLetterText) return;
+    const letter = coverLetterText;
+    if (!letter) return;
     try {
-      await navigator.clipboard.writeText(result.coverLetterText);
+      await navigator.clipboard.writeText(letter);
       setCoverCopied(true);
       window.setTimeout(() => setCoverCopied(false), 1800);
       setDownloadStatus("");
