@@ -24,6 +24,7 @@ import {
   clipForPrompt
 } from "./prompts.mjs";
 import { callConfiguredProvider } from "./clients.mjs";
+import { findUngroundedJdTerm } from "./grounding.mjs";
 import { generateGroundedCoverLetter } from "./coverLetter.mjs";
 import {
   applyGapCapsAndVerdict,
@@ -41,6 +42,22 @@ import {
 
 function trimText(value, max = 1200) {
   return String(value ?? "").trim().slice(0, max);
+}
+
+// changeSummary ("What changed") is free model prose, NOT derived from the
+// sanitized suggestions — so a model can claim a change ("added Kubernetes to
+// your Skills") that never survived sanitization, leaving the summary describing
+// an edit the resume never received. Drop any bullet that introduces a JD
+// tool/term absent from the TAILORED resume (groundingText = polishedText, which
+// already contains every surviving change, plus honest context) using the same
+// prose-mode grounding backstop the cover letter and application answers use.
+// Honest bullets — grounded terms, or generic "reorganized/emphasized" phrasing —
+// pass untouched; curated branded tools the JD wants but the resume lacks are cut.
+export function groundChangeSummary(changeSummary, jobText, groundingText) {
+  if (!changeSummary.length) return changeSummary;
+  const jobLower = String(jobText ?? "").toLowerCase();
+  const grounding = String(groundingText ?? "").toLowerCase();
+  return changeSummary.filter((bullet) => !findUngroundedJdTerm(bullet, jobLower, grounding, { proseMode: true }));
 }
 
 function normalizeScopeSection(section) {
@@ -260,13 +277,6 @@ export async function handlePolish(req, res) {
     const changeSummary = Array.isArray(parsed.changeSummary)
       ? parsed.changeSummary.map((item) => String(item).trim()).filter(Boolean).slice(0, 4)
       : [];
-    // Usable-response guard is a TAILOR-pass check: a model reply with no
-    // suggestions, no gaps, AND no summary is an unusable shape. In review-only
-    // mode an empty change list is valid (audit the base resume as-is), so the
-    // guard must not fire.
-    if (runTailor && !suggestedChanges.length && !missingRequiredSkills.length && !changeSummary.length) {
-      throw new UserSafeAiError("AI response did not include usable resume suggestions. Try again or switch models.", 502);
-    }
     // The polished preview is DERIVED, never model-authored: apply only the
     // sanitized suggestions to the scoped text. Every tailored character has
     // passed the exact-evidence gate, and the audit/cover passes judge exactly
@@ -275,11 +285,26 @@ export async function handlePolish(req, res) {
     // unchanged scope.
     const polishedText = scopeToText(tailorScope, suggestedChanges);
 
-    // Grounding corpus for the secondary passes: the resume the user actually
-    // ends up with (every char already past the exact-evidence gate) plus the
-    // honest context. A JD skill term the audit's rewrites or the cover letter
-    // introduce that is absent from here is unsupported.
+    // Grounding corpus for the secondary passes AND the change summary: the
+    // resume the user actually ends up with (every char already past the
+    // exact-evidence gate) plus the honest context. A JD skill term the audit's
+    // rewrites, the cover letter, or the summary introduce that is absent from
+    // here is unsupported.
     const groundingText = `${polishedText}\n${honestContext}`;
+
+    // changeSummary is free model prose; drop bullets that overclaim a change
+    // that never landed. Filter BEFORE the usable-response guard so a reply whose
+    // only "content" was fabricated summary bullets surfaces as a retryable 502
+    // instead of a silent "nothing changed" success.
+    const honestChangeSummary = groundChangeSummary(changeSummary, jobText, groundingText);
+
+    // Usable-response guard is a TAILOR-pass check: a model reply with no
+    // suggestions, no gaps, AND no honest summary is an unusable shape. In
+    // review-only mode an empty change list is valid (audit the base resume
+    // as-is), so the guard must not fire.
+    if (runTailor && !suggestedChanges.length && !missingRequiredSkills.length && !honestChangeSummary.length) {
+      throw new UserSafeAiError("AI response did not include usable resume suggestions. Try again or switch models.", 502);
+    }
 
     // The audit reuses the primary config unless the request assigns an
     // independent reviewer provider. A different reviewer audits what the
@@ -412,7 +437,7 @@ export async function handlePolish(req, res) {
     sendJson(res, 200, {
       polishedText,
       coverLetterText: coverLetterText ?? "",
-      changeSummary,
+      changeSummary: honestChangeSummary,
       missingRequiredSkills: missingRequiredSkills.length ? missingRequiredSkills : strictMissingRequiredSkills,
       suggestedChanges,
       aiScore: reconciled.aiScore,

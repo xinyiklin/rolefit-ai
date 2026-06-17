@@ -13,10 +13,36 @@
 
 import { findUngroundedJdTerm } from "../grounding.mjs";
 import { sanitizeStrictReview } from "../sanitize.mjs";
+import { groundChangeSummary } from "../polish.mjs";
 
 const f = (proposed, job, grounding, opts) => findUngroundedJdTerm(proposed, job, grounding, opts);
 
+// "What changed" summary honesty: the summary is free model prose (NOT derived
+// from the sanitized suggestions), so it can claim a change that never landed.
+// groundChangeSummary drops a bullet naming a JD tool/term absent from the
+// tailored resume + honest context, keeping grounded/generic bullets.
+const TAILORED = "languages: python, sql, javascript\ntools: git, docker, postgres";
+const JOB = "we need python, sql, salesforce administration, and kubernetes orchestration. docker a plus.";
+const gcs = (summary) => groundChangeSummary(summary, JOB, TAILORED);
+
 const checks = [
+  // --- changeSummary honesty: overclaims of unlanded changes are dropped ---
+  ["summary: ungrounded 'added Salesforce' overclaim dropped",
+    gcs(["Added Salesforce administration to your Skills section."]).length === 0],
+  ["summary: ungrounded 'Kubernetes' overclaim dropped",
+    gcs(["Highlighted Kubernetes orchestration across your tooling."]).length === 0],
+  ["summary: grounded bullet (Python/SQL in tailored resume) kept",
+    gcs(["Reorganized your Skills to surface Python and SQL first."]).length === 1],
+  ["summary: generic 'tightened wording' bullet kept (no JD term)",
+    gcs(["Tightened wording and removed redundancy."]).length === 1],
+  ["summary: mixed batch keeps only the honest bullets",
+    gcs([
+      "Reorganized your Skills to surface Python and SQL first.",
+      "Added Salesforce administration to your Skills section.",
+      "Emphasized your Docker experience."
+    ]).length === 2],
+  ["summary: empty list passes through unchanged", gcs([]).length === 0],
+
   // --- detector 4: distinctive short tokens detector 1's 3-char floor misses ---
   ["lowercase nlp flagged (detector1 needs a capital)", f("built nlp models", "nlp role", "") === "nlp"],
   ["c++ flagged ungrounded", f("wrote a c++ engine", "c++ required", "") === "c++"],
