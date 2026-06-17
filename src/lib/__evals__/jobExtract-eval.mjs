@@ -75,4 +75,78 @@ const normal = extractJobPosting(normalTitleShape);
 assert.equal(normal.tracking.title, "Software Engineer");
 assert.equal(normal.tracking.location, "Austin, TX");
 
+// ATS metadata stack (Starbucks-shaped): bare "Job Category"/"Job Function"
+// labels and the values stacked beneath them must not be mistaken for the title;
+// a bare "Pay" label feeds the real range, and a "200 hours" count sitting next
+// to a "base pay" sentence must NOT bleed in as $200/hr.
+const atsMetadataStack = `
+software engineer- ST, Seattle, WA
+Seattle, Washington, United States
+Job ID
+260034646
+Job Category
+Technology
+Job Function
+Software Engineering
+Job Level
+Individual Contributor
+Pay
+111000-185000
+Responsibilities
+Build and operate reliable services.
+You will accrue vacation up to a maximum of 200 hours (316 in CA) for roles at director or above.
+The actual base pay offered to the successful candidate depends on many factors.
+`;
+const ats = extractJobPosting(atsMetadataStack);
+assert.equal(ats.tracking.title, undefined); // "Job Category"/"Technology" are not titles
+assert.equal(ats.tracking.salaryMin, 111000); // bare "Pay" label → real range
+assert.equal(ats.tracking.salaryMax, 185000);
+assert.equal(ats.tracking.salaryPeriod, "yr"); // not $200/hr from the vacation-hours bleed
+
+// "Role:" section paragraph (Northwood-shaped): the label heads a prose
+// paragraph, not the title — the "As a <Title> at <Company>" sentence recovers
+// it; "Basic Qualifications" is a required-quals heading; a bare "Compensation"
+// label feeds the range.
+const roleSectionParagraph = `
+Software Engineer – General (new grad / early career)
+Location
+Torrance, CA
+Compensation
+$120K – $140K • Offers Equity
+Role:
+As a Software Engineer at Northwood, you will be pivotal in designing and optimizing the global service that delivers connectivity to our customers. You will have ownership over key areas.
+Basic Qualifications:
+0-2 years of professional software development experience.
+Completed bachelor's degree in Computer Science or related field.
+Preferred Qualifications:
+Proficiency in Rust, Golang, or C/C++.
+`;
+const roleSection = extractJobPosting(roleSectionParagraph);
+assert.equal(roleSection.tracking.title, "Software Engineer"); // not the "Role:" paragraph
+assert.equal(roleSection.tracking.company, "Northwood");
+assert(!hasPlaceholder(roleSection.tailoringText, "required qualifications"));
+assert.match(roleSection.tailoringText, /Required Qualifications:\n- 0-2 years/i);
+assert.equal(roleSection.tracking.salaryMin, 120000);
+assert.equal(roleSection.tracking.salaryMax, 140000);
+
+// Perk dollar figures (Toyota-shaped): "$2,500 training budget", "$6,000
+// adoption assistance" carry a currency token but no range/period/comp context —
+// they are perks, not compensation, and must not fabricate a salary.
+const perksWithDollars = `
+Toyota Connected is looking for a Software Engineer to join our Mobility team.
+Responsibilities
+Write maintainable, tested code and ship features.
+Required Qualifications
+Experience writing clean, tested code in Java.
+What's in it for you?
+Annual $2,500 Training Budget to help you grow.
+Adoption Assistance of $5,000 for regular adoptions or $6,000 for special needs.
+Home office stipend of $1,000 to help furnish a remote office.
+`;
+const perks = extractJobPosting(perksWithDollars);
+assert.equal(perks.tracking.salaryMin, undefined); // no fabricated salary from perks
+assert.equal(perks.tracking.salaryMax, undefined);
+assert(perks.manualReviewFields.includes("compensation"));
+assert.equal(perks.tracking.title, "Software Engineer"); // prose role still recovered
+
 console.log("jobExtract evals passed");
