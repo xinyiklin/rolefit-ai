@@ -128,6 +128,24 @@ const LINK_HOSTS = ["github.com", "linkedin.com", "gitlab.com", "twitter.com", "
 // (digits in TLD), "John D." (no TLD), or anything with whitespace.
 const BARE_DOMAIN_RE = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)*\.[a-z]{2,24}(?:\/[^\s]*)?$/i;
 
+// Hosts whose link we point at the www subdomain in the CLICKABLE href only —
+// the visible label is left exactly as typed, so the resume still shows the
+// clean "github.com/user". Apex only: an already-www host or any other
+// subdomain (gist.github.com, uk.linkedin.com) is left untouched.
+const WWW_HREF_HOSTS = ["github.com", "linkedin.com"];
+
+// Prepend www. to the host of a protocol-bearing URL for WWW_HREF_HOSTS; a no-op
+// for every other (or already-www) host. Only the authority before the first
+// "/" is matched, so the path is never altered.
+function ensureWwwHref(url) {
+  // Capture only the authority — stop at the first "/", "?", or "#" so a
+  // path-less URL with a query ("github.com?x=1") doesn't fold the query into
+  // the host and miss the exact-host match.
+  return url.replace(/^(https?:\/\/)([^/?#]+)/i, (full, scheme, host) =>
+    WWW_HREF_HOSTS.includes(host.toLowerCase()) ? `${scheme}www.${host}` : full
+  );
+}
+
 export function linkify(contactItem) {
   const raw = String(contactItem ?? "").trim();
   if (!raw) return null;
@@ -139,14 +157,14 @@ export function linkify(contactItem) {
   if (/[\s\\{}]/.test(raw)) return null;
 
   if (/^https?:\/\//i.test(raw)) {
-    return { url: raw, label: raw.replace(/^https?:\/\//i, "") };
+    return { url: ensureWwwHref(raw), label: raw.replace(/^https?:\/\//i, "") };
   }
   if (/^mailto:/i.test(raw)) {
     return { url: raw, label: raw.replace(/^mailto:/i, "") };
   }
   for (const host of LINK_HOSTS) {
     if (raw.toLowerCase().includes(host)) {
-      const url = raw.startsWith("http") ? raw : `https://${raw}`;
+      const url = ensureWwwHref(raw.startsWith("http") ? raw : `https://${raw}`);
       return { url, label: raw };
     }
   }

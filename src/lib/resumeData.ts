@@ -544,15 +544,19 @@ function labelImpliesUrl(label: string, url: string): boolean {
     .toLowerCase();
   const bare = String(url ?? "")
     .replace(/^\s*(?:https?:\/\/|mailto:)/i, "")
+    .replace(/^www\./i, "")
     .replace(/\/+$/, "")
     .trim()
     .toLowerCase();
-  if (!cleanLabel || !bare) return true; // nothing comparable — keep current behavior
-  if (cleanLabel === bare) return true;
-  if (bare.startsWith(cleanLabel) || cleanLabel.startsWith(bare)) return true;
+  // A "github.com/x" label still implies a "www.github.com/x" href (linkify adds
+  // the www to the href only), so compare with a leading www. stripped from both.
+  const bareLabel = cleanLabel.replace(/^www\./i, "");
+  if (!bareLabel || !bare) return true; // nothing comparable — keep current behavior
+  if (bareLabel === bare) return true;
+  if (bare.startsWith(bareLabel) || bareLabel.startsWith(bare)) return true;
   // A spaceless label that contains the URL's domain is link-like enough.
   const domain = bare.split("/")[0];
-  return !/\s/.test(cleanLabel) && cleanLabel.includes(domain);
+  return !/\s/.test(bareLabel) && bareLabel.includes(domain);
 }
 
 // Replace each \href{url}{label}. When the label implies the URL, keep just the
