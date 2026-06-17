@@ -187,6 +187,10 @@ function App() {
   // True once a polish has been initiated — keeps PolishProgress visible after
   // the run completes (including failures) until the user dismisses it.
   const [polishProgressVisible, setPolishProgressVisible] = useState(false);
+  // Aborts the in-flight polish fetch(es) when the user clicks Stop. Created per
+  // run in handlePolish/retryStage; both stages share one controller so a Stop
+  // during either tailor or review cancels the whole run.
+  const polishAbortRef = useRef<AbortController | null>(null);
   // Surfaces polish-flow feedback the user otherwise never sees: AI-failure
   // reasons (the local fallback still renders) and the pre-flight guards
   // ("load a resume", "select a section to tailor"). Rendered in an aria-live
@@ -1057,14 +1061,15 @@ function App() {
   // with stages:"tailor", builds a result WITHOUT aiScore/strictReview (so the
   // fit verdict shows "Estimated"/local, not "AI-judged"). Returns the
   // server-sanitized suggestedChanges array on success, null on failure.
-  async function runTailorStage(ctx: PolishContext): Promise<PolishedResume["suggestedChanges"] | null> {
+  async function runTailorStage(ctx: PolishContext, signal?: AbortSignal): Promise<PolishedResume["suggestedChanges"] | null> {
     const { scopedResumeText, fallback, commonBody } = ctx;
     setPolishProgress((prev) => ({ ...prev, tailor: { status: "running" }, review: { status: "idle" } }));
     try {
       const response = await fetch("/api/polish", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...commonBody, stages: "tailor" })
+        body: JSON.stringify({ ...commonBody, stages: "tailor" }),
+        signal
       });
       const data = await response.json() as Record<string, unknown>;
       if (!response.ok) throw new Error((data.error as string) ?? "AI tailor failed.");
@@ -1107,6 +1112,9 @@ function App() {
       setPolishProgress((prev) => ({ ...prev, tailor: { status: "done" } }));
       return suggestedChanges;
     } catch (error) {
+      // User clicked Stop — let the orchestrator handle the clean stop; do NOT
+      // drop in the local fallback or mark the stage failed.
+      if (signal?.aborted) throw error;
       setResult(fallback);
       // The local fallback carries a cover letter when one was requested; feed
       // it to the single-owner state so Materials/Copy/save still show it.
@@ -1126,14 +1134,15 @@ function App() {
   // review-only). Merges review data (aiScore, strictReview) into the current
   // result via setResult; for review-only with no prior result it synthesizes a
   // base result first so the verdict describes the displayed resume.
-  async function runReviewStage(ctx: PolishContext, suggestions: PolishedResume["suggestedChanges"]): Promise<void> {
+  async function runReviewStage(ctx: PolishContext, suggestions: PolishedResume["suggestedChanges"], signal?: AbortSignal): Promise<void> {
     const { scopedResumeText, fallback, commonBody } = ctx;
     setPolishProgress((prev) => ({ ...prev, review: { status: "running" } }));
     try {
       const response = await fetch("/api/polish", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...commonBody, stages: "review", suggestedChanges: suggestions ?? [] })
+        body: JSON.stringify({ ...commonBody, stages: "review", suggestedChanges: suggestions ?? [] }),
+        signal
       });
       const data = await response.json() as Record<string, unknown>;
       if (!response.ok) throw new Error((data.error as string) ?? "AI review failed.");
@@ -1157,6 +1166,9 @@ function App() {
       setActiveOutputTab("resume");
       setPolishProgress((prev) => ({ ...prev, review: { status: "done" } }));
     } catch (error) {
+      // User clicked Stop — let the orchestrator handle the clean stop. The
+      // existing result (e.g. a completed tailor in "both") is left intact.
+      if (signal?.aborted) throw error;
       const message = error instanceof Error ? error.message.replace(/[.。]\s*$/, "") : "request failed";
       setPolishProgress((prev) => ({
         ...prev,
@@ -1166,11 +1178,32 @@ function App() {
     }
   }
 
+  // Clean-stop teardown shared by handlePolish/retryStage when the user clicks
+  // Stop: clear the per-stage progress, hide the indicator, and surface a quiet
+  // status. The displayed resume is left as-is (a completed tailor stage in
+  // "both" keeps its result; a stopped tailor never replaced the prior result).
+  function handlePolishStopped() {
+    setPolishProgress(idleProgress());
+    setPolishProgressVisible(false);
+    setPolishStatus("Polish stopped.");
+  }
+
+  // Abort the in-flight polish fetch(es). The stage runners re-throw the abort,
+  // the orchestrator's catch runs handlePolishStopped, and `finally` clears
+  // isPolishing — so a Stop frees the UI immediately. (The server-side AI call
+  // runs on this machine and self-terminates within its own timeout.)
+  function stopPolish() {
+    polishAbortRef.current?.abort();
+  }
+
   async function handlePolish() {
     if (isPolishing) return;
     const ctx = buildPolishContext();
     if (!ctx) return;
 
+    const controller = new AbortController();
+    polishAbortRef.current = controller;
+    const { signal } = controller;
     setIsPolishing(true);
     setPolishProgress(idleProgress());
     setPolishProgressVisible(true);
@@ -1180,16 +1213,16 @@ function App() {
 
     try {
       if (polishStages === "tailor") {
-        await runTailorStage(ctx);
+        await runTailorStage(ctx, signal);
       } else if (polishStages === "review") {
         // Standalone review audits the current proposal when one exists (so the
         // verdict describes the displayed resume), else the base resume.
-        await runReviewStage(ctx, result?.suggestedChanges ?? []);
+        await runReviewStage(ctx, result?.suggestedChanges ?? [], signal);
       } else {
         // both: tailor first, then review only if tailor succeeded.
-        const suggestions = await runTailorStage(ctx);
+        const suggestions = await runTailorStage(ctx, signal);
         if (suggestions !== null) {
-          await runReviewStage(ctx, suggestions);
+          await runReviewStage(ctx, suggestions, signal);
         } else {
           // Tailor failed — mark review as skipped/failed so the user knows.
           setPolishProgress((prev) => ({
@@ -1198,8 +1231,17 @@ function App() {
           }));
         }
       }
+    } catch (error) {
+      // The only throw that reaches here is a Stop abort (stage runners catch
+      // their own request errors and surface them as a failed stage).
+      if (signal.aborted) handlePolishStopped();
+      // Defensive: stage runners convert their own request errors into a failed
+      // stage, so only a Stop abort should reach here. Surface anything else as a
+      // status toast rather than re-throwing out of this onClick-driven handler.
+      else setPolishStatus(error instanceof Error ? error.message : "Unexpected polish error.");
     } finally {
       setIsPolishing(false);
+      polishAbortRef.current = null;
     }
   }
 
@@ -1213,21 +1255,31 @@ function App() {
     const ctx = buildPolishContext();
     if (!ctx) return;
 
+    const controller = new AbortController();
+    polishAbortRef.current = controller;
+    const { signal } = controller;
     setIsPolishing(true);
     try {
       if (stage === "tailor") {
-        const suggestions = await runTailorStage(ctx);
+        const suggestions = await runTailorStage(ctx, signal);
         // If polishStages === "both", auto-run review after a successful tailor retry.
         if (suggestions !== null && polishStages === "both") {
-          await runReviewStage(ctx, suggestions);
+          await runReviewStage(ctx, suggestions, signal);
         }
       } else {
         // stage === "review": reuse the server-sanitized suggestedChanges from
         // the current result (never re-derives from tailorScope).
-        await runReviewStage(ctx, result?.suggestedChanges ?? []);
+        await runReviewStage(ctx, result?.suggestedChanges ?? [], signal);
       }
+    } catch (error) {
+      if (signal.aborted) handlePolishStopped();
+      // Defensive: stage runners convert their own request errors into a failed
+      // stage, so only a Stop abort should reach here. Surface anything else as a
+      // status toast rather than re-throwing out of this onClick-driven handler.
+      else setPolishStatus(error instanceof Error ? error.message : "Unexpected polish error.");
     } finally {
       setIsPolishing(false);
+      polishAbortRef.current = null;
     }
   }
 
@@ -1698,6 +1750,7 @@ function App() {
           stages={polishStages}
           progress={polishProgress}
           onRetry={retryStage}
+          onStop={stopPolish}
           onDismiss={() => setPolishProgressVisible(false)}
           busy={isPolishing}
         />

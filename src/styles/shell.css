@@ -515,6 +515,13 @@
 
 .polish-stage__retry { font-size: 0.74rem; }
 
+/* Stop (cancel the in-flight stage). The square glyph is set solid via
+   fill="currentColor" on the icon; keep the gap tight so it reads as one chip. */
+.polish-stage__stop {
+  font-size: 0.74rem;
+  gap: var(--s1);
+}
+
 .polish-stage__dismiss {
   display: inline-flex;
   align-items: center;
