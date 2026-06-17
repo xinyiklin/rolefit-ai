@@ -384,11 +384,11 @@
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
-/* -------- Two-stage polish progress -------- */
+/* -------- Two-stage polish progress (per-stage cards) -------- */
 
-/* Shares position/shell with .polish-toast so it renders in the same fixed
-   slot. Both are mutually exclusive in practice: polishProgress replaces the
-   in-flight status; polishStatus is now only for ancillary messages. */
+/* Transparent fixed stack — each stage is its own card with its own chrome, so
+   once every stage has finished and faded out, nothing remains visible (the
+   happy path needs no manual dismiss). pointer-events pass through the gaps. */
 .polish-progress {
   position: fixed;
   top: calc(var(--s5) + 2.5rem);
@@ -396,71 +396,150 @@
   transform: translateX(-50%);
   z-index: 35;
   display: flex;
-  align-items: flex-start;
+  flex-direction: column;
   gap: var(--s2);
-  max-width: min(480px, calc(100vw - var(--s5) * 2));
-  padding: var(--s2) var(--s3);
-  border: 1px solid var(--hairline-strong);
-  border-radius: 8px;
-  background: var(--card);
-  box-shadow: 0 6px 24px -8px rgba(0, 0, 0, 0.25);
-  font-size: 0.82rem;
-  color: var(--ink);
+  width: min(360px, calc(100vw - var(--s5) * 2));
+  pointer-events: none;
 }
 
-.polish-progress__rows {
+/* One stage card: icon · title (+ error) · actions. Slides in on appear.
+   No colored side-stripe (a banned pattern) — state is carried by the icon. */
+.polish-stage {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  max-height: 200px;
+  padding: var(--s3);
+  border: 1px solid var(--hairline-strong);
+  border-radius: 10px;
+  background: var(--card);
+  box-shadow: 0 8px 28px -12px rgba(0, 0, 0, 0.3);
+  font-size: 0.82rem;
+  color: var(--ink);
+  /* `backwards` (not `both`): apply the entry's start frame immediately, but do
+     NOT retain the end frame afterwards — a `forwards`/`both` fill would pin
+     opacity/transform and override the `.is-leaving` exit (the card would
+     snap-collapse at full opacity instead of fading). */
+  animation: polish-stage-in 200ms var(--ease) backwards;
+}
+
+@keyframes polish-stage-in {
+  from { opacity: 0.01; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Auto-dismiss fade for a completed stage. Opacity fades first (the visible
+   part); the height then collapses while the card is already invisible, so any
+   card below slides up smoothly before this one unmounts. */
+.polish-stage.is-leaving {
+  opacity: 0;
+  transform: translateY(-10px);
+  max-height: 0;
+  margin-bottom: calc(var(--s2) * -1);
+  padding-top: 0;
+  padding-bottom: 0;
+  border-top-width: 0;
+  border-bottom-width: 0;
+  overflow: hidden;
+  transition:
+    opacity 300ms var(--ease),
+    transform 300ms var(--ease),
+    max-height 440ms var(--ease),
+    margin-bottom 440ms var(--ease),
+    padding 440ms var(--ease),
+    border-width 440ms var(--ease);
+}
+
+.polish-stage__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  flex: none;
+  color: var(--ink-soft);
+}
+
+/* Running indicator: a smooth ring spinner (replaces the text "…" dots). The
+   moving arc inherits the icon color (currentColor) so it stays monochrome. */
+.polish-spinner {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid var(--hairline-strong);
+  border-top-color: currentColor;
+  animation: polish-spin 0.7s linear infinite;
+}
+
+@keyframes polish-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .polish-spinner { animation: none; }
+}
+
+.polish-stage__body {
   flex: 1 1 auto;
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: var(--s1);
+  gap: 1px;
 }
 
-/* Each stage row: label · status icon · optional error · optional retry button */
-.polish-progress__row {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: var(--s2);
-  min-height: 22px;
-}
-
-.polish-progress__label {
+.polish-stage__title {
   font-weight: 600;
   color: var(--ink-strong);
-  min-width: 4.5rem;
-  flex: none;
 }
 
-.polish-progress__status {
-  display: inline-flex;
-  align-items: center;
-  flex: none;
-  color: var(--ink-soft);
+/* Quiet secondary line: "Step 1 of 2 · 1:18". Tabular numerals so the live
+   timer doesn't jitter. */
+.polish-stage__meta {
+  font-size: 0.72rem;
+  color: var(--ink-faint);
+  font-variant-numeric: tabular-nums;
 }
 
-/* Running: inherit the animated dots color */
-.polish-progress__row--running .polish-progress__status { color: var(--ink); }
-
-/* Done: accent check */
-.polish-progress__row--done .polish-progress__status { color: var(--accent); }
-
-/* Failed: warm/danger alert */
-.polish-progress__icon--fail { color: var(--warm); }
-
-/* Optional error message — wraps, stays compact, is faint */
-.polish-progress__error {
-  flex: 1 1 100%;
+.polish-stage__error {
   font-size: 0.76rem;
   color: var(--ink-soft);
   line-height: 1.35;
-  margin-top: 1px;
 }
 
-/* Retry button — same ghost-button pattern, a bit more compact */
-.polish-progress__retry {
+.polish-stage__actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s1);
   flex: none;
-  font-size: 0.74rem;
+}
+
+.polish-stage__retry { font-size: 0.74rem; }
+
+.polish-stage__dismiss {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+.polish-stage__dismiss:hover {
+  color: var(--ink-strong);
+  background: var(--card-soft);
+}
+
+/* State carried by the icon alone — no colored side-stripe. */
+.polish-stage--running .polish-stage__icon { color: var(--ink-soft); }
+.polish-stage--done .polish-stage__icon { color: var(--accent); }
+.polish-stage--failed .polish-stage__icon { color: var(--warm); }
+
+@media (prefers-reduced-motion: reduce) {
+  .polish-stage { animation: none; }
+  .polish-stage.is-leaving { transition: opacity 120ms linear; }
 }
 
 /* -------- Segmented control (Polish stages) -------- */
