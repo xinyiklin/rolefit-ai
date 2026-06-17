@@ -108,7 +108,14 @@ function buildTailorTargetMap(scope) {
       if (!entryId) continue;
       const entryTargets = type === "skills"
         ? [
-            { field: "skill", text: entry.subtitleLeft ?? entry.skills ?? "", bulletId: "" },
+            // A skills row's list lives in the `subtitleLeft` property of the
+            // scope JSON, and the prompt lists BOTH "skill" and "subtitleLeft"
+            // as valid fields — so a model routinely targets it as "subtitleLeft"
+            // (the literal property name it reads). Register both field names as
+            // aliases for the one canonical "skill" target so that targeting
+            // resolves instead of dropping as unknownTarget (which left the
+            // changeSummary claiming a skills edit the resume never received).
+            { field: "skill", aliases: ["subtitleLeft"], text: entry.subtitleLeft ?? entry.skills ?? "", bulletId: "" },
             { field: "titleLeft", text: entry.titleLeft ?? "", bulletId: "" }
           ]
         : type === "summary"
@@ -122,12 +129,17 @@ function buildTailorTargetMap(scope) {
             { field: "subtitleRight", text: entry.subtitleRight ?? "", bulletId: "" }
           ];
       for (const item of entryTargets) {
-        const key = [sectionId, entryId, item.bulletId, item.field].join("::");
-        targets.set(key, {
+        // One canonical target object, shared by every field alias below, so the
+        // emitted suggestion always carries the canonical field (e.g. "skill",
+        // never "subtitleLeft") and the seen-set can dedup aliases to one entry.
+        const resolved = {
           target: { sectionId, entryId, field: item.field },
           currentText: clippedString(item.text, 1200),
           sectionHeading
-        });
+        };
+        for (const field of [item.field, ...(item.aliases ?? [])]) {
+          targets.set([sectionId, entryId, item.bulletId, field].join("::"), resolved);
+        }
       }
       if (Array.isArray(entry.bullets)) {
         for (const bullet of entry.bullets) {
@@ -170,7 +182,9 @@ export function sanitizeTailorSuggestions(raw, scope, dropStats, honestContext, 
   // model prose and can launder an inferred fact ("clinics run Windows"), but
   // it cannot conjure the term into the source text.
   const grounding = [
-    ...[...targets.values()].map((t) => t.currentText),
+    // new Set collapses the field aliases (which share one target object) so a
+    // skills row's text appears once, not once per alias.
+    ...[...new Set(targets.values())].map((t) => t.currentText),
     contextSectionsText(scope),
     String(honestContext ?? "")
   ].join("\n").toLowerCase();
@@ -199,7 +213,11 @@ export function sanitizeTailorSuggestions(raw, scope, dropStats, honestContext, 
     });
     const allowed = targets.get(key);
     if (!allowed) { drop("unknownTarget"); continue; }
-    if (seen.has(key)) { drop("duplicateTarget"); continue; }
+    // Dedup on the canonical target, not the model's field name: a skills row
+    // reached via both "skill" and its "subtitleLeft" alias is the same edit and
+    // must collapse to one suggestion.
+    const canonicalKey = targetKey({ ...allowed.target, bulletId: allowed.target.bulletId ?? "" });
+    if (seen.has(canonicalKey)) { drop("duplicateTarget"); continue; }
     const rawProposedText = item.proposedText ?? item.rewrite ?? item.text;
     const proposedText = clippedString(rawProposedText, 1400);
     if (!proposedText || proposedText === allowed.currentText) { drop("emptyOrUnchanged"); continue; }
@@ -257,7 +275,7 @@ export function sanitizeTailorSuggestions(raw, scope, dropStats, honestContext, 
       hits,
       risk
     });
-    seen.add(key);
+    seen.add(canonicalKey);
     if (output.length >= 12) break;
   }
   return output;

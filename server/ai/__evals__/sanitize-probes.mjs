@@ -153,6 +153,34 @@ const checks = [
       skillScope, {}, "Exact evidence: I use Microsoft Office (Word, Excel, PowerPoint) daily.", "Requirements: Microsoft Office for documentation and reporting."
     ).length === 0;
   })()],
+  // --- skills field aliasing: the scope JSON exposes a skills row's list under
+  // --- the property `subtitleLeft`, and the prompt lists BOTH "skill" and
+  // --- "subtitleLeft" as valid fields, so a model routinely targets the literal
+  // --- property name. That must resolve to the canonical "skill" target, not
+  // --- drop as unknownTarget (the symptom: changeSummary claims a Skills edit
+  // --- the resume never received). ---
+  ["skill edit targeted as subtitleLeft resolves to the canonical skill target", (() => {
+    const skillScope = { sections: [{ id: "sk", heading: "Technical Skills", type: "skills", entries: [
+      { id: "row-tool", titleLeft: "Tooling & Cloud", titleRight: "", subtitleLeft: "Git, Docker, Render", subtitleRight: "", bullets: [] }
+    ] }] };
+    const out = sanitizeTailorSuggestions(
+      [{ target: { sectionId: "sk", entryId: "row-tool", field: "subtitleLeft" }, proposedText: "Docker, Git, Render", reason: "surface containers first", evidenceType: "exact", evidence: "all three tools already listed in the skills row", hits: [] }],
+      skillScope, {}, "", "Requirements: Docker and Git experience."
+    );
+    return out.length === 1 && out[0].target.field === "skill";
+  })()],
+  ["skill row reached via both skill + subtitleLeft dedups to one suggestion", (() => {
+    const skillScope = { sections: [{ id: "sk", heading: "Technical Skills", type: "skills", entries: [
+      { id: "row-tool", titleLeft: "Tooling & Cloud", titleRight: "", subtitleLeft: "Git, Docker, Render", subtitleRight: "", bullets: [] }
+    ] }] };
+    return sanitizeTailorSuggestions(
+      [
+        { target: { sectionId: "sk", entryId: "row-tool", field: "skill" }, proposedText: "Docker, Git, Render", reason: "reorder", evidenceType: "exact", evidence: "all three tools already in the skills row", hits: [] },
+        { target: { sectionId: "sk", entryId: "row-tool", field: "subtitleLeft" }, proposedText: "Render, Docker, Git", reason: "reorder again", evidenceType: "exact", evidence: "all three tools already in the skills row", hits: [] }
+      ],
+      skillScope, {}, "", "Requirements: Docker and Git experience."
+    ).length === 1;
+  })()],
 
   // --- prose-mode brand grounding (cover letters / application answers) ---
   // findUngroundedJdTerm(proposedText, jobLower, grounding) — caller lowercases
