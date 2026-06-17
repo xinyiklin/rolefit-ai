@@ -213,11 +213,12 @@ export function sanitizeTailorSuggestions(raw, scope, dropStats, honestContext, 
     });
     const allowed = targets.get(key);
     if (!allowed) { drop("unknownTarget"); continue; }
-    // Dedup on the canonical target, not the model's field name: a skills row
-    // reached via both "skill" and its "subtitleLeft" alias is the same edit and
-    // must collapse to one suggestion.
-    const canonicalKey = targetKey({ ...allowed.target, bulletId: allowed.target.bulletId ?? "" });
-    if (seen.has(canonicalKey)) { drop("duplicateTarget"); continue; }
+    // Dedup on the canonical target OBJECT, not the model's field name: every
+    // field alias for one resume field shares a single `allowed` object (a skills
+    // row reached via both "skill" and its "subtitleLeft" alias, say), so identity
+    // dedup collapses them to one suggestion — and a true duplicate target
+    // resolves to that same object too.
+    if (seen.has(allowed)) { drop("duplicateTarget"); continue; }
     const rawProposedText = item.proposedText ?? item.rewrite ?? item.text;
     const proposedText = clippedString(rawProposedText, 1400);
     if (!proposedText || proposedText === allowed.currentText) { drop("emptyOrUnchanged"); continue; }
@@ -275,7 +276,7 @@ export function sanitizeTailorSuggestions(raw, scope, dropStats, honestContext, 
       hits,
       risk
     });
-    seen.add(canonicalKey);
+    seen.add(allowed);
     if (output.length >= 12) break;
   }
   return output;
