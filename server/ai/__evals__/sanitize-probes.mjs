@@ -16,6 +16,7 @@ import {
   coverageHasEligibilityBlocker,
   reconcileFitVerdict,
   sanitizeTailorSuggestions,
+  sanitizeStrictReview,
   scoreFromBuckets,
   scoreFromRequirementCoverage
 } from "../sanitize.mjs";
@@ -298,6 +299,23 @@ const checks = [
   ["BLOCKER still overrides HIGH count -> DON'T APPLY", (() => {
     const r = applyGapCapsAndVerdict({ base: 90, tailored: 88, liftReason: "" }, { gaps: [{ severity: "HIGH" }, { severity: "BLOCKER" }] });
     return r.aiScore.tailored === 45 && r.verdict === DONT;
+  })()],
+  ["strict-review gap with unsafe suggestedEdit keeps gap but blanks edit", (() => {
+    const review = sanitizeStrictReview({
+      verdict: "STRETCH",
+      gaps: [
+        {
+          gap: "Active Secret clearance",
+          severity: "BLOCKER",
+          evidenceType: "none",
+          canHonestlyAdd: false,
+          evidence: "Not in resume",
+          suggestedEdit: "Add clearance\nSecond line"
+        }
+      ]
+    }, "Requires Active Secret clearance.", "React projects");
+    const r = applyGapCapsAndVerdict({ base: 82, tailored: 84, liftReason: "" }, review);
+    return review?.gaps?.length === 1 && review.gaps[0].suggestedEdit === "" && r.verdict === DONT;
   })()],
   ["no qualifying gaps: verdict derived from sum", (() => {
     const r = applyGapCapsAndVerdict({ base: 73, tailored: 86, liftReason: "" }, { gaps: [{ severity: "MEDIUM" }] });

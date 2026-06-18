@@ -5,6 +5,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 const APPLICATION_STATUSES = ["interested", "applied", "interviewing", "offer", "rejected", "withdrawn"];
+const APPLICATION_ID_RE = /^[A-Za-z0-9_-]{1,80}$/;
 const MAX_APPLICATIONS = 500;
 const MAX_FIELD = 50_000;
 const MAX_RESUME_DATA_BYTES = 400_000;
@@ -47,6 +48,7 @@ const EVIDENCE_TYPES = ["exact", "adjacent", "none"];
 const APPLICATION_PRIORITIES = ["High", "Medium", "Low"];
 const SALARY_PERIODS = ["yr", "mo", "hr"];
 const RESUME_SECTION_TYPES = ["standard", "skills", "summary"];
+const REVIEW_GAP_SEVERITIES = ["BLOCKER", "HIGH", "MEDIUM", "LOW"];
 
 function sanitizeScore(value) {
   if (typeof value !== "number" || !Number.isFinite(value)) return null;
@@ -163,6 +165,10 @@ function sanitizeEvidenceType(value) {
   return EVIDENCE_TYPES.includes(value) ? value : undefined;
 }
 
+function sanitizeReviewGapSeverity(value) {
+  return REVIEW_GAP_SEVERITIES.includes(value) ? value : "MEDIUM";
+}
+
 function sanitizeMissingRequiredSkills(raw) {
   if (!Array.isArray(raw)) return undefined;
   const skills = raw
@@ -197,7 +203,7 @@ function sanitizeReview(raw) {
         const evidenceType = sanitizeEvidenceType(g?.evidenceType);
         return {
           gap: sanitizeString(g?.gap, 400),
-          severity: sanitizeString(g?.severity, 12),
+          severity: sanitizeReviewGapSeverity(g?.severity),
           evidenceType,
           canHonestlyAdd: evidenceType === "exact" && Boolean(g?.canHonestlyAdd),
           evidence: sanitizeString(g?.evidence, 800),
@@ -233,7 +239,8 @@ function sanitizeApplicationAnswers(raw) {
 
 function sanitizeApplication(raw) {
   if (!raw || typeof raw !== "object") return null;
-  const id = typeof raw.id === "string" ? raw.id.slice(0, 80) : "";
+  const rawId = sanitizeString(raw.id, 80);
+  const id = APPLICATION_ID_RE.test(rawId) ? rawId : "";
   const title = typeof raw.title === "string" ? raw.title.slice(0, 200) : "";
   if (!id || !title) return null;
 

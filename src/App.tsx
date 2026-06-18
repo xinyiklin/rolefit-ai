@@ -1408,7 +1408,7 @@ function App() {
 
   // The actual apply: save the application, snapshot artifacts, update UI.
   // Called directly when the user has opted to skip the download dialog, or
-  // from the dialog's Download / Use-base callbacks.
+  // from the dialog's Download / Apply-only callbacks.
   function commitApply() {
     if (!jobUrl.trim() && !jobDescription.trim()) return;
     const sr = result?.strictReview;
@@ -1496,7 +1496,7 @@ function App() {
     else handleDownloadTex(base);
   }
 
-  function handleUseBase() {
+  function handleApplyOnly() {
     setApplyDownloadPrompt(null);
     commitApply();
   }
@@ -1917,7 +1917,7 @@ function App() {
           defaultFileBaseName={resumeDownloadName("pdf").replace(/\.pdf$/i, "")}
           onDownload={handleApplyDownloadPick}
           onSkip={() => setApplyDownloadPrompt(null)}
-          onUseBase={handleUseBase}
+          onApplyOnly={handleApplyOnly}
         />
       ) : null}
 

@@ -1,6 +1,7 @@
 import { ChevronLeft, ChevronRight, Clock3, ExternalLink } from "lucide-react";
 import type { Application } from "../../hooks/useApplications";
 import {
+  dateKey,
   displayCompany,
   displayRole,
   formatCompactDate
@@ -16,7 +17,7 @@ type TrackerCalendarRailProps = {
   onToday: () => void;
   selectedEvents: CalendarEvent[];
   upcoming: CalendarEvent[];
-  onSelectDate: (key: string) => void;
+  onSelectDate: (key: string, visibleMonth?: Date) => void;
   onSetSelectedApplicationId: (id: string | null) => void;
   onOpenApplication: (app: Application) => void;
 };
@@ -110,9 +111,7 @@ export function TrackerCalendarRail({
               className="calendar-upcoming"
               key={event.id}
               onClick={() => {
-                onSelectDate(
-                  `${event.date.getFullYear()}-${String(event.date.getMonth() + 1).padStart(2, "0")}-${String(event.date.getDate()).padStart(2, "0")}`
-                );
+                onSelectDate(dateKey(event.date), event.date);
                 onSetSelectedApplicationId(event.app.id);
               }}
             >

@@ -341,8 +341,10 @@ export function sanitizeStrictReview(raw, jobText = "", grounding = "") {
       if (!gapText) return null;
       let suggestedEdit = clippedString(gap.suggestedEdit, 1400);
       // A suggestedEdit is rendered as inline copy the user may paste into a
-      // bullet; reject smuggled markup the same way tailor suggestions do.
-      if (suggestedEdit && containsStructuredMarkup(gap.suggestedEdit)) return null;
+      // bullet; blank smuggled markup the same way tailor suggestions do.
+      // Keep the gap itself so a malformed paste-ready edit cannot hide a
+      // HIGH/BLOCKER gap from the review pane or score caps.
+      if (suggestedEdit && containsStructuredMarkup(gap.suggestedEdit)) suggestedEdit = "";
       // Blank a paste-ready edit that introduces an ungrounded JD skill term —
       // the gap stays visible, but we don't hand the user unsupported copy.
       if (suggestedEdit && findUngroundedJdTerm(suggestedEdit, jobLower, groundingLower)) suggestedEdit = "";

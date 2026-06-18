@@ -75,8 +75,16 @@ function applicationResumeDir(id) {
   const dir = join(jobWorkspaceDir, "applications", id);
   // Defense in depth: ensure the resolved path stays inside the workspace.
   const base = resolve(jobWorkspaceDir, "applications");
-  if (!resolve(dir).startsWith(base + "/") && resolve(dir) !== base) return null;
+  if (!resolve(dir).startsWith(base + sep) && resolve(dir) !== base) return null;
   return dir;
+}
+
+function decodeRouteSegment(value) {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return null;
+  }
 }
 
 async function handleImportResumeDocx(req, res) {
@@ -643,14 +651,17 @@ async function handleSaveApplicationResume(req, res, id) {
     if (!tex && !pdfBase64) { sendJson(res, 400, { error: "No resume artifacts to save." }); return; }
     // Size caps: tex ~1MB of chars, pdf ~8MB decoded.
     if (tex.length > 1_000_000) { sendJson(res, 413, { error: "TeX source too large." }); return; }
+    let pdfBuffer = null;
+    if (pdfBase64) {
+      pdfBuffer = base64ToBuffer(pdfBase64, "PDF");
+      if (pdfBuffer.length > 8_000_000) { sendJson(res, 413, { error: "PDF too large." }); return; }
+    }
     await mkdir(dir, { recursive: true });
     let hasTex = false;
     let hasPdf = false;
     if (tex) { await writeFile(join(dir, "resume.tex"), tex, "utf8"); hasTex = true; }
-    if (pdfBase64) {
-      const buf = base64ToBuffer(pdfBase64);
-      if (buf.length > 8_000_000) { sendJson(res, 413, { error: "PDF too large." }); return; }
-      await writeFile(join(dir, "resume.pdf"), buf);
+    if (pdfBuffer) {
+      await writeFile(join(dir, "resume.pdf"), pdfBuffer);
       hasPdf = true;
     }
     sendJson(res, 200, {
@@ -1048,13 +1059,23 @@ const server = createServer((req, res) => {
 
   const resumeFileMatch = pathname.match(/^\/api\/applications\/([^/]+)\/resume\.(tex|pdf)$/);
   if (resumeFileMatch) {
-    void handleApplicationResumeFile(req, res, decodeURIComponent(resumeFileMatch[1]), resumeFileMatch[2]);
+    const id = decodeRouteSegment(resumeFileMatch[1]);
+    if (id === null) {
+      sendJson(res, 400, { error: "Invalid application id." });
+      return;
+    }
+    void handleApplicationResumeFile(req, res, id, resumeFileMatch[2]);
     return;
   }
 
   const resumeSaveMatch = pathname.match(/^\/api\/applications\/([^/]+)\/resume$/);
   if (resumeSaveMatch) {
-    void handleSaveApplicationResume(req, res, decodeURIComponent(resumeSaveMatch[1]));
+    const id = decodeRouteSegment(resumeSaveMatch[1]);
+    if (id === null) {
+      sendJson(res, 400, { error: "Invalid application id." });
+      return;
+    }
+    void handleSaveApplicationResume(req, res, id);
     return;
   }
 

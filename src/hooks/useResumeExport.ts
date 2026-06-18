@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import type { DocStyle } from "./useDocStyle";
 import type { PolishedResume } from "../resumeEngine";
@@ -95,6 +95,13 @@ export function useResumeExport({
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState("");
   const [previewPdfUrl, setPreviewPdfUrl] = useState("");
+  const previewRequestId = useRef(0);
+
+  useEffect(() => {
+    return () => {
+      if (previewPdfUrl) URL.revokeObjectURL(previewPdfUrl);
+    };
+  }, [previewPdfUrl]);
 
   // Clear stale download confirmations when a new polish starts. The shared
   // texStatus line is reset by App alongside this call.
@@ -214,11 +221,14 @@ export function useResumeExport({
       URL.revokeObjectURL(previewPdfUrl);
       setPreviewPdfUrl("");
     }
+    const requestId = previewRequestId.current + 1;
+    previewRequestId.current = requestId;
     setIsPreviewOpen(true);
     setIsPreviewLoading(true);
     setPreviewError("");
     try {
       const outcome = await renderCurrentPdf();
+      if (previewRequestId.current !== requestId) return;
       if ("error" in outcome) {
         setPreviewError(
           outcome.missingTectonic
@@ -230,14 +240,17 @@ export function useResumeExport({
       const url = URL.createObjectURL(outcome.pdf);
       setPreviewPdfUrl(url);
     } catch (error) {
+      if (previewRequestId.current !== requestId) return;
       setPreviewError(error instanceof Error ? error.message : "PDF preview failed.");
     } finally {
-      setIsPreviewLoading(false);
+      if (previewRequestId.current === requestId) setIsPreviewLoading(false);
     }
   }
 
   function handleClosePreview() {
+    previewRequestId.current += 1;
     setIsPreviewOpen(false);
+    setIsPreviewLoading(false);
     if (previewPdfUrl) {
       URL.revokeObjectURL(previewPdfUrl);
       setPreviewPdfUrl("");
