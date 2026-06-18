@@ -6,16 +6,16 @@ import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
 
-export function base64ToBuffer(value) {
+export function base64ToBuffer(value, label = "DOCX") {
   const base64 = String(value ?? "").replace(/^data:[^,]+,/, "");
   if (!base64 || !/^[a-z0-9+/=\s]+$/i.test(base64)) {
-    throw new Error("DOCX data was not valid base64.");
+    throw new Error(`${label} data was not valid base64.`);
   }
   const buffer = Buffer.from(base64, "base64");
   // Bound the decoded DOCX (real resumes are well under 1 MB) so a crafted body
   // can't exhaust memory/temp disk via import, base-resume save, or export.
   if (buffer.length > 10_000_000) {
-    throw new Error("DOCX file is too large.");
+    throw new Error(`${label} file is too large.`);
   }
   return buffer;
 }

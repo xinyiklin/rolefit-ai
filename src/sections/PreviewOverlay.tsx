@@ -40,6 +40,7 @@ export default function PreviewOverlay({
 
   // Reset zoom when a new PDF loads.
   useEffect(() => {
+    setNumPages(null);
     if (pdfUrl) setZoomIndex(DEFAULT_ZOOM_INDEX);
   }, [pdfUrl]);
 

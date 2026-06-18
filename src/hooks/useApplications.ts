@@ -238,6 +238,7 @@ export function useApplications() {
   const [error, setError] = useState("");
   const [storagePath, setStoragePath] = useState("");
   const persistVersion = useRef(0);
+  const persistQueue = useRef<Promise<void>>(Promise.resolve());
 
   useEffect(() => {
     let cancelled = false;
@@ -264,7 +265,7 @@ export function useApplications() {
   const persist = useCallback(async (next: Application[], previous: Application[]) => {
     const requestId = persistVersion.current + 1;
     persistVersion.current = requestId;
-    try {
+    const write = persistQueue.current.catch(() => undefined).then(async () => {
       const res = await fetch("/api/applications", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -272,6 +273,15 @@ export function useApplications() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Save failed.");
+      return data;
+    });
+    persistQueue.current = write.then(
+      () => undefined,
+      () => undefined
+    );
+
+    try {
+      const data = await write;
       // Trust the server-sanitized list back
       if (requestId === persistVersion.current) {
         if (Array.isArray(data.applications)) setApplications(data.applications);

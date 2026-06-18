@@ -150,18 +150,21 @@ function formFromApplication(application: Application | null): FormState {
 
 export function ApplicationModal({ open, application, onClose, onSave, onDelete, onLoad, onPreviewResume }: ApplicationModalProps) {
   const isEdit = Boolean(application);
+  const applicationId = application?.id ?? null;
   const [tab, setTab] = useState<ModalTab>("overview");
   const [form, setForm] = useState<FormState>(() => formFromApplication(application));
   const [copied, setCopied] = useState("");
   const [copyFailed, setCopyFailed] = useState("");
 
-  // Re-seed whenever the modal opens or targets a different application.
+  // Re-seed whenever the modal opens or targets a different application. Use
+  // the stable id, not the whole application object, so async tracker refreshes
+  // do not wipe unsaved form edits while the modal is open.
   useEffect(() => {
     if (!open) return;
     setForm(formFromApplication(application));
     setTab("overview");
     setCopied("");
-  }, [open, application]);
+  }, [open, applicationId]);
 
   useEffect(() => {
     if (!open) return;

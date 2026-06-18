@@ -117,6 +117,10 @@ export function TrackerCalendarView({
 
   const days = buildCalendarDays(month);
   const selectedEvents = eventsByDate.get(selectedDate) ?? [];
+  function selectDate(key: string, visibleMonth?: Date) {
+    if (visibleMonth) setMonth(startOfMonth(visibleMonth));
+    setSelectedDate(key);
+  }
   // Upcoming = forward-looking to-dos (follow-ups / interview prep / offer
   // reviews), soonest first. Exclude "applied" events: those are historical
   // "submitted on" markers, and a batch applied today would otherwise fill the
@@ -175,7 +179,7 @@ export function TrackerCalendarView({
           }}
           selectedEvents={selectedEvents}
           upcoming={upcoming}
-          onSelectDate={setSelectedDate}
+          onSelectDate={selectDate}
           onSetSelectedApplicationId={setSelectedApplicationId}
           onOpenApplication={onOpenApplication}
         />
