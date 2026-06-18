@@ -3,7 +3,9 @@
 .preview-overlay {
   position: fixed;
   inset: 0;
-  z-index: 30;
+  /* Above the application modal (z-index 50) so the saved-resume preview can be
+     opened from inside the modal's Documents tab. */
+  z-index: 60;
   display: grid;
   place-items: center;
   animation: preview-fade-in 0.18s var(--ease) both;

@@ -1,12 +1,25 @@
 # RoleFit AI
 
-A **local-first** resume tailoring webapp. Import a job posting (paste it, or pull it straight from the link), tailor your base resume from your workspace, score the draft against the job description, and export to LaTeX / DOCX / PDF — without storing your personal data in a hosted app.
+A **local-first** resume tailoring webapp. Import a job posting (paste it, or pull it straight from the link), tailor your base resume from your workspace, score the draft against the job description, and export to LaTeX / PDF — without storing your personal data in a hosted app.
 
 > Built for an entry-level SDE job hunt: tight workflow loop, blunt recruiter-style audit before applying, and a local pipeline tracker so you never lose track of a role.
 
-![RoleFit AI resume workspace with demo data](docs/screenshot.png)
+![RoleFit AI resume workspace](docs/screenshot.png)
 
-_Screenshot uses demo workspace data._
+The on-disk **application tracker** — a sortable, paginated table with right-click quick actions, plus a calendar of submissions and follow-ups:
+
+<table>
+<tr>
+<td width="50%"><img src="docs/applications-table.png" alt="Applications table with inspector"></td>
+<td width="50%"><img src="docs/applications-menu.png" alt="Right-click row actions, including change stage"></td>
+</tr>
+<tr>
+<td width="50%"><img src="docs/applications-calendar.png" alt="Calendar view with submissions and upcoming follow-ups"></td>
+<td width="50%"><img src="docs/application-modal.png" alt="Application detail modal"></td>
+</tr>
+</table>
+
+_Screenshots use demo workspace data._
 
 > **Recommended path:** keep your base resume as a **`.tex`** file (Jake's-style) and export with **PDF · LaTeX** for faithful, ATS-clean formatting. DOCX, LaTeX, and plain-text sources also work, but their **PDF · clean** export is a best-effort render and may need more manual editing/formatting.
 
@@ -18,9 +31,9 @@ _Screenshot uses demo workspace data._
 - **Fit scoring + 4-category keyword gap analysis** — required experience, knowledge, required skills, technical tools.
 - **Strict recruiter review mode** — verdict (STRONG FIT / REASONABLE FIT / STRETCH / DON'T APPLY), base-vs-tailored fit scores, gap severity, targeted bullet rewrites, interview risk flags, an apply-as-is / edit-first recommendation, and a cover-letter angle.
 - **LaTeX export pipeline (recommended)** built on a Jake's-style resume template + optional local PDF compile through **Tectonic** — the recommended path for faithful, ATS-clean output.
-- **DOCX format preservation** through direct OpenXML paragraph edits.
+- **DOCX import** — ingest a `.docx` base resume; its content is parsed into the structured editor (export is via the LaTeX/PDF paths above, not DOCX).
 - **Clean PDF export (no LaTeX needed)** — the tailored resume renders as HTML and prints through your browser's **Save as PDF**, keeping the text selectable for ATS parsing. A universal fallback for any source; for pixel-faithful formatting, prefer the LaTeX export.
-- **On-disk pipeline tracker** with status / source / company / role / follow-up date / notes / resume snapshot per application — survives browser wipes.
+- **On-disk pipeline tracker** — a sortable, paginated applications table (right-click any row for quick actions: open details, change stage, in-app PDF preview of the saved resume, or delete) alongside a calendar view of submissions and upcoming follow-ups. Tracks status / source / company / role / follow-up date / notes / resume snapshot per application, and survives browser wipes.
 - **Local-first storage** — workspace files live in `job-search-workspace/`; API keys stay server-side in `.env`. Cloud AI providers receive resume/job text only when you choose them for a polish request.
 
 ## Stack
@@ -87,7 +100,7 @@ The app creates `job-search-workspace/` for your private local data:
 - `applications.json` — the pipeline tracker's on-disk store
 - Anything else you drop in there
 
-This folder is gitignored except its README. Personal resumes, TEX/PDF/DOCX exports, and root-level resume artifacts are also gitignored as a privacy guard.
+This folder is gitignored except its README. Personal resumes, TEX/PDF/DOCX files, and root-level resume artifacts are also gitignored as a privacy guard.
 
 ## Project layout
 
@@ -98,7 +111,7 @@ server/
                                  #   prompts, sanitize, json, errors + applicationAnswers
   ai-cli/index.mjs               # Claude Code / Codex / Gemini CLI (Antigravity) shell-out
   applications/index.mjs         # pipeline tracker storage
-  docx.mjs                       # DOCX import/export helpers
+  docx.mjs                       # DOCX import helpers (extract → editor)
   http.mjs                       # JSON/body/fetch utilities
   latex/                         # parser + Jake's template renderer + optional Tectonic compile
   network.mjs                    # job-link fetch + SSRF guards
@@ -109,7 +122,7 @@ src/
   lib/                           # downloads, job extraction/distilling, resume format/block + LaTeX→HTML render helpers
   sections/                      # Masthead + nav menus (Resume/Job/AI/Options/Polish) / StudioPane / ExportRail / ReviewRail / ResumeDocument / ResumePrintLayer
   sections/editor/               # structured resume editor (sections, entries, bullets, skills rows)
-  sections/tabs/                 # Resume / Materials / Tracker / Analytics
+  sections/tabs/                 # Resume / Materials / Applications / Analytics
   resume/                        # resume engine split: types, text, keywords, scoring, rewrite, diff
   resumeEngine.ts                # barrel re-exporting src/resume/* (scoring/analysis/deterministic fallback)
   styles/                        # per-surface CSS + shared tokens

@@ -7,6 +7,7 @@ import {
   Copy,
   Download,
   ExternalLink,
+  Eye,
   FileText,
   MessageSquareText,
   Plus,
@@ -40,6 +41,8 @@ type ApplicationModalProps = {
   onDelete?: (id: string, title: string) => void;
   // Load this application's job target + resume snapshot into the Polish editor.
   onLoad?: (application: Application) => void;
+  // Open the saved resume PDF in the in-app react-pdf viewer.
+  onPreviewResume?: (application: Application) => void;
 };
 
 type ModalTab = "overview" | "interview" | "documents" | "questions";
@@ -145,7 +148,7 @@ function formFromApplication(application: Application | null): FormState {
   };
 }
 
-export function ApplicationModal({ open, application, onClose, onSave, onDelete, onLoad }: ApplicationModalProps) {
+export function ApplicationModal({ open, application, onClose, onSave, onDelete, onLoad, onPreviewResume }: ApplicationModalProps) {
   const isEdit = Boolean(application);
   const [tab, setTab] = useState<ModalTab>("overview");
   const [form, setForm] = useState<FormState>(() => formFromApplication(application));
@@ -597,6 +600,11 @@ export function ApplicationModal({ open, application, onClose, onSave, onDelete,
                       {artifacts.templateId ? ` · ${artifacts.templateId} template` : ""}.
                     </p>
                     <div className="application-doc-card__actions">
+                      {artifacts.hasPdf && onPreviewResume ? (
+                        <button type="button" className="secondary-button is-compact" onClick={() => onPreviewResume(application as Application)}>
+                          <Eye size={14} aria-hidden="true" /> Preview
+                        </button>
+                      ) : null}
                       {artifacts.hasPdf ? (
                         <a className="primary-button is-compact" href={`/api/applications/${encodeURIComponent((application as Application).id)}/resume.pdf`} download={`${downloadBase}_Resume.pdf`}>
                           <Download size={14} aria-hidden="true" /> PDF

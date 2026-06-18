@@ -1,38 +1,72 @@
-import { CalendarDays, Clock3, ExternalLink } from "lucide-react";
+import { ChevronLeft, ChevronRight, Clock3, ExternalLink } from "lucide-react";
 import type { Application } from "../../hooks/useApplications";
 import {
   displayCompany,
   displayRole,
-  formatCompactDate,
-  nextAction
+  formatCompactDate
 } from "../../lib/applicationDisplay";
 import type { CalendarEvent } from "./TrackerCalendarView";
 
 type TrackerCalendarRailProps = {
   selectedDate: string;
   todayKey: string;
+  monthLabelText: string;
+  onPrevMonth: () => void;
+  onNextMonth: () => void;
+  onToday: () => void;
   selectedEvents: CalendarEvent[];
   upcoming: CalendarEvent[];
-  selectedApp: Application | null;
   onSelectDate: (key: string) => void;
   onSetSelectedApplicationId: (id: string | null) => void;
   onOpenApplication: (app: Application) => void;
-  onLoad: (app: Application) => void;
 };
 
 export function TrackerCalendarRail({
   selectedDate,
   todayKey,
+  monthLabelText,
+  onPrevMonth,
+  onNextMonth,
+  onToday,
   selectedEvents,
   upcoming,
-  selectedApp,
   onSelectDate,
   onSetSelectedApplicationId,
-  onOpenApplication,
-  onLoad
+  onOpenApplication
 }: TrackerCalendarRailProps) {
   return (
     <aside className="calendar-side" aria-label="Selected day details">
+      {/* Inner scroller: the aside is sized by the calendar grid (the layout's
+          row height), and this absolutely-positioned child scrolls within it so
+          the rail never stretches the calendar taller. */}
+      <div className="calendar-side__scroll">
+      {/* Month navigation, sticky to the top of the rail (moved out of a
+          full-width bar above the grid to reclaim that vertical band). */}
+      <div className="calendar-rail-nav" aria-label="Month navigation">
+        <div className="calendar-nav" aria-label="Change month">
+          <button
+            type="button"
+            className="ghost-button is-icon"
+            aria-label="Previous month"
+            onClick={onPrevMonth}
+          >
+            <ChevronLeft size={15} aria-hidden="true" />
+          </button>
+          <strong>{monthLabelText}</strong>
+          <button
+            type="button"
+            className="ghost-button is-icon"
+            aria-label="Next month"
+            onClick={onNextMonth}
+          >
+            <ChevronRight size={15} aria-hidden="true" />
+          </button>
+        </div>
+        <button type="button" className="ghost-button is-compact" onClick={onToday}>
+          Today
+        </button>
+      </div>
+
       <section className="calendar-side__today">
         <p className="calendar-side__eyebrow">
           {selectedDate === todayKey ? "Today" : formatCompactDate(selectedDate)}
@@ -45,16 +79,17 @@ export function TrackerCalendarRail({
               title="Double-click to open full details"
               onDoubleClick={() => onOpenApplication(event.app)}
             >
+              <button
+                type="button"
+                className="calendar-agenda-card__open ghost-button is-icon"
+                aria-label={`Open ${displayCompany(event.app)} application`}
+                onClick={() => onOpenApplication(event.app)}
+              >
+                <ExternalLink size={14} aria-hidden="true" />
+              </button>
               <span>{event.label}</span>
               <strong>{displayCompany(event.app)}</strong>
               <em>{displayRole(event.app)}</em>
-              <button
-                type="button"
-                className="secondary-button is-compact"
-                onClick={() => onOpenApplication(event.app)}
-              >
-                Open application
-              </button>
             </article>
           ))
         ) : (
@@ -90,39 +125,7 @@ export function TrackerCalendarRail({
           <p className="calendar-empty-note">No dated follow-ups yet.</p>
         )}
       </section>
-
-      {selectedApp ? (
-        <>
-          <div className="calendar-side__rule" aria-hidden="true" />
-          <section className="calendar-side__panel">
-            <p className="calendar-side__eyebrow">
-              <CalendarDays size={12} aria-hidden="true" /> Linked application
-            </p>
-            <div className="calendar-linked-app">
-              <strong>{displayCompany(selectedApp)}</strong>
-              <span>{displayRole(selectedApp)}</span>
-              <em>{nextAction(selectedApp)}</em>
-              <div className="calendar-linked-app__actions">
-                <button
-                  type="button"
-                  className="secondary-button is-compact"
-                  onClick={() => onOpenApplication(selectedApp)}
-                >
-                  Open details
-                </button>
-                <button
-                  type="button"
-                  className="secondary-button is-compact"
-                  onClick={() => onLoad(selectedApp)}
-                >
-                  <ExternalLink size={12} aria-hidden="true" />
-                  Polish
-                </button>
-              </div>
-            </div>
-          </section>
-        </>
-      ) : null}
+      </div>
     </aside>
   );
 }

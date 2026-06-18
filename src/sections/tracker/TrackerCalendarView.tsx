@@ -1,5 +1,4 @@
 import { useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
 import type { Application, ApplicationStatus } from "../../hooks/useApplications";
 import {
   dateKey,
@@ -78,20 +77,16 @@ type TrackerCalendarViewProps = {
   applications: Application[];
   query: string;
   stageFilter: "all" | ApplicationStatus;
-  selectedApplicationId: string | null;
   setSelectedApplicationId: (id: string | null) => void;
   onOpenApplication: (app: Application) => void;
-  onLoad: (app: Application) => void;
 };
 
 export function TrackerCalendarView({
   applications,
   query,
   stageFilter,
-  selectedApplicationId,
   setSelectedApplicationId,
-  onOpenApplication,
-  onLoad
+  onOpenApplication
 }: TrackerCalendarViewProps) {
   const today = new Date();
   const todayKey = dateKey(today);
@@ -122,51 +117,18 @@ export function TrackerCalendarView({
 
   const days = buildCalendarDays(month);
   const selectedEvents = eventsByDate.get(selectedDate) ?? [];
-  const selectedApp =
-    applications.find((app) => app.id === selectedApplicationId) ??
-    selectedEvents[0]?.app ??
-    null;
+  // Upcoming = forward-looking to-dos (follow-ups / interview prep / offer
+  // reviews), soonest first. Exclude "applied" events: those are historical
+  // "submitted on" markers, and a batch applied today would otherwise fill the
+  // whole list with dated-today submissions instead of actual next actions.
   const upcoming = events
+    .filter((event) => event.type !== "applied")
     .filter((event) => event.date.getTime() >= new Date(today.toDateString()).getTime())
     .sort((a, b) => a.date.getTime() - b.date.getTime())
     .slice(0, 5);
 
   return (
-    <>
-      {/* Month navigation sits directly above the grid — only relevant in calendar view */}
-      <div className="tracker-calendar-nav" aria-label="Month navigation">
-        <button
-          type="button"
-          className="secondary-button is-compact"
-          onClick={() => {
-            setMonth(startOfMonth(today));
-            setSelectedDate(todayKey);
-          }}
-        >
-          Today
-        </button>
-        <div className="calendar-nav" aria-label="Change month">
-          <button
-            type="button"
-            className="ghost-button is-icon"
-            aria-label="Previous month"
-            onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1))}
-          >
-            <ChevronLeft size={15} aria-hidden="true" />
-          </button>
-          <strong>{monthLabel(month)}</strong>
-          <button
-            type="button"
-            className="ghost-button is-icon"
-            aria-label="Next month"
-            onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1))}
-          >
-            <ChevronRight size={15} aria-hidden="true" />
-          </button>
-        </div>
-      </div>
-
-      <div className="tracker-layout tracker-layout--calendar">
+    <div className="tracker-layout tracker-layout--calendar">
         <div className="calendar-grid">
           {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
             <span className="calendar-grid__weekday table-eyebrow" key={day}>
@@ -204,15 +166,19 @@ export function TrackerCalendarView({
         <TrackerCalendarRail
           selectedDate={selectedDate}
           todayKey={todayKey}
+          monthLabelText={monthLabel(month)}
+          onPrevMonth={() => setMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1))}
+          onNextMonth={() => setMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1))}
+          onToday={() => {
+            setMonth(startOfMonth(today));
+            setSelectedDate(todayKey);
+          }}
           selectedEvents={selectedEvents}
           upcoming={upcoming}
-          selectedApp={selectedApp}
           onSelectDate={setSelectedDate}
           onSetSelectedApplicationId={setSelectedApplicationId}
           onOpenApplication={onOpenApplication}
-          onLoad={onLoad}
         />
-      </div>
-    </>
+    </div>
   );
 }

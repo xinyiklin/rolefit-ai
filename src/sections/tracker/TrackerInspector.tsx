@@ -1,4 +1,4 @@
-import { BriefcaseBusiness, CalendarClock, ClipboardCheck, ExternalLink } from "lucide-react";
+import { BriefcaseBusiness, CalendarClock, ClipboardCheck, ExternalLink, Eye } from "lucide-react";
 import type { Application, ApplicationSource, ApplicationStatus } from "../../hooks/useApplications";
 import { APPLICATION_SOURCES } from "../../hooks/useApplications";
 import {
@@ -17,6 +17,7 @@ type TrackerInspectorProps = {
   onUpdateField: (id: string, field: "title" | "company" | "role" | "source" | "notes" | "followupAt" | "jobUrl", value: string) => void;
   onUpdateNotes: (id: string, notes: string) => void;
   onOpenApplication: (app: Application) => void;
+  onPreviewResume: (app: Application) => void;
   onLoad: (app: Application) => void;
   onDelete: (id: string, title: string) => void;
 };
@@ -27,6 +28,7 @@ export function TrackerInspector({
   onUpdateField,
   onUpdateNotes,
   onOpenApplication,
+  onPreviewResume,
   onLoad,
   onDelete
 }: TrackerInspectorProps) {
@@ -46,23 +48,27 @@ export function TrackerInspector({
     : verdict
     ? "Estimated"
     : "Not scored";
+  const safeJobUrl = /^https?:\/\//i.test(selected.jobUrl.trim()) ? selected.jobUrl.trim() : "";
 
   return (
     <>
+      {/* Quick-open pinned to the panel's top-right corner so the header reads as
+          a clean mark + title pair. */}
+      <button
+        type="button"
+        className="pipeline-inspector__open ghost-button is-icon"
+        aria-label="Open full application details"
+        onClick={() => onOpenApplication(selected)}
+      >
+        <ExternalLink size={14} aria-hidden="true" />
+      </button>
+
       <header className="pipeline-inspector__head">
         <span className="application-company-mark" data-len={companyInitials(displayCompany(selected)).length}>{companyInitials(displayCompany(selected))}</span>
         <div>
           <h3>{displayCompany(selected)}</h3>
           <p>{displayRole(selected)}</p>
         </div>
-        <button
-          type="button"
-          className="ghost-button is-icon"
-          aria-label="Open full application details"
-          onClick={() => onOpenApplication(selected)}
-        >
-          <ExternalLink size={14} aria-hidden="true" />
-        </button>
       </header>
 
       <div className="application-detail-score application-detail-score--inline">
@@ -117,28 +123,19 @@ export function TrackerInspector({
                 <dt>Resume</dt>
                 <span className="ledger-row__leader" aria-hidden="true" />
                 <dd className="inspector-sent__value">
-                  {selected.resumeUsed === "tailored" ? "Tailored" : selected.resumeUsed === "base" ? "Base" : null}
+                  <span>
+                    {selected.resumeUsed === "tailored" ? "Tailored" : selected.resumeUsed === "base" ? "Base" : "Saved"}
+                  </span>
                   {selected.resumeArtifacts?.hasPdf ? (
-                    <a
-                      className="inspector-sent__link"
-                      href={`/api/applications/${encodeURIComponent(selected.id)}/resume.pdf`}
-                      download
-                      target="_blank"
-                      rel="noreferrer"
+                    <button
+                      type="button"
+                      className="inspector-sent__preview"
+                      onClick={() => onPreviewResume(selected)}
+                      aria-label="Preview resume PDF"
+                      title="Preview resume PDF"
                     >
-                      pdf
-                    </a>
-                  ) : null}
-                  {selected.resumeArtifacts?.hasTex ? (
-                    <a
-                      className="inspector-sent__link"
-                      href={`/api/applications/${encodeURIComponent(selected.id)}/resume.tex`}
-                      download
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      .tex
-                    </a>
+                      <Eye size={14} aria-hidden="true" />
+                    </button>
                   ) : null}
                 </dd>
               </div>
@@ -204,7 +201,7 @@ export function TrackerInspector({
           className="textarea"
           value={selected.notes ?? ""}
           onChange={(event) => onUpdateNotes(selected.id, event.target.value)}
-          rows={4}
+          rows={3}
           placeholder="Interview focus, recruiter notes, or follow-up context."
         />
       </label>
@@ -229,13 +226,13 @@ export function TrackerInspector({
 
       <div className="application-side-actions">
         <button type="button" className="primary-button is-compact" onClick={() => onOpenApplication(selected)}>
-          Open details
+          Details
         </button>
         <button type="button" className="secondary-button is-compact" onClick={() => onLoad(selected)}>
-          Open in Polish
+          Polish
         </button>
-        {selected.jobUrl ? (
-          <a className="secondary-button is-compact" href={selected.jobUrl} target="_blank" rel="noreferrer">
+        {safeJobUrl ? (
+          <a className="secondary-button is-compact" href={safeJobUrl} target="_blank" rel="noreferrer">
             Job link
           </a>
         ) : null}

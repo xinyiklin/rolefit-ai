@@ -47,7 +47,10 @@ export default function PreviewOverlay({
   useEffect(() => {
     if (!isOpen) return;
     function onKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") { onClose(); return; }
+      // Stop here so an Escape that dismisses this (topmost) preview doesn't also
+      // reach a modal's window-level Escape handler underneath it. The preview's
+      // listener is on `document`, which bubbles before `window`.
+      if (e.key === "Escape") { e.stopPropagation(); onClose(); return; }
       if (!(e.metaKey || e.ctrlKey) || e.altKey || e.shiftKey) return;
       if (e.key === "=" || e.key === "+") {
         e.preventDefault();
