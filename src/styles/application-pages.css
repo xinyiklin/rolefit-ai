@@ -327,115 +327,6 @@
   line-height: 1.35;
 }
 
-/* -------- Up-next docket -------- */
-/* A quiet ledger band above the toolbar: hairline rules top/bottom, no card box.
-   Each row is a full-width button: mono date tag | dot | company+role | dotted leader | label. */
-
-.tracker-docket {
-  display: grid;
-  gap: 0;
-  padding: var(--s2) 0;
-  border-top: 1px solid var(--hairline-soft);
-  border-bottom: 1px solid var(--hairline-soft);
-}
-
-.tracker-docket__eyebrow {
-  display: block;
-  margin-bottom: var(--s1);
-  color: var(--ink-faint);
-  font-size: 0.62rem;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.tracker-docket__empty {
-  display: block;
-  padding: var(--s1) 0;
-  color: var(--ink-faint);
-  font-size: 0.74rem;
-}
-
-.tracker-docket__row {
-  display: grid;
-  /* Identity sizes to content; the dotted leader owns the spare width. */
-  grid-template-columns: 52px 10px auto minmax(var(--s4), 1fr) auto;
-  align-items: center;
-  gap: var(--s2);
-  min-height: 30px;
-  padding: 3px 0;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  color: var(--ink);
-  text-align: left;
-  cursor: pointer;
-  transition: background 120ms var(--ease);
-}
-
-.tracker-docket__row:hover {
-  background: var(--card-soft);
-  border-radius: var(--r-sm);
-}
-
-.tracker-docket__row:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-  border-radius: var(--r-sm);
-}
-
-.tracker-docket__date {
-  font-family: var(--font-mono);
-  font-size: 0.72rem;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  font-feature-settings: "tnum";
-  color: var(--ink-muted);
-  white-space: nowrap;
-}
-
-.tracker-docket__dot {
-  display: inline-block;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  flex: none;
-  background: var(--ink-faint);
-}
-
-.tracker-docket__dot--overdue,
-.tracker-docket__dot--quiet { background: var(--warm); }
-.tracker-docket__dot--due { background: var(--accent); }
-
-.tracker-docket__identity {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 0.76rem;
-}
-
-.tracker-docket__identity strong {
-  font-weight: 600;
-  color: var(--ink-strong);
-}
-
-.tracker-docket__role {
-  color: var(--ink-soft);
-}
-
-/* Dotted leader filling the middle space */
-.tracker-docket__leader {
-  height: 0;
-  border-bottom: 1px dotted var(--hairline-strong);
-}
-
-.tracker-docket__label {
-  color: var(--ink-muted);
-  font-size: 0.72rem;
-  white-space: nowrap;
-}
-
 /* -------- Table month-group divider -------- */
 
 .applications-table__month-divider {
@@ -480,21 +371,24 @@
   flex-wrap: wrap;
 }
 
-.inspector-sent__link {
-  font-family: var(--font-mono);
-  font-size: 0.7rem;
-  font-weight: 600;
-  color: var(--accent-deep);
-  text-decoration: none;
-  border-bottom: 1px dotted var(--accent-deep);
+/* Inline preview affordance next to the Tailored/Base label — opens the saved
+   PDF in the in-app react-pdf viewer. Quiet by default, accent on hover. */
+.inspector-sent__preview {
+  display: inline-flex;
+  align-items: center;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink-faint);
+  cursor: pointer;
+  transition: color 120ms var(--ease);
 }
 
-.inspector-sent__link:hover {
+.inspector-sent__preview:hover {
   color: var(--accent);
-  border-bottom-color: var(--accent);
 }
 
-.inspector-sent__link:focus-visible {
+.inspector-sent__preview:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
   border-radius: 2px;
@@ -511,9 +405,12 @@
   align-items: start;
 }
 
-/* Calendar view: grid + right rail (no inspector needed; CalendarRail is the rail) */
+/* Calendar view: grid + right rail (no inspector needed; CalendarRail is the rail).
+   Stretch the row so the rail matches the (taller) calendar grid; the rail then
+   caps at that height and scrolls its own content. */
 .tracker-layout--calendar {
   grid-template-columns: minmax(0, 1fr) minmax(260px, 330px);
+  align-items: stretch;
 }
 
 /* -------- View switcher -------- */
@@ -564,14 +461,6 @@
 .view-toggle__btn:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: -2px;
-}
-
-/* Calendar nav row above the grid (only visible in calendar view) */
-.tracker-calendar-nav {
-  display: flex;
-  align-items: center;
-  gap: var(--s2);
-  flex-wrap: wrap;
 }
 
 /* -------- Applications table -------- */
@@ -636,6 +525,275 @@ button.applications-table__row {
   background: var(--accent-soft);
 }
 
+/* Left column: table stacked above its pagination bar. */
+.applications-table-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+  min-width: 0;
+}
+
+/* Sortable column header: a quiet button that inherits the eyebrow look, with a
+   direction chevron on the active column. */
+button.table-sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  transition: color 120ms var(--ease);
+}
+
+button.table-sort:hover {
+  color: var(--ink-muted);
+}
+
+button.table-sort.is-active {
+  color: var(--ink-strong);
+}
+
+button.table-sort:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--r-sm);
+}
+
+button.table-sort svg {
+  flex: none;
+  color: var(--accent);
+}
+
+/* -------- Row context menu -------- */
+/* Right-click menu for table rows. Fixed-positioned at the cursor (clamped in JS),
+   floats above the table and inspector. */
+
+.row-menu {
+  position: fixed;
+  z-index: 45;
+  display: grid;
+  gap: 1px;
+  min-width: 184px;
+  padding: var(--s1);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-md);
+  background: var(--card-elev);
+  box-shadow: var(--shadow-lift);
+  animation: row-menu-in 0.12s var(--ease) both;
+}
+
+@keyframes row-menu-in {
+  from { opacity: 0; transform: translateY(-3px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .row-menu { animation: none; }
+}
+
+.row-menu__item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  width: 100%;
+  padding: 6px var(--s2);
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 0.78rem;
+  text-align: left;
+  cursor: pointer;
+  transition: background 100ms var(--ease), color 100ms var(--ease);
+}
+
+.row-menu__item svg {
+  flex: none;
+  color: var(--ink-faint);
+}
+
+/* Label fills the row so a trailing check (current stage) sits flush right. */
+.row-menu__label {
+  flex: 1 1 auto;
+}
+
+/* Leading dot (e.g. a stage dot) aligns on the same flex gap as icon items. */
+.row-menu__item .stage-dot {
+  margin-right: 0;
+}
+
+.row-menu__item .row-menu__check {
+  flex: none;
+  color: var(--accent);
+}
+
+.row-menu__item.is-active {
+  color: var(--ink-strong);
+  font-weight: 600;
+}
+
+/* Section header inside the menu (e.g. "Move to stage"). */
+.row-menu__header {
+  margin: 0;
+  padding: var(--s1) var(--s2) 2px;
+  color: var(--ink-faint);
+  font-size: 0.6rem;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.row-menu__item:hover,
+.row-menu__item:focus-visible {
+  background: var(--card-hover);
+  color: var(--ink-strong);
+  outline: none;
+}
+
+.row-menu__item:hover svg,
+.row-menu__item:focus-visible svg {
+  color: var(--ink-muted);
+}
+
+.row-menu__item--danger,
+.row-menu__item--danger svg {
+  color: var(--danger);
+}
+
+.row-menu__item--danger:hover,
+.row-menu__item--danger:focus-visible {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.row-menu__item--danger:hover svg,
+.row-menu__item--danger:focus-visible svg {
+  color: var(--danger);
+}
+
+.row-menu__sep {
+  height: 1px;
+  margin: var(--s1) calc(var(--s1) * -1);
+  background: var(--hairline-soft);
+}
+
+/* -------- Pagination -------- */
+/* A quiet bar under the table: count on the left, rows-per-page + a bordered
+   segmented pager on the right. */
+
+.applications-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+  flex-wrap: wrap;
+  padding: var(--s2) var(--s1) 0;
+}
+
+.applications-pagination__count {
+  color: var(--ink-faint);
+  font-size: 0.72rem;
+}
+
+.applications-pagination__count strong {
+  color: var(--ink-strong);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+
+.applications-pagination__controls {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s3);
+  flex-wrap: wrap;
+}
+
+.applications-pagination__size {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  color: var(--ink-faint);
+  font-size: 0.64rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.applications-pagination__size select {
+  height: 28px;
+  padding: 0 var(--s2);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-md);
+  background: var(--card-elev);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 0.78rem;
+  text-transform: none;
+  letter-spacing: 0;
+  cursor: pointer;
+}
+
+.applications-pagination__size select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* Bordered segmented pager: chevron steps flanking the page indicator. */
+.applications-pagination__pager {
+  display: inline-flex;
+  align-items: stretch;
+  height: 28px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-md);
+  background: var(--card-elev);
+  overflow: hidden;
+}
+
+.applications-pagination__step {
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  border: 0;
+  background: transparent;
+  color: var(--ink-muted);
+  cursor: pointer;
+  transition: background 120ms var(--ease), color 120ms var(--ease);
+}
+
+.applications-pagination__step:hover:not(:disabled) {
+  background: var(--card-hover);
+  color: var(--ink-strong);
+}
+
+.applications-pagination__step:disabled {
+  color: var(--ink-faint);
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.applications-pagination__step:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.applications-pagination__page {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 4.5ch;
+  padding: 0 var(--s2);
+  border-inline: 1px solid var(--hairline);
+  color: var(--ink-muted);
+  font-size: 0.74rem;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+  white-space: nowrap;
+}
+
 .applications-table__row > span {
   min-width: 0;
   overflow: hidden;
@@ -675,6 +833,32 @@ button.applications-table__row {
   z-index: 2;
 }
 
+/* Compact table-view inspector: tighter inter-block rhythm than the default s3,
+   but kept at s2 so blocks still breathe (no zero-gap stacking). */
+.pipeline-inspector {
+  gap: var(--s2);
+}
+
+/* The shared .field carries a menu-context margin-top that doubles the grid gap
+   here — drop it so the editable controls sit on the panel's own rhythm. */
+.pipeline-inspector .field {
+  margin-top: 0;
+}
+
+/* Dividers already get s2 of breathing room from the grid gap on each side. */
+.pipeline-inspector .inspector-divider {
+  margin: 0;
+}
+
+/* Open-details quick action, pinned to the panel corner (the sticky panel is its
+   containing block). */
+.pipeline-inspector__open {
+  position: absolute;
+  top: var(--s2);
+  right: var(--s2);
+  z-index: 1;
+}
+
 .application-side-panel__head,
 .pipeline-inspector__head {
   display: grid;
@@ -683,7 +867,12 @@ button.applications-table__row {
   gap: var(--s2);
 }
 
-.pipeline-inspector__head { grid-template-columns: auto 1fr; }
+/* Mark + title only; reserve the corner for the pinned open button so a long
+   company name never slides under it. */
+.pipeline-inspector__head {
+  grid-template-columns: auto 1fr;
+  padding-right: var(--s5);
+}
 
 .application-side-panel__head h3,
 .pipeline-inspector__head h3 {
@@ -788,123 +977,6 @@ button.applications-table__row {
 
 .application-side-empty strong { color: var(--ink-strong); }
 
-/* -------- Pipeline board -------- */
-/* Hero-metric card grids (.pipeline-metrics, .analytics-metrics) replaced by .figures-strip */
-
-.pipeline-board {
-  display: grid;
-  grid-template-columns: repeat(6, minmax(168px, 1fr));
-  gap: var(--s2);
-  min-width: 0;
-  overflow-x: auto;
-  padding-bottom: var(--s1);
-}
-
-.pipeline-column {
-  display: grid;
-  grid-template-rows: auto 1fr;
-  min-height: 430px;
-  /* Column is a quiet well: card-soft so it still reads against the
-     paper-deep desk canvas while staying lighter than the cardlets. */
-  border: 1px solid var(--hairline-soft);
-  border-radius: var(--r-lg);
-  background: var(--card-soft);
-  overflow: hidden;
-}
-
-.pipeline-column header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  min-height: 36px;
-  padding: 0 var(--s3);
-  border-bottom: 1px solid var(--hairline-soft);
-}
-
-/* Column header uses the shared eyebrow token (uppercase, faint, tracked) */
-.pipeline-column header .table-eyebrow {
-  color: var(--ink-faint);
-}
-
-.pipeline-column header em {
-  color: var(--ink-faint);
-  font-family: var(--font-mono);
-  font-style: normal;
-  font-size: 0.67rem;
-}
-
-.pipeline-column__cards {
-  display: grid;
-  align-content: start;
-  gap: var(--s2);
-  padding: var(--s2);
-}
-
-.pipeline-cardlet {
-  position: relative;
-  display: grid;
-  gap: 5px;
-  width: 100%;
-  min-height: 124px;
-  padding: var(--s3);
-  /* Cardlet reads as a crisp white index card above the well */
-  border: 1px solid var(--hairline);
-  border-radius: var(--r-md);
-  background: var(--card-elev);
-  color: var(--ink);
-  text-align: left;
-  box-shadow: var(--shadow-rest);
-  transition: border-color 150ms var(--ease), box-shadow 150ms var(--ease);
-}
-
-.pipeline-cardlet:hover,
-.pipeline-cardlet.is-selected {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-veil);
-}
-
-.pipeline-cardlet:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-
-.pipeline-cardlet__drag {
-  position: absolute;
-  top: var(--s2);
-  right: var(--s2);
-  color: var(--ink-faint);
-}
-
-.pipeline-cardlet__role {
-  color: var(--ink-muted);
-  font-size: 0.72rem;
-}
-
-.pipeline-cardlet__meta,
-.pipeline-cardlet__foot {
-  display: flex;
-  justify-content: space-between;
-  gap: var(--s2);
-  color: var(--ink-faint);
-  font-size: 0.66rem;
-}
-
-.pipeline-cardlet__foot {
-  margin-top: var(--s1);
-  align-items: center;
-}
-
-.pipeline-column__empty {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: var(--s4) var(--s2);
-  border-top: 1px solid var(--hairline-soft);
-  color: var(--ink-faint);
-  font-size: 0.68rem;
-  opacity: 0.7;
-}
-
 /* -------- Calendar -------- */
 
 
@@ -919,9 +991,14 @@ button.applications-table__row {
 }
 
 .calendar-nav strong {
-  padding: 0 var(--s3);
+  padding: 0 var(--s2);
+  min-width: 9.5ch;
   color: var(--ink-strong);
-  font-size: 0.78rem;
+  font-family: var(--font-serif);
+  font-size: 0.94rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  text-align: center;
 }
 
 .calendar-grid {
@@ -929,40 +1006,45 @@ button.applications-table__row {
   grid-template-columns: repeat(7, minmax(104px, 1fr));
   border: 1px solid var(--hairline);
   border-radius: var(--r-lg);
-  background: var(--card-elev);
+  background: var(--hairline-soft);
   box-shadow: var(--shadow-rest);
   overflow: hidden;
+  /* The grid background shows through the 1px cell gaps as crisp gridlines, so
+     the cells themselves carry no borders (no doubled edges, no last-column seam). */
+  gap: 1px;
 }
 
 .calendar-grid__weekday {
   display: grid;
   place-items: center;
-  min-height: 34px;
-  border-bottom: 1px solid var(--hairline);
-  border-right: 1px solid var(--hairline-soft);
+  min-height: 30px;
   background: var(--card-soft);
+  color: var(--ink-faint);
+  font-size: 0.6rem;
+  letter-spacing: 0.1em;
   /* Eyebrow styling is applied via .table-eyebrow class in TSX */
 }
 
 .calendar-cell {
   display: grid;
   align-content: start;
-  gap: var(--s2);
-  min-height: 112px;
-  padding: var(--s2);
-  border-right: 1px solid var(--hairline-soft);
-  border-bottom: 1px solid var(--hairline-soft);
+  gap: var(--s1);
+  min-height: 110px;
+  padding: 6px;
   background: var(--card-elev);
   text-align: left;
+  transition: background 120ms var(--ease);
 }
 
 .calendar-cell:hover {
   background: var(--card-hover);
 }
 
-/* Selected: very subtle tint, not accent-strength — the today disc is the only accent element */
+/* Selected: subtle tint plus a quiet inset hairline ring so the active day reads
+   without competing with the today disc for accent strength. */
 .calendar-cell.is-selected {
   background: var(--accent-soft);
+  box-shadow: inset 0 0 0 1px var(--accent-veil);
 }
 
 /* Outside month: dimmer date number, slightly receded background */
@@ -972,15 +1054,28 @@ button.applications-table__row {
 
 .calendar-cell.is-outside > span {
   color: var(--ink-faint);
-  opacity: 0.55;
+  opacity: 0.5;
+}
+
+/* Date number: fixed 22px run so plain numbers and the today disc share a baseline */
+.calendar-cell > span {
+  justify-self: start;
+  min-width: 22px;
+  height: 22px;
+  display: inline-grid;
+  place-items: center;
+  padding: 0 5px;
+  color: var(--ink-muted);
+  font-size: 0.72rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
 }
 
 /* Today disc: only accent-strength element in the cell */
 .calendar-cell.is-today > span {
-  display: inline-grid;
-  place-items: center;
   width: 22px;
-  height: 22px;
+  padding: 0;
   border-radius: var(--r-pill);
   background: var(--accent);
   color: var(--on-accent);
@@ -989,24 +1084,27 @@ button.applications-table__row {
 /* Today + selected: keep disc, use only card-hover tint not double accent */
 .calendar-cell.is-today.is-selected {
   background: var(--card-hover);
+  box-shadow: none;
 }
 
 .calendar-cell div {
   display: grid;
-  gap: 4px;
+  gap: 3px;
 }
 
 .calendar-event {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 5px;
   overflow: hidden;
-  padding: 3px 5px;
-  border-radius: var(--r-sm);
+  padding: 2px 7px;
+  border-radius: var(--r-pill);
   background: var(--card-soft);
   border: none;
   color: var(--ink-muted);
-  font-size: 0.63rem;
+  font-size: 0.64rem;
+  font-weight: 550;
+  line-height: 1.55;
   font-style: normal;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1017,6 +1115,13 @@ button.applications-table__row {
 .calendar-event--applied { background: var(--cool-faint); color: var(--cool); }
 .calendar-event--offer { background: var(--accent-soft); color: var(--accent-deep); }
 
+/* "+N more" overflow note under the chips */
+.calendar-cell div small {
+  padding-left: 2px;
+  color: var(--ink-faint);
+  font-size: 0.6rem;
+}
+
 /* Leading dot inside calendar event chips */
 .event-dot {
   display: inline-block;
@@ -1025,11 +1130,76 @@ button.applications-table__row {
   height: 5px;
   border-radius: 50%;
   background: currentColor;
-  opacity: 0.7;
+  opacity: 0.85;
 }
 
+/* The rail is sized by the calendar grid (the stretched layout row). Its real
+   content lives in an absolutely-positioned inner scroller so the rail's height
+   is driven by the calendar — NOT the other way around — and it scrolls when its
+   content is taller than the calendar. */
 .calendar-side {
-  padding: var(--s3);
+  position: relative;
+  padding: 0;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.calendar-side__scroll {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  align-content: start;
+  gap: var(--s3);
+  /* No top padding: the sticky nav sits flush at the scroller top so nothing
+     can scroll into a gap above it. */
+  padding: 0 var(--s3) var(--s3);
+  overflow-y: auto;
+}
+
+/* Month nav pinned to the top of the rail. Negative side margins bleed it over
+   the scroller's horizontal padding so it spans the full rail width and its
+   background fully masks content scrolling beneath it. */
+.calendar-rail-nav {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s2);
+  flex-wrap: wrap;
+  margin: 0 calc(var(--s3) * -1);
+  padding: var(--s2) var(--s3);
+  background: var(--card-elev);
+  border-bottom: 1px solid var(--hairline-soft);
+}
+
+/* Compact, refined month group for the narrow rail: shorter, borderless chrome —
+   the month label leads, the chevrons are quiet flanking steps. */
+.calendar-rail-nav .calendar-nav {
+  min-height: 30px;
+  border-color: var(--hairline-soft);
+}
+
+.calendar-rail-nav .calendar-nav strong {
+  min-width: 8ch;
+  padding: 0 var(--s1);
+  font-size: 0.86rem;
+}
+
+.calendar-rail-nav .calendar-nav .ghost-button.is-icon {
+  width: 26px;
+  height: 28px;
+  color: var(--ink-muted);
+}
+
+/* Today: a quiet text step, not a second filled control competing with the
+   month group. */
+.calendar-rail-nav .ghost-button.is-compact {
+  padding: 0 var(--s2);
+  height: 28px;
+  color: var(--accent-deep);
+  font-weight: 600;
 }
 
 .calendar-side__today,
@@ -1059,12 +1229,27 @@ button.applications-table__row {
 }
 
 .calendar-agenda-card {
+  position: relative;
   display: grid;
-  gap: 4px;
+  gap: 3px;
+  /* Reserve the top-right corner for the pinned open icon. */
   padding: var(--s3);
+  padding-right: var(--s5);
   border: 1px solid var(--hairline);
   border-radius: var(--r-md);
-  background: var(--card-soft);
+  background: var(--card);
+  box-shadow: var(--shadow-rest);
+}
+
+.calendar-agenda-card__open {
+  position: absolute;
+  top: var(--s1);
+  right: var(--s1);
+  color: var(--ink-faint);
+}
+
+.calendar-agenda-card__open:hover {
+  color: var(--accent);
 }
 
 .calendar-agenda-card span,
@@ -1074,15 +1259,31 @@ button.applications-table__row {
   font-weight: 650;
 }
 
-.calendar-agenda-card strong,
-.calendar-linked-app strong {
+/* Type-colored lead dot ties the agenda card to its event color without a stripe */
+.calendar-agenda-card > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.calendar-agenda-card > span::before {
+  content: "";
+  flex: none;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.calendar-agenda-card--followup > span { color: var(--warm); }
+.calendar-agenda-card--applied > span { color: var(--cool); }
+
+.calendar-agenda-card strong {
   color: var(--ink-strong);
   font-size: 0.82rem;
 }
 
 .calendar-agenda-card em,
-.calendar-linked-app span,
-.calendar-linked-app em,
 .calendar-upcoming em {
   color: var(--ink-soft);
   font-size: 0.7rem;
@@ -1092,18 +1293,25 @@ button.applications-table__row {
 .calendar-upcoming {
   display: grid;
   gap: 2px;
-  padding: var(--s2);
+  padding: 6px var(--s2);
+  margin: 0 calc(var(--s2) * -1);
   border-radius: var(--r-sm);
   text-align: left;
+  transition: background 120ms var(--ease);
+}
+
+/* Calmer mono date for the upcoming list — keeps accent weight on the agenda card */
+.calendar-upcoming span {
+  color: var(--ink-muted);
+  font-family: var(--font-mono);
+  font-size: 0.64rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
 }
 
 .calendar-upcoming:hover {
   background: var(--card-hover);
-}
-
-.calendar-linked-app {
-  display: grid;
-  gap: 4px;
 }
 
 /* -------- Analytics -------- */
@@ -1361,10 +1569,12 @@ button.applications-table__row {
   position: relative;
   display: grid;
   grid-template-rows: auto auto minmax(0, 1fr) auto;
-  gap: var(--s3);
+  gap: var(--s2);
   width: min(1080px, calc(100vw - 40px));
-  max-height: min(840px, calc(100vh - 40px));
-  padding: var(--s5);
+  /* Fixed height (not max-height) so the modal stays one consistent size as the
+     user switches tabs/content; the body scrolls within it. */
+  height: min(840px, calc(100vh - 40px));
+  padding: var(--s4);
   border: 1px solid var(--hairline);
   border-radius: var(--r-xl);
   background: var(--card-elev);
@@ -1379,16 +1589,22 @@ button.applications-table__row {
   gap: var(--s3);
 }
 
-/* Modal title uses .page-serif via class; keep only the color here as a fallback. */
+/* Compact modal title — smaller than the page-serif default it carries. */
 .application-modal__head h2 {
+  font-size: 1.12rem;
   color: var(--ink-strong);
 }
 
 .application-modal__head p,
 .application-modal__foot span {
-  margin-top: 3px;
+  margin-top: 2px;
   color: var(--ink-soft);
-  font-size: 0.74rem;
+  font-size: 0.72rem;
+}
+
+.application-modal__foot {
+  padding-top: var(--s2);
+  border-top: 1px solid var(--hairline-soft);
 }
 
 .application-modal__actions {
@@ -1399,7 +1615,7 @@ button.applications-table__row {
 
 .application-modal__tabs {
   display: flex;
-  gap: var(--s4);
+  gap: var(--s3);
   border-bottom: 1px solid var(--hairline);
 }
 
@@ -1436,7 +1652,7 @@ button.applications-table__row {
 
 .application-form {
   display: grid;
-  gap: var(--s3);
+  gap: var(--s2);
   align-content: start;
   padding: var(--s3);
   border: 1px solid var(--hairline);
@@ -1448,10 +1664,16 @@ button.applications-table__row {
   grid-column: 1 / -1;
 }
 
+/* The shared .field carries a menu-context margin-top that doubles the form's
+   own gap — drop it so the compacted modal form keeps a single rhythm. */
+.application-form .field {
+  margin-top: 0;
+}
+
 .application-form__grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--s3);
+  gap: var(--s2) var(--s3);
 }
 
 .application-match-card {
@@ -1682,18 +1904,11 @@ button.applications-table__row {
   white-space: pre-wrap;
 }
 
-.calendar-linked-app__actions {
-  display: flex;
-  gap: var(--s2);
-  flex-wrap: wrap;
-}
-
 @media (max-width: 1280px) {
   .analytics-panel { grid-column: span 6; }
   .analytics-panel--wide,
   .analytics-panel--narrow { grid-column: span 6; }
   .analytics-panel--wide + .analytics-panel--narrow + .analytics-panel--narrow { grid-column: span 6; }
-  .pipeline-board { grid-template-columns: repeat(6, minmax(178px, 220px)); }
 }
 
 @media (max-width: 1080px) {
@@ -1703,8 +1918,11 @@ button.applications-table__row {
     grid-template-columns: 1fr;
   }
 
+  /* Drop the sticky behavior but stay a containing block so the corner open
+     button still anchors to the panel (not the viewport). */
   .pipeline-inspector {
-    position: static;
+    position: relative;
+    top: auto;
   }
 
   .applications-table {
@@ -1717,6 +1935,22 @@ button.applications-table__row {
 
   .calendar-grid {
     grid-template-columns: repeat(7, minmax(92px, 1fr));
+  }
+
+  /* Single column: the rail stacks below the calendar, so let it flow at its
+     natural height instead of absolute-filling a stretched row. */
+  .tracker-layout--calendar {
+    align-items: start;
+  }
+
+  .calendar-side {
+    position: static;
+    overflow: visible;
+  }
+
+  .calendar-side__scroll {
+    position: static;
+    overflow: visible;
   }
 }
 

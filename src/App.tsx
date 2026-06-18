@@ -33,7 +33,7 @@ import {
   clearAutosaveDraft,
   type AutosavedDraft
 } from "./hooks/useAutosaveDraft";
-import { arrayBufferToBase64 } from "./lib/downloads";
+import { arrayBufferToBase64, sanitizeFileBase } from "./lib/downloads";
 import { buildAiRequestFields, buildAuditRequestFields } from "./lib/aiRequest";
 import { loadLastBaseResumeName, saveLastBaseResumeName } from "./lib/baseResumePrefs";
 import { buildCandidateFactsContext, mergeHonestContext } from "./lib/candidateFacts";
@@ -256,6 +256,8 @@ function App() {
   const [pipelineFilter, setPipelineFilter] = useState<"all" | ApplicationStatus>("all");
   const [trackerView, setTrackerView] = useState<TrackerView>("table");
   const [expandedApplicationId, setExpandedApplicationId] = useState<string | null>(null);
+  // Saved-application resume PDF preview ({url,name} → open; null → closed).
+  const [resumePreview, setResumePreview] = useState<{ url: string; name: string } | null>(null);
   const [isApplicationModalOpen, setIsApplicationModalOpen] = useState(false);
   // null → the modal is in "add" mode; an id → it edits that application.
   const [modalApplicationId, setModalApplicationId] = useState<string | null>(null);
@@ -1621,6 +1623,18 @@ function App() {
     setIsApplicationModalOpen(true);
   }
 
+  // In-app PDF preview of the resume that was saved with an application (renders
+  // the saved artifact via react-pdf — distinct from the editor compile preview).
+  function handlePreviewApplicationResume(application: Application) {
+    const base = sanitizeFileBase(
+      application.company || application.role || application.title || "resume"
+    );
+    setResumePreview({
+      url: `/api/applications/${encodeURIComponent(application.id)}/resume.pdf`,
+      name: `${base}_Resume.pdf`
+    });
+  }
+
   function handleAddApplication() {
     setModalApplicationId(null);
     setIsApplicationModalOpen(true);
@@ -1772,6 +1786,17 @@ function App() {
                 onClose={handleClosePreview}
                 onRetry={handlePreview}
               />
+              {/* Saved-application resume preview (react-pdf), separate from the
+                  editor compile preview above. */}
+              <PreviewOverlay
+                isOpen={!!resumePreview}
+                isLoading={false}
+                error=""
+                pdfUrl={resumePreview?.url ?? ""}
+                fileName={resumePreview?.name ?? "resume.pdf"}
+                onClose={() => setResumePreview(null)}
+                onRetry={() => {}}
+              />
             </Suspense>
           }
         >
@@ -1837,6 +1862,7 @@ function App() {
               onUpdateNotes={updateApplicationNotes}
               onLoad={handleLoadApplication}
               onOpenApplication={handleOpenApplicationDetail}
+              onPreviewResume={handlePreviewApplicationResume}
               onDelete={handleDeleteApplication}
               onAddApplication={handleAddApplication}
             />
@@ -1880,6 +1906,7 @@ function App() {
           setIsApplicationModalOpen(false);
           handleLoadApplication(app);
         }}
+        onPreviewResume={handlePreviewApplicationResume}
       />
 
       {applyDownloadPrompt ? (

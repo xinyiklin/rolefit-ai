@@ -162,6 +162,19 @@
 .studio-body[data-tab="analytics"],
 .studio-body[data-tab="materials"] {
   background: var(--paper-deep);
+  /* Firefox drops a grid/flex scroll container's own padding-bottom from the
+     scrollable overflow, so the last row kisses the viewport. Move that bottom
+     space into a spacer item (kept in overflow by every browser) instead. */
+  padding-bottom: 0;
+}
+
+.studio-body[data-tab="applications"]::after,
+.studio-body[data-tab="analytics"]::after,
+.studio-body[data-tab="materials"]::after {
+  content: "";
+  /* The grid gap (s3) already sits above this spacer, so s1 here nets ~16px of
+     bottom space — matching the original padding-bottom intent. */
+  height: var(--s1);
 }
 
 /* Resume tab: no page scroll — the editor canvas fills edge-to-edge from

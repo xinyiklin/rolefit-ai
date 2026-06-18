@@ -3,7 +3,7 @@
 // "review" is gone as a tab: the recruiter review docks in the Resume tab's
 // rail, and the local fit analytics live in the header's Fit popover.
 // "pipeline" and "calendar" are gone as top-level tabs: they merged into
-// "applications" as Table / Board / Calendar view switcher (TrackerTab).
+// "applications" as a Table / Calendar view switcher (TrackerTab).
 // "cover" and "questions" are gone as separate tabs: they merged into
 // "materials" (cover letter + application questions, step 2 of tab IA consolidation).
 export type OutputTab = "resume" | "materials" | "applications" | "analytics";

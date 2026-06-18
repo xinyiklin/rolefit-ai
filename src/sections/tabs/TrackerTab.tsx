@@ -1,20 +1,90 @@
-import { useMemo, useState } from "react";
-import { AlertCircle, Plus, Search } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { AlertCircle, ChevronLeft, ChevronRight, Eye, Link, Plus, Search, Sparkles, SquareArrowOutUpRight, Trash2 } from "lucide-react";
 import type { Application, ApplicationStatus } from "../../hooks/useApplications";
 import {
   BOARD_STATUSES,
   STATUS_LABEL,
-  buildDocket,
   displayCompany,
   displayRole,
+  fitScore,
+  nextAction,
+  priorityFor,
   statusCount
 } from "../../lib/applicationDisplay";
 import { TrackerTableView } from "../tracker/TrackerTableView";
-import { TrackerBoardView } from "../tracker/TrackerBoardView";
 import { TrackerCalendarView } from "../tracker/TrackerCalendarView";
 import { TrackerInspector } from "../tracker/TrackerInspector";
+import { TrackerRowMenu, type RowMenuItem } from "../tracker/TrackerRowMenu";
 
-export type TrackerView = "table" | "board" | "calendar";
+export type TrackerView = "table" | "calendar";
+
+// Sortable table columns. "applied" is the default and the only sort that keeps
+// month grouping (the rows are chronological); any other sort renders a flat list.
+export type SortKey =
+  | "company"
+  | "role"
+  | "stage"
+  | "applied"
+  | "priority"
+  | "nextAction"
+  | "fit";
+export type SortDir = "asc" | "desc";
+export type SortState = { key: SortKey; dir: SortDir };
+
+// Page-size options. Minimum is 20 per the product spec — never smaller.
+const PAGE_SIZES = [20, 50, 100] as const;
+const DEFAULT_PAGE_SIZE = 20;
+
+// Natural first-click direction per column: dates/fit lead with the most useful
+// end (newest / highest), text and ordinal columns lead ascending.
+const DEFAULT_DIR: Record<SortKey, SortDir> = {
+  company: "asc",
+  role: "asc",
+  stage: "asc",
+  applied: "desc",
+  priority: "asc",
+  nextAction: "asc",
+  fit: "desc"
+};
+
+const STAGE_ORDER: Record<ApplicationStatus, number> = BOARD_STATUSES.reduce(
+  (acc, status, index) => {
+    acc[status] = index;
+    return acc;
+  },
+  {} as Record<ApplicationStatus, number>
+);
+
+const PRIORITY_ORDER: Record<string, number> = { High: 0, Medium: 1, Low: 2 };
+
+function appliedKey(app: Application): string {
+  return app.appliedAt || app.createdAt || "";
+}
+
+// Ascending comparator for a single column; direction + tie-break are applied by
+// the caller so this stays a pure "which is smaller" decision.
+function compareBy(key: SortKey, a: Application, b: Application): number {
+  switch (key) {
+    case "company":
+      return displayCompany(a).localeCompare(displayCompany(b));
+    case "role":
+      return displayRole(a).localeCompare(displayRole(b));
+    case "stage":
+      return STAGE_ORDER[a.status] - STAGE_ORDER[b.status];
+    case "applied":
+      return appliedKey(a).localeCompare(appliedKey(b));
+    case "priority":
+      return PRIORITY_ORDER[priorityFor(a)] - PRIORITY_ORDER[priorityFor(b)];
+    case "nextAction":
+      return nextAction(a).localeCompare(nextAction(b));
+    case "fit": {
+      // Unknown fit sorts to the bottom of a descending list (the useful default).
+      const fa = fitScore(a) ?? -Infinity;
+      const fb = fitScore(b) ?? -Infinity;
+      return fa - fb;
+    }
+  }
+}
 
 type TrackerTabProps = {
   applications: Application[];
@@ -36,14 +106,14 @@ type TrackerTabProps = {
   onUpdateNotes: (id: string, notes: string) => void;
   onLoad: (app: Application) => void;
   onOpenApplication: (app: Application) => void;
+  onPreviewResume: (app: Application) => void;
   onDelete: (id: string, title: string) => void;
   onAddApplication: () => void;
 };
 
-const VIEWS: TrackerView[] = ["table", "board", "calendar"];
+const VIEWS: TrackerView[] = ["table", "calendar"];
 const VIEW_LABELS: Record<TrackerView, string> = {
   table: "Table",
-  board: "Board",
   calendar: "Calendar"
 };
 
@@ -63,14 +133,22 @@ export function TrackerTab({
   onUpdateNotes,
   onLoad,
   onOpenApplication,
+  onPreviewResume,
   onDelete,
   onAddApplication
 }: TrackerTabProps) {
   const [query, setQuery] = useState("");
+  // Default sort: most recent application first (by apply time).
+  const [sort, setSort] = useState<SortState>({ key: "applied", dir: "desc" });
+  const [pageSize, setPageSize] = useState<number>(DEFAULT_PAGE_SIZE);
+  const [page, setPage] = useState(1);
+  // Right-click context menu: the target app + cursor anchor (viewport coords).
+  const [rowMenu, setRowMenu] = useState<{ app: Application; x: number; y: number } | null>(null);
 
-  // Filtered list used by Table and Board (Calendar does its own event filtering internally)
-  const filtered = useMemo(() => {
+  // Filtered + sorted list used by the Table view (Calendar filters internally).
+  const sorted = useMemo(() => {
     const needle = query.trim().toLowerCase();
+    const dirMul = sort.dir === "asc" ? 1 : -1;
     return applications
       .filter((app) => pipelineFilter === "all" || app.status === pipelineFilter)
       .filter((app) => {
@@ -87,13 +165,102 @@ export function TrackerTab({
           .some((value) => String(value).toLowerCase().includes(needle));
       })
       .slice()
-      .sort((a, b) => (b.appliedAt || b.createdAt).localeCompare(a.appliedAt || a.createdAt));
-  }, [applications, pipelineFilter, query]);
+      .sort((a, b) => {
+        const primary = compareBy(sort.key, a, b) * dirMul;
+        if (primary !== 0) return primary;
+        // Stable tie-break: newest application first, regardless of column.
+        return appliedKey(b).localeCompare(appliedKey(a));
+      });
+  }, [applications, pipelineFilter, query, sort]);
 
-  const selected =
-    applications.find((app) => app.id === expandedApplicationId) ?? filtered[0] ?? null;
+  // Reset to the first page whenever the result set or its ordering changes, so
+  // the user is never stranded on a now-empty trailing page.
+  useEffect(() => {
+    setPage(1);
+  }, [query, pipelineFilter, sort, pageSize]);
 
-  const docket = useMemo(() => buildDocket(applications, new Date()), [applications]);
+  const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const pageStart = (safePage - 1) * pageSize;
+  const visible = sorted.slice(pageStart, pageStart + pageSize);
+
+  // Month dividers only make sense on the chronological default sort.
+  const grouped = sort.key === "applied";
+
+  const visibleSelected = expandedApplicationId
+    ? visible.find((app) => app.id === expandedApplicationId) ?? null
+    : null;
+  const selected = visibleSelected ?? visible[0] ?? sorted[0] ?? null;
+
+  // Keep the inspector tied to the current table page; otherwise paging can
+  // leave the rail editing a row that is no longer visible.
+  useEffect(() => {
+    if (trackerView !== "table" || !selected) return;
+    if (expandedApplicationId !== selected.id) setExpandedApplicationId(selected.id);
+  }, [expandedApplicationId, selected?.id, setExpandedApplicationId, trackerView]);
+
+  function handleSort(key: SortKey) {
+    setSort((prev) =>
+      prev.key === key
+        ? { key, dir: prev.dir === "asc" ? "desc" : "asc" }
+        : { key, dir: DEFAULT_DIR[key] }
+    );
+  }
+
+  function handleRowContextMenu(app: Application, event: { clientX: number; clientY: number }) {
+    setExpandedApplicationId(app.id);
+    setRowMenu({ app, x: event.clientX, y: event.clientY });
+  }
+
+  // Context-menu actions for the right-clicked row. Open + Delete are the core;
+  // Polish, Preview (when a PDF was saved), and the job posting (when a URL
+  // exists) round it out.
+  const rowMenuItems: RowMenuItem[] = rowMenu
+    ? (() => {
+        const app = rowMenu.app;
+        const items: RowMenuItem[] = [
+          { kind: "action", label: "Open details", icon: SquareArrowOutUpRight, onSelect: () => onOpenApplication(app) },
+          { kind: "action", label: "Open in Polish", icon: Sparkles, onSelect: () => onLoad(app) }
+        ];
+        if (app.resumeArtifacts?.hasPdf) {
+          items.push({ kind: "action", label: "Preview resume", icon: Eye, onSelect: () => onPreviewResume(app) });
+        }
+        // Only offer the link for a real http(s) URL — never open a stored
+        // javascript:/data:/protocol-less value.
+        if (app.jobUrl && /^https?:\/\//i.test(app.jobUrl)) {
+          const jobUrl = app.jobUrl;
+          items.push({
+            kind: "action",
+            label: "Open job posting",
+            icon: Link,
+            onSelect: () => window.open(jobUrl, "_blank", "noopener,noreferrer")
+          });
+        }
+        items.push({ kind: "separator" });
+        items.push({ kind: "header", label: "Move to stage" });
+        for (const status of BOARD_STATUSES) {
+          items.push({
+            kind: "action",
+            label: STATUS_LABEL[status],
+            dotClass: `stage-dot stage-dot--${status}`,
+            active: app.status === status,
+            onSelect: () => onUpdateStatus(app.id, status)
+          });
+        }
+        items.push({ kind: "separator" });
+        items.push({
+          kind: "action",
+          label: "Delete",
+          icon: Trash2,
+          danger: true,
+          onSelect: () => onDelete(app.id, app.title)
+        });
+        return items;
+      })()
+    : [];
+
+  const rangeStart = sorted.length === 0 ? 0 : pageStart + 1;
+  const rangeEnd = Math.min(pageStart + pageSize, sorted.length);
 
   return (
     <section className="workspace-page applications-page">
@@ -121,39 +288,6 @@ export function TrackerTab({
         <div className="pipeline-alert" role="status">
           <AlertCircle size={14} aria-hidden="true" />
           <span>Application changes may not be saved: {applicationsError}</span>
-        </div>
-      ) : null}
-
-      {/* Up next — docket of actionable items. Omit entirely when no applications exist. */}
-      {applications.length > 0 ? (
-        <div className="tracker-docket" aria-label="Up next">
-          <span className="tracker-docket__eyebrow">Up next</span>
-          {docket.length > 0 ? (
-            docket.map((item) => (
-              <button
-                key={item.app.id}
-                type="button"
-                className={`tracker-docket__row tracker-docket__row--${item.kind}`}
-                onClick={() => setExpandedApplicationId(item.app.id)}
-                aria-label={`${displayCompany(item.app)}, ${displayRole(item.app)}: ${item.label}`}
-              >
-                <span className="tracker-docket__date">{item.dateTag}</span>
-                <span
-                  className={`tracker-docket__dot tracker-docket__dot--${item.kind}`}
-                  aria-hidden="true"
-                />
-                <span className="tracker-docket__identity">
-                  <strong>{displayCompany(item.app)}</strong>
-                  {" "}
-                  <span className="tracker-docket__role">{displayRole(item.app)}</span>
-                </span>
-                <span className="tracker-docket__leader" aria-hidden="true" />
-                <span className="tracker-docket__label">{item.label}</span>
-              </button>
-            ))
-          ) : (
-            <span className="tracker-docket__empty">Nothing due.</span>
-          )}
         </div>
       ) : null}
 
@@ -211,34 +345,77 @@ export function TrackerTab({
           applications={applications}
           query={query}
           stageFilter={pipelineFilter}
-          selectedApplicationId={expandedApplicationId}
           setSelectedApplicationId={setExpandedApplicationId}
           onOpenApplication={onOpenApplication}
-          onLoad={onLoad}
         />
       ) : null}
 
-      {/* Table and Board views: shared two-column layout with the inspector */}
-      {trackerView !== "calendar" ? (
+      {/* Table view: table + pagination on the left, inspector on the right */}
+      {trackerView === "table" ? (
         <div className="tracker-layout">
-          {trackerView === "table" ? (
+          <div className="applications-table-wrap">
             <TrackerTableView
-              visible={filtered}
+              visible={visible}
               allCount={applications.length}
+              grouped={grouped}
+              sort={sort}
+              onSort={handleSort}
               selectedId={selected?.id ?? null}
               onSelect={setExpandedApplicationId}
               onDoubleClick={onOpenApplication}
+              onRowContextMenu={handleRowContextMenu}
             />
-          ) : (
-            <TrackerBoardView
-              filtered={filtered}
-              allApplications={applications}
-              selectedId={selected?.id ?? null}
-              onSelect={setExpandedApplicationId}
-              onDoubleClick={onOpenApplication}
-              onUpdateStatus={onUpdateStatus}
-            />
-          )}
+
+            {sorted.length > 0 ? (
+              <div className="applications-pagination" role="group" aria-label="Pagination">
+                <span className="applications-pagination__count">
+                  <strong>
+                    {rangeStart}–{rangeEnd}
+                  </strong>{" "}
+                  of {sorted.length}
+                </span>
+                <div className="applications-pagination__controls">
+                  <label className="applications-pagination__size">
+                    <span>Rows</span>
+                    <select
+                      value={pageSize}
+                      onChange={(event) => setPageSize(Number(event.target.value))}
+                      aria-label="Applications per page"
+                    >
+                      {PAGE_SIZES.map((size) => (
+                        <option key={size} value={size}>
+                          {size}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <div className="applications-pagination__pager">
+                    <button
+                      type="button"
+                      className="applications-pagination__step"
+                      onClick={() => setPage(Math.max(1, safePage - 1))}
+                      disabled={safePage <= 1}
+                      aria-label="Previous page"
+                    >
+                      <ChevronLeft size={15} aria-hidden="true" />
+                    </button>
+                    <span className="applications-pagination__page" aria-live="polite">
+                      {safePage} / {totalPages}
+                    </span>
+                    <button
+                      type="button"
+                      className="applications-pagination__step"
+                      onClick={() => setPage(Math.min(totalPages, safePage + 1))}
+                      disabled={safePage >= totalPages}
+                      aria-label="Next page"
+                    >
+                      <ChevronRight size={15} aria-hidden="true" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : null}
+          </div>
 
           <aside className="pipeline-inspector" aria-label="Selected application">
             <TrackerInspector
@@ -247,11 +424,21 @@ export function TrackerTab({
               onUpdateField={onUpdateField}
               onUpdateNotes={onUpdateNotes}
               onOpenApplication={onOpenApplication}
+              onPreviewResume={onPreviewResume}
               onLoad={onLoad}
               onDelete={onDelete}
             />
           </aside>
         </div>
+      ) : null}
+
+      {rowMenu ? (
+        <TrackerRowMenu
+          x={rowMenu.x}
+          y={rowMenu.y}
+          items={rowMenuItems}
+          onClose={() => setRowMenu(null)}
+        />
       ) : null}
     </section>
   );
