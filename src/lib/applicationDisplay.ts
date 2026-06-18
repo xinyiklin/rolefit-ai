@@ -109,8 +109,13 @@ export function formatSalary(
   const hasMin = typeof salaryMin === "number";
   const hasMax = typeof salaryMax === "number";
   if (!hasMin && !hasMax) return "";
-  const currency = (salaryCurrency || "").trim();
-  const symbol = currency === "USD" ? "$" : "";
+  const currency = (salaryCurrency || "").trim().toUpperCase();
+  // The distiller can now emit non-USD currencies, so render their native symbol
+  // (falls back to an ISO-code prefix for anything unmapped).
+  const CURRENCY_SYMBOL: Record<string, string> = {
+    USD: "$", GBP: "£", EUR: "€", JPY: "¥", CAD: "C$", AUD: "A$"
+  };
+  const symbol = CURRENCY_SYMBOL[currency] ?? "";
   const fmt = (value: number) => {
     if (symbol) {
       return value >= 1000 && value % 1000 === 0 ? `${symbol}${value / 1000}k` : `${symbol}${value.toLocaleString()}`;

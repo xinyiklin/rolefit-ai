@@ -119,6 +119,8 @@ const LOW_VALUE_METADATA_LABEL: RegExp[] = [
 const NON_TAILORING_SECTION: RegExp[] = [
   /^(compensation|salary|pay range|base pay|total rewards)\b/i,
   /^(benefits|perks|our benefits|what we offer|what['']?s in it for you)\b/i,
+  /^what we['‘’]?ll bring\b/i,  // Fix(JD-test): "What we'll bring" perks/benefits section (Toyota) — boundary so preferred-quals collection stops before benefits
+  /^job designation\b/i,  // Fix(JD-test): "Job Designation" (Hybrid/Remote work-arrangement block, Docusign) — logistics, not a duty/qual
   /^(how to apply|application instructions|about (us|the company|our company))\b/i,
   /^(equal opportunity|eeo|privacy notice|cookie notice)\b/i,
   // Fix #19: filter culture/values nav sections that appear before actual job content
@@ -154,7 +156,7 @@ const RESPONSIBILITY_HEADING: RegExp[] = [
   /^((core|key) )?responsibilit(y|ies)\b/i,  // Fix #1: covers "core/key responsibilities" + bare form
   /^what you['']?ll do\b/i,
   /^what you will do\b/i,
-  /^what you will be doing\b/i,  // Fix #19: covers "What you will be doing and owning"
+  /^what you(?: will|['‘’]?ll) be doing\b/i,  // Fix #19 + JD-test: "What you will be doing" and the contraction "What You'll Be Doing" (Toyota)
   /^your impact\b/i,
   /^you will:?\s*$/i,  // only bare "You will" or "You will:" — not "You will work alongside..."
   /^day[- ]to[- ]day\b/i,
@@ -173,8 +175,13 @@ const REQUIRED_HEADING: RegExp[] = [
   /^what we['']?re looking for\b/i,
   /^who you are\b/i,
   /^required skills?\b/i,              // Fix #1: added
+  /^must[- ]?haves?\s*:?\s*$/i,        // Fix(JD-test): STANDALONE "Must-have(s)" heading only — anchored so a "Must have <X>" requirement bullet isn't mistaken for a heading (which would drop it / end collection)
+  /^you(?:['‘’]?ll)? have\s*:?\s*$/i,  // Fix(JD-test): STANDALONE "You have"/"You'll have" heading only — not a "You have <X>" requirement bullet
   /^all you['']?ll need for success\b/i,
   /^skills,\s*licenses?\s*(?:&|and)\s*certifications?\b/i,
+  /^what you bring\b/i,  // Fix(JD-test): "What you bring" umbrella requirements heading (Toyota)
+  /^you must have$/i,    // Fix(JD-test): "YOU MUST HAVE" standalone heading (Honeywell)
+  /^basic$/i,            // Fix(JD-test): bare "Basic" subheading (Docusign); mirrors skills/experience
   /^what you[\u0027\u2018\u2019]?ll need( to succeed)?\b/i,  // Fix #1: added
   // Fix #2: narrow bare "skills" and "experience" to ONLY the standalone heading,
   // not lines like "Experience: 0-3 years…" or "Experience with Git…".
@@ -187,10 +194,12 @@ const REQUIRED_HEADING: RegExp[] = [
 const PREFERRED_HEADING: RegExp[] = [
   /^preferred qualifications?\b/i,
   /^preferred skills\b/i,
-  /^nice[- ]to[- ]have\b/i,
+  /^nice[- ]to[- ]haves?\b/i,  // Fix(JD-test): also matches plural "Nice-to-haves"
   /^bonus\b/i,
   /^plus(es)?\b/i,
   /^additional skills?\b/i,   // Fix #19: "Additional skills:" is typically a preferred/bonus section
+  /^added bonus\b/i,  // Fix(JD-test): "Added bonus if you have" preferred section (Toyota)
+  /^we value$/i,      // Fix(JD-test): "WE VALUE" standalone preferred heading (Honeywell)
   /^preferred\b/i  // Fix #1: added as LAST entry so longer required variants win
 ];
 
@@ -203,6 +212,23 @@ const STRUCTURE_HEADING: RegExp[] = [
   ...TAILORING_SECTION
 ];
 
+// Job-content headings that should RE-OPEN a skipped non-tailoring section (so a
+// benefits block — "What we'll bring" — sitting between "What you bring" and a
+// preferred section doesn't swallow the section after it). Code-review fix: the
+// preferred set here is the STRONG, unambiguous headings only — bare "bonus" /
+// "plus(es)" / "preferred" / "additional skills" are EXCLUDED because benefits
+// prose routinely opens with them ("Bonus potential up to 15%", "Plus generous
+// PTO"), which would wrongly re-open the skipped benefits block.
+const CONTENT_REENTRY_HEADING: RegExp[] = [
+  ...RESPONSIBILITY_HEADING,
+  ...REQUIRED_HEADING,
+  /^preferred qualifications?\b/i,
+  /^preferred skills\b/i,
+  /^nice[- ]to[- ]haves?\b/i,
+  /^added bonus\b/i,
+  /^we value$/i
+];
+
 // Fix #13: C# regex — \bc#\b never matches because # is non-word; use boundary
 // workaround with a lookbehind/lookahead that avoids \w on either side.
 // Fix #14: Added Flask, FastAPI, Vue, Elasticsearch, Express.js, HTML, CSS
@@ -213,10 +239,15 @@ const TECH_KEYWORDS: Array<[string, RegExp]> = [
   ["Node.js", /\bnode(?:\.js|js)?\b/i],
   ["Python", /\bpython\b/i],
   ["Java", /\bjava\b/i],
-  ["C++", /\bc\+\+\b|\bcpp\b/i],
+  ["C++", /\bc\+\+|\bcpp\b/i],  // Fix(JD-test): dropped trailing \b — it never matched "C++," before punctuation
   ["C#", /(^|[^\w])c#(?=[^\w]|$)/i],  // Fix #13
-  ["Go", /\bgolang\b|\bgo\b/i],
+  // "go" is a common verb ("go above and beyond"), so bare Go only counts when
+  // it looks like a language mention: Golang, "Go programming/development",
+  // known experience phrases, or a comma/slash/paren-delimited tech list item.
+  ["Go", /\bgolang\b|\bgo\s+(?:language|programming|development|developer|engineer|services?|apis?|backend|microservices?)\b|(?:\b(?:experience with|proficien(?:t|cy) in|knowledge of|using|with|in|write(?:s|ing)?|build(?:ing)? with|building)\s+)go(?=\s*(?:[,.;)/]|$|\band\b|\bor\b|\s+(?:services?|apis?|backend|microservices?)\b))|(?:^|[,(;/]\s*)go(?=\s*(?:[,.;)/]|$|\band\b|\bor\b))/i],
   ["Ruby", /\bruby\b/i],
+  // Fix(JD-test): Salesforce platform/ecosystem (was entirely absent — central tech of the Honeywell Sparta role)
+  ["Salesforce", /\bsalesforce(?:dx)?\b|\bapex\b|\bagentforce\b|\bdatacloud\b|\bsfdx\b|\bsf cli\b|\blightning web components?\b|\blwc\b/i],
   ["SQL", /\bsql\b/i],
   ["PostgreSQL", /\bpostgres(?:ql)?\b/i],
   ["MySQL", /\bmysql\b/i],
@@ -246,17 +277,42 @@ const TECH_KEYWORDS: Array<[string, RegExp]> = [
   ["Machine learning", /\bmachine learning\b|\bml\b/i],
   ["AI", /\bai\b|\bartificial intelligence\b|\bllm\b|\blarge language models?\b/i],
   ["Data structures", /\bdata structures?\b/i],
-  ["Algorithms", /\balgorithms?\b/i]
+  ["Algorithms", /\balgorithms?\b/i],
+  // Fix(JD-test): broaden language/framework/data-tool coverage. Appended at the
+  // end so the top-14 cap still favors the more common keywords above; these
+  // surface for roles that center on them. "Spring" is gated to a Spring product
+  // so the season word can't fire.
+  ["Rust", /\brust\b/i],
+  ["Kotlin", /\bkotlin\b/i],
+  // Fix(JD-test): "swift" is a common adjective ("swift support"), so require a
+  // dev-context word (the language in a comma-list is missed, but precision wins
+  // for an anti-fabrication brief).
+  ["Swift", /\bswiftui\b|\bswift\s+(?:developer|engineer|programming|programmer|language|sdk)\b/i],
+  ["Scala", /\bscala\b/i],
+  ["PHP", /\bphp\b/i],
+  // Fix(JD-test): anchor ".net" to a start/space/paren so a "company.net" domain
+  // or "x@y.net" email in the page body doesn't fabricate .NET.
+  [".NET", /(?:^|[\s(\[\/,])\.net\b|\bdotnet\b|\basp\.net\b|\bvb\.net\b/i],  // Fix: allow "/" and "," delimiters ("C#/.NET", "C++,.NET") while still excluding "company.net" domains
+  ["Spring", /\bspring\s?(?:boot|framework|mvc|cloud|security|data)\b/i],
+  ["Django", /\bdjango\b/i],
+  ["Angular", /\bangular\b/i],
+  ["Rails", /\bruby on rails\b|\brails\b/i],
+  ["Kafka", /\bkafka\b/i],
+  ["Spark", /\bapache spark\b|\bpyspark\b|\bspark\s+(?:streaming|sql)\b/i],  // Fix(JD-test): explicit forms only — bare "spark" is a common verb ("spark ideas")
+  ["Terraform", /\bterraform\b/i],
+  ["Snowflake", /\bsnowflake\b(?!\s+schema)/i],  // Fix: exclude "snowflake schema" (a data-modeling term, not the Snowflake product)
+  ["Airflow", /\bairflow\b/i]
 ];
 
 const DOMAIN_SIGNALS: Array<[string, RegExp]> = [
-  ["healthcare", /\bhealth(?:care)?\b|\bclinical\b|\bpatient\b|\bmedical\b/i],
+  ["healthcare", /\bhealth(?:care)?\b|\bclinical\b|\bpatient\b|\bmedical\b|\blife sciences?\b|\bregulated industr/i],
   ["fintech", /\bfintech\b|\bfinancial\b|\bpayments?\b|\bbanking\b|\bcapital markets?\b|\bprivate equity\b|\binvest(?:ing|ments?)\b/i],
   ["AI", /\bai\b|\bartificial intelligence\b|\bmachine learning\b|\bllm\b/i],
   ["infrastructure", /\binfrastructure\b|\bplatform\b|\bcloud\b|\bdevops\b|\bsre\b/i],
   ["SaaS", /\bsaas\b|\bsoftware as a service\b/i],
   ["enterprise", /\benterprise\b|\bb2b\b/i],
   ["security", /\bsecurity\b|\bcybersecurity\b|\bcompliance\b|\bsoc 2\b/i],
+  ["identity", /\bidentity verification\b|\bidv\b|\bkyc\b|\bdocument verification\b/i],  // Fix(JD-test): IDV/identity domain (Docusign)
   ["data", /\bdata\b|\banalytics\b|\bbi\b|\bwarehouse\b|\bpipeline\b/i],
   ["e-commerce", /\be-?commerce\b|\bretail\b|\bmarketplace\b/i],
   ["aviation", /\bairline\b|\baviation\b|\bflights?\b|\bairports?\b/i],
@@ -347,6 +403,16 @@ function isStructureHeading(line: string): boolean {
 function matchesHeading(line: string, headings: RegExp[]): boolean {
   const t = line.trim().replace(/:\s*$/, "");
   return t.length > 1 && t.length <= 100 && headings.some((re) => re.test(t));
+}
+
+function inlineHeadingContent(line: string, headings: RegExp[]): string {
+  const t = line.trim();
+  const colon = t.indexOf(":");
+  if (colon <= 0) return "";
+  const heading = t.slice(0, colon).trim();
+  const value = t.slice(colon + 1).trim();
+  if (!value || !matchesHeading(heading, headings)) return "";
+  return value;
 }
 
 function isTailoringHeading(line: string): boolean {
@@ -475,7 +541,11 @@ function isListLikeContent(line: string): boolean {
   if (isPromptMetadataLine(t) || isStructureHeading(t) || isEmptyMarker(t)) return false;
   // Bare "Label:" lines produced by Workday reflow or other ATS sources are not content
   if (isMetadataLabel(t)) return false;
-  if (/salary|compensation|benefits|equal opportunity|privacy|cookies?|apply now/i.test(t)) return false;
+  // Fix(JD-test): narrowed bare "privacy" → privacy-policy furniture only. Bare
+  // "privacy" dropped real duties that merely mention it (Docusign: "Partner
+  // with security, privacy, and compliance teams …"); the actual policy/notice
+  // furniture is still caught here and by TRAILING_BOILERPLATE/NON_TAILORING.
+  if (/salary|compensation|benefits|equal opportunity|privacy (?:policy|notice|statement)|cookies?|apply now/i.test(t)) return false;
   return true;
 }
 
@@ -486,6 +556,15 @@ function collectUnderHeadings(lines: string[], headings: RegExp[], maxItems: num
   for (const line of lines) {
     const t = cleanSummaryLine(line);
     if (!t) continue;
+    const inlineContent = inlineHeadingContent(t, headings);
+    if (inlineContent) {
+      active = true;
+      if (isListLikeContent(inlineContent)) {
+        collected.push(inlineContent);
+        if (collected.length >= maxItems * 2) break;
+      }
+      continue;
+    }
     if (matchesHeading(t, headings)) {
       active = true;
       continue;
@@ -619,7 +698,7 @@ function removeNonTailoringSections(lines: string[]): string[] {
       continue;
     }
 
-    if (skipping && isTailoringHeading(t)) {
+    if (skipping && (isTailoringHeading(t) || matchesHeading(t, CONTENT_REENTRY_HEADING))) {
       skipping = false;
       result.push(line);
       continue;
@@ -721,6 +800,22 @@ function normalizePeriod(value: string): ExtractedSalaryPeriod | undefined {
   return undefined;
 }
 
+// Fix(JD-test): map a detected currency symbol to an ISO-ish code so a non-USD
+// posting ("£55,000 - £75,000") is not silently reported as USD (anti-fab). An
+// empty symbol (compensation known only from a "Pay:" label) defaults to USD.
+function currencyFromSymbol(sym: string): string {
+  if (/^(USD|US\$)$/i.test(sym)) return "USD";
+  if (/^GBP$/i.test(sym)) return "GBP";
+  if (/£/.test(sym)) return "GBP";
+  if (/^EUR$/i.test(sym)) return "EUR";
+  if (/€/.test(sym)) return "EUR";
+  if (/^JPY$/i.test(sym)) return "JPY";
+  if (/¥/.test(sym)) return "JPY";
+  if (/^(CAD|CA\$|C\$)$/i.test(sym)) return "CAD";
+  if (/^(AUD|A\$)$/i.test(sym)) return "AUD";
+  return "USD";
+}
+
 function extractSalary(lines: string[]): Pick<
   ExtractedJobTracking,
   "salaryMin" | "salaryMax" | "salaryCurrency" | "salaryPeriod"
@@ -729,10 +824,23 @@ function extractSalary(lines: string[]): Pick<
     min: number;
     max: number | null;
     period?: ExtractedSalaryPeriod;
+    currency: string;
+    isUpTo: boolean;
     score: number;
   }> = [];
-  const money =
-    /(?:\b(USD|US\$)\s*)?(\$)?\s*(\d[\d,.]*(?:\s?[kK])?)(?:\s*(?:-|–|—|to)\s*(?:USD|US\$|\$)?\s*(\d[\d,.]*(?:\s?[kK])?))?(?:\s*(?:\/|per)?\s*(year|yr|annum|annual|annually|hour|hr|month|mo))?/gi;
+  // Currency tokens recognized adjacent to an amount. Multi-char tokens precede
+  // bare "$" so "US$"/"CA$" aren't truncated to "$"; group 1 captures the symbol
+  // (and the alternation also lets a non-$ symbol sit between min and max so the
+  // range "£55,000 - £75,000" no longer collapses to a single number).
+  const CUR = String.raw`USD|US\$|CAD|CA\$|C\$|AUD|A\$|GBP|EUR|JPY|£|€|¥|\$`;
+  // Code-review fix: the leading currency token must NOT be glued to a preceding
+  // letter — without the lookbehind, "ABC$5,000" captures "C$" (→ CAD) and "EUR"
+  // matches inside a word, fabricating a foreign currency on a US amount. Group 1
+  // still captures the symbol; group indices are unchanged.
+  const money = new RegExp(
+    String.raw`(?:(?<![A-Za-z])(${CUR}))?\s*(\d[\d,.]*(?:\s?[kK])?)(?:\s*(?:-|–|—|to)\s*(?:${CUR})?\s*(\d[\d,.]*(?:\s?[kK])?))?(?:\s*(?:\/|per)?\s*(year|yr|annum|annual|annually|hour|hr|month|mo))?`,
+    "gi"
+  );
 
   // A comp keyword counts only when it's on the SAME line as the amount, or on a
   // BARE label line directly above it ("Pay"\n"111000-185000"). A keyword buried
@@ -756,14 +864,25 @@ function extractSalary(lines: string[]): Pick<
     }
     const compContext = SAME_LINE_COMP.test(line) || COMP_LABEL.test(prev);
     for (const match of line.matchAll(money)) {
-      const min = parseAmount(match[3] ?? "");
-      const max = match[4] ? parseAmount(match[4]) : null;
-      const period = normalizePeriod(match[5] ?? "");
+      const sym = match[1] ?? "";
+      const min = parseAmount(match[2] ?? "");
+      const max = match[3] ? parseAmount(match[3]) : null;
+      const period = normalizePeriod(match[4] ?? "");
       if (!min) continue;
 
-      const currency = Boolean(match[1] || match[2]);
+      const currency = Boolean(sym);
       const range = max !== null && max !== min;
       const hasPeriod = Boolean(period);
+      // "up to $X" / "as much as $X": the lone figure is the ceiling, not floor.
+      const lead = line.slice(Math.max(0, (match.index ?? 0) - 14), match.index ?? 0);
+      const isUpTo = max === null && /\b(?:up to|as much as)\s*$/i.test(lead);
+      // A bare year ("Founded in 2015, salaries are competitive") or a counted
+      // quantity ("10,000 employees", "180 countries") on a comp-context line has
+      // no pay shape — skip it so compContext below can't promote it to a salary.
+      const after = line.slice((match.index ?? 0) + match[0].length).trimStart();
+      const looksLikeCount =
+        /^(?:employees?|customers?|users?|people|persons?|clients?|companies|countries|members?|applicants?|candidates?|openings?|years?|months?|days?|hours?)\b/i.test(after);
+      if (!currency && !range && !hasPeriod && ((min >= 1900 && min <= 2099) || looksLikeCount)) continue;
 
       // Anti-fabrication gate. Outside an explicit comp context, a number is only
       // compensation when it has the SHAPE of pay: a currency token AND either a
@@ -784,19 +903,28 @@ function extractSalary(lines: string[]): Pick<
       if (range) score += 4;
       if (period) score += 2;
       if (highValue || hourly) score += 1;
-      candidates.push({ min, max, period, score });
+      candidates.push({ min, max, period, currency: currencyFromSymbol(sym), isUpTo, score });
     }
   }
 
   const best = candidates.sort((a, b) => b.score - a.score || (b.max ?? b.min) - (a.max ?? a.min))[0];
   if (!best) return {};
 
+  // "up to $X": report the figure as the ceiling, leaving the floor open.
+  if (best.isUpTo) {
+    return {
+      salaryMin: null,
+      salaryMax: best.min,
+      salaryCurrency: best.currency,
+      salaryPeriod: best.period ?? (best.min >= 1000 ? "yr" : undefined)
+    };
+  }
   const min = best.max !== null && best.max < best.min ? best.max : best.min;
   const max = best.max !== null && best.max < best.min ? best.min : best.max;
   return {
     salaryMin: min,
     salaryMax: max,
-    salaryCurrency: "USD",
+    salaryCurrency: best.currency,
     salaryPeriod: best.period ?? (min >= 1000 ? "yr" : undefined)
   };
 }
@@ -897,8 +1025,13 @@ const COMPANY_STOPWORDS = new Set([
 const ROLE_NOUN =
   /\b(engineer(?:ing)?|developer|programmer|manager|designer|analyst|scientist|architect|administrator|specialist|consultant|director|officer|coordinator|associate|intern|representative|recruiter|strategist|marketer|writer|researcher|technician|devops|sre|product manager|accountant|controller|counsel|attorney|nurse|teacher|advisor|agent|generalist)\b/i;
 
+// Fix(JD-test): strip a leading RUN of recruiter fluff, including chained forms
+// joined by "and"/"&" and an optional "highly[- ]" intensifier, so the prose
+// role "passionate and highly motivated Software Engineer" reduces to
+// "Software Engineer" — not the junk fragment "and highly motivated Software
+// Engineer" that survived the single-token strip.
 const ROLE_FLUFF =
-  /^(experienced|talented|passionate|motivated|skilled|seasoned|exceptional|dynamic|enthusiastic|highly[- ]motivated|results[- ]driven|hands[- ]on|world[- ]class|rockstar|ninja|self[- ]starter)\s+/i;
+  /^(?:(?:and|&)\s+)?(?:(?:highly[- ])?(?:experienced|talented|passionate|motivated|skilled|seasoned|exceptional|dynamic|enthusiastic|results[- ]driven|hands[- ]on|world[- ]class|rockstar|ninja|self[- ]starter)\s+(?:and\s+|&\s+)?)+/i;
 
 function cleanCompanyName(name: string): string {
   return name
@@ -970,8 +1103,12 @@ function companyFromSelfCue(sentence: string): string {
     new RegExp(`^We are\\s+${COMPANY_NAME}\\s*,`),
     // "Join our American Airlines family…" — employer-brand intro copy.
     new RegExp(`\\bJoin\\s+our\\s+${COMPANY_NAME}\\s+(?:family|team)\\b`),
-    // "Join <Company> …" / "Welcome to <Company> …" (employer CTA)
-    new RegExp(`^(?:Join|Welcome to)\\s+${COMPANY_NAME}\\b`)
+    // "Join <Company>!" / "Welcome to <Company>." (employer CTA). Fix(JD-test):
+    // require a CTA terminator (punctuation, "today"/"now", or end of sentence)
+    // so a role-overview line — "Join Enterprise Intelligence as an Associate
+    // Full Stack Engineer supporting…" — no longer captures the team name as the
+    // employer; the later "At <Company>, we…" self-cue then correctly wins.
+    new RegExp(`^(?:Join|Welcome to)\\s+${COMPANY_NAME}(?:\\s*[!.,]|\\s+(?:today|now)\\b|\\s*$)`)
   ];
   for (const re of patterns) {
     const m = s.match(re);
@@ -1101,7 +1238,7 @@ function extractTracking(lines: string[], url?: string): ExtractedJobTracking {
     "";
   const company = valueForLabel(lines, ["Company", "Organization", "Employer"]) || linkedInTitle.company || "";
   const location =
-    valueForLabel(lines, ["Location", "Job location", "Primary location", "Work Location"]) ||
+    valueForLabel(lines, ["Location", "Locations", "Job location", "Primary location", "Work Location"]) ||
     linkedInTitle.location ||
     "";
   const employmentType = valueForLabel(lines, ["Employment type", "Job type", "Working Schedule"]);
@@ -1209,8 +1346,14 @@ function extractTracking(lines: string[], url?: string): ExtractedJobTracking {
     const end = titleSearchEnd === -1 ? Math.min(lines.length, 25) : Math.min(titleSearchEnd, 25);
 
     for (let i = 0; i < end; i += 1) {
-      const candidate = lines[i].trim();
+      let candidate = lines[i].trim();
       if (!candidate) continue;
+      // Fix(JD-test): strip a leading recruiting prefix ("Now Hiring: <Title>",
+      // "We're hiring — <Title>", "Job Opening: <Title>") before validating, so
+      // the prefix doesn't end up inside tracking.title.
+      candidate = candidate
+        .replace(/^(?:now hiring|we['‘’]?re hiring|hiring|job opening|open (?:role|position|req))\s*[:\-–—]\s*/i, "")
+        .trim();
       if (candidate.length < 8 || candidate.length > 70) continue;
       if (/[.!?;,]/.test(candidate)) continue;
       // Skip bullet-prefixed lines — these are list items from navigation, not titles
@@ -1281,7 +1424,15 @@ function extractTracking(lines: string[], url?: string): ExtractedJobTracking {
       const m = line.trim().match(/^about ([A-Z][\w.&' -]{1,40})$/i);
       const name = m?.[1].trim() ?? "";
       if (name && /^[A-Z]/.test(name) && !GENERIC_ABOUT.test(name)) {
-        resolvedCompany = name;
+        // Fix(JD-test): section headings are often styled ALL-CAPS ("ABOUT
+        // HONEYWELL"). Normalize an all-caps name to title case PER TOKEN, but
+        // leave short tokens (<= 4 chars) as-is so acronyms survive — "HONEYWELL"
+        // → "Honeywell", "GENERAL MOTORS" → "General Motors", but "BMW AG" and
+        // "IBM" stay untouched.
+        resolvedCompany =
+          name.length >= 6 && name === name.toUpperCase()
+            ? name.replace(/[A-Za-z]+/g, (w) => (w.length > 4 ? w.charAt(0) + w.slice(1).toLowerCase() : w))
+            : name;
         break;
       }
     }
@@ -1430,9 +1581,24 @@ function extractCompanyProductContext(
   return "";
 }
 
+// Fix(JD-test): a recruiter-intro paragraph or reporting-structure sentence that
+// sits directly under a "What you'll do"/"Overview" heading is not a duty — drop
+// it so it doesn't occupy (and evict, via the cap) a real responsibility bullet.
+// Code-review fix: anchor the "is/are looking for" form to the START with a short
+// (<=2 word) subject so it only matches an INTRO opener ("Docusign is looking
+// for…"), NOT a real duty that merely contains the phrase ("Define what the
+// business is looking for and translate it to specs").
+const RESP_INTRO_NOISE =
+  /^(?:\S+\s+){0,2}(?:is|are)\s+(?:looking for|seeking|hiring)\b|\bindividual contributor role\b/i;
+
 // Fix #18: caps: responsibilities 7→8, preferred 6→9
 function extractResponsibilities(lines: string[]): string[] {
-  const fromSections = collectUnderHeadings(lines, RESPONSIBILITY_HEADING, 8);  // Fix #18: 7→8
+  // Collect generously, drop intro/reporting noise, THEN cap at 8 — so removing
+  // a leading intro bullet lets a real duty take its place instead of shrinking
+  // the list (the noise items would otherwise occupy slots under the cap).
+  const fromSections = collectUnderHeadings(lines, RESPONSIBILITY_HEADING, 12)
+    .filter((item) => !RESP_INTRO_NOISE.test(item))
+    .slice(0, 8);  // Fix #18: cap 8
   if (fromSections.length) return fromSections;
   // Fix #9: extended fallback verbs with gerund forms and assist/contribute/participate/help
   return fallbackItems(
@@ -1445,7 +1611,11 @@ function extractResponsibilities(lines: string[]): string[] {
 }
 
 function extractQualifications(lines: string[]) {
-  const requiredRaw = collectUnderHeadings(lines, REQUIRED_HEADING, 12);
+  // Fix(JD-test): collect generously so the preferred-demotion split below sees
+  // the whole section — a low cap truncated trailing "is a plus"/"preferred"
+  // items before they could be demoted (Rochester lost 2). Final caps (8/9)
+  // still apply downstream, so this only widens what reaches demotion.
+  const requiredRaw = collectUnderHeadings(lines, REQUIRED_HEADING, 20);
   // Fix #4: use strict preferred check (first ~40 chars / first sentence only)
   const preferredRaw = [
     ...collectUnderHeadings(lines, PREFERRED_HEADING, 9),  // Fix #18: 6→9
@@ -1476,7 +1646,10 @@ function extractTechKeywords(lines: string[], tracking: ExtractedJobTracking): s
   ]
     .filter(Boolean)
     .join("\n");
-  return TECH_KEYWORDS.filter(([, re]) => re.test(source)).map(([label]) => label).slice(0, 14);
+  // Fix(JD-test): cap raised 14→18 so the broadened keyword set (Salesforce +
+  // Rust/Kotlin/Terraform/… appended below the common keywords) can still surface
+  // a posting's central tech instead of being crowded out by the top-14.
+  return TECH_KEYWORDS.filter(([, re]) => re.test(source)).map(([label]) => label).slice(0, 18);
 }
 
 // Fix #15: years regex must handle en/em dashes, and only count when within
@@ -1501,7 +1674,7 @@ function extractSenioritySignals(
   // ("Entry level" + "entry-level / junior" reads as a duplicate).
   if (
     !signals.some((existing) => /\b(entry|junior|new grad)\b/i.test(existing)) &&
-    /\b(entry[- ]level|new grad|early career|junior|jr\.?)\b/i.test(source)
+    /\b(entry[- ]level|new grad|early[- ]career|junior|jr\.?)\b/i.test(source)
   ) {
     add("entry-level / junior");
   }
@@ -1523,11 +1696,42 @@ function extractSenioritySignals(
   }
   yearsMatches.forEach(add);
 
-  // Fix #16: senior only from title/metadata
-  if (/\bsenior\b|\bsr\.?\b/i.test(titleAndMeta)) add("senior");
+  // Fix #16 + JD-test: add "senior" only when the TITLE names a senior technical
+  // role ("Senior [Staff/Principal/Lead] Engineer/Developer/…") or seniority
+  // metadata says so. This anchors on the role HEAD, so a comp-band title like
+  // NYL's "Senior Associate - Associate Full Stack Engineer" (where "Senior"
+  // modifies the pay grade "Associate", >3 tokens from "Engineer") does NOT
+  // fire, and — unlike a body-text gate — a real "Senior Engineer" posting is
+  // never demoted by mentoring copy ("mentor early-career engineers").
+  // Code-review fix: one shared technical-role-head list so the senior and
+  // staff/principal detectors can't drift apart (they previously had divergent
+  // head sets — e.g. "Staff SRE" failed to register).
+  const SENIOR_HEAD = "engineer|developer|programmer|architect|scientist|sre|devops|analyst|designer";
+  const seniorTitle = new RegExp(
+    String.raw`\b(?:senior|sr\.?)\s+(?:staff\s+|principal\s+|lead\s+)?(?:[A-Za-z.+/&-]+\s+){0,3}(?:${SENIOR_HEAD})\b`,
+    "i"
+  );
+  if (seniorTitle.test(titleAndMeta) || /\bsenior\b/i.test(reviewMetadata.seniority ?? "")) add("senior");
 
-  if (/\blead\b|\bleadership\b|\bmentor\b|\bmanage\b|\bmanager\b/i.test(source)) add("leadership");
-  if (/\bown\b|\bownership\b|\bend-to-end\b|\bdrive\b/i.test(source)) add("ownership");
+  // Fix(JD-test): staff/principal/distinguished/fellow are senior-or-above IC
+  // levels (title-anchored to a technical role head, so "principal investigator"
+  // or prose "staff are friendly" can't fire).
+  const staffLevel = titleAndMeta.match(
+    new RegExp(String.raw`\b(staff|principal|distinguished|fellow)\s+(?:[A-Za-z.+/&-]+\s+){0,3}(?:${SENIOR_HEAD})\b`, "i")
+  );
+  if (staffLevel) add(`${staffLevel[1].toLowerCase()}-level`);
+
+  // Fix(JD-test): intern / co-op from the TITLE only — a body mention of
+  // "internship experience preferred" must not tag a senior role an internship.
+  if (/\bintern(?:ship)?\b|\bco-?op\b/i.test(tracking.title ?? "")) add("intern");
+
+  // Fix(JD-test): dropped bare "manage"/"manager" — they over-matched routine
+  // copy ("manage time", "agreement management") and reports-to lines ("Senior
+  // Manager"), tagging individual-contributor roles as leadership.
+  if (/\blead\b|\bleadership\b|\bmentor\b/i.test(source)) add("leadership");
+  // Fix(JD-test): dropped "drive" — it matched street addresses ("…Hoyt Drive")
+  // and duty verbs ("drive design"), fabricating an ownership seniority signal.
+  if (/\bown\b|\bownership\b|\bend-to-end\b/i.test(source)) add("ownership");
   return signals.slice(0, 6);
 }
 
