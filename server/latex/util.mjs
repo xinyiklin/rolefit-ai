@@ -1,16 +1,11 @@
 // Helpers shared across LaTeX template renderers.
 
-// Section-heading classifier shared by the templates and the text parser:
-// summary-like sections hold plain paragraphs, not skill rows or entries.
-// Skills wins over summary so "Skills Summary" keeps its label-colon rows
-// (mirrors inferSectionType in src/lib/resumeData.ts).
-const SKILLS_HEADING_RE = /\b(?:technical\s+skills|skills|core\s+skills)\b/i;
-const SUMMARY_HEADING_RE = /\b(?:summary|objective|profile|about\s+me|highlights)\b/i;
+// Section-heading classification comes from the single source of truth shared with
+// the client scorer/parser (src/resume/sections.mjs) — re-exported so the templates
+// and the text parser keep importing it from ./util.mjs.
+import { isSummaryHeading } from "../../src/resume/sections.mjs";
 
-export function isSummaryHeading(heading) {
-  const trimmed = String(heading ?? "").trim();
-  return SUMMARY_HEADING_RE.test(trimmed) && !SKILLS_HEADING_RE.test(trimmed);
-}
+export { isSummaryHeading };
 
 // Templates classify sections by the editor's explicit type when the schema
 // carries one (a renamed summary still renders as paragraphs); heading text is
