@@ -134,17 +134,33 @@ export function newSection(type: ResumeSectionType = "standard", heading?: strin
 // Heuristics mirror the server parser (server/latex/parseResumeText.mjs) so a
 // resume seeded into the editor maps the same way the LaTeX pipeline would map it.
 
-const BULLET_RE = /^\s*(?:[-*•◦▪‣]|\d+[.)])\s+/;
+// Glyph set kept in sync with the scorer (src/resume/text.ts BULLET_GLYPHS, minus
+// "·" which is the heading separator) and the server parser
+// (server/latex/parseResumeText.mjs) so the editor, scorer, and LaTeX render path
+// all recognize the same pasted bullets.
+const BULLET_RE = /^\s*(?:[-*•◦▪▫■□●○‣⁃∙]|\d+[.)])\s+/;
 const SECTION_RE = /^[A-Z0-9][A-Z0-9 &/\-]+$/;
+// A recognized section-title phrase in ANY case. Anchored to the WHOLE line (with
+// only an optional "& X" / "and X" tail) so a job title or company name that
+// merely contains a section word — "Education Coordinator", "Software Engineering
+// Experience" — does NOT match, while a normally-formatted Title-Case header does.
+const KNOWN_SECTION_TITLE_RE =
+  /^(?:(?:work|professional|relevant|employment|career|academic|technical|core|key|other|additional|selected|personal)\s+)*(?:experience|education|skills|projects?|summary|objective|profile|highlights?|certifications?|licenses?|achievements?|accomplishments?|awards?|honou?rs?|background|history|publications?|patents?|involvement|activities|interests|languages?|volunteer(?:ing)?|leadership|coursework|competenc(?:e|ies)|qualifications?)(?:\s*(?:&|and|\/)\s*[a-z]+)?$/i;
 const HEADING_SPLIT_RE = /\s*[|•·]\s+/;
 
 function isSectionHeader(line: string): boolean {
-  const trimmed = line.trim();
+  // Tolerate a trailing colon ("Experience:", "EDUCATION:") — common in pasted /
+  // PDF-exported resumes — which the char classes below otherwise reject.
+  const trimmed = line.trim().replace(/:$/, "");
   if (trimmed.length < 2 || trimmed.length > 50) return false;
-  if (!SECTION_RE.test(trimmed)) return false;
   // Section headings are usually 1–2 words; cap at 4 so a SHOUTING company name
   // is not mistaken for a heading.
-  return trimmed.split(/\s+/).length <= 4;
+  if (trimmed.split(/\s+/).length > 4) return false;
+  // A header is an ALL-CAPS short line (the original rule) OR a recognized
+  // section-title phrase in any case — otherwise a normally-formatted Title-Case
+  // resume ("Experience", "Technical Skills") parsed as ZERO sections and the
+  // entire body collapsed into the contact line.
+  return SECTION_RE.test(trimmed) || KNOWN_SECTION_TITLE_RE.test(trimmed);
 }
 
 function stripBullet(line: string): string {
@@ -250,7 +266,7 @@ function parsePlainResume(text: string): ResumeData {
     if (!line) continue;
 
     if (isSectionHeader(line)) {
-      const heading = line.trim();
+      const heading = line.trim().replace(/:$/, "");
       currentSection = { id: uid("section"), heading, type: inferSectionType(heading), items: [] };
       sections.push(currentSection);
       currentItem = null;

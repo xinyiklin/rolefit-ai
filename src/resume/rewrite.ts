@@ -16,6 +16,19 @@ import type { PolishedResume } from "./types";
 
 const TECHNICAL_SECTION_NAMES = new Set(["core skills", "skills", "technical skills"]);
 
+// Markers that the action in a bullet is NOT the candidate's own completed work,
+// even after a weak-lead phrase is stripped: a negation ("...never shipped"), a
+// passive ("...was handled by X"), a peripheral role ("shadowed/observed..."), or
+// a third-party attribution clause ("...that the QA team closed"). When any match,
+// we must NOT assert a leading action verb — doing so would invert or misattribute
+// the claim. The relative-clause arm requires a relative pronoun AND a team/role
+// noun, so a beneficiary phrase like "for the platform team" (no pronoun) is left
+// strengthenable. These are high-confidence, low-false-positive markers; this is a
+// best-effort refusal to INVENT, not a proof of correctness — the preferred AI
+// polish plus human review handle the nuance rules can't.
+const NOT_OWNED_ACTION =
+  /\b(?:never|didn'?t|did not|do(?:es)? not|don'?t|wasn'?t|was not|weren'?t|were not|hasn'?t|haven'?t|hadn'?t|no longer|not yet|unable to|shadow(?:ed|ing)?|observ(?:ed|ing)|sat in on|assisted with)\b|\b(?:was|were|been|is|are)\s+\w+(?:ed|en)\s+by\b|\b(?:who|that|which|whom)\b(?:\W+\w+){0,4}?\W+(?:qa|team|teams|engineer|engineers|developer|developers|contractor|contractors|vendor|consultant|colleague|teammate|department|manager|staff|lead|leads)\b/i;
+
 function scoreBullet(line: string, keywords: string[]) {
   const clean = stripBullet(line).toLowerCase();
   const keywordHits = keywords.filter((keyword) => includesKeyword(clean, keyword)).length;
@@ -29,14 +42,35 @@ function polishBullet(line: string, keywords: string[], promptForMetric: boolean
   const weakLead = original
     .replace(/^(responsible for|worked on|helped with|used|utilized|created)\s+/i, "")
     .replace(/^(built|designed|developed|implemented|led|managed|optimized)\s+to\s+/i, "");
+  // We ASSERT a leading action verb only when BOTH hold: (1) a recognized
+  // weak-lead phrase ("responsible for", "worked on", …) was stripped, and (2) the
+  // remaining text carries no NOT_OWNED_ACTION marker (negation / passive /
+  // third-party attribution). Either guard alone is insufficient — a stripped weak
+  // lead can still front text the source negates or credits to someone else
+  // ("...shadowing a senior who built X", "...tickets that the QA team closed"). A
+  // bullet that started with its OWN words ("never deployed to prod") is likewise
+  // left intact. When in doubt we keep the source lead; at worst a weak bullet
+  // keeps a lower-energy lead. Best-effort refusal to invent, not a formal proof.
+  const weakLeadWasStripped = weakLead !== original;
   let body = sentenceCase(weakLead);
 
-  if (!startsWithAction(weakLead)) {
+  // Don't prepend a verb when the lead is already a gerund ("-ing" word). The lead
+  // may be a real verb ("deploying X" — prepending would double it: "Deployed
+  // deploying X") OR a noun-modifier ("testing frameworks", "pricing engine" —
+  // stripping/replacing it would corrupt the claim). Either way the safe move is to
+  // leave the gerund lead as-is; "Deploying X" is weaker but truthful, and the
+  // preferred AI polish phrases these better.
+  const leadsWithGerund = /^\w+ing\b/i.test(weakLead);
+  if (!startsWithAction(weakLead) && weakLeadWasStripped && !leadsWithGerund && !NOT_OWNED_ACTION.test(weakLead)) {
     body = `${chooseActionVerb(weakLead, keywords)} ${weakLead.charAt(0).toLowerCase()}${weakLead.slice(1)}`.trim();
   }
 
-  if (body.length > 185) {
-    body = `${body.slice(0, 182).replace(/\s+\S*$/, "")}...`;
+  // Only truncate genuinely bloated bullets. The cutoff matches the scorer's
+  // revived concision threshold (210 chars in scoring.ts) so the polisher no
+  // longer ellipsis-truncates normal ~190-char bullets that the scorer treats as
+  // fine — which both lost real content and looked unfinished.
+  if (body.length > 210) {
+    body = `${body.slice(0, 207).replace(/\s+\S*$/, "")}...`;
   }
 
   if (promptForMetric && !hasMetric(body)) {
@@ -49,6 +83,12 @@ function polishBullet(line: string, keywords: string[], promptForMetric: boolean
 function chooseActionVerb(text: string, keywords: string[]) {
   const normalized = normalizeText(text);
   if (/\b(migrat|transfer|onboard|coordinat)\w*/.test(normalized)) return "Coordinated";
+  // Cloud/DevOps work reads best with deployment/automation verbs rather than the
+  // generic "Built". Checked before the api/backend branch so a "deployed via
+  // Docker on AWS" bullet is led by "Deployed", not "Built". (All returned verbs
+  // are in ACTION_VERBS so the polished bullet scores as action-led.)
+  if (/\b(deploy|docker|kubernetes|k8s|container|pipeline|ci\/cd|cicd|terraform|provision|infrastructure)\w*/.test(normalized)) return "Deployed";
+  if (/\b(automat|orchestrat|script)\w*/.test(normalized)) return "Automated";
   if (/\b(debug|troubleshoot|fix|resolved?)\b/.test(normalized)) return "Resolved";
   if (/\b(test|validated?|verified?|qa)\b/.test(normalized)) return "Validated";
   if (/\b(database|postgresql|sql|model|schema)\b/.test(normalized)) return "Designed";
@@ -153,14 +193,60 @@ function removeSections(lines: string[], labels: Set<string>) {
   return trimBlankEdges(output);
 }
 
+// A skill named in the resume is "claimed" (assertable as held experience) only
+// if it appears in at least one line that is NOT purely aspirational or
+// disclaimed. Otherwise the summary/skills section would overclaim a skill the
+// source only said it WANTED to learn or had passing familiarity with ("Familiar
+// with: Kubernetes" -> asserting "hands-on experience with Kubernetes"). Markers
+// are deliberately narrow and chosen to avoid colliding with real skill names
+// (notably NOT bare "learning", which is inside "machine learning"). A skill that
+// also appears in any non-aspirational line (a real accomplishment bullet) stays.
+const ASPIRATIONAL_SKILL =
+  /\b(?:familiar(?:ity)? with|exposure to|some exposure|basic (?:knowledge|understanding|familiarity)|currently learning|want(?:ing)? to learn|hoping to (?:learn|use)|eager to (?:learn|use)|aspir\w* to (?:learn|use)|plan(?:ning)? to learn|interested in learning|beginner|studying|played with|tinkered with|dabbled(?: in)?|self-?taught|self-?study|coursework|on the side|in my spare time|for fun|as a hobby)\b/i;
+
+function skillIsClaimed(resumeText: string, keyword: string) {
+  // Scope the aspirational test to the CLAUSE the keyword sits in, splitting only
+  // on newline and ";" — NOT on "," or "|", which double as LIST separators: a
+  // marker must keep governing every item of a list it introduces ("Familiar with:
+  // React, Vue, Docker" / "Familiar with: React | Vue | Docker" exclude ALL),
+  // while a true clause break still un-taints the next clause ("Familiar with Rust;
+  // built Docker pipelines" claims Docker). Erring toward the marker governing more
+  // is the safe (under-claim) direction.
+  const clauses = resumeText.split(/[\n;]/).filter((clause) => includesKeyword(clause, keyword));
+  return clauses.some((clause) => !ASPIRATIONAL_SKILL.test(clause));
+}
+
+// A line with a real (non-contact) TITLE segment among its pipe/bullet-separated
+// parts is an entry/project HEADING ("Portfolio Site | github.com/x | 2024"), not a
+// stray duplicate contact line — so it must never be dropped just because it also
+// contains a URL/email. A pure contact line ("email | phone | github") has no such
+// title segment and is still droppable.
+function looksLikeEntryHeading(line: string): boolean {
+  // True if any "|"/bullet-separated segment is a real (non-contact) title — biased
+  // toward KEEPING the line: dropping a real heading loses content, whereas keeping
+  // a stray duplicate contact line is only cosmetic. No word-count cap, so a verbose
+  // title ("Senior Engineer, Platform Team, Acme Worldwide | github.com/x") is kept.
+  return line.split(/\s*[|·•]\s*/).some((segment) => {
+    const part = segment.trim();
+    return part.length > 0 && /[a-zA-Z]/.test(part) && !isContactLine(part) && !/^\d/.test(part);
+  });
+}
+
 function buildSummary(keywords: string[], resumeText: string) {
   // Strictly evidence-bounded: the only facts we may assert are skills that
   // appear in BOTH the source resume and the job keywords (a real
-  // resume↔JD overlap). Never hardcode an academic credential or a concrete
-  // skill list — for a non-CS / non-web candidate that fabricates both a degree
-  // and specific technical experience. With no derivable evidence, emit a
-  // bracketed placeholder the user fills in rather than a fabricated claim.
-  const matched = keywords.filter((keyword) => includesKeyword(resumeText, keyword)).slice(0, 7);
+  // resume↔JD overlap) AND are not purely aspirational. Never hardcode an
+  // academic credential or a concrete skill list — for a non-CS / non-web
+  // candidate that fabricates both a degree and specific technical experience.
+  // With no derivable evidence, emit a bracketed placeholder the user fills in
+  // rather than a fabricated claim.
+  const claimed = keywords.filter((keyword) => skillIsClaimed(resumeText, keyword));
+  // Drop a single-word keyword already covered by a longer matched phrase so the
+  // summary doesn't read "Machine Learning, Learning, Machine" — extractKeywords
+  // surfaces both a bigram and its component unigrams.
+  const matched = claimed
+    .filter((keyword) => !claimed.some((other) => other !== keyword && other.split(/[\s/]+/).includes(keyword)))
+    .slice(0, 7);
   if (matched.length === 0) {
     return ["SUMMARY", "[add summary: your background and target role]"];
   }
@@ -173,7 +259,7 @@ function buildSummary(keywords: string[], resumeText: string) {
 }
 
 function buildTechnicalSkills(keywords: string[], resumeText: string) {
-  const resumeSkills = ROLE_KEYWORDS.filter(({ keyword }) => includesKeyword(resumeText, keyword)).map(({ keyword }) => keyword);
+  const resumeSkills = ROLE_KEYWORDS.filter(({ keyword }) => skillIsClaimed(resumeText, keyword)).map(({ keyword }) => keyword);
   const targetedSkills = keywords.filter((keyword) => resumeSkills.includes(keyword));
   const skills = unique([...targetedSkills, ...resumeSkills]).slice(0, 12).map(titleCase);
 
@@ -275,7 +361,12 @@ export function normalizePolishedResume(polishedText: string, sourceResumeText: 
   const headerSet = new Set(header.map((line) => line.trim()).filter(Boolean));
   const body = trimBlankEdges(polished.body).filter((line) => {
     const trimmed = line.trim();
-    return trimmed && !headerSet.has(trimmed) && !isContactLine(trimmed);
+    // The isContactLine drop is meant to strip a duplicated header contact line
+    // from the body — it must NOT delete a real accomplishment BULLET, nor an
+    // entry/project HEADING, that merely contains an email/URL/phone ("- Built the
+    // notifications@ pipeline"; "Portfolio Site | github.com/x | 2024"). Drop only a
+    // pure contact line that is neither a bullet nor a titled heading.
+    return trimmed && !headerSet.has(trimmed) && !(isContactLine(trimmed) && !isBullet(line) && !looksLikeEntryHeading(trimmed));
   });
   const hasTechnicalSkills = body.some((line) => sectionName(line) === "technical skills");
   const output: string[] = [];

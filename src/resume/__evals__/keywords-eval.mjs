@@ -55,10 +55,39 @@ const checks = [
   // pair that never forms a bigram at all.
   ["single-occurrence content bigram dropped", !extractKeywords("payment reconciliation across ledgers").includes("payment reconciliation")],
 
-  // --- KNOWN LIMITATION, locked so a future change is deliberate: extractKeywords'
-  // token path requires length > 3 and 'c#' is not a ROLE_KEYWORD, so a bare 'c#'
-  // is not surfaced as an extracted keyword. (See keywords.ts isContentWord.)
-  ["known gap: bare c# is not extracted", !extractKeywords("Strong C# and SQL experience").includes("c#")]
+  // --- catalog additions (cloud/devops/framework gaps found by auditing real
+  // applications). Short / symbol / slashed terms are surfaced ONLY because they
+  // are ROLE_KEYWORDS now: the generic token path drops <=3-char tokens and
+  // splits on slashes, so a bare 'c#', 'aws', or 'ci/cd' would never appear
+  // otherwise. (This supersedes the old "bare c# is not extracted" known-gap.)
+  ["catalog: c# now extracted", extractKeywords("Strong C# and SQL experience").includes("c#")],
+  ["catalog: aws now extracted", extractKeywords("Experience with AWS and Docker").includes("aws")],
+  ["catalog: ci/cd now extracted", extractKeywords("Owns CI/CD pipelines and SQL").includes("ci/cd")],
+  ["catalog: k8s alias matches kubernetes", includesKeyword("Deployed to k8s", "kubernetes")],
+  ["catalog: gcp alias matches google cloud", includesKeyword("Ran services on GCP", "google cloud")],
+
+  // --- false-positive guards for deliberately narrow aliases: bare English words
+  // that are NOT the technology must not match (golang not bare 'go', 'spring
+  // boot' not the season, 'express.js' not the verb).
+  ["narrow alias: 'we go above and beyond' !~ go", !includesKeyword("we go above and beyond", "go")],
+  ["narrow alias: 'graduating spring 2024' !~ spring boot", !includesKeyword("graduating spring 2024", "spring boot")],
+  ["narrow alias: 'please express interest' !~ express", !includesKeyword("please express interest", "express")],
+
+  // --- scaffold stopwords: the jobExtract distiller's own section labels are no
+  // longer surfaced as required keywords (they are template furniture, not skills).
+  ["scaffold dropped: 'domain signals' not extracted", !extractKeywords("Domain Signals: fintech and payments domain").includes("domain")],
+  ["scaffold dropped: bare 'stack' not extracted", !extractKeywords("Tech Stack Keywords listed in the stack").includes("stack")],
+  // full-stack must still match despite 'stack' being a stopword (alias path is
+  // independent of STOP_WORDS).
+  ["full-stack still matches", includesKeyword("Full-stack engineer", "full-stack")],
+
+  // --- catalog collision guards (hardening audit): buildSummary/buildTechnicalSkills
+  // ASSERT a skill on any match, so a unit/common-noun collision would FABRICATE
+  // one. These aliases are intentionally kept OUT of ROLE_KEYWORDS — lock that.
+  ["no fabricate: '5 ml per test' !~ machine learning", !includesKeyword("Reduced reagent to 5 ml per test", "machine learning")],
+  ["no fabricate: 'shipping containers' !~ docker", !includesKeyword("Loaded shipping containers daily", "docker")],
+  ["real Docker still matches", includesKeyword("Built images with Docker", "docker")],
+  ["real machine learning still matches", includesKeyword("Trained machine learning models", "machine learning")]
 ];
 
 const failures = checks.filter(([, ok]) => !ok);
