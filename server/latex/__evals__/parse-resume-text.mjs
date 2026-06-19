@@ -33,6 +33,13 @@ const experience = section("EXPERIENCE");
 const expItem = experience?.items?.[0];
 const summary = s.sections.find((sec) => /summary/i.test(sec.heading));
 
+// Title-Case + trailing-colon headers must parse here too — this server parser is
+// kept in sync with the client src/lib/resumeData.ts isSectionHeader fix; before
+// it, a normally-formatted Title-Case resume collapsed its body into the contact.
+const titleCaseDoc = parseResumeText(
+  "Jane Doe\njane@example.com\n\nExperience:\nSoftware Engineer — Acme — 2020-2024\n- Built APIs\n\nEducation\nState University — BS CS — 2019"
+);
+
 const checks = [
   // --- name + contact ---
   ["first line is the name", s.name === "Jane Doe"],
@@ -53,6 +60,10 @@ const checks = [
   // --- summary paragraph preserved as content, not dropped ---
   ["summary section detected", Boolean(summary)],
   ["summary paragraph preserved", (summary?.items?.[0]?.bullets ?? []).some((b) => /Backend engineer/.test(b))],
+
+  // --- Title-Case + colon headers parse (server kept in sync with client parser) ---
+  ["Title-Case/colon headers parse into 2 sections", titleCaseDoc.sections.length === 2],
+  ["Title-Case heading drops trailing colon", titleCaseDoc.sections.every((sec) => !sec.heading.endsWith(":"))],
 
   // --- skills section heading detected ---
   ["technical skills section detected", Boolean(section("TECHNICAL SKILLS"))],

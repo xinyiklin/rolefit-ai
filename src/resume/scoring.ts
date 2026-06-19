@@ -121,14 +121,32 @@ function requiredYears(jobText: string): number | null {
   return found.length ? Math.min(...found) : null;
 }
 
+// An education section header — "Education" (a known section) plus common
+// variants ("Academic Background", "Education & Training") that isKnownSection
+// doesn't list. Full-match anchored + a pipe/year guard so a JOB entry like
+// "Academic Advisor | 2020-2022" is never mistaken for the education header.
+// The "education & X" arm is restricted to genuine education suffixes so a WORK
+// section titled "Education & Outreach" / "Education & Curriculum" (common in
+// edtech roles) is NOT mistaken for the academic section (which would skip its
+// real years of experience).
+const EDUCATION_SECTION_RE = /^(?:education|academics?|academic\s+(?:background|history|qualifications?|credentials?|record)|education\s+(?:and|&)\s+(?:training|certifications?|credentials?|qualifications?|learning|development))$/i;
+const isEducationSectionHeader = (line: string): boolean => {
+  const name = sectionName(line);
+  if (name === "education") return true;
+  return EDUCATION_SECTION_RE.test(name) && !line.includes("|") && !/\b(?:19|20)\d{2}\b/.test(line);
+};
+
 // Resume text with the education section dropped, so a degree's date span
 // (e.g. "2021-2025") is not mistaken for years of professional experience.
-// Lines under an EDUCATION header are skipped until the next known section.
+// Lines under an education header are skipped until the next known section.
+// Erring toward "in education" is the SAFE direction: it can only LOWER the
+// estimated years of experience, never inflate them past the seniority guardrail.
 function professionalExperienceText(resumeText: string): string {
   const kept: string[] = [];
   let inEducation = false;
   for (const line of resumeText.split("\n")) {
-    if (isKnownSection(line)) inEducation = sectionName(line) === "education";
+    if (isEducationSectionHeader(line)) inEducation = true;
+    else if (isKnownSection(line)) inEducation = false;
     if (!inEducation) kept.push(line);
   }
   return kept.join("\n");
@@ -138,10 +156,57 @@ function professionalExperienceText(resumeText: string): string {
 // (earliest to latest four-digit year), excluding the education section.
 // Returns null when there isn't enough dated work history to estimate — e.g. a
 // new-grad resume — so we don't guess.
+// Month token, fully anchored (no trailing `[a-z]*` slop) so "March"/"Mar" match
+// but "marketed"/"decided"/"approached" do NOT — that slop previously let a verb
+// before a 4-digit metric be read as a date and inflate seniority.
+const MONTH_RE = "(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)";
+// Optional date prefix before a year: "Jan ", "January ", "01/", "01.".
+const DATE_PREFIX = `(?:${MONTH_RE}\\.?\\s+|\\d{1,2}[\\/.]\\s*)?`;
+const YEAR_RE = "(?:19|20)\\d{2}";
+const YEAR_RANGE_RE = new RegExp(
+  `${DATE_PREFIX}\\b(${YEAR_RE})\\b\\s*(?:[-–—]|to|through|until)\\s*(?:${DATE_PREFIX}\\b(${YEAR_RE})\\b|present|current|now|ongoing|today|date)`,
+  "gi"
+);
+// A bare single year (no range) only at a DATE POSITION: after a "|"/"·"/"(" column
+// separator or a "since/from" cue. Requiring a cue (not bare whitespace) keeps a
+// prose count like "budget of 2000" from being read as a year; combined with the
+// bullet-skip in resumeYears, a metric ("2000 users") never qualifies.
+const BARE_YEAR_RE = new RegExp(`(?:[|·(]\\s*|\\b(?:since|from)\\s+)(?:\\d{1,2}[\\/.]\\s*)?\\b(${YEAR_RE})\\b`, "gi");
+
 function resumeYears(resumeText: string): number | null {
-  const years = [...professionalExperienceText(resumeText).matchAll(/\b(?:19|20)\d{2}\b/g)]
-    .map((m) => Number(m[0]))
-    .filter((y) => y >= 1980 && y <= 2035);
+  const text = professionalExperienceText(resumeText);
+  const years: number[] = [];
+  // Count a 4-digit number as a calendar year ONLY inside a date RANGE (earliest →
+  // latest), so a metric ("2000 users") or a stray prose number is never read as a
+  // year and inflate seniority. Endpoints may carry a month/MM prefix ("Jan 2016 -
+  // Jun 2024", "01/2016 - 06/2024"); the tail may be present/current.
+  // A bare SINGLE year (no range) is deliberately NOT counted — telling a date-year
+  // from a metric-year without context is unreliable, and returning null (→ no
+  // datable history) only LOWERS the seniority estimate, the safe/anti-overclaim
+  // direction. Match only the standalone modal-"may" risk lives inside a range,
+  // which is vanishingly rare in prose.
+  const cur = new Date().getFullYear();
+  for (const m of text.matchAll(YEAR_RANGE_RE)) {
+    const a = Number(m[1]);
+    if (a >= 1980 && a <= 2035) years.push(a);
+    if (m[2]) {
+      const b = Number(m[2]);
+      if (b >= 1980 && b <= 2035) years.push(b);
+    } else if (cur >= 1980 && cur <= 2035) {
+      years.push(cur);
+    }
+  }
+  // Bare single years at a date position, on NON-bullet lines only (a 4-digit number
+  // in a bullet is almost always a metric, e.g. "2000 users"). Restores tenure for
+  // the common "Company | Title | 2018" single-year format without re-opening the
+  // metric→year inflation the range-only scan was added to prevent.
+  for (const line of text.split("\n")) {
+    if (isBullet(line)) continue;
+    for (const m of line.matchAll(BARE_YEAR_RE)) {
+      const y = Number(m[1]);
+      if (y >= 1980 && y <= 2035) years.push(y);
+    }
+  }
   if (years.length < 2) return null;
   const span = Math.max(...years) - Math.min(...years);
   return span > 0 ? span : null;
@@ -174,18 +239,51 @@ export function scoreResume(resumeText: string, jobKeywords: string[], jobText: 
   const metricBullets = bullets.filter((line) => hasMetric(line)).length;
   const evidenceBullets = bullets.filter((line) => jobKeywords.some((keyword) => includesKeyword(line, keyword))).length;
   const sections = SECTION_LABELS.filter((section) => new RegExp(`\\b${section}\\b`, "i").test(resumeText)).length;
-  const longBullets = bullets.filter((line) => stripBullet(line).length > 175).length;
+  // A "long" bullet is one worth flagging for concision. The threshold is tuned
+  // to real resume bullets: across the saved application corpus the MEDIAN
+  // tailored bullet runs ~190 chars (about two lines) and the 90th percentile
+  // ~227, so the old 175-char cutoff flagged ~60% of every resume's bullets and
+  // pinned concision at its floor for every applicant — a dead constant carrying
+  // no signal. ~210 chars (~p85) flags only genuinely bloated bullets, so
+  // concision varies and discriminates again.
+  const longBullets = bullets.filter((line) => stripBullet(line).length > 210).length;
 
   const { keywordFit } = scoreKeywordFit(resumeText, jobKeywords, jobText);
   const bulletQuality = bullets.length
     ? clampScore(((actionBullets / bullets.length) * 0.45 + (evidenceBullets / bullets.length) * 0.35 + (metricBullets / bullets.length) * 0.2) * 100, 20)
     : 35;
   const structure = clampScore((sections / 4) * 100);
-  const concision = Math.max(35, 100 - longBullets * 8 - trimmedBulletGroups * 10);
+  // Gentler slope + a higher floor than the old (×8, ×10, floor 35) penalty: with
+  // the realistic 210-char threshold most resumes now flag 0-3 long bullets, so
+  // these coefficients spread concision across roughly 60-100 instead of pinning
+  // it at the floor. trimmedBulletGroups still penalises over-stuffed sections.
+  const concision = clampScore(100 - longBullets * 6 - trimmedBulletGroups * 8, 40);
   const seniority = scoreSeniority(resumeText, jobText);
-  let overall = clampScore(
-    keywordFit * 0.4 + bulletQuality * 0.2 + seniority * 0.15 + structure * 0.15 + concision * 0.1
-  );
+  // Rubric weights. `structure` is near-constant in practice (almost every real
+  // resume has all four counted sections, so it pins at 100 and carries no rank
+  // signal) — it was dropped from 0.15 to a token 0.07, and that weight moved to
+  // `keywordFit` (the only sub-score that meaningfully tracks AI fit judgment)
+  // and the now-revived `concision`. Weights sum to 1.0.
+  const rubric = keywordFit * 0.45 + bulletQuality * 0.18 + seniority * 0.15 + structure * 0.07 + concision * 0.15;
+  // Conservative corpus calibration. The literal-match rubric scores on a
+  // markedly stricter curve than the AI requirement-coverage judge (which credits
+  // adjacent/transferable evidence at 0.45 where the rubric gives 0). Measured
+  // against this user's own AI-scored applications, the raw rubric sat ~15 pts
+  // BELOW the AI's tailored fit on average — systematic pessimism that made the
+  // local "Estimated" verdict land a band too low and discouraged genuinely good
+  // applications. We correct HALF of that bias with a pure recenter (slope 1.0 —
+  // a shift, not a stretch, so rank order and spread are untouched and no new
+  // over-claims are introduced). The calibration sweep (--search in
+  // src/resume/__evals__/calibration-eval.mjs) showed that a steeper slope would
+  // remove the rest of the bias but multiply over-claims (local "Strong fit"
+  // where the AI says "Don't apply") and DROP verdict-band agreement — so we
+  // deliberately stay slightly conservative: still a touch below the AI, never
+  // above. The leftover offset keeps the shared 46/70/85 verdict bands reachable
+  // without forcing them. This is a calibration, NOT new evidence — it never
+  // asserts a resume fact.
+  const CALIBRATION_SLOPE = 1.0;
+  const CALIBRATION_OFFSET = 5;
+  let overall = clampScore(CALIBRATION_SLOPE * rubric + CALIBRATION_OFFSET);
 
   // Rubric guardrail: when the JD states a seniority bar (required years or a
   // senior-level title) and the resume clearly misses it, keep the overall out

@@ -29,7 +29,20 @@ export const ACTION_VERBS = [
   "reduced",
   "shipped",
   "streamlined",
-  "supported"
+  "supported",
+  // Strong action verbs the local polisher's chooseActionVerb can emit (and that
+  // recur in real bullets). Listed here so startsWithAction credits them in
+  // bulletQuality — otherwise the polisher's own "Deployed …"/"Resolved …"
+  // output, and genuine bullets led by these verbs, scored as having no action verb.
+  "automated",
+  "containerized",
+  "coordinated",
+  "deployed",
+  "engineered",
+  "integrated",
+  "resolved",
+  "strengthened",
+  "validated"
 ];
 
 export const ROLE_KEYWORDS: Array<{ keyword: string; aliases: string[] }> = [
@@ -62,7 +75,48 @@ export const ROLE_KEYWORDS: Array<{ keyword: string; aliases: string[] }> = [
   { keyword: "material ui", aliases: ["material ui", "mui"] },
   { keyword: "api integration", aliases: ["api integration", "integrate api", "integrate apis"] },
   { keyword: "code reviews", aliases: ["code review", "code reviews"] },
-  { keyword: "performance", aliases: ["performance", "latency"] }
+  { keyword: "performance", aliases: ["performance", "latency"] },
+  // Catalog coverage gaps surfaced by auditing this user's real applications:
+  // cloud providers appear in well over half the saved JDs yet were entirely
+  // absent here, so the resume's genuine matches went uncredited and the
+  // rewrite's skills section couldn't surface them. These add recognition only —
+  // a term is still counted exactly when it literally appears (keywordFit never
+  // invents coverage). Aliases avoid false-positive-prone bare words (e.g.
+  // "golang" not bare "go", "spring boot" not bare "spring", "express.js" not
+  // bare "express"). Multi-word/short terms (aws, c#, ci/cd, k8s) only become
+  // matchable/extractable BECAUSE they are listed here — the generic token path
+  // drops tokens <=3 chars and splits on slashes.
+  // Deliberately NOT aliased (would fabricate a skill via a unit/common-noun
+  // collision, since buildSummary/buildTechnicalSkills ASSERT a skill on any
+  // match): "ml" (the milliliter unit — "5 ml per test"), "flask" (the lab
+  // vessel), and bare container words "containers"/"containerized" (shipping/data
+  // containers). Keep machine-learning/docker matching to their unambiguous forms.
+  { keyword: "cloud", aliases: ["cloud"] },
+  { keyword: "aws", aliases: ["aws", "amazon web services"] },
+  { keyword: "azure", aliases: ["azure", "microsoft azure"] },
+  { keyword: "google cloud", aliases: ["google cloud", "gcp", "google cloud platform"] },
+  { keyword: "docker", aliases: ["docker"] },
+  { keyword: "kubernetes", aliases: ["kubernetes", "k8s"] },
+  { keyword: "ci/cd", aliases: ["ci/cd", "cicd", "ci cd", "continuous integration", "continuous delivery", "continuous deployment"] },
+  { keyword: "microservices", aliases: ["microservices", "microservice"] },
+  { keyword: "agile", aliases: ["agile"] },
+  { keyword: "scrum", aliases: ["scrum"] },
+  { keyword: "machine learning", aliases: ["machine learning"] },
+  { keyword: "angular", aliases: ["angular"] },
+  { keyword: "vue", aliases: ["vue", "vue.js", "vuejs"] },
+  { keyword: "next.js", aliases: ["next.js", "nextjs"] },
+  { keyword: "express", aliases: ["express.js", "expressjs"] },
+  { keyword: "fastapi", aliases: ["fastapi", "fast api"] },
+  { keyword: "spring boot", aliases: ["spring boot", "springboot"] },
+  { keyword: "c#", aliases: ["c#", "csharp", "c sharp"] },
+  { keyword: ".net", aliases: [".net", "dotnet", "asp.net"] },
+  { keyword: "go", aliases: ["golang"] },
+  { keyword: "graphql", aliases: ["graphql"] },
+  { keyword: "mongodb", aliases: ["mongodb", "mongo"] },
+  { keyword: "mysql", aliases: ["mysql"] },
+  { keyword: "redis", aliases: ["redis"] },
+  { keyword: "kafka", aliases: ["kafka"] },
+  { keyword: "terraform", aliases: ["terraform"] }
 ];
 
 const STOP_WORDS = new Set([
@@ -153,7 +207,32 @@ const STOP_WORDS = new Set([
   "such",
   "team",
   "teams",
-  "within"
+  "within",
+  // The stored/scored job text is this app's OWN jobExtract distiller output
+  // (src/lib/jobExtract.ts), not raw prose: 66/67 saved JDs literally contain the
+  // section headers "Tech Stack / Keywords:", "Seniority Signals:", "Domain
+  // Signals:", and "Company / Product Context:". Those scaffold tokens are NOT
+  // skills, yet extractKeywords was surfacing them and scoreKeywordFit then
+  // counted them as required keywords the resume can never contain ("domain
+  // signals" appears in no resume) — guaranteed misses that deflated keywordFit
+  // (40% of the score) on every tailored resume. Dropping the template furniture
+  // never invents coverage; it stops scoring the distiller's own labels. (These
+  // affect only the generic-token path; ROLE_KEYWORDS alias matching, e.g.
+  // "full-stack", is independent of STOP_WORDS.)
+  "context",
+  "domain",
+  "keywords",
+  // "product" is part of the distiller's "Company / Product Context:" scaffold label
+  // emitted on essentially every JD, so leaving it un-stopworded makes it a SYSTEMATIC
+  // phantom-missing keyword that deflates keywordFit on every resume lacking the word.
+  // That systematic deflation outweighs losing it as a (weak, generic) keyword on the
+  // occasional genuinely product-focused JD.
+  "product",
+  "seniority",
+  "signals",
+  "specified",
+  "stack",
+  "tech"
 ]);
 
 export const startsWithAction = (text: string) =>
