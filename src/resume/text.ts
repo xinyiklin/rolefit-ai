@@ -1,51 +1,25 @@
 // Shared low-level text utilities used across keyword extraction, scoring,
 // rewriting, and diffing. No domain tables live here — only generic string
-// helpers depended on by two or more of those modules.
+// helpers depended on by two or more of those modules. Section/bullet vocabulary
+// lives in the single source of truth ./sections.mjs (shared with the editor +
+// server parsers); the re-exports below keep existing importers unchanged.
+import { BULLET_GLYPHS, isTopLevelSectionHeader, normalize } from "./sections.mjs";
 
 export const hasMetric = (text: string) =>
   /(\$\s?\d+|\d+(?:\.\d+)?\s*%|\d+(?:\.\d+)?\s*(?:percent|x|k|m|tb|gb|mb)\b|\d+\+|\d+(?:\.\d+)?\s+(?:\w+\s+){0,2}(?:users?|requests?|records?|models?|endpoints?|apps?|patients?|facilities?|hours?|days?|weeks?|months?|ms|milliseconds?|seconds?|minutes?)\b)/i.test(text);
-// Bullet glyphs include the copy-paste variants Word/Google-Docs/PDF exports
-// produce (◦ ▪ ● ○ ‣ ⁃ ∙ …), not just "- * •" — otherwise a resume pasted with
-// those glyphs registers ZERO bullets and falls back to default bulletQuality.
-// The trailing \s+ is required, so a glyph inside text or a "2020-2023" date span
-// is never mistaken for a bullet. The middle dot "·" is deliberately EXCLUDED — it
-// is the contact/heading SEPARATOR ("email · phone · link"), so a fragment that
-// starts with "· " must not register as a bullet.
-const BULLET_GLYPHS = "-*•◦▪▫■□●○‣⁃∙";
+// Bullet detection uses the shared glyph set (./sections.mjs). The trailing \s+ is
+// required, so a glyph inside text or a "2020-2023" date span is never a bullet.
 const BULLET_RE = new RegExp(`^\\s*[${BULLET_GLYPHS}]\\s+`);
 export const isBullet = (line: string) => BULLET_RE.test(line);
 export const stripBullet = (line: string) => line.replace(BULLET_RE, "").trim();
-export const sectionName = (line: string) => line.trim().replace(/:$/, "").toLowerCase();
+// Single source: the same normalization the section matchers use, so label-matching
+// (sectionName) and boundary detection (isKnownSection) can never disagree.
+export const sectionName = normalize;
 export const isContactLine = (line: string) => /@|https?:\/\/|github\.com|linkedin\.com|\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}/i.test(line);
-export const isKnownSection = (line: string) =>
-  [
-    "summary",
-    "targeted summary",
-    "core skills",
-    "skills",
-    "technical skills",
-    "projects",
-    "experience",
-    "work experience",
-    // Experience-header variants — without these a section boundary goes
-    // unrecognized, so an education-first resume with one of these headers had its
-    // real experience years masked (and the education state machine never cleared).
-    "professional experience",
-    "employment history",
-    "work history",
-    "career history",
-    "relevant experience",
-    "professional background",
-    "education",
-    "certifications"
-    // NOTE: deliberately NOT adding awards/honors/publications/coursework/activities/
-    // languages/etc. Many are SUB-headers nested under Education, and this flat list
-    // drives the education date-shield in scoring.ts professionalExperienceText —
-    // recognizing them would clear the shield mid-Education and leak degree-era dates
-    // into years-of-experience, INFLATING seniority (the unsafe over-claim direction).
-    // Leaving them unrecognized keeps post-education content shielded, which only ever
-    // LOWERS the estimate (safe). A proper fix needs a nesting-aware section model.
-  ].includes(sectionName(line));
+// A known TOP-LEVEL section header — the boundary detector for the education
+// date-shield (scoring.ts) and the polisher's section-removal walk (rewrite.ts).
+// Single source of truth: ./sections.mjs (shared with the editor + server parsers).
+export const isKnownSection = isTopLevelSectionHeader;
 
 export function normalizeText(text: string) {
   return text

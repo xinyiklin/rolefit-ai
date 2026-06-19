@@ -1,5 +1,6 @@
 import { displayKeyword, extractKeywords, includesKeyword, startsWithAction } from "./keywords";
-import { hasMetric, isBullet, isKnownSection, sectionName, stripBullet } from "./text";
+import { isEducationHeading } from "./sections.mjs";
+import { hasMetric, isBullet, isKnownSection, stripBullet } from "./text";
 import type { MatchBreakdown, ResumeAnalysis, ResumeScore } from "./types";
 
 const SECTION_LABELS = ["summary", "experience", "skills", "education", "projects", "certifications"];
@@ -121,31 +122,21 @@ function requiredYears(jobText: string): number | null {
   return found.length ? Math.min(...found) : null;
 }
 
-// An education section header — "Education" (a known section) plus common
-// variants ("Academic Background", "Education & Training") that isKnownSection
-// doesn't list. Full-match anchored + a pipe/year guard so a JOB entry like
-// "Academic Advisor | 2020-2022" is never mistaken for the education header.
-// The "education & X" arm is restricted to genuine education suffixes so a WORK
-// section titled "Education & Outreach" / "Education & Curriculum" (common in
-// edtech roles) is NOT mistaken for the academic section (which would skip its
-// real years of experience).
-const EDUCATION_SECTION_RE = /^(?:education|academics?|academic\s+(?:background|history|qualifications?|credentials?|record)|education\s+(?:and|&)\s+(?:training|certifications?|credentials?|qualifications?|learning|development))$/i;
-const isEducationSectionHeader = (line: string): boolean => {
-  const name = sectionName(line);
-  if (name === "education") return true;
-  return EDUCATION_SECTION_RE.test(name) && !line.includes("|") && !/\b(?:19|20)\d{2}\b/.test(line);
-};
-
 // Resume text with the education section dropped, so a degree's date span
 // (e.g. "2021-2025") is not mistaken for years of professional experience.
-// Lines under an education header are skipped until the next known section.
-// Erring toward "in education" is the SAFE direction: it can only LOWER the
-// estimated years of experience, never inflate them past the seniority guardrail.
+// Lines under an education header are skipped until the next TOP-LEVEL section
+// (isKnownSection). Crucially, isEducationHeading recognizes education but
+// isKnownSection does NOT recognize sub-sections (Coursework/Awards/…), so a dated
+// sub-section nested under Education keeps the shield ON and never leaks degree
+// years into experience. Erring toward "in education" is the SAFE direction: it can
+// only LOWER the estimate, never inflate it past the seniority guardrail.
+// (isEducationHeading comes from ./sections.mjs; isKnownSection is re-exported by
+// ./text from the same module's isTopLevelSectionHeader.)
 function professionalExperienceText(resumeText: string): string {
   const kept: string[] = [];
   let inEducation = false;
   for (const line of resumeText.split("\n")) {
-    if (isEducationSectionHeader(line)) inEducation = true;
+    if (isEducationHeading(line)) inEducation = true;
     else if (isKnownSection(line)) inEducation = false;
     if (!inEducation) kept.push(line);
   }

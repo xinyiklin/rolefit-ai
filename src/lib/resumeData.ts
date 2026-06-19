@@ -17,6 +17,7 @@
 
 import { looksLikeLatex } from "./resumeFormat";
 import { stripInlineMarks } from "./inlineMarks";
+import { BULLET_GLYPHS, inferSectionType, isSectionHeader } from "../resume/sections.mjs";
 
 // ===== Types =====
 
@@ -60,19 +61,6 @@ let uidCounter = 0;
 function uid(prefix: string): string {
   uidCounter += 1;
   return `${prefix}-${uidCounter}`;
-}
-
-const SKILLS_SECTION_RE = /\b(?:technical\s+skills|skills|core\s+skills)\b/i;
-const SUMMARY_SECTION_RE = /\b(?:summary|objective|profile|about\s+me|highlights)\b/i;
-
-// Internal: type is inferred from the heading only when PARSING imported resumes
-// (added sections get an explicit type from the picker). Skills wins over
-// summary so "Skills Summary" stays a skill list.
-function inferSectionType(heading: string): ResumeSectionType {
-  const trimmed = heading.trim();
-  if (SKILLS_SECTION_RE.test(trimmed)) return "skills";
-  if (SUMMARY_SECTION_RE.test(trimmed)) return "summary";
-  return "standard";
 }
 
 export function newBullet(text = ""): ResumeBullet {
@@ -131,37 +119,15 @@ export function newSection(type: ResumeSectionType = "standard", heading?: strin
 }
 
 // ===== Parse (plain text → structured) =====
-// Heuristics mirror the server parser (server/latex/parseResumeText.mjs) so a
-// resume seeded into the editor maps the same way the LaTeX pipeline would map it.
+// Section/bullet heuristics are the SAME as the server parser
+// (server/latex/parseResumeText.mjs) — both import them from
+// ../resume/sections.mjs — so a resume seeded into the editor maps the same way the
+// LaTeX pipeline would map it.
 
-// Glyph set kept in sync with the scorer (src/resume/text.ts BULLET_GLYPHS, minus
-// "·" which is the heading separator) and the server parser
-// (server/latex/parseResumeText.mjs) so the editor, scorer, and LaTeX render path
-// all recognize the same pasted bullets.
-const BULLET_RE = /^\s*(?:[-*•◦▪▫■□●○‣⁃∙]|\d+[.)])\s+/;
-const SECTION_RE = /^[A-Z0-9][A-Z0-9 &/\-]+$/;
-// A recognized section-title phrase in ANY case. Anchored to the WHOLE line (with
-// only an optional "& X" / "and X" tail) so a job title or company name that
-// merely contains a section word — "Education Coordinator", "Software Engineering
-// Experience" — does NOT match, while a normally-formatted Title-Case header does.
-const KNOWN_SECTION_TITLE_RE =
-  /^(?:(?:work|professional|relevant|employment|career|academic|technical|core|key|other|additional|selected|personal)\s+)*(?:experience|education|skills|projects?|summary|objective|profile|highlights?|certifications?|licenses?|achievements?|accomplishments?|awards?|honou?rs?|background|history|publications?|patents?|involvement|activities|interests|languages?|volunteer(?:ing)?|leadership|coursework|competenc(?:e|ies)|qualifications?)(?:\s*(?:&|and|\/)\s*[a-z]+)?$/i;
+// Bullet glyph set is shared (../resume/sections.mjs); the parser additionally
+// accepts numbered lists ("1." / "1)"). isSectionHeader is shared too.
+const BULLET_RE = new RegExp(`^\\s*(?:[${BULLET_GLYPHS}]|\\d+[.)])\\s+`);
 const HEADING_SPLIT_RE = /\s*[|•·]\s+/;
-
-function isSectionHeader(line: string): boolean {
-  // Tolerate a trailing colon ("Experience:", "EDUCATION:") — common in pasted /
-  // PDF-exported resumes — which the char classes below otherwise reject.
-  const trimmed = line.trim().replace(/:$/, "");
-  if (trimmed.length < 2 || trimmed.length > 50) return false;
-  // Section headings are usually 1–2 words; cap at 4 so a SHOUTING company name
-  // is not mistaken for a heading.
-  if (trimmed.split(/\s+/).length > 4) return false;
-  // A header is an ALL-CAPS short line (the original rule) OR a recognized
-  // section-title phrase in any case — otherwise a normally-formatted Title-Case
-  // resume ("Experience", "Technical Skills") parsed as ZERO sections and the
-  // entire body collapsed into the contact line.
-  return SECTION_RE.test(trimmed) || KNOWN_SECTION_TITLE_RE.test(trimmed);
-}
 
 function stripBullet(line: string): string {
   return line.replace(BULLET_RE, "").trim();

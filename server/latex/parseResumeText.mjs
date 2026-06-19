@@ -32,31 +32,17 @@
 //     split on | (or " — ") for title / subtitle / dates / location
 
 import { isSummaryHeading } from "./util.mjs";
+// Section vocabulary + bullet glyphs come from the single source of truth shared
+// with the client scorer/parser, so this server render path segments a pasted
+// resume identically to the editor. (node imports the .mjs directly; the client
+// gets types from its .d.mts.)
+import { BULLET_GLYPHS, isSectionHeader } from "../../src/resume/sections.mjs";
 
-// Kept in sync with src/lib/resumeData.ts (BULLET_RE, SECTION_RE,
-// KNOWN_SECTION_TITLE_RE, isSectionHeader) and the scorer's bullet glyph set in
-// src/resume/text.ts — the client editor and this server render path must segment
-// the same pasted resume identically.
-const BULLET_RE = /^\s*(?:[-*•◦▪▫■□●○‣⁃∙]|\d+[.)])\s+/;
-const SECTION_RE = /^[A-Z0-9][A-Z0-9 &/\-]+$/;
-// A recognized section-title phrase in ANY case, anchored to the whole line (with
-// only an optional "& X" tail) so a Title-Case header parses but a job title that
-// merely contains a section word ("Education Coordinator") does not.
-const KNOWN_SECTION_TITLE_RE =
-  /^(?:(?:work|professional|relevant|employment|career|academic|technical|core|key|other|additional|selected|personal)\s+)*(?:experience|education|skills|projects?|summary|objective|profile|highlights?|certifications?|licenses?|achievements?|accomplishments?|awards?|honou?rs?|background|history|publications?|patents?|involvement|activities|interests|languages?|volunteer(?:ing)?|leadership|coursework|competenc(?:e|ies)|qualifications?)(?:\s*(?:&|and|\/)\s*[a-z]+)?$/i;
+// The parser additionally accepts numbered lists ("1." / "1)") on top of the shared
+// bullet glyphs.
+const BULLET_RE = new RegExp(`^\\s*(?:[${BULLET_GLYPHS}]|\\d+[.)])\\s+`);
 const HEADING_SPLIT_RE = /\s*[|•·]\s+/;
 const CONTACT_SPLIT_RE = /\s*[|•·]\s+/;
-
-function isSectionHeader(line) {
-  // Tolerate a trailing colon ("Experience:") which the char classes reject.
-  const trimmed = line.trim().replace(/:$/, "");
-  if (trimmed.length < 2 || trimmed.length > 50) return false;
-  // Avoid catching a SHOUTING company name. Section headings are usually one or
-  // two words; allow up to 4.
-  if (trimmed.split(/\s+/).length > 4) return false;
-  // ALL-CAPS short line OR a recognized section-title phrase in any case.
-  return SECTION_RE.test(trimmed) || KNOWN_SECTION_TITLE_RE.test(trimmed);
-}
 
 function stripBullet(line) {
   return line.replace(BULLET_RE, "").trim();
