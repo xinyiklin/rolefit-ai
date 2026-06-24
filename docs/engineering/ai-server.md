@@ -61,6 +61,21 @@ careflow `5173-5180`, portfolio `5184-5185`; do not mix them up.
   Preferred Qualifications, Tech Stack/Keywords, Seniority Signals, and
   Domain Signals. The link itself is kept only for pipeline tracking and is
   never sent to the AI.
+- browser-extension API (`/api/extension/*`, helpers in
+  `server/extension/index.mjs`): `analyze` (POST) returns a local
+  keyword-overlap fit estimate of the workspace base resume against the
+  posted page text, plus a normalized-URL lookup of any matching tracked
+  application; `import` (POST) stashes the page text in an in-memory
+  inbox; `inbox` (GET) hands that pending import to the app once and
+  clears it. `analyze` / `import` are reachable cross-origin from the
+  extension popup and are gated to extension-scheme Origins
+  (`chrome-extension://`, `moz-extension://`, `safari-web-extension://`)
+  with the validated Origin reflected back — never a wildcard, never an
+  absent Origin; `inbox` is polled same-origin by the app and stays behind
+  the localhost CSRF/Host guard with no CORS header. The quick score
+  reports only overlap of known tech keywords — it never invents resume
+  content, so the anti-fabrication-gated `/api/polish` remains the
+  authoritative fit verdict.
 - workspace file storage under `job-search-workspace/` (auto-load,
   upload, save, reload)
 

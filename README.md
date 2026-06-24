@@ -27,6 +27,7 @@ _Screenshots use demo workspace data._
 
 - **Multi-format resume I/O** — ingest `.docx`, `.tex` (Jake's-style), or plain text; paste extracted PDF text when the original file is only available as PDF.
 - **Job-link import** — paste a posting URL and pull the description in one click: Workday-aware (reads its CXS JSON API for `/job/` and `/details/` links), with a generic HTML→text fallback for other boards. The client distills the scrape before polishing, keeping role intro / responsibilities / requirements / preferred qualifications while dropping empty bullets, duplicated ATS title furniture, low-value Workday metadata, apply/share/navigation rows, company/culture marketing, salary pills, benefits/perks, pay-transparency, and EEO/legal boilerplate. The link itself is kept only for pipeline tracking and is **never sent to the model**.
+- **Browser extension (Chrome/Firefox)** — on any job posting, click the toolbar icon for an instant **local fit score** (a keyword-overlap estimate against your base resume), **matched vs missing** keywords, a check on whether you've **already tracked or applied** to that exact posting, and a one-click **Import** that distills the page into the app's Job field. Manifest V3; talks only to your local `http://localhost:5181` server, so nothing leaves your machine. See [Browser extension](#browser-extension).
 - **Subscription-friendly, multi-provider AI** — the default is the **Claude Code CLI** subscription path, with the other **subscription-CLI tools** (`Codex CLI`, `Gemini CLI` / Antigravity) routing through existing Claude Max / ChatGPT Plus / Google subscriptions instead of per-token billing, and **hosted-API backends** (OpenAI, Anthropic, Gemini, OpenRouter, Groq, Together, Mistral, local Ollama) available behind the same interface.
 - **Fit scoring + 4-category keyword gap analysis** — required experience, knowledge, required skills, technical tools.
 - **Strict recruiter review mode** — verdict (STRONG FIT / REASONABLE FIT / STRETCH / DON'T APPLY), base-vs-tailored fit scores, gap severity, targeted bullet rewrites, interview risk flags, an apply-as-is / edit-first recommendation, and a cover-letter angle.
@@ -92,6 +93,22 @@ brew install tectonic
 
 When installed, the `PDF · LaTeX` button in the export rail compiles your polished `.tex` directly to PDF in-app. Without it, use **PDF · clean** (the tailored resume prints through your browser's Save as PDF) or download the `.tex` to compile in your own LaTeX toolchain.
 
+## Browser extension
+
+A lightweight Chrome/Firefox popup that brings the fit check to the job board. On any posting, click the **RoleFit AI** toolbar icon to see:
+
+- an **estimated fit score** — a local keyword-overlap estimate against your base resume (the real AI verdict still comes from polishing in the app),
+- the **matched vs missing** keywords for that role,
+- whether you've **already tracked or applied** to that exact posting (matched by normalized URL), and
+- a one-click **Import to RoleFit AI** that distills the page text into the app's Job field.
+
+It is Manifest V3 and talks **only** to your local server at `http://localhost:5181`: the routes it calls accept extension-origin requests only (with a reflected, non-wildcard CORS origin), and the inbox the app reads is same-origin and CSRF-guarded — nothing is sent to any external service. The quick score reports only overlap of known tech keywords; it never invents resume content.
+
+Start the app first (`npm run dev`), then load the unpacked extension:
+
+- **Chrome / Edge** — open `chrome://extensions`, enable **Developer mode**, click **Load unpacked**, and select the `extension/` folder.
+- **Firefox** — open `about:debugging#/runtime/this-firefox`, click **Load Temporary Add-on…**, and select `extension/manifest.json`.
+
 ## Workspace
 
 The app creates `job-search-workspace/` for your private local data:
@@ -112,6 +129,7 @@ server/
   ai-cli/index.mjs               # Claude Code / Codex / Gemini CLI (Antigravity) shell-out
   applications/index.mjs         # pipeline tracker storage
   docx.mjs                       # DOCX import helpers (extract → editor)
+  extension/index.mjs            # browser-extension API: quick fit score + applied-status lookup
   http.mjs                       # JSON/body/fetch utilities
   latex/                         # parser + Jake's template renderer + optional Tectonic compile
   network.mjs                    # job-link fetch + SSRF guards
@@ -126,6 +144,7 @@ src/
   resume/                        # resume engine split: types, text, keywords, scoring, rewrite, diff
   resumeEngine.ts                # barrel re-exporting src/resume/* (scoring/analysis/deterministic fallback)
   styles/                        # per-surface CSS + shared tokens
+extension/                       # Chrome/Firefox MV3 popup (one-click import, fit score, applied status)
 docs/engineering/                # contributor notes (server, UI, git workflow, testing)
 job-search-workspace/            # local-only; gitignored except README
 ```
