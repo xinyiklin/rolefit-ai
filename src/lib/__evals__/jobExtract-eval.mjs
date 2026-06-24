@@ -387,4 +387,244 @@ assert.notEqual(extractJobPosting(`Software Engineer\nThe salary range is ABC$12
 // A counted quantity on a comp-context line is not a salary.
 assert.equal(extractJobPosting(`Software Engineer\nWe offer a competitive salary and have 5,000 customers.\nQualifications\nGo.`).tracking.salaryMin, undefined, "'5,000 customers' must not be read as salary");
 
+// (16) JD-corpus hardening regressions (real-posting failure modes).
+
+// Anti-fab: "401k plan" must not be read as a $401,000 salary, even when the
+// benefits paragraph also says "compensation".
+assert.equal(
+  extractJobPosting(`Software Engineer\nAcme\n\nBenefits\nWe offer competitive compensation and a 401k plan to teammates.\nQualifications\nPython.`).tracking.salaryMin,
+  undefined,
+  "'401k plan' must not be read as a $401,000 salary"
+);
+
+// Anti-fab: "20 hours or more per week" must not be read as $20/hr.
+assert.equal(
+  extractJobPosting(`Software Engineer\nAcme\n\nBenefits\nTeammates working 20 hours or more per week are eligible for compensation and benefits.\nQualifications\nPython.`).tracking.salaryMin,
+  undefined,
+  "'20 hours or more per week' must not fabricate $20/hr"
+);
+
+// Salary: shared-k range "$120-150k" scales BOTH numbers.
+const sharedK = extractJobPosting(`Software Engineer\nAcme\n\nCompensation\nThe pay range is $120-150k per year.\nQualifications\nPython.`).tracking;
+assert.equal(sharedK.salaryMin, 120000, "shared-k range min must be propagated");
+assert.equal(sharedK.salaryMax, 150000, "shared-k range max");
+
+// Salary: a "$X/yr - $Y/yr" range parses as one range (floor < ceiling), not two
+// lone candidates whose sort reports the ceiling as the floor.
+const splitRange = extractJobPosting(`Software Engineer\nAcme\n\nBase pay range\n$71,100.00/yr - $127,000.00/yr\nQualifications\nPython.`).tracking;
+assert.equal(splitRange.salaryMin, 71100, "split /yr range floor");
+assert.equal(splitRange.salaryMax, 127000, "split /yr range ceiling");
+
+// Anti-fab: LinkedIn AI-assistant chrome must not fabricate an "AI" tech keyword.
+const aiChrome = extractJobPosting(`Software Engineer\nAcme\n\nUse AI to assess how you fit\nGet AI-powered advice\nResponsibilities\nBuild web apps with React.\nQualifications\nJavaScript.`).tailoringText;
+assert(!/Tech Stack \/ Keywords:[\s\S]*\bAI\b/.test(aiChrome), "LinkedIn AI chrome must not fabricate an AI tech keyword");
+
+// Anti-fab: the company name token "Visa" must not be read as a work-auth need.
+assert.equal(
+  extractJobPosting(`Software Engineer\nVisa\n\nResponsibilities\nBuild payment systems.\nVisa requires at least 3 days in office.\nQualifications\nJava.`).tracking.workAuth,
+  undefined,
+  "company name 'Visa' must not be read as a work-auth requirement"
+);
+
+// Seniority: mentee/possessive copy must not over-tag leadership/ownership, but a
+// real people-management cue still does.
+const noLead = sectionBody(
+  extractJobPosting(`Software Engineer\nAcme\n\nResponsibilities\nYou will be paired with a mentor.\nWork on your own technical tasks.\nQualifications\nPython.`).tailoringText,
+  "Seniority Signals",
+  "Domain Signals"
+);
+assert(!/leadership/i.test(noLead), "'paired with a mentor' must not tag leadership");
+assert(!/ownership/i.test(noLead), "'your own technical tasks' must not tag ownership");
+assert.match(
+  sectionBody(extractJobPosting(`Engineering Manager\nAcme\n\nResponsibilities\nLead a team of engineers.\nQualifications\nPython.`).tailoringText, "Seniority Signals", "Domain Signals"),
+  /leadership/i,
+  "'lead a team of engineers' must tag leadership"
+);
+
+// uniqueItems must not amputate a real leading word that happens to be a label.
+assert.match(
+  extractJobPosting(`Software Engineer\nAcme\n\nResponsibilities\nSkills to address straightforward problems independently.\nQualifications\nPython.`).tailoringText,
+  /Skills to address straightforward problems/i,
+  "'Skills to address...' must keep its leading word"
+);
+
+// Title: a comma-bearing title is kept; the stacked header yields location+company.
+const stacked = extractJobPosting(`Software Engineer, Safety\nMountain View, CA\nWaymo\n\nResponsibilities\nBuild safety-critical systems.\nDesign test harnesses.\nReview code.\nQualifications\n5 years of Python.\nStrong CS fundamentals.\nAbout the team\nWaymo builds autonomous driving technology.`).tracking;
+assert.equal(stacked.title, "Software Engineer, Safety", "comma-bearing title must be kept");
+assert.equal(stacked.location, "Mountain View, CA", "stacked-header location must be read");
+assert.equal(stacked.company, "Waymo", "stacked-header company (body-echo gated) must be read");
+
+// A prose "Location:" sentence must be rejected (not stored as the location).
+assert.equal(
+  extractJobPosting(`Software Engineer\nAcme\n\nLocation: This role is hybrid (3-4 days a week in our main office).\nResponsibilities\nBuild things.\nQualifications\nPython.`).tracking.location,
+  undefined,
+  "a prose 'Location:' sentence must not be stored as the location"
+);
+
+// LinkedIn "apply for the <Title> role at <Company>" names the employer verbatim.
+assert.equal(
+  extractJobPosting(`Software Engineer\nNew York, NY\n\nJoin to apply for the Software Engineer role at Datadog\nResponsibilities\nBuild monitoring.\nQualifications\nGo.\nDatadog builds monitoring tools.`).tracking.company,
+  "Datadog",
+  "LinkedIn 'apply for the X role at Y' must set company"
+);
+
+// Heading coverage: new section variants route to the correct buckets.
+const headings = extractJobPosting(`Software Engineer\nAcme\n\nEssential Duties and Responsibilities\nWrite clean code.\nReview pull requests.\nCore Qualifications\n3 years of Java.\nStrong CS fundamentals.`).tailoringText;
+assert.match(headings, /Core Responsibilities:[\s\S]*Write clean code/i, "'Essential Duties and Responsibilities' collected as responsibilities");
+assert.match(headings, /Required Qualifications:[\s\S]*3 years of Java/i, "'Core Qualifications' collected as required qualifications");
+
+// Anti-fab (review HIGH-1): a comma-bearing title must NOT be read as a location
+// (the 2-letter tail is restricted to real US state codes, and the location reader
+// skips the title and role-noun lines).
+const commaTitleNoLoc = extractJobPosting(`Senior Engineer, AI\nAcme\n\nResponsibilities\nBuild ML systems.\nQualifications\nPython.`).tracking;
+assert.equal(commaTitleNoLoc.location, undefined, "'Senior Engineer, AI' must not be read as a location");
+
+// Anti-fab (review HIGH-2): a product/partner named in the header and echoed in the
+// duties must NOT be mistaken for the employer (echo gate requires a self-cue).
+const productNotCompany = extractJobPosting(`Software Engineer\nPhotoshop\n\nResponsibilities\nYou will work on Photoshop daily.\nIntegrate with Salesforce for CRM.\nQualifications\nJava.`).tracking;
+assert.notEqual(productNotCompany.company, "Photoshop", "a product the role builds must not be the company");
+assert.notEqual(productNotCompany.company, "Salesforce", "a partner the role integrates with must not be the company");
+// Exercise the echo-gate path directly: a bare "<product> is …" sentence must NOT
+// qualify the product as the employer (review HIGH — plain copula self-cue).
+const productIsCue = extractJobPosting(`Software Engineer\nPhotoshop\n\nResponsibilities\nBuild plugins.\nPhotoshop is the primary tool for this role and Salesforce is the CRM we use.\nQualifications\nJava.`).tracking;
+assert.notEqual(productIsCue.company, "Photoshop", "'Photoshop is the primary tool' must not make Photoshop the company");
+assert.notEqual(productIsCue.company, "Salesforce", "'Salesforce is the CRM' must not make Salesforce the company");
+
+// Anti-fab (review MED-1): a one-comma prose intro must NOT be accepted as a title.
+const proseNotTitle = extractJobPosting(`At Acme, we build great software\nResponsibilities\nShip features.\nAt Acme, we build great software\nQualifications\nGo.`).tracking;
+assert.notEqual(proseNotTitle.title, "At Acme, we build great software", "a prose intro must not be read as a title");
+
+// Recall (review LOW-3): a real visa requirement is still captured as workAuth.
+assert.match(
+  extractJobPosting(`Software Engineer\nAcme\n\nRequirements\nCandidates must hold a valid work visa.\nProficiency in Python.`).tracking.workAuth ?? "",
+  /visa/i,
+  "a real 'must hold a valid work visa' requirement must be captured"
+);
+
+// camelCase company brands ("iHeartMedia") are plausible employers.
+assert.equal(
+  extractJobPosting(`Software Engineer\nNew York, NY\n\nJoin to apply for the Software Engineer role at iHeartMedia\nResponsibilities\nBuild streaming features.\nQualifications\nJava development.`).tracking.company,
+  "iHeartMedia",
+  "camelCase company brand must be accepted"
+);
+
+// (17) Findings from REAL extension-captured Workday JDs (Salesforce, Cox).
+
+// Anti-fab: a sentence-final salary "$74,000.00 - $111,000.00." must parse as the
+// real range, not collapse to a $0 floor (trailing "." → NaN → 0 bug).
+const sentenceSalary = extractJobPosting(`Software Engineer\nAcme\n\nCompensation:\nCompensation includes a base salary in the range of $74,000.00 - $111,000.00. The base salary may vary.\nQualifications\nPython.`).tracking;
+assert.equal(sentenceSalary.salaryMin, 74000, "sentence-final salary floor must be 74000, not 0");
+assert.equal(sentenceSalary.salaryMax, 111000, "sentence-final salary ceiling must be 111000");
+
+// Workday screen-reader suffix "<title> page is loaded" must be stripped.
+assert.equal(
+  extractJobPosting(`Software Engineering AMTS (College Grad) page is loaded\nSalesforce\n\nResponsibilities\nBuild products.\nQualifications\nJava.\nSalesforce is the #1 AI CRM.`).tracking.title,
+  "Software Engineering AMTS (College Grad)",
+  "Workday 'page is loaded' suffix must be stripped from the title"
+);
+
+// Salesforce-style headings route correctly; the benefits/footer closers do not
+// leak into responsibilities/quals.
+const sf = extractJobPosting(`Software Engineer\nSalesforce\n\nWhat You'll Actually Be Doing\nArchitect and deliver scalable products.\nDevelop test automation frameworks.\nYou're Our Person If\nStrong background in Computer Science.\nEven Better If\nExperience with large language models.\nUnleash Your Potential\nWhen you join Salesforce you will be limitless.\nAccommodations\nIf you need a reasonable accommodation, submit a request.\nPosting Statement\nSalesforce is an equal opportunity employer.`).tailoringText;
+assert.match(sf, /Core Responsibilities:[\s\S]*Architect and deliver scalable products/i, "'What You'll Actually Be Doing' collected as responsibilities");
+assert.match(sf, /Required Qualifications:[\s\S]*Strong background in Computer Science/i, "'You're Our Person If' collected as required");
+assert(!/reasonable accommodation|equal opportunity employer|be limitless/i.test(sf), "benefits/accommodations/posting-statement footer must not leak into tailoring");
+
+// (18) Careers-site pages (extension body.innerText fallback): a leading nav block
+// must not become the title, the main role (first role-shaped line) must beat a
+// later related-jobs entry, and nav/CTA furniture must not pass as company/location.
+const careers = extractJobPosting(`Skip to main content
+Jobs
+Dashboard
+Sign in
+Join Our Talent Community
+Single Position
+View All Jobs
+Senior Data Engineer
+Austin, TX
+Apply Now
+Add to cart
+Job description
+Acme Corp is a leading data analytics company.
+Responsibilities
+Build and operate data pipelines.
+Qualifications
+5 years of SQL experience.
+Sr Manager, Marketing Operations
+Apply Now`);
+assert.equal(careers.tracking.title, "Senior Data Engineer", "title from top-down role-shaped scan, not nav chrome or a related job");
+assert.equal(careers.tracking.company, "Acme Corp", "company from self-cue, not the 'Join Our Talent Community' nav");
+assert.notEqual(careers.tracking.company, "Our Talent Community", "'Join Our Talent Community' must not be the company");
+
+// Anti-fab (review BLOCKER): a nav PROFESSION category ("Engineering", "Sales
+// Engineering") must not be read as the title — the real role (agent role noun,
+// 2+ words) must win even when categories appear first.
+const navCategory = extractJobPosting(`Skip to content\nCareers\nProfessions\nEngineering\nSales Engineering\nSoftware Development Engineer II\nSeattle, WA\nApply Now\nJob Description\nBuild services.\nResponsibilities\nDesign systems.\nQualifications\nJava.`).tracking;
+assert.equal(navCategory.title, "Software Development Engineer II", "nav profession category must not be the title");
+
+// An apply-button label stacked under a "Job Location" label is not a location.
+const srLoc = extractJobPosting(`Software Engineer\nAcme\n\nJob Location\nI'm interested\nResponsibilities\nBuild things.\nQualifications\nPython.\nAcme is a software company.`).tracking;
+assert.notEqual(srLoc.location, "I'm interested", "apply-button text must not be stored as the location");
+
+// "Position ID:" / "Req #" metadata lines must not be taken as the title.
+const reqMeta = extractJobPosting(`Skip to main content\nPosition ID: J0526-2196\nReq #363\nFull Stack Developer\nApply Now\nResponsibilities\nBuild.\nQualifications\nJavaScript.`).tracking;
+assert.equal(reqMeta.title, "Full Stack Developer", "a req-id/position-id line must not be the title");
+
+// (19) Tailoring-BODY quality (the part that drives resume tailoring/review).
+
+// "What You Have" heads qualifications — must not leak into responsibilities.
+const whatYouHave = extractJobPosting(`Software Engineer\nAcme\n\nWhat You'll Do\nBuild scalable services.\nShip features end to end.\nWhat You Have\n3 years of backend experience.\nProficiency in Python and SQL.`).tailoringText;
+const wyhResp = (whatYouHave.match(/Core Responsibilities:\n([\s\S]*?)\n\nRequired/) || [])[1] || "";
+const wyhReq = (whatYouHave.match(/Required Qualifications:\n([\s\S]*?)\n\nPreferred/) || [])[1] || "";
+assert(/Build scalable services/i.test(wyhResp), "duties stay under responsibilities");
+assert(/3 years of backend experience/i.test(wyhReq), "'What You Have' routes to required qualifications");
+assert(!/3 years of backend experience/i.test(wyhResp), "quals must not leak into responsibilities");
+
+// Intro/marketing prose and policy boilerplate must NOT land as qualifications —
+// including via the keyword-sweep fallback (a JD with no Requirements heading).
+const coxLike = extractJobPosting(`Software Engineer\nAcme\n\nJob Overview\nAs a Software Engineer you will apply your knowledge of modern software design and frameworks.\nResponsibilities\nWrite clean code.\nUnderstanding of databases.\n18 months experience in Java.\nDrug Testing\nTo be employed in this role, you will need to clear a pre-employment drug test.\nThe City is an Equal Opportunity employer.`).tailoringText;
+const coxReq = (coxLike.match(/Required Qualifications:\n([\s\S]*?)\n\nPreferred/) || [])[1] || "";
+// Note: a generic "As a <role> you will…" intro is NOT filtered — distinguishing it
+// from a real "As an engineer you will build X" duty is unreliable, and dropping
+// real duties hurts tailoring worse than a stray intro line (review HIGH).
+assert(!/clear a pre-employment drug test/i.test(coxReq), "'pre-employment drug test' policy must not be a qualification");
+assert(!/equal opportunity/i.test(coxReq), "EEO-employer boilerplate must not be a qualification");
+// Real domain content using those keywords must SURVIVE (no over-filter).
+const domainKeep = extractJobPosting(`Software Engineer\nAcme\n\nResponsibilities\nDevelop drug screening assays for the discovery team.\nBuild background screening integrations for the HR platform.\nChampion equal opportunity initiatives across hiring.\nQualifications\nPython.`).tailoringText;
+const dkResp = (domainKeep.match(/Core Responsibilities:\n([\s\S]*?)\n\nRequired/) || [])[1] || "";
+assert(/drug screening assays/i.test(dkResp), "real 'drug screening assays' duty must survive");
+assert(/background screening integrations/i.test(dkResp), "real 'background screening integrations' duty must survive");
+assert(/equal opportunity initiatives/i.test(dkResp), "real 'equal opportunity initiatives' duty must survive");
+
+// A product blurb sitting in the intro (not under a quals heading) must not be
+// pulled into the qualifications — the "What You Have" heading scopes the quals.
+const teamBlurb = extractJobPosting(`Software Engineer\nCommure\n\nThe Revenue Cycle Team at Commure powers practices everywhere.\nWhat You Have\n3 years of full-stack experience.\nProficiency in React and Python.`).tailoringText;
+const tbReq = (teamBlurb.match(/Required Qualifications:\n([\s\S]*?)\n\nPreferred/) || [])[1] || "";
+assert(!/Team at Commure powers/i.test(tbReq), "an intro product blurb must not be a qualification");
+assert(/3 years of full-stack experience/i.test(tbReq), "the real qualification is retained");
+
+// A "Section N:" numbering prefix on real headings must not block the match.
+const sectioned = extractJobPosting(`Software Engineer\nAcme\n\nSection 1: Position Summary\nWe build great software.\nSection 2: Job Functions, Essential Duties and Responsibilities\nAnalyze, implement and maintain software applications.\nAssist in planning across the SDLC.\nSection 3: Experience, Skills, Knowledge Requirements\nUp to two years of professional software experience.\nUnderstanding of data structures and algorithms.`).tailoringText;
+assert.match(sectioned, /Core Responsibilities:[\s\S]*Analyze, implement and maintain/i, "'Section 2: …Duties and Responsibilities' routes to responsibilities");
+assert.match(sectioned, /Required Qualifications:[\s\S]*two years of professional software experience/i, "'Section 3: Experience, Skills, Knowledge Requirements' routes to required");
+
+// Inline "Duties: A. B. C." prose (no bullets) must split into separate duties,
+// and an inline "Skills Required: …" must be captured as a qualification.
+const inlineProse = extractJobPosting(`Software Engineer\nAcme\n\nDESCRIPTION:\nDuties: Design, develop and implement scalable software solutions across the stack. Solve complex business problems through innovation and sound engineering practices. Troubleshoot and resolve application code-related issues in production.\nQUALIFICATIONS:\nSkills Required: This position requires experience with Java and Python for backend services.`).tailoringText;
+const ipResp = (inlineProse.match(/Core Responsibilities:\n([\s\S]*?)\n\nRequired/) || [])[1] || "";
+assert(/Design, develop and implement scalable software solutions/i.test(ipResp), "inline 'Duties:' prose split — duty 1");
+assert(/Solve complex business problems/i.test(ipResp), "inline 'Duties:' prose split — duty 2");
+assert((ipResp.match(/^- /gm) || []).length >= 3, "inline 'Duties:' prose splits into >=3 duties, not one blob");
+assert(/Required Qualifications:[\s\S]*experience with Java and Python/i.test(inlineProse), "inline 'Skills Required:' captured as a qualification");
+
+// Application-process boilerplate (video interview / how to prepare) is not a qual.
+const apptNoise = extractJobPosting(`Software Engineer\nAcme\n\nQualifications\n3 years of Python.\nQualified candidates must complete a video interview assessment after applying.\nHow to prepare: Set aside 40-45 minutes for the self-guided assessment.`).tailoringText;
+const anReq = (apptNoise.match(/Required Qualifications:\n([\s\S]*?)\n\nPreferred/) || [])[1] || "";
+assert(/3 years of Python/i.test(anReq), "the real qualification is kept");
+assert(!/video interview|how to prepare|set aside/i.test(anReq), "application-process boilerplate must not be a qualification");
+
+// "Do you qualify? You likely do if you have…" heads qualifications (SkillStorm).
+const doYouQualify = extractJobPosting(`Software Engineer\nAcme\n\nWhat you'll do:\nBuild internal tools.\nDo you qualify? You likely do if you have one of the following:\nA bachelor's degree in a technical field.\nAt least one year of professional experience.`).tailoringText;
+assert.match(doYouQualify, /Required Qualifications:[\s\S]*bachelor's degree in a technical field/i, "'Do you qualify?' routes to required qualifications");
+
 console.log("jobExtract evals passed");
