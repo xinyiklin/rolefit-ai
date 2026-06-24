@@ -3,6 +3,7 @@ import { mkdir, readFile, readdir, rename, writeFile } from "node:fs/promises";
 import { extname, join, resolve, sep } from "node:path";
 import { createServer as createViteServer } from "vite";
 import { handlePolish } from "./server/ai/polish.mjs";
+import { handleDistill, distillToFields } from "./server/ai/distill.mjs";
 import { getDefaultModel, getDefaultProvider } from "./server/ai/providers.mjs";
 import { handleApplicationAnswers } from "./server/ai/applicationAnswers.mjs";
 import { handleCoverLetter } from "./server/ai/coverLetter.mjs";
@@ -30,7 +31,39 @@ import { BlockedHostError, DnsError, fetchPublicHtml, isPublicHttpUrl } from "./
 import { quickScore, normalizeUrl, findMatchingApplication, extractJobMeta } from "./server/extension/index.mjs";
 
 const root = process.cwd();
-let extensionInbox = null; // { text: string, url: string } | null
+// Pending browser-extension import. `status` is "distilling" while the server-side
+// AI distill runs in the BACKGROUND (so it survives the popup closing on focus
+// loss), then "done" with `fields` set (or null if the AI distill failed → the app
+// falls back to the deterministic engine). `id` guards against a newer import
+// landing while an older distill is still in flight.
+let extensionInbox = null; // { text, url, fields, autoTailor, status: "distilling"|"done", id } | null
+let extensionImportSeq = 0;
+let extensionDistilling = false;
+
+// Run the background extension distill, SERIALIZED so a burst of imports can never
+// spawn parallel provider calls: at most one runs; when it settles, if a newer
+// import has since landed (still "distilling" with a different id) the latest is
+// distilled next. The id guard ensures only the most recent import's brief reaches
+// the inbox. Always settles the status to "done" so the app never polls forever.
+async function runExtensionDistill(importId, text, url) {
+  extensionDistilling = true;
+  try {
+    const fields = await distillToFields({ jobText: text, url });
+    if (extensionInbox && extensionInbox.id === importId) {
+      extensionInbox.fields = fields;
+      extensionInbox.status = "done";
+    }
+  } catch {
+    if (extensionInbox && extensionInbox.id === importId) {
+      extensionInbox.status = "done"; // fields stays null → app uses the deterministic engine
+    }
+  } finally {
+    extensionDistilling = false;
+    if (extensionInbox && extensionInbox.status === "distilling" && extensionInbox.id !== importId) {
+      void runExtensionDistill(extensionInbox.id, extensionInbox.text, extensionInbox.url);
+    }
+  }
+}
 const isProduction = process.env.NODE_ENV === "production";
 const jobWorkspaceDir = join(root, "job-search-workspace");
 const baseResumeCandidates = [
@@ -953,9 +986,11 @@ async function serveStatic(req, res) {
 // Browser-extension API. These routes are reached cross-origin from a
 // chrome-extension:// (or moz-/safari-) page, so they bypass the localhost
 // same-origin CSRF guard (dispatched BEFORE it) and instead validate the
-// extension Origin scheme directly. They are read-only triage helpers plus a
-// one-slot "inbox" used to hand a captured job page to the open app tab; they
-// never write resume data or run an AI provider.
+// extension Origin scheme directly. They never write resume data. The analyze
+// route is a read-only keyword triage; the import route stores a captured job page
+// in a one-slot "inbox" for the open app tab AND kicks off a server-side AI distill
+// in the background (serialized via runExtensionDistill), so import does run a
+// provider call — keys stay server-side and the route remains extension-Origin-gated.
 const EXTENSION_ORIGIN_SCHEMES = ["chrome-extension://", "moz-extension://", "safari-web-extension://"];
 
 // analyze + import: called cross-origin by the extension popup. Require a
@@ -1056,14 +1091,24 @@ async function handleExtensionRoutes(req, res, pathname) {
     }
     const text = typeof body.text === "string" ? body.text : "";
     const url = typeof body.url === "string" ? body.url : "";
+    const autoTailor = body.autoTailor === true;
     if (!text.trim() || !url.trim()) {
       sendJson(res, 400, { error: "A job page text and url are required." });
       return;
     }
-    // Last-write-wins: a second import before the app polls overwrites the
-    // first. Fine for the one-job-at-a-time personal workflow.
-    extensionInbox = { text: text.slice(0, 50_000), url };
+    // Store a "distilling" placeholder and return IMMEDIATELY so the popup can
+    // redirect without blocking (extension popups close on focus loss, which would
+    // otherwise abort an awaited distill). The AI distill then runs in the
+    // BACKGROUND, server-side, independent of any client connection; the app polls
+    // the inbox and loads the brief once status flips to "done". On AI failure,
+    // status still flips to "done" with fields=null and the app uses the
+    // deterministic engine on the raw text — so an import never silently strands.
+    const importId = (extensionImportSeq += 1);
+    extensionInbox = { text: text.slice(0, 50_000), url, fields: null, autoTailor, status: "distilling", id: importId };
     sendJson(res, 200, { ok: true });
+    // Kick the serialized distiller only when idle; if one is already running it
+    // will pick up this newest import when it settles (coalesce, never fan out).
+    if (!extensionDistilling) void runExtensionDistill(importId, text, url);
     return;
   }
 
@@ -1083,9 +1128,21 @@ async function handleExtensionInbox(req, res) {
     sendJson(res, 200, null);
     return;
   }
+  // Still distilling in the background — report progress WITHOUT draining so the
+  // app keeps polling until the brief is ready.
+  if (extensionInbox.status === "distilling") {
+    sendJson(res, 200, { status: "distilling" });
+    return;
+  }
+  // Done — hand over the brief once and clear it.
   const captured = extensionInbox;
   extensionInbox = null;
-  sendJson(res, 200, captured);
+  sendJson(res, 200, {
+    text: captured.text,
+    url: captured.url,
+    fields: captured.fields ?? null,
+    autoTailor: captured.autoTailor === true,
+  });
 }
 
 const vite = isProduction
@@ -1146,6 +1203,11 @@ const server = createServer((req, res) => {
 
   if (pathname === "/api/polish") {
     void handlePolish(req, res);
+    return;
+  }
+
+  if (pathname === "/api/distill") {
+    void handleDistill(req, res);
     return;
   }
 

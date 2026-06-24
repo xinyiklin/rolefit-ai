@@ -39,6 +39,7 @@ import { buildAiRequestFields, buildAuditRequestFields } from "./lib/aiRequest";
 import { loadLastBaseResumeName, saveLastBaseResumeName } from "./lib/baseResumePrefs";
 import { buildCandidateFactsContext, mergeHonestContext } from "./lib/candidateFacts";
 import { extractJobPosting, type ExtractedJobTracking } from "./lib/jobExtract";
+import { distillJobPosting, extractedFromAiOrLocal, type AiDistillFields } from "./lib/aiDistill";
 import { buildResumeBlocks } from "./lib/resumeBlocks";
 import { serializeResumeData, toTemplateSchema } from "./lib/resumeData";
 import { buildTailorScope, defaultTailorModes, tailorScopeToText, type TailorMode } from "./lib/tailorScope";
@@ -197,6 +198,12 @@ function App() {
   // ("load a resume", "select a section to tailor"). Rendered in an aria-live
   // banner below the masthead.
   const [polishStatus, setPolishStatus] = useState("");
+  // Holds the imported job's text when an extension import arrives with the "Tailor
+  // automatically" toggle on, so the app jumps straight to polish once a resume is
+  // ready (no manual click). Scoping to the specific job — not a bare flag — means a
+  // later import/paste/edit, or a toggle-OFF import, can never trigger a surprise
+  // polish against the wrong posting.
+  const [autoTailorJob, setAutoTailorJob] = useState<string | null>(null);
   // Resume export (print/LaTeX/preview) state + handlers live in
   // useResumeExport; texStatus stays here because non-export handlers write it too.
   const [texStatus, setTexStatus] = useState("");
@@ -342,24 +349,55 @@ function App() {
   // Debounced autosave to localStorage whenever the editor has unsaved edits.
   useAutosaveDraft({ editedResume, dirty: resumeEdited, jobLabel: _autosaveJobLabel });
 
-  // Auto-fill the job description from the browser extension inbox.
-  useExtensionInbox((text, url) => {
-    const extracted = extractJobPosting(text, { url: url || undefined });
+  // Auto-fill the job description from the browser extension inbox. AI distiller
+  // first (server-side keys), deterministic engine as the fallback.
+  useExtensionInbox((item) => {
+    // The posting was AI-distilled server-side in the background (the hook polled
+    // through the "distilling" state until the brief was ready). Use those
+    // structured fields directly; fall back to the deterministic engine on the raw
+    // text only when the server's AI distill failed (fields === null).
+    const { text, url, fields, autoTailor } = item;
+    const { extracted, source } = extractedFromAiOrLocal(
+      fields as Partial<AiDistillFields> | null,
+      text,
+      url || undefined
+    );
     const relevant = extracted.tailoringText;
     if (relevant.trim().length < 40) {
       setPolishStatus("Extension import had too little job text — paste manually.");
       return;
     }
+    const trimmedUrl = (url || "").trim();
+    setJobUrl(trimmedUrl);
     setJobDescription(relevant);
     setImportedJob({
-      url,
+      url: trimmedUrl,
       tailoringText: relevant.trim(),
       tracking: extracted.tracking,
       manualReviewFields: extracted.manualReviewFields,
     });
     setResult(null);
     applyCoverLetter("");
-    setPolishStatus("Job imported from browser extension.");
+    // Auto-tailor THIS import only, and always (re)set from the toggle so a
+    // toggle-OFF import clears any stale intent a prior toggle-ON import left.
+    setAutoTailorJob(autoTailor ? relevant.trim() : null);
+    const aiNote = source === "ai" ? " (distilled with AI)" : "";
+    // The imported JD satisfies the description-length gate; the only thing that can
+    // still defer the auto-polish is a missing resume / Tailor section — say so
+    // rather than appearing to do nothing.
+    const readyToTailor =
+      Boolean(editedResume) && Object.values(tailorModes).some((mode) => mode === "tailor");
+    setPolishStatus(
+      autoTailor && !readyToTailor
+        ? `Job imported from the browser extension${aiNote} — ${
+            editedResume ? "set a section to Tailor" : "load a resume"
+          } and it'll tailor automatically.`
+        : `Job imported from the browser extension${aiNote}.`
+    );
+  }, () => {
+    // Background server-side distill still running — show progress while the hook
+    // polls for the finished brief.
+    setPolishStatus("Distilling the imported posting with AI…");
   });
 
   // Warn before close/reload when there are unsaved edits.
@@ -545,14 +583,20 @@ function App() {
   // the JD on every keystroke-driven re-render. Memoizing matches the debounce
   // discipline the scoring path already uses, with no behavior change.
   const jobTracking = useMemo((): ExtractedJobTracking => {
-    const fresh = extractJobPosting(jobDescription, { url: jobUrl }).tracking;
     const imported =
       importedJob &&
       importedJob.url === jobUrl.trim() &&
       importedJob.tailoringText === jobDescription.trim()
         ? importedJob.tracking
         : null;
-    return imported ? { ...definedTracking(fresh), ...definedTracking(imported) } : definedTracking(fresh);
+    // The import (AI or deterministic) is the authoritative distill output. Don't
+    // re-parse the compact scaffold and merge — that would let a stray number or
+    // label in a bullet resurrect a field the distiller deliberately left empty
+    // (e.g. a $5M budget figure becoming the salary). Only re-parse when there is
+    // no matching import (user typed a raw JD straight into the box).
+    return imported
+      ? definedTracking(imported)
+      : definedTracking(extractJobPosting(jobDescription, { url: jobUrl }).tracking);
   }, [jobDescription, jobUrl, importedJob]);
 
   // ----- Derived (non-memo) -----
@@ -1306,6 +1350,23 @@ function App() {
     }
   }
 
+  // Auto-tailor: when an extension import requested it (toggle on), jump straight to
+  // polish as soon as a resume is ready. Scoped to the imported job's text — if the
+  // user swapped in a different JD (another import, a paste, or a hand edit) before a
+  // resume loaded, drop the intent instead of firing a surprise polish on the wrong
+  // posting.
+  useEffect(() => {
+    if (autoTailorJob === null) return;
+    if (autoTailorJob !== jobDescription.trim()) {
+      setAutoTailorJob(null);
+      return;
+    }
+    if (canPolish && !isPolishing) {
+      setAutoTailorJob(null);
+      void handlePolish();
+    }
+  }, [autoTailorJob, jobDescription, canPolish, isPolishing]);
+
   // Called from the ReviewRail "Add evidence" button on gaps/missing-skills rows.
   // Appends a template line to honestContext (unless the keyword is already there),
   // then opens the Options menu so the user can fill it in and re-run Polish.
@@ -1342,9 +1403,11 @@ function App() {
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error ?? "Could not read that link.");
-      // Local distiller trims the scraped page to the parts worth polishing
-      // against while extracting tracker-only details separately.
-      const extracted = extractJobPosting(String(data.text ?? ""), { url });
+      // AI distiller (server-side keys) trims the scraped page to the parts worth
+      // polishing and extracts tracker details; falls back to the deterministic
+      // engine on any failure so a link import always produces a brief.
+      setLinkStatus("Distilling the posting…");
+      const { extracted, source } = await distillJobPosting(String(data.text ?? ""), { url });
       const relevant = extracted.tailoringText;
       if (relevant.trim().length < 40) {
         setLinkStatus("Fetched the page, but found too little job text. Paste the description instead.");
@@ -1362,7 +1425,7 @@ function App() {
       applyCoverLetter("");
       const missing = compactManualReviewFields(extracted.manualReviewFields);
       setLinkStatus(
-        `Extracted ${relevant.length.toLocaleString()} compact characters for tailoring and captured ${presentTrackingFields(
+        `Distilled ${relevant.length.toLocaleString()} compact characters${source === "ai" ? " with AI" : ""} for tailoring and captured ${presentTrackingFields(
           extracted.tracking
         )}${missing ? `; add ${missing} manually if needed` : ""}.`
       );
@@ -1379,7 +1442,7 @@ function App() {
   // pipeline the link path uses. Covers JDs the server can't fetch (Workday
   // wd1 tenants, ADP, anything JS-only): user copies the visible page text from
   // their browser, pastes it in, and gets the structured brief plus tracking.
-  function handleDistillPaste() {
+  async function handleDistillPaste() {
     const raw = jobDescription;
     if (!raw.trim() || isExtractingLink) return;
     // Strip HTML tags only if the paste looks tag-shaped (text from "View
@@ -1404,27 +1467,33 @@ function App() {
       setLinkStatus("Paste a bit more job text first — distillation needs a real description to work from.");
       return;
     }
-    const extracted = extractJobPosting(cleaned, { url: jobUrl.trim() || undefined });
-    const relevant = extracted.tailoringText;
-    if (relevant.trim().length < 40) {
-      setLinkStatus("Couldn't find enough job-relevant text in the paste. Check that you copied the description, not just the page header.");
-      return;
+    setIsExtractingLink(true);
+    setLinkStatus("Distilling the paste…");
+    try {
+      const { extracted, source } = await distillJobPosting(cleaned, { url: jobUrl.trim() || undefined });
+      const relevant = extracted.tailoringText;
+      if (relevant.trim().length < 40) {
+        setLinkStatus("Couldn't find enough job-relevant text in the paste. Check that you copied the description, not just the page header.");
+        return;
+      }
+      setJobDescription(relevant);
+      setImportedJob({
+        url: jobUrl.trim(),
+        tailoringText: relevant.trim(),
+        tracking: extracted.tracking,
+        manualReviewFields: extracted.manualReviewFields
+      });
+      setResult(null);
+      applyCoverLetter("");
+      const missing = compactManualReviewFields(extracted.manualReviewFields);
+      setLinkStatus(
+        `Distilled ${relevant.length.toLocaleString()} compact characters${source === "ai" ? " with AI" : ""} from the paste and captured ${presentTrackingFields(
+          extracted.tracking
+        )}${missing ? `; add ${missing} manually if needed` : ""}.`
+      );
+    } finally {
+      setIsExtractingLink(false);
     }
-    setJobDescription(relevant);
-    setImportedJob({
-      url: jobUrl.trim(),
-      tailoringText: relevant.trim(),
-      tracking: extracted.tracking,
-      manualReviewFields: extracted.manualReviewFields
-    });
-    setResult(null);
-    applyCoverLetter("");
-    const missing = compactManualReviewFields(extracted.manualReviewFields);
-    setLinkStatus(
-      `Distilled ${relevant.length.toLocaleString()} compact characters from the paste and captured ${presentTrackingFields(
-        extracted.tracking
-      )}${missing ? `; add ${missing} manually if needed` : ""}.`
-    );
   }
 
   // The actual apply: save the application, snapshot artifacts, update UI.

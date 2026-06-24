@@ -170,7 +170,27 @@ function renderResult(data, pageData, onImport) {
     el('span', { className: 'btn-arrow', textContent: '↧' }),
     'Import to RoleFit AI'
   );
-  importBtn.addEventListener('click', () => onImport(importBtn));
+
+  // Optional shortcut: when checked, the app auto-runs the polish once the
+  // imported posting finishes distilling — no second "Tailor now" click. The
+  // preference persists across popups via chrome.storage.local.
+  const autoTailorInput = el('input', { type: 'checkbox', className: 'auto-tailor__input' });
+  // Restore the saved preference, but never clobber a value the user toggled while
+  // the async storage read was still in flight (open popup → click before get resolves).
+  let autoTailorTouched = false;
+  chrome.storage?.local?.get?.(['autoTailor'], (saved) => {
+    if (!autoTailorTouched) autoTailorInput.checked = Boolean(saved && saved.autoTailor);
+  });
+  autoTailorInput.addEventListener('change', () => {
+    autoTailorTouched = true;
+    chrome.storage?.local?.set?.({ autoTailor: autoTailorInput.checked });
+  });
+  const autoTailorToggle = el('label', { className: 'auto-tailor' },
+    autoTailorInput,
+    el('span', { className: 'auto-tailor__label', textContent: 'Tailor automatically after import' })
+  );
+
+  importBtn.addEventListener('click', () => onImport(importBtn, autoTailorInput.checked));
 
   return el('div', { className: 'state-result' },
     el('div', { className: 'job-meta' },
@@ -187,6 +207,7 @@ function renderResult(data, pageData, onImport) {
     renderScore(fit),
     hasKeywords ? keywordGroups : null,
     importBtn,
+    autoTailorToggle,
     el('div', { className: 'foot', textContent: 'Fit is a local keyword estimate — polish in the app for the AI verdict.' })
   );
 }
@@ -215,15 +236,17 @@ function extractPageData() {
 
 // ── Import handler ─────────────────────────────────────────────────────────
 
-async function handleImport(btn, pageData) {
+async function handleImport(btn, pageData, autoTailor) {
   btn.disabled = true;
-  btn.textContent = 'Opening RoleFit AI…';
+  // The import returns immediately; the server distills in the background and the
+  // app shows "Distilling…" as it polls for the finished brief. So this stays fast.
+  btn.textContent = 'Importing…';
 
   try {
     const res = await fetch(`${API_BASE}/api/extension/import`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text: pageData.text, url: pageData.url })
+      body: JSON.stringify({ text: pageData.text, url: pageData.url, autoTailor: Boolean(autoTailor) })
     });
     if (!res.ok) throw new Error(`Server error ${res.status}`);
   } catch {
@@ -234,19 +257,27 @@ async function handleImport(btn, pageData) {
     return;
   }
 
-  const tabs = await chrome.tabs.query({ url: `${API_BASE}/*` });
-  if (tabs.length > 0) {
-    await chrome.tabs.update(tabs[0].id, { active: true });
-    if (tabs[0].windowId != null) {
-      // The optional chain must extend through .catch — chrome.windows being
-      // undefined would otherwise call .catch on undefined and throw.
-      await chrome.windows?.update?.(tabs[0].windowId, { focused: true })?.catch(() => {});
+  // The import already reached the server (inbox populated, background distill
+  // kicked off); focusing/opening the app tab is best-effort. If the tabs API
+  // rejects (the app tab closed mid-call, a transient error), still give the
+  // button a terminal state instead of hanging on "Importing…".
+  try {
+    const tabs = await chrome.tabs.query({ url: `${API_BASE}/*` });
+    if (tabs.length > 0) {
+      await chrome.tabs.update(tabs[0].id, { active: true });
+      if (tabs[0].windowId != null) {
+        // The optional chain must extend through .catch — chrome.windows being
+        // undefined would otherwise call .catch on undefined and throw.
+        await chrome.windows?.update?.(tabs[0].windowId, { focused: true })?.catch(() => {});
+      }
+    } else {
+      await chrome.tabs.create({ url: API_BASE });
     }
-  } else {
-    await chrome.tabs.create({ url: API_BASE });
+    btn.textContent = 'Imported ✓';
+  } catch {
+    // The capture succeeded; only the redirect/focus failed.
+    btn.textContent = 'Imported ✓ — open RoleFit AI';
   }
-
-  btn.textContent = 'Imported ✓';
 }
 
 // ── Main ────────────────────────────────────────────────────────────────────
@@ -318,7 +349,7 @@ async function main() {
     return;
   }
 
-  loadingEl.replaceWith(renderResult(data, pageData, (btn) => handleImport(btn, pageData)));
+  loadingEl.replaceWith(renderResult(data, pageData, (btn, autoTailor) => handleImport(btn, pageData, autoTailor)));
 }
 
 main().catch((err) => {
