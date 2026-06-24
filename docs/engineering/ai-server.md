@@ -52,22 +52,42 @@ careflow `5173-5180`, portfolio `5184-5185`; do not mix them up.
   `/job/` and `/details/` links), LinkedIn visible job body + criteria
   rows when present, otherwise a generic HTML→text scrape — behind SSRF
   guards that re-validate the host and resolved IP on every redirect hop
-  and reject private / loopback / link-local targets. Client-side
-  distilling in `src/lib/jobExtract.ts` then splits the result into compact
-  model-facing tailoring text and tracking-only facts (role summary,
+  and reject private / loopback / link-local targets. Distilling is
+  AI-first (`/api/distill`, below) with the deterministic
+  `src/lib/jobExtract.ts` engine as the fallback; it then splits the result
+  into compact model-facing tailoring text and tracking-only facts (role summary,
   company, location, job type, work-auth note, compensation). The visible
   job-description field is a structured brief with Job Title,
   Company/Product Context, Core Responsibilities, Required Qualifications,
   Preferred Qualifications, Tech Stack/Keywords, Seniority Signals, and
   Domain Signals. The link itself is kept only for pipeline tracking and is
   never sent to the AI.
+- AI job distiller (`/api/distill`, `server/ai/distill.mjs`): sends the
+  raw (tag-stripped) posting text to the configured provider and returns
+  the SAME structured fields the deterministic engine emits, resolved
+  semantically so novel ATS layouts, inline-prose duties, and unusual
+  headings parse where the regex heading tables can't. Anti-fabrication is
+  enforced server-side, not just in the prompt: every scalar fact (title,
+  company, location, salary, tech) is dropped unless grounded in the source
+  text, and the source URL is fenced like all other untrusted prompt input.
+  The client (`src/lib/aiDistill.ts`) is AI-first with the deterministic
+  `jobExtract.ts` engine as the offline/no-key fallback on any non-200,
+  timeout, or unusable reply — so distillation always produces a brief. The
+  route sits behind the localhost CSRF/Host guard; keys stay server-side.
 - browser-extension API (`/api/extension/*`, helpers in
   `server/extension/index.mjs`): `analyze` (POST) returns a local
   keyword-overlap fit estimate of the workspace base resume against the
   posted page text, plus a normalized-URL lookup of any matching tracked
-  application; `import` (POST) stashes the page text in an in-memory
-  inbox; `inbox` (GET) hands that pending import to the app once and
-  clears it. `analyze` / `import` are reachable cross-origin from the
+  application; `import` (POST) stores the page text and returns
+  immediately, then runs the AI distiller (above) in the BACKGROUND
+  server-side — so it survives the popup closing on focus loss, and a burst
+  of imports is serialized to one in-flight provider call; `inbox` (GET)
+  reports `{status:"distilling"}` while that runs, then hands the finished
+  brief (the AI fields, or the deterministic fallback on AI failure) to the
+  app once before clearing it. The import also carries an optional
+  `autoTailor` flag from the popup's "Tailor automatically" toggle, so the
+  app can jump straight to polish once the brief and a base resume are
+  ready. `analyze` / `import` are reachable cross-origin from the
   extension popup and are gated to extension-scheme Origins
   (`chrome-extension://`, `moz-extension://`, `safari-web-extension://`)
   with the validated Origin reflected back — never a wildcard, never an
