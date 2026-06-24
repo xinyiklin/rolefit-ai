@@ -19,7 +19,7 @@ nothing leaves your machine. Start the app (`npm run dev`) before using it.
 
 | File | Role |
 | --- | --- |
-| `manifest.json` | MV3 manifest — `activeTab` + `scripting`, host access to `localhost:5181` only |
+| `manifest.json` | MV3 manifest — `activeTab` + `scripting` + `storage`, host access to `localhost:5181` only |
 | `popup.html` / `popup.css` / `popup.js` | the popup UI (vanilla ESM, no build step) |
 | `icons/icon.svg` | toolbar icon |
 
@@ -31,10 +31,15 @@ nothing leaves your machine. Start the app (`npm run dev`) before using it.
 2. It POSTs the text to `POST /api/extension/analyze`, which scores it against
    your workspace base resume and checks the application tracker by normalized
    URL, then renders the fit ring, keyword chips, and applied-status banner.
-3. **Import** POSTs the page text to `POST /api/extension/import` (an in-memory
-   inbox) and focuses the app tab; the app polls `GET /api/extension/inbox`,
-   pulls the text once, and distills it into the Job field — the same pipeline
-   as the in-app "Distill paste".
+3. **Import** POSTs the page text to `POST /api/extension/import` and focuses
+   the app tab. The server distills the posting in the BACKGROUND (AI
+   distiller, with the deterministic engine as fallback), so it survives the
+   popup closing on focus loss; the app polls `GET /api/extension/inbox`,
+   which reports progress until the brief is ready, then loads the structured
+   fields into the Job field.
+4. A **Tailor automatically after import** toggle (a checkbox in the popup,
+   persisted via `chrome.storage.local`) makes the app jump straight to polish
+   once the brief and your base resume are ready — no second click needed.
 
 The fit score is a local keyword-overlap estimate only. The authoritative,
 anti-fabrication-gated verdict still comes from polishing in the app.
