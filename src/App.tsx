@@ -33,6 +33,7 @@ import {
   clearAutosaveDraft,
   type AutosavedDraft
 } from "./hooks/useAutosaveDraft";
+import { useExtensionInbox } from "./hooks/useExtensionInbox";
 import { arrayBufferToBase64, sanitizeFileBase } from "./lib/downloads";
 import { buildAiRequestFields, buildAuditRequestFields } from "./lib/aiRequest";
 import { loadLastBaseResumeName, saveLastBaseResumeName } from "./lib/baseResumePrefs";
@@ -340,6 +341,26 @@ function App() {
 
   // Debounced autosave to localStorage whenever the editor has unsaved edits.
   useAutosaveDraft({ editedResume, dirty: resumeEdited, jobLabel: _autosaveJobLabel });
+
+  // Auto-fill the job description from the browser extension inbox.
+  useExtensionInbox((text, url) => {
+    const extracted = extractJobPosting(text, { url: url || undefined });
+    const relevant = extracted.tailoringText;
+    if (relevant.trim().length < 40) {
+      setPolishStatus("Extension import had too little job text — paste manually.");
+      return;
+    }
+    setJobDescription(relevant);
+    setImportedJob({
+      url,
+      tailoringText: relevant.trim(),
+      tracking: extracted.tracking,
+      manualReviewFields: extracted.manualReviewFields,
+    });
+    setResult(null);
+    applyCoverLetter("");
+    setPolishStatus("Job imported from browser extension.");
+  });
 
   // Warn before close/reload when there are unsaved edits.
   useBeforeUnloadGuard(resumeEdited);
