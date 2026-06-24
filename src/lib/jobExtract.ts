@@ -898,7 +898,7 @@ function parseLinkedInTitleLine(lines: string[]) {
   };
 }
 
-function sourceFromUrl(rawUrl?: string): string {
+export function sourceFromUrl(rawUrl?: string): string {
   if (!rawUrl) return "";
   try {
     const host = new URL(rawUrl).hostname;
@@ -2158,6 +2158,38 @@ function extractDomainSignals(
   return DOMAIN_SIGNALS.filter(([, re]) => re.test(source)).map(([label]) => label).slice(0, 8);
 }
 
+// Structured parts of a distilled posting. Shared by the deterministic engine and
+// the AI distiller so both emit the EXACT same tailoringText scaffold (which the
+// polish/review path and the keyword scorer parse by these literal headings).
+export type TailoringParts = {
+  title?: string;
+  context?: string;
+  responsibilities?: string[];
+  required?: string[];
+  preferred?: string[];
+  tech?: string[];
+  seniority?: string[];
+  domains?: string[];
+};
+
+// THE single source of truth for the tailoringText scaffold. Empty sections get
+// the same "[manual input needed: …]" / "Not specified" placeholders the engine
+// has always emitted, so manualReviewFields() and the scorer behave identically
+// regardless of which distiller produced the parts.
+export function assembleTailoringText(parts: TailoringParts, maxChars = 9_000): string {
+  const sections = [
+    `Job Title:\n${parts.title || "[manual input needed: job title]"}`,
+    `Company / Product Context:\n${parts.context || "[manual input needed: 1-3 sentence company or product summary]"}`,
+    ["Core Responsibilities:", ...bulletLines(parts.responsibilities ?? [], "[manual input needed: core responsibilities]")].join("\n"),
+    ["Required Qualifications:", ...bulletLines(parts.required ?? [], "[manual input needed: required qualifications]")].join("\n"),
+    ["Preferred Qualifications:", ...bulletLines(parts.preferred ?? [], "Not specified")].join("\n"),
+    ["Tech Stack / Keywords:", ...bulletLines(parts.tech ?? [], "[manual input needed: tech stack or keywords]")].join("\n"),
+    ["Seniority Signals:", ...bulletLines(parts.seniority ?? [], "Not specified")].join("\n"),
+    ["Domain Signals:", ...bulletLines(parts.domains ?? [], "Not specified")].join("\n")
+  ];
+  return normalize(sections.join("\n\n")).slice(0, maxChars);
+}
+
 function buildStructuredTailoringText(
   rawLines: string[],
   tracking: ExtractedJobTracking,
@@ -2167,28 +2199,23 @@ function buildStructuredTailoringText(
   const tailoringLines = buildTailoringLines(rawLines);
   // Fix #11: pass tailoringLines first, fall back to rawLines in extractCompanyProductContext
   const context = extractCompanyProductContext(tailoringLines, rawLines, tracking);
-  const responsibilities = extractResponsibilities(tailoringLines);
   const { required, preferred } = extractQualifications(tailoringLines);
-  const tech = extractTechKeywords(tailoringLines, tracking);
-  const seniority = extractSenioritySignals(tailoringLines, tracking, reviewMetadata);
-  const domains = extractDomainSignals(tracking, reviewMetadata, context);
-  const title = tracking.title || tracking.role || "";
-
-  const sections = [
-    `Job Title:\n${title || "[manual input needed: job title]"}`,
-    `Company / Product Context:\n${context || "[manual input needed: 1-3 sentence company or product summary]"}`,
-    ["Core Responsibilities:", ...bulletLines(responsibilities, "[manual input needed: core responsibilities]")].join("\n"),
-    ["Required Qualifications:", ...bulletLines(required, "[manual input needed: required qualifications]")].join("\n"),
-    ["Preferred Qualifications:", ...bulletLines(preferred, "Not specified")].join("\n"),
-    ["Tech Stack / Keywords:", ...bulletLines(tech, "[manual input needed: tech stack or keywords]")].join("\n"),
-    ["Seniority Signals:", ...bulletLines(seniority, "Not specified")].join("\n"),
-    ["Domain Signals:", ...bulletLines(domains, "Not specified")].join("\n")
-  ];
-
-  return normalize(sections.join("\n\n")).slice(0, maxChars);
+  return assembleTailoringText(
+    {
+      title: tracking.title || tracking.role || "",
+      context,
+      responsibilities: extractResponsibilities(tailoringLines),
+      required,
+      preferred,
+      tech: extractTechKeywords(tailoringLines, tracking),
+      seniority: extractSenioritySignals(tailoringLines, tracking, reviewMetadata),
+      domains: extractDomainSignals(tracking, reviewMetadata, context)
+    },
+    maxChars
+  );
 }
 
-function manualReviewFields(result: ExtractedJobPosting): string[] {
+export function manualReviewFields(result: ExtractedJobPosting): string[] {
   const fields: string[] = [];
   const tt = result.tailoringText;
   // Fix #8: also push "job description" when responsibilities AND required quals
