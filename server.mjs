@@ -27,8 +27,10 @@ import {
 } from "./server/docx.mjs";
 import { FetchTimeoutError, readBody, sendJson } from "./server/http.mjs";
 import { BlockedHostError, DnsError, fetchPublicHtml, isPublicHttpUrl } from "./server/network.mjs";
+import { quickScore, normalizeUrl, findMatchingApplication, extractJobMeta } from "./server/extension/index.mjs";
 
 const root = process.cwd();
+let extensionInbox = null; // { text: string, url: string } | null
 const isProduction = process.env.NODE_ENV === "production";
 const jobWorkspaceDir = join(root, "job-search-workspace");
 const baseResumeCandidates = [
@@ -948,6 +950,144 @@ async function serveStatic(req, res) {
   }
 }
 
+// Browser-extension API. These routes are reached cross-origin from a
+// chrome-extension:// (or moz-/safari-) page, so they bypass the localhost
+// same-origin CSRF guard (dispatched BEFORE it) and instead validate the
+// extension Origin scheme directly. They are read-only triage helpers plus a
+// one-slot "inbox" used to hand a captured job page to the open app tab; they
+// never write resume data or run an AI provider.
+const EXTENSION_ORIGIN_SCHEMES = ["chrome-extension://", "moz-extension://", "safari-web-extension://"];
+
+// analyze + import: called cross-origin by the extension popup. Require a
+// recognized extension-scheme Origin (a real chrome/moz/safari extension fetch
+// always sends one) and reflect that exact Origin back — never a bare "*", and
+// never allow an absent Origin, so no same-machine process or web page can
+// reach these by omitting the header.
+async function handleExtensionRoutes(req, res, pathname) {
+  const origin = req.headers.origin;
+  if (!origin || !EXTENSION_ORIGIN_SCHEMES.some((scheme) => origin.startsWith(scheme))) {
+    sendJson(res, 403, { error: "Forbidden." });
+    return;
+  }
+
+  res.setHeader("Access-Control-Allow-Origin", origin);
+  res.setHeader("Vary", "Origin");
+  if (req.method === "OPTIONS") {
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+    res.writeHead(204);
+    res.end();
+    return;
+  }
+
+  if (pathname === "/api/extension/analyze") {
+    if (req.method !== "POST") {
+      sendJson(res, 405, { error: "Use POST." });
+      return;
+    }
+    let body;
+    try {
+      body = JSON.parse((await readBody(req, 2_000_000)) || "{}");
+    } catch {
+      sendJson(res, 400, { error: "Invalid JSON." });
+      return;
+    }
+    const text = typeof body.text === "string" ? body.text : "";
+    const url = typeof body.url === "string" ? body.url : "";
+    const pageTitle = typeof body.pageTitle === "string" ? body.pageTitle : undefined;
+    if (!text.trim() || !url.trim()) {
+      sendJson(res, 400, { error: "A job page text and url are required." });
+      return;
+    }
+
+    const { title, company } = extractJobMeta(text, pageTitle);
+
+    let resumeText = "";
+    try {
+      const baseResume = await readWorkspaceBaseResume();
+      if (baseResume && baseResume.text) {
+        resumeText =
+          baseResume.kind === "tex"
+            ? extractPlainTextFromLatex(baseResume.text)
+            : baseResume.text;
+      }
+    } catch {
+      resumeText = "";
+    }
+
+    const fit = resumeText.trim().length >= 100 ? quickScore(resumeText, text) : null;
+
+    let previousApp = null;
+    try {
+      const apps = await readApplications(jobWorkspaceDir);
+      const match = findMatchingApplication(url, apps);
+      if (match) {
+        previousApp = {
+          id: match.id,
+          status: match.status,
+          appliedAt: match.appliedAt || null,
+          fitScore: match.tailoredFitScore || match.fitScore || null
+        };
+      }
+    } catch {
+      previousApp = null;
+    }
+
+    sendJson(res, 200, {
+      title: title ?? null,
+      company: company ?? null,
+      fit,
+      previousApp
+    });
+    return;
+  }
+
+  if (pathname === "/api/extension/import") {
+    if (req.method !== "POST") {
+      sendJson(res, 405, { error: "Use POST." });
+      return;
+    }
+    let body;
+    try {
+      body = JSON.parse((await readBody(req, 2_000_000)) || "{}");
+    } catch {
+      sendJson(res, 400, { error: "Invalid JSON." });
+      return;
+    }
+    const text = typeof body.text === "string" ? body.text : "";
+    const url = typeof body.url === "string" ? body.url : "";
+    if (!text.trim() || !url.trim()) {
+      sendJson(res, 400, { error: "A job page text and url are required." });
+      return;
+    }
+    // Last-write-wins: a second import before the app polls overwrites the
+    // first. Fine for the one-job-at-a-time personal workflow.
+    extensionInbox = { text: text.slice(0, 50_000), url };
+    sendJson(res, 200, { ok: true });
+    return;
+  }
+
+  sendJson(res, 404, { error: "Not found." });
+}
+
+// Polled same-origin by the app (useExtensionInbox). Returns the pending
+// extension import once and clears it. Stays behind the localhost CSRF/Host
+// guard (dispatched after it) and sends no CORS header, so a foreign page can
+// neither reach nor read it.
+async function handleExtensionInbox(req, res) {
+  if (req.method !== "GET") {
+    sendJson(res, 405, { error: "Use GET." });
+    return;
+  }
+  if (extensionInbox === null) {
+    sendJson(res, 200, null);
+    return;
+  }
+  const captured = extensionInbox;
+  extensionInbox = null;
+  sendJson(res, 200, captured);
+}
+
 const vite = isProduction
   ? null
   : await createViteServer({
@@ -960,6 +1100,17 @@ const vite = isProduction
 
 const server = createServer((req, res) => {
   const pathname = new URL(req.url ?? "/", `http://${req.headers.host}`).pathname;
+
+  // The extension's analyze/import routes are handled BEFORE the localhost CSRF
+  // guard: they are called cross-origin from a chrome-extension:// page (an
+  // Origin the localhost allowlist would reject) and do their own
+  // extension-scheme Origin validation + CORS inside. The inbox route is NOT
+  // here — it is polled same-origin by the app itself, so it stays behind the
+  // normal CSRF/Host guard below (and never advertises CORS).
+  if (pathname === "/api/extension/analyze" || pathname === "/api/extension/import") {
+    void handleExtensionRoutes(req, res, pathname);
+    return;
+  }
 
   // Same-origin/Host guard for the local API (default 127.0.0.1 mode): a website the
   // user visits must not be able to drive this server cross-origin (CSRF) or read the
@@ -984,6 +1135,13 @@ const server = createServer((req, res) => {
         return;
       }
     }
+  }
+
+  // Polled same-origin by the app's useExtensionInbox hook; CSRF/Host-guarded
+  // above like every other /api/ route (so a foreign page can't drain it).
+  if (pathname === "/api/extension/inbox") {
+    void handleExtensionInbox(req, res);
+    return;
   }
 
   if (pathname === "/api/polish") {
