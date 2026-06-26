@@ -69,14 +69,18 @@ function isNameLine(line: string): boolean {
   );
 }
 
-// Canonical, uppercased section label. Known synonyms collapse to one heading;
-// arbitrary titles (LaTeX \section{...}) are just uppercased.
+// Canonical, title-cased section label. Known synonyms collapse to one heading;
+// arbitrary titles (LaTeX \section{...}) are title-cased to match the PDF's
+// \scshape small-caps rendering (first letter full cap, rest small caps).
+function titleCase(s: string): string {
+  return s.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
+}
 function headingLabel(raw: string): string {
   const normalized = cleanLine(raw).toLowerCase();
-  if (normalized === "targeted summary") return "SUMMARY";
-  if (normalized === "core skills") return "TECHNICAL SKILLS";
-  if (normalized === "experience") return "WORK EXPERIENCE";
-  return cleanLine(raw).toUpperCase();
+  if (normalized === "targeted summary") return "Summary";
+  if (normalized === "core skills") return "Technical Skills";
+  if (normalized === "experience") return "Work Experience";
+  return titleCase(cleanLine(raw));
 }
 
 // Read a brace-balanced argument starting at s[i] === "{"; returns the inner
