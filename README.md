@@ -18,12 +18,15 @@ tailoring, job tracker, and applications stripped out.
   titles with right-aligned dates, italic subtitles, automatic multi-page
   pagination that keeps headings with their first entry.
 - **Layout & spacing controls** — page zoom (also ⌘/Ctrl +/- / 0),
-  Compact/Normal/Relaxed presets, fine sliders for line height and
-  section/entry/line gaps. Settings persist to `localStorage`.
-- **Typography controls** — toggle uppercase, underline, and bold section
-  headings; bold titles, italic subtitles/dates, bold skill labels; and a
+  Compact/Normal/Relaxed presets, and fine sliders for line height and
+  header/section/entry/list gaps tucked behind a "Fine-tune spacing" disclosure.
+  Save the current spacing as a reusable **Custom** preset. Settings persist to
+  `localStorage`.
+- **Typography controls** — grouped by element (Headings / Entries / Skills /
+  Contact): section-heading **case** (small caps / uppercase / normal) plus bold
+  and underline; bold titles, italic subtitles; bold skill labels; and a
   configurable contact divider (quick-pick glyphs or custom 1-2 char input).
-  Includes a one-click reset.
+  One-click reset to Jake's defaults.
 - **Exports** (each download opens a rename dialog pre-filled with a
   resume-derived file name)
   - **PDF - LaTeX** — the resume rendered through the Jake's template and compiled
@@ -79,6 +82,10 @@ src/
     editor/       the editable on-page resume (sections, entries, bullets, skills)
     Resume*.tsx   read-only document + off-screen print layer
   styles/         design tokens, resume document/editor CSS, app shell
+public/
+  favicon.svg     forge brand mark (anvil app-icon, also the sidebar lockup)
+  fonts/          embedded LM Roman faces for PDF-faithful on-page rendering
+  CNAME           GitHub Pages custom-domain config (jakeforge.xinyiklin.com)
 server/
   latex/          Jake's template renderer, resume parser, Tectonic wrapper
   docx.mjs        DOCX text extractor (zero-dep; shells to unzip)

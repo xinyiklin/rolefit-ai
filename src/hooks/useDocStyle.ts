@@ -1,5 +1,9 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 
+// Section-heading letter case — one mutually-exclusive choice (small caps, as in
+// Jake's \scshape; full ALL CAPS; or plain Title Case), so it's a segmented pick.
+export type HeadingCase = "smallcaps" | "uppercase" | "none";
+
 // User-adjustable typography for the HTML resume page (the editor, its read-only
 // print mirror, and therefore the "PDF · clean" export). The same values are
 // also sent to the LaTeX renderer so `.tex`, PDF preview, and PDF · LaTeX use the
@@ -22,9 +26,8 @@ export type DocStyle = {
   boldTitles: boolean; // entry title (role / project / school)
   boldHeadings: boolean; // section headings
   boldSkillLabels: boolean; // "Languages:" style labels
-  italicSubtitles: boolean; // subtitle + location row
-  italicDates: boolean; // the right-aligned date / link slot
-  uppercaseHeadings: boolean; // force section headings to ALL CAPS (off = small caps, as in the PDF)
+  italicSubtitles: boolean; // subtitle + location/date rows
+  headingCase: HeadingCase; // section-heading letter case (small caps / uppercase / normal)
   sectionRule: boolean; // the horizontal rule under each section heading
   contactDivider: string; // 1–2 char separator between header contact items
 };
@@ -46,12 +49,35 @@ export const DOC_STYLE_DEFAULTS: DocStyle = {
   boldHeadings: false,
   boldSkillLabels: true,
   italicSubtitles: true,
-  italicDates: false,
-  // Off by default → small-caps headings that match the Jake template's \scshape.
-  // The toggle forces ALL CAPS for users who prefer it.
-  uppercaseHeadings: false,
+  // Small caps by default → matches the Jake template's \scshape headings.
+  headingCase: "smallcaps",
   sectionRule: true,
   contactDivider: "|"
+};
+
+// The non-spacing "style" fields the Typography panel owns. Lifted as a type so
+// the "Jake's defaults" reset and applyStyle() stay in sync with the controls.
+export type DocStyleFields = Pick<
+  DocStyle,
+  | "boldTitles"
+  | "boldHeadings"
+  | "boldSkillLabels"
+  | "italicSubtitles"
+  | "headingCase"
+  | "sectionRule"
+  | "contactDivider"
+>;
+
+// The authentic upstream Jake's-Resume look for the style fields — applied by the
+// Typography panel's "Jake's defaults" reset. Spacing/zoom are left untouched.
+export const JAKE_STYLE_DEFAULTS: DocStyleFields = {
+  boldTitles: DOC_STYLE_DEFAULTS.boldTitles,
+  boldHeadings: DOC_STYLE_DEFAULTS.boldHeadings,
+  boldSkillLabels: DOC_STYLE_DEFAULTS.boldSkillLabels,
+  italicSubtitles: DOC_STYLE_DEFAULTS.italicSubtitles,
+  headingCase: DOC_STYLE_DEFAULTS.headingCase,
+  sectionRule: DOC_STYLE_DEFAULTS.sectionRule,
+  contactDivider: DOC_STYLE_DEFAULTS.contactDivider
 };
 
 // Single source of truth for the spacing fields that make up a preset (the
@@ -175,8 +201,15 @@ function coerce(raw: unknown, legacyMode: "current" | "v1" = "current"): DocStyl
     boldHeadings: r.boldHeadings === true,
     boldSkillLabels: r.boldSkillLabels !== false,
     italicSubtitles: r.italicSubtitles !== false,
-    italicDates: r.italicDates === true,
-    uppercaseHeadings: r.uppercaseHeadings === true,
+    // headingCase replaced the old `uppercaseHeadings` boolean: a stored `true`
+    // migrates to "uppercase"; anything else (including the old `false`) falls to
+    // the small-caps default.
+    headingCase:
+      r.headingCase === "uppercase" || r.headingCase === "none"
+        ? r.headingCase
+        : (r as Record<string, unknown>).uppercaseHeadings === true
+          ? "uppercase"
+          : DOC_STYLE_DEFAULTS.headingCase,
     sectionRule: r.sectionRule !== false,
     // Cap at 2 chars; fall back to "|" when missing (not when intentionally blank).
     contactDivider: typeof r.contactDivider === "string" ? r.contactDivider.slice(0, 2) : DOC_STYLE_DEFAULTS.contactDivider
@@ -253,9 +286,10 @@ export function useDocStyle() {
         "--doc-heading-weight": style.boldHeadings ? "700" : "400",
         "--doc-skill-label-weight": style.boldSkillLabels ? "700" : "400",
         "--doc-subtitle-style": style.italicSubtitles ? "italic" : "normal",
-        "--doc-date-style": style.italicDates ? "italic" : "normal",
-        // Section headings render small-caps by default; the toggle forces caps.
-        "--doc-heading-transform": style.uppercaseHeadings ? "uppercase" : "none",
+        // Heading case: small-caps via font-variant, ALL CAPS via text-transform,
+        // "none" leaves the stored Title Case untouched.
+        "--doc-heading-variant": style.headingCase === "smallcaps" ? "small-caps" : "normal",
+        "--doc-heading-transform": style.headingCase === "uppercase" ? "uppercase" : "none",
         "--doc-rule-width": style.sectionRule ? "1px" : "0",
         // Quoted so it's a valid CSS `content` <string> token.
         "--doc-contact-divider": JSON.stringify(style.contactDivider)
@@ -267,22 +301,10 @@ export function useDocStyle() {
     setStyle((current) => ({ ...current, [key]: value }));
   }
 
-  // Reset only the typography fields (toggles + contact divider). Zoom and the
-  // spacing values are left as-is — the spacing presets already act as a reset
-  // for those.
-  const TYPOGRAPHY_DEFAULTS = {
-    boldTitles: DOC_STYLE_DEFAULTS.boldTitles,
-    boldHeadings: DOC_STYLE_DEFAULTS.boldHeadings,
-    boldSkillLabels: DOC_STYLE_DEFAULTS.boldSkillLabels,
-    italicSubtitles: DOC_STYLE_DEFAULTS.italicSubtitles,
-    italicDates: DOC_STYLE_DEFAULTS.italicDates,
-    uppercaseHeadings: DOC_STYLE_DEFAULTS.uppercaseHeadings,
-    sectionRule: DOC_STYLE_DEFAULTS.sectionRule,
-    contactDivider: DOC_STYLE_DEFAULTS.contactDivider
-  } satisfies Partial<DocStyle>;
-
-  function resetTypography() {
-    setStyle((current) => ({ ...current, ...TYPOGRAPHY_DEFAULTS }));
+  // Apply a partial set of style fields at once (e.g. the Typography panel's
+  // "Jake's defaults" reset), leaving spacing and zoom untouched.
+  function applyStyle(partial: Partial<DocStyle>) {
+    setStyle((current) => ({ ...current, ...partial }));
   }
 
   function applySpacingPreset(preset: DocSpacingPreset) {
@@ -300,19 +322,19 @@ export function useDocStyle() {
     }
   }
 
-  const isTypographyDefault = useMemo(
-    () => (Object.keys(TYPOGRAPHY_DEFAULTS) as (keyof typeof TYPOGRAPHY_DEFAULTS)[]).every((k) => style[k] === TYPOGRAPHY_DEFAULTS[k]),
+  const isStyleDefault = useMemo(
+    () => (Object.keys(JAKE_STYLE_DEFAULTS) as (keyof DocStyleFields)[]).every((k) => style[k] === JAKE_STYLE_DEFAULTS[k]),
     [style]
   );
 
   return {
     style,
     set,
-    resetTypography,
+    applyStyle,
     applySpacingPreset,
     saveCustomPreset,
     customPreset,
-    isTypographyDefault,
+    isStyleDefault,
     cssVars
   };
 }

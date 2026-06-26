@@ -54,10 +54,10 @@ const DEFAULTS = {
   boldTitles: true,
   boldSkillLabels: true,
   italicSubtitles: true,
-  italicDates: true,
-  // Section-heading look — small-caps (\scshape) is the default; the Uppercase
-  // toggle forces ALL CAPS, and the rule under the heading is the titlerule.
-  uppercaseHeadings: false,
+  // Section-heading case — small-caps (\scshape) is Jake's default; "uppercase"
+  // forces ALL CAPS (\MakeUppercase) and "none" leaves Title Case. The rule under
+  // the heading is the titlerule.
+  headingCase: "smallcaps",
   sectionRule: true
 };
 
@@ -143,8 +143,14 @@ function styleToLatex(docStyle) {
     boldTitles: bool(docStyle.boldTitles, DEFAULTS.boldTitles),
     boldSkillLabels: bool(docStyle.boldSkillLabels, DEFAULTS.boldSkillLabels),
     italicSubtitles: bool(docStyle.italicSubtitles, DEFAULTS.italicSubtitles),
-    italicDates: bool(docStyle.italicDates, DEFAULTS.italicDates),
-    uppercaseHeadings: bool(docStyle.uppercaseHeadings, DEFAULTS.uppercaseHeadings),
+    // headingCase replaced the old `uppercaseHeadings` boolean; honor a legacy
+    // client that still sends `uppercaseHeadings: true`.
+    headingCase:
+      docStyle.headingCase === "uppercase" || docStyle.headingCase === "none"
+        ? docStyle.headingCase
+        : docStyle.uppercaseHeadings === true
+          ? "uppercase"
+          : DEFAULTS.headingCase,
     sectionRule: bool(docStyle.sectionRule, DEFAULTS.sectionRule)
   };
 }
@@ -227,9 +233,10 @@ function buildPreamble(style) {
 % Section gaps are pure separators: \titlespacing "before" is the WHOLE gap
 % above the heading (= sectionGap), "after" is the rule→first-row gap
 % (= sectionEntryGap). titlesec drops the before-glue at the top of a page, so
-% the first section's gap is set by the header \vspace instead. \scshape gives
-% small-caps; the Uppercase toggle uppercases the heading text in renderSection.
-\titleformat{\section}{\scshape\raggedright\large${style.boldHeadings ? "\\bfseries" : ""}}{}{0em}{}[\color{black}${style.sectionRule ? "\\titlerule" : ""}]
+% the first section's gap is set by the header \vspace instead. Heading case:
+% \scshape (small caps), \MakeUppercase before-code (full caps), or neither
+% (plain Title Case as stored).
+\titleformat{\section}{${style.headingCase === "smallcaps" ? "\\scshape" : ""}\raggedright\large${style.boldHeadings ? "\\bfseries" : ""}}{}{0em}{${style.headingCase === "uppercase" ? "\\MakeUppercase" : ""}}[\color{black}${style.sectionRule ? "\\titlerule" : ""}]
 \titlespacing*{\section}{0pt}{${fmtPt(style.sectionGapPt)}}{${fmtPt(style.sectionEntryGapPt)}}
 
 \ifdefined\pdfgentounicode\pdfgentounicode=1\fi
@@ -258,12 +265,12 @@ function buildPreamble(style) {
   \item
     \resumeRow{${bf("#1", style.boldTitles)}}{#2}%
     \vspace{${fmtPt(style.titleSubVSpacePt)}}%
-    \resumeRow{${it("\\small#3", style.italicSubtitles)}}{${it("\\small #4", style.italicDates)}}%
+    \resumeRow{${it("\\small#3", style.italicSubtitles)}}{${it("\\small #4", style.italicSubtitles)}}%
 }
 
 \newcommand{\resumeSubSubheading}[2]{%
     \item
-    \resumeRow{${it("\\small#1", style.italicSubtitles)}}{${it("\\small #2", style.italicDates)}}%
+    \resumeRow{${it("\\small#1", style.italicSubtitles)}}{${it("\\small #2", style.italicSubtitles)}}%
 }
 
 \newcommand{\resumeProjectHeading}[2]{%
@@ -367,10 +374,9 @@ ${item.bullets.map((bullet) => `        \\resumeItem{${escapeTex(bullet)}}`).joi
 
 function renderSection(section, style) {
   const hasAnyHeading = section.items.some((item) => item.title || item.subtitle || item.meta || item.location);
-  // Headings are small-caps (\scshape) by default; the Uppercase toggle forces
-  // ALL CAPS by uppercasing the text (\scshape is then a no-op on the caps).
-  const titled = titleCase(section.heading);
-  const heading = style.uppercaseHeadings ? titled.toUpperCase() : titled;
+  // Heading case is applied by \titleformat (\\scshape / \\MakeUppercase / none),
+  // so the text is just stored Title Case here.
+  const heading = titleCase(section.heading);
 
   // Summary-like headings render their rows as plain small paragraphs instead of
   // the skills block (which draws \\ line breaks and bolds "Label:" prefixes).

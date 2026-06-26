@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ChangeEvent, type DragEvent } from "react";
-import { Eye, FileCode2, FileDown, RotateCcw, Upload } from "lucide-react";
+import { ChevronRight, Eye, FileCode2, FileDown, RotateCcw, Upload } from "lucide-react";
 
 import { useResumeEditor } from "./hooks/useResumeEditor";
-import { useDocStyle, DOC_ZOOM_OPTIONS, DOC_SPACING_PRESETS, DOC_SPACING_KEYS, type DocSpacingKey, type DocSpacingPreset } from "./hooks/useDocStyle";
+import { useDocStyle, JAKE_STYLE_DEFAULTS, DOC_ZOOM_OPTIONS, DOC_SPACING_PRESETS, DOC_SPACING_KEYS, type DocSpacingKey, type DocSpacingPreset, type HeadingCase } from "./hooks/useDocStyle";
 import { useTemplates } from "./hooks/useTemplates";
 import { useResumeExport } from "./hooks/useResumeExport";
 import { ResumeEditor } from "./sections/editor/ResumeEditor";
@@ -13,6 +13,8 @@ import { fileToText } from "./lib/importResume";
 import type { ResumeData } from "./lib/resumeData";
 
 const STORAGE_KEY = "jakeforge.resume.v1";
+// Remembers whether the spacing-sliders disclosure is expanded.
+const FINE_TUNE_KEY = "jakeforge.ui.fineTune.v1";
 
 function loadSavedResume(): ResumeData | null {
   try {
@@ -106,11 +108,15 @@ function SpacingSlider({
 function AnimatedSeg<K extends string>({
   items,
   activeKey,
-  onSelect
+  onSelect,
+  block = false
 }: {
   items: { key: K; label: string }[];
   activeKey: K | null;
   onSelect: (key: K) => void;
+  // Full-width track with equal-width options — for 3-option controls that don't
+  // fit beside an inline label in the narrow sidebar.
+  block?: boolean;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const btnRefs = useRef<Map<K, HTMLButtonElement>>(new Map());
@@ -123,13 +129,16 @@ function AnimatedSeg<K extends string>({
     const cr = containerRef.current.getBoundingClientRect();
     const br = btn.getBoundingClientRect();
     setPill({ left: br.left - cr.left, width: br.width });
-  }, [activeKey]);
+    // items.length is a dep: in the full-width (block) layout, adding the saved
+    // "Custom" option reflows every button to a new equal width even when
+    // activeKey is unchanged, so the pill must re-measure on count changes too.
+  }, [activeKey, items.length]);
 
   useLayoutEffect(measure, [measure]);
   useEffect(() => { window.addEventListener("resize", measure); return () => window.removeEventListener("resize", measure); }, [measure]);
 
   return (
-    <div className="seg" ref={containerRef}>
+    <div className={`seg${block ? " seg--full" : ""}`} ref={containerRef}>
       {pill && (
         <span
           className="seg__pill"
@@ -154,6 +163,14 @@ function AnimatedSeg<K extends string>({
 // Common contact separators offered as one-tap chips (any 1–2 chars still work
 // via the custom input).
 const COMMON_DIVIDERS = ["|", "•", "·", "–", "/"];
+
+// Section-heading letter case — a mutually-exclusive choice, shown as a segmented
+// control (small caps is Jake's \scshape default; "Normal" leaves Title Case).
+const HEADING_CASES: { key: HeadingCase; label: string }[] = [
+  { key: "smallcaps", label: "Small caps" },
+  { key: "uppercase", label: "Uppercase" },
+  { key: "none", label: "Normal" }
+];
 
 // A pill that toggles a boolean DocStyle flag — filled when active. Reads more
 // like a formatting toolbar than a column of checkboxes.
@@ -183,6 +200,27 @@ export default function App() {
   const docStyle = useDocStyle();
   const templates = useTemplates();
   const [texStatus, setTexStatus] = useState("");
+
+  // The 11 fine-grained spacing sliders live behind a disclosure — most people
+  // pick a preset and never open them. Closed by default; choice is remembered.
+  const [showFineTune, setShowFineTune] = useState<boolean>(() => {
+    try {
+      return window.localStorage.getItem(FINE_TUNE_KEY) === "1";
+    } catch {
+      return false;
+    }
+  });
+  function toggleFineTune() {
+    setShowFineTune((open) => {
+      const next = !open;
+      try {
+        window.localStorage.setItem(FINE_TUNE_KEY, next ? "1" : "0");
+      } catch {
+        // Storage unavailable (private mode); the toggle still works this session.
+      }
+      return next;
+    });
+  }
 
   const selectedTemplate =
     templates.templates.find((t) => t.id === templates.selectedTemplateId) ?? null;
@@ -355,8 +393,11 @@ export default function App() {
     <div className="app">
       <aside className="sidebar">
         <div className="brand">
-          <span className="brand__mark">jakeforge</span>
-          <span className="brand__sub">Jake&apos;s-style resume editor</span>
+          <img className="brand__icon" src="/favicon.svg" alt="" width="34" height="34" />
+          <div className="brand__text">
+            <span className="brand__mark">jakeforge</span>
+            <span className="brand__sub">Jake&apos;s-style resume editor</span>
+          </div>
         </div>
 
         <div className="sidebar__actions">
@@ -441,36 +482,52 @@ export default function App() {
               ))}
             </select>
           </label>
-          <div className="ctl-row">
-            <span>Preset</span>
-            <AnimatedSeg items={presetItems} activeKey={activePresetKey} onSelect={applyPreset} />
+          <div className="ctl-seg-field">
+            <span className="ctl-seg-field__label">Preset</span>
+            <AnimatedSeg items={presetItems} activeKey={activePresetKey} onSelect={applyPreset} block />
           </div>
-          {SPACING_GROUPS.map((group) => (
-            <div className="ctl-group" key={group.label}>
-              <span className="ctl-group__label">{group.label}</span>
-              <div className="panel__stack">
-                {group.sliders.map(({ key, label, min, max, unit }) => (
-                  <SpacingSlider
-                    key={key}
-                    label={label}
-                    value={docStyle.style[key]}
-                    min={min}
-                    max={max}
-                    unit={unit}
-                    onChange={(value) => docStyle.set(key, value)}
-                  />
-                ))}
-              </div>
-            </div>
-          ))}
+
           <button
             type="button"
-            className="ctl-save-preset"
-            onClick={docStyle.saveCustomPreset}
-            title="Save the current spacing as your Custom preset"
+            className={`ctl-disclosure${showFineTune ? " is-open" : ""}`}
+            aria-expanded={showFineTune}
+            onClick={toggleFineTune}
           >
-            {activePresetKey === "custom" ? "Custom saved ✓" : docStyle.customPreset ? "Update Custom" : "Save as Custom"}
+            <ChevronRight size={13} className="ctl-disclosure__chev" aria-hidden="true" />
+            <span>Fine-tune spacing</span>
+            {activePresetKey === null ? <span className="ctl-disclosure__hint">Edited</span> : null}
           </button>
+
+          {showFineTune ? (
+            <div className="ctl-disclosure__body">
+              {SPACING_GROUPS.map((group) => (
+                <div className="ctl-group" key={group.label}>
+                  <span className="ctl-group__label">{group.label}</span>
+                  <div className="panel__stack">
+                    {group.sliders.map(({ key, label, min, max, unit }) => (
+                      <SpacingSlider
+                        key={key}
+                        label={label}
+                        value={docStyle.style[key]}
+                        min={min}
+                        max={max}
+                        unit={unit}
+                        onChange={(value) => docStyle.set(key, value)}
+                      />
+                    ))}
+                  </div>
+                </div>
+              ))}
+              <button
+                type="button"
+                className="ctl-save-preset"
+                onClick={docStyle.saveCustomPreset}
+                title="Save the current spacing as your Custom preset"
+              >
+                {activePresetKey === "custom" ? "Custom saved ✓" : docStyle.customPreset ? "Update Custom" : "Save as Custom"}
+              </button>
+            </div>
+          ) : null}
         </section>
 
         <section className="panel">
@@ -479,17 +536,49 @@ export default function App() {
             <button
               type="button"
               className="icon-btn"
-              onClick={docStyle.resetTypography}
-              disabled={docStyle.isTypographyDefault}
-              title="Reset typography"
-              aria-label="Reset typography"
+              onClick={() => docStyle.applyStyle(JAKE_STYLE_DEFAULTS)}
+              disabled={docStyle.isStyleDefault}
+              title="Reset every text style to Jake's defaults"
+              aria-label="Jake's defaults"
             >
               <RotateCcw size={14} aria-hidden="true" />
             </button>
           </div>
 
           <div className="ctl-group">
-            <span className="ctl-group__label">Contact divider</span>
+            <span className="ctl-group__label">Headings</span>
+            <div className="ctl-seg-field">
+              <span className="ctl-seg-field__label">Case</span>
+              <AnimatedSeg
+                items={HEADING_CASES}
+                activeKey={docStyle.style.headingCase}
+                onSelect={(key) => docStyle.set("headingCase", key)}
+                block
+              />
+            </div>
+            <div className="chip-row">
+              <ToggleChip label="Bold" active={docStyle.style.boldHeadings} onClick={(v) => docStyle.set("boldHeadings", v)} />
+              <ToggleChip label="Underline" active={docStyle.style.sectionRule} onClick={(v) => docStyle.set("sectionRule", v)} />
+            </div>
+          </div>
+
+          <div className="ctl-group">
+            <span className="ctl-group__label">Entries</span>
+            <div className="chip-row">
+              <ToggleChip label="Bold titles" active={docStyle.style.boldTitles} onClick={(v) => docStyle.set("boldTitles", v)} />
+              <ToggleChip label="Italic subtitles" active={docStyle.style.italicSubtitles} onClick={(v) => docStyle.set("italicSubtitles", v)} />
+            </div>
+          </div>
+
+          <div className="ctl-group">
+            <span className="ctl-group__label">Skills</span>
+            <div className="chip-row">
+              <ToggleChip label="Bold labels" active={docStyle.style.boldSkillLabels} onClick={(v) => docStyle.set("boldSkillLabels", v)} />
+            </div>
+          </div>
+
+          <div className="ctl-group">
+            <span className="ctl-group__label">Contact</span>
             <div className="chip-row">
               {COMMON_DIVIDERS.map((d) => (
                 <button
@@ -513,25 +602,6 @@ export default function App() {
                 title="Custom divider"
                 onChange={(e) => docStyle.set("contactDivider", e.target.value.slice(0, 2))}
               />
-            </div>
-          </div>
-
-          <div className="ctl-group">
-            <span className="ctl-group__label">Section headings</span>
-            <div className="chip-row">
-              <ToggleChip label="Uppercase" active={docStyle.style.uppercaseHeadings} onClick={(v) => docStyle.set("uppercaseHeadings", v)} />
-              <ToggleChip label="Underline" active={docStyle.style.sectionRule} onClick={(v) => docStyle.set("sectionRule", v)} />
-              <ToggleChip label="Bold" active={docStyle.style.boldHeadings} onClick={(v) => docStyle.set("boldHeadings", v)} />
-            </div>
-          </div>
-
-          <div className="ctl-group">
-            <span className="ctl-group__label">Entries &amp; skills</span>
-            <div className="chip-row">
-              <ToggleChip label="Bold title" active={docStyle.style.boldTitles} onClick={(v) => docStyle.set("boldTitles", v)} />
-              <ToggleChip label="Italic subtitle" active={docStyle.style.italicSubtitles} onClick={(v) => docStyle.set("italicSubtitles", v)} />
-              <ToggleChip label="Italic date" active={docStyle.style.italicDates} onClick={(v) => docStyle.set("italicDates", v)} />
-              <ToggleChip label="Bold skills" active={docStyle.style.boldSkillLabels} onClick={(v) => docStyle.set("boldSkillLabels", v)} />
             </div>
           </div>
         </section>

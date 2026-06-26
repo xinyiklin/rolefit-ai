@@ -30,10 +30,24 @@
 
 .brand {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  align-items: center;
+  gap: var(--s2);
   padding-bottom: var(--s3);
   border-bottom: 1px solid var(--hairline-soft);
+}
+
+.brand__icon {
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--r-md);
+}
+
+.brand__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
 }
 
 .brand__mark {
@@ -433,6 +447,58 @@
   border-color: var(--accent);
 }
 
+/* Disclosure that hides the 11 fine-grained spacing sliders behind one row. */
+.ctl-disclosure {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  width: 100%;
+  padding: 6px 0;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--ink-muted);
+  background: none;
+  border: 0;
+  cursor: pointer;
+  transition: color 0.12s var(--ease);
+}
+
+.ctl-disclosure:hover {
+  color: var(--ink-strong);
+}
+
+.ctl-disclosure__chev {
+  flex: 0 0 auto;
+  color: var(--ink-faint);
+  transition: transform 0.15s var(--ease);
+}
+
+.ctl-disclosure.is-open .ctl-disclosure__chev {
+  transform: rotate(90deg);
+}
+
+/* "Edited" tag when the live spacing matches no preset — a hint that there are
+   custom values tucked inside the collapsed disclosure. */
+.ctl-disclosure__hint {
+  margin-left: auto;
+  padding: 1px 7px;
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-faint);
+  background: var(--card-elev);
+  border: 1px solid var(--hairline-soft);
+  border-radius: var(--r-pill);
+}
+
+.ctl-disclosure__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+  margin-top: var(--s1);
+}
+
 .ctl-divider {
   width: 44px;
   padding: 4px 6px;
@@ -485,6 +551,31 @@
   border-radius: var(--r-pill);
 }
 
+/* Full-width track with equal-width options — used for the 3-option Preset and
+   Case controls, which don't fit beside an inline label in the narrow sidebar. */
+.seg--full {
+  display: flex;
+  width: 100%;
+}
+
+.seg--full .seg__opt {
+  flex: 1 1 0;
+  min-width: 0;
+  text-align: center;
+}
+
+/* Stacked label + full-width segmented control. */
+.ctl-seg-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+}
+
+.ctl-seg-field__label {
+  font-size: 0.82rem;
+  color: var(--ink-muted);
+}
+
 .seg__pill {
   position: absolute;
   top: 2px;
@@ -503,6 +594,7 @@
   padding: 4px 12px;
   font-size: 0.78rem;
   font-weight: 600;
+  white-space: nowrap;
   color: var(--ink-soft);
   border-radius: var(--r-pill);
   transition: color 0.2s ease;

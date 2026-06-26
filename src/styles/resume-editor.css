@@ -381,14 +381,15 @@
 }
 
 /* Section heading: small caps with a rule below, matching the PDF's \scshape.
-   Headings are stored in title case ("Education") so CSS small-caps renders the
-   first letter as a full capital and the rest as small capitals. The Uppercase
-   toggle (--doc-heading-transform: uppercase) still forces ALL CAPS on demand. */
+   Headings are stored in title case ("Education"), so the Case control drives
+   appearance: small-caps (--doc-heading-variant) renders the lowercase run as
+   small capitals, Uppercase (--doc-heading-transform) forces ALL CAPS, and
+   Normal leaves the stored Title Case untouched. */
 .rdx-section__heading {
   /* \large at the 11pt documentclass = 12pt = 1.096em of \normalsize 10.95pt. */
   font-size: 1.1em;
   font-weight: var(--doc-heading-weight, 400);
-  font-variant: small-caps;
+  font-variant: var(--doc-heading-variant, small-caps);
   text-transform: var(--doc-heading-transform, none);
   letter-spacing: 0.04em;
   color: #000000;
@@ -530,7 +531,7 @@
   min-width: 6ch;
   text-align: right;
   font-weight: 400;
-  font-style: var(--doc-date-style, normal);
+  font-style: normal;
   color: #000000;
   field-sizing: content;
 }

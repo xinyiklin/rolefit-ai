@@ -126,14 +126,16 @@
   margin-top: 0.62em;
 }
 
-/* Section heading: small caps with a rule below, matching the PDF's \scshape. */
+/* Section heading: case-driven (small caps / uppercase / normal), with a rule
+   below matching the PDF's \scshape + \titlerule. */
 .resume-doc__heading {
   margin: 0 0 0.16em;
   padding-bottom: 0.05em;
   border-bottom: 1px solid #000000;
   font-size: 1.02em;
   font-weight: 700;
-  font-variant: small-caps;
+  font-variant: var(--doc-heading-variant, small-caps);
+  text-transform: var(--doc-heading-transform, none);
   letter-spacing: 0.04em;
   color: #000000;
 }
