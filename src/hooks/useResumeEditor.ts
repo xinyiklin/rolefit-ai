@@ -36,7 +36,7 @@ type Action =
   | { type: "updateContact"; index: number; value: string }
   | { type: "addContact" }
   | { type: "removeContact"; index: number }
-  | { type: "addSection"; sectionType: ResumeSectionType }
+  | { type: "addSection"; sectionType: ResumeSectionType; position?: "top" | "bottom" }
   | { type: "removeSection"; sectionId: string }
   | { type: "reorderSections"; from: number; to: number }
   | { type: "setHeading"; sectionId: string; heading: string }
@@ -85,8 +85,13 @@ function reduce(data: ResumeData, action: Action): ResumeData {
     case "removeContact":
       return { ...data, contact: data.contact.filter((_, i) => i !== action.index) };
 
-    case "addSection":
-      return { ...data, sections: [...data.sections, newSection(action.sectionType)] };
+    case "addSection": {
+      const section = newSection(action.sectionType);
+      return {
+        ...data,
+        sections: action.position === "top" ? [section, ...data.sections] : [...data.sections, section]
+      };
+    }
     case "removeSection":
       return { ...data, sections: data.sections.filter((section) => section.id !== action.sectionId) };
     case "reorderSections":
@@ -209,7 +214,8 @@ export function useResumeEditor() {
       updateContact: (index: number, value: string) => dispatch({ type: "updateContact", index, value }),
       addContact: () => dispatch({ type: "addContact" }),
       removeContact: (index: number) => dispatch({ type: "removeContact", index }),
-      addSection: (sectionType: ResumeSectionType) => dispatch({ type: "addSection", sectionType }),
+      addSection: (sectionType: ResumeSectionType, position?: "top" | "bottom") =>
+        dispatch({ type: "addSection", sectionType, position }),
       removeSection: (sectionId: string) => dispatch({ type: "removeSection", sectionId }),
       reorderSections: (from: number, to: number) => dispatch({ type: "reorderSections", from, to }),
       setHeading: (sectionId: string, heading: string) => dispatch({ type: "setHeading", sectionId, heading }),
