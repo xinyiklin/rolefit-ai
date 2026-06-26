@@ -164,13 +164,30 @@ export function extractJobMeta(text, pageTitle) {
     }
   }
 
-  // 3. Generic: first segment of the page title is the role.
+  // 3. Imported ATS text may include explicit header lines even when the page
+  // title is just wrapper chrome — but only fill what the trusted LinkedIn/Indeed
+  // title parse (steps 1-2) didn't, so a stray "Company:" line in a JD body can't
+  // clobber a correctly-parsed employer. These still win over the generic
+  // page-title fallback (step 4) because that step is guarded on an empty field.
+  if (body) {
+    const roleLine = body.match(/^\s*(?:Role|Title):\s*(.+)$/im);
+    if (roleLine && !meta.title) meta.title = roleLine[1].trim();
+
+    const companyLine = body.match(/^\s*Company:\s*(.+)$/im);
+    if (companyLine && !meta.company) meta.company = companyLine[1].trim();
+  }
+
+  // 4. Generic: first segment of the page title is the role.
   if (!meta.title && title) {
     const first = title.split(/[|–\-]/)[0]?.trim() ?? "";
     if (first.length >= 3 && first.length <= 100) meta.title = first;
   }
 
-  // 4. Body "at <Company>" cue for a still-missing employer.
+  // 5. Body company cues for a still-missing employer.
+  if (!meta.company && body) {
+    const introMatch = body.match(/^\s*([A-Z][A-Za-z0-9 .&-]{2,60})\s+is\b/m);
+    if (introMatch) meta.company = introMatch[1].trim();
+  }
   if (!meta.company && body) {
     const atMatch = body.match(/\bat\s+([A-Z][A-Za-z0-9\s,&.]{2,40}?)(?:\s*,|\s*\n)/m);
     if (atMatch) meta.company = atMatch[1].trim();

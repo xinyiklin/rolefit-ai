@@ -15,6 +15,11 @@ type UseCoverLetterArgs = {
   // resets `result` (base-resume load, job import, application restore), so there
   // is no auto-reset effect here that could wipe a just-restored letter.
   resumeText: string;
+  // Distilled JD facts so the local fallback draft can name the target company
+  // and role instead of leaving [Company]/[role title] placeholders. Empty when
+  // the distiller could not ground them; the draft keeps the placeholders then.
+  jobCompany?: string;
+  jobRoleTitle?: string;
 };
 
 // Owns the cover letter as a single piece of state, generated ON DEMAND from the
@@ -30,8 +35,13 @@ export function useCoverLetter({
   honestContext,
   customInstructions,
   aiRequest,
-  resumeText
+  resumeText,
+  jobCompany,
+  jobRoleTitle
 }: UseCoverLetterArgs) {
+  // Shared by both fallback paths below so a known company/role is named even
+  // when the AI letter is blanked or the call fails.
+  const localDraftMeta = { company: jobCompany, roleTitle: jobRoleTitle };
   const [coverLetterText, setCoverLetterText] = useState("");
   const [coverStatus, setCoverStatus] = useState("");
   const [isGeneratingCover, setIsGeneratingCover] = useState(false);
@@ -77,13 +87,13 @@ export function useCoverLetter({
       } else {
         // Server blanked an ungrounded AI letter — fall back to the local,
         // strictly-grounded draft (the same backstop the polish cover pass uses).
-        setCoverLetterText(draftCoverLetter(resume, jobText));
+        setCoverLetterText(draftCoverLetter(resume, jobText, resume, localDraftMeta));
         setCoverStatus("Drafted a local cover letter (the AI draft was set aside for unsupported claims). Fill in the [add: …] placeholders.");
       }
     } catch (error) {
       const message = error instanceof Error ? error.message.replace(/[.。]\s*$/, "") : "request failed";
       // Always leave a usable draft: the deterministic local one.
-      setCoverLetterText(draftCoverLetter(resume, jobText));
+      setCoverLetterText(draftCoverLetter(resume, jobText, resume, localDraftMeta));
       setCoverStatus(`AI cover letter unavailable: ${message}. Showing a local draft to edit.`);
     } finally {
       setIsGeneratingCover(false);

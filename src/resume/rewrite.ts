@@ -313,35 +313,61 @@ export function polishResume(resumeText: string, jobText: string): PolishedResum
   };
 }
 
-export function draftCoverLetter(resumeText: string, jobText: string, polishedText = resumeText) {
+// Long US date for the letter head ("June 24, 2026"). Runtime-only impurity (the
+// current date); callers may pass meta.dateLabel to pin it for tests.
+function formatLetterDate() {
+  return new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+}
+
+// `meta` carries the JD facts the app already knows from the distiller (company,
+// role title) plus an optional date label. Each falls back to a bracketed
+// placeholder so an unknown field stays an honest blank the user fills in — never
+// an invented value — while a known one is named directly.
+export function draftCoverLetter(
+  resumeText: string,
+  jobText: string,
+  polishedText = resumeText,
+  meta: { company?: string; roleTitle?: string; dateLabel?: string } = {}
+) {
   const source = splitResumeHeader(resumeText);
   const candidateName = source.header[0]?.trim() || "[Your name]";
+  const company = meta.company?.trim() || "[Company]";
+  const roleTitle = meta.roleTitle?.trim() || "[role title]";
+  const dateLabel = meta.dateLabel?.trim() || formatLetterDate();
   const jobKeywords = extractKeywords(jobText);
   const matchedKeywords = jobKeywords.filter((keyword) => includesKeyword(polishedText, keyword)).slice(0, 5);
   const skillLine = matchedKeywords.length
     ? matchedKeywords.map(titleCase).join(", ")
     : "[add 2-3 relevant skills]";
+  // Strip each bullet's trailing punctuation before joining so "…480 kB." + "; "
+  // can't produce the "480 kB.; Supported…" double-stop seen in real drafts.
   const evidenceBullets = polishedText
     .split("\n")
     .filter(isBullet)
     .sort((a, b) => scoreBullet(b, matchedKeywords) - scoreBullet(a, matchedKeywords))
     .slice(0, 2)
-    .map((line) => stripBullet(line).replace(/\s*\[add metric:[^\]]+\]/gi, " [add metric]"));
+    .map((line) =>
+      stripBullet(line)
+        .replace(/\s*\[add metric:[^\]]+\]/gi, " [add metric]")
+        .replace(/[.;\s]+$/, "")
+        .trim()
+    )
+    .filter(Boolean);
   const evidenceLine =
     evidenceBullets.length > 0
-      ? `Two examples I would bring to the role are: ${evidenceBullets.join("; ")}.`
+      ? `${evidenceBullets.length === 1 ? "An example" : "Two examples"} I would bring to this role: ${evidenceBullets.join("; ")}.`
       : "My project work gives me practical experience turning requirements into working software.";
 
   return [
     candidateName,
-    "[Today's date]",
+    dateLabel,
     "",
     "[Hiring manager]",
-    "[Company]",
+    company,
     "",
     "Dear [Hiring manager],",
     "",
-    `I am applying for the [role title] role at [Company]. My background is [add your background], and my project experience aligns with the role through ${skillLine}.`,
+    `I am applying for the ${roleTitle} role at ${company}. My project experience connects to it through ${skillLine}.`,
     "",
     evidenceLine,
     "",

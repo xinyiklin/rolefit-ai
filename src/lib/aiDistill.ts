@@ -14,6 +14,7 @@ import {
   type ExtractedJobTracking,
   type ExtractedSalaryPeriod
 } from "./jobExtract";
+import type { AiRequestFields } from "./aiRequest";
 
 // The structured fields /api/distill returns (already grounded/anti-fab on the
 // server). Every field is optional at runtime — the model output is untrusted.
@@ -121,9 +122,9 @@ export function extractedFromAiOrLocal(
 // Returns which engine produced the result so the UI can note when AI was used.
 export async function distillJobPosting(
   text: string,
-  options: { url?: string; signal?: AbortSignal } = {}
+  options: { url?: string; signal?: AbortSignal; aiRequest?: Partial<AiRequestFields> } = {}
 ): Promise<DistillResult> {
-  const { url, signal } = options;
+  const { url, signal, aiRequest } = options;
   const local = (): DistillResult => ({ extracted: extractJobPosting(text, { url }), source: "local" });
   if (text.trim().length < 40) return local();
 
@@ -131,7 +132,7 @@ export async function distillJobPosting(
     const res = await fetch("/api/distill", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text, url }),
+      body: JSON.stringify({ text, url, ...(aiRequest ?? {}) }),
       signal
     });
     if (!res.ok) return local();

@@ -48,7 +48,11 @@ let extensionDistilling = false;
 async function runExtensionDistill(importId, text, url) {
   extensionDistilling = true;
   try {
-    const fields = await distillToFields({ jobText: text, url });
+    const jobText = await resolveImportedJobText(text, url);
+    if (extensionInbox && extensionInbox.id === importId) {
+      extensionInbox.text = jobText.slice(0, 50_000);
+    }
+    const fields = await distillToFields({ jobText, url });
     if (extensionInbox && extensionInbox.id === importId) {
       extensionInbox.fields = fields;
       extensionInbox.status = "done";
@@ -822,6 +826,97 @@ function linkedInJobText(html) {
   return htmlToText(lines.join("\n\n"));
 }
 
+function greenhouseParam(value, pattern) {
+  const param = String(value ?? "").trim();
+  return pattern.test(param) ? param : "";
+}
+
+function greenhouseJobAppUrl(u) {
+  const isGreenhouseHost = /(^|\.)greenhouse\.io$/i.test(u.hostname);
+  const boardFromSearch = greenhouseParam(u.searchParams.get("board") || u.searchParams.get("for"), /^[a-z0-9][a-z0-9_-]{0,80}$/i);
+  const tokenFromSearch = greenhouseParam(u.searchParams.get("gh_jid") || u.searchParams.get("token"), /^\d{3,20}$/);
+  if (boardFromSearch && tokenFromSearch) {
+    const appUrl = new URL("https://job-boards.greenhouse.io/embed/job_app");
+    appUrl.searchParams.set("for", boardFromSearch);
+    appUrl.searchParams.set("token", tokenFromSearch);
+    return appUrl;
+  }
+
+  if (!isGreenhouseHost) return null;
+
+  const pathParts = u.pathname.split("/").filter(Boolean);
+  const jobIndex = pathParts.findIndex((part) => part === "jobs");
+  const boardFromPath = jobIndex > 0 ? greenhouseParam(pathParts[jobIndex - 1], /^[a-z0-9][a-z0-9_-]{0,80}$/i) : "";
+  const tokenFromPath = jobIndex >= 0 ? greenhouseParam(pathParts[jobIndex + 1], /^\d{3,20}$/) : "";
+  if (!boardFromPath || !tokenFromPath) return null;
+
+  const appUrl = new URL("https://job-boards.greenhouse.io/embed/job_app");
+  appUrl.searchParams.set("for", boardFromPath);
+  appUrl.searchParams.set("token", tokenFromPath);
+  return appUrl;
+}
+
+function firstHtmlText(html, pattern) {
+  const match = String(html || "").match(pattern);
+  return match ? htmlToText(match[1]) : "";
+}
+
+function greenhouseEmbeddedJobText(html) {
+  const source = String(html || "");
+  if (!/\bjob__description\b/i.test(source)) return "";
+
+  const title = firstHtmlText(source, /<h1\b[^>]*>([\s\S]*?)<\/h1>/i);
+  const location = firstHtmlText(
+    source,
+    /<div\b[^>]*class=["'][^"']*\bjob__location\b[^"']*["'][^>]*>[\s\S]*?<div\b[^>]*>([\s\S]*?)<\/div>\s*<\/div>/i
+  );
+
+  const descriptionStart = source.search(/<div\b[^>]*class=["'][^"']*\bjob__description\b[^"']*["'][^>]*>/i);
+  if (descriptionStart < 0) return "";
+  const rest = source.slice(descriptionStart);
+  const endMarkers = [
+    rest.search(/<div\b[^>]*class=["'][^"']*\bjob-alert\b/i),
+    rest.search(/<div\b[^>]*class=["'][^"']*\bapplication--container\b/i),
+    rest.search(/<div\b[^>]*class=["'][^"']*\bdivider\b/i)
+  ].filter((index) => index > 0);
+  const descriptionHtml = rest.slice(0, endMarkers.length ? Math.min(...endMarkers) : rest.length);
+  const description = htmlToText(descriptionHtml);
+  if (description.length < 200) return "";
+
+  return htmlToText([
+    title ? `Role: ${title}` : "",
+    location ? `Location: ${location}` : "",
+    description
+  ].filter(Boolean).join("\n\n"));
+}
+
+async function importFromGreenhouse(jobUrl) {
+  const appUrl = greenhouseJobAppUrl(jobUrl);
+  if (!appUrl) return "";
+  const response = await fetchPublicHtml(appUrl, { Accept: "text/html" });
+  if (!response.ok) return "";
+  const html = await response.text();
+  return greenhouseEmbeddedJobText(html);
+}
+
+async function resolveImportedJobText(text, url) {
+  const fallbackText = String(text || "");
+  let jobUrl;
+  try {
+    jobUrl = new URL(String(url || ""));
+  } catch {
+    return fallbackText;
+  }
+  if (!isPublicHttpUrl(jobUrl) || !greenhouseJobAppUrl(jobUrl)) return fallbackText;
+
+  try {
+    const greenhouseText = await importFromGreenhouse(jobUrl);
+    return greenhouseText || fallbackText;
+  } catch {
+    return fallbackText;
+  }
+}
+
 // Workday job pages render the description client-side, but expose it via their
 // CXS JSON API. Rewrite a public job URL to that endpoint when we recognize the
 // host. Career-site links use /Site/job/Loc/Title_R123 (older) or
@@ -904,7 +999,7 @@ async function handleImportJob(req, res) {
   }
 
   try {
-    // Prefer a known ATS JSON API (Workday) since the rendered page is JS-only;
+    // Prefer known ATS endpoints since their rendered pages are often JS-only;
     // fall back to a generic HTML scrape for everything else.
     const workdayApi = workdayCxsUrl(jobUrl);
     if (workdayApi) {
@@ -913,6 +1008,12 @@ async function handleImportJob(req, res) {
         sendJson(res, 200, { text: workdayText.slice(0, 16_000) });
         return;
       }
+    }
+
+    const greenhouseText = await importFromGreenhouse(jobUrl);
+    if (greenhouseText) {
+      sendJson(res, 200, { text: greenhouseText.slice(0, 16_000) });
+      return;
     }
 
     const response = await fetchPublicHtml(jobUrl);
@@ -1027,13 +1128,14 @@ async function handleExtensionRoutes(req, res, pathname) {
       sendJson(res, 400, { error: "Invalid JSON." });
       return;
     }
-    const text = typeof body.text === "string" ? body.text : "";
+    const capturedText = typeof body.text === "string" ? body.text : "";
     const url = typeof body.url === "string" ? body.url : "";
     const pageTitle = typeof body.pageTitle === "string" ? body.pageTitle : undefined;
-    if (!text.trim() || !url.trim()) {
+    if (!capturedText.trim() || !url.trim()) {
       sendJson(res, 400, { error: "A job page text and url are required." });
       return;
     }
+    const text = await resolveImportedJobText(capturedText, url);
 
     const { title, company } = extractJobMeta(text, pageTitle);
 

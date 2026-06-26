@@ -69,8 +69,9 @@ export function isCliProvider(provider) {
 }
 
 function normalizeCliReasoningEffort(provider, effort) {
-  const normalized = String(effort ?? "").trim().toLowerCase();
+  let normalized = String(effort ?? "").trim().toLowerCase();
   if (!normalized) return "";
+  if (provider === "codex-cli" && normalized === "light") normalized = "low";
 
   const allowed = {
     "claude-cli": ["low", "medium", "high", "xhigh", "max"],

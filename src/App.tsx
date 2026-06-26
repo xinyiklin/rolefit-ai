@@ -351,17 +351,21 @@ function App() {
 
   // Auto-fill the job description from the browser extension inbox. AI distiller
   // first (server-side keys), deterministic engine as the fallback.
-  useExtensionInbox((item) => {
+  useExtensionInbox(async (item) => {
     // The posting was AI-distilled server-side in the background (the hook polled
     // through the "distilling" state until the brief was ready). Use those
     // structured fields directly; fall back to the deterministic engine on the raw
-    // text only when the server's AI distill failed (fields === null).
+    // text only when both the server's AI distill and a selected-provider retry
+    // fail. The retry matters because extension imports cannot read the app tab's
+    // localStorage settings, so the background server pass may have used a
+    // different default provider than the one selected in the AI menu.
     const { text, url, fields, autoTailor } = item;
-    const { extracted, source } = extractedFromAiOrLocal(
-      fields as Partial<AiDistillFields> | null,
-      text,
-      url || undefined
-    );
+    const { extracted, source } = fields
+      ? extractedFromAiOrLocal(fields as Partial<AiDistillFields>, text, url || undefined)
+      : await distillJobPosting(text, {
+          url: url || undefined,
+          aiRequest: buildAiRequestFields({ aiProvider, apiKey, apiBaseUrl, selectedModel, customModel, cliReasoningEffort })
+        });
     const relevant = extracted.tailoringText;
     if (relevant.trim().length < 40) {
       setPolishStatus("Extension import had too little job text — paste manually.");
@@ -435,6 +439,29 @@ function App() {
     findForTarget
   });
 
+  // Distill the job once per (description, url, import) instead of on every
+  // render. The full extractJobPosting parser is ~1500 LOC; running it in the
+  // component body (the cover letter, materialsJobTarget, and the apply/export
+  // callers below) re-parsed the JD on every keystroke-driven re-render.
+  // Memoizing matches the debounce discipline the scoring path already uses,
+  // with no behavior change.
+  const jobTracking = useMemo((): ExtractedJobTracking => {
+    const imported =
+      importedJob &&
+      importedJob.url === jobUrl.trim() &&
+      importedJob.tailoringText === jobDescription.trim()
+        ? importedJob.tracking
+        : null;
+    // The import (AI or deterministic) is the authoritative distill output. Don't
+    // re-parse the compact scaffold and merge — that would let a stray number or
+    // label in a bullet resurrect a field the distiller deliberately left empty
+    // (e.g. a $5M budget figure becoming the salary). Only re-parse when there is
+    // no matching import (user typed a raw JD straight into the box).
+    return imported
+      ? definedTracking(imported)
+      : definedTracking(extractJobPosting(jobDescription, { url: jobUrl }).tracking);
+  }, [jobDescription, jobUrl, importedJob]);
+
   // On-demand cover letter (no full polish required). Generates from the CURRENT
   // resume; the polish path also feeds this state (see runTailorStage) so the
   // Materials view, Copy, and save-to-application all read one source.
@@ -450,7 +477,9 @@ function App() {
     honestContext: requestHonestContext,
     customInstructions,
     aiRequest: { aiProvider, apiKey, apiBaseUrl, selectedModel, customModel, cliReasoningEffort },
-    resumeText
+    resumeText,
+    jobCompany: jobTracking.company,
+    jobRoleTitle: jobTracking.role
   });
 
   // ----- Effects -----
@@ -576,28 +605,6 @@ function App() {
     result,
     resumeBlocks
   });
-
-  // Distill the job once per (description, url, import) instead of on every
-  // render. The full extractJobPosting parser is ~1500 LOC; running it in the
-  // component body (materialsJobTarget + the apply/export callers below) re-parsed
-  // the JD on every keystroke-driven re-render. Memoizing matches the debounce
-  // discipline the scoring path already uses, with no behavior change.
-  const jobTracking = useMemo((): ExtractedJobTracking => {
-    const imported =
-      importedJob &&
-      importedJob.url === jobUrl.trim() &&
-      importedJob.tailoringText === jobDescription.trim()
-        ? importedJob.tracking
-        : null;
-    // The import (AI or deterministic) is the authoritative distill output. Don't
-    // re-parse the compact scaffold and merge — that would let a stray number or
-    // label in a bullet resurrect a field the distiller deliberately left empty
-    // (e.g. a $5M budget figure becoming the salary). Only re-parse when there is
-    // no matching import (user typed a raw JD straight into the box).
-    return imported
-      ? definedTracking(imported)
-      : definedTracking(extractJobPosting(jobDescription, { url: jobUrl }).tracking);
-  }, [jobDescription, jobUrl, importedJob]);
 
   // ----- Derived (non-memo) -----
   const resumeReady = (currentResumeText || resumeText).trim().length > 80;
@@ -1073,7 +1080,13 @@ function App() {
 
     const fallbackBase = polishResume(editableResumeText, combinedJobText);
     const fallback = includeCoverLetter
-      ? { ...fallbackBase, coverLetterText: draftCoverLetter(resumeText, combinedJobText, fallbackBase.polishedText) }
+      ? {
+          ...fallbackBase,
+          coverLetterText: draftCoverLetter(resumeText, combinedJobText, fallbackBase.polishedText, {
+            company: jobTracking.company,
+            roleTitle: jobTracking.role
+          })
+        }
       : fallbackBase;
 
     // Common request body shared by both stages.
@@ -1152,7 +1165,11 @@ function App() {
         combinedJobText
       );
       const coverText = includeCoverLetter
-        ? (data.coverLetterText as string | undefined) || draftCoverLetter(scopedResumeText, combinedJobText, scopedPolishedText)
+        ? (data.coverLetterText as string | undefined) ||
+          draftCoverLetter(scopedResumeText, combinedJobText, scopedPolishedText, {
+            company: jobTracking.company,
+            roleTitle: jobTracking.role
+          })
         : undefined;
       setResult({
         ...analysis,
@@ -1407,7 +1424,10 @@ function App() {
       // polishing and extracts tracker details; falls back to the deterministic
       // engine on any failure so a link import always produces a brief.
       setLinkStatus("Distilling the posting…");
-      const { extracted, source } = await distillJobPosting(String(data.text ?? ""), { url });
+      const { extracted, source } = await distillJobPosting(String(data.text ?? ""), {
+        url,
+        aiRequest: buildAiRequestFields({ aiProvider, apiKey, apiBaseUrl, selectedModel, customModel, cliReasoningEffort })
+      });
       const relevant = extracted.tailoringText;
       if (relevant.trim().length < 40) {
         setLinkStatus("Fetched the page, but found too little job text. Paste the description instead.");
@@ -1470,7 +1490,10 @@ function App() {
     setIsExtractingLink(true);
     setLinkStatus("Distilling the paste…");
     try {
-      const { extracted, source } = await distillJobPosting(cleaned, { url: jobUrl.trim() || undefined });
+      const { extracted, source } = await distillJobPosting(cleaned, {
+        url: jobUrl.trim() || undefined,
+        aiRequest: buildAiRequestFields({ aiProvider, apiKey, apiBaseUrl, selectedModel, customModel, cliReasoningEffort })
+      });
       const relevant = extracted.tailoringText;
       if (relevant.trim().length < 40) {
         setLinkStatus("Couldn't find enough job-relevant text in the paste. Check that you copied the description, not just the page header.");
