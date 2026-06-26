@@ -5,7 +5,7 @@
 // route then parses it as JSON).
 
 import { spawn } from "node:child_process";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -89,12 +89,19 @@ export async function callCodexCli({ model, reasoningEffort, systemPrompt, userP
     ? `${systemPrompt}\n\n---\n\n${userPrompt}`
     : userPrompt;
 
-  const args = ["exec", "--skip-git-repo-check", "--sandbox", "read-only"];
+  const workdir = await mkdtemp(join(tmpdir(), "rolefit-codex-"));
+  const outputPath = join(workdir, "last-message.txt");
+  const args = ["exec", "--skip-git-repo-check", "--sandbox", "read-only", "--output-last-message", outputPath];
   if (model && model !== "default") args.push("--model", model);
   if (reasoningEffort) args.push("-c", `model_reasoning_effort="${reasoningEffort}"`);
 
-  const { stdout } = await runCli("codex", args, combined);
-  return extractCodexFinalOutput(stdout);
+  try {
+    const { stdout } = await runCli("codex", args, combined);
+    const directOutput = await readFile(outputPath, "utf8").catch(() => "");
+    return directOutput.trim() || extractCodexFinalOutput(stdout);
+  } finally {
+    await rm(workdir, { recursive: true, force: true }).catch(() => {});
+  }
 }
 
 // ----- Gemini CLI (Google Gemini / Antigravity, non-interactive) -----

@@ -145,7 +145,7 @@ export const cliReasoningEffortOptionsByProvider: Partial<Record<AiProviderValue
   ],
   "codex-cli": [
     { value: "", label: "CLI default" },
-    { value: "low", label: "Low" },
+    { value: "low", label: "Light" },
     { value: "medium", label: "Medium" },
     { value: "high", label: "High" },
     { value: "xhigh", label: "Extra high" }
