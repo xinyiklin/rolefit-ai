@@ -227,7 +227,7 @@
   gap: 0.05em 0;
   /* PDF name→contact baseline gap is 14.3pt; the name line box's descent plus
      the contact line's ascent already supply nearly all of it. */
-  margin-top: 0.04em;
+  margin-top: var(--doc-name-contact-gap, 0.04em);
   /* \small at the 11pt documentclass = 10pt = 0.913em. */
   font-size: 0.91em;
   color: #1a1a1a;
@@ -263,7 +263,7 @@
      sit under the INPUT, not the divider — stay centered. A margin-based
      divider made the real footprint (~2em) drift from this value (was 0.85em),
      shifting the × off-center. */
-  --contact-divider-width: 1.82em;
+  --contact-divider-width: var(--doc-contact-gap, 1.82em);
 }
 
 .rdx-contact__chip::after {
@@ -339,32 +339,20 @@
   color: var(--danger);
 }
 
-/* Sections. The PDF's gap into a section heading varies with what precedes it
-   (TeX glue: ~23.9pt after a bullet list, 25.3pt after the skills block,
-   26.7pt after the contact line, at the normal preset) while the slider moves
-   all of them together at 11pt/em — mirror both with per-predecessor offsets. */
+/* Section gap is a pure separator (matches the PDF's \titlespacing "before"):
+   one uniform gap above every heading, regardless of what precedes it. The
+   per-predecessor offsets and leading-scaled (--doc-line) terms are gone — the
+   header→first-section distance has its own slider below. */
 .rdx-section {
   position: relative;
-  margin-top: calc(var(--doc-section-gap, 0.85em) + 0.02em);
-  /* BFC: keep child margins (esp. the bullet-less entry's trailing-glue
-     margin-bottom below) inside the section so they ADD to the next section's
-     margin like TeX glue sums, instead of collapsing into it. */
+  margin-top: var(--doc-section-gap, 0.85em);
+  /* BFC: keep child margins inside the section so the section gap is reliable
+     instead of collapsing into the first child's margin. */
   display: flow-root;
 }
 
-/* The (--doc-line − 1.18) terms below mirror how the PDF's list-closing glue
-   grows super-linearly with leading (TeX rubber/ex-unit glue): calibrated
-   against compiled PDFs at lineHeight 1.18 and 1.3, zero at the 1.18 default. */
-.rdx-section:has(.rdx-bullet) + .rdx-section {
-  margin-top: calc(var(--doc-section-gap, 0.85em) + 0.09em + (var(--doc-line, 1.18) - 1.18) * 2.6em);
-}
-
-.rdx-section--skills + .rdx-section {
-  margin-top: calc(var(--doc-section-gap, 0.85em) + 0.21em + (var(--doc-line, 1.18) - 1.18) * 0.75em);
-}
-
 .resume-doc section.rdx-section:first-of-type {
-  margin-top: calc(var(--doc-section-gap, 0.85em) + 0.34em);
+  margin-top: var(--doc-header-section-gap, 1.19em);
 }
 
 .rdx-section__head {
@@ -392,13 +380,16 @@
   z-index: 1;
 }
 
-/* Section heading: ALL CAPS with a rule below (the stored heading is uppercased
-   on parse; this also forces caps for hand-typed headings). */
+/* Section heading: small caps with a rule below, matching the PDF's \scshape.
+   Headings are stored in title case ("Education") so CSS small-caps renders the
+   first letter as a full capital and the rest as small capitals. The Uppercase
+   toggle (--doc-heading-transform: uppercase) still forces ALL CAPS on demand. */
 .rdx-section__heading {
   /* \large at the 11pt documentclass = 12pt = 1.096em of \normalsize 10.95pt. */
   font-size: 1.1em;
   font-weight: var(--doc-heading-weight, 400);
-  text-transform: var(--doc-heading-transform, uppercase);
+  font-variant: small-caps;
+  text-transform: var(--doc-heading-transform, none);
   letter-spacing: 0.04em;
   color: #000000;
   width: auto;
@@ -475,24 +466,15 @@
      \resumeSubHeadingListStart leftmargin=0.15in (10.8pt = 0.99em). The right
      edge (dates/locations) stays flush, so only the left content shifts in. */
   padding-left: 0.99em;
-  /* In the compiled PDF, entry→entry distance is FIXED glue (the Format menu's
-     entry gap feeds the \resumeSubheading trailing vspace, i.e. the head→bullets
-     gap below) — so the editor's entry margin is a constant too. */
-  margin-top: calc(0.43em + (var(--doc-line, 1.18) - 1.18) * 3em);
+  /* Entry→entry rhythm — the sole gap between entries, matching the PDF's
+     \resumeEntryGap (em*11pt). Rigid: it no longer scales with line height. */
+  margin-top: var(--doc-entry-gap, 0.42em);
 }
 
-/* The PDF's heading→first-entry gap is fixed template glue (independent of the
-   spacing sliders) and tighter than the entry→entry rhythm. */
+/* Section heading→first entry/row. Normal preset is calibrated from the compiled
+   PDF: section rule → first entry title top ≈ 4.56pt = 0.42em. */
 .rdx-section__head + .rdx-entry {
-  margin-top: 0.33em;
-}
-
-/* A bullet-less entry's \resumeSubheading trailing vspace has no bullet list to
-   absorb it in the PDF, so it leaks into whatever follows — mirror that so the
-   gap after e.g. the Education row tracks the entry-gap slider like the PDF
-   does. Zero at the default 0.42em. */
-.rdx-entry:not(:has(.rdx-bullet)) {
-  margin-bottom: calc((var(--doc-entry-gap, 0.42em) - 0.42em) * 1.15);
+  margin-top: var(--doc-section-entry-gap, 0.42em);
 }
 
 .rdx-entry__head {
@@ -500,6 +482,10 @@
   display: flex;
   align-items: flex-start;
   gap: 0.4em;
+  /* The heading tabular is 0.97\textwidth in the PDF — its right edge stops
+     0.075in (0.49em) short of the content area, inset from the section rule.
+     Bullets extend to the full width, so only the head gets this padding. */
+  padding-right: 0.49em;
 }
 
 .rdx-entry__rows {
@@ -508,10 +494,11 @@
 }
 
 /* Title row → subtitle row: the PDF's \resumeSubheading tabular spaces its two
-   rows one \normalsize baselineskip apart (13.3pt) — wider than the stacked
-   line boxes alone. */
+   rows one \normalsize baselineskip apart — measured glyph-bbox gap ≈ 0.063em in
+   the compiled PDF. The CSS box gap is slightly larger because inputs include
+   line-height leading; 0.06em box gap lands closest to the PDF visual. */
 .rdx-entry__row + .rdx-entry__row {
-  margin-top: 0.09em;
+  margin-top: var(--doc-title-sub-gap, 0.06em);
 }
 
 .rdx-entry__row {
@@ -570,8 +557,10 @@
 }
 
 /* Skills sections: Jake-style "Label: inline list" rows, not bullets. */
+/* Skills rule → first row = section/entry gap (the PDF's \titlespacing "after"),
+   same as a standard section's rule → first entry. */
 .rdx-section--skills .rdx-section__head {
-  margin-bottom: calc(0.39em - (var(--doc-line, 1.18) - 1.18) * 0.7em);
+  margin-bottom: var(--doc-section-entry-gap, 0.42em);
 }
 
 .rdx-skills-row {
@@ -630,15 +619,15 @@
   color: #222222;
 }
 
-/* Each skill line is a "bullet" of the skills block — give consecutive rows the
-   same adjustable gap as bullets/summaries so the Bullet-gap slider controls it. */
+/* Consecutive skill rows get their own dedicated gap slider (the PDF stacks them
+   with no inter-row glue by default, hence the 0em default). */
 .rdx-skills-row + .rdx-skills-row {
-  margin-top: var(--doc-bullet-gap, 0.2em);
+  margin-top: var(--doc-skills-row-gap, 0em);
 }
 
 /* Summary sections: plain paragraphs — no bullet glyphs, no heading slots. */
 .rdx-section--summary .rdx-section__head {
-  margin-bottom: 0.25em;
+  margin-bottom: var(--doc-section-entry-gap, 0.42em);
 }
 
 .rdx-summary-row {
@@ -670,10 +659,9 @@
   display: block;
   gap: 0;
   list-style: none;
-  /* Head→bullets gap: this is where the PDF spends the Format menu's "entry
-     gap" — \resumeSubheading's trailing \vspace{(entryGap − 0.65em) · 11pt}
-     sits between the heading tabular and the bullet list. */
-  margin: calc(var(--doc-entry-gap, 0.42em) - 0.02em + (var(--doc-line, 1.18) - 1.18) * 1em) 0 0;
+  /* Head→bullets gap = the PDF's explicit \vspace before the bullet list (inner
+     topsep is 0). Rigid em, no list-opening glue to model. */
+  margin: var(--doc-head-bullet-gap, 0.42em) 0 0;
   padding: 0;
   color: inherit;
   font-size: inherit;
@@ -686,10 +674,17 @@
   align-items: flex-start;
   /* PDF geometry: marker at 61.5pt, bullet text at 70.8pt from the page edge. */
   gap: 0.5em;
-  /* Breathing room between bullets — user-adjustable (Format menu). The PDF's
-     bullet trail moves 11pt per em of the slider; margins here resolve against
-     the \small 10pt bullet font, hence the 1.1 slope correction. */
-  margin: calc(var(--doc-bullet-gap, 0.2em) * 1.1 - 0.02em + (var(--doc-line, 1.18) - 1.18) * 0.97em) 0 0;
+  /* Between-bullet gap = the inner list \itemsep (em*11pt) in the PDF. Applied
+     as margin-top, so it sits only BETWEEN bullets; the first bullet resets it
+     below so the head→bullet gap stays owned by .rdx-bullets. */
+  margin: var(--doc-bullet-gap, 0.2em) 0 0;
+}
+
+/* First bullet's gap to the entry head is owned by .rdx-bullets (head→bullet),
+   so it must not also carry the between-bullet margin — mirrors the PDF, where
+   itemize adds \itemsep only between items, never before the first. */
+.rdx-bullets .rdx-bullet:first-child {
+  margin-top: 0;
 }
 
 .rdx-bullet__dot {

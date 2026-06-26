@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ChangeE
 import { Eye, FileCode2, FileDown, RotateCcw, Upload } from "lucide-react";
 
 import { useResumeEditor } from "./hooks/useResumeEditor";
-import { useDocStyle, DOC_ZOOM_OPTIONS, DOC_SPACING_PRESETS, type DocStyle } from "./hooks/useDocStyle";
+import { useDocStyle, DOC_ZOOM_OPTIONS, DOC_SPACING_PRESETS, DOC_SPACING_KEYS, type DocSpacingKey, type DocSpacingPreset } from "./hooks/useDocStyle";
 import { useTemplates } from "./hooks/useTemplates";
 import { useResumeExport } from "./hooks/useResumeExport";
 import { ResumeEditor } from "./sections/editor/ResumeEditor";
@@ -24,16 +24,45 @@ function loadSavedResume(): ResumeData | null {
   }
 }
 
-// Fine-grained layout/spacing controls — line height + the three vertical gaps.
-// Ranges mirror role-fit-ai's Format menu.
-const SPACING_SLIDERS: { key: "lineHeight" | "sectionGap" | "entryGap" | "bulletGap"; label: string; min: number; max: number; unit: string }[] = [
-  { key: "lineHeight", label: "Line height", min: 1, max: 1.6, unit: "" },
-  { key: "sectionGap", label: "Section gap", min: 0, max: 1.6, unit: "em" },
-  { key: "entryGap", label: "Entry gap", min: 0, max: 1.2, unit: "em" },
-  // Controls the gap between repeated lines inside a section — bullets, skill
-  // rows, and summary lines all read from --doc-bullet-gap, so "Line gap" names
-  // it honestly rather than implying bullets only.
-  { key: "bulletGap", label: "Line gap", min: 0, max: 1, unit: "em" }
+// Fine-grained layout/spacing controls, grouped by where on the page they act so
+// the (otherwise long) list stays scannable. Every spacing field in DocStyle is
+// exposed here; ranges mirror role-fit-ai's Format menu. Page font size and
+// margins are intentionally fixed by the Jake template.
+const SPACING_GROUPS: { label: string; sliders: { key: DocSpacingKey; label: string; min: number; max: number; unit: string }[] }[] = [
+  {
+    label: "Page",
+    sliders: [{ key: "lineHeight", label: "Line height", min: 1, max: 1.6, unit: "" }]
+  },
+  {
+    label: "Header",
+    sliders: [
+      { key: "nameContactGap", label: "Name → contact", min: 0, max: 0.5, unit: "em" },
+      { key: "contactGap", label: "Contact gap", min: 0.5, max: 3, unit: "em" },
+      { key: "headerSectionGap", label: "Header → section", min: 0, max: 2, unit: "em" }
+    ]
+  },
+  {
+    label: "Sections",
+    sliders: [
+      { key: "sectionGap", label: "Section gap", min: 0, max: 1.6, unit: "em" },
+      { key: "sectionEntryGap", label: "Heading → entry", min: 0, max: 1.2, unit: "em" }
+    ]
+  },
+  {
+    label: "Entries",
+    sliders: [
+      { key: "entryGap", label: "Entry gap", min: 0, max: 1.2, unit: "em" },
+      { key: "titleSubGap", label: "Title → subtitle", min: 0, max: 0.4, unit: "em" },
+      { key: "headBulletGap", label: "Entry → bullets", min: 0, max: 1.2, unit: "em" }
+    ]
+  },
+  {
+    label: "Lists",
+    sliders: [
+      { key: "bulletGap", label: "Bullet gap", min: 0, max: 1, unit: "em" },
+      { key: "skillsRowGap", label: "Skill-row gap", min: 0, max: 0.8, unit: "em" }
+    ]
+  }
 ];
 
 // Labeled range input for one spacing dimension.
@@ -267,17 +296,30 @@ export default function App() {
     event.target.value = "";
   }
 
-  const spacingActive = (values: DocStyle) =>
-    docStyle.style.lineHeight === values.lineHeight &&
-    docStyle.style.sectionGap === values.sectionGap &&
-    docStyle.style.entryGap === values.entryGap &&
-    docStyle.style.bulletGap === values.bulletGap;
+  // The live spacing equals a preset when all 11 fields match (within a hair, so
+  // float rounding from the sliders doesn't break the highlight).
+  const spacingActive = (values: DocSpacingPreset) =>
+    DOC_SPACING_KEYS.every((k) => Math.abs(docStyle.style[k] - values[k]) < 0.005);
 
-  const activePresetKey = Object.entries(DOC_SPACING_PRESETS).find(
-    ([, p]) => spacingActive({ ...docStyle.style, ...p.values })
-  )?.[0] as string | null ?? null;
+  // Built-in presets plus the user's saved "Custom" (when present), shown as one
+  // segmented selector. "custom" applies the saved snapshot; the rest apply their
+  // fixed values.
+  const presetItems = [
+    ...Object.entries(DOC_SPACING_PRESETS).map(([key, p]) => ({ key, label: p.label })),
+    ...(docStyle.customPreset ? [{ key: "custom", label: "Custom" }] : [])
+  ];
 
-  const presetItems = Object.entries(DOC_SPACING_PRESETS).map(([key, p]) => ({ key, label: p.label }));
+  const activePresetKey =
+    (Object.entries(DOC_SPACING_PRESETS).find(([, p]) => spacingActive(p.values))?.[0] ?? null) ??
+    (docStyle.customPreset && spacingActive(docStyle.customPreset) ? "custom" : null);
+
+  function applyPreset(key: string) {
+    if (key === "custom") {
+      if (docStyle.customPreset) docStyle.applySpacingPreset(docStyle.customPreset);
+      return;
+    }
+    docStyle.applySpacingPreset(DOC_SPACING_PRESETS[key as keyof typeof DOC_SPACING_PRESETS].values);
+  }
 
   const tectonicOff = !templates.tectonic.available;
 
@@ -401,25 +443,34 @@ export default function App() {
           </label>
           <div className="ctl-row">
             <span>Preset</span>
-            <AnimatedSeg
-              items={presetItems}
-              activeKey={activePresetKey}
-              onSelect={(key) => docStyle.applySpacingPreset(DOC_SPACING_PRESETS[key as keyof typeof DOC_SPACING_PRESETS].values)}
-            />
+            <AnimatedSeg items={presetItems} activeKey={activePresetKey} onSelect={applyPreset} />
           </div>
-          <div className="panel__stack">
-            {SPACING_SLIDERS.map(({ key, label, min, max, unit }) => (
-              <SpacingSlider
-                key={key}
-                label={label}
-                value={docStyle.style[key]}
-                min={min}
-                max={max}
-                unit={unit}
-                onChange={(value) => docStyle.set(key, value)}
-              />
-            ))}
-          </div>
+          {SPACING_GROUPS.map((group) => (
+            <div className="ctl-group" key={group.label}>
+              <span className="ctl-group__label">{group.label}</span>
+              <div className="panel__stack">
+                {group.sliders.map(({ key, label, min, max, unit }) => (
+                  <SpacingSlider
+                    key={key}
+                    label={label}
+                    value={docStyle.style[key]}
+                    min={min}
+                    max={max}
+                    unit={unit}
+                    onChange={(value) => docStyle.set(key, value)}
+                  />
+                ))}
+              </div>
+            </div>
+          ))}
+          <button
+            type="button"
+            className="ctl-save-preset"
+            onClick={docStyle.saveCustomPreset}
+            title="Save the current spacing as your Custom preset"
+          >
+            {activePresetKey === "custom" ? "Custom saved ✓" : docStyle.customPreset ? "Update Custom" : "Save as Custom"}
+          </button>
         </section>
 
         <section className="panel">
