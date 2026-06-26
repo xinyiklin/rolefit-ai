@@ -20,31 +20,49 @@ type ResumeEditorProps = {
   highlightTarget?: TailorChangeTarget | null;
 };
 
+type AddPosition = "top" | "bottom";
+
+// The section-type picker offers these up front so the user chooses the shape
+// (bulleted entries vs skill list vs summary) rather than relying on heading text.
+const SECTION_TYPE_OPTIONS: { type: ResumeSectionType; title: string; sub: string }[] = [
+  { type: "summary", title: "Summary", sub: "Short paragraph — professional summary or objective" },
+  {
+    type: "standard",
+    title: "Bulleted entries",
+    sub: "Title, dates & bullet points — experience, projects, education"
+  },
+  { type: "skills", title: "Skill list", sub: "Label + inline list — e.g. Languages: Python, SQL" }
+];
+
 // The editable on-page resume. Shares the `.resume-doc` look so it reads like the
 // document it produces; every field is a live control wired to the editor reducer.
 export function ResumeEditor({ data, actions, style, tailorModes = {}, onSetTailorMode, highlightTarget = null }: ResumeEditorProps) {
-  // "Add section" opens a small picker so the user chooses the section type up
-  // front (bulleted entries vs skill list) rather than relying on heading text.
-  const [pickingType, setPickingType] = useState(false);
+  // Which add-section picker is open (top or bottom corner), if any. Both corners
+  // share one open-at-a-time state so opening one closes the other.
+  const [openPicker, setOpenPicker] = useState<AddPosition | null>(null);
   const [pageBreaks, setPageBreaks] = useState<Record<string, number>>({});
   const [pageCount, setPageCount] = useState(1);
   const docRef = useRef<HTMLElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
-  const addSectionRef = useRef<HTMLDivElement>(null);
-  const addSectionTriggerRef = useRef<HTMLButtonElement>(null);
+  const topAddRef = useRef<HTMLDivElement>(null);
+  const bottomAddRef = useRef<HTMLDivElement>(null);
+  const topTriggerRef = useRef<HTMLButtonElement>(null);
+  const bottomTriggerRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
-    if (!pickingType) return;
+    if (!openPicker) return;
+    const containerRef = openPicker === "top" ? topAddRef : bottomAddRef;
+    const triggerRef = openPicker === "top" ? topTriggerRef : bottomTriggerRef;
     // pointerdown (not mousedown) so touch taps outside also close the picker.
     function onPointerDown(event: PointerEvent) {
-      if (addSectionRef.current && !addSectionRef.current.contains(event.target as Node)) {
-        setPickingType(false);
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setOpenPicker(null);
       }
     }
     function onKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
-        setPickingType(false);
-        addSectionTriggerRef.current?.focus();
+        setOpenPicker(null);
+        triggerRef.current?.focus();
       }
     }
     document.addEventListener("pointerdown", onPointerDown);
@@ -53,11 +71,50 @@ export function ResumeEditor({ data, actions, style, tailorModes = {}, onSetTail
       document.removeEventListener("pointerdown", onPointerDown);
       document.removeEventListener("keydown", onKeyDown);
     };
-  }, [pickingType]);
+  }, [openPicker]);
 
-  function addSectionOfType(type: ResumeSectionType) {
-    actions.addSection(type);
-    setPickingType(false);
+  function addSectionOfType(type: ResumeSectionType, position: AddPosition) {
+    actions.addSection(type, position);
+    setOpenPicker(null);
+  }
+
+  function renderAddSection(position: AddPosition) {
+    const open = openPicker === position;
+    const containerRef = position === "top" ? topAddRef : bottomAddRef;
+    const triggerRef = position === "top" ? topTriggerRef : bottomTriggerRef;
+    const label = position === "top" ? "Add section at top" : "Add section";
+    return (
+      <div className={`rdx-add-section rdx-add-section--${position}${open ? " is-open" : ""}`} ref={containerRef}>
+        <button
+          ref={triggerRef}
+          type="button"
+          className="rdx-add rdx-add--section"
+          onClick={() => setOpenPicker((current) => (current === position ? null : position))}
+          aria-haspopup="true"
+          aria-expanded={open}
+          title={label}
+          aria-label={label}
+        >
+          <Plus size={14} aria-hidden="true" />
+          <span>{label}</span>
+        </button>
+        {open ? (
+          <div className="rdx-add-section__menu" aria-label="Choose a section type">
+            {SECTION_TYPE_OPTIONS.map((option) => (
+              <button
+                key={option.type}
+                type="button"
+                className="rdx-add-section__option"
+                onClick={() => addSectionOfType(option.type, position)}
+              >
+                <span className="rdx-add-section__option-title">{option.title}</span>
+                <span className="rdx-add-section__option-sub">{option.sub}</span>
+              </button>
+            ))}
+          </div>
+        ) : null}
+      </div>
+    );
   }
 
   function resolveCssLengthPx(value: string, fontSizePx: number, fallbackPx: number) {
@@ -242,6 +299,8 @@ export function ResumeEditor({ data, actions, style, tailorModes = {}, onSetTail
           </button>
         </div>
 
+        {renderAddSection("top")}
+
         <SortableList ids={data.sections.map((section) => section.id)} onReorder={actions.reorderSections}>
           {data.sections.map((section, i) => {
             const isTarget = highlightTarget?.sectionId === section.id;
@@ -271,39 +330,7 @@ export function ResumeEditor({ data, actions, style, tailorModes = {}, onSetTail
           })}
         </SortableList>
 
-        <div className={`rdx-add-section${pickingType ? " is-open" : ""}`} ref={addSectionRef}>
-          <button
-            ref={addSectionTriggerRef}
-            type="button"
-            className="rdx-add rdx-add--section"
-            onClick={() => setPickingType((open) => !open)}
-            aria-haspopup="true"
-            aria-expanded={pickingType}
-            title="Add section"
-            aria-label="Add section"
-          >
-            <Plus size={14} aria-hidden="true" />
-            <span>Add section</span>
-          </button>
-          {pickingType ? (
-            <div className="rdx-add-section__menu" aria-label="Choose a section type">
-              <button type="button" className="rdx-add-section__option" onClick={() => addSectionOfType("summary")}>
-                <span className="rdx-add-section__option-title">Summary</span>
-                <span className="rdx-add-section__option-sub">Short paragraph — professional summary or objective</span>
-              </button>
-              <button type="button" className="rdx-add-section__option" onClick={() => addSectionOfType("standard")}>
-                <span className="rdx-add-section__option-title">Bulleted entries</span>
-                <span className="rdx-add-section__option-sub">
-                  Title, dates &amp; bullet points — experience, projects, education
-                </span>
-              </button>
-              <button type="button" className="rdx-add-section__option" onClick={() => addSectionOfType("skills")}>
-                <span className="rdx-add-section__option-title">Skill list</span>
-                <span className="rdx-add-section__option-sub">Label + inline list — e.g. Languages: Python, SQL</span>
-              </button>
-            </div>
-          ) : null}
-        </div>
+        {renderAddSection("bottom")}
       </div>
     </article>
   );
