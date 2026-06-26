@@ -19,6 +19,10 @@ import { looksLikeLatex } from "./resumeFormat";
 import { stripInlineMarks } from "./inlineMarks";
 import { BULLET_GLYPHS, inferSectionType, isSectionHeader } from "../resume/sections.mjs";
 
+function titleCase(s: string): string {
+  return s.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 // ===== Types =====
 
 export type ResumeBullet = { id: string; text: string };
@@ -232,7 +236,7 @@ function parsePlainResume(text: string): ResumeData {
     if (!line) continue;
 
     if (isSectionHeader(line)) {
-      const heading = line.trim().replace(/:$/, "");
+      const heading = titleCase(line.trim().replace(/:$/, ""));
       currentSection = { id: uid("section"), heading, type: inferSectionType(heading), items: [] };
       sections.push(currentSection);
       currentItem = null;
