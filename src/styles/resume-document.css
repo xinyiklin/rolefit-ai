@@ -10,6 +10,38 @@
    fill) so they print without "Background graphics".
    ============================================================= */
 
+/* Latin Modern Roman — the same font Tectonic embeds in the PDF.
+   Without this @font-face the browser falls back to Times/serif,
+   which is ~17% narrower and causes line breaks to diverge. */
+@font-face {
+  font-family: "Latin Modern Roman";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/LMRoman10-Regular.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Latin Modern Roman";
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/LMRoman10-Bold.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Latin Modern Roman";
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+  src: url("/fonts/LMRoman10-Italic.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Latin Modern Roman";
+  font-weight: 700;
+  font-style: italic;
+  font-display: swap;
+  src: url("/fonts/LMRoman10-BoldItalic.woff2") format("woff2");
+}
+
 .resume-doc {
   box-sizing: border-box;
   --doc-page-border-width: 1px;
@@ -94,14 +126,14 @@
   margin-top: 0.62em;
 }
 
-/* Section heading: ALL CAPS with a rule below. */
+/* Section heading: small caps with a rule below, matching the PDF's \scshape. */
 .resume-doc__heading {
   margin: 0 0 0.16em;
   padding-bottom: 0.05em;
   border-bottom: 1px solid #000000;
   font-size: 1.02em;
   font-weight: 700;
-  text-transform: uppercase;
+  font-variant: small-caps;
   letter-spacing: 0.04em;
   color: #000000;
 }
