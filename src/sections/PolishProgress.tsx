@@ -6,12 +6,20 @@ export type StageStatus = "idle" | "running" | "done" | "failed";
 export type StageState = {
   status: StageStatus;
   error?: string;
+  // Optional info line shown on the DONE card — e.g. the distill flow uses it to
+  // say whether the brief came from the AI or the local fallback.
+  note?: string;
+  noteTone?: "ok" | "warn";
 };
 
 export type PolishProgressState = {
   tailor: StageState;
   review: StageState;
 };
+
+// Every stage that can drive a card. Tailor/Review belong to the polish flow;
+// Distill is the single-step job-brief flow that reuses the same card vocabulary.
+type StageKey = "tailor" | "review" | "distill";
 
 type PolishProgressProps = {
   stages: "tailor" | "review" | "both";
@@ -30,9 +38,10 @@ const DONE_HOLD_MS = 10000;
 const FADE_MS = 500; // >= the CSS `.is-leaving` collapse (440ms) so unmount lands after it
 const STAGGER_MS = 800;
 
-const STAGE_COPY: Record<"tailor" | "review", Record<"running" | "done" | "failed", string>> = {
+const STAGE_COPY: Record<StageKey, Record<"running" | "done" | "failed", string>> = {
   tailor: { running: "Tailoring", done: "Tailored", failed: "Tailor failed" },
-  review: { running: "Reviewing", done: "Reviewed", failed: "Review failed" }
+  review: { running: "Reviewing", done: "Reviewed", failed: "Review failed" },
+  distill: { running: "Distilling", done: "Distilled", failed: "Distill failed" }
 };
 
 function formatElapsed(ms: number): string {
@@ -55,12 +64,15 @@ function StageCard({
   onDismiss,
   busy
 }: {
-  stageKey: "tailor" | "review";
+  stageKey: StageKey;
   state: StageState;
   step: number;
   total: number;
-  onRetry: (stage: "tailor" | "review") => void;
-  onStop: () => void;
+  // Optional: an event-driven flow (e.g. extension auto-import) has nothing to
+  // re-run, so it renders no Retry.
+  onRetry?: () => void;
+  // Optional: the distill flow has no in-flight cancel, so it renders no Stop.
+  onStop?: () => void;
   onDismiss: () => void;
   busy: boolean;
 }) {
@@ -133,10 +145,19 @@ function StageCard({
       <div className="polish-stage__body">
         <span className="polish-stage__title">{STAGE_COPY[stageKey][status]}</span>
         {meta ? <span className="polish-stage__meta">{meta}</span> : null}
+        {status === "done" && state.note ? (
+          <span
+            className={`polish-stage__note${
+              state.noteTone === "warn" ? " polish-stage__note--warn" : state.noteTone === "ok" ? " polish-stage__note--ok" : ""
+            }`}
+          >
+            {state.note}
+          </span>
+        ) : null}
         {status === "failed" && error ? <span className="polish-stage__error">{error}</span> : null}
       </div>
       <div className="polish-stage__actions">
-        {status === "running" ? (
+        {status === "running" && onStop ? (
           <button
             type="button"
             className="ghost-button is-compact polish-stage__stop"
@@ -146,11 +167,11 @@ function StageCard({
             Stop
           </button>
         ) : null}
-        {status === "failed" ? (
+        {status === "failed" && onRetry ? (
           <button
             type="button"
             className="ghost-button is-compact polish-stage__retry"
-            onClick={() => onRetry(stageKey)}
+            onClick={onRetry}
             disabled={busy}
           >
             <RotateCcw size={12} aria-hidden="true" />
@@ -164,7 +185,7 @@ function StageCard({
           type="button"
           className="polish-stage__dismiss"
           onClick={onDismiss}
-          aria-label={status === "running" ? "Hide polish progress (polish keeps running)" : "Dismiss polish progress"}
+          aria-label={status === "running" ? "Hide progress (the task keeps running)" : "Dismiss progress"}
         >
           <X size={13} aria-hidden="true" />
         </button>
@@ -188,7 +209,7 @@ export function PolishProgress({ stages, progress, onRetry, onStop, onDismiss, b
           state={progress.tailor}
           step={1}
           total={total}
-          onRetry={onRetry}
+          onRetry={() => onRetry("tailor")}
           onStop={onStop}
           onDismiss={onDismiss}
           busy={busy}
@@ -200,12 +221,31 @@ export function PolishProgress({ stages, progress, onRetry, onStop, onDismiss, b
           state={progress.review}
           step={stages === "both" ? 2 : 1}
           total={total}
-          onRetry={onRetry}
+          onRetry={() => onRetry("review")}
           onStop={onStop}
           onDismiss={onDismiss}
           busy={busy}
         />
       ) : null}
+    </div>
+  );
+}
+
+// The job-distill flow as a single card, sharing the polish card's look. Done
+// carries a note saying whether the brief came from the AI or the local
+// fallback; there's no in-flight cancel, so no Stop button is rendered.
+export function DistillProgress({
+  state,
+  onRetry,
+  onDismiss
+}: {
+  state: StageState;
+  onRetry?: () => void;
+  onDismiss: () => void;
+}) {
+  return (
+    <div className="polish-progress" aria-label="Distill progress">
+      <StageCard stageKey="distill" state={state} step={1} total={1} onRetry={onRetry} onDismiss={onDismiss} busy={false} />
     </div>
   );
 }

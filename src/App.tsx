@@ -49,7 +49,7 @@ import { ReviewerSettings } from "./sections/ReviewerSettings";
 import { Masthead } from "./sections/Masthead";
 import { JobMenu } from "./sections/JobMenu";
 import { PolishMenu } from "./sections/PolishMenu";
-import { PolishProgress, type PolishProgressState } from "./sections/PolishProgress";
+import { PolishProgress, DistillProgress, type PolishProgressState, type StageState } from "./sections/PolishProgress";
 import { ResumeMenu } from "./sections/ResumeMenu";
 import { StudioPane } from "./sections/StudioPane";
 import { ExportMenu } from "./sections/ExportRail";
@@ -58,6 +58,7 @@ import { loadDefaultExportFormat, saveDefaultExportFormat, type ExportFormat } f
 const PreviewOverlay = lazy(() => import("./sections/PreviewOverlay"));
 import { ApplicationModal } from "./sections/ApplicationModal";
 import { ResumePrintLayer } from "./sections/ResumePrintLayer";
+import { ViewportGate } from "./sections/ViewportGate";
 import { ResumeTab } from "./sections/tabs/ResumeTab";
 import { MaterialsTab } from "./sections/tabs/MaterialsTab";
 import { TrackerTab } from "./sections/tabs/TrackerTab";
@@ -167,6 +168,17 @@ function App() {
   const [jobUrl, setJobUrl] = useState("");
   const [importedJob, setImportedJob] = useState<ImportedJobSnapshot | null>(null);
   const [isExtractingLink, setIsExtractingLink] = useState(false);
+  // Distill progress card (same vocabulary as PolishProgress). Driven by both
+  // job-brief entry points (Extract-from-link and Distill-paste); the DONE card
+  // reports whether the brief came from the AI or the local fallback.
+  const [distillProgress, setDistillProgress] = useState<StageState>({ status: "idle" });
+  const [distillProgressVisible, setDistillProgressVisible] = useState(false);
+  // Which distill action the card's Retry should re-run (link or paste). Stored
+  // as a tag, not a captured closure, so Retry dispatches to the LIVE handler and
+  // picks up the current URL / paste — a stored closure would re-run stale input
+  // the user has since edited. Null for the event-driven extension import, which
+  // has nothing to re-run, so that card shows no Retry button.
+  const [distillRetrySource, setDistillRetrySource] = useState<"link" | "paste" | null>(null);
   // Starts empty; the mount effect (loadWorkspace) auto-loads a workspace
   // base-resume when one exists, otherwise the editor stays blank.
   const [resumeText, setResumeText] = useState("");
@@ -369,6 +381,9 @@ function App() {
     const relevant = extracted.tailoringText;
     if (relevant.trim().length < 40) {
       setPolishStatus("Extension import had too little job text — paste manually.");
+      setDistillRetrySource(null);
+      setDistillProgress({ status: "failed", error: "Imported posting had too little job text — paste manually." });
+      setDistillProgressVisible(true);
       return;
     }
     const trimmedUrl = (url || "").trim();
@@ -385,23 +400,29 @@ function App() {
     // Auto-tailor THIS import only, and always (re)set from the toggle so a
     // toggle-OFF import clears any stale intent a prior toggle-ON import left.
     setAutoTailorJob(autoTailor ? relevant.trim() : null);
-    const aiNote = source === "ai" ? " (distilled with AI)" : "";
-    // The imported JD satisfies the description-length gate; the only thing that can
-    // still defer the auto-polish is a missing resume / Tailor section — say so
-    // rather than appearing to do nothing.
+    // The distill card now carries the AI-vs-local signal, so the status line just
+    // covers import/auto-tailor context. The imported JD satisfies the
+    // description-length gate; the only thing that can still defer the auto-polish
+    // is a missing resume / Tailor section — say so rather than appearing to do nothing.
+    setDistillRetrySource(null);
+    setDistillProgress(distillDoneState(source));
+    setDistillProgressVisible(true);
     const readyToTailor =
       Boolean(editedResume) && Object.values(tailorModes).some((mode) => mode === "tailor");
     setPolishStatus(
       autoTailor && !readyToTailor
-        ? `Job imported from the browser extension${aiNote} — ${
+        ? `Job imported from the browser extension — ${
             editedResume ? "set a section to Tailor" : "load a resume"
           } and it'll tailor automatically.`
-        : `Job imported from the browser extension${aiNote}.`
+        : "Job imported from the browser extension."
     );
   }, () => {
-    // Background server-side distill still running — show progress while the hook
-    // polls for the finished brief.
-    setPolishStatus("Distilling the imported posting with AI…");
+    // Background server-side distill still running — surface it on the same card
+    // the link/paste flows use (no Retry: an extension import has nothing to
+    // re-run). Guard the running state so repeated polls don't churn renders.
+    setDistillRetrySource(null);
+    setDistillProgress((prev) => (prev.status === "running" ? prev : { status: "running" }));
+    setDistillProgressVisible(true);
   });
 
   // Warn before close/reload when there are unsaved edits.
@@ -1407,10 +1428,19 @@ function App() {
     return jobTracking;
   }
 
+  // DONE-card state for a distill run, calling out AI success vs local fallback.
+  const distillDoneState = (source: "ai" | "local"): StageState =>
+    source === "ai"
+      ? { status: "done", note: "Distilled with AI", noteTone: "ok" }
+      : { status: "done", note: "AI unavailable — used local extraction", noteTone: "warn" };
+
   async function handleExtractFromLink() {
     const url = jobUrl.trim();
     if (!url || isExtractingLink) return;
     setIsExtractingLink(true);
+    setDistillRetrySource("link");
+    setDistillProgress({ status: "running" });
+    setDistillProgressVisible(true);
     setLinkStatus("Fetching the posting…");
     try {
       const response = await fetch("/api/import-job", {
@@ -1431,6 +1461,7 @@ function App() {
       const relevant = extracted.tailoringText;
       if (relevant.trim().length < 40) {
         setLinkStatus("Fetched the page, but found too little job text. Paste the description instead.");
+        setDistillProgress({ status: "failed", error: "Too little job text on that page — paste the description instead." });
         setImportedJob(null);
         return;
       }
@@ -1445,14 +1476,16 @@ function App() {
       applyCoverLetter("");
       const missing = compactManualReviewFields(extracted.manualReviewFields);
       setLinkStatus(
-        `Distilled ${relevant.length.toLocaleString()} compact characters${source === "ai" ? " with AI" : ""} for tailoring and captured ${presentTrackingFields(
+        `Distilled ${relevant.length.toLocaleString()} compact characters for tailoring and captured ${presentTrackingFields(
           extracted.tracking
         )}${missing ? `; add ${missing} manually if needed` : ""}.`
       );
+      setDistillProgress(distillDoneState(source));
     } catch (error) {
       const message = error instanceof Error ? error.message.replace(/[.。]\s*$/, "") : "request failed";
       setImportedJob(null);
       setLinkStatus(`Couldn't extract from the link: ${message}. Paste the description instead.`);
+      setDistillProgress({ status: "failed", error: `Couldn't extract from the link: ${message}.` });
     } finally {
       setIsExtractingLink(false);
     }
@@ -1488,6 +1521,9 @@ function App() {
       return;
     }
     setIsExtractingLink(true);
+    setDistillRetrySource("paste");
+    setDistillProgress({ status: "running" });
+    setDistillProgressVisible(true);
     setLinkStatus("Distilling the paste…");
     try {
       const { extracted, source } = await distillJobPosting(cleaned, {
@@ -1497,6 +1533,7 @@ function App() {
       const relevant = extracted.tailoringText;
       if (relevant.trim().length < 40) {
         setLinkStatus("Couldn't find enough job-relevant text in the paste. Check that you copied the description, not just the page header.");
+        setDistillProgress({ status: "failed", error: "Couldn't find enough job-relevant text in the paste." });
         return;
       }
       setJobDescription(relevant);
@@ -1510,10 +1547,18 @@ function App() {
       applyCoverLetter("");
       const missing = compactManualReviewFields(extracted.manualReviewFields);
       setLinkStatus(
-        `Distilled ${relevant.length.toLocaleString()} compact characters${source === "ai" ? " with AI" : ""} from the paste and captured ${presentTrackingFields(
+        `Distilled ${relevant.length.toLocaleString()} compact characters from the paste and captured ${presentTrackingFields(
           extracted.tracking
         )}${missing ? `; add ${missing} manually if needed` : ""}.`
       );
+      setDistillProgress(distillDoneState(source));
+    } catch (error) {
+      // distillJobPosting is built to fall back to local rather than throw, so
+      // this only fires on an unexpected error — surface it instead of leaving
+      // the card stuck on "running".
+      const message = error instanceof Error ? error.message.replace(/[.。]\s*$/, "") : "distillation failed";
+      setLinkStatus(`Couldn't distill the paste: ${message}.`);
+      setDistillProgress({ status: "failed", error: `Couldn't distill the paste: ${message}.` });
     } finally {
       setIsExtractingLink(false);
     }
@@ -1760,8 +1805,18 @@ function App() {
 
   // ----- Render -----
 
+  // Resolve the distill card's Retry to the live handler for the last action, so
+  // it re-runs against the CURRENT url / paste rather than a stale captured one.
+  const distillRetry =
+    distillRetrySource === "link"
+      ? handleExtractFromLink
+      : distillRetrySource === "paste"
+        ? handleDistillPaste
+        : undefined;
+
   return (
     <div className="app-shell">
+      <ViewportGate />
       <Masthead
         onApply={handleApply}
         applyDisabled={!jobUrl.trim() && !jobDescription.trim()}
@@ -1872,15 +1927,26 @@ function App() {
         </div>
       ) : null}
 
-      {polishProgressVisible ? (
-        <PolishProgress
-          stages={polishStages}
-          progress={polishProgress}
-          onRetry={retryStage}
-          onStop={stopPolish}
-          onDismiss={() => setPolishProgressVisible(false)}
-          busy={isPolishing}
-        />
+      {polishProgressVisible || distillProgressVisible ? (
+        <div className="progress-dock" aria-label="Task progress">
+          {polishProgressVisible ? (
+            <PolishProgress
+              stages={polishStages}
+              progress={polishProgress}
+              onRetry={retryStage}
+              onStop={stopPolish}
+              onDismiss={() => setPolishProgressVisible(false)}
+              busy={isPolishing}
+            />
+          ) : null}
+          {distillProgressVisible ? (
+            <DistillProgress
+              state={distillProgress}
+              onRetry={distillRetry}
+              onDismiss={() => setDistillProgressVisible(false)}
+            />
+          ) : null}
+        </div>
       ) : null}
 
       <div className="workspace-grid">

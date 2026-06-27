@@ -29,6 +29,51 @@
   z-index: 30;
 }
 
+/* Full-cover "screen too small" notice (ViewportGate). z-index sits above the
+   nav popovers (40) and export rail (50) so nothing peeks through. */
+.viewport-gate {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--s5);
+  background: var(--paper);
+}
+
+.viewport-gate__card {
+  display: grid;
+  gap: var(--s2);
+  max-width: 340px;
+  text-align: center;
+}
+
+.viewport-gate__brand {
+  font-family: var(--font-display, var(--font-ui));
+  font-weight: 700;
+  font-size: 1rem;
+  color: var(--ink-strong);
+}
+
+.viewport-gate__title {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--ink-strong);
+}
+
+.viewport-gate__body {
+  margin: 0 0 var(--s2);
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: var(--ink-muted);
+}
+
+.viewport-gate__card .secondary-button {
+  justify-self: center;
+}
+
 .masthead__brand {
   display: flex;
   align-items: baseline;
@@ -384,12 +429,12 @@
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
-/* -------- Two-stage polish progress (per-stage cards) -------- */
+/* -------- Progress cards (polish stages + job distill) -------- */
 
-/* Transparent fixed stack — each stage is its own card with its own chrome, so
-   once every stage has finished and faded out, nothing remains visible (the
-   happy path needs no manual dismiss). pointer-events pass through the gaps. */
-.polish-progress {
+/* Shared fixed dock so the polish stack and the distill card share one
+   top-centered column and stack vertically instead of overlapping when both are
+   on screen at once. pointer-events pass through the gaps. */
+.progress-dock {
   position: fixed;
   top: calc(var(--s5) + 2.5rem);
   left: 50%;
@@ -399,6 +444,17 @@
   flex-direction: column;
   gap: var(--s2);
   width: min(360px, calc(100vw - var(--s5) * 2));
+  pointer-events: none;
+}
+
+/* Transparent stack — each stage is its own card with its own chrome, so once
+   every stage has finished and faded out, nothing remains visible (the happy
+   path needs no manual dismiss). */
+.polish-progress {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  width: 100%;
   pointer-events: none;
 }
 
@@ -505,6 +561,17 @@
   color: var(--ink-soft);
   line-height: 1.35;
 }
+
+/* Info line on a DONE card (distill's AI-vs-local result). Tone colors mirror
+   the icon states: --accent (ok) when the AI was used, --warm (warn) when it
+   fell back to the local extractor. */
+.polish-stage__note {
+  font-size: 0.74rem;
+  color: var(--ink-soft);
+  line-height: 1.35;
+}
+.polish-stage__note--ok { color: var(--accent); }
+.polish-stage__note--warn { color: var(--warm); }
 
 .polish-stage__actions {
   display: inline-flex;
