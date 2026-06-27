@@ -9,6 +9,8 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+import { CLAUDE_CLI_AUTH_MESSAGE, CLAUDE_CLI_FAILED_MESSAGE, CLAUDE_CLI_TIMEOUT_MESSAGE } from "../ai/errors.mjs";
+
 function runCli(command, args, stdinPayload, { timeoutMs = 240_000, cwd } = {}) {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, { stdio: ["pipe", "pipe", "pipe"], cwd });
@@ -17,7 +19,9 @@ function runCli(command, args, stdinPayload, { timeoutMs = 240_000, cwd } = {}) 
     const timer = setTimeout(() => {
       child.kill("SIGTERM");
       setTimeout(() => child.kill("SIGKILL"), 2_000).unref?.();
-      reject(new Error(`${command} timed out after ${Math.round(timeoutMs / 1000)}s. Try again or switch to a faster model.`));
+      const error = new Error(`${command} timed out after ${Math.round(timeoutMs / 1000)}s. Try again or switch to a faster model.`);
+      error.timedOut = true;
+      reject(error);
     }, timeoutMs);
     child.stdout.on("data", (chunk) => { stdout += chunk.toString(); });
     child.stderr.on("data", (chunk) => { stderr += chunk.toString(); });
@@ -37,7 +41,14 @@ function runCli(command, args, stdinPayload, { timeoutMs = 240_000, cwd } = {}) 
         // Include the first line of stderr so the actual CLI error is visible in logs.
         const hint = stderr.trim().split("\n")[0]?.slice(0, 200) ?? "";
         const detail = hint ? ` (${hint})` : "";
-        reject(new Error(`${command} exited with code ${code}${detail}. Check CLI authentication and model access, then try again.`));
+        const error = new Error(`${command} exited with code ${code}${detail}. Check CLI authentication and model access, then try again.`);
+        // Attach the captured streams so callers can classify the failure — e.g.
+        // claude writes its JSON result (incl. auth/401 errors) to stdout even on
+        // a non-zero exit, which would otherwise be lost.
+        error.stdout = stdout;
+        error.stderr = stderr;
+        error.exitCode = code;
+        reject(error);
       }
     });
     // Swallow EPIPE if the child exits before draining stdin — the real failure is
@@ -62,7 +73,18 @@ export async function callClaudeCli({ model, reasoningEffort, systemPrompt, user
   // with no loss in suggestion quality. An explicit reasoningEffort still wins.
   args.push("--effort", reasoningEffort || "low");
 
-  const { stdout } = await runCli("claude", args, userPrompt);
+  let stdout;
+  try {
+    ({ stdout } = await runCli("claude", args, userPrompt));
+  } catch (error) {
+    // Keep the actionable "not installed" hint (it's in the SAFE set). claude
+    // also writes its JSON result — including auth/401 errors — to stdout even on
+    // a non-zero exit (attached to the error by runCli), so classify from that.
+    // Pass the error too so a timeout (no CLI stdout) maps to its own hint
+    // instead of the generic auth-flavored failure message.
+    if (/is not installed or not on PATH/.test(error?.message ?? "")) throw error;
+    throw classifyClaudeFailure(typeof error?.stdout === "string" ? error.stdout : "", error);
+  }
 
   let envelope;
   try {
@@ -71,15 +93,36 @@ export async function callClaudeCli({ model, reasoningEffort, systemPrompt, user
     throw new Error("Claude Code returned output the app could not read. Try again or choose another provider.");
   }
 
-  if (envelope.is_error) {
-    const message = String(envelope.result ?? envelope.error ?? "Claude Code returned an error.");
-    if (/not logged in|please run \/login/i.test(message)) {
-      throw new Error("Claude Code is not authenticated. Run `claude auth login` and try again.");
-    }
-    throw new Error("Claude Code could not complete the request. Check your selected model and Claude Max access, then try again.");
-  }
+  if (envelope.is_error) throw classifyClaudeFailure(stdout);
 
   return String(envelope.result ?? "");
+}
+
+// Map a claude CLI failure to an actionable, SAFE message: a 401 / auth failure
+// points at sign-in; a timeout (no CLI stdout to classify) points at a faster
+// model; anything else is the generic "couldn't complete" hint. All three are in
+// errors.mjs' SAFE set so /api/polish surfaces them verbatim instead of "did not
+// return a usable draft". `stdout` is claude's JSON result (present on a non-zero
+// exit); `sourceError` is the rejected runCli error (carries the timeout flag).
+function classifyClaudeFailure(stdout, sourceError) {
+  let message = "";
+  let authStatus = 0;
+  try {
+    const envelope = JSON.parse(stdout);
+    message = String(envelope.result ?? envelope.error ?? "");
+    authStatus = Number(envelope.api_error_status) || 0;
+  } catch {
+    // stdout wasn't JSON (e.g. an empty/garbled non-zero exit).
+  }
+  if (authStatus === 401 || /not logged in|please run \/login|invalid authentication|failed to authenticate|unauthorized|\b401\b/i.test(message)) {
+    return new Error(CLAUDE_CLI_AUTH_MESSAGE);
+  }
+  // No CLI-reported error to classify and the call timed out → the actionable
+  // cause is the timeout, not a generic CLI error.
+  if (!message && (sourceError?.timedOut || /timed out/i.test(sourceError?.message ?? ""))) {
+    return new Error(CLAUDE_CLI_TIMEOUT_MESSAGE);
+  }
+  return new Error(CLAUDE_CLI_FAILED_MESSAGE);
 }
 
 // ----- Codex CLI (codex exec) -----
