@@ -23,8 +23,14 @@ export type DocStyle = {
   boldHeadings: boolean; // section headings
   boldSkillLabels: boolean; // "Languages:" style labels
   italicSubtitles: boolean; // subtitle + location row
-  italicDates: boolean; // the right-aligned date / link slot
+  // Section-heading letter case: small caps (Jake default), full UPPERCASE, or
+  // plain Title Case ("none"). The name keeps its own small-caps styling.
+  headingCase: HeadingCase;
+  sectionRule: boolean; // horizontal rule under each section heading
+  contactDivider: string; // 1–2 char separator between header contact items
 };
+
+export type HeadingCase = "smallcaps" | "uppercase" | "none";
 
 export const DOC_STYLE_DEFAULTS: DocStyle = {
   zoom: 1,
@@ -43,7 +49,35 @@ export const DOC_STYLE_DEFAULTS: DocStyle = {
   boldHeadings: false,
   boldSkillLabels: true,
   italicSubtitles: true,
-  italicDates: false
+  headingCase: "smallcaps",
+  sectionRule: true,
+  contactDivider: "|"
+};
+
+// The non-spacing "style" fields (everything the Style menu owns). Lifted as a
+// type so the "Jake's defaults" button and applyStyle() stay in sync.
+export type DocStyleFields = Pick<
+  DocStyle,
+  | "boldTitles"
+  | "boldHeadings"
+  | "boldSkillLabels"
+  | "italicSubtitles"
+  | "headingCase"
+  | "sectionRule"
+  | "contactDivider"
+>;
+
+// The authentic upstream Jake's-Resume look for the style fields — set by the
+// Style menu's "Jake's defaults" button. The name renders in natural case
+// regardless (not a style field).
+export const JAKE_STYLE_DEFAULTS: DocStyleFields = {
+  boldTitles: true,
+  boldHeadings: false,
+  boldSkillLabels: true,
+  italicSubtitles: true,
+  headingCase: "smallcaps",
+  sectionRule: true,
+  contactDivider: "|"
 };
 
 export type DocSpacingKey =
@@ -117,6 +151,15 @@ const clamp = (value: unknown, fallback: number, min: number, max: number) => {
   return Math.min(max, Math.max(min, n));
 };
 
+// Contact divider is a short glyph (UI offers | • · – /, plus a free 2-char
+// input). Clamp to 2 chars so it can't blow out the header; empty falls back to
+// the default "|".
+const coerceDivider = (value: unknown): string => {
+  if (typeof value !== "string") return DOC_STYLE_DEFAULTS.contactDivider;
+  const trimmed = value.slice(0, 2);
+  return trimmed.length ? trimmed : DOC_STYLE_DEFAULTS.contactDivider;
+};
+
 function coerce(raw: unknown, legacyMode: "current" | "v2" = "current"): DocStyle {
   const r = (raw ?? {}) as Partial<Record<keyof DocStyle, unknown>>;
   const legacySectionGap = clamp(r.sectionGap, DOC_STYLE_DEFAULTS.sectionGap, 0, 2);
@@ -148,7 +191,12 @@ function coerce(raw: unknown, legacyMode: "current" | "v2" = "current"): DocStyl
     boldHeadings: r.boldHeadings === true,
     boldSkillLabels: r.boldSkillLabels !== false,
     italicSubtitles: r.italicSubtitles !== false,
-    italicDates: r.italicDates === true
+    headingCase:
+      r.headingCase === "uppercase" || r.headingCase === "none"
+        ? r.headingCase
+        : DOC_STYLE_DEFAULTS.headingCase,
+    sectionRule: r.sectionRule !== false,
+    contactDivider: coerceDivider(r.contactDivider)
   };
 }
 
@@ -242,7 +290,13 @@ export function useDocStyle() {
         "--doc-heading-weight": style.boldHeadings ? "700" : "400",
         "--doc-skill-label-weight": style.boldSkillLabels ? "700" : "400",
         "--doc-subtitle-style": style.italicSubtitles ? "italic" : "normal",
-        "--doc-date-style": style.italicDates ? "italic" : "normal"
+        "--doc-heading-variant": style.headingCase === "smallcaps" ? "small-caps" : "normal",
+        "--doc-heading-transform": style.headingCase === "uppercase" ? "uppercase" : "none",
+        "--doc-rule-width": style.sectionRule ? "1px" : "0",
+        // Quoted so it drops straight into CSS `content`; JSON.stringify escapes
+        // any stray quote in a custom divider. An emptied custom field falls back
+        // to "|" so the live preview and the PDF export stay in agreement.
+        "--doc-contact-divider": JSON.stringify(style.contactDivider || "|")
       }) as CSSProperties,
     [style]
   );
@@ -255,8 +309,21 @@ export function useDocStyle() {
     setStyle({ ...DOC_STYLE_DEFAULTS });
   }
 
+  // Single merge-into-state helper so the two typed entry points below can't
+  // drift in merge semantics (e.g. if coercion is added later).
+  function merge(partial: Partial<DocStyle>) {
+    setStyle((current) => ({ ...current, ...partial }));
+  }
+
+  // Apply a full spacing preset (the Format menu's Normal/Compact/Custom buttons).
   function applySpacingPreset(preset: DocSpacingPreset) {
-    setStyle((current) => ({ ...current, ...preset }));
+    merge(preset);
+  }
+
+  // Apply a partial set of fields at once (e.g. the Style menu's "Jake's
+  // defaults" button), leaving everything else — including spacing — untouched.
+  function applyStyle(partial: Partial<DocStyle>) {
+    merge(partial);
   }
 
   // Snapshot the current spacing as the user's Custom preset (persisted).
@@ -275,7 +342,7 @@ export function useDocStyle() {
     [style]
   );
 
-  return { style, set, reset, applySpacingPreset, saveCustomPreset, customPreset, isDefault, cssVars };
+  return { style, set, reset, applySpacingPreset, applyStyle, saveCustomPreset, customPreset, isDefault, cssVars };
 }
 
 export type DocStyleControls = ReturnType<typeof useDocStyle>;

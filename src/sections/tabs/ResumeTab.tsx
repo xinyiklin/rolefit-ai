@@ -10,6 +10,7 @@ import { verdictPillClass, type FitVerdict } from "../../hooks/useResumeAnalysis
 import type { JobConstraint } from "../../lib/jobConstraints";
 import type { AutosavedDraft } from "../../hooks/useAutosaveDraft";
 import { FormatMenu } from "../FormatMenu";
+import { StyleMenu } from "../StyleMenu";
 import { ResumeEditor } from "../editor/ResumeEditor";
 import { ReviewRail } from "../ReviewRail";
 
@@ -129,6 +130,7 @@ export function ResumeTab({
             </select>
           </label>
           <FormatMenu docStyle={docStyle} />
+          <StyleMenu docStyle={docStyle} />
           {exportControl}
           {fitVerdict ? (
             <span className="fit-readout" title={`${fitVerdict.label} — ${fitVerdict.source}`}>

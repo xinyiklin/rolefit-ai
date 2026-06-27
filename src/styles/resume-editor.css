@@ -205,14 +205,13 @@
   field-sizing: content;
 }
 
-/* Name + contact header — mirror Jake's centered \Huge \scshape name + \small
-   contact line joined by " | ". */
+/* Name + contact header — centered \Huge name + \small contact line. The name
+   renders in its natural case (not small caps), matching the LaTeX export. */
 .rdx-name {
   text-align: center;
   /* \Huge at the 11pt documentclass = 24.88pt = 2.272em of \normalsize 10.95pt. */
   font-size: 2.27em;
   font-weight: 700;
-  font-variant: small-caps;
   letter-spacing: 0;
   line-height: 1.05;
   color: #000000;
@@ -284,7 +283,7 @@
    text-align centers the glyph for the ~0.9em-a-side gap. flex:none keeps the
    chip's flex layout from shrinking it. */
 .rdx-contact__chip:not(:first-child)::before {
-  content: "|";
+  content: var(--doc-contact-divider, "|");
   flex: none;
   display: inline-block;
   width: var(--contact-divider-width);
@@ -367,7 +366,8 @@
   gap: 0.5em;
   margin-bottom: 0.08em;
   padding-bottom: 0.05em;
-  border-bottom: 1px solid #000000;
+  /* Rule under the heading; width 0 (Format › Underline off) hides it. */
+  border-bottom: var(--doc-rule-width, 1px) solid #000000;
 }
 
 .rdx-section__head::after,
@@ -391,7 +391,11 @@
   /* \large at the 11pt documentclass = 12pt = 1.096em of \normalsize 10.95pt. */
   font-size: 1.1em;
   font-weight: var(--doc-heading-weight, 400);
-  font-variant: small-caps;
+  /* Heading case (Format menu): small caps (default), full uppercase, or plain
+     Title Case. Stored title-case, so small-caps shrinks the lowercase run and
+     uppercase promotes it; "normal"/"none" leaves the text untouched. */
+  font-variant: var(--doc-heading-variant, small-caps);
+  text-transform: var(--doc-heading-transform, none);
   letter-spacing: 0.04em;
   color: #000000;
   width: auto;
@@ -404,7 +408,12 @@
    Visual hierarchy mirrors semantics — Tailor loudest (editable, accent),
    Include muted (present/read-only), Off blank. */
 .rdx-tailor-seg {
-  display: inline-flex;
+  /* Equal-width inline-grid so the three labels (Tailor/Include/Off) share one
+     track width — that lets a single thumb slide between them in pure CSS, with
+     no JS measuring, and it stays aligned as the em-based font scales with zoom. */
+  position: relative;
+  display: inline-grid;
+  grid-template-columns: repeat(3, 1fr);
   align-items: stretch;
   flex: 0 0 auto;
   margin-left: auto;
@@ -419,6 +428,40 @@
   white-space: nowrap;
 }
 
+/* The sliding thumb: one cell wide, clipped to the pill by the container's
+   overflow. It glides between cells via translateX and cross-fades color so each
+   mode keeps its own semantic tint. The transform/background live on per-state
+   selectors (not a var() the pseudo reads) so a data-active change re-matches the
+   pseudo and recalcs it — Chromium does NOT invalidate a pseudo-element when only
+   an inherited custom property it consumes changes. */
+.rdx-tailor-seg::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: calc(100% / 3);
+  transform: translateX(0);
+  background: transparent;
+  transition: transform 0.24s var(--ease), background-color 0.18s var(--ease);
+  z-index: 0;
+}
+
+.rdx-tailor-seg[data-active="tailor"]::before {
+  transform: translateX(0);
+  background: var(--accent-soft);
+}
+
+.rdx-tailor-seg[data-active="include"]::before {
+  transform: translateX(100%);
+  background: var(--accent-veil);
+}
+
+.rdx-tailor-seg[data-active="off"]::before {
+  transform: translateX(200%);
+  background: var(--hairline-soft);
+}
+
 .rdx-tailor-seg__opt {
   appearance: none;
   border: 0;
@@ -428,7 +471,11 @@
   min-height: 1.55em;
   cursor: pointer;
   font: inherit;
-  transition: background-color 0.12s var(--ease), color 0.12s var(--ease);
+  text-align: center;
+  /* Lift the labels and dividers above the thumb. */
+  position: relative;
+  z-index: 1;
+  transition: color 0.12s var(--ease);
 }
 
 .rdx-tailor-seg__opt + .rdx-tailor-seg__opt {
@@ -440,25 +487,27 @@
 }
 
 .rdx-tailor-seg__opt--tailor.is-active {
-  background: var(--accent-soft);
   color: var(--accent-deep);
 }
 
 .rdx-tailor-seg__opt--include.is-active {
-  background: var(--accent-veil);
   color: var(--ink);
 }
 
 .rdx-tailor-seg__opt--off.is-active {
-  background: var(--hairline-soft);
   color: var(--ink-soft);
 }
 
 .rdx-tailor-seg__opt:focus-visible {
   outline: 2px solid var(--accent-glow);
   outline-offset: -2px;
-  position: relative;
-  z-index: 1;
+}
+
+/* Respect reduced-motion: snap the thumb instead of sliding. */
+@media (prefers-reduced-motion: reduce) {
+  .rdx-tailor-seg::before {
+    transition: none;
+  }
 }
 
 /* Entries */
@@ -531,7 +580,7 @@
   min-width: 6ch;
   text-align: right;
   font-weight: 400;
-  font-style: var(--doc-date-style, normal);
+  font-style: normal;
   color: #000000;
   field-sizing: content;
 }

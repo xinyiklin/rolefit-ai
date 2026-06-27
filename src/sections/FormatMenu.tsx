@@ -59,31 +59,10 @@ const SLIDER_GROUPS: { label: string; sliders: SliderSpec[] }[] = [
 
 const ALL_SLIDERS = SLIDER_GROUPS.flatMap((group) => group.sliders);
 
-type EmphasisKey = "boldTitles" | "boldHeadings" | "boldSkillLabels" | "italicSubtitles" | "italicDates";
-
-// Emphasis toggles grouped by the kind of styling, with chips for the parts each
-// kind applies to — clearer than five flat on/off switches.
-const EMPHASIS: { kind: "Bold" | "Italic"; chips: { key: EmphasisKey; label: string }[] }[] = [
-  {
-    kind: "Bold",
-    chips: [
-      { key: "boldTitles", label: "Titles" },
-      { key: "boldHeadings", label: "Headings" },
-      { key: "boldSkillLabels", label: "Skills" }
-    ]
-  },
-  {
-    kind: "Italic",
-    chips: [
-      { key: "italicSubtitles", label: "Subtitles" },
-      { key: "italicDates", label: "Dates" }
-    ]
-  }
-];
-
-// Typography controls for the resume page. Applies live to the editor and to the
-// read-only print mirror, and is forwarded to the LaTeX renderer for .tex,
-// PDF preview, and PDF · LaTeX exports.
+// Spacing/layout controls for the resume page (presets + per-region gaps). Text
+// styling — emphasis, heading case/rule, contact divider — lives in StyleMenu.
+// Applies live to the editor and the read-only print mirror, and is forwarded to
+// the LaTeX renderer for .tex, PDF preview, and PDF · LaTeX exports.
 export function FormatMenu({ docStyle }: { docStyle: DocStyleControls }) {
   const { style, set, reset, applySpacingPreset, saveCustomPreset, customPreset, isDefault } = docStyle;
 
@@ -154,38 +133,6 @@ export function FormatMenu({ docStyle }: { docStyle: DocStyleControls }) {
             </div>
           </div>
         ))}
-
-        <div className="format-slider-group format-style-group">
-          <span className="format-slider-group__label">Style</span>
-          <div className="format-emphasis">
-            {EMPHASIS.map((row) => (
-              <div className="format-emphasis__row" key={row.kind}>
-                <span
-                  className="format-emphasis__kind"
-                  style={row.kind === "Bold" ? { fontWeight: 700 } : { fontStyle: "italic" }}
-                >
-                  {row.kind}
-                </span>
-                <div className="format-emphasis__chips">
-                  {row.chips.map((chip) => {
-                    const on = Boolean(style[chip.key]);
-                    return (
-                      <button
-                        type="button"
-                        key={chip.key}
-                        className={`format-chip${on ? " is-on" : ""}`}
-                        aria-pressed={on}
-                        onClick={() => set(chip.key, !on)}
-                      >
-                        {chip.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
       </div>
 
       <div className="format-menu__foot">

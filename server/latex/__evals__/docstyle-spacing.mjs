@@ -54,8 +54,7 @@ const base = {
   boldTitles: true,
   boldHeadings: false,
   boldSkillLabels: true,
-  italicSubtitles: true,
-  italicDates: false
+  italicSubtitles: true
 };
 
 const styles = {
@@ -153,11 +152,31 @@ const normal = knobs(rendered.normal);
 const loose = knobs(rendered.loose);
 const fallback = render(undefined);
 
+// The header→section \vspace must cancel the `center` env's measured closing
+// glue so the visible header gap equals headerSectionGap. Recompute the expected
+// value from each preset's OWN gap fields and the conversion factors the renderer
+// uses (the ~1.085em glue at the 11pt base, rounded to fmtPt's one decimal), so
+// the check follows the formula instead of pinning a literal that silently
+// encodes "headerSectionGap = sectionGap + 0.34" across the fixtures.
+const CENTER_GLUE_EM = 1.085;
+const round1 = (n) => Math.round(n * 10) / 10;
+const expectedHeaderSection = (s) => round1((s.headerSectionGap - s.sectionGap - CENTER_GLUE_EM) * 11);
+
 const checks = [
   ["compact/normal/loose baselines increase", compact.baseline < normal.baseline && normal.baseline < loose.baseline],
   ["name/contact gap maps to increasing vspace", compact.nameContact < normal.nameContact && normal.nameContact < loose.nameContact],
   ["contact gap maps to increasing separator width", compact.contactWidth < normal.contactWidth && normal.contactWidth < loose.contactWidth],
-  ["header/section vspace stays zero when tied to section gap", compact.headerSection === 0 && normal.headerSection === 0 && loose.headerSection === 0],
+  // The header→section \vspace is negative: it pulls the first section up to
+  // cancel the `center` env's closing glue, so the visible header gap equals
+  // headerSectionGap instead of running ~8pt taller. Checked against the formula
+  // (per-preset) rather than a pinned literal.
+  [
+    "header/section vspace cancels the center-env closing glue (per-preset formula)",
+    compact.headerSection === expectedHeaderSection(styles.compact) &&
+      normal.headerSection === expectedHeaderSection(styles.normal) &&
+      loose.headerSection === expectedHeaderSection(styles.loose) &&
+      normal.headerSection < 0
+  ],
   ["section gap maps to increasing title-space-before", compact.sectionGap < normal.sectionGap && normal.sectionGap < loose.sectionGap],
   ["section/entry gap maps to increasing title-space-after", compact.sectionEntry < normal.sectionEntry && normal.sectionEntry < loose.sectionEntry],
   ["entry gap maps to increasing inter-entry vspace", compact.entryGap < normal.entryGap && normal.entryGap < loose.entryGap],
@@ -179,7 +198,7 @@ const checks = [
         baseline: 0.967,
         nameContact: 0.8,
         contactWidth: 16,
-        headerSection: 0,
+        headerSection: -8.2,
         sectionGap: 5.3,
         sectionEntry: 3.3,
         entryGap: 2.6,
@@ -196,7 +215,7 @@ const checks = [
         baseline: 1.083,
         nameContact: 1.6,
         contactWidth: 21,
-        headerSection: 0,
+        headerSection: -8.2,
         sectionGap: 13.2,
         sectionEntry: 6.6,
         entryGap: 7.7,

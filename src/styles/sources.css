@@ -645,6 +645,34 @@ select,
   gap: var(--s2);
 }
 
+/* Style menu carries chip groups; width is tuned so the widest row (the three
+   heading-case chips) fits on a single line without wrapping. */
+.style-menu .nav-menu__popover {
+  width: min(332px, 92vw);
+  max-height: min(88vh, 720px);
+  padding: var(--s3);
+  gap: var(--s2);
+}
+
+/* In the Format menu the first .format-style-group sat below the sliders and
+   wanted a divider; as the Style menu's first group it has nothing above it, so
+   drop the leading rule/padding. */
+.style-menu .format-slider-groups .format-style-group:first-child {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+
+/* Style menu foot: a single full-width "Jake's defaults" action. */
+.style-menu__foot {
+  padding-top: var(--s2);
+  border-top: 1px solid var(--hairline-soft);
+}
+
+.style-menu__foot .secondary-button {
+  width: 100%;
+}
+
 /* Preset picker — one connected segmented control. */
 .format-presets {
   display: flex;
@@ -881,6 +909,32 @@ select,
 .format-chip:focus-visible {
   outline: 2px solid var(--accent-glow);
   outline-offset: 1px;
+}
+
+/* Free-form contact divider (up to 2 chars), styled to sit beside the chips. */
+.format-divider-input {
+  width: 3.2ch;
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-pill);
+  padding: 4px 8px;
+  background: var(--card-soft);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1;
+  text-align: center;
+  transition: border-color 0.12s var(--ease);
+}
+
+.format-divider-input:hover {
+  border-color: var(--hairline-strong);
+}
+
+.format-divider-input:focus-visible {
+  outline: 2px solid var(--accent-glow);
+  outline-offset: 1px;
+  border-color: var(--accent-veil);
 }
 
 .format-menu__foot {

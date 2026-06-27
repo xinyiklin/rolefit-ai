@@ -75,6 +75,13 @@
   /* Mirror the Jake's-template PDF: Latin Modern / Computer Modern serif when
      available (TeX installs), otherwise a close old-style serif fallback. */
   font-family: "Latin Modern Roman", "CMU Serif", "Times New Roman", Times, Georgia, serif;
+  /* The embedded LM Roman faces have no real small-cap glyphs (LaTeX's \scshape
+     uses a separate caps font), and the app-wide `font-synthesis: none` in
+     tokens.css would otherwise stop the browser faking them — so heading/name
+     `font-variant: small-caps` rendered as plain text. Re-enable small-caps
+     synthesis here only (weight/style stay off; LM Roman has real bold/italic),
+     so headings match the PDF's \scshape effect. */
+  font-synthesis: small-caps;
   /* User-adjustable leading (Format menu); default mirrors the template. */
   line-height: var(--doc-line, 1.14);
 }
@@ -103,13 +110,12 @@
   line-height: 1.5;
 }
 
-/* Name: Jake's \textbf{\Huge \scshape …} — big, bold, small-caps, centered. */
+/* Name: Jake's \textbf{\Huge …} — big, bold, centered, natural case. */
 .resume-doc__name {
   margin: 0;
   text-align: center;
   font-size: 2.25em;
   font-weight: 700;
-  font-variant: small-caps;
   letter-spacing: 0;
   line-height: 1.05;
   color: #000000;
@@ -130,10 +136,11 @@
 .resume-doc__heading {
   margin: 0 0 0.16em;
   padding-bottom: 0.05em;
-  border-bottom: 1px solid #000000;
+  border-bottom: var(--doc-rule-width, 1px) solid #000000;
   font-size: 1.02em;
   font-weight: 700;
-  font-variant: small-caps;
+  font-variant: var(--doc-heading-variant, small-caps);
+  text-transform: var(--doc-heading-transform, none);
   letter-spacing: 0.04em;
   color: #000000;
 }

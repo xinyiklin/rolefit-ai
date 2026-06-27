@@ -54,7 +54,9 @@ const DEFAULTS = {
   boldTitles: true,
   boldSkillLabels: true,
   italicSubtitles: true,
-  italicDates: true
+  // Section-heading case + rule — Jake's upstream look (\scshape + \titlerule)
+  headingCase: "smallcaps",
+  sectionRule: true
 };
 
 const DOC_EM = {
@@ -100,8 +102,11 @@ function styleToLatex(docStyle) {
   const bulletGapPt = bulletGapEm * 11;
   // The header → first section vspace must absorb the first section's own
   // \titlespacing "before" (= sectionGap) plus the center block's natural
-  // bottom (~0.34em), so the visible first gap equals headerSectionGap.
-  const headerSectionVSpacePt = (headerSectionGapEm - sectionGapEm - 0.34) * 11;
+  // bottom glue, so the visible first gap equals headerSectionGap. That bottom
+  // glue is the `center` (trivlist) environment's closing \topsep — measured at
+  // ~1.085em via zref-savepos against compiled PDFs, NOT the ~0.34em the editor
+  // assumes; the old 0.34 left the PDF header gap ~8pt taller than the editor.
+  const headerSectionVSpacePt = (headerSectionGapEm - sectionGapEm - 1.085) * 11;
   // The two subheading rows are \par-stacked, so a -4.5pt baseline pulls them to
   // clean tight consecutive lines (below ~-5pt they collide); each em then adds
   // 11pt of air on top, matching the editor's title→subtitle margin. Measured
@@ -110,10 +115,14 @@ function styleToLatex(docStyle) {
   // CSS line-height 1.0 ≈ LaTeX \baselinestretch 0.83; CSS 1.2 ≈ stretch 1.0.
   const baselineStretch = lineHeight / 1.2;
   const bool = (v, fallback) => (typeof v === "boolean" ? v : fallback);
+  const headingCase =
+    docStyle.headingCase === "uppercase" || docStyle.headingCase === "none"
+      ? docStyle.headingCase
+      : DEFAULTS.headingCase;
   return {
     usesDocStyle: true,
     nameContactVSpacePt: DEFAULTS.nameContactVSpacePt + (nameContactGapEm - DOC_EM.nameContactGap) * 10,
-    contactSeparatorTex: `\\makebox[${fmtPt(contactGapEm * 10)}][c]{$|$}`,
+    contactSeparatorTex: `\\makebox[${fmtPt(contactGapEm * 10)}][c]{${dividerToTex(docStyle.contactDivider)}}`,
     headerSectionVSpacePt,
     sectionGapPt,
     sectionEntryGapPt,
@@ -127,7 +136,8 @@ function styleToLatex(docStyle) {
     boldTitles: bool(docStyle.boldTitles, DEFAULTS.boldTitles),
     boldSkillLabels: bool(docStyle.boldSkillLabels, DEFAULTS.boldSkillLabels),
     italicSubtitles: bool(docStyle.italicSubtitles, DEFAULTS.italicSubtitles),
-    italicDates: bool(docStyle.italicDates, DEFAULTS.italicDates)
+    headingCase,
+    sectionRule: bool(docStyle.sectionRule, DEFAULTS.sectionRule)
   };
 }
 
@@ -139,6 +149,25 @@ function bf(arg, on) {
 }
 function it(arg, on) {
   return on ? `\\textit{${arg}}` : arg;
+}
+
+// Render the user's contact divider (UI offers | • · – /, plus a free 2-char
+// input) as a LaTeX token for the centered \makebox. The common glyphs map to
+// their proper math/text forms; anything else is escaped as literal text.
+function dividerToTex(divider) {
+  // No trim: the CSS `content` path uses the raw value, so the PDF must too or
+  // the preview and export diverge on a space-bearing divider.
+  const d = typeof divider === "string" ? divider : "";
+  if (!d) return "$|$";
+  const MAP = {
+    "|": "$|$",
+    "•": "$\\bullet$",
+    "·": "$\\cdot$",
+    "–": "--",
+    "—": "---",
+    "/": "/"
+  };
+  return MAP[d] ?? escapeTex(d);
 }
 
 function fmtPt(value) {
@@ -210,7 +239,10 @@ function buildPreamble(style) {
 % above the heading (= sectionGap), "after" is the rule→first-row gap
 % (= sectionEntryGap). titlesec drops the before-glue at the top of a page, so
 % the first section's gap is set by the header \vspace instead.
-\titleformat{\section}{\scshape\raggedright\large${style.boldHeadings ? "\\bfseries" : ""}}{}{0em}{}[\color{black}\titlerule]
+% Heading case: \scshape (small caps), \MakeUppercase before-code (full caps via
+% titlesec passing the title as its argument), or neither (plain Title Case).
+% The rule under the heading is the optional after-code, dropped when off.
+\titleformat{\section}{${style.headingCase === "smallcaps" ? "\\scshape" : ""}\raggedright\large${style.boldHeadings ? "\\bfseries" : ""}}{}{0em}{${style.headingCase === "uppercase" ? "\\MakeUppercase" : ""}}${style.sectionRule ? "[\\color{black}\\titlerule]" : ""}
 \titlespacing*{\section}{0pt}{${fmtPt(style.sectionGapPt)}}{${fmtPt(style.sectionEntryGapPt)}}
 
 \ifdefined\pdfgentounicode\pdfgentounicode=1\fi
@@ -239,12 +271,12 @@ function buildPreamble(style) {
   \item
     \resumeRow{${bf("#1", style.boldTitles)}}{#2}%
     \vspace{${fmtPt(style.titleSubVSpacePt)}}%
-    \resumeRow{${it("\\small#3", style.italicSubtitles)}}{${it("\\small #4", style.italicDates)}}%
+    \resumeRow{${it("\\small#3", style.italicSubtitles)}}{${it("\\small #4", style.italicSubtitles)}}%
 }
 
 \newcommand{\resumeSubSubheading}[2]{%
     \item
-    \resumeRow{${it("\\small#1", style.italicSubtitles)}}{${it("\\small #2", style.italicDates)}}%
+    \resumeRow{${it("\\small#1", style.italicSubtitles)}}{${it("\\small #2", style.italicSubtitles)}}%
 }
 
 \newcommand{\resumeProjectHeading}[2]{%
@@ -272,7 +304,7 @@ function renderHeader(resume, style) {
   });
 
   return `\\begin{center}
-    \\textbf{\\Huge \\scshape ${escapeTex(resume.name)}} \\\\ \\vspace{${fmtPt(style.nameContactVSpacePt)}}
+    \\textbf{\\Huge ${escapeTex(resume.name)}} \\\\ \\vspace{${fmtPt(style.nameContactVSpacePt)}}
     \\small ${contactPieces.join(style.contactSeparatorTex)}
 \\end{center}${style.headerSectionVSpacePt === null ? "" : `\n\\vspace{${fmtPt(style.headerSectionVSpacePt)}}`}`;
 }
