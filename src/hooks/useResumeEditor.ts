@@ -32,6 +32,7 @@ type State = { data: ResumeData | null; dirty: boolean; manualEdited: boolean };
 
 type Action =
   | { type: "seed"; data: ResumeData | null }
+  | { type: "markClean" }
   | { type: "setName"; name: string }
   | { type: "updateContact"; index: number; value: string }
   | { type: "addContact" }
@@ -177,6 +178,11 @@ function reduce(data: ResumeData, action: Action): ResumeData {
 
 function rootReducer(state: State, action: Action): State {
   if (action.type === "seed") return { data: action.data, dirty: false, manualEdited: false };
+  // Mark the model as saved WITHOUT reseeding: clears `dirty` (so the before-unload
+  // guard stops warning once the work is applied/exported) while preserving `data`
+  // and `manualEdited` (the AI-verdict provenance must survive an Apply). Any later
+  // edit flips `dirty` back, re-arming the guard.
+  if (action.type === "markClean") return state.dirty ? { ...state, dirty: false } : state;
   if (!state.data) return state;
   const data = reduce(state.data, action);
   if (data === state.data) return state;
@@ -204,6 +210,13 @@ export function useResumeEditor() {
 
   const seedData = useCallback((data: ResumeData | null) => {
     dispatch({ type: "seed", data });
+  }, []);
+
+  // Clear the dirty flag after the work is safely persisted (Apply/export) so the
+  // before-unload guard stops warning — see the reducer note. Editor content is
+  // untouched, so editing again re-arms the guard.
+  const markClean = useCallback(() => {
+    dispatch({ type: "markClean" });
   }, []);
 
   const serializedResume = useMemo(() => (state.data ? serializeResumeData(state.data) : ""), [state.data]);
@@ -240,7 +253,7 @@ export function useResumeEditor() {
     []
   );
 
-  return { editedResume: state.data, dirty: state.dirty, manualEdited: state.manualEdited, serializedResume, seed, seedData, actions };
+  return { editedResume: state.data, dirty: state.dirty, manualEdited: state.manualEdited, serializedResume, seed, seedData, markClean, actions };
 }
 
 export type ResumeEditorActions = ReturnType<typeof useResumeEditor>["actions"];

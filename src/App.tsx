@@ -29,11 +29,13 @@ import { useDialog } from "./hooks/useDialog";
 import {
   useAutosaveDraft,
   useBeforeUnloadGuard,
-  loadAutosaveDraft,
+  recoverAutosaveDraft,
   clearAutosaveDraft,
   type AutosavedDraft
 } from "./hooks/useAutosaveDraft";
 import { useExtensionInbox } from "./hooks/useExtensionInbox";
+import { useTabPresence } from "./hooks/useTabPresence";
+import { activeSessionsSignature, type PresencePhase } from "./lib/tabPresence";
 import { arrayBufferToBase64, sanitizeFileBase } from "./lib/downloads";
 import { buildAiRequestFields, buildAuditRequestFields } from "./lib/aiRequest";
 import { loadLastBaseResumeName, saveLastBaseResumeName } from "./lib/baseResumePrefs";
@@ -50,6 +52,7 @@ import { Masthead } from "./sections/Masthead";
 import { JobMenu } from "./sections/JobMenu";
 import { PolishMenu } from "./sections/PolishMenu";
 import { PolishProgress, DistillProgress, type PolishProgressState, type StageState } from "./sections/PolishProgress";
+import { ActiveSessionsCard } from "./sections/ActiveSessionsCard";
 import { ResumeMenu } from "./sections/ResumeMenu";
 import { StudioPane } from "./sections/StudioPane";
 import { ExportMenu } from "./sections/ExportRail";
@@ -327,6 +330,7 @@ function App() {
     serializedResume,
     seed: seedResumeEditor,
     seedData: seedResumeData,
+    markClean: markResumeClean,
     actions: resumeEditorActions
   } = useResumeEditor();
   const currentResumeText = serializedResume || result?.polishedText || "";
@@ -360,6 +364,27 @@ function App() {
 
   // Debounced autosave to localStorage whenever the editor has unsaved edits.
   useAutosaveDraft({ editedResume, dirty: resumeEdited, jobLabel: _autosaveJobLabel });
+
+  // Cross-tab presence: each browser tab is an independent tailoring session, so
+  // we publish this tab's coarse phase (derived from existing flow state — never
+  // instrumented into the stage runners) and read back the OTHER live tabs for
+  // the shared in-progress card. Privacy: only the role · company label leaves
+  // the tab, never JD/resume text.
+  const _myPhase: PresencePhase = distillProgress.status === "running"
+    ? "distilling"
+    : isPolishing
+      ? polishStages === "review"
+        ? "reviewing"
+        : polishStages === "tailor"
+          ? "tailoring"
+          : "tailoring+reviewing"
+      : resumeEdited
+        ? "editing"
+        : "idle";
+  const otherSessions = useTabPresence({ jobLabel: _autosaveJobLabel, phase: _myPhase });
+  const otherSessionsSig = useMemo(() => activeSessionsSignature(otherSessions), [otherSessions]);
+  const [dismissedSessionsSig, setDismissedSessionsSig] = useState<string | null>(null);
+  const showActiveSessions = otherSessions.length > 0 && otherSessionsSig !== dismissedSessionsSig;
 
   // Auto-fill the job description from the browser extension inbox. AI distiller
   // first (server-side keys), deterministic engine as the fallback.
@@ -425,8 +450,13 @@ function App() {
     setDistillProgressVisible(true);
   });
 
-  // Warn before close/reload when there are unsaved edits.
-  useBeforeUnloadGuard(resumeEdited);
+  // Warn before close/reload when there are unsaved edits OR a distill/tailor/
+  // review is mid-flight (losing an in-progress run is as costly as losing edits).
+  // Apply clears `resumeEdited` (markResumeClean) since the work is then persisted
+  // and a copy exported; editing again re-arms it.
+  useBeforeUnloadGuard(
+    resumeEdited || isPolishing || distillProgress.status === "running"
+  );
 
   const {
     applications,
@@ -509,7 +539,7 @@ function App() {
     // Check for a recoverable autosaved draft on mount. We surface it AFTER the
     // workspace load so we know whether the user already has a base resume seeded.
     // The draft prompt is shown in ResumeTab; the user clicks to restore or dismiss.
-    const draft = loadAutosaveDraft();
+    const draft = recoverAutosaveDraft();
     if (draft) setPendingAutosaveDraft(draft);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -1620,8 +1650,11 @@ function App() {
         : undefined
     };
     upsertApplication(app);
-    // Edits are now tracked in the application record — clear the recovery draft.
+    // Edits are now tracked in the application record and an artifact is saved to
+    // disk — clear the recovery draft AND mark the editor clean so the before-unload
+    // guard stops warning. A later edit re-flips `dirty` and re-arms the guard.
     clearAutosaveDraft();
+    markResumeClean();
     setTexStatus(`Applied — saved "${existing?.title || app.title}" to Applications (${usedBase ? "original" : "tailored"} resume).`);
     setActiveOutputTab("applications");
     setExpandedApplicationId(existing?.id ?? app.id);
@@ -1927,7 +1960,7 @@ function App() {
         </div>
       ) : null}
 
-      {polishProgressVisible || distillProgressVisible ? (
+      {polishProgressVisible || distillProgressVisible || showActiveSessions ? (
         <div className="progress-dock" aria-label="Task progress">
           {polishProgressVisible ? (
             <PolishProgress
@@ -1944,6 +1977,12 @@ function App() {
               state={distillProgress}
               onRetry={distillRetry}
               onDismiss={() => setDistillProgressVisible(false)}
+            />
+          ) : null}
+          {showActiveSessions ? (
+            <ActiveSessionsCard
+              sessions={otherSessions}
+              onDismiss={() => setDismissedSessionsSig(otherSessionsSig)}
             />
           ) : null}
         </div>

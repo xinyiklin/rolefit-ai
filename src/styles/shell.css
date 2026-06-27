@@ -616,6 +616,141 @@
   .polish-stage.is-leaving { transition: opacity 120ms linear; }
 }
 
+/* -------- Active sessions (other browser tabs) -------- */
+
+/* Read-only awareness card in the progress dock: each browser tab is an
+   independent tailoring session, so this shows what OTHER tabs are doing. Shares
+   the polish-stage card chrome (border, radius, shadow, entry animation). */
+.active-sessions {
+  position: relative;
+  pointer-events: auto;
+  border: 1px solid var(--hairline-strong);
+  border-radius: 10px;
+  background: var(--card);
+  box-shadow: 0 8px 28px -12px rgba(0, 0, 0, 0.3);
+  color: var(--ink);
+  animation: polish-stage-in 200ms var(--ease) backwards;
+}
+
+.active-sessions__head {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  width: 100%;
+  /* Leave room for the absolutely-positioned dismiss button on the right. */
+  padding: var(--s3) calc(var(--s3) + 22px) var(--s3) var(--s3);
+  border: none;
+  background: transparent;
+  font-size: 0.82rem;
+  color: var(--ink);
+  cursor: pointer;
+  text-align: left;
+}
+.active-sessions__head:focus-visible,
+.active-sessions__dismiss:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.active-sessions__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  flex: none;
+  color: var(--ink-soft);
+}
+
+.active-sessions__title {
+  font-weight: 600;
+  color: var(--ink-strong);
+}
+
+.active-sessions__sub {
+  font-size: 0.72rem;
+  color: var(--ink-faint);
+  margin-left: auto;
+}
+
+.active-sessions__chevron {
+  flex: none;
+  color: var(--ink-soft);
+  transition: transform 160ms var(--ease);
+}
+.active-sessions__chevron.is-open { transform: rotate(180deg); }
+
+.active-sessions__list {
+  list-style: none;
+  margin: 0;
+  padding: 0 var(--s3) var(--s3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+}
+
+.active-sessions__item {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  font-size: 0.76rem;
+  min-width: 0;
+}
+
+.active-sessions__dot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  flex: none;
+  color: var(--ink-soft);
+}
+
+.active-sessions__idle-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--ink-faint);
+}
+
+.active-sessions__job {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ink-strong);
+}
+
+.active-sessions__phase {
+  flex: none;
+  color: var(--accent);
+}
+
+.active-sessions__dismiss {
+  position: absolute;
+  top: var(--s2);
+  right: var(--s2);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+.active-sessions__dismiss:hover {
+  color: var(--ink-strong);
+  background: var(--card-soft);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .active-sessions { animation: none; }
+  .active-sessions__chevron { transition: none; }
+}
+
 /* -------- Segmented control (Polish stages) -------- */
 
 /* Inline row of radio-backed labels that behaves like a button group.
