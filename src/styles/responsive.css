@@ -10,7 +10,9 @@
 
   .studio-pane {
     grid-template-columns: 1fr;
-    grid-template-rows: auto auto;
+    /* Tabs row hugs its content; the main row takes the slack. With `auto auto`
+       the stretched pane inflated the tab bar to fill half the viewport. */
+    grid-template-rows: auto minmax(0, 1fr);
   }
 
   .studio-tabs {
@@ -25,6 +27,31 @@
   }
 
   .studio-tabs::-webkit-scrollbar { display: none; }
+
+  /* In the horizontal bar the groups must run inline too — the desktop rules
+     stack each group's label over its tabs and add a TOP rule between groups,
+     which in a row reads as side-by-side columns with a stray hairline. Lay the
+     label + tabs in one line and turn the divider into a vertical rule. */
+  .studio-tabs__group {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: var(--s1);
+    margin-top: 0;
+    padding-top: 0;
+    border-top: 0;
+  }
+
+  .studio-tabs__group:not(:first-child) {
+    margin-left: var(--s2);
+    padding-left: var(--s2);
+    border-left: 1px solid var(--hairline-soft);
+  }
+
+  .studio-tabs__group-label {
+    margin-bottom: 0;
+    white-space: nowrap;
+  }
 
   .studio-tab {
     flex: 0 0 auto;
