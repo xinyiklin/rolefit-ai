@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { getTabId } from "../lib/tabPresence";
 
 /**
  * One pending browser-extension import. `fields` is the AI-distilled structured
@@ -11,6 +12,31 @@ export type ExtensionImport = {
   fields: Record<string, unknown> | null;
   autoTailor: boolean;
 };
+
+const EXTENSION_IMPORT_PARAM = "extensionImport";
+
+function readExtensionImportClaimToken(): string {
+  try {
+    const url = new URL(window.location.href);
+    return url.searchParams.get(EXTENSION_IMPORT_PARAM)?.trim() ?? "";
+  } catch {
+    return "";
+  }
+}
+
+// Strip the one-shot claim token from the address bar once its import has been
+// delivered. Otherwise a reload of this tab would re-present the (now drained)
+// token and try to claim again, and the lingering param is just noise in the URL.
+function clearExtensionImportParam(): void {
+  try {
+    const url = new URL(window.location.href);
+    if (!url.searchParams.has(EXTENSION_IMPORT_PARAM)) return;
+    url.searchParams.delete(EXTENSION_IMPORT_PARAM);
+    window.history.replaceState(window.history.state, "", url.toString());
+  } catch {
+    // Best-effort: a stale token is harmless once the entry is gone server-side.
+  }
+}
 
 /**
  * Polls /api/extension/inbox on mount, on window focus, and on tab visibility.
@@ -32,6 +58,7 @@ export function useExtensionInbox(
   onDistillingRef.current = onDistilling;
 
   useEffect(() => {
+    const claimToken = readExtensionImportClaimToken();
     let timer: ReturnType<typeof setTimeout> | null = null;
     let distilling = false;
     let cancelled = false;
@@ -45,8 +72,16 @@ export function useExtensionInbox(
         timer = null;
       }
       if (cancelled) return;
+      // Hidden tabs stay hands-off. Fresh extension imports carry a claim token
+      // in the newly-opened app tab's URL; existing visible tabs skip those
+      // reserved imports until the fresh tab has had a chance to claim them.
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
       try {
-        const res = await fetch("/api/extension/inbox");
+        // Carry this tab's session id so the server hands each import to exactly
+        // one tab — the one that claimed it — instead of every polling tab.
+        const params = new URLSearchParams({ tabId: getTabId() });
+        if (claimToken) params.set("claimToken", claimToken);
+        const res = await fetch(`/api/extension/inbox?${params.toString()}`);
         const data: unknown = await res.json();
         if (data === null || typeof data !== "object") {
           distilling = false;
@@ -66,6 +101,8 @@ export function useExtensionInbox(
               ? (obj.fields as Record<string, unknown>)
               : null;
           onImportRef.current({ text: obj.text, url: obj.url, fields, autoTailor: obj.autoTailor === true });
+          // Delivered once — drop the claim token so a reload can't re-claim.
+          if (claimToken) clearExtensionImportParam();
         }
       } catch {
         // Transient error: keep retrying ONLY if a distill is in flight (so we

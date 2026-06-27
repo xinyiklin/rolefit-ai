@@ -84,10 +84,13 @@ careflow `5173-5180`, portfolio `5184-5185`; do not mix them up.
   of imports is serialized to one in-flight provider call; `inbox` (GET)
   reports `{status:"distilling"}` while that runs, then hands the finished
   brief (the AI fields, or the deterministic fallback on AI failure) to the
-  app once before clearing it. The import also carries an optional
-  `autoTailor` flag from the popup's "Tailor automatically" toggle, so the
-  app can jump straight to polish once the brief and a base resume are
-  ready. `analyze` / `import` are reachable cross-origin from the
+  claiming app tab once before clearing it. Extension imports include a short
+  claim token and open a fresh app tab with that token, so a new posting starts
+  a new independent tailoring session instead of replacing an existing tab's
+  job target. The import also carries an optional `autoTailor` flag from the
+  popup's "Tailor automatically" toggle, so the app can jump straight to polish
+  once the brief and a base resume are ready. `analyze` / `import` are
+  reachable cross-origin from the
   extension popup and are gated to extension-scheme Origins
   (`chrome-extension://`, `moz-extension://`, `safari-web-extension://`)
   with the validated Origin reflected back — never a wildcard, never an
