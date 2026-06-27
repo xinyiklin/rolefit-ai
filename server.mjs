@@ -36,36 +36,90 @@ const root = process.cwd();
 // loss), then "done" with `fields` set (or null if the AI distill failed → the app
 // falls back to the deterministic engine). `id` guards against a newer import
 // landing while an older distill is still in flight.
-let extensionInbox = null; // { text, url, fields, autoTailor, status: "distilling"|"done", id } | null
+// QUEUE of pending imports, not a single slot. Each browser tab is an
+// independent session, so imports must not clobber one another and one tab's
+// distill must not surface in another tab. Each entry is CLAIMED by the first
+// tab to poll it (by the tab's session id); only that tab then sees its
+// "distilling" → "done" lifecycle, so a distill in one tab never pops the card
+// in another. A claim is refreshed on every poll (lastSeenAt) and released when
+// the owning tab goes quiet, so a claimed-then-closed import isn't stranded.
+// Entry: { id, text, url, fields, autoTailor, status, claimedBy, claimToken,
+// createdAt, lastSeenAt }.
+let extensionInbox = [];
 let extensionImportSeq = 0;
 let extensionDistilling = false;
+// Bound the queue: drop entries older than the TTL (a tab that claimed then
+// closed before draining, or an import no tab ever picked up) and cap the count.
+const EXTENSION_IMPORT_TTL_MS = 10 * 60 * 1000;
+const EXTENSION_INBOX_MAX = 8;
+// A claiming tab refreshes its claim on every poll (the client polls ~1.5s while
+// an import is distilling). If a claim isn't refreshed within this window the
+// owning tab is gone (closed/crashed), so the claim is released for re-acquisition
+// — otherwise a claimed-then-closed import would strand until the 10-min TTL.
+const EXTENSION_CLAIM_STALE_MS = 8 * 1000;
+
+function cleanExtensionClaimToken(value) {
+  const token = typeof value === "string" ? value.trim() : "";
+  return /^[A-Za-z0-9._:-]{8,128}$/.test(token) ? token : "";
+}
+
+function pruneExtensionInbox(now) {
+  extensionInbox = extensionInbox.filter((e) => now - e.createdAt < EXTENSION_IMPORT_TTL_MS);
+  if (extensionInbox.length > EXTENSION_INBOX_MAX) {
+    // Over the cap: drop the OLDEST entries first, but never an in-flight distill.
+    // Evicting a "distilling" entry would lose its finished brief — runExtensionDistill
+    // can no longer find its id, so the result is silently dropped and the owning
+    // tab polls forever. Keep every "distilling" entry plus the newest settled ones.
+    let overflow = extensionInbox.length - EXTENSION_INBOX_MAX;
+    extensionInbox = extensionInbox.filter((e) => {
+      if (overflow > 0 && e.status !== "distilling") {
+        overflow -= 1;
+        return false;
+      }
+      return true;
+    });
+  }
+}
+
+// Release claims whose owning tab has gone quiet so the import can be re-acquired
+// rather than stranded. The claimToken is PRESERVED on release: a token-bearing
+// entry stays reserved for its fresh tab (only a request presenting the matching
+// token can re-acquire it), so releasing a stale claim never hands a token entry
+// to a different tab. Only token-less (legacy) entries fall back to another tab.
+function releaseStaleExtensionClaims(now) {
+  for (const entry of extensionInbox) {
+    if (entry.claimedBy && now - (entry.lastSeenAt ?? entry.createdAt) > EXTENSION_CLAIM_STALE_MS) {
+      entry.claimedBy = null;
+    }
+  }
+}
 
 // Run the background extension distill, SERIALIZED so a burst of imports can never
-// spawn parallel provider calls: at most one runs; when it settles, if a newer
-// import has since landed (still "distilling" with a different id) the latest is
-// distilled next. The id guard ensures only the most recent import's brief reaches
-// the inbox. Always settles the status to "done" so the app never polls forever.
+// spawn parallel provider calls: at most one runs at a time; when it settles, the
+// next still-"distilling" entry in the queue is distilled. Distill runs in the
+// background (survives the popup closing on focus loss) and always settles the
+// entry to "done" so the owning tab never polls forever.
 async function runExtensionDistill(importId, text, url) {
   extensionDistilling = true;
   try {
     const jobText = await resolveImportedJobText(text, url);
-    if (extensionInbox && extensionInbox.id === importId) {
-      extensionInbox.text = jobText.slice(0, 50_000);
-    }
+    const pending = extensionInbox.find((e) => e.id === importId);
+    if (pending) pending.text = jobText.slice(0, 50_000);
     const fields = await distillToFields({ jobText, url });
-    if (extensionInbox && extensionInbox.id === importId) {
-      extensionInbox.fields = fields;
-      extensionInbox.status = "done";
+    const done = extensionInbox.find((e) => e.id === importId);
+    if (done) {
+      done.fields = fields;
+      done.status = "done";
     }
   } catch {
-    if (extensionInbox && extensionInbox.id === importId) {
-      extensionInbox.status = "done"; // fields stays null → app uses the deterministic engine
-    }
+    const failed = extensionInbox.find((e) => e.id === importId);
+    if (failed) failed.status = "done"; // fields stays null → app uses the deterministic engine
   } finally {
     extensionDistilling = false;
-    if (extensionInbox && extensionInbox.status === "distilling" && extensionInbox.id !== importId) {
-      void runExtensionDistill(extensionInbox.id, extensionInbox.text, extensionInbox.url);
-    }
+    // Chain to the next un-distilled import (the one we just finished is now
+    // "done", so it won't be re-selected).
+    const next = extensionInbox.find((e) => e.status === "distilling");
+    if (next) void runExtensionDistill(next.id, next.text, next.url);
   }
 }
 const isProduction = process.env.NODE_ENV === "production";
@@ -1088,10 +1142,10 @@ async function serveStatic(req, res) {
 // chrome-extension:// (or moz-/safari-) page, so they bypass the localhost
 // same-origin CSRF guard (dispatched BEFORE it) and instead validate the
 // extension Origin scheme directly. They never write resume data. The analyze
-// route is a read-only keyword triage; the import route stores a captured job page
-// in a one-slot "inbox" for the open app tab AND kicks off a server-side AI distill
-// in the background (serialized via runExtensionDistill), so import does run a
-// provider call — keys stay server-side and the route remains extension-Origin-gated.
+// route is a read-only keyword triage; the import route appends a captured job page
+// to a claimable inbox queue AND kicks off a server-side AI distill in the
+// background (serialized via runExtensionDistill), so import does run a provider
+// call — keys stay server-side and the route remains extension-Origin-gated.
 const EXTENSION_ORIGIN_SCHEMES = ["chrome-extension://", "moz-extension://", "safari-web-extension://"];
 
 // analyze + import: called cross-origin by the extension popup. Require a
@@ -1194,6 +1248,7 @@ async function handleExtensionRoutes(req, res, pathname) {
     const text = typeof body.text === "string" ? body.text : "";
     const url = typeof body.url === "string" ? body.url : "";
     const autoTailor = body.autoTailor === true;
+    const claimToken = cleanExtensionClaimToken(body.claimToken);
     if (!text.trim() || !url.trim()) {
       sendJson(res, 400, { error: "A job page text and url are required." });
       return;
@@ -1206,10 +1261,25 @@ async function handleExtensionRoutes(req, res, pathname) {
     // status still flips to "done" with fields=null and the app uses the
     // deterministic engine on the raw text — so an import never silently strands.
     const importId = (extensionImportSeq += 1);
-    extensionInbox = { text: text.slice(0, 50_000), url, fields: null, autoTailor, status: "distilling", id: importId };
+    const now = Date.now();
+    // Append (never overwrite) so a second import can't interrupt an in-flight
+    // distill — each import is its own claimable entry.
+    extensionInbox.push({
+      id: importId,
+      text: text.slice(0, 50_000),
+      url,
+      fields: null,
+      autoTailor,
+      status: "distilling",
+      claimedBy: null,
+      claimToken: claimToken || null,
+      createdAt: now,
+      lastSeenAt: now,
+    });
+    pruneExtensionInbox(now);
     sendJson(res, 200, { ok: true });
     // Kick the serialized distiller only when idle; if one is already running it
-    // will pick up this newest import when it settles (coalesce, never fan out).
+    // will pick up this import when it settles (queue, never fan out).
     if (!extensionDistilling) void runExtensionDistill(importId, text, url);
     return;
   }
@@ -1217,33 +1287,68 @@ async function handleExtensionRoutes(req, res, pathname) {
   sendJson(res, 404, { error: "Not found." });
 }
 
-// Polled same-origin by the app (useExtensionInbox). Returns the pending
-// extension import once and clears it. Stays behind the localhost CSRF/Host
-// guard (dispatched after it) and sends no CORS header, so a foreign page can
-// neither reach nor read it.
-async function handleExtensionInbox(req, res) {
+// Polled same-origin by the app (useExtensionInbox), with the polling tab's
+// session id in `tabId`. Returns at most ONE import per tab: the entry this tab
+// already claimed, else the oldest unclaimed entry (which it then claims). Only
+// the claiming tab sees that import's "distilling" → "done" lifecycle, so a
+// distill started in one tab never pops the card in another. Drains the entry on
+// hand-off. Stays behind the localhost CSRF/Host guard (dispatched after it) and
+// sends no CORS header, so a foreign page can neither reach nor read it.
+async function handleExtensionInbox(req, res, tabId, claimToken) {
   if (req.method !== "GET") {
     sendJson(res, 405, { error: "Use GET." });
     return;
   }
-  if (extensionInbox === null) {
+  const now = Date.now();
+  pruneExtensionInbox(now);
+  // Free up claims held by tabs that stopped polling (closed/crashed) before
+  // selecting, so a claimed-then-closed import isn't stranded until the TTL.
+  releaseStaleExtensionClaims(now);
+  // A token-bearing entry belongs to the fresh app tab the extension opened with
+  // that token. Reserve it for as long as it stays unclaimed so a non-matching tab
+  // can NEVER drain it into the wrong session — the whole point of per-tab imports.
+  // If the fresh tab never arrives (failed/slow/closed tab-open), the entry is not
+  // handed to some other tab; it simply expires via the TTL (pruneExtensionInbox).
+  const isReservedForFreshTab = (entry) => Boolean(entry.claimToken) && !entry.claimedBy;
+  // Prefer an entry already bound to this tab; otherwise claim the oldest
+  // unclaimed one. A token-bearing fresh tab can claim its matching import even
+  // if duplicate-tab detection regenerated its tab id after the first poll; the
+  // claim token is the stronger routing identity for extension-opened tabs.
+  // Older visible tabs have no token and skip token-reserved entries so they
+  // don't steal a new session.
+  // Without a tabId (legacy client) fall back to first-unclaimed without binding.
+  let entry = null;
+  if (claimToken) {
+    entry = extensionInbox.find((e) => e.claimToken === claimToken);
+    if (entry && tabId) entry.claimedBy = tabId;
+  }
+  if (!entry && tabId) {
+    entry = extensionInbox.find((e) => e.claimedBy === tabId);
+  }
+  if (!entry) {
+    entry = extensionInbox.find((e) => e.claimedBy === null && !isReservedForFreshTab(e));
+    if (entry && tabId) entry.claimedBy = tabId;
+  }
+  if (!entry) {
     sendJson(res, 200, null);
     return;
   }
+  // This tab owns the entry now — refresh the liveness stamp so the claim isn't
+  // released out from under it while it keeps polling.
+  if (tabId && entry.claimedBy === tabId) entry.lastSeenAt = now;
   // Still distilling in the background — report progress WITHOUT draining so the
-  // app keeps polling until the brief is ready.
-  if (extensionInbox.status === "distilling") {
+  // owning tab keeps polling until the brief is ready.
+  if (entry.status === "distilling") {
     sendJson(res, 200, { status: "distilling" });
     return;
   }
-  // Done — hand over the brief once and clear it.
-  const captured = extensionInbox;
-  extensionInbox = null;
+  // Done — hand over the brief once and remove it from the queue.
+  extensionInbox = extensionInbox.filter((e) => e !== entry);
   sendJson(res, 200, {
-    text: captured.text,
-    url: captured.url,
-    fields: captured.fields ?? null,
-    autoTailor: captured.autoTailor === true,
+    text: entry.text,
+    url: entry.url,
+    fields: entry.fields ?? null,
+    autoTailor: entry.autoTailor === true,
   });
 }
 
@@ -1299,7 +1404,10 @@ const server = createServer((req, res) => {
   // Polled same-origin by the app's useExtensionInbox hook; CSRF/Host-guarded
   // above like every other /api/ route (so a foreign page can't drain it).
   if (pathname === "/api/extension/inbox") {
-    void handleExtensionInbox(req, res);
+    const routeUrl = new URL(req.url ?? "/", `http://${req.headers.host}`);
+    const tabId = routeUrl.searchParams.get("tabId") || "";
+    const claimToken = cleanExtensionClaimToken(routeUrl.searchParams.get("claimToken"));
+    void handleExtensionInbox(req, res, tabId, claimToken);
     return;
   }
 

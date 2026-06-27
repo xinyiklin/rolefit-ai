@@ -46,6 +46,15 @@ function formatMonth(iso) {
   return d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
 }
 
+function randomClaimToken() {
+  try {
+    if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
+  } catch {
+    // Fall through to the compact fallback below.
+  }
+  return `import-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
+}
+
 // Maps a stored application to a banner treatment. `prominent` tones (applied /
 // offer / interviewing / rejected) surface a tinted banner so the user sees
 // "you've been here" before deciding to import again.
@@ -241,12 +250,18 @@ async function handleImport(btn, pageData, autoTailor) {
   // The import returns immediately; the server distills in the background and the
   // app shows "Distilling…" as it polls for the finished brief. So this stays fast.
   btn.textContent = 'Importing…';
+  const claimToken = randomClaimToken();
 
   try {
     const res = await fetch(`${API_BASE}/api/extension/import`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text: pageData.text, url: pageData.url, autoTailor: Boolean(autoTailor) })
+      body: JSON.stringify({
+        text: pageData.text,
+        url: pageData.url,
+        autoTailor: Boolean(autoTailor),
+        claimToken
+      })
     });
     if (!res.ok) throw new Error(`Server error ${res.status}`);
   } catch {
@@ -258,21 +273,11 @@ async function handleImport(btn, pageData, autoTailor) {
   }
 
   // The import already reached the server (inbox populated, background distill
-  // kicked off); focusing/opening the app tab is best-effort. If the tabs API
-  // rejects (the app tab closed mid-call, a transient error), still give the
-  // button a terminal state instead of hanging on "Importing…".
+  // kicked off). Open a fresh RoleFit tab with a claim token so this posting
+  // lands in a new independent tailoring session instead of replacing an
+  // in-progress app tab.
   try {
-    const tabs = await chrome.tabs.query({ url: `${API_BASE}/*` });
-    if (tabs.length > 0) {
-      await chrome.tabs.update(tabs[0].id, { active: true });
-      if (tabs[0].windowId != null) {
-        // The optional chain must extend through .catch — chrome.windows being
-        // undefined would otherwise call .catch on undefined and throw.
-        await chrome.windows?.update?.(tabs[0].windowId, { focused: true })?.catch(() => {});
-      }
-    } else {
-      await chrome.tabs.create({ url: API_BASE });
-    }
+    await chrome.tabs.create({ url: `${API_BASE}/?extensionImport=${encodeURIComponent(claimToken)}` });
     btn.textContent = 'Imported ✓';
   } catch {
     // The capture succeeded; only the redirect/focus failed.
