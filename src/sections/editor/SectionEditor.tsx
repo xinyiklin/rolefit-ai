@@ -50,6 +50,7 @@ function SectionEditorImpl({ section, index, siblingCount, actions, tailorMode =
           <div
             className="rdx-tailor-seg"
             role="radiogroup"
+            data-active={tailorMode}
             aria-label={`Tailoring for ${section.heading.trim() || "section"}`}
           >
             {TAILOR_MODES.map((mode, i) => (
