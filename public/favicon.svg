@@ -1,5 +1,14 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <rect width="64" height="64" rx="14" fill="#eef2ef"/>
-  <path fill="#23664f" d="M18 10h22l10 10v34H18z"/>
-  <path fill="#f8fbfa" d="M39 12v11h10zM24 29h22v4H24zm0 9h18v4H24zm0 9h14v4H24z"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="RoleFit AI">
+  <style>
+    .tile { fill: #eef2ef; }
+    .mark { fill: #23664f; }
+    @media (prefers-color-scheme: dark) {
+      .tile { fill: #16241e; }
+      .mark { fill: #cfe6dc; }
+    }
+  </style>
+  <rect class="tile" width="64" height="64" rx="14"/>
+  <text class="mark" x="32" y="47" text-anchor="middle"
+        font-family="Charter, Georgia, 'Times New Roman', serif"
+        font-weight="700" font-size="46">R</text>
 </svg>
