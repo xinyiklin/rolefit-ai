@@ -615,6 +615,43 @@ const checks = [
     const r = applyGapCapsAndVerdict({ base: 84, tailored: 88, liftReason: "" }, { gaps: [] }, clearance);
     return clearance === true && degree === true && r.aiScore.tailored <= 45 && r.verdict === DONT;
   })()],
+  // --- broadened eligibility lexicon: hard gates the old regex missed now fire,
+  // --- each ISOLATED from any legacy keyword so it proves the new term closed a
+  // --- real gap (a candidate could otherwise keep a Strong-fit verdict on a role
+  // --- they're formally ineligible for). ---
+  ["coverage: broadened gates (authorized-to-work / green card / TS-SCI / polygraph / PR) each fire the blocker", (() => {
+    const fires = (requirement) => coverageHasEligibilityBlocker([
+      { category: "Eligibility", requirement, importance: "critical", baseStatus: "missing", tailoredStatus: "missing" }
+    ]);
+    return (
+      fires("Must be legally authorized to work in the US") &&  // no sponsor/visa/citizen keyword — old regex missed it
+      fires("Must hold a valid green card") &&
+      fires("Must hold an active TS/SCI") &&                    // abbreviation, no literal "clearance"
+      fires("Must pass a counterintelligence polygraph") &&
+      fires("Permanent residency required")
+    );
+  })()],
+  // --- and the broadening must NOT false-fire on lookalike SKILL rows: a missing
+  // --- critical security/leadership/finance/ML requirement is a HIGH gap, never a
+  // --- hard DON'T-APPLY blocker. Locks the substring-safety choices (full-word
+  // --- "authorization"; dropped bare "ead" vs finance EAD; right-bounded "green
+  // --- card"; "resid(ent|ency|ence)" vs "residual"). These are wrong-direction
+  // --- collisions — each would tell the user not to apply to a role they qualify
+  // --- for — so they are the load-bearing anti-regression locks. ---
+  ["coverage: eligibility broadening does NOT false-fire on lookalike skill rows (unauthorized access / leadership / EAD metric / residual / cardigan)", (() => {
+    const fires = (requirement) => coverageHasEligibilityBlocker([
+      { category: "Required experience", requirement, importance: "critical", baseStatus: "missing", tailoredStatus: "missing" }
+    ]);
+    return (
+      fires("Prevent unauthorized access to production systems") === false &&  // security SKILL, not work-auth
+      fires("Proven leadership of engineering teams") === false &&             // "ead" inside "leadership"
+      fires("Ready to ship features on a weekly cadence") === false &&         // "ead" inside "ready"
+      fires("Experience building evergreen card-sorting UIs") === false &&     // "green card" inside "evergreen card"
+      fires("Model EAD, PD, and LGD for the loan book") === false &&           // finance Exposure At Default, not the doc
+      fires("Experience with permanent residual connections") === false &&     // ML residual, not residency
+      fires("Build a green cardigan catalog") === false                        // "green card" prefix of "cardigan"
+    );
+  })()],
   ["applyGapCapsAndVerdict default hasCoverageBlocker preserves existing gap-only behavior", (() => {
     // Two-arg call (legacy signature) must behave exactly as before: no coverage
     // blocker, gap-based caps only.

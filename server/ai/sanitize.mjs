@@ -769,12 +769,25 @@ export function scoreFromRequirementCoverage(rawCoverage, strictReview) {
   };
 }
 
-// ELIGIBILITY sub-lexicon: the subset of requirementBucket's "seniority" regex
-// that represents a HARD eligibility gate (clearance/work-auth/license/cert/
-// degree), NOT soft seniority. Deliberately EXCLUDES bare year/senior/level — a
-// missing "5+ years" is a HIGH gap at most, never a hard DON'T-APPLY blocker.
+// ELIGIBILITY lexicon: the HARD eligibility gates (clearance / work-auth /
+// residency / license / cert / degree) that force a DON'T APPLY when a JD
+// requires one the candidate lacks. Deliberately EXCLUDES bare year/senior/level
+// — a missing "5+ years" is a HIGH gap at most, never a hard blocker. Terms are
+// chosen to avoid substring FALSE POSITIVES on a critical/high MISSING row (each
+// would wrongly tell the user NOT to apply to a role they qualify for):
+// "authorization"/"authorisation" stay FULL words (so "unauthorized access", a
+// security SKILL, never fires), with an explicit "...to work" phrase catching
+// the standalone "authorized/eligible to work"; "green card" takes a right
+// boundary (rejects "cardigan"); "permanent resid(ent|ency|ence)" rejects
+// "residual" (an ML term). The bare "EAD" abbreviation is deliberately NOT
+// matched — it collides with the finance/risk metric Exposure At Default
+// (EAD/PD/LGD); the spelled-out "employment authorization document" is already
+// caught by "authorization". Only fires under coverageHasEligibilityBlocker's
+// critical/high + still-missing guard. Under-coverage is the safe direction;
+// missed gates (work permit / right to work / US person / SC-DV) are a
+// deliberate lexicon follow-up.
 const ELIGIBILITY_BLOCKER =
-  /clearance|citizen|authorization|authorisation|sponsor|visa|license|licence|certif|degree/i;
+  /clearance|citizen|authorization|authorisation|sponsor|visa|license|licence|certif|degree|\bgreen\s*cards?\b|permanent\s+resid(?:ent|ency|ence)\b|polygraph|ts\/sci|(?:eligible|authoriz\w+|authoris\w+)\s+to\s+work/i;
 
 // The model often reports a hard eligibility blocker as a requirementCoverage
 // ROW ("Active Secret clearance required", tailoredStatus "missing") rather than
