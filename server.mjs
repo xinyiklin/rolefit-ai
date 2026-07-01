@@ -105,7 +105,7 @@ async function runExtensionDistill(importId, text, url) {
     const jobText = await resolveImportedJobText(text, url);
     const pending = extensionInbox.find((e) => e.id === importId);
     if (pending) pending.text = jobText.slice(0, 50_000);
-    const fields = await distillToFields({ jobText, url });
+    const fields = await distillToFields({ jobText }); // URL is never sent to the model
     const done = extensionInbox.find((e) => e.id === importId);
     if (done) {
       done.fields = fields;
@@ -1148,6 +1148,28 @@ async function serveStatic(req, res) {
 // call — keys stay server-side and the route remains extension-Origin-gated.
 const EXTENSION_ORIGIN_SCHEMES = ["chrome-extension://", "moz-extension://", "safari-web-extension://"];
 
+// Optional HARD allowlist of exact extension origins, comma-separated, e.g.
+//   EXTENSION_ALLOWED_ORIGINS="chrome-extension://<id>,moz-extension://<uuid>"
+// When set, ONLY those origins may reach the extension routes — locking out every
+// other installed extension that can also see localhost. When unset (default),
+// any well-formed extension-scheme origin is accepted: a locally-loaded
+// extension's origin is browser/profile-specific (Chrome derives the id from a
+// key; Firefox uses a random per-install UUID), so it can't be pinned ahead of
+// time without breaking the user's own extension. Read the exact value to lock
+// down from the extension page's console: `location.origin`.
+const EXTENSION_ALLOWED_ORIGINS = new Set(
+  String(process.env.EXTENSION_ALLOWED_ORIGINS ?? "")
+    .split(",")
+    .map((o) => o.trim())
+    .filter(Boolean)
+);
+
+function isAllowedExtensionOrigin(origin) {
+  if (!origin) return false; // never allow an absent Origin (a same-machine process/page)
+  if (EXTENSION_ALLOWED_ORIGINS.size > 0) return EXTENSION_ALLOWED_ORIGINS.has(origin);
+  return EXTENSION_ORIGIN_SCHEMES.some((scheme) => origin.startsWith(scheme));
+}
+
 // analyze + import: called cross-origin by the extension popup. Require a
 // recognized extension-scheme Origin (a real chrome/moz/safari extension fetch
 // always sends one) and reflect that exact Origin back — never a bare "*", and
@@ -1155,7 +1177,7 @@ const EXTENSION_ORIGIN_SCHEMES = ["chrome-extension://", "moz-extension://", "sa
 // reach these by omitting the header.
 async function handleExtensionRoutes(req, res, pathname) {
   const origin = req.headers.origin;
-  if (!origin || !EXTENSION_ORIGIN_SCHEMES.some((scheme) => origin.startsWith(scheme))) {
+  if (!isAllowedExtensionOrigin(origin)) {
     sendJson(res, 403, { error: "Forbidden." });
     return;
   }

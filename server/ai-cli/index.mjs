@@ -155,17 +155,21 @@ export async function callGeminiCli({ model, systemPrompt, userPrompt }) {
 
   // --skip-trust: required for headless runs (the CLI otherwise refuses in an
   //   untrusted workspace). -o text: print only the model's text response.
-  //   -p: non-interactive (headless) mode with the prompt (passed via argv).
+  //   -p "": triggers non-interactive (headless) mode WITHOUT putting the prompt
+  //   in argv. The prompt is sensitive (resume + job text + honest context), and
+  //   argv is world-readable in a local process listing, so it is fed on stdin
+  //   instead — `gemini --help`: "-p ... Appended to input on stdin (if any)".
+  //   An empty -p value still selects headless mode, so input == stdin == prompt.
   const args = ["--skip-trust", "-o", "text"];
   if (model && model !== "default") args.push("-m", model);
-  args.push("-p", combined);
+  args.push("-p", "");
 
   // Run in a throwaway working dir so --skip-trust only ever trusts an empty
   // directory: the CLI cannot pick up project context (GEMINI.md) or touch
   // project files. Color/UX warnings go to stderr, so stdout stays clean JSON.
   const workdir = await mkdtemp(join(tmpdir(), "rolefit-gemini-"));
   try {
-    const { stdout } = await runCli("gemini", args, "", { cwd: workdir });
+    const { stdout } = await runCli("gemini", args, combined, { cwd: workdir });
     return stdout.trim();
   } catch (error) {
     // Keep the "not installed" message (it's surfaced as actionable config
