@@ -334,6 +334,68 @@ const checks = [
     return out.rewrites.length === 1;
   })()],
 
+  // --- review rewrite `hits` grounding: the "✓ <kw>" chips claim JD coverage,
+  // --- so a hit is kept only when the rewrite text surfaces it AND it is
+  // --- grounded in the resume/context. A model can no longer stamp fabricated
+  // --- ✓ matches onto a barely-changed rewrite (the tailor path already gated
+  // --- its hits; this closes the review-path asymmetry). ---
+  ["review rewrite: fabricated ✓ hit chips (absent from rewrite) are pruned, honest rewrite + real chip kept", (() => {
+    const corpus = "Built the reporting service in Node with structured logging and a deterministic fallback.";
+    const out = sanitizeStrictReview(
+      { verdict: "STRETCH", rewrites: [
+        { original: "Built the reporting service in Node with structured logging and a deterministic fallback.",
+          rewrite: "Built the reporting service in Node with structured logging, a deterministic fallback, and retries.",
+          hits: ["Kubernetes", "AWS", "logging"] }
+      ] },
+      "requirements: kubernetes, aws, logging.", corpus
+    );
+    // Rewrite kept; only "logging" (in the text + grounded) survives — the
+    // Kubernetes/AWS chips the text never surfaces are dropped.
+    return out.rewrites.length === 1
+      && out.rewrites[0].hits.length === 1
+      && out.rewrites[0].hits[0] === "logging";
+  })()],
+  ["review rewrite: a grounded hit the rewrite actually surfaces is kept", (() => {
+    const corpus = "Tuned PostgreSQL queries for the clinic reporting workload.";
+    const out = sanitizeStrictReview(
+      { verdict: "STRETCH", rewrites: [
+        { original: "Tuned PostgreSQL queries for the clinic reporting workload.",
+          rewrite: "Tuned PostgreSQL queries and indexes for the clinic reporting workload.",
+          hits: ["PostgreSQL"] }
+      ] },
+      "requirements: postgresql.", corpus
+    );
+    return out.rewrites.length === 1 && out.rewrites[0].hits.length === 1 && out.rewrites[0].hits[0] === "PostgreSQL";
+  })()],
+  ["review rewrite: a short-token hit (Go) present + grounded survives the chip gate", (() => {
+    const corpus = "Built services in Go for the ingestion pipeline.";
+    const out = sanitizeStrictReview(
+      { verdict: "STRETCH", rewrites: [
+        { original: "Built services in Go for the ingestion pipeline.",
+          rewrite: "Built high-throughput services in Go for the ingestion pipeline.",
+          hits: ["Go"] }
+      ] },
+      "requirements: go.", corpus
+    );
+    return out.rewrites.length === 1 && out.rewrites[0].hits.length === 1 && out.rewrites[0].hits[0] === "Go";
+  })()],
+  ["review rewrite: a MULTI-WORD hit the rewrite + grounding both surface is kept (phrase branch)", (() => {
+    // Locks the phrase-branch survive path so a future normalizePhrase/isGrounded
+    // edit can't silently regress multi-word ✓ chips. (Known limit: an inflected
+    // variant — "machine learning" vs "machine-learning models" plural/word-order —
+    // drops the one chip; safe-direction under-credit, tracked as a follow-up.)
+    const corpus = "Shipped a machine learning pipeline for demand forecasting.";
+    const out = sanitizeStrictReview(
+      { verdict: "STRETCH", rewrites: [
+        { original: "Shipped a machine learning pipeline for demand forecasting.",
+          rewrite: "Shipped a machine learning pipeline that improved demand forecasting accuracy.",
+          hits: ["machine learning"] }
+      ] },
+      "requirements: machine learning.", corpus
+    );
+    return out.rewrites.length === 1 && out.rewrites[0].hits.length === 1 && out.rewrites[0].hits[0] === "machine learning";
+  })()],
+
   // --- prose-mode brand grounding (cover letters / application answers) ---
   // findUngroundedJdTerm(proposedText, jobLower, grounding) — caller lowercases
   // jobLower + grounding. Prose mode skips detector 1 (capitalized tokens) so
