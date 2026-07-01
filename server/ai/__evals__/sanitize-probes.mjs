@@ -14,11 +14,14 @@
 import {
   applyGapCapsAndVerdict,
   coverageHasEligibilityBlocker,
+  makeRewriteGrounder,
+  missingRequiredFromCoverage,
   reconcileFitVerdict,
   sanitizeTailorSuggestions,
   sanitizeStrictReview,
   scoreFromBuckets,
-  scoreFromRequirementCoverage
+  scoreFromRequirementCoverage,
+  summarizeDroppedSuggestions
 } from "../sanitize.mjs";
 import { findUngroundedJdTerm } from "../grounding.mjs";
 
@@ -44,6 +47,28 @@ const scope = {
   ]
 };
 const JD = "Requirements: Linux administration, Windows support, Java backend services, PostgreSQL, Flask or FastAPI, Kubernetes on EKS, containerized deployments, microservices architecture, machine learning pipelines, CI/CD.";
+
+// Multi-entry scope for the entry-scoped anti-misattribution probes: a Skills row
+// listing Python/TS/SQL, a pure-Node RoleFit project (NO Python in its own text),
+// and a separate Data Pipeline project that DOES use Python + Docker. Corpus-wide
+// grounding would let "Python" from Skills/the pipeline leak onto the RoleFit
+// bullet; entry-scoped grounding must not.
+const MULTI = {
+  sections: [
+    { id: "sk", heading: "Skills", type: "skills", entries: [
+      { id: "row", titleLeft: "Stack", titleRight: "", subtitleLeft: "Python, TypeScript, SQL", subtitleRight: "", bullets: [] }
+    ] },
+    { id: "proj", heading: "Projects", type: "standard", entries: [
+      { id: "rolefit", titleLeft: "RoleFit AI", titleRight: "", subtitleLeft: "", subtitleRight: "", bullets: [
+        { id: "b1", text: "Built a resume review engine on a Node provider adapter spanning 10+ LLM backends with a deterministic fallback." }
+      ] },
+      { id: "pipe", titleLeft: "Data Pipeline", titleRight: "", subtitleLeft: "", subtitleRight: "", bullets: [
+        { id: "b2", text: "Built batch ETL jobs in Python and containerized them with Docker." }
+      ] }
+    ] }
+  ]
+};
+const MULTI_JOB = "Requirements: Python, TypeScript, Node.js, Docker, LLM integration.";
 
 function survives({ proposedText, hits = [], honest = "", evidence = "quotes the EHR migration bullet", evidenceType = "exact" }) {
   return sanitizeTailorSuggestions(
@@ -181,6 +206,132 @@ const checks = [
       ],
       skillScope, {}, "", "Requirements: Docker and Git experience."
     ).length === 1;
+  })()],
+
+  // --- entry-scoped grounding: anti-misattribution (a REAL skill relocated onto
+  // --- a project that never used it). The RoleFit "Python/Node adapter" failure:
+  // --- Python is in Skills + a different project, but NOT in the RoleFit entry,
+  // --- so it must NOT be attachable to the RoleFit bullet. Skills-row adds keep
+  // --- corpus grounding (a skill you have anywhere is legitimate to list). ---
+  ["misattribution: Python (in Skills + other entry) NOT attachable to a pure-Node project bullet", (() => {
+    const out = sanitizeTailorSuggestions(
+      [{ target: { sectionId: "proj", entryId: "rolefit", bulletId: "b1", field: "bullet" },
+         proposedText: "Built a resume review engine on a Python/Node provider adapter spanning 10+ LLM backends.",
+         evidenceType: "exact", evidence: "Python is listed in skills and used in the data pipeline project", hits: ["Python"] }],
+      MULTI, {}, "", MULTI_JOB
+    );
+    return out.length === 0;
+  })()],
+  ["same-entry tech still grounds (Docker written where the entry already uses it)", (() => {
+    const out = sanitizeTailorSuggestions(
+      [{ target: { sectionId: "proj", entryId: "pipe", bulletId: "b2", field: "bullet" },
+         proposedText: "Built batch ETL jobs in Python, containerized with Docker for scale.",
+         evidenceType: "exact", evidence: "quotes the ETL / Docker pipeline bullet", hits: ["Python", "Docker"] }],
+      MULTI, {}, "", MULTI_JOB
+    );
+    return out.length === 1;
+  })()],
+  ["honest-context escape hatch grounds a standard-entry tech (TypeScript on RoleFit)", (() => {
+    const out = sanitizeTailorSuggestions(
+      [{ target: { sectionId: "proj", entryId: "rolefit", bulletId: "b1", field: "bullet" },
+         proposedText: "Built a resume review engine on a Node adapter with a deterministic TypeScript fallback.",
+         evidenceType: "exact", evidence: "honest context attests the fallback is TypeScript", hits: ["TypeScript"] }],
+      MULTI, {}, "Exact evidence: RoleFit's deterministic fallback engine is written in TypeScript.", MULTI_JOB
+    );
+    return out.length === 1;
+  })()],
+  ["skills-row add stays corpus-grounded (Docker from another entry is a valid skill to list)", (() => {
+    const out = sanitizeTailorSuggestions(
+      [{ target: { sectionId: "sk", entryId: "row", field: "skill" },
+         proposedText: "Python, TypeScript, SQL, Docker",
+         evidenceType: "exact", evidence: "Docker is used in the data pipeline project", hits: ["Docker"] }],
+      MULTI, {}, "", MULTI_JOB
+    );
+    return out.length === 1;
+  })()],
+
+  // --- Finding 1 regression lock: the hit-keyword gate is alias/inflection-aware,
+  // --- so entry-scoped grounding does NOT false-drop an honest edit whose entry
+  // --- spells a tech in its short/alias form while the hit names the long form. ---
+  ["alias in entry grounds a long-form hit (entry has 'k8s', hit says 'Kubernetes') - no false drop", (() => {
+    const aliasScope = { sections: [
+      { id: "sk", heading: "Skills", type: "skills", entries: [
+        { id: "row", titleLeft: "Infra", titleRight: "", subtitleLeft: "Kubernetes, Terraform", subtitleRight: "", bullets: [] }
+      ] },
+      { id: "exp", heading: "Experience", type: "standard", entries: [
+        { id: "e1", titleLeft: "Platform Eng", titleRight: "", subtitleLeft: "", subtitleRight: "", bullets: [
+          { id: "b", text: "Ran the reporting platform on k8s with rolling deploys." }
+        ] }
+      ] }
+    ] };
+    const out = sanitizeTailorSuggestions(
+      [{ target: { sectionId: "exp", entryId: "e1", bulletId: "b", field: "bullet" },
+         proposedText: "Ran the reporting platform on Kubernetes with rolling deploys and health checks.",
+         evidenceType: "exact", evidence: "quotes the k8s reporting platform bullet", hits: ["Kubernetes"] }],
+      aliasScope, {}, "", "Requirements: Kubernetes on EKS."
+    );
+    return out.length === 1;
+  })()],
+
+  // --- Finding 2 regression lock: the strict-review one-click "apply rewrite"
+  // --- path is entry-scoped via makeRewriteGrounder, so the review pass cannot
+  // --- reintroduce a misattribution the tailor gate drops. ---
+  ["review rewrite CANNOT misattribute Python onto the pure-Node bullet (entry-scoped grounder)", (() => {
+    const corpus = "Python, TypeScript, SQL\nBuilt a resume review engine on a Node provider adapter spanning 10+ LLM backends with a deterministic fallback.\nBuilt batch ETL jobs in Python and containerized them with Docker.";
+    const out = sanitizeStrictReview(
+      { verdict: "STRETCH", rewrites: [
+        { original: "Built a resume review engine on a Node provider adapter spanning 10+ LLM backends with a deterministic fallback.",
+          rewrite: "Built a resume review engine on a Python/Node provider adapter spanning 10+ LLM backends." },
+        { original: "Built batch ETL jobs in Python and containerized them with Docker.",
+          rewrite: "Built batch ETL jobs in Python and containerized them with Docker for scale." }
+      ] },
+      MULTI_JOB.toLowerCase(),
+      corpus,
+      { rewriteGrounder: makeRewriteGrounder(MULTI, "", corpus) }
+    );
+    // Python-on-Node rewrite dropped; the same-entry ETL rewrite kept.
+    return out.rewrites.length === 1 && /ETL jobs in Python/.test(out.rewrites[0].rewrite);
+  })()],
+  ["review rewrite: substring-superset entry does NOT mis-route grounding (re-review bypass)", (() => {
+    // Entry A's bullet CONTAINS entry B's shorter bullet as a substring and A has
+    // Python; the rewrite targets B's exact bullet and injects Python. A blob
+    // substring match would ground against A (Python present) and pass; exact
+    // bullet-equality grounds against B (no Python) and drops. Also matches the
+    // client's findBullet, which applies the rewrite to B.
+    const subScope = { sections: [
+      { id: "exp", heading: "Experience", type: "standard", entries: [
+        { id: "a", titleLeft: "Senior Eng", titleRight: "", subtitleLeft: "", subtitleRight: "", bullets: [
+          { id: "ba", text: "Built the analytics ingestion pipeline for the reporting platform in Python with retries." }
+        ] },
+        { id: "b", titleLeft: "Analyst", titleRight: "", subtitleLeft: "", subtitleRight: "", bullets: [
+          { id: "bb", text: "Built the analytics ingestion pipeline for the reporting platform" }
+        ] }
+      ] }
+    ] };
+    const corpus = "Built the analytics ingestion pipeline for the reporting platform in Python with retries.\nBuilt the analytics ingestion pipeline for the reporting platform";
+    const out = sanitizeStrictReview(
+      { verdict: "STRETCH", rewrites: [
+        { original: "Built the analytics ingestion pipeline for the reporting platform",
+          rewrite: "Built the analytics ingestion pipeline for the reporting platform in Python." }
+      ] },
+      "requirements: python.", corpus,
+      { rewriteGrounder: makeRewriteGrounder(subScope, "", corpus) }
+    );
+    return out.rewrites.length === 0;
+  })()],
+  ["review rewrite WITHOUT grounder keeps corpus behavior (backward-compat)", (() => {
+    const corpus = "Python, TypeScript, SQL\nBuilt a resume review engine on a Node provider adapter with a deterministic fallback.";
+    const out = sanitizeStrictReview(
+      { verdict: "STRETCH", rewrites: [
+        { original: "Built a resume review engine on a Node provider adapter with a deterministic fallback.",
+          rewrite: "Built a resume review engine on a Python/Node provider adapter." }
+      ] },
+      "requirements: python, node.js.",
+      corpus
+    );
+    // No grounder -> corpus grounding -> Python (in the Skills row of the corpus)
+    // still passes. Documents the pre-fix behavior the grounder closes.
+    return out.rewrites.length === 1;
   })()],
 
   // --- prose-mode brand grounding (cover letters / application answers) ---
@@ -407,6 +558,58 @@ const checks = [
     // blocker, gap-based caps only.
     const r = applyGapCapsAndVerdict({ base: 73, tailored: 86, liftReason: "" }, { gaps: [{ severity: "HIGH" }] });
     return r.aiScore.tailored === 79 && r.verdict === "REASONABLE FIT";
+  })()],
+
+  // --- null aiScore (sparse review, no numeric score) still honors a hard
+  // --- blocker: eligibility gate must force DON'T APPLY, not inherit the model's
+  // --- verdict. Locks the applyGapCapsAndVerdict null-score hardening. ---
+  ["null aiScore + coverage blocker -> DON'T APPLY (not the model's verdict)", (() => {
+    const r = applyGapCapsAndVerdict(null, { verdict: "STRETCH", gaps: [] }, true);
+    return r.aiScore === null && r.verdict === DONT;
+  })()],
+  ["null aiScore + BLOCKER gap -> DON'T APPLY", (() => {
+    const r = applyGapCapsAndVerdict(null, { verdict: "REASONABLE FIT", gaps: [{ severity: "BLOCKER" }] });
+    return r.aiScore === null && r.verdict === DONT;
+  })()],
+  ["null aiScore, no blocker -> sanitized verdict passes through unchanged", (() => {
+    const r = applyGapCapsAndVerdict(null, { verdict: "STRETCH", gaps: [{ severity: "HIGH" }] });
+    return r.aiScore === null && r.verdict === "STRETCH";
+  })()],
+  ["null aiScore, no strict review -> verdict null", (() => {
+    const r = applyGapCapsAndVerdict(null, null);
+    return r.aiScore === null && r.verdict === null;
+  })()],
+
+  // --- score-gameability reconciliation: cap on missing-required coverage rows
+  // --- even when the model omits them from the gaps array ---
+  ["missingRequiredFromCoverage counts critical/high missing required rows only", (() => {
+    const cov = [
+      { category: "Required tech", requirement: "Kubernetes", importance: "critical", baseStatus: "missing", tailoredStatus: "missing" },
+      { category: "Required experience", requirement: "Distributed systems", importance: "high", baseStatus: "missing", tailoredStatus: "missing" },
+      { category: "Required tech", requirement: "React", importance: "high", baseStatus: "covered", tailoredStatus: "covered" },
+      { category: "Preferred", requirement: "GraphQL", importance: "low", baseStatus: "missing", tailoredStatus: "missing" },
+      { category: "Required tech", requirement: "SQL", importance: "medium", baseStatus: "missing", tailoredStatus: "missing" }
+    ];
+    return missingRequiredFromCoverage(cov) === 2; // clearance/covered/preferred/medium excluded
+  })()],
+  ["reconcile: 2 missing required coverage rows the gaps array omitted -> cap 69 (not gameable)", (() => {
+    const r = applyGapCapsAndVerdict({ base: 90, tailored: 92, liftReason: "" }, { gaps: [] }, false, 2);
+    return r.aiScore.tailored === 69 && r.verdict === "STRETCH";
+  })()],
+  ["reconcile: honest reply (gaps agree with coverage) is unchanged", (() => {
+    const r = applyGapCapsAndVerdict({ base: 90, tailored: 88, liftReason: "" }, { gaps: [{ severity: "HIGH" }] }, false, 1);
+    return r.aiScore.tailored === 79 && r.verdict === "REASONABLE FIT";
+  })()],
+  ["reconcile: gaps stronger than coverage still governs (max, not override)", (() => {
+    const r = applyGapCapsAndVerdict({ base: 90, tailored: 88, liftReason: "" }, { gaps: [{ severity: "HIGH" }, { severity: "HIGH" }, { severity: "HIGH" }] }, false, 1);
+    return r.aiScore.tailored === 60; // max(3 gaps, 1 coverage) = 3 -> 60
+  })()],
+
+  // --- surface withheld fabrications: split unsupported (anti-fab) vs benign drops ---
+  ["summarizeDroppedSuggestions: null when empty; splits unsupported vs benign", (() => {
+    const empty = summarizeDroppedSuggestions({});
+    const some = summarizeDroppedSuggestions({ ungroundedJdTerm: 2, missingEvidence: 1, duplicateTarget: 1, emptyOrUnchanged: 3 });
+    return empty === null && some.total === 7 && some.unsupported === 3;
   })()]
 ];
 

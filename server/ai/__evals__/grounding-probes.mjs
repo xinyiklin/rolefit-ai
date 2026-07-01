@@ -56,6 +56,20 @@ const checks = [
   ["sentence-final corpus token grounds it", f("strong C#.", "c# required", "i use c#. daily") === null],
   ["internal period preserved (node.js not split)", f("ran node.js services", "node.js required", "node.js in prod") === null],
 
+  // --- detector 2: hyphen/slash concepts ground via phrase normalization ---
+  // Regression lock: "real-time"/"ci/cd"/"event-driven"/"cloud-native" tokenize
+  // on hyphen/slash, so they must match as a normalized phrase, not a token. A
+  // term literally present in the resume must NOT be flagged ungrounded.
+  ["real-time grounded by hyphenated corpus term",
+    f("Built real-time streaming services", "real-time data required", "shipped real-time pipelines at scale") === null],
+  ["ci/cd grounded by slash corpus term",
+    f("Automated ci/cd pipelines", "ci/cd required", "owned the ci/cd pipeline in jenkins") === null],
+  ["event-driven grounded by hyphenated corpus term",
+    f("Designed event-driven services", "event-driven architecture wanted", "built event-driven microservices") === null],
+  // ...but a truly ungrounded hyphen concept is still flagged (safety preserved).
+  ["ungrounded 'event-driven' still flagged",
+    f("Designed event-driven services", "event-driven required", "wrote some python scripts") === "event-driven"],
+
   // --- proseMode: proper nouns allowed, skills still gated (cover/answers) ---
   ["proseMode allows company proper noun", f("excited about Acme platform", "acme corp hiring", "", { proseMode: true }) === null],
   ["non-prose flags the same proper noun", f("excited about Acme platform", "acme corp hiring", "") === "Acme"],

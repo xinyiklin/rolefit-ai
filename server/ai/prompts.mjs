@@ -74,7 +74,8 @@ export function honestTailoringRules() {
 5. Example — the job asks for Kubernetes and the resume shows only Docker:
    - allowed (adjacent, described truthfully): strengthen the existing "containerized services with Docker" bullet so the real containerization work is visible.
    - not allowed: listing Kubernetes in skills, writing "container orchestration (Kubernetes-style)", or any phrasing that implies cluster operation experience. Kubernetes stays a missing requirement.
-6. Do not pad the skills section with JD keywords the candidate has not actually used. Prefer leaving a requirement uncovered over fabricating coverage.`;
+6. Do not pad the skills section with JD keywords the candidate has not actually used. Prefer leaving a requirement uncovered over fabricating coverage.
+7. Attribution is per-entry. A skill, tool, language, or technology may be named in a specific bullet, title, or project ONLY if the evidence shows THAT role or project actually used it. A technology the candidate lists in the skills section or demonstrates in a different entry does NOT license adding it to an unrelated project — relocating a real skill onto a project that did not use it turns true experience into a false claim. When it is unclear whether a specific project used a tool, leave it out.`;
 }
 
 // Fit must reflect REAL qualification fit — can the candidate do the work —
@@ -106,6 +107,7 @@ export function accomplishmentStyleRules() {
 - Keep tech and tool mentions minimal: cite only the few technologies the work centered on; do not append long stacks or restate the skills section inside project bullets.
 - Use plain, specific verbs (built, designed, implemented, migrated, reduced, automated, debugged). Never use brochure vocabulary: seamless, robust, cutting-edge, innovative, dynamic, passionate, world-class, state-of-the-art, spearheaded, revolutionized, "leveraging synergies".
 - Preserve the candidate's actual level of ownership: do not turn entry-level or individual-contributor work into senior/staff-scale claims (led the org, owned the platform, architected company-wide, drove strategy) unless the resume itself states that scope.
+- Match verb tense to the role's timeframe: present tense for bullets in the candidate's current role (its dates run to "Present" or show no end date), past tense for every prior role. When you rewrite a bullet, keep its tense consistent with the other bullets in the same entry rather than introducing a conflicting one. The entry's dates decide which tense applies — never change a date or employment status to fit a tense.
 - Every claim must survive an interview probe ("walk me through how you did that"). If the candidate could not defend the wording with the evidence given, soften or cut it.`;
 }
 
@@ -154,9 +156,10 @@ ${accomplishmentStyleRules()}
 
 You are a VALIDATOR of the polish pass, not a second writer. Judge the proposed changes against the original resume and JD by answering, in order:
 1. Did the tailoring add any skill, tool, domain, metric, or responsibility the original resume and honest context do not support?
-2. Did it inflate ownership or seniority beyond what the original states?
-3. Did it become more generic or brochure-like instead of more concrete?
-4. Does any score lift trace to real evidence surfaced, rather than keyword insertion?
+2. Did it attribute a tool or technology to a specific project or role whose own evidence does not support it — even if that skill appears elsewhere in the resume (skills section or another entry)? A real skill relocated onto a project that did not use it is a fabrication: record the exact bullet and misattributed tool in riskFlags.
+3. Did it inflate ownership or seniority beyond what the original states?
+4. Did it become more generic or brochure-like instead of more concrete?
+5. Does any score lift trace to real evidence surfaced, rather than keyword insertion?
 If a check fails, lower the tailored score and record the exact offending text in riskFlags. A missing required skill belongs in "gaps" with canHonestlyAdd=false; never reward a rewrite that silently inserted unsupported JD terms.
 
 Hard blockers: if the JD REQUIRES a credential the candidate cannot gain by rephrasing — a security clearance, professional license, certification, specific degree, citizenship, or work authorization — and neither the resume nor honest context shows it, the verdict MUST be "DON'T APPLY" regardless of skill overlap, with that gap marked severity BLOCKER and canHonestlyAdd=false. Do not waver between verdicts on a hard blocker.
@@ -348,8 +351,9 @@ For suggestedChanges:
 Before returning JSON, silently verify every suggestion:
 1. No proposedText contains a JD keyword without exact evidence quoted in its "evidence" field.
 2. No invented metric, tool, employer, title, date, degree, certification, or outcome anywhere.
-3. No proposedText reads like a product feature list or inflates the candidate's level of ownership.
-4. Every target id/field exists in <tailor_scope> and is NOT in <context_sections>.
+3. No proposedText attributes a tool or technology to a project or role that the SAME entry (or honest context) does not evidence — a skill shown only elsewhere in the resume must not be relocated onto this entry.
+4. No proposedText reads like a product feature list or inflates the candidate's level of ownership.
+5. Every target id/field exists in <tailor_scope> and is NOT in <context_sections>.
 Drop any suggestion that fails a check instead of softening it.
 
 Honest context (optional user-provided evidence not already in the resume — use only as evidence, never as permission to fabricate):

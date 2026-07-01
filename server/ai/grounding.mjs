@@ -161,8 +161,18 @@ const INFLECTION_SUFFIX = /^(?:s|es|ed|d|ing|ized|ised|izing|ization)$/;
 // "React", "graph" must NOT ground "GraphQL". Multi-word terms match as a
 // hyphen/slash-normalized phrase.
 function isGrounded(groundingText, groundingTokens, term) {
-  if (term.includes(" ")) {
-    return normalizePhrase(groundingText).includes(normalizePhrase(term));
+  // Decide phrase-vs-token on the NORMALIZED term, not raw `term.includes(" ")`.
+  // normalizePhrase turns hyphens/slashes into spaces, so "real-time", "ci/cd",
+  // "event-driven", and "cloud-native" become multi-word phrases. The token loop
+  // below can never ground them: groundingTokens split on hyphen/slash, so
+  // "real-time" tokenizes to "real"+"time" and the single term "real-time" would
+  // match no token — silently dropping an honest suggestion whose term is right
+  // there in the resume. Matching the normalized phrase against the normalized
+  // corpus fixes that (and matches this module's documented "hyphen/slash-
+  // normalized phrase" contract).
+  const phrase = normalizePhrase(term);
+  if (phrase.includes(" ")) {
+    return normalizePhrase(groundingText).includes(phrase);
   }
   for (const token of groundingTokens) {
     if (token === term) return true;
@@ -249,4 +259,21 @@ export function findUngroundedJdTerm(proposedText, jobLower, grounding, options 
   }
 
   return null;
+}
+
+// Alias/inflection-aware grounding check for a SINGLE term (a claimed hit
+// keyword), exposed so the tailor sanitizer's hit-keyword gate shares the exact
+// same discipline as findUngroundedJdTerm (which routes through isGrounded).
+// Without this the hit gate did a raw substring `grounding.includes(word)` that
+// is alias-blind: once grounding narrowed to a single entry's text, an honest
+// edit whose entry spells a tech in its short/alias form (k8s, postgres, ts)
+// while the hit names the long form (Kubernetes, PostgreSQL, TypeScript) was
+// false-dropped. `term` and `grounding` may be any case; both are lowercased
+// here. Multi-word terms ("machine learning") match as a normalized phrase.
+export function isTermGrounded(term, grounding) {
+  const t = String(term ?? "").trim().toLowerCase();
+  if (!t) return false;
+  const groundingLower = String(grounding ?? "").toLowerCase();
+  const groundingTokens = new Set(stripBoundaryDots(groundingLower).match(/[a-z0-9.#+]+/g) ?? []);
+  return isGrounded(groundingLower, groundingTokens, t);
 }

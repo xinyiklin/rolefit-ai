@@ -29,12 +29,15 @@ import { generateGroundedCoverLetter } from "./coverLetter.mjs";
 import {
   applyGapCapsAndVerdict,
   coverageHasEligibilityBlocker,
+  makeRewriteGrounder,
+  missingRequiredFromCoverage,
   missingRequiredSkillsFromStrictReview,
   reconcileFitVerdict,
   sanitizeAiScore,
   sanitizeMissingRequiredSkills,
   sanitizeStrictReview,
   sanitizeTailorSuggestions,
+  summarizeDroppedSuggestions,
   scoreFromBuckets,
   scoreFromRequirementCoverage,
   tailorTargetKeys
@@ -269,6 +272,10 @@ export async function handlePolish(req, res) {
         validTargetKeys: tailorTargetKeys(tailorScope)
       });
     }
+    // Surface the anti-fabrication catches: a silent all-drop otherwise looks
+    // identical to a clean "nothing to suggest" pass (counts by reason only, no
+    // suggestion text — safe to send).
+    const droppedSuggestions = summarizeDroppedSuggestions(suggestionDropStats);
     const missingRequiredSkills = sanitizeMissingRequiredSkills(parsed.missingRequiredSkills);
     // changeSummary replaced the old strengths/fixes arrays (which no UI surface
     // ever rendered): 1-3 bullets on what changed or why nothing needed to. It
@@ -382,7 +389,13 @@ export async function handlePolish(req, res) {
         errorMessage: coverSettled.reason instanceof Error ? coverSettled.reason.message : String(coverSettled.reason)
       });
     }
-    let strictReviewResult = reviewParsed ? sanitizeStrictReview(reviewParsed.strictReview, jobText, groundingText) : null;
+    let strictReviewResult = reviewParsed
+      ? sanitizeStrictReview(reviewParsed.strictReview, jobText, groundingText, {
+          // Entry-scope one-click rewrites so the review pass can't reintroduce a
+          // misattribution the tailor gate drops (match rewrite.original -> entry).
+          rewriteGrounder: makeRewriteGrounder(tailorScope, honestContext, groundingText)
+        })
+      : null;
 
     // Scoring: prefer the requirement-coverage path — the reviewer extracts
     // per-requirement evidence/statuses, then the server calculates every point.
@@ -398,7 +411,10 @@ export async function handlePolish(req, res) {
       // not as a BLOCKER gap — must still force the DON'T APPLY band. Derive that
       // synthetic blocker from the same coverage table the score is built from.
       const hasCoverageBlocker = coverageHasEligibilityBlocker(reviewParsed?.requirementCoverage);
-      reconciled = applyGapCapsAndVerdict(baseScore, strictReviewResult, hasCoverageBlocker);
+      // Reconcile score-source with cap-source: cap on the missing-required rows
+      // the coverage table reports even if the model omitted them from `gaps`.
+      const coverageMissingCount = missingRequiredFromCoverage(reviewParsed?.requirementCoverage);
+      reconciled = applyGapCapsAndVerdict(baseScore, strictReviewResult, hasCoverageBlocker, coverageMissingCount);
     } else {
       reconciled = reconcileFitVerdict(
         bucketScore ?? sanitizeAiScore(reviewParsed?.fitScore ?? parsed.fitScore),
@@ -424,6 +440,7 @@ export async function handlePolish(req, res) {
         suggestedChanges,
         changeSummary: [],
         missingRequiredSkills: strictMissingRequiredSkills,
+        droppedSuggestions,
         aiScore: reconciled.aiScore,
         strictReview: strictReviewResult,
         model,
@@ -440,6 +457,7 @@ export async function handlePolish(req, res) {
       changeSummary: honestChangeSummary,
       missingRequiredSkills: missingRequiredSkills.length ? missingRequiredSkills : strictMissingRequiredSkills,
       suggestedChanges,
+      droppedSuggestions,
       aiScore: reconciled.aiScore,
       strictReview: strictReviewResult,
       model,
