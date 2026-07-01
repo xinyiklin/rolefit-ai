@@ -516,9 +516,23 @@ export function sanitizeStrictReview(raw, jobText = "", grounding = "", options 
       // tailor gate drops; corpus fallback for unmatched originals.
       const rewriteGrounding = rewriteGrounder ? rewriteGrounder(original) : groundingLower;
       if (findUngroundedJdTerm(rewrite, jobLower, rewriteGrounding)) return null;
-      const hits = Array.isArray(item.hits)
-        ? item.hits.map((hit) => clippedString(hit, 80)).filter(Boolean).slice(0, 6)
-        : [];
+      // `hits` render as "✓ <keyword>" chips claiming this rewrite now COVERS
+      // those JD keywords. The rewrite TEXT is grounded above, but the claimed
+      // matches were not — a model could leave the text nearly unchanged and
+      // stamp fabricated ✓ coverage (the tailor path grounds its hits for the
+      // same anti-fab reason; this review path did not). Keep a hit only when
+      // the rewrite text actually surfaces it AND it is grounded in the resume/
+      // honest context — dropping the individual false chip, not the honest
+      // rewrite. isTermGrounded is token-anchored (alias/inflection/phrase-aware,
+      // short-token safe: Go, CI/CD, k8s↔kubernetes). Known safe-direction limit:
+      // a MULTI-WORD hit whose wording differs from the text by a plural or word
+      // order (isGrounded's phrase branch is a literal substring) drops that one
+      // chip — it under-credits, never fabricates; the rewrite still shows.
+      const hits = (Array.isArray(item.hits) ? item.hits : [])
+        .map((hit) => clippedString(hit, 80))
+        .filter(Boolean)
+        .filter((kw) => isTermGrounded(kw, rewrite) && isTermGrounded(kw, rewriteGrounding))
+        .slice(0, 6);
       return { original, rewrite, hits };
     })
     .filter(Boolean)
