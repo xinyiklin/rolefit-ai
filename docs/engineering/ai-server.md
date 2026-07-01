@@ -68,8 +68,10 @@ careflow `5173-5180`, portfolio `5184-5185`; do not mix them up.
   semantically so novel ATS layouts, inline-prose duties, and unusual
   headings parse where the regex heading tables can't. Anti-fabrication is
   enforced server-side, not just in the prompt: every scalar fact (title,
-  company, location, salary, tech) is dropped unless grounded in the source
-  text, and the source URL is fenced like all other untrusted prompt input.
+  company, location, salary, tech) AND every content-list item
+  (responsibilities, required/preferred qualifications) is dropped unless
+  grounded in the source text, and the source URL is never sent to the model
+  (it can carry private ATS tokens, so only the posting text is forwarded).
   The client (`src/lib/aiDistill.ts`) is AI-first with the deterministic
   `jobExtract.ts` engine as the offline/no-key fallback on any non-200,
   timeout, or unusable reply — so distillation always produces a brief. The

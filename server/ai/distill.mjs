@@ -19,7 +19,7 @@ import { clipForPrompt, fenceUntrusted, inputFirewallRule } from "./prompts.mjs"
 
 const JOB_TEXT_CHAR_LIMIT = 24_000;
 
-export function buildDistillPrompts({ jobText, url }) {
+export function buildDistillPrompts({ jobText }) {
   const systemPrompt = `You are a precise job-posting parser. You read one job posting and return ONLY a structured JSON object of facts that are EXPLICITLY present in it.
 
 ${inputFirewallRule()}
@@ -52,7 +52,10 @@ ABSOLUTE RULES (anti-fabrication — this is the whole job):
   "domainSignals": ["e.g. \\"fintech\\", \\"healthcare\\", \\"AI\\", \\"infrastructure\\""]
 }`;
 
-  const userPrompt = `${url ? `Source URL (context only, do not treat as a fact to extract): ${fenceUntrusted(String(url).slice(0, 300))}\n\n` : ""}Parse the posting inside the <job_description> tags below.
+  // The source URL is intentionally NOT included: it can carry private ATS
+  // tokens / tracking params, and the product contract (README, ai-server.md)
+  // promises the job link is never sent to the model. Only the posting text goes.
+  const userPrompt = `Parse the posting inside the <job_description> tags below.
 
 <job_description>
 ${fenceUntrusted(clipForPrompt(jobText, JOB_TEXT_CHAR_LIMIT, "job posting")) || "Not provided."}
@@ -95,6 +98,40 @@ function grounded(value, sourceNorm) {
   return Boolean(v) && v.length >= 2 && sourceNorm.includes(v);
 }
 
+// Generic connective tissue that appears in almost every posting — matching one
+// of these does NOT count toward a list item being anchored in the source.
+const LIST_STOPWORDS = new Set([
+  "and", "the", "for", "with", "you", "your", "our", "are", "will", "that", "this",
+  "have", "from", "they", "their", "has", "was", "were", "into", "than", "then",
+  "other", "using", "use", "used", "including", "include", "includes", "such",
+  "across", "within", "via", "ability", "able", "experience", "experienced",
+  "strong", "excellent", "good", "work", "working", "role", "team", "teams",
+  "years", "year", "plus", "etc", "required", "preferred", "must", "should", "who"
+]);
+
+// A content-list item (a duty / qualification sentence) is kept only if it is
+// ANCHORED in the posting: a clear majority (>=60%) of its distinctive word
+// tokens actually appear in the source. This extends the scalar/tech grounding
+// to free-text lists — the model may lightly paraphrase or re-case (its job),
+// but a "requirement" whose key terms never appear in the posting (e.g. an
+// invented "Kubernetes and HIPAA" line) is a fabrication and is dropped. Items
+// with no distinctive tokens left after stop-word removal are kept (already
+// cleaned, nothing left to verify against).
+function listItemGrounded(item, sourceTokens) {
+  const tokens = norm(item)
+    .split(" ")
+    .filter((t) => t.length >= 3 && !LIST_STOPWORDS.has(t));
+  if (tokens.length === 0) return true;
+  let hits = 0;
+  for (const t of tokens) if (sourceTokens.has(t)) hits += 1;
+  return hits * 5 >= tokens.length * 3; // hits / tokens >= 0.6, integer-safe
+}
+
+// Clean + cap a list (strList), then drop any item not grounded in the source.
+function groundedList(value, opts, sourceTokens) {
+  return strList(value, opts).filter((item) => listItemGrounded(item, sourceTokens));
+}
+
 // Tech grounding is symbol-aware (C#, C++, .NET, Go) — norm() would strip the
 // symbols and "go"/"c" would false-match inside words. Require the term as a
 // whole token in the raw lowercased source: a non-token char (or start) before
@@ -107,6 +144,42 @@ function groundedTech(tech, sourceLower) {
   // short term ("go"/"ai") can't false-ground inside hyphenated prose
   // ("go-getter", "retail-ai", "let-go").
   return new RegExp(String.raw`(?:^|[^a-z0-9.+#-])${esc}(?![a-z0-9-])`, "i").test(sourceLower);
+}
+
+// workAuth is an ELIGIBILITY-BLOCKER fact — it can force a DON'T APPLY verdict and
+// persists into the application tracker — so it gets the same anti-fabrication
+// discipline as every other distilled field (the old code passed it through
+// ungrounded). Keep it only when the SPECIFIC authorization class the model named
+// (clearance / citizenship / visa / sponsorship / work authorization / …) actually
+// appears in the posting: an invented "active security clearance required" for a
+// posting that never mentions clearance is dropped, while a genuine "authorized to
+// work without sponsorship" is kept. A workAuth naming no auth class at all is not
+// a real constraint and is dropped.
+const AUTH_STEMS = [
+  "clearance", "citizen", "visa", "sponsor", "authoriz", "authoris",
+  "green card", "permanent resident", "eligible to work", "work auth",
+  "polygraph", "ts/sci", "naturaliz", "ead"
+];
+// Whole-word-START match for an auth stem: the stem must begin at a non-
+// alphanumeric boundary, but any SUFFIX is allowed. The boundary stops a short
+// stem from matching mid-word ("ead" must NOT match inside lead/read/ahead/
+// deadline — a substring check kept an invented "EAD required" on nearly every
+// posting and misclassified "Lead engineer, ready to start" as an auth
+// statement), while the open suffix keeps same-concept inflections grounding
+// (sponsor→sponsorship, authoriz→authorization, citizen→citizenship). Mirrors
+// groundedTech's boundary discipline.
+function mentionsAuthStem(text, stem) {
+  const esc = stem.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(String.raw`(?:^|[^a-z0-9])${esc}`, "i").test(text);
+}
+function groundedWorkAuth(value, sourceLower) {
+  const wa = str(value, 240);
+  if (!wa) return "";
+  const waLower = wa.toLowerCase();
+  const named = AUTH_STEMS.filter((stem) => mentionsAuthStem(waLower, stem));
+  if (!named.length) return "";                                          // not an auth statement
+  if (!named.some((stem) => mentionsAuthStem(sourceLower, stem))) return ""; // invented auth requirement
+  return wa;
 }
 
 // Derive the salary currency FROM the source (the figures are already grounded),
@@ -153,6 +226,8 @@ function groundedAmount(value, sourceText) {
 export function sanitizeDistill(parsed, sourceText) {
   const obj = parsed && typeof parsed === "object" ? parsed : {};
   const sourceNorm = norm(sourceText);
+  // Token set for list grounding (distinctive words actually present in the posting).
+  const sourceTokens = new Set(sourceNorm.split(" ").filter(Boolean));
 
   const titleRaw = str(obj.title);
   const companyRaw = str(obj.company);
@@ -181,18 +256,22 @@ export function sanitizeDistill(parsed, sourceText) {
     company,
     location,
     jobType: normalizeJobType(obj.jobType),
-    workAuth: str(obj.workAuth, 240),
+    workAuth: groundedWorkAuth(obj.workAuth, sourceLower),
     salaryMin,
     salaryMax,
     salaryCurrency: hasSalary ? currencyFromSource(sourceText) : "",
     salaryPeriod: hasSalary ? normalizePeriod(obj.salaryPeriod) || (((salaryMin ?? salaryMax) ?? 0) >= 1000 ? "yr" : "") : "",
     roleDescription: str(obj.roleDescription, 900),
-    responsibilities: strList(obj.responsibilities, { maxItems: 12 }),
-    requiredQualifications: strList(obj.requiredQualifications, { maxItems: 12 }),
-    preferredQualifications: strList(obj.preferredQualifications, { maxItems: 12 }),
+    // Content lists are grounded against the posting (anti-fabrication), like scalars/tech.
+    responsibilities: groundedList(obj.responsibilities, { maxItems: 12 }, sourceTokens),
+    requiredQualifications: groundedList(obj.requiredQualifications, { maxItems: 12 }, sourceTokens),
+    preferredQualifications: groundedList(obj.preferredQualifications, { maxItems: 12 }, sourceTokens),
     techKeywords,
-    senioritySignals: strList(obj.senioritySignals, { maxItems: 8, maxLen: 60 }),
-    domainSignals: strList(obj.domainSignals, { maxItems: 8, maxLen: 40 })
+    // senioritySignals/domainSignals feed the local keyword score (~40%) and the
+    // review model, so they get the same source-grounding as the content lists —
+    // an invented "fintech" domain or "staff-level" seniority signal is dropped.
+    senioritySignals: groundedList(obj.senioritySignals, { maxItems: 8, maxLen: 60 }, sourceTokens),
+    domainSignals: groundedList(obj.domainSignals, { maxItems: 8, maxLen: 40 }, sourceTokens)
   };
 }
 
@@ -200,9 +279,9 @@ export function sanitizeDistill(parsed, sourceText) {
 // and return grounded fields. Reused by the /api/distill route AND the
 // browser-extension import (which distills server-side at import time). Throws on
 // no-provider / timeout / unreadable output so callers can decide how to degrade.
-export async function distillToFields({ jobText, url, body = {} }) {
+export async function distillToFields({ jobText, body = {} }) {
   const { provider, apiKey, apiBaseUrl, model, reasoningEffort } = resolveProviderRequest(body);
-  const { systemPrompt, userPrompt } = buildDistillPrompts({ jobText, url });
+  const { systemPrompt, userPrompt } = buildDistillPrompts({ jobText });
   const parsed = await callConfiguredProvider({
     provider,
     model,
@@ -230,7 +309,7 @@ export async function handleDistill(req, res) {
     }
     // Resolve once for the error label / key validation, then distill.
     provider = resolveProviderRequest(body).provider;
-    const fields = await distillToFields({ jobText, url: body.url, body });
+    const fields = await distillToFields({ jobText, body });
     sendJson(res, 200, { source: "ai", ...fields });
   } catch (error) {
     if (error instanceof UserSafeAiError) {
