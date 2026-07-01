@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "node server.mjs",
     "build": "tsc && vite build",
-    "preview": "NODE_ENV=production node server.mjs"
+    "preview": "NODE_ENV=production node server.mjs",
+    "test": "node --test offline-evals.test.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
