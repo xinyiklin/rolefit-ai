@@ -270,6 +270,22 @@
   font-size: 0.8rem;
 }
 
+/* Anti-fabrication transparency: N AI edits withheld because they weren't
+   grounded in the resume/evidence. A quiet, reassuring note (the guardrail
+   working), not an error — kept distinct from gaps and the advisory. */
+.review-rail__note {
+  margin: 0 0 0.6rem;
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+.review-rail__note--withheld {
+  padding: 0.5rem 0.6rem;
+  border-radius: 0.5rem;
+  color: var(--ink-soft);
+  background: var(--accent-soft, rgba(0, 0, 0, 0.03));
+  border: 1px solid var(--accent-veil, rgba(0, 0, 0, 0.08));
+}
+
 /* "Before you apply" advisory — the job's lifestyle/logistical conditions.
    Warm caution tone (not danger): these don't block, they're for the user to
    weigh personally. Kept visually distinct from fit gaps so it's never read as

@@ -1234,6 +1234,7 @@ function App() {
           ? data.missingRequiredSkills as PolishedResume["missingRequiredSkills"]
           : undefined,
         suggestedChanges,
+        droppedSuggestions: (data.droppedSuggestions as PolishedResume["droppedSuggestions"]) ?? null,
         // Tailor-only: no AI review fields — useResumeAnalysis must see these
         // as undefined so the fit verdict shows "Estimated"/local, not "AI-judged".
         aiScore: undefined,

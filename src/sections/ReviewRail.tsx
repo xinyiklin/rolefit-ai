@@ -338,6 +338,12 @@ export function ReviewRail({ result, resume, actions, resumeDiff, jobConstraints
           ) : null}
         </header>
 
+        {result.droppedSuggestions && result.droppedSuggestions.unsupported > 0 ? (
+          <p className="review-rail__note review-rail__note--withheld" role="status">
+            {result.droppedSuggestions.unsupported} AI {result.droppedSuggestions.unsupported === 1 ? "edit was" : "edits were"} withheld — the wording wasn’t supported by your resume or honest context, so the anti-fabrication guardrail dropped {result.droppedSuggestions.unsupported === 1 ? "it" : "them"}. Nothing unverified reached your draft.
+          </p>
+        ) : null}
+
         {suggestions.length ? (
           suggestions.map((suggestion, index) => {
             const status = suggestionStatuses[index];

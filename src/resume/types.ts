@@ -109,6 +109,16 @@ export type TailorSuggestion = {
   risk: TailorChangeRisk;
 };
 
+// Counts of AI suggestions the server-side sanitizer withheld, grouped by reason.
+// `total` is every drop; `unsupported` is the anti-fabrication subset (ungrounded
+// or no-evidence edits). Surfaced so a caught fabrication doesn't look like a
+// clean "nothing to suggest" pass. Counts only — never suggestion text.
+export type DroppedSuggestions = {
+  total: number;
+  unsupported: number;
+  reasons: Record<string, number>;
+};
+
 export type PolishedResume = {
   polishedText: string;
   coverLetterText?: string;
@@ -126,6 +136,8 @@ export type PolishedResume = {
   changeSummary?: string[];
   missingRequiredSkills?: MissingRequiredSkill[];
   suggestedChanges?: TailorSuggestion[];
+  // Anti-fabrication catches the sanitizer withheld this run (counts only, no text).
+  droppedSuggestions?: DroppedSuggestions | null;
   trimmedBulletGroups: number;
   strictReview?: StrictReview;
   // Friendly label of the independent reviewer that ran the strict audit, set

@@ -2,7 +2,7 @@
 // reply returns (fit scores, missing-skill gaps). Kept separate from the
 // provider clients so the response-shaping rules are easy to find and test.
 
-import { findUngroundedJdTerm } from "./grounding.mjs";
+import { findUngroundedJdTerm, isTermGrounded } from "./grounding.mjs";
 
 function clampFitScore(value) {
   const n = Math.round(Number(value));
@@ -165,6 +165,37 @@ export function tailorTargetKeys(scope) {
   return [...buildTailorTargetMap(scope).keys()];
 }
 
+// Entry-scoped grounding map for the anti-misattribution gate. For each entry it
+// records the section TYPE and that entry's OWN text (title/subtitle rows + every
+// bullet) joined with the user's honest context, lowercased. STANDARD
+// project/experience targets ground against this entry-local text only — so a
+// real skill the candidate lists in Skills, or used in a DIFFERENT entry, cannot
+// be relocated onto a project that never used it (the "Python/Node adapter" on a
+// pure-Node project failure). Skills-row and summary targets deliberately skip
+// this and keep the whole-scope corpus (listing a skill you have, or summarizing
+// the whole resume, is legitimately corpus-level). Honest context is the escape
+// hatch: a tool a project genuinely used but the bullet never named can still be
+// attested there.
+function buildEntryGroundingMap(scope, honestContext) {
+  const map = new Map();
+  if (!scope || !Array.isArray(scope.sections)) return map;
+  const honest = String(honestContext ?? "");
+  for (const section of scope.sections) {
+    const sectionId = clippedString(section?.id, 120);
+    const type = section?.type === "skills" ? "skills" : section?.type === "summary" ? "summary" : "standard";
+    if (!sectionId || !Array.isArray(section?.entries)) continue;
+    for (const entry of section.entries) {
+      const entryId = clippedString(entry?.id, 120);
+      if (!entryId) continue;
+      const parts = [entry?.titleLeft, entry?.titleRight, entry?.subtitleLeft, entry?.subtitleRight];
+      if (Array.isArray(entry?.bullets)) for (const bullet of entry.bullets) parts.push(bullet?.text);
+      const text = `${parts.filter(Boolean).join("\n")}\n${honest}`.toLowerCase();
+      map.set(`${sectionId}::${entryId}`, { type, text });
+    }
+  }
+  return map;
+}
+
 // dropStats (optional) collects WHY suggestions were rejected, keyed by reason.
 // The route logs it (shape-only, no resume text) when a reply's suggestions all
 // die in sanitization — a silent all-drop looks identical to "the model had
@@ -176,18 +207,24 @@ export function sanitizeTailorSuggestions(raw, scope, dropStats, honestContext, 
   const targets = buildTailorTargetMap(scope);
   if (!targets.size) return [];
   const jobLower = String(jobText ?? "").toLowerCase();
-  // Grounding corpus for hit keywords: every current field text in the scope
-  // plus the user's honest context. A JD keyword the model writes INTO a
-  // proposedText must already exist somewhere in here — the evidence field is
-  // model prose and can launder an inferred fact ("clinics run Windows"), but
-  // it cannot conjure the term into the source text.
-  const grounding = [
+  // Whole-scope corpus grounding: every current field text in the scope + the
+  // read-only context sections + the user's honest context. Used for SKILLS-row
+  // and SUMMARY targets, where naming a skill the candidate has anywhere (or
+  // summarizing the whole resume) is honest. The evidence field is model prose
+  // and can launder an inferred fact ("clinics run Windows"); the source text
+  // cannot conjure the term.
+  const corpusGrounding = [
     // new Set collapses the field aliases (which share one target object) so a
     // skills row's text appears once, not once per alias.
     ...[...new Set(targets.values())].map((t) => t.currentText),
     contextSectionsText(scope),
     String(honestContext ?? "")
   ].join("\n").toLowerCase();
+  // Entry-scoped grounding for STANDARD project/experience targets: a tech term
+  // added to a project bullet must be evidenced by THAT entry's own text or
+  // honest context — not the skills section or a sibling entry. Closes the
+  // misattribution hole corpus grounding structurally cannot see.
+  const entryGrounding = buildEntryGroundingMap(scope, honestContext);
   const seen = new Set();
   const output = [];
   const drop = (reason) => {
@@ -246,13 +283,25 @@ export function sanitizeTailorSuggestions(raw, scope, dropStats, honestContext, 
     // clinic workstations" because clinics plausibly run Windows). Wholly-new
     // terms are the dangerous fabrication class; partial overlaps are left to
     // the prompt rules and human review.
+    // Grounding source for THIS target: STANDARD entries use their own entry text
+    // (+ honest context) so a skill from Skills or another entry cannot be
+    // misattributed here; skills/summary (and any unmapped target) use the corpus.
+    const entryInfo = entryGrounding.get(`${allowed.target.sectionId}::${allowed.target.entryId}`);
+    const grounding = entryInfo && entryInfo.type === "standard" ? entryInfo.text : corpusGrounding;
     const proposedLower = proposedText.toLowerCase();
     const ungroundedHit = hits.some((kw) => {
       const words = (kw.toLowerCase().match(/[a-z0-9.#+]{3,}/g) ?? []);
       if (!words.length) return false;
+      // Only a hit actually written INTO the proposal is a fabrication risk; a
+      // merely-reported hit is fine.
       const inProposed = words.some((w) => proposedLower.includes(w));
-      const inGrounding = words.some((w) => grounding.includes(w));
-      return inProposed && !inGrounding;
+      if (!inProposed) return false;
+      // Alias/inflection-aware grounding — the SAME discipline findUngroundedJdTerm
+      // uses below — so an entry that spells a tech in its short/alias form (k8s,
+      // postgres, ts) still grounds a hit naming the long form (Kubernetes,
+      // PostgreSQL, TypeScript). A raw substring check here false-dropped honest
+      // edits once grounding narrowed to a single entry's text.
+      return !isTermGrounded(kw, grounding);
     });
     if (ungroundedHit) { drop("ungroundedKeyword"); continue; }
     // JD-term grounding on the proposed text itself — the hits check above is
@@ -282,6 +331,32 @@ export function sanitizeTailorSuggestions(raw, scope, dropStats, honestContext, 
   return output;
 }
 
+// Drop reasons that mean a suggestion was UNSUPPORTED by the resume/evidence —
+// the anti-fabrication catches — as opposed to benign shape drops (duplicate,
+// unchanged, mis-targeted id, smuggled markup). Surfacing the unsupported count
+// lets the UI show "N edits withheld" so a caught fabrication doesn't look
+// identical to a clean "nothing to suggest" pass.
+const UNSUPPORTED_DROP_REASONS = new Set([
+  "nonExactEvidence", "missingEvidence", "ungroundedKeyword", "ungroundedJdTerm"
+]);
+
+// Summarize the sanitizer's dropStats (reason -> count) into a client-safe object
+// (counts only, never suggestion text). Returns null when nothing was dropped so
+// the UI can distinguish a caught-fabrication from a genuinely empty result.
+export function summarizeDroppedSuggestions(dropStats) {
+  if (!dropStats || typeof dropStats !== "object") return null;
+  let total = 0;
+  let unsupported = 0;
+  for (const [reason, count] of Object.entries(dropStats)) {
+    const n = Number(count) || 0;
+    if (n <= 0) continue;
+    total += n;
+    if (UNSUPPORTED_DROP_REASONS.has(reason)) unsupported += n;
+  }
+  if (total <= 0) return null;
+  return { total, unsupported, reasons: { ...dropStats } };
+}
+
 // Strict-review enums, mirrored from the strict-review prompt + the client's
 // StrictReview type in src/resume/types.ts. The client dereferences fields like
 // sr.verdict.replace(...), gap.severity.toLowerCase(), and sr.coverage[].status
@@ -301,6 +376,67 @@ function enumValue(value, allowed, fallback) {
   return fallback;
 }
 
+// Per-rewrite grounder for the strict-review "apply rewrite" path. A review
+// rewrite carries only original/rewrite text (no target id), yet the client
+// applies it one-click into the bullet whose text matches `original`
+// (ReviewRail findBullet). Corpus grounding there let the REVIEW pass re-inject
+// the exact misattribution the tailor gate now drops (e.g. "Python/Node" onto a
+// pure-Node bullet, grounded by a Skills-row "Python"). This matches the
+// rewrite's `original` back to the STANDARD entry that contains it and grounds
+// against THAT entry's own text + honest context. Falls back to the whole-corpus
+// grounding when the original matches no standard entry (a reworded quote, a
+// skills/summary target, or no scope) so behavior is never stricter than today
+// for unmatched rewrites. Returns a function (originalText) => lowercased
+// grounding string, ready for findUngroundedJdTerm's pre-lowercased contract.
+export function makeRewriteGrounder(scope, honestContext, corpusGrounding) {
+  const entryGrounding = buildEntryGroundingMap(scope, honestContext);
+  const corpusLower = String(corpusGrounding ?? "").toLowerCase();
+  // Mirror the client's ReviewRail `normalize` EXACTLY: stripInlineMarks removes
+  // <b>/<i>/<u> to "" (NOT to a space), then collapse whitespace + trim +
+  // lowercase. This must match so the server grounds against the SAME bullet the
+  // client will apply the rewrite to (its findBullet uses exact normalized bullet
+  // equality).
+  const norm = (t) => String(t ?? "").replace(/<\/?(?:b|i|u)>/gi, "").replace(/\s+/g, " ").trim().toLowerCase();
+  // Index each STANDARD-entry BULLET by its normalized text -> that entry's
+  // grounding text, matching the client's findBullet (exact normalized equality,
+  // first match). A substring match over the whole entry blob mis-routes: if
+  // entry A's bullet contains entry B's shorter bullet as a substring and A
+  // carries a JD tech B lacks, the server would ground against A while the client
+  // applies to B — landing the fabrication on B. Bullet texts that normalize
+  // identically across DIFFERENT entries are AMBIGUOUS (the client picks first; we
+  // cannot know which) and fall back to corpus rather than risk grounding a
+  // fabrication against the wrong entry.
+  const bulletGrounding = new Map();
+  const ambiguous = new Set();
+  if (scope && Array.isArray(scope.sections)) {
+    for (const section of scope.sections) {
+      const type = section?.type === "skills" ? "skills" : section?.type === "summary" ? "summary" : "standard";
+      const sectionId = clippedString(section?.id, 120);
+      if (type !== "standard" || !sectionId || !Array.isArray(section?.entries)) continue;
+      for (const entry of section.entries) {
+        const entryId = clippedString(entry?.id, 120);
+        const info = entryId ? entryGrounding.get(`${sectionId}::${entryId}`) : null;
+        if (!info || !Array.isArray(entry?.bullets)) continue;
+        for (const bullet of entry.bullets) {
+          const key = norm(bullet?.text);
+          if (!key) continue;
+          const prior = bulletGrounding.get(key);
+          if (prior && prior !== info.text) ambiguous.add(key);
+          else bulletGrounding.set(key, info.text);
+        }
+      }
+    }
+  }
+  return (originalText) => {
+    const needle = norm(originalText);
+    if (needle && !ambiguous.has(needle)) {
+      const grounding = bulletGrounding.get(needle);
+      if (grounding) return grounding;
+    }
+    return corpusLower;
+  };
+}
+
 // Validate and clamp the strict-review object before it reaches the client.
 // Returns null for non-objects so the UI simply omits the review pane. Every
 // field the client reads is forced to a safe type, enums fall back to a known
@@ -314,10 +450,13 @@ function enumValue(value, allowed, fallback) {
 // absent from the polished resume + honest context is fabrication. An ungrounded
 // rewrite is dropped entirely; an ungrounded suggestedEdit is blanked (the gap
 // itself still shows, just without the unsupported paste-ready copy).
-export function sanitizeStrictReview(raw, jobText = "", grounding = "") {
+export function sanitizeStrictReview(raw, jobText = "", grounding = "", options = {}) {
   if (!raw || typeof raw !== "object") return null;
   const jobLower = String(jobText ?? "").toLowerCase();
   const groundingLower = String(grounding ?? "").toLowerCase();
+  // Optional entry-scoped grounder for one-click rewrites (see makeRewriteGrounder);
+  // absent (2-3 arg callers, e.g. probes) -> corpus grounding, unchanged behavior.
+  const rewriteGrounder = typeof options.rewriteGrounder === "function" ? options.rewriteGrounder : null;
 
   const coverage = (Array.isArray(raw.coverage) ? raw.coverage : [])
     .map((row) => {
@@ -372,7 +511,11 @@ export function sanitizeStrictReview(raw, jobText = "", grounding = "") {
       if (containsStructuredMarkup(item.rewrite)) return null;
       // Same JD-term grounding the tailor path enforces: a rewrite is applied
       // directly into a bullet, so an ungrounded JD skill in it is fabrication.
-      if (findUngroundedJdTerm(rewrite, jobLower, groundingLower)) return null;
+      // Ground against the STANDARD entry this rewrite targets (matched via its
+      // `original`) so the review path can't reintroduce a misattribution the
+      // tailor gate drops; corpus fallback for unmatched originals.
+      const rewriteGrounding = rewriteGrounder ? rewriteGrounder(original) : groundingLower;
+      if (findUngroundedJdTerm(rewrite, jobLower, rewriteGrounding)) return null;
       const hits = Array.isArray(item.hits)
         ? item.hits.map((hit) => clippedString(hit, 80)).filter(Boolean).slice(0, 6)
         : [];
@@ -650,6 +793,22 @@ export function coverageHasEligibilityBlocker(rawCoverage) {
   });
 }
 
+// The score is derived from requirementCoverage, but the HIGH-gap caps read the
+// SEPARATE strictReview.gaps array — so a model can mark required rows "missing"
+// in coverage (correctly lowering the score) while omitting them from gaps to
+// escape the cap ladder, keeping a REASONABLE/STRONG band it shouldn't. This
+// counts missing required requirements straight from the coverage table
+// (critical/high importance, non-preferred bucket, still missing after tailoring)
+// so applyGapCapsAndVerdict can cap on whichever source reports more. Hard
+// eligibility gates are handled separately by coverageHasEligibilityBlocker.
+export function missingRequiredFromCoverage(rawCoverage) {
+  return sanitizeRequirementCoverage(rawCoverage).filter((row) =>
+    row.bucket !== "preferred" &&
+    (row.importance === "critical" || row.importance === "high") &&
+    row.tailoredStatus === "missing"
+  ).length;
+}
+
 // Deterministic caps + verdict from the sanitized gaps the reviewer itself
 // reported: a BLOCKER gap (clearance/license/degree-class) caps both scores in
 // the DON'T APPLY band; a HIGH gap (missing required skill) caps below 70. The
@@ -661,23 +820,40 @@ export function coverageHasEligibilityBlocker(rawCoverage) {
 // coverageHasEligibilityBlocker: when true, cap=45 + DON'T APPLY fire exactly
 // like a BLOCKER gap, so an eligibility gate reported only as a coverage row
 // still governs fit.
-export function applyGapCapsAndVerdict(aiScore, strictReview, hasCoverageBlocker = false) {
-  if (!aiScore) return { aiScore, verdict: strictReview?.verdict ?? null };
+export function applyGapCapsAndVerdict(aiScore, strictReview, hasCoverageBlocker = false, coverageMissingCount = 0) {
   const gaps = Array.isArray(strictReview?.gaps) ? strictReview.gaps : [];
+  // A BLOCKER gap OR a synthetic eligibility blocker from the coverage table
+  // (missing critical/high clearance/work-auth/license/cert/degree row) forces
+  // the DON'T APPLY band, regardless of HIGH-gap count OR score availability.
+  const hasBlocker = hasCoverageBlocker || gaps.some((gap) => gap.severity === "BLOCKER");
+  if (!aiScore) {
+    // No usable numeric score (the client falls back to the local engine score),
+    // but a hard eligibility blocker must STILL force DON'T APPLY — otherwise a
+    // sparse review (a clearance/work-auth/license/cert/degree gate reported with
+    // too few coverage rows to score, and no numeric buckets) would inherit the
+    // model's optimistic verdict for a role the candidate is formally ineligible
+    // for. With no blocker, pass the sanitized verdict through unchanged.
+    return { aiScore, verdict: hasBlocker ? "DON'T APPLY" : (strictReview?.verdict ?? null) };
+  }
   // Graduated HIGH-gap cap. A single missing required skill is near-universal on
   // an honest pass against an 8-15 skill JD; the old binary "any HIGH -> 69"
   // pinned otherwise-strong matches to the STRETCH ceiling, which is why almost
   // everything read STRETCH. Now the cap scales with how many required skills are
   // genuinely missing. A BLOCKER still forces DON'T APPLY (unchanged).
-  const highGaps = gaps.filter((gap) => gap.severity === "HIGH").length;
+  // Reconcile the two model arrays: take the STRONGER missing-required signal —
+  // a missing critical/high requirementCoverage row is at least as severe as a
+  // HIGH gap — so the fit number can't be gamed by under-reporting gaps. Honest
+  // replies (gaps and coverage agree) are unchanged; max() only bites when
+  // coverage reports MORE missing than the gaps array did.
+  const highGaps = Math.max(
+    gaps.filter((gap) => gap.severity === "HIGH").length,
+    coverageMissingCount
+  );
   let cap = 100;
   if (highGaps >= 1) cap = 79; // 1 missing required skill: top of REASONABLE FIT
   if (highGaps >= 2) cap = 69; // 2: STRETCH ceiling (the old flat behavior)
   if (highGaps >= 3) cap = 60; // 3+: solidly STRETCH
-  // A BLOCKER gap OR a synthetic eligibility blocker from the coverage table
-  // (missing critical/high clearance/work-auth/license/cert/degree row) forces
-  // the DON'T APPLY band, regardless of HIGH-gap count.
-  if (hasCoverageBlocker || gaps.some((gap) => gap.severity === "BLOCKER")) cap = 45;
+  if (hasBlocker) cap = 45;
   const base = Math.min(aiScore.base, cap);
   const tailored = Math.min(aiScore.tailored, cap);
   if (cap < 100 && (base !== aiScore.base || tailored !== aiScore.tailored)) {
