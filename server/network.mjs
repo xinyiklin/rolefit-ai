@@ -28,19 +28,77 @@ function isPrivateIPv4(ip) {
   return false;
 }
 
-// Returns true for IPv6 loopback, ULA (fc00::/7), link-local (fe80::/10),
-// unspecified, or IPv4-mapped addresses that map to a private IPv4.
+// Expand an IPv6 literal to its eight 16-bit hextets, or null if it is not a
+// syntactically valid IPv6 address. Handles "::" zero-compression, an embedded
+// dotted-IPv4 tail (::ffff:127.0.0.1), and a %zone suffix. Normalizing FIRST is
+// what closes the bypass: a textual check that only recognized one form (e.g.
+// dotted ::ffff:127.0.0.1) missed the equivalent hex form ::ffff:7f00:1 that the
+// URL parser produces, and the fully-spelled 0:0:0:0:0:ffff:7f00:1.
+function expandIPv6(value) {
+  let host = String(value).toLowerCase().replace(/^\[|\]$/g, "");
+  const pct = host.indexOf("%");
+  if (pct >= 0) host = host.slice(0, pct); // strip zone/scope id
+  if (!host.includes(":")) return null;
+
+  // Fold a trailing dotted-IPv4 tail into two hextets so the rest is pure hex.
+  const v4 = host.match(/(?:^|:)((?:\d{1,3}\.){3}\d{1,3})$/);
+  if (v4) {
+    const o = v4[1].split(".").map(Number);
+    if (o.some((n) => !Number.isInteger(n) || n > 255)) return null;
+    const hi = ((o[0] << 8) | o[1]).toString(16);
+    const lo = ((o[2] << 8) | o[3]).toString(16);
+    host = host.slice(0, host.length - v4[1].length) + `${hi}:${lo}`;
+  }
+
+  const halves = host.split("::");
+  if (halves.length > 2) return null; // at most one "::" run
+  const toHextets = (segment) => {
+    if (segment === "") return [];
+    const out = [];
+    for (const group of segment.split(":")) {
+      if (!/^[0-9a-f]{1,4}$/.test(group)) return null;
+      out.push(Number.parseInt(group, 16));
+    }
+    return out;
+  };
+  const head = toHextets(halves[0]);
+  const tail = halves.length === 2 ? toHextets(halves[1]) : [];
+  if (head === null || tail === null) return null;
+
+  let hextets;
+  if (halves.length === 2) {
+    const fill = 8 - head.length - tail.length;
+    if (fill < 1) return null; // "::" must stand for at least one zero group
+    hextets = [...head, ...new Array(fill).fill(0), ...tail];
+  } else {
+    hextets = head;
+  }
+  return hextets.length === 8 ? hextets : null;
+}
+
+// Decode two hextets into a dotted-IPv4 string (for the embedded-IPv4 IPv6 forms).
+const embeddedIPv4 = (hi, lo) => `${hi >> 8}.${hi & 0xff}.${lo >> 8}.${lo & 0xff}`;
+
+// Returns true for IPv6 loopback, unspecified, ULA (fc00::/7), link-local
+// (fe80::/10), or any form that embeds a private IPv4 — IPv4-mapped
+// (::ffff:a.b.c.d), IPv4-compatible (::a.b.c.d), 6to4 (2002::/16), or Teredo
+// (2001:0::/32). Works off the fully-expanded address so it can't be evaded by
+// choosing a different textual spelling of the same address.
 function isPrivateIPv6(ip) {
-  const host = ip.toLowerCase().replace(/^\[|\]$/g, "");
-  if (host === "::1" || host === "::") return true;
-  const mapped = host.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
-  if (mapped) return isPrivateIPv4(mapped[1]);
-  const head = host.split(":")[0];
-  if (!head) return false;
-  const block = Number.parseInt(head, 16);
-  if (Number.isNaN(block)) return false;
-  if ((block & 0xfe00) === 0xfc00) return true; // fc00::/7 (ULA)
-  if ((block & 0xffc0) === 0xfe80) return true; // fe80::/10 (link-local)
+  const h = expandIPv6(ip);
+  if (!h) return false;
+  if (h.every((x) => x === 0)) return true; // :: (unspecified)
+  if (h.slice(0, 7).every((x) => x === 0) && h[7] === 1) return true; // ::1 (loopback)
+  // ::ffff:a.b.c.d (mapped) and ::a.b.c.d (compatible): judge the embedded IPv4.
+  if (h.slice(0, 5).every((x) => x === 0) && (h[5] === 0xffff || h[5] === 0)) {
+    return isPrivateIPv4(embeddedIPv4(h[6], h[7]));
+  }
+  if (h[0] === 0x2002) return isPrivateIPv4(embeddedIPv4(h[1], h[2])); // 6to4 gateway IPv4
+  if (h[0] === 0x2001 && h[1] === 0x0000) {
+    return isPrivateIPv4(embeddedIPv4(h[6] ^ 0xffff, h[7] ^ 0xffff)); // Teredo client IPv4 (XOR-obfuscated)
+  }
+  if ((h[0] & 0xfe00) === 0xfc00) return true; // fc00::/7 (ULA)
+  if ((h[0] & 0xffc0) === 0xfe80) return true; // fe80::/10 (link-local)
   return false;
 }
 

@@ -282,7 +282,9 @@ Use `.env` for provider keys and overrides:
 `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`,
 `OPENROUTER_API_KEY`, `GROQ_API_KEY`, `TOGETHER_API_KEY`, `MISTRAL_API_KEY`,
 `AI_API_KEY`, `AI_PROVIDER`, `AI_BASE_URL`, `AI_MODEL`, `OPENAI_MODEL`, and
-`PORT`.
+`PORT`. Optional security override: `EXTENSION_ALLOWED_ORIGINS` (comma-separated
+exact extension origins) hard-restricts the browser-extension routes to those
+origins; unset = any extension-scheme origin is accepted.
 
 ---
 
