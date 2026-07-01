@@ -22,7 +22,8 @@
   "permissions": [
     "activeTab",
     "scripting",
-    "storage"
+    "storage",
+    "cookies"
   ],
   "host_permissions": [
     "http://localhost:5181/*"

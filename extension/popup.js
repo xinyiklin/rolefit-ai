@@ -39,11 +39,17 @@ function verdictLabel(score) {
   return "Don't apply";
 }
 
-function formatMonth(iso) {
+// `appliedAt` is a calendar day (stored as YYYY-MM-DD). Parse the date parts as
+// a LOCAL date rather than `new Date(iso)`, which reads a bare date as UTC
+// midnight and would render the day before in US timezones.
+function formatDate(iso) {
   if (!iso) return '';
-  const d = new Date(iso);
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
+  const d = m
+    ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]))
+    : new Date(iso);
   if (Number.isNaN(d.getTime())) return '';
-  return d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
 function randomClaimToken() {
@@ -64,7 +70,7 @@ function statusInfo(app) {
   const join = (...parts) => parts.filter(Boolean).join('  ·  ');
   switch (app.status) {
     case 'applied':
-      return { tone: 'applied', icon: '✓', label: 'Already applied', sub: join(formatMonth(app.appliedAt), fit) };
+      return { tone: 'applied', icon: '✓', label: 'Already applied', sub: join(formatDate(app.appliedAt), fit) };
     case 'interviewing':
       return { tone: 'applied', icon: '◆', label: 'In interviews', sub: fit };
     case 'offer':
@@ -72,7 +78,7 @@ function statusInfo(app) {
     case 'interested':
       return { tone: 'tracking', icon: '•', label: 'Tracking — not yet applied', sub: '' };
     case 'rejected':
-      return { tone: 'rejected', icon: '–', label: 'Not selected here', sub: formatMonth(app.appliedAt) };
+      return { tone: 'rejected', icon: '–', label: 'Not selected here', sub: formatDate(app.appliedAt) };
     case 'withdrawn':
       return { tone: 'idle', icon: '–', label: 'Withdrew application', sub: '' };
     default:
@@ -245,7 +251,24 @@ function extractPageData() {
 
 // ── Import handler ─────────────────────────────────────────────────────────
 
-async function handleImport(btn, pageData, autoTailor) {
+// Open the fresh RoleFit tab in the same Firefox Multi-Account Container as the
+// job posting it was imported from. Only Firefox tabs carry a `cookieStoreId`;
+// on Chrome it's undefined, so this is a no-op there. If the browser rejects the
+// container (unsupported, or a private/uncreatable store), fall back to a plain
+// tab so the import always opens.
+async function createImportTab(url, cookieStoreId) {
+  if (cookieStoreId) {
+    try {
+      await chrome.tabs.create({ url, cookieStoreId });
+      return;
+    } catch {
+      // Container not usable here — fall through to a container-less tab.
+    }
+  }
+  await chrome.tabs.create({ url });
+}
+
+async function handleImport(btn, pageData, autoTailor, cookieStoreId) {
   btn.disabled = true;
   // The import returns immediately; the server distills in the background and the
   // app shows "Distilling…" as it polls for the finished brief. So this stays fast.
@@ -275,9 +298,10 @@ async function handleImport(btn, pageData, autoTailor) {
   // The import already reached the server (inbox populated, background distill
   // kicked off). Open a fresh RoleFit tab with a claim token so this posting
   // lands in a new independent tailoring session instead of replacing an
-  // in-progress app tab.
+  // in-progress app tab. Match the source tab's container so the session opens
+  // in the same Firefox Multi-Account Container the job was viewed in.
   try {
-    await chrome.tabs.create({ url: `${API_BASE}/?extensionImport=${encodeURIComponent(claimToken)}` });
+    await createImportTab(`${API_BASE}/?extensionImport=${encodeURIComponent(claimToken)}`, cookieStoreId);
     btn.textContent = 'Imported ✓';
   } catch {
     // The capture succeeded; only the redirect/focus failed.
@@ -354,7 +378,7 @@ async function main() {
     return;
   }
 
-  loadingEl.replaceWith(renderResult(data, pageData, (btn, autoTailor) => handleImport(btn, pageData, autoTailor)));
+  loadingEl.replaceWith(renderResult(data, pageData, (btn, autoTailor) => handleImport(btn, pageData, autoTailor, tab.cookieStoreId)));
 }
 
 main().catch((err) => {

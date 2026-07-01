@@ -5,8 +5,11 @@ check to any job posting. Click the toolbar icon on a posting to see a local
 fit-score estimate, matched vs missing keywords, whether you've already tracked
 or applied to that exact posting, and a one-click import into a fresh app tab.
 
-It talks **only** to your local RoleFit AI server at `http://localhost:5181` —
-nothing leaves your machine. Start the app (`npm run dev`) before using it.
+It talks **only** to your local RoleFit AI server at `http://localhost:5181`.
+The local server may then run the configured AI distiller for imports, so posting
+text can go through your selected CLI/API provider unless you use a local model
+or fall back to the deterministic parser. Start the app (`npm run dev`) before
+using it.
 
 ## Install (unpacked)
 
@@ -19,7 +22,7 @@ nothing leaves your machine. Start the app (`npm run dev`) before using it.
 
 | File | Role |
 | --- | --- |
-| `manifest.json` | MV3 manifest — `activeTab` + `scripting` + `storage`, host access to `localhost:5181` only |
+| `manifest.json` | MV3 manifest — `activeTab` + `scripting` + `storage` + `cookies` (the last so imports can open in the source tab's Firefox container), host access to `localhost:5181` only |
 | `popup.html` / `popup.css` / `popup.js` | the popup UI (vanilla ESM, no build step) |
 | `icons/icon.svg` | toolbar icon |
 
