@@ -181,16 +181,28 @@
   text-transform: lowercase;
 }
 
-.rec-pill--apply {
+.rec-pill--ready {
   background: var(--accent-soft);
   color: var(--accent-deep);
   border: 1px solid var(--accent-veil);
 }
 
-.rec-pill--skip {
+.rec-pill--edits {
   background: var(--warm-veil);
   color: var(--warm);
   border: 1px solid var(--warm-soft);
+}
+
+.rec-pill--evidence {
+  background: var(--card-soft);
+  color: var(--ink-muted);
+  border: 1px solid var(--hairline-strong);
+}
+
+.rec-pill--stop {
+  background: var(--danger-soft);
+  color: var(--danger);
+  border: 1px solid var(--danger-line);
 }
 
 /* Gap cards */

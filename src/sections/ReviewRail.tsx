@@ -69,6 +69,12 @@ type SuggestionStatus =
   | { kind: "discarded" }
   | { kind: "stale"; currentText: string };
 
+type ReviewActionStatus = {
+  label: string;
+  tone: "ready" | "edits" | "evidence" | "stop";
+  title: string;
+};
+
 function findEntry(resume: ResumeData | null, sectionId: string, entryId?: string): ResumeEntry | null {
   if (!resume || !entryId) return null;
   const section = resume.sections.find((item) => item.id === sectionId);
@@ -101,6 +107,49 @@ function applySuggestionTarget(actions: ResumeEditorActions, suggestion: TailorS
   actions.updateEntry(sectionId, entryId, field, value, true);
 }
 
+function reviewActionStatus(result: PolishedResume, pendingEdits: number): ReviewActionStatus | null {
+  const sr = result.strictReview;
+  if (!sr) return null;
+  if (sr.verdict === "DON'T APPLY") {
+    return {
+      label: "do not apply",
+      tone: "stop",
+      title: "The reviewer found a hard mismatch or blocker for this role."
+    };
+  }
+
+  const missingEvidence =
+    sr.gaps.some((gap) => !gap.canHonestlyAdd && (gap.severity === "BLOCKER" || gap.severity === "HIGH")) ||
+    Boolean(result.missingRequiredSkills?.some((item) => !item.canHonestlyAdd));
+  if (missingEvidence) {
+    return {
+      label: "missing evidence",
+      tone: "evidence",
+      title: "The reviewer found requirements the AI cannot safely add without more honest context."
+    };
+  }
+
+  // pendingEdits blends Tailor + Reviewer pending cards, so the copy stays neutral
+  // ("edits", not "reviewer edits", which would misdirect when only Tailor edits
+  // are pending). topEdits is advisory prose shown in its own section — it must
+  // NOT drive an "edits ready" pill when nothing in the rail is actually applyable.
+  if (!sr.recommendation.applyAsIs || pendingEdits > 0) {
+    return {
+      label: pendingEdits > 0 ? "edits ready" : "edit first",
+      tone: "edits",
+      title: pendingEdits > 0
+        ? "Apply the pending edits in the rail before exporting."
+        : "The reviewer recommends another pass before applying."
+    };
+  }
+
+  return {
+    label: "ready to apply",
+    tone: "ready",
+    title: sr.recommendation.reason || "The tailored draft passed the recruiter-style review."
+  };
+}
+
 // The recruiter review beside the editor: the verdict plus each suggested
 // bullet rewrite as an actionable card — accept it, modify it before applying,
 // undo it, or apply everything that still matches. A card goes stale when its
@@ -114,14 +163,20 @@ export function ReviewRail({ result, resume, actions, resumeDiff, jobConstraints
   const [discardedSuggestions, setDiscardedSuggestions] = useState<Record<string, boolean>>({});
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
-  const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
-  const [copyFailedIndex, setCopyFailedIndex] = useState<number | null>(null);
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const [copyFailedKey, setCopyFailedKey] = useState<string | null>(null);
 
   if (!sr && !suggestions.length) return null;
-  const rewrites = suggestions.length ? [] : sr?.rewrites ?? [];
+  const rewrites = sr?.rewrites ?? [];
 
   function suggestionKey(suggestion: TailorSuggestion, index: number) {
-    return suggestion.id || `${suggestion.target.sectionId}:${suggestion.target.entryId ?? ""}:${suggestion.target.bulletId ?? ""}:${suggestion.target.field}:${index}`;
+    // Namespace the suggestion keyspace: suggestion.id is model-supplied and only
+    // length-clipped server-side, so it could equal a reviewer rewrite's
+    // "rewrite-<n>" key. Both sections share appliedTexts/editingKey/copiedKey, so
+    // a bare collision would cross-wire their apply/edit/copy state. The `sugg:`
+    // prefix keeps the two keyspaces disjoint.
+    const raw = suggestion.id || `${suggestion.target.sectionId}:${suggestion.target.entryId ?? ""}:${suggestion.target.bulletId ?? ""}:${suggestion.target.field}:${index}`;
+    return `sugg:${raw}`;
   }
 
   function suggestionStatus(suggestion: TailorSuggestion, index: number): SuggestionStatus {
@@ -207,7 +262,8 @@ export function ReviewRail({ result, resume, actions, resumeDiff, jobConstraints
   const statuses = rewrites.map((rewrite, index) => statusFor(rewrite, index));
   const suggestionStatuses = suggestions.map((suggestion, index) => suggestionStatus(suggestion, index));
   const pendingSuggestionCount = suggestionStatuses.filter((status) => status.kind === "pending").length;
-  const pendingCount = suggestions.length ? pendingSuggestionCount : statuses.filter((status) => status.kind === "pending").length;
+  const pendingRewriteCount = statuses.filter((status) => status.kind === "pending").length;
+  const actionStatus = reviewActionStatus(result, pendingSuggestionCount + pendingRewriteCount);
 
   function applyEdit(index: number, text: string) {
     const status = statuses[index];
@@ -232,13 +288,13 @@ export function ReviewRail({ result, resume, actions, resumeDiff, jobConstraints
     });
   }
 
-  function applyAll() {
-    if (suggestions.length) {
-      suggestions.forEach((suggestion, index) => {
-        if (suggestionStatus(suggestion, index).kind === "pending") applySuggestion(index, suggestion.proposedText);
-      });
-      return;
-    }
+  function applyAllSuggestions() {
+    suggestions.forEach((suggestion, index) => {
+      if (suggestionStatus(suggestion, index).kind === "pending") applySuggestion(index, suggestion.proposedText);
+    });
+  }
+
+  function applyAllRewrites() {
     // Recompute targets per apply: every pending rewrite points at a distinct
     // bullet, so batching the dispatches is safe.
     rewrites.forEach((rewrite, index) => {
@@ -246,17 +302,16 @@ export function ReviewRail({ result, resume, actions, resumeDiff, jobConstraints
     });
   }
 
-  async function copySuggestion(index: number) {
+  async function copyText(key: string, text: string) {
     try {
-      const text = suggestions[index]?.proposedText ?? rewrites[index]?.rewrite ?? "";
       await navigator.clipboard.writeText(text);
-      setCopiedIndex(index);
-      window.setTimeout(() => setCopiedIndex((current) => (current === index ? null : current)), 1500);
+      setCopiedKey(key);
+      window.setTimeout(() => setCopiedKey((current) => (current === key ? null : current)), 1500);
     } catch {
       // Clipboard unavailable — flag the failure so the user knows nothing was
       // copied (the suggestion text stays visible on the card to copy manually).
-      setCopyFailedIndex(index);
-      window.setTimeout(() => setCopyFailedIndex((current) => (current === index ? null : current)), 2500);
+      setCopyFailedKey(key);
+      window.setTimeout(() => setCopyFailedKey((current) => (current === key ? null : current)), 2500);
     }
   }
 
@@ -273,12 +328,11 @@ export function ReviewRail({ result, resume, actions, resumeDiff, jobConstraints
             <strong className={`verdict-pill verdict-pill--${sr.verdict.replace(/['\s]+/g, "-").toLowerCase()}`}>
               {sr.verdict}
             </strong>
-            <span
-              className={`rec-pill ${sr.recommendation.applyAsIs ? "rec-pill--apply" : "rec-pill--skip"}`}
-              title={sr.recommendation.reason || undefined}
-            >
-              {sr.recommendation.applyAsIs ? "Apply as-is" : "Edit first"}
-            </span>
+            {actionStatus ? (
+              <span className={`rec-pill rec-pill--${actionStatus.tone}`} title={actionStatus.title}>
+                {actionStatus.label}
+              </span>
+            ) : null}
           </div>
           <p className="review-rail__reason">{sr.verdictReason}</p>
         </>
@@ -324,28 +378,30 @@ export function ReviewRail({ result, resume, actions, resumeDiff, jobConstraints
         </section>
       ) : null}
 
-      <section className="review-rail__section" aria-label="Suggested edits">
-        <header className="review-rail__head">
-          <h3>
-            Suggested edits
-            {suggestions.length ? ` · ${suggestions.length}` : rewrites.length ? ` · ${rewrites.length}` : ""}
-          </h3>
-          {pendingCount > 1 ? (
-            <button type="button" className="secondary-button is-compact" onClick={applyAll}>
-              <CheckCheck size={12} aria-hidden="true" />
-              Apply all ({pendingCount})
-            </button>
-          ) : null}
-        </header>
+      {/* Hoisted above both edit sections: the server sets unsupported > 0 exactly
+          in the ALL-dropped case (suggestions.length === 0), which is the one
+          scenario this note exists for — an all-drop must not look identical to a
+          clean "nothing to suggest" pass. Gating it on suggestions.length hid it
+          precisely then. */}
+      {result.droppedSuggestions && result.droppedSuggestions.unsupported > 0 ? (
+        <p className="review-rail__note review-rail__note--withheld" role="status">
+          {result.droppedSuggestions.unsupported} AI {result.droppedSuggestions.unsupported === 1 ? "edit was" : "edits were"} withheld — the wording wasn’t supported by your resume or honest context, so the anti-fabrication guardrail dropped {result.droppedSuggestions.unsupported === 1 ? "it" : "them"}. Nothing unverified reached your draft.
+        </p>
+      ) : null}
 
-        {result.droppedSuggestions && result.droppedSuggestions.unsupported > 0 ? (
-          <p className="review-rail__note review-rail__note--withheld" role="status">
-            {result.droppedSuggestions.unsupported} AI {result.droppedSuggestions.unsupported === 1 ? "edit was" : "edits were"} withheld — the wording wasn’t supported by your resume or honest context, so the anti-fabrication guardrail dropped {result.droppedSuggestions.unsupported === 1 ? "it" : "them"}. Nothing unverified reached your draft.
-          </p>
-        ) : null}
+      {suggestions.length ? (
+        <section className="review-rail__section" aria-label="Tailor edits">
+          <header className="review-rail__head">
+            <h3>Tailor edits · {suggestions.length}</h3>
+            {pendingSuggestionCount > 1 ? (
+              <button type="button" className="secondary-button is-compact" onClick={applyAllSuggestions}>
+                <CheckCheck size={12} aria-hidden="true" />
+                Apply all ({pendingSuggestionCount})
+              </button>
+            ) : null}
+          </header>
 
-        {suggestions.length ? (
-          suggestions.map((suggestion, index) => {
+          {suggestions.map((suggestion, index) => {
             const status = suggestionStatuses[index];
             const key = suggestionKey(suggestion, index);
             const isEditing = editingKey === key;
@@ -465,131 +521,150 @@ export function ReviewRail({ result, resume, actions, resumeDiff, jobConstraints
                       <button
                         type="button"
                         className="ghost-button is-compact"
-                        onClick={() => copySuggestion(index)}
+                        onClick={() => copyText(key, suggestion.proposedText)}
                       >
                         <Clipboard size={12} aria-hidden="true" />
-                        {copiedIndex === index ? "Copied" : copyFailedIndex === index ? "Copy failed" : "Copy"}
+                        {copiedKey === key ? "Copied" : copyFailedKey === key ? "Copy failed" : "Copy"}
                       </button>
                     </>
                   ) : null}
                 </footer>
               </article>
             );
-          })
-        ) : rewrites.length === 0 ? (
-          <p className="review-rail__empty">No bullet rewrites suggested for this draft.</p>
-        ) : (
-          rewrites.map((rewrite, index) => {
-            const status = statuses[index];
-            const rewriteKey = `rewrite-${index}`;
-            const isEditing = editingKey === rewriteKey;
-            return (
-              <article className={`rr-edit rr-edit--${status.kind}`} key={index}>
-                {status.kind === "stale" ? (
-                  <span className="rr-edit__stale-badge" aria-label="Suggestion is stale">stale</span>
-                ) : null}
-                <p className="rr-edit__original">{renderInlineMarks(rewrite.original)}</p>
-                {isEditing ? (
-                  <textarea
-                    className="textarea rr-edit__draft"
-                    value={draft}
-                    rows={3}
-                    aria-label="Modify the suggested rewrite"
-                    onChange={(event) => setDraft(event.target.value)}
-                  />
-                ) : (
-                  <p className="rr-edit__rewrite">
-                    {renderInlineMarks(status.kind === "applied" ? status.appliedText : rewrite.rewrite)}
-                  </p>
-                )}
-                {rewrite.hits.length && !isEditing ? (
-                  <div className="mini-chip-list">
-                    {rewrite.hits.map((hit) => (
-                      <span className="mini-chip mini-chip--covered" key={hit}>
-                        ✓ {hit}
-                      </span>
-                    ))}
-                  </div>
-                ) : null}
-                <footer className="rr-edit__actions">
-                  {status.kind === "pending" && !isEditing ? (
-                    <>
-                      <button
-                        type="button"
-                        className="secondary-button is-compact"
-                        onClick={() => applyEdit(index, rewrite.rewrite)}
-                      >
-                        <Check size={12} aria-hidden="true" />
-                        Accept
-                      </button>
-                      <button
-                        type="button"
-                        className="ghost-button is-compact"
-                        onClick={() => {
-                          setEditingKey(rewriteKey);
-                          setDraft(rewrite.rewrite);
-                        }}
-                      >
-                        <Pencil size={12} aria-hidden="true" />
-                        Edit
-                      </button>
-                    </>
-                  ) : null}
-                  {isEditing ? (
-                    <>
-                      <button
-                        type="button"
-                        className="secondary-button is-compact"
-                        disabled={!draft.trim()}
-                        onClick={() => applyEdit(index, draft)}
-                      >
-                        <Check size={12} aria-hidden="true" />
-                        Apply
-                      </button>
-                      <button
-                        type="button"
-                        className="ghost-button is-compact"
-                        onClick={() => setEditingKey(null)}
-                      >
-                        <X size={12} aria-hidden="true" />
-                        Cancel
-                      </button>
-                    </>
-                  ) : null}
-                  {status.kind === "applied" ? (
-                    <>
-                      <span className="rr-edit__state rr-edit__state--applied">
-                        <Check size={12} aria-hidden="true" />
-                        Applied
-                      </span>
-                      <button type="button" className="ghost-button is-compact" onClick={() => undoEdit(index)}>
-                        <RotateCcw size={12} aria-hidden="true" />
-                        Undo
-                      </button>
-                    </>
-                  ) : null}
+          })}
+        </section>
+      ) : null}
+
+      {sr ? (
+        <section className="review-rail__section" aria-label="Reviewer edits">
+          <header className="review-rail__head">
+            <h3>
+              Reviewer edits
+              {rewrites.length ? ` · ${rewrites.length}` : ""}
+            </h3>
+            {pendingRewriteCount > 1 ? (
+              <button type="button" className="secondary-button is-compact" onClick={applyAllRewrites}>
+                <CheckCheck size={12} aria-hidden="true" />
+                Apply all ({pendingRewriteCount})
+              </button>
+            ) : null}
+          </header>
+
+          {rewrites.length === 0 ? (
+            <p className="review-rail__empty">No second-pass rewrites suggested for this draft.</p>
+          ) : (
+            rewrites.map((rewrite, index) => {
+              const status = statuses[index];
+              const rewriteKey = `rewrite-${index}`;
+              const isEditing = editingKey === rewriteKey;
+              return (
+                <article className={`rr-edit rr-edit--${status.kind}`} key={index}>
                   {status.kind === "stale" ? (
-                    <>
-                      <span className="rr-edit__state rr-edit__state--stale">
-                        <AlertCircle size={12} aria-hidden="true" />
-                        Bullet changed — apply manually
-                      </span>
-                      <button
-                        type="button"
-                        className="ghost-button is-compact"
-                        onClick={() => copySuggestion(index)}
-                      >
-                        <Clipboard size={12} aria-hidden="true" />
-                        {copiedIndex === index ? "Copied" : copyFailedIndex === index ? "Copy failed" : "Copy"}
-                      </button>
-                    </>
+                    <span className="rr-edit__stale-badge" aria-label="Suggestion is stale">stale</span>
                   ) : null}
-                </footer>
-              </article>
-            );
-          })
-        )}
-      </section>
+                  <p className="rr-edit__original">{renderInlineMarks(rewrite.original)}</p>
+                  {isEditing ? (
+                    <textarea
+                      className="textarea rr-edit__draft"
+                      value={draft}
+                      rows={3}
+                      aria-label="Modify the suggested rewrite"
+                      onChange={(event) => setDraft(event.target.value)}
+                    />
+                  ) : (
+                    <p className="rr-edit__rewrite">
+                      {renderInlineMarks(status.kind === "applied" ? status.appliedText : rewrite.rewrite)}
+                    </p>
+                  )}
+                  {rewrite.hits.length && !isEditing ? (
+                    <div className="mini-chip-list">
+                      {rewrite.hits.map((hit) => (
+                        <span className="mini-chip mini-chip--covered" key={hit}>
+                          ✓ {hit}
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
+                  <footer className="rr-edit__actions">
+                    {status.kind === "pending" && !isEditing ? (
+                      <>
+                        <button
+                          type="button"
+                          className="secondary-button is-compact"
+                          onClick={() => applyEdit(index, rewrite.rewrite)}
+                        >
+                          <Check size={12} aria-hidden="true" />
+                          Accept
+                        </button>
+                        <button
+                          type="button"
+                          className="ghost-button is-compact"
+                          onClick={() => {
+                            setEditingKey(rewriteKey);
+                            setDraft(rewrite.rewrite);
+                          }}
+                        >
+                          <Pencil size={12} aria-hidden="true" />
+                          Edit
+                        </button>
+                      </>
+                    ) : null}
+                    {isEditing ? (
+                      <>
+                        <button
+                          type="button"
+                          className="secondary-button is-compact"
+                          disabled={!draft.trim()}
+                          onClick={() => applyEdit(index, draft)}
+                        >
+                          <Check size={12} aria-hidden="true" />
+                          Apply
+                        </button>
+                        <button
+                          type="button"
+                          className="ghost-button is-compact"
+                          onClick={() => setEditingKey(null)}
+                        >
+                          <X size={12} aria-hidden="true" />
+                          Cancel
+                        </button>
+                      </>
+                    ) : null}
+                    {status.kind === "applied" ? (
+                      <>
+                        <span className="rr-edit__state rr-edit__state--applied">
+                          <Check size={12} aria-hidden="true" />
+                          Applied
+                        </span>
+                        <button type="button" className="ghost-button is-compact" onClick={() => undoEdit(index)}>
+                          <RotateCcw size={12} aria-hidden="true" />
+                          Undo
+                        </button>
+                      </>
+                    ) : null}
+                    {status.kind === "stale" ? (
+                      <>
+                        <span className="rr-edit__state rr-edit__state--stale">
+                          <AlertCircle size={12} aria-hidden="true" />
+                          Bullet changed — apply manually
+                        </span>
+                        <button
+                          type="button"
+                          className="ghost-button is-compact"
+                          onClick={() => copyText(rewriteKey, rewrite.rewrite)}
+                        >
+                          <Clipboard size={12} aria-hidden="true" />
+                          {copiedKey === rewriteKey ? "Copied" : copyFailedKey === rewriteKey ? "Copy failed" : "Copy"}
+                        </button>
+                      </>
+                    ) : null}
+                  </footer>
+                </article>
+              );
+            })
+          )}
+        </section>
+      ) : null}
 
       {sr?.gaps.length ? (
         <section className="review-rail__section" aria-label="Gaps">
