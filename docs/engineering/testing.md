@@ -2,8 +2,29 @@
 
 Role-Fit AI testing should prove the changed behavior, protect API key
 isolation, and avoid wasting time on broad checks when a targeted one
-gives stronger feedback. There is no automated test suite today; the
-gates below are the lightweight checks the project relies on.
+gives stronger feedback. The lightweight gates below are what the project
+relies on; an offline `node:test` suite (`npm test`) runs the deterministic
+AI-safety probes.
+
+## Offline Test Suite
+
+`npm test` runs `node --test offline-evals.test.mjs` — the repo-wide offline
+regression gate. It recursively discovers every `.mjs` under any `__evals__`
+directory in the repo (today: `server`, `server/ai`, `server/applications`,
+`server/latex`, `src/lib`, `src/resume`) and runs each as a child process
+(bounded by a 60s timeout), asserting exit 0. No model calls, no network, no
+provider keys; runs in a couple of seconds. A new offline eval — or a whole new
+`__evals__` directory — is gated automatically; no edit to the runner is needed.
+
+Each eval still runs standalone for a per-case PASS/FAIL list, e.g.
+`node server/ai/__evals__/sanitize-probes.mjs`. On a failed case the runner
+attaches the child's last output lines to the assertion so you can see which
+case broke without re-running.
+
+The LIVE evals (`fabrication-eval.mjs`, `tailor-quality-eval.mjs`) are excluded
+via the runner's `LIVE` denylist: they drive a real provider, cost tokens, and
+need a configured key. Run those by hand (see below). Any new network/model
+eval must be added to `LIVE` so it stays out of `npm test`.
 
 ## Testing Mindset
 
@@ -54,6 +75,7 @@ Good server verification covers:
 Useful commands:
 
 ```bash
+npm test
 node --check server.mjs
 npm run dev
 ```

@@ -52,9 +52,17 @@ const pathArg = args.find((a) => !a.startsWith("--"));
 const CORPUS = pathArg ? resolve(process.cwd(), pathArg) : join(ROOT, "job-search-workspace", "applications.json");
 
 if (!existsSync(CORPUS)) {
-  console.error(`calibration-eval: corpus not found at ${CORPUS}`);
-  console.error("Pass a path, or run from a workspace that has job-search-workspace/applications.json.");
-  process.exit(2);
+  // An explicitly-passed path that's missing is a real user error.
+  if (pathArg) {
+    console.error(`calibration-eval: corpus not found at ${pathArg} (${CORPUS})`);
+    process.exit(2);
+  }
+  // No path given and the default corpus is absent (clean checkout / CI). This is
+  // a calibration tool over gitignored LOCAL data, not a clean-room regression
+  // gate — so SKIP (exit 0) instead of failing the offline `npm test` suite that
+  // auto-discovers it. It still gates drift on machines that have the corpus.
+  console.log("calibration-eval: SKIP — no local corpus (job-search-workspace/applications.json absent).");
+  process.exit(0);
 }
 
 // ── stats helpers ─────────────────────────────────────────────────────────────
