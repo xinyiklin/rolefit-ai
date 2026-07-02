@@ -1,4 +1,4 @@
-name: Build and Deploy
+name: CI and Deploy
 
 on:
   pull_request:
@@ -10,11 +10,11 @@ permissions:
   contents: read
 
 concurrency:
-  group: pages-${{ github.ref }}
+  group: deploy-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  build:
+  verify:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -27,24 +27,88 @@ jobs:
       - run: npm ci
 
       - run: npm run build
-        env:
-          GITHUB_PAGES: "true"
 
-      - uses: actions/upload-pages-artifact@v5
-        if: github.event_name != 'pull_request'
-        with:
-          path: dist
+      - run: node --check server.mjs
 
   deploy:
-    needs: build
-    if: github.event_name != 'pull_request'
+    needs: verify
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
-    permissions:
-      pages: write
-      id-token: write
     environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+      name: ec2
+    env:
+      EC2_HOST: ${{ secrets.EC2_HOST }}
+      EC2_USER: ${{ secrets.EC2_USER }}
+      EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
+      ALLOWED_HOSTS: ${{ secrets.ALLOWED_HOSTS }}
+      CONTAINER_NAME: jakeforge
+      IMAGE_NAME: jakeforge
     steps:
-      - id: deployment
-        uses: actions/deploy-pages@v5
+      - uses: actions/checkout@v6
+
+      - name: Validate deployment secrets
+        run: |
+          test -n "$EC2_HOST"
+          test -n "$EC2_USER"
+          test -n "$EC2_SSH_KEY"
+          test -n "$ALLOWED_HOSTS"
+
+      - name: Prepare SSH
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$EC2_SSH_KEY" > ~/.ssh/jakeforge.pem
+          chmod 600 ~/.ssh/jakeforge.pem
+          ssh-keyscan -H "$EC2_HOST" >> ~/.ssh/known_hosts
+
+      - name: Package source
+        run: |
+          tar \
+            --exclude='.git' \
+            --exclude='node_modules' \
+            --exclude='dist' \
+            -czf "/tmp/jakeforge-${GITHUB_SHA}.tar.gz" \
+            .
+
+      - name: Copy source to EC2
+        run: |
+          scp \
+            -i ~/.ssh/jakeforge.pem \
+            "/tmp/jakeforge-${GITHUB_SHA}.tar.gz" \
+            "$EC2_USER@$EC2_HOST:/tmp/jakeforge-${GITHUB_SHA}.tar.gz"
+
+      - name: Build and restart container
+        run: |
+          ssh -i ~/.ssh/jakeforge.pem "$EC2_USER@$EC2_HOST" \
+            "CONTAINER_NAME='$CONTAINER_NAME' IMAGE_NAME='$IMAGE_NAME' ALLOWED_HOSTS='$ALLOWED_HOSTS' RELEASE_SHA='$GITHUB_SHA' bash -s" <<'REMOTE'
+          set -euo pipefail
+
+          app_root="$HOME/jakeforge"
+          release_dir="$app_root/releases/$RELEASE_SHA"
+
+          if docker ps >/dev/null 2>&1; then
+            docker_cmd=(docker)
+          elif sudo -n docker ps >/dev/null 2>&1; then
+            docker_cmd=(sudo docker)
+          else
+            echo "Docker is not available to $USER. Install Docker or allow passwordless sudo docker access." >&2
+            exit 1
+          fi
+
+          mkdir -p "$release_dir"
+          tar -xzf "/tmp/jakeforge-${RELEASE_SHA}.tar.gz" -C "$release_dir"
+          rm -f "/tmp/jakeforge-${RELEASE_SHA}.tar.gz"
+
+          cd "$release_dir"
+          "${docker_cmd[@]}" build -t "$IMAGE_NAME:$RELEASE_SHA" -t "$IMAGE_NAME:latest" .
+
+          "${docker_cmd[@]}" rm -f "$CONTAINER_NAME" 2>/dev/null || true
+          "${docker_cmd[@]}" run -d \
+            --name "$CONTAINER_NAME" \
+            --restart unless-stopped \
+            -p 80:5186 \
+            -e ALLOWED_HOSTS="$ALLOWED_HOSTS" \
+            "$IMAGE_NAME:latest"
+
+          curl -fsS http://localhost/api/templates >/dev/null
+          ln -sfn "$release_dir" "$app_root/current"
+          REMOTE

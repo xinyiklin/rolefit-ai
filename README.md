@@ -106,6 +106,29 @@ docker run -d \
 Use plain HTTP only for smoke testing. Put HTTPS in front of the app before
 entering real resume content on a hosted instance.
 
+### GitHub Actions deploy to EC2
+
+The workflow in `.github/workflows/deploy.yml` keeps pull requests as CI-only
+builds. Pushes to `main` build the app, then SSH into the EC2 host, copy the
+checked-out source archive, build the Docker image on the instance, and restart
+the `jakeforge` container on host port `80`.
+
+Configure these repository secrets before enabling the deploy job:
+
+| Secret | Value |
+| --- | --- |
+| `EC2_HOST` | Public IPv4 address or DNS name of the EC2 instance |
+| `EC2_USER` | SSH user, typically `ec2-user` on Amazon Linux |
+| `EC2_SSH_KEY` | Private key contents for the EC2 key pair |
+| `ALLOWED_HOSTS` | Comma-separated public hostnames/IPs, e.g. `jakeforge.xinyiklin.com,100.60.78.4,ec2-100-60-78-4.compute-1.amazonaws.com` |
+
+The EC2 instance must already have Docker installed and running. The workflow
+uses plain `docker` when available, or passwordless `sudo docker` on default
+Amazon Linux setups.
+
+When the custom domain points to EC2, DNS owns the hostname; GitHub Pages and
+`public/CNAME` are no longer part of the deployment path.
+
 ## Architecture
 
 ```
@@ -120,7 +143,6 @@ src/
 public/
   favicon.svg     forge brand mark (anvil app-icon, also the sidebar lockup)
   fonts/          embedded LM Roman faces for PDF-faithful on-page rendering
-  CNAME           GitHub Pages custom-domain config (jakeforge.xinyiklin.com)
 server/
   latex/          Jake's template renderer, resume parser, Tectonic wrapper
   docx.mjs        DOCX text extractor (zero-dep; shells to unzip)
