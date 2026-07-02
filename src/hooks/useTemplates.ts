@@ -57,7 +57,7 @@ export function useTemplates() {
         }
       } catch (error) {
         if (!cancelled) {
-          // Static deploy (GitHub Pages) or no server — the fetch either fails
+          // Static hosting or no server — the fetch either fails
           // outright (TypeError) or succeeds with a non-JSON HTML page. Either
           // way, degrade silently: leave templates empty and tectonic unavailable;
           // the editor still works, LaTeX export buttons just stay disabled.
