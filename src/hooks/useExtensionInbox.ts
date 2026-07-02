@@ -61,6 +61,15 @@ export function useExtensionInbox(
     const claimToken = readExtensionImportClaimToken();
     let timer: ReturnType<typeof setTimeout> | null = null;
     let distilling = false;
+    // A fresh extension tab (one carrying a claim token) owns an in-flight import
+    // until that import is delivered OR the server reports it gone (TTL-pruned
+    // while still "distilling", etc). Tracked as a MUTABLE flag, not `claimToken`
+    // directly, so it resets on delivery or on a null/no-entry response: once the
+    // reservation is drained or no longer exists server-side, this tab must revert
+    // to the hidden-tab hands-off rule instead of staying permitted to poll (and
+    // potentially being handed an unrelated import via the server's oldest-
+    // unclaimed fallback) while hidden for the rest of its life.
+    let claimActive = Boolean(claimToken);
     let cancelled = false;
     const schedule = (ms: number) => {
       if (!cancelled) timer = setTimeout(() => void checkInbox(), ms);
@@ -72,10 +81,26 @@ export function useExtensionInbox(
         timer = null;
       }
       if (cancelled) return;
-      // Hidden tabs stay hands-off. Fresh extension imports carry a claim token
-      // in the newly-opened app tab's URL; existing visible tabs skip those
-      // reserved imports until the fresh tab has had a chance to claim them.
-      if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
+      // Hidden tabs stay hands-off for NEW, unclaimed imports so a backgrounded
+      // tab never claims one meant for the visible tab. But a tab that already
+      // owns an in-flight import KEEPS polling while hidden: otherwise the
+      // background distill settles server-side yet the tab only notices when the
+      // user switches back, stranding the tailoring until the tab is refocused.
+      // "Owns an in-flight import" = the server already reported "distilling" to
+      // us, or this is a fresh extension tab whose (not-yet-delivered) claim-token
+      // import is reserved server-side for this exact tab and can never divert to
+      // another session — so polling while hidden can't steal anyone else's import.
+      // Both flags are reset the moment that ownership ends (delivery, or the
+      // server reporting the reservation is gone) — see the null-response branch
+      // below — so a tab can't stay permitted to poll-while-hidden indefinitely.
+      const ownsInFlightImport = distilling || claimActive;
+      if (
+        typeof document !== "undefined" &&
+        document.visibilityState === "hidden" &&
+        !ownsInFlightImport
+      ) {
+        return;
+      }
       try {
         // Carry this tab's session id so the server hands each import to exactly
         // one tab — the one that claimed it — instead of every polling tab.
@@ -85,6 +110,15 @@ export function useExtensionInbox(
         const data: unknown = await res.json();
         if (data === null || typeof data !== "object") {
           distilling = false;
+          // A poll that carried a claim token but got back null/no-entry means
+          // the reserved import no longer exists server-side (e.g. TTL-pruned
+          // while still "distilling"). This tab no longer owns an in-flight
+          // import, so drop back to the hidden-tab hands-off rule — otherwise
+          // claimActive would stay true forever and a later hidden poll could
+          // be handed an unrelated tokenless import via the server's oldest-
+          // unclaimed fallback. Do NOT clear the URL param here: delivery-once
+          // semantics only clear it on successful delivery, unchanged below.
+          if (claimToken) claimActive = false;
           return;
         }
         const obj = data as { status?: unknown; text?: unknown; url?: unknown; fields?: unknown; autoTailor?: unknown };
@@ -101,7 +135,10 @@ export function useExtensionInbox(
               ? (obj.fields as Record<string, unknown>)
               : null;
           onImportRef.current({ text: obj.text, url: obj.url, fields, autoTailor: obj.autoTailor === true });
-          // Delivered once — drop the claim token so a reload can't re-claim.
+          // Delivered once — this tab no longer owns an in-flight import, so the
+          // hidden-tab hands-off guard is restored; also drop the claim token from
+          // the URL so a reload can't re-present a drained token and re-claim.
+          claimActive = false;
           if (claimToken) clearExtensionImportParam();
         }
       } catch {
