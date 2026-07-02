@@ -154,6 +154,11 @@ export function resolveProviderRequest(body) {
       401
     );
   }
+  if (model && model.startsWith("-")) {
+    // A leading dash could read as a flag to the spawned CLI providers
+    // (`--model <value>`); no real model id starts with one.
+    throw new UserSafeAiError("Model name cannot start with a dash.", 400);
+  }
   if (model && !/^[a-z0-9_.:/@+-]+$/i.test(model)) {
     throw new UserSafeAiError(
       "Model name can only use letters, numbers, dots, dashes, underscores, slashes, at signs, pluses, or colons.",
