@@ -9,7 +9,7 @@ import { UserSafeAiError, safeConfigErrorMessage } from "./errors.mjs";
 import { resolveProviderRequest } from "./providers.mjs";
 import { accomplishmentStyleRules, fenceUntrusted, honestTailoringRules, inputFirewallRule } from "./prompts.mjs";
 import { callConfiguredProvider } from "./clients.mjs";
-import { findUngroundedJdTerm } from "./grounding.mjs";
+import { proseHasUngroundedTerm } from "./grounding.mjs";
 
 function applicationAnswersSystemPrompt() {
   return `You help a job seeker draft answers to the supplemental free-text questions on a job application (for example "Why do you want to work here?", "Why this role?", "What makes you a strong fit?"), plus a short description of each past role for per-experience form fields.
@@ -140,7 +140,7 @@ export async function handleApplicationAnswers(req, res) {
             // Flag an ungrounded skill claim for review (reuses the existing
             // needsInput surfacing) rather than blocking — answers are reviewed
             // before they're pasted into a real application.
-            const ungrounded = Boolean(answer) && Boolean(findUngroundedJdTerm(answer, jobLower, answerGrounding, { proseMode: true }));
+            const ungrounded = proseHasUngroundedTerm(answer, jobLower, answerGrounding);
             return {
               question: String(a?.question ?? "").slice(0, 400),
               answer,
@@ -158,7 +158,7 @@ export async function handleApplicationAnswers(req, res) {
             // Same grounding surfacing as answers: a role description is pasted
             // straight into a per-experience application field, so flag (for
             // review) any ungrounded JD skill claim rather than ship it silently.
-            const ungrounded = Boolean(description) && Boolean(findUngroundedJdTerm(description, jobLower, answerGrounding, { proseMode: true }));
+            const ungrounded = proseHasUngroundedTerm(description, jobLower, answerGrounding);
             return {
               role: String(r?.role ?? "").slice(0, 200),
               description,

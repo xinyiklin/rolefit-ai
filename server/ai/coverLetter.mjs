@@ -15,7 +15,7 @@ import {
   COVER_RESUME_CHAR_LIMIT
 } from "./prompts.mjs";
 import { callConfiguredProvider } from "./clients.mjs";
-import { findUngroundedJdTerm } from "./grounding.mjs";
+import { proseHasUngroundedTerm } from "./grounding.mjs";
 
 // Upper bound on a returned cover letter (~3 paragraphs / 180-280 words is ~2k
 // chars; this just caps a pathological provider response, matching the per-field
@@ -55,12 +55,7 @@ export async function generateGroundedCoverLetter({
     userPrompt
   });
   const letter = String(parsed.coverLetterText ?? "").trim().slice(0, COVER_LETTER_CHAR_LIMIT);
-  if (
-    letter &&
-    findUngroundedJdTerm(letter, jobText.toLowerCase(), `${resumeText}\n${honestContext}`.toLowerCase(), {
-      proseMode: true
-    })
-  ) {
+  if (proseHasUngroundedTerm(letter, jobText.toLowerCase(), `${resumeText}\n${honestContext}`.toLowerCase())) {
     console.warn("[ai] cover letter introduced an ungrounded JD skill term; blanking for local fallback", { provider });
     return "";
   }
