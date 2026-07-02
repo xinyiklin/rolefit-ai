@@ -1167,9 +1167,10 @@ function App() {
     return "";
   }
 
-  // Merge review data (aiScore, strictReview, reviewedBy) from a server response
-  // into the current result, preferring any missing-skills the prior result held.
-  // `fallback` is the base when there is no prior result (review-only with no tailor).
+  // Merge review data (aiScore, strictReview, reviewedBy, reviewStatus) from a
+  // server response into the current result, preferring any missing-skills the
+  // prior result held. `fallback` is the base when there is no prior result
+  // (review-only with no tailor).
   function mergeReviewIntoResult(
     prev: PolishedResume | null,
     data: Record<string, unknown>,
@@ -1184,6 +1185,7 @@ function App() {
       aiScore: (data.aiScore as PolishedResume["aiScore"]) ?? undefined,
       strictReview: (data.strictReview as PolishedResume["strictReview"]) ?? undefined,
       reviewedBy: reviewedBy || undefined,
+      reviewStatus: (data.reviewStatus as PolishedResume["reviewStatus"]) ?? undefined,
       missingRequiredSkills: (prevMissing?.length ? prevMissing : dataMissing) ?? undefined
     };
   }
@@ -1237,9 +1239,12 @@ function App() {
         droppedSuggestions: (data.droppedSuggestions as PolishedResume["droppedSuggestions"]) ?? null,
         // Tailor-only: no AI review fields — useResumeAnalysis must see these
         // as undefined so the fit verdict shows "Estimated"/local, not "AI-judged".
+        // reviewStatus resets too, so a stale "failed" from a prior review doesn't
+        // linger on a fresh tailor result that hasn't been reviewed yet.
         aiScore: undefined,
         strictReview: undefined,
-        reviewedBy: undefined
+        reviewedBy: undefined,
+        reviewStatus: undefined
       });
       // Feed the shared cover-letter state so Materials/Copy/save read one source
       // whether the letter came from the polish pass or on-demand generation.
@@ -1282,6 +1287,22 @@ function App() {
       });
       const data = await response.json() as Record<string, unknown>;
       if (!response.ok) throw new Error((data.error as string) ?? "AI review failed.");
+      // The request itself succeeded (200 OK), but the server's strict-review
+      // pass may still have produced nothing usable — reviewStatus distinguishes
+      // that from "review not requested" (see server/ai/polish.mjs). In that case
+      // strictReview/aiScore come back null, so merging would wipe any PRIOR
+      // successful review already sitting in the result. Skip the merge entirely
+      // and surface the failure the same way as a request-level failure, via the
+      // existing Retry affordance (PolishProgress's failed StageCard) — the
+      // result (including any prior successful review) is left untouched, same
+      // as the pre-reviewStatus network-error contract below.
+      if (data.reviewStatus === "failed") {
+        setPolishProgress((prev) => ({
+          ...prev,
+          review: { status: "failed", error: "The tailored draft is unaffected." }
+        }));
+        return;
+      }
       const reviewedBy = computePolishReviewedBy(data);
       setResult((prev) => {
         // review-only (no prior tailor): synthesize a base result first.
