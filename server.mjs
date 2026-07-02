@@ -1132,6 +1132,13 @@ async function serveStatic(req, res) {
     res.writeHead(200, { "Content-Type": type });
     res.end(data);
   } catch {
+    // Unmatched /api/* paths fall through to static serving in production;
+    // serving index.html as 200 would turn a mistyped or removed route into
+    // an opaque JSON parse error client-side instead of a visible 404.
+    if (pathname.startsWith("/api/")) {
+      sendJson(res, 404, { error: "Not found." });
+      return;
+    }
     const index = await readFile(join(root, "dist", "index.html"));
     res.writeHead(200, { "Content-Type": "text/html" });
     res.end(index);
