@@ -1,9 +1,14 @@
 # jakeforge
 
-A local-first **Jake's-style resume editor**. Edit a resume directly on the page
-— the same single-column, ATS-friendly layout from
+A **Jake's-style resume editor**, live at
+[jakeforge.xinyiklin.com](https://jakeforge.xinyiklin.com). Edit a resume
+directly on the page — the same single-column, ATS-friendly layout from
 [Jake Gutierrez's LaTeX template](https://github.com/jakegut/resume) — and export
 it as a clean browser PDF, a Tectonic-compiled LaTeX PDF, or `.tex` source.
+
+The app is deployed on EC2 behind Caddy (HTTPS), but stays private by design:
+your resume lives in your browser's `localStorage` and is sent only to the
+app's own LaTeX endpoints for rendering — never stored server-side.
 
 It's a focused extraction of the resume editor from the `role-fit-ai` sibling
 project: the structured editor, live document, and LaTeX pipeline, with the AI
@@ -91,27 +96,51 @@ container health checks work regardless.
 A single small instance (e.g. an EC2 `t3.micro`) is plenty — the server is one
 Node process with no database.
 
-For a small EC2 deployment, publish container port `5186` on host port `80` and
-include both the public DNS name and public IP in `ALLOWED_HOSTS`:
+For a small EC2 deployment, bind the container to loopback and put an HTTPS
+reverse proxy (e.g. [Caddy](https://caddyserver.com/)) in front:
 
 ```bash
 docker run -d \
   --name jakeforge \
   --restart unless-stopped \
-  -p 80:5186 \
-  -e ALLOWED_HOSTS=ec2-example.compute-1.amazonaws.com,203.0.113.7 \
+  -p 127.0.0.1:5186:5186 \
+  -e ALLOWED_HOSTS=jakeforge.example.com,203.0.113.7,localhost,127.0.0.1 \
   jakeforge
 ```
 
-Use plain HTTP only for smoke testing. Put HTTPS in front of the app before
-entering real resume content on a hosted instance.
+Caddy handles HTTPS, automatic Let's Encrypt certificates, and HTTP→HTTPS
+redirects. A minimal Caddyfile:
+
+```
+jakeforge.example.com {
+    reverse_proxy 127.0.0.1:5186
+}
+```
+
+Run Caddy as a Docker container on the same host:
+
+```bash
+docker run -d \
+  --name caddy \
+  --restart unless-stopped \
+  --network host \
+  -v caddy_data:/data \
+  -v /path/to/Caddyfile:/etc/caddy/Caddyfile \
+  caddy:2
+```
+
+To smoke-test on the host, hit the loopback binding directly
+(`curl -I http://127.0.0.1:5186`). Publishing the container on port 80
+(`-p 80:5186`) only works before Caddy is installed — once Caddy owns 80/443,
+that mapping fails with "address already in use".
 
 ### GitHub Actions deploy to EC2
 
 The workflow in `.github/workflows/deploy.yml` keeps pull requests as CI-only
-builds. Pushes to `main` build the app, then SSH into the EC2 host, copy the
-checked-out source archive, build the Docker image on the instance, and restart
-the `jakeforge` container on host port `80`.
+builds. Pushes to `main` SSH into the EC2 host, copy the source archive, build
+the Docker image on the instance, and restart the `jakeforge` container bound to
+`127.0.0.1:5186`. A separately managed Caddy container owns ports 80/443 and
+reverse-proxies to the app.
 
 Configure these repository secrets before enabling the deploy job:
 
@@ -122,12 +151,9 @@ Configure these repository secrets before enabling the deploy job:
 | `EC2_SSH_KEY` | Private key contents for the EC2 key pair |
 | `ALLOWED_HOSTS` | Comma-separated public hostnames/IPs, e.g. `jakeforge.xinyiklin.com,100.60.78.4,ec2-100-60-78-4.compute-1.amazonaws.com` |
 
-The EC2 instance must already have Docker installed and running. The workflow
-uses plain `docker` when available, or passwordless `sudo docker` on default
-Amazon Linux setups.
-
-When the custom domain points to EC2, DNS owns the hostname; GitHub Pages and
-`public/CNAME` are no longer part of the deployment path.
+The EC2 instance must already have Docker and Caddy running (see the Caddy
+setup above). The workflow uses plain `docker` when available, or passwordless
+`sudo docker` on default Amazon Linux setups.
 
 ## Architecture
 

@@ -82,9 +82,6 @@ jobs:
             "CONTAINER_NAME='$CONTAINER_NAME' IMAGE_NAME='$IMAGE_NAME' ALLOWED_HOSTS='$ALLOWED_HOSTS' RELEASE_SHA='$GITHUB_SHA' bash -s" <<'REMOTE'
           set -euo pipefail
 
-          app_root="$HOME/jakeforge"
-          release_dir="$app_root/releases/$RELEASE_SHA"
-
           if docker ps >/dev/null 2>&1; then
             docker_cmd=(docker)
           elif sudo -n docker ps >/dev/null 2>&1; then
@@ -94,21 +91,32 @@ jobs:
             exit 1
           fi
 
-          mkdir -p "$release_dir"
-          tar -xzf "/tmp/jakeforge-${RELEASE_SHA}.tar.gz" -C "$release_dir"
+          build_dir="$(mktemp -d)"
+          tar -xzf "/tmp/jakeforge-${RELEASE_SHA}.tar.gz" -C "$build_dir"
           rm -f "/tmp/jakeforge-${RELEASE_SHA}.tar.gz"
 
-          cd "$release_dir"
-          "${docker_cmd[@]}" build -t "$IMAGE_NAME:$RELEASE_SHA" -t "$IMAGE_NAME:latest" .
+          cd "$build_dir"
+          "${docker_cmd[@]}" build -t "$IMAGE_NAME:latest" .
+          cd /
+          rm -rf "$build_dir"
 
           "${docker_cmd[@]}" rm -f "$CONTAINER_NAME" 2>/dev/null || true
           "${docker_cmd[@]}" run -d \
             --name "$CONTAINER_NAME" \
             --restart unless-stopped \
-            -p 80:5186 \
+            -p 127.0.0.1:5186:5186 \
             -e ALLOWED_HOSTS="$ALLOWED_HOSTS" \
             "$IMAGE_NAME:latest"
 
-          curl -fsS http://localhost/api/templates >/dev/null
-          ln -sfn "$release_dir" "$app_root/current"
+          healthy=""
+          for _ in 1 2 3 4 5 6 7 8 9 10; do
+            if curl -fsS http://127.0.0.1:5186/api/templates >/dev/null; then
+              healthy=1
+              break
+            fi
+            sleep 1
+          done
+          [ -n "$healthy" ]
+
+          "${docker_cmd[@]}" image prune -f >/dev/null
           REMOTE
