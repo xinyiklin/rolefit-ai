@@ -143,6 +143,11 @@ export type PolishedResume = {
   // Friendly label of the independent reviewer that ran the strict audit, set
   // only when it differs from the rewrite provider (i.e. an audit override).
   reviewedBy?: string;
+  // Server-reported outcome of the strict-review pass: "off" = not requested,
+  // "failed" = requested but produced nothing usable (strictReview absent isn't
+  // enough to tell those apart), "ok" = strictReview is populated. Absent =
+  // legacy response or a local-fallback result that never called the server.
+  reviewStatus?: "ok" | "failed" | "off";
 };
 
 export type ResumeAnalysis = Omit<PolishedResume, "polishedText" | "strengths" | "fixes">;

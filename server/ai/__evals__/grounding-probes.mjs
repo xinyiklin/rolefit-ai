@@ -108,6 +108,117 @@ const checks = [
       { original: "b", rewrite: "Led a team" }
     ] });
     return out.rewrites.length === 2;
+  })()],
+
+  // --- Fix 2: advisory review prose (coverLetterAngle, topEdits[],
+  // --- riskFlags[].suggestion) is prose-grounded like suggestedEdit. On an
+  // --- ungrounded JD skill term the STRING is blanked (or the topEdits item
+  // --- dropped), never the parent object; a grounded term survives untouched.
+  // --- proseMode is used, so company/role proper nouns are allowed. ---
+  ["review: ungrounded coverLetterAngle (Kubernetes not in resume) is blanked, review kept", (() => {
+    const out = sanitizeStrictReview(
+      { verdict: "STRETCH", recommendation: { coverLetterAngle: "Frame your Kubernetes orchestration experience as the through-line for this platform role." } },
+      "kubernetes orchestration required",
+      "Built REST APIs in Python. Shipped Docker images."
+    );
+    return out !== null && out.recommendation.coverLetterAngle === "";
+  })()],
+  ["review: grounded coverLetterAngle (Python/Docker in resume) survives", (() => {
+    const out = sanitizeStrictReview(
+      { verdict: "REASONABLE FIT", recommendation: { coverLetterAngle: "Lead with your Python services and Docker delivery work — both map directly to this team." } },
+      "python and docker required",
+      "Built REST APIs in Python. Shipped Docker images."
+    );
+    return out.recommendation.coverLetterAngle.length > 0 && /Python/.test(out.recommendation.coverLetterAngle);
+  })()],
+  ["review: ungrounded topEdits item dropped, grounded items kept (parent survives)", (() => {
+    const out = sanitizeStrictReview(
+      { verdict: "STRETCH", recommendation: { topEdits: [
+        "Surface your Python REST work first.",       // grounded -> kept
+        "Add Kubernetes cluster operations to skills.", // ungrounded JD term -> dropped
+        "Highlight your Docker delivery pipeline."      // grounded -> kept
+      ] } },
+      "python, docker, kubernetes required",
+      "Built REST APIs in Python. Shipped Docker images."
+    );
+    return out.recommendation.topEdits.length === 2
+      && out.recommendation.topEdits.every((e) => !/Kubernetes/i.test(e));
+  })()],
+  ["review: ungrounded riskFlags.suggestion blanked, flag (bullet+risk) kept", (() => {
+    const out = sanitizeStrictReview(
+      { verdict: "STRETCH", riskFlags: [
+        { bullet: "Optimized the reporting pipeline.", risk: "Interviewer may probe scale.", suggestion: "Reframe as Kubernetes-scaled throughput." }
+      ] },
+      "kubernetes required",
+      "Built REST APIs in Python."
+    );
+    return out.riskFlags.length === 1
+      && out.riskFlags[0].risk.length > 0
+      && out.riskFlags[0].suggestion === "";
+  })()],
+  ["review: grounded riskFlags.suggestion survives", (() => {
+    const out = sanitizeStrictReview(
+      { verdict: "STRETCH", riskFlags: [
+        { bullet: "Optimized the reporting pipeline.", risk: "Interviewer may probe scale.", suggestion: "Quantify the Python pipeline's throughput improvement." }
+      ] },
+      "python required",
+      "Built REST APIs in Python."
+    );
+    return out.riskFlags.length === 1 && /Python/.test(out.riskFlags[0].suggestion);
+  })()],
+  ["review: company proper noun in coverLetterAngle is NOT blanked (proseMode allows it)", (() => {
+    const out = sanitizeStrictReview(
+      { verdict: "REASONABLE FIT", recommendation: { coverLetterAngle: "Connect your Python delivery record to Acme's platform-reliability mission." } },
+      "acme is hiring a python engineer",
+      "Built REST APIs in Python."
+    );
+    // "Acme" is a proper noun (not in the tool lexicon) and Python is grounded,
+    // so the angle survives intact.
+    return /Acme/.test(out.recommendation.coverLetterAngle);
+  })()],
+
+  // --- Fix C: memoized corpus tokenization is behaviorally invisible. The
+  // --- module memoizes the JD + grounding token sets (invariant across a
+  // --- review's ~19 calls) in a tiny FIFO cache. Repeated calls on identical
+  // --- corpora must return IDENTICAL results, and cache eviction (>4 distinct
+  // --- corpora) must not change any answer. Cross-call state via the shared
+  // --- (never-mutated) cached Set is the risk this locks against. ---
+  ["memoized tokenization: repeated identical corpora return identical results", (() => {
+    const job = "requires kubernetes, terraform, and python.";
+    const grounding = "built python services and rest apis for the reporting platform.";
+    const proposed = "provisioned terraform modules for the platform.";
+    // Same corpora, called many times: memoized token sets must not drift.
+    const results = [];
+    for (let i = 0; i < 25; i++) results.push(f(proposed, job, grounding));
+    const allEqual = results.every((r) => r === results[0]);
+    // Terraform is in the JD + proposal but NOT the grounding -> flagged every time.
+    return allEqual && results[0] === "terraform";
+  })()],
+  ["memoized tokenization: grounded term stays grounded across repeats", (() => {
+    const job = "requires python and docker.";
+    const grounding = "shipped python services in docker containers.";
+    const proposed = "maintained the python service and its docker image.";
+    const results = [];
+    for (let i = 0; i < 25; i++) results.push(f(proposed, job, grounding));
+    return results.every((r) => r === null);
+  })()],
+  ["memoized tokenization: cache eviction (>4 distinct corpora) does not change answers", (() => {
+    // Cycle through more distinct (job, grounding) corpus pairs than the cache
+    // holds, twice, and confirm each pair's verdict is stable — proving eviction
+    // + re-tokenization reproduce the fresh-tokenize result exactly.
+    const cases = [
+      { job: "needs kafka.", grounding: "wrote go services.", proposed: "ran kafka streams.", want: "kafka" },
+      { job: "needs redis.", grounding: "wrote go services.", proposed: "used redis caching.", want: "redis" },
+      { job: "needs mongodb.", grounding: "wrote go services.", proposed: "queried mongodb.", want: "mongodb" },
+      { job: "needs nginx.", grounding: "wrote go services.", proposed: "configured nginx.", want: "nginx" },
+      { job: "needs jenkins.", grounding: "wrote go services.", proposed: "set up jenkins.", want: "jenkins" },
+      { job: "needs python.", grounding: "built python jobs.", proposed: "wrote python jobs.", want: null }
+    ];
+    const first = cases.map((c) => f(c.proposed, c.job, c.grounding));
+    const second = cases.map((c) => f(c.proposed, c.job, c.grounding));
+    return cases.every((c, i) =>
+      first[i] === c.want && second[i] === c.want && first[i] === second[i]
+    );
   })()]
 ];
 

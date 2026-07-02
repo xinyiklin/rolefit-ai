@@ -24,7 +24,7 @@ import {
   clipForPrompt
 } from "./prompts.mjs";
 import { callConfiguredProvider } from "./clients.mjs";
-import { findUngroundedJdTerm } from "./grounding.mjs";
+import { proseHasUngroundedTerm } from "./grounding.mjs";
 import { generateGroundedCoverLetter } from "./coverLetter.mjs";
 import {
   applyGapCapsAndVerdict,
@@ -32,13 +32,10 @@ import {
   makeRewriteGrounder,
   missingRequiredFromCoverage,
   missingRequiredSkillsFromStrictReview,
-  reconcileFitVerdict,
-  sanitizeAiScore,
   sanitizeMissingRequiredSkills,
   sanitizeStrictReview,
   sanitizeTailorSuggestions,
   summarizeDroppedSuggestions,
-  scoreFromBuckets,
   scoreFromRequirementCoverage,
   tailorTargetKeys
 } from "./sanitize.mjs";
@@ -60,7 +57,7 @@ export function groundChangeSummary(changeSummary, jobText, groundingText) {
   if (!changeSummary.length) return changeSummary;
   const jobLower = String(jobText ?? "").toLowerCase();
   const grounding = String(groundingText ?? "").toLowerCase();
-  return changeSummary.filter((bullet) => !findUngroundedJdTerm(bullet, jobLower, grounding, { proseMode: true }));
+  return changeSummary.filter((bullet) => !proseHasUngroundedTerm(bullet, jobLower, grounding));
 }
 
 function normalizeScopeSection(section) {
@@ -397,15 +394,20 @@ export async function handlePolish(req, res) {
         })
       : null;
 
-    // Scoring: prefer the requirement-coverage path — the reviewer extracts
-    // per-requirement evidence/statuses, then the server calculates every point.
-    // Legacy fitBuckets remain as a rollout fallback, and gap caps still apply
-    // to whichever score shape is available.
-    const coverageScore = scoreFromRequirementCoverage(reviewParsed?.requirementCoverage, strictReviewResult);
-    const bucketScore = coverageScore ?? scoreFromBuckets(reviewParsed?.fitBuckets);
+    // Scoring is SERVER ARITHMETIC ONLY: the reviewer extracts per-requirement
+    // evidence/statuses, then scoreFromRequirementCoverage calculates every
+    // point. Model-authored numbers (fitScore/fitBuckets) never enter scoring —
+    // the reviewer prompt forbids them, and a null coverage score is a valid
+    // outcome (the client falls back to its local estimated score; we never
+    // synthesize a number). Gap caps live on strictReview (gap/blocker ladders),
+    // so a coverage score can only be trusted alongside a usable strictReview.
+    // When strictReviewResult is null the score never passed applyGapCapsAndVerdict
+    // and would surface UNCAPPED next to reviewStatus="failed" — a self-contradictory
+    // pair. So aiScore is null in that branch and the client falls back to its
+    // local estimate (the design).
     let reconciled;
     if (strictReviewResult) {
-      const baseScore = bucketScore ?? sanitizeAiScore(reviewParsed?.fitScore ?? parsed.fitScore);
+      const coverageScore = scoreFromRequirementCoverage(reviewParsed?.requirementCoverage, strictReviewResult);
       // A hard eligibility gate (clearance/work-auth/license/cert/degree) the
       // model reports only as a missing critical/high requirementCoverage row —
       // not as a BLOCKER gap — must still force the DON'T APPLY band. Derive that
@@ -414,18 +416,37 @@ export async function handlePolish(req, res) {
       // Reconcile score-source with cap-source: cap on the missing-required rows
       // the coverage table reports even if the model omitted them from `gaps`.
       const coverageMissingCount = missingRequiredFromCoverage(reviewParsed?.requirementCoverage);
-      reconciled = applyGapCapsAndVerdict(baseScore, strictReviewResult, hasCoverageBlocker, coverageMissingCount);
+      reconciled = applyGapCapsAndVerdict(coverageScore, strictReviewResult, hasCoverageBlocker, coverageMissingCount);
     } else {
-      reconciled = reconcileFitVerdict(
-        bucketScore ?? sanitizeAiScore(reviewParsed?.fitScore ?? parsed.fitScore),
-        strictReviewResult?.verdict
-      );
+      reconciled = { aiScore: null, verdict: null, capReason: "" };
     }
     if (strictReviewResult && reconciled.verdict && reconciled.verdict !== strictReviewResult.verdict) {
-      strictReviewResult = { ...strictReviewResult, verdict: reconciled.verdict };
+      // The server recomputed the verdict from coverage evidence and it disagrees
+      // with the model's. Swap the verdict AND replace the model's verdictReason:
+      // the model wrote a justification for a verdict it no longer holds, so
+      // leaving it would show the user a rationale for a verdict the model never
+      // chose. reconciled.capReason names the mechanism that moved it, stated
+      // only from facts already in the sanitized review (gap counts/severities,
+      // missing-required coverage count, blocker presence) — no new claims.
+      strictReviewResult = {
+        ...strictReviewResult,
+        verdict: reconciled.verdict,
+        verdictReason: reconciled.capReason || strictReviewResult.verdictReason
+      };
     }
 
     const strictMissingRequiredSkills = missingRequiredSkillsFromStrictReview(strictReviewResult);
+
+    // reviewStatus lets the client distinguish a review that was never requested
+    // from one that ran but produced nothing usable. "off" = review not run;
+    // "failed" = review requested but no usable strictReview survived — whether
+    // the pass rejected, returned no parseable object, or its shape did not
+    // sanitize (strictReviewResult is null in every one of those cases, since it
+    // is only computed from a non-null reviewParsed); "ok" = a sanitized
+    // strictReview is returned. Absent field = legacy client.
+    const reviewStatus = !runReview
+      ? "off"
+      : (!strictReviewResult ? "failed" : "ok");
 
     // The audit echo (auditProvider/auditModel) accompanies any response that
     // ran the review pass — both "both" and review-only.
@@ -443,6 +464,7 @@ export async function handlePolish(req, res) {
         droppedSuggestions,
         aiScore: reconciled.aiScore,
         strictReview: strictReviewResult,
+        reviewStatus,
         model,
         reasoningEffort,
         provider,
@@ -460,6 +482,7 @@ export async function handlePolish(req, res) {
       droppedSuggestions,
       aiScore: reconciled.aiScore,
       strictReview: strictReviewResult,
+      reviewStatus,
       model,
       reasoningEffort,
       provider,

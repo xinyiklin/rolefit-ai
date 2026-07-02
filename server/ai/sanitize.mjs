@@ -2,27 +2,7 @@
 // reply returns (fit scores, missing-skill gaps). Kept separate from the
 // provider clients so the response-shaping rules are easy to find and test.
 
-import { findUngroundedJdTerm, isTermGrounded } from "./grounding.mjs";
-
-function clampFitScore(value) {
-  const n = Math.round(Number(value));
-  if (!Number.isFinite(n)) return null;
-  return Math.max(0, Math.min(100, n));
-}
-
-// Validate the AI's base/tailored fit numbers. Returns null when neither score
-// is usable so the client falls back to the local engine.
-export function sanitizeAiScore(raw) {
-  if (!raw || typeof raw !== "object") return null;
-  const base = clampFitScore(raw.base);
-  const tailored = clampFitScore(raw.tailored);
-  if (base === null && tailored === null) return null;
-  return {
-    base: base ?? tailored,
-    tailored: tailored ?? base,
-    liftReason: typeof raw.liftReason === "string" ? raw.liftReason.slice(0, 300) : ""
-  };
-}
+import { findUngroundedJdTerm, isTermGrounded, proseHasUngroundedTerm } from "./grounding.mjs";
 
 const EVIDENCE_TYPES = new Set(["exact", "adjacent", "none"]);
 const TAILOR_FIELDS = new Set(["bullet", "skill", "titleLeft", "titleRight", "subtitleLeft", "subtitleRight"]);
@@ -538,29 +518,49 @@ export function sanitizeStrictReview(raw, jobText = "", grounding = "", options 
     .filter(Boolean)
     .slice(0, 4);
 
+  // Advisory prose surfaces (riskFlags[].suggestion, recommendation.topEdits[],
+  // recommendation.coverLetterAngle) are model free text the user reads as
+  // guidance; a JD skill term they name that is absent from the polished resume +
+  // honest context is fabrication the same way an ungrounded rewrite is. Run each
+  // through the prose-mode findUngroundedJdTerm backstop used for suggestedEdit:
+  // company/role proper nouns are allowed (proseMode skips the capitalized-token
+  // detector), but curated branded tools / lowercase tech concepts still gate.
+  // On a flagged term, BLANK the string (or DROP the topEdits item) — never drop
+  // the whole parent object, so an honest risk flag or recommendation still
+  // shows. verdictReason and coverage[].where are deliberately NOT grounded here
+  // (the route owns verdictReason; coverage[].where quotes the JD by design).
+  // Thin local alias over the shared prose-grounding predicate (jobLower/
+  // groundingLower are already lower-cased above).
+  const proseIsUngrounded = (text) => proseHasUngroundedTerm(text, jobLower, groundingLower);
+
   const riskFlags = (Array.isArray(raw.riskFlags) ? raw.riskFlags : [])
     .map((flag) => {
       if (!flag || typeof flag !== "object") return null;
       const risk = clippedString(flag.risk, 300);
       if (!risk) return null;
+      let suggestion = clippedString(flag.suggestion, 300);
+      if (proseIsUngrounded(suggestion)) suggestion = "";
       return {
         bullet: clippedString(flag.bullet, 300),
         risk,
-        suggestion: clippedString(flag.suggestion, 300)
+        suggestion
       };
     })
     .filter(Boolean)
     .slice(0, 3);
 
   const rawRec = raw.recommendation && typeof raw.recommendation === "object" ? raw.recommendation : {};
+  let coverLetterAngle = clippedString(rawRec.coverLetterAngle, 1400);
+  if (proseIsUngrounded(coverLetterAngle)) coverLetterAngle = "";
   const recommendation = {
     applyAsIs: Boolean(rawRec.applyAsIs),
     reason: clippedString(rawRec.reason, 300),
     topEdits: (Array.isArray(rawRec.topEdits) ? rawRec.topEdits : [])
       .map((edit) => clippedString(edit, 300))
       .filter(Boolean)
+      .filter((edit) => !proseIsUngrounded(edit))
       .slice(0, 3),
-    coverLetterAngle: clippedString(rawRec.coverLetterAngle, 1400)
+    coverLetterAngle
   };
 
   return {
@@ -585,15 +585,6 @@ export function missingRequiredSkillsFromStrictReview(strictReview) {
     }))
   );
 }
-
-// The numeric band each strict-review verdict must fall in. Mirrors the rule in
-// the strict-review prompt.
-const VERDICT_SCORE_BANDS = {
-  "DON'T APPLY": [0, 45],
-  STRETCH: [46, 69],
-  "REASONABLE FIT": [70, 84],
-  "STRONG FIT": [85, 100]
-};
 
 function verdictForScore(score) {
   if (score >= 85) return "STRONG FIT";
@@ -721,38 +712,6 @@ function requirementLiftReason(rows) {
   return `Tailoring improved evidence for ${improved.join(improved.length > 1 ? " and " : "")}.`;
 }
 
-function sumBuckets(raw) {
-  if (!raw || typeof raw !== "object") return null;
-  let total = 0;
-  let present = 0;
-  for (const [bucket, max] of Object.entries(BUCKET_MAX)) {
-    const n = Math.round(Number(raw[bucket]));
-    if (!Number.isFinite(n)) continue;
-    present++;
-    total += Math.max(0, Math.min(max, n));
-  }
-  // Require most buckets so a one-field reply can't masquerade as a score.
-  return present >= 3 ? Math.min(100, total) : null;
-}
-
-// The strict reviewer reports per-bucket subtotals; the SERVER does the
-// arithmetic. The model judges facts (coverage), the server derives the
-// number — the same bucket judgments always produce the same score, which
-// removes the holistic-number run-to-run wobble. Returns null when the model
-// did not supply usable buckets so the caller can fall back to the legacy
-// holistic fitScore + reconcileFitVerdict path.
-export function scoreFromBuckets(rawBuckets) {
-  if (!rawBuckets || typeof rawBuckets !== "object") return null;
-  const base = sumBuckets(rawBuckets.base);
-  const tailored = sumBuckets(rawBuckets.tailored);
-  if (base === null && tailored === null) return null;
-  return {
-    base: base ?? tailored,
-    tailored: tailored ?? base,
-    liftReason: typeof rawBuckets.liftReason === "string" ? rawBuckets.liftReason.slice(0, 300) : ""
-  };
-}
-
 // Primary strict-review scoring path: the model extracts requirement coverage,
 // but the server owns every point calculation. This removes model-authored
 // numeric bucket wobble while keeping the reviewer responsible for evidence
@@ -847,6 +806,12 @@ export function missingRequiredFromCoverage(rawCoverage) {
 // coverageHasEligibilityBlocker: when true, cap=45 + DON'T APPLY fire exactly
 // like a BLOCKER gap, so an eligibility gate reported only as a coverage row
 // still governs fit.
+// Single source for the server verdict reason when an unmet eligibility gate
+// forces DON'T APPLY. Referenced by both applyGapCapsAndVerdict branches (the
+// null-score path and the capped-score path) so the wording can never drift.
+const ELIGIBILITY_BLOCKER_CAP_REASON =
+  "Server verdict: a required eligibility gate is unmet, which forces DON'T APPLY.";
+
 export function applyGapCapsAndVerdict(aiScore, strictReview, hasCoverageBlocker = false, coverageMissingCount = 0) {
   const gaps = Array.isArray(strictReview?.gaps) ? strictReview.gaps : [];
   // A BLOCKER gap OR a synthetic eligibility blocker from the coverage table
@@ -860,7 +825,11 @@ export function applyGapCapsAndVerdict(aiScore, strictReview, hasCoverageBlocker
     // too few coverage rows to score, and no numeric buckets) would inherit the
     // model's optimistic verdict for a role the candidate is formally ineligible
     // for. With no blocker, pass the sanitized verdict through unchanged.
-    return { aiScore, verdict: hasBlocker ? "DON'T APPLY" : (strictReview?.verdict ?? null) };
+    return {
+      aiScore,
+      verdict: hasBlocker ? "DON'T APPLY" : (strictReview?.verdict ?? null),
+      capReason: hasBlocker ? ELIGIBILITY_BLOCKER_CAP_REASON : ""
+    };
   }
   // Graduated HIGH-gap cap. A single missing required skill is near-universal on
   // an honest pass against an 8-15 skill JD; the old binary "any HIGH -> 69"
@@ -890,45 +859,21 @@ export function applyGapCapsAndVerdict(aiScore, strictReview, hasCoverageBlocker
       tailored: `${aiScore.tailored}->${tailored}`
     });
   }
-  return { aiScore: { ...aiScore, base, tailored }, verdict: verdictForScore(tailored) };
-}
-
-// Enforce verdict/score agreement server-side rather than trusting the prompt —
-// the UI must never show a contradictory pair. Reconciliation is always in the
-// CONSERVATIVE direction: when the score is above the verdict's band (e.g.
-// "DON'T APPLY" with a tailored 82) the score is clamped DOWN to the band; when
-// the score is below the band (e.g. "STRONG FIT" with a tailored 82) the
-// VERDICT is downgraded to the band the score sits in. A fit signal is never
-// inflated to match the more optimistic half of a disagreement.
-export function reconcileFitVerdict(aiScore, verdict) {
-  if (!aiScore || typeof verdict !== "string") return { aiScore, verdict: verdict ?? null };
-  const normalized = verdict.trim().toUpperCase();
-  const band = VERDICT_SCORE_BANDS[normalized];
-  if (!band) return { aiScore, verdict };
-  const [lo, hi] = band;
-  if (aiScore.tailored > hi) {
-    console.warn("[ai] clamped tailored fit score down to verdict band", {
-      verdict: normalized,
-      from: aiScore.tailored,
-      to: hi
-    });
-    // Clamp base into the band too: a pessimistic verdict judges the JOB fit,
-    // which covers the original resume as well. Leaving base above the clamped
-    // tailored score would render as "tailoring made the resume worse" when
-    // the truth is "this job is a non-starter either way".
-    return {
-      aiScore: { ...aiScore, base: Math.min(aiScore.base, hi), tailored: hi },
-      verdict: normalized
-    };
+  // Deterministic, server-authored reason naming the mechanism that set the
+  // verdict. Stated only from facts already in the sanitized review — a blocker's
+  // presence, or the count of missing-required gaps that capped the score — so
+  // no new claim enters the review. Consumed by the /api/polish route when the
+  // server verdict overrides the model's, so the user never reads the model's
+  // stale justification for a verdict it no longer holds.
+  let capReason;
+  if (hasBlocker) {
+    capReason = ELIGIBILITY_BLOCKER_CAP_REASON;
+  } else if (highGaps >= 1 && aiScore.tailored > cap) {
+    // Only claim the cap when it actually bound; a score already below the cap
+    // set its own band, and attributing it to the cap would misstate the cause.
+    capReason = `Server verdict: ${highGaps} missing required qualification${highGaps === 1 ? "" : "s"} capped the fit score at ${cap}, setting the ${verdictForScore(tailored)} band.`;
+  } else {
+    capReason = `Server verdict: recomputed from requirement-coverage evidence to the ${verdictForScore(tailored)} band (score ${tailored}).`;
   }
-  if (aiScore.tailored < lo) {
-    const downgraded = verdictForScore(aiScore.tailored);
-    console.warn("[ai] downgraded verdict to match tailored fit score", {
-      from: normalized,
-      to: downgraded,
-      tailored: aiScore.tailored
-    });
-    return { aiScore, verdict: downgraded };
-  }
-  return { aiScore, verdict: normalized };
+  return { aiScore: { ...aiScore, base, tailored }, verdict: verdictForScore(tailored), capReason };
 }

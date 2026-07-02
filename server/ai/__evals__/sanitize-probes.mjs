@@ -16,10 +16,8 @@ import {
   coverageHasEligibilityBlocker,
   makeRewriteGrounder,
   missingRequiredFromCoverage,
-  reconcileFitVerdict,
   sanitizeTailorSuggestions,
   sanitizeStrictReview,
-  scoreFromBuckets,
   scoreFromRequirementCoverage,
   summarizeDroppedSuggestions
 } from "../sanitize.mjs";
@@ -448,28 +446,11 @@ const checks = [
     return typeof flagged === "string" && flagged.toLowerCase() === "salesforce";
   })()],
 
-  // --- conservative verdict/score reconciliation (no-buckets fallback path) ---
-  ["pessimistic verdict clamps base AND tailored down", JSON.stringify(reconcileFitVerdict({ base: 58, tailored: 59, liftReason: "" }, DONT).aiScore) === JSON.stringify({ base: 45, tailored: 45, liftReason: "" })],
-  ["optimistic verdict downgrades, scores intact", (() => {
-    const r = reconcileFitVerdict({ base: 82, tailored: 82, liftReason: "" }, "STRONG FIT");
-    return r.verdict === "REASONABLE FIT" && r.aiScore.tailored === 82 && r.aiScore.base === 82;
-  })()],
-  ["agreeing pair untouched", (() => {
-    const r = reconcileFitVerdict({ base: 60, tailored: 75, liftReason: "" }, "REASONABLE FIT");
-    return r.verdict === "REASONABLE FIT" && r.aiScore.base === 60 && r.aiScore.tailored === 75;
-  })()],
-
-  // --- arithmetic bucket scoring + gap caps (primary path) ---
-  ["bucket sums add and clamp per-bucket", (() => {
-    const s = scoreFromBuckets({
-      base: { requiredTech: 30, requiredDomains: 20, seniority: 10, preferred: 5, clarity: 8 },
-      tailored: { requiredTech: 99, requiredDomains: 20, seniority: 10, preferred: 5, clarity: 8 },
-      liftReason: "x"
-    });
-    return s.base === 73 && s.tailored === 83; // tailored requiredTech clamps 99 -> 40
-  })()],
-  ["sparse buckets rejected (needs >=3)", scoreFromBuckets({ base: { requiredTech: 40 }, tailored: { requiredTech: 40 } }) === null],
-  ["missing buckets falls back to null", scoreFromBuckets(undefined) === null],
+  // --- arithmetic requirement-coverage scoring + gap caps (primary + only path).
+  // --- Model-authored score buckets (scoreFromBuckets) and holistic fitScore
+  // --- (sanitizeAiScore) were REMOVED: scoring is server arithmetic only, so a
+  // --- reviewer that (against the prompt) emits fitBuckets/fitScore cannot move
+  // --- the score — there is no code path that reads them. ---
   ["requirement coverage derives base/tailored without model numbers", (() => {
     const s = scoreFromRequirementCoverage([
       { category: "Required tech", requirement: "React", importance: "high", baseStatus: "covered", tailoredStatus: "covered" },
@@ -704,11 +685,92 @@ const checks = [
     return r.aiScore.tailored === 60; // max(3 gaps, 1 coverage) = 3 -> 60
   })()],
 
+  // --- Fix 1 lock: scoring is coverage-arithmetic ONLY; model-authored fitScore
+  // --- / fitBuckets on the same reply cannot move the score. scoreFromRequirement-
+  // --- Coverage reads only the coverage rows, so stray numeric fields are inert. ---
+  ["model-authored fitScore/fitBuckets on the reply do NOT change the coverage score", (() => {
+    const rows = [
+      { category: "Required tech", requirement: "React", importance: "high", baseStatus: "covered", tailoredStatus: "covered" },
+      { category: "Required tech", requirement: "TypeScript", importance: "high", baseStatus: "adjacent", tailoredStatus: "covered" },
+      { category: "Required experience", requirement: "REST API development", importance: "high", baseStatus: "covered", tailoredStatus: "covered" },
+      { category: "Required years", requirement: "Entry level", importance: "medium", baseStatus: "covered", tailoredStatus: "covered" },
+      { category: "Preferred", requirement: "Healthcare domain", importance: "low", baseStatus: "missing", tailoredStatus: "adjacent" }
+    ];
+    const clean = scoreFromRequirementCoverage(rows, { riskFlags: [] });
+    // Attach a wildly optimistic model score/buckets to a copy of the reply; the
+    // score function ignores them entirely (identical output, no read path).
+    const withModelNumbers = scoreFromRequirementCoverage(rows, { riskFlags: [], fitScore: { base: 99, tailored: 100 }, fitBuckets: { tailored: { requiredTech: 40, requiredDomains: 25, seniority: 15, preferred: 10, clarity: 10 } } });
+    return clean.base === 77 && clean.tailored === 95
+      && withModelNumbers.base === clean.base && withModelNumbers.tailored === clean.tailored;
+  })()],
+
+  // --- Fix 3 lock: applyGapCapsAndVerdict returns a deterministic capReason the
+  // --- route uses to replace a stale model verdictReason when the server verdict
+  // --- overrides the model's. The reason names only in-review facts. ---
+  ["capReason names the eligibility blocker when it forces DON'T APPLY", (() => {
+    const r = applyGapCapsAndVerdict({ base: 88, tailored: 90, liftReason: "" }, { gaps: [] }, true);
+    return r.verdict === DONT && /eligibility/i.test(r.capReason) && /DON'T APPLY/.test(r.capReason);
+  })()],
+  ["capReason counts the missing required qualifications that capped the score", (() => {
+    const r = applyGapCapsAndVerdict({ base: 90, tailored: 92, liftReason: "" }, { gaps: [{ severity: "HIGH" }, { severity: "HIGH" }] });
+    // 2 HIGH gaps -> cap 69 -> STRETCH; the reason states the count and the band.
+    return r.verdict === "STRETCH" && /2 missing required qualifications/.test(r.capReason) && /69/.test(r.capReason);
+  })()],
+  ["capReason singular for 1 missing required qualification", (() => {
+    const r = applyGapCapsAndVerdict({ base: 90, tailored: 92, liftReason: "" }, { gaps: [{ severity: "HIGH" }] });
+    return /1 missing required qualification\b/.test(r.capReason) && /79/.test(r.capReason);
+  })()],
+  ["null-score + blocker capReason still forces DON'T APPLY reason", (() => {
+    const r = applyGapCapsAndVerdict(null, { verdict: "STRETCH", gaps: [] }, true);
+    return r.aiScore === null && r.verdict === DONT && /eligibility/i.test(r.capReason);
+  })()],
+  ["non-binding cap yields coverage-band wording, not a capped claim", (() => {
+    // 1 HIGH gap -> cap 79, but the score (55) is already below it: the band
+    // came from the score, so the reason must not attribute it to the cap.
+    const r = applyGapCapsAndVerdict({ base: 50, tailored: 55, liftReason: "" }, { gaps: [{ severity: "HIGH" }] });
+    return r.verdict === "STRETCH" && /requirement-coverage/i.test(r.capReason) && !/capped/.test(r.capReason);
+  })()],
+  ["uncapped score still yields a coverage-band capReason (no stale-reason gap)", (() => {
+    const r = applyGapCapsAndVerdict({ base: 73, tailored: 86, liftReason: "" }, { gaps: [{ severity: "MEDIUM" }] });
+    // No HIGH gaps / blocker -> verdict from the raw tailored score; capReason
+    // still populated so the route always has a server sentence to swap in.
+    return r.verdict === "STRONG FIT" && /requirement-coverage/i.test(r.capReason);
+  })()],
+
   // --- surface withheld fabrications: split unsupported (anti-fab) vs benign drops ---
   ["summarizeDroppedSuggestions: null when empty; splits unsupported vs benign", (() => {
     const empty = summarizeDroppedSuggestions({});
     const some = summarizeDroppedSuggestions({ ungroundedJdTerm: 2, missingEvidence: 1, duplicateTarget: 1, emptyOrUnchanged: 3 });
     return empty === null && some.total === 7 && some.unsupported === 3;
+  })()],
+
+  // --- Fix A lock: a reply whose strictReview shape is missing/non-object yields
+  // --- NO usable strictReview, so the route must return aiScore=null even if the
+  // --- requirementCoverage array would have scored. The self-contradictory state
+  // --- being closed: reviewStatus="failed" beside a real, UNCAPPED coverage score.
+  // ---
+  // --- sanitize-level lock (the input to the route's branch): a missing/non-object
+  // --- strictReview sanitizes to null, which is exactly the condition on which the
+  // --- route (server/ai/polish.mjs) takes the `else { aiScore: null }` branch and
+  // --- never calls scoreFromRequirementCoverage. The route logic is reviewed;
+  // --- this locks the sanitizer contract the route relies on. ---
+  ["Fix A: missing strictReview sanitizes to null even though coverage would score", (() => {
+    // Same 5-row coverage table the "derives base/tailored" probe scores to 77/95;
+    // proves the score is available yet the review shape is unusable.
+    const coverage = [
+      { category: "Required tech", requirement: "React", importance: "high", baseStatus: "covered", tailoredStatus: "covered" },
+      { category: "Required tech", requirement: "TypeScript", importance: "high", baseStatus: "adjacent", tailoredStatus: "covered" },
+      { category: "Required experience", requirement: "REST API development", importance: "high", baseStatus: "covered", tailoredStatus: "covered" },
+      { category: "Required years", requirement: "Entry level", importance: "medium", baseStatus: "covered", tailoredStatus: "covered" },
+      { category: "Preferred", requirement: "Healthcare domain", importance: "low", baseStatus: "missing", tailoredStatus: "adjacent" }
+    ];
+    const coverageScorable = scoreFromRequirementCoverage(coverage, { riskFlags: [] }) !== null;
+    // A reply that carried valid coverage but no strictReview object: the strict
+    // review sanitizes to null (undefined AND non-object both), so the route's
+    // truthy `if (strictReviewResult)` branch never runs and aiScore stays null.
+    const missingObj = sanitizeStrictReview(undefined, "", "");
+    const nonObj = sanitizeStrictReview("not an object", "", "");
+    return coverageScorable && missingObj === null && nonObj === null;
   })()]
 ];
 

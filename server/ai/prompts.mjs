@@ -237,6 +237,7 @@ Strict rules:
 - topEdits: ordered by impact, max 3.
 - If the resume is genuinely wrong for the role, set verdict to "DON'T APPLY" and applyAsIs to false.
 - The app derives numeric fit from requirementCoverage server-side. Do NOT provide numeric score buckets. The app converts statuses into scores, then caps for the gaps you report (one HIGH gap caps the total at 79, two HIGH gaps at 69, three or more at 60; any BLOCKER gap forces DON'T APPLY). Make your verdict match that evidence.
+- The FINAL verdict and score are recomputed server-side from your requirementCoverage and gaps — your "verdict"/"verdictReason" are used only when they agree with that math, and are replaced with a server-authored reason when they don't. Your job is accurate, well-grounded coverage evidence, not verdict arbitration: get the statuses, importance, and gap severities right and the verdict follows.
 
 ${fitScoringPrompt()}
 

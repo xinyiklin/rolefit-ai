@@ -42,14 +42,16 @@ function evidenceLabel(evidenceType: string | undefined) {
 const normalize = (text: string) => stripInlineMarks(text).replace(/\s+/g, " ").trim().toLowerCase();
 
 // Locate the editor bullet whose text matches `text` (whitespace-insensitive).
-// First match wins; duplicate bullets are rare enough that this is acceptable.
-function findBullet(resume: ResumeData | null, text: string): BulletTarget | null {
+// First match wins; duplicate bullets are rare enough that this is acceptable
+// for display. Batch apply passes `exclude` so duplicates resolve to distinct
+// bullets instead of all landing on the first match.
+function findBullet(resume: ResumeData | null, text: string, exclude?: ReadonlySet<string>): BulletTarget | null {
   const wanted = normalize(text);
   if (!resume || !wanted) return null;
   for (const section of resume.sections) {
     for (const entry of section.items) {
       for (const bullet of entry.bullets) {
-        if (normalize(bullet.text) === wanted) {
+        if (normalize(bullet.text) === wanted && !exclude?.has(bullet.id)) {
           return { sectionId: section.id, entryId: entry.id, bulletId: bullet.id };
         }
       }
@@ -265,13 +267,21 @@ export function ReviewRail({ result, resume, actions, resumeDiff, jobConstraints
   const pendingRewriteCount = statuses.filter((status) => status.kind === "pending").length;
   const actionStatus = reviewActionStatus(result, pendingSuggestionCount + pendingRewriteCount);
 
+  // Shared two-line mutation contract for accepting a reviewer rewrite: write
+  // the bullet, then record it as applied under this rewrite's index so the
+  // card's status survives later unrelated edits. Callers keep their own
+  // target-resolution and editingKey handling — this is just the apply itself.
+  function applyResolvedRewrite(index: number, target: BulletTarget, value: string) {
+    actions.updateBullet(target.sectionId, target.entryId, target.bulletId, value, true);
+    setAppliedTexts((current) => ({ ...current, [`rewrite-${index}`]: value }));
+  }
+
   function applyEdit(index: number, text: string) {
     const status = statuses[index];
     if (status.kind !== "pending") return;
     const value = text.trim();
     if (!value) return;
-    actions.updateBullet(status.target.sectionId, status.target.entryId, status.target.bulletId, value, true);
-    setAppliedTexts((current) => ({ ...current, [`rewrite-${index}`]: value }));
+    applyResolvedRewrite(index, status.target, value);
     setEditingKey(null);
   }
 
@@ -295,11 +305,28 @@ export function ReviewRail({ result, resume, actions, resumeDiff, jobConstraints
   }
 
   function applyAllRewrites() {
-    // Recompute targets per apply: every pending rewrite points at a distinct
-    // bullet, so batching the dispatches is safe.
+    // `statuses` is a render-time snapshot and findBullet is first-match-wins,
+    // so two rewrites whose `original` normalizes identically (duplicate
+    // bullets across entries) would both resolve to the SAME bullet — the
+    // second dispatch overwriting the first while the real second bullet is
+    // never edited. Track consumed bullets and re-resolve duplicates against
+    // the remaining ones so each rewrite lands on its own bullet.
+    const used = new Set<string>();
     rewrites.forEach((rewrite, index) => {
-      if (statuses[index].kind === "pending") applyEdit(index, rewrite.rewrite);
+      const status = statuses[index];
+      if (status.kind !== "pending") return;
+      let target = status.target;
+      if (used.has(target.bulletId)) {
+        const fresh = findBullet(resume, rewrite.original, used);
+        if (!fresh) return;
+        target = fresh;
+      }
+      used.add(target.bulletId);
+      const value = rewrite.rewrite.trim();
+      if (!value) return;
+      applyResolvedRewrite(index, target, value);
     });
+    setEditingKey(null);
   }
 
   async function copyText(key: string, text: string) {
