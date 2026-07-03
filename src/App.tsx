@@ -35,9 +35,11 @@ import {
 } from "./hooks/useAutosaveDraft";
 import { useExtensionInbox } from "./hooks/useExtensionInbox";
 import { useTabPresence } from "./hooks/useTabPresence";
-import { activeSessionsSignature, type PresencePhase } from "./lib/tabPresence";
+import { type PresencePhase } from "./lib/tabPresence";
 import { arrayBufferToBase64, sanitizeFileBase } from "./lib/downloads";
 import { buildAiRequestFields, buildAuditRequestFields } from "./lib/aiRequest";
+import { AI_UNAVAILABLE, ApiError, classifyFailure } from "./lib/failures";
+import { useDraggableDock } from "./hooks/useDraggableDock";
 import { loadLastBaseResumeName, saveLastBaseResumeName } from "./lib/baseResumePrefs";
 import { buildCandidateFactsContext, mergeHonestContext } from "./lib/candidateFacts";
 import { extractJobPosting, type ExtractedJobTracking } from "./lib/jobExtract";
@@ -51,8 +53,8 @@ import { ReviewerSettings } from "./sections/ReviewerSettings";
 import { Masthead } from "./sections/Masthead";
 import { JobMenu } from "./sections/JobMenu";
 import { PolishMenu } from "./sections/PolishMenu";
-import { PolishProgress, DistillProgress, type PolishProgressState, type StageState } from "./sections/PolishProgress";
-import { ActiveSessionsCard } from "./sections/ActiveSessionsCard";
+import { PolishProgress, DistillProgress, TaskProgress, type PolishProgressState, type StageState } from "./sections/PolishProgress";
+import { SessionsRail } from "./sections/SessionsRail";
 import { ResumeMenu } from "./sections/ResumeMenu";
 import { StudioPane } from "./sections/StudioPane";
 import { ExportMenu } from "./sections/ExportRail";
@@ -158,6 +160,11 @@ function App() {
   // ----- Dialog system -----
   const { confirm } = useDialog();
 
+  // Draggable progress dock (Tailor/Review/Distill/Cover/Answers task cards) —
+  // lets the user drag the fixed-position stack out of the way of whatever
+  // studio content it would otherwise sit over.
+  const dock = useDraggableDock();
+
   // Shared helper for the 6 identical "replace editor" confirms.
   const confirmReplaceEditor = () =>
     confirm({
@@ -176,12 +183,16 @@ function App() {
   // reports whether the brief came from the AI or the local fallback.
   const [distillProgress, setDistillProgress] = useState<StageState>({ status: "idle" });
   const [distillProgressVisible, setDistillProgressVisible] = useState(false);
-  // Which distill action the card's Retry should re-run (link or paste). Stored
-  // as a tag, not a captured closure, so Retry dispatches to the LIVE handler and
-  // picks up the current URL / paste — a stored closure would re-run stale input
-  // the user has since edited. Null for the event-driven extension import, which
-  // has nothing to re-run, so that card shows no Retry button.
-  const [distillRetrySource, setDistillRetrySource] = useState<"link" | "paste" | null>(null);
+  // Which distill action the card's Retry should re-run (link, paste, or a
+  // re-distill of an extension import). Stored as a tag, not a captured closure,
+  // so Retry dispatches to the LIVE handler and picks up the current URL / paste
+  // — a stored closure would re-run stale input the user has since edited. Null
+  // only before any distill has run, so that card shows no Retry button.
+  const [distillRetrySource, setDistillRetrySource] = useState<"link" | "paste" | "import" | null>(null);
+  // Raw source text + url of the last extension import, so its card's Retry can
+  // re-distill it through the CLIENT /api/distill path — the extension import is
+  // event-driven with no action to re-run otherwise.
+  const distillImportRef = useRef<{ text: string; url: string } | null>(null);
   // Starts empty; the mount effect (loadWorkspace) auto-loads a workspace
   // base-resume when one exists, otherwise the editor stays blank.
   const [resumeText, setResumeText] = useState("");
@@ -352,15 +363,38 @@ function App() {
   // applied to the editor and the print mirror.
   const docStyle = useDocStyle();
 
-  // Derive a short job-label for the autosave context (role + company only —
-  // never the full JD body). Evaluated inline; will be stable enough for the
-  // 1200 ms debounce window.
+  // Distill the job once per (description, url, import) instead of on every
+  // render. The full extractJobPosting parser is ~1500 LOC; running it in the
+  // component body (the cover letter, materialsJobTarget, presence label, and the
+  // apply/export callers below) re-parsed the JD on every keystroke-driven
+  // re-render. Memoizing matches the debounce discipline the scoring path already
+  // uses, with no behavior change.
+  const jobTracking = useMemo((): ExtractedJobTracking => {
+    const imported =
+      importedJob &&
+      importedJob.url === jobUrl.trim() &&
+      importedJob.tailoringText === jobDescription.trim()
+        ? importedJob.tracking
+        : null;
+    // The import (AI or deterministic) is the authoritative distill output. Don't
+    // re-parse the compact scaffold and merge — that would let a stray number or
+    // label in a bullet resurrect a field the distiller deliberately left empty
+    // (e.g. a $5M budget figure becoming the salary). Only re-parse when there is
+    // no matching import (user typed a raw JD straight into the box).
+    return imported
+      ? definedTracking(imported)
+      : definedTracking(extractJobPosting(jobDescription, { url: jobUrl }).tracking);
+  }, [jobDescription, jobUrl, importedJob]);
+
+  // Derive a short job-label for the autosave + cross-tab presence context (role
+  // + company only — never the full JD body). Uses the shared `jobTracking` so
+  // the label matches the AI-distilled role/company shown elsewhere in the app,
+  // rather than a weaker deterministic re-parse of the raw text.
   const _autosaveJobLabel = useMemo(() => {
     if (!jobDescription.trim()) return "";
-    const { tracking } = extractJobPosting(jobDescription, { url: jobUrl });
-    const parts = [tracking.role, tracking.company].filter(Boolean);
+    const parts = [jobTracking.role, jobTracking.company].filter(Boolean);
     return parts.join(" · ");
-  }, [jobDescription, jobUrl]);
+  }, [jobDescription, jobTracking]);
 
   // Debounced autosave to localStorage whenever the editor has unsaved edits.
   useAutosaveDraft({ editedResume, dirty: resumeEdited, jobLabel: _autosaveJobLabel });
@@ -382,9 +416,6 @@ function App() {
         ? "editing"
         : "idle";
   const otherSessions = useTabPresence({ jobLabel: _autosaveJobLabel, phase: _myPhase });
-  const otherSessionsSig = useMemo(() => activeSessionsSignature(otherSessions), [otherSessions]);
-  const [dismissedSessionsSig, setDismissedSessionsSig] = useState<string | null>(null);
-  const showActiveSessions = otherSessions.length > 0 && otherSessionsSig !== dismissedSessionsSig;
 
   // Auto-fill the job description from the browser extension inbox. AI distiller
   // first (server-side keys), deterministic engine as the fallback.
@@ -397,6 +428,10 @@ function App() {
     // localStorage settings, so the background server pass may have used a
     // different default provider than the one selected in the AI menu.
     const { text, url, fields, autoTailor } = item;
+    // Remember the raw import so its card's Retry can re-distill it (below).
+    // Store the URL trimmed so a retry keeps importedJob.url === jobUrl.trim()
+    // and the jobTracking memo uses the AI tracking, not a deterministic re-parse.
+    distillImportRef.current = { text, url: (url || "").trim() };
     const { extracted, source } = fields
       ? extractedFromAiOrLocal(fields as Partial<AiDistillFields>, text, url || undefined)
       : await distillJobPosting(text, {
@@ -406,8 +441,12 @@ function App() {
     const relevant = extracted.tailoringText;
     if (relevant.trim().length < 40) {
       setPolishStatus("Extension import had too little job text — paste manually.");
-      setDistillRetrySource(null);
-      setDistillProgress({ status: "failed", error: "Imported posting had too little job text — paste manually." });
+      setDistillRetrySource("import");
+      setDistillProgress({
+        status: "failed",
+        errorHeadline: "Missing input",
+        error: "Imported posting had too little job text — paste manually."
+      });
       setDistillProgressVisible(true);
       return;
     }
@@ -429,7 +468,8 @@ function App() {
     // covers import/auto-tailor context. The imported JD satisfies the
     // description-length gate; the only thing that can still defer the auto-polish
     // is a missing resume / Tailor section — say so rather than appearing to do nothing.
-    setDistillRetrySource(null);
+    // "import" keeps a Retry on the card that re-distills through the client path.
+    setDistillRetrySource("import");
     setDistillProgress(distillDoneState(source));
     setDistillProgressVisible(true);
     const readyToTailor =
@@ -470,7 +510,8 @@ function App() {
     updateField: updateApplicationField,
     remove: removeApplication,
     storagePath: applicationsPath,
-    findForTarget
+    findForTarget,
+    refresh: refreshApplications
   } = useApplications();
 
   const {
@@ -478,7 +519,10 @@ function App() {
     answersStatus,
     isGeneratingAnswers,
     handleGenerateAnswers,
-    handleSaveAnswers
+    handleSaveAnswers,
+    answersProgress,
+    dismissAnswersProgress,
+    retryAnswers
   } = useApplicationAnswers({
     resumeText,
     jobDescription,
@@ -490,28 +534,6 @@ function App() {
     findForTarget
   });
 
-  // Distill the job once per (description, url, import) instead of on every
-  // render. The full extractJobPosting parser is ~1500 LOC; running it in the
-  // component body (the cover letter, materialsJobTarget, and the apply/export
-  // callers below) re-parsed the JD on every keystroke-driven re-render.
-  // Memoizing matches the debounce discipline the scoring path already uses,
-  // with no behavior change.
-  const jobTracking = useMemo((): ExtractedJobTracking => {
-    const imported =
-      importedJob &&
-      importedJob.url === jobUrl.trim() &&
-      importedJob.tailoringText === jobDescription.trim()
-        ? importedJob.tracking
-        : null;
-    // The import (AI or deterministic) is the authoritative distill output. Don't
-    // re-parse the compact scaffold and merge — that would let a stray number or
-    // label in a bullet resurrect a field the distiller deliberately left empty
-    // (e.g. a $5M budget figure becoming the salary). Only re-parse when there is
-    // no matching import (user typed a raw JD straight into the box).
-    return imported
-      ? definedTracking(imported)
-      : definedTracking(extractJobPosting(jobDescription, { url: jobUrl }).tracking);
-  }, [jobDescription, jobUrl, importedJob]);
 
   // On-demand cover letter (no full polish required). Generates from the CURRENT
   // resume; the polish path also feeds this state (see runTailorStage) so the
@@ -521,7 +543,9 @@ function App() {
     applyCoverLetter,
     coverStatus,
     isGeneratingCover,
-    handleGenerateCoverLetter
+    handleGenerateCoverLetter,
+    coverProgress,
+    dismissCoverProgress
   } = useCoverLetter({
     currentResumeText,
     jobText: jobDescription,
@@ -1205,7 +1229,7 @@ function App() {
         signal
       });
       const data = await response.json() as Record<string, unknown>;
-      if (!response.ok) throw new Error((data.error as string) ?? "AI tailor failed.");
+      if (!response.ok) throw new ApiError((data.error as string) ?? "AI tailor failed.", response.status);
       const suggestedChanges: PolishedResume["suggestedChanges"] = Array.isArray(data.suggestedChanges) ? data.suggestedChanges : [];
       if (!data.polishedText && !suggestedChanges.length) {
         throw new Error("AI response did not include usable resume suggestions.");
@@ -1250,7 +1274,7 @@ function App() {
       // whether the letter came from the polish pass or on-demand generation.
       if (coverText) applyCoverLetter(coverText);
       setActiveOutputTab("resume");
-      setPolishProgress((prev) => ({ ...prev, tailor: { status: "done" } }));
+      setPolishProgress((prev) => ({ ...prev, tailor: { status: "done", note: "Tailored with AI", noteTone: "ok" } }));
       return suggestedChanges;
     } catch (error) {
       // User clicked Stop — let the orchestrator handle the clean stop; do NOT
@@ -1261,10 +1285,14 @@ function App() {
       // it to the single-owner state so Materials/Copy/save still show it.
       if (fallback.coverLetterText) applyCoverLetter(fallback.coverLetterText);
       setActiveOutputTab("resume");
-      const message = error instanceof Error ? error.message.replace(/[.。]\s*$/, "") : "request failed";
+      // This path ALREADY produces a usable result (the local fallback), so
+      // present it as done-with-fallback rather than failed — matches the
+      // distill card's AI-vs-local pattern, with the SAME uniform reason so all
+      // the fallback cards in a flow read identically. The done+warn card still
+      // renders Retry.
       setPolishProgress((prev) => ({
         ...prev,
-        tailor: { status: "failed", error: `AI unavailable: ${message}. Local analysis shown.` }
+        tailor: { status: "done", noteTone: "warn", errorHeadline: AI_UNAVAILABLE, note: "local draft shown" }
       }));
       return null;
     }
@@ -1275,9 +1303,25 @@ function App() {
   // review-only). Merges review data (aiScore, strictReview) into the current
   // result via setResult; for review-only with no prior result it synthesizes a
   // base result first so the verdict describes the displayed resume.
-  async function runReviewStage(ctx: PolishContext, suggestions: PolishedResume["suggestedChanges"], signal?: AbortSignal): Promise<void> {
+  // `tailorJustRan` is true when a tailor pass ran earlier in THIS synchronous
+  // flow (the "both" mode + its retry). That tailor called setResult with
+  // aiScore: undefined, but React hasn't re-rendered yet, so the `result`
+  // closure here is stale — it must NOT be trusted to decide the fallback note.
+  async function runReviewStage(
+    ctx: PolishContext,
+    suggestions: PolishedResume["suggestedChanges"],
+    signal?: AbortSignal,
+    tailorJustRan = false
+  ): Promise<void> {
     const { scopedResumeText, fallback, commonBody } = ctx;
     setPolishProgress((prev) => ({ ...prev, review: { status: "running" } }));
+    // On a review failure we keep whatever result is already shown. If that
+    // result carries a prior AI review (aiScore), the fit on screen is
+    // AI-judged, NOT a local estimate — so don't mislabel it. A preceding tailor
+    // in the same flow always wiped aiScore (→ local estimate), so ignore the
+    // stale `result` closure in that case and say "local estimate shown".
+    const reviewFallbackNote =
+      !tailorJustRan && result?.aiScore ? "kept the previous fit" : "local estimate shown";
     try {
       const response = await fetch("/api/polish", {
         method: "POST",
@@ -1286,20 +1330,20 @@ function App() {
         signal
       });
       const data = await response.json() as Record<string, unknown>;
-      if (!response.ok) throw new Error((data.error as string) ?? "AI review failed.");
+      if (!response.ok) throw new ApiError((data.error as string) ?? "AI review failed.", response.status);
       // The request itself succeeded (200 OK), but the server's strict-review
       // pass may still have produced nothing usable — reviewStatus distinguishes
       // that from "review not requested" (see server/ai/polish.mjs). In that case
       // strictReview/aiScore come back null, so merging would wipe any PRIOR
       // successful review already sitting in the result. Skip the merge entirely
-      // and surface the failure the same way as a request-level failure, via the
-      // existing Retry affordance (PolishProgress's failed StageCard) — the
-      // result (including any prior successful review) is left untouched, same
-      // as the pre-reviewStatus network-error contract below.
+      // and present it exactly like a request-level review failure below: a
+      // done+warn fallback card ("AI unavailable — local estimate shown"),
+      // consistent with the Distill/Tailor fallback cards. The result (including
+      // any prior successful review) is left untouched.
       if (data.reviewStatus === "failed") {
         setPolishProgress((prev) => ({
           ...prev,
-          review: { status: "failed", error: "The tailored draft is unaffected." }
+          review: { status: "done", noteTone: "warn", errorHeadline: AI_UNAVAILABLE, note: reviewFallbackNote }
         }));
         return;
       }
@@ -1321,17 +1365,19 @@ function App() {
         return mergeReviewIntoResult(prev, data, reviewedBy, fallback);
       });
       setActiveOutputTab("resume");
-      setPolishProgress((prev) => ({ ...prev, review: { status: "done" } }));
+      setPolishProgress((prev) => ({ ...prev, review: { status: "done", note: "Reviewed with AI", noteTone: "ok" } }));
     } catch (error) {
       // User clicked Stop — let the orchestrator handle the clean stop. The
       // existing result (e.g. a completed tailor in "both") is left intact.
       if (signal?.aborted) throw error;
-      const message = error instanceof Error ? error.message.replace(/[.。]\s*$/, "") : "request failed";
+      // A local fit estimate is always shown when the AI review can't run, so
+      // present this as a done+warn fallback card identical to Distill/Tailor:
+      // same uniform reason, same "local … shown" tail, same Retry. Keep the
+      // existing result — don't clobber a successful tailor result.
       setPolishProgress((prev) => ({
         ...prev,
-        review: { status: "failed", error: `AI review unavailable: ${message}.` }
+        review: { status: "done", noteTone: "warn", errorHeadline: AI_UNAVAILABLE, note: reviewFallbackNote }
       }));
-      // Keep the existing result — don't clobber a successful tailor result.
     }
   }
 
@@ -1379,12 +1425,16 @@ function App() {
         // both: tailor first, then review only if tailor succeeded.
         const suggestions = await runTailorStage(ctx, signal);
         if (suggestions !== null) {
-          await runReviewStage(ctx, suggestions, signal);
+          await runReviewStage(ctx, suggestions, signal, true);
         } else {
-          // Tailor failed — mark review as skipped/failed so the user knows.
+          // Tailor fell back to the local draft (done+warn). Review couldn't run
+          // for the same reason, and the fit is shown as a local estimate — so
+          // present review as the SAME done+warn fallback card as Tailor/Distill
+          // (uniform reason, "local estimate shown", Retry), not a divergent
+          // "Review failed / Skipped" card.
           setPolishProgress((prev) => ({
             ...prev,
-            review: { status: "failed", error: "Tailor failed — retry Tailor to enable Review." }
+            review: { status: "done", noteTone: "warn", errorHeadline: AI_UNAVAILABLE, note: "local estimate shown" }
           }));
         }
       }
@@ -1421,7 +1471,7 @@ function App() {
         const suggestions = await runTailorStage(ctx, signal);
         // If polishStages === "both", auto-run review after a successful tailor retry.
         if (suggestions !== null && polishStages === "both") {
-          await runReviewStage(ctx, suggestions, signal);
+          await runReviewStage(ctx, suggestions, signal, true);
         }
       } else {
         // stage === "review": reuse the server-sanitized suggestedChanges from
@@ -1481,10 +1531,13 @@ function App() {
   }
 
   // DONE-card state for a distill run, calling out AI success vs local fallback.
+  // The fallback shares the reason-line shape with the tailor/cover/review
+  // fallbacks and uses the same uniform reason, so every fallback card in a flow
+  // reads identically: a bold "AI unavailable" + "local brief shown".
   const distillDoneState = (source: "ai" | "local"): StageState =>
     source === "ai"
       ? { status: "done", note: "Distilled with AI", noteTone: "ok" }
-      : { status: "done", note: "AI unavailable — used local extraction", noteTone: "warn" };
+      : { status: "done", noteTone: "warn", errorHeadline: AI_UNAVAILABLE, note: "local brief shown" };
 
   async function handleExtractFromLink() {
     const url = jobUrl.trim();
@@ -1513,7 +1566,11 @@ function App() {
       const relevant = extracted.tailoringText;
       if (relevant.trim().length < 40) {
         setLinkStatus("Fetched the page, but found too little job text. Paste the description instead.");
-        setDistillProgress({ status: "failed", error: "Too little job text on that page — paste the description instead." });
+        setDistillProgress({
+          status: "failed",
+          errorHeadline: "Missing input",
+          error: "Too little job text on that page — paste the description instead."
+        });
         setImportedJob(null);
         return;
       }
@@ -1537,7 +1594,12 @@ function App() {
       const message = error instanceof Error ? error.message.replace(/[.。]\s*$/, "") : "request failed";
       setImportedJob(null);
       setLinkStatus(`Couldn't extract from the link: ${message}. Paste the description instead.`);
-      setDistillProgress({ status: "failed", error: `Couldn't extract from the link: ${message}.` });
+      const f = classifyFailure(error);
+      setDistillProgress({
+        status: "failed",
+        errorHeadline: f.headline,
+        error: `${f.detail}. Paste the description instead.`
+      });
     } finally {
       setIsExtractingLink(false);
     }
@@ -1585,7 +1647,11 @@ function App() {
       const relevant = extracted.tailoringText;
       if (relevant.trim().length < 40) {
         setLinkStatus("Couldn't find enough job-relevant text in the paste. Check that you copied the description, not just the page header.");
-        setDistillProgress({ status: "failed", error: "Couldn't find enough job-relevant text in the paste." });
+        setDistillProgress({
+          status: "failed",
+          errorHeadline: "Missing input",
+          error: "Couldn't find enough job-relevant text in the paste."
+        });
         return;
       }
       setJobDescription(relevant);
@@ -1610,7 +1676,52 @@ function App() {
       // the card stuck on "running".
       const message = error instanceof Error ? error.message.replace(/[.。]\s*$/, "") : "distillation failed";
       setLinkStatus(`Couldn't distill the paste: ${message}.`);
-      setDistillProgress({ status: "failed", error: `Couldn't distill the paste: ${message}.` });
+      const f = classifyFailure(error);
+      setDistillProgress({ status: "failed", errorHeadline: f.headline, error: f.detail });
+    } finally {
+      setIsExtractingLink(false);
+    }
+  }
+
+  // Retry an extension-import distill by re-distilling its stored raw text
+  // through the CLIENT /api/distill path — the extension import is event-driven
+  // with nothing to re-run otherwise, so this gives its card a working Retry.
+  async function retryImportDistill() {
+    const payload = distillImportRef.current;
+    if (!payload || isExtractingLink) return;
+    setIsExtractingLink(true);
+    setDistillProgress({ status: "running" });
+    setDistillProgressVisible(true);
+    try {
+      const { extracted, source } = await distillJobPosting(payload.text, {
+        url: payload.url || undefined,
+        aiRequest: buildAiRequestFields({ aiProvider, apiKey, apiBaseUrl, selectedModel, customModel, cliReasoningEffort })
+      });
+      const relevant = extracted.tailoringText;
+      if (relevant.trim().length < 40) {
+        setDistillProgress({
+          status: "failed",
+          errorHeadline: "Missing input",
+          error: "Imported posting had too little job text — paste manually."
+        });
+        return;
+      }
+      // Keep jobUrl in sync (payload.url is already trimmed) so the jobTracking
+      // memo's importedJob.url === jobUrl.trim() guard holds after the retry.
+      setJobUrl(payload.url);
+      setJobDescription(relevant);
+      setImportedJob({
+        url: payload.url,
+        tailoringText: relevant.trim(),
+        tracking: extracted.tracking,
+        manualReviewFields: extracted.manualReviewFields
+      });
+      setResult(null);
+      applyCoverLetter("");
+      setDistillProgress(distillDoneState(source));
+    } catch (error) {
+      const f = classifyFailure(error);
+      setDistillProgress({ status: "failed", errorHeadline: f.headline, error: f.detail });
     } finally {
       setIsExtractingLink(false);
     }
@@ -1867,7 +1978,9 @@ function App() {
       ? handleExtractFromLink
       : distillRetrySource === "paste"
         ? handleDistillPaste
-        : undefined;
+        : distillRetrySource === "import"
+          ? retryImportDistill
+          : undefined;
 
   return (
     <div className="app-shell">
@@ -1982,8 +2095,27 @@ function App() {
         </div>
       ) : null}
 
-      {polishProgressVisible || distillProgressVisible || showActiveSessions ? (
-        <div className="progress-dock" aria-label="Task progress">
+      {polishProgressVisible ||
+      distillProgressVisible ||
+      coverProgress.status !== "idle" ||
+      answersProgress.status !== "idle" ? (
+        <div
+          className={`progress-dock${dock.dragging ? " is-dragging" : ""}`}
+          style={dock.style}
+          onPointerDown={dock.onPointerDown}
+          aria-label="Task progress"
+        >
+          {/* Distill renders first (top): in the normal flow the job is
+              distilled before it's tailored, so top-to-bottom mirrors the order
+              the steps actually ran. Polish (Tailor→Review), then the on-demand
+              cover/answers, follow. */}
+          {distillProgressVisible ? (
+            <DistillProgress
+              state={distillProgress}
+              onRetry={distillRetry}
+              onDismiss={() => setDistillProgressVisible(false)}
+            />
+          ) : null}
           {polishProgressVisible ? (
             <PolishProgress
               stages={polishStages}
@@ -1994,19 +2126,18 @@ function App() {
               busy={isPolishing}
             />
           ) : null}
-          {distillProgressVisible ? (
-            <DistillProgress
-              state={distillProgress}
-              onRetry={distillRetry}
-              onDismiss={() => setDistillProgressVisible(false)}
-            />
-          ) : null}
-          {showActiveSessions ? (
-            <ActiveSessionsCard
-              sessions={otherSessions}
-              onDismiss={() => setDismissedSessionsSig(otherSessionsSig)}
-            />
-          ) : null}
+          <TaskProgress
+            stageKey="cover"
+            state={coverProgress}
+            onRetry={handleGenerateCoverLetter}
+            onDismiss={dismissCoverProgress}
+          />
+          <TaskProgress
+            stageKey="answers"
+            state={answersProgress}
+            onRetry={retryAnswers}
+            onDismiss={dismissAnswersProgress}
+          />
         </div>
       ) : null}
 
@@ -2015,6 +2146,7 @@ function App() {
           activeOutputTab={activeOutputTab}
           setActiveOutputTab={setActiveOutputTab}
           outputTabs={outputTabs}
+          railFooter={<SessionsRail self={{ jobLabel: _autosaveJobLabel, phase: _myPhase }} others={otherSessions} />}
           overlay={
             <Suspense fallback={null}>
               <PreviewOverlay
@@ -2060,6 +2192,7 @@ function App() {
               onRestoreAutosaveDraft={handleRestoreAutosaveDraft}
               onDismissAutosaveDraft={handleDismissAutosaveDraft}
               reviewStale={reviewStale}
+              jobTarget={materialsJobTarget}
               exportControl={
                 <ExportMenu
                   templates={templates}
@@ -2105,6 +2238,7 @@ function App() {
               onPreviewResume={handlePreviewApplicationResume}
               onDelete={handleDeleteApplication}
               onAddApplication={handleAddApplication}
+              onRefresh={refreshApplications}
             />
           ) : null}
 

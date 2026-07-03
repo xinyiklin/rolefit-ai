@@ -7,6 +7,131 @@
   background: var(--paper);
 }
 
+/* Left rail column: the numbered tab list at the top and the persistent
+   sessions panel pinned to the bottom. Owns the column's border + tint so both
+   regions sit on one continuous surface. */
+.studio-sidebar {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  border-right: 1px solid var(--hairline);
+  background: var(--card-soft);
+}
+
+/* Bottom-pinned rail region (concurrent-sessions panel). margin-top:auto pushes
+   it to the foot of the rail so it fills the space below the tab list. */
+.studio-sidebar__footer {
+  margin-top: auto;
+  min-height: 0;
+  padding: var(--s3) var(--s3) var(--s4);
+  border-top: 1px solid var(--hairline-soft);
+}
+
+/* -------- Sessions rail (concurrent tabs) -------- */
+
+.sessions-rail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  min-width: 0;
+}
+
+.sessions-rail__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s2);
+  padding: 0 var(--s2);
+}
+
+/* Mono small-caps eyebrow, matching the tab-group labels above. */
+.sessions-rail__eyebrow {
+  color: var(--ink-faint);
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  font-variant: small-caps;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 500;
+}
+
+.sessions-rail__count {
+  color: var(--ink-faint);
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.sessions-rail__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  /* Cap the height so many concurrent tabs scroll instead of shoving the rail. */
+  max-height: 40vh;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--hairline-strong) transparent;
+}
+
+.sessions-rail__item {
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr);
+  align-items: center;
+  gap: var(--s2);
+  padding: var(--s1) var(--s2);
+  border-radius: var(--r-sm);
+}
+
+.sessions-rail__item.is-self {
+  background: var(--card-hover);
+}
+
+.sessions-rail__dot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  flex: none;
+  color: var(--ink-soft);
+}
+
+.sessions-rail__idle-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ink-faint);
+}
+
+.sessions-rail__job {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ink-strong);
+  font-size: 0.74rem;
+  font-weight: 500;
+}
+
+.sessions-rail__you {
+  color: var(--ink-faint);
+  font-weight: 400;
+}
+
+/* Phase sits on its own line under the label (the rail is narrow), quiet accent. */
+.sessions-rail__phase {
+  grid-column: 2;
+  color: var(--accent);
+  font-size: 0.66rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .studio-main {
   position: relative;
   display: grid;
@@ -27,8 +152,6 @@
   min-width: 0;
   min-height: 0;
   padding: var(--s4) var(--s3);
-  border-right: 1px solid var(--hairline);
-  background: var(--card-soft);
 }
 
 /* Group eyebrow — mono small-caps label above each entry group, hairline above. */

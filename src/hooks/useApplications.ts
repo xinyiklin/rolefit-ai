@@ -417,13 +417,38 @@ export function useApplications() {
 
   const remove = useCallback(
     (id: string) => {
+      // Snapshot the pre-delete list so a failed DELETE can roll back (same
+      // contract as `persist`, which restores `previous` on error).
+      let snapshot: Application[] = [];
       setApplications((current) => {
-        const next = current.filter((a) => a.id !== id);
-        void persist(next, current);
-        return next;
+        snapshot = current;
+        return current.filter((a) => a.id !== id);
       });
+      const requestId = ++persistVersion.current;
+      const write = persistQueue.current.catch(() => undefined).then(async () => {
+        const res = await fetch(`/api/applications/${encodeURIComponent(id)}`, { method: "DELETE" });
+        const data = await res.json();
+        // 404 = already deleted (e.g. by another tab) — the optimistic removal
+        // is correct, so treat it as success rather than rolling back.
+        if (!res.ok && res.status !== 404) throw new Error(data.error ?? "Delete failed.");
+        return data;
+      });
+      persistQueue.current = write.then(() => undefined, () => undefined);
+      void write.then(
+        (data) => {
+          if (requestId === persistVersion.current && Array.isArray(data.applications)) {
+            setApplications(data.applications);
+          }
+        },
+        (err) => {
+          if (requestId === persistVersion.current) {
+            setApplications(snapshot);
+            setError(err instanceof Error ? err.message : "Delete failed.");
+          }
+        }
+      );
     },
-    [persist]
+    []
   );
 
   // Find an existing application matching the current job target — by URL when
@@ -443,6 +468,18 @@ export function useApplications() {
     [applications]
   );
 
+  const refresh = useCallback(async () => {
+    try {
+      const res = await fetch("/api/applications");
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed to load applications.");
+      setApplications(Array.isArray(data.applications) ? data.applications : []);
+      setError("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load applications.");
+    }
+  }, []);
+
   return {
     applications,
     isLoading,
@@ -455,6 +492,7 @@ export function useApplications() {
     updateNotes,
     updateField,
     remove,
-    findForTarget
+    findForTarget,
+    refresh
   };
 }

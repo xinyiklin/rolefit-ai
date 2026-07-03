@@ -717,14 +717,58 @@ async function handleListApplications(req, res) {
   }
 }
 
+// Serialize applications.json read-modify-write cycles. The merge/delete
+// handlers each read the file, derive a new list, and write it back; two
+// overlapping requests (e.g. Apply clicked in two tabs at once) could both read
+// the same disk state and the second write would drop the first's entry. A
+// simple promise chain makes each cycle atomic within this process — sufficient
+// for the single-server local app.
+let applicationsWriteQueue = Promise.resolve();
+function withApplicationsLock(task) {
+  const run = applicationsWriteQueue.then(task);
+  applicationsWriteQueue = run.then(
+    () => undefined,
+    () => undefined
+  );
+  return run;
+}
+
 async function handleSaveApplications(req, res) {
   try {
     const body = JSON.parse(await readBody(req));
     const incoming = Array.isArray(body.applications) ? body.applications : [];
-    const applications = await writeApplications(jobWorkspaceDir, incoming);
+    const applications = await withApplicationsLock(async () => {
+      // Merge with the on-disk list so entries added by other tabs aren't lost.
+      const existing = await readApplications(jobWorkspaceDir);
+      const incomingIds = new Set(incoming.map((a) => a?.id).filter(Boolean));
+      const preserved = existing.filter((a) => !incomingIds.has(a.id));
+      return writeApplications(jobWorkspaceDir, [...incoming, ...preserved]);
+    });
     sendJson(res, 200, { applications });
   } catch (error) {
     sendJson(res, 400, { error: error instanceof Error ? error.message : "Application save failed." });
+  }
+}
+
+async function handleDeleteApplication(req, res, id) {
+  if (req.method !== "DELETE") {
+    sendJson(res, 405, { error: "Use DELETE." });
+    return;
+  }
+  try {
+    const applications = await withApplicationsLock(async () => {
+      const existing = await readApplications(jobWorkspaceDir);
+      const filtered = existing.filter((a) => a.id !== id);
+      if (filtered.length === existing.length) return null;
+      return writeApplications(jobWorkspaceDir, filtered);
+    });
+    if (applications === null) {
+      sendJson(res, 404, { error: "Application not found." });
+      return;
+    }
+    sendJson(res, 200, { applications });
+  } catch (error) {
+    sendJson(res, 500, { error: error instanceof Error ? error.message : "Delete failed." });
   }
 }
 
@@ -1513,6 +1557,17 @@ const server = createServer((req, res) => {
     } else {
       sendJson(res, 405, { error: "Use GET or PUT." });
     }
+    return;
+  }
+
+  const appIdMatch = pathname.match(/^\/api\/applications\/([^/]+)$/);
+  if (appIdMatch) {
+    const id = decodeRouteSegment(appIdMatch[1]);
+    if (id === null) {
+      sendJson(res, 400, { error: "Invalid application id." });
+      return;
+    }
+    void handleDeleteApplication(req, res, id);
     return;
   }
 
