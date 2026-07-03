@@ -433,7 +433,11 @@
 
 /* Shared fixed dock so the polish stack and the distill card share one
    top-centered column and stack vertically instead of overlapping when both are
-   on screen at once. pointer-events pass through the gaps. */
+   on screen at once. pointer-events pass through the gaps.
+   Draggable via useDraggableDock (src/hooks/useDraggableDock.ts): that hook
+   adds an inline `transform` offset on top of this base centering once the
+   user drags, so the dock never permanently blocks the editor/preview below
+   it. This base rule stays authoritative until the first drag. */
 .progress-dock {
   position: fixed;
   top: calc(var(--s5) + 2.5rem);
@@ -473,11 +477,27 @@
   box-shadow: 0 8px 28px -12px rgba(0, 0, 0, 0.3);
   font-size: 0.82rem;
   color: var(--ink);
+  /* The dock is draggable (useDraggableDock) and pointerdown bubbles up from
+     any card; buttons inside keep their own `cursor: pointer` (ghost-button,
+     .polish-stage__dismiss) since those rules are more specific than this.
+     touch-action must be off BEFORE a touch starts (an inline style applied
+     mid-gesture is too late to stop the browser claiming it for scrolling). */
+  cursor: grab;
+  touch-action: none;
   /* `backwards` (not `both`): apply the entry's start frame immediately, but do
      NOT retain the end frame afterwards — a `forwards`/`both` fill would pin
      opacity/transform and override the `.is-leaving` exit (the card would
      snap-collapse at full opacity instead of fading). */
   animation: polish-stage-in 200ms var(--ease) backwards;
+}
+
+/* While a drag is in-flight (set by useDraggableDock): show the "grabbing"
+   cursor and suppress text selection so a fast drag doesn't select card text. */
+.progress-dock.is-dragging {
+  user-select: none;
+}
+.progress-dock.is-dragging .polish-stage {
+  cursor: grabbing;
 }
 
 @keyframes polish-stage-in {
@@ -556,22 +576,29 @@
   font-variant-numeric: tabular-nums;
 }
 
-.polish-stage__error {
+/* Shared "reason line" for BOTH a failed card and a done+warn fallback card:
+   a bold, warm reason (e.g. the uniform "AI unavailable") followed by a quiet
+   detail. One rule so the reason reads identically across Tailor, Distill, and
+   Review — the inconsistency this replaced. Warm tone matches the failed-card
+   icon (.polish-stage--failed .polish-stage__icon). */
+.polish-stage__reason {
   font-size: 0.76rem;
   color: var(--ink-soft);
   line-height: 1.35;
 }
+.polish-stage__reason strong {
+  color: var(--warm);
+  font-weight: 600;
+}
 
-/* Info line on a DONE card (distill's AI-vs-local result). Tone colors mirror
-   the icon states: --accent (ok) when the AI was used, --warm (warn) when it
-   fell back to the local extractor. */
+/* Info line on a done + OK card (e.g. "Tailored with AI") — a success
+   confirmation, distinct in kind from the warn/failed reason line above. */
 .polish-stage__note {
   font-size: 0.74rem;
   color: var(--ink-soft);
   line-height: 1.35;
 }
 .polish-stage__note--ok { color: var(--accent); }
-.polish-stage__note--warn { color: var(--warm); }
 
 .polish-stage__actions {
   display: inline-flex;
@@ -606,149 +633,17 @@
   background: var(--card-soft);
 }
 
-/* State carried by the icon alone — no colored side-stripe. */
+/* State carried by the icon alone — no colored side-stripe. A done+warn
+   fallback shares the failed card's warm alert icon (`.polish-stage--warn`
+   overrides the plain done green), since it recovered from an AI error. */
 .polish-stage--running .polish-stage__icon { color: var(--ink-soft); }
 .polish-stage--done .polish-stage__icon { color: var(--accent); }
-.polish-stage--failed .polish-stage__icon { color: var(--warm); }
+.polish-stage--failed .polish-stage__icon,
+.polish-stage--warn .polish-stage__icon { color: var(--warm); }
 
 @media (prefers-reduced-motion: reduce) {
   .polish-stage { animation: none; }
   .polish-stage.is-leaving { transition: opacity 120ms linear; }
-}
-
-/* -------- Active sessions (other browser tabs) -------- */
-
-/* Read-only awareness card in the progress dock: each browser tab is an
-   independent tailoring session, so this shows what OTHER tabs are doing. Shares
-   the polish-stage card chrome (border, radius, shadow, entry animation). */
-.active-sessions {
-  position: relative;
-  pointer-events: auto;
-  border: 1px solid var(--hairline-strong);
-  border-radius: 10px;
-  background: var(--card);
-  box-shadow: 0 8px 28px -12px rgba(0, 0, 0, 0.3);
-  color: var(--ink);
-  animation: polish-stage-in 200ms var(--ease) backwards;
-}
-
-.active-sessions__head {
-  display: flex;
-  align-items: center;
-  gap: var(--s3);
-  width: 100%;
-  /* Leave room for the absolutely-positioned dismiss button on the right. */
-  padding: var(--s3) calc(var(--s3) + 22px) var(--s3) var(--s3);
-  border: none;
-  background: transparent;
-  font-size: 0.82rem;
-  color: var(--ink);
-  cursor: pointer;
-  text-align: left;
-}
-.active-sessions__head:focus-visible,
-.active-sessions__dismiss:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-
-.active-sessions__icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 18px;
-  flex: none;
-  color: var(--ink-soft);
-}
-
-.active-sessions__title {
-  font-weight: 600;
-  color: var(--ink-strong);
-}
-
-.active-sessions__sub {
-  font-size: 0.72rem;
-  color: var(--ink-faint);
-  margin-left: auto;
-}
-
-.active-sessions__chevron {
-  flex: none;
-  color: var(--ink-soft);
-  transition: transform 160ms var(--ease);
-}
-.active-sessions__chevron.is-open { transform: rotate(180deg); }
-
-.active-sessions__list {
-  list-style: none;
-  margin: 0;
-  padding: 0 var(--s3) var(--s3);
-  display: flex;
-  flex-direction: column;
-  gap: var(--s2);
-}
-
-.active-sessions__item {
-  display: flex;
-  align-items: center;
-  gap: var(--s2);
-  font-size: 0.76rem;
-  min-width: 0;
-}
-
-.active-sessions__dot {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 14px;
-  flex: none;
-  color: var(--ink-soft);
-}
-
-.active-sessions__idle-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--ink-faint);
-}
-
-.active-sessions__job {
-  flex: 1 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--ink-strong);
-}
-
-.active-sessions__phase {
-  flex: none;
-  color: var(--accent);
-}
-
-.active-sessions__dismiss {
-  position: absolute;
-  top: var(--s2);
-  right: var(--s2);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
-  border: none;
-  border-radius: var(--r-sm);
-  background: transparent;
-  color: var(--ink-soft);
-  cursor: pointer;
-}
-.active-sessions__dismiss:hover {
-  color: var(--ink-strong);
-  background: var(--card-soft);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .active-sessions { animation: none; }
-  .active-sessions__chevron { transition: none; }
 }
 
 /* -------- Segmented control (Polish stages) -------- */

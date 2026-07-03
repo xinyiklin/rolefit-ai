@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { AlertCircle, ChevronLeft, ChevronRight, Eye, Link, Plus, Search, Sparkles, SquareArrowOutUpRight, Trash2 } from "lucide-react";
+import { AlertCircle, ChevronLeft, ChevronRight, Eye, Link, Plus, RefreshCw, Search, Sparkles, SquareArrowOutUpRight, Trash2 } from "lucide-react";
 import type { Application, ApplicationStatus } from "../../hooks/useApplications";
 import {
   BOARD_STATUSES,
@@ -109,6 +109,7 @@ type TrackerTabProps = {
   onPreviewResume: (app: Application) => void;
   onDelete: (id: string, title: string) => void;
   onAddApplication: () => void;
+  onRefresh: () => Promise<void>;
 };
 
 const VIEWS: TrackerView[] = ["table", "calendar"];
@@ -135,9 +136,11 @@ export function TrackerTab({
   onOpenApplication,
   onPreviewResume,
   onDelete,
-  onAddApplication
+  onAddApplication,
+  onRefresh
 }: TrackerTabProps) {
   const [query, setQuery] = useState("");
+  const [isRefreshing, setIsRefreshing] = useState(false);
   // Default sort: most recent application first (by apply time).
   const [sort, setSort] = useState<SortState>({ key: "applied", dir: "desc" });
   const [pageSize, setPageSize] = useState<number>(DEFAULT_PAGE_SIZE);
@@ -274,10 +277,22 @@ export function TrackerTab({
             </span>
           ) : null}
         </div>
-        <button type="button" className="primary-button is-compact" onClick={onAddApplication}>
-          <Plus size={14} aria-hidden="true" />
-          Add application
-        </button>
+        <div className="workspace-page__actions">
+          <button
+            type="button"
+            className="ghost-button is-compact is-icon"
+            onClick={async () => { setIsRefreshing(true); try { await onRefresh(); } finally { setIsRefreshing(false); } }}
+            disabled={isRefreshing}
+            title="Refresh applications"
+            aria-label="Refresh applications"
+          >
+            <RefreshCw size={14} className={isRefreshing ? "spin" : ""} aria-hidden="true" />
+          </button>
+          <button type="button" className="primary-button is-compact" onClick={onAddApplication}>
+            <Plus size={14} aria-hidden="true" />
+            Add application
+          </button>
+        </div>
       </header>
 
       {/* Loading + error feedback */}

@@ -15,6 +15,16 @@
     grid-template-rows: auto minmax(0, 1fr);
   }
 
+  /* The rail collapses to a horizontal tab bar; the sessions panel belongs to
+     the vertical rail only, so drop it (and the column border) here. */
+  .studio-sidebar {
+    border-right: 0;
+  }
+
+  .studio-sidebar__footer {
+    display: none;
+  }
+
   .studio-tabs {
     flex-direction: row;
     align-items: center;

@@ -36,6 +36,15 @@
   font-feature-settings: "tnum";
 }
 
+.workspace-page__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+}
+
+.spin { animation: icon-spin 0.7s linear infinite; }
+@keyframes icon-spin { to { transform: rotate(360deg); } }
+
 .workspace-toolbar {
   display: flex;
   align-items: center;

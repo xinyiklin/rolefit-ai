@@ -1,6 +1,8 @@
 import { useCallback, useState } from "react";
 import { buildAiRequestFields, type AiRequestSettings } from "../lib/aiRequest";
+import { AI_UNAVAILABLE, ApiError } from "../lib/failures";
 import { draftCoverLetter } from "../resumeEngine";
+import type { StageState } from "../sections/PolishProgress";
 
 type UseCoverLetterArgs = {
   // Generation input: the CURRENT resume (edited model serialized), so the
@@ -45,16 +47,25 @@ export function useCoverLetter({
   const [coverLetterText, setCoverLetterText] = useState("");
   const [coverStatus, setCoverStatus] = useState("");
   const [isGeneratingCover, setIsGeneratingCover] = useState(false);
+  // Dock card mirroring the polish/distill progress cards, so a cover-letter
+  // generation shows up in the same fixed progress stack instead of only the
+  // inline coverStatus line. Independent of coverStatus (which stays for the
+  // Materials-tab inline copy) — this feeds the dock only.
+  const [coverProgress, setCoverProgress] = useState<StageState>({ status: "idle" });
 
   // Set or clear the cover letter from an external owner (polish pass,
   // application restore, a fresh-start resume/job swap). Always clears the
   // generation status so a stale "Drafted…" line can't linger under a cleared
   // or replaced letter. handleGenerateCoverLetter sets its own status and does
-  // NOT route through this.
+  // NOT route through this. Also resets the dock card so a stale done/failed
+  // card can't outlive a letter that was just replaced out from under it.
   const applyCoverLetter = useCallback((text: string) => {
     setCoverLetterText(text);
     setCoverStatus("");
+    setCoverProgress({ status: "idle" });
   }, []);
+
+  const dismissCoverProgress = useCallback(() => setCoverProgress({ status: "idle" }), []);
 
   async function handleGenerateCoverLetter() {
     const resume = currentResumeText.trim() || resumeText.trim();
@@ -64,6 +75,7 @@ export function useCoverLetter({
     }
     setIsGeneratingCover(true);
     setCoverStatus("Drafting cover letter...");
+    setCoverProgress({ status: "running" });
     try {
       const response = await fetch("/api/cover-letter", {
         method: "POST",
@@ -77,28 +89,39 @@ export function useCoverLetter({
         })
       });
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error ?? "Could not generate a cover letter.");
+      if (!response.ok) throw new ApiError(data.error ?? "Could not generate a cover letter.", response.status);
       const ai = String(data.coverLetterText ?? "").trim();
       if (ai) {
         setCoverLetterText(ai);
         setCoverStatus(
           `Drafted a cover letter${data.model ? ` using ${data.model}` : ""}. Fill in any [add: …] placeholders before sending.`
         );
+        setCoverProgress({ status: "done", note: "Drafted with AI", noteTone: "ok" });
       } else {
         // Server blanked an ungrounded AI letter — fall back to the local,
         // strictly-grounded draft (the same backstop the polish cover pass uses).
         setCoverLetterText(draftCoverLetter(resume, jobText, resume, localDraftMeta));
         setCoverStatus("Drafted a local cover letter (the AI draft was set aside for unsupported claims). Fill in the [add: …] placeholders.");
+        setCoverProgress({ status: "done", noteTone: "warn", errorHeadline: "Ungrounded", note: "AI draft set aside — local draft shown" });
       }
     } catch (error) {
       const message = error instanceof Error ? error.message.replace(/[.。]\s*$/, "") : "request failed";
       // Always leave a usable draft: the deterministic local one.
       setCoverLetterText(draftCoverLetter(resume, jobText, resume, localDraftMeta));
       setCoverStatus(`AI cover letter unavailable: ${message}. Showing a local draft to edit.`);
+      setCoverProgress({ status: "done", noteTone: "warn", errorHeadline: AI_UNAVAILABLE, note: "local draft shown" });
     } finally {
       setIsGeneratingCover(false);
     }
   }
 
-  return { coverLetterText, applyCoverLetter, coverStatus, isGeneratingCover, handleGenerateCoverLetter };
+  return {
+    coverLetterText,
+    applyCoverLetter,
+    coverStatus,
+    isGeneratingCover,
+    handleGenerateCoverLetter,
+    coverProgress,
+    dismissCoverProgress
+  };
 }

@@ -6,6 +6,9 @@ export type StageStatus = "idle" | "running" | "done" | "failed";
 export type StageState = {
   status: StageStatus;
   error?: string;
+  // General, user-safe failure headline (from classifyFailure) shown bold before
+  // `error`'s detail text — e.g. "Timed out — the provider took too long."
+  errorHeadline?: string;
   // Optional info line shown on the DONE card — e.g. the distill flow uses it to
   // say whether the brief came from the AI or the local fallback.
   note?: string;
@@ -18,8 +21,8 @@ export type PolishProgressState = {
 };
 
 // Every stage that can drive a card. Tailor/Review belong to the polish flow;
-// Distill is the single-step job-brief flow that reuses the same card vocabulary.
-type StageKey = "tailor" | "review" | "distill";
+// Distill/Cover/Answers are single-step flows that reuse the same card vocabulary.
+type StageKey = "tailor" | "review" | "distill" | "cover" | "answers";
 
 type PolishProgressProps = {
   stages: "tailor" | "review" | "both";
@@ -41,7 +44,9 @@ const STAGGER_MS = 800;
 const STAGE_COPY: Record<StageKey, Record<"running" | "done" | "failed", string>> = {
   tailor: { running: "Tailoring", done: "Tailored", failed: "Tailor failed" },
   review: { running: "Reviewing", done: "Reviewed", failed: "Review failed" },
-  distill: { running: "Distilling", done: "Distilled", failed: "Distill failed" }
+  distill: { running: "Distilling", done: "Distilled", failed: "Distill failed" },
+  cover: { running: "Drafting cover letter", done: "Cover letter ready", failed: "Cover letter failed" },
+  answers: { running: "Drafting answers", done: "Answers ready", failed: "Answers failed" }
 };
 
 function formatElapsed(ms: number): string {
@@ -76,7 +81,7 @@ function StageCard({
   onDismiss: () => void;
   busy: boolean;
 }) {
-  const { status, error } = state;
+  const { status, error, errorHeadline, note, noteTone } = state;
   const [leaving, setLeaving] = useState(false);
   const [gone, setGone] = useState(false);
   const [elapsedMs, setElapsedMs] = useState(0);
@@ -109,8 +114,12 @@ function StageCard({
 
   // Auto-dismiss a completed stage, but only after the WHOLE polish has settled
   // (busy=false) and a deliberate hold — never the instant this stage finishes.
+  // A "warn" note means this DONE card is actually carrying a local-fallback
+  // notice plus a Retry action, so it persists like a failed card until the
+  // user dismisses or retries — auto-fading it would also silently remove the
+  // only affordance for getting the AI result back.
   useEffect(() => {
-    if (status !== "done" || busy) return;
+    if (status !== "done" || busy || noteTone === "warn") return;
     // Stagger by step so sibling cards leave one-by-one (Tailor, then Review).
     const leaveDelay = DONE_HOLD_MS + (step - 1) * STAGGER_MS;
     const fadeAt = window.setTimeout(() => setLeaving(true), leaveDelay);
@@ -119,7 +128,7 @@ function StageCard({
       window.clearTimeout(fadeAt);
       window.clearTimeout(goneAt);
     };
-  }, [status, busy, step]);
+  }, [status, busy, step, noteTone]);
 
   if (status === "idle" || gone) return null;
 
@@ -127,16 +136,32 @@ function StageCard({
   const elapsedText = elapsedMs > 0 || status === "running" ? formatElapsed(elapsedMs) : "";
   const meta = [stepText, elapsedText].filter(Boolean).join(" · ");
 
+  // A fallback (done + warn) and a hard failure describe the same kind of thing —
+  // a reason + a consequence — so they render through ONE "reason line": a bold,
+  // warm headline (the reason, e.g. "AI unavailable") plus a quiet detail. This
+  // keeps the reason looking identical whether it lands on a done+warn
+  // Tailor/Distill/Review card or a failed card. A done + ok card is different in
+  // kind (a success confirmation), so it keeps its own single accent-colored note.
+  const isWarnDone = status === "done" && noteTone === "warn";
+  const showReasonLine = status === "failed" || isWarnDone;
+  const reasonDetail = status === "failed" ? error : note;
+
+  // A fallback (done + warn) recovered from an AI error, so it carries the SAME
+  // alert icon + warm tint as a failed card — a success check would contradict
+  // the warm "AI unavailable" reason it shows. Only a clean success keeps the
+  // green check.
+  const cleanDone = status === "done" && !isWarnDone;
+
   return (
     <div
-      className={`polish-stage polish-stage--${status}${leaving ? " is-leaving" : ""}`}
+      className={`polish-stage polish-stage--${status}${isWarnDone ? " polish-stage--warn" : ""}${leaving ? " is-leaving" : ""}`}
       role="status"
       aria-live="polite"
     >
       <span className="polish-stage__icon" aria-hidden="true">
         {status === "running" ? (
           <span className="polish-spinner" />
-        ) : status === "done" ? (
+        ) : cleanDone ? (
           <Check size={14} strokeWidth={2.5} />
         ) : (
           <AlertCircle size={14} />
@@ -145,16 +170,16 @@ function StageCard({
       <div className="polish-stage__body">
         <span className="polish-stage__title">{STAGE_COPY[stageKey][status]}</span>
         {meta ? <span className="polish-stage__meta">{meta}</span> : null}
-        {status === "done" && state.note ? (
-          <span
-            className={`polish-stage__note${
-              state.noteTone === "warn" ? " polish-stage__note--warn" : state.noteTone === "ok" ? " polish-stage__note--ok" : ""
-            }`}
-          >
-            {state.note}
+        {status === "done" && noteTone === "ok" && note ? (
+          <span className="polish-stage__note polish-stage__note--ok">{note}</span>
+        ) : null}
+        {showReasonLine && (errorHeadline || reasonDetail) ? (
+          <span className="polish-stage__reason">
+            {errorHeadline ? <strong>{errorHeadline}</strong> : null}
+            {errorHeadline && reasonDetail ? " — " : null}
+            {reasonDetail}
           </span>
         ) : null}
-        {status === "failed" && error ? <span className="polish-stage__error">{error}</span> : null}
       </div>
       <div className="polish-stage__actions">
         {status === "running" && onStop ? (
@@ -167,7 +192,10 @@ function StageCard({
             Stop
           </button>
         ) : null}
-        {status === "failed" && onRetry ? (
+        {/* One Retry affordance for both a hard failure and a done+warn fallback
+            (the AI step failed but a local result already filled the card) —
+            same label everywhere so the control reads consistently. */}
+        {(status === "failed" || isWarnDone) && onRetry ? (
           <button
             type="button"
             className="ghost-button is-compact polish-stage__retry"
@@ -231,9 +259,31 @@ export function PolishProgress({ stages, progress, onRetry, onStop, onDismiss, b
   );
 }
 
-// The job-distill flow as a single card, sharing the polish card's look. Done
-// carries a note saying whether the brief came from the AI or the local
-// fallback; there's no in-flight cancel, so no Stop button is rendered.
+// A generic single-stage card for event-style flows that have no multi-step
+// sequencing (distill, cover-letter draft, application-answers draft): one
+// StageCard, no busy/Stop (nothing in-flight to cancel from here). Done can
+// carry a note (e.g. AI-vs-local-fallback) and, when that note is a "warn"
+// fallback, a Retry action via the shared StageCard fallback-retry path.
+export function TaskProgress({
+  stageKey,
+  state,
+  onRetry,
+  onDismiss
+}: {
+  stageKey: "distill" | "cover" | "answers";
+  state: StageState;
+  onRetry?: () => void;
+  onDismiss: () => void;
+}) {
+  return (
+    <div className="polish-progress" aria-label={`${STAGE_COPY[stageKey].running} progress`}>
+      <StageCard stageKey={stageKey} state={state} step={1} total={1} onRetry={onRetry} onDismiss={onDismiss} busy={false} />
+    </div>
+  );
+}
+
+// Thin back-compat wrapper so App.tsx compiles unchanged until it migrates to
+// TaskProgress directly.
 export function DistillProgress({
   state,
   onRetry,
@@ -243,9 +293,5 @@ export function DistillProgress({
   onRetry?: () => void;
   onDismiss: () => void;
 }) {
-  return (
-    <div className="polish-progress" aria-label="Distill progress">
-      <StageCard stageKey="distill" state={state} step={1} total={1} onRetry={onRetry} onDismiss={onDismiss} busy={false} />
-    </div>
-  );
+  return <TaskProgress stageKey="distill" state={state} onRetry={onRetry} onDismiss={onDismiss} />;
 }

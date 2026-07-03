@@ -40,6 +40,9 @@ type ResumeTabProps = {
   pendingAutosaveDraft?: AutosavedDraft | null;
   onRestoreAutosaveDraft?: (draft: AutosavedDraft) => void;
   onDismissAutosaveDraft?: () => void;
+  // Job target context: displayed in the header so the user knows which role
+  // the resume is being tailored for.
+  jobTarget?: { role?: string; company?: string } | null;
   // True when the JD changed since the last polish — the ReviewRail describes
   // an old posting and should be flagged as stale.
   reviewStale?: boolean;
@@ -65,6 +68,7 @@ export function ResumeTab({
   onSetTailorMode,
   exportControl,
   onAddHonestContext,
+  jobTarget,
   pendingAutosaveDraft,
   onRestoreAutosaveDraft,
   onDismissAutosaveDraft,
@@ -99,15 +103,17 @@ export function ResumeTab({
   const hasSuggestions = Boolean(result?.suggestedChanges?.length);
   const title = hasSuggestions || result?.source === "local" ? "Resume draft" : hasResult ? "Tailored resume" : "Resume draft";
   const sourceLabel = hasSuggestions ? "AI suggestions" : result?.source === "local" ? "Local analysis" : resultSourceLabel;
+  const jobTargetLabel = [jobTarget?.role, jobTarget?.company].filter(Boolean).join(" at ");
   return (
     <section className="studio-card studio-card--flush">
       <div className="studio-card__head">
         <h2>
           {title}
-          {(sourceLabel || dirty) ? (
+          {(sourceLabel || dirty || jobTargetLabel) ? (
             <span className="studio-card__head-meta">
               {sourceLabel ? ` · ${sourceLabel}` : ""}
               {dirty ? " · edited" : ""}
+              {jobTargetLabel ? ` · ${jobTargetLabel}` : ""}
             </span>
           ) : null}
         </h2>
