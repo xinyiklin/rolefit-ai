@@ -119,10 +119,14 @@ Never show:
 - First-class provider choices: subscription CLIs (Claude Code, Codex,
   Antigravity CLI) plus hosted OpenAI, Claude, Gemini, OpenRouter,
   Groq, Together AI, Mistral AI, and Local/custom.
-- The Model control changes with the selected provider; keep a
+- The AI menu is split into Distill, Tailor, and Review sections. Each
+  section owns a concrete provider/model/effort config; **Copy from** is a
+  one-shot sync between stages, not a live link.
+- Each Model control changes with its section's selected provider; keep a
   **Custom model** escape hatch for newer model IDs.
-- One-request `apiKey`, `provider`, `apiBaseUrl`, and `model` values
-  from the local UI must not be persisted in browser storage.
+- One-request `apiKey`, `provider`, `apiBaseUrl`, and `model` values from
+  the local UI must not be persisted in browser storage. API keys typed into
+  any AI menu section are one-session values only.
 
 ## Interaction
 

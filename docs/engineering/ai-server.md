@@ -40,12 +40,13 @@ careflow `5173-5180`, portfolio `5184-5185`; do not mix them up.
   changes (`<proposed_changes>`, slim JSON) instead of a second full resume
   copy — the polished resume is derivable from them, and dropping the
   redundant copy cuts the audit prompt by up to ~28k chars; the cover pass
-  uses a clipped copy of the tailored sections. The audit pass can
-  optionally use an *independent reviewer* provider/model (request `audit*`
-  fields, resolved by `resolveAuditProviderRequest`); when unset it reuses
-  the primary config. The suggestion and cover-letter passes always use the
-  primary provider — only the non-rewriting audit can differ, so a reviewer
-  model can never alter the editor's resume output.
+  uses a clipped copy of the tailored sections. The Tailor stage supplies the
+  primary provider for suggestion generation, cover letters, and application
+  answers. The Review stage can use its own provider/model (request `audit*`
+  fields, resolved by `resolveAuditProviderRequest`); when audit fields are
+  absent the server reuses the primary config. Only the non-rewriting audit
+  can differ inside `/api/polish`, so a reviewer model can never alter the
+  editor's resume output.
 - DOCX import / export (text extraction, format-preserved updates)
 - job posting import (`/api/import-job`): fetch a public posting URL —
   Workday CXS JSON when the host is recognized (`*.myworkdayjobs.com`,
@@ -63,7 +64,7 @@ careflow `5173-5180`, portfolio `5184-5185`; do not mix them up.
   Domain Signals. The link itself is kept only for pipeline tracking and is
   never sent to the AI.
 - AI job distiller (`/api/distill`, `server/ai/distill.mjs`): sends the
-  raw (tag-stripped) posting text to the configured provider and returns
+  raw (tag-stripped) posting text to the Distill-stage provider and returns
   the SAME structured fields the deterministic engine emits, resolved
   semantically so novel ATS layouts, inline-prose duties, and unusual
   headings parse where the regex heading tables can't. Anti-fabrication is
@@ -181,17 +182,21 @@ modules under `server/ai/` so no single file carries the whole pipeline:
 
 ## AI Provider Layer
 
-The provider is chosen per request (top-bar AI menu) or via `AI_PROVIDER`;
-absent that, the server defaults to the **Claude Code CLI** (`claude-cli`) — a
-**zero per-token cost** subscription path — not a hosted API
-(`getDefaultProvider()` in `server/ai/providers.mjs`). Setting `AI_PROVIDER`
-(or picking a provider in the AI menu) overrides this; an *unknown*
-`AI_PROVIDER` still coerces to OpenAI, and `AI_MODEL` / `OPENAI_MODEL` select
-the OpenAI model (`gpt-5.5` default). The other subscription CLIs (Codex CLI and
-the Antigravity CLI `agy`, which replaced the retired Gemini CLI) are the same
-zero-cost path for their vendors. The
-frontend already defaults to `claude-cli`, so this only affects the
-headless / no-provider request path.
+The provider is chosen per request. The frontend AI menu has separate
+Distill, Tailor, and Review stage configs: `/api/distill` receives the
+Distill config, `/api/polish` receives the Tailor config as `provider` /
+`model` / `reasoningEffort`, and the strict-review pass receives the
+Review config as `audit*` fields. If a request omits provider fields
+(headless/API use), the server defaults to the **Claude Code CLI**
+(`claude-cli`) — a **zero per-token cost** subscription path — not a
+hosted API (`getDefaultProvider()` in `server/ai/providers.mjs`). Setting
+`AI_PROVIDER` supplies that headless fallback; an *unknown* `AI_PROVIDER`
+still coerces to OpenAI, and `AI_MODEL` / `OPENAI_MODEL` select the
+OpenAI model (`gpt-5.5` default). The other subscription CLIs (Codex CLI
+and the Antigravity CLI `agy`, which replaced the retired Gemini CLI) are
+the same zero-cost path for their vendors. The frontend already defaults
+all three stages to `claude-cli`, so this mostly affects the headless /
+no-provider request path.
 
 Per-provider rules:
 
@@ -210,10 +215,11 @@ Per-provider rules:
 - Use compatible `/chat/completions` endpoints for OpenRouter, Groq,
   Together AI, Mistral, and Local/custom.
 - Accept one-request `apiKey`, `provider`, `apiBaseUrl`, and `model`
-  values from the UI for ad-hoc use, but do not persist them. The optional
-  reviewer override accepts the parallel `auditProvider`, `auditApiKey`,
-  `auditApiBaseUrl`, `auditModel`, and `auditReasoningEffort` fields; the
-  reviewer API key is likewise never persisted.
+  values from the UI for ad-hoc use, but do not persist them. Distill uses
+  that same request shape on `/api/distill`; Review uses the parallel
+  `auditProvider`, `auditApiKey`, `auditApiBaseUrl`, `auditModel`, and
+  `auditReasoningEffort` fields on `/api/polish`. Menu-entered API keys for
+  every stage are one-session values and are never persisted.
 - Allow `.env` to set provider-specific keys (`OPENAI_API_KEY`,
   `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `OPENROUTER_API_KEY`,
   `GROQ_API_KEY`, `TOGETHER_API_KEY`, `MISTRAL_API_KEY`, `AI_API_KEY`)

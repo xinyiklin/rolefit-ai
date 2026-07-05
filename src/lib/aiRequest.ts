@@ -39,8 +39,31 @@ export function buildAiRequestFields({
   };
 }
 
+export type DistillRequestSettings = {
+  distillProvider: AiProviderValue;
+  distillApiKey: string;
+  distillApiBaseUrl: string;
+  distillSelectedModel: string;
+  distillCustomModel: string;
+  distillCliReasoningEffort: string;
+};
+
+// Resolve the distill-stage request fields for `/api/distill` from the distill
+// stage's own concrete config (the "same as Tailor" live-link is gone — stages are
+// synced by the copy buttons instead). Returns the SAME `AiRequestFields` shape the
+// distill route already reads, so no server change is needed.
+export function buildDistillRequestFields(distill: DistillRequestSettings): AiRequestFields {
+  return {
+    provider: distill.distillProvider,
+    apiKey: distill.distillApiKey,
+    apiBaseUrl: distill.distillApiBaseUrl,
+    model: distill.distillSelectedModel === "custom" ? distill.distillCustomModel.trim() : distill.distillSelectedModel,
+    reasoningEffort: distill.distillCliReasoningEffort
+  };
+}
+
 export type AuditRequestSettings = {
-  auditProvider: AiProviderValue | "";
+  auditProvider: AiProviderValue;
   auditApiKey: string;
   auditApiBaseUrl: string;
   auditSelectedModel: string;
@@ -56,12 +79,10 @@ export type AuditRequestFields = {
   auditReasoningEffort: string;
 };
 
-// Resolve the optional independent-reviewer fields for `/api/polish`'s strict
-// audit pass. An empty `auditProvider` means "same as primary": the server
-// reuses the primary config, so we send blanks and skip the override entirely.
-// Mirrors buildAiRequestFields (custom-model escape hatch, exact server field
-// names) but namespaced with `audit*` so the primary rewrite/cover config is
-// untouched.
+// Resolve the independent-reviewer fields for `/api/polish`'s strict audit pass
+// from the reviewer stage's own concrete config. Mirrors buildAiRequestFields
+// (custom-model escape hatch, exact server field names) but namespaced with
+// `audit*` so the primary rewrite/cover config is untouched.
 export function buildAuditRequestFields({
   auditProvider,
   auditApiKey,
@@ -70,9 +91,6 @@ export function buildAuditRequestFields({
   auditCustomModel,
   auditCliReasoningEffort
 }: AuditRequestSettings): AuditRequestFields {
-  if (!auditProvider) {
-    return { auditProvider: "", auditApiKey: "", auditApiBaseUrl: "", auditModel: "", auditReasoningEffort: "" };
-  }
   return {
     auditProvider,
     auditApiKey,

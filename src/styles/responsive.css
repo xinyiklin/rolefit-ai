@@ -104,10 +104,6 @@
   .studio-tabs,
   .studio-body { padding-left: var(--s4); padding-right: var(--s4); }
 
-  .settings-grid {
-    grid-template-columns: 1fr !important;
-  }
-
 }
 
 @media (prefers-reduced-motion: reduce) {

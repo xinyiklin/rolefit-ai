@@ -28,7 +28,7 @@ _Screenshots use demo workspace data._
 - **Multi-format resume I/O** — ingest `.docx`, `.tex` (Jake's-style), or plain text; paste extracted PDF text when the original file is only available as PDF.
 - **Job-link import** — paste a posting URL and pull the description in one click: Workday-aware (reads its CXS JSON API for `/job/` and `/details/` links), with a generic HTML→text fallback for other boards. The posting is distilled before polishing — **AI-first** via the configured provider (anti-fabrication grounded server-side), with the deterministic engine as an offline fallback — keeping role intro / responsibilities / requirements / preferred qualifications while dropping empty bullets, duplicated ATS title furniture, low-value Workday metadata, apply/share/navigation rows, company/culture marketing, salary pills, benefits/perks, pay-transparency, and EEO/legal boilerplate. The link itself is kept only for pipeline tracking and is **never sent to the model**.
 - **Browser extension (Chrome/Firefox)** — on any job posting, click the toolbar icon for an instant **local fit score** (a keyword-overlap estimate against your base resume), **matched vs missing** keywords, a check on whether you've **already tracked or applied** to that exact posting, and a one-click **Import** that opens a fresh RoleFit tab, distills the page into that tab's Job field server-side, and keeps any existing tailoring session untouched — with an optional **Tailor automatically** toggle that jumps straight to polish once your base resume is loaded. Manifest V3; the extension talks only to your local `http://localhost:5181` server, while AI-backed import/polish still uses whichever local CLI, hosted API, or local model you configure. See [Browser extension](#browser-extension).
-- **Subscription-friendly, multi-provider AI** — the default is the **Claude Code CLI** path (any **Claude Pro or Max** plan), with the other **account-backed CLI tools** (`Codex CLI`, `Antigravity CLI`) running on your existing **ChatGPT** or **Google Antigravity** account — including their **free tiers** — instead of per-token billing, and **hosted-API backends** (OpenAI, Anthropic, Gemini, OpenRouter, Groq, Together, Mistral, local Ollama) available behind the same interface.
+- **Subscription-friendly, multi-provider AI** — the default is the **Claude Code CLI** path (any **Claude Pro or Max** plan), with the other **account-backed CLI tools** (`Codex CLI`, `Antigravity CLI`) running on your existing **ChatGPT** or **Google Antigravity** account — including their **free tiers** — instead of per-token billing, and **hosted-API backends** (OpenAI, Anthropic, Gemini, OpenRouter, Groq, Together, Mistral, local Ollama) available behind the same interface. The AI menu keeps separate provider/model controls for Distill, Tailor, and Review, with copy buttons when you want all stages aligned.
 - **Fit scoring + 4-category keyword gap analysis** — required experience, knowledge, required skills, technical tools.
 - **Strict recruiter review mode** — verdict (STRONG FIT / REASONABLE FIT / STRETCH / DON'T APPLY), base-vs-tailored fit scores, gap severity, targeted bullet rewrites, interview risk flags, ready / edits-pending / missing-evidence status, and a cover-letter angle.
 - **LaTeX export pipeline (recommended)** built on a Jake's-style resume template + optional local PDF compile through **Tectonic** — the recommended path for faithful, ATS-clean output.
@@ -54,7 +54,13 @@ Visit `http://localhost:5181`.
 
 ## AI setup
 
-Pick a provider/model from the top-bar AI menu, or set a key in `.env`:
+Pick providers/models from the top-bar AI menu, or set keys in `.env`. The menu is split by pipeline stage:
+
+- **Distill** — job-link, paste, and import distillation into a compact job brief.
+- **Tailor** — resume rewrite, cover letter, and application-answer drafting.
+- **Review** — strict recruiter-style audit and reviewer rewrites.
+
+Each stage has its own provider/model/effort settings; use **Copy from** in the menu to sync one stage from another. API keys typed into the menu are one-session values and are not saved. Keys in `.env` stay server-side:
 
 ```bash
 # pick one (or set multiple and switch in-app)
@@ -104,7 +110,7 @@ A lightweight Chrome/Firefox popup that brings the fit check to the job board. O
 - whether you've **already tracked or applied** to that exact posting (matched by normalized URL), and
 - a one-click **Import to RoleFit AI** that opens a fresh independent RoleFit tab and distills the page text into that tab's Job field (server-side, AI-first with a deterministic fallback), with an optional **Tailor automatically after import** toggle that runs the polish as soon as the brief and your base resume are ready.
 
-It is Manifest V3 and talks **only** to your local server at `http://localhost:5181`: the routes it calls accept extension-origin requests only (with a reflected, non-wildcard CORS origin), and the inbox the app reads is same-origin and CSRF-guarded. The local server may then run the configured AI distiller for imports, so posting text can go through your selected CLI/API provider unless you choose a local model or the deterministic fallback path. Imports carry a short local claim token so the newly-opened tab receives its own posting, while other open tabs continue their current jobs; the app also shows a small read-only "other sessions" card when another tab is active. The quick score reports only overlap of known tech keywords; it never invents resume content.
+It is Manifest V3 and talks **only** to your local server at `http://localhost:5181`: the routes it calls accept extension-origin requests only (with a reflected, non-wildcard CORS origin), and the inbox the app reads is same-origin and CSRF-guarded. The local server may then run the configured AI distiller for imports, so posting text can go through the app's Distill-stage CLI/API provider unless you choose a local model or the deterministic fallback path. Imports carry a short local claim token so the newly-opened tab receives its own posting, while other open tabs continue their current jobs; the app also shows a small read-only "other sessions" card when another tab is active. The quick score reports only overlap of known tech keywords; it never invents resume content.
 
 Start the app first (`npm run dev`), then load the unpacked extension:
 
