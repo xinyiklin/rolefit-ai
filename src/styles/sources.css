@@ -152,11 +152,6 @@ select,
   background: var(--surface);
   color: var(--ink);
 }
-.settings-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--s3);
-}
 
 /* -------- Upload box -------- */
 
@@ -577,26 +572,8 @@ select,
   line-height: 1.4;
 }
 
-/* Primary provider controls: a single vertical stack with even rhythm so the
-   selects read as one group, not a scattered grid. Provider gets its own row;
-   Model pairs with Reasoning effort only when both exist (see settings-grid),
-   otherwise Model spans full width via provider-config__single. */
-.provider-config {
-  display: grid;
-  gap: var(--s3);
-}
-
-.provider-config__single {
-  display: grid;
-}
-
-/* Field margins are owned by the container gap inside the config stacks. */
-.provider-config .field,
-.reviewer-settings .field {
-  margin-top: 0;
-}
-
-/* Section header inside a menu popover (e.g. the Reviewer block). */
+/* Section header inside a menu popover (the Polish menu's "Work authorization"
+   subhead and each AI MenuSection title). */
 .menu-subhead {
   display: flex;
   align-items: baseline;
@@ -612,29 +589,165 @@ select,
   color: var(--ink-muted);
 }
 
-.menu-subhead__note {
+/* Collapsible per-stage sections (Distill / Tailor / Review) in the AI menu.
+   Adjacent sections are divided by a hairline; the header row toggles the body. */
+.menu-section + .menu-section {
+  border-top: 1px solid var(--hairline-soft);
+}
+
+/* Header row: the title + caret toggle the body; a right-aligned control (copy
+   buttons when open, effective-provider summary when collapsed) shares the line. */
+.menu-section__header {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+}
+
+.menu-section__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s1);
+  padding: var(--s3) 0;
+  background: none;
+  border: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.menu-section__toggle:hover .menu-subhead__title,
+.menu-section__toggle:focus-visible .menu-subhead__title {
+  color: var(--ink);
+}
+
+.menu-section__header > .stage-copy,
+.menu-section__value {
+  margin-left: auto;
+}
+
+.menu-section__value {
+  max-width: 62%;
+  overflow: hidden;
+  font-size: 0.72rem;
+  color: var(--ink-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.menu-section__chev {
+  flex: none;
+  color: var(--ink-faint);
+  transition: transform 0.15s ease;
+}
+
+.menu-section.is-open .menu-section__chev {
+  transform: rotate(180deg);
+}
+
+.menu-section__body {
+  padding-bottom: var(--s3);
+}
+
+/* "Copy from" control on each section's title line: copies one of the other two
+   stages' settings into this one. Separate outlined pills, compact so they fit
+   beside the title. */
+.stage-copy {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+}
+
+.stage-copy__label {
+  flex: none;
   font-size: 0.68rem;
   color: var(--ink-faint);
 }
 
-/* Reviewer (strict-audit) override block in the AI menu, set off from the
-   primary provider controls above it with a hairline divider. The popover's
-   own grid gap handles the space above the divider. */
-.reviewer-settings {
-  display: grid;
-  gap: var(--s3);
-  padding-top: var(--s3);
-  border-top: 1px solid var(--hairline-soft);
+.segmented {
+  display: inline-flex;
+  gap: var(--s1);
 }
 
-.micro-status code {
-  font-family: var(--font-mono);
-  font-size: 0.78rem;
-  color: var(--accent-deep);
-  background: var(--accent-soft);
-  padding: 1px 4px;
-  border-radius: var(--r-sm);
+.segmented__btn {
+  padding: 3px 10px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-md);
+  background: var(--card);
+  font: inherit;
+  font-size: 0.72rem;
+  color: var(--ink-muted);
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
 }
+
+.segmented__btn:hover {
+  border-color: var(--hairline-strong);
+  background: var(--paper-deep);
+  color: var(--ink);
+}
+
+/* Bordered card holding one stage's provider fields, set off from the section
+   header above it. Provider / Model / effort share the top row. */
+.provider-card {
+  display: grid;
+  gap: var(--s3);
+  padding: var(--s3);
+  border: 1px solid var(--hairline-soft);
+  border-radius: var(--r-lg);
+  background: transparent;
+}
+
+.provider-card__row {
+  display: grid;
+  gap: var(--s3);
+  /* Model gets a bit more room than Provider — model ids run longer than provider
+     names (e.g. Antigravity's "Gemini 3.5 Flash (Medium)"). minmax(0,…) lets the
+     selects shrink instead of overflowing the columns. */
+  grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+}
+
+/* Effort holds short values (Low / Medium / … / Extra high) so it gets a narrower
+   column than Provider + Model — but enough room for the longer labels to show. */
+.provider-card__row--3 {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 0.8fr);
+}
+
+.provider-card .field {
+  margin-top: 0;
+  min-width: 0;
+}
+
+/* Keep the three selects on one baseline even when a label wraps to two lines
+   (the narrow "Reasoning effort" column): the label row flexes, the control
+   pins to the bottom of the equal-height cells. */
+.provider-card__row .field {
+  grid-template-rows: 1fr auto;
+}
+
+/* Harden the selects/inputs so a long option label (e.g. "Gemini 3.5 Flash
+   (High)") truncates with an ellipsis inside its grid cell instead of blowing the
+   column out or overflowing the panel. */
+.provider-card .field select,
+.provider-card .field .text-input,
+.provider-card .field .input-with-icon {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.provider-card .field select {
+  /* Drop the native dropdown arrow so the value gets the full cell width (e.g.
+     "Medium" fits the narrow Effort column instead of truncating to "Mediu…").
+     Clicking still opens the native dropdown. Tighter padding reclaims the space
+     the arrow used to occupy. */
+  appearance: none;
+  -webkit-appearance: none;
+  padding: 0 3px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
 
 /* -------- Format menu (resume typography controls) -------- */
 
@@ -652,6 +765,13 @@ select,
   max-height: min(88vh, 720px);
   padding: var(--s3);
   gap: var(--s2);
+}
+
+/* AI menu is a wider panel so each stage's Provider / Model / effort row fits on
+   one line; sections are divided by the .menu-section hairline. */
+.ai-menu .nav-menu__popover {
+  width: min(380px, 94vw);
+  max-height: min(86vh, 720px);
 }
 
 /* In the Format menu the first .format-style-group sat below the sliders and

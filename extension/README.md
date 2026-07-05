@@ -7,9 +7,9 @@ or applied to that exact posting, and a one-click import into a fresh app tab.
 
 It talks **only** to your local RoleFit AI server at `http://localhost:5181`.
 The local server may then run the configured AI distiller for imports, so posting
-text can go through your selected CLI/API provider unless you use a local model
-or fall back to the deterministic parser. Start the app (`npm run dev`) before
-using it.
+text can go through the app's Distill-stage CLI/API provider unless you use a
+local model or fall back to the deterministic parser. Start the app
+(`npm run dev`) before using it.
 
 ## Install (unpacked)
 

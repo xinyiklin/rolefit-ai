@@ -11,14 +11,24 @@ export type PersistedSettings = {
   customModel?: string;
   cliReasoningEffort?: string;
   apiBaseUrl?: string;
-  // Optional independent reviewer for the strict-audit pass. Empty/absent
-  // auditProvider means "same as primary". The reviewer API key, like the
-  // primary key, is never persisted.
+  // Independent reviewer for the strict-audit pass — its own concrete provider
+  // config (synced via the copy buttons, not a live link). The reviewer API key,
+  // like the primary key, is never persisted.
   auditProvider?: AiProviderValue;
   auditSelectedModel?: string;
   auditCustomModel?: string;
   auditCliReasoningEffort?: string;
   auditApiBaseUrl?: string;
+  // Independent distiller for the /api/distill pass — its own concrete provider
+  // config (synced to other stages via the copy buttons, not a live link). The
+  // distill API key, like the primary and reviewer keys, is never persisted.
+  distillProvider?: AiProviderValue;
+  distillSelectedModel?: string;
+  distillCustomModel?: string;
+  distillCliReasoningEffort?: string;
+  distillApiBaseUrl?: string;
+  // Per-section expand/collapse state for the AI menu (Distill / Tailor / Review).
+  sectionOpen?: { distill?: boolean; tailor?: boolean; review?: boolean };
   honestContext?: string;
   customInstructions?: string;
   strictReview?: boolean;
@@ -72,6 +82,45 @@ function coerce(settings: PersistedSettings): PersistedSettings {
       const fallback = providerOptions.find((option) => option.value === settings.auditProvider)?.model;
       if (fallback) settings.auditSelectedModel = fallback;
       else delete settings.auditSelectedModel;
+    }
+  }
+  // Each stage now holds a concrete provider + model (the old "" = "same as
+  // Tailor" sentinel is gone). Drop any stale empty string — for the model too,
+  // since the hook seeds its default with `?? "..."`, which does NOT replace an
+  // empty string. A legacy "same as primary" reviewer persisted an empty
+  // auditSelectedModel; left in place it would send an empty model, resolve to the
+  // CLI default, and mis-trigger the "reviewed by" attribution.
+  if ((settings.auditProvider as string) === "") delete settings.auditProvider;
+  if ((settings.distillProvider as string) === "") delete settings.distillProvider;
+  if (settings.selectedModel === "") delete settings.selectedModel;
+  if (settings.auditSelectedModel === "") delete settings.auditSelectedModel;
+  if (settings.distillSelectedModel === "") delete settings.distillSelectedModel;
+  // Same staleness guard for the distiller provider/model.
+  if (settings.distillProvider && !validProviders.has(settings.distillProvider)) {
+    delete settings.distillProvider;
+    delete settings.distillSelectedModel;
+    delete settings.distillCliReasoningEffort;
+  }
+  if (settings.distillProvider && settings.distillSelectedModel !== undefined && settings.distillSelectedModel !== "custom") {
+    const models = modelOptionsByProvider[settings.distillProvider] ?? [];
+    if (!models.some((model) => model.value === settings.distillSelectedModel)) {
+      const fallback = providerOptions.find((option) => option.value === settings.distillProvider)?.model;
+      if (fallback) settings.distillSelectedModel = fallback;
+      else delete settings.distillSelectedModel;
+    }
+  }
+  // Section open/collapse map: keep only well-formed boolean fields; drop the rest
+  // so a corrupt value can't leave a section stuck. An absent field defaults open.
+  if (settings.sectionOpen !== undefined) {
+    const raw = settings.sectionOpen;
+    if (!raw || typeof raw !== "object") {
+      delete settings.sectionOpen;
+    } else {
+      const cleaned: { distill?: boolean; tailor?: boolean; review?: boolean } = {};
+      for (const key of ["distill", "tailor", "review"] as const) {
+        if (typeof raw[key] === "boolean") cleaned[key] = raw[key];
+      }
+      settings.sectionOpen = cleaned;
     }
   }
   if (settings.strictReview !== undefined && typeof settings.strictReview !== "boolean") {

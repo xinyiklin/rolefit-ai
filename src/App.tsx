@@ -37,7 +37,7 @@ import { useExtensionInbox } from "./hooks/useExtensionInbox";
 import { useTabPresence } from "./hooks/useTabPresence";
 import { type PresencePhase } from "./lib/tabPresence";
 import { arrayBufferToBase64, sanitizeFileBase } from "./lib/downloads";
-import { buildAiRequestFields, buildAuditRequestFields } from "./lib/aiRequest";
+import { buildAiRequestFields, buildAuditRequestFields, buildDistillRequestFields } from "./lib/aiRequest";
 import { AI_UNAVAILABLE, ApiError, classifyFailure } from "./lib/failures";
 import { useDraggableDock } from "./hooks/useDraggableDock";
 import { loadLastBaseResumeName, saveLastBaseResumeName } from "./lib/baseResumePrefs";
@@ -49,7 +49,7 @@ import { serializeResumeData, toTemplateSchema } from "./lib/resumeData";
 import { buildTailorScope, defaultTailorModes, tailorScopeToText, type TailorMode } from "./lib/tailorScope";
 
 import { AiMenu } from "./sections/AiMenu";
-import { ReviewerSettings } from "./sections/ReviewerSettings";
+import { ProviderSection } from "./sections/ProviderSection";
 import { Masthead } from "./sections/Masthead";
 import { JobMenu } from "./sections/JobMenu";
 import { PolishMenu } from "./sections/PolishMenu";
@@ -263,6 +263,21 @@ function App() {
     auditApiKey,
     setAuditApiKey,
     handleAuditProviderChange,
+    distillProvider,
+    distillSelectedModel,
+    setDistillSelectedModel,
+    distillCustomModel,
+    setDistillCustomModel,
+    distillCliReasoningEffort,
+    setDistillCliReasoningEffort,
+    distillApiBaseUrl,
+    setDistillApiBaseUrl,
+    distillApiKey,
+    setDistillApiKey,
+    handleDistillProviderChange,
+    sectionOpen,
+    toggleSection,
+    copyStage,
     honestContext,
     setHonestContext,
     polishStages,
@@ -278,6 +293,18 @@ function App() {
   } = ai;
   const candidateFactsContext = buildCandidateFactsContext({ citizenshipStatus, legallyAuthorizedToWork, requiresSponsorship });
   const requestHonestContext = mergeHonestContext(honestContext, candidateFactsContext);
+  // Distill runs on its own concrete provider config (synced to other stages via
+  // the copy buttons, not a live link). Shared by every distill entry point
+  // (link, paste, extension import, and their retries).
+  const distillRequestFields = () =>
+    buildDistillRequestFields({
+      distillProvider,
+      distillApiKey,
+      distillApiBaseUrl,
+      distillSelectedModel,
+      distillCustomModel,
+      distillCliReasoningEffort
+    });
   const [includeCoverLetter, setIncludeCoverLetter] = useState(false);
   const [activeOutputTab, setActiveOutputTab] = useState<OutputTab>("resume");
   const [workspacePath, setWorkspacePath] = useState("");
@@ -436,7 +463,7 @@ function App() {
       ? extractedFromAiOrLocal(fields as Partial<AiDistillFields>, text, url || undefined)
       : await distillJobPosting(text, {
           url: url || undefined,
-          aiRequest: buildAiRequestFields({ aiProvider, apiKey, apiBaseUrl, selectedModel, customModel, cliReasoningEffort })
+          aiRequest: distillRequestFields()
         });
     const relevant = extracted.tailoringText;
     if (relevant.trim().length < 40) {
@@ -1561,7 +1588,7 @@ function App() {
       setLinkStatus("Distilling the posting…");
       const { extracted, source } = await distillJobPosting(String(data.text ?? ""), {
         url,
-        aiRequest: buildAiRequestFields({ aiProvider, apiKey, apiBaseUrl, selectedModel, customModel, cliReasoningEffort })
+        aiRequest: distillRequestFields()
       });
       const relevant = extracted.tailoringText;
       if (relevant.trim().length < 40) {
@@ -1642,7 +1669,7 @@ function App() {
     try {
       const { extracted, source } = await distillJobPosting(cleaned, {
         url: jobUrl.trim() || undefined,
-        aiRequest: buildAiRequestFields({ aiProvider, apiKey, apiBaseUrl, selectedModel, customModel, cliReasoningEffort })
+        aiRequest: distillRequestFields()
       });
       const relevant = extracted.tailoringText;
       if (relevant.trim().length < 40) {
@@ -1695,7 +1722,7 @@ function App() {
     try {
       const { extracted, source } = await distillJobPosting(payload.text, {
         url: payload.url || undefined,
-        aiRequest: buildAiRequestFields({ aiProvider, apiKey, apiBaseUrl, selectedModel, customModel, cliReasoningEffort })
+        aiRequest: distillRequestFields()
       });
       const relevant = extracted.tailoringText;
       if (relevant.trim().length < 40) {
@@ -2027,36 +2054,67 @@ function App() {
           />
         }
         aiControl={
-          <AiMenu
-            aiProvider={aiProvider}
-            onProviderChange={handleProviderChange}
-            apiKey={apiKey}
-            setApiKey={setApiKey}
-            apiBaseUrl={apiBaseUrl}
-            setApiBaseUrl={setApiBaseUrl}
-            selectedModel={selectedModel}
-            setSelectedModel={setSelectedModel}
-            customModel={customModel}
-            setCustomModel={setCustomModel}
-            cliReasoningEffort={cliReasoningEffort}
-            setCliReasoningEffort={setCliReasoningEffort}
-            reviewer={
-              <ReviewerSettings
-                auditProvider={auditProvider}
-                onAuditProviderChange={handleAuditProviderChange}
-                auditApiKey={auditApiKey}
-                setAuditApiKey={setAuditApiKey}
-                auditApiBaseUrl={auditApiBaseUrl}
-                setAuditApiBaseUrl={setAuditApiBaseUrl}
-                auditSelectedModel={auditSelectedModel}
-                setAuditSelectedModel={setAuditSelectedModel}
-                auditCustomModel={auditCustomModel}
-                setAuditCustomModel={setAuditCustomModel}
-                auditCliReasoningEffort={auditCliReasoningEffort}
-                setAuditCliReasoningEffort={setAuditCliReasoningEffort}
-              />
-            }
-          />
+          <AiMenu aiProvider={aiProvider} selectedModel={selectedModel} customModel={customModel}>
+            {/* Pipeline order: Distill → Tailor → Review. Each stage is its own
+                concrete provider; the segmented buttons copy settings between them. */}
+            <ProviderSection
+              stage="distill"
+              title="Distill"
+              provider={distillProvider}
+              onProviderChange={handleDistillProviderChange}
+              apiKey={distillApiKey}
+              setApiKey={setDistillApiKey}
+              apiBaseUrl={distillApiBaseUrl}
+              setApiBaseUrl={setDistillApiBaseUrl}
+              selectedModel={distillSelectedModel}
+              setSelectedModel={setDistillSelectedModel}
+              customModel={distillCustomModel}
+              setCustomModel={setDistillCustomModel}
+              cliReasoningEffort={distillCliReasoningEffort}
+              setCliReasoningEffort={setDistillCliReasoningEffort}
+              open={sectionOpen.distill}
+              onToggle={() => toggleSection("distill")}
+              onCopyFrom={(from) => copyStage(from, "distill")}
+            />
+            <ProviderSection
+              stage="tailor"
+              title="Tailor"
+              provider={aiProvider}
+              onProviderChange={handleProviderChange}
+              apiKey={apiKey}
+              setApiKey={setApiKey}
+              apiBaseUrl={apiBaseUrl}
+              setApiBaseUrl={setApiBaseUrl}
+              selectedModel={selectedModel}
+              setSelectedModel={setSelectedModel}
+              customModel={customModel}
+              setCustomModel={setCustomModel}
+              cliReasoningEffort={cliReasoningEffort}
+              setCliReasoningEffort={setCliReasoningEffort}
+              open={sectionOpen.tailor}
+              onToggle={() => toggleSection("tailor")}
+              onCopyFrom={(from) => copyStage(from, "tailor")}
+            />
+            <ProviderSection
+              stage="review"
+              title="Review"
+              provider={auditProvider}
+              onProviderChange={handleAuditProviderChange}
+              apiKey={auditApiKey}
+              setApiKey={setAuditApiKey}
+              apiBaseUrl={auditApiBaseUrl}
+              setApiBaseUrl={setAuditApiBaseUrl}
+              selectedModel={auditSelectedModel}
+              setSelectedModel={setAuditSelectedModel}
+              customModel={auditCustomModel}
+              setCustomModel={setAuditCustomModel}
+              cliReasoningEffort={auditCliReasoningEffort}
+              setCliReasoningEffort={setAuditCliReasoningEffort}
+              open={sectionOpen.review}
+              onToggle={() => toggleSection("review")}
+              onCopyFrom={(from) => copyStage(from, "review")}
+            />
+          </AiMenu>
         }
         polishControl={
           <PolishMenu
