@@ -117,7 +117,7 @@ Never show:
   on both the frontend and the server's no-`AI_PROVIDER` fallback (an
   unknown `AI_PROVIDER` value still coerces to OpenAI).
 - First-class provider choices: subscription CLIs (Claude Code, Codex,
-  Gemini CLI / Antigravity) plus hosted OpenAI, Claude, Gemini, OpenRouter,
+  Antigravity CLI) plus hosted OpenAI, Claude, Gemini, OpenRouter,
   Groq, Together AI, Mistral AI, and Local/custom.
 - The Model control changes with the selected provider; keep a
   **Custom model** escape hatch for newer model IDs.

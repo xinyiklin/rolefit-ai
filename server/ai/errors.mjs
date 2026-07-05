@@ -35,8 +35,8 @@ const SAFE_CONFIG_MESSAGES = new Set([
   CLAUDE_CLI_TIMEOUT_MESSAGE,
   "codex is not installed or not on PATH.",
   "claude is not installed or not on PATH.",
-  "gemini is not installed or not on PATH.",
-  "Gemini CLI could not complete the request. Run `gemini` once to sign in, confirm the selected model is available, then try again."
+  "agy is not installed or not on PATH.",
+  "Antigravity CLI could not complete the request. Run `agy auth login` to sign in, confirm the selected model is available, then try again."
 ]);
 
 // Returns the message verbatim when it is a known actionable config error, else

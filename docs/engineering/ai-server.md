@@ -20,7 +20,7 @@ careflow `5173-5180`, portfolio `5184-5185`; do not mix them up.
 - local HTTP serving with Vite middleware in development
 - `.env` loading and process environment hygiene
 - `/api/polish` AI provider routing — subscription CLIs (Claude Code,
-  Codex CLI, Gemini CLI / Antigravity) shelled out to local subprocesses,
+  Codex CLI, Antigravity CLI) shelled out to local subprocesses,
   plus hosted APIs (OpenAI, Anthropic, Google, OpenRouter, Groq,
   Together AI, Mistral, OpenAI-compatible). The route is intentionally
   multi-pass: targeted suggestion generation first, then the strict
@@ -142,10 +142,15 @@ modules under `server/ai/` so no single file carries the whole pipeline:
   takes an optional drop-stats collector and the route warns (shape-only)
   when a reply's suggestions are ALL dropped — a silent all-drop is
   otherwise indistinguishable from "no changes needed".
-  `reconcileFitVerdict` enforces verdict/score agreement conservatively:
-  scores (base AND tailored) clamp DOWN to a pessimistic verdict's band,
-  optimistic verdicts downgrade to the score's band — neither signal is
-  ever inflated. Hit-keyword grounding: a suggestion whose claimed JD
+  `applyGapCapsAndVerdict` derives the server verdict from the fit score
+  conservatively: a graduated cap scales with the number of genuinely missing
+  required skills (≥1 → 79, ≥2 → 69, ≥3 → 60; a BLOCKER or unmet eligibility
+  gate → 45 / DON'T APPLY), taking the STRONGER of the reported HIGH gaps and
+  the missing `requirementCoverage` rows so gaps can't be under-reported; base
+  AND tailored scores clamp DOWN to that cap and the verdict is
+  `verdictForScore(tailored)` — never inflated, with a deterministic `capReason`
+  naming the mechanism. With no usable numeric score the sanitized verdict
+  passes through unchanged (a hard eligibility blocker still forces DON'T APPLY). Hit-keyword grounding: a suggestion whose claimed JD
   keyword appears in `proposedText` but whose significant words exist
   nowhere in the scope text or honest context is dropped
   (`ungroundedKeyword`) — the model-prose evidence field cannot launder an
@@ -182,16 +187,19 @@ absent that, the server defaults to the **Claude Code CLI** (`claude-cli`) — a
 (`getDefaultProvider()` in `server/ai/providers.mjs`). Setting `AI_PROVIDER`
 (or picking a provider in the AI menu) overrides this; an *unknown*
 `AI_PROVIDER` still coerces to OpenAI, and `AI_MODEL` / `OPENAI_MODEL` select
-the OpenAI model (`gpt-5.5` default). The other subscription CLIs (Codex CLI,
-Gemini CLI / Antigravity) are the same zero-cost path for their vendors. The
+the OpenAI model (`gpt-5.5` default). The other subscription CLIs (Codex CLI and
+the Antigravity CLI `agy`, which replaced the retired Gemini CLI) are the same
+zero-cost path for their vendors. The
 frontend already defaults to `claude-cli`, so this only affects the
 headless / no-provider request path.
 
 Per-provider rules:
 
-- **Subscription CLIs** (Claude Code, Codex CLI, Gemini CLI / Antigravity)
-  shell out to local subprocesses via `server/ai-cli/` using your existing
-  subscription auth — no API key, no per-token cost.
+- **Subscription CLIs** (Claude Code `claude-cli`, Codex CLI `codex-cli`, and
+  the Antigravity CLI `antigravity-cli` — the `agy` binary that replaced the
+  retired Gemini CLI for Google's free tier and subscription) shell out to local
+  subprocesses via `server/ai-cli/` using your existing subscription auth — no
+  API key, no per-token cost.
 - Use each provider's native API (Anthropic Messages, Gemini
   `generateContent`) where supported. The Anthropic Messages call sends
   **no `temperature`** and **no trailing assistant prefill**: both return

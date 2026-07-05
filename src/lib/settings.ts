@@ -37,17 +37,21 @@ const KEY = "rolefit:settings";
 const validProviders = new Set<string>(providerOptions.map((option) => option.value));
 
 // Reconcile persisted values that may be stale (older app version, a renamed
-// provider, or hand-edited storage). An unknown provider would otherwise be
-// shown raw in the menu and silently coerced to OpenAI server-side; a model
-// left over from a different provider would make the dropdown and the submitted
-// model disagree.
+// provider, a removed model option, or hand-edited storage). An unknown provider
+// would otherwise be shown raw in the menu and silently coerced to OpenAI
+// server-side; a model left over from a different provider — or a now-removed
+// option such as the CLI providers' old blank "CLI subscription default" (empty
+// string) or OpenAI's old blank "Server default" — would make the dropdown and
+// the submitted model disagree. The empty string is checked with `!== undefined`
+// (not truthiness) so a saved "" still reconciles to the provider default; no
+// provider now ships a blank-value model or effort option.
 function coerce(settings: PersistedSettings): PersistedSettings {
   if (settings.aiProvider && !validProviders.has(settings.aiProvider)) {
     delete settings.aiProvider;
     delete settings.selectedModel;
     delete settings.cliReasoningEffort;
   }
-  if (settings.aiProvider && settings.selectedModel && settings.selectedModel !== "custom") {
+  if (settings.aiProvider && settings.selectedModel !== undefined && settings.selectedModel !== "custom") {
     const models = modelOptionsByProvider[settings.aiProvider] ?? [];
     if (!models.some((model) => model.value === settings.selectedModel)) {
       // Fall back to the provider's own default rather than a stale cross-provider id.
@@ -62,7 +66,7 @@ function coerce(settings: PersistedSettings): PersistedSettings {
     delete settings.auditSelectedModel;
     delete settings.auditCliReasoningEffort;
   }
-  if (settings.auditProvider && settings.auditSelectedModel && settings.auditSelectedModel !== "custom") {
+  if (settings.auditProvider && settings.auditSelectedModel !== undefined && settings.auditSelectedModel !== "custom") {
     const models = modelOptionsByProvider[settings.auditProvider] ?? [];
     if (!models.some((model) => model.value === settings.auditSelectedModel)) {
       const fallback = providerOptions.find((option) => option.value === settings.auditProvider)?.model;

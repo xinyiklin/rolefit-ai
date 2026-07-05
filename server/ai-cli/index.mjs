@@ -1,8 +1,8 @@
 // Subscription-CLI providers. Lets the polish route use Claude Max (via
 // Claude Code), ChatGPT/Codex Plus (via Codex CLI), or Google Gemini (via the
-// Gemini CLI / Antigravity) without burning paid API tokens. Each helper spawns
-// the local CLI binary and returns the model response as a string (the polish
-// route then parses it as JSON).
+// Antigravity CLI `agy`, which replaced the retired Gemini CLI) without burning
+// paid API tokens. Each helper spawns the local CLI binary and returns the model
+// response as a string (the polish route then parses it as JSON).
 
 import { spawn } from "node:child_process";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
@@ -147,39 +147,46 @@ export async function callCodexCli({ model, reasoningEffort, systemPrompt, userP
   }
 }
 
-// ----- Gemini CLI (Google Gemini / Antigravity, non-interactive) -----
+// ----- Antigravity CLI (agy — Google's Gemini CLI successor, non-interactive) -----
 
-export async function callGeminiCli({ model, systemPrompt, userPrompt }) {
-  // The Gemini CLI has no separate system-prompt flag, so combine like Codex.
+export async function callAntigravityCli({ model, systemPrompt, userPrompt }) {
+  // agy has no separate system-prompt flag, so combine like Codex/Gemini.
   const combined = systemPrompt ? `${systemPrompt}\n\n---\n\n${userPrompt}` : userPrompt;
 
-  // --skip-trust: required for headless runs (the CLI otherwise refuses in an
-  //   untrusted workspace). -o text: print only the model's text response.
-  //   -p "": triggers non-interactive (headless) mode WITHOUT putting the prompt
-  //   in argv. The prompt is sensitive (resume + job text + honest context), and
-  //   argv is world-readable in a local process listing, so it is fed on stdin
-  //   instead — `gemini --help`: "-p ... Appended to input on stdin (if any)".
-  //   An empty -p value still selects headless mode, so input == stdin == prompt.
-  const args = ["--skip-trust", "-o", "text"];
-  if (model && model !== "default") args.push("-m", model);
-  args.push("-p", "");
+  // -p "": print mode — run a single prompt non-interactively and print the
+  //   plain-text response. An empty -p value keeps print mode selected while the
+  //   prompt is fed on stdin, so the sensitive resume + job text never lands in
+  //   argv (world-readable in a local process listing). This mirrors the Gemini
+  //   CLI helper; agy is Gemini's direct successor. If a future agy build needs
+  //   the prompt as the -p value instead, pass `combined` there — but that would
+  //   reintroduce the argv leak this avoids.
+  // --model: model id. agy has NO `-m` short alias (it errors "flags provided
+  //   but not defined: -m"); the ids are the exact display names from `agy
+  //   models`, e.g. "Gemini 3.5 Flash (High)" (spaces + parens — passed as one
+  //   argv element, so no shell parsing). --dangerously-skip-permissions: a
+  //   non-interactive spawn otherwise blocks on a tool-approval prompt that never
+  //   renders (agy is an agentic harness). Auto-approving is safe here because the
+  //   CLI runs in a throwaway empty temp dir with nothing to read or write, and
+  //   the task only asks for a JSON answer. The runCli timeout still bounds any
+  //   hang. (All verified against agy 1.0.16.)
+  const args = ["-p", ""];
+  if (model && model !== "default") args.push("--model", model);
+  args.push("--dangerously-skip-permissions");
 
-  // Run in a throwaway working dir so --skip-trust only ever trusts an empty
-  // directory: the CLI cannot pick up project context (GEMINI.md) or touch
-  // project files. Color/UX warnings go to stderr, so stdout stays clean JSON.
-  const workdir = await mkdtemp(join(tmpdir(), "rolefit-gemini-"));
+  // Throwaway working dir: agy can't pick up project context (AGENTS.md/AGY.md)
+  // or touch project files. UX/color warnings go to stderr, so stdout stays clean.
+  const workdir = await mkdtemp(join(tmpdir(), "rolefit-antigravity-"));
   try {
-    const { stdout } = await runCli("gemini", args, combined, { cwd: workdir });
+    const { stdout } = await runCli("agy", args, combined, { cwd: workdir });
     return stdout.trim();
   } catch (error) {
-    // Keep the "not installed" message (it's surfaced as actionable config
-    // guidance); turn any other non-zero exit — most often an unauthenticated
-    // CLI or an inaccessible model — into a specific, actionable hint instead
-    // of the generic "did not return a usable draft" 500.
+    // Keep the actionable "not installed" hint (it's in the SAFE set); turn any
+    // other non-zero exit — most often an unauthenticated CLI or an inaccessible
+    // model — into a specific, actionable hint instead of a generic 500.
     const message = error instanceof Error ? error.message : "";
     if (/is not installed or not on PATH/.test(message)) throw error;
     throw new Error(
-      "Gemini CLI could not complete the request. Run `gemini` once to sign in, confirm the selected model is available, then try again."
+      "Antigravity CLI could not complete the request. Run `agy auth login` to sign in, confirm the selected model is available, then try again."
     );
   } finally {
     await rm(workdir, { recursive: true, force: true }).catch(() => {});

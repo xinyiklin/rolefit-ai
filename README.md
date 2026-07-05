@@ -28,7 +28,7 @@ _Screenshots use demo workspace data._
 - **Multi-format resume I/O** — ingest `.docx`, `.tex` (Jake's-style), or plain text; paste extracted PDF text when the original file is only available as PDF.
 - **Job-link import** — paste a posting URL and pull the description in one click: Workday-aware (reads its CXS JSON API for `/job/` and `/details/` links), with a generic HTML→text fallback for other boards. The posting is distilled before polishing — **AI-first** via the configured provider (anti-fabrication grounded server-side), with the deterministic engine as an offline fallback — keeping role intro / responsibilities / requirements / preferred qualifications while dropping empty bullets, duplicated ATS title furniture, low-value Workday metadata, apply/share/navigation rows, company/culture marketing, salary pills, benefits/perks, pay-transparency, and EEO/legal boilerplate. The link itself is kept only for pipeline tracking and is **never sent to the model**.
 - **Browser extension (Chrome/Firefox)** — on any job posting, click the toolbar icon for an instant **local fit score** (a keyword-overlap estimate against your base resume), **matched vs missing** keywords, a check on whether you've **already tracked or applied** to that exact posting, and a one-click **Import** that opens a fresh RoleFit tab, distills the page into that tab's Job field server-side, and keeps any existing tailoring session untouched — with an optional **Tailor automatically** toggle that jumps straight to polish once your base resume is loaded. Manifest V3; the extension talks only to your local `http://localhost:5181` server, while AI-backed import/polish still uses whichever local CLI, hosted API, or local model you configure. See [Browser extension](#browser-extension).
-- **Subscription-friendly, multi-provider AI** — the default is the **Claude Code CLI** subscription path, with the other **subscription-CLI tools** (`Codex CLI`, `Gemini CLI` / Antigravity) routing through existing Claude Max / ChatGPT Plus / Google subscriptions instead of per-token billing, and **hosted-API backends** (OpenAI, Anthropic, Gemini, OpenRouter, Groq, Together, Mistral, local Ollama) available behind the same interface.
+- **Subscription-friendly, multi-provider AI** — the default is the **Claude Code CLI** path (any **Claude Pro or Max** plan), with the other **account-backed CLI tools** (`Codex CLI`, `Antigravity CLI`) running on your existing **ChatGPT** or **Google Antigravity** account — including their **free tiers** — instead of per-token billing, and **hosted-API backends** (OpenAI, Anthropic, Gemini, OpenRouter, Groq, Together, Mistral, local Ollama) available behind the same interface.
 - **Fit scoring + 4-category keyword gap analysis** — required experience, knowledge, required skills, technical tools.
 - **Strict recruiter review mode** — verdict (STRONG FIT / REASONABLE FIT / STRETCH / DON'T APPLY), base-vs-tailored fit scores, gap severity, targeted bullet rewrites, interview risk flags, ready / edits-pending / missing-evidence status, and a cover-letter angle.
 - **LaTeX export pipeline (recommended)** built on a Jake's-style resume template + optional local PDF compile through **Tectonic** — the recommended path for faithful, ATS-clean output.
@@ -41,7 +41,7 @@ _Screenshots use demo workspace data._
 
 React 19 · TypeScript · Vite · Node.js (`server.mjs` with focused helpers under `server/`) · custom CSS · `lucide-react` icons
 
-No SaaS dependencies. Optional integrations: OpenAI · Anthropic · Gemini · OpenRouter · Groq · Together · Mistral · local Ollama · Claude Code CLI · Codex CLI · Gemini CLI (Antigravity) · Tectonic.
+No SaaS dependencies. Optional integrations: OpenAI · Anthropic · Gemini · OpenRouter · Groq · Together · Mistral · local Ollama · Claude Code CLI · Codex CLI · Antigravity CLI · Tectonic.
 
 ## Run
 
@@ -67,23 +67,25 @@ TOGETHER_API_KEY=...
 MISTRAL_API_KEY=...
 ```
 
-For **zero per-token cost**, use the subscription-CLI providers (the default is the Claude Code CLI; override with `AI_PROVIDER` or the in-app AI menu):
+For **zero per-token cost**, use the account-based CLI providers (the default is the Claude Code CLI; override with `AI_PROVIDER` or the in-app AI menu):
 
 ```bash
-# requires Claude Max
+# works with any Claude Pro or Max plan
 brew install claude-code   # or via the official installer
 claude auth login
 
-# requires ChatGPT Plus / Codex Plus
+# works with any ChatGPT plan, including the free tier (local tasks, usage-limited)
 brew install codex
 codex login
 
-# requires Google Gemini access (or drive it via Antigravity)
-# install Google's Gemini CLI, then sign in
-gemini   # run once to sign in
+# works with Google Antigravity (free tier or subscription)
+# install the Antigravity CLI (`agy`), then sign in
+agy auth login
 ```
 
 The app shells out to these CLIs for AI-backed import, polish, cover-letter, and application-answer requests — no API key required. The app is still local-first and personal-use: you run the server on your own machine, and the CLI auth/session stays tied to that device. For fully local inference, point the Local/custom provider at a local OpenAI-compatible server such as Ollama.
+
+> **Tested providers:** all three subscription CLIs — **Claude Code**, **Codex**, and **Antigravity** (`agy`) — plus the **OpenAI** hosted API have been exercised end-to-end. The remaining hosted-API routes (Anthropic, Gemini, OpenRouter, Groq, Together, Mistral, and local Ollama) share the same request path but have **not** been tested — treat them as best-effort.
 
 ## Optional local LaTeX
 
@@ -125,8 +127,9 @@ This folder is gitignored except its README. Personal resumes, TEX/PDF/DOCX file
 server.mjs                       # main HTTP server
 server/
   ai/                            # /api/polish + /api/distill: polish/distill (routes) + providers,
-                                 #   clients, prompts, sanitize, json, errors + applicationAnswers
-  ai-cli/index.mjs               # Claude Code / Codex / Gemini CLI (Antigravity) shell-out
+                                 #   clients, prompts, sanitize, grounding, json, errors,
+                                 #   coverLetter + applicationAnswers
+  ai-cli/index.mjs               # Claude Code / Codex / Antigravity CLI shell-out
   applications/index.mjs         # pipeline tracker storage
   docx.mjs                       # DOCX import helpers (extract → editor)
   extension/index.mjs            # browser-extension API: quick fit score + applied-status lookup

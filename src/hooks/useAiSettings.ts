@@ -1,5 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import { providerOptions } from "../config/aiOptions";
+import {
+  cliReasoningEffortOptionsFor,
+  defaultCliReasoningEffort,
+  providerOptions
+} from "../config/aiOptions";
 import { loadSettings, saveSettings } from "../lib/settings";
 import type { AiProviderValue } from "../config/aiOptions";
 import type { CitizenshipStatus } from "../lib/candidateFacts";
@@ -16,14 +20,18 @@ export function useAiSettings() {
   const [aiProvider, setAiProvider] = useState<AiProviderValue>(saved.aiProvider ?? "claude-cli");
   const [apiKey, setApiKey] = useState("");
   const [apiBaseUrl, setApiBaseUrl] = useState(saved.apiBaseUrl ?? "");
-  const [selectedModel, setSelectedModel] = useState(saved.selectedModel ?? "sonnet");
-  const [cliReasoningEffort, setCliReasoningEffort] = useState(saved.cliReasoningEffort ?? "");
+  const [selectedModel, setSelectedModel] = useState(saved.selectedModel ?? "claude-sonnet-5");
+  const [cliReasoningEffort, setCliReasoningEffort] = useState(
+    saved.cliReasoningEffort ?? defaultCliReasoningEffort(saved.aiProvider ?? "claude-cli")
+  );
   const [customModel, setCustomModel] = useState(saved.customModel ?? "");
 
   // Optional independent reviewer for the strict-audit pass. "" = same as the
   // primary provider. The reviewer API key, like the primary, is never persisted.
   const [auditProvider, setAuditProvider] = useState<AiProviderValue | "">(saved.auditProvider ?? "codex-cli");
-  const [auditSelectedModel, setAuditSelectedModel] = useState(saved.auditSelectedModel ?? "");
+  // Concrete default matching the default audit provider (codex-cli) now that the
+  // CLI providers no longer offer a blank "CLI subscription default" model option.
+  const [auditSelectedModel, setAuditSelectedModel] = useState(saved.auditSelectedModel ?? "gpt-5.5");
   const [auditCustomModel, setAuditCustomModel] = useState(saved.auditCustomModel ?? "");
   const [auditCliReasoningEffort, setAuditCliReasoningEffort] = useState(saved.auditCliReasoningEffort ?? "");
   const [auditApiBaseUrl, setAuditApiBaseUrl] = useState(saved.auditApiBaseUrl ?? "");
@@ -86,13 +94,35 @@ export function useAiSettings() {
     requiresSponsorship
   ]);
 
+  // Keep each reasoning effort valid for its selected model — the tiers a model
+  // exposes vary (Haiku none; Opus/Sonnet 4.6 lack xhigh). When the current value
+  // isn't offered by the model, fall back to the provider default (always a member
+  // of any non-empty tier list). An empty list (Haiku / non-CLI) hides the control,
+  // so the leftover value is inert and left untouched.
+  useEffect(() => {
+    const model = selectedModel === "custom" ? customModel : selectedModel;
+    const options = cliReasoningEffortOptionsFor(aiProvider, model);
+    if (options && options.length > 0 && !options.some((option) => option.value === cliReasoningEffort)) {
+      setCliReasoningEffort(defaultCliReasoningEffort(aiProvider));
+    }
+  }, [aiProvider, selectedModel, customModel, cliReasoningEffort]);
+
+  useEffect(() => {
+    if (!auditProvider) return;
+    const model = auditSelectedModel === "custom" ? auditCustomModel : auditSelectedModel;
+    const options = cliReasoningEffortOptionsFor(auditProvider, model);
+    if (options && options.length > 0 && !options.some((option) => option.value === auditCliReasoningEffort)) {
+      setAuditCliReasoningEffort(defaultCliReasoningEffort(auditProvider));
+    }
+  }, [auditProvider, auditSelectedModel, auditCustomModel, auditCliReasoningEffort]);
+
   function handleProviderChange(value: AiProviderValue) {
     const option = providerOptions.find((item) => item.value === value);
     setAiProvider(value);
     setApiKey("");
     setApiBaseUrl(option?.baseUrl ?? "");
     setSelectedModel(option?.model ?? "");
-    setCliReasoningEffort("");
+    setCliReasoningEffort(defaultCliReasoningEffort(value));
     setCustomModel("");
   }
 
@@ -104,7 +134,7 @@ export function useAiSettings() {
     setAuditApiKey("");
     setAuditApiBaseUrl(value ? option?.baseUrl ?? "" : "");
     setAuditSelectedModel(value ? option?.model ?? "" : "");
-    setAuditCliReasoningEffort("");
+    setAuditCliReasoningEffort(value ? defaultCliReasoningEffort(value) : "");
     setAuditCustomModel("");
   }
 

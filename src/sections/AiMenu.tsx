@@ -1,11 +1,12 @@
 import { KeyRound, Sparkles } from "lucide-react";
 import type { ReactNode } from "react";
 import {
-  cliReasoningEffortOptionsByProvider,
+  cliReasoningEffortOptionsFor,
   modelOptionsByProvider,
   providerOptions
 } from "../config/aiOptions";
 import { NavMenu } from "./NavMenu";
+import { ModelSelectOptions } from "./ModelSelectOptions";
 import type { AiProviderValue } from "../config/aiOptions";
 
 type AiMenuProps = {
@@ -45,9 +46,11 @@ export function AiMenu({
 }: AiMenuProps) {
   const selectedProviderOption = providerOptions.find((option) => option.value === aiProvider);
   const currentModelOptions = modelOptionsByProvider[aiProvider] ?? [];
-  const currentCliReasoningEffortOptions = cliReasoningEffortOptionsByProvider[aiProvider] ?? [];
+  const currentCliReasoningEffortOptions =
+    cliReasoningEffortOptionsFor(aiProvider, selectedModel === "custom" ? customModel : selectedModel) ?? [];
   const customModelPlaceholder = selectedProviderOption?.model || "model-id";
-  const isCliProvider = aiProvider === "claude-cli" || aiProvider === "codex-cli" || aiProvider === "gemini-cli";
+  const isCliProvider =
+    aiProvider === "claude-cli" || aiProvider === "codex-cli" || aiProvider === "antigravity-cli";
   const modelLabel = selectedModel === "custom" ? customModel || "custom" : selectedModel || "default";
 
   return (
@@ -79,11 +82,7 @@ export function AiMenu({
           <label className="field">
             <span>Model</span>
             <select value={selectedModel} onChange={(event) => setSelectedModel(event.target.value)}>
-              {currentModelOptions.map((option) => (
-                <option key={option.value || "server-default"} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
+              <ModelSelectOptions options={currentModelOptions} />
             </select>
           </label>
           {currentCliReasoningEffortOptions.length ? (
@@ -126,8 +125,8 @@ export function AiMenu({
                   ? "Not used — auth via `claude auth login`"
                   : aiProvider === "codex-cli"
                   ? "Not used — auth via `codex login`"
-                  : aiProvider === "gemini-cli"
-                  ? "Not used — auth via the `gemini` CLI login"
+                  : aiProvider === "antigravity-cli"
+                  ? "Not used — auth via `agy auth login`"
                   : aiProvider === "openai"
                   ? "Uses OPENAI_API_KEY when blank"
                   : "Uses this provider's .env key when blank"
