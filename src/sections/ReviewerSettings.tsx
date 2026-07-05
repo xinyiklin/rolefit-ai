@@ -1,10 +1,11 @@
 import { KeyRound } from "lucide-react";
 import {
-  cliReasoningEffortOptionsByProvider,
+  cliReasoningEffortOptionsFor,
   modelOptionsByProvider,
   providerOptions
 } from "../config/aiOptions";
 import type { AiProviderValue } from "../config/aiOptions";
+import { ModelSelectOptions } from "./ModelSelectOptions";
 
 // Optional independent reviewer for the strict-audit pass. The primary provider
 // rewrites (and drafts the cover letter); this lets a *different* model audit
@@ -43,9 +44,11 @@ export function ReviewerSettings({
   setAuditCliReasoningEffort
 }: ReviewerSettingsProps) {
   const isCliProvider =
-    auditProvider === "claude-cli" || auditProvider === "codex-cli" || auditProvider === "gemini-cli";
+    auditProvider === "claude-cli" || auditProvider === "codex-cli" || auditProvider === "antigravity-cli";
   const modelOptions = auditProvider ? modelOptionsByProvider[auditProvider] ?? [] : [];
-  const effortOptions = auditProvider ? cliReasoningEffortOptionsByProvider[auditProvider] ?? [] : [];
+  const effortOptions = auditProvider
+    ? cliReasoningEffortOptionsFor(auditProvider, auditSelectedModel === "custom" ? auditCustomModel : auditSelectedModel) ?? []
+    : [];
   const selectedProviderOption = providerOptions.find((option) => option.value === auditProvider);
   const customModelPlaceholder = selectedProviderOption?.model || "model-id";
 
@@ -78,11 +81,7 @@ export function ReviewerSettings({
             <label className="field">
               <span>Reviewer model</span>
               <select value={auditSelectedModel} onChange={(event) => setAuditSelectedModel(event.target.value)}>
-                {modelOptions.map((option) => (
-                  <option key={option.value || "server-default"} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
+                <ModelSelectOptions options={modelOptions} />
               </select>
             </label>
             {effortOptions.length ? (

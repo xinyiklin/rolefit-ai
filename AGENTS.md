@@ -119,7 +119,8 @@ ADR-style entries, for example:
 
 Use the relevant docs and repo surfaces by task shape:
 
-- UI work: read `docs/engineering/ui-principles.md`; reuse `src/ui.tsx` and
+- UI work: read `docs/engineering/ui-principles.md`; reuse the shared
+  `src/sections/` components (`NavMenu`, the `*Menu.tsx` menus, `shared.ts`) and
   `src/styles/`; preserve the navbar-inputs (Resume/Job/AI/Options menus +
   Polish) → full-width tabbed studio workflow; keep labels and hints short;
   visual QA is flag-first (skip by default; flag real layout/theming risk and

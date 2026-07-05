@@ -33,7 +33,7 @@ export function providerLabel(provider) {
       "openai-compatible": "OpenAI-compatible provider",
       "claude-cli": "Claude Code",
       "codex-cli": "Codex CLI",
-      "gemini-cli": "Gemini CLI"
+      "antigravity-cli": "Antigravity CLI"
     }[provider] ?? "AI provider"
   );
 }
@@ -52,7 +52,7 @@ const KNOWN_PROVIDERS = new Set([
   "local",
   "claude-cli",
   "codex-cli",
-  "gemini-cli"
+  "antigravity-cli"
 ]);
 
 export function isKnownProvider(value) {
@@ -65,7 +65,7 @@ export function normalizeProvider(provider) {
 }
 
 export function isCliProvider(provider) {
-  return provider === "claude-cli" || provider === "codex-cli" || provider === "gemini-cli";
+  return provider === "claude-cli" || provider === "codex-cli" || provider === "antigravity-cli";
 }
 
 function normalizeCliReasoningEffort(provider, effort) {
@@ -85,17 +85,17 @@ function providerDefaultModel(provider) {
   return (
     {
       openai: process.env.OPENAI_MODEL ?? "gpt-5.5",
-      anthropic: process.env.ANTHROPIC_MODEL ?? "claude-sonnet-4-6",
+      anthropic: process.env.ANTHROPIC_MODEL ?? "claude-sonnet-5",
       gemini: process.env.GEMINI_MODEL ?? "gemini-3.5-flash",
       openrouter: process.env.OPENROUTER_MODEL ?? "anthropic/claude-sonnet-4.6",
-      groq: process.env.GROQ_MODEL ?? "llama-3.3-70b-versatile",
+      groq: process.env.GROQ_MODEL ?? "openai/gpt-oss-120b",
       together: process.env.TOGETHER_MODEL ?? "openai/gpt-oss-20b",
       mistral: process.env.MISTRAL_MODEL ?? "mistral-large-latest",
       "openai-compatible": process.env.AI_MODEL ?? process.env.OPENAI_MODEL ?? "gpt-5.5",
       local: process.env.LOCAL_AI_MODEL ?? "llama3.2",
       "claude-cli": process.env.CLAUDE_CLI_MODEL ?? "",
       "codex-cli": process.env.CODEX_CLI_MODEL ?? "",
-      "gemini-cli": process.env.GEMINI_CLI_MODEL ?? ""
+      "antigravity-cli": process.env.ANTIGRAVITY_CLI_MODEL ?? ""
     }[provider] ?? process.env.OPENAI_MODEL ?? "gpt-5.5"
   );
 }
@@ -156,12 +156,18 @@ export function resolveProviderRequest(body) {
   }
   if (model && model.startsWith("-")) {
     // A leading dash could read as a flag to the spawned CLI providers
-    // (`--model <value>`); no real model id starts with one.
+    // (`--model <value>`); no real model id starts with one. This guard stays
+    // even though spaces/parens are allowed below.
     throw new UserSafeAiError("Model name cannot start with a dash.", 400);
   }
-  if (model && !/^[a-z0-9_.:/@+-]+$/i.test(model)) {
+  // Spaces and parentheses are permitted because the Antigravity CLI's model ids
+  // are display names like "Gemini 3.5 Flash (High)" (from `agy models`). They are
+  // injection-safe: CLI providers spawn with an argv array (no shell), so the
+  // value is one argument, and the leading-dash guard above still blocks flag
+  // injection. Hosted providers only place the model in a JSON body / encoded URL.
+  if (model && !/^[a-z0-9 _.:/@+()-]+$/i.test(model)) {
     throw new UserSafeAiError(
-      "Model name can only use letters, numbers, dots, dashes, underscores, slashes, at signs, pluses, or colons.",
+      "Model name can only use letters, numbers, spaces, dots, dashes, underscores, slashes, at signs, pluses, parentheses, or colons.",
       400
     );
   }

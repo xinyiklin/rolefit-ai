@@ -3,7 +3,7 @@
 // and returns parsed JSON. Single source of truth for outbound AI calls,
 // shared by /api/polish and /api/application-answers.
 
-import { callClaudeCli, callCodexCli, callGeminiCli } from "../ai-cli/index.mjs";
+import { callAntigravityCli, callClaudeCli, callCodexCli } from "../ai-cli/index.mjs";
 import { fetchWithTimeout } from "../http.mjs";
 import { chatCompletionsEndpoint } from "../network.mjs";
 import { UserSafeAiError } from "./errors.mjs";
@@ -270,7 +270,7 @@ async function callGeminiGenerateContent({ apiKey, model, systemPrompt, userProm
 async function dispatchProvider({ provider, model, reasoningEffort, apiKey, apiBaseUrl, systemPrompt, userPrompt }) {
   if (provider === "claude-cli") return parseAiJson(await callClaudeCli({ model, reasoningEffort, systemPrompt, userPrompt }));
   if (provider === "codex-cli") return parseAiJson(await callCodexCli({ model, reasoningEffort, systemPrompt, userPrompt }));
-  if (provider === "gemini-cli") return parseAiJson(await callGeminiCli({ model, systemPrompt, userPrompt }));
+  if (provider === "antigravity-cli") return parseAiJson(await callAntigravityCli({ model, systemPrompt, userPrompt }));
   if (provider === "anthropic") return callAnthropicMessages({ apiKey, model, systemPrompt, userPrompt });
   if (provider === "gemini") return callGeminiGenerateContent({ apiKey, model, systemPrompt, userPrompt });
   if (provider === "openai") return callOpenAiResponses({ apiKey, model, systemPrompt, userPrompt });
