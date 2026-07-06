@@ -22,16 +22,16 @@ tailoring, job tracker, and applications stripped out.
 - **Faithful Jake's styling** — serif document, ruled section headings, bold
   titles with right-aligned dates, italic subtitles, automatic multi-page
   pagination that keeps headings with their first entry.
-- **Layout & spacing controls** — page zoom (also ⌘/Ctrl +/- / 0),
-  Compact/Normal/Relaxed presets, and fine sliders for line height and
-  header/section/entry/list gaps tucked behind a "Fine-tune spacing" disclosure.
-  Save the current spacing as a reusable **Custom** preset. Settings persist to
+- **Layout & spacing controls** — page zoom (also ⌘/Ctrl +/- / 0) and
+  Compact/Normal/Relaxed presets. A **Fine-tune** button opens a spacing flyout
+  with sliders for line height and header/section/entry/list gaps; save the
+  current spacing as a reusable **Custom** preset. Settings persist to
   `localStorage`.
-- **Typography controls** — grouped by element (Headings / Entries / Skills /
-  Contact): section-heading **case** (small caps / uppercase / normal) plus bold
-  and underline; bold titles, italic subtitles; bold skill labels; and a
-  configurable contact divider (quick-pick glyphs or custom 1-2 char input).
-  One-click reset to Jake's defaults.
+- **Typography controls** — collapsible **Typography** / **Entries** / **Skills**
+  cards: section-heading **case** (small caps / uppercase / normal) plus bold and
+  underline, and a configurable contact divider (quick-pick glyphs or custom
+  1-2 char input) under Typography; bold titles and italic subtitles under
+  Entries; bold skill labels under Skills. One-click reset to Jake's defaults.
 - **Exports** (each download opens a rename dialog pre-filled with a
   resume-derived file name)
   - **PDF - LaTeX** — the resume rendered through the Jake's template and compiled
@@ -161,7 +161,7 @@ setup above). The workflow uses plain `docker` when available, or passwordless
 src/
   lib/            resume data model + parse/serialize/LaTeX-extract helpers
   hooks/          useResumeEditor · useDocStyle · useTemplates · useResumeExport
-  components/     reusable Modal shell, ImportModal, and SectionNav
+  components/     reusable Modal shell and ImportModal
   sections/
     editor/       the editable on-page resume (sections, entries, bullets, skills)
     Resume*.tsx   read-only document + off-screen print layer

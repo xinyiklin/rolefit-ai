@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
+import { Fragment, memo, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import { Plus, X } from "lucide-react";
 
 import type { ResumeData, ResumeSectionType } from "../../lib/resumeData";
@@ -17,12 +17,18 @@ type ResumeEditorProps = {
 
 // The editable on-page resume. Shares the `.resume-doc` look so it reads like the
 // document it produces; every field is a live control wired to the editor reducer.
-export function ResumeEditor({ data, actions, style }: ResumeEditorProps) {
+// Memoized: its props (resume model, actions, memoized cssVars) are reference-stable
+// across chrome-only state changes, so accordion/flyout toggles in App
+// don't force this expensive subtree to re-render. Pagination still observes the
+// rendered page width directly, since window and pane resizes change layout
+// without changing these props.
+function ResumeEditorInner({ data, actions, style }: ResumeEditorProps) {
   // "Add section" opens a small picker so the user chooses the section type up
   // front (bulleted entries vs skill list) rather than relying on heading text.
   const [pickingType, setPickingType] = useState(false);
   const [pageBreaks, setPageBreaks] = useState<Record<string, number>>({});
   const [pageCount, setPageCount] = useState(1);
+  const [layoutWidth, setLayoutWidth] = useState(0);
   const docRef = useRef<HTMLElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const addSectionRef = useRef<HTMLDivElement>(null);
@@ -106,6 +112,44 @@ export function ResumeEditor({ data, actions, style }: ResumeEditorProps) {
     if (trimmed.endsWith("em")) return amount * fontSizePx;
     return amount;
   }
+
+  useLayoutEffect(() => {
+    const doc = docRef.current;
+    if (!doc) return;
+
+    let frame: number | null = null;
+    const updateWidth = (width = doc.getBoundingClientRect().width) => {
+      setLayoutWidth((current) => (Math.abs(current - width) < 0.5 ? current : width));
+    };
+    const queueUpdate = (width?: number) => {
+      if (frame !== null) window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(() => {
+        frame = null;
+        updateWidth(width);
+      });
+    };
+
+    updateWidth();
+
+    if (typeof ResizeObserver === "undefined") {
+      const onResize = () => queueUpdate();
+      window.addEventListener("resize", onResize);
+      return () => {
+        if (frame !== null) window.cancelAnimationFrame(frame);
+        window.removeEventListener("resize", onResize);
+      };
+    }
+
+    const observer = new ResizeObserver((entries) => {
+      queueUpdate(entries[0]?.contentRect.width);
+    });
+    observer.observe(doc);
+
+    return () => {
+      if (frame !== null) window.cancelAnimationFrame(frame);
+      observer.disconnect();
+    };
+  }, []);
 
   useLayoutEffect(() => {
     const doc = docRef.current;
@@ -221,7 +265,7 @@ export function ResumeEditor({ data, actions, style }: ResumeEditorProps) {
     });
 
     return () => window.cancelAnimationFrame(raf);
-  }, [data, pageBreaks, style]);
+  }, [data, layoutWidth, pageBreaks, style]);
 
   const editorStyle = { ...style, "--doc-page-count": pageCount } as CSSProperties;
   const pages = Array.from({ length: pageCount }, (_, index) => index);
@@ -345,3 +389,5 @@ export function ResumeEditor({ data, actions, style }: ResumeEditorProps) {
     </article>
   );
 }
+
+export const ResumeEditor = memo(ResumeEditorInner);

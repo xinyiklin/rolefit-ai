@@ -51,6 +51,9 @@
   --danger-soft: oklch(0.92 0.04 25);
   --danger-line: oklch(0.45 0.12 30 / 0.3);
 
+  /* Layout */
+  --sidebar-width: 296px;
+
   /* Spacing scale */
   --s1: 4px;
   --s2: 8px;

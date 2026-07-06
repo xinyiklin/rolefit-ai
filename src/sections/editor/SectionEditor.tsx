@@ -26,7 +26,6 @@ function SectionEditorImpl({ section, index, siblingCount, actions, pageBreaks =
     <section
       ref={setNodeRef}
       style={style}
-      data-section-id={section.id}
       data-page-break-id={pageBreakId("section", section.id)}
       className={`rdx-section${isSkills ? " rdx-section--skills" : ""}${isSummary ? " rdx-section--summary" : ""}${isDragging ? " is-dragging" : ""}`}
     >
