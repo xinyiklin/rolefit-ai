@@ -140,17 +140,20 @@ select,
   display: flex;
   align-items: center;
   gap: var(--s2);
-  margin-top: var(--s2);
+  margin-top: var(--s1);
 }
 .field--inline > span { white-space: nowrap; }
+/* Compact citizenship select: content-width (overrides the base select's
+   width:100% so it stops stretching the whole row) and a touch shorter. Border,
+   the --r-md rounded corners, and the card-elev background all come from the base
+   `select` rule — the old --border/--r1/--surface overrides here were undefined
+   tokens, which is what flattened the corners and border. */
 .select--compact {
-  flex: 1;
-  padding: 4px 6px;
+  flex: 0 1 auto;
+  width: auto;
+  min-height: 28px;
+  padding: 0 var(--s2);
   font-size: 0.78rem;
-  border: 1px solid var(--border);
-  border-radius: var(--r1);
-  background: var(--surface);
-  color: var(--ink);
 }
 
 /* -------- Upload box -------- */

@@ -2,9 +2,12 @@ import { useEffect, useRef } from "react";
 import { getTabId } from "../lib/tabPresence";
 
 /**
- * One pending browser-extension import. `fields` is the AI-distilled structured
- * output produced server-side at import time (null when the server's AI distill
- * failed, in which case the app falls back to the deterministic engine on `text`).
+ * One pending browser-extension import. The server only PREPARES `text` (resolving
+ * the raw capture, e.g. fetching the full JD for a Greenhouse link) — it no longer
+ * AI-distills, so the receiving tab distills `text` client-side with its own
+ * selected Distill provider. `fields` is therefore null in the current protocol
+ * and kept only as legacy back-compat (an older server that still sends distilled
+ * structured output); the consumer handles both.
  */
 export type ExtensionImport = {
   text: string;
@@ -40,11 +43,13 @@ function clearExtensionImportParam(): void {
 
 /**
  * Polls /api/extension/inbox on mount, on window focus, and on tab visibility.
- * The server distills an import in the BACKGROUND, so the inbox reports
- * `{status:"distilling"}` first; this hook keeps polling (and calls `onDistilling`
- * for a progress affordance) until the brief is ready, then calls
- * `onImport({text, url, fields})`. The background distill is independent of the
- * popup, so closing it / switching tabs never strands an import.
+ * The server PREPARES an import's text in the BACKGROUND (resolving the raw
+ * capture, no AI call), so the inbox reports `{status:"distilling"}` first; this
+ * hook keeps polling (and calls `onDistilling` for a progress affordance) until
+ * the text is ready, then calls `onImport({text, url, fields})` — where `fields`
+ * is null and the receiving tab runs the distill client-side with its own
+ * provider. The background prepare is independent of the popup, so closing it /
+ * switching tabs never strands an import.
  *
  * Callback refs keep the latest closures without re-subscribing the listeners.
  */
@@ -122,10 +127,15 @@ export function useExtensionInbox(
           return;
         }
         const obj = data as { status?: unknown; text?: unknown; url?: unknown; fields?: unknown; autoTailor?: unknown };
-        if (obj.status === "distilling") {
+        // "distilling" = the background prepare hasn't finished. Treat ANY other
+        // status string without delivered text the same way (keep polling): a
+        // newer server may rename or add progress tokens, and an unknown status
+        // must never strand an import by falling through without a reschedule.
+        // (Forward-compat half of the planned "distilling"→"preparing" rename.)
+        if (typeof obj.status === "string" && typeof obj.text !== "string") {
           distilling = true;
           onDistillingRef.current?.();
-          schedule(1500); // keep polling until the background distill finishes
+          schedule(1500); // keep polling until the background prepare finishes
           return;
         }
         if (typeof obj.text === "string" && typeof obj.url === "string") {

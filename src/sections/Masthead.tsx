@@ -55,7 +55,7 @@ export function Masthead({
           disabled={!canPolish || isPolishing}
           title={canPolish ? "Tailor the resume to the job (AI polish + recruiter review)" : polishHint}
         >
-          <Sparkles size={13} aria-hidden="true" />
+          <Sparkles size={14} aria-hidden="true" />
           <span>{isPolishing ? <>Working<span className="loading-dots" aria-hidden="true" /></> : "Polish"}</span>
         </button>
         <button

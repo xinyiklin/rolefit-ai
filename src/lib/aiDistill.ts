@@ -98,22 +98,43 @@ export function buildExtractedFromAi(fields: Partial<AiDistillFields>, sourceTex
 export type DistillResult = { extracted: ExtractedJobPosting; source: "ai" | "local" };
 
 // Build from AI fields, but fall back to the deterministic engine when the AI
-// surfaced no usable core content (no title AND placeholder responsibilities AND
-// placeholder required quals) — the deterministic engine may catch structure the
-// model missed. `fields === null` means the AI distill failed/was absent. Shared
-// by the client `/api/distill` path and the extension import (distilled server-side).
+// surfaced no usable *content* — the deterministic engine may catch structure the
+// model missed, and "Distilled with AI" should only be claimed when the model
+// actually produced a tailoring brief. `fields === null` means the AI distill
+// failed/was absent. Shared by the client `/api/distill` path and the extension
+// import (both distill client-side through `/api/distill`; the extension's server
+// pass only prepares the raw text).
+//
+// "Usable AI content" mirrors the tailor pass's usable-response guard (needs
+// suggestions/gaps/summary) and review's reviewStatus="failed": a reply the
+// server grounded down to nothing of substance is an AI no-op. A bare title or
+// other metadata scalar does NOT count — the deterministic engine extracts those
+// too, so reporting them as "ai" mislabels a failure as success while the same
+// misbehaving provider makes tailor/review show a fallback. We key off ONLY the
+// server-grounded content lists (responsibilities/qualifications/tech/seniority/
+// domain). roleDescription is deliberately NOT a signal here: it is the one field
+// sanitizeDistill passes through ungrounded, so a fabricated 1-3 sentence summary
+// must not by itself qualify a reply as "ai" (that would reopen the false-success
+// this guard closes). When all lists are empty we defer to the local engine and
+// label the result "local" honestly.
+function hasUsableAiContent(fields: Partial<AiDistillFields>): boolean {
+  return (
+    strArray(fields.responsibilities).length > 0 ||
+    strArray(fields.requiredQualifications).length > 0 ||
+    strArray(fields.preferredQualifications).length > 0 ||
+    strArray(fields.techKeywords).length > 0 ||
+    strArray(fields.senioritySignals).length > 0 ||
+    strArray(fields.domainSignals).length > 0
+  );
+}
+
 export function extractedFromAiOrLocal(
   fields: Partial<AiDistillFields> | null,
   text: string,
   url?: string
 ): DistillResult {
-  if (fields) {
-    const extracted = buildExtractedFromAi(fields, text, url);
-    const coreMissing =
-      !extracted.tracking.title &&
-      /\[manual input needed: core responsibilities\]/.test(extracted.tailoringText) &&
-      /\[manual input needed: required qualifications\]/.test(extracted.tailoringText);
-    if (!coreMissing) return { extracted, source: "ai" };
+  if (fields && hasUsableAiContent(fields)) {
+    return { extracted: buildExtractedFromAi(fields, text, url), source: "ai" };
   }
   return { extracted: extractJobPosting(text, { url }), source: "local" };
 }

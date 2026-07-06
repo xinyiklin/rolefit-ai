@@ -29,6 +29,7 @@ export function JobMenu({
   const distillReady = jobDescription.trim().length >= 80;
   return (
     <NavMenu
+      className="job-menu"
       icon={<BriefcaseBusiness size={13} aria-hidden={true} />}
       ariaLabel="Job target"
       label={
@@ -41,9 +42,7 @@ export function JobMenu({
       }
     >
       <label className="field">
-        <span>
-          Job link <small>(optional — extract the posting below, or keep it for tracking)</small>
-        </span>
+        <span>Job link <small>(optional)</small></span>
         <div className="link-input-row">
           <div className="input-with-icon">
             <Link2 size={14} aria-hidden="true" />
@@ -67,15 +66,13 @@ export function JobMenu({
         </div>
       </label>
       <label className="field">
-        <span>
-          Job posting <small>(paste the full description, or extract it from the link above)</small>
-        </span>
+        <span>Job posting</span>
         <textarea
           className="textarea"
           value={jobDescription}
           onChange={(event) => setJobDescription(event.target.value)}
           placeholder="Paste responsibilities, qualifications, and preferred skills."
-          rows={8}
+          rows={16}
         />
       </label>
       <div className="job-distill-row">
@@ -83,15 +80,13 @@ export function JobMenu({
           type="button"
           className="secondary-button is-compact"
           onClick={onDistillPaste}
-          disabled={!distillReady}
+          disabled={!distillReady || isExtractingLink}
           title="Run the pasted text through the same structured-brief distiller the link extractor uses"
         >
           <Sparkles size={13} aria-hidden="true" />
           <span>Distill paste</span>
         </button>
-        <small className="job-distill-hint">
-          For links the server can't fetch — copy the visible page text, paste above, then distill.
-        </small>
+        <small className="job-distill-hint">For links the server can't fetch: paste the page text, then distill.</small>
       </div>
       {linkStatus ? <p className="micro-status">{linkStatus}</p> : null}
     </NavMenu>
