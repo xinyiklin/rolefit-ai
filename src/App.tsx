@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ChangeEvent, type DragEvent } from "react";
-import { ChevronRight, Eye, FileCode2, FileDown, RotateCcw, Upload } from "lucide-react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ChangeEvent, type DragEvent, type ReactNode } from "react";
+import { ChevronRight, Eye, FileCode2, FileDown, RotateCcw, SlidersHorizontal, Upload, X } from "lucide-react";
 
 import { useResumeEditor } from "./hooks/useResumeEditor";
 import { useDocStyle, JAKE_STYLE_DEFAULTS, DOC_ZOOM_OPTIONS, DOC_SPACING_PRESETS, DOC_SPACING_KEYS, type DocSpacingKey, type DocSpacingPreset, type HeadingCase } from "./hooks/useDocStyle";
@@ -8,14 +8,19 @@ import { useResumeExport } from "./hooks/useResumeExport";
 import { ResumeEditor } from "./sections/editor/ResumeEditor";
 import { ResumePrintLayer } from "./sections/ResumePrintLayer";
 import { Modal } from "./components/Modal";
-import { SectionNav } from "./components/SectionNav";
 import { buildStarterResume, reidResume } from "./sampleResume";
 import { fileToText } from "./lib/importResume";
 import type { ResumeData } from "./lib/resumeData";
 
 const STORAGE_KEY = "jakeforge.resume.v1";
-// Remembers whether the spacing-sliders disclosure is expanded.
-const FINE_TUNE_KEY = "jakeforge.ui.fineTune.v1";
+const FOCUSABLE_SELECTOR = [
+  "a[href]",
+  "button:not([disabled])",
+  "input:not([disabled])",
+  "select:not([disabled])",
+  "textarea:not([disabled])",
+  "[tabindex]:not([tabindex='-1'])"
+].join(",");
 
 function loadSavedResume(): ResumeData | null {
   try {
@@ -25,6 +30,12 @@ function loadSavedResume(): ResumeData | null {
   } catch {
     return null;
   }
+}
+
+function visibleFocusableElements(container: HTMLElement) {
+  return Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).filter(
+    (el) => el.offsetWidth > 0 || el.offsetHeight > 0 || el.getClientRects().length > 0
+  );
 }
 
 // Fine-grained layout/spacing controls, grouped by where on the page they act so
@@ -196,33 +207,49 @@ function ToggleChip({
   );
 }
 
+// Sidebar accordion card — an uppercase title row that toggles its body open.
+// Groups the typography controls so the sidebar reads as a short list of
+// sections a user expands one at a time.
+function AccordionCard({
+  title,
+  isOpen,
+  onToggle,
+  children
+}: {
+  title: string;
+  isOpen: boolean;
+  onToggle: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <section className={`acc${isOpen ? " is-open" : ""}`}>
+      <button type="button" className="acc__header" aria-expanded={isOpen} onClick={onToggle}>
+        <span className="acc__title">{title}</span>
+        <ChevronRight size={15} className="acc__chev" aria-hidden="true" />
+      </button>
+      {isOpen ? <div className="acc__body">{children}</div> : null}
+    </section>
+  );
+}
+
 export default function App() {
   const editor = useResumeEditor();
   const docStyle = useDocStyle();
   const templates = useTemplates();
   const [texStatus, setTexStatus] = useState("");
-  const canvasRef = useRef<HTMLElement>(null);
+  const fineTuneTriggerRef = useRef<HTMLButtonElement>(null);
+  const fineTuneDialogRef = useRef<HTMLDivElement>(null);
 
-  // The 11 fine-grained spacing sliders live behind a disclosure — most people
-  // pick a preset and never open them. Closed by default; choice is remembered.
-  const [showFineTune, setShowFineTune] = useState<boolean>(() => {
-    try {
-      return window.localStorage.getItem(FINE_TUNE_KEY) === "1";
-    } catch {
-      return false;
-    }
-  });
-  function toggleFineTune() {
-    setShowFineTune((open) => {
-      const next = !open;
-      try {
-        window.localStorage.setItem(FINE_TUNE_KEY, next ? "1" : "0");
-      } catch {
-        // Storage unavailable (private mode); the toggle still works this session.
-      }
-      return next;
-    });
-  }
+  // The 11 fine-grained spacing sliders live in a floating flyout — most people
+  // pick a preset and never open it. Session-only (a flyout that reopened over
+  // the sidebar on every reload would be more nuisance than convenience).
+  const [showFineTune, setShowFineTune] = useState(false);
+
+  // Typography controls are grouped into collapsible cards, each independently
+  // openable; all closed by default so the sidebar stays short.
+  const [openCards, setOpenCards] = useState({ typography: false, entries: false, skills: false });
+  const toggleCard = (key: keyof typeof openCards) =>
+    setOpenCards((cards) => ({ ...cards, [key]: !cards[key] }));
 
   const selectedTemplate =
     templates.templates.find((t) => t.id === templates.selectedTemplateId) ?? null;
@@ -305,6 +332,61 @@ export default function App() {
     };
   }, [exporter]);
 
+
+  // Keep keyboard focus inside the spacing flyout while it is open. It is modal
+  // for pointer users too: click outside closes it and focus returns to the trigger.
+  useEffect(() => {
+    if (!showFineTune) return;
+    const dialog = fineTuneDialogRef.current;
+    if (!dialog) return;
+    const dialogEl = dialog;
+    const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const focusTimer = window.setTimeout(() => {
+      const first = visibleFocusableElements(dialogEl)[0];
+      (first ?? dialogEl).focus();
+    }, 0);
+
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setShowFineTune(false);
+        return;
+      }
+      if (event.key !== "Tab") return;
+
+      const focusable = visibleFocusableElements(dialogEl);
+      if (!focusable.length) {
+        event.preventDefault();
+        dialogEl.focus();
+        return;
+      }
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const active = document.activeElement;
+
+      if (!dialogEl.contains(active)) {
+        event.preventDefault();
+        first.focus();
+      } else if (event.shiftKey && active === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && active === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    }
+
+    document.addEventListener("keydown", onKey);
+    return () => {
+      window.clearTimeout(focusTimer);
+      document.removeEventListener("keydown", onKey);
+      if (previouslyFocused && document.contains(previouslyFocused)) {
+        previouslyFocused.focus();
+      } else {
+        fineTuneTriggerRef.current?.focus();
+      }
+    };
+  }, [showFineTune]);
 
   function seedFromText(text: string) {
     editor.seed(text);
@@ -402,8 +484,6 @@ export default function App() {
           </div>
         </div>
 
-        <SectionNav canvasRef={canvasRef} sections={editor.editedResume?.sections ?? []} />
-
         <div className="sidebar__actions">
           <label
             className={`sidebar__drop${importDragOver ? " is-dragover" : ""}`}
@@ -424,7 +504,7 @@ export default function App() {
             />
             <Upload size={15} aria-hidden="true" />
             <span>Import resume</span>
-            <small>.txt · .md · .tex · .docx</small>
+            <small>.txt • .md • .tex • .docx</small>
           </label>
         </div>
 
@@ -439,7 +519,7 @@ export default function App() {
               title={tectonicOff ? "Install Tectonic (brew install tectonic) for LaTeX PDF" : "Download PDF (Tectonic)"}
             >
               <FileDown size={15} aria-hidden="true" />
-              {exporter.isRenderingLatexPdf ? "Compiling…" : "PDF"}
+              {exporter.isRenderingLatexPdf ? "Compiling…" : "Export PDF"}
             </button>
             <button
               type="button"
@@ -472,7 +552,22 @@ export default function App() {
         </section>
 
         <section className="panel">
-          <h2 className="panel__title">Layout &amp; spacing</h2>
+          <div className="panel__header">
+            <h2 className="panel__title">Layout &amp; spacing</h2>
+            <button
+              ref={fineTuneTriggerRef}
+              type="button"
+              className={`ctl-finetune${activePresetKey === null ? " is-edited" : ""}`}
+              onClick={() => setShowFineTune(true)}
+              title={activePresetKey === null ? "Fine-tune spacing — custom spacing active" : "Fine-tune spacing"}
+            >
+              <span>Fine-tune</span>
+              {/* Text equivalent for the visual .is-edited dot, folded into the
+                  button's accessible name so it isn't a colour-only signal. */}
+              {activePresetKey === null ? <span className="sr-only"> (custom spacing active)</span> : null}
+              <SlidersHorizontal size={14} aria-hidden="true" />
+            </button>
+          </div>
           <label className="ctl-row">
             <span>Zoom</span>
             <select
@@ -490,20 +585,125 @@ export default function App() {
             <span className="ctl-seg-field__label">Preset</span>
             <AnimatedSeg items={presetItems} activeKey={activePresetKey} onSelect={applyPreset} block />
           </div>
+        </section>
 
-          <button
-            type="button"
-            className={`ctl-disclosure${showFineTune ? " is-open" : ""}`}
-            aria-expanded={showFineTune}
-            onClick={toggleFineTune}
+        <div className="acc-stack">
+          <AccordionCard title="Typography" isOpen={openCards.typography} onToggle={() => toggleCard("typography")}>
+            <div className="ctl-group">
+              <span className="ctl-group__label">Headings</span>
+              <div className="ctl-seg-field">
+                <span className="ctl-seg-field__label">Case</span>
+                <AnimatedSeg
+                  items={HEADING_CASES}
+                  activeKey={docStyle.style.headingCase}
+                  onSelect={(key) => docStyle.set("headingCase", key)}
+                  block
+                />
+              </div>
+              <div className="chip-row">
+                <ToggleChip label="Bold" active={docStyle.style.boldHeadings} onClick={(v) => docStyle.set("boldHeadings", v)} />
+                <ToggleChip label="Underline" active={docStyle.style.sectionRule} onClick={(v) => docStyle.set("sectionRule", v)} />
+              </div>
+            </div>
+
+            <div className="ctl-group">
+              <span className="ctl-group__label">Contact</span>
+              <div className="chip-row">
+                {COMMON_DIVIDERS.map((d) => (
+                  <button
+                    key={d}
+                    type="button"
+                    className={`chip chip--glyph${docStyle.style.contactDivider === d ? " is-active" : ""}`}
+                    aria-pressed={docStyle.style.contactDivider === d}
+                    aria-label={`Divider ${d}`}
+                    onClick={() => docStyle.set("contactDivider", d)}
+                  >
+                    {d}
+                  </button>
+                ))}
+                <input
+                  className="ctl-divider"
+                  type="text"
+                  maxLength={2}
+                  value={docStyle.style.contactDivider}
+                  placeholder="…"
+                  aria-label="Custom contact divider (1–2 characters)"
+                  title="Custom divider"
+                  onChange={(e) => docStyle.set("contactDivider", e.target.value.slice(0, 2))}
+                />
+              </div>
+            </div>
+
+            <button
+              type="button"
+              className="ctl-save-preset"
+              onClick={() => docStyle.applyStyle(JAKE_STYLE_DEFAULTS)}
+              disabled={docStyle.isStyleDefault}
+              title="Reset every text style to Jake's defaults"
+            >
+              <RotateCcw size={13} aria-hidden="true" /> Jake&apos;s defaults
+            </button>
+          </AccordionCard>
+
+          <AccordionCard title="Entries" isOpen={openCards.entries} onToggle={() => toggleCard("entries")}>
+            <div className="chip-row">
+              <ToggleChip label="Bold titles" active={docStyle.style.boldTitles} onClick={(v) => docStyle.set("boldTitles", v)} />
+              <ToggleChip label="Italic subtitles" active={docStyle.style.italicSubtitles} onClick={(v) => docStyle.set("italicSubtitles", v)} />
+            </div>
+          </AccordionCard>
+
+          <AccordionCard title="Skills" isOpen={openCards.skills} onToggle={() => toggleCard("skills")}>
+            <div className="chip-row">
+              <ToggleChip label="Bold labels" active={docStyle.style.boldSkillLabels} onClick={(v) => docStyle.set("boldSkillLabels", v)} />
+            </div>
+          </AccordionCard>
+        </div>
+      </aside>
+
+      <main className="canvas">
+        {editor.editedResume ? (
+          // ResumeEditor is memoized so chrome-only UI state (accordion/flyout)
+          // doesn't re-render this expensive paginating tree. The editor observes
+          // its own width for layout-driven pagination updates.
+          <ResumeEditor data={editor.editedResume} actions={editor.actions} style={docStyle.cssVars} />
+        ) : null}
+      </main>
+
+      {editor.editedResume ? (
+        <ResumePrintLayer
+          resume={editor.editedResume}
+          polishedText={editor.serializedResume}
+          docStyleVars={docStyle.cssVars}
+        />
+      ) : null}
+
+      {showFineTune ? (
+        <div className="flyout-backdrop" onMouseDown={() => setShowFineTune(false)}>
+          <div
+            ref={fineTuneDialogRef}
+            className="flyout"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Fine-tune spacing"
+            tabIndex={-1}
+            onMouseDown={(event) => event.stopPropagation()}
           >
-            <ChevronRight size={13} className="ctl-disclosure__chev" aria-hidden="true" />
-            <span>Fine-tune spacing</span>
-            {activePresetKey === null ? <span className="ctl-disclosure__hint">Edited</span> : null}
-          </button>
-
-          {showFineTune ? (
-            <div className="ctl-disclosure__body">
+            <header className="flyout__head">
+              <span className="flyout__icon" aria-hidden="true">
+                <SlidersHorizontal size={17} />
+              </span>
+              <span className="flyout__title">Fine-tune spacing</span>
+              <button
+                type="button"
+                className="flyout__close"
+                onClick={() => setShowFineTune(false)}
+                aria-label="Close"
+              >
+                <X size={16} aria-hidden="true" />
+              </button>
+            </header>
+            <p className="flyout__sub">Adjust spacing to fine-tune the layout of your resume.</p>
+            <div className="flyout__body">
               {SPACING_GROUPS.map((group) => (
                 <div className="ctl-group" key={group.label}>
                   <span className="ctl-group__label">{group.label}</span>
@@ -522,6 +722,8 @@ export default function App() {
                   </div>
                 </div>
               ))}
+            </div>
+            <div className="flyout__foot">
               <button
                 type="button"
                 className="ctl-save-preset"
@@ -530,99 +732,18 @@ export default function App() {
               >
                 {activePresetKey === "custom" ? "Custom saved ✓" : docStyle.customPreset ? "Update Custom" : "Save as Custom"}
               </button>
-            </div>
-          ) : null}
-        </section>
-
-        <section className="panel">
-          <div className="panel__header">
-            <h2 className="panel__title">Typography</h2>
-            <button
-              type="button"
-              className="icon-btn"
-              onClick={() => docStyle.applyStyle(JAKE_STYLE_DEFAULTS)}
-              disabled={docStyle.isStyleDefault}
-              title="Reset every text style to Jake's defaults"
-              aria-label="Jake's defaults"
-            >
-              <RotateCcw size={14} aria-hidden="true" />
-            </button>
-          </div>
-
-          <div className="ctl-group">
-            <span className="ctl-group__label">Headings</span>
-            <div className="ctl-seg-field">
-              <span className="ctl-seg-field__label">Case</span>
-              <AnimatedSeg
-                items={HEADING_CASES}
-                activeKey={docStyle.style.headingCase}
-                onSelect={(key) => docStyle.set("headingCase", key)}
-                block
-              />
-            </div>
-            <div className="chip-row">
-              <ToggleChip label="Bold" active={docStyle.style.boldHeadings} onClick={(v) => docStyle.set("boldHeadings", v)} />
-              <ToggleChip label="Underline" active={docStyle.style.sectionRule} onClick={(v) => docStyle.set("sectionRule", v)} />
+              <button
+                type="button"
+                className="icon-btn"
+                onClick={() => docStyle.applySpacingPreset(DOC_SPACING_PRESETS.normal.values)}
+                title="Reset spacing to Normal"
+                aria-label="Reset spacing to Normal"
+              >
+                <RotateCcw size={15} aria-hidden="true" />
+              </button>
             </div>
           </div>
-
-          <div className="ctl-group">
-            <span className="ctl-group__label">Entries</span>
-            <div className="chip-row">
-              <ToggleChip label="Bold titles" active={docStyle.style.boldTitles} onClick={(v) => docStyle.set("boldTitles", v)} />
-              <ToggleChip label="Italic subtitles" active={docStyle.style.italicSubtitles} onClick={(v) => docStyle.set("italicSubtitles", v)} />
-            </div>
-          </div>
-
-          <div className="ctl-group">
-            <span className="ctl-group__label">Skills</span>
-            <div className="chip-row">
-              <ToggleChip label="Bold labels" active={docStyle.style.boldSkillLabels} onClick={(v) => docStyle.set("boldSkillLabels", v)} />
-            </div>
-          </div>
-
-          <div className="ctl-group">
-            <span className="ctl-group__label">Contact</span>
-            <div className="chip-row">
-              {COMMON_DIVIDERS.map((d) => (
-                <button
-                  key={d}
-                  type="button"
-                  className={`chip chip--glyph${docStyle.style.contactDivider === d ? " is-active" : ""}`}
-                  aria-pressed={docStyle.style.contactDivider === d}
-                  aria-label={`Divider ${d}`}
-                  onClick={() => docStyle.set("contactDivider", d)}
-                >
-                  {d}
-                </button>
-              ))}
-              <input
-                className="ctl-divider"
-                type="text"
-                maxLength={2}
-                value={docStyle.style.contactDivider}
-                placeholder="…"
-                aria-label="Custom contact divider (1–2 characters)"
-                title="Custom divider"
-                onChange={(e) => docStyle.set("contactDivider", e.target.value.slice(0, 2))}
-              />
-            </div>
-          </div>
-        </section>
-      </aside>
-
-      <main className="canvas" ref={canvasRef}>
-        {editor.editedResume ? (
-          <ResumeEditor data={editor.editedResume} actions={editor.actions} style={docStyle.cssVars} />
-        ) : null}
-      </main>
-
-      {editor.editedResume ? (
-        <ResumePrintLayer
-          resume={editor.editedResume}
-          polishedText={editor.serializedResume}
-          docStyleVars={docStyle.cssVars}
-        />
+        </div>
       ) : null}
 
       {exporter.isPreviewOpen ? (

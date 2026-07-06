@@ -40,7 +40,7 @@ instead of duplicating it.
   - `src/sections/editor/` — the editable on-page resume (sections, entries,
     bullets, skills, drag-reorder via `@dnd-kit`).
   - `src/sections/` — read-only document + off-screen print layer.
-  - `src/components/` — reusable `Modal` shell, `ImportModal`, and `SectionNav`.
+  - `src/components/` — reusable `Modal` shell and `ImportModal`.
   - `src/styles/` — `tokens.css`/`base.css` (design tokens), `resume-*.css`
     (document + editor), `index.css` (imports + app shell).
   - `server/latex/` — Jake's template renderer, plain-text/LaTeX parser, Tectonic
