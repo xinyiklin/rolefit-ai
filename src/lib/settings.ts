@@ -135,7 +135,9 @@ function coerce(settings: PersistedSettings): PersistedSettings {
   if (settings.polishStages === undefined && typeof settings.strictReview === "boolean") {
     settings.polishStages = settings.strictReview ? "both" : "tailor";
   }
-  const validCitizenship = new Set<string>(CITIZENSHIP_OPTIONS.map((option) => option.value));
+  // "unspecified" is the neutral default (not a selectable option), so add it
+  // explicitly — CITIZENSHIP_OPTIONS lists only the concrete statuses.
+  const validCitizenship = new Set<CitizenshipStatus>(["unspecified", ...CITIZENSHIP_OPTIONS.map((option) => option.value)]);
   if (settings.citizenshipStatus && !validCitizenship.has(settings.citizenshipStatus)) {
     delete settings.citizenshipStatus;
   }

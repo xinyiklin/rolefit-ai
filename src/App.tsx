@@ -444,70 +444,89 @@ function App() {
         : "idle";
   const otherSessions = useTabPresence({ jobLabel: _autosaveJobLabel, phase: _myPhase });
 
-  // Auto-fill the job description from the browser extension inbox. AI distiller
-  // first (server-side keys), deterministic engine as the fallback.
+  // Auto-fill the job description from the browser extension inbox. The AI distill
+  // runs HERE (client-side) with this tab's selected Distill provider; the
+  // deterministic engine is the fallback.
   useExtensionInbox(async (item) => {
-    // The posting was AI-distilled server-side in the background (the hook polled
-    // through the "distilling" state until the brief was ready). Use those
-    // structured fields directly; fall back to the deterministic engine on the raw
-    // text only when both the server's AI distill and a selected-provider retry
-    // fail. The retry matters because extension imports cannot read the app tab's
-    // localStorage settings, so the background server pass may have used a
-    // different default provider than the one selected in the AI menu.
+    // The server only PREPARED the raw text in the background (the hook polled
+    // through the "distilling" state until it was ready); it deliberately did not
+    // AI-distill, because the background pass can't read this tab's localStorage AI
+    // settings and would otherwise use the env-default provider. So distill here
+    // with distillRequestFields() to honor the tab's Distill selection. `fields`
+    // arrives null from the current server; the extractedFromAiOrLocal branch is
+    // kept only as defensive back-compat (an older server that still sends fields).
     const { text, url, fields, autoTailor } = item;
     // Remember the raw import so its card's Retry can re-distill it (below).
     // Store the URL trimmed so a retry keeps importedJob.url === jobUrl.trim()
     // and the jobTracking memo uses the AI tracking, not a deterministic re-parse.
     distillImportRef.current = { text, url: (url || "").trim() };
-    const { extracted, source } = fields
-      ? extractedFromAiOrLocal(fields as Partial<AiDistillFields>, text, url || undefined)
-      : await distillJobPosting(text, {
-          url: url || undefined,
-          aiRequest: distillRequestFields()
-        });
-    const relevant = extracted.tailoringText;
-    if (relevant.trim().length < 40) {
-      setPolishStatus("Extension import had too little job text — paste manually.");
-      setDistillRetrySource("import");
-      setDistillProgress({
-        status: "failed",
-        errorHeadline: "Missing input",
-        error: "Imported posting had too little job text — paste manually."
-      });
+    // The import distill shares the user distills' mutual exclusion (link/paste/
+    // retry all early-return on isExtractingLink): claim the flag so a mid-import
+    // "Distill paste" can't interleave and clobber this import's state — the
+    // client distill is a full AI round-trip, so the window is real. If a user
+    // distill is ALREADY in flight when the import lands, proceed without
+    // claiming (delivery is once-only); overwriting the flag would let that
+    // flow's finally unblock distills while this one is still running.
+    const claimedDistillLock = !isExtractingLink;
+    if (claimedDistillLock) setIsExtractingLink(true);
+    try {
+      // The client distill takes real time now (it always runs), so show the running
+      // card while it works — otherwise the import lands with no visible progress.
+      // (retrySource is set in each terminal branch below, before any card with Retry.)
+      setDistillProgress({ status: "running" });
       setDistillProgressVisible(true);
-      return;
+      const { extracted, source } = fields
+        ? extractedFromAiOrLocal(fields as Partial<AiDistillFields>, text, url || undefined)
+        : await distillJobPosting(text, {
+            url: url || undefined,
+            aiRequest: distillRequestFields()
+          });
+      const relevant = extracted.tailoringText;
+      if (relevant.trim().length < 40) {
+        setPolishStatus("Extension import had too little job text — paste manually.");
+        setDistillRetrySource("import");
+        setDistillProgress({
+          status: "failed",
+          errorHeadline: "Missing input",
+          error: "Imported posting had too little job text — paste manually."
+        });
+        setDistillProgressVisible(true);
+        return;
+      }
+      const trimmedUrl = (url || "").trim();
+      setJobUrl(trimmedUrl);
+      setJobDescription(relevant);
+      setImportedJob({
+        url: trimmedUrl,
+        tailoringText: relevant.trim(),
+        tracking: extracted.tracking,
+        manualReviewFields: extracted.manualReviewFields,
+      });
+      setResult(null);
+      applyCoverLetter("");
+      // Auto-tailor THIS import only, and always (re)set from the toggle so a
+      // toggle-OFF import clears any stale intent a prior toggle-ON import left.
+      setAutoTailorJob(autoTailor ? relevant.trim() : null);
+      // The distill card now carries the AI-vs-local signal, so the status line just
+      // covers import/auto-tailor context. The imported JD satisfies the
+      // description-length gate; the only thing that can still defer the auto-polish
+      // is a missing resume / Tailor section — say so rather than appearing to do nothing.
+      // "import" keeps a Retry on the card that re-distills through the client path.
+      setDistillRetrySource("import");
+      setDistillProgress(distillDoneState(source));
+      setDistillProgressVisible(true);
+      const readyToTailor =
+        Boolean(editedResume) && Object.values(tailorModes).some((mode) => mode === "tailor");
+      setPolishStatus(
+        autoTailor && !readyToTailor
+          ? `Job imported from the browser extension — ${
+              editedResume ? "set a section to Tailor" : "load a resume"
+            } and it'll polish automatically.`
+          : "Job imported from the browser extension."
+      );
+    } finally {
+      if (claimedDistillLock) setIsExtractingLink(false);
     }
-    const trimmedUrl = (url || "").trim();
-    setJobUrl(trimmedUrl);
-    setJobDescription(relevant);
-    setImportedJob({
-      url: trimmedUrl,
-      tailoringText: relevant.trim(),
-      tracking: extracted.tracking,
-      manualReviewFields: extracted.manualReviewFields,
-    });
-    setResult(null);
-    applyCoverLetter("");
-    // Auto-tailor THIS import only, and always (re)set from the toggle so a
-    // toggle-OFF import clears any stale intent a prior toggle-ON import left.
-    setAutoTailorJob(autoTailor ? relevant.trim() : null);
-    // The distill card now carries the AI-vs-local signal, so the status line just
-    // covers import/auto-tailor context. The imported JD satisfies the
-    // description-length gate; the only thing that can still defer the auto-polish
-    // is a missing resume / Tailor section — say so rather than appearing to do nothing.
-    // "import" keeps a Retry on the card that re-distills through the client path.
-    setDistillRetrySource("import");
-    setDistillProgress(distillDoneState(source));
-    setDistillProgressVisible(true);
-    const readyToTailor =
-      Boolean(editedResume) && Object.values(tailorModes).some((mode) => mode === "tailor");
-    setPolishStatus(
-      autoTailor && !readyToTailor
-        ? `Job imported from the browser extension — ${
-            editedResume ? "set a section to Tailor" : "load a resume"
-          } and it'll tailor automatically.`
-        : "Job imported from the browser extension."
-    );
   }, () => {
     // Background server-side distill still running — surface it on the same card
     // the link/paste flows use (no Retry: an extension import has nothing to
@@ -2054,7 +2073,7 @@ function App() {
           />
         }
         aiControl={
-          <AiMenu aiProvider={aiProvider} selectedModel={selectedModel} customModel={customModel}>
+          <AiMenu>
             {/* Pipeline order: Distill → Tailor → Review. Each stage is its own
                 concrete provider; the segmented buttons copy settings between them. */}
             <ProviderSection

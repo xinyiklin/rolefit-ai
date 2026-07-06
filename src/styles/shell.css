@@ -161,12 +161,6 @@
   }
 }
 
-.masthead__brand .eyebrow {
-  margin: 0;
-  font-size: 0.62rem;
-  letter-spacing: 0.16em;
-}
-
 /* Serif wordmark — editorial desk identity. */
 .masthead__brand h1 {
   font-family: var(--font-serif);
@@ -182,6 +176,9 @@
   align-items: center;
   gap: 0;
   flex-wrap: wrap;
+  /* Let the menu row shrink and wrap its groups before it can push the actions
+     off-edge — the menus are the overflow relief valve, brand + actions stay put. */
+  min-width: 0;
 }
 
 /* Hairline separator between the two menu groups (Resume/Job | AI/Options). */
@@ -195,7 +192,10 @@
   display: flex;
   align-items: center;
   gap: var(--s2);
-  padding-left: var(--s3);
+  /* Match the s4 region gap on the menus side of this hairline so the divider
+     sits centered (was s3 → hairline hugged the buttons). Keeps the separator
+     ladder: within-group seam < group↔group (s3) < menus↔actions (s4). */
+  padding-left: var(--s4);
   border-left: 1px solid var(--hairline-soft);
 }
 
@@ -367,13 +367,6 @@
 .nav-menu__sub.is-empty { color: var(--warm); }
 .nav-menu__sub.is-empty::before { border-color: var(--warm); }
 
-/* AI menu's model readout keeps the mono voice (it is an identifier). */
-.nav-menu__sub.is-meta {
-  font-family: var(--font-mono);
-  font-size: 0.66rem;
-}
-.nav-menu__sub.is-meta::before { content: none; }
-
 /* Caret rotates to point up when the menu is open — a quiet open/close cue. */
 .nav-menu__caret {
   color: var(--ink-faint);
@@ -408,6 +401,27 @@
   scrollbar-color: var(--hairline-strong) transparent;
   transform-origin: top right;
   animation: nav-menu-in 150ms var(--ease) both;
+}
+
+/* Masthead menu popovers open from their GROUP's left edge: each menu-group is the
+   positioning context (its nav-menu children go static), so Resume/Job both align
+   under Resume, and AI Provider/Options both align under AI Provider. A JS viewport
+   clamp in NavMenu nudges a panel back on screen if this would run it past the edge.
+   Studio menus (Format/Style) are outside .masthead, so they keep the default
+   right-aligned, per-trigger anchoring. */
+.masthead .menu-group { position: relative; }
+.masthead .menu-group .nav-menu { position: static; }
+.masthead .nav-menu__popover {
+  left: 0;
+  right: auto;
+  transform-origin: top left;
+}
+
+/* Taller panels for the two content-heavy masthead menus (Job posting; Options'
+   honest-context / custom-instructions) so more shows before the panel scrolls. */
+.job-menu .nav-menu__popover,
+.options-menu .nav-menu__popover {
+  max-height: min(88vh, 780px);
 }
 
 /* Subtle scrollbar styling for WebKit so long popovers (Job/AI) read clean. */

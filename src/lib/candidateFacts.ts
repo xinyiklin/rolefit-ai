@@ -8,8 +8,12 @@
 // who never set it. Anti-fabrication requires the default to claim nothing.
 export type CitizenshipStatus = "unspecified" | "us-citizen" | "permanent-resident" | "foreign-national";
 
+// "unspecified" is intentionally NOT a selectable option here: it stays the
+// neutral DEFAULT (asserts nothing — see the file header) and is rendered as a
+// disabled "Not specified" placeholder in the select (PolishMenu). Keeping it out
+// of this list removes "Prefer not to say" from the dropdown without letting the
+// default assert a citizenship. settings.ts still treats "unspecified" as valid.
 export const CITIZENSHIP_OPTIONS: { value: CitizenshipStatus; label: string }[] = [
-  { value: "unspecified", label: "Prefer not to say" },
   { value: "us-citizen", label: "U.S. citizen" },
   { value: "permanent-resident", label: "Permanent resident" },
   { value: "foreign-national", label: "Foreign national" }

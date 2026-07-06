@@ -65,6 +65,28 @@ export function NavMenu({ icon, label, ariaLabel, className, children, open: con
     };
   }, [open, isStudioMenu]);
 
+  // Masthead menu popovers anchor from their group's LEFT edge (see shell.css),
+  // and those groups sit toward the right of the bar, so a wide panel could run
+  // past the window's right edge. Nudge any overflowing panel back on screen with
+  // a negative margin (transform is reserved for the entrance animation; a
+  // left-anchored panel makes the margin math intuitive: -x moves it x px left).
+  // No-op for the right-anchored studio menus — they open leftward and can't
+  // overflow the right edge, so the correction never fires.
+  useLayoutEffect(() => {
+    if (!open) return;
+    const clamp = () => {
+      const popover = popoverRef.current;
+      if (!popover) return;
+      popover.style.marginLeft = "";
+      const rect = popover.getBoundingClientRect();
+      const overflow = rect.left + popover.offsetWidth - (window.innerWidth - 8);
+      if (overflow > 0) popover.style.marginLeft = `${-overflow}px`;
+    };
+    clamp();
+    window.addEventListener("resize", clamp);
+    return () => window.removeEventListener("resize", clamp);
+  }, [open]);
+
   useEffect(() => {
     if (!open) return;
     function onPointerDown(event: PointerEvent) {

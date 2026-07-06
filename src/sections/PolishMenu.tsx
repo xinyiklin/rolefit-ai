@@ -54,6 +54,7 @@ export function PolishMenu({
 }: PolishMenuProps) {
   return (
     <NavMenu
+      className="options-menu"
       icon={<SlidersHorizontal size={13} aria-hidden={true} />}
       ariaLabel="Polish options"
       label={
@@ -72,14 +73,12 @@ export function PolishMenu({
         />
         <span>
           <strong>Cover letter</strong>
-          <small>Draft a matching cover letter alongside the polish.</small>
         </span>
       </label>
 
       <div role="group" aria-labelledby="polish-stages-label" className="field">
         <span id="polish-stages-label">
           <strong>Polish stages</strong>
-          <small>Tailor rewrites; Review runs a recruiter audit; Both runs tailor then review.</small>
         </span>
         <div className="segmented-control" role="radiogroup" aria-labelledby="polish-stages-label">
           {STAGE_OPTIONS.map((opt) => (
@@ -101,8 +100,8 @@ export function PolishMenu({
         </div>
       </div>
 
-      {/* Work authorization group */}
-      <div className="menu-subhead" style={{ marginTop: 'var(--s2)' }}>
+      {/* Work authorization group (compact: single-line toggles, no sub-hints) */}
+      <div className="menu-subhead" style={{ marginTop: 'var(--s1)' }}>
         <span className="menu-subhead__title">Work authorization</span>
       </div>
 
@@ -113,6 +112,9 @@ export function PolishMenu({
           value={citizenshipStatus}
           onChange={(event) => setCitizenshipStatus(event.target.value as CitizenshipStatus)}
         >
+          {/* Neutral default: shown until a concrete status is picked, but not a
+              selectable menu entry (anti-fabrication opt-in gate). */}
+          <option value="unspecified" disabled hidden>Not specified</option>
           {CITIZENSHIP_OPTIONS.map((opt) => (
             <option key={opt.value} value={opt.value}>{opt.label}</option>
           ))}
@@ -134,7 +136,6 @@ export function PolishMenu({
             />
             <span>
               <strong>Legally authorized to work in U.S.</strong>
-              <small>Use this as a hard filter when a posting mentions work authorization.</small>
             </span>
           </label>
 
@@ -146,7 +147,6 @@ export function PolishMenu({
             />
             <span>
               <strong>Will require sponsorship</strong>
-              <small>Flags no-sponsorship postings as a blocker during review.</small>
             </span>
           </label>
         </>
@@ -154,7 +154,7 @@ export function PolishMenu({
 
       <label className="field">
         <span>
-          Honest context <small>(true facts not on the resume — used only as evidence)</small>
+          Honest context <small>(true facts not on your resume, used only as evidence)</small>
         </span>
         <textarea
           ref={honestContextRef}
@@ -162,20 +162,20 @@ export function PolishMenu({
           value={honestContext}
           onChange={(event) => setHonestContext(event.target.value)}
           placeholder="e.g., shipped a PostgreSQL migration with zero downtime; led a 3-person hackathon team; merged PR to django-rest-framework."
-          rows={3}
+          rows={6}
         />
       </label>
 
       <label className="field">
         <span>
-          Custom instructions <small>(optional — steer the rewrite: tone, length, emphasis)</small>
+          Custom instructions <small>(optional; steer tone, length, emphasis)</small>
         </span>
         <textarea
           className="textarea"
           value={customInstructions}
           onChange={(event) => setCustomInstructions(event.target.value)}
           placeholder="e.g., aim for one page; lead each bullet with a metric; use British spelling; don't add a summary section."
-          rows={3}
+          rows={6}
         />
       </label>
     </NavMenu>

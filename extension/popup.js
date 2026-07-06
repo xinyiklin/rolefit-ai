@@ -187,8 +187,8 @@ function renderResult(data, pageData, onImport) {
   );
 
   // Optional shortcut: when checked, the app auto-runs the polish once the
-  // imported posting finishes distilling — no second "Tailor now" click. The
-  // preference persists across popups via chrome.storage.local.
+  // imported posting finishes distilling — no second click. The preference
+  // persists across popups via chrome.storage.local.
   const autoTailorInput = el('input', { type: 'checkbox', className: 'auto-tailor__input' });
   // Restore the saved preference, but never clobber a value the user toggled while
   // the async storage read was still in flight (open popup → click before get resolves).
@@ -202,7 +202,7 @@ function renderResult(data, pageData, onImport) {
   });
   const autoTailorToggle = el('label', { className: 'auto-tailor' },
     autoTailorInput,
-    el('span', { className: 'auto-tailor__label', textContent: 'Tailor automatically after import' })
+    el('span', { className: 'auto-tailor__label', textContent: 'Polish automatically after import' })
   );
 
   importBtn.addEventListener('click', () => onImport(importBtn, autoTailorInput.checked));

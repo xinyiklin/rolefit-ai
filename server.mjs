@@ -3,7 +3,7 @@ import { mkdir, readFile, readdir, rename, writeFile } from "node:fs/promises";
 import { extname, join, resolve, sep } from "node:path";
 import { createServer as createViteServer } from "vite";
 import { handlePolish } from "./server/ai/polish.mjs";
-import { handleDistill, distillToFields } from "./server/ai/distill.mjs";
+import { handleDistill } from "./server/ai/distill.mjs";
 import { getDefaultModel, getDefaultProvider } from "./server/ai/providers.mjs";
 import { handleApplicationAnswers } from "./server/ai/applicationAnswers.mjs";
 import { handleCoverLetter } from "./server/ai/coverLetter.mjs";
@@ -31,23 +31,28 @@ import { BlockedHostError, DnsError, fetchPublicHtml, isPublicHttpUrl } from "./
 import { quickScore, normalizeUrl, findMatchingApplication, extractJobMeta } from "./server/extension/index.mjs";
 
 const root = process.cwd();
-// Pending browser-extension import. `status` is "distilling" while the server-side
-// AI distill runs in the BACKGROUND (so it survives the popup closing on focus
-// loss), then "done" with `fields` set (or null if the AI distill failed → the app
-// falls back to the deterministic engine). `id` guards against a newer import
-// landing while an older distill is still in flight.
+// Pending browser-extension import. `status` is "distilling" while the server
+// PREPARES the posting text in the BACKGROUND (resolving the raw capture — e.g.
+// fetching the full JD for a Greenhouse link — which survives the popup closing
+// on focus loss), then "done". The AI distill itself is NOT run here: the server
+// can't read the app tab's localStorage AI settings, so distilling server-side
+// used the env-default provider instead of the tab's selected Distill provider.
+// Instead the entry is delivered with `fields: null` and the receiving tab runs
+// the distill client-side with its OWN Distill provider (see useExtensionInbox →
+// distillJobPosting). `id` guards against a newer import landing while an older
+// prepare is still in flight.
 // QUEUE of pending imports, not a single slot. Each browser tab is an
 // independent session, so imports must not clobber one another and one tab's
-// distill must not surface in another tab. Each entry is CLAIMED by the first
+// import must not surface in another tab. Each entry is CLAIMED by the first
 // tab to poll it (by the tab's session id); only that tab then sees its
-// "distilling" → "done" lifecycle, so a distill in one tab never pops the card
+// "distilling" → "done" lifecycle, so an import in one tab never pops the card
 // in another. A claim is refreshed on every poll (lastSeenAt) and released when
 // the owning tab goes quiet, so a claimed-then-closed import isn't stranded.
 // Entry: { id, text, url, fields, autoTailor, status, claimedBy, claimToken,
 // createdAt, lastSeenAt }.
 let extensionInbox = [];
 let extensionImportSeq = 0;
-let extensionDistilling = false;
+let extensionPreparing = false;
 // Bound the queue: drop entries older than the TTL (a tab that claimed then
 // closed before draining, or an import no tab ever picked up) and cap the count.
 const EXTENSION_IMPORT_TTL_MS = 10 * 60 * 1000;
@@ -66,9 +71,9 @@ function cleanExtensionClaimToken(value) {
 function pruneExtensionInbox(now) {
   extensionInbox = extensionInbox.filter((e) => now - e.createdAt < EXTENSION_IMPORT_TTL_MS);
   if (extensionInbox.length > EXTENSION_INBOX_MAX) {
-    // Over the cap: drop the OLDEST entries first, but never an in-flight distill.
-    // Evicting a "distilling" entry would lose its finished brief — runExtensionDistill
-    // can no longer find its id, so the result is silently dropped and the owning
+    // Over the cap: drop the OLDEST entries first, but never an in-flight prepare.
+    // Evicting a "distilling" entry would lose its resolved text — runExtensionPrepare
+    // can no longer find its id, so the entry is silently dropped and the owning
     // tab polls forever. Keep every "distilling" entry plus the newest settled ones.
     let overflow = extensionInbox.length - EXTENSION_INBOX_MAX;
     extensionInbox = extensionInbox.filter((e) => {
@@ -94,32 +99,32 @@ function releaseStaleExtensionClaims(now) {
   }
 }
 
-// Run the background extension distill, SERIALIZED so a burst of imports can never
-// spawn parallel provider calls: at most one runs at a time; when it settles, the
-// next still-"distilling" entry in the queue is distilled. Distill runs in the
-// background (survives the popup closing on focus loss) and always settles the
-// entry to "done" so the owning tab never polls forever.
-async function runExtensionDistill(importId, text, url) {
-  extensionDistilling = true;
+// Prepare a background extension import: resolve the raw captured text into the
+// job text worth tailoring (e.g. fetch the full JD for a Greenhouse link — a
+// server-side step the browser can't do), store it, and settle the entry to
+// "done". SERIALIZED so a burst of imports can't fan out parallel fetches. The AI
+// distill is intentionally NOT run here — the entry is left with `fields: null` so
+// the receiving tab distills client-side with its own selected Distill provider.
+// Always settles to "done" (even on a resolve failure) so the owning tab never
+// polls forever; the tab then distills whatever raw text was captured.
+async function runExtensionPrepare(importId, text, url) {
+  extensionPreparing = true;
   try {
     const jobText = await resolveImportedJobText(text, url);
-    const pending = extensionInbox.find((e) => e.id === importId);
-    if (pending) pending.text = jobText.slice(0, 50_000);
-    const fields = await distillToFields({ jobText }); // URL is never sent to the model
     const done = extensionInbox.find((e) => e.id === importId);
     if (done) {
-      done.fields = fields;
-      done.status = "done";
+      done.text = jobText.slice(0, 50_000);
+      done.status = "done"; // fields stays null → the tab distills client-side
     }
   } catch {
     const failed = extensionInbox.find((e) => e.id === importId);
-    if (failed) failed.status = "done"; // fields stays null → app uses the deterministic engine
+    if (failed) failed.status = "done"; // keep the raw captured text → the tab distills it
   } finally {
-    extensionDistilling = false;
-    // Chain to the next un-distilled import (the one we just finished is now
+    extensionPreparing = false;
+    // Chain to the next un-prepared import (the one we just finished is now
     // "done", so it won't be re-selected).
     const next = extensionInbox.find((e) => e.status === "distilling");
-    if (next) void runExtensionDistill(next.id, next.text, next.url);
+    if (next) void runExtensionPrepare(next.id, next.text, next.url);
   }
 }
 const isProduction = process.env.NODE_ENV === "production";
@@ -1194,9 +1199,10 @@ async function serveStatic(req, res) {
 // same-origin CSRF guard (dispatched BEFORE it) and instead validate the
 // extension Origin scheme directly. They never write resume data. The analyze
 // route is a read-only keyword triage; the import route appends a captured job page
-// to a claimable inbox queue AND kicks off a server-side AI distill in the
-// background (serialized via runExtensionDistill), so import does run a provider
-// call — keys stay server-side and the route remains extension-Origin-gated.
+// to a claimable inbox queue AND kicks off a background PREPARE step (serialized
+// via runExtensionPrepare) that only resolves the raw text (no provider call) —
+// the AI distill runs later in the receiving tab with its own Distill provider.
+// The routes remain extension-Origin-gated and never write resume data.
 const EXTENSION_ORIGIN_SCHEMES = ["chrome-extension://", "moz-extension://", "safari-web-extension://"];
 
 // Optional HARD allowlist of exact extension origins, comma-separated, e.g.
@@ -1328,11 +1334,12 @@ async function handleExtensionRoutes(req, res, pathname) {
     }
     // Store a "distilling" placeholder and return IMMEDIATELY so the popup can
     // redirect without blocking (extension popups close on focus loss, which would
-    // otherwise abort an awaited distill). The AI distill then runs in the
-    // BACKGROUND, server-side, independent of any client connection; the app polls
-    // the inbox and loads the brief once status flips to "done". On AI failure,
-    // status still flips to "done" with fields=null and the app uses the
-    // deterministic engine on the raw text — so an import never silently strands.
+    // otherwise abort an awaited fetch). A BACKGROUND prepare step then resolves
+    // the raw text (e.g. the full Greenhouse JD), server-side, independent of any
+    // client connection; the app polls the inbox and, once status flips to "done",
+    // distills the text client-side with the tab's Distill provider. fields is
+    // always null here — the server no longer distills, so an import never carries
+    // an env-default-provider brief the tab didn't ask for.
     const importId = (extensionImportSeq += 1);
     const now = Date.now();
     // Append (never overwrite) so a second import can't interrupt an in-flight
@@ -1351,9 +1358,9 @@ async function handleExtensionRoutes(req, res, pathname) {
     });
     pruneExtensionInbox(now);
     sendJson(res, 200, { ok: true });
-    // Kick the serialized distiller only when idle; if one is already running it
+    // Kick the serialized prepare step only when idle; if one is already running it
     // will pick up this import when it settles (queue, never fan out).
-    if (!extensionDistilling) void runExtensionDistill(importId, text, url);
+    if (!extensionPreparing) void runExtensionPrepare(importId, text, url);
     return;
   }
 
@@ -1409,8 +1416,9 @@ async function handleExtensionInbox(req, res, tabId, claimToken) {
   // This tab owns the entry now — refresh the liveness stamp so the claim isn't
   // released out from under it while it keeps polling.
   if (tabId && entry.claimedBy === tabId) entry.lastSeenAt = now;
-  // Still distilling in the background — report progress WITHOUT draining so the
-  // owning tab keeps polling until the brief is ready.
+  // Still preparing in the background (resolving the raw text) — report progress
+  // WITHOUT draining so the owning tab keeps polling until the text is ready. The
+  // "distilling" token is the wire value the client polls on (it then distills).
   if (entry.status === "distilling") {
     sendJson(res, 200, { status: "distilling" });
     return;

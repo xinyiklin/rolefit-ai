@@ -35,13 +35,14 @@ local model or fall back to the deterministic parser. Start the app
    your workspace base resume and checks the application tracker by normalized
    URL, then renders the fit ring, keyword chips, and applied-status banner.
 3. **Import** POSTs the page text to `POST /api/extension/import` and opens a
-   fresh app tab with a short claim token. The server distills the posting in
-   the BACKGROUND (AI distiller, with the deterministic engine as fallback), so
-   it survives the popup closing on focus loss; the app polls
+   fresh app tab with a short claim token. The server prepares the raw posting
+   text in the BACKGROUND (e.g. fetching the full description for a Greenhouse
+   link), so it survives the popup closing on focus loss; the app polls
    `GET /api/extension/inbox?tabId=...&claimToken=...`, which reports progress
-   until the brief is ready, then loads the structured fields into that new
-   tab's Job field.
-4. A **Tailor automatically after import** toggle (a checkbox in the popup,
+   until the text is ready. The receiving tab then runs the AI distill itself
+   with its own selected Distill provider (deterministic engine as fallback)
+   and loads the brief into that tab's Job field.
+4. A **Polish automatically after import** toggle (a checkbox in the popup,
    persisted via `chrome.storage.local`) makes the app jump straight to polish
    once the brief and your base resume are ready — no second click needed.
 
