@@ -3,7 +3,7 @@
 // every scalar fact (title/company/location/salary/tech) is DROPPED unless it is
 // grounded in the source posting. These lock that behavior.
 import assert from "node:assert/strict";
-import { sanitizeDistill, buildDistillPrompts } from "../distill.mjs";
+import { sanitizeDistill, buildDistillPrompts } from "../distill.ts";
 
 const SOURCE = `Senior Backend Engineer at Acme Robotics
 Austin, TX

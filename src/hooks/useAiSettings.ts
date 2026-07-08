@@ -4,52 +4,65 @@ import {
   defaultCliReasoningEffort,
   providerOptions
 } from "../config/aiOptions";
-import { loadSettings, saveSettings } from "../lib/settings";
+import { loadSettings, saveSettings, type PersistedSettings } from "../lib/settings";
 import type { AiProviderValue } from "../config/aiOptions";
+import type { StageConfig, StageId } from "../lib/aiRequest";
 import type { CitizenshipStatus } from "../lib/candidateFacts";
 
-// Owns every auto-saved AI preference: the primary provider/model/key/base-URL/
-// reasoning-effort, the optional independent-reviewer (audit*) overrides, and
-// the polish prefs that persist alongside them (honest context and custom
-// instructions). All of these share one debounced localStorage write, so they
-// live together here rather than scattered across App. API keys for every stage
-// are intentionally NOT persisted.
+const STAGE_IDS: StageId[] = ["distill", "tailor", "review"];
+
+// Seed one stage's config from the persisted settings, using each stage's own
+// key prefix (Tailor's is unprefixed for back-compat with the original
+// single-stage settings shape; Review/Distill use audit*/distill*). API keys
+// are never persisted, so every stage always starts with an empty key.
+function seedStage(stage: StageId, saved: PersistedSettings): StageConfig {
+  if (stage === "tailor") {
+    const provider = saved.aiProvider ?? "claude-cli";
+    return {
+      provider,
+      apiKey: "",
+      apiBaseUrl: saved.apiBaseUrl ?? "",
+      selectedModel: saved.selectedModel ?? "claude-sonnet-5",
+      customModel: saved.customModel ?? "",
+      cliReasoningEffort: saved.cliReasoningEffort ?? defaultCliReasoningEffort(provider)
+    };
+  }
+  if (stage === "review") {
+    const provider = saved.auditProvider ?? "claude-cli";
+    return {
+      provider,
+      apiKey: "",
+      apiBaseUrl: saved.auditApiBaseUrl ?? "",
+      selectedModel: saved.auditSelectedModel ?? "claude-sonnet-5",
+      customModel: saved.auditCustomModel ?? "",
+      cliReasoningEffort: saved.auditCliReasoningEffort ?? defaultCliReasoningEffort(provider)
+    };
+  }
+  const provider = saved.distillProvider ?? "claude-cli";
+  return {
+    provider,
+    apiKey: "",
+    apiBaseUrl: saved.distillApiBaseUrl ?? "",
+    selectedModel: saved.distillSelectedModel ?? "claude-sonnet-5",
+    customModel: saved.distillCustomModel ?? "",
+    cliReasoningEffort: saved.distillCliReasoningEffort ?? defaultCliReasoningEffort(provider)
+  };
+}
+
+// Owns every auto-saved AI preference: each stage's (Distill/Tailor/Review)
+// provider/model/key/base-URL/reasoning-effort config, plus the polish prefs
+// that persist alongside them (honest context and custom instructions). All of
+// these share one debounced localStorage write, so they live together here
+// rather than scattered across App. API keys for every stage are intentionally
+// NOT persisted.
 export function useAiSettings() {
   const saved = useMemo(() => loadSettings(), []);
 
-  const [aiProvider, setAiProvider] = useState<AiProviderValue>(saved.aiProvider ?? "claude-cli");
-  const [apiKey, setApiKey] = useState("");
-  const [apiBaseUrl, setApiBaseUrl] = useState(saved.apiBaseUrl ?? "");
-  const [selectedModel, setSelectedModel] = useState(saved.selectedModel ?? "claude-sonnet-5");
-  const [cliReasoningEffort, setCliReasoningEffort] = useState(
-    saved.cliReasoningEffort ?? defaultCliReasoningEffort(saved.aiProvider ?? "claude-cli")
-  );
-  const [customModel, setCustomModel] = useState(saved.customModel ?? "");
-
-  // Independent reviewer for the strict-audit pass. Each stage now holds its OWN
-  // concrete provider config (no "same as Tailor" live link); the per-section
-  // segmented buttons COPY one stage's settings into another. Fresh defaults mirror
-  // the Tailor default (claude-cli / claude-sonnet-5) so all three start unified.
-  // The reviewer API key, like the primary, is never persisted.
-  const [auditProvider, setAuditProvider] = useState<AiProviderValue>(saved.auditProvider ?? "claude-cli");
-  const [auditSelectedModel, setAuditSelectedModel] = useState(saved.auditSelectedModel ?? "claude-sonnet-5");
-  const [auditCustomModel, setAuditCustomModel] = useState(saved.auditCustomModel ?? "");
-  const [auditCliReasoningEffort, setAuditCliReasoningEffort] = useState(
-    saved.auditCliReasoningEffort ?? defaultCliReasoningEffort(saved.auditProvider ?? "claude-cli")
-  );
-  const [auditApiBaseUrl, setAuditApiBaseUrl] = useState(saved.auditApiBaseUrl ?? "");
-  const [auditApiKey, setAuditApiKey] = useState("");
-
-  // Independent distiller for the /api/distill pass — own concrete config, same
-  // copy-not-link model and Tailor-matching defaults as the reviewer above.
-  const [distillProvider, setDistillProvider] = useState<AiProviderValue>(saved.distillProvider ?? "claude-cli");
-  const [distillSelectedModel, setDistillSelectedModel] = useState(saved.distillSelectedModel ?? "claude-sonnet-5");
-  const [distillCustomModel, setDistillCustomModel] = useState(saved.distillCustomModel ?? "");
-  const [distillCliReasoningEffort, setDistillCliReasoningEffort] = useState(
-    saved.distillCliReasoningEffort ?? defaultCliReasoningEffort(saved.distillProvider ?? "claude-cli")
-  );
-  const [distillApiBaseUrl, setDistillApiBaseUrl] = useState(saved.distillApiBaseUrl ?? "");
-  const [distillApiKey, setDistillApiKey] = useState("");
+  const [stages, setStages] = useState<Record<StageId, StageConfig>>(() => ({
+    distill: seedStage("distill", saved),
+    tailor: seedStage("tailor", saved),
+    review: seedStage("review", saved)
+  }));
 
   // Per-section expand/collapse state for the AI menu (Distill / Tailor / Review),
   // persisted so a collapsed section stays collapsed across reloads. All start open.
@@ -64,9 +77,6 @@ export function useAiSettings() {
   // Default "tailor" (no review) — preserve the user's choice once they opt in.
   // Legacy strictReview boolean is migrated to polishStages in settings.ts coerce().
   const [polishStages, setPolishStages] = useState<"tailor" | "review" | "both">(saved.polishStages ?? "tailor");
-  // Keep strictReview for back-compat: derived from polishStages so any code
-  // reading it still gets a sensible boolean. Not persisted directly any more.
-  const strictReview = polishStages === "both" || polishStages === "review";
   const [citizenshipStatus, setCitizenshipStatus] = useState<CitizenshipStatus>(saved.citizenshipStatus ?? "unspecified");
   const [legallyAuthorizedToWork, setLegallyAuthorizedToWork] = useState(saved.legallyAuthorizedToWork ?? true);
   const [requiresSponsorship, setRequiresSponsorship] = useState(saved.requiresSponsorship ?? false);
@@ -77,25 +87,24 @@ export function useAiSettings() {
   useEffect(() => {
     const id = setTimeout(() => {
       saveSettings({
-        aiProvider,
-        selectedModel,
-        customModel,
-        cliReasoningEffort,
-        apiBaseUrl,
-        auditProvider,
-        auditSelectedModel,
-        auditCustomModel,
-        auditCliReasoningEffort,
-        auditApiBaseUrl,
-        distillProvider,
-        distillSelectedModel,
-        distillCustomModel,
-        distillCliReasoningEffort,
-        distillApiBaseUrl,
+        aiProvider: stages.tailor.provider,
+        selectedModel: stages.tailor.selectedModel,
+        customModel: stages.tailor.customModel,
+        cliReasoningEffort: stages.tailor.cliReasoningEffort,
+        apiBaseUrl: stages.tailor.apiBaseUrl,
+        auditProvider: stages.review.provider,
+        auditSelectedModel: stages.review.selectedModel,
+        auditCustomModel: stages.review.customModel,
+        auditCliReasoningEffort: stages.review.cliReasoningEffort,
+        auditApiBaseUrl: stages.review.apiBaseUrl,
+        distillProvider: stages.distill.provider,
+        distillSelectedModel: stages.distill.selectedModel,
+        distillCustomModel: stages.distill.customModel,
+        distillCliReasoningEffort: stages.distill.cliReasoningEffort,
+        distillApiBaseUrl: stages.distill.apiBaseUrl,
         sectionOpen,
         honestContext,
         customInstructions,
-        strictReview,
         polishStages,
         citizenshipStatus,
         legallyAuthorizedToWork,
@@ -104,21 +113,7 @@ export function useAiSettings() {
     }, 400);
     return () => clearTimeout(id);
   }, [
-    aiProvider,
-    selectedModel,
-    customModel,
-    cliReasoningEffort,
-    apiBaseUrl,
-    auditProvider,
-    auditSelectedModel,
-    auditCustomModel,
-    auditCliReasoningEffort,
-    auditApiBaseUrl,
-    distillProvider,
-    distillSelectedModel,
-    distillCustomModel,
-    distillCliReasoningEffort,
-    distillApiBaseUrl,
+    stages,
     sectionOpen,
     honestContext,
     customInstructions,
@@ -128,66 +123,50 @@ export function useAiSettings() {
     requiresSponsorship
   ]);
 
-  // Keep each reasoning effort valid for its selected model — the tiers a model
-  // exposes vary (Haiku none; Opus/Sonnet 4.6 lack xhigh). When the current value
-  // isn't offered by the model, fall back to the provider default (always a member
-  // of any non-empty tier list). An empty list (Haiku / non-CLI) hides the control,
-  // so the leftover value is inert and left untouched.
+  // Keep each stage's reasoning effort valid for its selected model — the tiers
+  // a model exposes vary (Haiku none; Opus/Sonnet 4.6 lack xhigh). When the
+  // current value isn't offered by the model, fall back to the provider default
+  // (always a member of any non-empty tier list). An empty list (Haiku / non-CLI)
+  // hides the control, so the leftover value is inert and left untouched.
   useEffect(() => {
-    const model = selectedModel === "custom" ? customModel : selectedModel;
-    const options = cliReasoningEffortOptionsFor(aiProvider, model);
-    if (options && options.length > 0 && !options.some((option) => option.value === cliReasoningEffort)) {
-      setCliReasoningEffort(defaultCliReasoningEffort(aiProvider));
-    }
-  }, [aiProvider, selectedModel, customModel, cliReasoningEffort]);
+    setStages((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      for (const stage of STAGE_IDS) {
+        const config = prev[stage];
+        const model = config.selectedModel === "custom" ? config.customModel : config.selectedModel;
+        const options = cliReasoningEffortOptionsFor(config.provider, model);
+        if (options && options.length > 0 && !options.some((option) => option.value === config.cliReasoningEffort)) {
+          next[stage] = { ...config, cliReasoningEffort: defaultCliReasoningEffort(config.provider) };
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [stages]);
 
-  useEffect(() => {
-    const model = auditSelectedModel === "custom" ? auditCustomModel : auditSelectedModel;
-    const options = cliReasoningEffortOptionsFor(auditProvider, model);
-    if (options && options.length > 0 && !options.some((option) => option.value === auditCliReasoningEffort)) {
-      setAuditCliReasoningEffort(defaultCliReasoningEffort(auditProvider));
-    }
-  }, [auditProvider, auditSelectedModel, auditCustomModel, auditCliReasoningEffort]);
-
-  useEffect(() => {
-    const model = distillSelectedModel === "custom" ? distillCustomModel : distillSelectedModel;
-    const options = cliReasoningEffortOptionsFor(distillProvider, model);
-    if (options && options.length > 0 && !options.some((option) => option.value === distillCliReasoningEffort)) {
-      setDistillCliReasoningEffort(defaultCliReasoningEffort(distillProvider));
-    }
-  }, [distillProvider, distillSelectedModel, distillCustomModel, distillCliReasoningEffort]);
-
-  function handleProviderChange(value: AiProviderValue) {
-    const option = providerOptions.find((item) => item.value === value);
-    setAiProvider(value);
-    setApiKey("");
-    setApiBaseUrl(option?.baseUrl ?? "");
-    setSelectedModel(option?.model ?? "");
-    setCliReasoningEffort(defaultCliReasoningEffort(value));
-    setCustomModel("");
+  function updateStage(stage: StageId, patch: Partial<StageConfig>) {
+    setStages((prev) => ({ ...prev, [stage]: { ...prev[stage], ...patch } }));
   }
 
-  function handleAuditProviderChange(value: AiProviderValue) {
+  // Switching a stage's provider resets its key/base-URL/model/effort/custom-model
+  // to that provider's defaults, mirroring the original per-stage handlers.
+  function changeStageProvider(stage: StageId, value: AiProviderValue) {
     const option = providerOptions.find((item) => item.value === value);
-    setAuditProvider(value);
-    setAuditApiKey("");
-    setAuditApiBaseUrl(option?.baseUrl ?? "");
-    setAuditSelectedModel(option?.model ?? "");
-    setAuditCliReasoningEffort(defaultCliReasoningEffort(value));
-    setAuditCustomModel("");
+    setStages((prev) => ({
+      ...prev,
+      [stage]: {
+        provider: value,
+        apiKey: "",
+        apiBaseUrl: option?.baseUrl ?? "",
+        selectedModel: option?.model ?? "",
+        customModel: "",
+        cliReasoningEffort: defaultCliReasoningEffort(value)
+      }
+    }));
   }
 
-  function handleDistillProviderChange(value: AiProviderValue) {
-    const option = providerOptions.find((item) => item.value === value);
-    setDistillProvider(value);
-    setDistillApiKey("");
-    setDistillApiBaseUrl(option?.baseUrl ?? "");
-    setDistillSelectedModel(option?.model ?? "");
-    setDistillCliReasoningEffort(defaultCliReasoningEffort(value));
-    setDistillCustomModel("");
-  }
-
-  function toggleSection(stage: "distill" | "tailor" | "review") {
+  function toggleSection(stage: StageId) {
     setSectionOpen((prev) => ({ ...prev, [stage]: !prev[stage] }));
   }
 
@@ -196,100 +175,15 @@ export function useAiSettings() {
   // Tailor section copies Distill's settings onto Tailor). It's a one-shot copy,
   // not a live link — the stages can diverge again afterward. Includes the API key
   // (in-memory only) so a copied hosted-provider stage is immediately usable.
-  type StageConfig = {
-    provider: AiProviderValue;
-    apiKey: string;
-    apiBaseUrl: string;
-    selectedModel: string;
-    customModel: string;
-    cliReasoningEffort: string;
-  };
-  function readStage(stage: "distill" | "tailor" | "review"): StageConfig {
-    if (stage === "tailor") return { provider: aiProvider, apiKey, apiBaseUrl, selectedModel, customModel, cliReasoningEffort };
-    if (stage === "distill")
-      return {
-        provider: distillProvider,
-        apiKey: distillApiKey,
-        apiBaseUrl: distillApiBaseUrl,
-        selectedModel: distillSelectedModel,
-        customModel: distillCustomModel,
-        cliReasoningEffort: distillCliReasoningEffort
-      };
-    return {
-      provider: auditProvider,
-      apiKey: auditApiKey,
-      apiBaseUrl: auditApiBaseUrl,
-      selectedModel: auditSelectedModel,
-      customModel: auditCustomModel,
-      cliReasoningEffort: auditCliReasoningEffort
-    };
-  }
-  function writeStage(stage: "distill" | "tailor" | "review", c: StageConfig) {
-    if (stage === "tailor") {
-      setAiProvider(c.provider);
-      setApiKey(c.apiKey);
-      setApiBaseUrl(c.apiBaseUrl);
-      setSelectedModel(c.selectedModel);
-      setCustomModel(c.customModel);
-      setCliReasoningEffort(c.cliReasoningEffort);
-    } else if (stage === "distill") {
-      setDistillProvider(c.provider);
-      setDistillApiKey(c.apiKey);
-      setDistillApiBaseUrl(c.apiBaseUrl);
-      setDistillSelectedModel(c.selectedModel);
-      setDistillCustomModel(c.customModel);
-      setDistillCliReasoningEffort(c.cliReasoningEffort);
-    } else {
-      setAuditProvider(c.provider);
-      setAuditApiKey(c.apiKey);
-      setAuditApiBaseUrl(c.apiBaseUrl);
-      setAuditSelectedModel(c.selectedModel);
-      setAuditCustomModel(c.customModel);
-      setAuditCliReasoningEffort(c.cliReasoningEffort);
-    }
-  }
-  function copyStage(from: "distill" | "tailor" | "review", to: "distill" | "tailor" | "review") {
+  function copyStage(from: StageId, to: StageId) {
     if (from === to) return;
-    writeStage(to, readStage(from));
+    setStages((prev) => ({ ...prev, [to]: { ...prev[from] } }));
   }
 
   return {
-    aiProvider,
-    apiKey,
-    setApiKey,
-    apiBaseUrl,
-    setApiBaseUrl,
-    selectedModel,
-    setSelectedModel,
-    cliReasoningEffort,
-    setCliReasoningEffort,
-    customModel,
-    setCustomModel,
-    handleProviderChange,
-    auditProvider,
-    auditSelectedModel,
-    setAuditSelectedModel,
-    auditCustomModel,
-    setAuditCustomModel,
-    auditCliReasoningEffort,
-    setAuditCliReasoningEffort,
-    auditApiBaseUrl,
-    setAuditApiBaseUrl,
-    auditApiKey,
-    setAuditApiKey,
-    handleAuditProviderChange,
-    distillProvider,
-    distillSelectedModel,
-    setDistillSelectedModel,
-    distillCustomModel,
-    setDistillCustomModel,
-    distillCliReasoningEffort,
-    setDistillCliReasoningEffort,
-    distillApiBaseUrl,
-    setDistillApiBaseUrl,
-    distillApiKey,
-    setDistillApiKey,
-    handleDistillProviderChange,
+    stages,
+    updateStage,
+    changeStageProvider,
     sectionOpen,
     toggleSection,
     copyStage,
@@ -297,7 +191,6 @@ export function useAiSettings() {
     setHonestContext,
     polishStages,
     setPolishStages,
-    strictReview,
     citizenshipStatus,
     setCitizenshipStatus,
     legallyAuthorizedToWork,

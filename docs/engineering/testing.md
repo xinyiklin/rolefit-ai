@@ -41,7 +41,8 @@ eval must be added to `LIVE` so it stays out of `npm test`.
 
 Good server verification covers:
 
-- `node --check server.mjs` passes after server edits
+- `npx tsc -p tsconfig.server.json` passes after server edits (the server runs
+  under Node's native TypeScript type stripping; this is the type + syntax gate)
 - the affected route returns the expected JSON shape and HTTP status
 - `/api/polish` accepts a structured `tailorScope`, does not require or read
   full-resume `resumeText`, and returns only suggestions targeting IDs from
@@ -67,7 +68,9 @@ Good server verification covers:
   `job-search-workspace/tailor-eval/`); a matched JD should produce
   evidence-backed suggestions with a small honest lift, a bad-fit JD a
   stable DON'T APPLY
-- the deterministic local rewrite still runs when the AI call cannot
+- when an AI tailor/review/cover call fails, the stage shows a failed card
+  with Retry (no local draft — D011); the deterministic DISTILL fallback and
+  the local fit estimate still run
 - DOCX import / export roundtrips do not corrupt the format
 - `job-search-workspace/` reads / writes stay inside the workspace
   folder
@@ -76,7 +79,7 @@ Useful commands:
 
 ```bash
 npm test
-node --check server.mjs
+npx tsc -p tsconfig.server.json
 npm run dev
 ```
 
@@ -134,7 +137,9 @@ Good refactor verification proves behavior parity:
 - grep for old symbol names returns no meaningful hits after renames
 - no new imports of deprecated paths
 - affected call sites still use the intended public interface
-- the AI polish path **and** the deterministic fallback both still work
+- the AI polish path still works, and a failed AI call still surfaces a
+  failed stage card with Retry (local fallbacks exist only for distill and
+  the fit estimate — D011)
 
 Avoid drive-by refactors. Refactor only when the current task requires
 it, the existing structure blocks correctness, or the improvement can

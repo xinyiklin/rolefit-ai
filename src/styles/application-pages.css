@@ -52,8 +52,7 @@
   flex-wrap: wrap;
 }
 
-.workspace-search,
-.workspace-select {
+.workspace-search {
   display: inline-flex;
   align-items: center;
   gap: var(--s2);
@@ -71,36 +70,17 @@
   padding: 0 var(--s3);
 }
 
-.workspace-search--capped {
-  max-width: 420px;
-  flex: 0 1 420px;
-}
-
-.workspace-search input,
-.workspace-select select {
+.workspace-search input {
   min-width: 0;
   border: 0;
   outline: 0;
   background: transparent;
-}
-
-.workspace-search input {
   width: 100%;
   color: var(--ink);
   font-size: 0.8rem;
 }
 
-.workspace-select {
-  padding: 0 var(--s2);
-}
-
-.workspace-select select {
-  color: var(--ink);
-  font-size: 0.78rem;
-}
-
-.workspace-search:focus-within,
-.workspace-select:focus-within {
+.workspace-search:focus-within {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--accent-veil);
 }
@@ -145,6 +125,14 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* Quiet duplicate-cluster indicator next to the company name — no color
+   explosion, just a muted icon; the tooltip carries the explanation. */
+.application-duplicate-badge {
+  display: inline-flex;
+  flex-shrink: 0;
+  color: var(--ink-faint);
 }
 
 /* application-stage still used in ApplicationModal documents tab — keep as a slim badge there */
@@ -272,6 +260,8 @@
   padding: var(--s2) var(--s3);
   background: var(--card-soft);
   border-radius: var(--r-md);
+  min-width: 0;
+  max-width: 100%;
 }
 
 .figures-strip__item {
@@ -279,6 +269,7 @@
   flex-direction: column;
   gap: 1px;
   padding: var(--s1) var(--s4);
+  min-width: 0;
 }
 
 .figures-strip--compact .figures-strip__item {
@@ -324,6 +315,7 @@
   display: grid;
   grid-template-columns: 1fr;
   gap: var(--s2);
+  min-width: 0;
   background: none;
   border: none;
   padding: 0;
@@ -412,6 +404,7 @@
   grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
   gap: var(--s4);
   align-items: start;
+  min-width: 0;
 }
 
 /* Calendar view: grid + right rail (no inspector needed; CalendarRail is the rail).
@@ -476,11 +469,27 @@
 
 .applications-table {
   display: grid;
-  overflow: hidden;
+  /* Scroll horizontally (never clip) when the column template can't fit — the
+     inspector narrows the table column well below the row's natural width even
+     on a wide viewport, so this can't be gated on a viewport breakpoint. The
+     bordered box is the scroll frame; it stays put while the rows scroll inside.
+     Vertical stays clipped so the rounded corners still trim the row fills. */
+  overflow: auto hidden;
   border: 1px solid var(--hairline);
   border-radius: var(--r-lg);
   background: var(--card-elev);
   box-shadow: var(--shadow-rest);
+  scrollbar-width: thin;
+  scrollbar-color: var(--hairline-strong) transparent;
+}
+
+.applications-table::-webkit-scrollbar {
+  height: 8px;
+}
+
+.applications-table::-webkit-scrollbar-thumb {
+  background: var(--hairline-strong);
+  border-radius: var(--r-pill);
 }
 
 .applications-table__row {
@@ -489,6 +498,9 @@
      ellipsis-truncate and yield space when the inspector narrows the table —
      the fixed FIT verdict column must never be the one clipped. */
   grid-template-columns: minmax(120px, 1.3fr) minmax(112px, 1fr) 104px 88px 78px minmax(120px, 1fr) 104px 18px;
+  /* Hold the columns at their natural combined minimum; below that the table
+     scrolls horizontally instead of squeezing/clipping the right-hand columns. */
+  min-width: min-content;
   align-items: center;
   gap: var(--s3);
   min-height: 52px;
@@ -822,7 +834,6 @@ button.table-sort svg {
 
 .applications-empty strong { color: var(--ink-strong); }
 
-.application-side-panel,
 .pipeline-inspector,
 .calendar-side {
   display: grid;
@@ -833,11 +844,12 @@ button.table-sort svg {
   box-shadow: var(--shadow-rest);
 }
 
-.application-side-panel,
 .pipeline-inspector {
   position: sticky;
   top: var(--s4);
   padding: var(--s3);
+  min-width: 0;
+  max-width: 100%;
   /* Ensure the panel renders above board columns when sticky */
   z-index: 2;
 }
@@ -852,6 +864,14 @@ button.table-sort svg {
    here — drop it so the editable controls sit on the panel's own rhythm. */
 .pipeline-inspector .field {
   margin-top: 0;
+  min-width: 0;
+}
+
+.pipeline-inspector select,
+.pipeline-inspector .text-input,
+.pipeline-inspector .textarea {
+  min-width: 0;
+  max-width: 100%;
 }
 
 /* Dividers already get s2 of breathing room from the grid gap on each side. */
@@ -868,7 +888,6 @@ button.table-sort svg {
   z-index: 1;
 }
 
-.application-side-panel__head,
 .pipeline-inspector__head {
   display: grid;
   grid-template-columns: auto 1fr auto;
@@ -883,18 +902,26 @@ button.table-sort svg {
   padding-right: var(--s5);
 }
 
-.application-side-panel__head h3,
+.pipeline-inspector__head > div {
+  min-width: 0;
+}
+
 .pipeline-inspector__head h3 {
   color: var(--ink-strong);
   font-size: 0.92rem;
   font-weight: 650;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.application-side-panel__head p,
 .pipeline-inspector__head p {
   margin-top: 2px;
   color: var(--ink-soft);
   font-size: 0.74rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .application-detail-score {
@@ -948,6 +975,35 @@ button.table-sort svg {
   line-height: 1.4;
 }
 
+.inspector-duplicates {
+  display: grid;
+  gap: var(--s2);
+  margin: 0 0 var(--s2);
+  padding: 0;
+  list-style: none;
+}
+
+.inspector-duplicates__item {
+  display: grid;
+  gap: 2px;
+}
+
+.inspector-duplicates__title {
+  color: var(--ink);
+  font-size: 0.76rem;
+  font-weight: 600;
+}
+
+.inspector-duplicates__meta {
+  color: var(--ink-soft);
+  font-size: 0.7rem;
+}
+
+.inspector-duplicates__evidence {
+  color: var(--ink-faint);
+  font-size: 0.68rem;
+}
+
 .application-side-empty,
 .calendar-empty-note,
 .analytics-empty {
@@ -962,12 +1018,60 @@ button.table-sort svg {
   gap: var(--s1);
 }
 
+.ledger-row dd.application-chip-list {
+  flex: 0 1 auto;
+  justify-content: flex-end;
+  min-width: 0;
+  white-space: normal;
+}
+
+.pipeline-inspector .ledger-row {
+  min-width: 0;
+}
+
+.pipeline-inspector .ledger-row__leader {
+  flex: 1 1 var(--s3);
+}
+
+.pipeline-inspector .ledger-row dd {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  text-align: right;
+  white-space: normal;
+}
+
+.pipeline-inspector .ledger-row dd.application-chip-list {
+  max-width: 100%;
+}
+
+.pipeline-inspector .application-chip-list a,
+.pipeline-inspector .application-chip-list span {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .application-chip-list span {
   padding: 3px 7px;
   border-radius: var(--r-pill);
   background: var(--paper-deep);
   color: var(--ink-soft);
   font-size: 0.66rem;
+}
+
+.application-chip-list a {
+  padding: 2px 6px;
+  border-radius: var(--r-pill);
+  background: var(--paper-deep);
+  color: var(--accent-deep);
+  text-decoration: none;
+}
+
+.application-chip-list a:hover {
+  text-decoration: underline;
 }
 
 .application-side-actions {
@@ -1659,6 +1763,77 @@ button.table-sort svg {
   overflow: auto;
 }
 
+/* -------- Review-duplicates modal -------- */
+/* Reuses the .application-modal shell (fixed-size grid, header/scrim already
+   styled above); only the body differs — a scrolling stack of group cards
+   instead of the add-application form's two-column layout. */
+.duplicate-review-modal {
+  width: min(720px, calc(100vw - 40px));
+  height: auto;
+  max-height: min(86vh, 780px);
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.duplicate-review-modal__body {
+  display: grid;
+  gap: var(--s3);
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.duplicate-group-card__members {
+  display: grid;
+  gap: var(--s2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.duplicate-group-card__member {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s2);
+  padding-top: var(--s2);
+  border-top: 1px solid var(--hairline-soft);
+}
+
+.duplicate-group-card__member:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.duplicate-group-card__radio {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  color: var(--ink-soft);
+  font-size: 0.7rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.duplicate-group-card__member-info {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.duplicate-group-card__member-title {
+  color: var(--ink);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.duplicate-group-card__member-meta {
+  color: var(--ink-soft);
+  font-size: 0.7rem;
+}
+
+.duplicate-group-card__evidence {
+  margin-top: var(--s1);
+}
+
 .application-form {
   display: grid;
   gap: var(--s2);
@@ -1913,6 +2088,65 @@ button.table-sort svg {
   white-space: pre-wrap;
 }
 
+/* Review-duplicates modal — reuses .application-modal__* shell; body stacks
+   one full-width card per duplicate group instead of the form+aside grid. */
+.duplicate-review-modal .application-modal__body,
+.duplicate-review-modal__body {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--s3);
+  overflow: auto;
+}
+
+.duplicate-group-card__members {
+  display: grid;
+  gap: var(--s2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.duplicate-group-card__member {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s3);
+  padding: var(--s2) var(--s3);
+  border: 1px solid var(--hairline-soft);
+  border-radius: var(--r-sm);
+  background: var(--card);
+}
+
+.duplicate-group-card__radio {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s1);
+  flex-shrink: 0;
+  color: var(--ink-soft);
+  font-size: 0.7rem;
+  white-space: nowrap;
+}
+
+.duplicate-group-card__member-info {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.duplicate-group-card__member-title {
+  color: var(--ink-strong);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.duplicate-group-card__member-meta {
+  color: var(--ink-soft);
+  font-size: 0.72rem;
+}
+
+.duplicate-group-card__evidence span {
+  background: var(--warm-veil);
+}
+
 @media (max-width: 1280px) {
   .analytics-panel { grid-column: span 6; }
   .analytics-panel--wide,
@@ -1934,10 +2168,8 @@ button.table-sort svg {
     top: auto;
   }
 
-  .applications-table {
-    overflow-x: auto;
-  }
-
+  /* Base rule already scrolls the table horizontally; on small viewports hold a
+     slightly wider row minimum so the columns stay touch-comfortable. */
   .applications-table__row {
     min-width: 920px;
   }

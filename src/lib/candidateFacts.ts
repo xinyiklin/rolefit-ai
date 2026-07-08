@@ -2,7 +2,7 @@
 // citizenship or work authorization until the user explicitly opts in via the
 // Options menu. This matters because buildCandidateFactsContext() output is fed
 // into the AI request's honestContext, which the server folds into the
-// keyword-grounding allowlist (server/ai/sanitize.mjs) — so a concrete default
+// keyword-grounding allowlist (server/ai/sanitize.ts) — so a concrete default
 // like "U.S. citizen, clearance-eligible" would let an unverified
 // citizenship/clearance/work-auth claim survive into resume output for a user
 // who never set it. Anti-fabrication requires the default to claim nothing.

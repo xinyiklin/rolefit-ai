@@ -1,8 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { EvidenceType, MissingRequiredSkill, StrictReviewSeverity } from "../resumeEngine";
 import { inferApplicationTitle, inferCompanyFromUrl } from "../lib/jobTarget";
-import type { ExtractedJobTracking } from "../lib/jobExtract";
+import { sourceFromUrl, type ExtractedJobTracking } from "../lib/jobExtract";
 import type { ResumeData } from "../lib/resumeData";
+import { dedupeSourceUrls, normalizeJobUrl, findDuplicateApplications } from "../lib/jobIdentity";
+import type { DuplicateTarget } from "../lib/jobIdentity";
+import type { ApplicationAiUsage } from "../lib/aiUsage";
+
+export type { ApplicationAiUsage, StageAiUsage } from "../lib/aiUsage";
 
 export type ApplicationStatus = "interested" | "applied" | "interviewing" | "offer" | "rejected" | "withdrawn";
 
@@ -88,6 +93,18 @@ export type Application = {
   source?: ApplicationSource;
   jobUrl: string;
   jobDescription?: string;
+  // Additional discovered URLs for this same posting beyond the primary jobUrl
+  // (e.g. the same role seen on LinkedIn and later on the company's ATS). Capped
+  // at 10; deduped by normalized URL. Lets duplicate detection match a record no
+  // matter which board the user is currently looking at.
+  sourceUrls?: { url: string; source?: string; addedAt: string }[];
+  // Raw pre-distill posting text, kept ONLY when it differs from jobDescription
+  // (the distilled brief) — avoids storing the same text twice.
+  rawJobDescription?: string;
+  // Per-stage AI usage snapshot (distill/tailor/review/cover), captured at Apply
+  // time. Whole-map-replace on upsert — an incoming snapshot always wins, no
+  // deep per-stage merge.
+  aiUsage?: ApplicationAiUsage;
   status: ApplicationStatus;
   createdAt: string;
   appliedAt?: string;
@@ -217,17 +234,44 @@ export function missingRequiredSkillsFromApplication(app: Application): MissingR
   return derived?.length ? derived : undefined;
 }
 
+// EXACT-tier only: these two drive SILENT merges (Apply + Save answers), so
+// they must never widen to the fuzzy/layered matching findDuplicatesForTarget
+// below performs — only the URL-equality check itself is normalize-aware (so a
+// tracking-param variant of the same link still counts as the same target).
 function sameApplicationTarget(a: Application, incoming: Application) {
   const incomingUrl = incoming.jobUrl.trim();
-  if (incomingUrl && a.jobUrl.trim() === incomingUrl) return true;
+  const aUrl = a.jobUrl.trim();
+  if (incomingUrl && aUrl && normalizeJobUrl(aUrl) === normalizeJobUrl(incomingUrl)) return true;
 
   const incomingDescription = (incoming.jobDescription ?? "").trim();
   return Boolean(
     !incomingUrl &&
     incomingDescription &&
-    !a.jobUrl.trim() &&
+    !aUrl &&
     (a.jobDescription ?? "").trim() === incomingDescription
   );
+}
+
+const MAX_SOURCE_URLS = 10;
+
+// Union existing.sourceUrls + incoming.sourceUrls + whichever of the two
+// records' primary jobUrl is non-empty and is NOT the final merged primary —
+// so a URL that used to be primary (or an incoming primary that lost to the
+// existing one) is still remembered as an alternate posting location. The
+// dedup/cap/earliest-addedAt rules live in the shared dedupeSourceUrls (one
+// implementation with the group-merge path and the server sanitizer).
+function mergeSourceUrls(existing: Application, incoming: Application, now: string) {
+  const finalPrimary = (incoming.jobUrl || existing.jobUrl).trim();
+  const candidates: { url?: string; source?: string; addedAt?: string }[] = [
+    ...(existing.sourceUrls ?? []),
+    ...(incoming.sourceUrls ?? []),
+    ...[existing.jobUrl, incoming.jobUrl]
+      .map((rawUrl) => (rawUrl ?? "").trim())
+      .filter(Boolean)
+      .map((url) => ({ url, source: sourceFromUrl(url) || undefined, addedAt: now }))
+  ];
+  const result = dedupeSourceUrls(candidates, finalPrimary, now, MAX_SOURCE_URLS);
+  return result.length ? result : undefined;
 }
 
 type EditableField = "title" | "company" | "role" | "source" | "notes" | "followupAt" | "jobUrl";
@@ -262,14 +306,18 @@ export function useApplications() {
     };
   }, []);
 
-  const persist = useCallback(async (next: Application[], previous: Application[]) => {
+  // `deleteIds` names records this write REMOVES. The server's read-merge
+  // resurrects on-disk entries missing from the request (multi-tab protection),
+  // so a deleting operation (the duplicate merge) must list them explicitly —
+  // sending a shorter list alone would be silently undone.
+  const persist = useCallback(async (next: Application[], previous: Application[], deleteIds?: string[]) => {
     const requestId = persistVersion.current + 1;
     persistVersion.current = requestId;
     const write = persistQueue.current.catch(() => undefined).then(async () => {
       const res = await fetch("/api/applications", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ applications: next })
+        body: JSON.stringify({ applications: next, ...(deleteIds?.length ? { deleteIds } : {}) })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Save failed.");
@@ -311,6 +359,8 @@ export function useApplications() {
               source: current[idx].source || incoming.source,
               jobUrl: incoming.jobUrl || current[idx].jobUrl,
               jobDescription: incoming.jobDescription || current[idx].jobDescription,
+              rawJobDescription: incoming.rawJobDescription || current[idx].rawJobDescription,
+              sourceUrls: mergeSourceUrls(current[idx], incoming, now),
               updatedAt: now,
               createdAt: current[idx].createdAt
             }
@@ -451,21 +501,91 @@ export function useApplications() {
     []
   );
 
-  // Find an existing application matching the current job target — by URL when
-  // present, else by exact job-description text for link-less entries. Shared by
-  // the "Apply" and "Save answers" paths so both update in place
-  // rather than creating duplicate rows.
+  // Find an existing application matching the current job target — by
+  // normalized URL when present, else by exact job-description text for
+  // link-less entries. Shared by the "Apply" and "Save answers" paths so both
+  // update in place rather than creating duplicate rows. EXACT-tier only — see
+  // sameApplicationTarget.
   const findForTarget = useCallback(
     (targetUrl: string, targetDescription: string) => {
       const trimmedUrl = targetUrl.trim();
       const trimmedDescription = targetDescription.trim();
-      return trimmedUrl
-        ? applications.find((a) => a.jobUrl.trim() === trimmedUrl)
-        : applications.find(
-            (a) => !a.jobUrl.trim() && trimmedDescription && (a.jobDescription ?? "").trim() === trimmedDescription
-          );
+      if (!trimmedUrl) {
+        return applications.find(
+          (a) => !a.jobUrl.trim() && trimmedDescription && (a.jobDescription ?? "").trim() === trimmedDescription
+        );
+      }
+      const normTarget = normalizeJobUrl(trimmedUrl);
+      return applications.find((a) => a.jobUrl.trim() && normalizeJobUrl(a.jobUrl.trim()) === normTarget);
     },
     [applications]
+  );
+
+  // Layered duplicate scan (same-posting/repost/same-company-role, tiered
+  // confidence) against every stored application — see src/lib/jobIdentity.ts.
+  // Unlike findForTarget, this NEVER drives a silent merge on its own; callers
+  // decide what to do with "high"/"possible" matches (e.g. App.tsx's apply-time
+  // warning dialog).
+  const findDuplicatesForTarget = useCallback(
+    (target: DuplicateTarget) => findDuplicateApplications(target, applications),
+    [applications]
+  );
+
+  // Merge a duplicate group into one canonical record: keep the canonical's
+  // fields, absorb every other member's discovered URLs as sourceUrls, adopt the
+  // earliest createdAt, backfill rawJobDescription/aiUsage only when the canonical
+  // lacks them, then delete the other members. Destructive (removes rows) — the
+  // caller confirms first. No-ops on an unknown canonicalId or a <2 member set,
+  // so a stale group (already merged in another tab) can't drop data.
+  const mergeApplications = useCallback(
+    (memberIds: string[], canonicalId: string) => {
+      setApplications((current) => {
+        const ids = new Set(memberIds);
+        const members = current.filter((a) => ids.has(a.id));
+        const canonical = members.find((a) => a.id === canonicalId);
+        if (!canonical || members.length < 2) return current;
+        const now = new Date().toISOString();
+        const others = members.filter((a) => a.id !== canonicalId);
+
+        // Union sourceUrls: every member's sourceUrls + every non-canonical
+        // member's primary jobUrl. Dedup/primary-exclusion/cap/earliest-addedAt
+        // rules live in the shared dedupeSourceUrls (one implementation with
+        // the upsert merge and the server sanitizer).
+        const candidates: { url?: string; source?: string; addedAt?: string }[] = [
+          ...members.flatMap((member) => member.sourceUrls ?? []),
+          ...others
+            .map((member) => (member.jobUrl ?? "").trim())
+            .filter(Boolean)
+            .map((url) => ({ url, source: sourceFromUrl(url) || undefined, addedAt: now }))
+        ];
+        const deduped = dedupeSourceUrls(candidates, canonical.jobUrl, now, MAX_SOURCE_URLS);
+        const sourceUrls = deduped.length ? deduped : undefined;
+
+        // ISO timestamps sort lexically, so min() is a plain string comparison.
+        const earliestCreatedAt = members
+          .map((m) => m.createdAt)
+          .filter(Boolean)
+          .sort()[0] || canonical.createdAt;
+
+        const merged: Application = {
+          ...canonical,
+          sourceUrls,
+          rawJobDescription: canonical.rawJobDescription || others.find((m) => m.rawJobDescription)?.rawJobDescription,
+          aiUsage: canonical.aiUsage ?? others.find((m) => m.aiUsage)?.aiUsage,
+          createdAt: earliestCreatedAt,
+          updatedAt: now
+        };
+
+        const next = current
+          .filter((a) => !ids.has(a.id) || a.id === canonicalId)
+          .map((a) => (a.id === canonicalId ? merged : a));
+        // Name the removed members explicitly — without deleteIds the server's
+        // multi-tab read-merge would resurrect them from disk on this very write.
+        void persist(next, current, others.map((a) => a.id));
+        return next;
+      });
+    },
+    [persist]
   );
 
   const refresh = useCallback(async () => {
@@ -493,6 +613,8 @@ export function useApplications() {
     updateField,
     remove,
     findForTarget,
+    findDuplicatesForTarget,
+    mergeApplications,
     refresh
   };
 }

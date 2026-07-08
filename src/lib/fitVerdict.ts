@@ -27,10 +27,10 @@ export const VERDICT_TONE: Record<StrictReviewVerdict, "strong" | "good" | "stre
   "DON'T APPLY": "weak"
 };
 
-// Score → verdict. Thresholds MIRROR server/ai/sanitize.mjs verdictForScore
+// Score → verdict. Thresholds MIRROR server/ai/sanitize.ts verdictForScore
 // (STRONG FIT >=85, REASONABLE FIT >=70, STRETCH >=46, DON'T APPLY <46) and the
-// fitLabel/fitTone bands. Keep all three in sync — the .mjs server and .ts
-// client can't import each other.
+// fitLabel/fitTone bands. Keep all three in sync — the server and client
+// modules can't import each other.
 export function verdictFromScore(score: number | null | undefined): StrictReviewVerdict | null {
   if (typeof score !== "number") return null;
   if (score >= 85) return "STRONG FIT";

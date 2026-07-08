@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { AlertCircle, ChevronLeft, ChevronRight, Eye, Link, Plus, RefreshCw, Search, Sparkles, SquareArrowOutUpRight, Trash2 } from "lucide-react";
+import { AlertCircle, ChevronLeft, ChevronRight, Copy, Eye, Link, Plus, RefreshCw, Search, Sparkles, SquareArrowOutUpRight, Trash2 } from "lucide-react";
 import type { Application, ApplicationStatus } from "../../hooks/useApplications";
+import type { DuplicateGroup } from "../../lib/jobIdentity";
 import {
   BOARD_STATUSES,
   STATUS_LABEL,
@@ -11,10 +12,12 @@ import {
   priorityFor,
   statusCount
 } from "../../lib/applicationDisplay";
+import { groupDuplicateApplications } from "../../lib/jobIdentity";
 import { TrackerTableView } from "../tracker/TrackerTableView";
 import { TrackerCalendarView } from "../tracker/TrackerCalendarView";
 import { TrackerInspector } from "../tracker/TrackerInspector";
 import { TrackerRowMenu, type RowMenuItem } from "../tracker/TrackerRowMenu";
+import { DuplicateReviewModal } from "../tracker/DuplicateReviewModal";
 
 export type TrackerView = "table" | "calendar";
 
@@ -110,6 +113,11 @@ type TrackerTabProps = {
   onDelete: (id: string, title: string) => void;
   onAddApplication: () => void;
   onRefresh: () => Promise<void>;
+  // Merge action for duplicate clusters, threaded from useApplications via
+  // App.tsx. The clusters themselves are computed HERE (this component only
+  // mounts while the Applications tab is open), not in the hook — the O(n²)
+  // scan must not run app-wide on every applications change.
+  onMergeApplications: (memberIds: string[], canonicalId: string) => void;
 };
 
 const VIEWS: TrackerView[] = ["table", "calendar"];
@@ -137,7 +145,8 @@ export function TrackerTab({
   onPreviewResume,
   onDelete,
   onAddApplication,
-  onRefresh
+  onRefresh,
+  onMergeApplications
 }: TrackerTabProps) {
   const [query, setQuery] = useState("");
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -147,6 +156,41 @@ export function TrackerTab({
   const [page, setPage] = useState(1);
   // Right-click context menu: the target app + cursor anchor (viewport coords).
   const [rowMenu, setRowMenu] = useState<{ app: Application; x: number; y: number } | null>(null);
+  const [isDuplicateModalOpen, setIsDuplicateModalOpen] = useState(false);
+
+  // Identity of only the dedup-RELEVANT fields (plus status/dates the merge
+  // modal ranks and displays), so free-text edits — notes typed per keystroke
+  // in the inspector — don't retrigger the O(n²) duplicate scan below.
+  const duplicateScanKey = useMemo(
+    () =>
+      applications
+        .map(
+          (a) =>
+            `${a.id}|${a.jobUrl}|${a.company ?? ""}|${a.role ?? ""}|${a.title}|${a.location ?? ""}|${a.status}|${
+              a.appliedAt ?? ""
+            }|${a.createdAt}|${(a.rawJobDescription || a.jobDescription || "").length}|${a.sourceUrls?.length ?? 0}`
+        )
+        .join("\n"),
+    [applications]
+  );
+
+  // Tracker-wide duplicate clusters. Computed here — not in useApplications —
+  // so the O(n²) fingerprint pass runs only while this tab is mounted, and only
+  // when a dedup-relevant field actually changed (see duplicateScanKey).
+  const duplicateGroups: DuplicateGroup<Application>[] = useMemo(
+    () => groupDuplicateApplications(applications),
+    // duplicateScanKey stands in for `applications`: a key change implies a new
+    // applications array, so the callback never closes over a stale list.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [duplicateScanKey]
+  );
+
+  // Every application id that belongs to any duplicate cluster, for the table's
+  // quiet inline badge.
+  const duplicateIds = useMemo(
+    () => new Set(duplicateGroups.flatMap((g) => g.applications.map((a) => a.id))),
+    [duplicateGroups]
+  );
 
   // Filtered + sorted list used by the Table view (Calendar filters internally).
   const sorted = useMemo(() => {
@@ -194,6 +238,24 @@ export function TrackerTab({
     ? visible.find((app) => app.id === expandedApplicationId) ?? null
     : null;
   const selected = visibleSelected ?? visible[0] ?? sorted[0] ?? null;
+
+  // The duplicate group (if any) containing the selected application, for the
+  // inspector's "Possible duplicates" section.
+  const selectedId = selected?.id;
+  const selectedDuplicateGroup = useMemo(
+    () => (selectedId ? duplicateGroups.find((g) => g.applications.some((a) => a.id === selectedId)) : undefined),
+    [duplicateGroups, selectedId]
+  );
+
+  // If the previously-selected application was merged away (it no longer
+  // appears in `applications` at all), clear the stale selection so the
+  // inspector falls back to the next visible row instead of crashing on an
+  // application that no longer exists.
+  useEffect(() => {
+    if (!expandedApplicationId) return;
+    if (applications.some((app) => app.id === expandedApplicationId)) return;
+    setExpandedApplicationId(null);
+  }, [applications, expandedApplicationId, setExpandedApplicationId]);
 
   // Keep the inspector tied to the current table page; otherwise paging can
   // leave the rail editing a row that is no longer visible.
@@ -288,6 +350,16 @@ export function TrackerTab({
           >
             <RefreshCw size={14} className={isRefreshing ? "spin" : ""} aria-hidden="true" />
           </button>
+          {duplicateGroups.length > 0 ? (
+            <button
+              type="button"
+              className="secondary-button is-compact"
+              onClick={() => setIsDuplicateModalOpen(true)}
+            >
+              <Copy size={14} aria-hidden="true" />
+              Review duplicates · {duplicateGroups.length}
+            </button>
+          ) : null}
           <button type="button" className="primary-button is-compact" onClick={onAddApplication}>
             <Plus size={14} aria-hidden="true" />
             Add application
@@ -379,6 +451,7 @@ export function TrackerTab({
               onSelect={setExpandedApplicationId}
               onDoubleClick={onOpenApplication}
               onRowContextMenu={handleRowContextMenu}
+              duplicateIds={duplicateIds}
             />
 
             {sorted.length > 0 ? (
@@ -442,6 +515,8 @@ export function TrackerTab({
               onPreviewResume={onPreviewResume}
               onLoad={onLoad}
               onDelete={onDelete}
+              duplicateGroup={selectedDuplicateGroup}
+              onReviewDuplicates={() => setIsDuplicateModalOpen(true)}
             />
           </aside>
         </div>
@@ -453,6 +528,23 @@ export function TrackerTab({
           y={rowMenu.y}
           items={rowMenuItems}
           onClose={() => setRowMenu(null)}
+        />
+      ) : null}
+
+      {isDuplicateModalOpen ? (
+        <DuplicateReviewModal
+          groups={duplicateGroups}
+          onClose={() => setIsDuplicateModalOpen(false)}
+          onMerge={(memberIds, canonicalId) => {
+            onMergeApplications(memberIds, canonicalId);
+            // Defensive: if the row currently pinned in the inspector was merged
+            // away, clear the selection so it doesn't keep pointing at a deleted
+            // id for one frame. App.tsx's own effect self-heals expandedApplicationId
+            // too, but this avoids relying solely on that from a child component.
+            if (expandedApplicationId && memberIds.includes(expandedApplicationId) && expandedApplicationId !== canonicalId) {
+              setExpandedApplicationId(null);
+            }
+          }}
         />
       ) : null}
     </section>

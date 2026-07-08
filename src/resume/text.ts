@@ -1,13 +1,13 @@
 // Shared low-level text utilities used across keyword extraction, scoring,
 // rewriting, and diffing. No domain tables live here — only generic string
 // helpers depended on by two or more of those modules. Section/bullet vocabulary
-// lives in the single source of truth ./sections.mjs (shared with the editor +
+// lives in the single source of truth ./sections.ts (shared with the editor +
 // server parsers); the re-exports below keep existing importers unchanged.
-import { BULLET_GLYPHS, isTopLevelSectionHeader, normalize } from "./sections.mjs";
+import { BULLET_GLYPHS, isTopLevelSectionHeader, normalize } from "./sections";
 
 export const hasMetric = (text: string) =>
   /(\$\s?\d+|\d+(?:\.\d+)?\s*%|\d+(?:\.\d+)?\s*(?:percent|x|k|m|tb|gb|mb)\b|\d+\+|\d+(?:\.\d+)?\s+(?:\w+\s+){0,2}(?:users?|requests?|records?|models?|endpoints?|apps?|patients?|facilities?|hours?|days?|weeks?|months?|ms|milliseconds?|seconds?|minutes?)\b)/i.test(text);
-// Bullet detection uses the shared glyph set (./sections.mjs). The trailing \s+ is
+// Bullet detection uses the shared glyph set (./sections.ts). The trailing \s+ is
 // required, so a glyph inside text or a "2020-2023" date span is never a bullet.
 const BULLET_RE = new RegExp(`^\\s*[${BULLET_GLYPHS}]\\s+`);
 export const isBullet = (line: string) => BULLET_RE.test(line);
@@ -18,7 +18,7 @@ export const sectionName = normalize;
 export const isContactLine = (line: string) => /@|https?:\/\/|github\.com|linkedin\.com|\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}/i.test(line);
 // A known TOP-LEVEL section header — the boundary detector for the education
 // date-shield (scoring.ts) and the polisher's section-removal walk (rewrite.ts).
-// Single source of truth: ./sections.mjs (shared with the editor + server parsers).
+// Single source of truth: ./sections.ts (shared with the editor + server parsers).
 export const isKnownSection = isTopLevelSectionHeader;
 
 export function normalizeText(text: string) {

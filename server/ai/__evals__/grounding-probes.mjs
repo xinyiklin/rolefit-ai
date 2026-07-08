@@ -11,9 +11,9 @@
 //   suggestedEdit, while staying backward-compatible with the no-args call
 // All fixture text is synthetic. Exit code is non-zero on any failure.
 
-import { findUngroundedJdTerm } from "../grounding.mjs";
-import { sanitizeStrictReview } from "../sanitize.mjs";
-import { groundChangeSummary } from "../polish.mjs";
+import { findUngroundedJdTerm } from "../grounding.ts";
+import { sanitizeStrictReview } from "../sanitize.ts";
+import { groundChangeSummary } from "../polish.ts";
 
 const f = (proposed, job, grounding, opts) => findUngroundedJdTerm(proposed, job, grounding, opts);
 

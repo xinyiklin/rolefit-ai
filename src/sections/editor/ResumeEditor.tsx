@@ -22,6 +22,34 @@ type ResumeEditorProps = {
 
 type AddPosition = "top" | "bottom";
 
+// Pagination convergence guards. The measure→setPageBreaks pass below is a
+// fixed-point iteration: it renders spacers, measures the document they
+// displaced, and re-runs itself (pageBreaks is both its input and its output)
+// until the breaks stop changing. Two real layout effects can keep successive
+// passes from ever agreeing EXACTLY — Firefox snaps layout to its 1/60px grid
+// while the stored heights are full-precision floats, and an inserted spacer
+// suppresses the margin collapse the natural-position back-calculation assumes
+// — so with exact-equality convergence a boundary-adjacent document could
+// oscillate between two break sets forever: a 60fps full-document reflow loop
+// (rAF-suspended while the tab is backgrounded, resuming as a hard freeze on
+// refocus). Guard both ways: treat sub-epsilon height wobble as converged, and
+// hard-cap the passes per input change so even a genuinely non-convergent
+// document keeps its last breaks instead of looping. Normal edits settle in
+// 2-3 passes; the cap only exists for the pathological tail.
+const PAGE_BREAK_EPSILON_PX = 1;
+const MAX_PAGINATION_PASSES = 8;
+
+// Break sets are "converged" when every height matches within the epsilon; a
+// break present on one side counts as 0 on the other, so a spacer flickering
+// between absent and hair-thin also converges.
+function pageBreaksConverged(current: ResumePageBreaks, next: ResumePageBreaks): boolean {
+  const keys = new Set([...Object.keys(current), ...Object.keys(next)]);
+  for (const key of keys) {
+    if (Math.abs((current[key] ?? 0) - (next[key] ?? 0)) > PAGE_BREAK_EPSILON_PX) return false;
+  }
+  return true;
+}
+
 // The section-type picker offers these up front so the user chooses the shape
 // (bulleted entries vs skill list vs summary) rather than relying on heading text.
 const SECTION_TYPE_OPTIONS: { type: ResumeSectionType; title: string; sub: string }[] = [
@@ -42,6 +70,11 @@ export function ResumeEditor({ data, actions, style, tailorModes = {}, onSetTail
   const [openPicker, setOpenPicker] = useState<AddPosition | null>(null);
   const [pageBreaks, setPageBreaks] = useState<Record<string, number>>({});
   const [pageCount, setPageCount] = useState(1);
+  // Pagination pass budget: counts consecutive measure passes triggered by the
+  // effect's own setPageBreaks; a real input change (data/style identity) opens
+  // a fresh budget. See pageBreaksConverged above for why this must be bounded.
+  const paginationPassRef = useRef(0);
+  const paginationInputsRef = useRef<{ data: ResumeData; style?: CSSProperties }>({ data, style });
   const docRef = useRef<HTMLElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const topAddRef = useRef<HTMLDivElement>(null);
@@ -133,6 +166,23 @@ export function ResumeEditor({ data, actions, style, tailorModes = {}, onSetTail
     const doc = docRef.current;
     const content = contentRef.current;
     if (!doc || !content) return;
+
+    // A changed input (edit / Format-menu change) starts a fresh pass budget; a
+    // re-run from our own setPageBreaks spends the current one.
+    if (paginationInputsRef.current.data !== data || paginationInputsRef.current.style !== style) {
+      paginationInputsRef.current = { data, style };
+      paginationPassRef.current = 0;
+    }
+    if (paginationPassRef.current >= MAX_PAGINATION_PASSES) {
+      // Non-convergent measurement (see pageBreaksConverged): stop iterating and
+      // keep the current breaks. A hair-misplaced page break beats an unbounded
+      // 60fps reflow loop that hard-freezes the tab.
+      if (import.meta.env.DEV) {
+        console.warn("[pagination] pass cap hit — keeping current page breaks (non-convergent layout measurement)");
+      }
+      return;
+    }
+    paginationPassRef.current += 1;
 
     const raf = window.requestAnimationFrame(() => {
       const breakTargets = [...content.querySelectorAll<HTMLElement>("[data-page-break-id]")];
@@ -238,7 +288,7 @@ export function ResumeEditor({ data, actions, style, tailorModes = {}, onSetTail
         nextPageCount += 1;
       }
 
-      setPageBreaks((current) => (JSON.stringify(current) === JSON.stringify(nextBreaks) ? current : nextBreaks));
+      setPageBreaks((current) => (pageBreaksConverged(current, nextBreaks) ? current : nextBreaks));
       setPageCount((current) => (current === nextPageCount ? current : nextPageCount));
     });
 

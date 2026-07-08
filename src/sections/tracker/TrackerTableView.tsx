@@ -1,4 +1,4 @@
-import { BriefcaseBusiness, ChevronDown, ChevronRight, ChevronUp } from "lucide-react";
+import { BriefcaseBusiness, ChevronDown, ChevronRight, ChevronUp, Copy } from "lucide-react";
 import type { Application } from "../../hooks/useApplications";
 import type { SortKey, SortState } from "../tabs/TrackerTab";
 import {
@@ -22,6 +22,8 @@ type TrackerTableViewProps = {
   onSelect: (id: string) => void;
   onDoubleClick: (app: Application) => void;
   onRowContextMenu: (app: Application, event: { clientX: number; clientY: number }) => void;
+  // Ids that appear in any duplicate group (see TrackerTab's duplicateGroups memo).
+  duplicateIds: Set<string>;
 };
 
 // Column definitions in render order. `key` marks a sortable column.
@@ -64,12 +66,14 @@ function groupByMonth(apps: Application[]): Array<{ month: string; rows: Applica
 function ApplicationRow({
   app,
   isSelected,
+  isDuplicate,
   onSelect,
   onDoubleClick,
   onRowContextMenu
 }: {
   app: Application;
   isSelected: boolean;
+  isDuplicate: boolean;
   onSelect: (id: string) => void;
   onDoubleClick: (app: Application) => void;
   onRowContextMenu: (app: Application, event: { clientX: number; clientY: number }) => void;
@@ -91,6 +95,14 @@ function ApplicationRow({
       <span className="application-company" role="cell">
         <em data-len={companyInitials(displayCompany(app)).length}>{companyInitials(displayCompany(app))}</em>
         <strong>{displayCompany(app)}</strong>
+        {isDuplicate ? (
+          <span
+            className="application-duplicate-badge"
+            title="Possible duplicate — review in Review duplicates"
+          >
+            <Copy size={12} aria-hidden="true" />
+          </span>
+        ) : null}
       </span>
       <span role="cell" className={displayRole(app) === "Role not set" ? "text-placeholder" : ""}>
         {displayRole(app)}
@@ -136,7 +148,8 @@ export function TrackerTableView({
   selectedId,
   onSelect,
   onDoubleClick,
-  onRowContextMenu
+  onRowContextMenu,
+  duplicateIds
 }: TrackerTableViewProps) {
   const groups = grouped ? groupByMonth(visible) : [];
 
@@ -182,6 +195,7 @@ export function TrackerTableView({
                   key={app.id}
                   app={app}
                   isSelected={selectedId === app.id}
+                  isDuplicate={duplicateIds.has(app.id)}
                   onSelect={onSelect}
                   onDoubleClick={onDoubleClick}
                   onRowContextMenu={onRowContextMenu}
@@ -196,6 +210,7 @@ export function TrackerTableView({
                 key={app.id}
                 app={app}
                 isSelected={selectedId === app.id}
+                isDuplicate={duplicateIds.has(app.id)}
                 onSelect={onSelect}
                 onDoubleClick={onDoubleClick}
                 onRowContextMenu={onRowContextMenu}

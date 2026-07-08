@@ -133,9 +133,6 @@ select,
   flex: 1 1 auto;
 }
 
-.textarea--job { min-height: 200px; }
-.textarea--resume { min-height: 200px; }
-
 .field--inline {
   display: flex;
   align-items: center;

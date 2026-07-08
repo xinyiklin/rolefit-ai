@@ -372,14 +372,6 @@
   margin-top: 0;
 }
 
-/* Secondary card heading: stays sans and smaller so the serif page title
-   keeps rank within the same tab. */
-.studio-card__head h2.studio-card__subhead {
-  font-family: var(--font-ui);
-  font-size: 0.9rem;
-  letter-spacing: 0;
-}
-
 /* Quiet status note, not a badge: sentence case with a small leading dot. */
 .studio-card__meta {
   display: inline-flex;
@@ -421,88 +413,6 @@
 .fit-readout__source {
   color: var(--ink-soft);
   font-size: 0.72rem;
-}
-
-/* PanelHeading (reused inside studio cards) */
-.panel__heading {
-  display: flex;
-  align-items: center;
-  gap: var(--s2);
-  color: var(--accent-deep);
-  margin-bottom: var(--s1);
-}
-
-.panel__heading svg { flex-shrink: 0; color: var(--accent); width: 15px; height: 15px; }
-
-.panel__heading h2 {
-  font-family: var(--font-ui);
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: var(--ink-strong);
-  letter-spacing: -0.002em;
-}
-
-.panel__heading p {
-  color: var(--ink-soft);
-  font-size: 0.76rem;
-  line-height: 1.4;
-  margin-top: 1px;
-}
-
-/* -------- Recovery strip -------- */
-
-.recovery-strip {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--s4);
-  padding: var(--s3) var(--s4);
-  border: 1px solid var(--hairline);
-  border-radius: var(--r-md);
-  background: var(--card-soft);
-}
-
-.recovery-strip strong,
-.recovery-strip span { display: block; }
-
-.recovery-strip strong {
-  color: var(--ink-strong);
-  font-size: 0.88rem;
-  font-weight: 600;
-  margin-bottom: var(--s1);
-}
-
-.recovery-strip span {
-  color: var(--ink-soft);
-  font-size: 0.78rem;
-}
-
-/* -------- Resume output -------- */
-
-.resume-output {
-  display: block;
-  width: 100%;
-  min-height: 520px;
-  margin: 0;
-  overflow: auto;
-  white-space: pre-wrap;
-  border: 1px solid var(--hairline);
-  border-radius: var(--r-md);
-  padding: var(--s5);
-  background: var(--card);
-  color: var(--ink);
-  font-family: var(--font-mono);
-  font-size: 0.86rem;
-  line-height: 1.65;
-  resize: vertical;
-  scrollbar-width: thin;
-  scrollbar-color: var(--hairline-strong) transparent;
-}
-
-.resume-output:focus {
-  outline: none;
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-glow);
 }
 
 /* Page-zoom select beside the Format menu (Google-Docs style). */
@@ -553,12 +463,10 @@
          <dd>87 %</dd>
        </div>
      </dl>
-   Or with a plain div structure when dl semantics are not appropriate.
-
    .ledger-row — flex row with:
-     - label (dt or .ledger-row__label): ink-soft, 0.78rem
+     - label (dt): ink-soft, 0.78rem
      - dotted leader (auto-generated via flex: 1 + border-bottom): fills the gap
-     - value (dd or .ledger-row__value): mono, tabular-nums, ink-strong
+     - value (dd): mono, tabular-nums, ink-strong
    Compact vertical rhythm; min-height 26px. */
 
 .ledger-rows {

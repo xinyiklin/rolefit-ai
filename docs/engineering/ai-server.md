@@ -1,6 +1,6 @@
 # AI / Server Guidelines
 
-Role-Fit AI's server is a single Node entry point (`server.mjs`) that
+Role-Fit AI's server is a single Node entry point (`server.ts`) that
 serves the Vite frontend in development, exposes a small set of local
 API routes, and proxies AI provider calls so API keys stay off the
 browser.
@@ -15,7 +15,7 @@ careflow `5173-5180`, portfolio `5184-5185`; do not mix them up.
 
 ## Server Boundaries
 
-`server.mjs` owns:
+The server layer (`server.ts` routing to focused `server/` modules) owns:
 
 - local HTTP serving with Vite middleware in development
 - `.env` loading and process environment hygiene
@@ -46,9 +46,18 @@ careflow `5173-5180`, portfolio `5184-5185`; do not mix them up.
   fields, resolved by `resolveAuditProviderRequest`); when audit fields are
   absent the server reuses the primary config. Only the non-rewriting audit
   can differ inside `/api/polish`, so a reviewer model can never alter the
-  editor's resume output.
+  editor's resume output. The `/api/polish` response echoes the resolved
+  `provider` / `model` / `reasoningEffort` plus `attempts` (tailor-pass dispatch
+  count). Whenever the review pass ran (stages `review` / `both`, i.e.
+  `strictReview`), the response ALWAYS carries `auditProvider` / `auditModel` /
+  `auditReasoningEffort` (the resolved audit values, even when identical to the
+  primary) plus `auditAttempts` — so "review ran with the same provider" is
+  distinguishable from "no review". Backward compatible: the client only surfaces
+  "reviewed by" when `auditProvider !== provider`. `/api/cover-letter` and
+  `/api/application-answers` likewise echo the resolved `provider` / `model` /
+  `reasoningEffort`.
 - DOCX import / export (text extraction, format-preserved updates)
-- job posting import (`/api/import-job`): fetch a public posting URL —
+- job posting import (`/api/import-job`, `server/jobImport.ts`): fetch a public posting URL —
   Workday CXS JSON when the host is recognized (`*.myworkdayjobs.com`,
   `/job/` and `/details/` links), LinkedIn visible job body + criteria
   rows when present, otherwise a generic HTML→text scrape — behind SSRF
@@ -63,7 +72,7 @@ careflow `5173-5180`, portfolio `5184-5185`; do not mix them up.
   Preferred Qualifications, Tech Stack/Keywords, Seniority Signals, and
   Domain Signals. The link itself is kept only for pipeline tracking and is
   never sent to the AI.
-- AI job distiller (`/api/distill`, `server/ai/distill.mjs`): sends the
+- AI job distiller (`/api/distill`, `server/ai/distill.ts`): sends the
   raw (tag-stripped) posting text to the Distill-stage provider and returns
   the SAME structured fields the deterministic engine emits, resolved
   semantically so novel ATS layouts, inline-prose duties, and unusual
@@ -76,23 +85,43 @@ careflow `5173-5180`, portfolio `5184-5185`; do not mix them up.
   The client (`src/lib/aiDistill.ts`) is AI-first with the deterministic
   `jobExtract.ts` engine as the offline/no-key fallback on any non-200,
   timeout, or unusable reply — so distillation always produces a brief. The
-  route sits behind the localhost CSRF/Host guard; keys stay server-side.
+  route sits behind the localhost CSRF/Host guard; keys stay server-side. The
+  success response echoes the RESOLVED `provider` / `model` / `reasoningEffort`
+  (never `apiKey` / `apiBaseUrl`) plus `attempts` (dispatch count, ≥1) so the
+  client can record which model produced the brief.
 - browser-extension API (`/api/extension/*`, helpers in
-  `server/extension/index.mjs`): `analyze` (POST) returns a local
+  `server/extension/index.ts`): `analyze` (POST) returns a local
   keyword-overlap fit estimate of the workspace base resume against the
-  posted page text, plus a normalized-URL lookup of any matching tracked
-  application; `import` (POST) stores the page text and returns
-  immediately, then runs the AI distiller (above) in the BACKGROUND
-  server-side — so it survives the popup closing on focus loss, and a burst
-  of imports is serialized to one in-flight provider call; `inbox` (GET)
-  reports `{status:"distilling"}` while that runs, then hands the finished
-  brief (the AI fields, or the deterministic fallback on AI failure) to the
-  claiming app tab once before clearing it. Extension imports include a short
+  posted page text, plus a LAYERED duplicate lookup of any matching tracked
+  application (`findMatchingApplication` now delegates to the shared
+  `findDuplicateApplications` in `src/lib/jobIdentity.ts`: ATS posting id /
+  normalized URL / requisition id in the posted text / company + title +
+  description overlap — the posted `text` is passed as jobText so a duplicate
+  is caught even when the URL differs across boards). The response keeps the
+  existing `previousApp` shape (built from the best match) and adds
+  `match: { level, confidence, evidence }` (evidence capped at 3 strings), or
+  `previousApp`/`match` null when nothing matches; `import` (POST) stores the
+  page text and returns immediately, then a BACKGROUND server pass only
+  RESOLVES the raw job text (e.g. fetching the full Greenhouse posting body) —
+  it makes no AI call, because the server cannot read the receiving tab's
+  provider settings. The background pass survives the popup closing on focus
+  loss, and a burst of imports is serialized to one in-flight resolve; `inbox`
+  (GET) reports `{status:"distilling"}` while that prepare runs, then hands
+  the resolved raw text (`fields: null`) to the claiming app tab once before
+  clearing it, and the tab distills client-side through `/api/distill` with
+  its own Distill provider — or skips the AI request entirely when the
+  import's `distillAi` flag is off. Extension imports include a short
   claim token and open a fresh app tab with that token, so a new posting starts
   a new independent tailoring session instead of replacing an existing tab's
   job target. The import also carries an optional `autoTailor` flag from the
-  popup's "Tailor automatically" toggle, so the app can jump straight to polish
-  once the brief and a base resume are ready. `analyze` / `import` are
+  popup's "Polish automatically after import" toggle, so the app can jump
+  straight to polish once the brief and a base resume are ready, plus an
+  optional `distillAi` flag from the popup's "Distill with AI" toggle
+  (`body.distillAi === false` → false, anything else → true, so older extension
+  builds that omit it keep distilling); both flags are stored on the inbox entry
+  and returned in the `inbox` delivery payload so the claiming tab knows whether
+  to run the AI distiller or fall straight to the deterministic parser.
+  `analyze` / `import` are
   reachable cross-origin from the
   extension popup and are gated to extension-scheme Origins
   (`chrome-extension://`, `moz-extension://`, `safari-web-extension://`)
@@ -103,11 +132,11 @@ careflow `5173-5180`, portfolio `5184-5185`; do not mix them up.
   content, so the anti-fabrication-gated `/api/polish` remains the
   authoritative fit verdict.
 - workspace file storage under `job-search-workspace/` (auto-load,
-  upload, save, reload)
+  upload, save, reload — `server/workspace.ts`, which also owns the
+  base-resume version history in `.trash/`)
 
-Resume scoring, keyword extraction, and the deterministic fallback
-rewrite live in `src/resumeEngine.ts` (or similarly focused helpers).
-Keep that logic out of `server.mjs`.
+Resume scoring and keyword extraction live in `src/resumeEngine.ts` (or
+similarly focused helpers). Keep that logic out of `server.ts`.
 
 When a workflow grows, split it into focused helpers (file readers,
 provider clients, request handlers) rather than packing more code into
@@ -116,24 +145,24 @@ one large route.
 The `/api/polish` flow follows that rule — it is split across focused
 modules under `server/ai/` so no single file carries the whole pipeline:
 
-- `polish.mjs` — the `handlePolish` route (request parsing, the
+- `polish.ts` — the `handlePolish` route (request parsing, the
   suggest → parallel audit + cover orchestration, derived `polishedText`
   assembly) only.
-- `providers.mjs` — provider identity + per-request config resolution
+- `providers.ts` — provider identity + per-request config resolution
   (`normalizeProvider`, default provider/model, key/base-URL lookup,
   `resolveProviderRequest`, `resolveAuditProviderRequest`).
-- `clients.mjs` — the outbound provider clients (OpenAI Responses,
+- `clients.ts` — the outbound provider clients (OpenAI Responses,
   OpenAI-compatible chat, Anthropic Messages, Gemini) and the
   `callConfiguredProvider` dispatch.
-- `prompts.mjs` — every system/user prompt and the shared
+- `prompts.ts` — every system/user prompt and the shared
   honest-tailoring / anti-fabrication rule helpers (also imported by
-  `applicationAnswers.mjs`). Untrusted text (job description, resume,
+  `applicationAnswers.ts`). Untrusted text (job description, resume,
   honest context, custom instructions, pass-1 output) is interpolated
   through `fenceUntrusted`, which neutralizes literal fence-tag
   look-alikes so pasted content cannot escape its `<job_description>`-style
   delimiters; the input-firewall rule tells the model fenced content is
   data, never instructions.
-- `sanitize.mjs` — fit-score, missing-skill, structured suggestion, and
+- `sanitize.ts` — fit-score, missing-skill, structured suggestion, and
   strict-review response validation (`sanitizeStrictReview`: enum
   fallbacks, string clips, array caps, markup rejection on rewrites).
   The markup gate allows exactly the editor's inline-mark vocabulary
@@ -143,6 +172,14 @@ modules under `server/ai/` so no single file carries the whole pipeline:
   takes an optional drop-stats collector and the route warns (shape-only)
   when a reply's suggestions are ALL dropped — a silent all-drop is
   otherwise indistinguishable from "no changes needed".
+  Hit-keyword grounding: a suggestion whose claimed JD
+  keyword appears in `proposedText` but whose significant words exist
+  nowhere in the scope text or honest context is dropped
+  (`ungroundedKeyword`) — the model-prose evidence field cannot launder an
+  inferred fact (e.g. "clinics run Windows") into the resume.
+- `scoring.ts` — fit arithmetic and verdict derivation over the reviewer's
+  `requirementCoverage` evidence (`scoreFromRequirementCoverage`,
+  `coverageHasEligibilityBlocker`, `missingRequiredFromCoverage`).
   `applyGapCapsAndVerdict` derives the server verdict from the fit score
   conservatively: a graduated cap scales with the number of genuinely missing
   required skills (≥1 → 79, ≥2 → 69, ≥3 → 60; a BLOCKER or unmet eligibility
@@ -151,12 +188,17 @@ modules under `server/ai/` so no single file carries the whole pipeline:
   AND tailored scores clamp DOWN to that cap and the verdict is
   `verdictForScore(tailored)` — never inflated, with a deterministic `capReason`
   naming the mechanism. With no usable numeric score the sanitized verdict
-  passes through unchanged (a hard eligibility blocker still forces DON'T APPLY). Hit-keyword grounding: a suggestion whose claimed JD
-  keyword appears in `proposedText` but whose significant words exist
-  nowhere in the scope text or honest context is dropped
-  (`ungroundedKeyword`) — the model-prose evidence field cannot launder an
-  inferred fact (e.g. "clinics run Windows") into the resume.
-- `grounding.mjs` — `findUngroundedJdTerm`: the proposedText-level JD-term
+  passes through unchanged (a hard eligibility blocker still forces DON'T
+  APPLY). `displayCoverageFromRequirements` derives the user-visible
+  `strictReview.coverage` table from the same sanitized rows — the model no
+  longer authors a second copy of the requirement table, so the display and
+  the score can't disagree.
+- `eligibilityLexicon.ts` — the one home for every work-auth / credential
+  term list (the distiller's `AUTH_STEMS` grounding stems, scoring's
+  `ELIGIBILITY_BLOCKER` hard gate, and the seniority-bucket regex); its
+  header documents how the three deliberately differ. Add new gate terms
+  there, considering all three lists together.
+- `grounding.ts` — `findUngroundedJdTerm`: the proposedText-level JD-term
   gate behind `ungroundedJdTerm` drops. Detector 1 catches capitalized
   tokens (incl. a non-verb first word); detector 2 catches a curated
   lowercase tech-concept lexicon (microservices, machine learning, ci/cd…)
@@ -164,8 +206,8 @@ modules under `server/ai/` so no single file carries the whole pipeline:
   `src/resume/keywords.ts` (the TS module can't be imported from Node due
   to its extensionless TS import chain). Matching is fuzzy (60% prefix) so
   honest inflections survive.
-- `json.mjs` — `parseAiJson` (fenced / prose-wrapped / outermost-brace
-  + trailing-comma repair). `errors.mjs` — `UserSafeAiError` and the
+- `json.ts` — `parseAiJson` (fenced / prose-wrapped / outermost-brace
+  + trailing-comma repair). `errors.ts` — `UserSafeAiError` and the
   config-error → 400 mapping.
 
 ## API Design
@@ -189,7 +231,7 @@ Distill config, `/api/polish` receives the Tailor config as `provider` /
 Review config as `audit*` fields. If a request omits provider fields
 (headless/API use), the server defaults to the **Claude Code CLI**
 (`claude-cli`) — a **zero per-token cost** subscription path — not a
-hosted API (`getDefaultProvider()` in `server/ai/providers.mjs`). Setting
+hosted API (`getDefaultProvider()` in `server/ai/providers.ts`). Setting
 `AI_PROVIDER` supplies that headless fallback; an *unknown* `AI_PROVIDER`
 still coerces to OpenAI, and `AI_MODEL` / `OPENAI_MODEL` select the
 OpenAI model (`gpt-5.5` default). The other subscription CLIs (Codex CLI
@@ -257,9 +299,9 @@ The AI must:
   for the reviewer's own reported gaps (HIGH gaps cap at 79 / 69 / 60 by
   count, BLOCKER gap → DON'T APPLY band), and derives the verdict from the
   total (`scoreFromRequirementCoverage` + `applyGapCapsAndVerdict` in
-  `sanitize.mjs`) — the model extracts evidence, the server does the math, so
-  verdict and score cannot disagree. Legacy `fitBuckets` and holistic
-  `fitScore` replies remain compatibility fallbacks. The reviewer acts as a
+  `scoring.ts`) — the model extracts evidence, the server does the math, so
+  verdict and score cannot disagree. Model-authored numbers (`fitScore` /
+  `fitBuckets`) never enter scoring. The reviewer acts as a
   validator of the polish pass — unsupported inserted terms lower the
   tailored coverage, never raise it
 - write bullets as engineering accomplishments in plain language — no
@@ -269,14 +311,17 @@ The AI must:
 - keep strict review as an audit of the original resume plus polished
   resume, not as a second full rewrite
 
-The deterministic local rewrite in `src/resumeEngine.ts` must remain
-the fallback when the AI call cannot run.
+The only LOCAL fallbacks are the deterministic distiller
+(`src/lib/jobExtract.ts`) and the local fit estimate (D011, 2026-07-06):
+when the AI tailor, review, or cover-letter call cannot run or returns
+nothing usable, the stage fails plainly with a classified reason and a
+Retry — no locally generated draft stands in.
 
 ## Job Posting Import
 
 Keep the import pipeline split by responsibility:
 
-- `server/network.mjs` fetches the page safely, handles Workday CXS JSON
+- `server/network.ts` fetches the page safely, handles Workday CXS JSON
   when available, falls back to HTML→text extraction, enforces timeouts,
   and applies SSRF checks on the original URL and every redirect hop.
 - `src/lib/jobExtract.ts` is the dependency-free distiller. It should keep

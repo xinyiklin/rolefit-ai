@@ -4,9 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "node server.mjs",
-    "build": "tsc && vite build",
-    "preview": "NODE_ENV=production node server.mjs",
+    "dev": "node server.ts",
+    "build": "tsc && tsc -p tsconfig.server.json && vite build",
+    "preview": "NODE_ENV=production node server.ts",
     "test": "node --test offline-evals.test.mjs"
   },
   "dependencies": {
@@ -19,6 +19,7 @@
     "react-pdf": "^10.4.1"
   },
   "devDependencies": {
+    "@types/node": "^26.1.0",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.0.0",

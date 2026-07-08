@@ -29,18 +29,28 @@ type UseTabPresenceArgs = {
 // valid autosave draft. Instead liveness is driven purely by heartbeat
 // staleness: a reload refreshes the heartbeat well within STALE_MS, while a real
 // close lets the entry expire after STALE_MS (also covering a crash). The cost is
-// a closed tab lingering in the "active sessions" view for a few seconds, which
-// reads correctly as "active moments ago."
+// a closed tab lingering in the "active sessions" view for a few seconds — or up
+// to HIDDEN_STALE_MS when it was closed while backgrounded — which still reads
+// correctly as "active moments ago."
 export function useTabPresence({ jobLabel, phase }: UseTabPresenceArgs): PresenceEntry[] {
   const [others, setOthers] = useState<PresenceEntry[]>([]);
 
   // Publish on mount and whenever this tab's label/phase changes. A heartbeat
   // interval republishes the same state so a long-running phase keeps the entry
-  // fresh (and thus "live") for other tabs.
+  // fresh (and thus "live") for other tabs. Also republish the instant
+  // visibility flips: the heartbeat self-reports `hidden`, and the hide-time
+  // publish must land BEFORE background throttling can delay the interval —
+  // otherwise the last visible-tagged heartbeat ages out on the strict budget
+  // and this tab flickers dead in siblings (and to their autosave GC).
   useEffect(() => {
     publishPresence(jobLabel, phase, Date.now());
     const beat = setInterval(() => publishPresence(jobLabel, phase, Date.now()), HEARTBEAT_MS);
-    return () => clearInterval(beat);
+    const onVisibility = () => publishPresence(jobLabel, phase, Date.now());
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      clearInterval(beat);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
   }, [jobLabel, phase]);
 
   // Track other live sessions from any presence change (broadcast, storage

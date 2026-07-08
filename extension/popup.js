@@ -205,7 +205,40 @@ function renderResult(data, pageData, onImport) {
     el('span', { className: 'auto-tailor__label', textContent: 'Polish automatically after import' })
   );
 
-  importBtn.addEventListener('click', () => onImport(importBtn, autoTailorInput.checked));
+  // Distill with AI: default TRUE (preserves current behavior). Off → the app
+  // uses the deterministic parser instead of an AI provider call for this import.
+  const distillAiInput = el('input', { type: 'checkbox', className: 'auto-tailor__input' });
+  let distillAiTouched = false;
+  chrome.storage?.local?.get?.(['distillAi'], (saved) => {
+    // Default true: treat a never-set key as checked so a first-time user gets
+    // the prior distill-by-default behavior. Same touched-flag race guard as
+    // autoTailor so the async read can't clobber a click that landed first.
+    if (!distillAiTouched) distillAiInput.checked = !saved || saved.distillAi !== false;
+  });
+  distillAiInput.addEventListener('change', () => {
+    distillAiTouched = true;
+    chrome.storage?.local?.set?.({ distillAi: distillAiInput.checked });
+  });
+  const distillAiToggle = el('label', { className: 'auto-tailor' },
+    distillAiInput,
+    el('span', { className: 'auto-tailor__label', textContent: 'Distill with AI' })
+  );
+
+  importBtn.addEventListener('click', () => onImport(importBtn, autoTailorInput.checked, distillAiInput.checked));
+
+  // Layered-match evidence for the previously-saved card: a compact muted line
+  // (e.g. "Same LinkedIn posting (#123) · Same posting URL"). A non-"exact" match
+  // is a softer signal, so prefix "Possible duplicate:" to keep the user from
+  // over-trusting it. Only shown when a tracked application matched.
+  const match = data.match;
+  const evidenceLine =
+    previousApp && match && Array.isArray(match.evidence) && match.evidence.length
+      ? el('div', {
+          className: 'applied-evidence',
+          textContent:
+            (match.confidence !== 'exact' ? 'Possible duplicate: ' : '') + match.evidence.join(' · ')
+        })
+      : null;
 
   return el('div', { className: 'state-result' },
     el('div', { className: 'job-meta' },
@@ -216,13 +249,15 @@ function renderResult(data, pageData, onImport) {
       el('span', { className: 'applied-icon', textContent: si.icon }),
       el('div', { className: 'applied-body' },
         el('div', { className: 'applied-label', textContent: si.label }),
-        si.sub ? el('div', { className: 'applied-sub', textContent: si.sub }) : null
+        si.sub ? el('div', { className: 'applied-sub', textContent: si.sub }) : null,
+        evidenceLine
       )
     ),
     renderScore(fit),
     hasKeywords ? keywordGroups : null,
     importBtn,
     autoTailorToggle,
+    distillAiToggle,
     el('div', { className: 'foot', textContent: 'Fit is a local keyword estimate — polish in the app for the AI verdict.' })
   );
 }
@@ -268,10 +303,11 @@ async function createImportTab(url, cookieStoreId) {
   await chrome.tabs.create({ url });
 }
 
-async function handleImport(btn, pageData, autoTailor, cookieStoreId) {
+async function handleImport(btn, pageData, autoTailor, distillAi, cookieStoreId) {
   btn.disabled = true;
-  // The import returns immediately; the server distills in the background and the
-  // app shows "Distilling…" as it polls for the finished brief. So this stays fast.
+  // The import returns immediately; the server resolves the raw job text in the
+  // background and the receiving app tab distills it client-side (honoring its
+  // own Distill provider and this popup's "Distill with AI" toggle). Stays fast.
   btn.textContent = 'Importing…';
   const claimToken = randomClaimToken();
 
@@ -283,6 +319,7 @@ async function handleImport(btn, pageData, autoTailor, cookieStoreId) {
         text: pageData.text,
         url: pageData.url,
         autoTailor: Boolean(autoTailor),
+        distillAi: Boolean(distillAi),
         claimToken
       })
     });
@@ -378,7 +415,7 @@ async function main() {
     return;
   }
 
-  loadingEl.replaceWith(renderResult(data, pageData, (btn, autoTailor) => handleImport(btn, pageData, autoTailor, tab.cookieStoreId)));
+  loadingEl.replaceWith(renderResult(data, pageData, (btn, autoTailor, distillAi) => handleImport(btn, pageData, autoTailor, distillAi, tab.cookieStoreId)));
 }
 
 main().catch((err) => {

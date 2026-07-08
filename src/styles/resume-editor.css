@@ -1114,15 +1114,23 @@
 
 .resume-workbench.has-rail {
   grid-template-columns: minmax(0, 1fr) minmax(300px, 380px);
+  /* The editor column self-insets (its own s5 padding); the rail column has none,
+     so inset it here to keep its cards + scrollbar off the pane's right edge,
+     aligned with the toolbar's s5 right inset. Reset at the narrow breakpoint
+     below, where the rail stacks full-width under the editor. */
+  padding-right: var(--s5);
 }
 
 .resume-workbench__rail {
   min-width: 0;
-  position: sticky;
-  top: var(--s3);
-  /* Same fixed height as the editor pane; each side scrolls independently. */
-  height: calc(100vh - 210px);
-  height: calc(100dvh - 210px);
+  /* Fill the workbench grid row and scroll internally — the SAME mechanism the
+     editor pane uses (stretch to the definite row height; overflow:auto sets the
+     block-axis automatic minimum to 0 so the pane scrolls instead of growing).
+     A previous `height: calc(100dvh - 210px)` hard-coded the viewport chrome and
+     under-shot the real column height, leaving the rail short (dead space below)
+     while its own content was needlessly clipped. The flex/grid chain already
+     computes the exact available height, so no magic number is needed. */
+  min-height: 0;
   overflow: hidden auto;
   scrollbar-width: thin;
   scrollbar-color: var(--hairline-strong) transparent;
@@ -1140,10 +1148,14 @@
 @media (max-width: 1180px) {
   .resume-workbench.has-rail {
     grid-template-columns: minmax(0, 1fr);
+    /* Single column here — the rail stacks full-width under the editor, so the
+       two-column right inset would just be a stray asymmetric gap. */
+    padding-right: 0;
   }
+  /* Stacked below the editor: flow at natural height (the base rule's
+     internal scroll is a two-column behavior). position/height resets became
+     dead when the base rule stopped setting them. */
   .resume-workbench__rail {
-    position: static;
-    height: auto;
     overflow: visible;
   }
 }

@@ -6,10 +6,11 @@ import {
   providerOptions
 } from "../config/aiOptions";
 import type { AiProviderValue } from "../config/aiOptions";
+import type { StageConfig, StageId } from "../lib/aiRequest";
 import { MenuSection } from "./MenuSection";
 import { ModelSelectOptions } from "./ModelSelectOptions";
 
-export type StageKey = "distill" | "tailor" | "review";
+export type StageKey = StageId;
 
 // The three pipeline stages, in pipeline order. The copy control in each section
 // lists the OTHER two (a stage never copies from itself).
@@ -23,22 +24,16 @@ const STAGES: { key: StageKey; label: string }[] = [
 // collapsible section. The header line carries a "Copy from" control that copies
 // one of the OTHER two stages' settings into this one (one-shot copy, not a live
 // link). The body is the full provider menu (provider / model / reasoning effort /
-// key / base URL). Each stage holds its own concrete config.
+// key / base URL). Each stage holds its own concrete config, passed as one
+// `StageConfig` object with a single `onChange` patcher instead of 12 flat props.
 type ProviderSectionProps = {
   stage: StageKey;
   title: string;
-  provider: AiProviderValue;
+  config: StageConfig;
+  onChange: (patch: Partial<StageConfig>) => void;
+  // Switching provider resets key/base-URL/model/effort/custom-model, so it stays
+  // its own callback rather than a plain onChange({ provider }) patch.
   onProviderChange: (provider: AiProviderValue) => void;
-  apiKey: string;
-  setApiKey: (v: string) => void;
-  apiBaseUrl: string;
-  setApiBaseUrl: (v: string) => void;
-  selectedModel: string;
-  setSelectedModel: (v: string) => void;
-  customModel: string;
-  setCustomModel: (v: string) => void;
-  cliReasoningEffort: string;
-  setCliReasoningEffort: (v: string) => void;
   open: boolean;
   onToggle: () => void;
   onCopyFrom: (from: StageKey) => void;
@@ -57,22 +52,14 @@ function keyPlaceholder(provider: AiProviderValue): string {
 export function ProviderSection({
   stage,
   title,
-  provider,
+  config,
+  onChange,
   onProviderChange,
-  apiKey,
-  setApiKey,
-  apiBaseUrl,
-  setApiBaseUrl,
-  selectedModel,
-  setSelectedModel,
-  customModel,
-  setCustomModel,
-  cliReasoningEffort,
-  setCliReasoningEffort,
   open,
   onToggle,
   onCopyFrom
 }: ProviderSectionProps) {
+  const { provider, apiKey, apiBaseUrl, selectedModel, customModel, cliReasoningEffort } = config;
   const isCliProvider = provider === "claude-cli" || provider === "codex-cli" || provider === "antigravity-cli";
   const modelOptions = modelOptionsByProvider[provider] ?? [];
   const effortOptions =
@@ -119,14 +106,14 @@ export function ProviderSection({
           </label>
           <label className="field">
             <span>Model</span>
-            <select value={selectedModel} onChange={(event) => setSelectedModel(event.target.value)}>
+            <select value={selectedModel} onChange={(event) => onChange({ selectedModel: event.target.value })}>
               <ModelSelectOptions options={modelOptions} />
             </select>
           </label>
           {effortOptions.length ? (
             <label className="field">
               <span>Effort</span>
-              <select value={cliReasoningEffort} onChange={(event) => setCliReasoningEffort(event.target.value)}>
+              <select value={cliReasoningEffort} onChange={(event) => onChange({ cliReasoningEffort: event.target.value })}>
                 {effortOptions.map((option) => (
                   <option key={option.value || "cli-default-effort"} value={option.value}>
                     {option.label}
@@ -143,7 +130,7 @@ export function ProviderSection({
             <input
               className="text-input"
               value={customModel}
-              onChange={(event) => setCustomModel(event.target.value)}
+              onChange={(event) => onChange({ customModel: event.target.value })}
               placeholder={customModelPlaceholder}
               type="text"
             />
@@ -157,7 +144,7 @@ export function ProviderSection({
             <input
               autoComplete="off"
               value={apiKey}
-              onChange={(event) => setApiKey(event.target.value)}
+              onChange={(event) => onChange({ apiKey: event.target.value })}
               placeholder={keyPlaceholder(provider)}
               disabled={isCliProvider}
               type="password"
@@ -171,7 +158,7 @@ export function ProviderSection({
             <input
               className="text-input"
               value={apiBaseUrl}
-              onChange={(event) => setApiBaseUrl(event.target.value)}
+              onChange={(event) => onChange({ apiBaseUrl: event.target.value })}
               placeholder="https://provider.example/v1"
               type="url"
             />

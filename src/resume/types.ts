@@ -126,11 +126,7 @@ export type PolishedResume = {
   score: ResumeScore;
   aiScore?: AiFitScore;
   savedFit?: SavedFitComparison;
-  topKeywords: string[];
-  matchedKeywords: string[];
   missingKeywords: string[];
-  strengths: string[];
-  fixes: string[];
   // 1-3 bullets from the AI describing what changed (or why nothing needed
   // changing). Absent on local-engine results (which still produce strengths/fixes).
   changeSummary?: string[];
@@ -150,13 +146,7 @@ export type PolishedResume = {
   reviewStatus?: "ok" | "failed" | "off";
 };
 
-export type ResumeAnalysis = Omit<PolishedResume, "polishedText" | "strengths" | "fixes">;
-
-export type MatchBreakdown = {
-  category: string;
-  covered: string[];
-  missing: string[];
-};
+export type ResumeAnalysis = Omit<PolishedResume, "polishedText">;
 
 // One run of the inline before/after diff: text that is unchanged, newly added
 // in the tailored resume, or removed from the original. Adjacent runs of the

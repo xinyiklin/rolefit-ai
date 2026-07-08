@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { buildAiRequestFields, type AiRequestSettings } from "../lib/aiRequest";
+import { buildStageRequestFields, type StageConfig } from "../lib/aiRequest";
 import { classifyFailure, ApiError } from "../lib/failures";
 import type { ApplicationAnswersResult } from "../sections/shared";
 import type { StageState } from "../sections/PolishProgress";
@@ -11,7 +11,7 @@ type UseApplicationAnswersArgs = {
   jobUrl: string;
   honestContext: string;
   customInstructions: string;
-  aiRequest: AiRequestSettings;
+  aiRequest: StageConfig;
   upsertApplication: (app: Application) => void;
   findForTarget: (url: string, desc: string) => Application | undefined;
 };
@@ -74,7 +74,7 @@ export function useApplicationAnswers({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          ...buildAiRequestFields(aiRequest),
+          ...buildStageRequestFields(aiRequest),
           resumeText,
           jobText: jobDescription,
           honestContext,

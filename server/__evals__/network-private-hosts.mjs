@@ -3,7 +3,7 @@
 // spelling of an IPv6 address that embeds a private IPv4. A regression here
 // re-opens an SSRF hole, so these run in the offline `npm test` gate.
 import assert from "node:assert/strict";
-import { isPrivateHost, isPublicHttpUrl } from "../network.mjs";
+import { isPrivateHost, isPublicHttpUrl } from "../network.ts";
 
 // --- IPv6 forms that all denote 127.0.0.1 (the bypass this probe locks down) ---
 // URL parsing normalizes ::ffff:127.0.0.1 to the hex form ::ffff:7f00:1, which an

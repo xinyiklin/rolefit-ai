@@ -15,9 +15,12 @@ import {
   type ExtractedSalaryPeriod
 } from "./jobExtract";
 import type { AiRequestFields } from "./aiRequest";
+import type { StageAiUsage } from "./aiUsage";
 
 // The structured fields /api/distill returns (already grounded/anti-fab on the
 // server). Every field is optional at runtime — the model output is untrusted.
+// provider/model/reasoningEffort/attempts are the resolved-request echo the
+// server adds alongside the distilled content, used only for aiUsage attribution.
 export type AiDistillFields = {
   source: "ai";
   title: string;
@@ -36,6 +39,10 @@ export type AiDistillFields = {
   techKeywords: string[];
   senioritySignals: string[];
   domainSignals: string[];
+  provider?: string;
+  model?: string;
+  reasoningEffort?: string;
+  attempts?: number;
 };
 
 const PERIODS: ExtractedSalaryPeriod[] = ["yr", "mo", "hr"];
@@ -50,7 +57,7 @@ const str = (value: unknown): string => (typeof value === "string" ? value : "")
 
 // Map the (untrusted) AI fields onto the deterministic engine's ExtractedJobPosting
 // shape, reusing the shared scaffold builder and manualReviewFields.
-export function buildExtractedFromAi(fields: Partial<AiDistillFields>, sourceText: string, url?: string): ExtractedJobPosting {
+function buildExtractedFromAi(fields: Partial<AiDistillFields>, sourceText: string, url?: string): ExtractedJobPosting {
   const title = str(fields.title);
   const salaryMin = num(fields.salaryMin);
   const salaryMax = num(fields.salaryMax);
@@ -95,7 +102,39 @@ export function buildExtractedFromAi(fields: Partial<AiDistillFields>, sourceTex
   return result;
 }
 
-export type DistillResult = { extracted: ExtractedJobPosting; source: "ai" | "local" };
+export type DistillResult = { extracted: ExtractedJobPosting; source: "ai" | "local"; usage: StageAiUsage };
+
+function definedFields<T extends Record<string, unknown>>(obj: T): Partial<T> {
+  return Object.fromEntries(Object.entries(obj).filter(([, v]) => v !== undefined && v !== "")) as Partial<T>;
+}
+
+// Usage attribution for an AI-accepted distill: the resolved provider/model
+// echo the server attaches to a successful /api/distill response.
+function aiUsageFromFields(fields: Partial<AiDistillFields>): StageAiUsage {
+  return {
+    source: "ai",
+    ...definedFields({ provider: fields.provider, model: fields.model, reasoningEffort: fields.reasoningEffort }),
+    ...(typeof fields.attempts === "number" ? { attempts: fields.attempts } : {}),
+    completedAt: new Date().toISOString()
+  };
+}
+
+// Usage attribution for a local result reached after attempting AI (a real
+// call was made but returned nothing usable, an error, or a non-ok response).
+function localFallbackUsage(aiRequest?: Partial<AiRequestFields>): StageAiUsage {
+  return {
+    source: "local",
+    fallback: true,
+    ...definedFields({ requestedProvider: aiRequest?.provider, requestedModel: aiRequest?.model }),
+    completedAt: new Date().toISOString()
+  };
+}
+
+// Usage attribution for a local result reached WITHOUT attempting AI at all
+// (e.g. the text was too short to bother calling out).
+function localOnlyUsage(): StageAiUsage {
+  return { source: "local", completedAt: new Date().toISOString() };
+}
 
 // Build from AI fields, but fall back to the deterministic engine when the AI
 // surfaced no usable *content* — the deterministic engine may catch structure the
@@ -128,26 +167,38 @@ function hasUsableAiContent(fields: Partial<AiDistillFields>): boolean {
   );
 }
 
+// `aiRequest` is only used for fallback attribution (which provider/model was
+// CONFIGURED when the AI content turned out unusable) — it does not affect
+// which branch is taken.
 export function extractedFromAiOrLocal(
   fields: Partial<AiDistillFields> | null,
   text: string,
-  url?: string
+  url?: string,
+  aiRequest?: Partial<AiRequestFields>
 ): DistillResult {
   if (fields && hasUsableAiContent(fields)) {
-    return { extracted: buildExtractedFromAi(fields, text, url), source: "ai" };
+    return { extracted: buildExtractedFromAi(fields, text, url), source: "ai", usage: aiUsageFromFields(fields) };
   }
-  return { extracted: extractJobPosting(text, { url }), source: "local" };
+  return { extracted: extractJobPosting(text, { url }), source: "local", usage: localFallbackUsage(aiRequest) };
 }
 
 // Distill raw posting text. AI-first with a deterministic fallback on any failure.
-// Returns which engine produced the result so the UI can note when AI was used.
+// Returns which engine produced the result so the UI can note when AI was used,
+// plus a StageAiUsage snapshot for the app's per-stage AI-usage tracker.
 export async function distillJobPosting(
   text: string,
   options: { url?: string; signal?: AbortSignal; aiRequest?: Partial<AiRequestFields> } = {}
 ): Promise<DistillResult> {
   const { url, signal, aiRequest } = options;
-  const local = (): DistillResult => ({ extracted: extractJobPosting(text, { url }), source: "local" });
-  if (text.trim().length < 40) return local();
+  // No AI attempted at all (text too short to bother calling out).
+  const localOnly = (): DistillResult => ({ extracted: extractJobPosting(text, { url }), source: "local", usage: localOnlyUsage() });
+  // An AI call was made but didn't produce a usable result.
+  const localAfterAttempt = (): DistillResult => ({
+    extracted: extractJobPosting(text, { url }),
+    source: "local",
+    usage: localFallbackUsage(aiRequest)
+  });
+  if (text.trim().length < 40) return localOnly();
 
   try {
     const res = await fetch("/api/distill", {
@@ -156,13 +207,13 @@ export async function distillJobPosting(
       body: JSON.stringify({ text, url, ...(aiRequest ?? {}) }),
       signal
     });
-    if (!res.ok) return local();
+    if (!res.ok) return localAfterAttempt();
     const fields = (await res.json()) as Partial<AiDistillFields> | null;
-    if (!fields || fields.source !== "ai") return local();
-    return extractedFromAiOrLocal(fields, text, url);
+    if (!fields || fields.source !== "ai") return localAfterAttempt();
+    return extractedFromAiOrLocal(fields, text, url, aiRequest);
   } catch (error) {
     // A genuine cancel should propagate; everything else falls back locally.
     if (error instanceof DOMException && error.name === "AbortError") throw error;
-    return local();
+    return localAfterAttempt();
   }
 }

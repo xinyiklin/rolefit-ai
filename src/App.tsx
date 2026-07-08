@@ -1,14 +1,10 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   analyzeResumeText,
-  draftCoverLetter,
-  normalizePolishedResume,
-  type PolishedResume,
-  polishResume
+  type PolishedResume
 } from "./resumeEngine";
 
-import { describeProviderModel } from "./config/aiOptions";
 import { useTemplates } from "./hooks/useTemplates";
 import { useDebouncedValue } from "./hooks/useDebouncedValue";
 import { useDocStyle } from "./hooks/useDocStyle";
@@ -16,7 +12,6 @@ import { useAiSettings } from "./hooks/useAiSettings";
 import { useApplicationAnswers } from "./hooks/useApplicationAnswers";
 import {
   useApplications,
-  makeApplicationDraft,
   missingRequiredSkillsFromApplication,
   type Application,
   type ApplicationStatus
@@ -33,33 +28,33 @@ import {
   clearAutosaveDraft,
   type AutosavedDraft
 } from "./hooks/useAutosaveDraft";
-import { useExtensionInbox } from "./hooks/useExtensionInbox";
 import { useTabPresence } from "./hooks/useTabPresence";
 import { type PresencePhase } from "./lib/tabPresence";
-import { arrayBufferToBase64, sanitizeFileBase } from "./lib/downloads";
-import { buildAiRequestFields, buildAuditRequestFields, buildDistillRequestFields } from "./lib/aiRequest";
-import { AI_UNAVAILABLE, ApiError, classifyFailure } from "./lib/failures";
+import { sanitizeFileBase } from "./lib/downloads";
+import { buildStageRequestFields, type StageId } from "./lib/aiRequest";
 import { useDraggableDock } from "./hooks/useDraggableDock";
-import { loadLastBaseResumeName, saveLastBaseResumeName } from "./lib/baseResumePrefs";
 import { buildCandidateFactsContext, mergeHonestContext } from "./lib/candidateFacts";
 import { extractJobPosting, type ExtractedJobTracking } from "./lib/jobExtract";
-import { distillJobPosting, extractedFromAiOrLocal, type AiDistillFields } from "./lib/aiDistill";
-import { buildResumeBlocks } from "./lib/resumeBlocks";
-import { serializeResumeData, toTemplateSchema } from "./lib/resumeData";
-import { buildTailorScope, defaultTailorModes, tailorScopeToText, type TailorMode } from "./lib/tailorScope";
+import { serializeResumeData } from "./lib/resumeData";
+import { defaultTailorModes, type TailorMode } from "./lib/tailorScope";
+import type { StageAiUsage } from "./lib/aiUsage";
+import { useDuplicateGuard } from "./hooks/useDuplicateGuard";
+import { useJobIntake, type ImportedJobSnapshot } from "./hooks/useJobIntake";
+import { usePolishPipeline } from "./hooks/usePolishPipeline";
+import { useWorkspaceResume } from "./hooks/useWorkspaceResume";
+import { useApplyFlow } from "./hooks/useApplyFlow";
 
 import { AiMenu } from "./sections/AiMenu";
 import { ProviderSection } from "./sections/ProviderSection";
 import { Masthead } from "./sections/Masthead";
 import { JobMenu } from "./sections/JobMenu";
 import { PolishMenu } from "./sections/PolishMenu";
-import { PolishProgress, DistillProgress, TaskProgress, type PolishProgressState, type StageState } from "./sections/PolishProgress";
+import { PolishProgress, DistillProgress, TaskProgress } from "./sections/PolishProgress";
 import { SessionsRail } from "./sections/SessionsRail";
 import { ResumeMenu } from "./sections/ResumeMenu";
 import { StudioPane } from "./sections/StudioPane";
 import { ExportMenu } from "./sections/ExportRail";
 import { ApplyDownloadDialog } from "./sections/ApplyDownloadDialog";
-import { loadDefaultExportFormat, saveDefaultExportFormat, type ExportFormat } from "./lib/exportPrefs";
 const PreviewOverlay = lazy(() => import("./sections/PreviewOverlay"));
 import { ApplicationModal } from "./sections/ApplicationModal";
 import { ResumePrintLayer } from "./sections/ResumePrintLayer";
@@ -69,84 +64,16 @@ import { MaterialsTab } from "./sections/tabs/MaterialsTab";
 import { TrackerTab } from "./sections/tabs/TrackerTab";
 import type { TrackerView } from "./sections/tabs/TrackerTab";
 import { AnalyticsTab } from "./sections/tabs/AnalyticsTab";
-import type {
-  OutputTab,
-  OutputTabDescriptor,
-  ResumeBlock
-} from "./sections/shared";
+import type { OutputTab, OutputTabDescriptor } from "./sections/shared";
+
+// The AI menu's three provider sections, in pipeline order.
+const STAGE_SECTIONS: { id: StageId; title: string }[] = [
+  { id: "distill", title: "Distill" },
+  { id: "tailor", title: "Tailor" },
+  { id: "review", title: "Review" }
+];
 
 // ============ Types ============
-
-type WorkspaceBaseResume = {
-  exists: boolean;
-  fileName?: string;
-  label?: string;
-  kind?: string;
-  text?: string;
-  paragraphs?: number;
-  docxBase64?: string;
-};
-
-type BaseResumeOption = {
-  fileName: string;
-  label: string;
-  kind: string;
-};
-
-type BaseResumeHistoryEntry = {
-  key: string;
-  originalName: string;
-  kind: string;
-  date: string;
-};
-
-// Recent versions are grouped by variant (one expandable group per variant),
-// each capped server-side to its most recent entries.
-type BaseResumeHistoryGroup = {
-  variant: string;
-  label: string;
-  entries: BaseResumeHistoryEntry[];
-};
-
-type JobWorkspace = {
-  path: string;
-  baseResume: WorkspaceBaseResume;
-  baseResumeOptions?: BaseResumeOption[];
-  baseResumeHistory?: BaseResumeHistoryGroup[];
-  files: string[];
-};
-
-type ImportedJobSnapshot = {
-  url: string;
-  tailoringText: string;
-  tracking: ExtractedJobTracking;
-  manualReviewFields: string[];
-};
-
-function normalizeResumeSnapshot(text: string) {
-  return text.replace(/\s+/g, " ").trim();
-}
-
-function presentTrackingFields(tracking: ExtractedJobTracking) {
-  const fields = [
-    tracking.role || tracking.title ? "role" : "",
-    tracking.company ? "company" : "",
-    tracking.location ? "location" : "",
-    tracking.jobType ? "job type" : "",
-    tracking.salaryMin != null || tracking.salaryMax != null ? "compensation" : "",
-    tracking.roleDescription ? "role summary" : ""
-  ].filter(Boolean);
-  if (!fields.length) return "no tracking fields";
-  if (fields.length === 1) return fields[0];
-  return `${fields.slice(0, -1).join(", ")} and ${fields[fields.length - 1]}`;
-}
-
-function compactManualReviewFields(fields: string[]) {
-  const unique = [...new Set(fields)].filter((field) => field !== "job description");
-  if (!unique.length) return "";
-  if (unique.length === 1) return unique[0];
-  return `${unique.slice(0, -1).join(", ")} and ${unique[unique.length - 1]}`;
-}
 
 function definedTracking(tracking: ExtractedJobTracking) {
   return Object.fromEntries(
@@ -177,48 +104,25 @@ function App() {
   const [jobDescription, setJobDescription] = useState("");
   const [jobUrl, setJobUrl] = useState("");
   const [importedJob, setImportedJob] = useState<ImportedJobSnapshot | null>(null);
-  const [isExtractingLink, setIsExtractingLink] = useState(false);
-  // Distill progress card (same vocabulary as PolishProgress). Driven by both
-  // job-brief entry points (Extract-from-link and Distill-paste); the DONE card
-  // reports whether the brief came from the AI or the local fallback.
-  const [distillProgress, setDistillProgress] = useState<StageState>({ status: "idle" });
-  const [distillProgressVisible, setDistillProgressVisible] = useState(false);
-  // Which distill action the card's Retry should re-run (link, paste, or a
-  // re-distill of an extension import). Stored as a tag, not a captured closure,
-  // so Retry dispatches to the LIVE handler and picks up the current URL / paste
-  // — a stored closure would re-run stale input the user has since edited. Null
-  // only before any distill has run, so that card shows no Retry button.
-  const [distillRetrySource, setDistillRetrySource] = useState<"link" | "paste" | "import" | null>(null);
-  // Raw source text + url of the last extension import, so its card's Retry can
-  // re-distill it through the CLIENT /api/distill path — the extension import is
-  // event-driven with no action to re-run otherwise.
-  const distillImportRef = useRef<{ text: string; url: string } | null>(null);
+  // Per-stage AI usage snapshot (distill/tailor/review/cover), captured across
+  // the pipeline and snapshotted onto the Application at Apply time. Keys are
+  // deleted (not set to "none") when a fresh polish run starts, so a stale
+  // provider attribution can never linger from a prior run into the new one.
+  const [pipelineAiUsage, setPipelineAiUsage] = useState<Record<string, StageAiUsage>>({});
+  // Pre-distill raw posting text, kept ONLY when it differs from the working
+  // jobDescription (the distilled brief) — mirrors Application.rawJobDescription
+  // and feeds duplicate detection's requisition-id/fingerprint tiers, which work
+  // best against the raw posting rather than the compact tailoring scaffold.
+  const [jobRawText, setJobRawText] = useState("");
   // Starts empty; the mount effect (loadWorkspace) auto-loads a workspace
   // base-resume when one exists, otherwise the editor stays blank.
   const [resumeText, setResumeText] = useState("");
   const [fileName, setFileName] = useState("");
 
-  const [resumeBlocks, setResumeBlocks] = useState<ResumeBlock[]>([]);
   const [result, setResult] = useState<PolishedResume | null>(null);
   const [fileError, setFileError] = useState("");
   const [fileStatus, setFileStatus] = useState("");
   const [linkStatus, setLinkStatus] = useState("");
-  const [isPolishing, setIsPolishing] = useState(false);
-  // Per-stage progress state for the two-stage polish flow (Tailor / Review).
-  // Shown in the PolishProgress component while a polish is in-flight or has
-  // a failed stage. Reset to all-idle on every new polish run.
-  const idleProgress = (): PolishProgressState => ({
-    tailor: { status: "idle" },
-    review: { status: "idle" }
-  });
-  const [polishProgress, setPolishProgress] = useState<PolishProgressState>(idleProgress);
-  // True once a polish has been initiated — keeps PolishProgress visible after
-  // the run completes (including failures) until the user dismisses it.
-  const [polishProgressVisible, setPolishProgressVisible] = useState(false);
-  // Aborts the in-flight polish fetch(es) when the user clicks Stop. Created per
-  // run in handlePolish/retryStage; both stages share one controller so a Stop
-  // during either tailor or review cancels the whole run.
-  const polishAbortRef = useRef<AbortController | null>(null);
   // Surfaces polish-flow feedback the user otherwise never sees: AI-failure
   // reasons (the local fallback still renders) and the pre-flight guards
   // ("load a resume", "select a section to tailor"). Rendered in an aria-live
@@ -239,42 +143,9 @@ function App() {
   // persisted. Destructured into the same names the handlers + JSX already use.
   const ai = useAiSettings();
   const {
-    aiProvider,
-    apiKey,
-    setApiKey,
-    apiBaseUrl,
-    setApiBaseUrl,
-    selectedModel,
-    setSelectedModel,
-    cliReasoningEffort,
-    setCliReasoningEffort,
-    customModel,
-    setCustomModel,
-    handleProviderChange,
-    auditProvider,
-    auditSelectedModel,
-    setAuditSelectedModel,
-    auditCustomModel,
-    setAuditCustomModel,
-    auditCliReasoningEffort,
-    setAuditCliReasoningEffort,
-    auditApiBaseUrl,
-    setAuditApiBaseUrl,
-    auditApiKey,
-    setAuditApiKey,
-    handleAuditProviderChange,
-    distillProvider,
-    distillSelectedModel,
-    setDistillSelectedModel,
-    distillCustomModel,
-    setDistillCustomModel,
-    distillCliReasoningEffort,
-    setDistillCliReasoningEffort,
-    distillApiBaseUrl,
-    setDistillApiBaseUrl,
-    distillApiKey,
-    setDistillApiKey,
-    handleDistillProviderChange,
+    stages,
+    updateStage,
+    changeStageProvider,
     sectionOpen,
     toggleSection,
     copyStage,
@@ -296,24 +167,9 @@ function App() {
   // Distill runs on its own concrete provider config (synced to other stages via
   // the copy buttons, not a live link). Shared by every distill entry point
   // (link, paste, extension import, and their retries).
-  const distillRequestFields = () =>
-    buildDistillRequestFields({
-      distillProvider,
-      distillApiKey,
-      distillApiBaseUrl,
-      distillSelectedModel,
-      distillCustomModel,
-      distillCliReasoningEffort
-    });
+  const distillRequestFields = () => buildStageRequestFields(stages.distill);
   const [includeCoverLetter, setIncludeCoverLetter] = useState(false);
   const [activeOutputTab, setActiveOutputTab] = useState<OutputTab>("resume");
-  const [workspacePath, setWorkspacePath] = useState("");
-  const [workspaceFiles, setWorkspaceFiles] = useState<string[]>([]);
-  const [baseResumeName, setBaseResumeName] = useState("");
-  const [baseResumeOptions, setBaseResumeOptions] = useState<BaseResumeOption[]>([]);
-  const [baseResumeHistory, setBaseResumeHistory] = useState<BaseResumeHistoryGroup[]>([]);
-  const [workspaceStatus, setWorkspaceStatus] = useState("");
-  const [isSavingBaseResume, setIsSavingBaseResume] = useState(false);
   const [pipelineFilter, setPipelineFilter] = useState<"all" | ApplicationStatus>("all");
   const [trackerView, setTrackerView] = useState<TrackerView>("table");
   const [expandedApplicationId, setExpandedApplicationId] = useState<string | null>(null);
@@ -322,10 +178,6 @@ function App() {
   const [isApplicationModalOpen, setIsApplicationModalOpen] = useState(false);
   // null → the modal is in "add" mode; an id → it edits that application.
   const [modalApplicationId, setModalApplicationId] = useState<string | null>(null);
-  // Post-Apply download prompt: holds the just-applied role's label while open.
-  const [applyDownloadPrompt, setApplyDownloadPrompt] = useState<{ label: string } | null>(null);
-  // The user's remembered "download this format on Apply" choice (localStorage).
-  const [defaultExportFormat, setDefaultExportFormat] = useState<ExportFormat | null>(loadDefaultExportFormat);
   // Controlled open state for the Options (PolishMenu) popover — lets the
   // "Add evidence" handler open it programmatically without a new popover system.
   const [polishMenuOpen, setPolishMenuOpen] = useState(false);
@@ -424,125 +276,16 @@ function App() {
   }, [jobDescription, jobTracking]);
 
   // Debounced autosave to localStorage whenever the editor has unsaved edits.
-  useAutosaveDraft({ editedResume, dirty: resumeEdited, jobLabel: _autosaveJobLabel });
-
-  // Cross-tab presence: each browser tab is an independent tailoring session, so
-  // we publish this tab's coarse phase (derived from existing flow state — never
-  // instrumented into the stage runners) and read back the OTHER live tabs for
-  // the shared in-progress card. Privacy: only the role · company label leaves
-  // the tab, never JD/resume text.
-  const _myPhase: PresencePhase = distillProgress.status === "running"
-    ? "distilling"
-    : isPolishing
-      ? polishStages === "review"
-        ? "reviewing"
-        : polishStages === "tailor"
-          ? "tailoring"
-          : "tailoring+reviewing"
-      : resumeEdited
-        ? "editing"
-        : "idle";
-  const otherSessions = useTabPresence({ jobLabel: _autosaveJobLabel, phase: _myPhase });
-
-  // Auto-fill the job description from the browser extension inbox. The AI distill
-  // runs HERE (client-side) with this tab's selected Distill provider; the
-  // deterministic engine is the fallback.
-  useExtensionInbox(async (item) => {
-    // The server only PREPARED the raw text in the background (the hook polled
-    // through the "distilling" state until it was ready); it deliberately did not
-    // AI-distill, because the background pass can't read this tab's localStorage AI
-    // settings and would otherwise use the env-default provider. So distill here
-    // with distillRequestFields() to honor the tab's Distill selection. `fields`
-    // arrives null from the current server; the extractedFromAiOrLocal branch is
-    // kept only as defensive back-compat (an older server that still sends fields).
-    const { text, url, fields, autoTailor } = item;
-    // Remember the raw import so its card's Retry can re-distill it (below).
-    // Store the URL trimmed so a retry keeps importedJob.url === jobUrl.trim()
-    // and the jobTracking memo uses the AI tracking, not a deterministic re-parse.
-    distillImportRef.current = { text, url: (url || "").trim() };
-    // The import distill shares the user distills' mutual exclusion (link/paste/
-    // retry all early-return on isExtractingLink): claim the flag so a mid-import
-    // "Distill paste" can't interleave and clobber this import's state — the
-    // client distill is a full AI round-trip, so the window is real. If a user
-    // distill is ALREADY in flight when the import lands, proceed without
-    // claiming (delivery is once-only); overwriting the flag would let that
-    // flow's finally unblock distills while this one is still running.
-    const claimedDistillLock = !isExtractingLink;
-    if (claimedDistillLock) setIsExtractingLink(true);
-    try {
-      // The client distill takes real time now (it always runs), so show the running
-      // card while it works — otherwise the import lands with no visible progress.
-      // (retrySource is set in each terminal branch below, before any card with Retry.)
-      setDistillProgress({ status: "running" });
-      setDistillProgressVisible(true);
-      const { extracted, source } = fields
-        ? extractedFromAiOrLocal(fields as Partial<AiDistillFields>, text, url || undefined)
-        : await distillJobPosting(text, {
-            url: url || undefined,
-            aiRequest: distillRequestFields()
-          });
-      const relevant = extracted.tailoringText;
-      if (relevant.trim().length < 40) {
-        setPolishStatus("Extension import had too little job text — paste manually.");
-        setDistillRetrySource("import");
-        setDistillProgress({
-          status: "failed",
-          errorHeadline: "Missing input",
-          error: "Imported posting had too little job text — paste manually."
-        });
-        setDistillProgressVisible(true);
-        return;
-      }
-      const trimmedUrl = (url || "").trim();
-      setJobUrl(trimmedUrl);
-      setJobDescription(relevant);
-      setImportedJob({
-        url: trimmedUrl,
-        tailoringText: relevant.trim(),
-        tracking: extracted.tracking,
-        manualReviewFields: extracted.manualReviewFields,
-      });
-      setResult(null);
-      applyCoverLetter("");
-      // Auto-tailor THIS import only, and always (re)set from the toggle so a
-      // toggle-OFF import clears any stale intent a prior toggle-ON import left.
-      setAutoTailorJob(autoTailor ? relevant.trim() : null);
-      // The distill card now carries the AI-vs-local signal, so the status line just
-      // covers import/auto-tailor context. The imported JD satisfies the
-      // description-length gate; the only thing that can still defer the auto-polish
-      // is a missing resume / Tailor section — say so rather than appearing to do nothing.
-      // "import" keeps a Retry on the card that re-distills through the client path.
-      setDistillRetrySource("import");
-      setDistillProgress(distillDoneState(source));
-      setDistillProgressVisible(true);
-      const readyToTailor =
-        Boolean(editedResume) && Object.values(tailorModes).some((mode) => mode === "tailor");
-      setPolishStatus(
-        autoTailor && !readyToTailor
-          ? `Job imported from the browser extension — ${
-              editedResume ? "set a section to Tailor" : "load a resume"
-            } and it'll polish automatically.`
-          : "Job imported from the browser extension."
-      );
-    } finally {
-      if (claimedDistillLock) setIsExtractingLink(false);
-    }
-  }, () => {
-    // Background server-side distill still running — surface it on the same card
-    // the link/paste flows use (no Retry: an extension import has nothing to
-    // re-run). Guard the running state so repeated polls don't churn renders.
-    setDistillRetrySource(null);
-    setDistillProgress((prev) => (prev.status === "running" ? prev : { status: "running" }));
-    setDistillProgressVisible(true);
+  // getJobKeyHash is a lazy closure: duplicateGuard is declared later in this
+  // component and is only read inside the debounced write, after mount.
+  useAutosaveDraft({
+    editedResume,
+    dirty: resumeEdited,
+    jobLabel: _autosaveJobLabel,
+    pipelineAiUsage,
+    jobRawText,
+    getJobKeyHash: () => duplicateGuard.currentJobKeyHash()
   });
-
-  // Warn before close/reload when there are unsaved edits OR a distill/tailor/
-  // review is mid-flight (losing an in-progress run is as costly as losing edits).
-  // Apply clears `resumeEdited` (markResumeClean) since the work is then persisted
-  // and a copy exported; editing again re-arms it.
-  useBeforeUnloadGuard(
-    resumeEdited || isPolishing || distillProgress.status === "running"
-  );
 
   const {
     applications,
@@ -557,8 +300,23 @@ function App() {
     remove: removeApplication,
     storagePath: applicationsPath,
     findForTarget,
+    findDuplicatesForTarget,
+    mergeApplications,
     refresh: refreshApplications
   } = useApplications();
+
+  // Duplicate-warning ladder for the current job target (advisory note, the
+  // pre-polish blocking gate, and the Apply merge-target resolution) — the
+  // acknowledgment state and dialog copy live in the hook. `tracking` is lazy:
+  // currentJobTracking is declared later in this component.
+  const duplicateGuard = useDuplicateGuard({
+    jobUrl,
+    jobDescription,
+    jobRawText,
+    tracking: () => currentJobTracking(),
+    findDuplicatesForTarget,
+    confirm
+  });
 
   const {
     answersResult,
@@ -575,7 +333,7 @@ function App() {
     jobUrl,
     honestContext: requestHonestContext,
     customInstructions,
-    aiRequest: { aiProvider, apiKey, apiBaseUrl, selectedModel, customModel, cliReasoningEffort },
+    aiRequest: stages.tailor,
     upsertApplication,
     findForTarget
   });
@@ -597,10 +355,9 @@ function App() {
     jobText: jobDescription,
     honestContext: requestHonestContext,
     customInstructions,
-    aiRequest: { aiProvider, apiKey, apiBaseUrl, selectedModel, customModel, cliReasoningEffort },
+    aiRequest: stages.tailor,
     resumeText,
-    jobCompany: jobTracking.company,
-    jobRoleTitle: jobTracking.role
+    onUsage: (usage) => setPipelineAiUsage((prev) => ({ ...prev, cover: usage }))
   });
 
   // ----- Effects -----
@@ -693,12 +450,10 @@ function App() {
     );
   }, [editedResume, jobDescription, tailorModes]);
 
-  const combinedJobText = jobDescription;
-
   // Debounce the live inputs so per-keystroke synchronous scoring doesn't jank
   // typing on large resumes. The polished `result` stays immediate.
   const debouncedResumeText = useDebouncedValue(resumeText);
-  const debouncedCombinedJobText = useDebouncedValue(combinedJobText);
+  const debouncedJobDescription = useDebouncedValue(jobDescription);
   // The edited resume is debounced before the heavy match/diff/fit recompute so
   // typing in the editor stays smooth (the editor preview itself updates live).
   const debouncedCurrentResumeText = useDebouncedValue(currentResumeText);
@@ -715,16 +470,14 @@ function App() {
     resultSourceLabel
   } = useResumeAnalysis({
     resumeText,
-    combinedJobText,
+    jobDescription,
     debouncedResumeText,
-    debouncedCombinedJobText,
+    debouncedJobDescription,
     debouncedCurrentResumeText,
     // Gate AI fit provenance on FREE edits only — accepting the AI's reviewed
     // suggestions keeps the verdict "AI-judged" (it describes that proposal).
     isEdited: resumeManuallyEdited,
-    editedResume,
-    result,
-    resumeBlocks
+    result
   });
 
   // ----- Derived (non-memo) -----
@@ -799,742 +552,143 @@ function App() {
     setTexStatus
   });
 
+  // ----- Job intake (distill/import flows) -----
+  // Extract-from-link, Distill-paste, the browser-extension inbox import (both
+  // AI-off and AI-distill paths), and each entry point's Retry — extracted to
+  // src/hooks/useJobIntake.ts. isExtractingLink/distillProgress/
+  // distillProgressVisible/distillRetry are owned by the hook; App only reads
+  // them below for render + the presence phase + the before-unload guard.
+  const {
+    isExtractingLink,
+    distillProgress,
+    distillProgressVisible,
+    setDistillProgressVisible,
+    distillRetry,
+    handleManualJobDescriptionChange,
+    handleExtractFromLink,
+    handleDistillPaste
+  } = useJobIntake({
+    jobUrl,
+    setJobUrl,
+    jobDescription,
+    setJobDescription,
+    setImportedJob,
+    setResult,
+    applyCoverLetter,
+    setPipelineAiUsage,
+    setJobRawText,
+    setAutoTailorJob,
+    setPolishStatus,
+    setLinkStatus,
+    duplicateWarnNote: duplicateGuard.duplicateWarnNote,
+    distillRequestFields,
+    tailorModes,
+    editedResume
+  });
+
+  // ----- Polish pipeline (Tailor -> Review) -----
+  // buildPolishContext, the reviewer-attribution + merge helpers, the two
+  // stage runners, handlePolish, retryStage, and Stop — extracted to
+  // src/hooks/usePolishPipeline.ts. isPolishing/polishProgress/
+  // polishProgressVisible are owned by the hook; App only reads them below for
+  // render + the presence phase + the before-unload guard.
+  const {
+    isPolishing,
+    polishProgress,
+    polishProgressVisible,
+    setPolishProgressVisible,
+    handlePolish,
+    retryStage,
+    stopPolish
+  } = usePolishPipeline({
+    editedResume,
+    tailorModes,
+    currentResumeText,
+    jobDescription,
+    includeCoverLetter,
+    requestHonestContext,
+    customInstructions,
+    polishStages,
+    tailor: stages.tailor,
+    review: stages.review,
+    result,
+    setResult,
+    applyCoverLetter,
+    setActiveOutputTab,
+    setPipelineAiUsage,
+    setPolishStatus,
+    resetExportStatuses,
+    setTexStatus,
+    confirmDuplicateBeforePolish: duplicateGuard.confirmDuplicateBeforePolish
+  });
+
+  // Cross-tab presence: each browser tab is an independent tailoring session, so
+  // we publish this tab's coarse phase (derived from existing flow state — never
+  // instrumented into the stage runners) and read back the OTHER live tabs for
+  // the shared in-progress card. Privacy: only the role · company label leaves
+  // the tab, never JD/resume text.
+  const _myPhase: PresencePhase = distillProgress.status === "running"
+    ? "distilling"
+    : isPolishing
+      ? polishStages === "review"
+        ? "reviewing"
+        : polishStages === "tailor"
+          ? "tailoring"
+          : "tailoring+reviewing"
+      : resumeEdited
+        ? "editing"
+        : "idle";
+  const otherSessions = useTabPresence({ jobLabel: _autosaveJobLabel, phase: _myPhase });
+
+  // Warn before close/reload when there are unsaved edits OR a distill/tailor/
+  // review is mid-flight (losing an in-progress run is as costly as losing edits).
+  // Apply clears `resumeEdited` (markResumeClean) since the work is then persisted
+  // and a copy exported; editing again re-arms it.
+  useBeforeUnloadGuard(
+    resumeEdited || isPolishing || distillProgress.status === "running"
+  );
+
   // ----- Handlers -----
 
-  // `skipConfirm` is true on paths that PRESERVE the user's work (Save) or are
-  // triggered on first mount before the user has made any edits. It is false on
-  // explicit Reload, Load-version, and Restore actions where the user could have
-  // unsaved edits they'd lose.
-  async function applyWorkspaceBaseResume(baseResume: WorkspaceBaseResume, status: string, skipConfirm = false) {
-    if (!baseResume.exists || !baseResume.text) return;
-
-    if (!skipConfirm && resumeEdited) {
-      if (!(await confirmReplaceEditor())) return;
-      // User confirmed the replace — the autosaved draft of the old edits is
-      // now superseded; clear it so the restore bar doesn't linger.
-      clearAutosaveDraft();
-      setPendingAutosaveDraft(null);
-    }
-
-    saveLastBaseResumeName(baseResume.fileName ?? "");
-    setResumeText(baseResume.text);
-    setFileName(baseResume.fileName ?? "base-resume");
-    setBaseResumeName(baseResume.fileName ?? "");
-    setResult(null);
-    applyCoverLetter("");
-    setFileError("");
-    setPolishStatus("");
-    resetExportStatuses();
-    setTexStatus("");
-    // Make the loaded base resume editable straight away (pre-polish).
-    seedResumeEditor(baseResume.text, "");
-
-    if (baseResume.kind === "docx" && baseResume.docxBase64) {
-      setResumeBlocks(buildResumeBlocks(baseResume.text));
-      setFileStatus(`${status} DOCX content parsed into the editor.`);
-    } else {
-      setResumeBlocks([]);
-      setFileStatus(status);
-    }
-  }
-
-  function updateWorkspaceState(workspace: JobWorkspace) {
-    setWorkspacePath(workspace.path);
-    setWorkspaceFiles(workspace.files ?? []);
-    setBaseResumeName(workspace.baseResume?.exists ? workspace.baseResume.fileName ?? "" : "");
-    setBaseResumeOptions(workspace.baseResumeOptions ?? []);
-    // Only overwrite history when the response actually carries it. A partial
-    // response (e.g. a caller that forgets the field) must not silently wipe the
-    // Recent list — that was the "history disappears on save" bug.
-    if (workspace.baseResumeHistory !== undefined) setBaseResumeHistory(workspace.baseResumeHistory);
-  }
-
-  async function loadWorkspace(applyBaseResume = false) {
-    try {
-      const response = await fetch("/api/workspace");
-      const workspace = (await response.json()) as JobWorkspace & { error?: string };
-      if (!response.ok) throw new Error(workspace.error ?? "Workspace check failed.");
-
-      updateWorkspaceState(workspace);
-      if (workspace.baseResume?.exists) {
-        if (applyBaseResume) {
-          const rememberedName = loadLastBaseResumeName();
-          const availableBaseNames = new Set([
-            workspace.baseResume.fileName ?? "",
-            ...(workspace.baseResumeOptions ?? []).map((option) => option.fileName)
-          ]);
-          const rememberedExists = availableBaseNames.has(rememberedName);
-          if (
-            rememberedName &&
-            rememberedExists &&
-            rememberedName !== workspace.baseResume.fileName
-          ) {
-            await loadBaseResumeVersion(rememberedName);
-            return;
-          }
-          if (rememberedName && !rememberedExists) {
-            saveLastBaseResumeName("");
-          }
-          setWorkspaceStatus("");
-          await applyWorkspaceBaseResume(workspace.baseResume, "");
-          return;
-        }
-        setWorkspaceStatus("");
-      } else {
-        saveLastBaseResumeName("");
-        setWorkspaceStatus("Local workspace ready. Save a base resume to use it automatically on startup.");
-        if (applyBaseResume && workspace.baseResume?.text) {
-          setResumeText(workspace.baseResume.text);
-          seedResumeEditor(workspace.baseResume.text, "");
-          setFileStatus("Loaded the starter template. Replace it with your own resume to get started.");
-        }
-      }
-    } catch (error) {
-      setWorkspaceStatus(error instanceof Error ? error.message : "Local workspace could not be checked.");
-    }
-  }
-
-  async function saveBaseResume(payload: { fileName: string; fileBase64?: string; text?: string }) {
-    setIsSavingBaseResume(true);
-    setWorkspaceStatus("Saving base resume to the local workspace…");
-
-    try {
-      const response = await fetch("/api/workspace/base-resume", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      });
-      const workspace = (await response.json()) as Partial<JobWorkspace> & {
-        baseResume?: WorkspaceBaseResume;
-        error?: string;
-      };
-      if (!response.ok || !workspace.baseResume) {
-        throw new Error(workspace.error ?? "Base resume save failed.");
-      }
-
-      updateWorkspaceState({
-        path: workspace.path ?? workspacePath,
-        baseResume: workspace.baseResume,
-        baseResumeOptions: workspace.baseResumeOptions,
-        baseResumeHistory: workspace.baseResumeHistory,
-        files: workspace.files ?? workspaceFiles
-      });
-      // Save preserves the user's work — no confirm needed; also clear the
-      // autosave since the edits are now persisted to the workspace file.
-      clearAutosaveDraft();
-      await applyWorkspaceBaseResume(workspace.baseResume, "", true);
-      setWorkspaceStatus("Saved.");
-    } catch (error) {
-      setWorkspaceStatus(error instanceof Error ? error.message : "Base resume save failed.");
-    } finally {
-      setIsSavingBaseResume(false);
-    }
-  }
-
-  async function removeBaseResume() {
-    if (!baseResumeName) return;
-    // Destructive + irreversible-looking action: confirm first. The server keeps
-    // a timestamped backup in .trash, so this is recoverable, but a stray click
-    // shouldn't wipe a base resume.
-    if (
-      !(await confirm({
-        title: "Remove base resume?",
-        message: `Remove the base resume "${baseResumeName}"? A backup is kept in job-search-workspace/.trash, and the resume text stays in the editor.`,
-        confirmLabel: "Remove",
-        tone: "danger"
-      }))
-    )
-      return;
-    setIsSavingBaseResume(true);
-    setWorkspaceStatus("Removing the base resume from the local workspace…");
-    try {
-      const response = await fetch("/api/workspace/base-resume", { method: "DELETE" });
-      const workspace = (await response.json()) as Partial<JobWorkspace> & { error?: string };
-      if (!response.ok) throw new Error(workspace.error ?? "Base resume removal failed.");
-      updateWorkspaceState({
-        path: workspace.path ?? workspacePath,
-        baseResume: workspace.baseResume ?? { exists: false },
-        baseResumeOptions: workspace.baseResumeOptions,
-        baseResumeHistory: workspace.baseResumeHistory,
-        files: workspace.files ?? workspaceFiles
-      });
-      // Detach the file from the editor so the resume text is editable again,
-      // but keep the current text so the user doesn't lose their draft.
-      saveLastBaseResumeName("");
-      setFileName("");
-      setResumeBlocks([]);
-      setFileStatus("");
-      setWorkspaceStatus("Removed the base resume (backup saved in .trash). Save again to set a new one.");
-    } catch (error) {
-      setWorkspaceStatus(error instanceof Error ? error.message : "Base resume removal failed.");
-    } finally {
-      setIsSavingBaseResume(false);
-    }
-  }
-
-  async function restoreBaseResume(key: string) {
-    if (resumeEdited) {
-      if (!(await confirmReplaceEditor())) return;
-      clearAutosaveDraft();
-      setPendingAutosaveDraft(null);
-    }
-    setIsSavingBaseResume(true);
-    setWorkspaceStatus("Restoring from history…");
-    try {
-      const response = await fetch("/api/workspace/base-resume/restore", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ key })
-      });
-      const workspace = (await response.json()) as Partial<JobWorkspace> & {
-        baseResume?: WorkspaceBaseResume;
-        baseResumeHistory?: BaseResumeHistoryGroup[];
-        error?: string;
-      };
-      if (!response.ok || !workspace.baseResume) {
-        throw new Error(workspace.error ?? "Restore failed.");
-      }
-      updateWorkspaceState({
-        path: workspace.path ?? workspacePath,
-        baseResume: workspace.baseResume,
-        baseResumeOptions: workspace.baseResumeOptions,
-        baseResumeHistory: workspace.baseResumeHistory,
-        files: workspace.files ?? workspaceFiles
-      });
-      await applyWorkspaceBaseResume(workspace.baseResume, "", true); // confirmed above
-      setWorkspaceStatus("Restored.");
-    } catch (error) {
-      setWorkspaceStatus(error instanceof Error ? error.message : "Restore failed.");
-    } finally {
-      setIsSavingBaseResume(false);
-    }
-  }
-
-  async function saveCurrentAsBaseResume() {
-    const targetName = baseResumeName || fileName || "base-resume.txt";
-    let text = currentResumeText || resumeText;
-
-    if (/\.tex$/i.test(targetName) && editedResume) {
-      setIsSavingBaseResume(true);
-      setWorkspaceStatus("Rendering current resume to LaTeX before saving…");
-      try {
-        text = await renderTexFromSchema(toTemplateSchema(editedResume), selectedTemplateId, {
-          docStyle: docStyle.style
-        });
-      } catch (error) {
-        setWorkspaceStatus(error instanceof Error ? error.message : "Current resume could not be rendered to LaTeX.");
-        setIsSavingBaseResume(false);
-        return;
-      }
-    }
-
-    await saveBaseResume({ fileName: targetName, text });
-  }
-
-  async function loadBaseResumeVersion(fileName: string) {
-    if (resumeEdited) {
-      if (!(await confirmReplaceEditor())) return;
-      clearAutosaveDraft();
-      setPendingAutosaveDraft(null);
-    }
-    setIsSavingBaseResume(true);
-    setWorkspaceStatus("Loading base resume version…");
-    try {
-      const response = await fetch("/api/workspace/base-resume/select", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ fileName })
-      });
-      const workspace = (await response.json()) as Partial<JobWorkspace> & {
-        baseResume?: WorkspaceBaseResume;
-        error?: string;
-      };
-      if (!response.ok || !workspace.baseResume) {
-        throw new Error(workspace.error ?? "Base resume load failed.");
-      }
-      updateWorkspaceState({
-        path: workspace.path ?? workspacePath,
-        baseResume: workspace.baseResume,
-        baseResumeOptions: workspace.baseResumeOptions,
-        baseResumeHistory: workspace.baseResumeHistory,
-        files: workspace.files ?? workspaceFiles
-      });
-      await applyWorkspaceBaseResume(workspace.baseResume, "", true); // confirmed above
-      setWorkspaceStatus("");
-    } catch (error) {
-      setWorkspaceStatus(error instanceof Error ? error.message : "Base resume load failed.");
-    } finally {
-      setIsSavingBaseResume(false);
-    }
-  }
-
-  async function handleFileUpload(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    if (resumeEdited) {
-      // Capture the input element before the await — the synthetic event may be
-      // recycled by React and event.target will be null after an async boundary.
-      const input = event.target;
-      if (!(await confirmReplaceEditor())) {
-        // Reset the file input so the same file can be chosen again later.
-        input.value = "";
-        return;
-      }
-      clearAutosaveDraft();
-      setPendingAutosaveDraft(null);
-    }
-
-    setFileName(file.name);
-    setFileError("");
-    setFileStatus("");
-    // Clear any stale "Load a resume before polishing." guard — uploading is
-    // exactly the action that resolves it.
-    setPolishStatus("");
-    setResumeBlocks([]);
-    setResult(null);
-    applyCoverLetter("");
-
-    if (/\.pdf$/i.test(file.name)) {
-      setFileError(
-        "PDF uploads are text-only and cannot preserve layout. Upload the original DOCX or TEX for format-preserving edits, or paste extracted PDF text."
-      );
-      return;
-    }
-
-    if (/\.docx$/i.test(file.name)) {
-      try {
-        const base64 = arrayBufferToBase64(await file.arrayBuffer());
-        const response = await fetch("/api/import-resume-docx", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ docxBase64: base64 })
-        });
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.error ?? "DOCX import failed.");
-        setResumeText(String(data.text ?? ""));
-        setResumeBlocks(buildResumeBlocks(String(data.text ?? "")));
-        seedResumeEditor(String(data.text ?? ""), "");
-        setFileStatus("DOCX parsed into the editor.");
-      } catch (error) {
-        setFileError(
-          error instanceof Error ? error.message : "DOCX import failed. Try saving the resume from Word as a fresh DOCX."
-        );
-      }
-      return;
-    }
-
-    if (/\.tex$/i.test(file.name)) {
-      // Keep the raw LaTeX as the working text so AI rewrites can preserve it in
-      // place as .tex; parse it into the structured editor for interactive edits.
-      const texText = await file.text();
-      // The local parser bounds input at 200 KB (resumeData.ts MAX_LATEX_INPUT); a
-      // larger file would parse to an empty editor while claiming success — surface it.
-      if (texText.length > 200_000) {
-        setFileError("This .tex file is too large to parse locally (over 200 KB). Paste the resume content directly instead.");
-        return;
-      }
-      setResumeText(texText);
-      setResumeBlocks([]);
-      seedResumeEditor(texText, "");
-      setFileStatus("LaTeX source loaded and parsed into the editor. Export as .tex or compile with Tectonic.");
-      return;
-    }
-
-    if (!/\.(txt|md|csv)$/i.test(file.name)) {
-      setFileError("Upload DOCX or TEX for format-preserving edits, or TXT, MD, or CSV for text-only polishing.");
-      return;
-    }
-
-    try {
-      const text = await file.text();
-      setResumeText(text);
-      setResumeBlocks([]);
-      seedResumeEditor(text, "");
-      setFileStatus("Text file loaded. Export uses the clean ATS PDF template or any LaTeX template.");
-    } catch {
-      setFileError("The file could not be read. Try pasting the resume text instead.");
-    }
-  }
-
-  // ----- Polish flow (shared) -----
-  // handlePolish and retryStage both run the two-stage polish (Tailor → Review)
-  // against /api/polish. The per-run context (scoped resume text, local fallback,
-  // common request body), the reviewer-attribution + merge helpers, and the two
-  // stage runners are hoisted to component scope so the initial run and a
-  // per-stage retry share ONE implementation. The two copies had drifted (e.g. a
-  // stale provenance path in retry); consolidating removes that hazard.
-
-  type PolishContext = {
-    scopedResumeText: string;
-    fallback: PolishedResume;
-    commonBody: Record<string, unknown>;
-  };
-
-  // Build the per-run context, or return null after setting a guard status.
-  // Guards (no editable resume, empty/too-short tailor scope) match the original
-  // handlePolish pre-flight checks; the `isPolishing` guard stays in each caller.
-  function buildPolishContext(): PolishContext | null {
-    if (!editedResume) {
-      setPolishStatus("Load a resume before polishing.");
-      return null;
-    }
-    // Fall back to the default modes if the user never touched the controls.
-    const modes = Object.keys(tailorModes).length ? tailorModes : defaultTailorModes(editedResume);
-    const tailorIds = Object.keys(modes).filter((id) => modes[id] === "tailor");
-    const contextIds = Object.keys(modes).filter((id) => modes[id] === "include");
-    const tailorScope = buildTailorScope(editedResume, tailorIds, contextIds);
-    // Context-inclusive text (read-only Include sections appended) — used by the
-    // AI-path polished/fit/cover derivations so those sections count and can be
-    // cited. The editable-only variant powers the gate and the LOCAL fallback,
-    // which rewrites its input: feeding it editable-only keeps the deterministic
-    // fallback from rewording an Include section (the read-only promise holds on
-    // every path, not just the AI one).
-    const scopedResumeText = tailorScopeToText(tailorScope);
-    const editableResumeText = tailorScopeToText(tailorScope, true);
-    // Gate on EDITABLE sections: a context-only scope (Include but nothing to
-    // Tailor) has no targets, so it cannot be polished.
-    if (!tailorScope.sections.length || editableResumeText.trim().length < 40) {
-      setPolishStatus("Set at least one resume section to Tailor.");
-      return null;
-    }
-
-    const fallbackBase = polishResume(editableResumeText, combinedJobText);
-    const fallback = includeCoverLetter
-      ? {
-          ...fallbackBase,
-          coverLetterText: draftCoverLetter(resumeText, combinedJobText, fallbackBase.polishedText, {
-            company: jobTracking.company,
-            roleTitle: jobTracking.role
-          })
-        }
-      : fallbackBase;
-
-    // Common request body shared by both stages.
-    const commonBody = {
-      ...buildAiRequestFields({ aiProvider, apiKey, apiBaseUrl, selectedModel, customModel, cliReasoningEffort }),
-      ...buildAuditRequestFields({ auditProvider, auditApiKey, auditApiBaseUrl, auditSelectedModel, auditCustomModel, auditCliReasoningEffort }),
-      tailorScope,
-      jobText: jobDescription,
-      includeCoverLetter,
-      honestContext: requestHonestContext,
-      customInstructions
-    };
-
-    return { scopedResumeText, fallback, commonBody };
-  }
-
-  // Compute the reviewer attribution string from a server response (non-empty
-  // only when the audit ran on a different provider/model than the tailor).
-  function computePolishReviewedBy(data: Record<string, unknown>): string {
-    if (
-      typeof data.auditProvider === "string" &&
-      data.auditProvider &&
-      (data.auditProvider !== data.provider || (data.auditModel || "") !== (data.model || ""))
-    ) {
-      return describeProviderModel(data.auditProvider as string, (data.auditModel as string | undefined) ?? "");
-    }
-    return "";
-  }
-
-  // Merge review data (aiScore, strictReview, reviewedBy, reviewStatus) from a
-  // server response into the current result, preferring any missing-skills the
-  // prior result held. `fallback` is the base when there is no prior result
-  // (review-only with no tailor).
-  function mergeReviewIntoResult(
-    prev: PolishedResume | null,
-    data: Record<string, unknown>,
-    reviewedBy: string,
-    fallback: PolishedResume
-  ): PolishedResume {
-    const base = prev ?? fallback;
-    const prevMissing = base.missingRequiredSkills;
-    const dataMissing = Array.isArray(data.missingRequiredSkills) ? data.missingRequiredSkills : undefined;
-    return {
-      ...base,
-      aiScore: (data.aiScore as PolishedResume["aiScore"]) ?? undefined,
-      strictReview: (data.strictReview as PolishedResume["strictReview"]) ?? undefined,
-      reviewedBy: reviewedBy || undefined,
-      reviewStatus: (data.reviewStatus as PolishedResume["reviewStatus"]) ?? undefined,
-      missingRequiredSkills: (prevMissing?.length ? prevMissing : dataMissing) ?? undefined
-    };
-  }
-
-  // Stage runner: Tailor. Sets progress.tailor=running, posts to /api/polish
-  // with stages:"tailor", builds a result WITHOUT aiScore/strictReview (so the
-  // fit verdict shows "Estimated"/local, not "AI-judged"). Returns the
-  // server-sanitized suggestedChanges array on success, null on failure.
-  async function runTailorStage(ctx: PolishContext, signal?: AbortSignal): Promise<PolishedResume["suggestedChanges"] | null> {
-    const { scopedResumeText, fallback, commonBody } = ctx;
-    setPolishProgress((prev) => ({ ...prev, tailor: { status: "running" }, review: { status: "idle" } }));
-    try {
-      const response = await fetch("/api/polish", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...commonBody, stages: "tailor" }),
-        signal
-      });
-      const data = await response.json() as Record<string, unknown>;
-      if (!response.ok) throw new ApiError((data.error as string) ?? "AI tailor failed.", response.status);
-      const suggestedChanges: PolishedResume["suggestedChanges"] = Array.isArray(data.suggestedChanges) ? data.suggestedChanges : [];
-      if (!data.polishedText && !suggestedChanges.length) {
-        throw new Error("AI response did not include usable resume suggestions.");
-      }
-      const scopedPolishedText = data.polishedText
-        ? normalizePolishedResume(data.polishedText as string, scopedResumeText)
-        : scopedResumeText;
-      const analysis = analyzeResumeText(
-        suggestedChanges.length ? currentResumeText || scopedPolishedText : scopedPolishedText,
-        combinedJobText
-      );
-      const coverText = includeCoverLetter
-        ? (data.coverLetterText as string | undefined) ||
-          draftCoverLetter(scopedResumeText, combinedJobText, scopedPolishedText, {
-            company: jobTracking.company,
-            roleTitle: jobTracking.role
-          })
-        : undefined;
-      setResult({
-        ...analysis,
-        polishedText: suggestedChanges.length ? currentResumeText || scopedPolishedText : scopedPolishedText,
-        source: "ai",
-        coverLetterText: coverText,
-        strengths: Array.isArray(data.strengths) && data.strengths.length ? data.strengths as string[] : fallback.strengths,
-        fixes: Array.isArray(data.fixes) && data.fixes.length ? data.fixes as string[] : fallback.fixes,
-        changeSummary: Array.isArray(data.changeSummary) && data.changeSummary.length ? data.changeSummary as string[] : undefined,
-        missingRequiredSkills: Array.isArray(data.missingRequiredSkills) && data.missingRequiredSkills.length
-          ? data.missingRequiredSkills as PolishedResume["missingRequiredSkills"]
-          : undefined,
-        suggestedChanges,
-        droppedSuggestions: (data.droppedSuggestions as PolishedResume["droppedSuggestions"]) ?? null,
-        // Tailor-only: no AI review fields — useResumeAnalysis must see these
-        // as undefined so the fit verdict shows "Estimated"/local, not "AI-judged".
-        // reviewStatus resets too, so a stale "failed" from a prior review doesn't
-        // linger on a fresh tailor result that hasn't been reviewed yet.
-        aiScore: undefined,
-        strictReview: undefined,
-        reviewedBy: undefined,
-        reviewStatus: undefined
-      });
-      // Feed the shared cover-letter state so Materials/Copy/save read one source
-      // whether the letter came from the polish pass or on-demand generation.
-      if (coverText) applyCoverLetter(coverText);
-      setActiveOutputTab("resume");
-      setPolishProgress((prev) => ({ ...prev, tailor: { status: "done", note: "Tailored with AI", noteTone: "ok" } }));
-      return suggestedChanges;
-    } catch (error) {
-      // User clicked Stop — let the orchestrator handle the clean stop; do NOT
-      // drop in the local fallback or mark the stage failed.
-      if (signal?.aborted) throw error;
-      setResult(fallback);
-      // The local fallback carries a cover letter when one was requested; feed
-      // it to the single-owner state so Materials/Copy/save still show it.
-      if (fallback.coverLetterText) applyCoverLetter(fallback.coverLetterText);
-      setActiveOutputTab("resume");
-      // This path ALREADY produces a usable result (the local fallback), so
-      // present it as done-with-fallback rather than failed — matches the
-      // distill card's AI-vs-local pattern, with the SAME uniform reason so all
-      // the fallback cards in a flow read identically. The done+warn card still
-      // renders Retry.
-      setPolishProgress((prev) => ({
-        ...prev,
-        tailor: { status: "done", noteTone: "warn", errorHeadline: AI_UNAVAILABLE, note: "local draft shown" }
-      }));
-      return null;
-    }
-  }
-
-  // Stage runner: Review. Sets progress.review=running, posts with stages:"review"
-  // and the sanitized suggestedChanges (from the prior tailor, or [] for
-  // review-only). Merges review data (aiScore, strictReview) into the current
-  // result via setResult; for review-only with no prior result it synthesizes a
-  // base result first so the verdict describes the displayed resume.
-  // `tailorJustRan` is true when a tailor pass ran earlier in THIS synchronous
-  // flow (the "both" mode + its retry). That tailor called setResult with
-  // aiScore: undefined, but React hasn't re-rendered yet, so the `result`
-  // closure here is stale — it must NOT be trusted to decide the fallback note.
-  async function runReviewStage(
-    ctx: PolishContext,
-    suggestions: PolishedResume["suggestedChanges"],
-    signal?: AbortSignal,
-    tailorJustRan = false
-  ): Promise<void> {
-    const { scopedResumeText, fallback, commonBody } = ctx;
-    setPolishProgress((prev) => ({ ...prev, review: { status: "running" } }));
-    // On a review failure we keep whatever result is already shown. If that
-    // result carries a prior AI review (aiScore), the fit on screen is
-    // AI-judged, NOT a local estimate — so don't mislabel it. A preceding tailor
-    // in the same flow always wiped aiScore (→ local estimate), so ignore the
-    // stale `result` closure in that case and say "local estimate shown".
-    const reviewFallbackNote =
-      !tailorJustRan && result?.aiScore ? "kept the previous fit" : "local estimate shown";
-    try {
-      const response = await fetch("/api/polish", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...commonBody, stages: "review", suggestedChanges: suggestions ?? [] }),
-        signal
-      });
-      const data = await response.json() as Record<string, unknown>;
-      if (!response.ok) throw new ApiError((data.error as string) ?? "AI review failed.", response.status);
-      // The request itself succeeded (200 OK), but the server's strict-review
-      // pass may still have produced nothing usable — reviewStatus distinguishes
-      // that from "review not requested" (see server/ai/polish.mjs). In that case
-      // strictReview/aiScore come back null, so merging would wipe any PRIOR
-      // successful review already sitting in the result. Skip the merge entirely
-      // and present it exactly like a request-level review failure below: a
-      // done+warn fallback card ("AI unavailable — local estimate shown"),
-      // consistent with the Distill/Tailor fallback cards. The result (including
-      // any prior successful review) is left untouched.
-      if (data.reviewStatus === "failed") {
-        setPolishProgress((prev) => ({
-          ...prev,
-          review: { status: "done", noteTone: "warn", errorHeadline: AI_UNAVAILABLE, note: reviewFallbackNote }
-        }));
-        return;
-      }
-      const reviewedBy = computePolishReviewedBy(data);
-      setResult((prev) => {
-        // review-only (no prior tailor): synthesize a base result first.
-        if (!prev) {
-          const baseAnalysis = analyzeResumeText(currentResumeText || scopedResumeText, combinedJobText);
-          const baseResult: PolishedResume = {
-            ...baseAnalysis,
-            polishedText: currentResumeText || scopedResumeText,
-            source: "ai",
-            strengths: fallback.strengths,
-            fixes: fallback.fixes,
-            suggestedChanges: []
-          };
-          return mergeReviewIntoResult(baseResult, data, reviewedBy, fallback);
-        }
-        return mergeReviewIntoResult(prev, data, reviewedBy, fallback);
-      });
-      setActiveOutputTab("resume");
-      setPolishProgress((prev) => ({ ...prev, review: { status: "done", note: "Reviewed with AI", noteTone: "ok" } }));
-    } catch (error) {
-      // User clicked Stop — let the orchestrator handle the clean stop. The
-      // existing result (e.g. a completed tailor in "both") is left intact.
-      if (signal?.aborted) throw error;
-      // A local fit estimate is always shown when the AI review can't run, so
-      // present this as a done+warn fallback card identical to Distill/Tailor:
-      // same uniform reason, same "local … shown" tail, same Retry. Keep the
-      // existing result — don't clobber a successful tailor result.
-      setPolishProgress((prev) => ({
-        ...prev,
-        review: { status: "done", noteTone: "warn", errorHeadline: AI_UNAVAILABLE, note: reviewFallbackNote }
-      }));
-    }
-  }
-
-  // Clean-stop teardown shared by handlePolish/retryStage when the user clicks
-  // Stop: clear the per-stage progress, hide the indicator, and surface a quiet
-  // status. The displayed resume is left as-is (a completed tailor stage in
-  // "both" keeps its result; a stopped tailor never replaced the prior result).
-  function handlePolishStopped() {
-    setPolishProgress(idleProgress());
-    setPolishProgressVisible(false);
-    setPolishStatus("Polish stopped.");
-  }
-
-  // Abort the in-flight polish fetch(es). The stage runners re-throw the abort,
-  // the orchestrator's catch runs handlePolishStopped, and `finally` clears
-  // isPolishing — so a Stop frees the UI immediately. (The server-side AI call
-  // runs on this machine and self-terminates within its own timeout.)
-  function stopPolish() {
-    polishAbortRef.current?.abort();
-  }
-
-  async function handlePolish() {
-    if (isPolishing) return;
-    const ctx = buildPolishContext();
-    if (!ctx) return;
-
-    const controller = new AbortController();
-    polishAbortRef.current = controller;
-    const { signal } = controller;
-    setIsPolishing(true);
-    setPolishProgress(idleProgress());
-    setPolishProgressVisible(true);
-    setPolishStatus("");
-    resetExportStatuses();
-    setTexStatus("");
-
-    try {
-      if (polishStages === "tailor") {
-        await runTailorStage(ctx, signal);
-      } else if (polishStages === "review") {
-        // Standalone review audits the current proposal when one exists (so the
-        // verdict describes the displayed resume), else the base resume.
-        await runReviewStage(ctx, result?.suggestedChanges ?? [], signal);
-      } else {
-        // both: tailor first, then review only if tailor succeeded.
-        const suggestions = await runTailorStage(ctx, signal);
-        if (suggestions !== null) {
-          await runReviewStage(ctx, suggestions, signal, true);
-        } else {
-          // Tailor fell back to the local draft (done+warn). Review couldn't run
-          // for the same reason, and the fit is shown as a local estimate — so
-          // present review as the SAME done+warn fallback card as Tailor/Distill
-          // (uniform reason, "local estimate shown", Retry), not a divergent
-          // "Review failed / Skipped" card.
-          setPolishProgress((prev) => ({
-            ...prev,
-            review: { status: "done", noteTone: "warn", errorHeadline: AI_UNAVAILABLE, note: "local estimate shown" }
-          }));
-        }
-      }
-    } catch (error) {
-      // The only throw that reaches here is a Stop abort (stage runners catch
-      // their own request errors and surface them as a failed stage).
-      if (signal.aborted) handlePolishStopped();
-      // Defensive: stage runners convert their own request errors into a failed
-      // stage, so only a Stop abort should reach here. Surface anything else as a
-      // status toast rather than re-throwing out of this onClick-driven handler.
-      else setPolishStatus(error instanceof Error ? error.message : "Unexpected polish error.");
-    } finally {
-      setIsPolishing(false);
-      polishAbortRef.current = null;
-    }
-  }
-
-  // Retry a failed stage — a thin dispatcher over the shared stage runners. For
-  // "tailor": re-runs the tailor stage (and if polishStages === "both" and it
-  // succeeds, runs review). For "review": re-runs review with the current
-  // result's suggestedChanges (the server-sanitized list from the prior tailor —
-  // never re-derives from scope).
-  async function retryStage(stage: "tailor" | "review") {
-    if (isPolishing) return;
-    const ctx = buildPolishContext();
-    if (!ctx) return;
-
-    const controller = new AbortController();
-    polishAbortRef.current = controller;
-    const { signal } = controller;
-    setIsPolishing(true);
-    try {
-      if (stage === "tailor") {
-        const suggestions = await runTailorStage(ctx, signal);
-        // If polishStages === "both", auto-run review after a successful tailor retry.
-        if (suggestions !== null && polishStages === "both") {
-          await runReviewStage(ctx, suggestions, signal, true);
-        }
-      } else {
-        // stage === "review": reuse the server-sanitized suggestedChanges from
-        // the current result (never re-derives from tailorScope).
-        await runReviewStage(ctx, result?.suggestedChanges ?? [], signal);
-      }
-    } catch (error) {
-      if (signal.aborted) handlePolishStopped();
-      // Defensive: stage runners convert their own request errors into a failed
-      // stage, so only a Stop abort should reach here. Surface anything else as a
-      // status toast rather than re-throwing out of this onClick-driven handler.
-      else setPolishStatus(error instanceof Error ? error.message : "Unexpected polish error.");
-    } finally {
-      setIsPolishing(false);
-      polishAbortRef.current = null;
-    }
-  }
+  // The workspace / base-resume cluster (state + handlers) lives in
+  // useWorkspaceResume; App passes in the editor/export/dialog dependencies it
+  // needs and reads back the workspace state + the handlers ResumeMenu wires up.
+  const {
+    baseResumeName,
+    baseResumeOptions,
+    baseResumeHistory,
+    workspaceStatus,
+    isSavingBaseResume,
+    loadWorkspace,
+    removeBaseResume,
+    restoreBaseResume,
+    saveCurrentAsBaseResume,
+    loadBaseResumeVersion,
+    handleFileUpload
+  } = useWorkspaceResume({
+    confirm,
+    confirmReplaceEditor,
+    resumeEdited,
+    seedResumeEditor,
+    fileName,
+    setResumeText,
+    setFileName,
+    setResult,
+    applyCoverLetter,
+    setFileError,
+    setFileStatus,
+    setPolishStatus,
+    resetExportStatuses,
+    setTexStatus,
+    clearAutosaveDraft,
+    setPendingAutosaveDraft,
+    renderTexFromSchema,
+    selectedTemplateId,
+    docStyle,
+    currentResumeText,
+    resumeText,
+    editedResume
+  });
 
   // Auto-tailor: when an extension import requested it (toggle on), jump straight to
   // polish as soon as a resume is ready. Scoped to the imported job's text — if the
@@ -1576,329 +730,49 @@ function App() {
     return jobTracking;
   }
 
-  // DONE-card state for a distill run, calling out AI success vs local fallback.
-  // The fallback shares the reason-line shape with the tailor/cover/review
-  // fallbacks and uses the same uniform reason, so every fallback card in a flow
-  // reads identically: a bold "AI unavailable" + "local brief shown".
-  const distillDoneState = (source: "ai" | "local"): StageState =>
-    source === "ai"
-      ? { status: "done", note: "Distilled with AI", noteTone: "ok" }
-      : { status: "done", noteTone: "warn", errorHeadline: AI_UNAVAILABLE, note: "local brief shown" };
-
-  async function handleExtractFromLink() {
-    const url = jobUrl.trim();
-    if (!url || isExtractingLink) return;
-    setIsExtractingLink(true);
-    setDistillRetrySource("link");
-    setDistillProgress({ status: "running" });
-    setDistillProgressVisible(true);
-    setLinkStatus("Fetching the posting…");
-    try {
-      const response = await fetch("/api/import-job", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url })
-      });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error ?? "Could not read that link.");
-      // AI distiller (server-side keys) trims the scraped page to the parts worth
-      // polishing and extracts tracker details; falls back to the deterministic
-      // engine on any failure so a link import always produces a brief.
-      setLinkStatus("Distilling the posting…");
-      const { extracted, source } = await distillJobPosting(String(data.text ?? ""), {
-        url,
-        aiRequest: distillRequestFields()
-      });
-      const relevant = extracted.tailoringText;
-      if (relevant.trim().length < 40) {
-        setLinkStatus("Fetched the page, but found too little job text. Paste the description instead.");
-        setDistillProgress({
-          status: "failed",
-          errorHeadline: "Missing input",
-          error: "Too little job text on that page — paste the description instead."
-        });
-        setImportedJob(null);
-        return;
-      }
-      setJobDescription(relevant);
-      setImportedJob({
-        url,
-        tailoringText: relevant.trim(),
-        tracking: extracted.tracking,
-        manualReviewFields: extracted.manualReviewFields
-      });
-      setResult(null);
-      applyCoverLetter("");
-      const missing = compactManualReviewFields(extracted.manualReviewFields);
-      setLinkStatus(
-        `Distilled ${relevant.length.toLocaleString()} compact characters for tailoring and captured ${presentTrackingFields(
-          extracted.tracking
-        )}${missing ? `; add ${missing} manually if needed` : ""}.`
-      );
-      setDistillProgress(distillDoneState(source));
-    } catch (error) {
-      const message = error instanceof Error ? error.message.replace(/[.。]\s*$/, "") : "request failed";
-      setImportedJob(null);
-      setLinkStatus(`Couldn't extract from the link: ${message}. Paste the description instead.`);
-      const f = classifyFailure(error);
-      setDistillProgress({
-        status: "failed",
-        errorHeadline: f.headline,
-        error: `${f.detail}. Paste the description instead.`
-      });
-    } finally {
-      setIsExtractingLink(false);
-    }
-  }
-
-  // Distill whatever the user pasted into the Job posting box through the same
-  // pipeline the link path uses. Covers JDs the server can't fetch (Workday
-  // wd1 tenants, ADP, anything JS-only): user copies the visible page text from
-  // their browser, pastes it in, and gets the structured brief plus tracking.
-  async function handleDistillPaste() {
-    const raw = jobDescription;
-    if (!raw.trim() || isExtractingLink) return;
-    // Strip HTML tags only if the paste looks tag-shaped (text from "View
-    // source" or a copied editor block). Plain copy-paste from a rendered page
-    // doesn't need this and passes through untouched.
-    const looksLikeHtml = /<\/?[a-z][\s\S]{0,40}>/i.test(raw) && raw.split("<").length > 5;
-    const cleaned = looksLikeHtml
-      ? raw
-          .replace(/<style[\s\S]*?<\/style>/gi, " ")
-          .replace(/<script[\s\S]*?<\/script>/gi, " ")
-          .replace(/<\/(p|div|li|h[1-6]|ul|ol|tr|section|header|footer|article)>/gi, "\n")
-          .replace(/<li[^>]*>/gi, "\n• ")
-          .replace(/<br\s*\/?>/gi, "\n")
-          .replace(/<[^>]+>/g, " ")
-          .replace(/&nbsp;/gi, " ")
-          .replace(/&amp;/gi, "&")
-          .replace(/&lt;/gi, "<")
-          .replace(/&gt;/gi, ">")
-          .replace(/&quot;|&#39;/gi, '"')
-      : raw;
-    if (cleaned.trim().length < 80) {
-      setLinkStatus("Paste a bit more job text first — distillation needs a real description to work from.");
-      return;
-    }
-    setIsExtractingLink(true);
-    setDistillRetrySource("paste");
-    setDistillProgress({ status: "running" });
-    setDistillProgressVisible(true);
-    setLinkStatus("Distilling the paste…");
-    try {
-      const { extracted, source } = await distillJobPosting(cleaned, {
-        url: jobUrl.trim() || undefined,
-        aiRequest: distillRequestFields()
-      });
-      const relevant = extracted.tailoringText;
-      if (relevant.trim().length < 40) {
-        setLinkStatus("Couldn't find enough job-relevant text in the paste. Check that you copied the description, not just the page header.");
-        setDistillProgress({
-          status: "failed",
-          errorHeadline: "Missing input",
-          error: "Couldn't find enough job-relevant text in the paste."
-        });
-        return;
-      }
-      setJobDescription(relevant);
-      setImportedJob({
-        url: jobUrl.trim(),
-        tailoringText: relevant.trim(),
-        tracking: extracted.tracking,
-        manualReviewFields: extracted.manualReviewFields
-      });
-      setResult(null);
-      applyCoverLetter("");
-      const missing = compactManualReviewFields(extracted.manualReviewFields);
-      setLinkStatus(
-        `Distilled ${relevant.length.toLocaleString()} compact characters from the paste and captured ${presentTrackingFields(
-          extracted.tracking
-        )}${missing ? `; add ${missing} manually if needed` : ""}.`
-      );
-      setDistillProgress(distillDoneState(source));
-    } catch (error) {
-      // distillJobPosting is built to fall back to local rather than throw, so
-      // this only fires on an unexpected error — surface it instead of leaving
-      // the card stuck on "running".
-      const message = error instanceof Error ? error.message.replace(/[.。]\s*$/, "") : "distillation failed";
-      setLinkStatus(`Couldn't distill the paste: ${message}.`);
-      const f = classifyFailure(error);
-      setDistillProgress({ status: "failed", errorHeadline: f.headline, error: f.detail });
-    } finally {
-      setIsExtractingLink(false);
-    }
-  }
-
-  // Retry an extension-import distill by re-distilling its stored raw text
-  // through the CLIENT /api/distill path — the extension import is event-driven
-  // with nothing to re-run otherwise, so this gives its card a working Retry.
-  async function retryImportDistill() {
-    const payload = distillImportRef.current;
-    if (!payload || isExtractingLink) return;
-    setIsExtractingLink(true);
-    setDistillProgress({ status: "running" });
-    setDistillProgressVisible(true);
-    try {
-      const { extracted, source } = await distillJobPosting(payload.text, {
-        url: payload.url || undefined,
-        aiRequest: distillRequestFields()
-      });
-      const relevant = extracted.tailoringText;
-      if (relevant.trim().length < 40) {
-        setDistillProgress({
-          status: "failed",
-          errorHeadline: "Missing input",
-          error: "Imported posting had too little job text — paste manually."
-        });
-        return;
-      }
-      // Keep jobUrl in sync (payload.url is already trimmed) so the jobTracking
-      // memo's importedJob.url === jobUrl.trim() guard holds after the retry.
-      setJobUrl(payload.url);
-      setJobDescription(relevant);
-      setImportedJob({
-        url: payload.url,
-        tailoringText: relevant.trim(),
-        tracking: extracted.tracking,
-        manualReviewFields: extracted.manualReviewFields
-      });
-      setResult(null);
-      applyCoverLetter("");
-      setDistillProgress(distillDoneState(source));
-    } catch (error) {
-      const f = classifyFailure(error);
-      setDistillProgress({ status: "failed", errorHeadline: f.headline, error: f.detail });
-    } finally {
-      setIsExtractingLink(false);
-    }
-  }
-
-  // The actual apply: save the application, snapshot artifacts, update UI.
-  // Called directly when the user has opted to skip the download dialog, or
-  // from the dialog's Download / Apply-only callbacks.
-  function commitApply() {
-    if (!jobUrl.trim() && !jobDescription.trim()) return;
-    const sr = result?.strictReview;
-    const hasStructuredSuggestions = Boolean(result?.suggestedChanges?.length);
-    const acceptedStructuredSuggestions =
-      hasStructuredSuggestions &&
-      Boolean(result?.polishedText) &&
-      normalizeResumeSnapshot(currentResumeText) !== normalizeResumeSnapshot(result?.polishedText ?? "");
-    const usedBase = !result?.polishedText || (hasStructuredSuggestions && !acceptedStructuredSuggestions);
-    const sentResume = currentResumeText || resumeText || result?.polishedText || "";
-    const existing = findForTarget(jobUrl, jobDescription);
-    const now = new Date().toISOString();
-    const status: ApplicationStatus =
-      existing && existing.status && existing.status !== "interested" ? existing.status : "applied";
-    const draft = makeApplicationDraft(jobUrl, jobDescription, currentJobTracking());
-    const app: Application = {
-      ...draft,
-      id: existing?.id ?? draft.id,
-      status,
-      appliedAt: existing?.appliedAt ?? now,
-      fitScore: headlineScore ?? result?.score.overall ?? null,
-      baseFitScore: fitComparison?.base ?? null,
-      tailoredFitScore: fitComparison?.tailored ?? null,
-      fitScoreSource: fitComparison?.source ?? null,
-      templateId: selectedTemplateId,
-      resumeData: editedResume ?? undefined,
-      polishedText: sentResume,
-      resumeUsed: usedBase ? "base" : "tailored",
-      coverLetterText: coverLetterText || "",
-      missingRequiredSkills: result?.missingRequiredSkills?.length ? result.missingRequiredSkills : undefined,
-      review: sr
-        ? {
-            verdict: sr.verdict,
-            verdictReason: sr.verdictReason,
-            riskFlags: sr.riskFlags.map((r) => ({ risk: r.risk, suggestion: r.suggestion })),
-            gaps: sr.gaps.map((g) => ({
-              gap: g.gap,
-              severity: g.severity,
-              evidenceType: g.evidenceType,
-              canHonestlyAdd: g.canHonestlyAdd,
-              evidence: g.evidence,
-              suggestedEdit: g.suggestedEdit
-            })),
-            recommendation: {
-              applyAsIs: sr.recommendation.applyAsIs,
-              reason: sr.recommendation.reason,
-              coverLetterAngle: sr.recommendation.coverLetterAngle,
-              topEdits: sr.recommendation.topEdits
-            }
-          }
-        : undefined
-    };
-    upsertApplication(app);
-    // Edits are now tracked in the application record and an artifact is saved to
-    // disk — clear the recovery draft AND mark the editor clean so the before-unload
-    // guard stops warning. A later edit re-flips `dirty` and re-arms the guard.
-    clearAutosaveDraft();
-    markResumeClean();
-    setTexStatus(`Applied — saved "${existing?.title || app.title}" to Applications (${usedBase ? "original" : "tailored"} resume).`);
-    setActiveOutputTab("applications");
-    setExpandedApplicationId(existing?.id ?? app.id);
-    void saveAppliedResumeArtifacts(existing?.id ?? app.id, existing?.title || app.title);
-  }
-
-  // Apply button handler: if the user has opted to skip the dialog, commit
-  // immediately; otherwise show the pre-apply dialog for format/base choice.
-  function handleApply() {
-    if (!jobUrl.trim() && !jobDescription.trim()) return;
-    if (!canExportResume) {
-      commitApply();
-      return;
-    }
-    const existing = findForTarget(jobUrl, jobDescription);
-    const draft = makeApplicationDraft(jobUrl, jobDescription, currentJobTracking());
-    setApplyDownloadPrompt({ label: existing?.title || draft.title });
-  }
-
-  function handleApplyDownloadPick(format: ExportFormat, makeDefault: boolean, fileBaseName: string) {
-    if (makeDefault) {
-      saveDefaultExportFormat(format);
-      setDefaultExportFormat(format);
-    }
-    setApplyDownloadPrompt(null);
-    commitApply();
-    const base = fileBaseName || undefined;
-    if (format === "pdf-latex") void handleDownloadLatexPdf(base);
-    else if (format === "pdf-clean") handlePrintResume(base);
-    else handleDownloadTex(base);
-  }
-
-  function handleApplyOnly() {
-    setApplyDownloadPrompt(null);
-    commitApply();
-  }
-
-  // Render the current resume to .tex/.pdf and persist them under the applied
-  // application, then attach the returned metadata. Best-effort: Apply has
-  // already succeeded, so a failed render/compile is swallowed (tex-only is a
-  // valid outcome when Tectonic is missing).
-  async function saveAppliedResumeArtifacts(id: string, label: string) {
-    try {
-      const artifacts = await getResumeArtifacts();
-      if (!artifacts) return;
-      const res = await fetch(`/api/applications/${encodeURIComponent(id)}/resume`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          tex: artifacts.tex,
-          pdfBase64: artifacts.pdfBase64 ?? undefined,
-          fileName: artifacts.fileName,
-          templateId: artifacts.templateId
-        })
-      });
-      const data = await res.json();
-      if (!res.ok || !data.resumeArtifacts) return;
-      patchApplication(id, { resumeArtifacts: data.resumeArtifacts });
-      setTexStatus(
-        `Applied "${label}" — saved resume ${data.resumeArtifacts.hasPdf ? ".tex + PDF" : ".tex (install Tectonic to also save the PDF)"}.`
-      );
-    } catch {
-      // Best-effort: the application is already saved.
-    }
-  }
+  // The Apply flow (download-prompt state + commitApply/handleApply/
+  // handleApplyDownloadPick/handleApplyOnly/saveAppliedResumeArtifacts) lives in
+  // useApplyFlow; App passes in the job/resume/result/export/duplicate-guard
+  // dependencies it needs and reads back the download-prompt state + handlers
+  // the Apply button and ApplyDownloadDialog wire up.
+  const {
+    applyMergeTargetRef,
+    applyDownloadPrompt,
+    setApplyDownloadPrompt,
+    defaultExportFormat,
+    handleApply,
+    handleApplyDownloadPick,
+    handleApplyOnly
+  } = useApplyFlow({
+    jobUrl,
+    jobDescription,
+    jobRawText,
+    result,
+    currentResumeText,
+    resumeText,
+    editedResume,
+    selectedTemplateId,
+    coverLetterText,
+    headlineScore,
+    fitComparison,
+    pipelineAiUsage,
+    applications,
+    findForTarget,
+    upsertApplication,
+    patchApplication,
+    currentJobTracking,
+    resolveApplyDuplicate: duplicateGuard.resolveApplyDuplicate,
+    canExportResume,
+    handlePrintResume,
+    handleDownloadTex,
+    handleDownloadLatexPdf,
+    getResumeArtifacts,
+    clearAutosaveDraft,
+    markResumeClean,
+    setTexStatus,
+    setActiveOutputTab,
+    setExpandedApplicationId
+  });
 
   async function handleLoadApplication(app: Application) {
     if (resumeEdited) {
@@ -1910,12 +784,20 @@ function App() {
     setJobDescription(app.jobDescription || "");
     setJobUrl(app.jobUrl || "");
     setImportedJob(null);
+    // Restore a consistent AI-usage/raw-text pair regardless of which branch
+    // below runs — a tracker-restore must not carry over the PREVIOUS working
+    // job's provider attribution or raw text.
+    setPipelineAiUsage(app.aiUsage ?? { distill: { source: "none" } });
+    setJobRawText(app.rawJobDescription ?? "");
+    // Deliberately reloading a tracked application for another pass: pre-ack
+    // its own record so the polish/apply duplicate gates don't nag that it
+    // "already exists" — merging back into it is the point.
+    duplicateGuard.ackApplication(app);
     if (app.resumeData || app.polishedText) {
       const restoredResume = app.polishedText || (app.resumeData ? serializeResumeData(app.resumeData) : "");
       const restoredAnalysis = analyzeResumeText(restoredResume, app.jobDescription || "");
       setResumeText(restoredResume);
       setFileName("");
-      setResumeBlocks([]);
       setFileStatus("Loaded the applied resume snapshot into the editor. Save it as base if you want it at startup.");
       // Single-owner cover letter: show the saved letter alongside its restored
       // resume (Materials/Copy/save read this hook state, not result).
@@ -1930,10 +812,6 @@ function App() {
           typeof app.baseFitScore === "number" && typeof app.tailoredFitScore === "number"
             ? { source: app.fitScoreSource === "ai" ? "ai" : "local", base: app.baseFitScore, tailored: app.tailoredFitScore }
             : undefined,
-        strengths: app.review?.verdictReason ? [app.review.verdictReason] : ["Loaded from pipeline snapshot."],
-        fixes: app.review?.recommendation?.topEdits?.length
-          ? app.review.recommendation.topEdits
-          : ["Review against the current job text before sending again."],
         missingRequiredSkills: missingRequiredSkillsFromApplication(app)
       });
       if (app.resumeData) {
@@ -1962,6 +840,19 @@ function App() {
     }
     seedResumeEditor(draft.resumeText, "");
     applyCoverLetter(""); // resume swapped — clear any cover from a prior context
+    // The autosave doesn't carry the job description/URL, so a saved
+    // pipelineAiUsage/rawText only applies when the SAME job target is still
+    // loaded — restoring onto an unrelated job would misattribute stale
+    // AI-usage. Gate on the draft's job-key hash when present (exact target
+    // identity); fall back to the role · company label for older drafts (a
+    // label collides across reposts of the same role, so it's belt-only).
+    const provenanceApplies = draft.jobKeyHash
+      ? draft.jobKeyHash === duplicateGuard.currentJobKeyHash()
+      : Boolean(draft.jobLabel && draft.jobLabel === _autosaveJobLabel);
+    if (provenanceApplies) {
+      if (draft.pipelineAiUsage) setPipelineAiUsage(draft.pipelineAiUsage);
+      if (draft.jobRawText) setJobRawText(draft.jobRawText);
+    }
     clearAutosaveDraft();
     setPendingAutosaveDraft(null);
     setFileStatus(`Restored unsaved draft${draft.jobLabel ? ` (${draft.jobLabel})` : ""}.`);
@@ -2017,17 +908,6 @@ function App() {
 
   // ----- Render -----
 
-  // Resolve the distill card's Retry to the live handler for the last action, so
-  // it re-runs against the CURRENT url / paste rather than a stale captured one.
-  const distillRetry =
-    distillRetrySource === "link"
-      ? handleExtractFromLink
-      : distillRetrySource === "paste"
-        ? handleDistillPaste
-        : distillRetrySource === "import"
-          ? retryImportDistill
-          : undefined;
-
   return (
     <div className="app-shell">
       <ViewportGate />
@@ -2062,7 +942,7 @@ function App() {
         jobControl={
           <JobMenu
             jobDescription={jobDescription}
-            setJobDescription={setJobDescription}
+            setJobDescription={handleManualJobDescriptionChange}
             jobUrl={jobUrl}
             setJobUrl={setJobUrl}
             onExtractFromLink={handleExtractFromLink}
@@ -2076,63 +956,19 @@ function App() {
           <AiMenu>
             {/* Pipeline order: Distill → Tailor → Review. Each stage is its own
                 concrete provider; the segmented buttons copy settings between them. */}
-            <ProviderSection
-              stage="distill"
-              title="Distill"
-              provider={distillProvider}
-              onProviderChange={handleDistillProviderChange}
-              apiKey={distillApiKey}
-              setApiKey={setDistillApiKey}
-              apiBaseUrl={distillApiBaseUrl}
-              setApiBaseUrl={setDistillApiBaseUrl}
-              selectedModel={distillSelectedModel}
-              setSelectedModel={setDistillSelectedModel}
-              customModel={distillCustomModel}
-              setCustomModel={setDistillCustomModel}
-              cliReasoningEffort={distillCliReasoningEffort}
-              setCliReasoningEffort={setDistillCliReasoningEffort}
-              open={sectionOpen.distill}
-              onToggle={() => toggleSection("distill")}
-              onCopyFrom={(from) => copyStage(from, "distill")}
-            />
-            <ProviderSection
-              stage="tailor"
-              title="Tailor"
-              provider={aiProvider}
-              onProviderChange={handleProviderChange}
-              apiKey={apiKey}
-              setApiKey={setApiKey}
-              apiBaseUrl={apiBaseUrl}
-              setApiBaseUrl={setApiBaseUrl}
-              selectedModel={selectedModel}
-              setSelectedModel={setSelectedModel}
-              customModel={customModel}
-              setCustomModel={setCustomModel}
-              cliReasoningEffort={cliReasoningEffort}
-              setCliReasoningEffort={setCliReasoningEffort}
-              open={sectionOpen.tailor}
-              onToggle={() => toggleSection("tailor")}
-              onCopyFrom={(from) => copyStage(from, "tailor")}
-            />
-            <ProviderSection
-              stage="review"
-              title="Review"
-              provider={auditProvider}
-              onProviderChange={handleAuditProviderChange}
-              apiKey={auditApiKey}
-              setApiKey={setAuditApiKey}
-              apiBaseUrl={auditApiBaseUrl}
-              setApiBaseUrl={setAuditApiBaseUrl}
-              selectedModel={auditSelectedModel}
-              setSelectedModel={setAuditSelectedModel}
-              customModel={auditCustomModel}
-              setCustomModel={setAuditCustomModel}
-              cliReasoningEffort={auditCliReasoningEffort}
-              setCliReasoningEffort={setAuditCliReasoningEffort}
-              open={sectionOpen.review}
-              onToggle={() => toggleSection("review")}
-              onCopyFrom={(from) => copyStage(from, "review")}
-            />
+            {STAGE_SECTIONS.map(({ id, title }) => (
+              <ProviderSection
+                key={id}
+                stage={id}
+                title={title}
+                config={stages[id]}
+                onChange={(patch) => updateStage(id, patch)}
+                onProviderChange={(provider) => changeStageProvider(id, provider)}
+                open={sectionOpen[id]}
+                onToggle={() => toggleSection(id)}
+                onCopyFrom={(from) => copyStage(from, id)}
+              />
+            ))}
           </AiMenu>
         }
         polishControl={
@@ -2316,6 +1152,7 @@ function App() {
               onDelete={handleDeleteApplication}
               onAddApplication={handleAddApplication}
               onRefresh={refreshApplications}
+              onMergeApplications={mergeApplications}
             />
           ) : null}
 
@@ -2367,7 +1204,13 @@ function App() {
           defaultFormat={defaultExportFormat}
           defaultFileBaseName={resumeDownloadName("pdf").replace(/\.pdf$/i, "")}
           onDownload={handleApplyDownloadPick}
-          onSkip={() => setApplyDownloadPrompt(null)}
+          onSkip={() => {
+            // True cancel path (backdrop click / × / Escape) — abandons the
+            // whole apply without committing, so any duplicate-merge target
+            // this flow identified must not leak into a later apply.
+            applyMergeTargetRef.current = null;
+            setApplyDownloadPrompt(null);
+          }}
           onApplyOnly={handleApplyOnly}
         />
       ) : null}

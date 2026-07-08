@@ -1,6 +1,7 @@
-import { BriefcaseBusiness, CalendarClock, ClipboardCheck, ExternalLink, Eye } from "lucide-react";
+import { BriefcaseBusiness, CalendarClock, ClipboardCheck, Copy, ExternalLink, Eye } from "lucide-react";
 import type { Application, ApplicationSource, ApplicationStatus } from "../../hooks/useApplications";
 import { APPLICATION_SOURCES } from "../../hooks/useApplications";
+import type { DuplicateGroup } from "../../lib/jobIdentity";
 import {
   BOARD_STATUSES,
   STATUS_LABEL,
@@ -8,8 +9,18 @@ import {
   displayCompany,
   displayRole,
   appFitVerdict,
+  formatCompactDate,
+  hostLabel,
   nextAction
 } from "../../lib/applicationDisplay";
+import { describeProviderModel } from "../../config/aiOptions";
+
+const AI_USAGE_STAGES: { key: string; label: string }[] = [
+  { key: "distill", label: "Distill" },
+  { key: "tailor", label: "Tailor" },
+  { key: "review", label: "Review" },
+  { key: "cover", label: "Cover" }
+];
 
 type TrackerInspectorProps = {
   selected: Application | null;
@@ -20,6 +31,9 @@ type TrackerInspectorProps = {
   onPreviewResume: (app: Application) => void;
   onLoad: (app: Application) => void;
   onDelete: (id: string, title: string) => void;
+  // The duplicate group containing `selected`, if any (undefined when not a member).
+  duplicateGroup?: DuplicateGroup<Application>;
+  onReviewDuplicates?: () => void;
 };
 
 export function TrackerInspector({
@@ -30,7 +44,9 @@ export function TrackerInspector({
   onOpenApplication,
   onPreviewResume,
   onLoad,
-  onDelete
+  onDelete,
+  duplicateGroup,
+  onReviewDuplicates
 }: TrackerInspectorProps) {
   if (!selected) {
     return (
@@ -49,6 +65,19 @@ export function TrackerInspector({
     ? "Estimated"
     : "Not scored";
   const safeJobUrl = /^https?:\/\//i.test(selected.jobUrl.trim()) ? selected.jobUrl.trim() : "";
+
+  // Other members of the selected app's duplicate group, each paired with the
+  // edge (evidence) that connects it to the selected app.
+  const duplicateOthers = duplicateGroup
+    ? duplicateGroup.applications
+        .filter((app) => app.id !== selected.id)
+        .map((app) => {
+          const edge = duplicateGroup.edges.find(
+            (e) => (e.a === selected.id && e.b === app.id) || (e.a === app.id && e.b === selected.id)
+          );
+          return { app, edge };
+        })
+    : [];
 
   return (
     <>
@@ -110,7 +139,54 @@ export function TrackerInspector({
             <dd>{selected.appliedAt.slice(0, 10)}</dd>
           </div>
         ) : null}
+        {safeJobUrl || selected.sourceUrls?.length ? (
+          <div className="ledger-row">
+            <dt>Found on</dt>
+            <span className="ledger-row__leader" aria-hidden="true" />
+            <dd className="application-chip-list">
+              {[safeJobUrl, ...(selected.sourceUrls ?? []).map((s) => s.url)]
+                // hostLabel enforces the http(s)-only rule: "" filters the entry out.
+                .map((url) => ({ url, host: url ? hostLabel(url) : "" }))
+                .filter(({ host }) => host)
+                .map(({ url, host }) => (
+                  <a key={url} href={url} target="_blank" rel="noreferrer">
+                    {host}
+                  </a>
+                ))}
+            </dd>
+          </div>
+        ) : null}
       </dl>
+
+      {duplicateOthers.length ? (
+        <section className="side-section">
+          <p className="side-section__label"><Copy size={11} aria-hidden="true" /> Possible duplicates · {duplicateOthers.length}</p>
+          <ul className="inspector-duplicates">
+            {duplicateOthers.map(({ app, edge }) => (
+              <li key={app.id} className="inspector-duplicates__item">
+                <span className="inspector-duplicates__title">
+                  {displayCompany(app)} · {displayRole(app)}
+                </span>
+                <span className="inspector-duplicates__meta">
+                  {STATUS_LABEL[app.status]}
+                  {app.appliedAt ? ` · ${formatCompactDate(app.appliedAt)}` : ""}
+                </span>
+                {edge ? (
+                  <span className="inspector-duplicates__evidence">
+                    {edge.confidence !== "exact" ? "Possibly · " : ""}
+                    {edge.evidence.join(" · ")}
+                  </span>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+          {onReviewDuplicates ? (
+            <button type="button" className="secondary-button is-compact" onClick={onReviewDuplicates}>
+              Review &amp; merge
+            </button>
+          ) : null}
+        </section>
+      ) : null}
 
       {/* Sent dossier — only rendered when any of the three data points exist */}
       {(selected.resumeUsed || (selected.resumeArtifacts?.hasTex || selected.resumeArtifacts?.hasPdf) || selected.coverLetterText || selected.applicationAnswers?.length) ? (
@@ -154,6 +230,31 @@ export function TrackerInspector({
                 <dd>{selected.applicationAnswers.length} saved</dd>
               </div>
             ) : null}
+          </dl>
+        </>
+      ) : null}
+
+      {selected.aiUsage ? (
+        <>
+          <div className="inspector-divider" aria-hidden="true" />
+          <p className="inspector-sent__eyebrow">AI usage</p>
+          <dl className="ledger-rows inspector-facts">
+            {AI_USAGE_STAGES.filter(({ key }) => selected.aiUsage?.[key]).map(({ key, label }) => {
+              const usage = selected.aiUsage![key];
+              return (
+                <div className="ledger-row" key={key}>
+                  <dt>{label}</dt>
+                  <span className="ledger-row__leader" aria-hidden="true" />
+                  <dd>
+                    {usage.source === "ai"
+                      ? describeProviderModel(usage.provider ?? "", usage.model ?? "")
+                      : usage.source === "local"
+                      ? "local fallback"
+                      : "not used"}
+                  </dd>
+                </div>
+              );
+            })}
           </dl>
         </>
       ) : null}
