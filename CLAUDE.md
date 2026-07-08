@@ -42,4 +42,4 @@ decide — don't run unsolicited. When running: Chrome is the default tool;
 
 `AGENTS.md` covers resume/job-data privacy in full. Claude-tool-specific
 addition: do not `Read` `.env` to display its contents in chat — to confirm a
-key is present, check `process.env` access patterns in `server.mjs` instead.
+key is present, check `process.env` access patterns in `server.ts` instead.

@@ -97,7 +97,7 @@ form instead so merged history stays consistent.
 - Run the minimum local gate before opening a PR:
 
   ```bash
-  node --check server.mjs
+  npx tsc -p tsconfig.server.json
   npm run build
   ```
 

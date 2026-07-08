@@ -3,8 +3,9 @@ import { ClipboardCheck, Sparkles } from "lucide-react";
 
 type MastheadProps = {
   // Mark the current role as applied and save it to the pipeline, using the
-  // resume draft currently in the editor.
-  onApply: () => void;
+  // resume draft currently in the editor. Runs a duplicate-application scan
+  // first (may await a confirm dialog), hence the async-friendly signature.
+  onApply: () => void | Promise<void>;
   applyDisabled: boolean;
   // Explains why Apply is greyed out (mirrors polishHint).
   applyHint: string;

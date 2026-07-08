@@ -3,7 +3,7 @@
 Operational rules for coding agents working in the Role-Fit AI repository.
 
 Role-Fit AI is a local-first resume-polishing web app: a React 19 + Vite +
-TypeScript frontend with a Node `server.mjs` API layer for AI provider calls.
+TypeScript frontend with a Node `server.ts` API layer for AI provider calls.
 It helps a job seeker tailor a resume to a target job description without
 inventing experience, employers, dates, metrics, education, tools, or
 production outcomes. Framework and dependency versions live in `package.json`.
@@ -126,10 +126,11 @@ Use the relevant docs and repo surfaces by task shape:
   visual QA is flag-first (skip by default; flag real layout/theming risk and
   let the user decide).
 - Server / AI work: read `docs/engineering/ai-server.md`; keep API keys
-  server-side; keep `server.mjs` focused on local serving, job import, DOCX
+  server-side; keep `server.ts` focused on local serving, job import, DOCX
   import/export, workspace storage, and AI provider calls.
-- Resume engine work: keep scoring, keyword extraction, and deterministic
-  fallback rewrite in `src/resumeEngine.ts` or similarly focused helpers.
+- Resume engine work: keep scoring and keyword extraction in
+  `src/resumeEngine.ts` or similarly focused helpers. The only local
+  fallbacks are the distiller and the fit estimate (D011).
 - Testing work: read `docs/engineering/testing.md`; choose checks based on
   affected behavior and blast radius.
 - Git/PR work: read `docs/engineering/git-workflow.md` before naming a branch,
@@ -253,9 +254,9 @@ Read `docs/engineering/testing.md` for full pass criteria.
   preserved. Visual QA is flag-first: skip by default, flag changes with real
   layout/theming risk for the user to decide, never run unsolicited; note when
   it was skipped.
-- Server / AI: `node --check server.mjs` passes; affected routes return the
-  expected status and JSON shape; deterministic fallback still runs when the AI
-  call cannot.
+- Server / AI: `npx tsc -p tsconfig.server.json` passes; affected routes return the
+  expected status and JSON shape; the deterministic distill fallback still
+  runs when the AI call cannot (tailor/review/cover fail plainly — D011).
 - Build: `npm run build` succeeds when frontend source or types changed.
 - Refactors: existing behavior preserved, `npm run build` succeeds, and search
   confirms old symbols are gone.
@@ -271,7 +272,7 @@ Run from the project root.
 - Build: `npm run build`
 - Dev: `npm run dev` (starts the API-backed local server on `PORT` or `5181`)
 - Preview: `npm run preview`
-- Server syntax check: `node --check server.mjs`
+- Server type check: `npx tsc -p tsconfig.server.json` (the server runs under Node's native TypeScript type stripping; this is the syntax + type gate)
 
 Port `5181` is canonical for this project (reserved range `5181-5183`). If
 `5181` is already bound, treat that as a signal the app is already running and

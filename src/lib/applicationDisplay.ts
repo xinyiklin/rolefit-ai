@@ -49,7 +49,7 @@ export function fitScore(app: Application) {
 }
 
 // Score -> tone (fit-color class only). Thresholds MIRROR verdictForScore in
-// server/ai/sanitize.mjs (STRONG FIT >=85, REASONABLE FIT >=70, STRETCH >=46,
+// server/ai/sanitize.ts (STRONG FIT >=85, REASONABLE FIT >=70, STRETCH >=46,
 // DON'T APPLY <46) and verdictFromScore in lib/fitVerdict.ts — keep in sync. The
 // fit LABEL now always comes from the shared verdict vocabulary (appFitVerdict /
 // fitVerdict.ts) so the tracker, review pane, and resume header never disagree.
@@ -164,6 +164,21 @@ export function averageFit(applications: Application[]) {
 
 export function statusCount(applications: Application[], status: ApplicationStatus) {
   return applications.filter((app) => app.status === status).length;
+}
+
+// Compact display host for a posting link: http(s) only — anything else returns
+// "" and the caller skips rendering a link (one safety rule everywhere a stored
+// URL becomes clickable). Strips the leading "www." so boards read as short
+// chips. Shared by TrackerInspector's "Found on" chips and the duplicate-review
+// modal's member links.
+export function hostLabel(url: string): string {
+  const trimmed = url.trim();
+  if (!/^https?:\/\//i.test(trimmed)) return "";
+  try {
+    return new URL(trimmed).hostname.replace(/^www\./, "");
+  } catch {
+    return "";
+  }
 }
 
 // Average fit-score lift from tailoring (tailoredFitScore - baseFitScore), across

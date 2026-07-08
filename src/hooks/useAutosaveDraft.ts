@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { serializeResumeData, type ResumeData } from "../lib/resumeData";
 import { getTabId, liveTabIds } from "../lib/tabPresence";
+import type { StageAiUsage } from "../lib/aiUsage";
 
 // localStorage key PREFIX for the autosaved draft. Each tab namespaces its draft
 // under `${AUTOSAVE_PREFIX}:${tabId}` so concurrent tabs (independent tailoring
@@ -9,7 +10,7 @@ import { getTabId, liveTabIds } from "../lib/tabPresence";
 // a recoverable orphan so an in-flight draft survives the upgrade.
 // Stores ONLY the user's own serialized resume text + a timestamp + a light
 // job-target label. NO job description body, NO API keys, NO secrets.
-export const AUTOSAVE_PREFIX = "rolefit:draftAutosave";
+const AUTOSAVE_PREFIX = "rolefit:draftAutosave";
 const LEGACY_AUTOSAVE_KEY = AUTOSAVE_PREFIX;
 
 // A recovered draft from a CLOSED tab is offered for at most this long. Older
@@ -24,6 +25,17 @@ export type AutosavedDraft = {
   // Light label for the job target — only the distilled role/company strings,
   // never the full JD body.
   jobLabel: string;
+  // Per-stage AI usage snapshot and raw pre-distill JD text, carried so a
+  // reload doesn't lose them while the resume draft itself is being recovered.
+  // Both optional/omittable: an older saved draft (or one from a session that
+  // never captured them) simply restores without these fields.
+  pipelineAiUsage?: Record<string, StageAiUsage>;
+  jobRawText?: string;
+  // Compact hash of the job target's identity (URL + text prefix — see
+  // useDuplicateGuard). Restores gate the provenance fields on it, because the
+  // jobLabel alone (role · company) collides across reposts of the same role.
+  // No JD text is stored, only the hash.
+  jobKeyHash?: string;
 };
 
 function keyForTab(tabId: string): string {
@@ -48,7 +60,12 @@ function parseDraft(raw: string | null): AutosavedDraft | null {
     return {
       resumeText: parsed.resumeText,
       savedAt: parsed.savedAt,
-      jobLabel: typeof parsed.jobLabel === "string" ? parsed.jobLabel : ""
+      jobLabel: typeof parsed.jobLabel === "string" ? parsed.jobLabel : "",
+      ...(parsed.pipelineAiUsage && typeof parsed.pipelineAiUsage === "object"
+        ? { pipelineAiUsage: parsed.pipelineAiUsage }
+        : {}),
+      ...(typeof parsed.jobRawText === "string" ? { jobRawText: parsed.jobRawText } : {}),
+      ...(typeof parsed.jobKeyHash === "string" ? { jobKeyHash: parsed.jobKeyHash } : {})
     };
   } catch {
     return null;
@@ -57,7 +74,7 @@ function parseDraft(raw: string | null): AutosavedDraft | null {
 
 // Write THIS tab's draft. Called inside a debounce, so all serialization happens
 // off the hot render path.
-export function saveAutosaveDraft(draft: AutosavedDraft): void {
+function saveAutosaveDraft(draft: AutosavedDraft): void {
   try {
     localStorage.setItem(keyForTab(getTabId()), JSON.stringify(draft));
   } catch {
@@ -151,13 +168,27 @@ type UseAutosaveDraftArgs = {
   // A short label for the current job target (role + company) — stored as
   // context only, never the full JD body.
   jobLabel: string;
+  // Current per-stage AI usage + raw pre-distill JD text, saved ALONGSIDE the
+  // resume draft (not a separate trigger — the effect still only fires off
+  // dirty/editedResume changes, so these just ride along with whichever
+  // resume-edit write already happens).
+  pipelineAiUsage?: Record<string, StageAiUsage>;
+  jobRawText?: string;
+  // Lazy getter (not a value) so the caller can supply it regardless of hook
+  // declaration order; invoked only inside the debounced write.
+  getJobKeyHash?: () => string;
 };
 
 // Debounced autosave: whenever the editor has unsaved edits, write the
 // serialized resume to localStorage so a reload / crash / close can recover.
 // 1200 ms debounce balances responsiveness against write frequency.
-export function useAutosaveDraft({ editedResume, dirty, jobLabel }: UseAutosaveDraftArgs): void {
+export function useAutosaveDraft({ editedResume, dirty, jobLabel, pipelineAiUsage, jobRawText, getJobKeyHash }: UseAutosaveDraftArgs): void {
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Latest usage/raw-text read inside the debounced write without re-triggering
+  // the effect (and its debounce reset) on every distill/tailor/review tick —
+  // only dirty/editedResume/jobLabel changes should reschedule the write.
+  const latestExtras = useRef({ pipelineAiUsage, jobRawText, getJobKeyHash });
+  latestExtras.current = { pipelineAiUsage, jobRawText, getJobKeyHash };
 
   useEffect(() => {
     // Only autosave when there are actual unsaved edits.
@@ -174,10 +205,14 @@ export function useAutosaveDraft({ editedResume, dirty, jobLabel }: UseAutosaveD
       timerRef.current = null;
       const resumeText = serializeResumeData(editedResume);
       if (!resumeText.trim()) return;
+      const { pipelineAiUsage: usage, jobRawText: rawText, getJobKeyHash: getHash } = latestExtras.current;
       saveAutosaveDraft({
         resumeText,
         savedAt: new Date().toISOString(),
-        jobLabel
+        jobLabel,
+        ...(usage && Object.keys(usage).length ? { pipelineAiUsage: usage } : {}),
+        ...(rawText ? { jobRawText: rawText } : {}),
+        ...(getHash ? { jobKeyHash: getHash() } : {})
       });
     }, 1200);
 

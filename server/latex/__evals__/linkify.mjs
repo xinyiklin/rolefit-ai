@@ -11,8 +11,8 @@
 //
 // Synthetic fixtures only — no personal resume text, no Tectonic/PDF compile.
 
-import { linkify } from "../util.mjs";
-import { parseResumeText } from "../parseResumeText.mjs";
+import { linkify } from "../util.ts";
+import { parseResumeText } from "../parseResumeText.ts";
 
 // [input, expected url (href), expected label (display)]
 const linkCases = [

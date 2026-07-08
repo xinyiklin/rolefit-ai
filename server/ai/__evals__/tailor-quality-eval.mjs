@@ -31,8 +31,8 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { handlePolish } from "../polish.mjs";
-import { extractPlainTextFromLatex } from "../../latex/parseResumeText.mjs";
+import { handlePolish } from "../polish.ts";
+import { extractPlainTextFromLatex } from "../../latex/parseResumeText.ts";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 const PROVIDER = process.env.EVAL_PROVIDER || "claude-cli";

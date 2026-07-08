@@ -22,7 +22,7 @@
 // Exit code is non-zero if any fabrication (skill leaked into the resume) is
 // found, or if a provider/config error blocks the run.
 
-import { handlePolish } from "../polish.mjs";
+import { handlePolish } from "../polish.ts";
 
 const PROVIDER = process.env.EVAL_PROVIDER || "claude-cli";
 const MODEL = process.env.EVAL_MODEL ?? (PROVIDER === "claude-cli" ? "opus" : "");

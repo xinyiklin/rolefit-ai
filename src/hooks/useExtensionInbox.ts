@@ -14,6 +14,9 @@ export type ExtensionImport = {
   url: string;
   fields: Record<string, unknown> | null;
   autoTailor: boolean;
+  // Whether the receiving tab should AI-distill this import. Absent from an
+  // older server response → treated as true (AI distill on, the prior default).
+  distillAi: boolean;
 };
 
 const EXTENSION_IMPORT_PARAM = "extensionImport";
@@ -126,7 +129,14 @@ export function useExtensionInbox(
           if (claimToken) claimActive = false;
           return;
         }
-        const obj = data as { status?: unknown; text?: unknown; url?: unknown; fields?: unknown; autoTailor?: unknown };
+        const obj = data as {
+          status?: unknown;
+          text?: unknown;
+          url?: unknown;
+          fields?: unknown;
+          autoTailor?: unknown;
+          distillAi?: unknown;
+        };
         // "distilling" = the background prepare hasn't finished. Treat ANY other
         // status string without delivered text the same way (keep polling): a
         // newer server may rename or add progress tokens, and an unknown status
@@ -144,7 +154,15 @@ export function useExtensionInbox(
             obj.fields !== null && typeof obj.fields === "object"
               ? (obj.fields as Record<string, unknown>)
               : null;
-          onImportRef.current({ text: obj.text, url: obj.url, fields, autoTailor: obj.autoTailor === true });
+          onImportRef.current({
+            text: obj.text,
+            url: obj.url,
+            fields,
+            autoTailor: obj.autoTailor === true,
+            // Absent → true (the prior, only behavior); only an explicit
+            // `false` turns off client-side AI distillation for this import.
+            distillAi: obj.distillAi !== false
+          });
           // Delivered once — this tab no longer owns an in-flight import, so the
           // hidden-tab hands-off guard is restored; also drop the claim token from
           // the URL so a reload can't re-present a drained token and re-claim.

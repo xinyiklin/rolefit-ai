@@ -46,6 +46,14 @@ const KEY = "rolefit:settings";
 
 const validProviders = new Set<string>(providerOptions.map((option) => option.value));
 
+// The three stages' provider/model/effort fields, in the same [provider, model,
+// effort] shape so one loop can reconcile all of them identically.
+const STAGE_FIELD_GROUPS: Array<[keyof PersistedSettings, keyof PersistedSettings, keyof PersistedSettings]> = [
+  ["aiProvider", "selectedModel", "cliReasoningEffort"],
+  ["auditProvider", "auditSelectedModel", "auditCliReasoningEffort"],
+  ["distillProvider", "distillSelectedModel", "distillCliReasoningEffort"]
+];
+
 // Reconcile persisted values that may be stale (older app version, a renamed
 // provider, a removed model option, or hand-edited storage). An unknown provider
 // would otherwise be shown raw in the menu and silently coerced to OpenAI
@@ -56,58 +64,33 @@ const validProviders = new Set<string>(providerOptions.map((option) => option.va
 // (not truthiness) so a saved "" still reconciles to the provider default; no
 // provider now ships a blank-value model or effort option.
 function coerce(settings: PersistedSettings): PersistedSettings {
-  if (settings.aiProvider && !validProviders.has(settings.aiProvider)) {
-    delete settings.aiProvider;
-    delete settings.selectedModel;
-    delete settings.cliReasoningEffort;
-  }
-  if (settings.aiProvider && settings.selectedModel !== undefined && settings.selectedModel !== "custom") {
-    const models = modelOptionsByProvider[settings.aiProvider] ?? [];
-    if (!models.some((model) => model.value === settings.selectedModel)) {
-      // Fall back to the provider's own default rather than a stale cross-provider id.
-      const fallback = providerOptions.find((option) => option.value === settings.aiProvider)?.model;
-      if (fallback) settings.selectedModel = fallback;
-      else delete settings.selectedModel;
+  // Untyped alias for the mutations below — every field here is a plain string
+  // (or undefined), so indexing through the strongly-typed PersistedSettings
+  // would fight the compiler for no safety benefit.
+  const bag = settings as unknown as Record<string, string | undefined>;
+  for (const [providerKey, modelKey, effortKey] of STAGE_FIELD_GROUPS) {
+    if (bag[providerKey] && !validProviders.has(bag[providerKey] as string)) {
+      delete bag[providerKey];
+      delete bag[modelKey];
+      delete bag[effortKey];
     }
-  }
-  // Same staleness guard for the optional reviewer provider/model.
-  if (settings.auditProvider && !validProviders.has(settings.auditProvider)) {
-    delete settings.auditProvider;
-    delete settings.auditSelectedModel;
-    delete settings.auditCliReasoningEffort;
-  }
-  if (settings.auditProvider && settings.auditSelectedModel !== undefined && settings.auditSelectedModel !== "custom") {
-    const models = modelOptionsByProvider[settings.auditProvider] ?? [];
-    if (!models.some((model) => model.value === settings.auditSelectedModel)) {
-      const fallback = providerOptions.find((option) => option.value === settings.auditProvider)?.model;
-      if (fallback) settings.auditSelectedModel = fallback;
-      else delete settings.auditSelectedModel;
+    if (bag[providerKey] && bag[modelKey] !== undefined && bag[modelKey] !== "custom") {
+      const models = modelOptionsByProvider[bag[providerKey] as AiProviderValue] ?? [];
+      if (!models.some((model) => model.value === bag[modelKey])) {
+        // Fall back to the provider's own default rather than a stale cross-provider id.
+        const fallback = providerOptions.find((option) => option.value === bag[providerKey])?.model;
+        if (fallback) bag[modelKey] = fallback;
+        else delete bag[modelKey];
+      }
     }
-  }
-  // Each stage now holds a concrete provider + model (the old "" = "same as
-  // Tailor" sentinel is gone). Drop any stale empty string — for the model too,
-  // since the hook seeds its default with `?? "..."`, which does NOT replace an
-  // empty string. A legacy "same as primary" reviewer persisted an empty
-  // auditSelectedModel; left in place it would send an empty model, resolve to the
-  // CLI default, and mis-trigger the "reviewed by" attribution.
-  if ((settings.auditProvider as string) === "") delete settings.auditProvider;
-  if ((settings.distillProvider as string) === "") delete settings.distillProvider;
-  if (settings.selectedModel === "") delete settings.selectedModel;
-  if (settings.auditSelectedModel === "") delete settings.auditSelectedModel;
-  if (settings.distillSelectedModel === "") delete settings.distillSelectedModel;
-  // Same staleness guard for the distiller provider/model.
-  if (settings.distillProvider && !validProviders.has(settings.distillProvider)) {
-    delete settings.distillProvider;
-    delete settings.distillSelectedModel;
-    delete settings.distillCliReasoningEffort;
-  }
-  if (settings.distillProvider && settings.distillSelectedModel !== undefined && settings.distillSelectedModel !== "custom") {
-    const models = modelOptionsByProvider[settings.distillProvider] ?? [];
-    if (!models.some((model) => model.value === settings.distillSelectedModel)) {
-      const fallback = providerOptions.find((option) => option.value === settings.distillProvider)?.model;
-      if (fallback) settings.distillSelectedModel = fallback;
-      else delete settings.distillSelectedModel;
-    }
+    // Each stage now holds a concrete provider + model (the old "" = "same as
+    // Tailor" sentinel is gone). Drop any stale empty string — for the model too,
+    // since the hook seeds its default with `?? "..."`, which does NOT replace an
+    // empty string. A legacy "same as primary" reviewer persisted an empty
+    // auditSelectedModel; left in place it would send an empty model, resolve to the
+    // CLI default, and mis-trigger the "reviewed by" attribution.
+    if (bag[providerKey] === "") delete bag[providerKey];
+    if (bag[modelKey] === "") delete bag[modelKey];
   }
   // Section open/collapse map: keep only well-formed boolean fields; drop the rest
   // so a corrupt value can't leave a section stuck. An absent field defaults open.

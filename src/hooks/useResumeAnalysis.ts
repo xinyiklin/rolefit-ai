@@ -1,17 +1,12 @@
 import { useMemo } from "react";
-import {
-  analyzeMatchBreakdown,
-  analyzeResumeText,
-  buildResumeDiff,
-  type PolishedResume
-} from "../resumeEngine";
-import { extractPlainTextFromLatex, type ResumeData } from "../lib/resumeData";
+import { analyzeResumeText, buildResumeDiff, type PolishedResume } from "../resumeEngine";
+import { extractPlainTextFromLatex } from "../lib/resumeData";
 import { stripInlineMarks } from "../lib/inlineMarks";
 import { looksLikeLatex } from "../lib/resumeFormat";
 import { extractJobConstraints } from "../lib/jobConstraints";
 import { VERDICT_LABEL, verdictFromScore, verdictPillClass } from "../lib/fitVerdict";
 import type { StrictReviewVerdict } from "../resume/types";
-import type { FitComparison, ResumeBlock, ResumeBlockKind } from "../sections/shared";
+import type { FitComparison } from "../sections/shared";
 
 export { verdictPillClass };
 
@@ -24,9 +19,9 @@ export type FitVerdict = { verdict: StrictReviewVerdict; label: string; source: 
 
 type UseResumeAnalysisArgs = {
   resumeText: string;
-  combinedJobText: string;
+  jobDescription: string;
   debouncedResumeText: string;
-  debouncedCombinedJobText: string;
+  debouncedJobDescription: string;
   // The current resume as edited in the structured editor (serialized + debounced),
   // falling back to the raw polish output. Drives match/diff/fit so manual edits
   // are scored live. `isEdited` is true once the user has FREELY hand-edited the
@@ -34,12 +29,7 @@ type UseResumeAnalysisArgs = {
   // verdict still describes that proposal (see useResumeEditor `manualEdited`).
   debouncedCurrentResumeText: string;
   isEdited: boolean;
-  // The structured editor model, when seeded. Bullet counts and live-draft
-  // scoring prefer it (via its serialization) over the raw source text, which
-  // may be LaTeX markup the local engine would misread.
-  editedResume: ResumeData | null;
   result: PolishedResume | null;
-  resumeBlocks: ResumeBlock[];
 };
 
 // Pure, read-only derivation of every score/diff/match value the UI shows.
@@ -49,14 +39,12 @@ type UseResumeAnalysisArgs = {
 // handlers, which stay in App).
 export function useResumeAnalysis({
   resumeText,
-  combinedJobText,
+  jobDescription,
   debouncedResumeText,
-  debouncedCombinedJobText,
+  debouncedJobDescription,
   debouncedCurrentResumeText,
   isEdited,
-  editedResume,
-  result,
-  resumeBlocks
+  result
 }: UseResumeAnalysisArgs) {
   // The current tailored resume text: the edited model when present, else the raw
   // polish output. Used by match/diff/fit so the scores track manual edits.
@@ -65,32 +53,10 @@ export function useResumeAnalysis({
   // LaTeX source is scored on its content, not its markup.
   const liveDraftText = debouncedCurrentResumeText || debouncedResumeText;
   const currentAnalysis = useMemo(() => {
-    return debouncedResumeText.trim() && debouncedCombinedJobText.trim()
-      ? analyzeResumeText(liveDraftText, debouncedCombinedJobText)
+    return debouncedResumeText.trim() && debouncedJobDescription.trim()
+      ? analyzeResumeText(liveDraftText, debouncedJobDescription)
       : null;
-  }, [debouncedCombinedJobText, debouncedResumeText, liveDraftText]);
-
-  const resumeBulletCount = useMemo(() => {
-    if (editedResume) {
-      return editedResume.sections.reduce(
-        (count, section) =>
-          // Skills rows and summary paragraphs live in entry/bullet slots but
-          // aren't bullets (the text fallback below counts only "- " lines).
-          section.type === "skills" || section.type === "summary"
-            ? count
-            : count +
-              section.items.reduce((c, item) => c + item.bullets.filter((b) => b.text.trim()).length, 0),
-        0
-      );
-    }
-    return resumeText.split("\n").filter((line) => /^\s*[-*•]\s+/.test(line)).length;
-  }, [editedResume, resumeText]);
-
-  const matchBreakdown = useMemo(() => {
-    const sourceText = result ? tailoredText : liveDraftText;
-    const jobText = result ? combinedJobText : debouncedCombinedJobText;
-    return jobText.trim() ? analyzeMatchBreakdown(sourceText, jobText) : [];
-  }, [combinedJobText, debouncedCombinedJobText, liveDraftText, result, tailoredText]);
+  }, [debouncedJobDescription, debouncedResumeText, liveDraftText]);
 
   // Diff against the base resume's CONTENT: a LaTeX source is reduced to plain
   // text first so the before/after reads as wording changes, not markup noise.
@@ -130,25 +96,15 @@ export function useResumeAnalysis({
         return { source: result.savedFit.source, base: result.savedFit.base, tailored: result.savedFit.tailored, reason: "" };
       }
     }
-    if (!combinedJobText.trim()) return null;
+    if (!jobDescription.trim()) return null;
     // Score the base on its content (same de-LaTeXed text the diff uses) so
     // markup noise doesn't depress the base and inflate the lift.
-    const baseScore = analyzeResumeText(basePlainText, combinedJobText).score.overall;
+    const baseScore = analyzeResumeText(basePlainText, jobDescription).score.overall;
     const tailoredScore = isEdited
-      ? analyzeResumeText(tailoredText, combinedJobText).score.overall
+      ? analyzeResumeText(tailoredText, jobDescription).score.overall
       : result.score.overall;
     return { source: "local", base: baseScore, tailored: tailoredScore, reason: "" };
-  }, [result, basePlainText, combinedJobText, isEdited, tailoredText]);
-
-  const blockStats = useMemo(() => {
-    return resumeBlocks.reduce(
-      (stats, block) => {
-        stats[block.kind] += 1;
-        return stats;
-      },
-      { contact: 0, section: 0, bullet: 0, text: 0 } as Record<ResumeBlockKind, number>
-    );
-  }, [resumeBlocks]);
+  }, [result, basePlainText, jobDescription, isEdited, tailoredText]);
 
   const scoreSource = result ?? currentAnalysis;
   // Headline FIT: the tailored score from the comparison (AI when present, else
@@ -159,7 +115,7 @@ export function useResumeAnalysis({
   // State-aware fallback: name the input that is actually missing instead of
   // a blanket "awaiting resume and job target" (the resume often auto-loads).
   const hasResumeText = resumeText.trim().length > 0;
-  const hasJobText = combinedJobText.trim().length > 0;
+  const hasJobText = jobDescription.trim().length > 0;
   const scoreContext = fitComparison?.source === "ai"
     ? "AI-judged fit (tailored)"
     : result
@@ -193,16 +149,11 @@ export function useResumeAnalysis({
   // deliberately NOT a fit input (the prompt rules keep the verdict about
   // qualifications). Deterministic from the job text, so it's available whether
   // or not strict review ran.
-  const jobConstraints = useMemo(() => extractJobConstraints(combinedJobText), [combinedJobText]);
+  const jobConstraints = useMemo(() => extractJobConstraints(jobDescription), [jobDescription]);
 
   return {
-    currentAnalysis,
-    resumeBulletCount,
-    matchBreakdown,
     resumeDiff,
     fitComparison,
-    blockStats,
-    scoreSource,
     headlineScore,
     scoreContext,
     fitVerdict,

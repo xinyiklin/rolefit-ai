@@ -27,7 +27,7 @@ _Screenshots use demo workspace data._
 
 - **Multi-format resume I/O** — ingest `.docx`, `.tex` (Jake's-style), or plain text; paste extracted PDF text when the original file is only available as PDF.
 - **Job-link import** — paste a posting URL and pull the description in one click: Workday-aware (reads its CXS JSON API for `/job/` and `/details/` links), with a generic HTML→text fallback for other boards. The posting is distilled before polishing — **AI-first** via the configured provider (anti-fabrication grounded server-side), with the deterministic engine as an offline fallback — keeping role intro / responsibilities / requirements / preferred qualifications while dropping empty bullets, duplicated ATS title furniture, low-value Workday metadata, apply/share/navigation rows, company/culture marketing, salary pills, benefits/perks, pay-transparency, and EEO/legal boilerplate. The link itself is kept only for pipeline tracking and is **never sent to the model**.
-- **Browser extension (Chrome/Firefox)** — on any job posting, click the toolbar icon for an instant **local fit score** (a keyword-overlap estimate against your base resume), **matched vs missing** keywords, a check on whether you've **already tracked or applied** to that exact posting, and a one-click **Import** that opens a fresh RoleFit tab, distills the page into that tab's Job field server-side, and keeps any existing tailoring session untouched — with an optional **Tailor automatically** toggle that jumps straight to polish once your base resume is loaded. Manifest V3; the extension talks only to your local `http://localhost:5181` server, while AI-backed import/polish still uses whichever local CLI, hosted API, or local model you configure. See [Browser extension](#browser-extension).
+- **Browser extension (Chrome/Firefox)** — on any job posting, click the toolbar icon for an instant **local fit score** (a keyword-overlap estimate against your base resume), **matched vs missing** keywords, a check on whether you've **already tracked or applied** to that posting, and a one-click **Import** that opens a fresh RoleFit tab, lets the server prepare the raw page text, then has that tab distill it with its own Distill provider before loading the Job field — with optional **Polish automatically** and **Distill with AI** toggles. Manifest V3; the extension talks only to your local `http://localhost:5181` server, while AI-backed import/polish still uses whichever local CLI, hosted API, or local model you configure. See [Browser extension](#browser-extension).
 - **Subscription-friendly, multi-provider AI** — the default is the **Claude Code CLI** path (any **Claude Pro or Max** plan), with the other **account-backed CLI tools** (`Codex CLI`, `Antigravity CLI`) running on your existing **ChatGPT** or **Google Antigravity** account — including their **free tiers** — instead of per-token billing, and **hosted-API backends** (OpenAI, Anthropic, Gemini, OpenRouter, Groq, Together, Mistral, local Ollama) available behind the same interface. The AI menu keeps separate provider/model controls for Distill, Tailor, and Review, with copy buttons when you want all stages aligned.
 - **Fit scoring + 4-category keyword gap analysis** — required experience, knowledge, required skills, technical tools.
 - **Strict recruiter review mode** — verdict (STRONG FIT / REASONABLE FIT / STRETCH / DON'T APPLY), base-vs-tailored fit scores, gap severity, targeted bullet rewrites, interview risk flags, ready / edits-pending / missing-evidence status, and a cover-letter angle.
@@ -39,7 +39,7 @@ _Screenshots use demo workspace data._
 
 ## Stack
 
-React 19 · TypeScript · Vite · Node.js (`server.mjs` with focused helpers under `server/`) · custom CSS · `lucide-react` icons
+React 19 · TypeScript · Vite · Node.js (`server.ts` with focused helpers under `server/`) · custom CSS · `lucide-react` icons
 
 No SaaS dependencies. Optional integrations: OpenAI · Anthropic · Gemini · OpenRouter · Groq · Together · Mistral · local Ollama · Claude Code CLI · Codex CLI · Antigravity CLI · Tectonic.
 
@@ -107,10 +107,10 @@ A lightweight Chrome/Firefox popup that brings the fit check to the job board. O
 
 - an **estimated fit score** — a local keyword-overlap estimate against your base resume (the real AI verdict still comes from polishing in the app),
 - the **matched vs missing** keywords for that role,
-- whether you've **already tracked or applied** to that exact posting (matched by normalized URL), and
-- a one-click **Import to RoleFit AI** that opens a fresh independent RoleFit tab and distills the page text into that tab's Job field (server-side, AI-first with a deterministic fallback), with an optional **Tailor automatically after import** toggle that runs the polish as soon as the brief and your base resume are ready.
+- whether you've **already tracked or applied** to that posting (matched by ATS posting id, normalized URL, requisition id, or company/title/description overlap), and
+- a one-click **Import to RoleFit AI** that opens a fresh independent RoleFit tab, lets the server prepare the raw page text, then has that tab distill it with its own Distill provider before loading the Job field. **Polish automatically after import** can run polish as soon as the brief and your base resume are ready, and **Distill with AI** can be turned off to use the deterministic parser for that import.
 
-It is Manifest V3 and talks **only** to your local server at `http://localhost:5181`: the routes it calls accept extension-origin requests only (with a reflected, non-wildcard CORS origin), and the inbox the app reads is same-origin and CSRF-guarded. The local server may then run the configured AI distiller for imports, so posting text can go through the app's Distill-stage CLI/API provider unless you choose a local model or the deterministic fallback path. Imports carry a short local claim token so the newly-opened tab receives its own posting, while other open tabs continue their current jobs; the app also shows a small read-only "other sessions" card when another tab is active. The quick score reports only overlap of known tech keywords; it never invents resume content.
+It is Manifest V3 and talks **only** to your local server at `http://localhost:5181`: the routes it calls accept extension-origin requests only (with a reflected, non-wildcard CORS origin), and the inbox the app reads is same-origin and CSRF-guarded. The server-side import step prepares the captured posting text (for example, resolving a fuller board description when possible); the receiving tab then runs the app's Distill stage with its selected CLI/API/local provider, or skips that provider call when **Distill with AI** is off. Imports carry a short local claim token so the newly-opened tab receives its own posting, while other open tabs continue their current jobs; the app also shows a small read-only "other sessions" card when another tab is active. The quick score reports only overlap of known tech keywords; it never invents resume content.
 
 Start the app first (`npm run dev`), then load the unpacked extension:
 
@@ -130,28 +130,31 @@ This folder is gitignored except its README. Personal resumes, TEX/PDF/DOCX file
 ## Project layout
 
 ```
-server.mjs                       # main HTTP server
+server.ts                       # HTTP entry point: route dispatch + CSRF/Host guard
 server/
   ai/                            # /api/polish + /api/distill: polish/distill (routes) + providers,
-                                 #   clients, prompts, sanitize, grounding, json, errors,
-                                 #   coverLetter + applicationAnswers
-  ai-cli/index.mjs               # Claude Code / Codex / Antigravity CLI shell-out
-  applications/index.mjs         # pipeline tracker storage
-  docx.mjs                       # DOCX import helpers (extract → editor)
-  extension/index.mjs            # browser-extension API: quick fit score + applied-status lookup
-  http.mjs                       # JSON/body/fetch utilities
+                                 #   clients, prompts, sanitize, scoring, grounding, eligibilityLexicon,
+                                 #   json, errors, coverLetter + applicationAnswers
+  ai-cli/index.ts               # Claude Code / Codex / Antigravity CLI shell-out
+  applications/                  # pipeline tracker storage (index) + HTTP routes
+  docx.ts                       # DOCX import helpers (extract → editor)
+  extension/                     # browser-extension API routes + quick fit score / applied-status helpers
+  http.ts                       # JSON/body/fetch utilities
+  jobImport.ts                  # /api/import-job: ATS scrapers (Workday/Greenhouse/LinkedIn → text)
   latex/                         # parser + Jake's template renderer + optional Tectonic compile
-  network.mjs                    # job-link fetch + SSRF guards
+  network.ts                    # job-link fetch + SSRF guards
+  workspace.ts                  # base-resume workspace storage + .trash version history
 src/
   App.tsx                        # state + handlers + composition
   config/aiOptions.ts            # provider/model/reasoning options
-  hooks/                          # templates, applications, per-tab autosave/presence, resume export/analysis, AI settings, answers
-  lib/                           # downloads, job extraction/distilling, resume format/block + LaTeX→HTML render helpers
+  hooks/                          # templates, applications, workspace resume, apply flow, polish pipeline,
+                                  #   job intake, per-tab autosave/presence, resume export/analysis, AI settings
+  lib/                           # downloads, job extraction/distilling, resume format + LaTeX→HTML render helpers
   sections/                      # Masthead + nav menus (Resume/Job/AI/Options/Polish) / StudioPane / ExportRail / ReviewRail / ResumeDocument / ResumePrintLayer
   sections/editor/               # structured resume editor (sections, entries, bullets, skills rows)
   sections/tabs/                 # Resume / Materials / Applications / Analytics
   resume/                        # resume engine split: types, text, keywords, scoring, rewrite, diff
-  resumeEngine.ts                # barrel re-exporting src/resume/* (scoring/analysis/deterministic fallback)
+  resumeEngine.ts                # barrel re-exporting src/resume/* (scoring/analysis/normalization)
   styles/                        # per-surface CSS + shared tokens
 extension/                       # Chrome/Firefox MV3 popup (one-click import, fit score, applied status)
 docs/engineering/                # contributor notes (server, UI, git workflow, testing)
@@ -162,7 +165,7 @@ job-search-workspace/            # local-only; gitignored except README
 
 ```bash
 npm run dev        # start API + Vite middleware on :5181
-npm run build      # tsc + vite production build
+npm run build      # tsc (app + server configs) + vite production build
 npm run preview    # serve the production build locally
 ```
 

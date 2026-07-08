@@ -1,6 +1,6 @@
-// Classifies a caught error from a fetch to the LOCAL API (server.mjs / server/ai/*)
+// Classifies a caught error from a fetch to the LOCAL API (server.ts / server/ai/*)
 // into a general, user-safe failure type for the progress-card UI. Server error
-// messages are already user-safe (see server/ai/*.mjs catch blocks) — we mostly
+// messages are already user-safe (see server/ai/*.ts catch blocks) — we mostly
 // pass the message through as `detail` and attach a general `headline`. Browser/
 // fetch-level errors (network failures, TypeErrors) are NOT user-safe, so those
 // get a replaced, friendly detail instead of the raw message.
@@ -25,7 +25,7 @@ export type ClassifiedFailure = {
 };
 
 // Thrown by API-calling code that has an HTTP status to attach (fetch calls to
-// server.mjs / server/ai/* routes). `httpStatus` lets classifyFailure use the
+// server.ts / server/ai/* routes). `httpStatus` lets classifyFailure use the
 // server's response code as a stronger signal than message-sniffing alone.
 export class ApiError extends Error {
   httpStatus?: number;

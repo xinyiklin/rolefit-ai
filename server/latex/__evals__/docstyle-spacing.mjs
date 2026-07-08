@@ -6,7 +6,7 @@
 // Locks the regression-prone path where editor spacing controls must change the
 // generated .tex/PDF-LaTeX rhythm, while the Jake template stays Tectonic-safe.
 
-import { renderResumeTexFromSchema } from "../index.mjs";
+import { renderResumeTexFromSchema } from "../index.ts";
 
 const schema = {
   name: "Candidate Name",

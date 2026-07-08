@@ -1,8 +1,8 @@
 import { useCallback, useState } from "react";
-import { buildAiRequestFields, type AiRequestSettings } from "../lib/aiRequest";
-import { AI_UNAVAILABLE, ApiError } from "../lib/failures";
-import { draftCoverLetter } from "../resumeEngine";
+import { buildStageRequestFields, type StageConfig } from "../lib/aiRequest";
+import { ApiError, classifyFailure } from "../lib/failures";
 import type { StageState } from "../sections/PolishProgress";
+import type { StageAiUsage } from "../lib/aiUsage";
 
 type UseCoverLetterArgs = {
   // Generation input: the CURRENT resume (edited model serialized), so the
@@ -11,26 +11,26 @@ type UseCoverLetterArgs = {
   jobText: string;
   honestContext: string;
   customInstructions: string;
-  aiRequest: AiRequestSettings;
+  aiRequest: StageConfig;
   // Generation fallback only (used when currentResumeText is empty). The letter
   // is a SINGLE owned value — App clears/sets it at the same discrete events it
   // resets `result` (base-resume load, job import, application restore), so there
   // is no auto-reset effect here that could wipe a just-restored letter.
   resumeText: string;
-  // Distilled JD facts so the local fallback draft can name the target company
-  // and role instead of leaving [Company]/[role title] placeholders. Empty when
-  // the distiller could not ground them; the draft keeps the placeholders then.
-  jobCompany?: string;
-  jobRoleTitle?: string;
+  // Reports this generation's AI-usage attribution to the caller's per-stage
+  // tracker (App's pipelineAiUsage.cover), called once per handleGenerateCoverLetter
+  // completion — not on the "add resume/job first" early-return, which never
+  // attempted anything.
+  onUsage?: (usage: StageAiUsage) => void;
 };
 
 // Owns the cover letter as a single piece of state, generated ON DEMAND from the
 // current resume + job via /api/cover-letter — no full polish required. The
 // polish path also feeds this state (App calls setCoverLetterText when a Tailor
 // run drafts one), so the Materials view, Copy, and save-to-application all read
-// one source. Always leaves the user with a usable draft: if the AI letter is
-// blanked (server grounding backstop) or the call fails, it falls back to the
-// deterministic, strictly-grounded local draftCoverLetter.
+// one source. There is no local fallback letter (D011): when the AI letter is
+// blanked (server grounding backstop) or the call fails, the card fails plainly
+// with Retry and any existing letter is left untouched.
 export function useCoverLetter({
   currentResumeText,
   jobText,
@@ -38,12 +38,8 @@ export function useCoverLetter({
   customInstructions,
   aiRequest,
   resumeText,
-  jobCompany,
-  jobRoleTitle
+  onUsage
 }: UseCoverLetterArgs) {
-  // Shared by both fallback paths below so a known company/role is named even
-  // when the AI letter is blanked or the call fails.
-  const localDraftMeta = { company: jobCompany, roleTitle: jobRoleTitle };
   const [coverLetterText, setCoverLetterText] = useState("");
   const [coverStatus, setCoverStatus] = useState("");
   const [isGeneratingCover, setIsGeneratingCover] = useState(false);
@@ -81,7 +77,7 @@ export function useCoverLetter({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          ...buildAiRequestFields(aiRequest),
+          ...buildStageRequestFields(aiRequest),
           resumeText: resume,
           jobText,
           honestContext,
@@ -97,19 +93,41 @@ export function useCoverLetter({
           `Drafted a cover letter${data.model ? ` using ${data.model}` : ""}. Fill in any [add: …] placeholders before sending.`
         );
         setCoverProgress({ status: "done", note: "Drafted with AI", noteTone: "ok" });
+        onUsage?.({
+          source: "ai",
+          ...(typeof data.provider === "string" && data.provider ? { provider: data.provider } : {}),
+          ...(typeof data.model === "string" && data.model ? { model: data.model } : {}),
+          ...(typeof data.reasoningEffort === "string" && data.reasoningEffort
+            ? { reasoningEffort: data.reasoningEffort }
+            : {}),
+          ...(typeof data.attempts === "number" && Number.isFinite(data.attempts) ? { attempts: data.attempts } : {}),
+          completedAt: new Date().toISOString()
+        });
       } else {
-        // Server blanked an ungrounded AI letter — fall back to the local,
-        // strictly-grounded draft (the same backstop the polish cover pass uses).
-        setCoverLetterText(draftCoverLetter(resume, jobText, resume, localDraftMeta));
-        setCoverStatus("Drafted a local cover letter (the AI draft was set aside for unsupported claims). Fill in the [add: …] placeholders.");
-        setCoverProgress({ status: "done", noteTone: "warn", errorHeadline: "Ungrounded", note: "AI draft set aside — local draft shown" });
+        // Server blanked an ungrounded AI letter (anti-fabrication backstop).
+        // No local draft stands in (D011): fail plainly, keep any existing
+        // letter untouched, offer Retry.
+        setCoverStatus("The AI draft was set aside for unsupported claims. Retry, or adjust honest context.");
+        setCoverProgress({ status: "failed", errorHeadline: "Ungrounded", error: "The AI draft was set aside for unsupported claims." });
+        onUsage?.({
+          source: "none",
+          requestedProvider: aiRequest.provider,
+          requestedModel: aiRequest.selectedModel === "custom" ? aiRequest.customModel.trim() : aiRequest.selectedModel,
+          completedAt: new Date().toISOString()
+        });
       }
     } catch (error) {
       const message = error instanceof Error ? error.message.replace(/[.。]\s*$/, "") : "request failed";
-      // Always leave a usable draft: the deterministic local one.
-      setCoverLetterText(draftCoverLetter(resume, jobText, resume, localDraftMeta));
-      setCoverStatus(`AI cover letter unavailable: ${message}. Showing a local draft to edit.`);
-      setCoverProgress({ status: "done", noteTone: "warn", errorHeadline: AI_UNAVAILABLE, note: "local draft shown" });
+      // No local fallback letter (D011): fail plainly with a classified reason.
+      const f = classifyFailure(error);
+      setCoverStatus(`AI cover letter unavailable: ${message}.`);
+      setCoverProgress({ status: "failed", errorHeadline: f.headline, error: f.detail });
+      onUsage?.({
+        source: "none",
+        requestedProvider: aiRequest.provider,
+        requestedModel: aiRequest.selectedModel === "custom" ? aiRequest.customModel.trim() : aiRequest.selectedModel,
+        completedAt: new Date().toISOString()
+      });
     } finally {
       setIsGeneratingCover(false);
     }

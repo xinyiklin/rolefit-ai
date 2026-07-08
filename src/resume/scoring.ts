@@ -1,42 +1,9 @@
-import { displayKeyword, extractKeywords, includesKeyword, startsWithAction } from "./keywords";
-import { isEducationHeading } from "./sections.mjs";
+import { extractKeywords, includesKeyword, startsWithAction } from "./keywords";
+import { isEducationHeading } from "./sections";
 import { hasMetric, isBullet, isKnownSection, stripBullet } from "./text";
-import type { MatchBreakdown, ResumeAnalysis, ResumeScore } from "./types";
+import type { ResumeAnalysis, ResumeScore } from "./types";
 
 const SECTION_LABELS = ["summary", "experience", "skills", "education", "projects", "certifications"];
-
-const MATCH_CATEGORIES: Array<{ category: string; keywords: string[] }> = [
-  {
-    category: "Required Experience",
-    keywords: ["full-stack", "frontend", "backend", "api integration", "code reviews", "testing", "debugging"]
-  },
-  {
-    category: "Knowledge Areas",
-    keywords: ["data structures", "algorithms", "object-oriented programming", "database", "authentication", "performance"]
-  },
-  {
-    category: "Required Skills",
-    keywords: ["rest api", "git", "github", "testing", "debugging", "sql"]
-  },
-  {
-    category: "Technical Skills",
-    keywords: [
-      "react",
-      "typescript",
-      "javascript",
-      "node.js",
-      "python",
-      "java",
-      "c++",
-      "postgresql",
-      "django",
-      "django rest framework",
-      "html/css",
-      "tailwind css",
-      "material ui"
-    ]
-  }
-];
 
 const clampScore = (score: number, minimum = 0) => Math.max(minimum, Math.min(100, Math.round(score)));
 
@@ -130,7 +97,7 @@ function requiredYears(jobText: string): number | null {
 // sub-section nested under Education keeps the shield ON and never leaks degree
 // years into experience. Erring toward "in education" is the SAFE direction: it can
 // only LOWER the estimate, never inflate it past the seniority guardrail.
-// (isEducationHeading comes from ./sections.mjs; isKnownSection is re-exported by
+// (isEducationHeading comes from ./sections.ts; isKnownSection is re-exported by
 // ./text from the same module's isTopLevelSectionHeader.)
 function professionalExperienceText(resumeText: string): string {
   const kept: string[] = [];
@@ -302,23 +269,7 @@ export function analyzeResumeText(resumeText: string, jobText: string): ResumeAn
 
   return {
     score: scoreResume(resumeText, jobKeywords, jobText, bulletGroupsOverLimit),
-    topKeywords: jobKeywords,
-    matchedKeywords: jobKeywords.filter((keyword) => includesKeyword(resumeText, keyword)),
     missingKeywords: jobKeywords.filter((keyword) => !includesKeyword(resumeText, keyword)).slice(0, 10),
     trimmedBulletGroups: bulletGroupsOverLimit
   };
-}
-
-export function analyzeMatchBreakdown(resumeText: string, jobText: string): MatchBreakdown[] {
-  return MATCH_CATEGORIES.map(({ category, keywords }) => {
-    const relevant = keywords.filter((keyword) => includesKeyword(jobText, keyword));
-    const covered = relevant.filter((keyword) => includesKeyword(resumeText, keyword)).map(displayKeyword);
-    const missing = relevant.filter((keyword) => !includesKeyword(resumeText, keyword)).map(displayKeyword);
-
-    return {
-      category,
-      covered,
-      missing
-    };
-  }).filter((group) => group.covered.length > 0 || group.missing.length > 0);
 }

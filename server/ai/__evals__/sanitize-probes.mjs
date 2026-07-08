@@ -12,16 +12,19 @@
 // All fixture text is synthetic. Exit code is non-zero on any failure.
 
 import {
-  applyGapCapsAndVerdict,
-  coverageHasEligibilityBlocker,
   makeRewriteGrounder,
-  missingRequiredFromCoverage,
   sanitizeTailorSuggestions,
   sanitizeStrictReview,
-  scoreFromRequirementCoverage,
   summarizeDroppedSuggestions
-} from "../sanitize.mjs";
-import { findUngroundedJdTerm } from "../grounding.mjs";
+} from "../sanitize.ts";
+import {
+  applyGapCapsAndVerdict,
+  coverageHasEligibilityBlocker,
+  displayCoverageFromRequirements,
+  missingRequiredFromCoverage,
+  scoreFromRequirementCoverage
+} from "../scoring.ts";
+import { findUngroundedJdTerm } from "../grounding.ts";
 
 const scope = {
   sections: [
@@ -473,6 +476,56 @@ const checks = [
   ["sparse requirement coverage falls back to null", scoreFromRequirementCoverage([
     { category: "Required tech", requirement: "React", importance: "high", baseStatus: "covered", tailoredStatus: "covered" }
   ], { riskFlags: [] }) === null],
+
+  // --- displayCoverageFromRequirements: the user-visible coverage table is now
+  // --- DERIVED from requirementCoverage (server-owned) instead of a model-authored
+  // --- strictReview.coverage array that scoring never read (so it could drift).
+  // --- It maps requirement->keyword, tailoredStatus/tailoredEvidence->status/where,
+  // --- coerces the status enum via sanitizeRequirementCoverage, orders
+  // --- critical->high->medium->low (stable within tier), and caps at 12. ---
+  ["displayCoverage maps requirement/tailoredStatus/tailoredEvidence to the client {category,keyword,status,where} shape, ordered by importance", (() => {
+    const out = displayCoverageFromRequirements([
+      { category: "Required tech", requirement: "React", importance: "high", baseStatus: "adjacent", tailoredStatus: "covered", tailoredEvidence: "Frontend project uses React" },
+      { category: "Required experience", requirement: "REST APIs", importance: "medium", baseStatus: "missing", tailoredStatus: "adjacent", tailoredEvidence: "" },
+      { category: "Required tech", requirement: "Go", importance: "critical", baseStatus: "missing", tailoredStatus: "missing", tailoredEvidence: "Not in resume" },
+      { category: "Preferred", requirement: "GraphQL", importance: "low", baseStatus: "missing", tailoredStatus: "missing", tailoredEvidence: "Not in resume" }
+    ]);
+    return out.length === 4
+      && Object.keys(out[0]).sort().join(",") === "category,keyword,status,where"
+      && out[0].keyword === "Go" && out[0].status === "missing" // critical first
+      && out[1].keyword === "React" && out[1].status === "covered" && out[1].where === "Frontend project uses React"
+      && out[2].keyword === "REST APIs" && out[2].where === "" // empty tailoredEvidence passes through, empty allowed
+      && out[3].keyword === "GraphQL";
+  })()],
+  ["displayCoverage coerces a garbage tailoredStatus to a valid enum (via sanitizeRequirementCoverage)", (() => {
+    const out = displayCoverageFromRequirements([
+      { category: "Required tech", requirement: "React", importance: "high", tailoredStatus: "🚀 great" }
+    ]);
+    return out.length === 1 && out[0].status === "missing"; // unknown status -> baseStatus fallback -> "missing"
+  })()],
+  ["displayCoverage caps the table at 12 rows", (() => {
+    const rows = Array.from({ length: 20 }, (_, i) => ({
+      category: "Required tech", requirement: `Skill ${i}`, importance: "medium", baseStatus: "covered", tailoredStatus: "covered"
+    }));
+    return displayCoverageFromRequirements(rows).length === 12;
+  })()],
+  ["displayCoverage drops un-bucketable rows and returns [] when none survive (empty fallback)", (() => {
+    // sanitizeRequirementCoverage drops rows whose category matches no scoring
+    // bucket, so a table of only non-bucketing rows yields an empty display — the
+    // same [] the old sanitizer produced when the model omitted coverage.
+    const out = displayCoverageFromRequirements([
+      { category: "Vibes", requirement: "Culture fit", importance: "high", baseStatus: "covered", tailoredStatus: "covered" }
+    ]);
+    return Array.isArray(out) && out.length === 0 && displayCoverageFromRequirements(null).length === 0;
+  })()],
+  ["displayCoverage is stable within an importance tier (input order preserved)", (() => {
+    const out = displayCoverageFromRequirements([
+      { category: "Required tech", requirement: "Alpha", importance: "high", baseStatus: "covered", tailoredStatus: "covered" },
+      { category: "Required tech", requirement: "Beta", importance: "high", baseStatus: "covered", tailoredStatus: "adjacent" },
+      { category: "Required tech", requirement: "Gamma", importance: "high", baseStatus: "covered", tailoredStatus: "missing" }
+    ]);
+    return out.map((r) => r.keyword).join(",") === "Alpha,Beta,Gamma";
+  })()],
   ["BLOCKER gap caps both scores into DON'T-APPLY band", (() => {
     const r = applyGapCapsAndVerdict({ base: 73, tailored: 83, liftReason: "" }, { gaps: [{ severity: "BLOCKER" }] });
     return r.aiScore.base === 45 && r.aiScore.tailored === 45 && r.verdict === DONT;

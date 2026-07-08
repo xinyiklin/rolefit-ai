@@ -22,12 +22,21 @@ const TAB_ID_KEY = "rolefit:tabId";
 const REGISTRY_KEY = "rolefit:tabPresence";
 const CHANNEL_NAME = "rolefit:presence";
 
-// A tab republishes its heartbeat on this cadence; an entry older than STALE_MS
-// is treated as a dead tab (crash / hard close that skipped the unload cleanup).
-// STALE must be a comfortable multiple of HEARTBEAT so a momentarily busy tab is
-// never mistaken for dead.
+// A tab republishes its heartbeat on this cadence; an entry older than its
+// staleness budget is treated as a dead tab (crash / hard close that skipped the
+// unload cleanup). STALE must be a comfortable multiple of HEARTBEAT so a
+// momentarily busy tab is never mistaken for dead.
+//
+// HIDDEN tabs get a much longer budget: Firefox budget-throttles background-tab
+// timers, so a hidden tab's 4s heartbeat can legally stretch far past 12s. With
+// a flat budget that tab flickers in/out of siblings' live sets (a full App
+// re-render per flicker) and — worse — briefly looks dead to the autosave GC,
+// which reclaims "orphaned" drafts by liveness (liveTabIds). Each heartbeat
+// self-reports visibility, so readers grant hidden publishers the longer window
+// while visible tabs keep the crisp 12s one.
 export const HEARTBEAT_MS = 4000;
 export const STALE_MS = 12000;
+export const HIDDEN_STALE_MS = 60000;
 
 export type PresencePhase =
   | "idle"
@@ -42,6 +51,10 @@ export type PresenceEntry = {
   jobLabel: string;
   phase: PresencePhase;
   updatedAt: number;
+  // Self-reported document visibility at publish time. Hidden publishers are
+  // pruned on HIDDEN_STALE_MS instead of STALE_MS (see above). Absent on entries
+  // written by older code → treated as visible, matching the old behavior.
+  hidden?: boolean;
   instanceId?: string;
   instanceBornAt?: number;
 };
@@ -145,10 +158,13 @@ function writeRegistry(reg: Registry): void {
 }
 
 // Drop entries whose heartbeat has gone stale. Pure prune, returns a new object.
+// A hidden publisher's timers may be background-throttled, so it gets the longer
+// budget; visible (and legacy, flag-less) entries keep the strict one.
 function prune(reg: Registry, now: number): Registry {
   const next: Registry = {};
   for (const [id, entry] of Object.entries(reg)) {
-    if (entry && typeof entry.updatedAt === "number" && now - entry.updatedAt < STALE_MS) {
+    const budget = entry?.hidden === true ? HIDDEN_STALE_MS : STALE_MS;
+    if (entry && typeof entry.updatedAt === "number" && now - entry.updatedAt < budget) {
       next[id] = entry;
     }
   }
@@ -172,6 +188,9 @@ export function publishPresence(jobLabel: string, phase: PresencePhase, now: num
     jobLabel,
     phase,
     updatedAt: now,
+    // Self-report visibility so readers apply the right staleness budget. The
+    // publisher is the only party that knows it's backgrounded.
+    hidden: typeof document !== "undefined" && document.visibilityState === "hidden",
     instanceId: PAGE_INSTANCE_ID,
     instanceBornAt: PAGE_INSTANCE_BORN_AT
   };

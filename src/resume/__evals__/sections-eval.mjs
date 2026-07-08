@@ -1,4 +1,4 @@
-// Probes for the shared section model (src/resume/sections.mjs) — the single source
+// Probes for the shared section model (src/resume/sections.ts) — the single source
 // of truth the client scorer/parser and the server parser all import. It is plain
 // ESM, so this eval imports it directly (no esbuild bundle needed).
 //
@@ -9,7 +9,7 @@
 // TOP-LEVEL header for the scorer (so a dated sub-section under Education never
 // clears the date-shield and inflates seniority).
 
-import { BULLET_GLYPHS, inferSectionType, isEducationHeading, isSectionHeader, isSummaryHeading, isTopLevelSectionHeader } from "../sections.mjs";
+import { BULLET_GLYPHS, inferSectionType, isEducationHeading, isSectionHeader, isSummaryHeading, isTopLevelSectionHeader } from "../sections.ts";
 
 const checks = [
   // ── isSectionHeader (parser: top-level OR sub-section, any case, colon-tolerant)

@@ -42,14 +42,6 @@ export type ApplicationAnswersResult = {
   roleDescriptions: GeneratedRoleDescription[];
 } | null;
 
-export type ResumeBlockKind = "contact" | "section" | "bullet" | "text";
-
-export type ResumeBlock = {
-  id: string;
-  kind: ResumeBlockKind;
-  text: string;
-};
-
 // Before/after fit numbers for the original (base) vs. tailored resume against
 // one job. `source` records whether the numbers came from the AI judge (scored
 // both in one call) or the deterministic local engine fallback.

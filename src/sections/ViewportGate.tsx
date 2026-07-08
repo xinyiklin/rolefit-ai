@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 // Below this width the studio layout (tab rail, Format/Style menus, the
 // page-proportional resume preview) gets too cramped to use — the app is a
 // desktop-width tool. Single knob: bump it if the breakpoint should move.
-export const MIN_VIEWPORT_WIDTH = 720;
+const MIN_VIEWPORT_WIDTH = 720;
 
 const tooNarrow = () => typeof window !== "undefined" && window.innerWidth < MIN_VIEWPORT_WIDTH;
 
