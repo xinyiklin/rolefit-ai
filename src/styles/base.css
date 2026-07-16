@@ -7,6 +7,10 @@ html, body {
   height: 100%;
 }
 
+#root {
+  min-height: 100%;
+}
+
 body {
   min-height: 100vh;
   background: var(--paper);
@@ -22,6 +26,14 @@ button {
   border: 0;
   background: none;
   cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
+:focus-visible {
+  scroll-margin: 16px;
 }
 
 h1, h2, h3, p { margin: 0; }
@@ -53,3 +65,13 @@ ul {
   border: 0;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

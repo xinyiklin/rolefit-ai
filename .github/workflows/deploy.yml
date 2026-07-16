@@ -9,9 +9,12 @@ on:
 permissions:
   contents: read
 
+# PR verify runs are safe to cancel on force-push; a main-branch run may be
+# mid container swap on the server, so it must finish and let the next run
+# queue behind it instead.
 concurrency:
   group: deploy-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   verify:
@@ -21,14 +24,12 @@ jobs:
 
       - uses: actions/setup-node@v6
         with:
-          node-version: 20
+          node-version: 24
           cache: npm
 
       - run: npm ci
 
-      - run: npm run build
-
-      - run: node --check server.mjs
+      - run: npm run check
 
   deploy:
     needs: verify
@@ -40,9 +41,8 @@ jobs:
       EC2_HOST: ${{ secrets.EC2_HOST }}
       EC2_USER: ${{ secrets.EC2_USER }}
       EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
-      ALLOWED_HOSTS: ${{ secrets.ALLOWED_HOSTS }}
-      CONTAINER_NAME: jakeforge
-      IMAGE_NAME: jakeforge
+      CONTAINER_NAME: typeset
+      IMAGE_NAME: typeset
     steps:
       - uses: actions/checkout@v6
 
@@ -51,13 +51,12 @@ jobs:
           test -n "$EC2_HOST"
           test -n "$EC2_USER"
           test -n "$EC2_SSH_KEY"
-          test -n "$ALLOWED_HOSTS"
 
       - name: Prepare SSH
         run: |
           install -m 700 -d ~/.ssh
-          printf '%s\n' "$EC2_SSH_KEY" > ~/.ssh/jakeforge.pem
-          chmod 600 ~/.ssh/jakeforge.pem
+          printf '%s\n' "$EC2_SSH_KEY" > ~/.ssh/typeset.pem
+          chmod 600 ~/.ssh/typeset.pem
           ssh-keyscan -H "$EC2_HOST" >> ~/.ssh/known_hosts
 
       - name: Package source
@@ -66,20 +65,20 @@ jobs:
             --exclude='.git' \
             --exclude='node_modules' \
             --exclude='dist' \
-            -czf "/tmp/jakeforge-${GITHUB_SHA}.tar.gz" \
+            -czf "/tmp/typeset-${GITHUB_SHA}.tar.gz" \
             .
 
       - name: Copy source to EC2
         run: |
           scp \
-            -i ~/.ssh/jakeforge.pem \
-            "/tmp/jakeforge-${GITHUB_SHA}.tar.gz" \
-            "$EC2_USER@$EC2_HOST:/tmp/jakeforge-${GITHUB_SHA}.tar.gz"
+            -i ~/.ssh/typeset.pem \
+            "/tmp/typeset-${GITHUB_SHA}.tar.gz" \
+            "$EC2_USER@$EC2_HOST:/tmp/typeset-${GITHUB_SHA}.tar.gz"
 
       - name: Build and restart container
         run: |
-          ssh -i ~/.ssh/jakeforge.pem "$EC2_USER@$EC2_HOST" \
-            "CONTAINER_NAME='$CONTAINER_NAME' IMAGE_NAME='$IMAGE_NAME' ALLOWED_HOSTS='$ALLOWED_HOSTS' RELEASE_SHA='$GITHUB_SHA' bash -s" <<'REMOTE'
+          ssh -i ~/.ssh/typeset.pem "$EC2_USER@$EC2_HOST" \
+            "CONTAINER_NAME='$CONTAINER_NAME' IMAGE_NAME='$IMAGE_NAME' RELEASE_SHA='$GITHUB_SHA' bash -s" <<'REMOTE'
           set -euo pipefail
 
           if docker ps >/dev/null 2>&1; then
@@ -92,8 +91,8 @@ jobs:
           fi
 
           build_dir="$(mktemp -d)"
-          tar -xzf "/tmp/jakeforge-${RELEASE_SHA}.tar.gz" -C "$build_dir"
-          rm -f "/tmp/jakeforge-${RELEASE_SHA}.tar.gz"
+          tar -xzf "/tmp/typeset-${RELEASE_SHA}.tar.gz" -C "$build_dir"
+          rm -f "/tmp/typeset-${RELEASE_SHA}.tar.gz"
 
           cd "$build_dir"
           "${docker_cmd[@]}" build -t "$IMAGE_NAME:latest" .
@@ -101,16 +100,18 @@ jobs:
           rm -rf "$build_dir"
 
           "${docker_cmd[@]}" rm -f "$CONTAINER_NAME" 2>/dev/null || true
+          # One-time migration cleanup: pre-rename services used these names.
+          "${docker_cmd[@]}" rm -f typeset-resume 2>/dev/null || true
+          "${docker_cmd[@]}" rm -f jakeforge 2>/dev/null || true
           "${docker_cmd[@]}" run -d \
             --name "$CONTAINER_NAME" \
             --restart unless-stopped \
-            -p 127.0.0.1:5186:5186 \
-            -e ALLOWED_HOSTS="$ALLOWED_HOSTS" \
+            -p 127.0.0.1:5186:8080 \
             "$IMAGE_NAME:latest"
 
           healthy=""
           for _ in 1 2 3 4 5 6 7 8 9 10; do
-            if curl -fsS http://127.0.0.1:5186/api/templates >/dev/null; then
+            if curl -fsS http://127.0.0.1:5186/ >/dev/null; then
               healthy=1
               break
             fi

@@ -6,7 +6,10 @@ import {
   type ResumeData,
   type ResumeEntry,
   type ResumeSectionData
-} from "./lib/resumeData";
+} from "./lib/resumeData.ts";
+
+const bold = (value: string) => value ? `<b>${value}</b>` : value;
+const italic = (value: string) => value ? `<i>${value}</i>` : value;
 
 // Build a structured entry directly (skipping the text parser, whose spaced-dash
 // → column heuristic would mangle date ranges like "Jun. 2025 – Aug. 2025").
@@ -18,7 +21,12 @@ function entry(
   bullets: string[]
 ): ResumeEntry {
   return {
-    ...newEntry({ titleLeft, subtitleLeft, titleRight, subtitleRight }),
+    ...newEntry({
+      titleLeft: bold(titleLeft),
+      subtitleLeft: italic(subtitleLeft),
+      titleRight,
+      subtitleRight: italic(subtitleRight)
+    }),
     bullets: bullets.map((text) => newBullet(text))
   };
 }
@@ -27,10 +35,9 @@ function section(heading: string, type: ResumeSectionData["type"], items: Resume
   return { ...newSection(type, heading), items };
 }
 
-// The fill-in-the-blanks starter — a Jake's-template skeleton with placeholder
-// prompts (mirrors role-fit-ai's `jakes-starter.tex`). It is both the first-run
-// default and what the "Load sample" button restores, so a new user types over
-// guidance instead of clearing out a stranger's resume.
+// The fill-in-the-blanks starter uses the app's generic single-column resume
+// structure. It is both the first-run default and what "Load sample" restores,
+// so a new user types over guidance instead of clearing a stranger's resume.
 export function buildStarterResume(): ResumeData {
   return {
     name: "Your Name",
@@ -58,36 +65,10 @@ export function buildStarterResume(): ResumeData {
         ])
       ]),
       section("Technical Skills", "skills", [
-        newSkillEntry("Languages", "Python, TypeScript, JavaScript, SQL, Java"),
-        newSkillEntry("Frameworks", "React, Node.js, Express, FastAPI"),
-        newSkillEntry("Tools", "Git, Docker, AWS, PostgreSQL, Redis")
+        newSkillEntry(bold("Languages"), "Python, TypeScript, JavaScript, SQL, Java"),
+        newSkillEntry(bold("Frameworks"), "React, Node.js, Express, FastAPI"),
+        newSkillEntry(bold("Tools"), "Git, Docker, AWS, PostgreSQL, Redis")
       ])
     ]
-  };
-}
-
-// Regenerate every id when rehydrating saved JSON. The module-level id counter in
-// resumeData.ts resets to 0 on reload, so freshly added rows would otherwise
-// collide with the saved "section-1"/"entry-2" ids. New ids here use distinct
-// prefixes so they can never clash with the counter's later output.
-let rehydrateCounter = 0;
-export function reidResume(data: ResumeData): ResumeData {
-  const id = (prefix: string) => `seed-${prefix}-${(rehydrateCounter += 1)}`;
-  return {
-    name: data.name ?? "",
-    contact: Array.isArray(data.contact) ? [...data.contact] : [],
-    sections: (data.sections ?? []).map((s) => ({
-      id: id("section"),
-      heading: s.heading ?? "",
-      type: s.type ?? "standard",
-      items: (s.items ?? []).map((it) => ({
-        id: id("entry"),
-        titleLeft: it.titleLeft ?? "",
-        titleRight: it.titleRight ?? "",
-        subtitleLeft: it.subtitleLeft ?? "",
-        subtitleRight: it.subtitleRight ?? "",
-        bullets: (it.bullets ?? []).map((b) => ({ id: id("bullet"), text: b.text ?? "" }))
-      }))
-    }))
   };
 }

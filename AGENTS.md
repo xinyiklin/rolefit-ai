@@ -1,253 +1,204 @@
-# jakeforge Agent Guide
+# Typeset Agent Guide
 
-Generic working agreements for coding agents on this project. `AGENTS.md` is the
-provider-agnostic source of truth; `CLAUDE.md` adds Claude-specific overrides.
-A more specific or deeper doc (a nested `AGENTS.md`, README, or engineering doc)
-wins over this file when it is current.
+Provider-agnostic working agreements for this repository. `CLAUDE.md` adds
+Claude-specific overrides. More specific current guidance wins for its scope.
 
-jakeforge is a local-first, single-template resume editor: fill in a form-driven
-on-page resume and export it in the Jake Gutierrez LaTeX style. A React 19 + Vite
-+ TypeScript frontend renders the editable document; a small Node `server.mjs`
-exposes only the LaTeX endpoints (template list, resume → `.tex`/PDF render via
-Tectonic, `.tex` import). The editor surface, structured model, and LaTeX
-pipeline were ported from the `role-fit-ai` sibling, with its AI, job-tracker,
-applications, and DOCX surfaces removed.
+Typeset is a local-first React 19 + TypeScript + Vite 8 resume editor. The
+browser owns the structured document, deterministic layout, persistence,
+`.resume` file I/O, and client-side PDF export. Production is a static site with
+no application backend or runtime API.
 
 ## Instruction Precedence
 
 1. User instructions for the current task.
-2. Safety, data integrity, and secret handling — before stylistic preferences.
-3. The nearest, most specific guidance file, when current.
-4. Durable facts in the nearest `CONTINUITY.md`, over older chat context.
-5. Existing architecture and conventions.
+2. Safety, data integrity, and secret handling.
+3. The nearest current `AGENTS.md` or provider-specific guide.
+4. `PRODUCT.md` for product behavior and `DESIGN.md` for visual behavior.
+5. Durable facts and decisions in `CONTINUITY.md`.
+6. Existing architecture and conventions.
 
-Do not preserve stale rules. If the project shape changes, update the relevant
-docs and the continuity ledger together.
+Do not preserve stale rules. Update the relevant guide and continuity ledger
+when the project shape or a durable decision changes.
 
-Keep this file a router: state agent behavior and high-level conventions here,
-and keep detailed rules in the narrowest relevant document (a nested `AGENTS.md`,
-README, or engineering doc). When content overlaps, point to the deeper doc
-instead of duplicating it.
+## Guidance Map
 
-## Project Shape
+- `PRODUCT.md` — product purpose, interaction principles, privacy, and supported
+  authoring experience.
+- `DESIGN.md` — visual system, editor grammar, responsive behavior, and
+  accessibility expectations.
+- `src/lib/AGENTS.md` — canonical resume model, document style and typography,
+  inline transforms, strict `.resume` codec, versioning, and validation.
+- `src/components/AGENTS.md` — reusable chrome primitives and the toolbar
+  family: popover conventions, option-list ownership, and control contracts.
+- `src/sections/editor/AGENTS.md` — direct-editing boundaries, caret/selection
+  mapping, context commands, and structure-overlay behavior.
+- `src/typeset/AGENTS.md` — deterministic measurement, layout, fonts, DOM/print
+  rendering, PDF emission, and parity checks. Also read it for changes under
+  `scripts/` or `public/fonts/` that affect the typesetting contract.
+- `CONTINUITY.md` — active decisions, recent verified state, open risks, and
+  current working set.
 
-- Stack: React 19 + TypeScript + Vite 7; Node `server.mjs` for the LaTeX API.
-  npm. Tectonic (system binary) compiles `.tex` → PDF when installed.
-- Layout:
-  - `src/lib/` — resume data model + parse/serialize/LaTeX-extract helpers.
-  - `src/hooks/` — `useResumeEditor` (structured reducer), `useDocStyle`
-    (typography, localStorage), `useTemplates` (API client), `useResumeExport`.
-  - `src/sections/editor/` — the editable on-page resume (sections, entries,
-    bullets, skills, drag-reorder via `@dnd-kit`).
-  - `src/sections/` — read-only document + off-screen print layer.
-  - `src/components/` — reusable `Modal` shell and `ImportModal`.
-  - `src/styles/` — `tokens.css`/`base.css` (design tokens), `resume-*.css`
-    (document + editor), `index.css` (imports + app shell).
-  - `server/latex/` — Jake's template renderer, plain-text/LaTeX parser, Tectonic
-    wrapper. `server/docx.mjs` — DOCX text extractor (zero-dep, shells to `unzip`).
-- Entry points: `src/main.tsx` → `src/App.tsx` (UI); `server.mjs` (serves the
-  Vite app in dev / `dist` in prod, plus `/api/templates`,
-  `/api/render-resume-latex`, `/api/import-resume-tex`, `/api/import-resume-docx`).
-- External services: none; local-only. Optional deps: a local Tectonic install
-  for LaTeX PDF output, and the system `unzip` (standard) for DOCX import.
-- Deployment: optional self-hosted Docker image (see `Dockerfile` and README's
-  "Deploying" section). The image bundles Tectonic + `unzip` and requires
-  `ALLOWED_HOSTS` (comma-separated public hostnames) at runtime — the server
-  refuses to start without it when bound beyond loopback.
+## Architecture
 
-Treat the project as local-first. The resume is the user's personal data — keep
-it in `localStorage` only; never send it anywhere but the app's own LaTeX
-endpoints (the local server in dev, the user's own self-hosted instance when
-deployed). No third-party services either way.
+- `src/main.tsx` -> `src/App.tsx` is the application entry path.
+- `src/lib/` owns reusable, non-visual resume-domain logic, the document-style
+  contract, and shared typography values.
+- `src/hooks/` owns editor history/state and browser persistence for document
+  and view preferences.
+- `src/sections/editor/` adapts the engine to direct input, DOM selection/caret
+  mapping, context commands, and structure controls.
+- `src/typeset/` owns the exact layout-input adapter and shared deterministic
+  layout consumed by the editor, browser print layer, and dedicated PDF emitter.
+- `src/components/` owns reusable editor chrome (`Modal`, `Popover`, and the
+  `toolbar/` family — see `src/components/AGENTS.md`); `src/styles/` owns
+  tokens, shell, toolbar, popover, document, and print styles.
+- `public/fonts/` and `scripts/` hold reproducible font assets and generators.
 
-Viewport support is desktop/tablet first. The editor does not need to provide a
-full phone-sized authoring experience; if mobile maintenance starts creating
-awkward compromises, it is acceptable to use the same kind of small-screen
-restriction/gate already used in the `role-fit-ai` sibling instead of polishing
-every mobile layout.
+Keep production static. Do not add analytics, hosted AI, accounts, remote
+persistence, runtime services, or resume-data requests without explicit user
+approval.
+
+## Product And Data Invariants
+
+- Treat resume content as personal data. It stays in browser storage and files
+  the user explicitly opens or downloads.
+- `.resume` is the sole editable source format. PDF is final output, not an
+  editable input or alternate source path.
+- The current and first `.resume` contract is `schemaVersion: 1`; no prototype
+  file versions are supported. Future schema changes require an explicit
+  version/migration decision, round-trip checks, and matching docs.
+- Session ids do not cross the file boundary. Zoom and the spell-check toggle
+  are local view preferences (`DocStyle` fields) that are never written to a
+  `.resume` file.
+- Editor, browser print, and dedicated PDF output must derive from the same
+  structured document, style values, and layout contract.
+- Preserve the desktop/tablet-first authoring experience and the clear
+  small-screen gate described in `PRODUCT.md` and `DESIGN.md`.
 
 ## Commands
 
-Run from the project root.
+Run commands from the repository root.
 
 - Install: `npm install`
-- Run / dev: `npm run dev` (starts `server.mjs` on `PORT` or 5186; Vite in
-  middleware mode)
-- Build: `npm run build` (`tsc` typecheck + `vite build` → `dist/`)
-- Preview prod: `npm run preview` (`NODE_ENV=production node server.mjs`)
-- Server syntax check: `node --check server.mjs`
+- Development: `npm run dev`
+- Build: `npm run build` (`tsc` + Vite -> `dist/`)
+- Preview: `npm run preview`
+- Editable-file eval: `npm run eval:resume-file`
+- Direct-editor eval: `npm run eval:editor`
+- PDF font-parity eval: `npm run eval:pdf-font-parity`
+- All evals: `npm test` (alias of `npm run eval`)
+- Full local/CI verification: `npm run check` (build + all evals)
 
-There is no test harness yet. Verify with the build, a server syntax check, and a
-browser check of the editor + a Tectonic PDF render when LaTeX paths change.
+There is no separate lint command. `npm run check` is the unified build and
+deterministic-eval gate; use the narrowest named eval while iterating. Material
+UI changes still require a real-browser check.
 
-### Port reservations
-
-Sibling projects in this workspace use fixed, non-overlapping dev-server ranges
-so a bound port means "the app is already running," not "pick another." The port
-is pinned with Vite `strictPort: true`; when 5186 is bound, connect to the
-running app instead of starting a second server or switching ports.
-
-- careflow: `5173-5180`
-- role-fit-ai: `5181-5183`
-- portfolio: `5184-5185`
-- jakeforge: `5186` (Vite HMR socket on `24686`)
+Typeset uses port `5186` and HMR port `24686` with Vite `strictPort: true`. A
+bound port means the app is already running; use it instead of selecting another
+port. Sibling reservations are careflow `5173-5180`, role-fit-ai `5181-5183`,
+and portfolio `5184-5185`.
 
 ## Start-Of-Task Checklist
 
 Before changing code or project files:
 
-1. Read `CONTINUITY.md` if it exists.
-2. Read the nearest `AGENTS.md`, `CLAUDE.md`, README, or docs that apply.
-3. Identify the goal, acceptance criteria, scope, and constraints.
-4. Inspect the files you will touch before choosing an implementation.
-5. If the request depends on current or recency-sensitive facts, establish the
-   date/time and prefer authoritative sources.
-6. For non-trivial tasks, state a compact plan with concrete verification checks.
-7. Ask one targeted clarifying question only when ambiguity could cause
-   user-facing confusion or irreversible work. Otherwise make a reasonable
-   assumption and proceed.
+1. Read `CONTINUITY.md` and the nearest applicable guides.
+2. Identify the goal, acceptance criteria, scope, and constraints.
+3. Inspect the files, callers, state owner, and output paths involved.
+4. Establish current authoritative sources for recency-sensitive work.
+5. For non-trivial tasks, state a compact plan with verification checks.
+6. Ask only when ambiguity could materially change or endanger the result;
+   otherwise make a bounded assumption and proceed.
 
-## Accuracy, Recency, And Sourcing
+## Working Principles
 
-When a request depends on "latest", "current", "today", recent APIs, pricing,
-release notes, security advisories, or compatibility:
+- Keep changes surgical. Every changed line should trace to the request, its
+  necessary cleanup, or verification.
+- Prefer the minimum durable solution; avoid speculative features, knobs,
+  abstractions, and compatibility fallbacks that hide failures.
+- Match existing naming, style, framework choices, and helper APIs.
+- Read before editing and preserve user changes in a dirty worktree.
+- Remove only dead code created by your change; report unrelated cleanup.
+- Keep actionable failures visible. Do not silently swallow errors or leave
+  empty `catch` blocks.
+- Ask before adding a dependency when bundle size, security, or maintenance is
+  affected.
+- Reproduce, change, verify, and inspect. Use failures as evidence and rerun the
+  smallest meaningful check before broader checks.
 
-- Establish the current date/time (e.g. `date -Is`; on macOS,
-  `date '+%Y-%m-%dT%H:%M:%S%z'`) and state it when it affects the answer.
-- Prefer official or primary sources: vendor docs, upstream repositories,
-  changelogs, release notes, standards, or maintainer announcements.
-- For safety-, compatibility-, legal-, medical-, or financial-sensitive details,
-  cross-check reputable sources and call out source dates when relevant.
-- Use library/API documentation tools when available. Pin the library and version
-  when known, fetch only the focused docs needed, and summarize rather than
-  dumping large source text.
-- Use web search when it materially improves correctness; prefer official docs
-  before secondary explainers.
+## Maintainability, Modularity, And Reuse
 
-## Agent Operating Principles
-
-- Think before coding. State important assumptions, surface tradeoffs, and ask
-  when confusion would change the solution.
-- Keep it simple. Write the minimum durable code that solves the request; do not
-  add speculative features, knobs, abstractions, or future-proofing.
-- Make surgical changes. Every changed line should trace to the request, a
-  cleanup caused by it, or a verification fix.
-- Match the codebase. Prefer existing style, naming, patterns, framework choices,
-  and helper APIs over personal preference.
-- Clean up only your own wake. Remove imports, state, helpers, files, or docs
-  made obsolete by your change; mention unrelated dead code instead of deleting
-  it.
-- Define success in verifiable terms: reproduce the issue, make the change, run
-  the relevant test/build, and inspect the result.
-- Loop until verified. If a check fails, use the failure as evidence, adjust, and
-  rerun the smallest meaningful check before broader ones.
-- Use judgment on tiny tasks. A typo or one-line answer does not need ceremony.
-- Push back when the requested path is riskier, broader, or more brittle than a
-  simpler way to satisfy the same goal.
-
-## Development And Editing
-
-- Default to read-only exploration before edits.
-- Keep changes scoped and reviewable.
-- Prefer patch-style edits over full rewrites unless a clean replacement is
-  requested or the file is no longer relevant.
-- Preserve existing style and conventions.
-- Keep hand-written source files modular. Treat files over ~300 lines as a prompt
-  to check boundaries; split when it improves readability or future change. Do
-  not cap necessary scope just to hit a line count.
-- Keep public entrypoints stable where practical; isolate volatile logic behind
-  smaller helpers.
-- Do not add default fallbacks during development just to hide failures. If a
-  required value is missing, fail visibly enough to fix the real cause.
-- Do not leave empty `catch` blocks or silently swallow errors.
-- Do not reinvent the wheel. When a mature library would reduce risk, ask before
-  adding it and help qualify the choice.
-- Design UI for the end user and workflow, not for the database schema.
-- Verify major UI changes in a real browser when feasible, rather than relying
-  only on static inspection. The Claude-specific tool choice (Chrome vs Preview)
-  lives in `CLAUDE.md`.
-
-## Secrets And Safety
-
-- Never print secrets, tokens, private keys, credentials, or broad environment
-  dumps. Do not ask the user to paste secrets.
-- Never commit secrets or `.env` files; keep them git-ignored.
-- Avoid commands that may expose secrets (dumping shell environments, reading
-  private key files). Redact sensitive strings in shared output.
-- Remote API calls must be read-only unless the user explicitly requests a write;
-  dry-run requested writes first when possible.
-- Pause and confirm before irreversible or destructive actions: bulk deletes,
-  history rewrites, schema or data drops, production/remote writes, or adding
-  paid or vendor dependencies.
-
-## Containers And Tooling
-
-- Never install system packages on the host unless the user explicitly asks.
-- Prefer the project's existing workflow when one exists (`Dockerfile`, compose
-  files, Make targets, or documented scripts).
-- If no workflow exists and dependencies are needed, discuss a minimal,
-  project-scoped setup before adding one.
-
-## Reading Documents And Data
-
-For PDFs, uploads, long documents, spreadsheets, or CSVs:
-
-- Read the full source before drafting.
-- Draft the requested output.
-- Before finalizing, re-check the source for factual accuracy, invented details,
-  and wording/style constraints.
-- Label paraphrases explicitly when source-faithful handling matters.
-
-## Continuity Ledger
-
-Maintain one compact `CONTINUITY.md` for the project. It is the durable handoff
-memory; keep it factual and bounded — no transcripts, raw logs, or chat dumps.
-
-- Read it at the start of each task before acting.
-- Update it only for meaningful deltas: goal, constraints, durable decisions,
-  state, open questions, working set, or important tool outcomes.
-- Tag every entry with an ISO date and a provenance tag: `[USER]`, `[CODE]`,
-  `[TOOL]`, or `[ASSUMPTION]`. Write `UNCONFIRMED` rather than guessing.
-- Supersede changed facts explicitly instead of silently rewriting history.
-- Keep `Snapshot` to ~25 lines, `Done (recent)` to ~7 bullets, and `Working set`
-  to ~12 paths. Compress older noise into milestone bullets that point to a
-  commit, PR, doc, or log.
-- Record durable choices as ADR-lite entries, e.g.
-  `D001 ACTIVE: chosen stack is ...`.
-- In replies after material work, include a brief snapshot: Goal, Now, Next, and
-  Open Questions. Print the full ledger only when it changed materially or the
-  user asks.
+- Search for the existing owner before adding a type, constant, transform, or
+  control. Do not create parallel representations of one concept.
+- Keep domain logic independent of React where practical. Components and hooks
+  should adapt deterministic helpers to state, effects, DOM events, and UI.
+- Keep side effects at explicit boundaries: storage/file lifecycle near
+  `App`/hooks, DOM selection in the editor adapter, and PDF/download work in the
+  export boundary.
+- Keep dependencies directed. Domain and typesetting modules must not depend on
+  toolbar components or application orchestration; avoid circular imports and
+  broad barrel exports.
+- Extract only a stable responsibility, demonstrated duplication, a useful test
+  seam, or a volatile concern. Do not generalize one speculative use case or add
+  pass-through components solely to reduce line count.
+- Reuse established primitives and tokens for repeated interaction and visual
+  contracts. Keep feature-specific composition beside its consumer rather than
+  growing generic components through unrelated modes and boolean props.
+- Keep state close to its owner. Reducer transitions remain explicit and
+  serializable; reusable controls receive values and callbacks; derived state is
+  computed rather than duplicated.
+- Treat files around 300 lines, unrelated effects in one component, or repeated
+  edits across distant regions as prompts to review boundaries. Split by
+  responsibility, not an arbitrary line target.
+- Preserve every caller's real contract when sharing code. Reuse must not weaken
+  validation, accessibility, error reporting, privacy, or deterministic layout.
+- Verify extracted logic and each affected integration path.
 
 ## Verification And Definition Of Done
 
 A task is done when:
 
-- The requested change is implemented or the question is answered.
-- Relevant verification was attempted — build, lint, tests, typecheck, document
-  rendering, or browser checks (see Commands). UI changes that alter layout,
-  styling, animation, or other visible surfaces get a real-browser check.
-- Errors and warnings are fixed or explicitly listed as out of scope.
-- Impact is explained: what changed, where, and why.
-- Docs are updated for impacted behavior, setup, or workflow.
-- `CONTINUITY.md` is updated when the change materially affects state, decisions,
-  risks, or next steps.
-- If no build or test harness exists, say so and verify by the strongest
-  available lightweight check.
+- The requested behavior is implemented or the question is answered.
+- The nearest focused checks and broader build were attempted as appropriate.
+- UI work has real-browser evidence; PDF work checks rendered output; file work
+  checks round trips and rejection behavior.
+- Errors and warnings are fixed or explicitly reported as out of scope.
+- Affected behavior, setup, architecture, and workflow docs are current.
+- `CONTINUITY.md` records meaningful state, decision, risk, or next-step changes.
+- The final report explains impact, verification, limitations, and remaining
+  questions without overstating what was checked.
+
+## Safety And Static Hosting
+
+- Never expose secrets, credentials, private keys, or broad environment dumps.
+  Never commit secrets or `.env` files.
+- Remote calls are read-only unless the user explicitly authorizes a write.
+- Confirm before destructive actions, history rewrites, production writes, or
+  paid/vendor dependencies.
+- Do not install host system packages without explicit approval.
+- Prefer the existing Vite and Docker workflows. The Docker image serves `dist/`
+  from unprivileged Nginx on port 8080 and needs no runtime environment values.
+- Bind self-hosted containers to loopback behind HTTPS unless public exposure is
+  explicitly intended and secured.
+
+## Continuity Ledger
+
+- Keep one bounded `CONTINUITY.md`; no transcripts, chat dumps, or raw logs.
+- Tag entries with an ISO date and `[USER]`, `[CODE]`, `[TOOL]`, or
+  `[ASSUMPTION]`; write `UNCONFIRMED` rather than guessing.
+- Supersede changed facts explicitly. Keep Snapshot near 25 lines, Done (recent)
+  near 7 bullets, and Working set near 12 paths by compressing older detail.
+- Record durable choices as compact ADR-style entries and report Goal, Now,
+  Next, and Open Questions after material work.
 
 ## Git And Existing Work
 
-- The working tree may contain user edits or generated output.
-- Run git commands from the relevant repository root; use non-interactive flags.
+- Run git commands from the repository root with non-interactive flags.
 - Do not stage, commit, push, amend, reset, rebase, or switch branches unless the
   user asks.
-- Stage and commit `AGENTS.md` and `CLAUDE.md` like any other tracked file when
-  they're part of the change; do not single them out to exclude. `CONTINUITY.md`
-  and `.claude/` are gitignored, so they never appear as staging candidates.
-- Never revert, delete, or overwrite changes you did not make unless explicitly
-  asked.
-- Never force-push a shared branch or rewrite published history without an
-  explicit request.
-- Avoid broad cleanup, drive-by refactors, and formatting churn.
-- When asked to commit, prefer one coherent commit per reviewable unit. Follow
-  project-specific commit rules when present; otherwise use Conventional Commit
-  subjects such as `fix(scope): preserve calendar scroll`.
+- Treat `AGENTS.md` and `CLAUDE.md` like normal tracked files when requested;
+  `CONTINUITY.md` and `.claude/` are ignored.
+- Never revert, delete, or overwrite work you did not make without explicit
+  permission. Never force-push or rewrite published history without approval.
+- Avoid broad cleanup and formatting churn. When asked to commit, prefer one
+  coherent reviewable unit with a concise Conventional Commit subject.

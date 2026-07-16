@@ -1,188 +1,269 @@
-# jakeforge
+# Typeset
 
-A **Jake's-style resume editor**, live at
-[jakeforge.xinyiklin.com](https://jakeforge.xinyiklin.com). Edit a resume
-directly on the page — the same single-column, ATS-friendly layout from
-[Jake Gutierrez's LaTeX template](https://github.com/jakegut/resume) — and export
-it as a clean browser PDF, a Tectonic-compiled LaTeX PDF, or `.tex` source.
+Typeset is a resume editor with the familiarity of a focused word processor,
+hosted at [typeset.xinyiklin.com](https://typeset.xinyiklin.com). Edit the
+rendered page directly, adjust typography and spacing, save an editable
+`.resume` file, and export the finished document to a pixel-faithful PDF that the
+app renders itself.
 
-The app is deployed on EC2 behind Caddy (HTTPS), but stays private by design:
-your resume lives in your browser's `localStorage` and is sent only to the
-app's own LaTeX endpoints for rendering — never stored server-side.
-
-It's a focused extraction of the resume editor from the `role-fit-ai` sibling
-project: the structured editor, live document, and LaTeX pipeline, with the AI
-tailoring, job tracker, and applications stripped out.
+Typeset runs entirely in your browser. The structured resume model and browser
+typesetting engine are the source of truth, and there is no application backend,
+account, analytics service, or document conversion pipeline — the site serves
+static assets, and your resume content never leaves your device.
 
 ## Features
 
-- **On-page editing** — name, contact chips, and Education / Experience /
-  Projects / Skills / Summary sections. Add, remove, and drag-reorder sections,
-  entries, and bullets inline (`@dnd-kit`, pointer + keyboard).
-- **Faithful Jake's styling** — serif document, ruled section headings, bold
-  titles with right-aligned dates, italic subtitles, automatic multi-page
-  pagination that keeps headings with their first entry.
-- **Layout & spacing controls** — page zoom (also ⌘/Ctrl +/- / 0) and
-  Compact/Normal/Relaxed presets. A **Fine-tune** button opens a spacing flyout
-  with sliders for line height and header/section/entry/list gaps; save the
-  current spacing as a reusable **Custom** preset. Settings persist to
-  `localStorage`.
-- **Typography controls** — collapsible **Typography** / **Entries** / **Skills**
-  cards: section-heading **case** (small caps / uppercase / normal) plus bold and
-  underline, and a configurable contact divider (quick-pick glyphs or custom
-  1-2 char input) under Typography; bold titles and italic subtitles under
-  Entries; bold skill labels under Skills. One-click reset to Jake's defaults.
-- **Exports** (each download opens a rename dialog pre-filled with a
-  resume-derived file name)
-  - **PDF - LaTeX** — the resume rendered through the Jake's template and compiled
-    by [Tectonic](https://tectonic-typesetting.github.io/). Requires Tectonic.
-  - **LaTeX source (`.tex`)** — download the rendered template source.
-  - **Clean PDF** — press Cmd+P / Ctrl+P; the print CSS isolates the resume into
-    a selectable, ATS-readable page (choose Save as PDF). No dependencies.
-- **Import** — drag-and-drop or browse for a file (`.txt`, `.md`, `.tex`,
-  `.docx`) directly from the sidebar. LaTeX is auto-detected. PDF import is
-  intentionally unsupported — it extracts too poorly to be useful.
-- **In-app PDF preview** — compile and view the LaTeX PDF without downloading.
-- **Autosave** — the structured resume is persisted to `localStorage`, so a
-  reload keeps your work. Rendering only calls the app's own LaTeX endpoints.
+- **Direct page editing** — select text and type on the rendered resume instead
+  of filling out a separate form.
+- **Familiar document toolbar** — New, Open, Save, Export PDF, undo, redo,
+  selection formatting, a spell-check toggle, compact text/page panels, and
+  zoom stay close at hand.
+- **Structured editing** — add, remove, and reorder sections, entries, bullets,
+  skill rows, summary paragraphs, and contact items without losing document
+  structure.
+- **Deterministic layout** — the editor, browser print layer, and dedicated PDF
+  emitter share the same structured input, bundled fonts, committed metrics,
+  page geometry, and pagination.
+- **Print-aware typography** — choose Latin Modern, Source Serif 4, or Source
+  Sans 3; open common sizes from the centered editable value, enter a custom
+  6–48 pt value, or step it with adjacent 1 pt minus/plus controls.
+- **Flexible page margins** — start from Narrow, Normal, or Wide, or enter
+  independent top, right, bottom, and left margins from 0.25–1.5 inches.
+- **Focused spacing controls** — choose a common or custom line height
+  independently from Compact, Balanced, Spacious, and custom page-gap presets.
+- **Portable source files** — `.resume` preserves editable content and every
+  print-affecting style setting.
+- **Real undo and redo** — text and structural edits share bounded history with
+  typing coalescing and caret restoration.
+- **Browser autosave** — status sits directly beside the filename, and the
+  current document is restored from browser storage on the same browser and origin.
+- **Private by design** — resume content stays in the browser and is never sent
+  to an application service, even though the app is served from a hosted site.
 
-## Getting started
+## Files and PDF output
+
+`.resume` is the only editable file format accepted by Typeset. It is a
+versioned JSON document with:
+
+- `format: "typeset-resume"`
+- `schemaVersion: 1`
+- structured resume content
+- print-affecting typography, alignment, margin, and spacing settings
+
+Disposable editor ids are regenerated when a file opens, and zoom and the
+spell-check toggle are kept as local viewing preferences rather than written
+into the document. Imports are validated field by field and limited to 2 MB. Other source-document formats are
+not accepted. Version 1 is the first and only schema; pre-release prototype
+formats are intentionally unsupported.
+
+Use **Save** to download a reopenable `.resume` file. Use **Export PDF** to
+download a finished `.pdf`: the owned typeset engine renders the pages and the app
+serializes them to PDF entirely in your browser (embedded fonts, vector rules, and
+clickable links), with no print dialog, document upload, or server-side conversion.
+PDF is final output, not an editable source format.
+
+Autosave is a recovery convenience, not a replacement for saving a `.resume`
+file that can be backed up or moved to another device.
+
+The filename field expands with its content. Leaving it blank resets it to
+`Untitled resume` when editing finishes.
+
+## Typography, spacing, and alignment
+
+Selecting text enables the toolbar family, editable point-size, and paragraph
+alignment controls. Clicking the size value opens common document sizes; the
+field also accepts a custom value from 6–48 pt, while adjacent minus and plus
+buttons step it by exactly 1 pt. Family and size apply only to that selection;
+alignment applies to the selected field/paragraph. With only a caret, the
+toolbar reports and changes the typing font, size, bold, italic, and underline
+state at that location. Family, size, bold, italic, and underline changes on a
+range restore its exact start and end after toolbar interaction. The browser
+typesetter automatically detects email addresses and web links. Selected text
+can also receive a custom destination from the Link control, where detected or
+explicit links can be edited or persistently removed. The typesetter measures
+mixed runs with committed metrics before it breaks lines, so the editable page,
+browser print layer, and dedicated PDF output stay aligned. Typography stays in
+the direct toolbar; selecting all text is the explicit way to restyle the entire
+resume. Paragraph owns document-wide body, header, and heading alignment plus
+independent persisted entry start and end indents. Styles owns heading case and
+rule treatment plus per-role font, size, and emphasis for headings, entry
+columns, skill labels, and contact text. Those field controls reflect manual
+inline changes and can reapply or remove formatting across every matching
+field. The dedicated Spacing menu keeps unitless line height separate from
+physical point-based page gaps.
+
+Saved page-spacing controls also use physical points. `em` is useful when a gap
+should grow automatically with nearby text, but it makes a print-layout control
+change meaning when the font size changes. A point value instead represents a
+stable distance on the page. Application chrome still uses normal screen-oriented
+CSS units; this rule applies to the resume's print geometry.
+
+The toolbar offers left, center, right, and justified alignment for the selected
+paragraph. The Paragraph menu's body, header, and section-heading alignment controls
+remain document-wide defaults. A global option is active only while every field
+in its scope resolves to that alignment; a local override clears the active
+state, and choosing a global option clears conflicting local overrides. Entry
+alignment uses the available column between the start and end indents.
+Unformatted paired title/date and subtitle/location rows keep their left and
+right anchors; a local alignment override intentionally moves that selected row
+as a group within those indent boundaries.
+
+## Run from source
+
+Typeset is hosted at [typeset.xinyiklin.com](https://typeset.xinyiklin.com); no
+install is needed to use it. To work on it locally:
+
+Requirements:
+
+- Node.js 24 recommended (matches CI and the Docker build); 22.6 is the hard
+  floor, since the evals run TypeScript directly via
+  `--experimental-strip-types`
+- npm
 
 ```bash
 npm install
-npm run dev        # http://localhost:5186
+npm run dev
 ```
 
-`npm run dev` runs `server.mjs`, which serves the Vite app and the LaTeX API from
-one process.
+Open [http://localhost:5186](http://localhost:5186). The port is fixed; if it is
+already bound, use the running app instead of starting another instance.
 
-### Optional: LaTeX PDF output
-
-Clean PDF via Cmd+P / Ctrl+P works out of the box. For the high-fidelity
-**PDF - LaTeX** export and the in-app preview, install Tectonic:
+Useful checks:
 
 ```bash
-brew install tectonic
+npm run check
+npm run build
+npm run preview
+npm run eval:resume-file
+npm run eval:editor
+npm run eval:pdf-font-parity
 ```
 
-Then restart the dev server. Without it, those buttons are disabled and the
-sidebar shows the clean-print hint.
-
-## Scripts
-
-| Command | Description |
-| --- | --- |
-| `npm run dev` | Dev server (frontend + LaTeX API) on port 5186 |
-| `npm run build` | Typecheck (`tsc`) + production build to `dist/` |
-| `npm run preview` | Serve the production build (`NODE_ENV=production`) |
-
-## Deploying (Docker)
-
-The `Dockerfile` builds a self-contained image: the production bundle,
-`server.mjs`, Tectonic (arch-matched, so LaTeX PDF works in the container), and
-`unzip` for DOCX import.
-
-```bash
-docker build -t jakeforge .
-docker run -p 5186:5186 -e ALLOWED_HOSTS=resume.example.com,203.0.113.7 jakeforge
-```
-
-`ALLOWED_HOSTS` is required: a comma-separated list of every hostname or IP the
-app is reached by. It backs the same-origin/Host guard on the API, and the
-server refuses to start without it when bound beyond loopback. Loopback names
-(`localhost`, `127.0.0.1`) are always allowed, so on-box smoke tests and
-container health checks work regardless.
-
-A single small instance (e.g. an EC2 `t3.micro`) is plenty — the server is one
-Node process with no database.
-
-For a small EC2 deployment, bind the container to loopback and put an HTTPS
-reverse proxy (e.g. [Caddy](https://caddyserver.com/)) in front:
-
-```bash
-docker run -d \
-  --name jakeforge \
-  --restart unless-stopped \
-  -p 127.0.0.1:5186:5186 \
-  -e ALLOWED_HOSTS=jakeforge.example.com,203.0.113.7,localhost,127.0.0.1 \
-  jakeforge
-```
-
-Caddy handles HTTPS, automatic Let's Encrypt certificates, and HTTP→HTTPS
-redirects. A minimal Caddyfile:
-
-```
-jakeforge.example.com {
-    reverse_proxy 127.0.0.1:5186
-}
-```
-
-Run Caddy as a Docker container on the same host:
-
-```bash
-docker run -d \
-  --name caddy \
-  --restart unless-stopped \
-  --network host \
-  -v caddy_data:/data \
-  -v /path/to/Caddyfile:/etc/caddy/Caddyfile \
-  caddy:2
-```
-
-To smoke-test on the host, hit the loopback binding directly
-(`curl -I http://127.0.0.1:5186`). Publishing the container on port 80
-(`-p 80:5186`) only works before Caddy is installed — once Caddy owns 80/443,
-that mapping fails with "address already in use".
-
-### GitHub Actions deploy to EC2
-
-The workflow in `.github/workflows/deploy.yml` keeps pull requests as CI-only
-builds. Pushes to `main` SSH into the EC2 host, copy the source archive, build
-the Docker image on the instance, and restart the `jakeforge` container bound to
-`127.0.0.1:5186`. A separately managed Caddy container owns ports 80/443 and
-reverse-proxies to the app.
-
-Configure these repository secrets before enabling the deploy job:
-
-| Secret | Value |
-| --- | --- |
-| `EC2_HOST` | Public IPv4 address or DNS name of the EC2 instance |
-| `EC2_USER` | SSH user, typically `ec2-user` on Amazon Linux |
-| `EC2_SSH_KEY` | Private key contents for the EC2 key pair |
-| `ALLOWED_HOSTS` | Comma-separated public hostnames/IPs, e.g. `jakeforge.xinyiklin.com,100.60.78.4,ec2-100-60-78-4.compute-1.amazonaws.com` |
-
-The EC2 instance must already have Docker and Caddy running (see the Caddy
-setup above). The workflow uses plain `docker` when available, or passwordless
-`sudo docker` on default Amazon Linux setups.
+`npm run check` is the local and CI verification gate: it runs the TypeScript
+production build and all three deterministic evals. The focused eval commands
+are faster iteration targets for the `.resume` codec, direct-editing adapter,
+and PDF-font shaping contract respectively. `npm run preview` serves the latest
+production build on port 5186. There is no separate lint command.
 
 ## Architecture
 
-```
+```text
 src/
-  lib/            resume data model + parse/serialize/LaTeX-extract helpers
-  hooks/          useResumeEditor · useDocStyle · useTemplates · useResumeExport
-  components/     reusable Modal shell and ImportModal
+  main.tsx                       React entry point
+  App.tsx                        file lifecycle, autosave, toolbar, workspace
+  sampleResume.ts                starter document
+  components/
+    Modal.tsx                    dialog shell (focus trap, Escape, backdrop)
+    Popover.tsx                  accessible anchored-popover primitive
+    toolbar/                     editor toolbar, style popovers, zoom controls
+  hooks/
+    useResumeEditor.ts           structured reducer, history, edit actions
+    useDocStyle.ts               browser persistence/state adapter for style + view prefs
+  lib/
+    resumeData.ts                canonical model, constructors, session ids
+    documentStyle.ts             pure persisted style contract, defaults, bounds
+    documentTypography.ts        shared deterministic document-size scale
+    resumeFile.ts                strict `.resume` v1 codec and validation
+    inlineMarksText.ts           inline-mark grammar, emphasis/font/size/alignment helpers
+    styleFieldFormatting.ts      bulk/effective formatting across field roles
+    links.ts                     safe link normalization and auto-detection
+    pageMargins.ts               page-margin presets, bounds, normalization
+    download.ts                  shared browser file-download side effect
   sections/
-    editor/       the editable on-page resume (sections, entries, bullets, skills)
-    Resume*.tsx   read-only document + off-screen print layer
-  styles/         design tokens, resume document/editor CSS, app shell
+    ResumePrintLayer.tsx         off-screen browser-print document
+    editor/                      direct input, caret mapping, commands, structure overlay
+  typeset/
+    schema.ts                    exact layout input + sole ResumeData adapter
+    blocks.ts                    model to vertical line stream
+    linebreak.ts                 deterministic paragraph breaking
+    layout.ts                    page breaking and geometry
+    fontRegistry.ts              bundled family and face registry
+    measure.ts / metrics.gen.ts  committed measurements for all document fonts
+    render/dom.tsx               selectable editor and print renderer
+    pdf/emit.ts                  embedded-font PDF serializer
+  styles/                        tokens, shell, toolbar, popovers, document, overlay, print
 public/
-  favicon.svg     forge brand mark (anvil app-icon, also the sidebar lockup)
-  fonts/          embedded LM Roman faces for PDF-faithful on-page rendering
-server/
-  latex/          Jake's template renderer, resume parser, Tectonic wrapper
-  docx.mjs        DOCX text extractor (zero-dep; shells to unzip)
-server.mjs        serves the app + /api/{templates,render-resume-latex,import-resume-tex,import-resume-docx}
+  fonts/                         bundled web/PDF fonts and their licenses
+scripts/
+  generate_font_assets.py        pinned webfont and metric generator
+  generate_pdf_fonts.py          derives PDF-embeddable OTF/TTF siblings
 ```
 
-The editor holds a **structured resume model** (`ResumeData`). LaTeX exports
-render straight from that model through the template — the same path the preview
-uses — so downloads match what you see. Plain-text serialization backs the
-clean-print mirror.
+`ResumeData` is the canonical in-memory model. The layout conversion carries
+temporary provenance ids into the painted output so selections and structure
+controls map back to the correct field. `src/typeset/schema.ts` is the sole
+adapter into that renderer-ready input. The `.resume` codec removes session ids
+on save and creates fresh ones on open.
 
-## Privacy
+Vite is used for local development and static compilation only. All production
+runtime behavior is browser-side.
 
-Local-first and personal. The resume lives in `localStorage` and is sent solely
-to the app's own LaTeX endpoints for rendering — on your machine when running
-locally, or on your own server when self-hosting the Docker image. There is no
-account, no database, and no third-party service.
+### Font assets
+
+`scripts/generate_font_assets.py` builds the static WOFF2 files in
+`public/fonts/` and regenerates `src/typeset/metrics.gen.ts` from pinned,
+checksum-verified sources. Its header records the reproducible Python tooling;
+run it with `--check` to verify those committed outputs.
+`scripts/generate_pdf_fonts.py` derives the matching OTF/TTF files consumed by
+the client-side PDF emitter. After a font-pipeline change, regenerate both
+formats and run `npm run eval:pdf-font-parity`. Source Serif 4 and Source Sans 3
+use the SIL Open Font License stored in `public/fonts/SourceSerif4-OFL.txt` and
+`public/fonts/SourceSans3-OFL.txt`. Latin Modern's GUST Font License is stored in
+`public/fonts/LatinModern-GUST-FONT-LICENSE.txt`.
+
+## Privacy model
+
+Resume content is stored only in browser `localStorage` and in files the user
+explicitly opens or downloads. **Export PDF** lays out and serializes the
+document in the page with the dedicated pdf-lib emitter; it does not invoke the
+browser print dialog or send document content over the network. Manual browser
+printing remains available through the separate off-screen print layer. Fonts
+and application assets are bundled with the site.
+
+The app makes no resume-data requests and includes no third-party analytics,
+hosted AI, accounts, or remote persistence. A static host receives ordinary
+asset requests; it does not receive the document being edited.
+
+## Static hosting
+
+Typeset is deployed at [typeset.xinyiklin.com](https://typeset.xinyiklin.com).
+Because the build is a static site, any static host can serve the contents of
+`dist/`:
+
+```bash
+npm ci
+npm run build
+```
+
+For self-hosting with the checked-in Docker image:
+
+```bash
+docker build -t typeset .
+docker run --rm -p 127.0.0.1:5186:8080 typeset
+```
+
+The multi-stage image builds with Node and serves only the compiled assets from
+unprivileged Nginx. It has no runtime environment variables or application API.
+Put the loopback-bound container behind an HTTPS reverse proxy when exposing it
+publicly.
+
+Example Caddy site:
+
+```caddy
+resume.example.com {
+  reverse_proxy 127.0.0.1:5186
+}
+```
+
+The GitHub workflow runs `npm run check` for pull requests. On configured pushes
+to `main`, it rebuilds and restarts the same static Nginx container on the EC2
+host that serves [typeset.xinyiklin.com](https://typeset.xinyiklin.com).
+
+## Viewport support
+
+Typeset targets modern desktop and tablet browsers. A focused small-screen
+gate is preferable to degrading the document editor into a compromised phone UI.
+
+## License
+
+[MIT](LICENSE) © 2026 Xinyi Lin
