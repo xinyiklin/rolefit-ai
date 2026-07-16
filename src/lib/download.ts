@@ -1,0 +1,15 @@
+// The one browser download choreography for every file the app emits
+// (.resume saves, exported PDFs): object URL → hidden anchor click → deferred
+// revoke. The revoke must not be synchronous — some engines (Safari) abort the
+// download if the URL dies inside the click's task.
+export function downloadBlob(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.hidden = true;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 0);
+}

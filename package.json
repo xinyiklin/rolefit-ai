@@ -1,29 +1,34 @@
 {
-  "name": "jakeforge",
+  "name": "typeset",
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": ">=22.6"
+  },
   "scripts": {
-    "dev": "node server.mjs",
+    "dev": "vite",
     "build": "tsc && vite build",
-    "preview": "NODE_ENV=production node server.mjs"
+    "preview": "vite preview",
+    "eval:resume-file": "node --experimental-strip-types src/lib/__evals__/resume-file-v1.mjs",
+    "eval:editor": "node --experimental-strip-types src/sections/editor/__evals__/typeset-editing.mjs",
+    "eval:pdf-font-parity": "node --experimental-strip-types src/typeset/__evals__/pdf-font-parity.mjs",
+    "eval": "npm run eval:resume-file && npm run eval:editor && npm run eval:pdf-font-parity",
+    "test": "npm run eval",
+    "check": "npm run build && npm run eval"
   },
   "dependencies": {
-    "@dnd-kit/core": "^6.3.1",
-    "@dnd-kit/sortable": "^8.0.0",
-    "@dnd-kit/utilities": "^3.2.2",
-    "lucide-react": "^0.468.0",
-    "react": "^19.1.0",
-    "react-dom": "^19.1.0"
+    "@pdf-lib/fontkit": "^1.1.1",
+    "lucide-react": "^1.24.0",
+    "pdf-lib": "^1.17.1",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7"
   },
   "devDependencies": {
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
-    "@vitejs/plugin-react": "^5.0.0",
-    "typescript": "^5.8.0",
-    "vite": "^7.0.0"
-  },
-  "overrides": {
-    "esbuild": "^0.28.1"
+    "@vitejs/plugin-react": "^6.0.3",
+    "typescript": "^5.9.3",
+    "vite": "^8.1.4"
   }
 }

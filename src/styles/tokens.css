@@ -1,84 +1,56 @@
-/* =============================================================
-   RoleFit AI — Drafting desk
-   Single-pane studio: navbar-input menus + tabbed canvas + export rail.
-   Palette: paper-warm neutrals tinted toward the forest brand hue (OKLCH),
-   one committed accent for actions and selection, quiet semantic states.
-   ============================================================= */
-
 :root {
-  /* Type stacks — single sans family for tool chrome */
-  --font-display: "Geist", -apple-system, BlinkMacSystemFont, "Helvetica Neue", "Segoe UI", sans-serif;
-  --font-ui: "Geist", -apple-system, BlinkMacSystemFont, "Helvetica Neue", "Segoe UI", sans-serif;
-  --font-mono: "JetBrains Mono", "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
-  /* Serif — system-only; used for the brand wordmark, page h2, and print-desk identity chrome */
-  --font-serif: "Charter", "Bitstream Charter", "Iowan Old Style", "Georgia", "Cambria", "Times New Roman", serif;
+  color-scheme: light;
 
-  /* Surface — green-tinted paper neutrals (never pure white/black) */
-  --paper: oklch(0.956 0.006 150);
-  --paper-deep: oklch(0.934 0.008 150);
-  --card: oklch(0.992 0.002 150);
-  --card-soft: oklch(0.963 0.005 150);
-  --card-elev: oklch(0.997 0.001 150);
-  --card-hover: oklch(0.976 0.004 150);
+  /* Application chrome uses the platform's native UI voice. The resume page
+     owns Latin Modern separately in resume-document.css. */
+  --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-serif: Charter, "Bitstream Charter", "Iowan Old Style", Georgia, serif;
+  --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
 
-  --ink: oklch(0.25 0.012 160);
-  --ink-strong: oklch(0.18 0.014 160);
-  --ink-muted: oklch(0.41 0.014 160);
-  --ink-soft: oklch(0.5 0.014 160);
-  --ink-faint: oklch(0.58 0.012 160);
+  /* The Working Page palette: cool desk neutrals and one drafting-teal ink. */
+  --paper: #eef1ef;
+  --paper-deep: #e8ece9;
+  --card: #fbfcfb;
+  --card-soft: #f4f6f4;
+  --card-elev: #fdfefd;
+  --card-hover: #f0f3f1;
 
-  --hairline: oklch(0.885 0.008 150);
-  --hairline-soft: oklch(0.925 0.006 150);
-  --hairline-strong: oklch(0.81 0.01 150);
+  --ink: #242826;
+  --ink-strong: #171a19;
+  --ink-muted: #626965;
+  --ink-soft: #737b76;
+  --ink-faint: #89918c;
 
-  /* Brand accent — forest ink */
-  --accent: oklch(0.46 0.085 165);
-  --accent-deep: oklch(0.36 0.075 168);
-  --accent-soft: oklch(0.945 0.024 162);
-  --accent-veil: oklch(0.46 0.085 165 / 0.12);
-  --accent-glow: oklch(0.46 0.085 165 / 0.2);
-  --on-accent: oklch(0.975 0.008 150);
+  --hairline: #d9dedb;
+  --hairline-soft: #e6eae7;
+  --hairline-strong: #bec6c1;
 
-  /* Signal colors */
-  --warm: oklch(0.52 0.1 75);
-  --warm-soft: oklch(0.92 0.05 85);
-  --warm-veil: oklch(0.965 0.025 85);
-  --cool: oklch(0.45 0.06 250);
-  --cool-veil: oklch(0.45 0.06 250 / 0.1);
-  --cool-line: oklch(0.45 0.06 250 / 0.25);
-  --cool-faint: oklch(0.45 0.06 250 / 0.06);
-  --danger: oklch(0.45 0.12 30);
-  --danger-soft: oklch(0.92 0.04 25);
-  --danger-line: oklch(0.45 0.12 30 / 0.3);
+  --accent: #176b5c;
+  --accent-deep: #12594d;
+  --accent-soft: #e4f1ed;
+  --accent-veil: rgb(23 107 92 / 14%);
+  --accent-glow: rgb(23 107 92 / 24%);
+  --on-accent: #f8fbfa;
 
-  /* Layout */
-  --sidebar-width: 296px;
+  --warm: #8a6224;
+  --danger: #a5413d;
+  --danger-soft: #f8e9e7;
+  --danger-line: rgb(165 65 61 / 28%);
 
-  /* Spacing scale */
   --s1: 4px;
   --s2: 8px;
   --s3: 12px;
   --s4: 16px;
-  --s5: 22px;
-  --s6: 32px;
-  --s7: 48px;
+  --s5: 24px;
 
-  /* Radii */
   --r-sm: 4px;
   --r-md: 6px;
-  --r-lg: 10px;
-  --r-xl: 14px;
-  --r-pill: 999px;
+  --r-lg: 8px;
 
-  /* Shadows — neutral tint */
-  --shadow-rest: 0 1px 0 oklch(0.2 0.01 160 / 0.04), 0 6px 20px oklch(0.2 0.01 160 / 0.03);
-  --shadow-lift: 0 1px 0 oklch(0.2 0.01 160 / 0.05), 0 14px 36px oklch(0.2 0.01 160 / 0.08);
-  --shadow-inset: inset 0 1px 0 oklch(1 0 0 / 0.6);
-  --shadow-rail: 0 -1px 0 var(--hairline), 0 -14px 32px oklch(0.2 0.01 160 / 0.03);
-  --shadow-mast: 0 1px 0 var(--hairline);
+  --shadow-rest: 0 1px 2px rgb(21 29 25 / 8%), 0 18px 48px rgb(21 29 25 / 10%);
+  --shadow-lift: 0 2px 6px rgb(21 29 25 / 8%), 0 12px 32px rgb(21 29 25 / 14%);
 
-  /* Motion */
-  --ease: cubic-bezier(0.2, 0.6, 0.2, 1);
+  --ease: cubic-bezier(0.2, 0.65, 0.25, 1);
 
   color: var(--ink);
   background: var(--paper);

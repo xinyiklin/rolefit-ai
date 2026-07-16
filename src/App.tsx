@@ -1,823 +1,613 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ChangeEvent, type DragEvent, type ReactNode } from "react";
-import { ChevronRight, Eye, FileCode2, FileDown, RotateCcw, SlidersHorizontal, Upload, X } from "lucide-react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type DragEvent
+} from "react";
+import { FileUp, Info, TriangleAlert, X } from "lucide-react";
 
-import { useResumeEditor } from "./hooks/useResumeEditor";
-import { useDocStyle, JAKE_STYLE_DEFAULTS, DOC_ZOOM_OPTIONS, DOC_SPACING_PRESETS, DOC_SPACING_KEYS, type DocSpacingKey, type DocSpacingPreset, type HeadingCase } from "./hooks/useDocStyle";
-import { useTemplates } from "./hooks/useTemplates";
-import { useResumeExport } from "./hooks/useResumeExport";
-import { ResumeEditor } from "./sections/editor/ResumeEditor";
-import { ResumePrintLayer } from "./sections/ResumePrintLayer";
 import { Modal } from "./components/Modal";
-import { buildStarterResume, reidResume } from "./sampleResume";
-import { fileToText } from "./lib/importResume";
+import { TopToolbar, type ToolbarSaveStatus } from "./components/toolbar/TopToolbar";
+import { useDocStyle } from "./hooks/useDocStyle";
+import {
+  DOC_PAGE_WIDTH_PX,
+  DOC_STYLE_DEFAULTS,
+  nextZoomOption,
+  toDocumentStyle,
+  type DocumentStyle
+} from "./lib/documentStyle";
+import { useResumeEditor } from "./hooks/useResumeEditor";
+import {
+  downloadResumeFile,
+  parseResumeFile,
+  readResumeFile,
+  resumeFileName,
+  serializeResumeFile,
+  type ParsedResumeFile
+} from "./lib/resumeFile";
 import type { ResumeData } from "./lib/resumeData";
+import { downloadBlob } from "./lib/download";
+import {
+  STYLE_FIELD_MARK_DEFAULTS,
+  globalAlignmentState,
+  styleFieldFontStates,
+  styleFieldMarkStates,
+  styleFieldSizeStates,
+  styleFieldDefaultSizePt
+} from "./lib/styleFieldFormatting";
+import { buildStarterResume } from "./sampleResume";
+import { ResumePrintLayer } from "./sections/ResumePrintLayer";
+import { layoutResume } from "./typeset/layout.ts";
+import { toTypesetSchema } from "./typeset/schema.ts";
+import {
+  TypesetEditor,
+  type InlineFormatState,
+  type TypesetEditorHandle
+} from "./sections/editor/TypesetEditor";
 
-const STORAGE_KEY = "jakeforge.resume.v1";
-const FOCUSABLE_SELECTOR = [
-  "a[href]",
-  "button:not([disabled])",
-  "input:not([disabled])",
-  "select:not([disabled])",
-  "textarea:not([disabled])",
-  "[tabindex]:not([tabindex='-1'])"
-].join(",");
+const AUTOSAVE_KEY = "typeset-resume.autosave.v1";
+const DOCUMENT_TITLE_KEY = "typeset-resume.documentTitle.v1";
+const AUTOSAVE_DELAY_MS = 450;
+const UNTITLED_RESUME_TITLE = "Untitled resume";
 
-function loadSavedResume(): ResumeData | null {
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return null;
-    return reidResume(JSON.parse(raw) as ResumeData);
-  } catch {
-    return null;
-  }
-}
+type Notice = {
+  tone: "info" | "error";
+  message: string;
+};
 
-function visibleFocusableElements(container: HTMLElement) {
-  return Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).filter(
-    (el) => el.offsetWidth > 0 || el.offsetHeight > 0 || el.getClientRects().length > 0
-  );
-}
-
-// Fine-grained layout/spacing controls, grouped by where on the page they act so
-// the (otherwise long) list stays scannable. Every spacing field in DocStyle is
-// exposed here; ranges mirror role-fit-ai's Format menu. Page font size and
-// margins are intentionally fixed by the Jake template.
-const SPACING_GROUPS: { label: string; sliders: { key: DocSpacingKey; label: string; min: number; max: number; unit: string }[] }[] = [
-  {
-    label: "Page",
-    sliders: [{ key: "lineHeight", label: "Line height", min: 1, max: 1.6, unit: "" }]
-  },
-  {
-    label: "Header",
-    sliders: [
-      { key: "nameContactGap", label: "Name → contact", min: 0, max: 0.5, unit: "em" },
-      { key: "contactGap", label: "Contact gap", min: 0.5, max: 3, unit: "em" },
-      { key: "headerSectionGap", label: "Header → section", min: 0, max: 2, unit: "em" }
-    ]
-  },
-  {
-    label: "Sections",
-    sliders: [
-      { key: "sectionGap", label: "Section gap", min: 0, max: 1.6, unit: "em" },
-      { key: "sectionEntryGap", label: "Heading → entry", min: 0, max: 1.2, unit: "em" }
-    ]
-  },
-  {
-    label: "Entries",
-    sliders: [
-      { key: "entryGap", label: "Entry gap", min: 0, max: 1.2, unit: "em" },
-      { key: "titleSubGap", label: "Title → subtitle", min: 0, max: 0.4, unit: "em" },
-      { key: "headBulletGap", label: "Entry → bullets", min: 0, max: 1.2, unit: "em" }
-    ]
-  },
-  {
-    label: "Lists",
-    sliders: [
-      { key: "bulletGap", label: "Bullet gap", min: 0, max: 1, unit: "em" },
-      { key: "skillsRowGap", label: "Skill-row gap", min: 0, max: 0.8, unit: "em" }
-    ]
-  }
-];
-
-// Labeled range input for one spacing dimension.
-function SpacingSlider({
-  label,
-  value,
-  min,
-  max,
-  unit,
-  onChange
-}: {
-  label: string;
-  value: number;
-  min: number;
-  max: number;
-  unit: string;
-  onChange: (value: number) => void;
-}) {
-  return (
-    <label className="ctl-slider">
-      <span className="ctl-slider__head">
-        {label}
-        <small className="ctl-slider__value">
-          {value.toFixed(2)}
-          {unit}
-        </small>
-      </span>
-      <input
-        type="range"
-        min={min}
-        max={max}
-        step={0.01}
-        value={value}
-        onChange={(event) => onChange(Number(event.target.value))}
-        aria-label={label}
-      />
-    </label>
-  );
-}
-
-function AnimatedSeg<K extends string>({
-  items,
-  activeKey,
-  onSelect,
-  block = false
-}: {
-  items: { key: K; label: string }[];
-  activeKey: K | null;
-  onSelect: (key: K) => void;
-  // Full-width track with equal-width options — for 3-option controls that don't
-  // fit beside an inline label in the narrow sidebar.
-  block?: boolean;
-}) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const btnRefs = useRef<Map<K, HTMLButtonElement>>(new Map());
-  const [pill, setPill] = useState<{ left: number; width: number } | null>(null);
-
-  const measure = useCallback(() => {
-    if (!activeKey || !containerRef.current) { setPill(null); return; }
-    const btn = btnRefs.current.get(activeKey);
-    if (!btn) { setPill(null); return; }
-    const cr = containerRef.current.getBoundingClientRect();
-    const br = btn.getBoundingClientRect();
-    setPill({ left: br.left - cr.left, width: br.width });
-    // items.length is a dep: in the full-width (block) layout, adding the saved
-    // "Custom" option reflows every button to a new equal width even when
-    // activeKey is unchanged, so the pill must re-measure on count changes too.
-  }, [activeKey, items.length]);
-
-  useLayoutEffect(measure, [measure]);
-  useEffect(() => { window.addEventListener("resize", measure); return () => window.removeEventListener("resize", measure); }, [measure]);
-
-  return (
-    <div className={`seg${block ? " seg--full" : ""}`} ref={containerRef}>
-      {pill && (
-        <span
-          className="seg__pill"
-          style={{ transform: `translateX(${pill.left}px)`, width: pill.width }}
-        />
-      )}
-      {items.map(({ key, label }) => (
-        <button
-          key={key}
-          type="button"
-          ref={(el) => { if (el) btnRefs.current.set(key, el); else btnRefs.current.delete(key); }}
-          className={`seg__opt${activeKey === key ? " is-active" : ""}`}
-          onClick={() => onSelect(key)}
-        >
-          {label}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-// Common contact separators offered as one-tap chips (any 1–2 chars still work
-// via the custom input).
-const COMMON_DIVIDERS = ["|", "•", "·", "–", "/"];
-
-// Section-heading letter case — a mutually-exclusive choice, shown as a segmented
-// control (small caps is Jake's \scshape default; "Normal" leaves Title Case).
-const HEADING_CASES: { key: HeadingCase; label: string }[] = [
-  { key: "smallcaps", label: "Small caps" },
-  { key: "uppercase", label: "Uppercase" },
-  { key: "none", label: "Normal" }
-];
-
-// A pill that toggles a boolean DocStyle flag — filled when active. Reads more
-// like a formatting toolbar than a column of checkboxes.
-function ToggleChip({
-  label,
-  active,
-  onClick
-}: {
-  label: string;
-  active: boolean;
-  onClick: (next: boolean) => void;
-}) {
-  return (
-    <button
-      type="button"
-      className={`chip${active ? " is-active" : ""}`}
-      aria-pressed={active}
-      onClick={() => onClick(!active)}
-    >
-      {label}
-    </button>
-  );
-}
-
-// Sidebar accordion card — an uppercase title row that toggles its body open.
-// Groups the typography controls so the sidebar reads as a short list of
-// sections a user expands one at a time.
-function AccordionCard({
-  title,
-  isOpen,
-  onToggle,
-  children
-}: {
+type Replacement = {
+  kind: "new" | "open";
+  data: ResumeData;
+  documentStyle: DocumentStyle;
   title: string;
-  isOpen: boolean;
-  onToggle: () => void;
-  children: ReactNode;
-}) {
-  return (
-    <section className={`acc${isOpen ? " is-open" : ""}`}>
-      <button type="button" className="acc__header" aria-expanded={isOpen} onClick={onToggle}>
-        <span className="acc__title">{title}</span>
-        <ChevronRight size={15} className="acc__chev" aria-hidden="true" />
-      </button>
-      {isOpen ? <div className="acc__body">{children}</div> : null}
-    </section>
-  );
+};
+
+const EMPTY_INLINE_FORMAT: InlineFormatState = {
+  canFormat: false,
+  bold: false,
+  italic: false,
+  underline: false,
+  fontFamily: null,
+  fontSizePt: null,
+  alignment: null,
+  alignmentScope: null,
+  entryField: null,
+  linkHref: null,
+  linkText: "",
+  linkAutomatic: false,
+  canLink: false,
+  canClearFormatting: false
+};
+
+function titleFromFileName(fileName: string) {
+  return fileName.replace(/\.resume$/i, "").trim() || UNTITLED_RESUME_TITLE;
+}
+
+function readableError(error: unknown) {
+  return error instanceof Error ? error.message : "Something went wrong while opening this resume.";
+}
+
+function hasDraggedFiles(event: DragEvent<HTMLElement>) {
+  return Array.from(event.dataTransfer.types).includes("Files");
 }
 
 export default function App() {
   const editor = useResumeEditor();
   const docStyle = useDocStyle();
-  const templates = useTemplates();
-  const [texStatus, setTexStatus] = useState("");
-  const fineTuneTriggerRef = useRef<HTMLButtonElement>(null);
-  const fineTuneDialogRef = useRef<HTMLDivElement>(null);
+  const editorRef = useRef<TypesetEditorHandle>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const workspaceRef = useRef<HTMLElement>(null);
+  const initializedRef = useRef(false);
+  const autoFitRef = useRef(false);
+  const dragDepthRef = useRef(0);
 
-  // The 11 fine-grained spacing sliders live in a floating flyout — most people
-  // pick a preset and never open it. Session-only (a flyout that reopened over
-  // the sidebar on every reload would be more nuisance than convenience).
-  const [showFineTune, setShowFineTune] = useState(false);
+  const [documentTitle, setDocumentTitle] = useState(UNTITLED_RESUME_TITLE);
+  const [saveStatus, setSaveStatus] = useState<ToolbarSaveStatus>("saving");
+  const [notice, setNotice] = useState<Notice | null>(null);
+  const [pendingReplacement, setPendingReplacement] = useState<Replacement | null>(null);
+  const [inlineFormat, setInlineFormat] = useState<InlineFormatState>(EMPTY_INLINE_FORMAT);
+  const [linkEditorOpen, setLinkEditorOpen] = useState(false);
+  const [isSavingFile, setIsSavingFile] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const [isDraggingFile, setIsDraggingFile] = useState(false);
 
-  // Typography controls are grouped into collapsible cards, each independently
-  // openable; all closed by default so the sidebar stays short.
-  const [openCards, setOpenCards] = useState({ typography: false, entries: false, skills: false });
-  const toggleCard = (key: keyof typeof openCards) =>
-    setOpenCards((cards) => ({ ...cards, [key]: !cards[key] }));
+  const resume = editor.editedResume;
+  const documentStyleSignature = useMemo(
+    () => JSON.stringify(toDocumentStyle(docStyle.style)),
+    [docStyle.style]
+  );
+  const globalAlignments = useMemo(
+    () => resume ? globalAlignmentState(resume, docStyle.style) : null,
+    [docStyle.style, resume]
+  );
+  const styleMarkStates = useMemo(
+    () => resume ? styleFieldMarkStates(resume) : undefined,
+    [resume]
+  );
+  const styleFontStates = useMemo(
+    () => resume ? styleFieldFontStates(resume, docStyle.style.fontFamily) : undefined,
+    [resume, docStyle.style.fontFamily]
+  );
+  const styleSizeStates = useMemo(
+    () => resume ? styleFieldSizeStates(resume, docStyle.style.baseFontSizePt) : undefined,
+    [resume, docStyle.style.baseFontSizePt]
+  );
 
-  const selectedTemplate =
-    templates.templates.find((t) => t.id === templates.selectedTemplateId) ?? null;
-
-  const exporter = useResumeExport({
-    editedResume: editor.editedResume,
-    currentResumeText: editor.serializedResume,
-    selectedTemplateId: templates.selectedTemplateId,
-    selectedTemplate,
-    renderTex: templates.renderTex,
-    renderPdf: templates.renderPdf,
-    renderTexFromSchema: templates.renderTexFromSchema,
-    renderPdfFromSchema: templates.renderPdfFromSchema,
-    docStyle: docStyle.style,
-    tectonic: templates.tectonic,
-    setTexStatus
-  });
-
-  // Seed once: saved work if present, otherwise the Jake's sample.
   useEffect(() => {
-    editor.seedData(loadSavedResume() ?? buildStarterResume());
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    if (initializedRef.current) return;
+    initializedRef.current = true;
 
-  // Persist the structured model (debounced) so a reload keeps the user's work.
-  const saveTimer = useRef<number | undefined>(undefined);
-  useEffect(() => {
-    if (!editor.editedResume) return;
-    window.clearTimeout(saveTimer.current);
-    const snapshot = editor.editedResume;
-    saveTimer.current = window.setTimeout(() => {
-      try {
-        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
-      } catch {
-        // Storage unavailable (private mode) — edits still apply this session.
+    let initialData = buildStarterResume();
+    let initialDocumentStyle: DocumentStyle | null = null;
+    let initialTitle = UNTITLED_RESUME_TITLE;
+
+    try {
+      const autosave = window.localStorage.getItem(AUTOSAVE_KEY);
+      if (autosave) {
+        // Browser drafts and disk files share one strict validation path so
+        // corrupt or manually edited state never reaches the editor reducer.
+        const restored = parseResumeFile(autosave);
+        initialData = restored.data;
+        initialDocumentStyle = restored.documentStyle;
+        initialTitle = window.localStorage.getItem(DOCUMENT_TITLE_KEY) || UNTITLED_RESUME_TITLE;
       }
-    }, 400);
-    return () => window.clearTimeout(saveTimer.current);
-  }, [editor.editedResume]);
-
-  // Intercept Ctrl/Cmd +/- (and 0 to reset) to step page zoom instead of the
-  // browser's own zoom, matching role-fit-ai.
-  useEffect(() => {
-    function onKeyDown(e: KeyboardEvent) {
-      if (!(e.metaKey || e.ctrlKey) || e.altKey || e.shiftKey) return;
-      const zoomOptions = DOC_ZOOM_OPTIONS as readonly number[];
-      const currentIndex = zoomOptions.indexOf(docStyle.style.zoom);
-      if (e.key === "=" || e.key === "+") {
-        e.preventDefault();
-        const next = currentIndex < zoomOptions.length - 1 ? currentIndex + 1 : currentIndex;
-        if (next !== currentIndex) docStyle.set("zoom", zoomOptions[next]);
-      } else if (e.key === "-") {
-        e.preventDefault();
-        const prev = currentIndex > 0 ? currentIndex - 1 : currentIndex;
-        if (prev !== currentIndex) docStyle.set("zoom", zoomOptions[prev]);
-      } else if (e.key === "0") {
-        e.preventDefault();
-        docStyle.set("zoom", 1);
-      }
+    } catch {
+      setNotice({
+        tone: "error",
+        message: "Your last local draft could not be restored, so a fresh resume was opened instead."
+      });
     }
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
+
+    editor.seedData(initialData);
+    docStyle.replaceDocumentStyle(initialDocumentStyle ?? toDocumentStyle(docStyle.style));
+    setDocumentTitle(initialTitle);
+  }, [editor.seedData]);
+
+  // The editable source is continuously kept in this browser. Saving a file is
+  // still a separate, explicit action so users can move or version a resume.
+  useEffect(() => {
+    if (!initializedRef.current || !resume) return;
+    setSaveStatus("saving");
+
+    const timer = window.setTimeout(() => {
+      try {
+        window.localStorage.setItem(AUTOSAVE_KEY, serializeResumeFile(resume, docStyle.style));
+        window.localStorage.setItem(DOCUMENT_TITLE_KEY, documentTitle.trim() || UNTITLED_RESUME_TITLE);
+        editor.markClean();
+        setSaveStatus("saved");
+      } catch {
+        setSaveStatus({ state: "error", label: "Local save unavailable" });
+      }
+    }, AUTOSAVE_DELAY_MS);
+
+    return () => window.clearTimeout(timer);
+  }, [documentStyleSignature, documentTitle, editor.markClean, resume]);
+
+  useEffect(() => {
+    document.title = `${documentTitle.trim() || UNTITLED_RESUME_TITLE} — Typeset`;
+  }, [documentTitle]);
+
+  useEffect(() => {
+    const onBeforeUnload = (event: BeforeUnloadEvent) => {
+      const state = typeof saveStatus === "string" ? saveStatus : saveStatus.state;
+      if (!editor.dirty && state !== "error") return;
+      event.preventDefault();
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [editor.dirty, saveStatus]);
+
+  const applyReplacement = useCallback(
+    (replacement: Replacement) => {
+      editor.seedData(replacement.data);
+      docStyle.replaceDocumentStyle(replacement.documentStyle);
+      setDocumentTitle(replacement.title);
+      setPendingReplacement(null);
+      setInlineFormat(EMPTY_INLINE_FORMAT);
+      setNotice({
+        tone: "info",
+        message: replacement.kind === "open" ? `Opened ${replacement.title}.` : "Started a fresh resume."
+      });
+    },
+    [editor.seedData]
+  );
+
+  const queueReplacement = useCallback(
+    (replacement: Replacement) => {
+      if (resume) setPendingReplacement(replacement);
+      else applyReplacement(replacement);
+    },
+    [applyReplacement, resume]
+  );
+
+  const newResume = useCallback(() => {
+    queueReplacement({
+      kind: "new",
+      data: buildStarterResume(),
+      documentStyle: toDocumentStyle(DOC_STYLE_DEFAULTS),
+      title: UNTITLED_RESUME_TITLE
+    });
+  }, [queueReplacement]);
+
+  const openParsedResume = useCallback(
+    (parsed: ParsedResumeFile, fileName: string) => {
+      queueReplacement({
+        kind: "open",
+        data: parsed.data,
+        documentStyle: parsed.documentStyle,
+        title: titleFromFileName(fileName)
+      });
+    },
+    [queueReplacement]
+  );
+
+  const openFile = useCallback(
+    async (file: File) => {
+      if (!file.name.toLowerCase().endsWith(".resume")) {
+        setNotice({ tone: "error", message: "Choose a .resume file. Other import formats are not supported." });
+        return;
+      }
+
+      try {
+        openParsedResume(await readResumeFile(file), file.name);
+      } catch (error) {
+        setNotice({ tone: "error", message: readableError(error) });
+      }
+    },
+    [openParsedResume]
+  );
+
+  const onFileInput = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0];
+      event.target.value = "";
+      if (file) void openFile(file);
+    },
+    [openFile]
+  );
+
+  const saveResumeFile = useCallback(() => {
+    if (!resume) return;
+    setIsSavingFile(true);
+    try {
+      const fileName = downloadResumeFile(resume, docStyle.style, documentTitle);
+      editor.markClean();
+      setNotice({ tone: "info", message: `Saved ${fileName}.` });
+    } catch (error) {
+      setNotice({ tone: "error", message: readableError(error) });
+    } finally {
+      setIsSavingFile(false);
+    }
+  }, [docStyle.style, documentTitle, editor.markClean, resume]);
+
+  const exportPdf = useCallback(async () => {
+    if (!resume || isExporting) return;
+    setIsExporting(true);
+    try {
+      // Dedicated client-side export: the owned typeset engine lays the resume
+      // out and pdf-lib serializes those exact glyph positions to PDF bytes —
+      // no browser Print dialog, and the resume text never leaves the page.
+      // pdf-lib + the emitter load on demand to stay out of the main bundle.
+      // Layout is already shared with the on-screen renderer, so it remains a
+      // direct import instead of pretending to form a second async chunk.
+      const { emitPdf, fetchFontBytes } = await import("./typeset/pdf/emit.ts");
+      const schema = toTypesetSchema(resume);
+      const doc = layoutResume(schema, docStyle.style);
+      const fonts = await fetchFontBytes(doc);
+      const bytes = await emitPdf(doc, fonts, {
+        title: schema.name ? `${schema.name} — Resume` : "Resume"
+      });
+      const fileName = `${resumeFileName(documentTitle).replace(/\.resume$/i, "")}.pdf`;
+      downloadBlob(new Blob([bytes as BlobPart], { type: "application/pdf" }), fileName);
+      setNotice({ tone: "info", message: `Exported ${fileName}.` });
+    } catch (error) {
+      setNotice({ tone: "error", message: `PDF export failed. ${readableError(error)}` });
+    } finally {
+      setIsExporting(false);
+    }
+  }, [docStyle.style, documentTitle, isExporting, resume]);
+
+  const fitPage = useCallback(() => {
+    const width = workspaceRef.current?.clientWidth ?? window.innerWidth;
+    const availableWidth = Math.max(320, width - 120);
+    const fit = Math.min(1.25, Math.max(0.5, availableWidth / DOC_PAGE_WIDTH_PX));
+    docStyle.set("zoom", Math.round(fit * 100) / 100);
   }, [docStyle]);
 
-  // The "PDF · clean" button is gone — users print via ⌘P / Ctrl+P (the print
-  // CSS isolates the resume). Seed the browser's suggested filename from the
-  // resume on any manual print, restoring the page title afterward.
+  // At supported tablet widths, start with the whole sheet visible. Desktop
+  // keeps the familiar 100% default, and the choice remains user-adjustable.
   useEffect(() => {
-    function onBeforePrint() {
-      document.title = exporter.resumeDownloadName("pdf").replace(/\.pdf$/i, "");
-    }
-    function onAfterPrint() {
-      document.title = "jakeforge — Jake's-style resume editor";
-    }
-    window.addEventListener("beforeprint", onBeforePrint);
-    window.addEventListener("afterprint", onAfterPrint);
-    return () => {
-      window.removeEventListener("beforeprint", onBeforePrint);
-      window.removeEventListener("afterprint", onAfterPrint);
-    };
-  }, [exporter]);
+    if (!resume || autoFitRef.current) return;
+    autoFitRef.current = true;
+    if (window.innerWidth > 720 && window.innerWidth < 900 && docStyle.style.zoom >= 1) fitPage();
+  }, [docStyle.style.zoom, fitPage, resume]);
 
+  const undo = useCallback(() => {
+    if (editorRef.current) editorRef.current.undo();
+    else editor.actions.undo();
+  }, [editor.actions]);
 
-  // Keep keyboard focus inside the spacing flyout while it is open. It is modal
-  // for pointer users too: click outside closes it and focus returns to the trigger.
+  const redo = useCallback(() => {
+    if (editorRef.current) editorRef.current.redo();
+    else editor.actions.redo();
+  }, [editor.actions]);
+
   useEffect(() => {
-    if (!showFineTune) return;
-    const dialog = fineTuneDialogRef.current;
-    if (!dialog) return;
-    const dialogEl = dialog;
-    const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    const focusTimer = window.setTimeout(() => {
-      const first = visibleFocusableElements(dialogEl)[0];
-      (first ?? dialogEl).focus();
-    }, 0);
-
-    function onKey(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        setShowFineTune(false);
-        return;
-      }
-      if (event.key !== "Tab") return;
-
-      const focusable = visibleFocusableElements(dialogEl);
-      if (!focusable.length) {
+    const onShortcut = (event: KeyboardEvent) => {
+      if (!(event.metaKey || event.ctrlKey) || event.altKey) return;
+      const key = event.key.toLowerCase();
+      if (key === "s") {
         event.preventDefault();
-        dialogEl.focus();
-        return;
-      }
-
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      const active = document.activeElement;
-
-      if (!dialogEl.contains(active)) {
+        saveResumeFile();
+      } else if (key === "o") {
         event.preventDefault();
-        first.focus();
-      } else if (event.shiftKey && active === first) {
+        fileInputRef.current?.click();
+      } else if (key === "0") {
         event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && active === last) {
+        docStyle.set("zoom", 1);
+      } else if (key === "-" || key === "_") {
         event.preventDefault();
-        first.focus();
-      }
-    }
-
-    document.addEventListener("keydown", onKey);
-    return () => {
-      window.clearTimeout(focusTimer);
-      document.removeEventListener("keydown", onKey);
-      if (previouslyFocused && document.contains(previouslyFocused)) {
-        previouslyFocused.focus();
-      } else {
-        fineTuneTriggerRef.current?.focus();
+        docStyle.set("zoom", nextZoomOption(docStyle.style.zoom, -1));
+      } else if (key === "=" || key === "+") {
+        event.preventDefault();
+        docStyle.set("zoom", nextZoomOption(docStyle.style.zoom, 1));
       }
     };
-  }, [showFineTune]);
+    document.addEventListener("keydown", onShortcut);
+    return () => document.removeEventListener("keydown", onShortcut);
+  }, [docStyle, saveResumeFile]);
 
-  function seedFromText(text: string) {
-    editor.seed(text);
-    setTexStatus("");
-  }
-
-  // Direct drag-and-drop + click-to-browse import on the sidebar zone.
-  const importInputRef = useRef<HTMLInputElement>(null);
-  const [importDragOver, setImportDragOver] = useState(false);
-
-  async function handleImportFile(file: File | null | undefined) {
-    if (!file) return;
-    try {
-      seedFromText(await fileToText(file));
-    } catch (e) {
-      setTexStatus(e instanceof Error ? e.message : "Could not read that file.");
-    }
-  }
-
-  function handleImportDrop(event: DragEvent<HTMLLabelElement>) {
+  const onDragEnter = useCallback((event: DragEvent<HTMLDivElement>) => {
+    if (!hasDraggedFiles(event)) return;
     event.preventDefault();
-    setImportDragOver(false);
-    void handleImportFile(event.dataTransfer.files?.[0]);
-  }
+    dragDepthRef.current += 1;
+    setIsDraggingFile(true);
+  }, []);
 
-  function handleImportChange(event: ChangeEvent<HTMLInputElement>) {
-    void handleImportFile(event.target.files?.[0]);
-    // Reset so re-selecting the same file fires onChange again.
-    event.target.value = "";
-  }
+  const onDragOver = useCallback((event: DragEvent<HTMLDivElement>) => {
+    if (!hasDraggedFiles(event)) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "copy";
+  }, []);
 
-  // The live spacing equals a preset when all 11 fields match (within a hair, so
-  // float rounding from the sliders doesn't break the highlight).
-  const spacingActive = (values: DocSpacingPreset) =>
-    DOC_SPACING_KEYS.every((k) => Math.abs(docStyle.style[k] - values[k]) < 0.005);
+  const onDragLeave = useCallback((event: DragEvent<HTMLDivElement>) => {
+    if (!hasDraggedFiles(event)) return;
+    event.preventDefault();
+    dragDepthRef.current = Math.max(0, dragDepthRef.current - 1);
+    if (dragDepthRef.current === 0) setIsDraggingFile(false);
+  }, []);
 
-  // Built-in presets plus the user's saved "Custom" (when present), shown as one
-  // segmented selector. "custom" applies the saved snapshot; the rest apply their
-  // fixed values.
-  const presetItems = [
-    ...Object.entries(DOC_SPACING_PRESETS).map(([key, p]) => ({ key, label: p.label })),
-    ...(docStyle.customPreset ? [{ key: "custom", label: "Custom" }] : [])
-  ];
-
-  const activePresetKey =
-    (Object.entries(DOC_SPACING_PRESETS).find(([, p]) => spacingActive(p.values))?.[0] ?? null) ??
-    (docStyle.customPreset && spacingActive(docStyle.customPreset) ? "custom" : null);
-
-  function applyPreset(key: string) {
-    if (key === "custom") {
-      if (docStyle.customPreset) docStyle.applySpacingPreset(docStyle.customPreset);
-      return;
-    }
-    docStyle.applySpacingPreset(DOC_SPACING_PRESETS[key as keyof typeof DOC_SPACING_PRESETS].values);
-  }
-
-  const tectonicOff = !templates.tectonic.available;
-
-  // Rename-before-download. The export handlers take a base name (no extension);
-  // this dialog collects it, pre-filled with the resume-derived default.
-  const [renameTarget, setRenameTarget] = useState<{ kind: "pdf" | "tex" } | null>(null);
-  const [renameValue, setRenameValue] = useState("");
-
-
-
-  // Generic confirm dialog (used by destructive actions like "Load sample").
-  const [confirmState, setConfirmState] = useState<{
-    title: string;
-    message: string;
-    confirmLabel: string;
-    onConfirm: () => void;
-  } | null>(null);
-
-  function openRename(kind: "pdf" | "tex") {
-    setRenameValue(exporter.resumeDownloadName(kind).replace(/\.(pdf|tex)$/i, ""));
-    setRenameTarget({ kind });
-  }
-
-  function confirmRename() {
-    if (!renameTarget) return;
-    const base = renameValue.trim() || undefined;
-    if (renameTarget.kind === "pdf") exporter.handleDownloadLatexPdf(base);
-    else exporter.handleDownloadTex(base);
-    setRenameTarget(null);
-  }
+  const onDrop = useCallback(
+    (event: DragEvent<HTMLDivElement>) => {
+      event.preventDefault();
+      dragDepthRef.current = 0;
+      setIsDraggingFile(false);
+      const file = event.dataTransfer.files[0];
+      if (file) void openFile(file);
+    },
+    [openFile]
+  );
 
   return (
-    <div className="app">
-      <aside className="sidebar">
-        <div className="brand">
-          <img className="brand__icon" src="/favicon.svg" alt="" width="34" height="34" />
-          <div className="brand__text">
-            <span className="brand__mark">jakeforge</span>
-            <span className="brand__sub">Jake&apos;s-style resume editor</span>
-          </div>
+    <div
+      className="app"
+      onDragEnter={onDragEnter}
+      onDragOver={onDragOver}
+      onDragLeave={onDragLeave}
+      onDrop={onDrop}
+    >
+      <TopToolbar
+        documentTitle={documentTitle}
+        onDocumentTitleChange={setDocumentTitle}
+        saveStatus={saveStatus}
+        onNew={newResume}
+        onOpen={() => fileInputRef.current?.click()}
+        onSave={saveResumeFile}
+        onExport={() => void exportPdf()}
+        documentStructure={{
+          name: resume?.name ?? "",
+          contact: resume?.contact ?? [],
+          disabled: !resume,
+          onSetName: editor.actions.setName,
+          onUpdateContact: editor.actions.updateContact,
+          onAddContact: editor.actions.addContact,
+          onRemoveContact: editor.actions.removeContact,
+          onAddSection: (type, position) => editorRef.current?.addSection(type, position)
+        }}
+        saveDisabled={!resume}
+        exportDisabled={!resume}
+        isSaving={isSavingFile}
+        isExporting={isExporting}
+        onUndo={undo}
+        onRedo={redo}
+        canUndo={editor.canUndo}
+        canRedo={editor.canRedo}
+        formattingDisabled={!resume}
+        inlineFormatting={{
+          fontFamily: {
+            value: inlineFormat.fontFamily,
+            onChange: (fontFamily) => editorRef.current?.setFontFamily(fontFamily),
+            disabled: false
+          },
+          fontSize: {
+            value: inlineFormat.fontSizePt,
+            onChange: (fontSizePt) => editorRef.current?.setFontSize(fontSizePt),
+            disabled: false
+          },
+          alignment: {
+            value: inlineFormat.alignment,
+            onChange: (alignment) => editorRef.current?.setAlignment(alignment),
+            disabled: false
+          },
+          bold: {
+            onToggle: () => editorRef.current?.toggleMark("bold"),
+            pressed: inlineFormat.bold,
+            disabled: inlineFormat.alignmentScope === "heading" && docStyle.style.headingCase === "smallcaps"
+          },
+          italic: {
+            onToggle: () => editorRef.current?.toggleMark("italic"),
+            pressed: inlineFormat.italic,
+            disabled: inlineFormat.alignmentScope === "heading" && docStyle.style.headingCase === "smallcaps"
+          },
+          underline: {
+            onToggle: () => editorRef.current?.toggleMark("underline"),
+            pressed: inlineFormat.underline,
+            disabled: inlineFormat.alignmentScope === "heading" && docStyle.style.headingCase === "smallcaps"
+          },
+          link: {
+            href: inlineFormat.linkHref,
+            text: inlineFormat.linkText,
+            automatic: inlineFormat.linkAutomatic,
+            onApply: ({ text, href }) => editorRef.current?.applyLink(text, href),
+            onRemove: () => editorRef.current?.removeLink(),
+            disabled: !inlineFormat.canLink,
+            open: linkEditorOpen,
+            onOpenChange: setLinkEditorOpen
+          },
+          clearFormatting: {
+            onClear: () => editorRef.current?.clearFormatting(),
+            disabled: !inlineFormat.canClearFormatting
+          }
+        }}
+        docStyle={docStyle}
+        globalAlignments={globalAlignments ?? undefined}
+        onGlobalAlignmentChange={(scope, alignment) => {
+          editor.actions.clearAlignmentOverrides(scope);
+          setInlineFormat((current) =>
+            current.alignmentScope === scope ? { ...current, alignment } : current
+          );
+          if (scope === "body") docStyle.set("bodyAlign", alignment);
+          else if (scope === "header") docStyle.set("headerAlign", alignment === "justify" ? "left" : alignment);
+          else docStyle.set("headingAlign", alignment === "justify" ? "left" : alignment);
+        }}
+        styleMarkStates={styleMarkStates}
+        onStyleFieldMarkChange={(field, mark, on) => {
+          editor.actions.setStyleFieldMark(field, mark, on);
+          setInlineFormat((current) =>
+            current.entryField === field ? { ...current, [mark]: on } : current
+          );
+        }}
+        styleFontStates={styleFontStates}
+        onStyleFieldFontChange={(field, family) => {
+          // Picking the document font clears the override so the field keeps
+          // inheriting; any other family is stored explicitly.
+          editor.actions.setStyleFieldFont(field, family === docStyle.style.fontFamily ? "default" : family);
+          setInlineFormat((current) =>
+            current.entryField === field ? { ...current, fontFamily: family } : current
+          );
+        }}
+        styleSizeStates={styleSizeStates}
+        onStyleFieldSizeChange={(field, sizePt) => {
+          // Snapping back to the role default clears the override; otherwise the
+          // exact point size is stored on every instance of the field.
+          const isDefault = Math.abs(sizePt - styleFieldDefaultSizePt(field, docStyle.style.baseFontSizePt)) < 0.05;
+          editor.actions.setStyleFieldSize(field, isDefault ? "default" : sizePt);
+          setInlineFormat((current) =>
+            current.entryField === field ? { ...current, fontSizePt: sizePt } : current
+          );
+        }}
+        onResetStyleFormatting={() => {
+          editor.actions.resetStyleFieldFormatting();
+          setInlineFormat((current) => {
+            if (!current.entryField) return current;
+            return { ...current, ...STYLE_FIELD_MARK_DEFAULTS[current.entryField] };
+          });
+        }}
+        onFitZoom={fitPage}
+      />
+
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".resume"
+        onChange={onFileInput}
+        hidden
+      />
+
+      {notice ? (
+        <div className={`app-notice app-notice--${notice.tone}`} role={notice.tone === "error" ? "alert" : "status"}>
+          {notice.tone === "error" ? (
+            <TriangleAlert size={16} aria-hidden="true" />
+          ) : (
+            <Info size={16} aria-hidden="true" />
+          )}
+          <span>{notice.message}</span>
+          <button type="button" onClick={() => setNotice(null)} aria-label="Dismiss message">
+            <X size={15} aria-hidden="true" />
+          </button>
+        </div>
+      ) : null}
+
+      <main className="document-workspace" ref={workspaceRef} aria-label="Resume editor">
+        <div className="mobile-gate">
+          <strong>Open this editor on a larger screen</strong>
+          <p>Typeset is designed for precise desktop and tablet editing. File actions remain available above.</p>
         </div>
 
-        <div className="sidebar__actions">
-          <label
-            className={`sidebar__drop${importDragOver ? " is-dragover" : ""}`}
-            onDragOver={(e) => {
-              e.preventDefault();
-              setImportDragOver(true);
-            }}
-            onDragLeave={() => setImportDragOver(false)}
-            onDrop={handleImportDrop}
-            title="Click to browse or drop a .txt / .md / .tex / .docx file"
-          >
-            <input
-              ref={importInputRef}
-              type="file"
-              accept=".txt,.md,.markdown,.tex,.docx"
-              hidden
-              onChange={handleImportChange}
+        {resume ? (
+          <section className="document-canvas" aria-label="Editable resume pages">
+            <TypesetEditor
+              ref={editorRef}
+              data={resume}
+              actions={editor.actions}
+              canUndo={editor.canUndo}
+              canRedo={editor.canRedo}
+              docStyle={docStyle}
+              onInlineFormatStateChange={setInlineFormat}
+              onRequestLinkEditor={() => setLinkEditorOpen(true)}
             />
-            <Upload size={15} aria-hidden="true" />
-            <span>Import resume</span>
-            <small>.txt • .md • .tex • .docx</small>
-          </label>
-        </div>
-
-        <section className="panel">
-          <h2 className="panel__title">Export</h2>
-          <div className="export-row">
-            <button
-              type="button"
-              className="btn btn--primary export-row__main"
-              onClick={() => openRename("pdf")}
-              disabled={tectonicOff || exporter.isRenderingLatexPdf}
-              title={tectonicOff ? "Install Tectonic (brew install tectonic) for LaTeX PDF" : "Download PDF (Tectonic)"}
-            >
-              <FileDown size={15} aria-hidden="true" />
-              {exporter.isRenderingLatexPdf ? "Compiling…" : "Export PDF"}
-            </button>
-            <button
-              type="button"
-              className="btn export-row__icon"
-              onClick={() => exporter.handlePreview()}
-              disabled={tectonicOff || exporter.isPreviewLoading}
-              title={tectonicOff ? "Install Tectonic (brew install tectonic) for preview" : "Preview PDF"}
-              aria-label="Preview PDF"
-            >
-              <Eye size={16} aria-hidden="true" />
-            </button>
-            <button
-              type="button"
-              className="btn export-row__icon"
-              onClick={() => openRename("tex")}
-              disabled={exporter.isDownloadingTex}
-              title="Download LaTeX source (.tex)"
-              aria-label="Download LaTeX source"
-            >
-              <FileCode2 size={16} aria-hidden="true" />
-            </button>
+          </section>
+        ) : (
+          <div className="document-loading" role="status">
+            Preparing your resume…
           </div>
-          {tectonicOff ? (
-            <p className="panel__hint">
-              LaTeX PDF &amp; preview need Tectonic. <code>brew install tectonic</code>, then restart. Clean PDF via
-              ⌘P / Ctrl+P always works.
-            </p>
-          ) : null}
-          {texStatus ? <p className="panel__status">{texStatus}</p> : null}
-        </section>
-
-        <section className="panel">
-          <div className="panel__header">
-            <h2 className="panel__title">Layout &amp; spacing</h2>
-            <button
-              ref={fineTuneTriggerRef}
-              type="button"
-              className={`ctl-finetune${activePresetKey === null ? " is-edited" : ""}`}
-              onClick={() => setShowFineTune(true)}
-              title={activePresetKey === null ? "Fine-tune spacing — custom spacing active" : "Fine-tune spacing"}
-            >
-              <span>Fine-tune</span>
-              {/* Text equivalent for the visual .is-edited dot, folded into the
-                  button's accessible name so it isn't a colour-only signal. */}
-              {activePresetKey === null ? <span className="sr-only"> (custom spacing active)</span> : null}
-              <SlidersHorizontal size={14} aria-hidden="true" />
-            </button>
-          </div>
-          <label className="ctl-row">
-            <span>Zoom</span>
-            <select
-              value={docStyle.style.zoom}
-              onChange={(event) => docStyle.set("zoom", Number(event.target.value))}
-            >
-              {DOC_ZOOM_OPTIONS.map((zoom) => (
-                <option key={zoom} value={zoom}>
-                  {Math.round(zoom * 100)}%
-                </option>
-              ))}
-            </select>
-          </label>
-          <div className="ctl-seg-field">
-            <span className="ctl-seg-field__label">Preset</span>
-            <AnimatedSeg items={presetItems} activeKey={activePresetKey} onSelect={applyPreset} block />
-          </div>
-        </section>
-
-        <div className="acc-stack">
-          <AccordionCard title="Typography" isOpen={openCards.typography} onToggle={() => toggleCard("typography")}>
-            <div className="ctl-group">
-              <span className="ctl-group__label">Headings</span>
-              <div className="ctl-seg-field">
-                <span className="ctl-seg-field__label">Case</span>
-                <AnimatedSeg
-                  items={HEADING_CASES}
-                  activeKey={docStyle.style.headingCase}
-                  onSelect={(key) => docStyle.set("headingCase", key)}
-                  block
-                />
-              </div>
-              <div className="chip-row">
-                <ToggleChip label="Bold" active={docStyle.style.boldHeadings} onClick={(v) => docStyle.set("boldHeadings", v)} />
-                <ToggleChip label="Underline" active={docStyle.style.sectionRule} onClick={(v) => docStyle.set("sectionRule", v)} />
-              </div>
-            </div>
-
-            <div className="ctl-group">
-              <span className="ctl-group__label">Contact</span>
-              <div className="chip-row">
-                {COMMON_DIVIDERS.map((d) => (
-                  <button
-                    key={d}
-                    type="button"
-                    className={`chip chip--glyph${docStyle.style.contactDivider === d ? " is-active" : ""}`}
-                    aria-pressed={docStyle.style.contactDivider === d}
-                    aria-label={`Divider ${d}`}
-                    onClick={() => docStyle.set("contactDivider", d)}
-                  >
-                    {d}
-                  </button>
-                ))}
-                <input
-                  className="ctl-divider"
-                  type="text"
-                  maxLength={2}
-                  value={docStyle.style.contactDivider}
-                  placeholder="…"
-                  aria-label="Custom contact divider (1–2 characters)"
-                  title="Custom divider"
-                  onChange={(e) => docStyle.set("contactDivider", e.target.value.slice(0, 2))}
-                />
-              </div>
-            </div>
-
-            <button
-              type="button"
-              className="ctl-save-preset"
-              onClick={() => docStyle.applyStyle(JAKE_STYLE_DEFAULTS)}
-              disabled={docStyle.isStyleDefault}
-              title="Reset every text style to Jake's defaults"
-            >
-              <RotateCcw size={13} aria-hidden="true" /> Jake&apos;s defaults
-            </button>
-          </AccordionCard>
-
-          <AccordionCard title="Entries" isOpen={openCards.entries} onToggle={() => toggleCard("entries")}>
-            <div className="chip-row">
-              <ToggleChip label="Bold titles" active={docStyle.style.boldTitles} onClick={(v) => docStyle.set("boldTitles", v)} />
-              <ToggleChip label="Italic subtitles" active={docStyle.style.italicSubtitles} onClick={(v) => docStyle.set("italicSubtitles", v)} />
-            </div>
-          </AccordionCard>
-
-          <AccordionCard title="Skills" isOpen={openCards.skills} onToggle={() => toggleCard("skills")}>
-            <div className="chip-row">
-              <ToggleChip label="Bold labels" active={docStyle.style.boldSkillLabels} onClick={(v) => docStyle.set("boldSkillLabels", v)} />
-            </div>
-          </AccordionCard>
-        </div>
-      </aside>
-
-      <main className="canvas">
-        {editor.editedResume ? (
-          // ResumeEditor is memoized so chrome-only UI state (accordion/flyout)
-          // doesn't re-render this expensive paginating tree. The editor observes
-          // its own width for layout-driven pagination updates.
-          <ResumeEditor data={editor.editedResume} actions={editor.actions} style={docStyle.cssVars} />
-        ) : null}
+        )}
       </main>
 
-      {editor.editedResume ? (
-        <ResumePrintLayer
-          resume={editor.editedResume}
-          polishedText={editor.serializedResume}
-          docStyleVars={docStyle.cssVars}
-        />
-      ) : null}
+      <div className="workspace-footnote" aria-hidden="true">
+        <span>Click the page to edit</span>
+        <span>Drag beside an item to reorder</span>
+        <span>Saved only in this browser unless you download a .resume file</span>
+      </div>
 
-      {showFineTune ? (
-        <div className="flyout-backdrop" onMouseDown={() => setShowFineTune(false)}>
-          <div
-            ref={fineTuneDialogRef}
-            className="flyout"
-            role="dialog"
-            aria-modal="true"
-            aria-label="Fine-tune spacing"
-            tabIndex={-1}
-            onMouseDown={(event) => event.stopPropagation()}
-          >
-            <header className="flyout__head">
-              <span className="flyout__icon" aria-hidden="true">
-                <SlidersHorizontal size={17} />
-              </span>
-              <span className="flyout__title">Fine-tune spacing</span>
-              <button
-                type="button"
-                className="flyout__close"
-                onClick={() => setShowFineTune(false)}
-                aria-label="Close"
-              >
-                <X size={16} aria-hidden="true" />
-              </button>
-            </header>
-            <p className="flyout__sub">Adjust spacing to fine-tune the layout of your resume.</p>
-            <div className="flyout__body">
-              {SPACING_GROUPS.map((group) => (
-                <div className="ctl-group" key={group.label}>
-                  <span className="ctl-group__label">{group.label}</span>
-                  <div className="panel__stack">
-                    {group.sliders.map(({ key, label, min, max, unit }) => (
-                      <SpacingSlider
-                        key={key}
-                        label={label}
-                        value={docStyle.style[key]}
-                        min={min}
-                        max={max}
-                        unit={unit}
-                        onChange={(value) => docStyle.set(key, value)}
-                      />
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-            <div className="flyout__foot">
-              <button
-                type="button"
-                className="ctl-save-preset"
-                onClick={docStyle.saveCustomPreset}
-                title="Save the current spacing as your Custom preset"
-              >
-                {activePresetKey === "custom" ? "Custom saved ✓" : docStyle.customPreset ? "Update Custom" : "Save as Custom"}
-              </button>
-              <button
-                type="button"
-                className="icon-btn"
-                onClick={() => docStyle.applySpacingPreset(DOC_SPACING_PRESETS.normal.values)}
-                title="Reset spacing to Normal"
-                aria-label="Reset spacing to Normal"
-              >
-                <RotateCcw size={15} aria-hidden="true" />
-              </button>
-            </div>
+      {resume ? <ResumePrintLayer resume={resume} docStyle={docStyle.style} /> : null}
+
+      {isDraggingFile ? (
+        <div className="file-drop-overlay" role="status" aria-live="polite">
+          <div className="file-drop-overlay__card">
+            <FileUp size={24} aria-hidden="true" />
+            <strong>Open .resume file</strong>
+            <span>Drop it anywhere in the editor</span>
           </div>
         </div>
       ) : null}
 
-      {exporter.isPreviewOpen ? (
-        <Modal title="PDF preview" size="lg" onClose={exporter.handleClosePreview}>
-          <div className="modal__body modal__body--flush">
-            {exporter.isPreviewLoading ? (
-              <p className="modal__msg">Compiling with Tectonic…</p>
-            ) : exporter.previewError ? (
-              <p className="modal__msg modal__msg--error">{exporter.previewError}</p>
-            ) : exporter.previewPdfUrl ? (
-              <iframe className="modal__frame" title="Resume PDF preview" src={exporter.previewPdfUrl} />
-            ) : null}
-          </div>
-        </Modal>
-      ) : null}
-
-      {renameTarget ? (
-        <Modal title="Download as" ariaLabel="Rename before download" onClose={() => setRenameTarget(null)}>
-          <form
-            onSubmit={(event) => {
-              event.preventDefault();
-              confirmRename();
-            }}
-          >
-            <div className="modal__body">
-              <label className="dialog__field">
-                <span>File name</span>
-                <span className="dialog__input">
-                  <input
-                    type="text"
-                    value={renameValue}
-                    autoFocus
-                    onFocus={(event) => event.target.select()}
-                    onChange={(event) => setRenameValue(event.target.value)}
-                    aria-label="File name (without extension)"
-                  />
-                  <span className="dialog__ext">.{renameTarget.kind}</span>
-                </span>
-              </label>
-            </div>
-            <div className="modal__foot">
-              <button type="button" className="btn btn--ghost" onClick={() => setRenameTarget(null)}>
-                Cancel
-              </button>
-              <button type="submit" className="btn btn--primary">
-                <FileDown size={15} aria-hidden="true" /> Download
-              </button>
-            </div>
-          </form>
-        </Modal>
-      ) : null}
-
-
-
-      {confirmState ? (
-        <Modal title={confirmState.title} onClose={() => setConfirmState(null)}>
+      {pendingReplacement ? (
+        <Modal title="Replace the current resume?" onClose={() => setPendingReplacement(null)}>
           <div className="modal__body">
-            <p className="modal__msg">{confirmState.message}</p>
+            <p className="modal__message">
+              {pendingReplacement.kind === "open"
+                ? `Opening ${pendingReplacement.title} will replace the draft currently saved in this browser.`
+                : "Starting fresh will replace the draft currently saved in this browser."}
+            </p>
+            <p className="modal__support">Download a .resume copy first if you want to keep the current version.</p>
           </div>
-          <div className="modal__foot">
-            <button type="button" className="btn btn--ghost" onClick={() => setConfirmState(null)}>
+          <footer className="modal__foot">
+            <button type="button" className="button button--quiet" onClick={() => setPendingReplacement(null)}>
               Cancel
             </button>
             <button
               type="button"
-              className="btn btn--primary"
-              onClick={() => {
-                confirmState.onConfirm();
-                setConfirmState(null);
-              }}
+              className="button button--primary"
+              data-autofocus="true"
+              onClick={() => applyReplacement(pendingReplacement)}
             >
-              {confirmState.confirmLabel}
+              {pendingReplacement.kind === "open" ? "Open resume" : "Start fresh"}
             </button>
-          </div>
+          </footer>
         </Modal>
       ) : null}
     </div>
