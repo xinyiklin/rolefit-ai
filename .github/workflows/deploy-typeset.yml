@@ -1,9 +1,27 @@
-name: CI and Deploy
+name: Typeset CI and Deploy
 
+# Path-filtered to the Typeset app and everything it builds from, so sibling
+# apps' changes don't redeploy the editor. Do NOT mark `verify` a required
+# status check while these filters exist: a PR that skips the workflow would
+# never report the check and block forever.
 on:
   pull_request:
+    paths:
+      - "apps/typeset/**"
+      - "packages/**"
+      - "package.json"
+      - "package-lock.json"
+      - "tsconfig.base.json"
+      - ".github/workflows/deploy-typeset.yml"
   push:
     branches: [main]
+    paths:
+      - "apps/typeset/**"
+      - "packages/**"
+      - "package.json"
+      - "package-lock.json"
+      - "tsconfig.base.json"
+      - ".github/workflows/deploy-typeset.yml"
   workflow_dispatch:
 
 permissions:
@@ -11,9 +29,10 @@ permissions:
 
 # PR verify runs are safe to cancel on force-push; a main-branch run may be
 # mid container swap on the server, so it must finish and let the next run
-# queue behind it instead.
+# queue behind it instead. The group is app-scoped so sibling apps' workflows
+# never queue against this one.
 concurrency:
-  group: deploy-${{ github.ref }}
+  group: deploy-typeset-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
@@ -29,7 +48,11 @@ jobs:
 
       - run: npm ci
 
-      - run: npm run check
+      # Verify only this app's slice of the workspace: the app build plus both
+      # packages' typechecks and evals (codec, editor, PDF font parity).
+      - run: npm run check --workspace packages/engine
+      - run: npm run check --workspace packages/editor
+      - run: npm run check --workspace apps/typeset
 
   deploy:
     needs: verify
@@ -60,11 +83,16 @@ jobs:
           ssh-keyscan -H "$EC2_HOST" >> ~/.ssh/known_hosts
 
       - name: Package source
+        # Ship only what the Typeset image build needs. apps/role-fit-ai is a
+        # local-first personal tool and job-search-workspace holds private
+        # data — neither may ever reach the public web host.
         run: |
           tar \
             --exclude='.git' \
             --exclude='node_modules' \
             --exclude='dist' \
+            --exclude='apps/role-fit-ai' \
+            --exclude='job-search-workspace' \
             -czf "/tmp/typeset-${GITHUB_SHA}.tar.gz" \
             .
 
@@ -95,7 +123,7 @@ jobs:
           rm -f "/tmp/typeset-${RELEASE_SHA}.tar.gz"
 
           cd "$build_dir"
-          "${docker_cmd[@]}" build -t "$IMAGE_NAME:latest" .
+          "${docker_cmd[@]}" build -f apps/typeset/Dockerfile -t "$IMAGE_NAME:latest" .
           cd /
           rm -rf "$build_dir"
 
