@@ -1,0 +1,45 @@
+# --- Dependencies & build output ---
+node_modules/
+dist/
+*.tsbuildinfo
+
+# --- Editor / IDE ---
+.DS_Store
+.vscode/
+.idea/
+
+# --- Logs & caches ---
+*.log
+.eslintcache
+
+# --- Scratch / temp working files (build caches, render artifacts) ---
+tmp/
+*.tmp
+.playwright-cli/
+.trash/
+
+# --- Secrets ---
+.env
+
+# --- Agent handoff (local-only, per CLAUDE.md "do not stage") ---
+CONTINUITY.md
+.claude/
+
+# --- Personal job-search artifacts (privacy guard) ---
+*.docx
+*.pdf
+*resume*.tex
+*Resume*.tex
+*resume*.txt
+*resume*.md
+*resume*.csv
+*resume*.png
+*Resume*.png
+*resume*.jpg
+*Resume*.jpg
+# .resume save files hold personal resume data; the bundled starter is the one
+# tracked exception (it ships with the app, not a user's resume).
+*.resume
+!server/starter.resume
+job-search-workspace/*
+!job-search-workspace/README.md
