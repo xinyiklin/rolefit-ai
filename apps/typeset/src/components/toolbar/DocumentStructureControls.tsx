@@ -1,8 +1,8 @@
 import { Check, LayoutGrid, Plus, Trash2, UserRound, X } from "lucide-react";
 import { useEffect, useId, useState } from "react";
 
-import { stripInlineMarks } from "../../lib/inlineMarksText";
-import { SECTION_TYPE_OPTIONS, type ResumeSectionType } from "../../lib/resumeData";
+import { stripInlineMarks } from "@typeset/engine/lib/inlineMarksText";
+import { SECTION_TYPE_OPTIONS, type ResumeSectionType } from "@typeset/engine/lib/resumeData";
 import { Popover } from "../Popover";
 import { CONTACT_DIVIDERS } from "./styleOptions";
 import { ToolbarButton } from "./ToolbarButton";

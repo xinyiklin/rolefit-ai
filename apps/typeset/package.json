@@ -7,18 +7,20 @@
     "node": ">=22.6"
   },
   "scripts": {
+    "sync-fonts": "node scripts/sync-fonts.mjs",
+    "predev": "npm run sync-fonts",
     "dev": "vite",
+    "prebuild": "npm run sync-fonts",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "eval:resume-file": "node --experimental-strip-types src/lib/__evals__/resume-file-v1.mjs",
     "eval:editor": "node --experimental-strip-types src/sections/editor/__evals__/typeset-editing.mjs",
-    "eval:pdf-font-parity": "node --experimental-strip-types src/typeset/__evals__/pdf-font-parity.mjs",
-    "eval": "npm run eval:resume-file && npm run eval:editor && npm run eval:pdf-font-parity",
+    "eval": "npm run eval:editor",
     "test": "npm run eval",
     "check": "npm run build && npm run eval"
   },
   "dependencies": {
     "@pdf-lib/fontkit": "^1.1.1",
+    "@typeset/engine": "*",
     "lucide-react": "^1.24.0",
     "pdf-lib": "^1.17.1",
     "react": "^19.2.7",

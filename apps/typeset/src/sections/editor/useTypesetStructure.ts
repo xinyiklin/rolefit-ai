@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState, type MutableRefObject, type PointerEvent } from "react";
 
 import type { ResumeEditorActions } from "../../hooks/useResumeEditor.ts";
-import type { ResumeData, ResumeSectionType } from "../../lib/resumeData.ts";
-import { fieldKey } from "../../typeset/types.ts";
+import type { ResumeData, ResumeSectionType } from "@typeset/engine/lib/resumeData";
+import { fieldKey } from "@typeset/engine/typeset/types";
 import { extentOf, slotsFor, type BlockAnchor, type DragState, type Extent, type TypesetAnchors } from "./typesetStructure.ts";
 
 export type PendingCaret = (

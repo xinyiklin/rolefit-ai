@@ -3,7 +3,7 @@ import { useId } from "react";
 
 import { Popover } from "../Popover";
 import type { DocStyleControls } from "../../hooks/useDocStyle";
-import { DOC_STYLE_BOUNDS, type AlignmentScope, type BodyAlign } from "../../lib/documentStyle";
+import { DOC_STYLE_BOUNDS, type AlignmentScope, type BodyAlign } from "@typeset/engine/lib/documentStyle";
 import { ToolbarButton } from "./ToolbarButton";
 import { StyleRange } from "./StyleRange";
 import {

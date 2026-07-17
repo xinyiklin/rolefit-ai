@@ -1,9 +1,9 @@
 import { useDeferredValue, useMemo } from "react";
 import { createPortal } from "react-dom";
-import type { ResumeData } from "../lib/resumeData";
-import type { DocumentStyle } from "../lib/documentStyle.ts";
-import { TypesetDomPages } from "../typeset/render/dom.tsx";
-import { toTypesetSchema } from "../typeset/schema.ts";
+import type { ResumeData } from "@typeset/engine/lib/resumeData";
+import type { DocumentStyle } from "@typeset/engine/lib/documentStyle";
+import { TypesetDomPages } from "@typeset/engine/typeset/render/dom";
+import { toTypesetSchema } from "@typeset/engine/typeset/schema";
 
 // Off-screen copy of the current resume, portaled to <body> so it sits beside
 // #root rather than deep in the app tree. Hidden on screen; print CSS hides

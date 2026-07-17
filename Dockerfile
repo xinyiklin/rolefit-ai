@@ -9,9 +9,13 @@ WORKDIR /repo
 # Installing with --workspace keeps sibling apps' dependency trees out of the
 # image build; --include-workspace-root brings in root-level tooling.
 COPY package.json package-lock.json ./
+COPY packages/engine/package.json packages/engine/
 COPY apps/typeset/package.json apps/typeset/
 RUN npm ci --workspace apps/typeset --include-workspace-root
 
+# The engine is a workspace dependency of the app: it supplies the layout
+# contract and the font assets the app's prebuild mirrors into public/.
+COPY packages/engine packages/engine
 COPY apps/typeset apps/typeset
 RUN npm run build --workspace apps/typeset
 

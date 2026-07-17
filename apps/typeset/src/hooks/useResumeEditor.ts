@@ -10,13 +10,13 @@ import {
   type ResumeEntry,
   type ResumeSectionData,
   type ResumeSectionType
-} from "../lib/resumeData.ts";
+} from "@typeset/engine/lib/resumeData";
 import {
   clearAlignmentOverride,
   type FieldFontFamily,
   type FieldMark
-} from "../lib/inlineMarksText.ts";
-import type { AlignmentScope } from "../lib/documentStyle.ts";
+} from "@typeset/engine/lib/inlineMarksText";
+import type { AlignmentScope } from "@typeset/engine/lib/documentStyle";
 import {
   resetStyleFieldFormatting,
   setStyleFieldFont,
@@ -24,7 +24,7 @@ import {
   setStyleFieldSize,
   type EntryTextField,
   type StyleTextField
-} from "../lib/styleFieldFormatting.ts";
+} from "@typeset/engine/lib/styleFieldFormatting";
 
 // New rows match the section's shape: skill row, summary paragraph, or entry.
 function newEntryForSection(section: ResumeSectionData): ResumeEntry {

@@ -1,7 +1,7 @@
 import type { CSSProperties, PointerEvent } from "react";
 import { GripVertical } from "lucide-react";
 
-import type { ResumeData } from "../../lib/resumeData.ts";
+import type { ResumeData } from "@typeset/engine/lib/resumeData";
 import type { BlockAnchor, DragState } from "./typesetStructure.ts";
 
 const GRIP_GUTTER_PX = 28;

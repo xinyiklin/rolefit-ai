@@ -77,7 +77,7 @@ let worst = { delta: 0, where: "" };
 for (const [family, def] of Object.entries(DOCUMENT_FONT_FAMILIES)) {
   for (const [face, faceDef] of Object.entries(def.faces)) {
     const file = faceDef.assetPath.replace(/^\/fonts\//, "").replace(/\.woff2$/i, `.${SFNT_EXT[family]}`);
-    const font = fontkit.create(readFileSync(new URL(`../../../public/fonts/${file}`, import.meta.url)));
+    const font = fontkit.create(readFileSync(new URL(`../../../fonts/${file}`, import.meta.url)));
     const upm = font.unitsPerEm;
     const check = (raw) => {
       const display = texLigatures(raw); // emit draws display-form run text

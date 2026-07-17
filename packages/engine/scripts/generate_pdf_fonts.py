@@ -6,8 +6,8 @@ valid PDF font program, so the client-side "Export PDF" path (pdf-lib +
 @pdf-lib/fontkit, see src/typeset/pdf/emit.ts) embeds a decompressed sfnt
 sibling per face:
 
-  public/fonts/<Face>.woff2  ->  public/fonts/<Face>.otf   (Latin Modern, CFF)
-                                 public/fonts/<Face>.ttf   (Source families, glyf)
+  fonts/<Face>.woff2  ->  fonts/<Face>.otf   (Latin Modern, CFF)
+                          fonts/<Face>.ttf   (Source families, glyf)
 
 Ligatures: the woff2 sources are already filtered to the engine's five modeled
 f-ligatures by scripts/generate_font_assets.py (strip_unmodeled_ligatures), so
@@ -38,9 +38,9 @@ from generate_font_assets import (
     strip_unmodeled_ligatures,
 )
 
-# Anchored to the repository like generate_font_assets.py, so the script works
+# Anchored to the package root like generate_font_assets.py, so the script works
 # from any working directory.
-FONTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "public", "fonts")
+FONTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "fonts")
 
 
 def main() -> None:

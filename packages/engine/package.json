@@ -1,0 +1,39 @@
+{
+  "name": "@typeset/engine",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Deterministic resume typesetting engine, document model, and strict .resume codec shared by every Typeset consumer.",
+  "exports": {
+    "./fonts.css": "./fonts.css",
+    "./fonts/*": "./fonts/*",
+    "./*": "./src/*.ts",
+    "./typeset/render/dom": "./src/typeset/render/dom.tsx"
+  },
+  "files": [
+    "src",
+    "fonts",
+    "fonts.css"
+  ],
+  "scripts": {
+    "eval:resume-file": "node --experimental-strip-types src/lib/__evals__/resume-file-v1.mjs",
+    "eval:pdf-font-parity": "node --experimental-strip-types src/typeset/__evals__/pdf-font-parity.mjs",
+    "eval": "npm run eval:resume-file && npm run eval:pdf-font-parity",
+    "test": "npm run eval",
+    "check": "npm run eval",
+    "fonts:check": "python3 scripts/generate_font_assets.py --check"
+  },
+  "peerDependencies": {
+    "@pdf-lib/fontkit": "^1.1.1",
+    "pdf-lib": "^1.17.1",
+    "react": ">=19"
+  },
+  "peerDependenciesMeta": {
+    "@pdf-lib/fontkit": {
+      "optional": true
+    },
+    "pdf-lib": {
+      "optional": true
+    }
+  }
+}

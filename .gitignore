@@ -12,3 +12,6 @@ CONTINUITY.md
 .playwright-cli/
 output/playwright/
 .impeccable/
+
+# Generated: mirrored from packages/engine/fonts by the app sync-fonts script.
+apps/typeset/public/fonts/

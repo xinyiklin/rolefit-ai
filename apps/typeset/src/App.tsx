@@ -18,7 +18,7 @@ import {
   nextZoomOption,
   toDocumentStyle,
   type DocumentStyle
-} from "./lib/documentStyle";
+} from "@typeset/engine/lib/documentStyle";
 import { useResumeEditor } from "./hooks/useResumeEditor";
 import {
   downloadResumeFile,
@@ -27,9 +27,9 @@ import {
   resumeFileName,
   serializeResumeFile,
   type ParsedResumeFile
-} from "./lib/resumeFile";
-import type { ResumeData } from "./lib/resumeData";
-import { downloadBlob } from "./lib/download";
+} from "@typeset/engine/lib/resumeFile";
+import type { ResumeData } from "@typeset/engine/lib/resumeData";
+import { downloadBlob } from "@typeset/engine/lib/download";
 import {
   STYLE_FIELD_MARK_DEFAULTS,
   globalAlignmentState,
@@ -37,11 +37,11 @@ import {
   styleFieldMarkStates,
   styleFieldSizeStates,
   styleFieldDefaultSizePt
-} from "./lib/styleFieldFormatting";
-import { buildStarterResume } from "./sampleResume";
+} from "@typeset/engine/lib/styleFieldFormatting";
+import { buildStarterResume } from "@typeset/engine/sampleResume";
 import { ResumePrintLayer } from "./sections/ResumePrintLayer";
-import { layoutResume } from "./typeset/layout.ts";
-import { toTypesetSchema } from "./typeset/schema.ts";
+import { layoutResume } from "@typeset/engine/typeset/layout";
+import { toTypesetSchema } from "@typeset/engine/typeset/schema";
 import {
   TypesetEditor,
   type InlineFormatState,
@@ -293,7 +293,7 @@ export default function App() {
       // pdf-lib + the emitter load on demand to stay out of the main bundle.
       // Layout is already shared with the on-screen renderer, so it remains a
       // direct import instead of pretending to form a second async chunk.
-      const { emitPdf, fetchFontBytes } = await import("./typeset/pdf/emit.ts");
+      const { emitPdf, fetchFontBytes } = await import("@typeset/engine/typeset/pdf/emit");
       const schema = toTypesetSchema(resume);
       const doc = layoutResume(schema, docStyle.style);
       const fonts = await fetchFontBytes(doc);

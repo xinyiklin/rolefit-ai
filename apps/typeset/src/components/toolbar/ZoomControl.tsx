@@ -1,7 +1,7 @@
 import { Minus, Plus } from "lucide-react";
 
 import type { DocStyleControls } from "../../hooks/useDocStyle";
-import { DOC_ZOOM_OPTIONS, nextZoomOption } from "../../lib/documentStyle";
+import { DOC_ZOOM_OPTIONS, nextZoomOption } from "@typeset/engine/lib/documentStyle";
 import { ToolbarButton } from "./ToolbarButton";
 
 export type ZoomControlProps = {

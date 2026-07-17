@@ -3,7 +3,7 @@ import { useEffect, useId, useState } from "react";
 
 import { Popover } from "../Popover";
 import type { DocStyleControls } from "../../hooks/useDocStyle";
-import { DOC_SPACING_PRESETS, DOC_STYLE_BOUNDS } from "../../lib/documentStyle";
+import { DOC_SPACING_PRESETS, DOC_STYLE_BOUNDS } from "@typeset/engine/lib/documentStyle";
 import { ToolbarButton } from "./ToolbarButton";
 import { StyleRange } from "./StyleRange";
 import {

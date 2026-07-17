@@ -21,8 +21,8 @@ import {
   useState
 } from "react";
 
-import type { ResumeData, ResumeSectionType } from "../../lib/resumeData";
-import { automaticLinkHref } from "../../lib/links";
+import type { ResumeData, ResumeSectionType } from "@typeset/engine/lib/resumeData";
+import { automaticLinkHref } from "@typeset/engine/lib/links";
 import type { ResumeEditorActions } from "../../hooks/useResumeEditor";
 import {
   STYLE_FIELD_MARK_DEFAULTS,
@@ -30,16 +30,16 @@ import {
   styleFieldMarkStates,
   type EntryTextField,
   type StyleTextField
-} from "../../lib/styleFieldFormatting";
-import { stripInlineMarks } from "../../lib/inlineMarksText";
+} from "@typeset/engine/lib/styleFieldFormatting";
+import { stripInlineMarks } from "@typeset/engine/lib/inlineMarksText";
 import type { DocStyleControls } from "../../hooks/useDocStyle";
-import type { AlignmentScope, BodyAlign, DocStyle, FontFamily } from "../../lib/documentStyle";
-import { fontSizesFor, nameSizePt } from "../../lib/documentTypography.ts";
-import { fieldKey, parseFieldKey, type FieldSrc } from "../../typeset/types.ts";
-import { pageGeometry } from "../../typeset/blocks.ts";
-import type { LayoutDocument } from "../../typeset/layout.ts";
-import { TypesetDomPages } from "../../typeset/render/dom.tsx";
-import { toTypesetSchema } from "../../typeset/schema.ts";
+import type { AlignmentScope, BodyAlign, DocStyle, FontFamily } from "@typeset/engine/lib/documentStyle";
+import { fontSizesFor, nameSizePt } from "@typeset/engine/lib/documentTypography";
+import { fieldKey, parseFieldKey, type FieldSrc } from "@typeset/engine/typeset/types";
+import { pageGeometry } from "@typeset/engine/typeset/blocks";
+import type { LayoutDocument } from "@typeset/engine/typeset/layout";
+import { TypesetDomPages } from "@typeset/engine/typeset/render/dom";
+import { toTypesetSchema } from "@typeset/engine/typeset/schema";
 import { anchorsFromDoc } from "./typesetStructure.ts";
 import { TypesetStructureOverlay } from "./TypesetStructureOverlay.tsx";
 import { TypesetContextMenu } from "./TypesetContextMenu.tsx";
