@@ -560,7 +560,8 @@
   line-height: 1.45;
 }
 
-/* De-emphasize the verdict pill while stale. */
-.review-rail__verdict--stale .verdict-pill {
+/* De-emphasize the verdict + action-status pills while stale. */
+.review-rail__verdict--stale .verdict-pill,
+.review-rail__verdict--stale .rec-pill {
   opacity: 0.65;
 }

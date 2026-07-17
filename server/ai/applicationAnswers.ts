@@ -2,7 +2,7 @@
 // application asks (e.g. "Why do you want to work here?"), plus a short
 // description of each past role for the per-experience boxes some forms have.
 // Reuses the provider seam, honesty contract, and accomplishment-style rules
-// from polish.mjs so answers follow the same anti-fabrication guarantees.
+// from polish.ts so answers follow the same anti-fabrication guarantees.
 
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { FetchTimeoutError, readBody, sendJson } from "../http.ts";
@@ -25,6 +25,40 @@ type ApplicationAnswersPromptInput = {
   honestContext: string;
   customInstructions: string;
 };
+
+const MAX_APPLICATION_QUESTIONS = 12;
+const MAX_APPLICATION_QUESTION_CHARS = 400;
+const MAX_APPLICATION_QUESTIONS_TOTAL_CHARS = 4_800;
+
+export function normalizeApplicationQuestions(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  const output: string[] = [];
+  let remaining = MAX_APPLICATION_QUESTIONS_TOTAL_CHARS;
+  for (const raw of value) {
+    if (output.length >= MAX_APPLICATION_QUESTIONS || remaining <= 0) break;
+    const question = String(raw ?? "").replace(/\s+/g, " ").trim().slice(0, MAX_APPLICATION_QUESTION_CHARS);
+    if (!question) continue;
+    const clipped = question.slice(0, remaining);
+    if (!clipped) break;
+    output.push(clipped);
+    remaining -= clipped.length;
+  }
+  return output;
+}
+
+export function assertUsableApplicationAnswerOutput(
+  requestedQuestions: string[],
+  includeRoleDescriptions: boolean,
+  answers: unknown[],
+  roleDescriptions: unknown[]
+): void {
+  if (requestedQuestions.length > 0 && answers.length !== requestedQuestions.length) {
+    throw new UserSafeAiError("AI response did not include usable application answers. Try again or switch models.", 502);
+  }
+  if (includeRoleDescriptions && roleDescriptions.length === 0) {
+    throw new UserSafeAiError("AI response did not include usable role descriptions. Try again or switch models.", 502);
+  }
+}
 
 function applicationAnswersSystemPrompt(): string {
   return `You help a job seeker draft answers to the supplemental free-text questions on a job application (for example "Why do you want to work here?", "Why this role?", "What makes you a strong fit?"), plus a short description of each past role for per-experience form fields.
@@ -101,9 +135,7 @@ export async function handleApplicationAnswers(req: IncomingMessage, res: Server
     const honestContext = String(body.honestContext ?? "").slice(0, 8_000);
     const customInstructions = String(body.customInstructions ?? "").slice(0, 4_000);
     const includeRoleDescriptions = body.includeRoleDescriptions !== false;
-    const questions = Array.isArray(body.questions)
-      ? body.questions.map((q: unknown) => String(q ?? "").trim()).filter(Boolean).slice(0, 12)
-      : [];
+    const questions = normalizeApplicationQuestions(body.questions);
 
     if (resumeText.trim().length < 80) {
       sendJson(res, 400, { error: "Add your resume before generating answers." });
@@ -150,41 +182,48 @@ export async function handleApplicationAnswers(req: IncomingMessage, res: Server
     const jobLower = jobText.toLowerCase();
     const answerGrounding = `${resumeText}\n${honestContext}`.toLowerCase();
 
-    const answers = Array.isArray(parsedObj.answers)
-      ? parsedObj.answers
-          .slice(0, 12)
-          .map((a) => {
+    const rawAnswers = Array.isArray(parsedObj.answers) ? parsedObj.answers : [];
+    const answers = questions
+          .map((question, index) => {
+            const a = rawAnswers[index];
             const answer = String(a?.answer ?? "").trim().slice(0, 4_000);
-            // Flag an ungrounded skill claim for review (reuses the existing
-            // needsInput surfacing) rather than blocking — answers are reviewed
-            // before they're pasted into a real application.
             const ungrounded = proseHasUngroundedTerm(answer, jobLower, answerGrounding);
+            if (ungrounded) {
+              throw new UserSafeAiError("AI response included an unsupported skill claim in an application answer. The draft was withheld; try again or add honest context.", 502);
+            }
             return {
-              question: String(a?.question ?? "").slice(0, 400),
+              // Request order/text is server-owned. Never trust the model's echoed
+              // question field to relabel an answer.
+              question,
               answer,
-              needsInput: Boolean(a?.needsInput) || ungrounded
+              needsInput: Boolean(a?.needsInput)
             };
           })
-          .filter((a) => a.answer)
-      : [];
+          .filter((a) => a.answer);
 
     const roleDescriptions = Array.isArray(parsedObj.roleDescriptions)
       ? parsedObj.roleDescriptions
           .slice(0, 20)
           .map((r) => {
             const description = String(r?.description ?? "").trim().slice(0, 2_000);
-            // Same grounding surfacing as answers: a role description is pasted
-            // straight into a per-experience application field, so flag (for
-            // review) any ungrounded JD skill claim rather than ship it silently.
+            // Withhold globally unsupported JD-skill prose. The request currently
+            // supplies plain resume text rather than a stable per-role source map,
+            // so even a globally grounded draft still requires user confirmation
+            // before it is copied into a specific experience field.
             const ungrounded = proseHasUngroundedTerm(description, jobLower, answerGrounding);
+            if (ungrounded) {
+              throw new UserSafeAiError("AI response included an unsupported skill claim in a role description. The draft was withheld; try again or add honest context.", 502);
+            }
             return {
               role: String(r?.role ?? "").slice(0, 200),
               description,
-              needsInput: ungrounded
+              needsInput: true
             };
           })
           .filter((r) => r.description)
       : [];
+
+    assertUsableApplicationAnswerOutput(questions, includeRoleDescriptions, answers, roleDescriptions);
 
     // Echo the resolved provider/model/reasoningEffort (never the apiKey/apiBaseUrl).
     sendJson(res, 200, { answers, roleDescriptions, model, provider, reasoningEffort, attempts: stats.attempts ?? 1 });

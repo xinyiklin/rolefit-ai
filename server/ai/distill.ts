@@ -14,7 +14,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { readBody, sendJson, FetchTimeoutError } from "../http.ts";
 import { UserSafeAiError, safeConfigErrorMessage } from "./errors.ts";
-import { getDefaultProvider, normalizeProvider, providerLabel, resolveProviderRequest } from "./providers.ts";
+import { providerLabel, resolveProviderRequest } from "./providers.ts";
 import { callConfiguredProvider } from "./clients.ts";
 import { clipForPrompt, fenceUntrusted, inputFirewallRule } from "./prompts.ts";
 import { AUTH_STEMS, mentionsAuthStem } from "./eligibilityLexicon.ts";
@@ -36,8 +36,9 @@ ABSOLUTE RULES (anti-fabrication — this is the whole job):
 2. Never invent a company, title, location, salary, technology, or requirement. Copy facts as written (you may fix casing/whitespace and trim, nothing more).
 3. Do NOT put benefits, perks, pay/compensation prose, EEO/legal/diversity statements, application instructions, recruiter marketing, or "about the company" fluff into responsibilities or qualifications.
 4. techKeywords are ONLY concrete technologies/languages/frameworks/tools/platforms NAMED in the posting (e.g. "Python", "React", "AWS", "Kubernetes"). Never a generic skill ("communication") and never a tool the posting does not name.
-5. Each list item is one concise duty/qualification (no numbering, no bullets).
-6. Output exactly one JSON object and nothing else — no markdown fences, no commentary.`;
+5. roleDescription is a neutral extract or light trim of the posting's own role/company description. Do not synthesize a new summary, combine unrelated claims, or add implied context.
+6. Each list item is one concise duty/qualification (no numbering, no bullets).
+7. Output exactly one JSON object and nothing else — no markdown fences, no commentary.`;
 
   const schema = `Return this JSON shape (use "" / null / [] for anything not stated):
 {
@@ -50,7 +51,7 @@ ABSOLUTE RULES (anti-fabrication — this is the whole job):
   "salaryMax": <integer, or null>,
   "salaryCurrency": "USD, GBP, EUR, CAD, AUD, JPY, or \\"\\"",
   "salaryPeriod": "yr, mo, hr, or \\"\\"",
-  "roleDescription": "a neutral 1-3 sentence summary of the role/company, or \\"\\"",
+  "roleDescription": "a neutral 1-3 sentence extract/light trim of the stated role/company description, or \\"\\"",
   "responsibilities": ["one duty per item"],
   "requiredQualifications": ["one required qualification per item"],
   "preferredQualifications": ["one preferred/nice-to-have qualification per item"],
@@ -116,6 +117,69 @@ const LIST_STOPWORDS = new Set([
   "years", "year", "plus", "etc", "required", "preferred", "must", "should", "who"
 ]);
 
+const ROLE_DESCRIPTION_STOPWORDS = new Set([
+  ...LIST_STOPWORDS,
+  "company", "business", "position", "candidate", "candidates", "looking", "seeking",
+  "help", "helps", "helping", "join", "joining", "opportunity"
+]);
+
+const ROLE_TOKEN_CANONICAL = new Map([
+  ["postgresql", "postgres"], ["postgres", "postgres"],
+  ["k8s", "kubernetes"], ["kubernetes", "kubernetes"],
+  ["typescript", "typescript"], ["ts", "typescript"]
+]);
+
+// Light morphology keeps grounding paraphrase-friendly without turning it into
+// semantic guesswork: "building" can match "build" and "services" can match
+// "service", but an invented domain/tool still has no matching token.
+function tokenKey(token: string): string {
+  let key = token;
+  if (key.length > 5 && key.endsWith("ies")) key = `${key.slice(0, -3)}y`;
+  else if (key.length > 5 && key.endsWith("ing")) key = key.slice(0, -3).replace(/(.)\1$/, "$1");
+  else if (key.length > 4 && key.endsWith("ed")) key = key.slice(0, -2).replace(/(.)\1$/, "$1");
+  else if (key.length > 4 && key.endsWith("s")) key = key.slice(0, -1);
+  return ROLE_TOKEN_CANONICAL.get(key) ?? key;
+}
+
+function distinctiveTokenKeys(value: unknown, stopwords: Set<string>): string[] {
+  return [...new Set(norm(value)
+    .split(" ")
+    .filter((token) => token.length >= 3 && !stopwords.has(token))
+    .map(tokenKey)
+    .filter(Boolean))];
+}
+
+// Free-text fields need the same symbol/case-aware protection as techKeywords.
+// Otherwise generic token overlap lets clearance/business phrases ground an
+// invented technology claim (TS/SCI -> TypeScript, net-zero -> .NET, etc.).
+function atomicTechClaimsGrounded(claim: unknown, sourceText: string): boolean {
+  const text = String(claim ?? "");
+  const claimsTypeScript = /\bTypeScript\b/i.test(text)
+    || /(?:^|[^A-Za-z0-9/])TS(?!\s*\/\s*SCI\b|[A-Za-z0-9])/i.test(text);
+  if (claimsTypeScript && !groundedTech("ts", sourceText)) return false;
+  if (/\.net\b/i.test(text) && !groundedTech(".net", sourceText)) return false;
+  if ((/\bGolang\b/i.test(text) || /(?:^|[^A-Za-z0-9])Go(?![-&A-Za-z0-9+#])/.test(text))
+    && !groundedTech("go", sourceText)) return false;
+  if (/(?:^|[^A-Za-z0-9])C(?![-&A-Za-z0-9+#])/.test(text) && !groundedTech("c", sourceText)) return false;
+  if (/(?:^|[^A-Za-z0-9])R(?![-&A-Za-z0-9+#])/.test(text) && !groundedTech("r", sourceText)) return false;
+  return true;
+}
+
+// roleDescription used to pass through as trusted prose. Keep a neutral/lightly
+// paraphrased extract only when nearly all of its distinctive content is present
+// in the posting. Every distinctive token must match (with only light morphology
+// and established aliases), so one novel domain cannot hide inside copied prose.
+function groundedRoleDescription(value: unknown, sourceText: string): string {
+  const description = str(value, 900);
+  if (!description) return "";
+  if (!atomicTechClaimsGrounded(description, sourceText)) return "";
+  const tokens = distinctiveTokenKeys(description, ROLE_DESCRIPTION_STOPWORDS);
+  if (!tokens.length) return "";
+  const sourceTokens = new Set(distinctiveTokenKeys(sourceText, new Set()));
+  const hits = tokens.filter((token) => sourceTokens.has(token)).length;
+  return hits === tokens.length ? description : "";
+}
+
 // A content-list item (a duty / qualification sentence) is kept only if it is
 // ANCHORED in the posting: a clear majority (>=60%) of its distinctive word
 // tokens actually appear in the source. This extends the scalar/tech grounding
@@ -124,7 +188,8 @@ const LIST_STOPWORDS = new Set([
 // invented "Kubernetes and HIPAA" line) is a fabrication and is dropped. Items
 // with no distinctive tokens left after stop-word removal are kept (already
 // cleaned, nothing left to verify against).
-function listItemGrounded(item: unknown, sourceTokens: Set<string>): boolean {
+function listItemGrounded(item: unknown, sourceTokens: Set<string>, sourceText: string): boolean {
+  if (!atomicTechClaimsGrounded(item, sourceText)) return false;
   const tokens = norm(item)
     .split(" ")
     .filter((t) => t.length >= 3 && !LIST_STOPWORDS.has(t));
@@ -135,22 +200,36 @@ function listItemGrounded(item: unknown, sourceTokens: Set<string>): boolean {
 }
 
 // Clean + cap a list (strList), then drop any item not grounded in the source.
-function groundedList(value: unknown, opts: StrListOptions, sourceTokens: Set<string>): string[] {
-  return strList(value, opts).filter((item) => listItemGrounded(item, sourceTokens));
+function groundedList(value: unknown, opts: StrListOptions, sourceTokens: Set<string>, sourceText: string): string[] {
+  return strList(value, opts).filter((item) => listItemGrounded(item, sourceTokens, sourceText));
 }
 
 // Tech grounding is symbol-aware (C#, C++, .NET, Go) — norm() would strip the
 // symbols and "go"/"c" would false-match inside words. Require the term as a
 // whole token in the raw lowercased source: a non-token char (or start) before
 // it, and no alphanumeric immediately after.
-function groundedTech(tech: unknown, sourceLower: string): boolean {
+function groundedTech(tech: unknown, sourceText: string): boolean {
   const t = String(tech ?? "").toLowerCase().trim();
-  if (t.length < 2) return false;
+  if (t.length < 2 && t !== "c" && t !== "r") return false;
+  // Keep clearance/business phrases from being reclassified as technologies.
+  // These short/symbolic names need stricter boundaries than the generic token
+  // matcher below.
+  if (t === "ts") {
+    return /\bTypeScript\b/i.test(sourceText)
+      || /(?:^|[^A-Za-z0-9/])TS(?!\s*\/\s*SCI\b|[A-Za-z0-9])/i.test(sourceText);
+  }
+  if (t === ".net") return /(?:^|[^a-z0-9])\.net(?![-a-z0-9])/i.test(sourceText);
+  if (t === "go") {
+    return /\bGolang\b/i.test(sourceText)
+      || /(?:^|[^A-Za-z0-9])Go(?![-&A-Za-z0-9+#]|\s+to\s+market)/.test(sourceText);
+  }
+  if (t === "c") return /(?:^|[^A-Za-z0-9])C(?![-&A-Za-z0-9+#])/.test(sourceText);
+  if (t === "r") return /(?:^|[^A-Za-z0-9])R(?![-&A-Za-z0-9+#]|\s*&\s*D\b)/.test(sourceText);
   const esc = t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   // Whole-token match: a hyphen counts as a boundary char on BOTH sides too, so a
   // short term ("go"/"ai") can't false-ground inside hyphenated prose
   // ("go-getter", "retail-ai", "let-go").
-  return new RegExp(String.raw`(?:^|[^a-z0-9.+#-])${esc}(?![a-z0-9-])`, "i").test(sourceLower);
+  return new RegExp(String.raw`(?:^|[^a-z0-9.+#-])${esc}(?![a-z0-9-])`, "i").test(sourceText);
 }
 
 // workAuth is an ELIGIBILITY-BLOCKER fact — it can force a DON'T APPLY verdict and
@@ -175,15 +254,33 @@ function groundedWorkAuth(value: unknown, sourceLower: string): string {
   return wa;
 }
 
-// Derive the salary currency FROM the source (the figures are already grounded),
-// rather than trusting the model — so a "£55,000" role is never reported as USD.
-function currencyFromSource(sourceText: string): string {
-  if (/£|\bGBP\b/.test(sourceText)) return "GBP";
-  if (/€|\bEUR\b/.test(sourceText)) return "EUR";
-  if (/¥|\bJPY\b/.test(sourceText)) return "JPY";
-  if (/\b(CAD|CA\$|C\$)\b|CA\$|C\$/.test(sourceText)) return "CAD";
-  if (/\b(AUD|A\$)\b|A\$/.test(sourceText)) return "AUD";
-  return "USD";
+function salaryContextFromSource(sourceText: string): string {
+  return sourceText
+    .split(/\r?\n|(?<=[.!?])\s+/)
+    .filter((part) =>
+      /\b(?:salary|compensation|base pay|pay range|hourly rate|annual pay|remuneration)\b/i.test(part)
+      || /(?:[$£€¥]|\b(?:USD|GBP|EUR|CAD|AUD|JPY)\b)\s*\d/i.test(part)
+    )
+    .join("\n");
+}
+
+// Derive currency only from the explicit salary/pay context, never from a
+// plausible default. Bare salary numbers therefore keep currency empty.
+function currencyFromSalaryContext(salaryContext: string): string {
+  if (/\bGBP\b|£/.test(salaryContext)) return "GBP";
+  if (/\bEUR\b|€/.test(salaryContext)) return "EUR";
+  if (/\bJPY\b|¥/.test(salaryContext)) return "JPY";
+  if (/\bCAD\b|CA\$|C\$/.test(salaryContext)) return "CAD";
+  if (/\bAUD\b|A\$/.test(salaryContext)) return "AUD";
+  if (/\bUSD\b|US\$|\$/.test(salaryContext)) return "USD";
+  return "";
+}
+
+function periodFromSalaryContext(salaryContext: string): string {
+  if (/\b(?:per\s+year|annually|annual|yearly)\b|\/\s*(?:yr|year)\b/i.test(salaryContext)) return "yr";
+  if (/\b(?:per\s+month|monthly)\b|\/\s*(?:mo|month)\b/i.test(salaryContext)) return "mo";
+  if (/\b(?:per\s+hour|hourly)\b|\/\s*(?:hr|hour)\b/i.test(salaryContext)) return "hr";
+  return "";
 }
 
 function normalizeJobType(value: unknown): string {
@@ -196,9 +293,57 @@ function normalizeJobType(value: unknown): string {
   return "";
 }
 
-function normalizePeriod(value: unknown): string {
-  const t = str(value, 8).toLowerCase();
-  return t === "yr" || t === "mo" || t === "hr" ? t : "";
+// A normalized employment type is still a claim. Require the corresponding
+// phrase in the posting instead of accepting a plausible model classification
+// (for example, turning an unspecified role into "Full-time"). Contract uses
+// employment-context patterns so ordinary prose such as "manage contracts" does
+// not become an employment type.
+function groundedJobType(value: unknown, sourceText: string): string {
+  const normalized = normalizeJobType(value);
+  if (!normalized) return "";
+  const patterns: Record<string, RegExp[]> = {
+    "Full-time": [
+      /\b(?:employment|job|position|role)\s+type\s*[:\-]?\s*full[-\s]?time\b/i,
+      /\bfull[-\s]?time\s+(?:role|position|job|employment)\b/i,
+      /\b(?:role|position|job)\s+(?:is\s+)?full[-\s]?time\b/i,
+      /^\s*full[-\s]?time\s*$/i
+    ],
+    "Part-time": [
+      /\b(?:employment|job|position|role)\s+type\s*[:\-]?\s*part[-\s]?time\b/i,
+      /\bpart[-\s]?time\s+(?:role|position|job|employment)\b/i,
+      /\b(?:role|position|job)\s+(?:is\s+)?part[-\s]?time\b/i,
+      /^\s*part[-\s]?time\s*$/i
+    ],
+    Contract: [
+      /\b(?:employment|job)\s+type\s*[:\-]?\s*contract\b/i,
+      /\bcontract(?:[-\s]+(?:role|position|job|employment|basis|opportunity|to[-\s]hire))\b/i,
+      /\b(?:role|position|job)\s+(?:is\s+)?(?:a\s+)?contract\b/i,
+      /\b\d+[-\s]?(?:month|year)\s+contract\b/i,
+      /(?:^|\n)\s*contract\s*(?:$|\n)/im
+    ],
+    Internship: [
+      /\bintern\s+(?:role|position|job|program)\b/i,
+      /\b(?:employment|job)\s+type\s*[:\-]?\s*intern(?:ship)?\b/i,
+      /\b(?:internship|intern)\s+(?:role|position|job|program|opportunity)\b/i,
+      /\b(?:role|position|job)\s+(?:is\s+)?(?:an?\s+)?internship\b/i,
+      /^\s*[^.!?\n]{0,60}\b(?:internship|intern)\b\s*$/i
+    ],
+    Temporary: [
+      /\btemporary\s+(?:role|position|job|employment|assignment)\b/i,
+      /\b(?:employment|job)\s+type\s*[:\-]?\s*temporary\b/i
+    ]
+  };
+  const segments = sourceText.split(/\r?\n|(?<=[.!?])\s+/);
+  const affirmative = segments.some((segment) => {
+    if (!patterns[normalized]?.some((pattern) => pattern.test(segment))) return false;
+    // A historical qualification, benefit rule, or explicit negation does not
+    // describe this role's employment type.
+    if (/\b(?:benefits?|employees?|eligibility)\b/i.test(segment)) return false;
+    if (/\b(?:prior|previous|past)\b.{0,45}\b(?:experience|employment|work|internship)\b/i.test(segment)) return false;
+    if (/\b(?:not|isn['’]?t|is\s+not|no)\b.{0,45}\b(?:full[-\s]?time|part[-\s]?time|contract|intern(?:ship)?|temporary)\b/i.test(segment)) return false;
+    return true;
+  });
+  return affirmative ? normalized : "";
 }
 
 // A salary number is kept only when its digits actually appear in the posting
@@ -231,8 +376,11 @@ export function sanitizeDistill(parsed: unknown, sourceText: string) {
   const company = grounded(companyRaw, sourceNorm) ? companyRaw : "";
   const location = grounded(locationRaw, sourceNorm) ? locationRaw : "";
 
-  let salaryMin = groundedAmount(obj.salaryMin, sourceText);
-  let salaryMax = groundedAmount(obj.salaryMax, sourceText);
+  const salaryContext = salaryContextFromSource(sourceText);
+  // A number elsewhere in the posting (headcount, users, requisition id) is not
+  // salary evidence. Require amounts to occur in an explicit pay context.
+  let salaryMin = groundedAmount(obj.salaryMin, salaryContext);
+  let salaryMax = groundedAmount(obj.salaryMax, salaryContext);
   if (salaryMin != null && salaryMax != null && salaryMin > salaryMax) {
     [salaryMin, salaryMax] = [salaryMax, salaryMin];
   }
@@ -241,31 +389,31 @@ export function sanitizeDistill(parsed: unknown, sourceText: string) {
   // techKeywords must each be named in the posting (symbol-aware, 2-char floor
   // so "Go"/"C#"/"AI" survive while inventions are dropped).
   const sourceLower = sourceText.toLowerCase();
-  const techKeywords = strList(obj.techKeywords, { maxItems: 24, maxLen: 40, minLen: 2 }).filter((t) =>
-    groundedTech(t, sourceLower)
+  const techKeywords = strList(obj.techKeywords, { maxItems: 24, maxLen: 40, minLen: 1 }).filter((t) =>
+    groundedTech(t, sourceText)
   );
 
   return {
     title,
     company,
     location,
-    jobType: normalizeJobType(obj.jobType),
+    jobType: groundedJobType(obj.jobType, sourceText),
     workAuth: groundedWorkAuth(obj.workAuth, sourceLower),
     salaryMin,
     salaryMax,
-    salaryCurrency: hasSalary ? currencyFromSource(sourceText) : "",
-    salaryPeriod: hasSalary ? normalizePeriod(obj.salaryPeriod) || (((salaryMin ?? salaryMax) ?? 0) >= 1000 ? "yr" : "") : "",
-    roleDescription: str(obj.roleDescription, 900),
+    salaryCurrency: hasSalary ? currencyFromSalaryContext(salaryContext) : "",
+    salaryPeriod: hasSalary ? periodFromSalaryContext(salaryContext) : "",
+    roleDescription: groundedRoleDescription(obj.roleDescription, sourceText),
     // Content lists are grounded against the posting (anti-fabrication), like scalars/tech.
-    responsibilities: groundedList(obj.responsibilities, { maxItems: 12 }, sourceTokens),
-    requiredQualifications: groundedList(obj.requiredQualifications, { maxItems: 12 }, sourceTokens),
-    preferredQualifications: groundedList(obj.preferredQualifications, { maxItems: 12 }, sourceTokens),
+    responsibilities: groundedList(obj.responsibilities, { maxItems: 12 }, sourceTokens, sourceText),
+    requiredQualifications: groundedList(obj.requiredQualifications, { maxItems: 12 }, sourceTokens, sourceText),
+    preferredQualifications: groundedList(obj.preferredQualifications, { maxItems: 12 }, sourceTokens, sourceText),
     techKeywords,
     // senioritySignals/domainSignals feed the local keyword score (~40%) and the
     // review model, so they get the same source-grounding as the content lists —
     // an invented "fintech" domain or "staff-level" seniority signal is dropped.
-    senioritySignals: groundedList(obj.senioritySignals, { maxItems: 8, maxLen: 60 }, sourceTokens),
-    domainSignals: groundedList(obj.domainSignals, { maxItems: 8, maxLen: 40 }, sourceTokens)
+    senioritySignals: groundedList(obj.senioritySignals, { maxItems: 8, maxLen: 60 }, sourceTokens, sourceText),
+    domainSignals: groundedList(obj.domainSignals, { maxItems: 8, maxLen: 40 }, sourceTokens, sourceText)
   };
 }
 
@@ -299,7 +447,8 @@ export async function handleDistill(req: IncomingMessage, res: ServerResponse): 
     sendJson(res, 405, { error: "Use POST." });
     return;
   }
-  let provider = normalizeProvider(getDefaultProvider());
+  // Actual default validation happens inside the guarded resolver below.
+  let provider = "claude-cli";
   try {
     const body = JSON.parse(await readBody(req, 2_000_000));
     const jobText = String(body.text ?? "");

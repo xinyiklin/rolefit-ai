@@ -1,6 +1,15 @@
 import { useRef, type KeyboardEvent, type ReactNode } from "react";
+import { BarChart3, ClipboardList, FileText, Mail } from "lucide-react";
 import type { OutputTab, OutputTabDescriptor, OutputTabGroup } from "./shared";
 import { TAB_GROUPS } from "./shared";
+
+// Sidebar rail entries lead with a fixed icon per tab id.
+const TAB_ICONS: Record<OutputTab, ReactNode> = {
+  resume: <FileText size={15} aria-hidden="true" />,
+  materials: <Mail size={15} aria-hidden="true" />,
+  applications: <ClipboardList size={15} aria-hidden="true" />,
+  analytics: <BarChart3 size={15} aria-hidden="true" />
+};
 
 type StudioPaneProps = {
   activeOutputTab: OutputTab;
@@ -64,7 +73,6 @@ export function StudioPane({
               {group}
             </span>
             {grouped[group].map(({ tab, posIndex }) => {
-              const numericIndex = tab.index ?? String(posIndex + 1).padStart(2, "0");
               return (
                 <button
                   ref={(el) => {
@@ -81,10 +89,10 @@ export function StudioPane({
                   tabIndex={activeOutputTab === tab.id ? 0 : -1}
                   type="button"
                 >
-                  <span className="studio-tab__index" aria-hidden="true">
-                    {numericIndex}
+                  <span className="studio-tab__icon" aria-hidden="true">
+                    {TAB_ICONS[tab.id]}
                   </span>
-                  <span>{tab.label}</span>
+                  <span className="studio-tab__label">{tab.label}</span>
                   {tab.badge !== undefined ? <em>{tab.badge}</em> : null}
                 </button>
               );

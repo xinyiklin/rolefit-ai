@@ -5,8 +5,17 @@ import {
   DOC_SPACING_PRESETS,
   type DocSpacingKey,
   type DocSpacingPreset,
-  type DocStyleControls
+  type DocStyleControls,
+  type PageMargins
 } from "../hooks/useDocStyle";
+
+// Page-margin presets: 0.4in / 0.5in (Jake default) / 0.75in on all four sides.
+// A preset (not a slider) because the layout engine is calibrated at these stops.
+const MARGIN_OPTIONS: { value: PageMargins; label: string }[] = [
+  { value: "narrow", label: "Narrow" },
+  { value: "normal", label: "Normal" },
+  { value: "wide", label: "Wide" }
+];
 
 type SliderSpec = {
   key: DocSpacingKey;
@@ -18,8 +27,8 @@ type SliderSpec = {
 };
 
 // Sliders grouped by where on the page they act, so the (otherwise long) list is
-// scannable. Every spacing field in DocStyle is exposed here; page font size and
-// margins are intentionally fixed by the Jake template.
+// scannable. Every spacing field in DocStyle is exposed here; page font size is
+// intentionally fixed by the Jake template (margins are the preset row below).
 const SLIDER_GROUPS: { label: string; sliders: SliderSpec[] }[] = [
   {
     label: "Page",
@@ -61,8 +70,8 @@ const ALL_SLIDERS = SLIDER_GROUPS.flatMap((group) => group.sliders);
 
 // Spacing/layout controls for the resume page (presets + per-region gaps). Text
 // styling — emphasis, heading case/rule, contact divider — lives in StyleMenu.
-// Applies live to the editor and the read-only print mirror, and is forwarded to
-// the LaTeX renderer for .tex, PDF preview, and PDF · LaTeX exports.
+// Applies live to the editor and the read-only print mirror, and is consumed by
+// the owned editor/preview/PDF engine.
 export function FormatMenu({ docStyle }: { docStyle: DocStyleControls }) {
   const { style, set, reset, applySpacingPreset, saveCustomPreset, customPreset, isDefault } = docStyle;
 
@@ -108,6 +117,26 @@ export function FormatMenu({ docStyle }: { docStyle: DocStyleControls }) {
         {SLIDER_GROUPS.map((group) => (
           <div className="format-slider-group" key={group.label}>
             <span className="format-slider-group__label">{group.label}</span>
+            {group.label === "Page" ? (
+              <div className="format-emphasis">
+                <div className="format-emphasis__row">
+                  <span className="format-emphasis__kind">Margins</span>
+                  <div className="format-emphasis__chips">
+                    {MARGIN_OPTIONS.map((opt) => (
+                      <button
+                        type="button"
+                        className={`format-chip${style.pageMargins === opt.value ? " is-on" : ""}`}
+                        aria-pressed={style.pageMargins === opt.value}
+                        onClick={() => set("pageMargins", opt.value)}
+                        key={opt.value}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ) : null}
             <div className="format-rows">
               {group.sliders.map(({ key, label, min, max, step, unit }) => {
                 const value = style[key];

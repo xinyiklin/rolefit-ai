@@ -1,9 +1,6 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
-// User-adjustable typography for the HTML resume page (the editor, its read-only
-// print mirror, and therefore the "PDF · clean" export). The same values are
-// also sent to the LaTeX renderer so `.tex`, PDF preview, and PDF · LaTeX use the
-// same rhythm.
+// User-adjustable typography for the owned editor/preview/PDF engine.
 export type DocStyle = {
   // Page zoom, Google-Docs style: 1 (= "100%") is the comfortable default page
   // (75% of the pane); width and font scale by the same factor.
@@ -28,9 +25,25 @@ export type DocStyle = {
   headingCase: HeadingCase;
   sectionRule: boolean; // horizontal rule under each section heading
   contactDivider: string; // 1–2 char separator between header contact items
+  // Header block (name + contact row) alignment: left / center / right.
+  headerAlign: HeaderAlign;
+  // Body-paragraph alignment (bullets, skills, summaries — not the two-sided
+  // title/date rows): left / justify / center / right.
+  bodyAlign: BodyAlign;
+  // Section-heading alignment: left / center / right.
+  headingAlign: HeaderAlign;
+  // Name size tier — the engine's three calibrated sizes (17.28pt / 20.74pt /
+  // 24.88pt at the 11pt body); the editor mirrors the exact em ratios.
+  nameSize: NameSize;
+  // Page margins preset (all four sides): 0.4in / 0.5in (Jake) / 0.75in.
+  pageMargins: PageMargins;
 };
 
 export type HeadingCase = "smallcaps" | "uppercase" | "none";
+export type HeaderAlign = "left" | "center" | "right";
+export type BodyAlign = "left" | "justify" | "center" | "right";
+export type NameSize = "large" | "xlarge" | "huge";
+export type PageMargins = "narrow" | "normal" | "wide";
 
 export const DOC_STYLE_DEFAULTS: DocStyle = {
   zoom: 1,
@@ -51,11 +64,18 @@ export const DOC_STYLE_DEFAULTS: DocStyle = {
   italicSubtitles: true,
   headingCase: "smallcaps",
   sectionRule: true,
-  contactDivider: "|"
+  contactDivider: "|",
+  headerAlign: "center",
+  bodyAlign: "left",
+  headingAlign: "left",
+  nameSize: "huge",
+  pageMargins: "normal"
 };
 
 // The non-spacing "style" fields (everything the Style menu owns). Lifted as a
 // type so the "Jake's defaults" button and applyStyle() stay in sync.
+// pageMargins is deliberately NOT a style field — it is page layout (Format
+// menu) and "Jake's defaults" must not reset it.
 export type DocStyleFields = Pick<
   DocStyle,
   | "boldTitles"
@@ -65,6 +85,10 @@ export type DocStyleFields = Pick<
   | "headingCase"
   | "sectionRule"
   | "contactDivider"
+  | "headerAlign"
+  | "bodyAlign"
+  | "headingAlign"
+  | "nameSize"
 >;
 
 // The authentic upstream Jake's-Resume look for the style fields — set by the
@@ -77,7 +101,11 @@ export const JAKE_STYLE_DEFAULTS: DocStyleFields = {
   italicSubtitles: true,
   headingCase: "smallcaps",
   sectionRule: true,
-  contactDivider: "|"
+  contactDivider: "|",
+  headerAlign: "center",
+  bodyAlign: "left",
+  headingAlign: "left",
+  nameSize: "huge"
 };
 
 export type DocSpacingKey =
@@ -131,14 +159,20 @@ export const DOC_SPACING_PRESETS = {
 } as const satisfies Record<string, { label: string; values: DocSpacingPreset }>;
 
 // Google-Docs-style zoom steps for the Resume tab's page-zoom select.
-export const DOC_ZOOM_OPTIONS = [0.5, 0.75, 0.9, 1, 1.1, 1.25, 1.5] as const;
+// 1 = true size (816 CSS px page). The select also offers a one-shot "Fit"
+// that computes paneWidth/816 into a custom numeric zoom.
+export const DOC_ZOOM_OPTIONS = [0.5, 0.75, 0.9, 1, 1.1, 1.25, 1.5, 2] as const;
+
+// Logical page width in CSS px at 100% zoom (8.5in × 96px/in) — the divisor
+// for the zoom select's "Fit" computation.
+export const DOC_PAGE_WIDTH_PX = 816;
 
 const STORAGE_KEY = "rolefit.docStyle.v3";
 // User-saved spacing preset (the 11 spacing sliders only, like the built-in
 // presets). Stored separately so it survives Reset and live edits.
 const CUSTOM_STORAGE_KEY = "rolefit.docStyle.custom.v1";
 // v2 had one `entryGap` slider, but it was wired to the entry-header -> bullets
-// gap in both CSS and LaTeX. Migrate that value to `headBulletGap`; the new
+// gap in the engine layout. Migrate that value to `headBulletGap`; the new
 // `entryGap` starts at the calibrated entry-to-entry default.
 const LEGACY_V2_STORAGE_KEY = "rolefit.docStyle.v2";
 // v1 stored zoom as a fraction of the pane (default 0.75); v2 re-bases so 1
@@ -196,7 +230,18 @@ function coerce(raw: unknown, legacyMode: "current" | "v2" = "current"): DocStyl
         ? r.headingCase
         : DOC_STYLE_DEFAULTS.headingCase,
     sectionRule: r.sectionRule !== false,
-    contactDivider: coerceDivider(r.contactDivider)
+    contactDivider: coerceDivider(r.contactDivider),
+    headerAlign:
+      r.headerAlign === "left" || r.headerAlign === "right" ? r.headerAlign : DOC_STYLE_DEFAULTS.headerAlign,
+    bodyAlign:
+      r.bodyAlign === "justify" || r.bodyAlign === "center" || r.bodyAlign === "right"
+        ? r.bodyAlign
+        : DOC_STYLE_DEFAULTS.bodyAlign,
+    headingAlign:
+      r.headingAlign === "center" || r.headingAlign === "right" ? r.headingAlign : DOC_STYLE_DEFAULTS.headingAlign,
+    nameSize: r.nameSize === "large" || r.nameSize === "xlarge" ? r.nameSize : DOC_STYLE_DEFAULTS.nameSize,
+    pageMargins:
+      r.pageMargins === "narrow" || r.pageMargins === "wide" ? r.pageMargins : DOC_STYLE_DEFAULTS.pageMargins
   };
 }
 
@@ -271,36 +316,6 @@ export function useDocStyle() {
     return () => window.clearTimeout(saveTimer.current);
   }, [style]);
 
-  const cssVars = useMemo(
-    () =>
-      ({
-        "--doc-zoom": String(style.zoom),
-        "--doc-line": String(style.lineHeight),
-        "--doc-name-contact-gap": `${style.nameContactGap}em`,
-        "--doc-contact-gap": `${style.contactGap}em`,
-        "--doc-header-section-gap": `${style.headerSectionGap}em`,
-        "--doc-section-gap": `${style.sectionGap}em`,
-        "--doc-section-entry-gap": `${style.sectionEntryGap}em`,
-        "--doc-entry-gap": `${style.entryGap}em`,
-        "--doc-title-sub-gap": `${style.titleSubGap}em`,
-        "--doc-head-bullet-gap": `${style.headBulletGap}em`,
-        "--doc-skills-row-gap": `${style.skillsRowGap}em`,
-        "--doc-bullet-gap": `${style.bulletGap}em`,
-        "--doc-title-weight": style.boldTitles ? "700" : "400",
-        "--doc-heading-weight": style.boldHeadings ? "700" : "400",
-        "--doc-skill-label-weight": style.boldSkillLabels ? "700" : "400",
-        "--doc-subtitle-style": style.italicSubtitles ? "italic" : "normal",
-        "--doc-heading-variant": style.headingCase === "smallcaps" ? "small-caps" : "normal",
-        "--doc-heading-transform": style.headingCase === "uppercase" ? "uppercase" : "none",
-        "--doc-rule-width": style.sectionRule ? "1px" : "0",
-        // Quoted so it drops straight into CSS `content`; JSON.stringify escapes
-        // any stray quote in a custom divider. An emptied custom field falls back
-        // to "|" so the live preview and the PDF export stay in agreement.
-        "--doc-contact-divider": JSON.stringify(style.contactDivider || "|")
-      }) as CSSProperties,
-    [style]
-  );
-
   function set<K extends keyof DocStyle>(key: K, value: DocStyle[K]) {
     setStyle((current) => ({ ...current, [key]: value }));
   }
@@ -342,7 +357,7 @@ export function useDocStyle() {
     [style]
   );
 
-  return { style, set, reset, applySpacingPreset, applyStyle, saveCustomPreset, customPreset, isDefault, cssVars };
+  return { style, set, reset, applySpacingPreset, applyStyle, saveCustomPreset, customPreset, isDefault };
 }
 
 export type DocStyleControls = ReturnType<typeof useDocStyle>;

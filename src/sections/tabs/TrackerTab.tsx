@@ -37,6 +37,7 @@ export type SortState = { key: SortKey; dir: SortDir };
 // Page-size options. Minimum is 20 per the product spec — never smaller.
 const PAGE_SIZES = [20, 50, 100] as const;
 const DEFAULT_PAGE_SIZE = 20;
+const DEFAULT_SORT: SortState = { key: "applied", dir: "desc" };
 
 // Natural first-click direction per column: dates/fit lead with the most useful
 // end (newest / highest), text and ordinal columns lead ascending.
@@ -151,7 +152,7 @@ export function TrackerTab({
   const [query, setQuery] = useState("");
   const [isRefreshing, setIsRefreshing] = useState(false);
   // Default sort: most recent application first (by apply time).
-  const [sort, setSort] = useState<SortState>({ key: "applied", dir: "desc" });
+  const [sort, setSort] = useState<SortState>(DEFAULT_SORT);
   const [pageSize, setPageSize] = useState<number>(DEFAULT_PAGE_SIZE);
   const [page, setPage] = useState(1);
   // Right-click context menu: the target app + cursor anchor (viewport coords).
@@ -225,6 +226,22 @@ export function TrackerTab({
   useEffect(() => {
     setPage(1);
   }, [query, pipelineFilter, sort, pageSize]);
+
+  // Next action is intentionally omitted from the compact table. If the user
+  // enters that layout while it is the active sort, return to the visible
+  // chronological default so the row order never depends on a hidden control.
+  useEffect(() => {
+    const compactQuery = window.matchMedia("(max-width: 900px)");
+    const resetHiddenSort = (isCompact: boolean) => {
+      if (!isCompact) return;
+      setSort((current) => (current.key === "nextAction" ? DEFAULT_SORT : current));
+    };
+    const handleCompactChange = (event: MediaQueryListEvent) => resetHiddenSort(event.matches);
+
+    resetHiddenSort(compactQuery.matches);
+    compactQuery.addEventListener("change", handleCompactChange);
+    return () => compactQuery.removeEventListener("change", handleCompactChange);
+  }, []);
 
   const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize));
   const safePage = Math.min(page, totalPages);

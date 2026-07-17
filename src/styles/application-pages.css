@@ -2195,6 +2195,27 @@ button.table-sort svg {
   }
 }
 
+@media (max-width: 900px) {
+  /* The inspector is stacked by this point, so keep the primary register facts
+     in view rather than forcing the user to discover Fit via a bottom-only
+     horizontal scrollbar. Next action remains in application details. */
+  .applications-table__row {
+    grid-template-columns:
+      minmax(105px, 1.25fr)
+      minmax(94px, 1fr)
+      82px
+      70px
+      64px
+      minmax(86px, 96px)
+      16px;
+    min-width: 620px;
+  }
+
+  .applications-table__row > .applications-table__cell--next-action {
+    display: none;
+  }
+}
+
 @media (max-width: 760px) {
   .workspace-page__head,
   .application-modal__head,

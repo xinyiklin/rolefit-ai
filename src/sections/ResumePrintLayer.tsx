@@ -1,44 +1,33 @@
-import { useMemo, type CSSProperties } from "react";
+import { useMemo } from "react";
 import { createPortal } from "react-dom";
 import type { ResumeData } from "../lib/resumeData";
-import { parseResumeDocument } from "../lib/resumeDocument";
-import { ResumeDocument } from "./ResumeDocument";
-import { ResumeReadonlyDocument } from "./ResumeReadonlyDocument";
+import { toTemplateSchema } from "../lib/resumeData";
+import type { DocStyleIn } from "../typeset/blocks.ts";
+import { TypesetDomPages } from "../typeset/render/dom.tsx";
 
 // Off-screen copy of the tailored resume, portaled to <body> so it sits beside
-// #root rather than deep in the app tree. Hidden on screen; print CSS hides #root
-// and shows only this, so "PDF · clean" (window.print → Save as PDF) prints the
-// resume in isolation regardless of which output tab is active.
+// #root rather than deep in the app tree. Hidden on screen; print CSS hides
+// #root and shows only this, so a manual browser print (⌘P → Save as PDF)
+// yields the resume in isolation regardless of which output tab is active.
 //
-// When the structured editor model is available (the normal case) we render it
-// read-only with the SAME `.rdx-*` markup the editor uses, so the print matches
-// what you edit exactly. The text-parse path stays as a fallback for the rare case
-// where no structured model exists yet.
+// The pages are painted by the typeset ENGINE's DOM backend (D013/D014) in
+// true pt units — identical layout to the engine PDF and the preview overlay,
+// as real selectable text. Printing starts only once the structured model
+// exists, so there is no second parser or fallback layout to drift.
 export function ResumePrintLayer({
   resume,
-  polishedText,
-  sourceText,
-  docStyleVars
+  docStyle
 }: {
-  resume: ResumeData | null;
-  polishedText: string;
-  sourceText?: string;
-  // User typography (Format menu) — applied to the mirror so PDF · clean matches
-  // the editor. The text-parse fallback keeps fixed styles.
-  docStyleVars?: CSSProperties;
+  resume: ResumeData;
+  // Format/Style-menu values — the engine lays the printed page out with the
+  // same rhythm the editor and exports use.
+  docStyle: DocStyleIn;
 }) {
-  const fallbackModel = useMemo(
-    () => (resume ? null : parseResumeDocument(polishedText, sourceText)),
-    [resume, polishedText, sourceText]
-  );
+  const schema = useMemo(() => toTemplateSchema(resume), [resume]);
 
   return createPortal(
     <div className="resume-print-layer" aria-hidden="true">
-      {resume ? (
-        <ResumeReadonlyDocument data={resume} style={docStyleVars} />
-      ) : (
-        <ResumeDocument model={fallbackModel!} />
-      )}
+      <TypesetDomPages schema={schema} docStyle={docStyle} variant="print" />
     </div>,
     document.body
   );

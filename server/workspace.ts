@@ -1,8 +1,8 @@
 // Base-resume workspace subsystem: discovers, loads, saves, trashes, and restores
-// the root-level LaTeX/DOCX/text base resumes under job-search-workspace/. Split
-// out of server.ts; the four /api/workspace* route handlers plus the file
-// readers/writers they share live here. JSON I/O, base64 decode, DOCX extraction,
-// and HTTP helpers are imported directly, matching the server/ai/* module style.
+// the root-level structured (.resume) / plain-text base resumes under
+// job-search-workspace/. Split out of server.ts; the four /api/workspace* route
+// handlers plus the file readers/writers they share live here. JSON I/O and HTTP
+// helpers are imported directly, matching the server/ai/* module style.
 //
 // jobWorkspaceDir is exported so the application-tracker and extension routes can
 // close over the same workspace directory without a factory.
@@ -10,7 +10,6 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { mkdir, readFile, readdir, rename, writeFile } from "node:fs/promises";
 import { extname, join } from "node:path";
-import { base64ToBuffer, bufferToBase64, extractDocxResume } from "./docx.ts";
 import { readBody, sendJson } from "./http.ts";
 
 // A loaded base resume (or the "none found" sentinel). Optional fields carry the
@@ -22,19 +21,17 @@ type BaseResumeResult = {
   kind?: string;
   text?: string;
   paragraphs?: number;
-  docxBase64?: string;
 };
 
 const root = process.cwd();
 export const jobWorkspaceDir = join(root, "job-search-workspace");
 const baseResumeCandidates = [
-  "base-resume.tex",
-  "base-resume.docx",
+  "base-resume.resume",
   "base-resume.txt",
   "base-resume.md",
   "base-resume.csv"
 ];
-const baseResumeTexPattern = /^base-resume(?:-[A-Za-z0-9][A-Za-z0-9_-]*)?\.tex$/;
+const baseResumeVariantPattern = /^base-resume(?:-[A-Za-z0-9][A-Za-z0-9_-]*)?\.resume$/;
 
 export async function ensureJobWorkspace(): Promise<void> {
   await mkdir(jobWorkspaceDir, { recursive: true });
@@ -55,14 +52,14 @@ async function readWorkspaceFiles(): Promise<string[]> {
 
 function assertBaseResumeFileName(fileName: unknown): string {
   const name = String(fileName ?? "").trim();
-  if (!baseResumeTexPattern.test(name) || name.includes("/") || name.includes("..")) {
+  if (!baseResumeVariantPattern.test(name) || name.includes("/") || name.includes("..")) {
     throw new Error("Choose a valid base resume version.");
   }
   return name;
 }
 
 function baseResumeLabel(fileName: string): string {
-  const base = fileName.replace(/\.(docx|tex|txt|md|csv)$/i, "");
+  const base = fileName.replace(/\.(resume|txt|md|csv)$/i, "");
   if (base === "base-resume") return "Default";
   const friendlyWords = new Map([
     ["ai", "AI"],
@@ -87,7 +84,7 @@ export async function readWorkspaceBaseResume(requestedFileName?: string): Promi
     ? [assertBaseResumeFileName(requestedFileName)]
     : [
         ...(await readBaseResumeOptions()).map((option) => option.fileName),
-        ...baseResumeCandidates.filter((name) => !baseResumeTexPattern.test(name))
+        ...baseResumeCandidates.filter((name) => !baseResumeVariantPattern.test(name))
       ];
 
   const uniqueCandidates = [...new Set(candidates)];
@@ -95,28 +92,15 @@ export async function readWorkspaceBaseResume(requestedFileName?: string): Promi
     const filePath = join(jobWorkspaceDir, fileName);
     try {
       const data = await readFile(filePath);
-      const extension = extname(fileName).toLowerCase();
-      if (extension === ".docx") {
-        const docxBase64 = bufferToBase64(data);
-        const parsed = await extractDocxResume(docxBase64);
-        return {
-          exists: true,
-          fileName,
-          label: baseResumeLabel(fileName),
-          kind: "docx",
-          text: parsed.text,
-          paragraphs: parsed.paragraphs,
-          docxBase64
-        };
-      }
-
-      const text = data.toString("utf8").slice(0, 45_000);
+      // Cap generously: a .resume file is raw JSON the client must JSON.parse, so
+      // truncation would corrupt it — 200k covers a full structured resume.
+      const text = data.toString("utf8").slice(0, 200_000);
       if (text.trim().length < 80) continue;
       return {
         exists: true,
         fileName,
         label: baseResumeLabel(fileName),
-        kind: extension.replace(".", "") || "text",
+        kind: extname(fileName).toLowerCase().replace(".", "") || "text",
         text
       };
     } catch {
@@ -124,12 +108,12 @@ export async function readWorkspaceBaseResume(requestedFileName?: string): Promi
     }
   }
 
-  // No workspace file found — fall back to the bundled Jake's starter template so
-  // the editor is never empty on a fresh install.
+  // No workspace file found — fall back to the bundled starter .resume so the
+  // editor is never empty on a fresh install.
   try {
-    const starterPath = join(root, "server/latex/templates/jakes-starter.tex");
+    const starterPath = join(root, "server/starter.resume");
     const starterText = await readFile(starterPath, "utf8");
-    return { exists: false, text: starterText, kind: "tex", fileName: "jakes-starter.tex" };
+    return { exists: false, text: starterText, kind: "resume", fileName: "starter.resume" };
   } catch {
     return { exists: false };
   }
@@ -138,15 +122,15 @@ export async function readWorkspaceBaseResume(requestedFileName?: string): Promi
 async function readBaseResumeOptions(): Promise<{ fileName: string; label: string; kind: string }[]> {
   const files = await readWorkspaceFiles();
   return files
-    .filter((name) => baseResumeTexPattern.test(name))
+    .filter((name) => baseResumeVariantPattern.test(name))
     .map((fileName) => ({
       fileName,
       label: baseResumeLabel(fileName),
-      kind: "tex"
+      kind: "resume"
     }))
     .sort((a, b) => {
-      if (a.fileName === "base-resume.tex") return -1;
-      if (b.fileName === "base-resume.tex") return 1;
+      if (a.fileName === "base-resume.resume") return -1;
+      if (b.fileName === "base-resume.resume") return 1;
       return a.label.localeCompare(b.label);
     });
 }
@@ -154,7 +138,7 @@ async function readBaseResumeOptions(): Promise<{ fileName: string; label: strin
 // Clear the app-managed default base resume, but never hard-delete: move every
 // known default format into job-search-workspace/.trash/ with a timestamp so a
 // removed or replaced base resume is always recoverable. Named variants such as
-// base-resume-fullstack.tex stay in place.
+// base-resume-fullstack.resume stay in place.
 async function clearBaseResumeFiles(): Promise<void> {
   const trashDir = join(jobWorkspaceDir, ".trash");
   await mkdir(trashDir, { recursive: true });
@@ -193,8 +177,8 @@ type HistoryGroup = { variant: string; label: string; entries: HistoryEntry[] };
 // `perVariant` most recent entries (default 3); older backups stay in .trash and
 // remain restorable by hand — this is a display cap, not a destructive prune.
 // The variant identity is the file stem (extension-agnostic) so a Default whose
-// history spans base-resume.tex and base-resume.txt consolidates into one group.
-// Matches both default (base-resume.tex) and named variants (base-resume-fullstack.tex).
+// history spans base-resume.resume and base-resume.txt consolidates into one group.
+// Matches both default (base-resume.resume) and named variants (base-resume-fullstack.resume).
 async function readBaseResumeHistory(perVariant = 3): Promise<HistoryGroup[]> {
   const trashDir = join(jobWorkspaceDir, ".trash");
   let entries: string[];
@@ -203,8 +187,8 @@ async function readBaseResumeHistory(perVariant = 3): Promise<HistoryGroup[]> {
   } catch {
     return [];
   }
-  // Matches: 2026-06-10T16-30-45-123Z__base-resume[-variant].(docx|tex|txt|md|csv)
-  const baseResumePattern = /^(.+?)__(base-resume(?:-[A-Za-z0-9][A-Za-z0-9_-]*)?)\.(docx|tex|txt|md|csv)$/;
+  // Matches: 2026-06-10T16-30-45-123Z__base-resume[-variant].(resume|txt|md|csv)
+  const baseResumePattern = /^(.+?)__(base-resume(?:-[A-Za-z0-9][A-Za-z0-9_-]*)?)\.(resume|txt|md|csv)$/;
   const matched = (entries
     .map((name): HistoryMatch | null => {
       const m = name.match(baseResumePattern);
@@ -320,48 +304,33 @@ export async function handleWorkspaceBaseResume(req: IncomingMessage, res: Serve
     const fileName = String(body.fileName ?? "").trim();
     const extension = extname(fileName).toLowerCase();
 
-    if (extension === ".docx") {
-      const docxBase64 = String(body.fileBase64 ?? "");
-      const parsed = await extractDocxResume(docxBase64);
-      await clearBaseResumeFiles();
-      await writeFile(join(jobWorkspaceDir, "base-resume.docx"), base64ToBuffer(docxBase64));
-      sendJson(res, 200, {
-        saved: true,
-        path: jobWorkspaceDir,
-        baseResume: {
-          exists: true,
-          fileName: "base-resume.docx",
-          kind: "docx",
-          text: parsed.text,
-          paragraphs: parsed.paragraphs,
-          docxBase64
-        },
-        baseResumeOptions: await readBaseResumeOptions(),
-        baseResumeHistory: await readBaseResumeHistory(),
-        files: await readWorkspaceFiles()
-      });
+    if (![".txt", ".md", ".csv", ".resume", ""].includes(extension)) {
+      sendJson(res, 400, { error: "Save a RESUME, TXT, MD, or CSV resume as the base resume." });
       return;
     }
 
-    if (![".txt", ".md", ".csv", ".tex", ""].includes(extension)) {
-      sendJson(res, 400, { error: "Save a DOCX, TEX, TXT, MD, or CSV resume as the base resume." });
+    // A .resume envelope is raw JSON the client must JSON.parse, so truncating it
+    // mid-document would write a corrupt file — reject oversize outright. Plain
+    // text (.txt/.md/.csv) can be capped by slicing without breaking its format.
+    const isResume = extension === ".resume";
+    const rawText = String(body.text ?? "");
+    if (isResume && rawText.length > 200_000) {
+      sendJson(res, 413, { error: "Resume file is too large to save." });
       return;
     }
-
-    const text = String(body.text ?? "").slice(0, 45_000);
+    const text = isResume ? rawText : rawText.slice(0, 200_000);
     if (text.trim().length < 80) {
       sendJson(res, 400, { error: "Base resume text is too short to save." });
       return;
     }
 
-    // Preserve active workspace LaTeX variants in place. Arbitrary uploaded
-    // .tex names still normalize to the default base-resume.tex.
-    const isTex = extension === ".tex";
+    // Preserve active workspace .resume variants in place. Arbitrary uploaded
+    // .resume names still normalize to the default base-resume.resume.
     let targetName = "base-resume.txt";
-    if (isTex) {
-      targetName = baseResumeTexPattern.test(fileName) ? assertBaseResumeFileName(fileName) : "base-resume.tex";
+    if (isResume) {
+      targetName = baseResumeVariantPattern.test(fileName) ? assertBaseResumeFileName(fileName) : "base-resume.resume";
     }
-    if (targetName === "base-resume.tex" || !isTex) {
+    if (targetName === "base-resume.resume" || !isResume) {
       await clearBaseResumeFiles();
     } else {
       // Named variant: back it up before overwriting so it appears in version history.
@@ -374,7 +343,7 @@ export async function handleWorkspaceBaseResume(req: IncomingMessage, res: Serve
       baseResume: {
         exists: true,
         fileName: targetName,
-        kind: isTex ? "tex" : "txt",
+        kind: isResume ? "resume" : "txt",
         text
       },
       baseResumeOptions: await readBaseResumeOptions(),
@@ -403,13 +372,13 @@ export async function handleRestoreBaseResume(req: IncomingMessage, res: ServerR
     const sourcePath = join(trashDir, key);
 
     // Extract the original filename from the key (after the stamp prefix).
-    const keyMatch = key.match(/^.+?__(base-resume(?:-[A-Za-z0-9][A-Za-z0-9_-]*)?\.(?:docx|tex|txt|md|csv))$/);
+    const keyMatch = key.match(/^.+?__(base-resume(?:-[A-Za-z0-9][A-Za-z0-9_-]*)?\.(?:resume|txt|md|csv))$/);
     if (!keyMatch) {
       sendJson(res, 400, { error: "Invalid history key." });
       return;
     }
     const targetName = keyMatch[1];
-    const isNamedVariant = baseResumeTexPattern.test(targetName) && targetName !== "base-resume.tex";
+    const isNamedVariant = baseResumeVariantPattern.test(targetName) && targetName !== "base-resume.resume";
 
     // Read the archived file, back up the current version, write the restored version.
     const data = await readFile(sourcePath);

@@ -596,35 +596,28 @@ export function ApplicationModal({ open, application, onClose, onSave, onDelete,
                     </span>
                   ) : null}
                 </div>
-                {artifacts?.hasTex || artifacts?.hasPdf ? (
+                {artifacts?.hasPdf ? (
                   <>
                     <p className="application-muted">
                       Saved {artifacts.savedAt ? new Date(artifacts.savedAt).toLocaleDateString() : ""}
                       {artifacts.templateId ? ` · ${artifacts.templateId} template` : ""}.
                     </p>
                     <div className="application-doc-card__actions">
-                      {artifacts.hasPdf && onPreviewResume ? (
+                      {onPreviewResume ? (
                         <button type="button" className="secondary-button is-compact" onClick={() => onPreviewResume(application as Application)}>
                           <Eye size={14} aria-hidden="true" /> Preview
                         </button>
                       ) : null}
-                      {artifacts.hasPdf ? (
-                        <a className="primary-button is-compact" href={`/api/applications/${encodeURIComponent((application as Application).id)}/resume.pdf`} download={`${downloadBase}_Resume.pdf`}>
-                          <Download size={14} aria-hidden="true" /> PDF
-                        </a>
-                      ) : null}
-                      {artifacts.hasTex ? (
-                        <a className="secondary-button is-compact" href={`/api/applications/${encodeURIComponent((application as Application).id)}/resume.tex`} download={`${downloadBase}_Resume.tex`}>
-                          <Download size={14} aria-hidden="true" /> .tex
-                        </a>
-                      ) : null}
+                      <a className="primary-button is-compact" href={`/api/applications/${encodeURIComponent((application as Application).id)}/resume.pdf`} download={`${downloadBase}_Resume.pdf`}>
+                        <Download size={14} aria-hidden="true" /> PDF
+                      </a>
                     </div>
                   </>
                 ) : (
                   <p className="application-muted">
                     {isEdit
-                      ? "No resume snapshot saved for this role yet. Open it in Polish, then use Apply to save the .tex and PDF that went out."
-                      : "Save the application first, then apply a polished resume to attach its .tex and PDF here."}
+                      ? "No resume snapshot saved for this role yet. Open it in Polish, then use Apply to save the PDF that went out."
+                      : "Save the application first, then apply a polished resume to attach its PDF here."}
                   </p>
                 )}
               </div>

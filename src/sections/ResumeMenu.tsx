@@ -40,6 +40,7 @@ type ResumeMenuProps = {
   baseResumeHistory: HistoryGroup[];
   workspaceStatus: string;
   isSavingBaseResume: boolean;
+  isWorkspaceBootstrapping: boolean;
   fileName: string;
   fileError: string;
   fileStatus: string;
@@ -78,6 +79,7 @@ export function ResumeMenu({
   baseResumeHistory,
   workspaceStatus,
   isSavingBaseResume,
+  isWorkspaceBootstrapping,
   fileName,
   fileError,
   fileStatus,
@@ -92,6 +94,8 @@ export function ResumeMenu({
 }: ResumeMenuProps) {
   const activeBaseResume = baseResumeOptions.find((option) => option.fileName === baseResumeName);
   const baseResumeDisplayName = activeBaseResume?.label ?? baseResumeName;
+  const resumeStatus = isWorkspaceBootstrapping ? "checking" : resumeReady ? "ready" : "empty";
+  const resumeStatusClass = isWorkspaceBootstrapping ? "" : resumeReady ? "is-ready" : "is-empty";
 
   return (
     <NavMenu
@@ -100,17 +104,17 @@ export function ResumeMenu({
       label={
         <>
           <span className="nav-menu__label">Resume</span>
-          <span className={`nav-menu__sub ${resumeReady ? "is-ready" : "is-empty"}`}>
-            {resumeReady ? "ready" : "empty"}
+          <span className={`nav-menu__sub ${resumeStatusClass}`} aria-live="polite">
+            {resumeStatus}
           </span>
         </>
       }
     >
       {/* Flat source header — no card wrapper */}
-      <div className="resume-source-head">
+      <div className="resume-source-head" aria-busy={isWorkspaceBootstrapping}>
         <FolderOpen size={14} aria-hidden="true" />
         <div className="resume-source-head__info">
-          <strong>{baseResumeDisplayName || "No base saved"}</strong>
+          <strong>{isWorkspaceBootstrapping ? "Checking workspace" : baseResumeDisplayName || "No base saved"}</strong>
         </div>
       </div>
       <div className="workspace-actions">
@@ -229,8 +233,8 @@ export function ResumeMenu({
 
       <label className="upload-box">
         <Upload size={18} aria-hidden="true" />
-        <span>{fileName || "Upload resume (.docx · .tex · .txt · .md · .csv)"}</span>
-        <input accept=".docx,.txt,.md,.csv,.tex" type="file" onChange={onFileUpload} />
+        <span>{fileName || "Upload resume (.txt · .md · .csv · .resume)"}</span>
+        <input accept=".txt,.md,.csv,.resume" type="file" onChange={onFileUpload} />
       </label>
 
       {fileError ? (

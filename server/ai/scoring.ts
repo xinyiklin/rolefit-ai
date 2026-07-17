@@ -1,5 +1,5 @@
 // Fit scoring + verdict arithmetic — the server does the math over
-// reviewer-extracted evidence; split from sanitize.mjs. Anti-fabrication-critical:
+// reviewer-extracted evidence; split from sanitize.ts. Anti-fabrication-critical:
 // behavior changes require adversarial review.
 
 import { clippedString, enumValue, COVERAGE_STATUSES } from "./sanitize.ts";
@@ -22,14 +22,254 @@ type RequirementRow = {
 };
 // The already-sanitized review object the caps/clarity math reads defensively.
 type StrictReviewLike = {
-  gaps?: Array<{ severity?: unknown }>;
+  gaps?: Array<{ gap?: unknown; severity?: unknown; capEligible?: unknown }>;
   verdict?: string;
   riskFlags?: unknown[];
 } | null | undefined;
 // The base/tailored score pair the coverage arithmetic produces.
 type AiScore = { base: number; tailored: number; liftReason: string };
 
+// Optional grounding inputs for requirement coverage. Omitting this argument
+// preserves legacy behavior for existing callers; route code supplies all four
+// corpora so model-authored statuses are treated only as claims to verify.
+export type RequirementCoverageGrounding = {
+  jobText?: unknown;
+  baseResume?: unknown;
+  tailoredResume?: unknown;
+  honestContext?: unknown;
+};
+
 const REQUIREMENT_IMPORTANCE = new Set(["critical", "high", "medium", "low"]);
+const LOGISTICAL_REQUIREMENT_RE = /\b(?:travel|relocat(?:e|ion)|on[- ]?site|in[- ]?office|remote|hybrid|shift|overnight|weekend|on[- ]?call|overtime|extended hours|physical|lift(?:ing)?|stand(?:ing)?|commute|driver'?s? licen[cs]e|driving|transportation)\b/i;
+const DEGREE_OR_EQUIVALENT_RE = /(?:degree|bachelor['’]?s?|master['’]?s?).{0,60}(?:or|and\/or)\s+(?:equivalent|relevant|comparable).{0,30}experience|(?:equivalent|relevant|comparable)\s+experience.{0,60}(?:degree|bachelor['’]?s?|master['’]?s?)/i;
+
+const TOKEN_STOPWORDS = new Set([
+  "a", "an", "and", "are", "as", "at", "be", "by", "for", "from", "has", "have",
+  "in", "into", "is", "it", "of", "on", "or", "that", "the", "their", "this", "to",
+  "using", "use", "used", "with", "you", "your"
+]);
+
+// Evidence frequently arrives as reporting prose rather than a verbatim quote:
+// "Skills section lists React" should ground on React, not fail because the
+// resume does not literally contain "section lists". Remove only this framing;
+// distinctive role/domain/tool words still have to match the corpus.
+const EVIDENCE_REPORTING_BOILERPLATE = new Set([
+  ...TOKEN_STOPWORDS,
+  "base", "bullet", "bullets", "candidate", "context", "current", "entry", "evidence",
+  "honest", "include", "includes", "including", "list", "lists", "listed", "listing", "mentions", "mentioned", "original", "polished",
+  "project", "projects", "resume", "role", "section", "shows", "shown", "skills", "states",
+  "tailored", "work", "says"
+]);
+
+const REQUIREMENT_BOILERPLATE = new Set([
+  ...TOKEN_STOPWORDS,
+  "ability", "candidate", "candidates", "domain", "experience", "knowledge", "must", "preferred",
+  "proficiency", "proficient", "qualification", "qualifications", "required", "requirement",
+  "requirements", "should", "skill", "skills", "technology", "technologies", "tool", "tools", "years", "year"
+]);
+
+// Small, established equivalence families only. Both corpus and claim tokens
+// receive the same canonical form, preserving valid coverage without broad
+// fuzzy matching (which would reopen false-friend failures).
+const COVERAGE_TOKEN_CANONICAL = new Map<string, string>([
+  ["postgres", "postgres"], ["postgresql", "postgres"],
+  ["k8s", "kubernetes"], ["kubernetes", "kubernetes"],
+  ["ts", "typescript"], ["typescript", "typescript"],
+  ["react", "react"], ["react.js", "react"], ["reactjs", "react"]
+]);
+
+function tokenVariants(raw: string): string[] {
+  const token = raw.replace(/^\.+|\.+$/g, "");
+  if (!token) return [];
+  const variants = new Set<string>();
+  const add = (variant: string) => {
+    if (!variant) return;
+    variants.add(variant);
+    const canonical = COVERAGE_TOKEN_CANONICAL.get(variant);
+    if (canonical) variants.add(canonical);
+  };
+  add(token);
+  if (/^[a-z]+$/.test(token)) {
+    if (token.length > 5 && token.endsWith("ies")) add(`${token.slice(0, -3)}y`);
+    if (token.length > 5 && token.endsWith("ments")) add(token.slice(0, -5));
+    if (token.length > 4 && token.endsWith("ment")) add(token.slice(0, -4));
+    if (token.length > 5 && token.endsWith("ing")) {
+      const stem = token.slice(0, -3).replace(/(.)\1$/, "$1");
+      add(stem);
+      add(`${stem}e`);
+    }
+    if (token.length > 4 && token.endsWith("ed")) {
+      const stem = token.slice(0, -2).replace(/(.)\1$/, "$1");
+      add(stem);
+      add(`${stem}e`);
+    }
+    if (token.length > 4 && token.endsWith("s")) add(token.slice(0, -1));
+  }
+  return [...variants];
+}
+
+function rawTokens(value: unknown): string[] {
+  return String(value ?? "").toLowerCase().match(/[a-z0-9][a-z0-9+#.]*/g) ?? [];
+}
+
+function corpusTokens(value: unknown): Set<string> {
+  return new Set(rawTokens(value).flatMap(tokenVariants));
+}
+
+function distinctiveTokens(value: unknown, ignored: Set<string>): string[] {
+  return [...new Set(rawTokens(value)
+    .filter((token) => (token.length >= 2 || token === "c" || token === "r" || /^\d+$/.test(token)) && !ignored.has(token))
+  )];
+}
+
+type AtomicRequirementKind = "typescript" | "dotnet" | "go" | "c" | "r";
+
+// Reviewer requirement labels often wrap a short technology in descriptive
+// prose ("TypeScript development", "Go backend services"). Detect the atomic
+// claim inside that label before generic token-overlap scoring can let a false
+// friend (TS/SCI, net-zero, go-to-market, C-suite, R&D) carry the row.
+function atomicRequirementKind(value: unknown): AtomicRequirementKind | null {
+  const raw = String(value ?? "");
+  if (/\.net\b/i.test(raw)) return "dotnet";
+  if (/\btypescript\b/i.test(raw)) return "typescript";
+  if (/\bGolang\b/i.test(raw) || /(?:^|[^A-Za-z0-9])Go(?![-&A-Za-z0-9+#])/.test(raw)) return "go";
+  if (/(?:^|[^A-Za-z0-9])C(?![-&A-Za-z0-9+#])/.test(raw)) return "c";
+  if (/(?:^|[^A-Za-z0-9])R(?![-&A-Za-z0-9+#])/.test(raw)) return "r";
+  return null;
+}
+
+function specialAtomicRequirementGrounded(value: unknown, corpus: unknown, _ignored: Set<string>): boolean | null {
+  const raw = String(value ?? "");
+  const source = String(corpus ?? "");
+  if (/\bts\s*\/\s*sci\b/i.test(raw) || /\bts\b.{0,20}\bclearance\b/i.test(raw)) {
+    return /\bts\s*\/\s*sci\b/i.test(source) || /\bts\b.{0,20}\bclearance\b/i.test(source);
+  }
+  const kind = atomicRequirementKind(raw);
+  if (kind === "dotnet") return /(?:^|[^a-z0-9])\.net(?![-a-z0-9])/i.test(source) ? null : false;
+  if (kind === "typescript") {
+    const grounded = /\bTypeScript\b/i.test(source)
+      || /(?:^|[^A-Za-z0-9/])TS(?!\s*\/\s*SCI\b|[A-Za-z0-9])/i.test(source);
+    return grounded ? null : false;
+  }
+  if (kind === "go") {
+    return /\bGolang\b/i.test(source) || /(?:^|[^A-Za-z0-9])Go(?![-&A-Za-z0-9+#])/.test(source) ? null : false;
+  }
+  if (kind === "c") {
+    return /(?:^|[^A-Za-z0-9])C(?![-&A-Za-z0-9+#])/.test(source) ? null : false;
+  }
+  if (kind === "r") {
+    return /(?:^|[^A-Za-z0-9])R(?![-&A-Za-z0-9+#])/.test(source) ? null : false;
+  }
+  return null;
+}
+
+function hasAtomicFalseFriend(value: unknown, corpus: unknown, ignored: Set<string>): boolean {
+  const raw = String(value ?? "");
+  const source = String(corpus ?? "");
+  const exact = specialAtomicRequirementGrounded(raw, source, ignored);
+  if (exact !== false) return false;
+  const kind = atomicRequirementKind(raw);
+  if (kind === "dotnet") return /\bnet[- ]zero\b/i.test(source);
+  if (kind === "typescript") return /\bTS\s*\/\s*SCI\b/i.test(source);
+  if (kind === "go") return /\bgo[- ]to[- ]market\b|\bgo[- ]getter\b/i.test(source);
+  if (kind === "c") return /\bC[- ]suite\b|\bC[- ]level\b|\bC#\b|\bC\+\+\b/i.test(source);
+  if (kind === "r") return /\bR\s*&\s*D\b/i.test(source);
+  return false;
+}
+
+function phraseGrounded(value: unknown, corpus: unknown, ignored: Set<string>, requireAll = false): boolean {
+  const special = specialAtomicRequirementGrounded(value, corpus, ignored);
+  if (special !== null) return special;
+  const tokens = distinctiveTokens(value, ignored);
+  if (!tokens.length) return false;
+  const available = corpusTokens(corpus);
+  let hits = 0;
+  for (const token of tokens) {
+    if (tokenVariants(token).some((variant) => available.has(variant))) hits += 1;
+  }
+  // Single-token evidence (React, AWS, Go) must match exactly. Longer prose can
+  // paraphrase lightly, but a clear majority of distinctive terms must survive.
+  if (requireAll) return hits === tokens.length;
+  return tokens.length === 1 ? hits === 1 : hits * 5 >= tokens.length * 3;
+}
+
+function requirementNegatedInCorpus(requirement: unknown, corpus: unknown): boolean {
+  const source = String(corpus ?? "").toLowerCase();
+  const tokens = distinctiveTokens(requirement, REQUIREMENT_BOILERPLATE)
+    .filter((token) => token.length >= 3)
+    .sort((a, b) => b.length - a.length);
+  const anchor = tokens[0];
+  if (!anchor) return false;
+  const escaped = anchor.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const matches = [...source.matchAll(new RegExp(`\\b${escaped}\\b`, "g"))];
+  if (!matches.length) return false;
+  return matches.every((match) => {
+    const at = match.index ?? 0;
+    const before = source.slice(Math.max(0, at - 50), at);
+    const after = source.slice(at + anchor.length, Math.min(source.length, at + anchor.length + 50));
+    return /\b(?:no|not|never|without|lack(?:s|ed|ing)?)\b[^.!;\n]{0,45}$/.test(before)
+      || /^[^.!;\n]{0,30}\b(?:no experience|not experienced|unsupported|not used)\b/.test(after);
+  });
+}
+
+function requirementContext(requirement: unknown, source: unknown): string {
+  const text = String(source ?? "");
+  const tokens = distinctiveTokens(requirement, REQUIREMENT_BOILERPLATE).sort((a, b) => b.length - a.length);
+  const lower = text.toLowerCase();
+  const anchor = tokens.find((token) => lower.includes(token));
+  if (!anchor) return text;
+  const lines = text.split(/\r?\n/);
+  const lineIndex = lines.findIndex((line) => line.toLowerCase().includes(anchor));
+  if (lineIndex < 0) {
+    const at = lower.indexOf(anchor);
+    return text.slice(Math.max(0, at - 180), Math.min(text.length, at + anchor.length + 180));
+  }
+  return `${lines[Math.max(0, lineIndex - 1)] ?? ""}\n${lines[lineIndex]}`;
+}
+
+function requirementIsPreferredOnly(requirement: unknown, category: unknown, jobText: unknown): boolean {
+  if (/\b(?:preferred|nice|bonus)\b/i.test(String(category ?? ""))) return true;
+  const context = requirementContext(requirement, jobText);
+  return /\b(?:preferred|nice[- ]to[- ]have|bonus|plus)\b/i.test(context)
+    && !/\b(?:required|must|minimum|mandatory)\b/i.test(context);
+}
+
+function isLogisticalRequirement(value: unknown): boolean {
+  return LOGISTICAL_REQUIREMENT_RE.test(String(value ?? ""));
+}
+
+function requirementIsGrounded(requirement: string, grounding?: RequirementCoverageGrounding): boolean {
+  if (!grounding || grounding.jobText === undefined) return true;
+  return phraseGrounded(requirement, grounding.jobText, REQUIREMENT_BOILERPLATE, true);
+}
+
+function effectiveCoverageClaim(
+  status: string,
+  evidence: string,
+  corpus: unknown,
+  groundingEnabled: boolean,
+  requirement: string
+): { status: string; evidence: string } {
+  if (!groundingEnabled || status === "missing") return { status, evidence };
+  if (requirementNegatedInCorpus(requirement, corpus)) {
+    return { status: "missing", evidence: "Not in resume" };
+  }
+  if (hasAtomicFalseFriend(requirement, corpus, REQUIREMENT_BOILERPLATE)) {
+    return { status: "missing", evidence: "Not in resume" };
+  }
+  // "covered" means exact requirement evidence, so the requirement itself
+  // must be anchored too; otherwise padded prose could hide one fabricated tool
+  // among several generic grounded words and still pass the ratio check.
+  if (status === "covered" && !phraseGrounded(requirement, corpus, REQUIREMENT_BOILERPLATE, true)) {
+    return { status: "missing", evidence: "Not in resume" };
+  }
+  if (/\b(?:not in (?:the )?resume|no evidence|unsupported|not provided|no .{0,30}experience|without .{0,40}|lack(?:s|ed|ing)? .{0,40})\b/i.test(evidence)) {
+    return { status: "missing", evidence: "Not in resume" };
+  }
+  return phraseGrounded(evidence, corpus, EVIDENCE_REPORTING_BOILERPLATE)
+    ? { status, evidence }
+    : { status: "missing", evidence: "Not in resume" };
+}
 
 function verdictForScore(score: number): string {
   if (score >= 85) return "STRONG FIT";
@@ -83,20 +323,31 @@ function requirementBucket(category: unknown): BucketName | null {
   return null;
 }
 
-function sanitizeRequirementCoverage(raw: unknown): RequirementRow[] {
+function sanitizeRequirementCoverage(raw: unknown, grounding?: RequirementCoverageGrounding): RequirementRow[] {
   if (!Array.isArray(raw)) return [];
   const output: RequirementRow[] = [];
   const seen = new Set<string>();
+  // Coverage compares what the original and polished DOCUMENTS prove. Honest
+  // context may authorize a tailor suggestion, but it does not count as resume
+  // coverage until that supported fact actually appears in tailoredResume.
+  const baseCorpus = String(grounding?.baseResume ?? "");
+  const tailoredCorpus = String(grounding?.tailoredResume ?? "");
+  const groundingEnabled = grounding !== undefined;
   for (const row of raw) {
     if (!row || typeof row !== "object") continue;
     const requirement = clippedString(row.requirement ?? row.keyword ?? row.gap, 180);
     if (!requirement) continue;
+    if (!requirementIsGrounded(requirement, grounding)) continue;
     const category = clippedString(row.category, 80);
     const bucket = requirementBucket(category);
     if (!bucket) continue;
     const importance = enumValue(row.importance, REQUIREMENT_IMPORTANCE, bucket === "preferred" ? "low" : "medium");
-    const baseStatus = enumValue(row.baseStatus ?? row.status, COVERAGE_STATUSES, "missing");
-    const tailoredStatus = enumValue(row.tailoredStatus ?? row.status, COVERAGE_STATUSES, baseStatus);
+    const rawBaseStatus = enumValue(row.baseStatus ?? row.status, COVERAGE_STATUSES, "missing");
+    const rawTailoredStatus = enumValue(row.tailoredStatus ?? row.status, COVERAGE_STATUSES, rawBaseStatus);
+    const rawBaseEvidence = clippedString(row.baseEvidence ?? row.where, 300);
+    const rawTailoredEvidence = clippedString(row.tailoredEvidence ?? row.where, 300);
+    const base = effectiveCoverageClaim(rawBaseStatus, rawBaseEvidence, baseCorpus, groundingEnabled, requirement);
+    const tailored = effectiveCoverageClaim(rawTailoredStatus, rawTailoredEvidence, tailoredCorpus, groundingEnabled, requirement);
     const key = `${bucket}:${requirement.toLowerCase()}`;
     if (seen.has(key)) continue;
     seen.add(key);
@@ -105,10 +356,10 @@ function sanitizeRequirementCoverage(raw: unknown): RequirementRow[] {
       category,
       requirement,
       importance,
-      baseStatus,
-      tailoredStatus,
-      baseEvidence: clippedString(row.baseEvidence ?? row.where, 300),
-      tailoredEvidence: clippedString(row.tailoredEvidence ?? row.where, 300)
+      baseStatus: base.status,
+      tailoredStatus: tailored.status,
+      baseEvidence: base.evidence,
+      tailoredEvidence: tailored.evidence
     });
     if (output.length >= 20) break;
   }
@@ -166,11 +417,16 @@ function requirementLiftReason(rows: RequirementRow[]): string {
 // but the server owns every point calculation. This removes model-authored
 // numeric bucket wobble while keeping the reviewer responsible for evidence
 // classification.
-export function scoreFromRequirementCoverage(rawCoverage: unknown, strictReview: StrictReviewLike): AiScore | null {
-  const rows = sanitizeRequirementCoverage(rawCoverage);
+export function scoreFromRequirementCoverage(
+  rawCoverage: unknown,
+  strictReview: StrictReviewLike,
+  grounding?: RequirementCoverageGrounding
+): AiScore | null {
+  const rows = sanitizeRequirementCoverage(rawCoverage, grounding);
   // Require enough rows that the score is based on an actual requirement table,
   // not one or two vague bullets. Fallback callers may still use legacy buckets.
-  if (rows.length < 4) return null;
+  const requiredDecisionBuckets = new Set(rows.filter((row) => row.bucket !== "preferred").map((row) => row.bucket));
+  if (rows.length < 6 || requiredDecisionBuckets.size < 2) return null;
   return {
     base: scoreRequirements(rows, "baseStatus", strictReview),
     tailored: scoreRequirements(rows, "tailoredStatus", strictReview),
@@ -199,8 +455,8 @@ const DISPLAY_COVERAGE_IMPORTANCE_ORDER: Record<string, number> = { critical: 0,
 // critical→high→medium→low (stable within a tier) and capped at 12, mirroring the
 // old prompt's "4-12 most important". Returns [] when coverage is unusable — the
 // same empty fallback the old sanitizer produced when the model omitted coverage.
-export function displayCoverageFromRequirements(rawCoverage: unknown) {
-  const rows = sanitizeRequirementCoverage(rawCoverage).map((row, index) => ({ row, index }));
+export function displayCoverageFromRequirements(rawCoverage: unknown, grounding?: RequirementCoverageGrounding) {
+  const rows = sanitizeRequirementCoverage(rawCoverage, grounding).map((row, index) => ({ row, index }));
   rows.sort((a, b) => {
     const rank =
       (DISPLAY_COVERAGE_IMPORTANCE_ORDER[a.row.importance] ?? 2) -
@@ -232,7 +488,7 @@ export function displayCoverageFromRequirements(rawCoverage: unknown) {
 // BLOCKER) that is strong-importance (critical/high) AND still MISSING after
 // tailoring. Only a "missing" tailoredStatus escalates, so a satisfied
 // requirement never caps.
-export function coverageHasEligibilityBlocker(rawCoverage: unknown): boolean {
+export function coverageHasEligibilityBlocker(rawCoverage: unknown, grounding?: RequirementCoverageGrounding): boolean {
   if (!Array.isArray(rawCoverage)) return false;
   // Scan the RAW rows, NOT sanitizeRequirementCoverage's output: that helper
   // drops any row whose `category` does not match a scoring bucket, so a hard
@@ -246,11 +502,27 @@ export function coverageHasEligibilityBlocker(rawCoverage: unknown): boolean {
     if (!row || typeof row !== "object") return false;
     const requirement = String(row.requirement ?? row.keyword ?? row.gap ?? "");
     const category = String(row.category ?? "");
+    if (!requirementIsGrounded(requirement, grounding)) return false;
+    if (isLogisticalRequirement(`${category} ${requirement}`)) return false;
+    if (DEGREE_OR_EQUIVALENT_RE.test(requirement)) return false;
+    if (requirementIsPreferredOnly(requirement, category, grounding?.jobText)) return false;
     if (!ELIGIBILITY_BLOCKER.test(`${category} ${requirement}`)) return false;
     const importance = enumValue(row.importance, REQUIREMENT_IMPORTANCE, "medium");
     if (importance !== "critical" && importance !== "high") return false;
-    const tailoredStatus = enumValue(row.tailoredStatus ?? row.status, COVERAGE_STATUSES, "missing");
-    return tailoredStatus === "missing";
+    const rawTailoredStatus = enumValue(row.tailoredStatus ?? row.status, COVERAGE_STATUSES, "missing");
+    const tailoredEvidence = clippedString(row.tailoredEvidence ?? row.where, 300);
+    const tailoredCorpus = String(grounding?.tailoredResume ?? "");
+    const tailored = effectiveCoverageClaim(
+      rawTailoredStatus,
+      tailoredEvidence,
+      tailoredCorpus,
+      grounding !== undefined,
+      requirement
+    );
+    // Formal eligibility is binary: adjacent experience cannot satisfy a
+    // required clearance/license/work-authorization gate. Only a grounded
+    // covered claim clears the blocker.
+    return tailored.status !== "covered";
   });
 }
 
@@ -262,9 +534,11 @@ export function coverageHasEligibilityBlocker(rawCoverage: unknown): boolean {
 // (critical/high importance, non-preferred bucket, still missing after tailoring)
 // so applyGapCapsAndVerdict can cap on whichever source reports more. Hard
 // eligibility gates are handled separately by coverageHasEligibilityBlocker.
-export function missingRequiredFromCoverage(rawCoverage: unknown): number {
-  return sanitizeRequirementCoverage(rawCoverage).filter((row) =>
+export function missingRequiredFromCoverage(rawCoverage: unknown, grounding?: RequirementCoverageGrounding): number {
+  return sanitizeRequirementCoverage(rawCoverage, grounding).filter((row) =>
     row.bucket !== "preferred" &&
+    !isLogisticalRequirement(`${row.category} ${row.requirement}`) &&
+    !requirementIsPreferredOnly(row.requirement, row.category, grounding?.jobText) &&
     (row.importance === "critical" || row.importance === "high") &&
     row.tailoredStatus === "missing"
   ).length;
@@ -295,10 +569,15 @@ export function applyGapCapsAndVerdict(
 ) {
   // Array.isArray(strictReview?.gaps) truthiness proves strictReview non-null.
   const gaps = Array.isArray(strictReview?.gaps) ? strictReview!.gaps! : [];
+  const capGaps = gaps.filter((gap) =>
+    gap.capEligible !== false &&
+    !isLogisticalRequirement(gap.gap) &&
+    !DEGREE_OR_EQUIVALENT_RE.test(String(gap.gap ?? ""))
+  );
   // A BLOCKER gap OR a synthetic eligibility blocker from the coverage table
   // (missing critical/high clearance/work-auth/license/cert/degree row) forces
   // the DON'T APPLY band, regardless of HIGH-gap count OR score availability.
-  const hasBlocker = hasCoverageBlocker || gaps.some((gap) => gap.severity === "BLOCKER");
+  const hasBlocker = hasCoverageBlocker || capGaps.some((gap) => gap.severity === "BLOCKER");
   if (!aiScore) {
     // No usable numeric score (the client falls back to the local engine score),
     // but a hard eligibility blocker must STILL force DON'T APPLY — otherwise a
@@ -323,7 +602,7 @@ export function applyGapCapsAndVerdict(
   // replies (gaps and coverage agree) are unchanged; max() only bites when
   // coverage reports MORE missing than the gaps array did.
   const highGaps = Math.max(
-    gaps.filter((gap) => gap.severity === "HIGH").length,
+    capGaps.filter((gap) => gap.severity === "HIGH").length,
     coverageMissingCount
   );
   let cap = 100;

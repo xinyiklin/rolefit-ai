@@ -1,12 +1,12 @@
 // Single source of truth for resume SECTION vocabulary + classification, shared by
-// the client scorer (src/resume/text.ts, scoring.ts), the client editor parser
-// (src/lib/resumeData.ts), and the server LaTeX text parser (server/latex/*.ts).
+// the client scorer (src/resume/text.ts, scoring.ts) and the client editor parser
+// (src/lib/resumeData.ts).
 //
 // It's a plain .ts module, kept dependency-free, so both Node (native TypeScript
 // type stripping) and the bundler can import it directly. Before this, the same
-// vocabulary lived in 4+ hand-synced copies that repeatedly drifted apart (a client
-// scorer list, a client parser regex, a server parser regex, a server template
-// regex) — the root cause of several section-classification bugs.
+// vocabulary lived in several hand-synced copies that repeatedly drifted apart (a
+// client scorer list and a client parser regex among them) — the root cause of
+// several section-classification bugs.
 //
 // The model is NESTING-AWARE. A heading has a level:
 //   - TOP-LEVEL: experience / education / skills / summary / projects / certifications

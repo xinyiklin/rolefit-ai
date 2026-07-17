@@ -36,6 +36,9 @@ export function Masthead({
   return (
     <header className="masthead" aria-label="Workspace header">
       <div className="masthead__brand">
+        <span className="masthead__mark" aria-hidden="true">
+          R
+        </span>
         <h1>RoleFit AI</h1>
       </div>
       <div className="masthead__menus">

@@ -16,7 +16,7 @@ export function sendJson(res: ServerResponse, status: number, payload: unknown):
 // Reads the request body as UTF-8, enforcing a true BYTE cap (default 8 MB).
 // Accumulates Buffers and decodes once at the end so the cap is accurate and
 // multibyte characters are never split across chunk boundaries. Pass a smaller
-// `maxBytes` for JSON/AI routes that never need the full DOCX-sized budget.
+// `maxBytes` for JSON/AI routes that never need the full upload-sized budget.
 export function readBody(req: IncomingMessage, maxBytes = maxRequestBytes): Promise<string> {
   return new Promise<string>((resolveBody, reject) => {
     const chunks: Buffer[] = [];

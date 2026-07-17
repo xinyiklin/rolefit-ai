@@ -8,22 +8,19 @@
 // "materials" (cover letter + application questions, step 2 of tab IA consolidation).
 export type OutputTab = "resume" | "materials" | "applications" | "analytics";
 
-// Rail groups for the numbered table-of-contents sidebar.
+// Rail groups for the sidebar tab list.
 export type OutputTabGroup = "DRAFT" | "TRACK";
 
 export type OutputTabDescriptor = {
   id: OutputTab;
   label: string;
   badge?: string | number;
-  /** Two-digit index displayed in the numbered rail, e.g. "01".
-   *  When absent, StudioPane derives it from the tab's position (1-based). */
-  index?: string;
   /** Rail group this tab belongs to ("DRAFT" or "TRACK").
    *  When absent, StudioPane derives it from the tab id. */
   group?: OutputTabGroup;
 };
 
-// Canonical group membership for the numbered rail.
+// Canonical group membership for the sidebar rail.
 // DRAFT: Resume + Materials (cover letter + application questions); TRACK: tracker + analytics.
 export const TAB_GROUPS: Record<OutputTab, OutputTabGroup> = {
   resume:       "DRAFT",

@@ -114,7 +114,7 @@ function ApplicationRow({
       <span role="cell" className="table-date">
         {app.appliedAt ? formatCompactDate(app.appliedAt) : "-"}
       </span>
-      <span role="cell">
+      <span role="cell" className="applications-table__cell--priority">
         {priorityFor(app) === "Medium" ? (
           <span className="priority-default">{priorityFor(app)}</span>
         ) : (
@@ -126,7 +126,12 @@ function ApplicationRow({
           </>
         )}
       </span>
-      <span role="cell" className={nextAction(app) === "Awaiting response" ? "next-action-default" : ""}>
+      <span
+        role="cell"
+        className={`applications-table__cell--next-action${
+          nextAction(app) === "Awaiting response" ? " next-action-default" : ""
+        }`}
+      >
         {nextAction(app)}
       </span>
       <span role="cell">
@@ -164,7 +169,13 @@ export function TrackerTableView({
               key={col.key}
               role="columnheader"
               aria-sort={isActive ? (sort.dir === "asc" ? "ascending" : "descending") : "none"}
-              className={`table-eyebrow table-sort ${isActive ? "is-active" : ""}`}
+              className={`table-eyebrow table-sort ${isActive ? "is-active" : ""}${
+                col.key === "priority"
+                  ? " applications-table__cell--priority"
+                  : col.key === "nextAction"
+                    ? " applications-table__cell--next-action"
+                    : ""
+              }`}
               onClick={() => onSort(col.key)}
             >
               {col.label}

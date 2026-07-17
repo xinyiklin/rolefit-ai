@@ -15,7 +15,7 @@
 
   /* Surface — green-tinted paper neutrals (never pure white/black) */
   --paper: oklch(0.956 0.006 150);
-  --paper-deep: oklch(0.934 0.008 150);
+  --paper-deep: oklch(0.925 0.009 150);
   --card: oklch(0.992 0.002 150);
   --card-soft: oklch(0.963 0.005 150);
   --card-elev: oklch(0.997 0.001 150);

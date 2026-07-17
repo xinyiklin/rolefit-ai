@@ -584,8 +584,26 @@ export function ReviewRail({ result, resume, actions, resumeDiff, jobConstraints
               const status = statuses[index];
               const rewriteKey = `rewrite-${index}`;
               const isEditing = editingKey === rewriteKey;
+              const rewriteTarget =
+                status.kind === "pending"
+                  ? status.target
+                  : status.kind === "applied"
+                    ? findBullet(resume, status.appliedText)
+                    : null;
+              const highlightTarget: TailorChangeTarget | null = rewriteTarget
+                ? { ...rewriteTarget, field: "bullet" }
+                : null;
               return (
-                <article className={`rr-edit rr-edit--${status.kind}`} key={index}>
+                <article
+                  className={`rr-edit rr-edit--${status.kind}`}
+                  key={index}
+                  onMouseEnter={() => onHighlight?.(highlightTarget)}
+                  onMouseLeave={() => onHighlight?.(null)}
+                  onFocus={() => onHighlight?.(highlightTarget)}
+                  onBlur={(event) => {
+                    if (!event.currentTarget.contains(event.relatedTarget as Node | null)) onHighlight?.(null);
+                  }}
+                >
                   {status.kind === "stale" ? (
                     <span className="rr-edit__stale-badge" aria-label="Suggestion is stale">stale</span>
                   ) : null}

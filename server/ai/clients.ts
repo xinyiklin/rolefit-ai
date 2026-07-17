@@ -126,27 +126,44 @@ function jsonModeUnsupported(response: Response, data: any): boolean {
   return /response[_\s-]?format|responsemime|json/i.test(message);
 }
 
-async function callOpenAiResponses({ apiKey, model, systemPrompt, userPrompt }: ProviderCallArgs): Promise<unknown> {
-  const response = await fetchWithTimeout("https://api.openai.com/v1/responses", {
+// Pure request-body seam for deterministic privacy/shape probes. OpenAI's
+// Responses API stores responses by default unless `store:false` is explicit;
+// resume and job text are sensitive, so every call opts out.
+export function buildOpenAiResponsesBody({ model, systemPrompt, userPrompt }: ProviderCallArgs) {
+  return {
+    model,
+    instructions: systemPrompt,
+    input: [
+      {
+        role: "user",
+        content: [
+          { type: "input_text", text: userPrompt }
+        ]
+      }
+    ],
+    text: { format: { type: "json_object" } },
+    max_output_tokens: OUTPUT_TOKEN_LIMIT,
+    store: false
+  };
+}
+
+export function buildOpenAiCompatibleHeaders(apiKey?: string): Record<string, string> {
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
+  return headers;
+}
+
+export async function callOpenAiResponsesWithFetch(
+  { apiKey, model, systemPrompt, userPrompt }: ProviderCallArgs,
+  request: typeof fetchWithTimeout = fetchWithTimeout
+): Promise<unknown> {
+  const response = await request("https://api.openai.com/v1/responses", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${apiKey}`
     },
-    body: JSON.stringify({
-      model,
-      instructions: systemPrompt,
-      input: [
-        {
-          role: "user",
-          content: [
-            { type: "input_text", text: userPrompt }
-          ]
-        }
-      ],
-      text: { format: { type: "json_object" } },
-      max_output_tokens: OUTPUT_TOKEN_LIMIT
-    })
+    body: JSON.stringify(buildOpenAiResponsesBody({ model, systemPrompt, userPrompt }))
   });
 
   const data: any = await response.json().catch(() => ({}));
@@ -160,6 +177,10 @@ async function callOpenAiResponses({ apiKey, model, systemPrompt, userPrompt }: 
 
 async function callOpenAiCompatibleChat({ provider = "", apiKey, apiBaseUrl, model, systemPrompt, userPrompt }: ProviderCallArgs): Promise<unknown> {
   const endpoint = chatCompletionsEndpoint(apiBaseUrl);
+  const headers = buildOpenAiCompatibleHeaders(apiKey);
+  // Local loopback servers such as Ollama commonly require no authentication.
+  // Hosted/remote compatible providers are still rejected at config resolution
+  // when no key is available.
   const requestBody: {
     model: string;
     messages: { role: string; content: string }[];
@@ -181,10 +202,7 @@ async function callOpenAiCompatibleChat({ provider = "", apiKey, apiBaseUrl, mod
 
   let response = await fetchWithTimeout(endpoint, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`
-    },
+    headers,
     body: JSON.stringify(requestBody)
   });
 
@@ -198,10 +216,7 @@ async function callOpenAiCompatibleChat({ provider = "", apiKey, apiBaseUrl, mod
     delete requestBody.response_format;
     response = await fetchWithTimeout(endpoint, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`
-      },
+      headers,
       body: JSON.stringify(requestBody)
     });
     data = await response.json().catch(() => ({}));
@@ -302,7 +317,7 @@ async function dispatchProvider({ provider, model, reasoningEffort, apiKey, apiB
   if (provider === "antigravity-cli") return parseAiJson(await callAntigravityCli({ model, systemPrompt, userPrompt }));
   if (provider === "anthropic") return callAnthropicMessages({ apiKey, model, systemPrompt, userPrompt });
   if (provider === "gemini") return callGeminiGenerateContent({ apiKey, model, systemPrompt, userPrompt });
-  if (provider === "openai") return callOpenAiResponses({ apiKey, model, systemPrompt, userPrompt });
+  if (provider === "openai") return callOpenAiResponsesWithFetch({ apiKey, model, systemPrompt, userPrompt });
   return callOpenAiCompatibleChat({ provider, apiKey, apiBaseUrl, model, systemPrompt, userPrompt });
 }
 

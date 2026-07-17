@@ -1,16 +1,14 @@
 import type { ReactNode } from "react";
 
+export { stripInlineMarks } from "./inlineMarksText.ts";
+
 // Lightweight inline formatting for resume text. The rich editor serializes
 // inline style as small internal tags (`<b>`, `<i>`, `<u>`) so nested bold/
-// italic/underline can round-trip through the editor, print mirror, and LaTeX
-// export without changing the ResumeData schema.
+// italic/underline can round-trip through the editor and the owned renderers
+// without changing the ResumeData schema.
 
 const INLINE_TAG_RE = /<\/?(?:b|i|u)>/gi;
 const HAS_INLINE_MARKUP_RE = /<\/?(?:b|i|u)>/i;
-
-export function stripInlineMarks(text: string): string {
-  return text.replace(INLINE_TAG_RE, "");
-}
 
 function escapeHtml(value: string): string {
   return value
@@ -20,6 +18,23 @@ function escapeHtml(value: string): string {
     .replace(/"/g, "&quot;");
 }
 
+// Ligature DISPLAY preview: ASCII `---` renders as an em dash, `--` as an en
+// dash, and `'` as a typographic apostrophe. Rendered resume surfaces use the
+// same substitutions so the on-screen page matches the PDF —
+// but ONLY at the display layer: ResumeData keeps the ASCII the user typed
+// (serializeRichHtml maps the glyphs back), so scoring and the stored data
+// are untouched, and reparsing can never split a "–"-joined date range.
+export function texLigatures(text: string): string {
+  return text.replace(/---/g, "—").replace(/--/g, "–").replace(/'/g, "’");
+}
+
+const TEX_LIGATURE_RE = /---|--|'/;
+
+// Inverse of texLigatures, for serializing edited DOM back to ResumeData.
+function unTexLigatures(text: string): string {
+  return text.replace(/—/g, "---").replace(/–/g, "--").replace(/’/g, "'");
+}
+
 export function inlineMarksToHtml(value: string): string {
   const source = String(value ?? "");
   let html = "";
@@ -27,7 +42,7 @@ export function inlineMarksToHtml(value: string): string {
 
   for (const match of source.matchAll(INLINE_TAG_RE)) {
     const tag = match[0].toLowerCase();
-    html += escapeHtml(source.slice(cursor, match.index));
+    html += escapeHtml(texLigatures(source.slice(cursor, match.index)));
     if (tag === "<b>") html += "<strong>";
     else if (tag === "</b>") html += "</strong>";
     else if (tag === "<i>") html += "<em>";
@@ -36,14 +51,17 @@ export function inlineMarksToHtml(value: string): string {
     cursor = (match.index ?? 0) + match[0].length;
   }
 
-  html += escapeHtml(source.slice(cursor));
+  html += escapeHtml(texLigatures(source.slice(cursor)));
   return html.replace(/\n/g, "<br>");
 }
 
 // Render inline markup as sanitized HTML. The source string is escaped except
 // for the tiny allowed tag set above, so pasted/typed HTML cannot execute.
 export function renderInlineMarks(text: string): ReactNode {
-  if (!HAS_INLINE_MARKUP_RE.test(text)) return text;
+  if (!HAS_INLINE_MARKUP_RE.test(text)) {
+    // Plain text still gets the TeX-ligature preview (no HTML needed).
+    return TEX_LIGATURE_RE.test(text) ? texLigatures(text) : text;
+  }
   return <span dangerouslySetInnerHTML={{ __html: inlineMarksToHtml(text) }} />;
 }
 
@@ -99,5 +117,7 @@ export function serializeRichHtml(root: HTMLElement, multiline: boolean): string
     .join("")
     .replace(/\u00a0/g, " ");
   const normalized = multiline ? value.replace(/\n{3,}/g, "\n\n").replace(/\n+$/g, "") : value.replace(/\s*\n+\s*/g, " ");
-  return normalized;
+  // Undo the display-layer TeX ligatures so ResumeData stays ASCII (see
+  // texLigatures above): the DOM shows \u2014/\u2013/\u2019, the stored value keeps ---/--/'.
+  return unTexLigatures(normalized);
 }

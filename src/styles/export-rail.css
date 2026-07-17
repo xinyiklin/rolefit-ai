@@ -7,13 +7,14 @@
   gap: var(--s1);
 }
 
+/* Chevron hugs the "Export" label and reads as a quiet affordance. */
 .export-menu__trigger svg:last-child {
-  margin-left: -5px;
+  margin-left: -2px;
+  opacity: 0.65;
 }
 
 .export-menu__trigger {
-  min-width: 42px;
-  padding-inline: 6px;
+  padding-inline: var(--s2);
 }
 
 .export-menu__popover {
@@ -30,52 +31,6 @@
   border-radius: var(--r-lg);
   box-shadow: var(--shadow-lift);
 }
-
-.export-menu__template {
-  display: grid;
-  gap: var(--s1);
-}
-
-.export-menu__template > span {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--s1);
-  /* Label: ink-faint, harmonized with ledger vocabulary */
-  color: var(--ink-faint);
-  font-size: 0.72rem;
-  font-weight: 500;
-}
-
-.export-menu__template > span svg {
-  color: var(--ink-faint);
-  width: 13px;
-  height: 13px;
-  flex-shrink: 0;
-}
-
-.export-menu__template select {
-  width: 100%;
-  min-height: 30px;
-  padding: 0 var(--s2);
-  font-size: 0.78rem;
-  font-weight: 500;
-  color: var(--ink-strong);
-  background: var(--card-elev);
-  border: 1px solid var(--hairline-strong);
-  border-radius: var(--r-md);
-  /* Pin to light color-scheme so the native select chrome (arrow, option bg)
-     stays legible on the light popover surface regardless of OS dark mode. */
-  color-scheme: light;
-}
-
-.export-menu__template small,
-.export-menu__hint {
-  font-size: 0.7rem;
-  line-height: 1.35;
-  color: var(--ink-faint);
-}
-
-.export-menu__hint.warn { color: var(--warm); }
 
 .export-menu__actions {
   display: grid;
@@ -124,7 +79,7 @@
 /* -------- Base action button overrides (ghost-button.is-compact inside menu) -------- */
 
 /*
-  "quiet ghosts": Copy, .tex, Preview
+  "quiet ghosts": Copy, .resume, Preview
   These inherit the base ghost-button style — transparent bg, hairline border
   on hover. We only tweak size to match the compact rail chrome.
 */
@@ -183,7 +138,7 @@
   background: var(--accent-soft);
 }
 
-/* PDF·LaTeX is the canonical export — accent-deep text + accent-tinted border */
+/* PDF is the canonical export — accent-deep text + accent-tinted border */
 .export-menu__actions .pdf-action--canonical {
   color: var(--accent-deep);
   border-color: oklch(0.46 0.085 165 / 0.35);
@@ -218,9 +173,9 @@
 /* -------- Rename-at-save dialog -------- */
 
 /*
-  Fires when a file-saving export (PDF·LaTeX / PDF·clean / .tex / DOCX) is
-  requested: the system pre-fills the name, the user can edit it, then confirm.
-  Centered modal over a dimmed backdrop, matching the preview overlay's chrome.
+  Fires when a file-saving export (PDF / .resume) is requested: the system
+  pre-fills the name, the user can edit it, then confirm. Centered modal over
+  a dimmed backdrop, matching the preview overlay's chrome.
 */
 .rename-dialog {
   position: fixed;
@@ -367,7 +322,7 @@
   color: var(--ink);
 }
 
-/* Small section eyebrow above the format group and the file-name field. */
+/* Small section eyebrow above the file-name field. */
 .apply-download__field-label {
   margin-top: 2px;
   font-size: 0.7rem;
@@ -377,178 +332,12 @@
   color: var(--ink-soft);
 }
 
-.apply-download__options {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s2);
-}
-
-.apply-download__option {
-  display: flex;
-  align-items: center;
-  gap: var(--s3);
-  width: 100%;
-  padding: var(--s3);
-  text-align: left;
-  background: var(--card-elev);
-  border: 1px solid var(--hairline-strong);
-  border-radius: var(--r-lg);
-  color: var(--ink-strong);
-  cursor: pointer;
-  transition: border-color 140ms var(--ease), background 140ms var(--ease), box-shadow 140ms var(--ease);
-}
-
-/* Icon chip — a rounded tile so the row reads as a real option card. */
-.apply-download__option-icon {
-  display: grid;
-  place-items: center;
-  flex-shrink: 0;
-  width: 32px;
-  height: 32px;
-  border-radius: var(--r-md);
-  background: var(--card-soft);
-  border: 1px solid var(--hairline);
-  color: var(--ink-soft);
-  transition: background 140ms var(--ease), color 140ms var(--ease), border-color 140ms var(--ease);
-}
-
-.apply-download__option:hover:not(:disabled) {
-  border-color: var(--accent);
-  background: var(--accent-soft);
-}
-
-.apply-download__option.is-selected {
-  border-color: var(--accent);
-  background: var(--accent-soft);
-  box-shadow: 0 0 0 2px var(--accent-veil);
-}
-
-.apply-download__option.is-selected .apply-download__option-icon {
-  background: var(--accent);
-  border-color: var(--accent-deep);
-  color: var(--on-accent);
-}
-
-.apply-download__option:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-
-.apply-download__option:disabled {
-  color: var(--ink-faint);
-  background: var(--card-soft);
-  border-color: var(--hairline-soft);
-  cursor: not-allowed;
-}
-
-.apply-download__option:disabled .apply-download__option-icon {
-  opacity: 0.55;
-}
-
-.apply-download__option-text {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
-.apply-download__option-label {
-  font-size: 0.84rem;
-  font-weight: 600;
-}
-
-.apply-download__option-hint {
-  font-size: 0.72rem;
-  color: var(--ink-faint);
-  line-height: 1.35;
-}
-
-/* Radio affordance on the right: an empty ring until selected, then accent + check. */
-.apply-download__radio {
-  display: grid;
-  place-items: center;
-  flex-shrink: 0;
-  width: 20px;
-  height: 20px;
-  border-radius: var(--r-pill);
-  border: 1px solid var(--hairline-strong);
-  background: var(--card);
-  color: var(--on-accent);
-  transition: background 140ms var(--ease), border-color 140ms var(--ease);
-}
-
-.apply-download__option.is-selected .apply-download__radio {
-  background: var(--accent);
-  border-color: var(--accent-deep);
-}
-
 .apply-download__name {
   margin-top: 2px;
 }
 
 .apply-download__name-hint {
   margin-top: 2px;
-}
-
-/* Saved-selection box: a real bordered toggle card, not a bare checkbox row. */
-.apply-download__remember {
-  display: flex;
-  align-items: center;
-  gap: var(--s3);
-  margin-top: 2px;
-  padding: var(--s3);
-  border: 1px solid var(--hairline-strong);
-  border-radius: var(--r-lg);
-  background: var(--card-elev);
-  cursor: pointer;
-  transition: border-color 140ms var(--ease), background 140ms var(--ease);
-}
-
-.apply-download__remember:hover {
-  border-color: var(--accent);
-}
-
-.apply-download__remember.is-on {
-  border-color: var(--accent);
-  background: var(--accent-soft);
-}
-
-.apply-download__remember input {
-  flex-shrink: 0;
-  width: 16px;
-  height: 16px;
-  accent-color: var(--accent);
-  cursor: pointer;
-}
-
-.apply-download__remember-icon {
-  flex-shrink: 0;
-  color: var(--ink-faint);
-  transition: color 140ms var(--ease);
-}
-
-.apply-download__remember.is-on .apply-download__remember-icon {
-  color: var(--accent-deep);
-}
-
-.apply-download__remember-text {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  min-width: 0;
-}
-
-.apply-download__remember-title {
-  font-size: 0.78rem;
-  font-weight: 600;
-  color: var(--ink-strong);
-}
-
-.apply-download__remember-sub {
-  font-size: 0.71rem;
-  color: var(--ink-faint);
-  line-height: 1.35;
 }
 
 /* The primary Download button in this dialog is in-row, not full-width. */

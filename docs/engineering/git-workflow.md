@@ -48,7 +48,7 @@ Rules:
   `test`, `chore`, `build`, `ci`, `perf`, or `revert`.
 - Add an optional lowercase noun scope when it helps:
   `<type>(<scope>): <summary>`, such as `ui`, `server`, `polish`,
-  `docx`, `workspace`, `deps`, or `workflow`.
+  `resume`, `extension`, `workspace`, `deps`, or `workflow`.
 - Write the summary in imperative mood: `add`, `fix`, `preserve`,
   `remove`, `split`.
 - Keep the summary lowercase unless a proper noun, acronym, or code
@@ -62,7 +62,7 @@ Rules:
 Examples:
 
 ```text
-feat: add deterministic rewrite fallback
+feat(import): add deterministic distill fallback
 fix(server): reject empty api key instead of silent fallback
 refactor(ui): extract polish controls component
 feat(polish): cap each role to five bullets
@@ -109,7 +109,7 @@ form instead so merged history stays consistent.
   without an explicit reason recorded in the PR body or commit message.
 - Do not stage `.env`, `node_modules/`, `dist/`, `outputs/`,
   `job-search-workspace/` contents (except its `README.md`), or
-  root-level resume / TEX / PDF / DOCX / tracker files. The `.gitignore`
+  root-level resume / `.resume` / PDF / tracker files. The `.gitignore`
   already guards these — verify with `git status --short` before
   staging.
 - Stage and commit `AGENTS.md` and `CLAUDE.md` like any other tracked

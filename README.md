@@ -1,6 +1,6 @@
 # RoleFit AI
 
-A **local-first** resume tailoring webapp. Import a job posting (paste it, or pull it straight from the link), tailor your base resume from your workspace, score the draft against the job description, and export to LaTeX / PDF — without storing your personal data in a hosted app.
+A **local-first** resume tailoring webapp. Import a job posting (paste it, or pull it straight from the link), tailor your base resume from your workspace, score the draft against the job description, and export to PDF or save a re-loadable `.resume` file — without storing your personal data in a hosted app.
 
 > Built for an entry-level SDE job hunt: tight workflow loop, blunt recruiter-style audit before applying, and a local pipeline tracker so you never lose track of a role.
 
@@ -19,29 +19,33 @@ The on-disk **application tracker** — a sortable, paginated table with right-c
 </tr>
 </table>
 
-_Screenshots use demo workspace data._
+_Screenshots use demo workspace data and may trail minor UI refinements._
 
-> **Recommended path:** keep your base resume as a **`.tex`** file (Jake's-style) and export with **PDF · LaTeX** for faithful, ATS-clean formatting. DOCX, LaTeX, and plain-text sources also work, but their **PDF · clean** export is a best-effort render and may need more manual editing/formatting.
+The engine-painted page is the editor and source of truth: type directly in the
+export layout, use its margin controls to add, remove, reorder, or scope
+sections, and send review cards back to the exact field. The editor is its own
+preview — it and the PDF export use the same layout engine, and a `.resume` file
+saves the structured resume data so you can reload it later or move it between tabs.
 
 ## Highlights
 
-- **Multi-format resume I/O** — ingest `.docx`, `.tex` (Jake's-style), or plain text; paste extracted PDF text when the original file is only available as PDF.
-- **Job-link import** — paste a posting URL and pull the description in one click: Workday-aware (reads its CXS JSON API for `/job/` and `/details/` links), with a generic HTML→text fallback for other boards. The posting is distilled before polishing — **AI-first** via the configured provider (anti-fabrication grounded server-side), with the deterministic engine as an offline fallback — keeping role intro / responsibilities / requirements / preferred qualifications while dropping empty bullets, duplicated ATS title furniture, low-value Workday metadata, apply/share/navigation rows, company/culture marketing, salary pills, benefits/perks, pay-transparency, and EEO/legal boilerplate. The link itself is kept only for pipeline tracking and is **never sent to the model**.
+- **Resume input** — ingest a `.txt`, `.md`, or `.csv` resume (or paste text) into the typeset editor as a one-time conversion into the structured model, or load a previously saved `.resume` file directly; paste extracted PDF text when the original is only available as PDF.
+- **Job-link import** — paste a posting URL and pull the description in one click: Workday-aware (reads its CXS JSON API for `/job/` and `/details/` links), with a generic HTML→text fallback for other boards. The posting is distilled before polishing — **AI-first** via the configured provider, with server-side grounding/sanitization checks and the deterministic engine as an offline fallback — keeping role intro / responsibilities / requirements / preferred qualifications while dropping empty bullets, duplicated ATS title furniture, low-value Workday metadata, apply/share/navigation rows, company/culture marketing, salary pills, benefits/perks, pay-transparency, and EEO/legal boilerplate. The link itself is kept only for pipeline tracking and is **never sent to the model**.
 - **Browser extension (Chrome/Firefox)** — on any job posting, click the toolbar icon for an instant **local fit score** (a keyword-overlap estimate against your base resume), **matched vs missing** keywords, a check on whether you've **already tracked or applied** to that posting, and a one-click **Import** that opens a fresh RoleFit tab, lets the server prepare the raw page text, then has that tab distill it with its own Distill provider before loading the Job field — with optional **Polish automatically** and **Distill with AI** toggles. Manifest V3; the extension talks only to your local `http://localhost:5181` server, while AI-backed import/polish still uses whichever local CLI, hosted API, or local model you configure. See [Browser extension](#browser-extension).
-- **Subscription-friendly, multi-provider AI** — the default is the **Claude Code CLI** path (any **Claude Pro or Max** plan), with the other **account-backed CLI tools** (`Codex CLI`, `Antigravity CLI`) running on your existing **ChatGPT** or **Google Antigravity** account — including their **free tiers** — instead of per-token billing, and **hosted-API backends** (OpenAI, Anthropic, Gemini, OpenRouter, Groq, Together, Mistral, local Ollama) available behind the same interface. The AI menu keeps separate provider/model controls for Distill, Tailor, and Review, with copy buttons when you want all stages aligned.
+- **Subscription-friendly, multi-provider AI** — the default is the **Claude Code CLI** path, with other **account-backed CLI tools** (`Codex CLI`, `Antigravity CLI`) available when the installed CLI and signed-in account grant access. These paths avoid configuring a separate metered API key in RoleFit, but remain subject to each provider's plan and usage limits. **Hosted-API backends** (OpenAI, Anthropic, Gemini, OpenRouter, Groq, Together, Mistral, local Ollama) remain available behind the same interface. The AI menu keeps separate provider/model controls for Distill, Tailor, and Review, with copy buttons when you want all stages aligned.
 - **Fit scoring + 4-category keyword gap analysis** — required experience, knowledge, required skills, technical tools.
-- **Strict recruiter review mode** — verdict (STRONG FIT / REASONABLE FIT / STRETCH / DON'T APPLY), base-vs-tailored fit scores, gap severity, targeted bullet rewrites, interview risk flags, ready / edits-pending / missing-evidence status, and a cover-letter angle.
-- **LaTeX export pipeline (recommended)** built on a Jake's-style resume template + optional local PDF compile through **Tectonic** — the recommended path for faithful, ATS-clean output.
-- **DOCX import** — ingest a `.docx` base resume; its content is parsed into the structured editor (export is via the LaTeX/PDF paths above, not DOCX).
-- **Clean PDF export (no LaTeX needed)** — the tailored resume renders as HTML and prints through your browser's **Save as PDF**, keeping the text selectable for ATS parsing. A universal fallback for any source; for pixel-faithful formatting, prefer the LaTeX export.
+- **Strict recruiter review mode** — audit the current edited draft as-is, or audit the sanitized proposal produced moments earlier in **Both**, for a verdict (STRONG FIT / REASONABLE FIT / STRETCH / DON'T APPLY), grounded fit scores, gap severity, targeted bullet rewrites, interview risk flags, ready / edits-pending / missing-evidence status, and a cover-letter angle.
+- **One typeset editing surface** — direct text editing, inline emphasis, undo/redo, keyboard caret movement, structural add/remove/reorder controls, per-section Tailor/Include/Off scope, and review-field highlighting all operate on the exported page layout.
+- **WYSIWYG editor + PDF export** — the editor *is* the preview: it and the exported PDF use the same owned layout engine, so visible line breaks and page flow match the export exactly. No external toolchain to install — typesetting and PDF generation run in the browser.
+- **`.resume` save/load** — download the structured resume data as a `.resume` file (lossless JSON, formatting preserved) and reload it later, or keep it as a portable backup of your work.
 - **On-disk pipeline tracker** — a sortable, paginated applications table (right-click any row for quick actions: open details, change stage, in-app PDF preview of the saved resume, or delete) alongside a calendar view of submissions and upcoming follow-ups. Tracks status / source / company / role / follow-up date / notes / resume snapshot per application, and survives browser wipes.
-- **Local-first personal workflow** — the app, server, extension bridge, and workspace files run on your own device; workspace files live in `job-search-workspace/`, and API keys stay server-side in `.env`. AI-backed import, polish, cover-letter, and application-answer features send the relevant job/resume text through the provider or CLI you choose; use a local model for fully local inference.
+- **Local-first personal workflow** — the app, server, extension bridge, and workspace files run on your own device; workspace files live in `job-search-workspace/`, and keys loaded from `.env` stay server-side. A key typed into the AI menu lives only in page memory for that session and is sent to the local API for the request; the local server uses it to authenticate the selected hosted/custom provider endpoint, but does not save, log, or echo it. AI-backed import, polish, cover-letter, and application-answer features send the relevant job/resume text through the provider or CLI you choose; use a local model for fully local inference.
 
 ## Stack
 
 React 19 · TypeScript · Vite · Node.js (`server.ts` with focused helpers under `server/`) · custom CSS · `lucide-react` icons
 
-No SaaS dependencies. Optional integrations: OpenAI · Anthropic · Gemini · OpenRouter · Groq · Together · Mistral · local Ollama · Claude Code CLI · Codex CLI · Antigravity CLI · Tectonic.
+No hosted RoleFit backend, database, or account system. Optional provider integrations: OpenAI · Anthropic · Gemini · OpenRouter · Groq · Together · Mistral · local Ollama · Claude Code CLI · Codex CLI · Antigravity CLI.
 
 ## Run
 
@@ -52,15 +56,19 @@ npm run dev
 
 Visit `http://localhost:5181`.
 
+The server binds to loopback by default. `HOST=0.0.0.0` is an explicit,
+unauthenticated LAN-exposure override; never use it on a public or untrusted
+network.
+
 ## AI setup
 
 Pick providers/models from the top-bar AI menu, or set keys in `.env`. The menu is split by pipeline stage:
 
 - **Distill** — job-link, paste, and import distillation into a compact job brief.
-- **Tailor** — resume rewrite, cover letter, and application-answer drafting.
-- **Review** — strict recruiter-style audit and reviewer rewrites.
+- **Tailor** — evidence-grounded resume suggestions, cover letter, and application-answer drafting.
+- **Review** — strict recruiter-style audit of the current edited draft.
 
-Each stage has its own provider/model/effort settings; use **Copy from** in the menu to sync one stage from another. API keys typed into the menu are one-session values and are not saved. Keys in `.env` stay server-side:
+Each stage has its own provider/model/effort settings; use **Copy from** in the menu to sync one stage from another. Keys in `.env` stay server-side. API keys typed into the menu are one-session, page-memory values sent to the local `/api/*` route, which uses them only to authenticate the selected hosted/custom provider endpoint; they are never persisted, logged, or echoed in a response:
 
 ```bash
 # pick one (or set multiple and switch in-app)
@@ -73,33 +81,30 @@ TOGETHER_API_KEY=...
 MISTRAL_API_KEY=...
 ```
 
-For **zero per-token cost**, use the account-based CLI providers (the default is the Claude Code CLI; override with `AI_PROVIDER` or the in-app AI menu):
+To avoid configuring a separate metered API key in RoleFit, use an account-backed CLI provider (the default is Claude Code CLI; override with `AI_PROVIDER` or the in-app AI menu). Availability and usage limits come from the installed CLI and signed-in provider account:
 
 ```bash
-# works with any Claude Pro or Max plan
+# requires a Claude Code installation and an account with CLI access
 brew install claude-code   # or via the official installer
 claude auth login
 
-# works with any ChatGPT plan, including the free tier (local tasks, usage-limited)
+# requires a Codex CLI installation and an account with CLI access
 brew install codex
 codex login
 
-# works with Google Antigravity (free tier or subscription)
+# requires an Antigravity CLI installation and an account with CLI access
 # install the Antigravity CLI (`agy`), then sign in
 agy auth login
 ```
 
 The app shells out to these CLIs for AI-backed import, polish, cover-letter, and application-answer requests — no API key required. The app is still local-first and personal-use: you run the server on your own machine, and the CLI auth/session stays tied to that device. For fully local inference, point the Local/custom provider at a local OpenAI-compatible server such as Ollama.
 
-> **Tested providers:** all three subscription CLIs — **Claude Code**, **Codex**, and **Antigravity** (`agy`) — plus the **OpenAI** hosted API have been exercised end-to-end. The remaining hosted-API routes (Anthropic, Gemini, OpenRouter, Groq, Together, Mistral, and local Ollama) share the same request path but have **not** been tested — treat them as best-effort.
+> **Provider verification:** Claude Code, Codex, and Antigravity (`agy`) CLIs plus the OpenAI hosted API have previously been exercised end-to-end. CLI entitlements, model names, and provider behavior change; re-verify the installed versions before relying on that result. The remaining hosted-API routes (Anthropic, Gemini, OpenRouter, Groq, Together, Mistral, and local Ollama) share the same request path but remain best-effort until exercised locally.
 
-## Optional local LaTeX
-
-```bash
-brew install tectonic
-```
-
-When installed, the `PDF · LaTeX` button in the export rail compiles your polished `.tex` directly to PDF in-app. Without it, use **PDF · clean** (the tailored resume prints through your browser's Save as PDF) or download the `.tex` to compile in your own LaTeX toolchain.
+The only local fallbacks are deterministic job distillation and the local fit
+estimate. Tailor, Review, Cover Letter, and application-answer generation fail
+plainly when their configured AI call cannot run; no local draft silently
+stands in.
 
 ## Browser extension
 
@@ -121,11 +126,11 @@ Start the app first (`npm run dev`), then load the unpacked extension:
 
 The app creates `job-search-workspace/` for your private local data:
 
-- `base-resume.docx` (or `.tex`, `.txt`, `.md`, `.csv`) — auto-loaded on startup
+- `base-resume.resume` (or `.txt`, `.md`, `.csv`) — auto-loaded on startup
 - `applications.json` — the pipeline tracker's on-disk store
 - Anything else you drop in there
 
-This folder is gitignored except its README. Personal resumes, TEX/PDF/DOCX files, and root-level resume artifacts are also gitignored as a privacy guard.
+This folder is gitignored except its README. Personal resumes, `.resume`/PDF files, and root-level resume artifacts are also gitignored as a privacy guard.
 
 ## Project layout
 
@@ -137,24 +142,25 @@ server/
                                  #   json, errors, coverLetter + applicationAnswers
   ai-cli/index.ts               # Claude Code / Codex / Antigravity CLI shell-out
   applications/                  # pipeline tracker storage (index) + HTTP routes
-  docx.ts                       # DOCX import helpers (extract → editor)
+  base64.ts                     # base64 <-> Buffer helpers (base-resume / PDF artifact I/O)
   extension/                     # browser-extension API routes + quick fit score / applied-status helpers
   http.ts                       # JSON/body/fetch utilities
   jobImport.ts                  # /api/import-job: ATS scrapers (Workday/Greenhouse/LinkedIn → text)
-  latex/                         # parser + Jake's template renderer + optional Tectonic compile
   network.ts                    # job-link fetch + SSRF guards
+  starter.resume                # bundled starter resume seeded when the workspace has no base resume
   workspace.ts                  # base-resume workspace storage + .trash version history
 src/
   App.tsx                        # state + handlers + composition
   config/aiOptions.ts            # provider/model/reasoning options
-  hooks/                          # templates, applications, workspace resume, apply flow, polish pipeline,
+  hooks/                          # applications, workspace resume, apply flow, polish pipeline,
                                   #   job intake, per-tab autosave/presence, resume export/analysis, AI settings
-  lib/                           # downloads, job extraction/distilling, resume format + LaTeX→HTML render helpers
-  sections/                      # Masthead + nav menus (Resume/Job/AI/Options/Polish) / StudioPane / ExportRail / ReviewRail / ResumeDocument / ResumePrintLayer
-  sections/editor/               # structured resume editor (sections, entries, bullets, skills rows)
+  lib/                           # downloads, job extraction/distilling, resume data + `.resume` file helpers
+  sections/                      # Masthead + nav menus / StudioPane / editor / PreviewOverlay / ExportRail / post-polish ReviewRail
+  sections/editor/               # owned typeset editor + controlled editing math
   sections/tabs/                 # Resume / Materials / Applications / Analytics
   resume/                        # resume engine split: types, text, keywords, scoring, rewrite, diff
   resumeEngine.ts                # barrel re-exporting src/resume/* (scoring/analysis/normalization)
+  typeset/                       # canonical layout engine + DOM editor/preview renderer + PDF emitter
   styles/                        # per-surface CSS + shared tokens
 extension/                       # Chrome/Firefox MV3 popup (one-click import, fit score, applied status)
 docs/engineering/                # contributor notes (server, UI, git workflow, testing)

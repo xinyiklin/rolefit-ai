@@ -12,17 +12,16 @@
  * loadWorkspace(true) once on mount.
  *
  * Everything this cluster reads or mutates OUTSIDE its own state (the resume
- * editor, export status, autosave draft, dialogs, templates/doc style) stays
- * owned by App and arrives via args, mirroring usePolishPipeline's pattern.
+ * editor, export status, autosave draft, dialogs) stays owned by App and
+ * arrives via args, mirroring usePolishPipeline's pattern.
  */
 import { useState } from "react";
 import type { ChangeEvent } from "react";
 import type { ConfirmOptions } from "./useDialog";
-import type { DocStyleControls } from "./useDocStyle";
 import type { AutosavedDraft } from "./useAutosaveDraft";
 import { loadLastBaseResumeName, saveLastBaseResumeName } from "../lib/baseResumePrefs";
-import { arrayBufferToBase64 } from "../lib/downloads";
-import { toTemplateSchema, type ResumeData, type ResumeTemplateSchema } from "../lib/resumeData";
+import { serializeResumeData, type ResumeData } from "../lib/resumeData";
+import { parseResumeFile, serializeResumeFile } from "../lib/resumeFile";
 import type { PolishedResume } from "../resumeEngine";
 
 export type WorkspaceBaseResume = {
@@ -32,7 +31,6 @@ export type WorkspaceBaseResume = {
   kind?: string;
   text?: string;
   paragraphs?: number;
-  docxBase64?: string;
 };
 
 export type BaseResumeOption = {
@@ -78,16 +76,13 @@ type UseWorkspaceResumeArgs = {
   setFileStatus: (value: string) => void;
   setPolishStatus: (value: string) => void;
   resetExportStatuses: () => void;
-  setTexStatus: (value: string) => void;
+  setExportStatus: (value: string) => void;
   clearAutosaveDraft: () => void;
   setPendingAutosaveDraft: (draft: AutosavedDraft | null) => void;
-  renderTexFromSchema: (
-    schema: ResumeTemplateSchema,
-    templateId?: string,
-    options?: { docStyle?: DocStyleControls["style"] }
-  ) => Promise<string>;
-  selectedTemplateId: string;
-  docStyle: DocStyleControls;
+  // Seeds the structured editor directly from a ResumeData object (bypasses
+  // the plain-text parser) — used when loading a `.resume` file, whose
+  // content is already the structured model.
+  seedResumeData: (data: ResumeData | null) => void;
   currentResumeText: string;
   resumeText: string;
   editedResume: ResumeData | null;
@@ -107,12 +102,10 @@ export function useWorkspaceResume({
   setFileStatus,
   setPolishStatus,
   resetExportStatuses,
-  setTexStatus,
+  setExportStatus,
   clearAutosaveDraft,
   setPendingAutosaveDraft,
-  renderTexFromSchema,
-  selectedTemplateId,
-  docStyle,
+  seedResumeData,
   currentResumeText,
   resumeText,
   editedResume
@@ -124,6 +117,11 @@ export function useWorkspaceResume({
   const [baseResumeHistory, setBaseResumeHistory] = useState<BaseResumeHistoryGroup[]>([]);
   const [workspaceStatus, setWorkspaceStatus] = useState("");
   const [isSavingBaseResume, setIsSavingBaseResume] = useState(false);
+  // This is the one-shot startup check, not a generic loading flag. It begins
+  // true so the first paint does not claim the workspace is empty, then only
+  // ever settles to false. Explicit Reload actions keep the current editor on
+  // screen while their request runs.
+  const [isWorkspaceBootstrapping, setIsWorkspaceBootstrapping] = useState(true);
 
   // `skipConfirm` is true on paths that PRESERVE the user's work (Save) or are
   // triggered on first mount before the user has made any edits. It is false on
@@ -141,7 +139,6 @@ export function useWorkspaceResume({
     }
 
     saveLastBaseResumeName(baseResume.fileName ?? "");
-    setResumeText(baseResume.text);
     setFileName(baseResume.fileName ?? "base-resume");
     setBaseResumeName(baseResume.fileName ?? "");
     setResult(null);
@@ -149,15 +146,26 @@ export function useWorkspaceResume({
     setFileError("");
     setPolishStatus("");
     resetExportStatuses();
-    setTexStatus("");
-    // Make the loaded base resume editable straight away (pre-polish).
-    seedResumeEditor(baseResume.text, "");
-
-    if (baseResume.kind === "docx" && baseResume.docxBase64) {
-      setFileStatus(`${status} DOCX content parsed into the editor.`);
+    setExportStatus("");
+    // A `.resume` base is a lossless structured save — parse it and seed the
+    // editor directly from the ResumeData (mirrors restoring a tracked
+    // application's resumeData) rather than round-tripping through the
+    // plain-text parser.
+    if (baseResume.kind === "resume") {
+      try {
+        const parsed = parseResumeFile(baseResume.text);
+        setResumeText(serializeResumeData(parsed));
+        seedResumeData(parsed);
+      } catch (error) {
+        setFileStatus(error instanceof Error ? error.message : "This .resume file could not be read.");
+        return;
+      }
     } else {
-      setFileStatus(status);
+      // Make the loaded base resume editable straight away (pre-polish).
+      setResumeText(baseResume.text);
+      seedResumeEditor(baseResume.text, "");
     }
+    setFileStatus(status);
   }
 
   function updateWorkspaceState(workspace: JobWorkspace) {
@@ -206,13 +214,30 @@ export function useWorkspaceResume({
         saveLastBaseResumeName("");
         setWorkspaceStatus("Local workspace ready. Save a base resume to use it automatically on startup.");
         if (applyBaseResume && workspace.baseResume?.text) {
-          setResumeText(workspace.baseResume.text);
-          seedResumeEditor(workspace.baseResume.text, "");
-          setFileStatus("Loaded the starter template. Replace it with your own resume to get started.");
+          // The bundled starter is a `.resume` envelope (kind "resume"); parse
+          // it structurally, exactly like a saved base resume. Falling through to
+          // the plain-text seeder would render the raw JSON as resume content.
+          const starterText = workspace.baseResume.text;
+          try {
+            if (workspace.baseResume.kind === "resume") {
+              const parsed = parseResumeFile(starterText);
+              setResumeText(serializeResumeData(parsed));
+              seedResumeData(parsed);
+            } else {
+              setResumeText(starterText);
+              seedResumeEditor(starterText, "");
+            }
+            setFileStatus("Loaded the starter template. Replace it with your own resume to get started.");
+          } catch {
+            // Corrupt bundled starter — leave the editor empty rather than seed
+            // garbage; the workspace status still guides the user to add a resume.
+          }
         }
       }
     } catch (error) {
       setWorkspaceStatus(error instanceof Error ? error.message : "Local workspace could not be checked.");
+    } finally {
+      setIsWorkspaceBootstrapping(false);
     }
   }
 
@@ -332,21 +357,21 @@ export function useWorkspaceResume({
   }
 
   async function saveCurrentAsBaseResume() {
-    const targetName = baseResumeName || fileName || "base-resume.txt";
-    let text = currentResumeText || resumeText;
-
-    if (/\.tex$/i.test(targetName) && editedResume) {
-      setIsSavingBaseResume(true);
-      setWorkspaceStatus("Rendering current resume to LaTeX before saving…");
-      try {
-        text = await renderTexFromSchema(toTemplateSchema(editedResume), selectedTemplateId, {
-          docStyle: docStyle.style
-        });
-      } catch (error) {
-        setWorkspaceStatus(error instanceof Error ? error.message : "Current resume could not be rendered to LaTeX.");
-        setIsSavingBaseResume(false);
-        return;
+    let targetName = baseResumeName || fileName || "base-resume.txt";
+    // A `.resume`-named base saves the lossless structured JSON. If we only have
+    // plain text (no structured model yet — e.g. a text-only polish result),
+    // retarget to `.txt` so we never write non-JSON into a `.resume` file, which
+    // would fail to parse on reload.
+    let text: string;
+    if (/\.resume$/i.test(targetName)) {
+      if (editedResume) {
+        text = serializeResumeFile(editedResume);
+      } else {
+        targetName = targetName.replace(/\.resume$/i, ".txt");
+        text = currentResumeText || resumeText;
       }
+    } else {
+      text = currentResumeText || resumeText;
     }
 
     await saveBaseResume({ fileName: targetName, text });
@@ -417,50 +442,28 @@ export function useWorkspaceResume({
 
     if (/\.pdf$/i.test(file.name)) {
       setFileError(
-        "PDF uploads are text-only and cannot preserve layout. Upload the original DOCX or TEX for format-preserving edits, or paste extracted PDF text."
+        "PDF uploads are text-only and cannot preserve layout. Upload a .resume file for format-preserving edits, or paste extracted PDF text."
       );
       return;
     }
 
-    if (/\.docx$/i.test(file.name)) {
+    if (/\.resume$/i.test(file.name)) {
+      // A `.resume` file is the lossless structured save — parse it straight
+      // into the editor's ResumeData (ids are remapped on load, see resumeFile.ts).
       try {
-        const base64 = arrayBufferToBase64(await file.arrayBuffer());
-        const response = await fetch("/api/import-resume-docx", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ docxBase64: base64 })
-        });
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.error ?? "DOCX import failed.");
-        setResumeText(String(data.text ?? ""));
-        seedResumeEditor(String(data.text ?? ""), "");
-        setFileStatus("DOCX parsed into the editor.");
+        const text = await file.text();
+        const parsed = parseResumeFile(text);
+        setResumeText(serializeResumeData(parsed));
+        seedResumeData(parsed);
+        setFileStatus(".resume file loaded into the editor.");
       } catch (error) {
-        setFileError(
-          error instanceof Error ? error.message : "DOCX import failed. Try saving the resume from Word as a fresh DOCX."
-        );
+        setFileError(error instanceof Error ? error.message : "This .resume file could not be read.");
       }
-      return;
-    }
-
-    if (/\.tex$/i.test(file.name)) {
-      // Keep the raw LaTeX as the working text so AI rewrites can preserve it in
-      // place as .tex; parse it into the structured editor for interactive edits.
-      const texText = await file.text();
-      // The local parser bounds input at 200 KB (resumeData.ts MAX_LATEX_INPUT); a
-      // larger file would parse to an empty editor while claiming success — surface it.
-      if (texText.length > 200_000) {
-        setFileError("This .tex file is too large to parse locally (over 200 KB). Paste the resume content directly instead.");
-        return;
-      }
-      setResumeText(texText);
-      seedResumeEditor(texText, "");
-      setFileStatus("LaTeX source loaded and parsed into the editor. Export as .tex or compile with Tectonic.");
       return;
     }
 
     if (!/\.(txt|md|csv)$/i.test(file.name)) {
-      setFileError("Upload DOCX or TEX for format-preserving edits, or TXT, MD, or CSV for text-only polishing.");
+      setFileError("Upload a .resume file to restore a saved editor state, or TXT, MD, or CSV for text-only polishing.");
       return;
     }
 
@@ -468,7 +471,7 @@ export function useWorkspaceResume({
       const text = await file.text();
       setResumeText(text);
       seedResumeEditor(text, "");
-      setFileStatus("Text file loaded. Export uses the clean ATS PDF template or any LaTeX template.");
+      setFileStatus("Text file loaded. Export as PDF, or save as .resume to keep editing it later.");
     } catch {
       setFileError("The file could not be read. Try pasting the resume text instead.");
     }
@@ -484,6 +487,7 @@ export function useWorkspaceResume({
     baseResumeHistory,
     workspaceStatus,
     isSavingBaseResume,
+    isWorkspaceBootstrapping,
     loadWorkspace,
     removeBaseResume,
     restoreBaseResume,

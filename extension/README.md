@@ -59,8 +59,9 @@ Each import is its own independent RoleFit tab. The claim token keeps the new
 posting out of older visible tabs while still allowing a no-strand fallback if
 the new tab never opens or closes before draining the import.
 
-The fit score is a local keyword-overlap estimate only. The authoritative,
-anti-fabrication-gated verdict still comes from polishing in the app.
+The fit score is a local keyword-overlap estimate only. Polishing in the app
+provides the fuller provider-backed review with deterministic
+grounding/sanitization checks; its output still requires human review.
 
 No build or bundler — `popup.js` is a plain ES module loaded directly by
 `popup.html`. There is nothing to compile.

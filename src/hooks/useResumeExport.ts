@@ -1,30 +1,24 @@
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 
 import type { DocStyle } from "./useDocStyle";
 import type { PolishedResume } from "../resumeEngine";
-import type { RenderPdfResult, Template } from "./useTemplates";
 import { buildResumeFileName, downloadBlob, extractApplicantName, sanitizeFileBase } from "../lib/downloads";
 import { inferCompanyFromUrl } from "../lib/jobTarget";
-import { toTemplateSchema, type ResumeData, type ResumeTemplateSchema } from "../lib/resumeData";
-
-type RenderTex = (resumeText: string, templateId?: string, options?: { rawTex?: boolean; docStyle?: DocStyle }) => Promise<string>;
-type RenderPdf = (resumeText: string, templateId?: string, options?: { rawTex?: boolean; docStyle?: DocStyle }) => Promise<RenderPdfResult>;
-type RenderTexFromSchema = (schema: ResumeTemplateSchema, templateId?: string, options?: { docStyle?: DocStyle }) => Promise<string>;
-type RenderPdfFromSchema = (schema: ResumeTemplateSchema, templateId?: string, options?: { docStyle?: DocStyle }) => Promise<RenderPdfResult>;
+import { toTemplateSchema, type ResumeData } from "../lib/resumeData";
+import { serializeResumeFile } from "../lib/resumeFile";
 
 type UseResumeExportArgs = {
   result: PolishedResume | null;
   // The current cover letter — single owner, from polish OR on-demand
   // generation (App's useCoverLetter state). The Copy button reads this.
   coverLetterText?: string;
-  // The structured editor model. When present, LaTeX exports (.tex / PDF·LaTeX)
-  // render straight from it through the template — the SAME faithful path the
-  // on-screen compile preview uses — instead of the lossy serialize→reparse text
-  // round-trip, so the download matches the preview byte-for-structure.
+  // The structured editor model. PDF export, preview, and the .resume save all
+  // work from this — the owned typeset engine and the .resume file format are
+  // both fully client-side.
   editedResume: ResumeData | null;
   // The current resume text as shown in the editor (structured model serialized),
-  // falling back to the raw polish output. Clean-print operates on THIS; it is
-  // also the LaTeX fallback when no structured model exists.
+  // falling back to the raw polish output. Used for the file-name heuristic
+  // when no structured model exists yet.
   currentResumeText: string;
   jobUrl: string;
   // Resolver for the employer name used in download file names. Returns the
@@ -33,26 +27,16 @@ type UseResumeExportArgs = {
   // only when this is empty. A thunk so the distiller runs lazily at save time.
   resolveJobCompany?: () => string;
   resumeText: string;
-  selectedTemplateId: string;
-  selectedTemplate: Template | null;
-  renderTex: RenderTex;
-  renderPdf: RenderPdf;
-  renderTexFromSchema: RenderTexFromSchema;
-  renderPdfFromSchema: RenderPdfFromSchema;
-  // The editor's Format-menu values. Forwarded to the LaTeX renderer so the
-  // compiled PDF mirrors the on-screen typography (spacing + leading).
+  // The editor's Format-menu values. The engine consumes them directly.
   docStyle: DocStyle;
-  tectonic: { available: boolean };
-  // The LaTeX/download status line is owned by App because several non-export
-  // handlers (polish, workspace, track) also write to it; this hook reports
-  // export progress through it.
-  setTexStatus: (value: string) => void;
+  // The status line is owned by App because several non-export handlers
+  // (polish, workspace, track) also write to it; this hook reports export
+  // progress through it.
+  setExportStatus: (value: string) => void;
 };
 
-// Owns the resume export surface: clean-PDF print, LaTeX .tex / PDF render,
-// and in-app PDF preview, plus the per-action status/flag state those buttons
-// read. Pulled out of App.tsx so the orchestrator stays focused on workflow
-// state; behavior is unchanged from the inline handlers.
+// Owns the resume export surface: engine PDF render/preview and the `.resume`
+// save, plus the per-action status/flag state those buttons read.
 export function useResumeExport({
   result,
   coverLetterText,
@@ -61,50 +45,31 @@ export function useResumeExport({
   jobUrl,
   resolveJobCompany,
   resumeText,
-  selectedTemplateId,
-  selectedTemplate,
-  renderTex,
-  renderPdf,
-  renderTexFromSchema,
-  renderPdfFromSchema,
   docStyle,
-  tectonic,
-  setTexStatus
+  setExportStatus
 }: UseResumeExportArgs) {
-  // Render the CURRENT resume to LaTeX/PDF. With a structured model, go straight
-  // through the template (faithful — matches the compile preview); otherwise fall
-  // back to the serialize→reparse text path.
-  function renderCurrentTex(): Promise<string> {
-    return editedResume
-      ? renderTexFromSchema(toTemplateSchema(editedResume), selectedTemplateId, { docStyle })
-      : renderTex(currentResumeText, selectedTemplateId, { docStyle });
-  }
-  function renderCurrentPdf(): Promise<RenderPdfResult> {
-    return editedResume
-      ? renderPdfFromSchema(toTemplateSchema(editedResume), selectedTemplateId, { docStyle })
-      : renderPdf(currentResumeText, selectedTemplateId, { docStyle });
+  // Typeset the structured resume with the owned engine and serialize to PDF
+  // bytes — fully client-side. Dynamic imports keep pdf-lib + the engine out
+  // of the main bundle until first use.
+  async function renderEnginePdfBytes(): Promise<Uint8Array> {
+    if (!editedResume) throw new Error("No structured resume to typeset.");
+    const [{ layoutResume }, { emitPdf, fetchFontBytes }] = await Promise.all([
+      import("../typeset/layout.ts"),
+      import("../typeset/pdf/emit.ts")
+    ]);
+    const fonts = await fetchFontBytes();
+    const schema = toTemplateSchema(editedResume);
+    return emitPdf(layoutResume(schema, docStyle), fonts, {
+      title: schema.name ? `${schema.name} — Resume` : "Resume"
+    });
   }
 
   const [coverCopied, setCoverCopied] = useState(false);
   const [downloadStatus, setDownloadStatus] = useState("");
-  const [isDownloadingTex, setIsDownloadingTex] = useState(false);
-  const [isRenderingLatexPdf, setIsRenderingLatexPdf] = useState(false);
-
-  // In-app PDF preview state (Tectonic compile → blob URL → overlay).
-  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
-  const [isPreviewLoading, setIsPreviewLoading] = useState(false);
-  const [previewError, setPreviewError] = useState("");
-  const [previewPdfUrl, setPreviewPdfUrl] = useState("");
-  const previewRequestId = useRef(0);
-
-  useEffect(() => {
-    return () => {
-      if (previewPdfUrl) URL.revokeObjectURL(previewPdfUrl);
-    };
-  }, [previewPdfUrl]);
+  const [isRenderingPdf, setIsRenderingPdf] = useState(false);
 
   // Clear stale download confirmations when a new polish starts. The shared
-  // texStatus line is reset by App alongside this call.
+  // exportStatus line is reset by App alongside this call.
   function resetStatuses() {
     setCoverCopied(false);
     setDownloadStatus("");
@@ -135,176 +100,73 @@ export function useResumeExport({
     // Prefer the distilled/tracked company (matches the saved application) and
     // fall back to the URL-derived guess only when it is empty.
     const company = (resolveJobCompany?.() || "").trim() || inferCompanyFromUrl(jobUrl);
-    return buildResumeFileName(
-      extractApplicantName(currentResumeText || resumeText),
-      company,
-      ext
-    );
+    // Prefer the structured model's name; fall back to scanning the serialized
+    // text only when there is no structured model yet (text-only polish result).
+    const applicant =
+      (editedResume?.name ?? "").replace(/<\/?[a-z]+>/gi, "").trim() ||
+      extractApplicantName(currentResumeText || resumeText);
+    return buildResumeFileName(applicant, company, ext);
   }
 
-  // "PDF · clean": print the off-screen ResumePrintLayer — the read-only .rdx-*
-  // mirror of the structured resume (text-parsed fallback when no model exists) — so
-  // the browser's Save as PDF yields selectable, ATS-readable text. document.title
-  // seeds the suggested filename, restored after printing.
-  function handlePrintResume(overrideBase?: string) {
-    if (!currentResumeText) return;
-    const fileName = resumeDownloadName("pdf", overrideBase).replace(/\.pdf$/i, "");
-    const previousTitle = document.title;
-    document.title = fileName;
-    window.addEventListener("afterprint", () => { document.title = previousTitle; }, { once: true });
-    window.print();
-    setDownloadStatus("Opened the print dialog — choose “Save as PDF” (uncheck “Headers and footers” for a clean page).");
-  }
-
-  async function handleDownloadTex(overrideBase?: string) {
-    // Exports need a renderable resume, not an AI result: the structured editor
-    // is the source of truth, so .tex is always rendered from the current
-    // resume data through the selected template.
-    if (!result && !editedResume) return;
-    setIsDownloadingTex(true);
-    setTexStatus("Rendering LaTeX source…");
-    try {
-      const tex = await renderCurrentTex();
-      const templateLabel = selectedTemplate?.name ?? selectedTemplateId;
-      const fileName = resumeDownloadName("tex", overrideBase);
-      downloadBlob(new Blob([tex], { type: "application/x-tex" }), fileName);
-      setTexStatus(
-        `Downloaded ${fileName} using the ${templateLabel} template.`
-      );
-    } catch (error) {
-      setTexStatus(error instanceof Error ? error.message : "TEX render failed.");
-    } finally {
-      setIsDownloadingTex(false);
-    }
-  }
-
-  async function handleDownloadLatexPdf(overrideBase?: string) {
-    if (!result && !editedResume) return;
-    if (!tectonic.available) {
-      setTexStatus(
-        "Tectonic is not installed. Install with `brew install tectonic` to enable in-app LaTeX PDF rendering."
-      );
+  // "PDF": typeset by the owned engine, serialized client-side (D014).
+  async function handleDownloadPdf(overrideBase?: string) {
+    // The engine typesets the structured model only; say so rather than
+    // no-opping (canExport also allows a text-only polish result).
+    if (!editedResume) {
+      setExportStatus("Load a resume into the editor to export a PDF.");
       return;
     }
-    setIsRenderingLatexPdf(true);
-    setTexStatus("Compiling LaTeX → PDF with Tectonic…");
+    setIsRenderingPdf(true);
+    setExportStatus("Typesetting PDF…");
     try {
-      const outcome = await renderCurrentPdf();
-      if ("error" in outcome) {
-        setTexStatus(
-          outcome.missingTectonic
-            ? "Tectonic is not installed. Install with `brew install tectonic` to enable in-app LaTeX PDF rendering."
-            : `LaTeX PDF compile failed: ${outcome.error}`
-        );
-        return;
-      }
+      const bytes = await renderEnginePdfBytes();
       const fileName = resumeDownloadName("pdf", overrideBase);
-      downloadBlob(outcome.pdf, fileName);
-      setTexStatus(`Downloaded ${fileName} rendered via Tectonic + ${selectedTemplate?.name ?? selectedTemplateId}.`);
+      downloadBlob(new Blob([bytes as BlobPart], { type: "application/pdf" }), fileName);
+      setExportStatus(`Downloaded ${fileName}.`);
     } catch (error) {
-      setTexStatus(error instanceof Error ? error.message : "LaTeX PDF render failed.");
+      setExportStatus(error instanceof Error ? `PDF export failed: ${error.message}` : "PDF export failed.");
     } finally {
-      setIsRenderingLatexPdf(false);
+      setIsRenderingPdf(false);
     }
   }
 
-  async function handlePreview() {
-    if (!result && !editedResume) return;
-    if (!tectonic.available) {
-      setTexStatus(
-        "Tectonic is not installed. Install with `brew install tectonic` to enable PDF preview."
-      );
+  // Download the current resume as a `.resume` file: a lossless, re-loadable
+  // JSON save of the structured editor model — fully client-side, no server
+  // route (same as the PDF path).
+  function handleDownloadResume(overrideBase?: string) {
+    if (!editedResume) {
+      setExportStatus("Load a resume into the editor to save a .resume file.");
       return;
     }
-    // Revoke any previous blob URL before creating a new one.
-    if (previewPdfUrl) {
-      URL.revokeObjectURL(previewPdfUrl);
-      setPreviewPdfUrl("");
-    }
-    const requestId = previewRequestId.current + 1;
-    previewRequestId.current = requestId;
-    setIsPreviewOpen(true);
-    setIsPreviewLoading(true);
-    setPreviewError("");
-    try {
-      const outcome = await renderCurrentPdf();
-      if (previewRequestId.current !== requestId) return;
-      if ("error" in outcome) {
-        setPreviewError(
-          outcome.missingTectonic
-            ? "Tectonic is not installed. Install with `brew install tectonic`."
-            : outcome.error
-        );
-        return;
-      }
-      const url = URL.createObjectURL(outcome.pdf);
-      setPreviewPdfUrl(url);
-    } catch (error) {
-      if (previewRequestId.current !== requestId) return;
-      setPreviewError(error instanceof Error ? error.message : "PDF preview failed.");
-    } finally {
-      if (previewRequestId.current === requestId) setIsPreviewLoading(false);
-    }
+    const fileName = resumeDownloadName("resume", overrideBase);
+    downloadBlob(new Blob([serializeResumeFile(editedResume)], { type: "application/json" }), fileName);
+    setExportStatus(`Saved ${fileName}.`);
   }
 
-  function handleClosePreview() {
-    previewRequestId.current += 1;
-    setIsPreviewOpen(false);
-    setIsPreviewLoading(false);
-    if (previewPdfUrl) {
-      URL.revokeObjectURL(previewPdfUrl);
-      setPreviewPdfUrl("");
-    }
-    setPreviewError("");
-  }
-
-  // Render the CURRENT resume to artifacts for pipeline tracking: the .tex source
-  // (always, deterministic from the model/template) plus the compiled PDF as
-  // base64 when Tectonic is available. Returns null when there is nothing to
-  // render; degrades to tex-only when the PDF compile is unavailable or fails,
-  // so tracking never blocks on a missing Tectonic install.
-  async function getResumeArtifacts(): Promise<
-    { tex: string; pdfBase64: string | null; fileName: string; templateId: string } | null
-  > {
+  // Render the CURRENT resume to artifacts for pipeline tracking: the
+  // engine-typeset PDF as base64. Returns null when there is nothing to
+  // render or the PDF emit fails, so a failed render never blocks tracking.
+  async function getResumeArtifacts(): Promise<{ pdfBase64: string | null; fileName: string } | null> {
     if (!result && !editedResume) return null;
-    let tex = "";
+    let pdfBase64: string | null = null;
     try {
-      tex = await renderCurrentTex();
+      const bytes = await renderEnginePdfBytes();
+      pdfBase64 = await blobToBase64(new Blob([bytes as BlobPart]));
     } catch {
       return null;
     }
-    if (!tex.trim()) return null;
-    let pdfBase64: string | null = null;
-    if (tectonic.available) {
-      try {
-        const outcome = await renderCurrentPdf();
-        if (!("error" in outcome)) {
-          pdfBase64 = await blobToBase64(outcome.pdf);
-        }
-      } catch {
-        // Keep tex-only; a failed compile must not abort tracking.
-      }
-    }
-    return { tex, pdfBase64, fileName: resumeDownloadName("pdf"), templateId: selectedTemplateId };
+    return { pdfBase64, fileName: resumeDownloadName("pdf") };
   }
 
   return {
     coverCopied,
     downloadStatus,
-    isDownloadingTex,
-    isRenderingLatexPdf,
-    isPreviewOpen,
-    isPreviewLoading,
-    previewError,
-    previewPdfUrl,
+    isRenderingPdf,
     resetStatuses,
     handleCopyCoverLetter,
     resumeDownloadName,
-    handlePrintResume,
-    handleDownloadTex,
-    handleDownloadLatexPdf,
-    handlePreview,
-    handleClosePreview,
+    handleDownloadPdf,
+    handleDownloadResume,
     getResumeArtifacts
   };
 }

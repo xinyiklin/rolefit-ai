@@ -295,6 +295,37 @@ export function findUngroundedJdTerm(
   return null;
 }
 
+// General claim-term gate for resume-field rewrites. The JD-specific gate above
+// catches keyword stuffing, but an invented metric/tool/employer that is NOT in
+// the JD must not become invisible to sanitization. This companion checks the
+// same curated concepts/tools/short tokens plus capitalized proper-claim tokens
+// without requiring the term to appear in the JD. It deliberately remains a
+// conservative lexical backstop, not a semantic verifier: ordinary lowercase
+// rephrasing is left to the evidence + numeric gates and human review.
+export function findUngroundedClaimTerm(proposedText: unknown, grounding: unknown): string | null {
+  const groundingLower = String(grounding ?? "").toLowerCase();
+  const groundingTokens = tokenize(groundingLower);
+  const markStripped = String(proposedText ?? "").replace(/<\/?(?:b|i|u)>/gi, " ");
+  const proposedLower = markStripped.toLowerCase();
+  const proposedTokens = new Set(stripBoundaryDots(proposedLower).match(/[a-z0-9.#+]+/g) ?? []);
+
+  for (const match of markStripped.matchAll(/\b[A-Z][A-Za-z0-9.+#]{2,}\b/g)) {
+    const token = match[0].toLowerCase();
+    if (match.index === 0 && LEADING_ACTION_VERBS.has(token)) continue;
+    if (!isGrounded(groundingLower, groundingTokens, token)) return match[0];
+  }
+  for (const concept of LOWERCASE_TECH_CONCEPTS) {
+    if (proposedLower.includes(concept) && !isGrounded(groundingLower, groundingTokens, concept)) return concept;
+  }
+  for (const name of LOWERCASE_TOOL_NAMES) {
+    if (proposedTokens.has(name) && !isGrounded(groundingLower, groundingTokens, name)) return name;
+  }
+  for (const token of SHORT_TECH_TOKENS) {
+    if (proposedTokens.has(token) && !isGrounded(groundingLower, groundingTokens, token)) return token;
+  }
+  return null;
+}
+
 // Prose-surface grounding predicate: true when `text` names a JD skill term
 // absent from the grounding corpus. The one shared shape behind five hand-rolled
 // copies (strict-review advisory prose, the change summary, cover letters, and
@@ -325,4 +356,25 @@ export function isTermGrounded(term: unknown, grounding: unknown): boolean {
   // so route it through the same memoized tokenize() as findUngroundedJdTerm.
   const groundingTokens = tokenize(groundingLower);
   return isGrounded(groundingLower, groundingTokens, t);
+}
+
+// Collision-safe claim grounding for extracted gaps/skills. The general alias
+// map intentionally treats TS and TypeScript as equivalent for honest resume
+// rewrites, but requirement extraction must not read the clearance acronym
+// TS/SCI as TypeScript (likewise net-zero/.NET and common short-token phrases).
+export function isClaimTermGroundedInSource(term: unknown, source: unknown): boolean {
+  const rawTerm = String(term ?? "").trim();
+  const rawSource = String(source ?? "");
+  const normalized = rawTerm.toLowerCase();
+  if (/\.net\b/i.test(rawTerm)) return /(?:^|[^a-z0-9])\.net(?![-a-z0-9])/i.test(rawSource);
+  if (/^typescript$/i.test(rawTerm)) {
+    return /\bTypeScript\b/i.test(rawSource)
+      || /(?:^|[^A-Za-z0-9/])TS(?!\s*\/\s*SCI\b|[A-Za-z0-9])/i.test(rawSource);
+  }
+  if (normalized === "go") {
+    return /\bGolang\b/i.test(rawSource) || /(?:^|[^A-Za-z0-9])Go(?![-&A-Za-z0-9+#])/.test(rawSource);
+  }
+  if (normalized === "c") return /(?:^|[^A-Za-z0-9])C(?![-&A-Za-z0-9+#])/.test(rawSource);
+  if (normalized === "r") return /(?:^|[^A-Za-z0-9])R(?![-&A-Za-z0-9+#])/.test(rawSource);
+  return isTermGrounded(rawTerm, rawSource);
 }

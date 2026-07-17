@@ -1015,9 +1015,16 @@ select,
   transition: color 0.12s var(--ease), background-color 0.12s var(--ease), border-color 0.12s var(--ease);
 }
 
-.format-chip:hover:not(.is-on) {
+.format-chip:hover:not(.is-on):not(:disabled) {
   border-color: var(--hairline-strong);
   color: var(--ink);
+}
+
+/* e.g. Bold headings has no effect under small caps (no bold small-caps face). */
+.format-chip:disabled {
+  cursor: default;
+  opacity: 0.45;
+  color: var(--ink-faint);
 }
 
 .format-chip.is-on {

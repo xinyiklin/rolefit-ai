@@ -37,7 +37,10 @@ style. Use bracketed placeholders for missing facts, for example
 - Do not rely on prior chat context unless the durable fact is recorded in
   `CONTINUITY.md`.
 - Do not overwrite unrelated work or user-edited files.
-- Keep API keys server-side; never expose provider keys to browser code.
+- Keep `.env` provider keys server-only. A key entered in the AI menu may live
+  only in page memory for that session and travel in a same-origin request to
+  the local `/api/*` route. The local server may use it only to authenticate the
+  selected hosted/custom provider call; never persist, log, or echo it.
 - Do not print secrets, tokens, broad environment dumps, raw resume text, raw
   job descriptions, or AI prompts in chat unless the user explicitly requests
   that local debugging output.
@@ -123,11 +126,20 @@ Use the relevant docs and repo surfaces by task shape:
   `src/sections/` components (`NavMenu`, the `*Menu.tsx` menus, `shared.ts`) and
   `src/styles/`; preserve the navbar-inputs (Resume/Job/AI/Options menus +
   Polish) → full-width tabbed studio workflow; keep labels and hints short;
+  keep the engine-painted `TypesetEditor` as the sole resume editor (text/input
+  events, structural chrome, and layout provenance stay in its focused editor
+  modules; do not reintroduce a parallel HTML editor or DOM-pagination loop);
   visual QA is flag-first (skip by default; flag real layout/theming risk and
   let the user decide).
-- Server / AI work: read `docs/engineering/ai-server.md`; keep API keys
-  server-side; keep `server.ts` focused on local serving, job import, DOCX
-  import/export, workspace storage, and AI provider calls.
+- Server / AI work: read `docs/engineering/ai-server.md`; keep `.env` keys
+  server-only and menu-entered keys transient as described above; keep
+  `server.ts` focused on local serving, job import, workspace storage, and AI
+  provider calls. A fresh standalone Review
+  audits the current edited resume as-is and sends no prior suggestions; the
+  internal Review leg of Both may receive only the sanitized suggestions from
+  that same Tailor run. When budgeting structured prompt payloads, clip fields
+  before serialization so embedded JSON remains valid — never slice serialized
+  JSON.
 - Resume engine work: keep scoring and keyword extraction in
   `src/resumeEngine.ts` or similarly focused helpers. The only local
   fallbacks are the distiller and the fit estimate (D011).
@@ -154,6 +166,9 @@ instructions:
 - `src/resumeEngine.ts` and `src/resume/` are anti-fabrication-critical logic,
   not UI: changes there always get an adversarial review pass before
   finalizing, regardless of which agent implemented them.
+- Prompt, grounding, sanitizer, and scoring changes under `server/ai/` also
+  require an adversarial review plus the relevant offline evals before
+  finalizing; prompt wording is executable product behavior, not docs-only copy.
 - Delegate multi-file implementation to the matching agent; the orchestrator
   may handle trivial single-file edits directly.
 - Subagents do not read or update `CONTINUITY.md` (an explicit exception to
@@ -199,7 +214,7 @@ File-size guidance:
   write; dry-run requested writes when possible.
 - Never run commands that delete resume/workspace data or call destructive
   remote APIs without explicit instruction.
-- Do not commit `.env`, `node_modules/`, `dist/`, exported resumes/TEX/PDF/DOCX
+- Do not commit `.env`, `node_modules/`, `dist/`, exported resumes/`.resume`/PDF
   files, root-level resume artifacts, or `job-search-workspace/` contents
   except its `README.md`.
 - Keep generated resume claims grounded in user-provided facts.
@@ -237,7 +252,7 @@ push, open a PR, or merge.
 - Check `git status --short` before staging so unrelated work is visible.
 - Stage only relevant files.
 - Do not stage `.env`, `job-search-workspace/` contents except
-  `job-search-workspace/README.md`, or exported resumes/TEX/PDF/DOCX files. The
+  `job-search-workspace/README.md`, or exported resumes/`.resume`/PDF files. The
   `.gitignore` already guards these; verify with `git status --short`.
 - Stage and commit `AGENTS.md` and `CLAUDE.md` like any other tracked file when
   they're part of the change; do not single them out to exclude. `CONTINUITY.md`
@@ -256,7 +271,8 @@ Read `docs/engineering/testing.md` for full pass criteria.
   it was skipped.
 - Server / AI: `npx tsc -p tsconfig.server.json` passes; affected routes return the
   expected status and JSON shape; the deterministic distill fallback still
-  runs when the AI call cannot (tailor/review/cover fail plainly — D011).
+  runs when the AI call cannot (tailor/review/cover/application-answer
+  generation fail plainly — D011).
 - Build: `npm run build` succeeds when frontend source or types changed.
 - Refactors: existing behavior preserved, `npm run build` succeeds, and search
   confirms old symbols are gone.
@@ -280,13 +296,24 @@ connect to `http://localhost:5181` instead of starting a second dev server or
 changing ports. Sibling reservations: careflow `5173-5180`, portfolio
 `5184-5185`.
 
-Use `.env` for provider keys and overrides:
+Use `.env` for server-owned provider configuration. Supported key variables are
 `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`,
 `OPENROUTER_API_KEY`, `GROQ_API_KEY`, `TOGETHER_API_KEY`, `MISTRAL_API_KEY`,
-`AI_API_KEY`, `AI_PROVIDER`, `AI_BASE_URL`, `AI_MODEL`, `OPENAI_MODEL`, and
-`PORT`. Optional security override: `EXTENSION_ALLOWED_ORIGINS` (comma-separated
-exact extension origins) hard-restricts the browser-extension routes to those
-origins; unset = any extension-scheme origin is accepted.
+and the shared fallback `AI_API_KEY`. `AI_PROVIDER` selects the headless/default
+provider. Model overrides are provider-specific (`OPENAI_MODEL`,
+`ANTHROPIC_MODEL`, `GEMINI_MODEL`, `OPENROUTER_MODEL`, `GROQ_MODEL`,
+`TOGETHER_MODEL`, `MISTRAL_MODEL`, `LOCAL_AI_MODEL`, `CLAUDE_CLI_MODEL`,
+`CODEX_CLI_MODEL`, `ANTIGRAVITY_CLI_MODEL`). Base-URL overrides are likewise
+provider-specific (`OPENROUTER_BASE_URL`, `GROQ_BASE_URL`, `TOGETHER_BASE_URL`,
+`MISTRAL_BASE_URL`, `LOCAL_AI_BASE_URL`). For request resolution, `AI_MODEL` and
+`AI_BASE_URL` / `OPENAI_COMPATIBLE_BASE_URL` apply only to the headless
+`openai-compatible` provider; they are not global overrides for every provider.
+
+`PORT` changes the port. The server binds to loopback by default. `HOST=0.0.0.0`
+is an explicit, unauthenticated LAN-exposure override; never use it on a public
+or untrusted network. `EXTENSION_ALLOWED_ORIGINS` (comma-separated exact
+extension origins) hard-restricts the browser-extension routes; unset means any
+supported extension-scheme origin is accepted.
 
 ---
 

@@ -1,5 +1,5 @@
 // Application tracker HTTP routes: list/save/delete tracked applications and
-// persist/stream a tailored resume's saved .tex / .pdf artifacts. Split out of
+// persist/stream a tailored resume's saved .pdf artifact. Split out of
 // server.ts; the read-modify-write handlers are serialized through a
 // process-local promise lock (withApplicationsLock) that guards
 // applications.json against overlapping cycles.
@@ -14,7 +14,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join, resolve, sep } from "node:path";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { readBody, sendJson } from "../http.ts";
-import { base64ToBuffer } from "../docx.ts";
+import { base64ToBuffer } from "../base64.ts";
 import { jobWorkspaceDir } from "../workspace.ts";
 import { APPLICATION_ID_RE, readApplications, writeApplications, applicationsFilePath } from "./index.ts";
 
@@ -101,57 +101,52 @@ export async function handleDeleteApplication(req: IncomingMessage, res: ServerR
   }
 }
 
-// Persist a tailored resume's .tex source and/or compiled PDF for one
-// application under job-search-workspace/applications/<id>/ (gitignored). The
-// returned resumeArtifacts mirrors the shape the application sanitizer stores.
+// Persist a tailored resume's compiled PDF for one application under
+// job-search-workspace/applications/<id>/ (gitignored). The returned
+// resumeArtifacts mirrors the shape the application sanitizer stores.
 export async function handleSaveApplicationResume(req: IncomingMessage, res: ServerResponse, id: string): Promise<void> {
   if (req.method !== "POST") { sendJson(res, 405, { error: "Use POST." }); return; }
   const dir = applicationResumeDir(id);
   if (!dir) { sendJson(res, 400, { error: "Invalid application id." }); return; }
   try {
     const body = JSON.parse(await readBody(req));
-    const tex = typeof body.tex === "string" ? body.tex : "";
     const pdfBase64 = typeof body.pdfBase64 === "string" ? body.pdfBase64 : "";
     const fileName = typeof body.fileName === "string" ? body.fileName.slice(0, 200) : "";
     const templateId = typeof body.templateId === "string" ? body.templateId.slice(0, 80) : "";
-    if (!tex && !pdfBase64) { sendJson(res, 400, { error: "No resume artifacts to save." }); return; }
-    // Size caps: tex ~1MB of chars, pdf ~8MB decoded.
-    if (tex.length > 1_000_000) { sendJson(res, 413, { error: "TeX source too large." }); return; }
+    if (!pdfBase64) { sendJson(res, 400, { error: "No resume artifacts to save." }); return; }
+    // Size cap: pdf ~8MB decoded.
     let pdfBuffer: Buffer | null = null;
     if (pdfBase64) {
       pdfBuffer = base64ToBuffer(pdfBase64, "PDF");
       if (pdfBuffer.length > 8_000_000) { sendJson(res, 413, { error: "PDF too large." }); return; }
     }
     await mkdir(dir, { recursive: true });
-    let hasTex = false;
     let hasPdf = false;
-    if (tex) { await writeFile(join(dir, "resume.tex"), tex, "utf8"); hasTex = true; }
     if (pdfBuffer) {
       await writeFile(join(dir, "resume.pdf"), pdfBuffer);
       hasPdf = true;
     }
     sendJson(res, 200, {
-      resumeArtifacts: { hasTex, hasPdf, fileName, templateId, savedAt: new Date().toISOString() }
+      resumeArtifacts: { hasPdf, fileName, templateId, savedAt: new Date().toISOString() }
     });
   } catch (error) {
     sendJson(res, 400, { error: error instanceof Error ? error.message : "Saving resume artifacts failed." });
   }
 }
 
-// Stream a saved resume artifact (.tex or .pdf) back as a file download. The
-// browser names it via the <a download> attribute; the Content-Disposition
-// filename is only a fallback, so a fixed "resume" name is fine here.
-export async function handleApplicationResumeFile(req: IncomingMessage, res: ServerResponse, id: string, ext: string): Promise<void> {
+// Stream a saved resume PDF back as a file download. The browser names it via
+// the <a download> attribute; the Content-Disposition filename is only a
+// fallback, so a fixed "resume" name is fine here.
+export async function handleApplicationResumeFile(req: IncomingMessage, res: ServerResponse, id: string): Promise<void> {
   if (req.method !== "GET") { sendJson(res, 405, { error: "Use GET." }); return; }
   const dir = applicationResumeDir(id);
   if (!dir) { sendJson(res, 400, { error: "Invalid application id." }); return; }
-  const isPdf = ext === "pdf";
-  const filePath = join(dir, isPdf ? "resume.pdf" : "resume.tex");
+  const filePath = join(dir, "resume.pdf");
   try {
     const data = await readFile(filePath);
     res.writeHead(200, {
-      "Content-Type": isPdf ? "application/pdf" : "application/x-tex; charset=utf-8",
-      "Content-Disposition": `attachment; filename="resume.${isPdf ? "pdf" : "tex"}"`,
+      "Content-Type": "application/pdf",
+      "Content-Disposition": `attachment; filename="resume.pdf"`,
       "Content-Length": data.length,
       "Cache-Control": "no-store"
     });

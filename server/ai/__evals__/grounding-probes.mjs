@@ -102,12 +102,12 @@ const checks = [
     );
     return out.gaps.length === 1 && out.gaps[0].suggestedEdit === "";
   })()],
-  ["backward-compatible: no job/grounding -> no grounding drops", (() => {
+  ["no grounding fails closed on a branded rewrite but keeps generic prose", (() => {
     const out = sanitizeStrictReview({ verdict: "STRETCH", rewrites: [
       { original: "a", rewrite: "Built Kubernetes things" },
       { original: "b", rewrite: "Led a team" }
     ] });
-    return out.rewrites.length === 2;
+    return out.rewrites.length === 1 && out.rewrites[0].rewrite === "Led a team";
   })()],
 
   // --- Fix 2: advisory review prose (coverLetterAngle, topEdits[],

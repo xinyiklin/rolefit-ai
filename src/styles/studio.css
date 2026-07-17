@@ -2,7 +2,7 @@
 
 .studio-pane {
   display: grid;
-  grid-template-columns: clamp(168px, 13vw, 208px) minmax(0, 1fr);
+  grid-template-columns: clamp(184px, 14vw, 226px) minmax(0, 1fr);
   min-height: 0;
   background: var(--paper);
 }
@@ -140,10 +140,9 @@
   min-height: 0;
 }
 
-/* -------- Tab rail (numbered table of contents) -------- */
+/* -------- Tab rail -------- */
 
-/* The rail reads as a printed index: numbered entries grouped by DRAFT / TRACK,
-   with mono two-digit indices instead of icons. */
+/* Icon-led entries grouped by DRAFT / TRACK under small-caps mono eyebrows. */
 .studio-tabs {
   display: flex;
   flex-direction: column;
@@ -181,42 +180,38 @@
   font-weight: 500;
 }
 
-/* Each tab row: [two-digit index] [label] [badge?] — no icon slot. */
+/* Each tab row: [icon] [label] (+ badge). */
 .studio-tab {
-  display: grid;
-  grid-template-columns: 22px minmax(0, 1fr) auto;
+  display: flex;
   align-items: center;
   gap: var(--s2);
-  min-height: 30px;
+  min-height: 34px;
   padding: 0 var(--s2);
   border: 0;
-  border-radius: var(--r-sm);
+  border-radius: var(--r-md);
   background: transparent;
   color: var(--ink-soft);
   font-family: var(--font-ui);
-  font-size: 0.8rem;
+  font-size: 0.82rem;
   font-weight: 500;
   text-align: left;
   cursor: pointer;
-  transition: color 160ms var(--ease), background 160ms var(--ease);
+  transition: color 160ms var(--ease), background 160ms var(--ease), box-shadow 160ms var(--ease);
 }
 
-/* The icon slot is suppressed in the new numbered rail; icons are hidden via
-   CSS so the JSX prop signature is unchanged. */
-.studio-tab > svg { display: none; }
+.studio-tab + .studio-tab {
+  margin-top: 2px;
+}
 
-/* Two-digit mono index — generated via the data-index attribute set by StudioPane. */
-.studio-tab__index {
+.studio-tab__icon {
+  display: inline-flex;
   flex: none;
-  font-family: var(--font-mono);
-  font-size: 0.7rem;
-  font-variant-numeric: tabular-nums;
   color: var(--ink-faint);
-  line-height: 1;
   transition: color 160ms var(--ease);
 }
 
-.studio-tab span {
+.studio-tab__label {
+  flex: 0 1 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -228,9 +223,14 @@
   background: var(--card-hover);
 }
 
+.studio-tab:hover .studio-tab__icon {
+  color: var(--ink-soft);
+}
+
 .studio-tab em {
   display: inline-flex;
   align-items: center;
+  flex: none;
   height: 16px;
   padding: 0 5px;
   border-radius: var(--r-pill);
@@ -242,25 +242,22 @@
   font-weight: 500;
 }
 
-/* Active: ink-strong label, accent index, hairline underline — no card background. */
+/* Active: an accent-washed row — the rail's one committed moment. The icon
+   turns to the deep accent; a veil ring keeps the fill crisp. */
 .studio-tab[aria-selected="true"] {
   color: var(--ink-strong);
   font-weight: 600;
-  background: transparent;
-}
-
-.studio-tab[aria-selected="true"] .studio-tab__index {
-  color: var(--accent);
-}
-
-.studio-tab[aria-selected="true"] em {
   background: var(--accent-soft);
+  box-shadow: 0 0 0 1px var(--accent-veil);
+}
+
+.studio-tab[aria-selected="true"] .studio-tab__icon {
   color: var(--accent-deep);
 }
 
-/* Active hairline underline indicator (subtle; replaces the card-box approach). */
-.studio-tab[aria-selected="true"]::after {
-  content: none; /* using index color as the sole indicator — no underline */
+.studio-tab[aria-selected="true"] em {
+  background: var(--card-elev);
+  color: var(--accent-deep);
 }
 
 /* -------- Studio body -------- */
@@ -301,12 +298,14 @@
 }
 
 /* Resume tab: no page scroll — the editor canvas fills edge-to-edge from
-   toolbar to export rail, like the Google Docs workspace. */
+   toolbar to export rail, like the Google Docs workspace. Deep desk tone so
+   the white sheets (editor page, preview pages) read as paper on the desk. */
 .studio-body[data-tab="resume"] {
   overflow: hidden;
   display: flex;
   flex-direction: column;
   padding: 0;
+  background: var(--paper-deep);
 }
 
 .studio-body[data-tab="resume"] > .studio-card--flush {
@@ -360,6 +359,17 @@
   flex-wrap: wrap;
   gap: var(--s2);
   min-width: 0;
+}
+
+/* Hairline that groups the view/format controls (Zoom · Format · Style) apart
+   from the Export action. Collapses when the toolbar wraps so it never dangles
+   at the start of a wrapped row. */
+.studio-card__tool-divider {
+  width: 1px;
+  height: 20px;
+  margin-inline: var(--s1);
+  background: var(--hairline);
+  flex: none;
 }
 
 .studio-card__head h2 {
@@ -435,6 +445,44 @@
   min-height: 26px;
   padding: 0 var(--s1) 0 var(--s2);
   font-size: 0.76rem;
+}
+
+/* Spell-check toggle beside Zoom: an editor-display control (like Zoom, it
+   never touches the export), shaped like the Format/Style triggers — a quiet
+   transparent pill with icon + label. Accent-tinted when on so the red-underline
+   state reads at a glance; plain and muted when off. */
+.doc-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 var(--s2);
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--ink-soft);
+  font-family: var(--font-ui);
+  font-size: 0.76rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 150ms var(--ease), background 150ms var(--ease), border-color 150ms var(--ease);
+}
+
+.doc-toggle:hover {
+  color: var(--ink);
+  background: var(--card-soft);
+}
+
+.doc-toggle.is-on {
+  color: var(--accent-deep);
+  background: var(--accent-soft);
+  border-color: var(--accent-veil);
+}
+
+.doc-toggle:focus-visible {
+  outline: 2px solid var(--accent-veil);
+  outline-offset: 1px;
 }
 
 /* -------- Page-title vocabulary -------- */
@@ -526,17 +574,25 @@
 /* -------- Draft-restore affordance (Resume tab head) -------- */
 /* Quiet inline bar shown when an autosaved draft is available. One line,
    no visual noise, dismissible. Sits between the card head and the workbench. */
+/* Floated into the page's top margin: an out-of-flow overlay so its presence
+   or dismissal never reshuffles the editor's height. Kept compact and lifted to
+   the top edge so it clears the resume name below it. */
 .draft-restore-bar {
+  position: absolute;
+  z-index: 6;
+  top: 0;
+  left: var(--s5);
+  right: var(--s5);
   display: flex;
   align-items: center;
   gap: var(--s2);
-  padding: var(--s2) var(--s3);
+  padding: var(--s1) var(--s3);
   border-radius: var(--r-md);
   background: var(--accent-soft);
   border: 1px solid var(--accent-veil);
+  box-shadow: var(--shadow-lift);
   font-size: 0.78rem;
   color: var(--accent-deep);
-  margin-bottom: var(--s3);
 }
 
 .draft-restore-bar__text {

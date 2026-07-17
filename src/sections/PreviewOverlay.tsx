@@ -15,24 +15,21 @@ pdfjs.GlobalWorkerOptions.workerSrc = new URL(
 const ZOOM_STEPS = [0.5, 0.75, 1, 1.25, 1.5, 2] as const;
 const DEFAULT_ZOOM_INDEX = 2; // 100%
 
+// Views a saved application's stored PDF via react-pdf (react-pdf owns its own
+// loading/error UI). The live resume needs no compile preview — the editor is
+// its own WYSIWYG surface — so this overlay only ever shows a saved PDF URL.
 type PreviewOverlayProps = {
   isOpen: boolean;
-  isLoading: boolean;
-  error: string;
-  pdfUrl: string;
+  pdfUrl?: string;
   fileName: string;
   onClose: () => void;
-  onRetry: () => void;
 };
 
 export default function PreviewOverlay({
   isOpen,
-  isLoading,
-  error,
-  pdfUrl,
+  pdfUrl = "",
   fileName,
-  onClose,
-  onRetry
+  onClose
 }: PreviewOverlayProps) {
   const [numPages, setNumPages] = useState<number | null>(null);
   const [zoomIndex, setZoomIndex] = useState(DEFAULT_ZOOM_INDEX);
@@ -74,6 +71,7 @@ export default function PreviewOverlay({
       .then((r) => r.blob())
       .then((blob) => downloadBlob(blob, fileName));
   }
+  const canDownload = Boolean(pdfUrl);
 
   if (!isOpen) return null;
 
@@ -133,7 +131,7 @@ export default function PreviewOverlay({
               type="button"
               className="preview-overlay__download"
               onClick={handleDownload}
-              disabled={!pdfUrl}
+              disabled={!canDownload}
               aria-label="Download PDF"
               title="Download PDF"
             >
@@ -153,20 +151,7 @@ export default function PreviewOverlay({
         </div>
 
         <div className="preview-overlay__body">
-          {isLoading ? (
-            <div className="preview-overlay__loading" role="status">
-              <div className="preview-overlay__spinner" />
-              <span>Compiling with Tectonic…</span>
-            </div>
-          ) : error ? (
-            <div className="preview-overlay__error" role="alert">
-              <strong>Compile failed</strong>
-              <p>{error}</p>
-              <button className="ghost-button" type="button" onClick={onRetry}>
-                Retry
-              </button>
-            </div>
-          ) : pdfUrl ? (
+          {pdfUrl ? (
             <div className="preview-overlay__scroll">
               <Document
                 className="preview-overlay__document"

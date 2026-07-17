@@ -5,9 +5,9 @@ import {
   type PolishedResume
 } from "./resumeEngine";
 
-import { useTemplates } from "./hooks/useTemplates";
 import { useDebouncedValue } from "./hooks/useDebouncedValue";
 import { useDocStyle } from "./hooks/useDocStyle";
+import { useEditorPrefs } from "./hooks/useEditorPrefs";
 import { useAiSettings } from "./hooks/useAiSettings";
 import { useApplicationAnswers } from "./hooks/useApplicationAnswers";
 import {
@@ -55,16 +55,34 @@ import { ResumeMenu } from "./sections/ResumeMenu";
 import { StudioPane } from "./sections/StudioPane";
 import { ExportMenu } from "./sections/ExportRail";
 import { ApplyDownloadDialog } from "./sections/ApplyDownloadDialog";
-const PreviewOverlay = lazy(() => import("./sections/PreviewOverlay"));
-import { ApplicationModal } from "./sections/ApplicationModal";
 import { ResumePrintLayer } from "./sections/ResumePrintLayer";
 import { ViewportGate } from "./sections/ViewportGate";
 import { ResumeTab } from "./sections/tabs/ResumeTab";
 import { MaterialsTab } from "./sections/tabs/MaterialsTab";
-import { TrackerTab } from "./sections/tabs/TrackerTab";
 import type { TrackerView } from "./sections/tabs/TrackerTab";
-import { AnalyticsTab } from "./sections/tabs/AnalyticsTab";
 import type { OutputTab, OutputTabDescriptor } from "./sections/shared";
+
+const PreviewOverlay = lazy(() => import("./sections/PreviewOverlay"));
+const ApplicationModal = lazy(() =>
+  import("./sections/ApplicationModal").then((module) => ({ default: module.ApplicationModal }))
+);
+const TrackerTab = lazy(() =>
+  import("./sections/tabs/TrackerTab").then((module) => ({ default: module.TrackerTab }))
+);
+const AnalyticsTab = lazy(() =>
+  import("./sections/tabs/AnalyticsTab").then((module) => ({ default: module.AnalyticsTab }))
+);
+
+function ApplicationModalLoading() {
+  return (
+    <div className="application-modal">
+      <div className="application-modal__scrim" aria-hidden="true" />
+      <section className="application-modal__panel" aria-busy="true">
+        <p className="pipeline-note" role="status" aria-live="polite">Loading application…</p>
+      </section>
+    </div>
+  );
+}
 
 // The AI menu's three provider sections, in pipeline order.
 const STAGE_SECTIONS: { id: StageId; title: string }[] = [
@@ -72,6 +90,11 @@ const STAGE_SECTIONS: { id: StageId; title: string }[] = [
   { id: "tailor", title: "Tailor" },
   { id: "review", title: "Review" }
 ];
+
+// The engine's built-in resume layout (there is no template picker anymore —
+// the owned typeset engine renders one style). Recorded on Applications for
+// historical bookkeeping (Application.templateId).
+const RESUME_TEMPLATE_ID = "jakes";
 
 // ============ Types ============
 
@@ -134,9 +157,10 @@ function App() {
   // later import/paste/edit, or a toggle-OFF import, can never trigger a surprise
   // polish against the wrong posting.
   const [autoTailorJob, setAutoTailorJob] = useState<string | null>(null);
-  // Resume export (print/LaTeX/preview) state + handlers live in
-  // useResumeExport; texStatus stays here because non-export handlers write it too.
-  const [texStatus, setTexStatus] = useState("");
+  // Resume export (PDF / `.resume`) state + handlers live in useResumeExport;
+  // exportStatus stays here because non-export handlers (polish, workspace,
+  // track) write it too.
+  const [exportStatus, setExportStatus] = useState("");
   // All auto-saved AI preferences (primary provider/model, the reviewer-override
   // audit* fields, and the polish prefs that persist with them) plus the
   // debounced localStorage write live in useAiSettings. API keys are not
@@ -192,19 +216,6 @@ function App() {
   // show a quiet "review is stale" notice in the ReviewRail.
   const [reviewStale, setReviewStale] = useState(false);
 
-  // ----- Hooks -----
-  const {
-    templates,
-    selectedTemplateId,
-    setSelectedTemplateId,
-    tectonic,
-    templatesError,
-    renderTex,
-    renderPdf,
-    renderPdfFromSchema,
-    renderTexFromSchema
-  } = useTemplates();
-
   // ----- Structured resume editor -----
   // editedResume is the canonical editable model; it seeds at discrete events
   // (a fresh polish, a loaded base resume, a restored snapshot). `currentResumeText`
@@ -217,6 +228,8 @@ function App() {
     // Gates AI fit provenance so applying the AI's own suggestions keeps the
     // verdict "AI-judged"; arbitrary typing downgrades it to "Estimated".
     manualEdited: resumeManuallyEdited,
+    canUndo: canUndoResume,
+    canRedo: canRedoResume,
     serializedResume,
     seed: seedResumeEditor,
     seedData: seedResumeData,
@@ -228,8 +241,8 @@ function App() {
   // map stores only "tailor"/"include" so the three states are mutually exclusive
   // by construction.
   const [tailorModes, setTailorModes] = useState<Record<string, TailorMode>>({});
-  // Stable identity so the memoized SectionEditor isn't re-rendered for every
-  // section on each App render (setTailorModes is itself stable).
+  // Stable identity keeps the typeset editor's section controls from
+  // re-rendering solely because App rendered.
   const setTailorMode = useCallback((sectionId: string, mode: TailorMode) => {
     setTailorModes((current) => {
       const next = { ...current };
@@ -241,6 +254,9 @@ function App() {
   // User typography for the HTML resume page (Format menu): persisted CSS vars
   // applied to the editor and the print mirror.
   const docStyle = useDocStyle();
+  // Editor-only display prefs (e.g. spellcheck underlines) — persisted apart
+  // from docStyle since they never affect the resume output.
+  const editorPrefs = useEditorPrefs();
 
   // Distill the job once per (description, url, import) instead of on every
   // render. The full extractJobPosting parser is ~1500 LOC; running it in the
@@ -345,6 +361,7 @@ function App() {
   const {
     coverLetterText,
     applyCoverLetter,
+    applyPolishCoverResult,
     coverStatus,
     isGeneratingCover,
     handleGenerateCoverLetter,
@@ -503,7 +520,6 @@ function App() {
     : !editedResume || !Object.values(tailorModes).some((mode) => mode === "tailor")
     ? "Load a resume and set at least one section to Tailor."
     : "Add more resume text in the Resume menu (a few lines at least).";
-  const selectedTemplate = templates.find((t) => t.id === selectedTemplateId) ?? null;
   const outputTabs: OutputTabDescriptor[] = [
     { id: "resume", label: "Resume" },
     { id: "materials", label: "Materials" },
@@ -511,23 +527,15 @@ function App() {
     { id: "analytics", label: "Analytics" }
   ];
 
-  // ----- Resume export (print / LaTeX / preview) -----
+  // ----- Resume export (engine PDF / .resume save) -----
   const {
     coverCopied,
     downloadStatus,
-    isDownloadingTex,
-    isRenderingLatexPdf,
-    isPreviewOpen,
-    isPreviewLoading,
-    previewError,
-    previewPdfUrl,
+    isRenderingPdf,
     resetStatuses: resetExportStatuses,
     handleCopyCoverLetter,
-    handlePrintResume,
-    handleDownloadTex,
-    handleDownloadLatexPdf,
-    handlePreview,
-    handleClosePreview,
+    handleDownloadPdf,
+    handleDownloadResume,
     resumeDownloadName,
     getResumeArtifacts
   } = useResumeExport({
@@ -541,15 +549,8 @@ function App() {
     resolveJobCompany: () => currentJobTracking().company ?? "",
     coverLetterText,
     resumeText,
-    selectedTemplateId,
-    selectedTemplate,
-    renderTex,
-    renderPdf,
-    renderTexFromSchema,
-    renderPdfFromSchema,
     docStyle: docStyle.style,
-    tectonic,
-    setTexStatus
+    setExportStatus
   });
 
   // ----- Job intake (distill/import flows) -----
@@ -611,14 +612,13 @@ function App() {
     polishStages,
     tailor: stages.tailor,
     review: stages.review,
-    result,
     setResult,
-    applyCoverLetter,
+    applyPolishCoverResult,
     setActiveOutputTab,
     setPipelineAiUsage,
     setPolishStatus,
     resetExportStatuses,
-    setTexStatus,
+    setExportStatus,
     confirmDuplicateBeforePolish: duplicateGuard.confirmDuplicateBeforePolish
   });
 
@@ -659,6 +659,7 @@ function App() {
     baseResumeHistory,
     workspaceStatus,
     isSavingBaseResume,
+    isWorkspaceBootstrapping,
     loadWorkspace,
     removeBaseResume,
     restoreBaseResume,
@@ -679,12 +680,10 @@ function App() {
     setFileStatus,
     setPolishStatus,
     resetExportStatuses,
-    setTexStatus,
+    setExportStatus,
     clearAutosaveDraft,
     setPendingAutosaveDraft,
-    renderTexFromSchema,
-    selectedTemplateId,
-    docStyle,
+    seedResumeData,
     currentResumeText,
     resumeText,
     editedResume
@@ -739,7 +738,6 @@ function App() {
     applyMergeTargetRef,
     applyDownloadPrompt,
     setApplyDownloadPrompt,
-    defaultExportFormat,
     handleApply,
     handleApplyDownloadPick,
     handleApplyOnly
@@ -751,7 +749,7 @@ function App() {
     currentResumeText,
     resumeText,
     editedResume,
-    selectedTemplateId,
+    selectedTemplateId: RESUME_TEMPLATE_ID,
     coverLetterText,
     headlineScore,
     fitComparison,
@@ -763,13 +761,11 @@ function App() {
     currentJobTracking,
     resolveApplyDuplicate: duplicateGuard.resolveApplyDuplicate,
     canExportResume,
-    handlePrintResume,
-    handleDownloadTex,
-    handleDownloadLatexPdf,
+    handleDownloadPdf,
     getResumeArtifacts,
     clearAutosaveDraft,
     markResumeClean,
-    setTexStatus,
+    setExportStatus,
     setActiveOutputTab,
     setExpandedApplicationId
   });
@@ -828,7 +824,7 @@ function App() {
     }
     setPolishStatus("");
     resetExportStatuses();
-    setTexStatus("");
+    setExportStatus("");
     setActiveOutputTab("resume");
   }
 
@@ -926,6 +922,7 @@ function App() {
             baseResumeHistory={baseResumeHistory}
             workspaceStatus={workspaceStatus}
             isSavingBaseResume={isSavingBaseResume}
+            isWorkspaceBootstrapping={isWorkspaceBootstrapping}
             fileName={fileName}
             fileError={fileError}
             fileStatus={fileStatus}
@@ -1062,25 +1059,14 @@ function App() {
           railFooter={<SessionsRail self={{ jobLabel: _autosaveJobLabel, phase: _myPhase }} others={otherSessions} />}
           overlay={
             <Suspense fallback={null}>
-              <PreviewOverlay
-                isOpen={isPreviewOpen}
-                isLoading={isPreviewLoading}
-                error={previewError}
-                pdfUrl={previewPdfUrl}
-                fileName={resumeDownloadName("pdf")}
-                onClose={handleClosePreview}
-                onRetry={handlePreview}
-              />
-              {/* Saved-application resume preview (react-pdf), separate from the
-                  editor compile preview above. */}
+              {/* Saved-application resume preview (react-pdf): views a PDF saved
+                  in the tracker. The live editor is its own WYSIWYG preview, so
+                  there is no separate compile-preview of the current resume. */}
               <PreviewOverlay
                 isOpen={!!resumePreview}
-                isLoading={false}
-                error=""
                 pdfUrl={resumePreview?.url ?? ""}
                 fileName={resumePreview?.name ?? "resume.pdf"}
                 onClose={() => setResumePreview(null)}
-                onRetry={() => {}}
               />
             </Suspense>
           }
@@ -1089,7 +1075,10 @@ function App() {
             <ResumeTab
               editedResume={editedResume}
               actions={resumeEditorActions}
+              canUndo={canUndoResume}
+              canRedo={canRedoResume}
               dirty={resumeEdited}
+              isWorkspaceBootstrapping={isWorkspaceBootstrapping}
               hasResult={Boolean(result)}
               resultSourceLabel={resultSourceLabel}
               scoreContext={scoreContext}
@@ -1098,6 +1087,7 @@ function App() {
               result={result}
               resumeDiff={resumeDiff}
               docStyle={docStyle}
+              editorPrefs={editorPrefs}
               tailorModes={tailorModes}
               onSetTailorMode={setTailorMode}
               onAddHonestContext={handleAddHonestContext}
@@ -1108,23 +1098,13 @@ function App() {
               jobTarget={materialsJobTarget}
               exportControl={
                 <ExportMenu
-                  templates={templates}
-                  templatesError={templatesError}
-                  selectedTemplateId={selectedTemplateId}
-                  setSelectedTemplateId={setSelectedTemplateId}
-                  selectedTemplate={selectedTemplate}
-                  tectonic={tectonic}
                   canExport={canExportResume}
                   defaultFileBaseName={resumeDownloadName("pdf").replace(/\.pdf$/i, "")}
-                  isDownloadingTex={isDownloadingTex}
-                  isRenderingLatexPdf={isRenderingLatexPdf}
-                  isPreviewLoading={isPreviewLoading}
-                  texStatus={texStatus}
+                  isRenderingPdf={isRenderingPdf}
+                  exportStatus={exportStatus}
                   downloadStatus={downloadStatus}
-                  onDownloadTex={handleDownloadTex}
-                  onDownloadLatexPdf={handleDownloadLatexPdf}
-                  onPreview={handlePreview}
-                  onPrintResume={handlePrintResume}
+                  onDownloadPdf={handleDownloadPdf}
+                  onDownloadResume={handleDownloadResume}
                 />
               }
             />
@@ -1132,28 +1112,30 @@ function App() {
 
 
           {activeOutputTab === "applications" ? (
-            <TrackerTab
-              applications={applications}
-              applicationsPath={applicationsPath}
-              applicationsError={applicationsError}
-              isApplicationsLoading={isApplicationsLoading}
-              pipelineFilter={pipelineFilter}
-              setPipelineFilter={setPipelineFilter}
-              expandedApplicationId={expandedApplicationId}
-              setExpandedApplicationId={setExpandedApplicationId}
-              trackerView={trackerView}
-              setTrackerView={setTrackerView}
-              onUpdateStatus={updateApplicationStatus}
-              onUpdateField={updateApplicationField}
-              onUpdateNotes={updateApplicationNotes}
-              onLoad={handleLoadApplication}
-              onOpenApplication={handleOpenApplicationDetail}
-              onPreviewResume={handlePreviewApplicationResume}
-              onDelete={handleDeleteApplication}
-              onAddApplication={handleAddApplication}
-              onRefresh={refreshApplications}
-              onMergeApplications={mergeApplications}
-            />
+            <Suspense fallback={<p className="pipeline-note" role="status">Loading applications…</p>}>
+              <TrackerTab
+                applications={applications}
+                applicationsPath={applicationsPath}
+                applicationsError={applicationsError}
+                isApplicationsLoading={isApplicationsLoading}
+                pipelineFilter={pipelineFilter}
+                setPipelineFilter={setPipelineFilter}
+                expandedApplicationId={expandedApplicationId}
+                setExpandedApplicationId={setExpandedApplicationId}
+                trackerView={trackerView}
+                setTrackerView={setTrackerView}
+                onUpdateStatus={updateApplicationStatus}
+                onUpdateField={updateApplicationField}
+                onUpdateNotes={updateApplicationNotes}
+                onLoad={handleLoadApplication}
+                onOpenApplication={handleOpenApplicationDetail}
+                onPreviewResume={handlePreviewApplicationResume}
+                onDelete={handleDeleteApplication}
+                onAddApplication={handleAddApplication}
+                onRefresh={refreshApplications}
+                onMergeApplications={mergeApplications}
+              />
+            </Suspense>
           ) : null}
 
           {activeOutputTab === "materials" ? (
@@ -1179,29 +1161,33 @@ function App() {
           ) : null}
 
           {activeOutputTab === "analytics" ? (
-            <AnalyticsTab applications={applications} onOpenApplications={() => setActiveOutputTab("applications")} />
+            <Suspense fallback={<p className="pipeline-note" role="status">Loading analytics…</p>}>
+              <AnalyticsTab applications={applications} onOpenApplications={() => setActiveOutputTab("applications")} />
+            </Suspense>
           ) : null}
         </StudioPane>
       </div>
 
-      <ApplicationModal
-        open={isApplicationModalOpen}
-        application={modalApplicationId ? applications.find((app) => app.id === modalApplicationId) ?? null : null}
-        onClose={() => setIsApplicationModalOpen(false)}
-        onSave={handleSaveApplicationFromModal}
-        onDelete={handleDeleteApplication}
-        onLoad={(app) => {
-          setIsApplicationModalOpen(false);
-          handleLoadApplication(app);
-        }}
-        onPreviewResume={handlePreviewApplicationResume}
-      />
+      {isApplicationModalOpen ? (
+        <Suspense fallback={<ApplicationModalLoading />}>
+          <ApplicationModal
+            open
+            application={modalApplicationId ? applications.find((app) => app.id === modalApplicationId) ?? null : null}
+            onClose={() => setIsApplicationModalOpen(false)}
+            onSave={handleSaveApplicationFromModal}
+            onDelete={handleDeleteApplication}
+            onLoad={(app) => {
+              setIsApplicationModalOpen(false);
+              handleLoadApplication(app);
+            }}
+            onPreviewResume={handlePreviewApplicationResume}
+          />
+        </Suspense>
+      ) : null}
 
       {applyDownloadPrompt ? (
         <ApplyDownloadDialog
           label={applyDownloadPrompt.label}
-          tectonicAvailable={tectonic.available}
-          defaultFormat={defaultExportFormat}
           defaultFileBaseName={resumeDownloadName("pdf").replace(/\.pdf$/i, "")}
           onDownload={handleApplyDownloadPick}
           onSkip={() => {
@@ -1215,12 +1201,10 @@ function App() {
         />
       ) : null}
 
-      {currentResumeText ? (
+      {editedResume ? (
         <ResumePrintLayer
           resume={editedResume}
-          polishedText={currentResumeText}
-          sourceText={resumeText}
-          docStyleVars={docStyle.cssVars}
+          docStyle={docStyle.style}
         />
       ) : null}
     </div>

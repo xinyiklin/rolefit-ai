@@ -1,74 +1,59 @@
 import { useEffect, useRef, useState } from "react";
-import { Check, ChevronDown, Download, Eye, FileCode2, X } from "lucide-react";
-import type { TectonicStatus, Template } from "../hooks/useTemplates";
-import type { ExportFormat } from "../lib/exportPrefs";
+import { Check, ChevronDown, Download, FileJson, X } from "lucide-react";
+
+// The owned engine's PDF is the only file-export format (D014). Kept as a named
+// union so EXPORT_META / the rename target stay self-documenting.
+type ExportFormat = "pdf-engine";
 
 // File-saving exports route through a rename dialog: the system names the file
 // first (`defaultFileBaseName`), the user can edit it, then confirm. Preview is
-// not a file-save, so it bypasses it. `pdf-clean` prints through the browser's
-// own Save-as-PDF dialog; we still collect a name so document.title (which seeds
-// that dialog's suggested filename) reflects the user's choice.
-// `ExportFormat` is shared with the post-Apply download prompt (see exportPrefs).
+// not a file-save, so it bypasses it.
 export const EXPORT_META: Record<ExportFormat, { ext: string; label: string }> = {
-  "pdf-latex": { ext: "pdf", label: "PDF (LaTeX)" },
-  "pdf-clean": { ext: "pdf", label: "PDF (clean)" },
-  tex: { ext: "tex", label: "LaTeX source" }
+  "pdf-engine": { ext: "pdf", label: "PDF" }
 };
 
+// The `.resume` save isn't part of ExportFormat (PDF is the only file-export
+// format) — it's a plain client-side save button, so its rename-dialog metadata
+// lives locally here.
+const RESUME_EXT = "resume";
+const RESUME_LABEL = ".resume";
+
+type RenameTarget = ExportFormat | "resume";
+
 type ExportMenuProps = {
-  templates: Template[];
-  templatesError: string;
-  selectedTemplateId: string;
-  setSelectedTemplateId: (id: string) => void;
-  selectedTemplate: Template | null;
-  tectonic: TectonicStatus;
   // True once a resume is exportable: a structured editor model exists (loaded
   // base / upload) or a polish produced text. Exports do not require an AI run.
   canExport: boolean;
   // System-proposed file name (extension excluded) — pre-fills the rename
   // dialog. e.g. "Xinyi_Lin_Stripe_Resume".
   defaultFileBaseName: string;
-  isDownloadingTex: boolean;
-  isRenderingLatexPdf: boolean;
-  isPreviewLoading: boolean;
-  texStatus: string;
+  isRenderingPdf: boolean;
+  exportStatus: string;
   downloadStatus: string;
   // The download handlers accept the user's chosen base name (extension
   // excluded); when omitted they fall back to the system name.
-  onDownloadTex: (fileBaseName?: string) => void | Promise<void>;
-  onDownloadLatexPdf: (fileBaseName?: string) => void | Promise<void>;
-  onPreview: () => void | Promise<void>;
-  onPrintResume: (fileBaseName?: string) => void;
+  onDownloadPdf: (fileBaseName?: string) => void | Promise<void>;
+  onDownloadResume: (fileBaseName?: string) => void;
 };
 
 export function ExportMenu({
-  templates,
-  templatesError,
-  selectedTemplateId,
-  setSelectedTemplateId,
-  selectedTemplate,
-  tectonic,
   canExport,
   defaultFileBaseName,
-  isDownloadingTex,
-  isRenderingLatexPdf,
-  isPreviewLoading,
-  texStatus,
+  isRenderingPdf,
+  exportStatus,
   downloadStatus,
-  onDownloadTex,
-  onDownloadLatexPdf,
-  onPreview,
-  onPrintResume
+  onDownloadPdf,
+  onDownloadResume
 }: ExportMenuProps) {
   // Rename-at-save: which export was requested, plus the in-flight file name.
-  const [renameFormat, setRenameFormat] = useState<ExportFormat | null>(null);
+  const [renameFormat, setRenameFormat] = useState<RenameTarget | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const [isOpen, setIsOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const renameInputRef = useRef<HTMLInputElement>(null);
 
   // Open the rename dialog for a save action, pre-filled with the system name.
-  function requestExport(format: ExportFormat) {
+  function requestExport(format: RenameTarget) {
     setRenameValue(defaultFileBaseName);
     setRenameFormat(format);
     setIsOpen(false);
@@ -85,9 +70,8 @@ export function ExportMenu({
     // extension. An empty field falls back to the system name there.
     const base = renameValue.trim() || undefined;
     setRenameFormat(null);
-    if (format === "pdf-latex") onDownloadLatexPdf(base);
-    else if (format === "pdf-clean") onPrintResume(base);
-    else if (format === "tex") onDownloadTex(base);
+    if (format === "pdf-engine") onDownloadPdf(base);
+    else onDownloadResume(base);
   }
 
   // Focus + select the file name when the dialog opens so renaming is one move.
@@ -114,130 +98,68 @@ export function ExportMenu({
     };
   }, [isOpen]);
 
+  const renameLabel = renameFormat === "resume" ? RESUME_LABEL : renameFormat ? EXPORT_META[renameFormat].label : "";
+  const renameExt = renameFormat === "resume" ? RESUME_EXT : renameFormat ? EXPORT_META[renameFormat].ext : "";
+
   return (
-    <div className="export-menu" ref={menuRef} aria-label="Render and export">
-      <button
-        className="ghost-button is-compact"
-        type="button"
-        disabled={!canExport || !tectonic.available || isPreviewLoading}
-        onClick={onPreview}
-        title={
-          isPreviewLoading
-            ? "Compiling PDF, please wait"
-            : !tectonic.available
-            ? "Install Tectonic to preview LaTeX PDFs locally (brew install tectonic)"
-            : canExport
-            ? `Preview PDF via Tectonic + ${selectedTemplate?.name ?? "template"}`
-            : "Load a resume to enable exports"
-        }
-      >
-        <Eye size={14} aria-hidden="true" />
-        <span>{isPreviewLoading ? "Compiling…" : "Preview"}</span>
-      </button>
+    <div className="export-menu" ref={menuRef} aria-label="Export">
       <button
         className="secondary-button is-compact export-menu__trigger"
         type="button"
         onClick={() => setIsOpen((open) => !open)}
         aria-haspopup="menu"
         aria-expanded={isOpen}
-        aria-label="Export"
-        title="Export"
+        title="Export the resume as PDF, or save it as a re-loadable .resume file"
       >
         <Download size={14} aria-hidden="true" />
+        <span>Export</span>
         <ChevronDown size={13} aria-hidden="true" />
       </button>
 
       {isOpen ? (
         <div className="export-menu__popover" role="menu" aria-label="Export options">
-          {templates.length > 1 ? (
-            <label className="export-menu__template" htmlFor="latex-template">
-              <span>
-                <FileCode2 size={14} aria-hidden="true" />
-                Template
-              </span>
-              <select
-                id="latex-template"
-                value={selectedTemplateId}
-                onChange={(event) => setSelectedTemplateId(event.target.value)}
-              >
-                {templates.map((template) => (
-                  <option key={template.id} value={template.id}>
-                    {template.name}
-                  </option>
-                ))}
-              </select>
-              {selectedTemplate ? <small>{selectedTemplate.description}</small> : null}
-            </label>
-          ) : null}
-
-          {templatesError ? <small className="export-menu__hint warn">{templatesError}</small> : null}
-
           <div className="export-menu__actions">
-            {/* Utility export */}
-            <button
-              className="ghost-button is-compact"
-              type="button"
-              disabled={!canExport || isDownloadingTex}
-              onClick={() => requestExport("tex")}
-              title={
-                isDownloadingTex
-                  ? "Rendering LaTeX source, please wait"
-                  : canExport
-                  ? "Download the current resume as LaTeX source for the selected template"
-                  : "Load a resume to enable exports"
-              }
-            >
-              <FileCode2 size={14} aria-hidden="true" />
-              <span>{isDownloadingTex ? "Rendering…" : ".tex"}</span>
-            </button>
-
-            {/* PDF destination actions */}
+            {/* PDF — typeset by the built-in engine, fully client-side (D014). */}
             <button
               className="ghost-button is-compact pdf-action pdf-action--canonical"
               type="button"
-              disabled={!canExport || !tectonic.available || isRenderingLatexPdf}
-              onClick={() => requestExport("pdf-latex")}
+              disabled={!canExport || isRenderingPdf}
+              onClick={() => requestExport("pdf-engine")}
               title={
-                isRenderingLatexPdf
-                  ? "Compiling PDF via Tectonic, please wait"
-                  : !tectonic.available
-                  ? "Install Tectonic to render LaTeX PDFs locally (brew install tectonic)"
+                isRenderingPdf
+                  ? "Typesetting PDF, please wait"
                   : canExport
-                  ? `Render PDF via Tectonic + ${selectedTemplate?.name ?? "template"}`
+                  ? "Download the resume as PDF (typeset in-app; searchable text, clickable links)"
                   : "Load a resume to enable exports"
               }
             >
               <Download size={14} aria-hidden="true" />
-              <span>{isRenderingLatexPdf ? "Compiling…" : "PDF · LaTeX"}</span>
+              <span>{isRenderingPdf ? "Typesetting…" : "PDF"}</span>
             </button>
+
+            {/* .resume — a lossless JSON save of the structured editor model,
+                re-loadable from the Resume menu's upload. */}
             <button
-              className="ghost-button is-compact pdf-action"
+              className="ghost-button is-compact"
               type="button"
               disabled={!canExport}
-              onClick={() => requestExport("pdf-clean")}
+              onClick={() => requestExport("resume")}
               title={
                 canExport
-                  ? "Opens your browser's print dialog — choose Save as PDF (no LaTeX needed)"
+                  ? "Download resume data (.resume) — re-loadable save"
                   : "Load a resume to enable exports"
               }
             >
-              <Download size={14} aria-hidden="true" />
-              <span>PDF · clean</span>
+              <FileJson size={14} aria-hidden="true" />
+              <span>{RESUME_LABEL}</span>
             </button>
           </div>
 
-          {texStatus || downloadStatus ? (
+          {exportStatus || downloadStatus ? (
             <div className="export-menu__status" role="status">
-              {texStatus ? <span>{texStatus}</span> : null}
-              {texStatus && downloadStatus ? <span className="sep">·</span> : null}
+              {exportStatus ? <span>{exportStatus}</span> : null}
+              {exportStatus && downloadStatus ? <span className="sep">·</span> : null}
               {downloadStatus ? <span>{downloadStatus}</span> : null}
-            </div>
-          ) : null}
-          {!tectonic.available ? (
-            <div className="export-menu__tip">
-              <span>
-                Install <code>brew install tectonic</code> for in-app PDF preview and LaTeX export.
-              </span>
             </div>
           ) : null}
         </div>
@@ -255,7 +177,7 @@ export function ExportMenu({
           >
             <header className="rename-dialog__head">
               <Download size={14} aria-hidden="true" />
-              <span>Save {EXPORT_META[renameFormat].label}</span>
+              <span>Save {renameLabel}</span>
             </header>
             <label className="rename-dialog__field">
               <span className="rename-dialog__label">File name</span>
@@ -273,14 +195,12 @@ export function ExportMenu({
                   spellCheck={false}
                 />
                 <span className="rename-dialog__ext" aria-hidden="true">
-                  .{EXPORT_META[renameFormat].ext}
+                  .{renameExt}
                 </span>
               </span>
             </label>
             <p className="rename-dialog__hint">
-              {renameFormat === "pdf-clean"
-                ? "Your browser's Save-as-PDF dialog opens next, pre-filled with this name."
-                : "The system named this for you — rename it before saving if you like."}
+              The system named this for you — rename it before saving if you like.
             </p>
             <footer className="rename-dialog__actions">
               <button type="button" className="ghost-button is-compact" onClick={cancelRename}>
@@ -289,7 +209,7 @@ export function ExportMenu({
               </button>
               <button type="submit" className="secondary-button is-compact">
                 <Check size={12} aria-hidden="true" />
-                {renameFormat === "pdf-clean" ? "Continue" : "Save"}
+                Save
               </button>
             </footer>
           </form>

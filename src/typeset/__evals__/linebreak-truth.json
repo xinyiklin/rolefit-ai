@@ -1,0 +1,37 @@
+{
+  "note": "Tectonic truth: end word of the first wrapped line of each paragraph (raggedright, \\small = 9.963bp, column = 505.2bp). Regenerate: compile the inputs (with <b> as \\textbf) in an 11pt article + lmodern + fullpage[empty] + 0.5in margins at \\hsize 507.09 TeX pt, extract first-line end words from the PDF.",
+  "columnBp": 505.2,
+  "sizeBp": 9.963,
+  "cases": [
+    {
+      "input": "Built and maintained a continuous integration pipeline spanning multiple repositories and delivering artifacts for authentication, validation, and facility isolation across several environments.",
+      "ends": [
+        "for"
+      ]
+    },
+    {
+      "input": "Implemented a provider adapter over hosted backends, normalizing model and base-URL configuration, timeouts, and JSON parsing, with a deterministic local rewriter fallback for offline work.",
+      "ends": [
+        "timeouts,"
+      ]
+    },
+    {
+      "input": "Forked the editor into a self-hosted resume tool, containerized with <b>Docker</b> and deployed to <b>AWS EC2</b> behind a custom domain with HTTPS everywhere by default.",
+      "ends": [
+        "a"
+      ]
+    },
+    {
+      "input": "Efficient office workflows affirm difficult scaffolding effects, offering fifty affordable configuration profiles for staff efficiency and effortless afternoon handoffs.",
+      "ends": [
+        "staff"
+      ]
+    },
+    {
+      "input": "Delivered <b>schema-validated, section-scoped suggestions</b> as accept/edit/discard diffs, with server-owned scoring that never grades above grounded evidence in reviews.",
+      "ends": [
+        "server-owned"
+      ]
+    }
+  ]
+}

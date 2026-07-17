@@ -1,6 +1,6 @@
 import { useCallback, useState } from "react";
 import { buildStageRequestFields, type StageConfig } from "../lib/aiRequest";
-import { ApiError, classifyFailure } from "../lib/failures";
+import { AI_UNAVAILABLE, ApiError, classifyFailure } from "../lib/failures";
 import type { StageState } from "../sections/PolishProgress";
 import type { StageAiUsage } from "../lib/aiUsage";
 
@@ -24,13 +24,22 @@ type UseCoverLetterArgs = {
   onUsage?: (usage: StageAiUsage) => void;
 };
 
+export type PolishCoverResult = {
+  status: "off" | "ok" | "failed";
+  coverLetterText?: string;
+  provider?: string;
+  model?: string;
+  reasoningEffort?: string;
+  attempts?: number;
+};
+
 // Owns the cover letter as a single piece of state, generated ON DEMAND from the
 // current resume + job via /api/cover-letter — no full polish required. The
-// polish path also feeds this state (App calls setCoverLetterText when a Tailor
-// run drafts one), so the Materials view, Copy, and save-to-application all read
-// one source. There is no local fallback letter (D011): when the AI letter is
-// blanked (server grounding backstop) or the call fails, the card fails plainly
-// with Retry and any existing letter is left untouched.
+// polish path also feeds this state through applyPolishCoverResult, so the
+// Materials view, Copy, and save-to-application all read one source. There is no
+// local fallback letter (D011): when the AI letter is blanked (server grounding
+// backstop) or the call fails, the card fails plainly with Retry and any existing
+// letter is left untouched.
 export function useCoverLetter({
   currentResumeText,
   jobText,
@@ -60,6 +69,50 @@ export function useCoverLetter({
     setCoverStatus("");
     setCoverProgress({ status: "idle" });
   }, []);
+
+  // Consume the optional cover-letter outcome returned by a combined Polish
+  // request. This is deliberately separate from applyCoverLetter: workspace
+  // restore/clear should reset stale status cards, while an AI outcome needs to
+  // show success or failure and retain provenance. A failed combined cover pass
+  // never clears an existing letter; Retry continues to use the focused
+  // on-demand generator below.
+  const applyPolishCoverResult = useCallback((result: PolishCoverResult) => {
+    if (result.status === "off") return;
+
+    const text = result.coverLetterText?.trim() ?? "";
+    if (result.status === "ok" && text) {
+      setCoverLetterText(text);
+      setCoverStatus(
+        `Drafted a cover letter${result.model ? ` using ${result.model}` : ""}. Fill in any [add: …] placeholders before sending.`
+      );
+      setCoverProgress({ status: "done", note: "Drafted with AI", noteTone: "ok" });
+      onUsage?.({
+        source: "ai",
+        ...(result.provider ? { provider: result.provider } : {}),
+        ...(result.model ? { model: result.model } : {}),
+        ...(result.reasoningEffort ? { reasoningEffort: result.reasoningEffort } : {}),
+        ...(typeof result.attempts === "number" && Number.isFinite(result.attempts) ? { attempts: result.attempts } : {}),
+        completedAt: new Date().toISOString()
+      });
+      return;
+    }
+
+    // Treat a contradictory "ok" + empty payload as failed too. The message is
+    // intentionally generic: the server logs the detailed secondary-pass
+    // failure, while the UI only needs to say that the existing draft was kept.
+    setCoverStatus("The cover letter could not be generated during Polish. Your existing draft was kept; retry to try again.");
+    setCoverProgress({
+      status: "failed",
+      errorHeadline: AI_UNAVAILABLE,
+      error: "Polish finished, but the cover letter step did not return a usable draft."
+    });
+    onUsage?.({
+      source: "none",
+      requestedProvider: aiRequest.provider,
+      requestedModel: aiRequest.selectedModel === "custom" ? aiRequest.customModel.trim() : aiRequest.selectedModel,
+      completedAt: new Date().toISOString()
+    });
+  }, [aiRequest, onUsage]);
 
   const dismissCoverProgress = useCallback(() => setCoverProgress({ status: "idle" }), []);
 
@@ -136,6 +189,7 @@ export function useCoverLetter({
   return {
     coverLetterText,
     applyCoverLetter,
+    applyPolishCoverResult,
     coverStatus,
     isGeneratingCover,
     handleGenerateCoverLetter,

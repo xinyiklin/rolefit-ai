@@ -14,10 +14,10 @@
  * control between two owners. polishAbortRef stays internal (only
  * handlePolish/retryStage/stopPolish touch it).
  *
- * result/editedResume/tailorModes/jobDescription/the tailor+review StageConfigs/
- * etc. stay in App (they're shared far beyond this flow — the editor, scoring,
- * exports, autosave), so they arrive via args; duplicateGuard and
- * includeCoverLetter likewise arrive as dependencies rather than being
+ * editedResume/tailorModes/jobDescription/the tailor+review StageConfigs/etc.
+ * stay in App (they're shared far beyond this flow — the editor, scoring,
+ * exports, autosave), so they arrive via args; duplicateGuard and the focused
+ * cover-result callback likewise arrive as dependencies rather than being
  * re-owned here.
  */
 import { useRef, useState } from "react";
@@ -30,6 +30,7 @@ import type { StageAiUsage } from "../lib/aiUsage";
 import type { ResumeData } from "../lib/resumeData";
 import type { PolishProgressState } from "../sections/PolishProgress";
 import type { OutputTab } from "../sections/shared";
+import type { PolishCoverResult } from "./useCoverLetter";
 
 function idleProgress(): PolishProgressState {
   return {
@@ -41,6 +42,15 @@ function idleProgress(): PolishProgressState {
 type PolishContext = {
   scopedResumeText: string;
   commonBody: Record<string, unknown>;
+  reviewFingerprint: string;
+};
+
+type ReviewSuggestions = NonNullable<PolishedResume["suggestedChanges"]>;
+type ReviewTarget = "current" | "proposal";
+type ReviewSnapshot = {
+  target: ReviewTarget;
+  suggestions: ReviewSuggestions;
+  fingerprint: string;
 };
 
 type UsePolishPipelineArgs = {
@@ -57,14 +67,13 @@ type UsePolishPipelineArgs = {
   polishStages: "tailor" | "review" | "both";
   tailor: StageConfig;
   review: StageConfig;
-  result: PolishedResume | null;
   setResult: (updater: PolishedResume | null | ((prev: PolishedResume | null) => PolishedResume | null)) => void;
-  applyCoverLetter: (text: string) => void;
+  applyPolishCoverResult: (result: PolishCoverResult) => void;
   setActiveOutputTab: (tab: OutputTab) => void;
   setPipelineAiUsage: (updater: (prev: Record<string, StageAiUsage>) => Record<string, StageAiUsage>) => void;
   setPolishStatus: (value: string) => void;
   resetExportStatuses: () => void;
-  setTexStatus: (value: string) => void;
+  setExportStatus: (value: string) => void;
   confirmDuplicateBeforePolish: () => Promise<boolean>;
 };
 
@@ -79,14 +88,13 @@ export function usePolishPipeline({
   polishStages,
   tailor,
   review,
-  result,
   setResult,
-  applyCoverLetter,
+  applyPolishCoverResult,
   setActiveOutputTab,
   setPipelineAiUsage,
   setPolishStatus,
   resetExportStatuses,
-  setTexStatus,
+  setExportStatus,
   confirmDuplicateBeforePolish
 }: UsePolishPipelineArgs) {
   const [isPolishing, setIsPolishing] = useState(false);
@@ -101,6 +109,9 @@ export function usePolishPipeline({
   // run in handlePolish/retryStage; both stages share one controller so a Stop
   // during either tailor or review cancels the whole run.
   const polishAbortRef = useRef<AbortController | null>(null);
+  // Snapshot the exact target + suggestion payload handed to the most recent
+  // review attempt. Null means there is no legitimate Review retry for this run.
+  const reviewSnapshotRef = useRef<ReviewSnapshot | null>(null);
 
   // Build the per-run context, or return null after setting a guard status.
   // Guards (no editable resume, empty/too-short tailor scope) match the original
@@ -138,7 +149,17 @@ export function usePolishPipeline({
       customInstructions
     };
 
-    return { scopedResumeText, commonBody };
+    // Retry provenance: bind a Review attempt to the exact document scope and
+    // evidence inputs it audited. Provider settings may intentionally change for
+    // a retry, but stale suggestions must never be re-applied to a rebuilt scope.
+    const reviewFingerprint = JSON.stringify({
+      tailorScope,
+      jobText: jobDescription,
+      honestContext: requestHonestContext,
+      customInstructions
+    });
+
+    return { scopedResumeText, commonBody, reviewFingerprint };
   }
 
   // Compute the reviewer attribution string from a server response (non-empty
@@ -179,7 +200,7 @@ export function usePolishPipeline({
   // with stages:"tailor", builds a result WITHOUT aiScore/strictReview (so the
   // fit verdict shows "Estimated"/local, not "AI-judged"). Returns the
   // server-sanitized suggestedChanges array on success, null on failure.
-  async function runTailorStage(ctx: PolishContext, signal?: AbortSignal): Promise<PolishedResume["suggestedChanges"] | null> {
+  async function runTailorStage(ctx: PolishContext, signal?: AbortSignal): Promise<ReviewSuggestions | null> {
     const { scopedResumeText, commonBody } = ctx;
     setPolishProgress((prev) => ({ ...prev, tailor: { status: "running" }, review: { status: "idle" } }));
     try {
@@ -191,7 +212,7 @@ export function usePolishPipeline({
       });
       const data = await response.json() as Record<string, unknown>;
       if (!response.ok) throw new ApiError((data.error as string) ?? "AI tailor failed.", response.status);
-      const suggestedChanges: PolishedResume["suggestedChanges"] = Array.isArray(data.suggestedChanges) ? data.suggestedChanges : [];
+      const suggestedChanges: ReviewSuggestions = Array.isArray(data.suggestedChanges) ? data.suggestedChanges : [];
       if (!data.polishedText && !suggestedChanges.length) {
         throw new Error("AI response did not include usable resume suggestions.");
       }
@@ -202,7 +223,18 @@ export function usePolishPipeline({
         suggestedChanges.length ? currentResumeText || scopedPolishedText : scopedPolishedText,
         jobDescription
       );
-      const coverText = includeCoverLetter ? ((data.coverLetterText as string | undefined) || undefined) : undefined;
+      const legacyCoverText = typeof data.coverLetterText === "string" ? data.coverLetterText.trim() : "";
+      const coverStatus: PolishCoverResult["status"] =
+        data.coverStatus === "off" || data.coverStatus === "ok" || data.coverStatus === "failed"
+          ? data.coverStatus
+          : !includeCoverLetter
+            ? "off"
+            : legacyCoverText
+              ? "ok"
+              : "failed";
+      const coverText = coverStatus === "ok"
+        ? legacyCoverText || undefined
+        : undefined;
       setResult({
         ...analysis,
         polishedText: suggestedChanges.length ? currentResumeText || scopedPolishedText : scopedPolishedText,
@@ -223,9 +255,16 @@ export function usePolishPipeline({
         reviewedBy: undefined,
         reviewStatus: undefined
       });
-      // Feed the shared cover-letter state so Materials/Copy/save read one source
-      // whether the letter came from the polish pass or on-demand generation.
-      if (coverText) applyCoverLetter(coverText);
+      // Feed the shared cover-letter owner the explicit secondary-pass outcome.
+      // It shows success/failure in Materials + the task dock and preserves any
+      // existing letter when the optional combined cover pass fails.
+      applyPolishCoverResult({
+        status: coverStatus,
+        coverLetterText: coverText,
+        ...(typeof data.provider === "string" && data.provider ? { provider: data.provider } : {}),
+        ...(typeof data.model === "string" && data.model ? { model: data.model } : {}),
+        ...(typeof data.reasoningEffort === "string" && data.reasoningEffort ? { reasoningEffort: data.reasoningEffort } : {})
+      });
       setActiveOutputTab("resume");
       setPolishProgress((prev) => ({ ...prev, tailor: { status: "done", note: "Tailored with AI", noteTone: "ok" } }));
       const tailorUsage: StageAiUsage = {
@@ -238,10 +277,7 @@ export function usePolishPipeline({
       };
       setPipelineAiUsage((prev) => ({
         ...prev,
-        tailor: tailorUsage,
-        // The cover letter from this same run shares the tailor call's
-        // attribution (it exists only when the AI actually produced it).
-        ...(coverText ? { cover: tailorUsage } : {})
+        tailor: tailorUsage
       }));
       return suggestedChanges;
     } catch (error) {
@@ -269,23 +305,25 @@ export function usePolishPipeline({
     }
   }
 
-  // Stage runner: Review. Sets progress.review=running, posts with stages:"review"
-  // and the sanitized suggestedChanges (from the prior tailor, or [] for
-  // review-only). Merges review data (aiScore, strictReview) into the current
-  // result via setResult; for review-only with no prior result it synthesizes a
-  // base result first so the verdict describes the displayed resume.
+  // Stage runner: Review. Sets progress.review=running, snapshots and posts an
+  // explicit target plus its exact suggestedChanges input: the just-sanitized
+  // Tailor proposal in Both mode, or [] when a standalone Review audits the
+  // current edited draft as-is. A current-draft success replaces any stale prior
+  // proposal result before merging the new review fields; a proposal success
+  // preserves the Tailor result already on screen.
   async function runReviewStage(
     ctx: PolishContext,
-    suggestions: PolishedResume["suggestedChanges"],
+    snapshot: ReviewSnapshot,
     signal?: AbortSignal
   ): Promise<void> {
     const { scopedResumeText, commonBody } = ctx;
+    reviewSnapshotRef.current = snapshot;
     setPolishProgress((prev) => ({ ...prev, review: { status: "running" } }));
     try {
       const response = await fetch("/api/polish", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...commonBody, stages: "review", suggestedChanges: suggestions ?? [] }),
+        body: JSON.stringify({ ...commonBody, stages: "review", suggestedChanges: snapshot.suggestions }),
         signal
       });
       const data = await response.json() as Record<string, unknown>;
@@ -316,8 +354,10 @@ export function usePolishPipeline({
       }
       const reviewedBy = computePolishReviewedBy(data);
       setResult((prev) => {
-        // review-only (no prior tailor): synthesize a base result first.
-        if (!prev) {
+        // Standalone Review always describes the current edited draft, never a
+        // stale proposal retained from an earlier Tailor run. Proposal review
+        // keeps the existing Tailor result, including its zero-suggestion case.
+        if (snapshot.target === "current" || !prev) {
           const baseAnalysis = analyzeResumeText(currentResumeText || scopedResumeText, jobDescription);
           const baseResult: PolishedResume = {
             ...baseAnalysis,
@@ -400,6 +440,9 @@ export function usePolishPipeline({
     // burning a polish run on it.
     if (!(await confirmDuplicateBeforePolish())) return;
 
+    // A fresh run owns a fresh retry history. The next Review attempt (if any)
+    // installs its own current/proposal snapshot before making the request.
+    reviewSnapshotRef.current = null;
     const controller = new AbortController();
     polishAbortRef.current = controller;
     const { signal } = controller;
@@ -408,7 +451,7 @@ export function usePolishPipeline({
     setPolishProgressVisible(true);
     setPolishStatus("");
     resetExportStatuses();
-    setTexStatus("");
+    setExportStatus("");
     // A fresh full run must not show stale prior-run provider attribution while
     // the new run is in flight — the stage runners below repopulate whichever
     // keys they actually run.
@@ -416,7 +459,9 @@ export function usePolishPipeline({
       const next = { ...prev };
       delete next.tailor;
       delete next.review;
-      delete next.cover;
+      // Preserve provenance for an existing letter when this run is not asking
+      // the Tailor stage to replace it. Review-only never generates a cover.
+      if (includeCoverLetter && polishStages !== "review") delete next.cover;
       return next;
     });
 
@@ -424,22 +469,23 @@ export function usePolishPipeline({
       if (polishStages === "tailor") {
         await runTailorStage(ctx, signal);
       } else if (polishStages === "review") {
-        // Standalone review audits the current proposal when one exists (so the
-        // verdict describes the displayed resume), else the base resume.
-        await runReviewStage(ctx, result?.suggestedChanges ?? [], signal);
+        // A fresh standalone Review audits the CURRENT edited draft as-is. Old
+        // result suggestions may describe a prior draft and must not be silently
+        // re-applied or re-judged.
+        await runReviewStage(ctx, {
+          target: "current",
+          suggestions: [],
+          fingerprint: ctx.reviewFingerprint
+        }, signal);
       } else {
         // both: tailor first, then review only if tailor succeeded.
         const suggestions = await runTailorStage(ctx, signal);
         if (suggestions !== null) {
-          await runReviewStage(ctx, suggestions, signal);
-        } else {
-          // Tailor failed (there is no local tailor fallback anymore — D011),
-          // so review has nothing to audit: mark it failed alongside rather
-          // than pretending a local estimate stands in.
-          setPolishProgress((prev) => ({
-            ...prev,
-            review: { status: "failed", errorHeadline: "Skipped", error: "Tailor did not complete, so there was nothing to review." }
-          }));
+          await runReviewStage(ctx, {
+            target: "proposal",
+            suggestions,
+            fingerprint: ctx.reviewFingerprint
+          }, signal);
         }
       }
     } catch (error) {
@@ -458,13 +504,31 @@ export function usePolishPipeline({
 
   // Retry a failed stage — a thin dispatcher over the shared stage runners. For
   // "tailor": re-runs the tailor stage (and if polishStages === "both" and it
-  // succeeds, runs review). For "review": re-runs review with the current
-  // result's suggestedChanges (the server-sanitized list from the prior tailor —
-  // never re-derives from scope).
+  // succeeds, runs review). For "review": replays the exact suggestion payload
+  // and target captured by the failed review attempt — the Both proposal stays
+  // a proposal, while standalone Review stays a current-draft-as-is audit.
   async function retryStage(stage: "tailor" | "review") {
     if (isPolishing) return;
+    const reviewSnapshot = stage === "review" ? reviewSnapshotRef.current : null;
+    if (stage === "review" && !reviewSnapshot) {
+      setPolishStatus("There is no review attempt to retry. Start a new Review instead.");
+      return;
+    }
     const ctx = buildPolishContext();
     if (!ctx) return;
+    if (reviewSnapshot && reviewSnapshot.fingerprint !== ctx.reviewFingerprint) {
+      reviewSnapshotRef.current = null;
+      setPolishStatus("The resume or review inputs changed. Start a new Review instead of retrying the stale proposal.");
+      setPolishProgress((prev) => ({
+        ...prev,
+        review: {
+          status: "failed",
+          errorHeadline: "Inputs changed",
+          error: "Start a new Review so it audits the current resume and job inputs."
+        }
+      }));
+      return;
+    }
 
     const controller = new AbortController();
     polishAbortRef.current = controller;
@@ -476,7 +540,7 @@ export function usePolishPipeline({
       const next = { ...prev };
       if (stage === "tailor") {
         delete next.tailor;
-        delete next.cover;
+        if (includeCoverLetter) delete next.cover;
       } else {
         delete next.review;
       }
@@ -487,12 +551,16 @@ export function usePolishPipeline({
         const suggestions = await runTailorStage(ctx, signal);
         // If polishStages === "both", auto-run review after a successful tailor retry.
         if (suggestions !== null && polishStages === "both") {
-          await runReviewStage(ctx, suggestions, signal);
+          await runReviewStage(ctx, {
+            target: "proposal",
+            suggestions,
+            fingerprint: ctx.reviewFingerprint
+          }, signal);
         }
       } else {
-        // stage === "review": reuse the server-sanitized suggestedChanges from
-        // the current result (never re-derives from tailorScope).
-        await runReviewStage(ctx, result?.suggestedChanges ?? [], signal);
+        // Guarded above; keep this branch explicit so a future refactor cannot
+        // silently fall back to an empty/stale payload.
+        if (reviewSnapshot) await runReviewStage(ctx, reviewSnapshot, signal);
       }
     } catch (error) {
       if (signal.aborted) handlePolishStopped();

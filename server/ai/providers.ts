@@ -22,6 +22,8 @@ type AuditRequestBody = {
   auditReasoningEffort?: unknown;
 };
 
+type ReviewOnlyRequestBody = ProviderRequestBody & AuditRequestBody;
+
 // The resolved per-request provider config the routes destructure. reasoningEffort
 // is narrowed to string at the return (the null case throws before returning).
 export type ResolvedProviderConfig = {
@@ -34,9 +36,16 @@ export type ResolvedProviderConfig = {
 
 export function getDefaultProvider(): string {
   // No explicit AI_PROVIDER → default to the zero-per-token-cost Claude CLI
-  // (subscription-backed). normalizeProvider still coerces unknown strings to
-  // "openai", so only the "nothing specified" default flips here.
-  return normalizeProvider(process.env.AI_PROVIDER || "claude-cli");
+  // (subscription-backed). A non-empty typo must fail closed rather than silently
+  // selecting paid OpenAI.
+  const configured = String(process.env.AI_PROVIDER ?? "").trim();
+  if (configured && !isKnownProvider(configured)) {
+    throw new UserSafeAiError(
+      `Unknown AI_PROVIDER "${configured.slice(0, 40)}". Set it to a supported provider or remove it to use Claude Code.`,
+      400
+    );
+  }
+  return normalizeProvider(configured || "claude-cli");
 }
 
 export function getDefaultModel(): string {
@@ -66,8 +75,8 @@ export function providerLabel(provider: string): string {
   );
 }
 
-// Every provider id the app understands. "openai" is the default any unknown
-// value coerces to, so it is also the membership baseline for isKnownProvider().
+// Every provider id the app understands. Public request/default resolvers reject
+// unknown non-empty values before normalizeProvider is called.
 const KNOWN_PROVIDERS = new Set([
   "openai",
   "anthropic",
@@ -87,6 +96,15 @@ const KNOWN_PROVIDERS = new Set([
 // reviewer provider with it. Not part of the module's public surface.
 function isKnownProvider(value: unknown): boolean {
   return KNOWN_PROVIDERS.has(String(value ?? "").trim().toLowerCase());
+}
+
+function isExactLoopbackBaseUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return ["localhost", "127.0.0.1", "[::1]", "::1"].includes(url.hostname.toLowerCase());
+  } catch {
+    return false;
+  }
 }
 
 export function normalizeProvider(provider: unknown): string {
@@ -132,22 +150,20 @@ function providerDefaultModel(provider: string): string {
 
 function providerApiKey(provider: string, requestApiKey: string): string {
   if (requestApiKey) return requestApiKey;
-  return (
-    {
-      openai: process.env.OPENAI_API_KEY,
-      anthropic: process.env.ANTHROPIC_API_KEY,
-      gemini: process.env.GEMINI_API_KEY,
-      openrouter: process.env.OPENROUTER_API_KEY,
-      groq: process.env.GROQ_API_KEY,
-      together: process.env.TOGETHER_API_KEY,
-      mistral: process.env.MISTRAL_API_KEY,
-      "openai-compatible": process.env.AI_API_KEY || process.env.OPENAI_API_KEY,
-      local: process.env.AI_API_KEY
-    }[provider] ||
-    process.env.AI_API_KEY ||
-    process.env.OPENAI_API_KEY ||
-    ""
-  );
+  // Credential boundary: never let an OpenAI key bleed into another vendor or
+  // into a loopback local server merely because it is present in the process.
+  const providerSpecific = {
+    openai: process.env.OPENAI_API_KEY,
+    anthropic: process.env.ANTHROPIC_API_KEY,
+    gemini: process.env.GEMINI_API_KEY,
+    openrouter: process.env.OPENROUTER_API_KEY,
+    groq: process.env.GROQ_API_KEY,
+    together: process.env.TOGETHER_API_KEY,
+    mistral: process.env.MISTRAL_API_KEY,
+    "openai-compatible": process.env.OPENAI_COMPATIBLE_API_KEY,
+    local: process.env.LOCAL_AI_API_KEY
+  }[provider];
+  return providerSpecific || process.env.AI_API_KEY || "";
 }
 
 function providerBaseUrl(provider: string, requestBaseUrl: unknown): string {
@@ -170,7 +186,17 @@ function providerBaseUrl(provider: string, requestBaseUrl: unknown): string {
 // (handled by each route's catch) on a missing key, bad model, or unsupported
 // CLI effort. Shared by /api/polish and /api/application-answers.
 export function resolveProviderRequest(body: ProviderRequestBody): ResolvedProviderConfig {
-  const provider = normalizeProvider(body.provider || getDefaultProvider());
+  const requestedProvider = String(body.provider ?? "").trim();
+  // An omitted provider keeps the headless/default path. An explicitly supplied
+  // typo must not silently become OpenAI: that can select a paid provider the
+  // caller never intended and makes the resulting key/model error misleading.
+  if (requestedProvider && !isKnownProvider(requestedProvider)) {
+    throw new UserSafeAiError(
+      `Unknown AI provider "${requestedProvider.slice(0, 40)}". Pick a supported provider or omit the field to use the configured default.`,
+      400
+    );
+  }
+  const provider = normalizeProvider(requestedProvider || getDefaultProvider());
   const requestApiKey = String(body.apiKey ?? "").trim();
   const apiKey = providerApiKey(provider, requestApiKey);
   const apiBaseUrl = providerBaseUrl(provider, body.apiBaseUrl);
@@ -178,7 +204,8 @@ export function resolveProviderRequest(body: ProviderRequestBody): ResolvedProvi
   const model = requestedModel || providerDefaultModel(provider);
   const reasoningEffort = normalizeCliReasoningEffort(provider, body.reasoningEffort);
 
-  if (!apiKey && !isCliProvider(provider)) {
+  const unauthenticatedLoopbackLocal = provider === "local" && isExactLoopbackBaseUrl(apiBaseUrl);
+  if (!apiKey && !isCliProvider(provider) && !unauthenticatedLoopbackLocal) {
     throw new UserSafeAiError(
       `Add an API key in AI settings or set the ${provider.toUpperCase()} API key in .env before starting the app.`,
       401
@@ -206,6 +233,28 @@ export function resolveProviderRequest(body: ProviderRequestBody): ResolvedProvi
   }
 
   return { provider, apiKey, apiBaseUrl, model, reasoningEffort };
+}
+
+// Review-only requests do not dispatch the Tailor provider. Resolve the audit*
+// namespace directly when present so a missing/invalid UNUSED Tailor key cannot
+// block a valid standalone Review. Headless callers that omit auditProvider keep
+// the existing primary-field/default semantics.
+export function resolveReviewOnlyProviderRequest(body: ReviewOnlyRequestBody): ResolvedProviderConfig {
+  const raw = String(body.auditProvider ?? "").trim();
+  if (!raw) return resolveProviderRequest(body);
+  if (!isKnownProvider(raw)) {
+    throw new UserSafeAiError(
+      `Unknown reviewer provider "${raw.slice(0, 40)}". Pick a supported provider for the audit pass.`,
+      400
+    );
+  }
+  return resolveProviderRequest({
+    provider: raw,
+    apiKey: body.auditApiKey,
+    apiBaseUrl: body.auditApiBaseUrl,
+    model: body.auditModel,
+    reasoningEffort: body.auditReasoningEffort
+  });
 }
 
 // Resolve the optional independent-reviewer provider for the strict-audit pass.

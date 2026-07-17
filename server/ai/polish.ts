@@ -2,8 +2,8 @@
 // suggestion pass first, then the optional strict recruiter audit and optional
 // cover letter IN PARALLEL, so one model response is not forced to rewrite,
 // score, audit, and draft a letter at once. The polished preview is never
-// model-authored: it is derived by applying the sanitized suggestions to the
-// scoped text, so every tailored character has passed the exact-evidence gate.
+// model-authored: it is derived by applying suggestions that passed the current
+// deterministic grounding/sanitization gates to the scoped text.
 // Provider config, prompts, provider clients, response sanitizing, and error
 // types live in sibling modules under server/ai/.
 
@@ -11,11 +11,10 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { FetchTimeoutError, readBody, sendJson } from "../http.ts";
 import { UserSafeAiError, safeConfigErrorMessage } from "./errors.ts";
 import {
-  getDefaultProvider,
-  normalizeProvider,
   providerLabel,
   resolveAuditProviderRequest,
-  resolveProviderRequest
+  resolveProviderRequest,
+  resolveReviewOnlyProviderRequest
 } from "./providers.ts";
 import {
   STRICT_REVIEW_JOB_CHAR_LIMIT,
@@ -29,6 +28,7 @@ import { proseHasUngroundedTerm } from "./grounding.ts";
 import { generateGroundedCoverLetter } from "./coverLetter.ts";
 import {
   makeRewriteGrounder,
+  makeRewriteNumericGrounder,
   missingRequiredSkillsFromStrictReview,
   sanitizeMissingRequiredSkills,
   sanitizeStrictReview,
@@ -235,7 +235,10 @@ export async function handlePolish(req: IncomingMessage, res: ServerResponse): P
     return;
   }
 
-  let provider = normalizeProvider(getDefaultProvider());
+  // Safe label fallback only; actual default/provider validation happens inside
+  // the try via resolveProviderRequest so an invalid AI_PROVIDER returns JSON
+  // instead of escaping the route before its error handler.
+  let provider = "claude-cli";
   try {
     const body = JSON.parse(await readBody(req, 1_000_000));
     const tailorScope = normalizeTailorScope(body.tailorScope);
@@ -269,26 +272,44 @@ export async function handlePolish(req: IncomingMessage, res: ServerResponse): P
       return;
     }
 
-    const resolved = resolveProviderRequest(body);
+    // Standalone Review dispatches only the Review config. Do not validate the
+    // unused Tailor config first (a blank hosted Tailor key must not block a valid
+    // CLI reviewer). Headless review callers without audit* fields retain the
+    // normal primary/default field semantics.
+    const resolved = runTailor
+      ? resolveProviderRequest(body)
+      : resolveReviewOnlyProviderRequest(body);
     provider = resolved.provider;
     const { apiKey, apiBaseUrl, model, reasoningEffort } = resolved;
 
-    const { systemPrompt, userPrompt } = buildPolishPrompts({
-      jobText,
-      tailorScope,
-      honestContext,
-      customInstructions
-    });
-
     // Tailor pass. In review-only mode there are no model-authored suggestions
-    // to generate, so the provider call is skipped and the suggestions come from
+    // to generate, so even the tailor prompt is not constructed: this avoids
+    // serializing a large scope and doing prompt-only work for a pass that will
+    // never dispatch. Suggestions instead come from
     // the request body (a prior tailor response round-tripped through the client,
     // hence UNTRUSTED). Both paths feed the SAME sanitizer against the scope, so
     // client-provided suggestions are never trusted unsanitized.
     const tailorStats: AttemptStats = {};
-    const parsed = runTailor
-      ? await callConfiguredProvider({ provider, model, reasoningEffort, apiKey, apiBaseUrl, systemPrompt, userPrompt }, tailorStats)
-      : { suggestedChanges: Array.isArray(body.suggestedChanges) ? body.suggestedChanges : [] };
+    let parsed: unknown;
+    if (runTailor) {
+      const tailorPrompts = buildPolishPrompts({
+        jobText,
+        tailorScope,
+        honestContext,
+        customInstructions
+      });
+      parsed = await callConfiguredProvider({
+        provider,
+        model,
+        reasoningEffort,
+        apiKey,
+        apiBaseUrl,
+        systemPrompt: tailorPrompts.systemPrompt,
+        userPrompt: tailorPrompts.userPrompt
+      }, tailorStats);
+    } else {
+      parsed = { suggestedChanges: Array.isArray(body.suggestedChanges) ? body.suggestedChanges : [] };
+    }
     // Model output (or the review-only body echo): read fields defensively.
     const parsedObj = parsed as { suggestedChanges?: unknown; missingRequiredSkills?: unknown; changeSummary?: unknown };
     const suggestionDropStats = {};
@@ -318,7 +339,11 @@ export async function handlePolish(req: IncomingMessage, res: ServerResponse): P
     // identical to a clean "nothing to suggest" pass (counts by reason only, no
     // suggestion text — safe to send).
     const droppedSuggestions = summarizeDroppedSuggestions(suggestionDropStats);
-    const missingRequiredSkills = sanitizeMissingRequiredSkills(parsedObj.missingRequiredSkills);
+    const missingRequiredSkills = sanitizeMissingRequiredSkills(
+      parsedObj.missingRequiredSkills,
+      jobText,
+      `${scopeText}\n${honestContext}`
+    );
     // changeSummary replaced the old strengths/fixes arrays (which no UI surface
     // ever rendered): 1-3 bullets on what changed or why nothing needed to. It
     // doubles as the usable-response signal — a reply with no suggestions, no
@@ -327,19 +352,26 @@ export async function handlePolish(req: IncomingMessage, res: ServerResponse): P
       ? parsedObj.changeSummary.map((item: unknown) => String(item).trim()).filter(Boolean).slice(0, 4)
       : [];
     // The polished preview is DERIVED, never model-authored: apply only the
-    // sanitized suggestions to the scoped text. Every tailored character has
-    // passed the exact-evidence gate, and the audit/cover passes judge exactly
-    // the text the editor can end up with. Zero sanitized suggestions is a
-    // valid outcome (the scope already fits) — the preview is then the
-    // unchanged scope.
+    // sanitized suggestions to the scoped text. Every applied suggestion has
+    // passed the current deterministic grounding/sanitization gates, and the
+    // audit/cover passes judge exactly the text the editor can end up with. Zero
+    // sanitized suggestions is a valid outcome (the scope already fits) — the
+    // preview is then the unchanged scope.
     const polishedText = scopeToText(tailorScope, suggestedChanges);
 
     // Grounding corpus for the secondary passes AND the change summary: the
-    // resume the user actually ends up with (every char already past the
-    // exact-evidence gate) plus the honest context. A JD skill term the audit's
+    // resume the user actually ends up with (every applied suggestion already
+    // past the deterministic grounding/sanitization gates) plus the honest
+    // context. A JD skill term the audit's
     // rewrites, the cover letter, or the summary introduce that is absent from
     // here is unsupported.
     const groundingText = `${polishedText}\n${honestContext}`;
+    const coverageGrounding = {
+      jobText,
+      baseResume: scopeText,
+      tailoredResume: polishedText,
+      honestContext
+    };
 
     // changeSummary is free model prose; drop bullets that overclaim a change
     // that never landed. Filter BEFORE the usable-response guard so a reply whose
@@ -361,7 +393,9 @@ export async function handlePolish(req: IncomingMessage, res: ServerResponse): P
     // audit pass never rewrites the resume, so a different reviewer model cannot
     // alter the format-preserved output. Audit and cover letter both depend
     // only on the derived polished text, so they run in parallel.
-    const audit = runReview ? resolveAuditProviderRequest(body, resolved) : resolved;
+    const audit = runReview
+      ? (runTailor ? resolveAuditProviderRequest(body, resolved) : resolved)
+      : resolved;
     const auditStats: AttemptStats = {};
     const reviewPromise = !runReview
       ? Promise.resolve(null)
@@ -391,7 +425,8 @@ export async function handlePolish(req: IncomingMessage, res: ServerResponse): P
     // grounded generator with the standalone /api/cover-letter path; grounding
     // against polishedText matches the prior `${polishedText}\n${honestContext}`
     // corpus (the grounding backstop now lives in one place).
-    const coverPromise = !(runTailor && includeCoverLetter)
+    const coverRequested = runTailor && includeCoverLetter;
+    const coverPromise = !coverRequested
       ? Promise.resolve(null)
       : generateGroundedCoverLetter({
           provider,
@@ -409,8 +444,8 @@ export async function handlePolish(req: IncomingMessage, res: ServerResponse): P
     // surviving retry) must NOT sink the request and discard the computed
     // suggestions/polishedText — especially with an independent reviewer that
     // can run on a different provider/key. allSettled isolates each: a rejected
-    // review falls back to strictReview:null (pane omitted); a rejected cover
-    // falls back to "" (the same shape used when cover generation is disabled).
+    // review falls back to strictReview:null + reviewStatus:"failed"; a rejected
+    // or blank cover returns "" + coverStatus:"failed".
     const [reviewSettled, coverSettled] = await Promise.allSettled([reviewPromise, coverPromise]);
     // Model output from the review pass: read the two fields defensively.
     let reviewParsed: { strictReview?: unknown; requirementCoverage?: unknown } | null = null;
@@ -424,9 +459,11 @@ export async function handlePolish(req: IncomingMessage, res: ServerResponse): P
       });
     }
     let coverLetterText = "";
+    let coverStatus: "off" | "ok" | "failed" = coverRequested ? "failed" : "off";
     if (coverSettled.status === "fulfilled") {
       coverLetterText = coverSettled.value ?? "";
-    } else {
+      if (coverRequested && coverLetterText.trim()) coverStatus = "ok";
+    } else if (coverRequested) {
       console.warn("[ai] cover letter pass failed; returning primary rewrite without it", {
         provider,
         errorName: coverSettled.reason instanceof Error ? coverSettled.reason.name : typeof coverSettled.reason,
@@ -439,7 +476,9 @@ export async function handlePolish(req: IncomingMessage, res: ServerResponse): P
       ? sanitizeStrictReview(reviewParsed.strictReview, jobText, groundingText, {
           // Entry-scope one-click rewrites so the review pass can't reintroduce a
           // misattribution the tailor gate drops (match rewrite.original -> entry).
-          rewriteGrounder: makeRewriteGrounder(tailorScope, honestContext, groundingText)
+          rewriteGrounder: makeRewriteGrounder(tailorScope, honestContext, groundingText),
+          rewriteNumericGrounder: makeRewriteNumericGrounder(tailorScope, honestContext),
+          suggestedEditNumericGrounding: honestContext
         })
       : null;
     // Attach the user-visible coverage table, DERIVED from the reviewer's
@@ -451,7 +490,7 @@ export async function handlePolish(req: IncomingMessage, res: ServerResponse): P
     if (strictReviewResult) {
       strictReviewResult = {
         ...strictReviewResult,
-        coverage: displayCoverageFromRequirements(reviewParsed?.requirementCoverage)
+        coverage: displayCoverageFromRequirements(reviewParsed?.requirementCoverage, coverageGrounding)
       };
     }
 
@@ -468,15 +507,19 @@ export async function handlePolish(req: IncomingMessage, res: ServerResponse): P
     // local estimate (the design).
     let reconciled: ReturnType<typeof applyGapCapsAndVerdict>;
     if (strictReviewResult) {
-      const coverageScore = scoreFromRequirementCoverage(reviewParsed?.requirementCoverage, strictReviewResult);
+      const coverageScore = scoreFromRequirementCoverage(
+        reviewParsed?.requirementCoverage,
+        strictReviewResult,
+        coverageGrounding
+      );
       // A hard eligibility gate (clearance/work-auth/license/cert/degree) the
       // model reports only as a missing critical/high requirementCoverage row —
       // not as a BLOCKER gap — must still force the DON'T APPLY band. Derive that
       // synthetic blocker from the same coverage table the score is built from.
-      const hasCoverageBlocker = coverageHasEligibilityBlocker(reviewParsed?.requirementCoverage);
+      const hasCoverageBlocker = coverageHasEligibilityBlocker(reviewParsed?.requirementCoverage, coverageGrounding);
       // Reconcile score-source with cap-source: cap on the missing-required rows
       // the coverage table reports even if the model omitted them from `gaps`.
-      const coverageMissingCount = missingRequiredFromCoverage(reviewParsed?.requirementCoverage);
+      const coverageMissingCount = missingRequiredFromCoverage(reviewParsed?.requirementCoverage, coverageGrounding);
       reconciled = applyGapCapsAndVerdict(coverageScore, strictReviewResult, hasCoverageBlocker, coverageMissingCount);
     } else {
       reconciled = { aiScore: null, verdict: null, capReason: "" };
@@ -529,7 +572,7 @@ export async function handlePolish(req: IncomingMessage, res: ServerResponse): P
     if (!runTailor) {
       // Review-only: no model-authored tailor output, no cover letter. Report
       // the audit plus the re-sanitized suggestions and the derived (unchanged)
-      // scope text the audit judged.
+      // suggestion-applied scope text the audit judged.
       // Review-only ran no tailor provider call, so `attempts` is omitted (there
       // is no tailor pass to count); auditAttempts in auditEcho covers the audit.
       sendJson(res, 200, {
@@ -541,6 +584,7 @@ export async function handlePolish(req: IncomingMessage, res: ServerResponse): P
         aiScore: reconciled.aiScore,
         strictReview: strictReviewResult,
         reviewStatus,
+        coverStatus,
         model,
         reasoningEffort,
         provider,
@@ -552,6 +596,7 @@ export async function handlePolish(req: IncomingMessage, res: ServerResponse): P
     sendJson(res, 200, {
       polishedText,
       coverLetterText: coverLetterText ?? "",
+      coverStatus,
       changeSummary: honestChangeSummary,
       missingRequiredSkills: missingRequiredSkills.length ? missingRequiredSkills : strictMissingRequiredSkills,
       suggestedChanges,

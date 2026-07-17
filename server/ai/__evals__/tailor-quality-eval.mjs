@@ -9,12 +9,14 @@
 // or JD text.
 //
 // Usage:
-//   node server/ai/__evals__/tailor-quality-eval.mjs <jd-file> [runs] [resume.tex]
-//     jd-file    - .json with a `tailoringText` field (job-import capture) or a
-//                  plain .txt job description. Samples live in
-//                  job-search-workspace/tailor-eval/samples/.
-//     runs       - concurrent identical runs (default 3)
-//     resume.tex - LaTeX resume (default job-search-workspace/base-resume.tex)
+//   node server/ai/__evals__/tailor-quality-eval.mjs <jd-file> [runs] [resume-file]
+//     jd-file     - .json with a `tailoringText` field (job-import capture) or a
+//                   plain .txt job description. Samples live in
+//                   job-search-workspace/tailor-eval/samples/.
+//     runs        - concurrent identical runs (default 3)
+//     resume-file - base resume (default job-search-workspace/base-resume-fullstack.resume);
+//                   a .resume envelope is serialized to plain text, any other
+//                   file is read as-is.
 //   EVAL_PROVIDER / EVAL_MODEL override the provider (default claude-cli/opus).
 //
 // Reading the output:
@@ -32,7 +34,7 @@ import { tmpdir } from "node:os";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { handlePolish } from "../polish.ts";
-import { extractPlainTextFromLatex } from "../../latex/parseResumeText.ts";
+import { serializeResumeData } from "../../../src/lib/resumeData.ts";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 const PROVIDER = process.env.EVAL_PROVIDER || "claude-cli";
@@ -40,20 +42,25 @@ const MODEL = process.env.EVAL_MODEL ?? (PROVIDER === "claude-cli" ? "opus" : ""
 
 const jdArg = process.argv[2];
 if (!jdArg) {
-  console.error("Usage: node server/ai/__evals__/tailor-quality-eval.mjs <jd-file> [runs] [resume.tex]");
+  console.error("Usage: node server/ai/__evals__/tailor-quality-eval.mjs <jd-file> [runs] [resume-file]");
   process.exit(2);
 }
 const RUNS = Number(process.argv[3] || 3);
 const jdPath = isAbsolute(jdArg) ? jdArg : join(ROOT, jdArg);
 const resumePath = process.argv[4]
   ? (isAbsolute(process.argv[4]) ? process.argv[4] : join(ROOT, process.argv[4]))
-  : join(ROOT, "job-search-workspace/base-resume.tex");
+  : join(ROOT, "job-search-workspace/base-resume-fullstack.resume");
 const OUT_DIR = join(ROOT, "job-search-workspace/tailor-eval");
 mkdirSync(OUT_DIR, { recursive: true });
 
 const jdRaw = readFileSync(jdPath, "utf8");
 const jobText = jdPath.endsWith(".json") ? JSON.parse(jdRaw).tailoringText : jdRaw;
-const resumePlain = extractPlainTextFromLatex(readFileSync(resumePath, "utf8"));
+// A .resume base is a { format, version, data } JSON envelope — serialize its
+// ResumeData to plain text; any other file is already plain text.
+const resumeRaw = readFileSync(resumePath, "utf8");
+const resumePlain = resumePath.endsWith(".resume")
+  ? serializeResumeData(JSON.parse(resumeRaw).data)
+  : resumeRaw;
 const label = jdPath.replace(/^.*\//, "").replace(/\.(json|txt)$/, "");
 
 // Optional deterministic scorer: bundle src/resumeEngine.ts on demand.

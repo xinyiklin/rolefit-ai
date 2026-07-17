@@ -1,17 +1,9 @@
 /* =============================================================
-   Resume document — print/page styling for the tailored resume.
-   The .resume-doc__* element rules style the text-parsed FALLBACK
-   (ResumeDocument), used only when no structured editor model
-   exists. The on-screen Resume tab and the primary print path
-   render the editor's .rdx-* markup (ResumeEditor /
-   ResumeReadonlyDocument, in resume-editor.css). The shared
-   .resume-doc page wrapper + .resume-print-layer rules below apply
-   to both paths. Section rules use border-bottom (not a background
-   fill) so they print without "Background graphics".
+   Owned resume document rendering for editor, preview, print, and PDF.
    ============================================================= */
 
-/* Latin Modern Roman — the same font Tectonic embeds in the PDF.
-   Without this @font-face the browser falls back to Times/serif,
+/* Latin Modern Roman matches the engine's committed metrics.
+   Without these faces the browser falls back to Times/serif,
    which is ~17% narrower and causes line breaks to diverge. */
 @font-face {
   font-family: "Latin Modern Roman";
@@ -41,68 +33,33 @@
   font-display: swap;
   src: url("/fonts/LMRoman10-BoldItalic.woff2") format("woff2");
 }
-
-.resume-doc {
-  box-sizing: border-box;
-  --doc-page-border-width: 1px;
-  /* Match the compiled Jake-template PDF's margins in editor coordinates:
-     0.5in (36pt) text margins on all sides. Block padding is tuned so the
-     name BASELINE lands at the PDF's 52.9pt from the page top (padding
-     reaches the top of the name's line box, not its baseline). Em values
-     resolve against the 10.95pt-equivalent base font below. */
-  --doc-page-padding-block: 2.87em;
-  --doc-page-padding-inline: 3.29em;
-  /* Page zoom (Google-Docs style): 100% = a comfortable page at 75% of the pane;
-     width and font scale by the same factor, so the page keeps true letter
-     proportions at any zoom and centers in the pane below ~133%. */
-  width: calc(var(--doc-zoom, 1) * 75%);
-  margin-inline: auto;
-  aspect-ratio: 8.5 / 11;
-  /* Font scales linearly with the pane width (cqw) so the on-screen page tracks
-     the printed page's proportions — 1.342cqw = 1.789% of the page's own width
-     = 10.95pt on a 612pt letter page, the exact \normalsize of the PDF's
-     11pt documentclass. Everything inside is em-relative to this base. No
-     upper cap (the 7px floor only guards tiny panes). */
-  font-size: max(7px, calc(1.342cqw * var(--doc-zoom, 1)));
-  /* Margins ≈ the template's ~0.5in page margins (em-relative, so they scale with
-     the font/width too). */
-  padding: var(--doc-page-padding-block) var(--doc-page-padding-inline);
-  background: #ffffff;
-  border: var(--doc-page-border-width) solid var(--hairline);
-  border-radius: var(--r-md);
-  box-shadow: var(--shadow-rest);
-  color: #1a1a1a;
-  /* Mirror the Jake's-template PDF: Latin Modern / Computer Modern serif when
-     available (TeX installs), otherwise a close old-style serif fallback. */
-  font-family: "Latin Modern Roman", "CMU Serif", "Times New Roman", Times, Georgia, serif;
-  /* The embedded LM Roman faces have no real small-cap glyphs (LaTeX's \scshape
-     uses a separate caps font), and the app-wide `font-synthesis: none` in
-     tokens.css would otherwise stop the browser faking them — so heading/name
-     `font-variant: small-caps` rendered as plain text. Re-enable small-caps
-     synthesis here only (weight/style stay off; LM Roman has real bold/italic),
-     so headings match the PDF's \scshape effect. */
-  font-synthesis: small-caps;
-  /* User-adjustable leading (Format menu); default mirrors the template. */
-  line-height: var(--doc-line, 1.14);
+/* Optical masters for the typeset engine's DOM renderer: TeX sets bold
+   display sizes (the \Huge/\LARGE/\Large name) from lmbx12 and \scshape
+   headings from the real small-caps face lmcsc10 — distinct families here,
+   mirroring TeX's font selection. */
+@font-face {
+  font-family: "Latin Modern Roman Display";
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/LMRoman12-Bold.otf") format("opentype");
 }
-
-/* The editable resume flows with its content instead of forcing a fixed page
-   shape — short resumes aren't padded with dead space, long ones aren't clipped.
-   The read-only mirror + print layer keep the page aspect ratio. */
-.resume-doc--editable:not(.resume-doc--paged) {
-  aspect-ratio: auto;
-  /* At least one full letter page; when pagination inserts a second page, reserve
-     the full next sheet instead of ending the white page at the last line. */
-  min-height: calc(
-    (var(--doc-zoom, 1) * 75cqi * 11 / 8.5) * var(--doc-page-count, 1) +
-    (var(--doc-page-count, 1) - 1) * var(--doc-page-gap, 2em)
-  );
+@font-face {
+  font-family: "Latin Modern Roman Caps";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/LMRomanCaps10-Regular.otf") format("opentype");
 }
 
 /* Blank state is a calm placeholder on the pane background (matching the other
    tabs) — not a white "page", since there is no document to print yet. */
 .resume-doc__empty {
-  margin: 0;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: var(--s2);
+  min-height: calc(var(--s7) * 5);
   padding: var(--s7) var(--s5);
   text-align: center;
   color: var(--ink-soft);
@@ -110,71 +67,504 @@
   line-height: 1.5;
 }
 
-/* Name: Jake's \textbf{\Huge …} — big, bold, centered, natural case. */
-.resume-doc__name {
+.resume-doc__empty strong {
+  color: var(--ink-strong);
+  font-size: 0.92rem;
+  font-weight: 600;
+}
+
+.resume-doc__boot {
+  display: grid;
+  place-content: center;
+  min-height: calc(var(--s7) * 5);
   margin: 0;
+  padding: var(--s7) var(--s5);
+  color: var(--ink-faint);
+  font-size: 0.78rem;
   text-align: center;
-  font-size: 2.25em;
-  font-weight: 700;
-  letter-spacing: 0;
-  line-height: 1.05;
-  color: #000000;
 }
 
-.resume-doc__contact {
-  margin: 0.2em 0 0;
-  text-align: center;
-  font-size: 0.9em;
-  color: #1a1a1a;
+/* ==== Typeset-engine DOM pages (src/typeset/render/dom.tsx) ====
+   Real text at engine coordinates. Screen variant (the on-screen editor)
+   gets sheet chrome; print variant is bare true-size pt pages, one per sheet. */
+.tsd-doc--screen .tsd-page {
+  margin: 0 auto var(--s4);
+  background: #ffffff;
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-rest);
 }
 
-.resume-doc__section {
-  margin-top: 0.62em;
+.tsd-doc--print .tsd-page {
+  background: #ffffff;
 }
 
-/* Section heading: small caps with a rule below, matching the PDF's \scshape. */
-.resume-doc__heading {
-  margin: 0 0 0.16em;
-  padding-bottom: 0.05em;
-  border-bottom: var(--doc-rule-width, 1px) solid #000000;
-  font-size: 1.02em;
-  font-weight: 700;
-  font-variant: var(--doc-heading-variant, small-caps);
-  text-transform: var(--doc-heading-transform, none);
-  letter-spacing: 0.04em;
-  color: #000000;
+/* Typeset editor: the painted page is one contenteditable host with a quiet
+   keyboard focus ring, text cursor, and ink caret. Links remain text while
+   editing, so a pointer cursor would lie. */
+.tsd-doc--editable {
+  outline: none;
+  caret-color: #000;
 }
 
-.resume-doc__role {
+.tsd-doc--editable .tsd-page {
+  cursor: text;
+}
+
+.tsd-doc--editable a {
+  cursor: text;
+}
+
+.tsd-run--highlighted {
+  border-radius: 2px;
+  background: var(--accent-veil);
+  box-shadow: 0 0 0 2px var(--accent-veil);
+}
+
+/* ---- Typeset editor structural chrome (hover controls in the sheet
+   margins, positioned from engine layout — never inside the editable DOM,
+   never reflowing the text). ---- */
+.typeset-editor {
+  position: relative;
+}
+
+.ts-chrome {
+  position: absolute;
+  z-index: 3;
   display: flex;
+  align-items: flex-start;
+  gap: 3px;
+  pointer-events: none;
+}
+
+.ts-chrome > button {
+  pointer-events: auto;
+}
+
+/* Tailor/Include/Off — a horizontal row, right-aligned into the sheet margin so
+   the chips sit on the section heading's line instead of stacking down over the
+   entry beneath it. */
+.ts-chrome--chips {
+  flex-direction: row;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 3px;
+  box-sizing: border-box;
+}
+
+.ts-chrome--gutter {
+  flex-direction: column;
+  gap: 2px;
+  /* The whole column captures the pointer (buttons AND the gaps between them) so
+     that reaching down the stack for a lower button keeps the hover frozen on
+     this block — otherwise the pointer's y crosses into the next block and the
+     kit runs away from the cursor. Paired with the onMouseMove freeze-on-chrome
+     guard. Safe here because the gutter is a narrow column in the empty margin. */
+  pointer-events: auto;
+}
+
+.ts-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 var(--s2);
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--r-pill);
+  background: var(--card-elev);
+  color: var(--ink-soft);
+  font-family: var(--font-ui);
+  font-size: 0.68rem;
+  font-weight: 600;
+  cursor: pointer;
+  /* No transition on the active fill: hovering a new section swaps which chip is
+     `is-on` instantly. A transition made the previously-active chip (usually
+     Tailor) linger, reading as a flicker that "jumps" to the real mode. */
+}
+
+.ts-chip:hover {
+  background: var(--accent-soft);
+  color: var(--accent-deep);
+}
+
+.ts-chip.is-on {
+  background: var(--accent);
+  border-color: var(--accent-deep);
+  color: var(--on-accent);
+}
+
+.ts-chip:focus-visible,
+.ts-gutter-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Left-gutter add/delete for the hovered bullet/entry/row. */
+.ts-gutter-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--r-sm);
+  background: var(--card-elev);
+  color: var(--ink-soft);
+  cursor: pointer;
+  transition: color 120ms var(--ease), background 120ms var(--ease);
+}
+
+.ts-gutter-btn:hover {
+  background: var(--accent-soft);
+  color: var(--accent-deep);
+}
+
+.ts-gutter-btn--danger:hover {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.ts-entry-details,
+.ts-header-details {
+  position: absolute;
+  z-index: 7;
+  width: min(320px, calc(100vw - 48px));
+  padding: var(--s3);
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--r-md);
+  background: var(--card-elev);
+  box-shadow: var(--shadow-lift);
+  font-family: var(--font-ui);
+}
+
+.ts-entry-details__head {
+  display: flex;
+  align-items: center;
   justify-content: space-between;
-  align-items: baseline;
-  gap: 0.9em;
-  margin-top: 0.18em;
-  font-size: 1em;
-  font-weight: 700;
-  color: #000000;
+  margin-bottom: var(--s2);
+  color: var(--ink-strong);
+  font-size: 0.78rem;
 }
 
-.resume-doc__role-right {
-  flex: 0 0 auto;
-  font-weight: 400;
-  white-space: nowrap;
-  color: #000000;
+.ts-entry-details__close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--ink-soft);
+  cursor: pointer;
 }
 
-.resume-doc__para {
-  margin: 0.12em 0 0;
+.ts-entry-details__close:hover {
+  background: var(--card-hover);
+  color: var(--ink-strong);
 }
 
-.resume-doc__bullets {
-  margin: 0.08em 0 0;
-  padding-left: 1.4em;
-  list-style: disc;
+.ts-entry-details__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s2);
 }
 
-.resume-doc__bullets li {
-  margin: 0.04em 0 0;
+.ts-entry-details__field {
+  display: grid;
+  gap: 3px;
+  color: var(--ink-soft);
+  font-size: 0.66rem;
+  font-weight: 600;
+}
+
+.ts-entry-details__field input {
+  min-width: 0;
+  height: 30px;
+  padding: 0 var(--s2);
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--r-sm);
+  background: var(--card);
+  color: var(--ink);
+  font: 400 0.76rem/1 var(--font-ui);
+}
+
+.ts-entry-details__field input.is-highlighted {
+  border-color: var(--accent);
+  background: var(--accent-veil);
+  box-shadow: 0 0 0 2px var(--accent-veil);
+}
+
+.ts-entry-details__close:focus-visible,
+.ts-entry-details__field input:focus-visible,
+.ts-header-details button:focus-visible,
+.ts-header-details input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Drag reorder: grab-cursor grip; while dragging, the whole surface goes
+   grabbing + selection-proof, and the accent insertion line shows the slot. */
+.ts-grip {
+  cursor: grab;
+  touch-action: none;
+}
+
+.typeset-editor.is-dragging,
+.typeset-editor.is-dragging .tsd-page,
+.typeset-editor.is-dragging .tsd-page * {
+  cursor: grabbing !important;
+  user-select: none;
+}
+
+.ts-drop-indicator {
+  position: absolute;
+  z-index: 4;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent-veil);
+  pointer-events: none;
+}
+
+/* Self-owned right-click menu (replaces the browser's native context menu over
+   the editable page). Fixed to the viewport; clamped on screen by the component. */
+.ts-context-menu {
+  position: fixed;
+  z-index: 50;
+  min-width: 184px;
+  padding: var(--s1);
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--r-md);
+  background: var(--card-elev);
+  box-shadow: var(--shadow-lift);
+  font-family: var(--font-ui);
+  user-select: none;
+}
+
+.ts-context-menu__item {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  width: 100%;
+  min-height: 30px;
+  padding: 0 var(--s2);
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 0.8rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ts-context-menu__item:hover:not(:disabled),
+.ts-context-menu__item:focus-visible {
+  background: var(--accent-soft);
+  color: var(--accent-deep);
+  outline: none;
+}
+
+.ts-context-menu__item:disabled {
+  color: var(--ink-faint);
+  cursor: default;
+}
+
+.ts-context-menu__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  color: var(--ink-soft);
+}
+
+.ts-context-menu__item:hover:not(:disabled) .ts-context-menu__icon {
+  color: var(--accent-deep);
+}
+
+.ts-context-menu__item:disabled .ts-context-menu__icon {
+  color: var(--ink-faint);
+}
+
+.ts-context-menu__label {
+  flex: 1;
+}
+
+.ts-context-menu__shortcut {
+  color: var(--ink-soft);
+  font-size: 0.72rem;
+  letter-spacing: 0.02em;
+}
+
+.ts-context-menu__divider {
+  height: 1px;
+  margin: var(--s1) var(--s2);
+  background: var(--hairline);
+}
+
+/* Quiet add-section affordance below the last sheet. */
+.ts-add-section {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  padding: var(--s2) 0 var(--s4);
+}
+
+.ts-add-section__buttons {
+  display: flex;
+  gap: var(--s2);
+}
+
+.ts-header-details {
+  bottom: calc(100% + var(--s1));
+  left: 50%;
+  width: min(360px, calc(100vw - 40px));
+  text-align: left;
+  transform: translateX(-50%);
+}
+
+.ts-header-details__contacts {
+  display: grid;
+  gap: var(--s1);
+  margin-top: var(--s3);
+}
+
+.ts-header-details__label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--ink-soft);
+  font-size: 0.66rem;
+  font-weight: 600;
+}
+
+.ts-header-details__label button,
+.ts-header-details__contact button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 26px;
+  min-height: 26px;
+  padding: 0 var(--s1);
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--r-sm);
+  background: var(--card);
+  color: var(--ink-soft);
+  font: 600 0.68rem/1 var(--font-ui);
+  cursor: pointer;
+}
+
+.ts-header-details__label button {
+  gap: 3px;
+}
+
+.ts-header-details__contact {
+  display: flex;
+  gap: var(--s1);
+}
+
+.ts-header-details__contact input {
+  min-width: 0;
+  height: 30px;
+  flex: 1;
+  padding: 0 var(--s2);
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--r-sm);
+  background: var(--card);
+  color: var(--ink);
+  font: 400 0.76rem/1 var(--font-ui);
+}
+
+.ts-header-details__contact button.is-danger:hover {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.ts-header-details__empty {
+  margin: 0;
+  color: var(--ink-soft);
+  font: 400 0.72rem/1.4 var(--font-ui);
+}
+
+.ts-add-section__menu {
+  position: absolute;
+  z-index: 6;
+  bottom: calc(100% + var(--s1));
+  left: 50%;
+  display: grid;
+  width: min(280px, calc(100vw - 40px));
+  padding: var(--s2);
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--r-md);
+  background: var(--card-elev);
+  box-shadow: var(--shadow-lift);
+  transform: translateX(-50%);
+}
+
+.ts-add-section__position {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px;
+  margin-bottom: var(--s1);
+  padding: 2px;
+  border-radius: var(--r-sm);
+  background: var(--card-soft);
+}
+
+.ts-add-section__position-btn,
+.ts-add-section__option {
+  border: 0;
+  border-radius: var(--r-sm);
+  color: var(--ink-muted);
+  font-family: var(--font-ui);
+  cursor: pointer;
+}
+
+.ts-add-section__position-btn {
+  min-height: 28px;
+  background: transparent;
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.ts-add-section__position-btn.is-on {
+  background: var(--card-elev);
+  color: var(--accent-deep);
+  box-shadow: var(--shadow-inset);
+}
+
+.ts-add-section__option {
+  display: grid;
+  gap: 1px;
+  min-height: 42px;
+  padding: var(--s2);
+  text-align: left;
+  background: transparent;
+}
+
+.ts-add-section__option > span {
+  color: var(--ink-strong);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.ts-add-section__option > small {
+  color: var(--ink-soft);
+  font-size: 0.68rem;
+}
+
+.ts-add-section__position-btn:hover,
+.ts-add-section__option:hover {
+  background: var(--accent-soft);
+  color: var(--accent-deep);
+}
+
+.ts-add-section__position-btn:focus-visible,
+.ts-add-section__option:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
 }
 
 /* Off-screen by default — the print layer exists only to be printed. */
@@ -192,9 +582,12 @@
     display: block !important;
   }
 
+  /* The ENGINE paginates: each .tsd-page is a complete 612×792pt sheet with
+     its margins already laid out inside, so the printer margin is zero and
+     every sheet maps 1:1 onto one piece of paper. */
   @page {
     size: letter;
-    margin: 0.5in;
+    margin: 0;
   }
 
   html,
@@ -204,51 +597,12 @@
     background: #ffffff !important;
   }
 
-  /* The @page margin supplies the frame, so the page itself is borderless and
-     flush. The PDF page is a fixed size, so the base font is fixed (not the
-     screen's width-scaling clamp); the em-based internals scale off it. */
-  .resume-print-layer .resume-doc {
-    aspect-ratio: auto;
-    width: auto;
-    max-width: none;
-    margin: 0;
-    padding: 0;
-    border: 0;
-    box-shadow: none;
-    background: #ffffff;
-    color: #000000;
-    font-size: 10.5pt;
-    line-height: 1.4;
+  .resume-print-layer .tsd-page {
+    break-after: page;
   }
 
-  /* The structured-editor mirror keeps the editor's own leading (user-set via the
-     Format menu) so the printed page matches what you edit on screen. */
-  .resume-print-layer .resume-doc--readonly {
-    line-height: var(--doc-line, 1.18);
+  .resume-print-layer .tsd-page:last-child {
+    break-after: auto;
   }
 
-  /* Keep roles, bullets, and a heading + its first lines from splitting across
-     a page boundary. */
-  .resume-doc__role,
-  .resume-doc__bullets li {
-    break-inside: avoid;
-  }
-
-  .resume-doc__heading {
-    break-after: avoid;
-  }
-
-  /* Structured-editor mirror: match the editor's pagination policy — standard
-     entries may split between bullets, while individual bullets, skill rows,
-     and summary paragraphs stay atomic. */
-  .resume-print-layer .rdx-skills-row,
-  .resume-print-layer .rdx-summary-row,
-  .resume-print-layer .rdx-bullet {
-    break-inside: avoid;
-  }
-
-  .resume-print-layer .rdx-entry__head,
-  .resume-print-layer .rdx-section__head {
-    break-after: avoid;
-  }
 }

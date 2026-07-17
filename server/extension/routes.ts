@@ -13,7 +13,7 @@
 
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { readBody, sendJson } from "../http.ts";
-import { extractPlainTextFromLatex } from "../latex/index.ts";
+import { serializeResumeData } from "../../src/lib/resumeData.ts";
 import { readApplications } from "../applications/index.ts";
 import { jobWorkspaceDir, readWorkspaceBaseResume } from "../workspace.ts";
 import { resolveImportedJobText } from "../jobImport.ts";
@@ -225,10 +225,18 @@ export async function handleExtensionRoutes(req: IncomingMessage, res: ServerRes
     try {
       const baseResume = await readWorkspaceBaseResume();
       if (baseResume && baseResume.text) {
-        resumeText =
-          baseResume.kind === "tex"
-            ? extractPlainTextFromLatex(baseResume.text)
-            : baseResume.text;
+        if (baseResume.kind === "resume") {
+          // A .resume base is a { format, version, data } envelope of raw JSON on
+          // disk. Serialize its ResumeData to the plain text the quick scorer
+          // expects; fall back to the raw text if the envelope can't be parsed.
+          try {
+            resumeText = serializeResumeData(JSON.parse(baseResume.text).data);
+          } catch {
+            resumeText = baseResume.text;
+          }
+        } else {
+          resumeText = baseResume.text;
+        }
       }
     } catch {
       resumeText = "";

@@ -1,7 +1,6 @@
 // Structured, editable resume model — the canonical shape the interactive editor
-// mutates and the LaTeX/Tectonic "Compile Preview" renders. It mirrors the schema
-// the server templates already consume (server/latex/parseResumeText.ts →
-// the jakes template's `render(resume)`), plus stable ids for React keys:
+// mutates and the typeset engine's preview/PDF renders, plus stable ids for
+// React keys:
 //
 //   { name, contact: string[],
 //     sections: [
@@ -9,16 +8,15 @@
 //         items: [ { titleLeft, titleRight, subtitleLeft, subtitleRight, bullets[] } ] }
 //     ] }
 //
-// `parseResumeData` seeds the editor from existing plain-text / LaTeX resumes,
-// `serializeResumeData` derives the plain text every legacy consumer needs
-// (scoring, diff, clean-PDF print, pipeline snapshot), and
-// `toTemplateSchema` produces the id-free schema the server template renderer
-// expects for the structured compile path.
+// `parseResumeData` seeds the editor from plain-text resumes (upload/paste),
+// `serializeResumeData` derives the plain text needed by scoring, diffs, and
+// pipeline snapshots, and
+// `toTemplateSchema` produces the render schema the typeset engine consumes —
+// it carries the ResumeData ids so engine output stays traceable back to
+// editor fields.
 
-import { looksLikeLatex } from "./resumeFormat";
-import { stripInlineMarks } from "./inlineMarks";
-import { BULLET_GLYPHS, inferSectionType, isSectionHeader } from "../resume/sections";
-import { extractPlainTextFromLatex } from "./latexText";
+import { stripInlineMarks } from "./inlineMarksText.ts";
+import { BULLET_GLYPHS, inferSectionType, isSectionHeader } from "../resume/sections.ts";
 
 function titleCase(s: string): string {
   return s.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
@@ -43,8 +41,8 @@ export type ResumeSectionData = { id: string; heading: string; type: ResumeSecti
 
 export type ResumeData = { name: string; contact: string[]; sections: ResumeSectionData[] };
 
-// Id-free shape sent to the server template renderer. Matches exactly what
-// jakes.ts destructures in its `render(resume)`.
+// Shape the typeset engine renders (editor / preview / PDF). The optional id
+// fields are field provenance for Exact-mode editing (rendering ignores them).
 export type ResumeTemplateSchema = {
   name: string;
   contact: string[];
@@ -54,7 +52,18 @@ export type ResumeTemplateSchema = {
     // heading text (a renamed summary still renders as paragraphs). Optional:
     // server-side text parsing produces schemas without it.
     type?: ResumeSectionType;
-    items: { title: string; subtitle: string; meta: string; location: string; bullets: string[] }[];
+    id?: string;
+    items: {
+      title: string;
+      subtitle: string;
+      meta: string;
+      location: string;
+      bullets: string[];
+      id?: string;
+      // Aligned 1:1 with `bullets` after empty-row filtering. For skills items
+      // the combined "Label: skills" row is index 0 and carries the ITEM id.
+      bulletIds?: string[];
+    }[];
   }[];
 };
 
@@ -124,10 +133,8 @@ export function newSection(type: ResumeSectionType = "standard", heading?: strin
 }
 
 // ===== Parse (plain text → structured) =====
-// Section/bullet heuristics are the SAME as the server parser
-// (server/latex/parseResumeText.ts) — both import them from
-// ../resume/sections.ts — so a resume seeded into the editor maps the same way the
-// LaTeX pipeline would map it.
+// Section/bullet heuristics live in ../resume/sections.ts so parsing stays
+// consistent wherever a plain-text resume needs the same section model.
 
 // Bullet glyph set is shared (../resume/sections.ts); the parser additionally
 // accepts numbered lists ("1." / "1)"). isSectionHeader is shared too.
@@ -191,14 +198,12 @@ function parseContactLines(lines: string[]): string[] {
 }
 
 export function parseResumeData(text: string, sourceText?: string): ResumeData {
-  const plain = looksLikeLatex(text) ? extractPlainTextFromLatex(text) : text;
-  const data = parsePlainResume(plain);
+  const data = parsePlainResume(text);
 
   // Recover a name/contact from the original source when the polished output
-  // dropped its header (mirrors the existing PDF/document fallback).
+  // dropped its header.
   if (!data.name && sourceText) {
-    const srcPlain = looksLikeLatex(sourceText) ? extractPlainTextFromLatex(sourceText) : sourceText;
-    const src = parsePlainResume(srcPlain);
+    const src = parsePlainResume(sourceText);
     if (src.name) {
       data.name = src.name;
       if (!data.contact.length) data.contact = src.contact;
@@ -282,7 +287,7 @@ function parsePlainResume(text: string): ResumeData {
 }
 
 // ===== Serialize (structured → plain text) =====
-// Emits the format the scoring/diff/print/DOCX consumers expect: name line,
+// Emits the format the scoring/diff/print consumers expect: name line,
 // contact joined by " | ", ALL-CAPS section headings, Jake-style entry rows,
 // and skills rows as "Label: comma-separated skills".
 
@@ -339,55 +344,72 @@ export function serializeResumeData(data: ResumeData): string {
     }
   }
 
-  // Plain-text consumers (Copy, DOCX rewrite, scoring, diff, snapshots) get the
+  // Plain-text consumers (Copy, scoring, diff, snapshots) get the
   // text without the internal inline formatting tags — those style only the
-  // rendered surfaces (editor, print mirror, LaTeX templates).
+  // rendered surfaces (editor and Preview/PDF).
   return stripInlineMarks(lines.join("\n").replace(/\n{3,}/g, "\n\n").trim());
 }
 
 export function toTemplateSchema(data: ResumeData): ResumeTemplateSchema {
   return {
     name: data.name.trim(),
-    contact: data.contact.map((c) => c.trim()).filter(Boolean),
+    // No filter: the engine's contact src indexes must match data.contact's
+    // (filtering empties would shift every later index, mis-targeting edits),
+    // and the typeset editor needs empty items visible/caret-addressable.
+    contact: data.contact.map((c) => c.trim()),
     sections: data.sections.map((section) => ({
       heading: section.heading.trim(),
       type: section.type,
+      id: section.id,
       items:
+        // Empty rows/bullets are KEPT (not filtered): the typeset editor needs
+        // them visible and caret-addressable (the engine renders an emptied
+        // bullet as a bare marker). Delete the bullet/row to remove it.
         section.type === "skills"
           ? section.items
-              .map((item) => ({
-                title: "",
-                subtitle: "",
-                meta: "",
-                location: "",
-                bullets: [formatSkillRow(item), ...item.bullets.map((b) => b.text.trim())].filter(Boolean)
-              }))
+              .map((item) => {
+                const rows = [
+                  { text: formatSkillRow(item), id: item.id },
+                  ...item.bullets.map((b) => ({ text: b.text.trim(), id: b.id }))
+                ];
+                return {
+                  title: "",
+                  subtitle: "",
+                  meta: "",
+                  location: "",
+                  bullets: rows.map((r) => r.text),
+                  id: item.id,
+                  bulletIds: rows.map((r) => r.id)
+                };
+              })
               .filter((item) => item.bullets.length)
           : section.type === "summary"
           ? section.items
-              .map((item) => ({
-                title: "",
-                subtitle: "",
-                meta: "",
-                location: "",
-                bullets: item.bullets.map((b) => b.text.trim()).filter(Boolean)
-              }))
+              .map((item) => {
+                const rows = item.bullets.map((b) => ({ text: b.text.trim(), id: b.id }));
+                return {
+                  title: "",
+                  subtitle: "",
+                  meta: "",
+                  location: "",
+                  bullets: rows.map((r) => r.text),
+                  id: item.id,
+                  bulletIds: rows.map((r) => r.id)
+                };
+              })
               .filter((item) => item.bullets.length)
-          : section.items.map((item) => ({
-              title: item.titleLeft.trim(),
-              subtitle: item.subtitleLeft.trim(),
-              meta: item.titleRight.trim(),
-              location: item.subtitleRight.trim(),
-              bullets: item.bullets.map((b) => b.text.trim()).filter(Boolean)
-            }))
+          : section.items.map((item) => {
+              const rows = item.bullets.map((b) => ({ text: b.text.trim(), id: b.id }));
+              return {
+                title: item.titleLeft.trim(),
+                subtitle: item.subtitleLeft.trim(),
+                meta: item.titleRight.trim(),
+                location: item.subtitleRight.trim(),
+                bullets: rows.map((r) => r.text),
+                id: item.id,
+                bulletIds: rows.map((r) => r.id)
+              };
+            })
     }))
   };
 }
-
-// ===== LaTeX → plain text =====
-// The extractor is the ONE shared implementation in ./latexText.ts (imported at
-// the top for this module's own parse path, above). It used to live here as a
-// hand-port of server/latex/parseResumeText.ts; both now consume the shared
-// module. Re-exported so existing importers (e.g. useResumeAnalysis) keep
-// resolving extractPlainTextFromLatex from resumeData.
-export { extractPlainTextFromLatex };

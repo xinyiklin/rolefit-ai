@@ -120,9 +120,9 @@ components:
 
 Role-Fit AI is a drafting desk, not a dashboard. Content surfaces read as
 paper sheets laid on a deeper desk tone; the chrome around them borrows from
-print production: a newspaper masthead with a double rule, a numbered
-table-of-contents tab rail, dotted-leader ledger rows, mono indices and
-tabular figures. The serif voice appears only in identity chrome (wordmark,
+print production: a newspaper masthead with a double rule, an icon-led
+tab rail grouped like a table of contents, dotted-leader ledger rows, mono
+indices and tabular figures. The serif voice appears only in identity chrome (wordmark,
 page titles), the way a paper's nameplate differs from its body type. The tool
 is calm, dense, and trustworthy; it disappears into the task of tailoring a
 resume.
@@ -231,7 +231,7 @@ stacks resolve to system fonts.
   0.06–0.18em): `.eyebrow`, `.table-eyebrow`, field labels. The widest
   tracking (0.18em) belongs to the masthead eyebrow only.
 - **Data** (mono, 500–600, 0.64–0.92rem, tabular-nums): ledger values,
-  figures-strip numbers, tab indices, dates, fit scores, model identifiers.
+  figures-strip numbers, dates, fit scores, model identifiers.
 
 ### Named Rules
 
@@ -327,16 +327,20 @@ interactive control shares the same focus treatment: 2px Forest Ink outline,
 
 ### Navigation
 
-- **Masthead:** newspaper-style: serif wordmark, typographic menu triggers
-  (no boxes, no pills) separated into groups by hairline verticals; hover
-  shows a 1px ink underline at 18% opacity (35% when open) and a
-  `--card-soft` tint. Each trigger carries a dot-plus-word input-state
-  readout (`is-ready` accent, `is-empty` warm). Popovers are 14px-radius
-  raised sheets with `--shadow-lift`, entering with a 140ms 4px slide-fade.
-- **Tab rail:** a numbered table of contents on `--card-soft`: mono
-  two-digit indices instead of icons, small-caps mono group eyebrows
-  (DRAFT / TRACK) above hairline-separated groups. The active tab is
-  ink-strong text with a Forest Ink index; no card box, no underline bar.
+- **Masthead:** newspaper-style: a 26px Forest-Ink seal tile with the serif
+  initial beside the serif wordmark (the one place the accent is identity,
+  not action), then typographic menu triggers (no boxes, no pills) separated
+  into groups by hairline verticals; each trigger leads with a small icon
+  (`--ink-faint`, accent on hover/open); hover shows a 1px ink underline at
+  18% opacity (35% when open) and a `--card-soft` tint. Each trigger carries
+  a dot-plus-word input-state readout (`is-ready` accent, `is-empty` warm).
+  Popovers are 14px-radius raised sheets with `--shadow-lift`, entering with
+  a 140ms 4px slide-fade.
+- **Tab rail:** icon-led entries ([icon] [label]) on `--card-soft`, under
+  small-caps mono group eyebrows (DRAFT / TRACK) above hairline-separated
+  groups. The active entry is the rail's one committed moment: an
+  `--accent-soft` washed row with a `--accent-veil` ring, deep-accent icon,
+  ink-strong label. Below 1080px the rail flattens to a horizontal pill bar.
   APG tabs keyboard model is mandatory.
 
 ### Ledger Rows (signature)
@@ -369,7 +373,8 @@ the numbers are.
 ### Page Anatomy: Sheets Center, Rail Right
 
 Working pages share one skeleton: content as paper sheets in the main
-column, one control surface docked right. Resume = editor sheet + review
+column, one control surface docked right. Resume = one engine-painted editing
+sheet with quiet margin controls + review
 rail; Materials = draft sheets + plan rail; Applications = view surface +
 inspector. The rail is a single sheet (`--card`, hairline, rest shadow);
 the main column sits directly on the desk. Below ~1080px the rail drops

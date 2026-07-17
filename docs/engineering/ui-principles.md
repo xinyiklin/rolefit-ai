@@ -30,11 +30,13 @@ inputs pane was folded into the masthead by explicit user request,
 - masthead (navbar): the input menus — Resume source (workspace
   base-resume, upload, source text), Job target (link + description), AI
   provider, polish Options — plus the primary Polish action and Apply
-- studio (full width): the tabbed output views — Resume (structured editor
-  with per-section tailor selection and the suggestion/recruiter-review rail
-  docked beside it post-polish), Materials (cover letter + application
-  questions), Applications (table / board / calendar tracker views),
-  Analytics — plus the template/export rail below
+- studio (full width): the tabbed output views — Resume (the engine-painted
+  page is the sole editor, so what you see is exactly what exports — it is its
+  own live preview, so there is no separate compile-preview; its margin
+  controls own add/remove/reorder, section type, and per-section tailor scope;
+  the suggestion/recruiter-review rail docks beside it post-polish), Materials (cover letter
+  + application questions), Applications (table / board / calendar tracker
+  views), Analytics — plus the template/export rail below
 
 Polish should feel like a review queue, not a hidden overwrite. By default,
 the user selects editable resume sections in the document; identity,
@@ -113,9 +115,10 @@ Never show:
 
 ## AI Settings UI
 
-- Default provider is the Claude Code CLI (`claude-cli`) subscription path,
-  on both the frontend and the server's no-`AI_PROVIDER` fallback (an
-  unknown `AI_PROVIDER` value still coerces to OpenAI).
+- Default provider is the account-backed Claude Code CLI (`claude-cli`) path,
+  on both the frontend and the server's no-`AI_PROVIDER` fallback. A non-empty,
+  unrecognized `AI_PROVIDER` fails configuration instead of silently selecting
+  OpenAI.
 - First-class provider choices: subscription CLIs (Claude Code, Codex,
   Antigravity CLI) plus hosted OpenAI, Claude, Gemini, OpenRouter,
   Groq, Together AI, Mistral AI, and Local/custom.
@@ -124,9 +127,11 @@ Never show:
   one-shot sync between stages, not a live link.
 - Each Model control changes with its section's selected provider; keep a
   **Custom model** escape hatch for newer model IDs.
-- One-request `apiKey`, `provider`, `apiBaseUrl`, and `model` values from
-  the local UI must not be persisted in browser storage. API keys typed into
-  any AI menu section are one-session values only.
+- Provider, model, base-URL, and effort preferences may persist in localStorage
+  so the three stage configurations survive reloads. `apiKey` is the exception:
+  a key typed into any AI menu section may live only in page memory for that
+  session and in the same-origin request to local `/api/*`; never persist, log,
+  or echo it.
 
 ## Interaction
 

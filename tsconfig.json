@@ -13,6 +13,10 @@
     "forceConsistentCasingInFileNames": true,
     "module": "ESNext",
     "moduleResolution": "bundler",
+    /* Dual-runtime modules use explicit .ts import extensions so the same code
+       runs under Node's native type stripping (offline evals) and Vite. noEmit
+       is on, so this is safe. */
+    "allowImportingTsExtensions": true,
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,

@@ -1,0 +1,246 @@
+{
+ "note": "Tectonic truth for the synthetic one-page resume: per-line {p, y, x0, text} baselines extracted with pdf.js. Frozen regression truth for the owned engine: the LaTeX/Tectonic render path these baselines were generated from has been removed, so this fixture is static and no longer regenerated in-repo.",
+ "schema": {
+  "name": "Casey Sample",
+  "contact": [
+   "casey@example.com",
+   "github.com/caseysample",
+   "Springfield, OH"
+  ],
+  "sections": [
+   {
+    "heading": "Education",
+    "type": "standard",
+    "items": [
+     {
+      "title": "Springfield State University",
+      "subtitle": "B.S. in Computer Science, honors program",
+      "meta": "May 2024",
+      "location": "Springfield, OH",
+      "bullets": []
+     }
+    ]
+   },
+   {
+    "heading": "Technical Skills",
+    "type": "skills",
+    "items": [
+     {
+      "title": "",
+      "subtitle": "",
+      "meta": "",
+      "location": "",
+      "bullets": [
+       "Languages: Python, TypeScript, SQL, HTML/CSS"
+      ]
+     },
+     {
+      "title": "",
+      "subtitle": "",
+      "meta": "",
+      "location": "",
+      "bullets": [
+       "Tools: Git, Docker, PostgreSQL, GitHub Actions"
+      ]
+     }
+    ]
+   },
+   {
+    "heading": "Projects",
+    "type": "standard",
+    "items": [
+     {
+      "title": "Sample Project",
+      "subtitle": "React 19, TypeScript, Node.js, PostgreSQL",
+      "meta": "sample.example.com/projects",
+      "location": "",
+      "bullets": [
+       "Built and maintained a continuous integration pipeline spanning multiple repositories and delivering artifacts for authentication, validation, and facility isolation.",
+       "Implemented a provider adapter over hosted backends, normalizing model and base-URL configuration, timeouts, and JSON parsing, with a deterministic rewriter fallback."
+      ]
+     }
+    ]
+   },
+   {
+    "heading": "Experience",
+    "type": "standard",
+    "items": [
+     {
+      "title": "Operations Assistant",
+      "subtitle": "Community Health Center",
+      "meta": "Mar 2023 -- Present",
+      "location": "Springfield, OH",
+      "bullets": [
+       "Translated recurring scheduling and clinical workflow issues into practical requirements for physicians and staff in a high-volume clinic environment."
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ "docStyle": {
+  "lineHeight": 1.18,
+  "nameContactGap": 0.04,
+  "contactGap": 1.82,
+  "headerSectionGap": 1.19,
+  "sectionGap": 0.85,
+  "sectionEntryGap": 0.42,
+  "entryGap": 0.42,
+  "titleSubGap": 0.06,
+  "headBulletGap": 0.42,
+  "skillsRowGap": 0,
+  "bulletGap": 0.2,
+  "boldTitles": true,
+  "boldHeadings": false,
+  "boldSkillLabels": true,
+  "italicSubtitles": true,
+  "headingCase": "smallcaps",
+  "sectionRule": true,
+  "contactDivider": "|",
+  "headerAlign": "center",
+  "bodyAlign": "left",
+  "headingAlign": "left",
+  "nameSize": "huge",
+  "pageMargins": "normal"
+ },
+ "lines": [
+  {
+   "p": 1,
+   "y": 52.95,
+   "x0": 221.16,
+   "text": "Casey Sample"
+  },
+  {
+   "p": 1,
+   "y": 67.23,
+   "x0": 157.29,
+   "text": "casey@example.com|github.com/caseysample|Springfield, OH"
+  },
+  {
+   "p": 1,
+   "y": 95.46,
+   "x0": 36,
+   "text": "Education"
+  },
+  {
+   "p": 1,
+   "y": 113.88,
+   "x0": 46.8,
+   "text": "Springfield State UniversityMay 2024"
+  },
+  {
+   "p": 1,
+   "y": 123.41,
+   "x0": 46.8,
+   "text": "B.S. in Computer Science, honors programSpringfield, OH"
+  },
+  {
+   "p": 1,
+   "y": 146.55,
+   "x0": 36,
+   "text": "Technical Skills"
+  },
+  {
+   "p": 1,
+   "y": 163.12,
+   "x0": 46.8,
+   "text": "Languages: Python, TypeScript, SQL, HTML/CSS"
+  },
+  {
+   "p": 1,
+   "y": 176.43,
+   "x0": 46.8,
+   "text": "Tools: Git, Docker, PostgreSQL, GitHub Actions"
+  },
+  {
+   "p": 1,
+   "y": 199.51,
+   "x0": 36,
+   "text": "Projects"
+  },
+  {
+   "p": 1,
+   "y": 217.93,
+   "x0": 46.8,
+   "text": "Sample Projectsample.example.com/projects"
+  },
+  {
+   "p": 1,
+   "y": 229.18,
+   "x0": 46.8,
+   "text": "React 19, TypeScript, Node.js, PostgreSQL"
+  },
+  {
+   "p": 1,
+   "y": 244.28,
+   "x0": 61.53,
+   "text": "•"
+  },
+  {
+   "p": 1,
+   "y": 245.58,
+   "x0": 70.8,
+   "text": "Built and maintained a continuous integration pipeline spanning multiple repositories and delivering artifacts for"
+  },
+  {
+   "p": 1,
+   "y": 257.33,
+   "x0": 70.8,
+   "text": "authentication, validation, and facility isolation."
+  },
+  {
+   "p": 1,
+   "y": 270.21,
+   "x0": 61.53,
+   "text": "•"
+  },
+  {
+   "p": 1,
+   "y": 271.27,
+   "x0": 70.8,
+   "text": "Implemented a provider adapter over hosted backends, normalizing model and base-URL configuration, timeouts,"
+  },
+  {
+   "p": 1,
+   "y": 283.03,
+   "x0": 70.8,
+   "text": "and JSON parsing, with a deterministic rewriter fallback."
+  },
+  {
+   "p": 1,
+   "y": 306.1,
+   "x0": 36,
+   "text": "Experience"
+  },
+  {
+   "p": 1,
+   "y": 324.52,
+   "x0": 46.8,
+   "text": "Operations AssistantMar 2023 – Present"
+  },
+  {
+   "p": 1,
+   "y": 334.05,
+   "x0": 46.8,
+   "text": "Community Health CenterSpringfield, OH"
+  },
+  {
+   "p": 1,
+   "y": 349.15,
+   "x0": 61.53,
+   "text": "•"
+  },
+  {
+   "p": 1,
+   "y": 350.45,
+   "x0": 70.8,
+   "text": "Translated recurring scheduling and clinical workflow issues into practical requirements for physicians and staff in a"
+  },
+  {
+   "p": 1,
+   "y": 362.2,
+   "x0": 70.8,
+   "text": "high-volume clinic environment."
+  }
+ ]
+}

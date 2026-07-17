@@ -2,8 +2,11 @@
 
 Role-Fit AI's server is a single Node entry point (`server.ts`) that
 serves the Vite frontend in development, exposes a small set of local
-API routes, and proxies AI provider calls so API keys stay off the
-browser.
+API routes, and owns all outbound AI provider calls. Keys loaded from
+`.env` never leave the server. A key entered in the AI menu is a transient
+page-memory value sent to a same-origin local `/api/*` route for that request;
+the local server uses it only as authentication for the selected hosted or
+custom provider endpoint. It must never be persisted, logged, or echoed.
 
 ## Port
 
@@ -22,41 +25,60 @@ The server layer (`server.ts` routing to focused `server/` modules) owns:
 - `/api/polish` AI provider routing — subscription CLIs (Claude Code,
   Codex CLI, Antigravity CLI) shelled out to local subprocesses,
   plus hosted APIs (OpenAI, Anthropic, Google, OpenRouter, Groq,
-  Together AI, Mistral, OpenAI-compatible). The route is intentionally
-  multi-pass: targeted suggestion generation first, then the strict
-  recruiter audit (when enabled) and the cover letter (when requested)
-  run in parallel, so one model response is not forced to suggest edits,
-  score, audit, and draft a letter at the same time. The suggestion pass
+  Together AI, Mistral, OpenAI-compatible). The route supports independent
+  `tailor` and `review` requests plus a backward-compatible/headless `both`
+  request. The current UI implements Both as two sequential requests: Tailor
+  first (`stages: "tailor"`, with the optional cover pass), then Review
+  (`stages: "review"`) with only the sanitized suggestions from that same run.
+  A headless `stages: "both"` request instead runs targeted suggestions first,
+  then runs its strict audit and optional cover pass in parallel. No single
+  model response is forced to suggest edits, score, audit, and draft a letter
+  at the same time. Review-only skips the suggestion pass and audits the
+  current edited draft exactly as submitted; it must not regenerate or replay
+  stale tailoring changes. The suggestion pass
   returns only structured `suggestedChanges` (no full-text rewrite, no fit
-  score — scoring belongs to the audit pass, with the local engine as
-  fallback); the `polishedText` preview is derived server-side by applying
-  the sanitized suggestions to the scoped text, so every tailored
-  character has passed the exact-evidence gate before the audit, the
-  cover letter, or the UI diff sees it. The polish request sends a structured
-  `tailorScope` of user-selected editable sections instead of the full
-  resume; identity, contact, education, and any omitted sections remain
-  locked out of the rewrite prompt unless the user selects them. The audit
-  pass receives the clipped original sections plus the SANITIZED proposed
-  changes (`<proposed_changes>`, slim JSON) instead of a second full resume
-  copy — the polished resume is derivable from them, and dropping the
-  redundant copy cuts the audit prompt by up to ~28k chars; the cover pass
-  uses a clipped copy of the tailored sections. The Tailor stage supplies the
+  score — evidence-based scoring belongs to the audit pass; when no usable AI
+  score exists, the client may still display its separate local fit estimate,
+  but the Review stage itself fails rather than receiving a local substitute);
+  the `polishedText` preview is derived server-side by applying only sanitized
+  suggestions to the scoped text. Every applied suggestion has passed the
+  current deterministic grounding and sanitization gates before the audit,
+  cover letter, or UI diff sees it. Those gates reduce fabrication risk; they
+  are not proof of truth, and human review remains required. The polish request
+  sends a structured `tailorScope` of user-selected editable sections instead
+  of the full resume; identity, contact, education, and any omitted sections remain
+  locked out of the rewrite prompt unless the user selects them. In a combined
+  run, the audit pass receives the clipped original sections plus the SANITIZED
+  proposed changes (`<proposed_changes>`, slim JSON) instead of a second full
+  resume copy — the polished resume is derivable from them, and dropping the
+  redundant copy cuts the audit prompt by up to ~28k chars. Review-only instead
+  receives the current edited draft as its audit target. The cover pass uses a
+  clipped copy of the tailored sections. The Tailor stage supplies the
   primary provider for suggestion generation, cover letters, and application
   answers. The Review stage can use its own provider/model (request `audit*`
   fields, resolved by `resolveAuditProviderRequest`); when audit fields are
   absent the server reuses the primary config. Only the non-rewriting audit
   can differ inside `/api/polish`, so a reviewer model can never alter the
-  editor's resume output. The `/api/polish` response echoes the resolved
-  `provider` / `model` / `reasoningEffort` plus `attempts` (tailor-pass dispatch
-  count). Whenever the review pass ran (stages `review` / `both`, i.e.
+  editor's resume output. A `/api/polish` response that ran Tailor echoes the
+  resolved `provider` / `model` / `reasoningEffort` plus `attempts`
+  (tailor-pass dispatch count); Review-only intentionally omits `attempts`
+  because it made no Tailor dispatch. Whenever the review pass ran (stages
+  `review` / `both`, i.e.
   `strictReview`), the response ALWAYS carries `auditProvider` / `auditModel` /
   `auditReasoningEffort` (the resolved audit values, even when identical to the
   primary) plus `auditAttempts` — so "review ran with the same provider" is
-  distinguishable from "no review". Backward compatible: the client only surfaces
-  "reviewed by" when `auditProvider !== provider`. `/api/cover-letter` and
+  distinguishable from "no review". The response also reports
+  `coverStatus: "off" | "ok" | "failed"`; clients must not infer cover state
+  from a missing letter, and a cover failure must not discard successful
+  tailor/review results. The client surfaces "reviewed by" when either the
+  audit provider or audit model differs from the Tailor configuration.
+  `/api/cover-letter` and
   `/api/application-answers` likewise echo the resolved `provider` / `model` /
   `reasoningEffort`.
-- DOCX import / export (text extraction, format-preserved updates)
+- resume import into the structured editor: a `.txt` / `.md` / `.csv` (or pasted)
+  resume is parsed once into `ResumeData`, the source of truth thereafter (no DOCX
+  or LaTeX import — the original is converted a single time into the editor
+  format); a previously saved `.resume` file loads its `ResumeData` directly
 - job posting import (`/api/import-job`, `server/jobImport.ts`): fetch a public posting URL —
   Workday CXS JSON when the host is recognized (`*.myworkdayjobs.com`,
   `/job/` and `/details/` links), LinkedIn visible job body + criteria
@@ -76,16 +98,20 @@ The server layer (`server.ts` routing to focused `server/` modules) owns:
   raw (tag-stripped) posting text to the Distill-stage provider and returns
   the SAME structured fields the deterministic engine emits, resolved
   semantically so novel ATS layouts, inline-prose duties, and unusual
-  headings parse where the regex heading tables can't. Anti-fabrication is
-  enforced server-side, not just in the prompt: every scalar fact (title,
-  company, location, salary, tech) AND every content-list item
-  (responsibilities, required/preferred qualifications) is dropped unless
-  grounded in the source text, and the source URL is never sent to the model
+  headings parse where the regex heading tables can't. Server-side grounding
+  checks supplement the prompt: scalar facts (including title, company,
+  location, salary, `roleDescription`, `jobType`, and tech) and content-list
+  items (responsibilities, required/preferred qualifications) are checked
+  against the source and dropped when the current deterministic matchers cannot
+  ground them. This reduces unsupported output but does not replace human
+  review. The source URL is never sent to the model
   (it can carry private ATS tokens, so only the posting text is forwarded).
   The client (`src/lib/aiDistill.ts`) is AI-first with the deterministic
   `jobExtract.ts` engine as the offline/no-key fallback on any non-200,
   timeout, or unusable reply — so distillation always produces a brief. The
-  route sits behind the localhost CSRF/Host guard; keys stay server-side. The
+  route sits behind the localhost CSRF/Host guard. `.env` keys stay server-side;
+  a menu-entered key reaches the route only in that transient request and is
+  never returned. The
   success response echoes the RESOLVED `provider` / `model` / `reasoningEffort`
   (never `apiKey` / `apiBaseUrl`) plus `attempts` (dispatch count, ≥1) so the
   client can record which model produced the brief.
@@ -129,8 +155,9 @@ The server layer (`server.ts` routing to focused `server/` modules) owns:
   absent Origin; `inbox` is polled same-origin by the app and stays behind
   the localhost CSRF/Host guard with no CORS header. The quick score
   reports only overlap of known tech keywords — it never invents resume
-  content, so the anti-fabrication-gated `/api/polish` remains the
-  authoritative fit verdict.
+  content. `/api/polish` provides the fuller provider-backed review, with
+  deterministic grounding/sanitization checks; its output still requires
+  human review.
 - workspace file storage under `job-search-workspace/` (auto-load,
   upload, save, reload — `server/workspace.ts`, which also owns the
   base-resume version history in `.trash/`)
@@ -161,9 +188,11 @@ modules under `server/ai/` so no single file carries the whole pipeline:
   through `fenceUntrusted`, which neutralizes literal fence-tag
   look-alikes so pasted content cannot escape its `<job_description>`-style
   delimiters; the input-firewall rule tells the model fenced content is
-  data, never instructions.
-- `sanitize.ts` — fit-score, missing-skill, structured suggestion, and
-  strict-review response validation (`sanitizeStrictReview`: enum
+  data, never instructions. Prompt budgets are structural: clip individual
+  fields/arrays before `JSON.stringify` (or parse, shrink, and re-serialize),
+  never character-slice serialized JSON into an invalid payload.
+- `sanitize.ts` — missing-skill, structured suggestion, and strict-review
+  response validation (`sanitizeStrictReview`: enum
   fallbacks, string clips, array caps, markup rejection on rewrites).
   The markup gate allows exactly the editor's inline-mark vocabulary
   (`<b>`/`<i>`/`<u>`, no attributes) because formatted bullets carry those
@@ -180,6 +209,9 @@ modules under `server/ai/` so no single file carries the whole pipeline:
 - `scoring.ts` — fit arithmetic and verdict derivation over the reviewer's
   `requirementCoverage` evidence (`scoreFromRequirementCoverage`,
   `coverageHasEligibilityBlocker`, `missingRequiredFromCoverage`).
+  Coverage statuses must be grounded against the submitted resume evidence
+  before the same rows reach the display table, bucket math, or gap caps; an
+  unsupported model-authored "covered" status cannot inflate any of them.
   `applyGapCapsAndVerdict` derives the server verdict from the fit score
   conservatively: a graduated cap scales with the number of genuinely missing
   required skills (≥1 → 79, ≥2 → 69, ≥3 → 60; a BLOCKER or unmet eligibility
@@ -198,24 +230,25 @@ modules under `server/ai/` so no single file carries the whole pipeline:
   `ELIGIBILITY_BLOCKER` hard gate, and the seniority-bucket regex); its
   header documents how the three deliberately differ. Add new gate terms
   there, considering all three lists together.
-- `grounding.ts` — `findUngroundedJdTerm`: the proposedText-level JD-term
-  gate behind `ungroundedJdTerm` drops. Detector 1 catches capitalized
-  tokens (incl. a non-verb first word); detector 2 catches a curated
-  lowercase tech-concept lexicon (microservices, machine learning, ci/cd…)
-  that deliberately mirrors the concept-class entries of
-  `src/resume/keywords.ts` (the TS module can't be imported from Node due
-  to its extensionless TS import chain). Matching is fuzzy (60% prefix) so
-  honest inflections survive.
+- `grounding.ts` — deterministic JD-term grounding helpers used by the
+  sanitizers. The proposed-text gate compares normalized JD terms against the
+  submitted resume scope and honest context; unsupported JD-only terms produce
+  structured grounding drops before a suggestion can be applied. Treat the
+  current normalization/matching rules as implementation detail and keep their
+  behavior locked by grounding/sanitizer probes rather than documenting one
+  prefix heuristic as a stable contract.
 - `json.ts` — `parseAiJson` (fenced / prose-wrapped / outermost-brace
   + trailing-comma repair). `errors.ts` — `UserSafeAiError` and the
   config-error → 400 mapping.
 
 ## API Design
 
-- Keep API routes explicit and local-only. There is no auth layer
-  because the server only runs on the user's machine.
-- Reject unknown or unsupported fields rather than silently dropping
-  them when accepting structured input.
+- Keep API routes explicit and loopback-only by default. There is no auth
+  layer. `HOST=0.0.0.0` is an explicit, unauthenticated LAN-exposure override;
+  never use it on a public or untrusted network.
+- Validate and coerce recognized boundary fields before use, and reject invalid
+  required values. Do not claim that unknown fields are rejected unless the
+  route has an explicit allowlist check and a regression test.
 - Return stable JSON response shapes for the frontend.
 - Cap request payloads (current limit: `maxRequestBytes = 8_000_000`).
 - Surface provider errors with safe, user-facing messages; never leak
@@ -230,13 +263,16 @@ Distill config, `/api/polish` receives the Tailor config as `provider` /
 `model` / `reasoningEffort`, and the strict-review pass receives the
 Review config as `audit*` fields. If a request omits provider fields
 (headless/API use), the server defaults to the **Claude Code CLI**
-(`claude-cli`) — a **zero per-token cost** subscription path — not a
-hosted API (`getDefaultProvider()` in `server/ai/providers.ts`). Setting
-`AI_PROVIDER` supplies that headless fallback; an *unknown* `AI_PROVIDER`
-still coerces to OpenAI, and `AI_MODEL` / `OPENAI_MODEL` select the
-OpenAI model (`gpt-5.5` default). The other subscription CLIs (Codex CLI
+(`claude-cli`) — an account-backed CLI path rather than a separately configured
+hosted API key (`getDefaultProvider()` in `server/ai/providers.ts`). Setting
+`AI_PROVIDER` supplies that headless fallback. A non-empty, unrecognized
+`AI_PROVIDER` is a fail-fast configuration error; it does not silently select
+OpenAI. When OpenAI is selected explicitly, its model comes from
+`OPENAI_MODEL` (`gpt-5.5` default). The other account-backed CLIs (Codex CLI
 and the Antigravity CLI `agy`, which replaced the retired Gemini CLI) are
-the same zero-cost path for their vendors. The frontend already defaults
+similar paths for their vendors. They avoid a separate metered API key in
+RoleFit, but access and usage limits remain governed by the installed CLI and
+signed-in provider account. The frontend already defaults
 all three stages to `claude-cli`, so this mostly affects the headless /
 no-provider request path.
 
@@ -244,9 +280,9 @@ Per-provider rules:
 
 - **Subscription CLIs** (Claude Code `claude-cli`, Codex CLI `codex-cli`, and
   the Antigravity CLI `antigravity-cli` — the `agy` binary that replaced the
-  retired Gemini CLI for Google's free tier and subscription) shell out to local
-  subprocesses via `server/ai-cli/` using your existing subscription auth — no
-  API key, no per-token cost.
+  retired Gemini CLI) shell out to local subprocesses via `server/ai-cli/`
+  using the CLI's existing account auth. RoleFit needs no API key for these
+  paths; provider entitlements and usage limits still apply.
 - Use each provider's native API (Anthropic Messages, Gemini
   `generateContent`) where supported. The Anthropic Messages call sends
   **no `temperature`** and **no trailing assistant prefill**: both return
@@ -257,16 +293,30 @@ Per-provider rules:
 - Use compatible `/chat/completions` endpoints for OpenRouter, Groq,
   Together AI, Mistral, and Local/custom.
 - Accept one-request `apiKey`, `provider`, `apiBaseUrl`, and `model`
-  values from the UI for ad-hoc use, but do not persist them. Distill uses
+  values from the UI for ad-hoc use. An `apiKey` may live only in page memory
+  for the session and in the same-origin request body. The local server uses it
+  only to authenticate the selected hosted/custom provider call; never persist,
+  log, or echo it. Distill uses
   that same request shape on `/api/distill`; Review uses the parallel
   `auditProvider`, `auditApiKey`, `auditApiBaseUrl`, `auditModel`, and
-  `auditReasoningEffort` fields on `/api/polish`. Menu-entered API keys for
-  every stage are one-session values and are never persisted.
-- Allow `.env` to set provider-specific keys (`OPENAI_API_KEY`,
-  `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `OPENROUTER_API_KEY`,
-  `GROQ_API_KEY`, `TOGETHER_API_KEY`, `MISTRAL_API_KEY`, `AI_API_KEY`)
-  and provider/model/base-URL overrides (`AI_PROVIDER`, `AI_BASE_URL`,
-  `AI_MODEL`, `OPENAI_MODEL`).
+  `auditReasoningEffort` fields on `/api/polish`.
+- `.env` keys: `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`,
+  `OPENROUTER_API_KEY`, `GROQ_API_KEY`, `TOGETHER_API_KEY`, and
+  `MISTRAL_API_KEY`. `OPENAI_COMPATIBLE_API_KEY` applies only to the headless
+  `openai-compatible` provider, and `LOCAL_AI_API_KEY` applies only to
+  Local/custom; neither is a global fallback. `AI_API_KEY` is the explicit
+  shared fallback when a provider-specific key is absent.
+- Default provider: `AI_PROVIDER`.
+- Provider-specific model overrides: `OPENAI_MODEL`, `ANTHROPIC_MODEL`,
+  `GEMINI_MODEL`, `OPENROUTER_MODEL`, `GROQ_MODEL`, `TOGETHER_MODEL`,
+  `MISTRAL_MODEL`, `LOCAL_AI_MODEL`, `CLAUDE_CLI_MODEL`, `CODEX_CLI_MODEL`,
+  and `ANTIGRAVITY_CLI_MODEL`. For request resolution, `AI_MODEL` is only the
+  generic model override for the headless `openai-compatible` provider; it does
+  not replace the provider-specific variables above.
+- Provider-specific base-URL overrides: `OPENROUTER_BASE_URL`,
+  `GROQ_BASE_URL`, `TOGETHER_BASE_URL`, `MISTRAL_BASE_URL`, and
+  `LOCAL_AI_BASE_URL`. `AI_BASE_URL` / `OPENAI_COMPATIBLE_BASE_URL` apply only
+  to the headless `openai-compatible` provider, not to every provider.
 
 The AI must:
 
@@ -308,14 +358,16 @@ The AI must:
   brochure vocabulary, no claims the candidate could not defend in an
   interview, and proposed text stays close to the current field's length
   so the one-page layout survives
-- keep strict review as an audit of the original resume plus polished
-  resume, not as a second full rewrite
+- keep strict review non-rewriting: in a combined run it compares the original
+  scope with the sanitized tailored result; in review-only it audits the
+  current edited draft as-is
 
 The only LOCAL fallbacks are the deterministic distiller
 (`src/lib/jobExtract.ts`) and the local fit estimate (D011, 2026-07-06):
 when the AI tailor, review, or cover-letter call cannot run or returns
 nothing usable, the stage fails plainly with a classified reason and a
-Retry — no locally generated draft stands in.
+Retry — no locally generated draft stands in. Application-answer generation
+also has no local draft fallback.
 
 ## Job Posting Import
 
@@ -386,29 +438,40 @@ In the response:
 
 ## Document Workflow
 
-- DOCX is the format-preserving path for uploaded Word resumes; `.tex`
-  sources preserve LaTeX in place automatically. PDF-only sources must be
-  pasted as extracted text.
-- The clean PDF path is local HTML print: `src/lib/resumeDocument.ts`
-  parses the tailored text, `src/sections/ResumeDocument.tsx` renders the
-  document, and `src/sections/ResumePrintLayer.tsx` exposes that same HTML
-  to `window.print()` / browser Save as PDF. The output stays selectable,
-  ATS-readable text, but pixel-faithful formatting should use LaTeX export.
-- Treat uploaded DOCX bytes as transient — extract text, perform the
-  edit, and write back without persisting unrelated copies.
+- The structured `ResumeData` model, edited through the owned typeset page, is
+  the source of truth. `.txt` / `.md` / `.csv` (or pasted) resumes are parsed once
+  into that model; PDF-only sources must be pasted as extracted text. There is no
+  DOCX or LaTeX import/export.
+- `.resume` is the portable save format for resume data: a lossless JSON envelope
+  (`{ format: "rolefit.resume", version: 1, data: <ResumeData> }`) written and read
+  entirely client-side (like the PDF export — no server route). `src/lib/resumeFile.ts`
+  owns `serializeResumeFile` / `parseResumeFile`; the latter coerces shape
+  defensively and remaps ids on load so a file from a prior session cannot collide
+  with the in-memory id counter.
+- D014: `src/typeset/` is the canonical layout path for the editor and PDF
+  export. Both consume the same layout result so line breaks, vertical flow, and
+  pagination stay aligned — the editor is its own WYSIWYG preview, so there is no
+  separate compile-preview overlay, and typesetting/PDF generation run in the
+  browser with no external toolchain.
+- `src/sections/ResumePrintLayer.tsx` remains an internal/manual browser-print
+  surface, not a second advertised PDF engine. The typeset eval fixtures under
+  `src/typeset/__evals__/` are committed static regression truth for the owned
+  engine; they are frozen (no external regeneration path).
 - Keep `job-search-workspace/` the canonical location for personal
   resumes, application trackers, exported drafts, and job-specific
   files. The folder is gitignored except for its `README.md`.
-- On startup, the server discovers root-level LaTeX base resumes named
-  `base-resume.tex` or `base-resume-*.tex`, loads `base-resume.tex`
-  first when present, then named variants. Legacy `base-resume.docx`,
-  `.txt`, `.md`, and `.csv` files remain fallback-only for old local
-  workspaces.
+- On startup, the server discovers root-level base resumes named
+  `base-resume.resume` or `base-resume-*.resume`, loading `base-resume.resume`
+  first when present, then named variants; when none exist it seeds the bundled
+  `server/starter.resume`. Legacy `.txt`, `.md`, and `.csv` base resumes remain
+  readable as fallback plain text for old local workspaces.
 
 ## Deployment And Infrastructure
 
-- Current shape is local-only: no hosted backend, no database, no
-  account system.
+- Current shape is local-first: no hosted RoleFit backend, no database, no
+  account system. The server binds to loopback by default; the optional
+  `HOST=0.0.0.0` override exposes the unauthenticated app to the LAN and must
+  never be used on a public or untrusted network.
 - Do not introduce infrastructure, platform changes, or paid / vendor
   dependencies without asking.
 - Do not add Electron / Tauri / native desktop packaging unless the user

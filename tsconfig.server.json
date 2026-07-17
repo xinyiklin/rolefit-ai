@@ -27,7 +27,6 @@
     "server.ts",
     "server/**/*.ts",
     "src/lib/jobIdentity.ts",
-    "src/lib/latexText.ts",
     "src/resume/sections.ts"
   ]
 }

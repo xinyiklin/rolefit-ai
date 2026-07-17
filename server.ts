@@ -8,17 +8,7 @@ import { handleDistill } from "./server/ai/distill.ts";
 import { getDefaultModel, getDefaultProvider } from "./server/ai/providers.ts";
 import { handleApplicationAnswers } from "./server/ai/applicationAnswers.ts";
 import { handleCoverLetter } from "./server/ai/coverLetter.ts";
-import {
-  listTemplates,
-  renderResumeTex,
-  renderResumeTexFromSchema,
-  extractPlainTextFromLatex,
-  checkTectonicAvailability,
-  compileTexToPdf,
-  defaultTemplateId
-} from "./server/latex/index.ts";
-import { extractDocxResume } from "./server/docx.ts";
-import { readBody, sendJson } from "./server/http.ts";
+import { sendJson } from "./server/http.ts";
 import {
   ensureJobWorkspace,
   handleRestoreBaseResume,
@@ -62,9 +52,9 @@ await loadLocalEnv();
 await ensureJobWorkspace();
 
 const port = Number(process.env.PORT ?? 5181);
-// Bind to loopback by default: this app has no auth and exposes URL-fetch,
-// file-storage, and LaTeX/DOCX-compile endpoints, so it must not be reachable
-// from other devices on the network. Set HOST=0.0.0.0 to opt into LAN access.
+// Bind to loopback by default: this app has no auth and exposes URL-fetch and
+// file-storage endpoints, so it must not be reachable from other devices on the
+// network. Set HOST=0.0.0.0 to opt into LAN access.
 const host = process.env.HOST || "127.0.0.1";
 
 function decodeRouteSegment(value: string): string | null {
@@ -72,143 +62,6 @@ function decodeRouteSegment(value: string): string | null {
     return decodeURIComponent(value);
   } catch {
     return null;
-  }
-}
-
-async function handleImportResumeDocx(req: IncomingMessage, res: ServerResponse): Promise<void> {
-  if (req.method !== "POST") {
-    sendJson(res, 405, { error: "Use POST." });
-    return;
-  }
-
-  try {
-    const { docxBase64 } = JSON.parse(await readBody(req));
-    const result = await extractDocxResume(docxBase64);
-
-    sendJson(res, 200, result);
-  } catch (error) {
-    sendJson(res, 400, { error: error instanceof Error ? error.message : "DOCX import failed." });
-  }
-}
-
-async function handleListTemplates(req: IncomingMessage, res: ServerResponse): Promise<void> {
-  if (req.method !== "GET") {
-    sendJson(res, 405, { error: "Use GET." });
-    return;
-  }
-
-  try {
-    const tectonic = await checkTectonicAvailability();
-    sendJson(res, 200, {
-      templates: listTemplates(),
-      defaultTemplateId,
-      tectonic
-    });
-  } catch (error) {
-    sendJson(res, 500, { error: error instanceof Error ? error.message : "Template list failed." });
-  }
-}
-
-async function handleRenderResumeLatex(req: IncomingMessage, res: ServerResponse): Promise<void> {
-  if (req.method !== "POST") {
-    sendJson(res, 405, { error: "Use POST." });
-    return;
-  }
-
-  try {
-    const body = JSON.parse(await readBody(req));
-    const resumeText = String(body.resumeText ?? "");
-    const templateId = String(body.templateId ?? defaultTemplateId);
-    const wantsPdf = Boolean(body.wantsPdf);
-    // rawTex: the text already IS a full LaTeX document (preserve-format on a
-    // .tex source) — compile it as-is instead of pouring it into a template.
-    const rawTex = Boolean(body.rawTex);
-    // resume: structured editor data — render straight through the template,
-    // skipping the lossy plain-text parse (Compile Preview path).
-    const structured = body.resume && typeof body.resume === "object" ? body.resume : null;
-    // docStyle: editor's Format menu values (spacing/leading) — when present, the
-    // template renders with matching pt overrides so the PDF mirrors the editor.
-    const docStyle = body.docStyle && typeof body.docStyle === "object" ? body.docStyle : null;
-
-    // Cap the structured payload before rendering (defense-in-depth, mirrors the
-    // DOCX export cap) so a pathological client body can't blow up the renderer.
-    if (structured && JSON.stringify(structured).length > 400_000) {
-      sendJson(res, 400, { error: "Resume data is too large to render." });
-      return;
-    }
-
-    if (!structured && !rawTex && !resumeText.trim()) {
-      sendJson(res, 400, { error: "Resume text is empty." });
-      return;
-    }
-
-    // Cap the text (template) and rawTex branches too — reject rather than slice,
-    // since truncating LaTeX mid-document would corrupt the Tectonic compile.
-    // Mirrors the import-resume-tex guard.
-    if (resumeText.length > 200_000) {
-      sendJson(res, 400, { error: "Resume text is too large to render." });
-      return;
-    }
-
-    let tex: string;
-    let resolvedTemplateId: string;
-    if (structured) {
-      ({ tex, templateId: resolvedTemplateId } = renderResumeTexFromSchema({ schema: structured, templateId, docStyle }));
-    } else if (rawTex) {
-      tex = resumeText;
-      resolvedTemplateId = "raw";
-    } else {
-      ({ tex, templateId: resolvedTemplateId } = renderResumeTex({ resumeText, templateId, docStyle }));
-    }
-
-    let pdfBase64: string | null = null;
-    let pdfError: { code: string; message: string } | null = null;
-    if (wantsPdf) {
-      try {
-        const pdfBuffer = await compileTexToPdf(tex);
-        pdfBase64 = pdfBuffer.toString("base64");
-      } catch (error) {
-        pdfError = {
-          code: (error as { code?: string })?.code ?? "COMPILE_FAILED",
-          message: error instanceof Error ? error.message : "PDF compile failed."
-        };
-      }
-    }
-
-    sendJson(res, 200, { tex, templateId: resolvedTemplateId, pdfBase64, pdfError });
-  } catch (error) {
-    sendJson(res, 400, { error: error instanceof Error ? error.message : "LaTeX render failed." });
-  }
-}
-
-async function handleImportResumeTex(req: IncomingMessage, res: ServerResponse): Promise<void> {
-  if (req.method !== "POST") {
-    sendJson(res, 405, { error: "Use POST." });
-    return;
-  }
-
-  try {
-    const body = JSON.parse(await readBody(req));
-    const tex = String(body.tex ?? "");
-    if (!tex.trim()) {
-      sendJson(res, 400, { error: "LaTeX source is empty." });
-      return;
-    }
-    // A real résumé .tex is a few KB. The brace-balanced reader is worst-case
-    // O(n²) on pathological unbalanced-brace input, so reject oversized payloads
-    // before parsing to keep one cheap upload from freezing the event loop.
-    if (tex.length > 200_000) {
-      sendJson(res, 400, { error: "LaTeX source is too large to import." });
-      return;
-    }
-    const text = extractPlainTextFromLatex(tex);
-    if (!text.trim()) {
-      sendJson(res, 422, { error: "Could not extract text from the LaTeX source. Paste the resume content directly instead." });
-      return;
-    }
-    sendJson(res, 200, { text });
-  } catch (error) {
-    sendJson(res, 400, { error: error instanceof Error ? error.message : "LaTeX import failed." });
   }
 }
 
@@ -357,26 +210,6 @@ const server = createServer((req, res) => {
     return;
   }
 
-  if (pathname === "/api/import-resume-docx") {
-    void handleImportResumeDocx(req, res);
-    return;
-  }
-
-  if (pathname === "/api/templates") {
-    void handleListTemplates(req, res);
-    return;
-  }
-
-  if (pathname === "/api/render-resume-latex") {
-    void handleRenderResumeLatex(req, res);
-    return;
-  }
-
-  if (pathname === "/api/import-resume-tex") {
-    void handleImportResumeTex(req, res);
-    return;
-  }
-
   if (pathname === "/api/applications") {
     if (req.method === "GET") {
       void handleListApplications(req, res);
@@ -399,14 +232,14 @@ const server = createServer((req, res) => {
     return;
   }
 
-  const resumeFileMatch = pathname.match(/^\/api\/applications\/([^/]+)\/resume\.(tex|pdf)$/);
+  const resumeFileMatch = pathname.match(/^\/api\/applications\/([^/]+)\/resume\.pdf$/);
   if (resumeFileMatch) {
     const id = decodeRouteSegment(resumeFileMatch[1]);
     if (id === null) {
       sendJson(res, 400, { error: "Invalid application id." });
       return;
     }
-    void handleApplicationResumeFile(req, res, id, resumeFileMatch[2]);
+    void handleApplicationResumeFile(req, res, id);
     return;
   }
 

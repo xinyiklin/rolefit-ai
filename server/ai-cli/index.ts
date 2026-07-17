@@ -6,7 +6,7 @@
 
 import { spawn } from "node:child_process";
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -32,6 +32,25 @@ type CliArgs = {
   userPrompt?: string;
 };
 
+// Subscription CLIs should never be able to exhaust the local server by writing
+// an unbounded transcript or diagnostic stream. Normal structured replies are a
+// few KB; this leaves ample headroom while bounding both captured streams.
+const MAX_CLI_STREAM_BYTES = 2_000_000;
+
+function terminateChild(child: ChildProcessWithoutNullStreams): void {
+  child.kill("SIGTERM");
+  setTimeout(() => child.kill("SIGKILL"), 2_000).unref?.();
+}
+
+async function readBoundedFile(path: string): Promise<string> {
+  const info = await stat(path).catch(() => null);
+  if (!info) return "";
+  if (info.size > MAX_CLI_STREAM_BYTES) {
+    throw new Error("Codex returned too much output. Try again or choose another provider.");
+  }
+  return readFile(path, "utf8");
+}
+
 function runCli(
   command: string,
   args: string[],
@@ -43,39 +62,60 @@ function runCli(
     const child = spawn(command, args, { stdio: ["pipe", "pipe", "pipe"], cwd }) as ChildProcessWithoutNullStreams;
     let stdout = "";
     let stderr = "";
+    let stdoutBytes = 0;
+    let stderrBytes = 0;
+    let settled = false;
+    const rejectOnce = (error: Error): void => {
+      if (settled) return;
+      settled = true;
+      reject(error);
+    };
+    const appendBounded = (stream: "stdout" | "stderr", chunk: Buffer): void => {
+      if (settled) return;
+      const bytes = chunk.length;
+      if (stream === "stdout") stdoutBytes += bytes;
+      else stderrBytes += bytes;
+      if ((stream === "stdout" ? stdoutBytes : stderrBytes) > MAX_CLI_STREAM_BYTES) {
+        terminateChild(child);
+        rejectOnce(new Error(`${command} returned too much output. Try again or choose another provider.`));
+        return;
+      }
+      if (stream === "stdout") stdout += chunk.toString();
+      else stderr += chunk.toString();
+    };
     const timer = setTimeout(() => {
-      child.kill("SIGTERM");
-      setTimeout(() => child.kill("SIGKILL"), 2_000).unref?.();
+      terminateChild(child);
       const error = new Error(`${command} timed out after ${Math.round(timeoutMs / 1000)}s. Try again or switch to a faster model.`) as CliError;
       error.timedOut = true;
-      reject(error);
+      rejectOnce(error);
     }, timeoutMs);
-    child.stdout.on("data", (chunk) => { stdout += chunk.toString(); });
-    child.stderr.on("data", (chunk) => { stderr += chunk.toString(); });
+    child.stdout.on("data", (chunk: Buffer) => appendBounded("stdout", chunk));
+    child.stderr.on("data", (chunk: Buffer) => appendBounded("stderr", chunk));
     child.on("error", (err) => {
       clearTimeout(timer);
       if ((err as CliError).code === "ENOENT") {
-        reject(new Error(`${command} is not installed or not on PATH.`));
+        rejectOnce(new Error(`${command} is not installed or not on PATH.`));
       } else {
-        reject(new Error(`${command} could not be started. Check the CLI installation and try again.`));
+        rejectOnce(new Error(`${command} could not be started. Check the CLI installation and try again.`));
       }
     });
     child.on("close", (code) => {
       clearTimeout(timer);
+      if (settled) return;
       if (code === 0) {
+        settled = true;
         resolve({ stdout, stderr });
       } else {
-        // Include the first line of stderr so the actual CLI error is visible in logs.
-        const hint = stderr.trim().split("\n")[0]?.slice(0, 200) ?? "";
-        const detail = hint ? ` (${hint})` : "";
-        const error = new Error(`${command} exited with code ${code}${detail}. Check CLI authentication and model access, then try again.`) as CliError;
+        // Never put raw CLI stderr into the Error message: route-level logging
+        // records that message, and a CLI diagnostic may echo sensitive prompt
+        // text. Claude classification still receives bounded stdout privately.
+        const error = new Error(`${command} exited with code ${code}. Check CLI authentication and model access, then try again.`) as CliError;
         // Attach the captured streams so callers can classify the failure — e.g.
         // claude writes its JSON result (incl. auth/401 errors) to stdout even on
         // a non-zero exit, which would otherwise be lost.
         error.stdout = stdout;
-        error.stderr = stderr;
         error.exitCode = code;
-        reject(error);
+        rejectOnce(error);
       }
     });
     // Swallow EPIPE if the child exits before draining stdin — the real failure is
@@ -89,20 +129,30 @@ function runCli(
 
 // ----- Claude Code (claude --print) -----
 
-export async function callClaudeCli({ model, reasoningEffort, systemPrompt, userPrompt }: CliArgs): Promise<string> {
-  const args = ["-p", "--tools", "", "--output-format", "json"];
+export function buildClaudeCliArgs({ model, reasoningEffort, systemPrompt }: CliArgs): string[] {
+  const args = [
+    "-p", "--tools", "", "--no-session-persistence",
+    "--setting-sources", "", "--strict-mcp-config", "--mcp-config", "{}",
+    "--disable-slash-commands", "--no-chrome", "--output-format", "json"
+  ];
   if (systemPrompt) args.push("--append-system-prompt", systemPrompt);
   if (model && model !== "default") args.push("--model", model);
+  args.push("--effort", reasoningEffort || "low");
+  return args;
+}
+
+export async function callClaudeCli({ model, reasoningEffort, systemPrompt, userPrompt }: CliArgs): Promise<string> {
   // Default to LOW reasoning effort. With no --effort flag the CLI runs at its
   // session default (high), which spends ~17K thinking tokens on a structured
   // resume rewrite and pushes a single call past 5 minutes. Polish is a bounded
   // rewrite/audit, not open-ended reasoning — low effort cuts each call to ~70s
   // with no loss in suggestion quality. An explicit reasoningEffort still wins.
-  args.push("--effort", reasoningEffort || "low");
+  const args = buildClaudeCliArgs({ model, reasoningEffort, systemPrompt });
 
+  const workdir = await mkdtemp(join(tmpdir(), "rolefit-claude-"));
   let stdout;
   try {
-    ({ stdout } = await runCli("claude", args, userPrompt));
+    ({ stdout } = await runCli("claude", args, userPrompt, { cwd: workdir }));
   } catch (error) {
     // Keep the actionable "not installed" hint (it's in the SAFE set). claude
     // also writes its JSON result — including auth/401 errors — to stdout even on
@@ -112,6 +162,8 @@ export async function callClaudeCli({ model, reasoningEffort, systemPrompt, user
     const err = error as CliError;
     if (/is not installed or not on PATH/.test(err?.message ?? "")) throw error;
     throw classifyClaudeFailure(typeof err?.stdout === "string" ? err.stdout : "", err);
+  } finally {
+    await rm(workdir, { recursive: true, force: true }).catch(() => {});
   }
 
   let envelope;
@@ -129,7 +181,7 @@ export async function callClaudeCli({ model, reasoningEffort, systemPrompt, user
 // Map a claude CLI failure to an actionable, SAFE message: a 401 / auth failure
 // points at sign-in; a timeout (no CLI stdout to classify) points at a faster
 // model; anything else is the generic "couldn't complete" hint. All three are in
-// errors.mjs' SAFE set so /api/polish surfaces them verbatim instead of "did not
+// errors.ts' SAFE set so /api/polish surfaces them verbatim instead of "did not
 // return a usable draft". `stdout` is claude's JSON result (present on a non-zero
 // exit); `sourceError` is the rejected runCli error (carries the timeout flag).
 function classifyClaudeFailure(stdout: string, sourceError?: CliError): Error {
@@ -155,6 +207,22 @@ function classifyClaudeFailure(stdout: string, sourceError?: CliError): Error {
 
 // ----- Codex CLI (codex exec) -----
 
+export function buildCodexCliArgs({ model, reasoningEffort }: CliArgs, workdir: string, outputPath: string): string[] {
+  const args = [
+    "exec",
+    "--skip-git-repo-check",
+    "--sandbox", "read-only",
+    "--ephemeral",
+    "--ignore-user-config",
+    "--ignore-rules",
+    "-C", workdir,
+    "--output-last-message", outputPath
+  ];
+  if (model && model !== "default") args.push("--model", model);
+  if (reasoningEffort) args.push("-c", `model_reasoning_effort="${reasoningEffort}"`);
+  return args;
+}
+
 export async function callCodexCli({ model, reasoningEffort, systemPrompt, userPrompt }: CliArgs): Promise<string> {
   const combined = systemPrompt
     ? `${systemPrompt}\n\n---\n\n${userPrompt}`
@@ -162,13 +230,11 @@ export async function callCodexCli({ model, reasoningEffort, systemPrompt, userP
 
   const workdir = await mkdtemp(join(tmpdir(), "rolefit-codex-"));
   const outputPath = join(workdir, "last-message.txt");
-  const args = ["exec", "--skip-git-repo-check", "--sandbox", "read-only", "--output-last-message", outputPath];
-  if (model && model !== "default") args.push("--model", model);
-  if (reasoningEffort) args.push("-c", `model_reasoning_effort="${reasoningEffort}"`);
+  const args = buildCodexCliArgs({ model, reasoningEffort }, workdir, outputPath);
 
   try {
-    const { stdout } = await runCli("codex", args, combined);
-    const directOutput = await readFile(outputPath, "utf8").catch(() => "");
+    const { stdout } = await runCli("codex", args, combined, { cwd: workdir });
+    const directOutput = await readBoundedFile(outputPath);
     return directOutput.trim() || extractCodexFinalOutput(stdout);
   } finally {
     await rm(workdir, { recursive: true, force: true }).catch(() => {});
@@ -176,6 +242,15 @@ export async function callCodexCli({ model, reasoningEffort, systemPrompt, userP
 }
 
 // ----- Antigravity CLI (agy — Google's Gemini CLI successor, non-interactive) -----
+
+export function buildAntigravityCliArgs({ model }: CliArgs): string[] {
+  const args = ["-p", ""];
+  if (model && model !== "default") args.push("--model", model);
+  // --sandbox supplies the terminal restrictions that the throwaway cwd alone
+  // cannot provide. Permission auto-approval remains necessary in print mode.
+  args.push("--sandbox", "--dangerously-skip-permissions");
+  return args;
+}
 
 export async function callAntigravityCli({ model, systemPrompt, userPrompt }: CliArgs): Promise<string> {
   // agy has no separate system-prompt flag, so combine like Codex/Gemini.
@@ -193,16 +268,15 @@ export async function callAntigravityCli({ model, systemPrompt, userPrompt }: Cl
   //   models`, e.g. "Gemini 3.5 Flash (High)" (spaces + parens — passed as one
   //   argv element, so no shell parsing). --dangerously-skip-permissions: a
   //   non-interactive spawn otherwise blocks on a tool-approval prompt that never
-  //   renders (agy is an agentic harness). Auto-approving is safe here because the
-  //   CLI runs in a throwaway empty temp dir with nothing to read or write, and
-  //   the task only asks for a JSON answer. The runCli timeout still bounds any
-  //   hang. (All verified against agy 1.0.16.)
-  const args = ["-p", ""];
-  if (model && model !== "default") args.push("--model", model);
-  args.push("--dangerously-skip-permissions");
+  //   renders (agy is an agentic harness). The CLI also receives --sandbox and a
+  //   throwaway cwd to reduce access; this is defense in depth, not a claim of
+  //   absolute OS isolation. The runCli timeout still bounds any hang.
+  const args = buildAntigravityCliArgs({ model });
 
-  // Throwaway working dir: agy can't pick up project context (AGENTS.md/AGY.md)
-  // or touch project files. UX/color warnings go to stderr, so stdout stays clean.
+  // Throwaway working dir keeps project instruction files out of automatic
+  // discovery. Together with --sandbox it reduces filesystem exposure, but it
+  // is not an OS-level guarantee against absolute reads or network access.
+  // UX/color warnings go to stderr, so stdout stays clean.
   const workdir = await mkdtemp(join(tmpdir(), "rolefit-antigravity-"));
   try {
     const { stdout } = await runCli("agy", args, combined, { cwd: workdir });

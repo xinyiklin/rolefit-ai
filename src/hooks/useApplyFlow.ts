@@ -1,12 +1,12 @@
 /**
- * useApplyFlow — the Apply flow, extracted from App.tsx: the download-prompt +
- * default-export-format state, commitApply, handleApply, handleApplyDownloadPick,
- * handleApplyOnly, and saveAppliedResumeArtifacts.
+ * useApplyFlow — the Apply flow, extracted from App.tsx: the download-prompt
+ * state, commitApply, handleApply, handleApplyDownloadPick, handleApplyOnly,
+ * and saveAppliedResumeArtifacts.
  *
- * State ownership: applyMergeTargetRef/applyDownloadPrompt/defaultExportFormat
- * are OWNED here — every mutator of them is one of these functions. App only
- * reads applyDownloadPrompt/defaultExportFormat for render (the
- * ApplyDownloadDialog) and calls handleApply from the Apply button.
+ * State ownership: applyMergeTargetRef/applyDownloadPrompt are OWNED here —
+ * every mutator of them is one of these functions. App only reads
+ * applyDownloadPrompt for render (the ApplyDownloadDialog) and calls
+ * handleApply from the Apply button.
  *
  * Everything this cluster reads or mutates OUTSIDE its own state (job/resume
  * text, the polish result, the applications store, export/download, duplicate
@@ -21,7 +21,6 @@ import {
 } from "./useApplications";
 import type { ApplyDuplicateResolution } from "./useDuplicateGuard";
 import type { ExtractedJobTracking } from "../lib/jobExtract";
-import { loadDefaultExportFormat, saveDefaultExportFormat, type ExportFormat } from "../lib/exportPrefs";
 import type { StageAiUsage } from "../lib/aiUsage";
 import type { ResumeData } from "../lib/resumeData";
 import type { PolishedResume } from "../resumeEngine";
@@ -51,15 +50,11 @@ type UseApplyFlowArgs = {
   currentJobTracking: () => ExtractedJobTracking;
   resolveApplyDuplicate: () => Promise<ApplyDuplicateResolution>;
   canExportResume: boolean;
-  handlePrintResume: (overrideBase?: string) => void;
-  handleDownloadTex: (overrideBase?: string) => void | Promise<void>;
-  handleDownloadLatexPdf: (overrideBase?: string) => void | Promise<void>;
-  getResumeArtifacts: () => Promise<
-    { tex: string; pdfBase64: string | null; fileName: string; templateId: string } | null
-  >;
+  handleDownloadPdf: (overrideBase?: string) => void | Promise<void>;
+  getResumeArtifacts: () => Promise<{ pdfBase64: string | null; fileName: string } | null>;
   clearAutosaveDraft: () => void;
   markResumeClean: () => void;
-  setTexStatus: (value: string) => void;
+  setExportStatus: (value: string) => void;
   setActiveOutputTab: (tab: OutputTab) => void;
   setExpandedApplicationId: (id: string | null) => void;
 };
@@ -84,13 +79,11 @@ export function useApplyFlow({
   currentJobTracking,
   resolveApplyDuplicate,
   canExportResume,
-  handlePrintResume,
-  handleDownloadTex,
-  handleDownloadLatexPdf,
+  handleDownloadPdf,
   getResumeArtifacts,
   clearAutosaveDraft,
   markResumeClean,
-  setTexStatus,
+  setExportStatus,
   setActiveOutputTab,
   setExpandedApplicationId
 }: UseApplyFlowArgs) {
@@ -102,13 +95,11 @@ export function useApplyFlow({
   const applyMergeTargetRef = useRef<string | null>(null);
   // Post-Apply download prompt: holds the just-applied role's label while open.
   const [applyDownloadPrompt, setApplyDownloadPrompt] = useState<{ label: string } | null>(null);
-  // The user's remembered "download this format on Apply" choice (localStorage).
-  const [defaultExportFormat, setDefaultExportFormat] = useState<ExportFormat | null>(loadDefaultExportFormat);
 
-  // Render the current resume to .tex/.pdf and persist them under the applied
+  // Render the current resume to PDF and persist it under the applied
   // application, then attach the returned metadata. Best-effort: Apply has
-  // already succeeded, so a failed render/compile is swallowed (tex-only is a
-  // valid outcome when Tectonic is missing).
+  // already succeeded, so a failed render is swallowed (the application is
+  // still saved even without a resume snapshot attached).
   async function saveAppliedResumeArtifacts(id: string, label: string) {
     try {
       const artifacts = await getResumeArtifacts();
@@ -117,17 +108,15 @@ export function useApplyFlow({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          tex: artifacts.tex,
           pdfBase64: artifacts.pdfBase64 ?? undefined,
-          fileName: artifacts.fileName,
-          templateId: artifacts.templateId
+          fileName: artifacts.fileName
         })
       });
       const data = await res.json();
       if (!res.ok || !data.resumeArtifacts) return;
       patchApplication(id, { resumeArtifacts: data.resumeArtifacts });
-      setTexStatus(
-        `Applied "${label}" — saved resume ${data.resumeArtifacts.hasPdf ? ".tex + PDF" : ".tex (install Tectonic to also save the PDF)"}.`
+      setExportStatus(
+        `Applied "${label}" — saved resume ${data.resumeArtifacts.hasPdf ? "PDF" : "(PDF could not be typeset)"}.`
       );
     } catch {
       // Best-effort: the application is already saved.
@@ -216,7 +205,7 @@ export function useApplyFlow({
     // guard stops warning. A later edit re-flips `dirty` and re-arms the guard.
     clearAutosaveDraft();
     markResumeClean();
-    setTexStatus(`Applied — saved "${existing?.title || app.title}" to Applications (${usedBase ? "original" : "tailored"} resume).`);
+    setExportStatus(`Applied — saved "${existing?.title || app.title}" to Applications (${usedBase ? "original" : "tailored"} resume).`);
     setActiveOutputTab("applications");
     setExpandedApplicationId(existing?.id ?? app.id);
     void saveAppliedResumeArtifacts(existing?.id ?? app.id, existing?.title || app.title);
@@ -224,7 +213,7 @@ export function useApplyFlow({
 
   // Apply button handler: runs the layered duplicate scan first (warn / confirm
   // as needed — see findDuplicatesForTarget), then either commits immediately
-  // (no download dialog) or shows the pre-apply dialog for format/base choice.
+  // (no download dialog) or shows the pre-apply dialog for the file name.
   async function handleApply() {
     if (!jobUrl.trim() && !jobDescription.trim()) return;
     // Reset before evaluating so a prior call's stale target can never leak
@@ -244,17 +233,10 @@ export function useApplyFlow({
     setApplyDownloadPrompt({ label: existing?.title || draft.title });
   }
 
-  function handleApplyDownloadPick(format: ExportFormat, makeDefault: boolean, fileBaseName: string) {
-    if (makeDefault) {
-      saveDefaultExportFormat(format);
-      setDefaultExportFormat(format);
-    }
+  function handleApplyDownloadPick(fileBaseName: string) {
     setApplyDownloadPrompt(null);
     commitApply();
-    const base = fileBaseName || undefined;
-    if (format === "pdf-latex") void handleDownloadLatexPdf(base);
-    else if (format === "pdf-clean") handlePrintResume(base);
-    else handleDownloadTex(base);
+    void handleDownloadPdf(fileBaseName || undefined);
   }
 
   function handleApplyOnly() {
@@ -266,7 +248,6 @@ export function useApplyFlow({
     applyMergeTargetRef,
     applyDownloadPrompt,
     setApplyDownloadPrompt,
-    defaultExportFormat,
     handleApply,
     handleApplyDownloadPick,
     handleApplyOnly

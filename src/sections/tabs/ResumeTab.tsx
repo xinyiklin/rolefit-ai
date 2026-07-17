@@ -1,23 +1,57 @@
 import { useEffect, useState, type ReactNode } from "react";
+import { SpellCheck } from "lucide-react";
 
 import type { PolishedResume, ResumeDiff } from "../../resumeEngine";
 import type { ResumeData } from "../../lib/resumeData";
+import { isFieldFullyMarked, type FieldMark } from "../../lib/inlineMarksText";
 import type { TailorMode } from "../../lib/tailorScope";
 import type { ResumeEditorActions } from "../../hooks/useResumeEditor";
 import type { TailorChangeTarget } from "../../resume/types";
-import { DOC_ZOOM_OPTIONS, type DocStyleControls } from "../../hooks/useDocStyle";
+import { DOC_PAGE_WIDTH_PX, DOC_ZOOM_OPTIONS, type DocStyleControls } from "../../hooks/useDocStyle";
+import type { EditorPrefsControls } from "../../hooks/useEditorPrefs";
 import { verdictPillClass, type FitVerdict } from "../../hooks/useResumeAnalysis";
 import type { JobConstraint } from "../../lib/jobConstraints";
 import type { AutosavedDraft } from "../../hooks/useAutosaveDraft";
 import { FormatMenu } from "../FormatMenu";
 import { StyleMenu } from "../StyleMenu";
-import { ResumeEditor } from "../editor/ResumeEditor";
+import { TypesetEditor } from "../editor/TypesetEditor";
 import { ReviewRail } from "../ReviewRail";
+
+// Standard-entry title/subtitle values that carry text (skills/summary items
+// reuse those columns for other meanings, so they're excluded).
+function entryFieldValues(data: ResumeData | null, field: "title" | "subtitle"): string[] {
+  if (!data) return [];
+  const key = field === "title" ? "titleLeft" : "subtitleLeft";
+  return data.sections
+    .filter((section) => section.type !== "skills" && section.type !== "summary")
+    .flatMap((section) => section.items.map((entry) => entry[key]))
+    .filter((value) => value.trim());
+}
+
+// Chip state: once any entry carries the mark, "on" means EVERY entry does;
+// before that the whole-field render flag stands in (untouched resumes).
+function entriesMarkOn(
+  data: ResumeData | null,
+  field: "title" | "subtitle",
+  mark: FieldMark,
+  flag: boolean
+): boolean {
+  const values = entryFieldValues(data, field);
+  if (!values.length) return flag;
+  const marked = new RegExp(`<${mark === "bold" ? "b" : "i"}>`, "i");
+  if (!values.some((value) => marked.test(value))) return flag;
+  return values.every((value) => isFieldFullyMarked(value, mark));
+}
 
 type ResumeTabProps = {
   editedResume: ResumeData | null;
   actions: ResumeEditorActions;
+  canUndo: boolean;
+  canRedo: boolean;
   dirty: boolean;
+  // True only for the first workspace check. Manual Reload actions do not
+  // replace the live editor with this arrival state.
+  isWorkspaceBootstrapping: boolean;
   // Whether a polish has produced a tailored draft; before that the editor
   // holds the untailored source, so the heading shouldn't claim "tailored".
   hasResult: boolean;
@@ -32,6 +66,9 @@ type ResumeTabProps = {
   result: PolishedResume | null;
   resumeDiff: ResumeDiff | null;
   docStyle: DocStyleControls;
+  // Editor-only display prefs (spellcheck). Separate from docStyle: never
+  // affects layout/export, and Format's "Reset to defaults" must not touch it.
+  editorPrefs: EditorPrefsControls;
   tailorModes: Record<string, TailorMode>;
   onSetTailorMode: (sectionId: string, mode: TailorMode) => void;
   exportControl?: ReactNode;
@@ -43,19 +80,22 @@ type ResumeTabProps = {
   // Job target context: displayed in the header so the user knows which role
   // the resume is being tailored for.
   jobTarget?: { role?: string; company?: string } | null;
-  // True when the JD changed since the last polish — the ReviewRail describes
-  // an old posting and should be flagged as stale.
+  // True when the JD changed since the last polish — the review describes an
+  // old posting and should be flagged as stale.
   reviewStale?: boolean;
 };
 
-// The resume surface is edit-and-check: the structured editor carries the
-// document (the HTML page mirrors the export typography), and once a recruiter
+// The resume surface is edit-and-check: the owned typeset page is the editor
+// and export layout, and once a recruiter
 // review exists it docks beside the editor as an actionable rail — accept,
 // modify, or apply-all the suggested edits without leaving the document.
 export function ResumeTab({
   editedResume,
   actions,
+  canUndo,
+  canRedo,
   dirty,
+  isWorkspaceBootstrapping,
   hasResult,
   resultSourceLabel,
   scoreContext,
@@ -64,6 +104,7 @@ export function ResumeTab({
   result,
   resumeDiff,
   docStyle,
+  editorPrefs,
   tailorModes,
   onSetTailorMode,
   exportControl,
@@ -99,6 +140,17 @@ export function ResumeTab({
 
   const [highlightTarget, setHighlightTarget] = useState<TailorChangeTarget | null>(null);
 
+  // Entry emphasis is real inline formatting, applied in bulk from the Style
+  // menu and overridable per entry. The whole-field flag stays as the fallback
+  // for entries with no marks (and clears once marks become authoritative).
+  const titlesBold = entriesMarkOn(editedResume, "title", "bold", docStyle.style.boldTitles);
+  const subtitlesItalic = entriesMarkOn(editedResume, "subtitle", "italic", docStyle.style.italicSubtitles);
+  const handleEntriesMark = (field: "title" | "subtitle", mark: FieldMark, on: boolean) => {
+    actions.setEntriesMark(field, mark, on);
+    if (field === "title" && mark === "bold") docStyle.set("boldTitles", false);
+    else if (field === "subtitle" && mark === "italic") docStyle.set("italicSubtitles", false);
+  };
+
   const hasReview = Boolean(result?.strictReview || result?.suggestedChanges?.length);
   const hasSuggestions = Boolean(result?.suggestedChanges?.length);
   const title = hasSuggestions || result?.source === "local" ? "Resume draft" : hasResult ? "Tailored resume" : "Resume draft";
@@ -118,13 +170,28 @@ export function ResumeTab({
           ) : null}
         </h2>
         <div className="studio-card__tools">
-          <label className="doc-zoom" title="Page zoom">
+          <label className="doc-zoom" title="Page zoom (100% = actual size)">
             <span className="doc-zoom__label">Zoom</span>
             <select
               value={String(docStyle.style.zoom)}
-              onChange={(event) => docStyle.set("zoom", Number(event.target.value))}
+              onChange={(event) => {
+                if (event.target.value === "fit") {
+                  // One-shot Fit: size the fixed 816px logical page to the
+                  // editor pane's content width (like Docs' Fit).
+                  const pane = document.querySelector(".resume-workbench__editor");
+                  if (pane) {
+                    const cs = window.getComputedStyle(pane);
+                    const content = pane.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+                    const fit = Math.max(0.4, Math.min(2, content / DOC_PAGE_WIDTH_PX));
+                    docStyle.set("zoom", Math.floor(fit * 100) / 100);
+                  }
+                  return;
+                }
+                docStyle.set("zoom", Number(event.target.value));
+              }}
               aria-label="Page zoom"
             >
+              <option value="fit">Fit</option>
               {DOC_ZOOM_OPTIONS.map((z) => (
                 <option key={z} value={String(z)}>
                   {Math.round(z * 100)}%
@@ -135,8 +202,28 @@ export function ResumeTab({
               ) : null}
             </select>
           </label>
+          <button
+            type="button"
+            className={`doc-toggle${editorPrefs.prefs.spellCheck ? " is-on" : ""}`}
+            aria-pressed={editorPrefs.prefs.spellCheck}
+            onClick={() => editorPrefs.set("spellCheck", !editorPrefs.prefs.spellCheck)}
+            title={
+              editorPrefs.prefs.spellCheck
+                ? "Spell check on — hiding it removes the red typo underlines"
+                : "Spell check off — turn on to underline possible typos"
+            }
+          >
+            <SpellCheck size={14} aria-hidden={true} />
+            <span className="doc-toggle__label">Spell check</span>
+          </button>
           <FormatMenu docStyle={docStyle} />
-          <StyleMenu docStyle={docStyle} />
+          <StyleMenu
+            docStyle={docStyle}
+            titlesBold={titlesBold}
+            subtitlesItalic={subtitlesItalic}
+            onEntriesMark={handleEntriesMark}
+          />
+          <span className="studio-card__tool-divider" aria-hidden="true" />
           {exportControl}
           {fitVerdict ? (
             <span className="fit-readout" title={`${fitVerdict.label} — ${fitVerdict.source}`}>
@@ -151,35 +238,37 @@ export function ResumeTab({
         </div>
       </div>
 
-      {pendingAutosaveDraft && onRestoreAutosaveDraft && onDismissAutosaveDraft ? (
-        <div className="draft-restore-bar" role="alert">
-          <span className="draft-restore-bar__text">
-            Unsaved draft found
-            {pendingAutosaveDraft.jobLabel ? ` · ${pendingAutosaveDraft.jobLabel}` : ""}
-            {" "}
-            <span className="draft-restore-bar__time">
-              {new Date(pendingAutosaveDraft.savedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-            </span>
-          </span>
-          <button
-            type="button"
-            className="ghost-button is-compact draft-restore-bar__action"
-            onClick={() => onRestoreAutosaveDraft(pendingAutosaveDraft)}
-          >
-            Restore
-          </button>
-          <button
-            type="button"
-            className="ghost-button is-compact draft-restore-bar__dismiss"
-            aria-label="Dismiss"
-            onClick={onDismissAutosaveDraft}
-          >
-            ×
-          </button>
-        </div>
-      ) : null}
-
       <div className={`resume-workbench${hasReview ? " has-rail" : ""}`}>
+        {/* Floated as an overlay so appearing/dismissing never reflows the
+            editor (it sits over the desk margin above the page). */}
+        {pendingAutosaveDraft && onRestoreAutosaveDraft && onDismissAutosaveDraft ? (
+          <div className="draft-restore-bar" role="alert">
+            <span className="draft-restore-bar__text">
+              Unsaved draft found
+              {pendingAutosaveDraft.jobLabel ? ` · ${pendingAutosaveDraft.jobLabel}` : ""}
+              {" "}
+              <span className="draft-restore-bar__time">
+                {new Date(pendingAutosaveDraft.savedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+              </span>
+            </span>
+            <button
+              type="button"
+              className="ghost-button is-compact draft-restore-bar__action"
+              onClick={() => onRestoreAutosaveDraft(pendingAutosaveDraft)}
+            >
+              Restore
+            </button>
+            <button
+              type="button"
+              className="ghost-button is-compact draft-restore-bar__dismiss"
+              aria-label="Dismiss"
+              onClick={onDismissAutosaveDraft}
+            >
+              ×
+            </button>
+          </div>
+        ) : null}
+
         <div
           className="resume-workbench__editor"
           onDragStart={(e) => {
@@ -187,24 +276,41 @@ export function ResumeTab({
           }}
         >
           {editedResume ? (
-            <ResumeEditor
+            <TypesetEditor
               data={editedResume}
               actions={actions}
-              style={docStyle.cssVars}
+              canUndo={canUndo}
+              canRedo={canRedo}
+              docStyle={docStyle}
+              spellCheck={editorPrefs.prefs.spellCheck}
               tailorModes={tailorModes}
               onSetTailorMode={onSetTailorMode}
               highlightTarget={highlightTarget}
             />
-          ) : (
-            <p className="resume-doc__empty">
-              Load a resume or run a polish to begin. After a polish, the review rail docks here with one-click edits.
+          ) : isWorkspaceBootstrapping ? (
+            <p className="resume-doc__boot" role="status" aria-live="polite">
+              Opening workspace…
             </p>
+          ) : (
+            <div className="resume-doc__empty">
+              <strong>Bring a resume to the desk</strong>
+              <span>Open Resume above to upload a source file.</span>
+            </div>
           )}
         </div>
 
         {hasReview && result ? (
           <div className="resume-workbench__rail">
-            <ReviewRail result={result} resume={editedResume} actions={actions} resumeDiff={resumeDiff} jobConstraints={jobConstraints} reviewStale={reviewStale} onHighlight={setHighlightTarget} onAddHonestContext={onAddHonestContext} />
+            <ReviewRail
+              result={result}
+              resume={editedResume}
+              actions={actions}
+              resumeDiff={resumeDiff}
+              jobConstraints={jobConstraints}
+              reviewStale={reviewStale}
+              onHighlight={setHighlightTarget}
+              onAddHonestContext={onAddHonestContext}
+            />
           </div>
         ) : null}
       </div>

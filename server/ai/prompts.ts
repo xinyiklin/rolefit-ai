@@ -15,7 +15,7 @@ export const COVER_JOB_CHAR_LIMIT = 18_000;
 const TAILOR_SCOPE_CHAR_LIMIT = 24_000;
 
 // Prompt inputs are boundary data: interpolated through fenceUntrusted /
-// clipForPrompt / JSON.stringify, all of which coerce defensively, so each field
+// clipForPrompt / serializeJsonForPrompt, all of which coerce defensively, so each field
 // is `unknown`. tailorScope is read for its optional contextSections array only.
 type PromptTailorScope = { contextSections?: unknown[] };
 
@@ -53,6 +53,122 @@ export function clipForPrompt(text: unknown, maxChars: number, label: string): s
 [${label} clipped: middle omitted to stay within the model context budget]
 
 ${value.slice(-tail).trimStart()}`;
+}
+
+type PromptJson = null | boolean | number | string | PromptJson[] | { [key: string]: PromptJson };
+
+function stringifyPromptJson(value: PromptJson): string {
+  return JSON.stringify(value) ?? "null";
+}
+
+function clonePromptJson(value: unknown, ancestors = new WeakSet<object>()): PromptJson {
+  if (value == null) return null;
+  if (typeof value === "string" || typeof value === "boolean") return value;
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  if (typeof value === "bigint") return String(value);
+  if (typeof value !== "object") return null;
+  if (ancestors.has(value)) return "[circular value omitted]";
+  ancestors.add(value);
+  let cloned: PromptJson;
+  if (Array.isArray(value)) {
+    cloned = value.map((item) => clonePromptJson(item, ancestors));
+  } else {
+    const record: { [key: string]: PromptJson } = {};
+    for (const key of Object.keys(value)) {
+      record[key] = clonePromptJson((value as Record<string, unknown>)[key], ancestors);
+    }
+    cloned = record;
+  }
+  ancestors.delete(value);
+  return cloned;
+}
+
+const JSON_CLIP_MARKER = "…[clipped]…";
+
+function clipJsonString(value: string, maxLength: number): string {
+  if (value.length <= maxLength) return value;
+  if (maxLength <= JSON_CLIP_MARKER.length) return value.slice(0, Math.max(0, maxLength));
+  const available = maxLength - JSON_CLIP_MARKER.length;
+  const head = Math.ceil(available * 0.7);
+  return `${value.slice(0, head)}${JSON_CLIP_MARKER}${value.slice(-(available - head))}`;
+}
+
+type JsonStringSlot = { parent: PromptJson[] | { [key: string]: PromptJson }; key: string | number; value: string; min: number; order: number };
+type JsonArraySlot = { value: PromptJson[]; depth: number; order: number };
+
+function collectJsonSlots(root: { value: PromptJson }): { strings: JsonStringSlot[]; arrays: JsonArraySlot[] } {
+  const strings: JsonStringSlot[] = [];
+  const arrays: JsonArraySlot[] = [];
+  let order = 0;
+  const visit = (value: PromptJson, parent: PromptJson[] | { [key: string]: PromptJson }, key: string | number, depth: number) => {
+    const currentOrder = order++;
+    if (typeof value === "string") {
+      const structural = typeof key === "string" && /(?:^id$|Id$|^field$|^type$|^version$)/.test(key);
+      strings.push({ parent, key, value, min: structural ? value.length : Math.min(64, value.length), order: currentOrder });
+      return;
+    }
+    if (Array.isArray(value)) {
+      arrays.push({ value, depth, order: currentOrder });
+      value.forEach((item, index) => visit(item, value, index, depth + 1));
+      return;
+    }
+    if (value && typeof value === "object") {
+      for (const [childKey, child] of Object.entries(value)) visit(child, value, childKey, depth + 1);
+    }
+  };
+  visit(root.value, root, "value", 0);
+  return { strings, arrays };
+}
+
+// JSON prompt payloads must remain parseable under character budgets. Unlike
+// clipForPrompt (which intentionally preserves text head/tail), this serializer
+// clones its input, clips only string VALUES, then omits trailing array items as
+// needed. It never mutates caller data and always returns deterministic valid JSON.
+export function serializeJsonForPrompt(value: unknown, maxChars: number): string {
+  const budget = Math.max(2, Math.floor(Number.isFinite(maxChars) ? maxChars : 2));
+  const root: { value: PromptJson } = { value: clonePromptJson(value) };
+  let serialized = stringifyPromptJson(root.value);
+  if (serialized.length <= budget) return serialized;
+
+  // First preserve shape and leading array items by shrinking long prose values
+  // to a readable floor. Structural IDs/enums are never clipped.
+  let slots = collectJsonSlots(root);
+  const strings = slots.strings.sort((a, b) => (b.value.length - b.min) - (a.value.length - a.min) || a.order - b.order);
+  let excess = serialized.length - budget;
+  for (const slot of strings) {
+    const reducible = slot.value.length - slot.min;
+    if (reducible <= 0 || excess <= 0) continue;
+    const reduction = Math.min(reducible, excess);
+    const clipped = clipJsonString(slot.value, slot.value.length - reduction);
+    if (Array.isArray(slot.parent)) slot.parent[Number(slot.key)] = clipped;
+    else slot.parent[String(slot.key)] = clipped;
+    excess -= reduction;
+  }
+  serialized = stringifyPromptJson(root.value);
+  if (serialized.length <= budget) return serialized;
+
+  // Structural overhead or many short values can still exceed the budget. Drop
+  // trailing items from deepest arrays first, preserving deterministic prefixes.
+  while (serialized.length > budget) {
+    slots = collectJsonSlots(root);
+    const arrays = slots.arrays
+      .filter((slot) => slot.value.length > 0)
+      .sort((a, b) => b.depth - a.depth || b.order - a.order);
+    if (!arrays.length) break;
+    let remaining = serialized.length - budget;
+    for (const slot of arrays) {
+      if (!slot.value.length || remaining <= 0) continue;
+      const removed = slot.value.pop();
+      remaining -= stringifyPromptJson(removed ?? null).length + 1;
+    }
+    serialized = stringifyPromptJson(root.value);
+  }
+  if (serialized.length <= budget) return serialized;
+
+  // Extremely small synthetic budgets may leave only object-key overhead. A
+  // JSON string sentinel is preferable to malformed mid-object clipping.
+  const omitted = stringifyPromptJson("[JSON omitted: prompt budget too small]");
+  return omitted.length <= budget ? omitted : "\"\"";
 }
 
 // Fence-tag firewall: the prompts wrap untrusted user text (job description,
@@ -209,9 +325,7 @@ function formatProposedChanges(suggestedChanges: unknown): string {
     evidence: change.evidence,
     hits: change.hits
   }));
-  return fenceUntrusted(
-    clipForPrompt(JSON.stringify(slim), STRICT_REVIEW_CHANGES_CHAR_LIMIT, "proposed changes")
-  );
+  return fenceUntrusted(serializeJsonForPrompt(slim, STRICT_REVIEW_CHANGES_CHAR_LIMIT));
 }
 
 function strictReviewPrompt({ jobText, resumeText, suggestedChanges, honestContext, customInstructions }: StrictReviewPromptInput): string {
@@ -322,25 +436,28 @@ ${customInstructions
 
 function formatTailorScope(tailorScope: unknown): string {
   // Compact serialization: pretty-printing the scope spent ~25% of the prompt's
-  // scope budget on indentation. Models parse compact JSON fine.
-  return fenceUntrusted(
-    clipForPrompt(JSON.stringify(tailorScope ?? {}), TAILOR_SCOPE_CHAR_LIMIT, "tailor scope")
-  );
+  // scope budget on indentation. Models parse compact JSON fine. Read-only
+  // context has its own fence below, so omit it here instead of paying for the
+  // same sections twice or exposing read-only ids inside the editable block.
+  const source = tailorScope && typeof tailorScope === "object"
+    ? tailorScope as Record<string, unknown>
+    : {};
+  const { contextSections: _contextSections, ...editableScope } = source;
+  return fenceUntrusted(serializeJsonForPrompt(editableScope, TAILOR_SCOPE_CHAR_LIMIT));
 }
 
 // Read-only "Include" sections — serialized like the scope but presented in a
 // separate block the model may cite as evidence but must never target.
 function formatContextSections(tailorScope: PromptTailorScope | undefined): string {
-  return fenceUntrusted(
-    clipForPrompt(JSON.stringify(tailorScope?.contextSections ?? []), TAILOR_SCOPE_CHAR_LIMIT, "context sections")
-  );
+  return fenceUntrusted(serializeJsonForPrompt(tailorScope?.contextSections ?? [], TAILOR_SCOPE_CHAR_LIMIT));
 }
 
 // The rewrite pass returns ONLY structured suggestions — no full-text rewrite
 // and no fit score. The polished preview is derived server-side by applying the
-// sanitized suggestions to the scope (so every tailored character passes the
-// exact-evidence gate), and scoring belongs to the strict-review pass (the
-// local engine is the fallback when strict review is off or unavailable).
+// sanitized suggestions to the scope (so every applied change passes the
+// current deterministic grounding/sanitization gates), and scoring belongs to
+// the strict-review pass (the local engine is the fallback when strict review
+// is off or unavailable).
 // Halving the output this pass must produce is also the main latency lever.
 function polishPrompt({ jobText, tailorScope, honestContext, customInstructions }: PolishPromptInput): string {
   return `Return this JSON shape exactly:

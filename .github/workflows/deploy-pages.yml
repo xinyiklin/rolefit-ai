@@ -2,7 +2,7 @@ name: Deploy static site to GitHub Pages
 
 # Builds the Vite frontend and publishes the static bundle to GitHub Pages.
 # Note: this is a static-only demo. Anything that calls the local Node server
-# (AI polish, job import, DOCX, the on-disk tracker) will not function here;
+# (AI polish, job import, the on-disk tracker) will not function here;
 # the hosted build is the UI shell only.
 
 on:

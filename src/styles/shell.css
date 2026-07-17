@@ -19,7 +19,7 @@
   display: flex;
   align-items: center;
   gap: var(--s4);
-  padding: var(--s2) var(--s5);
+  padding: var(--s3) var(--s5);
   /* Double rule: 1px solid (hairline-strong) + 2px gap + 1px dashed (hairline-soft).
      Achieved with border + box-shadow below so no extra DOM node is needed. */
   border-bottom: 1px solid var(--hairline-strong);
@@ -76,9 +76,27 @@
 
 .masthead__brand {
   display: flex;
-  align-items: baseline;
-  gap: var(--s3);
+  align-items: center;
+  gap: var(--s2);
   margin-right: auto;
+}
+
+/* Brand mark: an accent-inked tile with the serif initial — the nameplate's
+   seal. The one place the accent is allowed to be identity, not action. */
+.masthead__mark {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: var(--r-md);
+  background: var(--accent);
+  color: var(--on-accent);
+  font-family: var(--font-serif);
+  font-weight: 700;
+  font-size: 0.95rem;
+  line-height: 1;
+  box-shadow: var(--shadow-inset), 0 2px 8px var(--accent-glow);
+  user-select: none;
 }
 
 /* Polish-flow status/error toast — fixed so it never reflows the studio grid.
@@ -165,7 +183,7 @@
 .masthead__brand h1 {
   font-family: var(--font-serif);
   font-weight: 700;
-  font-size: 1.1rem;
+  font-size: 1.15rem;
   line-height: 1;
   letter-spacing: -0.01em;
   color: var(--ink-strong);
@@ -286,15 +304,15 @@
 .nav-menu__trigger {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  height: 30px;
+  gap: 6px;
+  height: 32px;
   padding: 0 var(--s2);
   border: 0;
   border-radius: var(--r-sm);
   background: transparent;
   color: var(--ink-soft);
   font-family: var(--font-ui);
-  font-size: 0.76rem;
+  font-size: 0.78rem;
   font-weight: 600;
   cursor: pointer;
   position: relative;
@@ -330,9 +348,18 @@
 .masthead .nav-menu__trigger:hover::after { opacity: 0.18; }
 .masthead .nav-menu__trigger[aria-expanded="true"]::after { opacity: 0.35; }
 
-/* The icon-slot (svg) before the label is gone in the masthead typographic
-   triggers. Scope to .masthead so in-studio menus (Format menu) keep their icons. */
-.masthead .nav-menu__trigger > svg:first-child { display: none; }
+/* Trigger icons: quiet at rest, accent when the menu is hovered/open — the
+   icons anchor each menu the way the mark anchors the brand. */
+.masthead .nav-menu__trigger > svg:first-child {
+  color: var(--ink-faint);
+  flex: none;
+  transition: color 150ms var(--ease);
+}
+
+.masthead .nav-menu__trigger:hover > svg:first-child,
+.masthead .nav-menu__trigger[aria-expanded="true"] > svg:first-child {
+  color: var(--accent);
+}
 
 .nav-menu__label { white-space: nowrap; }
 

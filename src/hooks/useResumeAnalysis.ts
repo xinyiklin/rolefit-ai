@@ -1,8 +1,6 @@
 import { useMemo } from "react";
 import { analyzeResumeText, buildResumeDiff, type PolishedResume } from "../resumeEngine";
-import { extractPlainTextFromLatex } from "../lib/resumeData";
 import { stripInlineMarks } from "../lib/inlineMarks";
-import { looksLikeLatex } from "../lib/resumeFormat";
 import { extractJobConstraints } from "../lib/jobConstraints";
 import { VERDICT_LABEL, verdictFromScore, verdictPillClass } from "../lib/fitVerdict";
 import type { StrictReviewVerdict } from "../resume/types";
@@ -49,8 +47,8 @@ export function useResumeAnalysis({
   // The current tailored resume text: the edited model when present, else the raw
   // polish output. Used by match/diff/fit so the scores track manual edits.
   const tailoredText = (result ? debouncedCurrentResumeText || result.polishedText : "") || "";
-  // Pre-polish live draft: prefer the serialized editor model (clean text) so a
-  // LaTeX source is scored on its content, not its markup.
+  // Pre-polish live draft: prefer the serialized editor model (clean text)
+  // over the raw source text.
   const liveDraftText = debouncedCurrentResumeText || debouncedResumeText;
   const currentAnalysis = useMemo(() => {
     return debouncedResumeText.trim() && debouncedJobDescription.trim()
@@ -58,13 +56,8 @@ export function useResumeAnalysis({
       : null;
   }, [debouncedJobDescription, debouncedResumeText, liveDraftText]);
 
-  // Diff against the base resume's CONTENT: a LaTeX source is reduced to plain
-  // text first so the before/after reads as wording changes, not markup noise.
-  const basePlainText = useMemo(
-    () =>
-      looksLikeLatex(resumeText) ? extractPlainTextFromLatex(resumeText) || resumeText : resumeText,
-    [resumeText]
-  );
+  // Diff against the base resume's content, as-is.
+  const basePlainText = resumeText;
 
   // Strip inline marks (<b>/<i>/<u>) from both sides so the diff reads as
   // wording changes, not markup noise, and a tag split across diff segments
@@ -97,8 +90,8 @@ export function useResumeAnalysis({
       }
     }
     if (!jobDescription.trim()) return null;
-    // Score the base on its content (same de-LaTeXed text the diff uses) so
-    // markup noise doesn't depress the base and inflate the lift.
+    // Score the base on its content (same text the diff uses) so markup noise
+    // doesn't depress the base and inflate the lift.
     const baseScore = analyzeResumeText(basePlainText, jobDescription).score.overall;
     const tailoredScore = isEdited
       ? analyzeResumeText(tailoredText, jobDescription).score.overall
@@ -138,7 +131,11 @@ export function useResumeAnalysis({
   // describes that very proposal, so applying it does not flip to "Estimated".
   const fitVerdict = useMemo<FitVerdict | null>(() => {
     const aiVerdict = result?.strictReview?.verdict;
-    if (aiVerdict && VERDICT_LABEL[aiVerdict] && !isEdited) {
+    // Review prose can survive even when the server rejects an incomplete
+    // requirement table and returns aiScore:null. In that case the model verdict
+    // did not pass server arithmetic, so keep the prose visible but label the
+    // locally derived band Estimated rather than AI-judged.
+    if (result?.aiScore && aiVerdict && VERDICT_LABEL[aiVerdict] && !isEdited) {
       return { verdict: aiVerdict, label: VERDICT_LABEL[aiVerdict], source: "AI-judged" };
     }
     const derived = verdictFromScore(headlineScore);

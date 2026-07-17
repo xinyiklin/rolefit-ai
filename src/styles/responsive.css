@@ -82,6 +82,32 @@
   .nav-menu__sub { display: none; }
 }
 
+@media (min-width: 761px) and (max-width: 900px) {
+  /* Seal-first intermediate masthead. The full wordmark stays as the document
+     h1 for assistive technology, while the visible seal gives the menus and
+     paired actions enough room to remain one deliberate row. */
+  .masthead {
+    gap: var(--s3);
+    padding-inline: var(--s4);
+  }
+
+  .masthead__brand h1 {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  .masthead__actions {
+    padding-left: var(--s3);
+  }
+}
+
 @media (max-width: 760px) {
   .masthead {
     flex-wrap: wrap;

@@ -23,25 +23,17 @@ export function downloadBlob(blob: Blob, fileName: string) {
   setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
-// Pull the applicant's name from a resume so downloads can be named after the
-// person. Scans the document body, strips LaTeX, and takes the first
-// "First Last" sequence. Returns "" when nothing confident is found.
+// Pull the applicant's name from a resume's plain text so downloads can be named
+// after the person. Scans the first lines and takes the first "First Last"
+// sequence. Returns "" when nothing confident is found. (Callers prefer the
+// structured ResumeData.name; this is the fallback for text-only sources.)
 export function extractApplicantName(text: string): string {
-  const docStart = text.indexOf("\\begin{document}");
-  const body = docStart >= 0 ? text.slice(docStart) : text;
   // Scan line by line (the name sits on its own line at the top) and take the
   // first 2-3 word "First Last" from the start of a line. Matching per-line
   // avoids gluing the name to a following title like "Software Engineer".
-  const lines = body
-    .replace(/%.*$/gm, " ")
+  const lines = text
     .split(/\r?\n/)
-    .map((line) =>
-      line
-        .replace(/\\[a-zA-Z]+\*?(\[[^\]]*\])?/g, " ")
-        .replace(/[{}\\$~^]/g, " ")
-        .replace(/\s+/g, " ")
-        .trim()
-    )
+    .map((line) => line.replace(/\s+/g, " ").trim())
     .filter(Boolean);
   for (const line of lines.slice(0, 12)) {
     const match = line.match(/^([A-Z][a-z]+(?:\s+[A-Z][A-Za-z'’.-]+){1,2})\b/);

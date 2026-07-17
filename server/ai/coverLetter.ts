@@ -3,7 +3,7 @@
 // HTTP handler for the standalone path. Anti-fabrication is enforced by the
 // prose-mode grounding backstop — the letter may name the target company/role,
 // but a JD SKILL term it claims that is absent from the resume + honest context
-// is blanked so the caller falls back to the strictly-grounded local draft.
+// is blanked so callers can surface generation failure and offer Retry.
 
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { FetchTimeoutError, readBody, sendJson } from "../http.ts";
@@ -20,7 +20,7 @@ import { proseHasUngroundedTerm } from "./grounding.ts";
 
 // Upper bound on a returned cover letter (~3 paragraphs / 180-280 words is ~2k
 // chars; this just caps a pathological provider response, matching the per-field
-// caps in applicationAnswers.mjs).
+// caps in applicationAnswers.ts).
 const COVER_LETTER_CHAR_LIMIT = 8_000;
 
 // Optional dispatch-attempt collector (same additive pattern as the sanitizer's
@@ -45,7 +45,7 @@ type CoverLetterArgs = {
 // honest context, so each caller grounds against exactly what produced the
 // letter: the polish pass passes its polished/tailored text, the standalone
 // path passes the current resume. Returns the letter, or "" when it is empty or
-// blanked for an ungrounded claim (the caller then uses its local fallback).
+// blanked for an ungrounded claim (callers treat that as a failed generation).
 export async function generateGroundedCoverLetter({
   provider,
   model,
@@ -74,7 +74,7 @@ export async function generateGroundedCoverLetter({
   }, stats);
   const letter = String((parsed as { coverLetterText?: unknown }).coverLetterText ?? "").trim().slice(0, COVER_LETTER_CHAR_LIMIT);
   if (proseHasUngroundedTerm(letter, jobText.toLowerCase(), `${resumeText}\n${honestContext}`.toLowerCase())) {
-    console.warn("[ai] cover letter introduced an ungrounded JD skill term; blanking for local fallback", { provider });
+    console.warn("[ai] cover letter introduced an ungrounded JD skill term; returning an empty result", { provider });
     return "";
   }
   return letter;
