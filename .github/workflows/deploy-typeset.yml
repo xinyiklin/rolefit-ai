@@ -1,0 +1,151 @@
+name: Typeset CI and Deploy
+
+# Path-filtered to the Typeset app and everything it builds from, so sibling
+# apps' changes don't redeploy the editor. Do NOT mark `verify` a required
+# status check while these filters exist: a PR that skips the workflow would
+# never report the check and block forever.
+on:
+  pull_request:
+    paths:
+      - "apps/typeset/**"
+      - "packages/**"
+      - "package.json"
+      - "package-lock.json"
+      - "tsconfig.base.json"
+      - ".github/workflows/deploy-typeset.yml"
+  push:
+    branches: [main]
+    paths:
+      - "apps/typeset/**"
+      - "packages/**"
+      - "package.json"
+      - "package-lock.json"
+      - "tsconfig.base.json"
+      - ".github/workflows/deploy-typeset.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# PR verify runs are safe to cancel on force-push; a main-branch run may be
+# mid container swap on the server, so it must finish and let the next run
+# queue behind it instead. The group is app-scoped so sibling apps' workflows
+# never queue against this one.
+concurrency:
+  group: deploy-typeset-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      # Verify only this app's slice of the workspace: the app build plus both
+      # packages' typechecks and evals (codec, editor, PDF font parity).
+      - run: npm run check --workspace packages/engine
+      - run: npm run check --workspace packages/editor
+      - run: npm run check --workspace apps/typeset
+
+  deploy:
+    needs: verify
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    environment:
+      name: ec2
+    env:
+      EC2_HOST: ${{ secrets.EC2_HOST }}
+      EC2_USER: ${{ secrets.EC2_USER }}
+      EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
+      CONTAINER_NAME: typeset
+      IMAGE_NAME: typeset
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Validate deployment secrets
+        run: |
+          test -n "$EC2_HOST"
+          test -n "$EC2_USER"
+          test -n "$EC2_SSH_KEY"
+
+      - name: Prepare SSH
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$EC2_SSH_KEY" > ~/.ssh/typeset.pem
+          chmod 600 ~/.ssh/typeset.pem
+          ssh-keyscan -H "$EC2_HOST" >> ~/.ssh/known_hosts
+
+      - name: Package source
+        # Ship only what the Typeset image build needs. apps/role-fit-ai is a
+        # local-first personal tool and job-search-workspace holds private
+        # data — neither may ever reach the public web host.
+        run: |
+          tar \
+            --exclude='.git' \
+            --exclude='node_modules' \
+            --exclude='dist' \
+            --exclude='apps/role-fit-ai' \
+            --exclude='job-search-workspace' \
+            -czf "/tmp/typeset-${GITHUB_SHA}.tar.gz" \
+            .
+
+      - name: Copy source to EC2
+        run: |
+          scp \
+            -i ~/.ssh/typeset.pem \
+            "/tmp/typeset-${GITHUB_SHA}.tar.gz" \
+            "$EC2_USER@$EC2_HOST:/tmp/typeset-${GITHUB_SHA}.tar.gz"
+
+      - name: Build and restart container
+        run: |
+          ssh -i ~/.ssh/typeset.pem "$EC2_USER@$EC2_HOST" \
+            "CONTAINER_NAME='$CONTAINER_NAME' IMAGE_NAME='$IMAGE_NAME' RELEASE_SHA='$GITHUB_SHA' bash -s" <<'REMOTE'
+          set -euo pipefail
+
+          if docker ps >/dev/null 2>&1; then
+            docker_cmd=(docker)
+          elif sudo -n docker ps >/dev/null 2>&1; then
+            docker_cmd=(sudo docker)
+          else
+            echo "Docker is not available to $USER. Install Docker or allow passwordless sudo docker access." >&2
+            exit 1
+          fi
+
+          build_dir="$(mktemp -d)"
+          tar -xzf "/tmp/typeset-${RELEASE_SHA}.tar.gz" -C "$build_dir"
+          rm -f "/tmp/typeset-${RELEASE_SHA}.tar.gz"
+
+          cd "$build_dir"
+          "${docker_cmd[@]}" build -f apps/typeset/Dockerfile -t "$IMAGE_NAME:latest" .
+          cd /
+          rm -rf "$build_dir"
+
+          "${docker_cmd[@]}" rm -f "$CONTAINER_NAME" 2>/dev/null || true
+          # One-time migration cleanup: pre-rename services used these names.
+          "${docker_cmd[@]}" rm -f typeset-resume 2>/dev/null || true
+          "${docker_cmd[@]}" rm -f jakeforge 2>/dev/null || true
+          "${docker_cmd[@]}" run -d \
+            --name "$CONTAINER_NAME" \
+            --restart unless-stopped \
+            -p 127.0.0.1:5186:8080 \
+            "$IMAGE_NAME:latest"
+
+          healthy=""
+          for _ in 1 2 3 4 5 6 7 8 9 10; do
+            if curl -fsS http://127.0.0.1:5186/ >/dev/null; then
+              healthy=1
+              break
+            fi
+            sleep 1
+          done
+          [ -n "$healthy" ]
+
+          "${docker_cmd[@]}" image prune -f >/dev/null
+          REMOTE

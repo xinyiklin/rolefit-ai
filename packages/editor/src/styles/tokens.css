@@ -1,0 +1,62 @@
+:root {
+  color-scheme: light;
+
+  /* Application chrome uses the platform's native UI voice. The resume page
+     owns Latin Modern separately in resume-document.css. */
+  --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-serif: Charter, "Bitstream Charter", "Iowan Old Style", Georgia, serif;
+  --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+
+  /* The Working Page palette: cool desk neutrals and one drafting-teal ink. */
+  --paper: #eef1ef;
+  --paper-deep: #e8ece9;
+  --card: #fbfcfb;
+  --card-soft: #f4f6f4;
+  --card-elev: #fdfefd;
+  --card-hover: #f0f3f1;
+
+  --ink: #242826;
+  --ink-strong: #171a19;
+  --ink-muted: #626965;
+  --ink-soft: #737b76;
+  --ink-faint: #89918c;
+
+  --hairline: #d9dedb;
+  --hairline-soft: #e6eae7;
+  --hairline-strong: #bec6c1;
+
+  --accent: #176b5c;
+  --accent-deep: #12594d;
+  --accent-soft: #e4f1ed;
+  --accent-veil: rgb(23 107 92 / 14%);
+  --accent-glow: rgb(23 107 92 / 24%);
+  --on-accent: #f8fbfa;
+
+  --warm: #8a6224;
+  --danger: #a5413d;
+  --danger-soft: #f8e9e7;
+  --danger-line: rgb(165 65 61 / 28%);
+
+  --s1: 4px;
+  --s2: 8px;
+  --s3: 12px;
+  --s4: 16px;
+  --s5: 24px;
+
+  --r-sm: 4px;
+  --r-md: 6px;
+  --r-lg: 8px;
+
+  --shadow-rest: 0 1px 2px rgb(21 29 25 / 8%), 0 18px 48px rgb(21 29 25 / 10%);
+  --shadow-lift: 0 2px 6px rgb(21 29 25 / 8%), 0 12px 32px rgb(21 29 25 / 14%);
+
+  --ease: cubic-bezier(0.2, 0.65, 0.25, 1);
+
+  color: var(--ink);
+  background: var(--paper);
+  font-family: var(--font-ui);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
