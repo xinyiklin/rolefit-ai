@@ -1,5 +1,5 @@
-import type { LayoutDocument } from "@typeset/engine/typeset/layout";
-import { parseFieldKey, type FieldSrc } from "@typeset/engine/typeset/types";
+import type { LayoutDocument } from "@typeset/engine/typeset/layout.ts";
+import { parseFieldKey, type FieldSrc } from "@typeset/engine/typeset/types.ts";
 
 // Engine-derived positions for controls that sit in page margins without
 // entering the editable DOM or influencing layout.

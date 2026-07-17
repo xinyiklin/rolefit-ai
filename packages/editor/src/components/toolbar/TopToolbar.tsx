@@ -17,11 +17,11 @@ import {
 } from "lucide-react";
 
 import type { DocStyleControls } from "../../hooks/useDocStyle";
-import { FONT_FAMILY_OPTIONS, type BodyAlign, type FontFamily } from "@typeset/engine/lib/documentStyle";
-import type { AlignmentScope } from "@typeset/engine/lib/documentStyle";
-import type { FieldFontFamily, StyleFieldFontStates, StyleFieldMarkStates, StyleFieldSizeStates, StyleTextField } from "@typeset/engine/lib/styleFieldFormatting";
-import type { FieldMark } from "@typeset/engine/lib/inlineMarksText";
-import type { ResumeSectionType } from "@typeset/engine/lib/resumeData";
+import { FONT_FAMILY_OPTIONS, type BodyAlign, type FontFamily } from "@typeset/engine/lib/documentStyle.ts";
+import type { AlignmentScope } from "@typeset/engine/lib/documentStyle.ts";
+import type { FieldFontFamily, StyleFieldFontStates, StyleFieldMarkStates, StyleFieldSizeStates, StyleTextField } from "@typeset/engine/lib/styleFieldFormatting.ts";
+import type { FieldMark } from "@typeset/engine/lib/inlineMarksText.ts";
+import type { ResumeSectionType } from "@typeset/engine/lib/resumeData.ts";
 import { DocumentStructureControls } from "./DocumentStructureControls";
 import { PageStylePopover } from "./PageStylePopover";
 import { ParagraphStylePopover } from "./ParagraphStylePopover";

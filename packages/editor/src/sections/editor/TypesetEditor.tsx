@@ -21,8 +21,8 @@ import {
   useState
 } from "react";
 
-import type { ResumeData, ResumeSectionType } from "@typeset/engine/lib/resumeData";
-import { automaticLinkHref } from "@typeset/engine/lib/links";
+import type { ResumeData, ResumeSectionType } from "@typeset/engine/lib/resumeData.ts";
+import { automaticLinkHref } from "@typeset/engine/lib/links.ts";
 import type { ResumeEditorActions } from "../../hooks/useResumeEditor";
 import {
   STYLE_FIELD_MARK_DEFAULTS,
@@ -30,16 +30,16 @@ import {
   styleFieldMarkStates,
   type EntryTextField,
   type StyleTextField
-} from "@typeset/engine/lib/styleFieldFormatting";
-import { stripInlineMarks } from "@typeset/engine/lib/inlineMarksText";
+} from "@typeset/engine/lib/styleFieldFormatting.ts";
+import { stripInlineMarks } from "@typeset/engine/lib/inlineMarksText.ts";
 import type { DocStyleControls } from "../../hooks/useDocStyle";
-import type { AlignmentScope, BodyAlign, DocStyle, FontFamily } from "@typeset/engine/lib/documentStyle";
-import { fontSizesFor, nameSizePt } from "@typeset/engine/lib/documentTypography";
-import { fieldKey, parseFieldKey, type FieldSrc } from "@typeset/engine/typeset/types";
-import { pageGeometry } from "@typeset/engine/typeset/blocks";
-import type { LayoutDocument } from "@typeset/engine/typeset/layout";
-import { TypesetDomPages } from "@typeset/engine/typeset/render/dom";
-import { toTypesetSchema } from "@typeset/engine/typeset/schema";
+import type { AlignmentScope, BodyAlign, DocStyle, FontFamily } from "@typeset/engine/lib/documentStyle.ts";
+import { fontSizesFor, nameSizePt } from "@typeset/engine/lib/documentTypography.ts";
+import { fieldKey, parseFieldKey, type FieldSrc } from "@typeset/engine/typeset/types.ts";
+import { pageGeometry } from "@typeset/engine/typeset/blocks.ts";
+import type { LayoutDocument } from "@typeset/engine/typeset/layout.ts";
+import { TypesetDomPages } from "@typeset/engine/typeset/render/dom.tsx";
+import { toTypesetSchema } from "@typeset/engine/typeset/schema.ts";
 import { anchorsFromDoc } from "./typesetStructure.ts";
 import { TypesetStructureOverlay } from "./TypesetStructureOverlay.tsx";
 import { TypesetContextMenu } from "./TypesetContextMenu.tsx";

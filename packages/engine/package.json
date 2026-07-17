@@ -5,22 +5,20 @@
   "type": "module",
   "description": "Deterministic resume typesetting engine, document model, and strict .resume codec shared by every Typeset consumer.",
   "exports": {
-    "./fonts.css": "./fonts.css",
     "./fonts/*": "./fonts/*",
-    "./*": "./src/*.ts",
-    "./typeset/render/dom": "./src/typeset/render/dom.tsx"
+    "./*": "./src/*"
   },
   "files": [
     "src",
-    "fonts",
-    "fonts.css"
+    "fonts"
   ],
   "scripts": {
     "eval:resume-file": "node --experimental-strip-types src/lib/__evals__/resume-file-v1.mjs",
     "eval:pdf-font-parity": "node --experimental-strip-types src/typeset/__evals__/pdf-font-parity.mjs",
     "eval": "npm run eval:resume-file && npm run eval:pdf-font-parity",
     "test": "npm run eval",
-    "check": "npm run eval",
+    "typecheck": "tsc --noEmit",
+    "check": "npm run typecheck && npm run eval",
     "fonts:check": "python3 scripts/generate_font_assets.py --check"
   },
   "peerDependencies": {

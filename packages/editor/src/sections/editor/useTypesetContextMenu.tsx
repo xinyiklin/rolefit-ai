@@ -18,8 +18,8 @@ import {
   Unlink
 } from "lucide-react";
 
-import { SECTION_TYPE_OPTIONS, type ResumeData, type ResumeSectionType } from "@typeset/engine/lib/resumeData";
-import { parseFieldKey, type FieldSrc } from "@typeset/engine/typeset/types";
+import { SECTION_TYPE_OPTIONS, type ResumeData, type ResumeSectionType } from "@typeset/engine/lib/resumeData.ts";
+import { parseFieldKey, type FieldSrc } from "@typeset/engine/typeset/types.ts";
 import {
   autoLinkWordAt,
   expandToLinkRun,

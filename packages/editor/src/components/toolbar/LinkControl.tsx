@@ -1,7 +1,7 @@
 import { ExternalLink, Link2, Unlink } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
-import { normalizeLinkDestination } from "@typeset/engine/lib/links";
+import { normalizeLinkDestination } from "@typeset/engine/lib/links.ts";
 import { Popover } from "../Popover";
 import { ToolbarButton } from "./ToolbarButton";
 

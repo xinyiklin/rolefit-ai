@@ -26,53 +26,66 @@ when the project shape or a durable decision changes.
   authoring experience.
 - `DESIGN.md` — visual system, editor grammar, responsive behavior, and
   accessibility expectations.
-- `apps/typeset/src/lib/AGENTS.md` — canonical resume model, document style and
-  typography, inline transforms, strict `.resume` codec, versioning, validation.
-- `apps/typeset/src/components/AGENTS.md` — reusable chrome primitives and the
-  toolbar family: popover conventions, option-list ownership, control contracts.
-- `apps/typeset/src/sections/editor/AGENTS.md` — direct-editing boundaries,
-  caret/selection mapping, context commands, and structure-overlay behavior.
-- `apps/typeset/src/typeset/AGENTS.md` — deterministic measurement, layout,
+- `packages/engine/src/lib/AGENTS.md` — canonical resume model, document style
+  and typography, inline transforms, strict `.resume` codec, versioning,
+  validation.
+- `packages/engine/src/typeset/AGENTS.md` — deterministic measurement, layout,
   fonts, DOM/print rendering, PDF emission, and parity checks. Also read it for
-  changes under `apps/typeset/scripts/` or `apps/typeset/public/fonts/` that
+  changes under `packages/engine/scripts/` or `packages/engine/fonts/` that
   affect the typesetting contract.
+- `packages/editor/src/components/AGENTS.md` — reusable chrome primitives and
+  the toolbar family: popover conventions, option-list ownership, control
+  contracts.
+- `packages/editor/src/sections/editor/AGENTS.md` — direct-editing boundaries,
+  caret/selection mapping, context commands, and structure-overlay behavior.
 - `CONTINUITY.md` — active decisions, recent verified state, open risks, and
   current working set.
 
 ## Workspace
 
 This repository is an npm-workspaces monorepo. The workspace root owns the
-lockfile, shared tooling, and the deployment pipeline; each app owns its own
-build and checks.
+lockfile, shared tooling (`tsconfig.base.json`), and the deployment pipeline;
+each workspace owns its own build/typecheck/checks.
 
-- `apps/typeset/` — the Typeset editor (static site; the only app today).
-- `packages/` — shared packages. Empty until the engine is extracted; see
-  `CONTINUITY.md` for the in-flight extraction plan.
-- Root `Dockerfile` builds `apps/typeset` from the workspace root, because npm
-  workspaces resolve from the root manifest and lockfile.
+- `packages/engine/` — `@typeset/engine`: the deterministic typesetting engine,
+  resume model, strict `.resume` codec, fonts, and generators. React-free
+  except `typeset/render/dom.tsx`; `react`/`pdf-lib` are peer deps. Owns the
+  font assets (the metrics are extracted from them).
+- `packages/editor/` — `@typeset/editor`: the editing surface (contenteditable
+  page, formatting controls, history/style hooks, styles) over `@typeset/engine`.
+- `apps/typeset/` — the standalone Typeset site: a thin shell (file lifecycle,
+  autosave, deploy) that composes the packages. The only app today.
+- Root `Dockerfile` builds `apps/typeset` from the workspace root, copying the
+  two packages it depends on.
+
+Consumers must serve the engine's fonts at `/fonts/`; each app mirrors them
+into its own `public/fonts/` at predev/prebuild via `scripts/sync-fonts.mjs`
+(that directory is generated and gitignored). Cross-package imports carry the
+file extension (`@typeset/engine/lib/resumeData.ts`) because both packages
+export raw `.ts`/`.tsx` via `"./*": "./src/*"`.
 
 Run everything from the repository root. Root `check`/`test` fan out to every
-workspace; app-specific work uses `--workspace apps/typeset`.
+workspace; scoped work uses `--workspace <name>` (e.g. `packages/engine`).
 
 ## Architecture
 
-Paths below are relative to `apps/typeset/`.
-
-- `src/main.tsx` -> `src/App.tsx` is the application entry path.
-- `src/lib/` owns reusable, non-visual resume-domain logic, the document-style
-  contract, and shared typography values.
-- `src/hooks/` owns editor history/state and browser persistence for document
-  and view preferences.
-- `src/sections/editor/` adapts the engine to direct input, DOM selection/caret
-  mapping, context commands, and structure controls.
-- `src/typeset/` owns the exact layout-input adapter and shared deterministic
-  layout consumed by the editor, browser print layer, and dedicated PDF emitter.
-- `src/components/` owns reusable editor chrome (`Modal`, `Popover`, and the
-  `toolbar/` family — see its `AGENTS.md`); `src/styles/` owns tokens, shell,
-  toolbar, popover, document, and print styles.
-- `public/fonts/` and `scripts/` hold reproducible font assets and generators.
-  The generators anchor paths to the app root via `__file__`; keep them beside
-  the assets they produce.
+- `packages/engine/src/lib/` owns reusable, non-visual resume-domain logic, the
+  document-style contract, the `.resume` codec, and shared typography values.
+- `packages/engine/src/typeset/` owns the exact layout-input adapter and shared
+  deterministic layout consumed by the editor, browser print layer, and
+  dedicated PDF emitter.
+- `packages/engine/fonts/` and `packages/engine/scripts/` hold reproducible font
+  assets and generators. The generators anchor paths to the package root via
+  `__file__`; keep them beside the assets they produce.
+- `packages/editor/src/sections/editor/` adapts the engine to direct input, DOM
+  selection/caret mapping, context commands, and structure controls.
+- `packages/editor/src/hooks/` owns editor history/state and browser persistence
+  for document and view preferences.
+- `packages/editor/src/components/` owns reusable editor chrome (`Modal`,
+  `Popover`, and the `toolbar/` family); `packages/editor/src/styles/` owns
+  tokens, shell, toolbar, popover, document, and print styles.
+- `apps/typeset/src/main.tsx` -> `src/App.tsx` is the application entry path: it
+  wires the packages to file lifecycle, autosave, and the toolbar.
 
 Keep production static. Do not add analytics, hosted AI, accounts, remote
 persistence, runtime services, or resume-data requests without explicit user

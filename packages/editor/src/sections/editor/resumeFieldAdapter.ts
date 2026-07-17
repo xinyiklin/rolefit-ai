@@ -2,8 +2,8 @@
 // Pure inline editing stays in inlineTextEditing.ts; reducer dispatch stays at
 // this explicit domain boundary.
 
-import type { ResumeData } from "@typeset/engine/lib/resumeData";
-import { fieldKey, type FieldSrc } from "@typeset/engine/typeset/types";
+import type { ResumeData } from "@typeset/engine/lib/resumeData.ts";
+import { fieldKey, type FieldSrc } from "@typeset/engine/typeset/types.ts";
 import { buildDisplayMap, splitValueAt } from "./inlineTextEditing.ts";
 
 type ResumeFieldActions = {

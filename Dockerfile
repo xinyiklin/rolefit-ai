@@ -6,16 +6,21 @@ FROM node:24-alpine AS build
 WORKDIR /repo
 
 # Manifests first so the dependency layer caches independently of source edits.
-# Installing with --workspace keeps sibling apps' dependency trees out of the
-# image build; --include-workspace-root brings in root-level tooling.
+# Every workspace the app transitively depends on must be listed here, or npm
+# won't create its symlink. --workspace keeps sibling APPS' trees out of the
+# build; --include-workspace-root brings in root-level tooling.
 COPY package.json package-lock.json ./
 COPY packages/engine/package.json packages/engine/
+COPY packages/editor/package.json packages/editor/
 COPY apps/typeset/package.json apps/typeset/
 RUN npm ci --workspace apps/typeset --include-workspace-root
 
-# The engine is a workspace dependency of the app: it supplies the layout
-# contract and the font assets the app's prebuild mirrors into public/.
+# The shared tsconfig base (each workspace's tsconfig extends it) and the two
+# packages the app depends on: @typeset/engine (layout contract + fonts the
+# prebuild mirrors into public/) and @typeset/editor (the editing surface).
+COPY tsconfig.base.json ./
 COPY packages/engine packages/engine
+COPY packages/editor packages/editor
 COPY apps/typeset apps/typeset
 RUN npm run build --workspace apps/typeset
 

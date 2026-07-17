@@ -5,7 +5,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent, type RefObject } from "react";
 
-import { PAGE_HEIGHT_BP, PAGE_WIDTH_BP } from "@typeset/engine/typeset/blocks";
+import { PAGE_HEIGHT_BP, PAGE_WIDTH_BP } from "@typeset/engine/typeset/blocks.ts";
 import { anchorForField, type BlockAnchor, type TypesetAnchors } from "./typesetStructure.ts";
 import { keyOfNode } from "./domSelection.ts";
 

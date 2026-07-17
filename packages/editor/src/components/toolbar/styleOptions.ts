@@ -15,7 +15,7 @@ import {
   type DocSpacingPreset,
   type DocStyle,
   type HeadingCase
-} from "@typeset/engine/lib/documentStyle";
+} from "@typeset/engine/lib/documentStyle.ts";
 import type { DocStyleControls } from "../../hooks/useDocStyle";
 
 export type AlignmentOption = {

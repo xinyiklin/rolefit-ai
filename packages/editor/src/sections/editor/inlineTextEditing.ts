@@ -10,10 +10,10 @@
 // grammar (<b>/<i>/<u>, unclosed tolerated) and texLigatures's sequential
 // replaces (which a longest-match walker reproduces for any hyphen run).
 
-import type { FieldSrc } from "@typeset/engine/typeset/types";
-import type { DocumentFontFamily } from "@typeset/engine/typeset/fontRegistry";
-import type { FieldAlignment } from "@typeset/engine/lib/inlineMarksText";
-import { automaticLinkHref, decodeLinkHref, encodeLinkHref } from "@typeset/engine/lib/links";
+import type { FieldSrc } from "@typeset/engine/typeset/types.ts";
+import type { DocumentFontFamily } from "@typeset/engine/typeset/fontRegistry.ts";
+import type { FieldAlignment } from "@typeset/engine/lib/inlineMarksText.ts";
+import { automaticLinkHref, decodeLinkHref, encodeLinkHref } from "@typeset/engine/lib/links.ts";
 
 type DisplayChar = {
   // The value substring this display char covers ("---" for "—", a whole

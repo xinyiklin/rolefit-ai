@@ -3,7 +3,7 @@ import { useEffect, useId, useState } from "react";
 
 import { Popover } from "../Popover";
 import type { DocStyleControls } from "../../hooks/useDocStyle";
-import { PAGE_MARGIN_BOUNDS_PT, pageMarginValuesFor, type PageMargins } from "@typeset/engine/lib/pageMargins";
+import { PAGE_MARGIN_BOUNDS_PT, pageMarginValuesFor, type PageMargins } from "@typeset/engine/lib/pageMargins.ts";
 import { ToolbarButton } from "./ToolbarButton";
 
 export type PageStylePopoverProps = {

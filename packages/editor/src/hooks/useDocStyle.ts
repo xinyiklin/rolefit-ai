@@ -9,7 +9,7 @@ import {
   type DocStyle,
   type DocStyleFields,
   type DocumentStyle
-} from "@typeset/engine/lib/documentStyle";
+} from "@typeset/engine/lib/documentStyle.ts";
 
 const STORAGE_KEY = "typeset-resume.docStyle.v1";
 // User-saved spacing preset (the point-gap sliders only, like the built-in

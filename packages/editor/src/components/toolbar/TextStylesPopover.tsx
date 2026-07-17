@@ -11,7 +11,7 @@ import { useId } from "react";
 
 import { Popover } from "../Popover";
 import type { DocStyleControls } from "../../hooks/useDocStyle";
-import { FONT_FAMILY_OPTIONS, TEXT_STYLE_DEFAULTS } from "@typeset/engine/lib/documentStyle";
+import { FONT_FAMILY_OPTIONS, TEXT_STYLE_DEFAULTS } from "@typeset/engine/lib/documentStyle.ts";
 import { FontSizeControl } from "./FontSizeControl";
 import { ToolbarButton } from "./ToolbarButton";
 import {
@@ -22,8 +22,8 @@ import {
   type StyleFieldMarkStates,
   type StyleFieldSizeStates,
   type StyleTextField
-} from "@typeset/engine/lib/styleFieldFormatting";
-import type { FieldFontState, FieldMark } from "@typeset/engine/lib/inlineMarksText";
+} from "@typeset/engine/lib/styleFieldFormatting.ts";
+import type { FieldFontState, FieldMark } from "@typeset/engine/lib/inlineMarksText.ts";
 import { HEADING_CASE_OPTIONS } from "./styleOptions";
 
 export type TextStylesPopoverProps = {

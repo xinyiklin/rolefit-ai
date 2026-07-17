@@ -9,17 +9,17 @@ import {
 } from "react";
 import { FileUp, Info, TriangleAlert, X } from "lucide-react";
 
-import { Modal } from "./components/Modal";
-import { TopToolbar, type ToolbarSaveStatus } from "./components/toolbar/TopToolbar";
-import { useDocStyle } from "./hooks/useDocStyle";
+import { Modal } from "@typeset/editor/components/Modal.tsx";
+import { TopToolbar, type ToolbarSaveStatus } from "@typeset/editor/components/toolbar/TopToolbar.tsx";
+import { useDocStyle } from "@typeset/editor/hooks/useDocStyle.ts";
 import {
   DOC_PAGE_WIDTH_PX,
   DOC_STYLE_DEFAULTS,
   nextZoomOption,
   toDocumentStyle,
   type DocumentStyle
-} from "@typeset/engine/lib/documentStyle";
-import { useResumeEditor } from "./hooks/useResumeEditor";
+} from "@typeset/engine/lib/documentStyle.ts";
+import { useResumeEditor } from "@typeset/editor/hooks/useResumeEditor.ts";
 import {
   downloadResumeFile,
   parseResumeFile,
@@ -27,9 +27,9 @@ import {
   resumeFileName,
   serializeResumeFile,
   type ParsedResumeFile
-} from "@typeset/engine/lib/resumeFile";
-import type { ResumeData } from "@typeset/engine/lib/resumeData";
-import { downloadBlob } from "@typeset/engine/lib/download";
+} from "@typeset/engine/lib/resumeFile.ts";
+import type { ResumeData } from "@typeset/engine/lib/resumeData.ts";
+import { downloadBlob } from "@typeset/engine/lib/download.ts";
 import {
   STYLE_FIELD_MARK_DEFAULTS,
   globalAlignmentState,
@@ -37,16 +37,16 @@ import {
   styleFieldMarkStates,
   styleFieldSizeStates,
   styleFieldDefaultSizePt
-} from "@typeset/engine/lib/styleFieldFormatting";
-import { buildStarterResume } from "@typeset/engine/sampleResume";
-import { ResumePrintLayer } from "./sections/ResumePrintLayer";
-import { layoutResume } from "@typeset/engine/typeset/layout";
-import { toTypesetSchema } from "@typeset/engine/typeset/schema";
+} from "@typeset/engine/lib/styleFieldFormatting.ts";
+import { buildStarterResume } from "@typeset/engine/sampleResume.ts";
+import { ResumePrintLayer } from "@typeset/editor/sections/ResumePrintLayer.tsx";
+import { layoutResume } from "@typeset/engine/typeset/layout.ts";
+import { toTypesetSchema } from "@typeset/engine/typeset/schema.ts";
 import {
   TypesetEditor,
   type InlineFormatState,
   type TypesetEditorHandle
-} from "./sections/editor/TypesetEditor";
+} from "@typeset/editor/sections/editor/TypesetEditor.tsx";
 
 const AUTOSAVE_KEY = "typeset-resume.autosave.v1";
 const DOCUMENT_TITLE_KEY = "typeset-resume.documentTitle.v1";
@@ -293,7 +293,7 @@ export default function App() {
       // pdf-lib + the emitter load on demand to stay out of the main bundle.
       // Layout is already shared with the on-screen renderer, so it remains a
       // direct import instead of pretending to form a second async chunk.
-      const { emitPdf, fetchFontBytes } = await import("@typeset/engine/typeset/pdf/emit");
+      const { emitPdf, fetchFontBytes } = await import("@typeset/engine/typeset/pdf/emit.ts");
       const schema = toTypesetSchema(resume);
       const doc = layoutResume(schema, docStyle.style);
       const fonts = await fetchFontBytes(doc);
