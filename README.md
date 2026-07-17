@@ -128,15 +128,17 @@ npm run dev
 Open [http://localhost:5186](http://localhost:5186). The port is fixed; if it is
 already bound, use the running app instead of starting another instance.
 
-Useful checks:
+Useful checks — all from the repository root:
 
 ```bash
-npm run check
+npm run check        # every workspace's own gate (build + evals)
 npm run build
 npm run preview
-npm run eval:resume-file
-npm run eval:editor
-npm run eval:pdf-font-parity
+
+# focused evals are app-scoped
+npm run eval:resume-file     --workspace apps/typeset
+npm run eval:editor          --workspace apps/typeset
+npm run eval:pdf-font-parity --workspace apps/typeset
 ```
 
 `npm run check` is the local and CI verification gate: it runs the TypeScript
@@ -147,66 +149,79 @@ production build on port 5186. There is no separate lint command.
 
 ## Architecture
 
+This repository is an npm-workspaces monorepo. The root owns the lockfile,
+shared tooling, and the deployment pipeline; `apps/typeset` is the editor and
+the only app today. `packages/` is reserved for the shared typesetting engine
+once it is extracted.
+
 ```text
-src/
-  main.tsx                       React entry point
-  App.tsx                        file lifecycle, autosave, toolbar, workspace
-  sampleResume.ts                starter document
-  components/
-    Modal.tsx                    dialog shell (focus trap, Escape, backdrop)
-    Popover.tsx                  accessible anchored-popover primitive
-    toolbar/                     editor toolbar, style popovers, zoom controls
-  hooks/
-    useResumeEditor.ts           structured reducer, history, edit actions
-    useDocStyle.ts               browser persistence/state adapter for style + view prefs
-  lib/
-    resumeData.ts                canonical model, constructors, session ids
-    documentStyle.ts             pure persisted style contract, defaults, bounds
-    documentTypography.ts        shared deterministic document-size scale
-    resumeFile.ts                strict `.resume` v1 codec and validation
-    inlineMarksText.ts           inline-mark grammar, emphasis/font/size/alignment helpers
-    styleFieldFormatting.ts      bulk/effective formatting across field roles
-    links.ts                     safe link normalization and auto-detection
-    pageMargins.ts               page-margin presets, bounds, normalization
-    download.ts                  shared browser file-download side effect
-  sections/
-    ResumePrintLayer.tsx         off-screen browser-print document
-    editor/                      direct input, caret mapping, commands, structure overlay
-  typeset/
-    schema.ts                    exact layout input + sole ResumeData adapter
-    blocks.ts                    model to vertical line stream
-    linebreak.ts                 deterministic paragraph breaking
-    layout.ts                    page breaking and geometry
-    fontRegistry.ts              bundled family and face registry
-    measure.ts / metrics.gen.ts  committed measurements for all document fonts
-    render/dom.tsx               selectable editor and print renderer
-    pdf/emit.ts                  embedded-font PDF serializer
-  styles/                        tokens, shell, toolbar, popovers, document, overlay, print
-public/
-  fonts/                         bundled web/PDF fonts and their licenses
-scripts/
-  generate_font_assets.py        pinned webfont and metric generator
-  generate_pdf_fonts.py          derives PDF-embeddable OTF/TTF siblings
+package.json                       workspace root (workspaces, root scripts)
+Dockerfile                         builds apps/typeset from the workspace root
+apps/typeset/
+  index.html                       Vite entry document
+  vite.config.ts / tsconfig.json   app build + typecheck config
+  PRODUCT.md / DESIGN.md           product and visual contracts
+  src/
+    main.tsx                       React entry point
+    App.tsx                        file lifecycle, autosave, toolbar, workspace
+    sampleResume.ts                starter document
+    components/
+      Modal.tsx                    dialog shell (focus trap, Escape, backdrop)
+      Popover.tsx                  accessible anchored-popover primitive
+      toolbar/                     editor toolbar, style popovers, zoom controls
+    hooks/
+      useResumeEditor.ts           structured reducer, history, edit actions
+      useDocStyle.ts               persistence/state adapter for style + view prefs
+    lib/
+      resumeData.ts                canonical model, constructors, session ids
+      documentStyle.ts             pure persisted style contract, defaults, bounds
+      documentTypography.ts        shared deterministic document-size scale
+      resumeFile.ts                strict `.resume` v1 codec and validation
+      inlineMarksText.ts           inline-mark grammar + emphasis/font/size helpers
+      styleFieldFormatting.ts      bulk/effective formatting across field roles
+      links.ts                     safe link normalization and auto-detection
+      pageMargins.ts               page-margin presets, bounds, normalization
+      download.ts                  shared browser file-download side effect
+    sections/
+      ResumePrintLayer.tsx         off-screen browser-print document
+      editor/                      direct input, caret mapping, commands, overlay
+    typeset/
+      schema.ts                    exact layout input + sole ResumeData adapter
+      blocks.ts                    model to vertical line stream + page constants
+      linebreak.ts                 deterministic paragraph breaking
+      layout.ts                    page breaking and geometry
+      fontRegistry.ts              bundled family and face registry
+      measure.ts / metrics.gen.ts  committed measurements for all document fonts
+      render/dom.tsx               selectable editor and print renderer
+      pdf/emit.ts                  embedded-font PDF serializer
+    styles/                        tokens, shell, toolbar, popovers, document, print
+  public/
+    fonts/                         bundled web/PDF fonts and their licenses
+  scripts/
+    generate_font_assets.py        pinned webfont and metric generator
+    generate_pdf_fonts.py          derives PDF-embeddable OTF/TTF siblings
+packages/                          shared packages (reserved; engine extraction)
 ```
 
 `ResumeData` is the canonical in-memory model. The layout conversion carries
 temporary provenance ids into the painted output so selections and structure
-controls map back to the correct field. `src/typeset/schema.ts` is the sole
-adapter into that renderer-ready input. The `.resume` codec removes session ids
-on save and creates fresh ones on open.
+controls map back to the correct field. `apps/typeset/src/typeset/schema.ts` is
+the sole adapter into that renderer-ready input. The `.resume` codec removes
+session ids on save and creates fresh ones on open.
 
 Vite is used for local development and static compilation only. All production
 runtime behavior is browser-side.
 
 ### Font assets
 
-`scripts/generate_font_assets.py` builds the static WOFF2 files in
-`public/fonts/` and regenerates `src/typeset/metrics.gen.ts` from pinned,
-checksum-verified sources. Its header records the reproducible Python tooling;
-run it with `--check` to verify those committed outputs.
-`scripts/generate_pdf_fonts.py` derives the matching OTF/TTF files consumed by
-the client-side PDF emitter. After a font-pipeline change, regenerate both
-formats and run `npm run eval:pdf-font-parity`. Source Serif 4 and Source Sans 3
+`apps/typeset/scripts/generate_font_assets.py` builds the static WOFF2 files in
+`apps/typeset/public/fonts/` and regenerates `src/typeset/metrics.gen.ts` from
+pinned, checksum-verified sources. Its header records the reproducible Python
+tooling; run it with `--check` to verify those committed outputs.
+`generate_pdf_fonts.py` beside it derives the matching OTF/TTF files consumed by
+the client-side PDF emitter. Both anchor their paths to the app root, so they
+run from any working directory. After a font-pipeline change, regenerate both
+formats and run the font-parity eval. Source Serif 4 and Source Sans 3
 use the SIL Open Font License stored in `public/fonts/SourceSerif4-OFL.txt` and
 `public/fonts/SourceSans3-OFL.txt`. Latin Modern's GUST Font License is stored in
 `public/fonts/LatinModern-GUST-FONT-LICENSE.txt`.

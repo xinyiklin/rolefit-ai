@@ -26,19 +26,37 @@ when the project shape or a durable decision changes.
   authoring experience.
 - `DESIGN.md` — visual system, editor grammar, responsive behavior, and
   accessibility expectations.
-- `src/lib/AGENTS.md` — canonical resume model, document style and typography,
-  inline transforms, strict `.resume` codec, versioning, and validation.
-- `src/components/AGENTS.md` — reusable chrome primitives and the toolbar
-  family: popover conventions, option-list ownership, and control contracts.
-- `src/sections/editor/AGENTS.md` — direct-editing boundaries, caret/selection
-  mapping, context commands, and structure-overlay behavior.
-- `src/typeset/AGENTS.md` — deterministic measurement, layout, fonts, DOM/print
-  rendering, PDF emission, and parity checks. Also read it for changes under
-  `scripts/` or `public/fonts/` that affect the typesetting contract.
+- `apps/typeset/src/lib/AGENTS.md` — canonical resume model, document style and
+  typography, inline transforms, strict `.resume` codec, versioning, validation.
+- `apps/typeset/src/components/AGENTS.md` — reusable chrome primitives and the
+  toolbar family: popover conventions, option-list ownership, control contracts.
+- `apps/typeset/src/sections/editor/AGENTS.md` — direct-editing boundaries,
+  caret/selection mapping, context commands, and structure-overlay behavior.
+- `apps/typeset/src/typeset/AGENTS.md` — deterministic measurement, layout,
+  fonts, DOM/print rendering, PDF emission, and parity checks. Also read it for
+  changes under `apps/typeset/scripts/` or `apps/typeset/public/fonts/` that
+  affect the typesetting contract.
 - `CONTINUITY.md` — active decisions, recent verified state, open risks, and
   current working set.
 
+## Workspace
+
+This repository is an npm-workspaces monorepo. The workspace root owns the
+lockfile, shared tooling, and the deployment pipeline; each app owns its own
+build and checks.
+
+- `apps/typeset/` — the Typeset editor (static site; the only app today).
+- `packages/` — shared packages. Empty until the engine is extracted; see
+  `CONTINUITY.md` for the in-flight extraction plan.
+- Root `Dockerfile` builds `apps/typeset` from the workspace root, because npm
+  workspaces resolve from the root manifest and lockfile.
+
+Run everything from the repository root. Root `check`/`test` fan out to every
+workspace; app-specific work uses `--workspace apps/typeset`.
+
 ## Architecture
+
+Paths below are relative to `apps/typeset/`.
 
 - `src/main.tsx` -> `src/App.tsx` is the application entry path.
 - `src/lib/` owns reusable, non-visual resume-domain logic, the document-style
@@ -50,9 +68,11 @@ when the project shape or a durable decision changes.
 - `src/typeset/` owns the exact layout-input adapter and shared deterministic
   layout consumed by the editor, browser print layer, and dedicated PDF emitter.
 - `src/components/` owns reusable editor chrome (`Modal`, `Popover`, and the
-  `toolbar/` family — see `src/components/AGENTS.md`); `src/styles/` owns
-  tokens, shell, toolbar, popover, document, and print styles.
+  `toolbar/` family — see its `AGENTS.md`); `src/styles/` owns tokens, shell,
+  toolbar, popover, document, and print styles.
 - `public/fonts/` and `scripts/` hold reproducible font assets and generators.
+  The generators anchor paths to the app root via `__file__`; keep them beside
+  the assets they produce.
 
 Keep production static. Do not add analytics, hosted AI, accounts, remote
 persistence, runtime services, or resume-data requests without explicit user
@@ -73,21 +93,26 @@ approval.
 - Editor, browser print, and dedicated PDF output must derive from the same
   structured document, style values, and layout contract.
 - Preserve the desktop/tablet-first authoring experience and the clear
-  small-screen gate described in `PRODUCT.md` and `DESIGN.md`.
+  small-screen gate described in `apps/typeset/PRODUCT.md` and
+  `apps/typeset/DESIGN.md`.
 
 ## Commands
 
 Run commands from the repository root.
 
-- Install: `npm install`
+- Install: `npm install` (installs every workspace from the root lockfile)
 - Development: `npm run dev`
-- Build: `npm run build` (`tsc` + Vite -> `dist/`)
+- Build: `npm run build` (`tsc` + Vite -> `apps/typeset/dist/`)
 - Preview: `npm run preview`
-- Editable-file eval: `npm run eval:resume-file`
-- Direct-editor eval: `npm run eval:editor`
-- PDF font-parity eval: `npm run eval:pdf-font-parity`
-- All evals: `npm test` (alias of `npm run eval`)
-- Full local/CI verification: `npm run check` (build + all evals)
+- Full local/CI verification: `npm run check` (every workspace's own check)
+
+Root `dev`/`build`/`preview` currently delegate to `apps/typeset`; they gain
+per-app names when a second app lands. The named evals are app-scoped:
+
+- Editable-file eval: `npm run eval:resume-file --workspace apps/typeset`
+- Direct-editor eval: `npm run eval:editor --workspace apps/typeset`
+- PDF font-parity eval: `npm run eval:pdf-font-parity --workspace apps/typeset`
+- All evals for the app: `npm test --workspace apps/typeset`
 
 There is no separate lint command. `npm run check` is the unified build and
 deterministic-eval gate; use the narrowest named eval while iterating. Material
