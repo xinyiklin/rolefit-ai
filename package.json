@@ -9,9 +9,10 @@
     "node": ">=22.6"
   },
   "scripts": {
-    "dev": "npm run dev --workspace apps/typeset",
-    "build": "npm run build --workspace apps/typeset",
-    "preview": "npm run preview --workspace apps/typeset",
+    "dev:typeset": "npm run dev --workspace apps/typeset",
+    "dev:rolefit": "npm run dev --workspace apps/role-fit-ai",
+    "build:typeset": "npm run build --workspace apps/typeset",
+    "build:rolefit": "npm run build --workspace apps/role-fit-ai",
     "check": "npm run check --workspaces --if-present",
     "test": "npm run test --workspaces --if-present"
   }

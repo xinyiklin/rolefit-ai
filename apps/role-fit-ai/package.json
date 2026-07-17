@@ -7,7 +7,8 @@
     "dev": "node server.ts",
     "build": "tsc && tsc -p tsconfig.server.json && vite build",
     "preview": "NODE_ENV=production node server.ts",
-    "test": "node --test offline-evals.test.mjs"
+    "test": "node --test offline-evals.test.mjs",
+    "check": "npm run build && npm test"
   },
   "dependencies": {
     "@pdf-lib/fontkit": "^1.1.1",

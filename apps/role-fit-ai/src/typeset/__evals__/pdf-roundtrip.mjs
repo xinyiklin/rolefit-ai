@@ -38,7 +38,10 @@ console.log = (...args) => {
   else origWarn(...args);
 };
 
-const pdfjs = await import(join(root, "node_modules/pdfjs-dist/legacy/build/pdf.mjs"));
+// Bare specifier so Node's resolver climbs to wherever npm hoisted the
+// package (pdfjs-dist has no exports map, so deep subpaths resolve legacily).
+// A hardcoded node_modules path broke when the repo became a workspace.
+const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
 const doc = await pdfjs.getDocument({ data: bytes.slice(), useWorkerFetch: false, isEvalSupported: false }).promise;
 
 let failures = 0;
