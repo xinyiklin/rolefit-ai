@@ -1,0 +1,37 @@
+{
+  "manifest_version": 3,
+  "name": "RoleFit AI",
+  "version": "1.0.0",
+  "description": "Import job postings into RoleFit AI for AI-powered resume tailoring and review.",
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "RoleFit AI",
+    "default_icon": {
+      "16": "icons/icon.svg",
+      "32": "icons/icon.svg",
+      "48": "icons/icon.svg",
+      "128": "icons/icon.svg"
+    }
+  },
+  "icons": {
+    "16": "icons/icon.svg",
+    "32": "icons/icon.svg",
+    "48": "icons/icon.svg",
+    "128": "icons/icon.svg"
+  },
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "storage",
+    "cookies"
+  ],
+  "host_permissions": [
+    "http://localhost:5181/*"
+  ],
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "role-fit-ai@localhost",
+      "strict_min_version": "109.0"
+    }
+  }
+}

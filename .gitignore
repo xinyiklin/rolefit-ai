@@ -1,41 +1,22 @@
-# --- Dependencies & build output ---
-node_modules/
-dist/
-*.tsbuildinfo
-
-# --- Editor / IDE ---
+# Workspace-level ignores. App-specific rules (including role-fit-ai's
+# privacy guards for personal resume data) live in each app's own .gitignore.
+node_modules
+dist
+.vite
 .DS_Store
-.vscode/
-.idea/
-
-# --- Logs & caches ---
 *.log
-.eslintcache
-
-# --- Scratch / temp working files (build caches, render artifacts) ---
-tmp/
-*.tmp
-.playwright-cli/
-.trash/
-
-# --- Secrets ---
+*.local
 .env
-
-# --- Agent handoff (local-only, per CLAUDE.md "do not stage") ---
-CONTINUITY.md
+.env.*
+!.env.example
+*.pem
+/CONTINUITY.md
 .claude/
+.playwright-cli/
+output/playwright/
+tmp/
+.impeccable/
 
-# --- Personal job-search artifacts (privacy guard) ---
-*.docx
-*.pdf
-*resume*.tex
-*Resume*.tex
-*resume*.txt
-*resume*.md
-*resume*.csv
-*resume*.png
-*Resume*.png
-*resume*.jpg
-*Resume*.jpg
-job-search-workspace/*
-!job-search-workspace/README.md
+# Generated: mirrored from packages/engine/fonts by the app sync-fonts script.
+apps/typeset/public/fonts/
+apps/role-fit-ai/public/fonts/

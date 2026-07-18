@@ -1,13 +1,20 @@
-name: Deploy static site to GitHub Pages
+name: RoleFit AI Pages demo
 
 # Builds the Vite frontend and publishes the static bundle to GitHub Pages.
 # Note: this is a static-only demo. Anything that calls the local Node server
-# (AI polish, job import, DOCX, the on-disk tracker) will not function here;
+# (AI polish, job import, the on-disk tracker) will not function here;
 # the hosted build is the UI shell only.
 
 on:
   push:
     branches: [main]
+    paths:
+      - "apps/role-fit-ai/**"
+      - "packages/**"
+      - "package.json"
+      - "package-lock.json"
+      - "tsconfig.base.json"
+      - ".github/workflows/deploy-pages.yml"
   workflow_dispatch:
 
 permissions:
@@ -37,10 +44,10 @@ jobs:
         run: npm ci
 
       - name: Build (base path scoped to the project page)
-        run: npm run build -- --base=/rolefit-ai/
+        run: npm run build --workspace apps/role-fit-ai -- --base=/rolefit-ai/
 
       - name: Add SPA 404 fallback
-        run: cp dist/index.html dist/404.html
+        run: cp apps/role-fit-ai/dist/index.html apps/role-fit-ai/dist/404.html
 
       - name: Configure Pages
         uses: actions/configure-pages@v6
@@ -50,7 +57,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v5
         with:
-          path: dist
+          path: apps/role-fit-ai/dist
 
   deploy:
     needs: build

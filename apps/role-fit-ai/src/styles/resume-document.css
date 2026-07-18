@@ -1,0 +1,166 @@
+/* RoleFit host chrome layered over the shared @typeset/editor document and
+   structure styles. The package owns fonts, pages, editing, print, context
+   menus, and drag behavior; only RoleFit's AI-scope and review UI lives here. */
+
+.resume-doc__empty {
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: var(--s2);
+  min-height: calc(var(--s7) * 5);
+  padding: var(--s7) var(--s5);
+  color: var(--ink-soft);
+  font-size: 0.86rem;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.resume-doc__empty strong {
+  color: var(--ink-strong);
+  font-size: 0.92rem;
+  font-weight: 600;
+}
+
+.resume-doc__boot {
+  display: grid;
+  place-content: center;
+  min-height: calc(var(--s7) * 5);
+  margin: 0;
+  padding: var(--s7) var(--s5);
+  color: var(--ink-faint);
+  font-size: 0.78rem;
+  text-align: center;
+}
+
+.tsd-run--highlighted {
+  border-radius: 2px;
+  background: var(--accent-veil);
+  box-shadow: 0 0 0 2px var(--accent-veil);
+}
+
+.ts-chrome {
+  position: absolute;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  pointer-events: none;
+}
+
+.ts-chrome > button {
+  pointer-events: auto;
+}
+
+.ts-chrome--chips {
+  box-sizing: border-box;
+  justify-content: flex-end;
+}
+
+.ts-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 var(--s2);
+  color: var(--ink-soft);
+  background: var(--card-elev);
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--r-pill);
+  font-family: var(--font-ui);
+  font-size: 0.68rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ts-chip:hover {
+  color: var(--accent-deep);
+  background: var(--accent-soft);
+}
+
+.ts-chip.is-on {
+  color: var(--on-accent);
+  background: var(--accent);
+  border-color: var(--accent-deep);
+}
+
+.ts-chip:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.ts-entry-details {
+  position: absolute;
+  z-index: 7;
+  width: min(320px, calc(100vw - 48px));
+  padding: var(--s3);
+  color: var(--ink);
+  background: var(--card-elev);
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-lift);
+  font-family: var(--font-ui);
+}
+
+.ts-entry-details__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--s2);
+  color: var(--ink-strong);
+  font-size: 0.78rem;
+}
+
+.ts-entry-details__close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  color: var(--ink-soft);
+  background: transparent;
+  border: 0;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+}
+
+.ts-entry-details__close:hover {
+  color: var(--ink-strong);
+  background: var(--card-hover);
+}
+
+.ts-entry-details__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s2);
+}
+
+.ts-entry-details__field {
+  display: grid;
+  gap: 3px;
+  color: var(--ink-soft);
+  font-size: 0.66rem;
+  font-weight: 600;
+}
+
+.ts-entry-details__field input {
+  min-width: 0;
+  height: 30px;
+  padding: 0 var(--s2);
+  color: var(--ink);
+  background: var(--card);
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--r-sm);
+  font: 400 0.76rem/1 var(--font-ui);
+}
+
+.ts-entry-details__field input.is-highlighted {
+  background: var(--accent-veil);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-veil);
+}
+
+.ts-entry-details__close:focus-visible,
+.ts-entry-details__field input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}

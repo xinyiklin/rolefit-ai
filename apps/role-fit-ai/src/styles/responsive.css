@@ -1,0 +1,213 @@
+/* -------- Responsive -------- */
+
+@media (max-width: 1080px) {
+  .studio-pane {
+    grid-template-columns: 52px minmax(0, 1fr);
+  }
+
+  /* Keep the navigation axis stable. The desktop rail collapses to an icon
+     strip instead of becoming a second top navbar. */
+  .studio-sidebar {
+    border-right: 1px solid var(--hairline);
+  }
+
+  .studio-tabs {
+    align-items: center;
+    padding: var(--s3) var(--s2);
+  }
+
+  .studio-tabs__group-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .studio-tab {
+    position: relative;
+    justify-content: center;
+    width: 36px;
+    min-width: 36px;
+    min-height: 36px;
+    padding: 0;
+  }
+
+  .studio-tab__label {
+    position: absolute;
+    left: 100%;
+    opacity: 0;
+    transform: translateX(-6px);
+    pointer-events: none;
+  }
+
+  .studio-tab em {
+    position: absolute;
+    top: -3px;
+    right: -3px;
+    min-width: 14px;
+    height: 14px;
+    padding-inline: 3px;
+    font-size: 0.55rem;
+  }
+}
+
+@media (max-width: 1180px) {
+  /* First disclosure: remove secondary state words while preserving the menu
+     names. Readiness remains available inside each menu. */
+  .nav-menu__sub { display: none; }
+}
+
+@media (max-width: 1080px) {
+  /* Tighten the masthead alongside the rail collapse, but keep the visible
+     wordmark until the much narrower action breakpoint. */
+
+  .masthead {
+    gap: var(--s3);
+    padding-inline: var(--s4);
+  }
+
+}
+
+@media (max-width: 940px) {
+  /* Menus disclose to identical icon controls. Parent and intra-group gaps
+     match so all five icons read as one evenly spaced sequence. */
+  .masthead__menus,
+  .masthead .menu-group {
+    gap: 8px;
+  }
+
+  .masthead .nav-menu__label,
+  .masthead .nav-menu__caret {
+    display: none;
+  }
+
+  .masthead .nav-menu__trigger {
+    justify-content: center;
+    width: 34px;
+    height: 32px;
+    padding-inline: 0;
+    border: 1px solid var(--hairline-soft);
+    background: var(--card-soft);
+  }
+
+  .masthead .nav-menu__trigger > svg:first-child {
+    display: block;
+  }
+
+  .masthead .nav-menu__tooltip {
+    position: absolute;
+    top: calc(100% + 7px);
+    left: 50%;
+    z-index: 70;
+    display: block;
+    width: max-content;
+    max-width: 180px;
+    padding: 5px 8px;
+    border: 1px solid var(--hairline);
+    border-radius: var(--r-sm);
+    background: var(--ink-strong);
+    color: var(--paper);
+    box-shadow: var(--shadow-rest);
+    font-size: 0.68rem;
+    line-height: 1.2;
+    pointer-events: none;
+    opacity: 0;
+    transform: translate(-50%, -2px);
+    transition: opacity 120ms var(--ease), transform 120ms var(--ease);
+  }
+
+  .masthead .nav-menu__trigger[aria-expanded="false"]:hover + .nav-menu__tooltip,
+  .masthead .nav-menu__trigger[aria-expanded="false"]:focus-visible + .nav-menu__tooltip {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+@media (max-width: 760px) {
+  .masthead {
+    gap: 4px;
+    padding-inline: 5px;
+  }
+
+  .masthead__brand {
+    flex: 0 0 auto;
+    gap: 0;
+    margin-right: auto;
+  }
+
+  .masthead__mark {
+    display: none;
+  }
+
+  .masthead__brand h1 {
+    font-size: 0.9rem;
+    white-space: nowrap;
+  }
+
+  .masthead__menus,
+  .masthead .menu-group {
+    gap: 3px;
+  }
+
+  .masthead .nav-menu__trigger {
+    width: 28px;
+    height: 30px;
+  }
+
+  .masthead__actions {
+    flex: 0 0 auto;
+    gap: 3px;
+    padding-left: 0;
+  }
+
+  .masthead__actions .masthead__polish.masthead__polish,
+  .masthead__actions .masthead__apply.masthead__apply {
+    width: auto;
+    height: 30px;
+    gap: 4px;
+    padding-inline: 5px;
+    font-size: 0.7rem;
+  }
+
+  .studio-body { padding-left: var(--s4); padding-right: var(--s4); }
+}
+
+@media (max-width: 360px) {
+  .masthead {
+    gap: 2px;
+    padding-inline: 3px;
+  }
+
+  .masthead__brand h1 {
+    font-size: 0.78rem;
+  }
+
+  .masthead__menus,
+  .masthead .menu-group {
+    gap: 2px;
+  }
+
+  .masthead .nav-menu__trigger {
+    width: 25px;
+    height: 28px;
+  }
+
+  .masthead__actions .masthead__polish.masthead__polish,
+  .masthead__actions .masthead__apply.masthead__apply {
+    height: 28px;
+    gap: 2px;
+    padding-inline: 3px;
+    font-size: 0.64rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    transition: none !important;
+    animation: none !important;
+  }
+}

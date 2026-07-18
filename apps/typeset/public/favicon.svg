@@ -1,0 +1,8 @@
+<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Typeset">
+  <title>Typeset</title>
+  <rect width="64" height="64" rx="14" fill="#176b5c" />
+  <path d="M16 9h25l8 8v38H16z" fill="#fbfcfb" />
+  <path d="M41 9v8h8z" fill="#c9ddd7" />
+  <path d="M23 24h19v4h-7.25v18h-4.5V28H23z" fill="#176b5c" />
+  <path d="M22 50h20" stroke="#bec6c1" stroke-width="2" stroke-linecap="round" />
+</svg>

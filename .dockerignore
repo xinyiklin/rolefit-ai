@@ -1,0 +1,18 @@
+# Patterns are matched against the workspace root. Nested workspaces need the
+# ** prefix — a bare `dist` would only match /dist, not apps/*/dist.
+**/node_modules
+**/dist
+**/.vite
+**/.DS_Store
+**/*.local
+**/.env
+**/.env.*
+**/*.pem
+CONTINUITY.md
+**/CONTINUITY.md
+.claude/
+.git
+.github
+**/.playwright-cli
+output/playwright
+.impeccable

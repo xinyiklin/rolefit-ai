@@ -1,0 +1,76 @@
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+}
+
+body {
+  min-height: 100vh;
+  background: var(--paper);
+  color: var(--ink);
+}
+
+button, input, select, textarea {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+
+h1, h2, h3, p { margin: 0; }
+
+ul {
+  display: grid;
+  gap: var(--s2);
+  margin: 0;
+  padding-left: var(--s5);
+  color: var(--ink-muted);
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+
+::placeholder { color: var(--ink-faint); }
+
+.app-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  min-height: 100dvh;
+  gap: var(--s3);
+  padding: var(--s6);
+  background: var(--paper);
+  color: var(--ink);
+  text-align: center;
+}
+
+.app-error__title,
+.app-error__body {
+  margin: 0;
+}
+
+.app-error__title {
+  color: var(--ink-strong);
+  font-size: 1rem;
+  font-weight: 650;
+}
+
+.app-error__body {
+  max-width: 520px;
+  color: var(--ink-soft);
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+
+.app-error__reload.app-error__reload {
+  margin-top: var(--s2);
+}
+::selection { background: var(--accent-veil); color: var(--accent-deep); }

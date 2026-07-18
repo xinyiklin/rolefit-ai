@@ -1,0 +1,204 @@
+/* Structure overlay for the engine-rendered page. Controls are positioned from
+   layout geometry, remain outside the editable DOM, and never reflow text. */
+.typeset-editor {
+  position: relative;
+}
+
+/* The visible grab bar sits inside a larger transparent hit area that extends
+   into the leading whitespace beside the entry or bullet. */
+.ts-grip {
+  position: absolute;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  box-sizing: border-box;
+  width: var(--ts-grip-width, 28px);
+  height: var(--ts-grip-height, 32px);
+  min-width: 28px;
+  min-height: 32px;
+  padding: 0 0 0 2px;
+  border: 0;
+  background: transparent;
+  cursor: grab;
+  touch-action: none;
+  pointer-events: auto;
+  opacity: 0.42;
+  transition: opacity 120ms var(--ease);
+}
+
+.ts-grip:hover,
+.ts-grip:focus-visible {
+  opacity: 1;
+  outline: none;
+}
+
+.ts-grip:active {
+  cursor: grabbing;
+}
+
+/* Dotted drag handle (lucide GripVertical). Sized in JS so it scales with the
+   page zoom; here we only carry colour and the hover/active accent. */
+.ts-grip__handle {
+  flex: 0 0 auto;
+  color: var(--ink-faint);
+  transition: color 120ms var(--ease);
+}
+
+.ts-grip:hover .ts-grip__handle,
+.ts-grip:focus-visible .ts-grip__handle,
+.ts-grip:active .ts-grip__handle {
+  color: var(--accent);
+}
+
+.typeset-editor.is-dragging,
+.typeset-editor.is-dragging .tsd-page,
+.typeset-editor.is-dragging .tsd-page * {
+  cursor: grabbing !important;
+  user-select: none;
+}
+
+.ts-drag-source {
+  position: absolute;
+  z-index: 3;
+  border-radius: var(--r-sm);
+  background: var(--accent-soft);
+  box-shadow:
+    0 0 0 1px var(--accent-veil),
+    var(--shadow-lift);
+  opacity: 0.9;
+  pointer-events: none;
+}
+
+.ts-drop-indicator {
+  position: absolute;
+  z-index: 5;
+  height: 3px;
+  margin-top: -1px;
+  border-radius: 2px;
+  background: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent-veil);
+  pointer-events: none;
+}
+
+.ts-drop-indicator::before {
+  content: "";
+  position: absolute;
+  left: -4px;
+  top: 50%;
+  width: 9px;
+  height: 9px;
+  transform: translateY(-50%);
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 2px var(--card-elev);
+}
+
+/* Self-owned right-click menu. It is fixed to the viewport and clamped on
+   screen by the component. */
+.ts-context-menu {
+  position: fixed;
+  z-index: 50;
+  min-width: 184px;
+  padding: var(--s1);
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--r-md);
+  background: var(--card-elev);
+  box-shadow: var(--shadow-lift);
+  font-family: var(--font-ui);
+  user-select: none;
+}
+
+.ts-context-menu__item {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  width: 100%;
+  min-height: 34px;
+  padding: 0 var(--s2);
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 0.8rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ts-context-menu__item:hover:not(:disabled),
+.ts-context-menu__item:focus-visible {
+  background: var(--accent-soft);
+  color: var(--accent-deep);
+  outline: none;
+}
+
+.ts-context-menu__item:disabled {
+  color: var(--ink-faint);
+  cursor: default;
+}
+
+.ts-context-menu__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  color: var(--ink-soft);
+}
+
+.ts-context-menu__item:hover:not(:disabled) .ts-context-menu__icon {
+  color: var(--accent-deep);
+}
+
+.ts-context-menu__item:disabled .ts-context-menu__icon {
+  color: var(--ink-faint);
+}
+
+.ts-context-menu__label {
+  flex: 1;
+}
+
+.ts-context-menu__shortcut {
+  color: var(--ink-soft);
+  font-size: 0.72rem;
+  letter-spacing: 0.02em;
+}
+
+.ts-context-menu__divider {
+  height: 1px;
+  margin: var(--s1) var(--s2);
+  background: var(--hairline);
+}
+
+.ts-context-menu__row {
+  position: relative;
+}
+
+.ts-context-menu__chevron {
+  margin-left: auto;
+  color: var(--ink-soft);
+}
+
+.ts-context-menu__item:hover:not(:disabled) .ts-context-menu__chevron,
+.ts-context-menu__item:focus-visible .ts-context-menu__chevron {
+  color: var(--accent-deep);
+}
+
+.ts-context-menu__submenu {
+  position: absolute;
+  left: 100%;
+  top: calc(-1 * var(--s1));
+  margin-left: 4px;
+}
+
+@media (pointer: coarse) {
+  .ts-grip {
+    min-width: 40px;
+    min-height: 40px;
+    opacity: 1;
+  }
+
+  .ts-context-menu__item {
+    min-height: 40px;
+  }
+}

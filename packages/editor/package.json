@@ -1,0 +1,27 @@
+{
+  "name": "@typeset/editor",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "The Typeset editing surface: the direct-edit contenteditable page, formatting controls, history/style hooks, and styles, over @typeset/engine.",
+  "exports": {
+    "./styles/*": "./src/styles/*",
+    "./*": "./src/*"
+  },
+  "scripts": {
+    "eval:editor": "node --experimental-strip-types src/sections/editor/__evals__/typeset-editing.mjs",
+    "eval:hooks": "node --experimental-strip-types src/hooks/__evals__/resume-editor-structure.mjs",
+    "eval": "npm run eval:editor && npm run eval:hooks",
+    "test": "npm run eval",
+    "typecheck": "tsc --noEmit",
+    "check": "npm run typecheck && npm run eval"
+  },
+  "dependencies": {
+    "@typeset/engine": "*",
+    "lucide-react": "^1.24.0"
+  },
+  "peerDependencies": {
+    "react": ">=19",
+    "react-dom": ">=19"
+  }
+}

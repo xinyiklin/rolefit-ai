@@ -1,0 +1,215 @@
+/* =============================================================
+   Owned resume document rendering for editor, preview, print, and PDF.
+   ============================================================= */
+
+/* Every document face has a dedicated CSS family and a matching committed
+   metric table. The renderer waits for the selected family before pagination,
+   so browser fallback fonts can never silently change line breaks. */
+@font-face {
+  font-family: "Typeset LM Roman 10 Regular";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/LMRoman10-Regular.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset LM Roman 10 Bold";
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/LMRoman10-Bold.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset LM Roman 10 Italic";
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+  src: url("/fonts/LMRoman10-Italic.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset LM Roman 10 Bold Italic";
+  font-weight: 700;
+  font-style: italic;
+  font-display: swap;
+  src: url("/fonts/LMRoman10-BoldItalic.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset LM Roman 12 Bold Display";
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/LMRoman12-Bold.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset LM Roman Caps 10";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/LMRomanCaps10-Regular.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Typeset Source Serif 4 Regular";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/SourceSerif4-Regular.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Source Serif 4 Bold";
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/SourceSerif4-Bold.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Source Serif 4 Italic";
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+  src: url("/fonts/SourceSerif4-Italic.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Source Serif 4 Bold Italic";
+  font-weight: 700;
+  font-style: italic;
+  font-display: swap;
+  src: url("/fonts/SourceSerif4-BoldItalic.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Source Serif 4 Bold Display";
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/SourceSerif4-BoldDisplay.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Source Serif 4 Caps";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/SourceSerif4-Caps.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Typeset Source Sans 3 Regular";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/SourceSans3-Regular.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Source Sans 3 Bold";
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/SourceSans3-Bold.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Source Sans 3 Italic";
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+  src: url("/fonts/SourceSans3-Italic.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Source Sans 3 Bold Italic";
+  font-weight: 700;
+  font-style: italic;
+  font-display: swap;
+  src: url("/fonts/SourceSans3-BoldItalic.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Source Sans 3 Bold Display";
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/SourceSans3-BoldDisplay.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Source Sans 3 Caps";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/SourceSans3-Caps.woff2") format("woff2");
+}
+
+/* ==== Typeset-engine DOM pages (src/typeset/render/dom.tsx) ====
+   Real text at engine coordinates. Screen pages get quiet paper chrome; print
+   pages remain bare, physical-size sheets. */
+.tsd-doc--screen .tsd-page {
+  margin: 0 auto var(--s4);
+  background: #ffffff;
+  border: 1px solid var(--hairline);
+  border-radius: 2px;
+  box-shadow: var(--shadow-rest);
+}
+
+.tsd-doc--print .tsd-page {
+  background: #ffffff;
+}
+
+/* Typeset editor: the painted page is one contenteditable host with a quiet
+   keyboard focus ring, text cursor, and ink caret. Links remain text while
+   editing, so a pointer cursor would lie. */
+.tsd-doc--editable {
+  outline: none;
+  caret-color: #000;
+}
+
+.tsd-doc--editable .tsd-page {
+  cursor: text;
+}
+
+.tsd-doc--editable a {
+  cursor: text;
+}
+
+/* Off-screen by default — the print layer exists only to be printed. */
+.resume-print-layer {
+  display: none;
+}
+
+@media print {
+  /* Print only the resume: drop the whole app shell, show the isolated page. */
+  #root {
+    display: none !important;
+  }
+
+  .resume-print-layer {
+    display: block !important;
+  }
+
+  /* Engine hairlines and link underlines are positioned boxes. Preserve their
+     ink in Chromium's default print path, even when "Background graphics" is
+     not enabled in the system dialog. */
+  .resume-print-layer,
+  .resume-print-layer * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* The ENGINE paginates: each .tsd-page is a complete 612×792pt sheet with
+     its margins already laid out inside, so the printer margin is zero and
+     every sheet maps 1:1 onto one piece of paper. */
+  @page {
+    size: letter;
+    margin: 0;
+  }
+
+  html,
+  body {
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+  }
+
+  .resume-print-layer .tsd-page {
+    break-after: page;
+  }
+
+  .resume-print-layer .tsd-page:last-child {
+    break-after: auto;
+  }
+
+}

@@ -1,0 +1,93 @@
+/* Resume workspace layout. Typeset's document row and formatting row live
+   inside this tab, so they start at the studio-main edge instead of spanning
+   over RoleFit's navigation rail. */
+
+.resume-tab__toolbar {
+  position: relative;
+  top: auto;
+  flex: 0 0 auto;
+  z-index: 20;
+}
+
+.resume-tab__toolbar .top-toolbar__primary-row {
+  height: var(--toolbar-row-height);
+  min-height: var(--toolbar-row-height);
+  padding-block: 6px;
+}
+
+.resume-tab__toolbar .studio-card__tools {
+  flex: 0 0 auto;
+  flex-wrap: nowrap;
+}
+
+/* RoleFit's export menu keeps its text label without the leading icon. The
+   label-first toolbar disclosure at this container width now lives in
+   packages/editor/src/styles/toolbar.css, scoped by the host seam attribute
+   [data-toolbar-labels="text"] set on this tab's toolbar header. */
+.resume-tab__toolbar .export-menu__trigger > svg:first-child {
+  display: none;
+}
+
+/* Edit-and-check split: the owned page on the left, then the actionable
+   recruiter-review rail when a review exists. */
+.resume-workbench {
+  position: relative; /* positioning context for the floated draft-restore bar */
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: 1fr;
+  gap: var(--s4);
+  align-items: stretch;
+  flex: 1 1 0;
+  min-height: 0;
+}
+
+.resume-workbench.has-rail {
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 380px);
+  padding-right: var(--s5);
+}
+
+.resume-workbench__editor {
+  min-width: 0;
+  container-type: inline-size;
+  overflow: auto;
+  padding: var(--s4) var(--s5);
+  scrollbar-width: thin;
+  scrollbar-color: var(--hairline-strong) transparent;
+}
+
+.resume-workbench__editor::-webkit-scrollbar,
+.resume-workbench__rail::-webkit-scrollbar {
+  width: 8px;
+}
+
+.resume-workbench__editor::-webkit-scrollbar-thumb,
+.resume-workbench__rail::-webkit-scrollbar-thumb {
+  background: var(--hairline-strong);
+  border-radius: var(--r-pill);
+}
+
+.resume-workbench__rail {
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--hairline-strong) transparent;
+}
+
+@media (max-width: 1180px) {
+  .resume-workbench.has-rail {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: none;
+    grid-auto-rows: max-content;
+    padding-right: 0;
+  }
+
+  .resume-workbench.has-rail .resume-workbench__editor {
+    height: auto;
+    overflow: visible;
+  }
+
+  .resume-workbench__rail {
+    overflow: visible;
+  }
+}

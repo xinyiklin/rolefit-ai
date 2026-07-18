@@ -1,0 +1,358 @@
+/* ── Custom properties — mirrors the app's drafting-desk tokens ─────────── */
+/* Values copied from src/styles/tokens.css so the popup reads as the same
+   green-tinted near-white paper surface as the app (not a warmer cream). */
+:root {
+  --bg:           oklch(0.956 0.006 150);
+  --surface:      oklch(0.992 0.002 150);
+  --surface-2:    oklch(0.934 0.008 150);
+  --fg:           oklch(0.25 0.012 160);
+  --fg-muted:     oklch(0.41 0.014 160);
+  --fg-dim:       oklch(0.51 0.012 160);
+  --border:       oklch(0.885 0.008 150);
+  --border-soft:  oklch(0.925 0.006 150);
+
+  --brand:        oklch(0.46 0.085 165);
+  --brand-hover:  oklch(0.36 0.075 168);
+  --on-accent:    oklch(0.975 0.008 150);
+  --ring-track:   oklch(0.9 0.007 150);
+
+  --score-strong:  oklch(0.46 0.085 165);
+  --score-good:    oklch(0.45 0.06 250);
+  --score-stretch: oklch(0.52 0.1 75);
+  --score-poor:    oklch(0.45 0.12 30);
+
+  /* Tinted fills/inks for banners + chips, derived from the brand/signal hues */
+  --match-ink:   oklch(0.36 0.075 168);
+  --match-veil:  oklch(0.46 0.085 165 / 0.12);
+  --match-fill:  oklch(0.46 0.085 165 / 0.18);
+  --match-line:  oklch(0.46 0.085 165 / 0.34);
+  --gap-ink:     oklch(0.42 0.1 72);
+  --gap-veil:    oklch(0.52 0.1 75 / 0.12);
+  --gap-fill:    oklch(0.52 0.1 75 / 0.18);
+  --gap-line:    oklch(0.52 0.1 75 / 0.32);
+  --danger-ink:  oklch(0.4 0.12 30);
+  --danger-veil: oklch(0.45 0.12 30 / 0.08);
+  --danger-fill: oklch(0.45 0.12 30 / 0.14);
+  --danger-line: oklch(0.45 0.12 30 / 0.28);
+
+  --font-serif: "Charter", "Bitstream Charter", "Iowan Old Style", Georgia, "Times New Roman", serif;
+
+  --radius:      10px;
+  --radius-sm:   7px;
+  --radius-pill: 999px;
+}
+
+/* ── Reset / base ──────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  width: 340px;
+  min-height: 130px;
+  max-height: 520px;
+  overflow-y: auto;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: "Geist", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 13px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Masthead ──────────────────────────────────────────────────────────── */
+.masthead {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 11px 15px 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.brand-mark {
+  width: 21px;
+  height: 21px;
+  flex-shrink: 0;
+  border-radius: 6px;
+  background: var(--brand);
+  border: 1px solid var(--brand-hover);
+  display: grid;
+  place-items: center;
+  color: var(--on-accent);
+  font-weight: 700;
+  font-size: 12px;
+  font-family: var(--font-serif);
+}
+
+.brand-name {
+  font-family: var(--font-serif);
+  font-size: 14.5px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--fg);
+}
+
+.brand-tag {
+  margin-left: auto;
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--fg-dim);
+}
+
+/* ── Loading ───────────────────────────────────────────────────────────── */
+.state-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 34px 15px;
+  color: var(--fg-muted);
+  font-size: 12px;
+}
+
+.spinner {
+  width: 26px;
+  height: 26px;
+  border: 2.5px solid var(--ring-track);
+  border-top-color: var(--score-strong);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner { animation: none; }
+}
+
+/* ── Error ─────────────────────────────────────────────────────────────── */
+.state-error { padding: 16px 15px; }
+
+.error-card {
+  display: flex;
+  gap: 10px;
+  background: var(--danger-veil);
+  border: 1px solid var(--danger-line);
+  border-radius: var(--radius);
+  padding: 13px 14px;
+}
+
+.error-mark {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--danger-fill);
+  color: var(--score-poor);
+  display: grid;
+  place-items: center;
+  font-size: 13px;
+  font-weight: 700;
+  margin-top: 1px;
+}
+
+.error-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--danger-ink);
+  margin-bottom: 3px;
+}
+
+.error-msg {
+  font-size: 12px;
+  color: var(--fg-muted);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+/* ── Result ────────────────────────────────────────────────────────────── */
+.state-result {
+  padding: 13px 15px 15px;
+  display: flex;
+  flex-direction: column;
+  gap: 13px;
+}
+
+/* Job meta */
+.job-meta { display: flex; flex-direction: column; gap: 3px; }
+
+.job-title {
+  font-family: var(--font-serif);
+  font-size: 15.5px;
+  font-weight: 600;
+  color: var(--fg);
+  line-height: 1.3;
+}
+
+.job-company {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--fg-muted);
+}
+
+.job-company::before {
+  content: "";
+  width: 5px;
+  height: 5px;
+  border-radius: 1px;
+  background: var(--fg-dim);
+}
+
+/* Application banner */
+.applied-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-radius: var(--radius);
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.applied-icon {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  font-weight: 700;
+  background: var(--surface-2);
+  color: var(--fg-muted);
+}
+
+.applied-body { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.applied-label { font-size: 12.5px; font-weight: 600; color: var(--fg); }
+.applied-sub { font-size: 11px; color: var(--fg-muted); }
+.applied-evidence { font-size: 10.5px; color: var(--fg-dim); line-height: 1.35; margin-top: 2px; }
+
+.applied-banner.tone-applied {
+  background: var(--match-veil);
+  border-color: var(--match-line);
+}
+.tone-applied .applied-icon { background: var(--match-fill); color: var(--score-strong); }
+.tone-applied .applied-label { color: var(--match-ink); }
+
+.applied-banner.tone-offer {
+  background: var(--gap-veil);
+  border-color: var(--gap-line);
+}
+.tone-offer .applied-icon { background: var(--gap-fill); color: var(--score-stretch); }
+.tone-offer .applied-label { color: var(--gap-ink); }
+
+.applied-banner.tone-rejected {
+  background: var(--danger-veil);
+  border-color: var(--danger-line);
+}
+.tone-rejected .applied-icon { background: var(--danger-fill); color: var(--score-poor); }
+
+.applied-banner.tone-tracking { background: var(--surface); }
+.tone-tracking .applied-icon { color: var(--score-good); }
+
+.applied-banner.tone-idle {
+  background: transparent;
+  border-style: dashed;
+  border-color: var(--border);
+}
+.tone-idle .applied-label { color: var(--fg-muted); font-weight: 500; }
+
+/* No-resume notice */
+.no-resume {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  font-size: 12px;
+  color: var(--fg-muted);
+  line-height: 1.5;
+}
+.no-resume-mark {
+  flex-shrink: 0;
+  width: 26px;
+  height: 18px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--fg-dim);
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  font-weight: 700;
+  margin-top: 1px;
+}
+
+/* Import button */
+.btn-import {
+  width: 100%;
+  height: 44px;
+  margin-top: 1px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: var(--brand);
+  color: var(--on-accent);
+  border: none;
+  border-radius: var(--radius);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.08s ease;
+}
+.btn-import:hover:not(:disabled) { background: var(--brand-hover); }
+.btn-import:active:not(:disabled) { transform: scale(0.99); }
+.btn-import:focus-visible,
+.auto-tailor__input:focus-visible {
+  outline: 2px solid var(--brand-hover);
+  outline-offset: 2px;
+}
+.btn-import:disabled {
+  background: var(--surface-2);
+  color: var(--fg-muted);
+  cursor: default;
+}
+.btn-import .btn-arrow { font-size: 15px; line-height: 1; }
+
+/* Auto-tailor toggle */
+.auto-tailor {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: -1px;
+  min-height: 28px;
+  padding: 4px 2px;
+  cursor: pointer;
+  user-select: none;
+}
+.auto-tailor__input {
+  width: 13px;
+  height: 13px;
+  margin: 0;
+  accent-color: var(--brand);
+  cursor: pointer;
+}
+.auto-tailor__label {
+  font-size: 11.5px;
+  color: var(--fg-muted);
+  line-height: 1.3;
+}
+
+/* Foot note */
+.foot {
+  font-size: 10.5px;
+  color: var(--fg-dim);
+  line-height: 1.45;
+  text-align: center;
+  padding: 0 4px;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }

@@ -1,0 +1,932 @@
+/* Typeset document toolbar
+   Familiar editor density, flat resting chrome, and elevation only for popovers. */
+
+.top-toolbar {
+  --toolbar-control-height: 32px;
+  --toolbar-row-height: 48px;
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  color: var(--ink);
+  background: var(--card);
+  border-bottom: 1px solid var(--hairline);
+  isolation: isolate;
+  user-select: none;
+  container-name: typeset-toolbar;
+  container-type: inline-size;
+}
+
+.top-toolbar__primary-row,
+.top-toolbar__secondary-row {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  height: var(--toolbar-row-height);
+  min-height: var(--toolbar-row-height);
+  box-sizing: border-box;
+}
+
+.top-toolbar__primary-row {
+  justify-content: space-between;
+  gap: var(--s4);
+  padding: 6px 14px;
+  border-bottom: 1px solid var(--hairline-soft);
+}
+
+.top-toolbar__secondary-row {
+  gap: 7px;
+  padding: 6px 12px;
+  background: var(--card-soft);
+}
+
+.top-toolbar__secondary-row--formatting {
+  position: relative;
+  flex-wrap: nowrap;
+  overflow: visible;
+}
+
+.top-toolbar__identity {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+}
+
+.top-toolbar__product-name {
+  flex: 0 0 auto;
+  color: var(--ink-strong);
+  font-size: 0.92rem;
+  font-weight: 680;
+  letter-spacing: -0.012em;
+  white-space: nowrap;
+}
+
+.top-toolbar__identity-divider {
+  flex: 0 0 auto;
+  width: 1px;
+  height: 18px;
+  background: var(--hairline);
+}
+
+.top-toolbar__document-meta {
+  display: inline-flex;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: 3px;
+  min-width: 0;
+}
+
+.top-toolbar__title-field {
+  display: flex;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 36ch;
+}
+
+.top-toolbar__title-field input {
+  width: auto;
+  max-width: 36ch;
+  field-sizing: content;
+  height: 30px;
+  min-width: 0;
+  padding: 4px 3px;
+  color: var(--ink-strong);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--r-md);
+  outline: none;
+  font-size: 0.86rem;
+  font-weight: 570;
+  text-overflow: ellipsis;
+  transition:
+    background 140ms var(--ease),
+    border-color 140ms var(--ease),
+    box-shadow 140ms var(--ease);
+}
+
+.top-toolbar__title-field input:hover:not(:focus) {
+  background: var(--card-soft);
+  border-color: var(--hairline-soft);
+}
+
+.top-toolbar__title-field input:focus-visible {
+  background: var(--card);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-veil);
+}
+
+.top-toolbar__document-title {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink-strong);
+  font-size: 0.86rem;
+  font-weight: 570;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.top-toolbar__document-context {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  max-width: 34ch;
+  overflow: hidden;
+  color: var(--ink-soft);
+  font-size: 0.72rem;
+  font-weight: 450;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.top-toolbar__document-context::before {
+  content: "·";
+  margin-inline: 3px 5px;
+  color: var(--ink-faint);
+}
+
+.top-toolbar__save-status {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 5px;
+  max-width: 150px;
+  color: var(--ink-soft);
+  font-size: 0.7rem;
+  font-weight: 520;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.top-toolbar__save-status-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.top-toolbar__save-status--saved {
+  color: var(--accent-deep);
+}
+
+.top-toolbar__save-status--unsaved {
+  color: var(--warm);
+}
+
+.top-toolbar__save-status--error {
+  color: var(--danger);
+}
+
+.top-toolbar__save-status--saving .top-toolbar__save-status-icon {
+  animation: toolbar-spin 900ms linear infinite;
+}
+
+.top-toolbar__file-actions,
+.top-toolbar__group,
+.top-toolbar__zoom {
+  display: flex;
+  align-items: center;
+}
+
+.top-toolbar__file-actions {
+  flex: 0 0 auto;
+  gap: 3px;
+}
+
+.top-toolbar__group {
+  flex: 0 0 auto;
+  gap: 2px;
+}
+
+.top-toolbar__group--style {
+  gap: 4px;
+}
+
+.top-toolbar__group--typography,
+.top-toolbar__group--body-align {
+  gap: 3px;
+}
+
+.top-toolbar__group--typography-overflow,
+.top-toolbar__divider--overflow-typography,
+.top-toolbar__group--body-align-overflow,
+.top-toolbar__divider--overflow-alignment {
+  display: none;
+}
+
+.top-toolbar__divider {
+  flex: 0 0 auto;
+  width: 1px;
+  height: 22px;
+  margin: 0 2px;
+  background: var(--hairline);
+}
+
+.top-toolbar__main-tools,
+.top-toolbar__overflow-tools {
+  display: contents;
+}
+
+.top-toolbar__more-trigger {
+  display: none;
+}
+
+.top-toolbar__more-trigger .toolbar-tooltip__bubble {
+  right: 0;
+  left: auto;
+  translate: 0 -2px;
+}
+
+.top-toolbar__font-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink-muted);
+  font-size: 0.71rem;
+  font-weight: 590;
+  white-space: nowrap;
+}
+
+.font-family-control {
+  position: relative;
+  display: inline-flex;
+  min-width: 0;
+  width: 128px;
+}
+
+.font-family-control__trigger {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 18px;
+  align-items: center;
+  width: 100%;
+  height: var(--toolbar-control-height);
+  padding: 0 5px 0 9px;
+  color: var(--ink);
+  background: var(--card);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-md);
+  outline: none;
+  font: 520 0.75rem/1 var(--font-ui);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 140ms var(--ease), box-shadow 140ms var(--ease), background 140ms var(--ease);
+}
+
+.font-family-control__trigger > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.font-family-control__trigger > svg {
+  justify-self: center;
+  color: var(--ink-muted);
+  transition: transform 140ms var(--ease);
+}
+
+.font-family-control.is-open .font-family-control__trigger > svg {
+  transform: rotate(180deg);
+}
+
+.font-family-control__trigger:hover:not(:disabled) {
+  background: var(--card-hover);
+  border-color: var(--hairline-strong);
+}
+
+.font-family-control__trigger:focus-visible,
+.font-family-control.is-open .font-family-control__trigger {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-veil);
+}
+
+.font-family-control__trigger:disabled {
+  color: var(--ink-faint);
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+.font-family-control__menu {
+  z-index: 120;
+  display: grid;
+  gap: 2px;
+  padding: 4px;
+  color: var(--ink);
+  background: var(--card);
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-lift);
+}
+
+.font-family-control__menu button {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 16px;
+  align-items: center;
+  width: 100%;
+  min-height: 30px;
+  padding: 5px 7px;
+  color: var(--ink);
+  background: transparent;
+  border: 0;
+  border-radius: var(--r-sm);
+  outline: none;
+  font: 520 0.75rem/1.2 var(--font-ui);
+  text-align: left;
+  cursor: pointer;
+}
+
+.font-family-control__menu button > svg {
+  justify-self: center;
+  color: var(--accent);
+  opacity: 0;
+}
+
+.font-family-control__menu button.is-selected > svg {
+  opacity: 1;
+}
+
+.font-family-control__menu button:hover,
+.font-family-control__menu button:focus-visible,
+.font-family-control__menu button.is-selected {
+  color: var(--accent-deep);
+  background: var(--accent-veil);
+}
+
+.font-size-control {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  height: var(--toolbar-control-height);
+  color: var(--ink-muted);
+  background: var(--card);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-md);
+  font: 520 0.75rem/1 var(--font-ui);
+  transition: border-color 140ms var(--ease), box-shadow 140ms var(--ease), background 140ms var(--ease);
+}
+
+.font-size-control__value {
+  display: inline-flex;
+  align-items: center;
+  height: 100%;
+  border-inline: 1px solid var(--hairline);
+}
+
+.font-size-control input {
+  width: 34px;
+  min-width: 0;
+  height: 100%;
+  padding: 0 4px;
+  color: var(--ink);
+  background: transparent;
+  border: 0;
+  outline: 0;
+  font: inherit;
+  text-align: center;
+}
+
+.font-size-control__step {
+  display: inline-grid;
+  place-items: center;
+  height: 100%;
+  padding: 0;
+  color: var(--ink-muted);
+  background: transparent;
+  border: 0;
+  outline: 0;
+  cursor: pointer;
+}
+
+.font-size-control__step {
+  width: 24px;
+}
+
+.font-size-control__step:hover:not(:disabled) {
+  color: var(--ink);
+  background: var(--card-hover);
+}
+
+.font-size-control__step:focus-visible {
+  color: var(--accent);
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+
+.font-size-control__step:disabled {
+  color: var(--ink-faint);
+  cursor: not-allowed;
+}
+
+.font-size-control__menu {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 6px);
+  left: 50%;
+  display: grid;
+  width: 48px;
+  max-height: 232px;
+  padding: 4px;
+  overflow-y: auto;
+  color: var(--ink);
+  background: var(--card);
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-lift);
+  font: 520 0.75rem/1.2 var(--font-ui);
+  transform: translateX(-50%);
+}
+
+.font-size-control__menu button {
+  min-height: 28px;
+  padding: 3px 4px;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  border-radius: var(--r-sm);
+  font: inherit;
+  text-align: center;
+  cursor: pointer;
+}
+
+.font-size-control__menu button:hover,
+.font-size-control__menu button.is-selected {
+  color: var(--accent);
+  background: var(--accent-veil);
+}
+
+.font-size-control:hover:not(:has(input:disabled)) {
+  background: var(--card-hover);
+  border-color: var(--hairline-strong);
+}
+
+.font-size-control:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-veil);
+}
+
+.font-size-control:has(input:disabled) {
+  color: var(--ink-faint);
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+.top-toolbar__zoom {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+}
+
+.top-toolbar__zoom-combobox {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 20px;
+  width: 72px;
+  height: var(--toolbar-control-height);
+  overflow: hidden;
+  color: var(--ink);
+  background: var(--card);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-md);
+  transition: border-color 140ms var(--ease), box-shadow 140ms var(--ease), background 140ms var(--ease);
+}
+
+.top-toolbar__zoom-combobox:hover {
+  background: var(--card-hover);
+  border-color: var(--hairline-strong);
+}
+
+.top-toolbar__zoom-combobox:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-veil);
+}
+
+.top-toolbar__zoom-combobox input {
+  min-width: 0;
+  height: 100%;
+  padding: 0 1px 0 6px;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  outline: 0;
+  font: 520 0.75rem/1 var(--font-ui);
+  text-align: left;
+}
+
+.top-toolbar__zoom-toggle {
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 100%;
+  padding: 0;
+  color: var(--ink-muted);
+  background: transparent;
+  border: 0;
+  outline: 0;
+  cursor: pointer;
+}
+
+.top-toolbar__zoom-toggle:hover {
+  color: var(--ink-strong);
+  background: var(--paper-deep);
+}
+
+.top-toolbar__zoom-toggle svg {
+  transition: rotate 140ms var(--ease);
+}
+
+.top-toolbar__zoom.is-open .top-toolbar__zoom-toggle svg {
+  rotate: 180deg;
+}
+
+.zoom-control__menu {
+  z-index: 100;
+  display: grid;
+  max-height: 280px;
+  padding: 4px;
+  overflow-y: auto;
+  color: var(--ink);
+  background: var(--card);
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-lift);
+  font: 520 0.75rem/1.2 var(--font-ui);
+}
+
+.zoom-control__menu button {
+  min-height: 28px;
+  padding: 4px 8px;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  border-radius: var(--r-sm);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.zoom-control__menu button:hover,
+.zoom-control__menu button.is-selected {
+  color: var(--accent);
+  background: var(--accent-veil);
+}
+
+/* Toolbar commands and their delayed, non-interactive tooltips. */
+.toolbar-tooltip {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 auto;
+}
+
+.toolbar-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: var(--toolbar-control-height, 32px);
+  min-width: var(--toolbar-control-height, 32px);
+  padding: 0 7px;
+  color: var(--ink-muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--r-md);
+  outline: none;
+  font-size: 0.76rem;
+  font-weight: 590;
+  line-height: 1;
+  white-space: nowrap;
+  transition:
+    color 120ms var(--ease),
+    background 120ms var(--ease),
+    border-color 120ms var(--ease),
+    box-shadow 120ms var(--ease);
+}
+
+.toolbar-button--icon {
+  width: var(--toolbar-control-height, 32px);
+  padding: 0;
+}
+
+.toolbar-button--text {
+  padding-inline: 9px;
+}
+
+.toolbar-button__icon,
+.toolbar-button__trailing {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+}
+
+.toolbar-button__trailing {
+  margin-left: -2px;
+  color: var(--ink-faint);
+  transition: rotate 160ms var(--ease);
+}
+
+.toolbar-button:hover:not(:disabled) {
+  color: var(--ink-strong);
+  background: var(--card-hover);
+  border-color: var(--hairline-soft);
+}
+
+.toolbar-button:active:not(:disabled),
+.toolbar-button.is-active:not(:disabled) {
+  color: var(--ink-strong);
+  background: var(--paper-deep);
+  border-color: var(--hairline);
+}
+
+.toolbar-button.is-pressed:not(:disabled) {
+  color: var(--accent-deep);
+  background: var(--accent-soft);
+  border-color: var(--accent-veil);
+}
+
+.toolbar-button--primary {
+  padding-inline: 11px;
+  color: var(--on-accent);
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.toolbar-button--primary:hover:not(:disabled),
+.toolbar-button--primary:active:not(:disabled) {
+  color: var(--on-accent);
+  background: var(--accent-deep);
+  border-color: var(--accent-deep);
+}
+
+.toolbar-button:focus-visible {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-veil);
+}
+
+.toolbar-button--primary:focus-visible {
+  box-shadow: 0 0 0 2px var(--card), 0 0 0 4px var(--accent-glow);
+}
+
+.toolbar-button:disabled {
+  color: var(--ink-faint);
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+.popover.is-open > .toolbar-tooltip .toolbar-button__trailing {
+  rotate: 180deg;
+}
+
+.toolbar-tooltip__bubble {
+  position: absolute;
+  top: calc(100% + 7px);
+  left: 50%;
+  z-index: 90;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  width: max-content;
+  max-width: min(260px, calc(100vw - 20px));
+  padding: 6px 8px;
+  color: var(--card);
+  background: var(--ink-strong);
+  border: 1px solid var(--ink);
+  border-radius: var(--r-md);
+  box-shadow: 0 6px 18px oklch(0.2 0.01 160 / 0.14);
+  font-size: 0.6875rem;
+  font-weight: 520;
+  line-height: 1.2;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  translate: -50% -2px;
+  transition:
+    opacity 100ms var(--ease),
+    translate 100ms var(--ease),
+    visibility 0s linear 100ms;
+}
+
+.toolbar-tooltip__shortcut {
+  color: var(--hairline-strong);
+  font-family: var(--font-ui);
+  font-size: 0.6875rem;
+  font-weight: 560;
+}
+
+@media (hover: hover) {
+  /* Show on hover, or on keyboard focus only. A plain click leaves the button
+     focused but not :focus-visible, so the tooltip does not linger after a
+     press closes its menu. */
+  .toolbar-tooltip:hover > .toolbar-tooltip__bubble,
+  .toolbar-tooltip:has(:focus-visible) > .toolbar-tooltip__bubble {
+    opacity: 1;
+    visibility: visible;
+    translate: -50% 0;
+    transition-delay: 420ms;
+  }
+
+  .top-toolbar__more-trigger .toolbar-tooltip:hover > .toolbar-tooltip__bubble,
+  .top-toolbar__more-trigger .toolbar-tooltip:has(:focus-visible) > .toolbar-tooltip__bubble {
+    translate: 0 0;
+  }
+
+  .popover.is-open > .toolbar-tooltip .toolbar-tooltip__bubble {
+    opacity: 0;
+    visibility: hidden;
+  }
+}
+@keyframes toolbar-spin {
+  to {
+    rotate: 360deg;
+  }
+}
+
+@container typeset-toolbar (max-width: 1210px) {
+  .top-toolbar__group--style .toolbar-button__label,
+  .top-toolbar__group--style .toolbar-button__trailing {
+    display: none;
+  }
+
+  .top-toolbar__group--style .toolbar-button--text {
+    width: var(--toolbar-control-height);
+    padding: 0;
+  }
+}
+
+/* Label-first disclosure seam: a host may set `data-toolbar-labels="text"` on
+   the wrapper around the toolbar to opt into label-first disclosure instead
+   of the default icon-first collapse above. A host that has no standalone
+   file-action cluster in this row can afford to keep style-menu labels
+   readable longer, and can afford to keep document-structure labels/icons
+   legible further down before the icon-only fallback. Typeset never sets the
+   attribute, so it is unaffected. */
+[data-toolbar-labels="text"] .top-toolbar__document-structure .toolbar-button__icon {
+  display: none;
+}
+
+/* The 1190.01px lower edge interlocks exactly with the 1210px band above so
+   the two disclosure states hand off without a gap; retune them together. */
+@container typeset-toolbar (min-width: 1190.01px) and (max-width: 1210px) {
+  [data-toolbar-labels="text"] .top-toolbar__group--style {
+    gap: 0;
+  }
+
+  [data-toolbar-labels="text"] .top-toolbar__group--style .toolbar-button__label,
+  [data-toolbar-labels="text"] .top-toolbar__group--style .toolbar-button__trailing {
+    display: inline;
+  }
+
+  [data-toolbar-labels="text"] .top-toolbar__group--style .toolbar-button--text {
+    width: auto;
+    padding-inline: 6px;
+  }
+}
+
+@container typeset-toolbar (max-width: 1100px) {
+  .top-toolbar__document-context {
+    max-width: 24ch;
+  }
+}
+
+@container typeset-toolbar (max-width: 1040px) {
+  .top-toolbar__document-context {
+    display: none;
+  }
+
+  .top-toolbar__secondary-row--formatting {
+    align-items: center;
+    gap: 7px;
+    padding: 6px 12px;
+    overflow: visible;
+  }
+
+  .top-toolbar__main-tools {
+    display: flex;
+    flex: 1 1 auto;
+    align-items: center;
+    gap: 7px;
+    width: 100%;
+    min-width: 0;
+    height: var(--toolbar-control-height);
+  }
+
+  .top-toolbar__overflow-tools {
+    display: none;
+  }
+
+  .top-toolbar__secondary-row--formatting.is-more-open .top-toolbar__overflow-tools {
+    position: absolute;
+    z-index: 80;
+    top: calc(100% + 6px);
+    right: 12px;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+    width: max-content;
+    max-width: calc(100cqi - 24px);
+    min-height: var(--toolbar-row-height);
+    padding: 8px;
+    box-sizing: border-box;
+    background: var(--card);
+    border: 1px solid var(--hairline-strong);
+    border-radius: var(--r-lg);
+    box-shadow: var(--shadow-lift);
+  }
+
+  .top-toolbar__more-trigger {
+    display: flex;
+    flex: 0 0 auto;
+  }
+}
+
+@container typeset-toolbar (max-width: 900px) {
+  .top-toolbar__file-actions .toolbar-button__label,
+  .top-toolbar__file-actions .toolbar-button__trailing,
+  .top-toolbar__document-structure .toolbar-button__label,
+  .top-toolbar__document-structure .toolbar-button__trailing {
+    display: none;
+  }
+
+  .top-toolbar__file-actions .toolbar-button--text,
+  .top-toolbar__document-structure .toolbar-button--text {
+    width: var(--toolbar-control-height);
+    padding: 0;
+  }
+
+  .top-toolbar__group--body-align-primary,
+  .top-toolbar__divider--direct-alignment {
+    display: none;
+  }
+
+  .top-toolbar__secondary-row--formatting.is-more-open .top-toolbar__group--body-align-overflow {
+    display: flex;
+  }
+
+  .top-toolbar__secondary-row--formatting.is-more-open .top-toolbar__divider--overflow-alignment {
+    display: block;
+  }
+}
+
+/* Label-first disclosure seam (continued from the 1210px band above): a host
+   opted in via `data-toolbar-labels="text"` keeps its document-structure
+   label/trailing readable through this narrower edge instead of collapsing to
+   icon-only alongside file actions. */
+@container typeset-toolbar (max-width: 900px) {
+  [data-toolbar-labels="text"] .top-toolbar__document-structure .toolbar-button__label,
+  [data-toolbar-labels="text"] .top-toolbar__document-structure .toolbar-button__trailing {
+    display: inline;
+  }
+
+  [data-toolbar-labels="text"] .top-toolbar__document-structure .toolbar-button--text {
+    width: auto;
+    padding-inline: 9px;
+  }
+}
+
+@container typeset-toolbar (max-width: 720px) {
+  .top-toolbar__product-name,
+  .top-toolbar__identity-divider {
+    display: none;
+  }
+
+  .top-toolbar__group--typography-primary,
+  .top-toolbar__divider--direct-typography {
+    display: none;
+  }
+
+  .top-toolbar__secondary-row--formatting.is-more-open .top-toolbar__group--typography-overflow {
+    display: flex;
+  }
+
+  .top-toolbar__secondary-row--formatting.is-more-open .top-toolbar__divider--overflow-typography {
+    display: block;
+  }
+}
+
+@container typeset-toolbar (max-width: 620px) {
+  .top-toolbar__save-status {
+    max-width: 90px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .top-toolbar__file-actions .toolbar-button--text {
+    padding-inline: 6px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .top-toolbar * {
+    scroll-behavior: auto;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
+
+@media print {
+  .top-toolbar {
+    display: none !important;
+  }
+}

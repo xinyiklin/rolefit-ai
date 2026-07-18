@@ -1,0 +1,1009 @@
+/* Toolbar popovers: the anchored non-modal popover primitive and every popover
+   surface it hosts (link editor, Header / Add-section, and the Spacing /
+   Paragraph / Styles / Page style popovers, including the popover-scoped
+   FontSizeControl overrides). Fixed-position responsive placement is coupled to
+   the toolbar's height (top: 102px); toolbar chrome itself lives in
+   toolbar.css, which must be imported before this file. */
+
+/* Anchored non-modal popovers. */
+.popover {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 auto;
+}
+
+.popover__surface {
+  position: absolute;
+  top: calc(100% + 8px);
+  z-index: 80;
+  color: var(--ink);
+  background: var(--card-elev);
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--r-lg);
+  box-shadow: 0 12px 32px oklch(0.2 0.01 160 / 0.14), 0 2px 6px oklch(0.2 0.01 160 / 0.08);
+  outline: none;
+  overflow: hidden;
+  animation: toolbar-popover-in 130ms var(--ease) both;
+}
+
+.popover--start > .popover__surface {
+  left: 0;
+}
+
+.popover--center > .popover__surface {
+  left: 50%;
+  translate: -50% 0;
+}
+
+.popover--end > .popover__surface {
+  right: 0;
+}
+
+.popover__surface:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.link-control__panel {
+  width: min(320px, calc(100vw - 24px));
+  padding: 14px;
+}
+
+/* Header + Add-section popovers (relocated from the page footer to the toolbar). */
+.structure-popover {
+  display: grid;
+  gap: 9px;
+  width: min(272px, calc(100vw - 24px));
+  padding: 12px;
+  background: var(--card-elev);
+}
+
+.structure-popover__head {
+  display: flex;
+  align-items: center;
+}
+
+.structure-popover__head strong {
+  color: var(--ink-strong);
+  font-size: 0.86rem;
+  font-weight: 670;
+}
+
+.structure-popover__field {
+  display: grid;
+  gap: 5px;
+  color: var(--ink-muted);
+  font-size: 0.7rem;
+  font-weight: 590;
+}
+
+.structure-popover__field input,
+.structure-popover__contact input {
+  width: 100%;
+  height: 32px;
+  padding: 0 9px;
+  color: var(--ink);
+  background: var(--card);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-md);
+  outline: none;
+  font: 500 0.76rem/1 var(--font-ui);
+}
+
+.structure-popover__field input:focus-visible,
+.structure-popover__contact input:focus-visible {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-veil);
+}
+
+.structure-popover__contacts {
+  display: grid;
+  gap: 6px;
+}
+
+.structure-popover__contacts-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--ink-muted);
+  font-size: 0.7rem;
+  font-weight: 590;
+}
+
+.structure-popover__contacts-head button {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px 7px;
+  color: var(--accent-deep);
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-veil);
+  border-radius: var(--r-md);
+  font-size: 0.68rem;
+  font-weight: 620;
+}
+
+.structure-popover__contact {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.structure-popover__contact input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.structure-popover__contact button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+  color: var(--ink-muted);
+  background: transparent;
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-md);
+  outline: none;
+}
+
+.structure-popover__contact button.is-danger:hover {
+  color: var(--danger);
+  background: var(--danger-soft);
+  border-color: var(--danger-soft);
+}
+
+.structure-popover__empty {
+  color: var(--ink-soft);
+  font-size: 0.72rem;
+  line-height: 1.4;
+}
+
+.structure-popover__position {
+  display: inline-grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px;
+  padding: 2px;
+  background: var(--card-soft);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-md);
+}
+
+.structure-popover__position-btn {
+  padding: 5px 8px;
+  color: var(--ink-muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+  outline: none;
+  font-size: 0.72rem;
+  font-weight: 590;
+}
+
+.structure-popover__position-btn.is-on {
+  color: var(--accent-deep);
+  background: var(--accent-soft);
+  border-color: var(--accent-veil);
+}
+
+.structure-popover__option {
+  display: grid;
+  gap: 1px;
+  padding: 8px 10px;
+  text-align: left;
+  color: var(--ink);
+  background: transparent;
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-md);
+  outline: none;
+}
+
+.structure-popover__option:hover {
+  background: var(--card-hover);
+  border-color: var(--hairline-strong);
+}
+
+.structure-popover__option span {
+  font-size: 0.78rem;
+  font-weight: 620;
+}
+
+.structure-popover__option small {
+  color: var(--ink-soft);
+  font-size: 0.68rem;
+}
+
+.link-control__heading,
+.link-control__actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+}
+
+.link-control__heading strong {
+  color: var(--ink-strong);
+  font-size: 0.82rem;
+  font-weight: 670;
+}
+
+.link-control__heading span {
+  color: var(--accent-deep);
+  font-size: 0.67rem;
+  font-weight: 650;
+}
+
+.link-control__field {
+  display: grid;
+  gap: 5px;
+  margin-top: 12px;
+  color: var(--ink-muted);
+  font-size: 0.69rem;
+  font-weight: 590;
+}
+
+.link-control__field input {
+  width: 100%;
+  height: 34px;
+  padding: 0 9px;
+  color: var(--ink);
+  background: var(--card);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-md);
+  outline: none;
+  font: 500 0.75rem/1 var(--font-ui);
+}
+
+.link-control__field input:focus-visible {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-veil);
+}
+
+.link-control__field input[aria-invalid="true"] {
+  border-color: var(--danger);
+}
+
+.link-control__error {
+  margin-top: 6px;
+  color: var(--danger);
+  font-size: 0.69rem;
+  line-height: 1.35;
+}
+
+.link-control__actions {
+  margin-top: 12px;
+}
+
+.link-control__actions-end {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.link-control__open {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-height: 30px;
+  padding: 0 10px;
+  color: var(--ink-muted);
+  background: transparent;
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-md);
+  outline: none;
+  font-size: 0.72rem;
+  font-weight: 620;
+  text-decoration: none;
+}
+
+.link-control__open:hover {
+  color: var(--ink-strong);
+  background: var(--card-hover);
+}
+
+.link-control__open:focus-visible {
+  box-shadow: 0 0 0 3px var(--accent-veil);
+}
+
+.link-control__actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-height: 30px;
+  padding: 0 10px;
+  border-radius: var(--r-md);
+  outline: none;
+  font-size: 0.72rem;
+  font-weight: 620;
+}
+
+.link-control__remove {
+  color: var(--ink-muted);
+  background: transparent;
+  border: 1px solid transparent;
+}
+
+.link-control__remove:hover {
+  color: var(--danger);
+  background: var(--danger-soft);
+}
+
+.link-control__apply {
+  color: var(--card);
+  background: var(--accent);
+  border: 1px solid var(--accent);
+}
+
+.link-control__apply:hover {
+  background: var(--accent-deep);
+}
+
+.link-control__actions button:focus-visible {
+  box-shadow: 0 0 0 3px var(--accent-veil);
+}
+
+.style-popover {
+  display: flex;
+  flex-direction: column;
+  max-height: min(650px, calc(100vh - 116px));
+  background: var(--card-elev);
+}
+
+.style-popover--text {
+  width: min(324px, calc(100vw - 24px));
+}
+
+.style-popover--page {
+  width: min(288px, calc(100vw - 24px));
+}
+
+.style-popover--spacing {
+  width: min(316px, calc(100vw - 24px));
+}
+
+.style-popover__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 4px var(--s3);
+  user-select: text;
+}
+
+.style-popover__section {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--hairline-soft);
+}
+
+.style-popover__section:last-child {
+  border-bottom: 0;
+}
+
+.style-popover__section-title {
+  margin-bottom: 7px;
+  color: var(--ink-strong);
+  font-size: 0.73rem;
+  font-weight: 660;
+  line-height: 1.2;
+}
+
+.style-popover__segmented {
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  min-width: 0;
+  padding: 2px;
+  background: var(--card-soft);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-md);
+}
+
+.style-popover__segmented button {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 28px;
+  padding: 5px 8px;
+  overflow: hidden;
+  color: var(--ink-muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+  outline: none;
+  font-size: 0.7rem;
+  font-weight: 570;
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.style-popover__segmented button:hover:not(.is-selected) {
+  color: var(--ink-strong);
+  background: var(--card-hover);
+}
+
+.style-popover__segmented button.is-selected {
+  color: var(--accent-deep);
+  background: var(--accent-soft);
+  border-color: var(--accent-veil);
+}
+
+.style-popover__segmented button:focus-visible {
+  position: relative;
+  z-index: 1;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-veil);
+}
+
+.style-popover__margin-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.style-popover__margin-field {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  color: var(--ink-muted);
+  font-size: 0.69rem;
+  font-weight: 570;
+}
+
+.style-popover__custom-number {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s2);
+  color: var(--ink-muted);
+  font-size: 0.69rem;
+  font-weight: 570;
+}
+
+.style-popover__custom-number {
+  margin-top: 10px;
+}
+
+.style-popover__number-control {
+  display: inline-flex;
+  align-items: stretch;
+  gap: 5px;
+}
+
+.style-popover__number-control input,
+.style-popover__margin-input {
+  width: 70px;
+  height: 30px;
+  padding: 0 7px;
+  color: var(--ink);
+  background: var(--card);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-md);
+  outline: none;
+  font: 500 0.75rem/1 var(--font-ui);
+  text-align: center;
+  appearance: textfield;
+}
+
+.style-popover__margin-input {
+  width: 100%;
+  text-align: left;
+}
+
+.style-popover__number-control input::-webkit-inner-spin-button,
+.style-popover__number-control input::-webkit-outer-spin-button,
+.style-popover__margin-input::-webkit-inner-spin-button,
+.style-popover__margin-input::-webkit-outer-spin-button {
+  margin: 0;
+  appearance: none;
+}
+
+.style-popover__number-control input:hover,
+.style-popover__margin-input:hover {
+  border-color: var(--hairline-strong);
+}
+
+.style-popover__number-control input:focus-visible,
+.style-popover__margin-input:focus-visible {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-veil);
+}
+
+.style-popover__glyph-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 9px;
+}
+
+.style-popover__glyph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  min-height: 30px;
+  padding: 0;
+  color: var(--ink-muted);
+  background: var(--card);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-md);
+  outline: none;
+  font-family: var(--font-serif);
+  font-size: 0.84rem;
+  font-weight: 570;
+}
+
+.style-popover__glyph:hover {
+  color: var(--ink-strong);
+  background: var(--card-hover);
+  border-color: var(--hairline-strong);
+}
+
+.style-popover__glyph.is-selected {
+  color: var(--accent-deep);
+  background: var(--accent-soft);
+  border-color: var(--accent-veil);
+}
+
+.style-popover__glyph:focus-visible {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-veil);
+}
+
+.style-popover__entry-marks {
+  display: grid;
+  gap: 12px;
+}
+
+/* One style field = its name over a single control row so the family, size, and
+   emphasis controls line up in equal-height columns across every field. */
+.style-popover__field-style {
+  display: grid;
+  gap: 5px;
+}
+
+.style-popover__field-style-label {
+  color: var(--ink-muted);
+  font-size: 0.72rem;
+  font-weight: 590;
+}
+
+.style-popover__field-style-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: stretch;
+  gap: 6px;
+}
+
+.style-popover__entry-font.font-family-control {
+  width: 100%;
+}
+
+.style-popover__entry-font .font-family-control__trigger {
+  height: 30px;
+  font-size: 0.72rem;
+  font-weight: 590;
+}
+
+/* The size control reuses the toolbar's FontSizeControl for identical UI/UX and
+   the common-size dropdown; pin its height to the row and its text to the same
+   size the toolbar uses (its input is `font: inherit`, which would otherwise
+   pick up the popover's larger base size). */
+.style-popover__field-size.font-size-control {
+  height: 30px;
+  font-size: 0.75rem;
+}
+
+.style-popover__toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+  min-height: 30px;
+  margin-top: 8px;
+  color: var(--ink-muted);
+  font-size: 0.72rem;
+  font-weight: 590;
+}
+
+.style-popover__switch {
+  flex: 0 0 auto;
+  width: 38px;
+  height: 22px;
+  padding: 2px;
+  background: var(--hairline);
+  border: 1px solid var(--hairline-strong);
+  border-radius: 999px;
+  outline: none;
+  transition: background 140ms var(--ease), border-color 140ms var(--ease);
+}
+
+.style-popover__switch.is-on {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.style-popover__switch:focus-visible {
+  box-shadow: 0 0 0 3px var(--accent-veil);
+}
+
+.style-popover__switch-knob {
+  display: block;
+  width: 16px;
+  height: 16px;
+  background: var(--card);
+  border-radius: 999px;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 18%);
+  transition: transform 140ms var(--ease);
+}
+
+.style-popover__switch.is-on .style-popover__switch-knob {
+  transform: translateX(16px);
+}
+
+.style-popover__entry-mark-buttons {
+  display: inline-grid;
+  grid-template-columns: repeat(3, 32px);
+  height: 30px;
+  background: var(--card-soft);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-md);
+}
+
+.style-popover__entry-mark-buttons button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 0;
+  color: var(--ink-muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+  outline: none;
+}
+
+.style-popover__entry-mark-buttons button:hover:not(.is-selected):not(:disabled) {
+  color: var(--ink-strong);
+  background: var(--card-hover);
+}
+
+.style-popover__entry-mark-buttons button:disabled {
+  cursor: not-allowed;
+  color: var(--ink-faint);
+  background: transparent;
+  border-color: var(--hairline-soft);
+}
+
+.style-popover__entry-mark-buttons button.is-selected {
+  color: var(--accent-deep);
+  background: var(--accent-soft);
+  border-color: var(--accent-veil);
+}
+
+/* Mixed: this field's instances diverge on the mark. Shown as a quieter,
+   dashed accent so it reads as indeterminate rather than on or off. */
+.style-popover__entry-mark-buttons button.is-mixed {
+  color: var(--accent-deep);
+  background: transparent;
+  border-color: var(--accent-veil);
+  border-style: dashed;
+}
+
+.style-popover__entry-mark-buttons button:focus-visible {
+  position: relative;
+  z-index: 1;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-veil);
+}
+
+.style-popover__custom-glyph input {
+  height: 32px;
+  width: 48px;
+  padding: 0 7px;
+  text-align: center;
+  color: var(--ink);
+  background: var(--card);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-md);
+  outline: none;
+  font-size: 0.75rem;
+  font-weight: 500;
+  transition:
+    border-color 140ms var(--ease),
+    box-shadow 140ms var(--ease),
+    background 140ms var(--ease);
+}
+
+.style-popover__custom-glyph input:hover {
+  background: var(--card-hover);
+  border-color: var(--hairline-strong);
+}
+
+.style-popover__custom-glyph input:focus-visible {
+  background: var(--card);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-veil);
+}
+
+.style-popover__custom-glyph {
+  display: inline-flex;
+}
+
+.style-popover__alignment-list {
+  display: grid;
+  gap: 12px;
+}
+
+.style-popover__alignment-field {
+  display: grid;
+  grid-template-columns: minmax(104px, 0.8fr) minmax(0, 1.2fr);
+  align-items: center;
+  gap: 6px var(--s3);
+}
+
+.style-popover__alignment-label {
+  color: var(--ink-muted);
+  font-size: 0.72rem;
+  font-weight: 590;
+  line-height: 1.25;
+}
+
+.style-popover__alignment-picker {
+  display: inline-grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(34px, 1fr);
+  justify-self: end;
+  min-width: 116px;
+  padding: 2px;
+  background: var(--card-soft);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-md);
+}
+
+.style-popover__alignment-picker button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 34px;
+  min-height: 30px;
+  padding: 0;
+  color: var(--ink-muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+  outline: none;
+}
+
+.style-popover__alignment-picker button:hover:not(.is-selected) {
+  color: var(--ink-strong);
+  background: var(--card-hover);
+}
+
+.style-popover__alignment-picker button.is-selected {
+  color: var(--accent-deep);
+  background: var(--accent-soft);
+  border-color: var(--accent-veil);
+}
+
+.style-popover__alignment-picker button:focus-visible {
+  position: relative;
+  z-index: 1;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-veil);
+}
+
+.style-popover__helper {
+  grid-column: 2;
+  max-width: 34ch;
+  color: var(--ink-soft);
+  font-size: 0.6875rem;
+  font-weight: 450;
+  line-height: 1.4;
+}
+
+.style-popover__spacing-groups {
+  display: grid;
+  grid-template-columns: 1fr;
+  align-items: start;
+}
+
+.style-popover__advanced {
+  padding: 14px 0 2px;
+}
+
+.style-popover__section--spacing {
+  padding-block: 13px;
+}
+
+.style-popover__range-list {
+  display: grid;
+  gap: 10px;
+}
+
+.style-popover__range {
+  display: grid;
+  gap: 5px;
+  color: var(--ink-muted);
+  font-size: 0.69rem;
+  font-weight: 520;
+}
+
+.style-popover__range-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s2);
+}
+
+.style-popover__range-value {
+  color: var(--ink-faint);
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  font-weight: 500;
+}
+
+.style-popover__range input[type="range"] {
+  width: 100%;
+  min-height: 18px;
+  margin: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.style-popover__range input[type="range"]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--r-sm);
+}
+
+.style-popover__footer {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--s2);
+  min-height: 52px;
+  padding: 9px var(--s4);
+  background: var(--card);
+  border-top: 1px solid var(--hairline);
+}
+
+.style-popover__footer--split {
+  justify-content: space-between;
+}
+
+.style-popover__reset,
+.style-popover__secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 6px 9px;
+  color: var(--ink-muted);
+  background: var(--card);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-md);
+  outline: none;
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+
+.style-popover__secondary {
+  color: var(--accent-deep);
+}
+
+.style-popover__reset:hover:not(:disabled),
+.style-popover__secondary:hover:not(:disabled) {
+  color: var(--ink-strong);
+  background: var(--card-hover);
+  border-color: var(--hairline-strong);
+}
+
+.style-popover__reset:focus-visible,
+.style-popover__secondary:focus-visible {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-veil);
+}
+
+.style-popover__reset:disabled,
+.style-popover__secondary:disabled {
+  color: var(--ink-faint);
+  cursor: not-allowed;
+  opacity: 0.56;
+}
+@keyframes toolbar-popover-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 900px) {
+  .text-style-popover > .popover__surface,
+  .spacing-style-popover > .popover__surface,
+  .page-style-popover > .popover__surface {
+    position: fixed;
+    top: 102px;
+    right: 12px;
+    left: auto;
+  }
+
+  .style-popover--page,
+  .style-popover--spacing,
+  .style-popover--text {
+    max-height: calc(100vh - 116px);
+  }
+}
+
+@media (max-width: 720px) {
+  .text-style-popover > .popover__surface {
+    position: fixed;
+    top: 102px;
+    right: 10px;
+    left: 10px;
+  }
+
+  .style-popover--text {
+    width: auto;
+  }
+}
+
+@media (max-width: 620px) {
+  .text-style-popover > .popover__surface,
+  .spacing-style-popover > .popover__surface,
+  .page-style-popover > .popover__surface {
+    right: 12px;
+    left: 12px;
+  }
+
+  .style-popover--text,
+  .style-popover--spacing,
+  .style-popover--page {
+    width: auto;
+  }
+
+  .style-popover__spacing-groups {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (pointer: coarse) {
+  .style-popover__segmented button,
+  .style-popover__glyph,
+  .style-popover__alignment-picker button,
+  .style-popover__custom-glyph input,
+  .style-popover__reset,
+  .style-popover__secondary {
+    min-height: 40px;
+  }
+
+  .style-popover__range input[type="range"] {
+    min-height: 40px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .popover__surface {
+    scroll-behavior: auto;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
+
+@media print {
+  .popover__surface {
+    display: none !important;
+  }
+}

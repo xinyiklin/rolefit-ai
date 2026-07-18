@@ -1,0 +1,807 @@
+/* -------- App shell -------- */
+
+.app-shell {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  /* `vh` first as the fallback; `dvh` overrides where supported so the bottom
+     export rail isn't clipped behind iOS Safari's dynamic toolbar. */
+  min-height: 100vh;
+  min-height: 100dvh;
+  height: 100vh;
+  height: 100dvh;
+}
+
+/* -------- Masthead -------- */
+
+/* Newspaper-style masthead: brand wordmark · typographic menu row · actions.
+   One structural hairline joins it directly to the sidebar and workspace. */
+.masthead {
+  display: flex;
+  align-items: center;
+  gap: var(--s4);
+  box-sizing: border-box;
+  height: 57px;
+  padding: var(--s3) var(--s5);
+  border-bottom: 1px solid var(--hairline-strong);
+  box-shadow: none;
+  background: var(--card);
+  position: relative;
+  z-index: 30;
+}
+
+/* Resume-authoring width notice. It replaces only the document editor content,
+   leaving the masthead and other workspace tabs available at high zoom. */
+.viewport-gate {
+  min-height: 320px;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--s5);
+  background: var(--paper);
+}
+
+.viewport-gate__card {
+  display: grid;
+  gap: var(--s2);
+  max-width: 360px;
+  text-align: center;
+}
+
+.viewport-gate__title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--ink-strong);
+}
+
+.viewport-gate__body {
+  margin: 0;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  color: var(--ink-muted);
+}
+
+.masthead__brand {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  margin-right: auto;
+}
+
+/* Brand mark: an accent-inked tile with the serif initial — the nameplate's
+   seal. The one place the accent is allowed to be identity, not action. */
+.masthead__mark {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: var(--r-md);
+  background: var(--accent);
+  color: var(--on-accent);
+  font-family: var(--font-serif);
+  font-weight: 700;
+  font-size: 0.95rem;
+  line-height: 1;
+  box-shadow: var(--shadow-inset), 0 2px 8px var(--accent-glow);
+  user-select: none;
+}
+
+/* Animated "rotating dots" for in-progress labels — cycles . / .. / ... inside a
+   fixed-width box so the preceding text never reflows. Static "…" is the
+   no-animation fallback (engines that don't animate `content`, and reduced-motion). */
+.loading-dots {
+  display: inline-block;
+  width: 1.25em;
+  text-align: left;
+  white-space: pre;
+}
+
+.loading-dots::after {
+  content: "…";
+  animation: loading-dots-cycle 1.2s steps(1, end) infinite;
+}
+
+@keyframes loading-dots-cycle {
+  0% { content: "."; }
+  33% { content: ".."; }
+  66% { content: "..."; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loading-dots::after {
+    content: "…";
+    animation: none;
+  }
+}
+
+/* Serif wordmark — editorial desk identity. */
+.masthead__brand h1 {
+  font-family: var(--font-serif);
+  font-weight: 700;
+  font-size: 1.15rem;
+  line-height: 1;
+  letter-spacing: -0.01em;
+  color: var(--ink-strong);
+}
+
+.masthead__menus {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: nowrap;
+  /* Responsive disclosure removes secondary text before this row can wrap. */
+  min-width: 0;
+}
+
+/* Whitespace groups the menu families. Repeated vertical rules made both the
+   labelled and compact states look like a segmented control. */
+.masthead__menus > .menu-group + .menu-group {
+  margin-left: 0;
+  padding-left: 0;
+  border-left: 0;
+}
+
+.masthead__actions {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  /* A little whitespace separates the action pair from the menu row without
+     restoring the former ladder of vertical rules. */
+  padding-left: var(--s2);
+  border-left: 0;
+}
+
+.masthead-action {
+  position: relative;
+  display: inline-flex;
+}
+
+.masthead-action__hint {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 70;
+  width: max-content;
+  max-width: 270px;
+  padding: 6px 9px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-sm);
+  background: var(--ink-strong);
+  color: var(--paper);
+  box-shadow: var(--shadow-rest);
+  font-size: 0.68rem;
+  font-weight: 500;
+  line-height: 1.35;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(-2px);
+  transition: opacity 120ms var(--ease), transform 120ms var(--ease);
+}
+
+.masthead-action > button:hover + .masthead-action__hint,
+.masthead-action > button:focus-visible + .masthead-action__hint {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.masthead-action > button[aria-disabled="true"] {
+  cursor: not-allowed;
+}
+
+.masthead-action > button[aria-disabled="true"]:active {
+  transform: none;
+}
+
+@media (max-width: 360px) {
+  /* The Polish action sits too near the right edge for an action-anchored
+     270px hint. Pin both hints to the viewport at phone widths so focus/hover
+     help is fully readable instead of clipping past the left edge. */
+  .masthead-action__hint {
+    position: fixed;
+    top: 65px;
+    right: 8px;
+    width: min(270px, calc(100vw - 16px));
+  }
+}
+
+.masthead-feedback-stack {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  z-index: 60;
+  display: grid;
+  gap: var(--s1);
+  width: min(380px, calc(100vw - var(--s5) * 2));
+}
+
+.masthead-feedback {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s2);
+  padding: var(--s2) var(--s3);
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--r-lg);
+  background: var(--card);
+  box-shadow: var(--shadow-lift);
+  color: var(--ink);
+  font-size: 0.76rem;
+  line-height: 1.4;
+}
+
+.masthead-feedback--error {
+  border-color: var(--danger-line);
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.masthead-feedback > span {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.masthead-feedback > button {
+  flex: 0 0 auto;
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: currentColor;
+  cursor: pointer;
+}
+
+.masthead-feedback > button:hover {
+  background: var(--card-hover);
+}
+
+.masthead-feedback > button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.eyebrow {
+  margin: 0 0 var(--s2);
+  color: var(--ink-soft);
+  font-family: var(--font-ui);
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+/* Primary Polish action in the masthead, sized to sit beside the nav menus.
+   Double-class selector outranks the base full-width .primary-button rule,
+   which loads later in the bundle (sources.css).
+   Enabled: accent-filled with a lift shadow so it reads as the primary action.
+   Disabled: flat neutral so it doesn't compete with enabled state. */
+.masthead__actions .masthead__polish.masthead__polish {
+  width: auto;
+  min-height: 30px;
+  margin: 0;
+  padding: 0 var(--s4);
+  font-size: 0.8rem;
+}
+
+/* Enabled Polish gets a stronger accent presence — primary action of the app. */
+.masthead__actions .masthead__polish.masthead__polish:not(:disabled):not([aria-disabled="true"]) {
+  background: var(--accent);
+  border-color: var(--accent-deep);
+  color: var(--on-accent);
+  box-shadow: var(--shadow-inset), 0 2px 8px var(--accent-glow);
+}
+
+.masthead__actions .masthead__polish.masthead__polish:not(:disabled):not([aria-disabled="true"]):hover {
+  background: var(--accent-deep);
+  box-shadow: var(--shadow-inset), 0 4px 14px var(--accent-glow);
+}
+
+/* Apply is the secondary partner to Polish — same box size so the pair reads as
+   a matched primary/secondary set, with secondary-button's neutral fill keeping
+   the accent reserved for Polish. Double class outranks .is-compact's sizing. */
+.masthead__actions .masthead__apply.masthead__apply {
+  min-height: 30px;
+  padding: 0 var(--s4);
+  font-size: 0.8rem;
+}
+
+/* -------- Workspace grid -------- */
+
+/* Single full-width studio: the resume/job inputs live in navbar menus now. */
+.workspace-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* -------- Navbar dropdown menus (Resume, Job, AI, Options) -------- */
+
+/* Typographic menu groups: no box, no pills — quiet inline items separated by
+   hairline verticals (handled on .masthead__menus level). */
+.menu-group {
+  display: inline-flex;
+  align-items: stretch;
+  gap: 2px;
+  /* Removed: border, border-radius, background — the pill box is gone. */
+}
+
+/* Sibling menus group by a compact whitespace gap, not segmented dividers. */
+.menu-group > .nav-menu + .nav-menu {
+  margin-left: 0;
+  padding-left: 0;
+  border-left: 0;
+}
+
+/* Clear the old radius overrides — triggers are no longer clipped to a pill. */
+.menu-group .nav-menu:first-child .nav-menu__trigger,
+.menu-group .nav-menu:last-child .nav-menu__trigger,
+.menu-group .nav-menu:only-child .nav-menu__trigger {
+  border-radius: var(--r-sm);
+}
+
+.nav-menu { position: relative; display: inline-flex; }
+
+.nav-menu__tooltip {
+  display: none;
+}
+
+/* Typographic trigger: transparent base, ink label, subtle hover underline,
+   open state = ink-strong. No border at rest. */
+.nav-menu__trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 var(--s2);
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--ink-soft);
+  font-family: var(--font-ui);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  position: relative;
+  transition: color 150ms var(--ease), background 150ms var(--ease);
+}
+
+/* Hover: quiet card-soft tint + ink label. */
+.nav-menu__trigger:hover {
+  color: var(--ink);
+  background: var(--card-soft);
+}
+
+/* Open: ink-strong label, no colored background that competes with content. */
+.nav-menu__trigger[aria-expanded="true"] {
+  color: var(--ink-strong);
+  background: var(--card-soft);
+}
+
+/* Subtle ink underline on hover (1px, not a thick stripe).
+   Scoped to masthead so in-studio menus (Format) are unaffected. */
+.masthead .nav-menu__trigger::after {
+  content: "";
+  position: absolute;
+  bottom: 4px;
+  left: var(--s2);
+  right: var(--s2);
+  height: 1px;
+  background: var(--ink-strong);
+  opacity: 0;
+  transition: opacity 150ms var(--ease);
+}
+
+.masthead .nav-menu__trigger:hover::after { opacity: 0.18; }
+.masthead .nav-menu__trigger[aria-expanded="true"]::after { opacity: 0.35; }
+
+/* Trigger icons are reserved for the compact state; there they become accent
+   colored on hover/open. */
+.masthead .nav-menu__trigger > svg:first-child {
+  display: none;
+  color: var(--ink-faint);
+  flex: none;
+  transition: color 150ms var(--ease);
+}
+
+/* The two high-value actions retain both icon and label at every supported
+   width; only the five menu triggers disclose to icon-only controls. */
+.masthead__actions button > svg {
+  display: block;
+}
+
+.masthead .nav-menu__trigger:hover > svg:first-child,
+.masthead .nav-menu__trigger[aria-expanded="true"] > svg:first-child {
+  color: var(--accent);
+}
+
+.nav-menu__label { white-space: nowrap; }
+
+/* Input-state readout beside the menu label: a small dot + quiet word. */
+.nav-menu__sub {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 14ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.68rem;
+  font-weight: 500;
+  color: var(--ink-faint);
+}
+
+.nav-menu__sub::before {
+  content: "";
+  width: 5px;
+  height: 5px;
+  border-radius: var(--r-pill);
+  /* Inactive dot: use hairline-strong border + a faint fill so it is legible
+     on the card-elev trigger background without being visually loud. */
+  border: 1px solid var(--hairline-strong);
+  background: var(--hairline-strong);
+  flex: none;
+}
+
+.nav-menu__sub.is-ready { color: var(--accent-deep); }
+.nav-menu__sub.is-ready::before { background: var(--accent); border-color: var(--accent); }
+.nav-menu__sub.is-empty { color: var(--warm); }
+.nav-menu__sub.is-empty::before { border-color: var(--warm); }
+
+/* Caret rotates to point up when the menu is open — a quiet open/close cue. */
+.nav-menu__caret {
+  color: var(--ink-faint);
+  flex: none;
+  transition: transform 180ms var(--ease), color 150ms var(--ease);
+}
+
+.nav-menu__trigger:hover .nav-menu__caret { color: var(--ink-soft); }
+.nav-menu__trigger[aria-expanded="true"] .nav-menu__caret {
+  transform: rotate(180deg);
+  color: var(--ink);
+}
+
+.nav-menu__popover {
+  position: absolute;
+  top: calc(100% + var(--s2) + 1px);
+  right: 0;
+  z-index: 40;
+  width: min(380px, 92vw);
+  padding: var(--s4);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-xl);
+  background: var(--card-elev);
+  /* Layered: ambient lift + a crisp hairline ring so the panel reads as a
+     distinct surface above the masthead, not a flat box. */
+  box-shadow: var(--shadow-lift), 0 0 0 1px oklch(0.2 0.01 160 / 0.02);
+  display: grid;
+  gap: var(--s3);
+  max-height: min(78vh, 640px);
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--hairline-strong) transparent;
+  transform-origin: top right;
+  animation: nav-menu-in 150ms var(--ease) both;
+}
+
+/* Masthead menu popovers open from their GROUP's left edge: each menu-group is the
+   positioning context (its nav-menu children go static), so Resume/Job both align
+   under Resume, and AI Provider/Options both align under AI Provider. A JS viewport
+   clamp in NavMenu nudges a panel back on screen if this would run it past the edge.
+   Studio menus (Format/Style) are outside .masthead, so they keep the default
+   right-aligned, per-trigger anchoring. */
+.masthead .menu-group { position: relative; }
+.masthead .menu-group .nav-menu { position: static; }
+.masthead .nav-menu__popover {
+  left: 0;
+  right: auto;
+  transform-origin: top left;
+}
+
+/* Taller panels for the two content-heavy masthead menus (Job posting; Options'
+   honest-context / custom-instructions) so more shows before the panel scrolls. */
+.job-menu .nav-menu__popover,
+.options-menu .nav-menu__popover {
+  max-height: min(88vh, 780px);
+}
+
+.sessions-menu .nav-menu__popover {
+  width: min(300px, 92vw);
+}
+
+/* Subtle scrollbar styling for WebKit so long popovers (Job/AI) read clean. */
+.nav-menu__popover::-webkit-scrollbar { width: 8px; }
+.nav-menu__popover::-webkit-scrollbar-thumb {
+  background: var(--hairline-strong);
+  border-radius: var(--r-pill);
+  border: 2px solid var(--card-elev);
+}
+
+.nav-menu__popover > .field { margin-top: 0; }
+
+/* Popover enter: start at opacity 0.01 (not 0) so the opaque background is
+   composited from frame 1 — this prevents the mid-animation bleed-through
+   that appears when the OS composites a fully transparent element over the
+   underlying content. */
+@keyframes nav-menu-in {
+  from { opacity: 0.01; transform: translateY(-6px) scale(0.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* -------- Progress cards (polish stages + job distill) -------- */
+
+/* Shared fixed dock so the polish stack and the distill card share one
+   top-centered column and stack vertically instead of overlapping when both are
+   on screen at once. pointer-events pass through the gaps.
+   Draggable via useDraggableDock (src/hooks/useDraggableDock.ts): that hook
+   adds an inline `transform` offset on top of this base centering once the
+   user drags, so the dock never permanently blocks the editor/preview below
+   it. This base rule stays authoritative until the first drag. */
+.progress-dock {
+  position: fixed;
+  top: calc(var(--s5) + 2.5rem);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 35;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  width: min(360px, calc(100vw - var(--s5) * 2));
+  pointer-events: none;
+}
+
+/* One workflow sheet owns Distill, Tailor, and Review. Rows share a single
+   outline so the sequence reads as a process, not a stack of unrelated toasts. */
+.ai-workflow {
+  width: 100%;
+  max-height: 360px;
+  overflow: hidden;
+  pointer-events: auto;
+  border: 1px solid var(--hairline-strong);
+  border-radius: 10px;
+  background: var(--card);
+  box-shadow: 0 10px 34px -14px rgba(0, 0, 0, 0.34);
+  color: var(--ink);
+  cursor: grab;
+  touch-action: none;
+  animation: ai-workflow-in 180ms var(--ease) backwards;
+  transition: opacity 300ms var(--ease), transform 300ms var(--ease);
+}
+
+.progress-dock.is-dragging { user-select: none; }
+.progress-dock.is-dragging .ai-workflow { cursor: grabbing; }
+
+@keyframes ai-workflow-in {
+  from { opacity: 0.01; transform: translateY(-5px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.ai-workflow.is-leaving {
+  opacity: 0;
+  transform: translateY(-8px);
+  pointer-events: none;
+}
+
+.ai-workflow__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+  min-height: 38px;
+  padding: var(--s2) var(--s3);
+  border-bottom: 1px solid var(--hairline);
+  background: var(--card-soft);
+}
+
+.ai-workflow__head > div {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s2);
+  min-width: 0;
+}
+
+.ai-workflow__head strong {
+  color: var(--ink-strong);
+  font-size: 0.78rem;
+  font-weight: 650;
+}
+
+.ai-workflow__head span,
+.ai-workflow__stage-meta {
+  color: var(--ink-faint);
+  font-size: 0.7rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.ai-workflow__dismiss {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  flex: none;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+.ai-workflow__dismiss:hover {
+  color: var(--ink-strong);
+  background: var(--card);
+}
+
+.ai-workflow__stage {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--s2);
+  min-height: 52px;
+  padding: var(--s2) var(--s3);
+  border-top: 1px solid var(--hairline);
+  transition: opacity 140ms var(--ease), background 140ms var(--ease);
+}
+
+.ai-workflow__stage:first-child { border-top: 0; }
+.ai-workflow__stage--running { background: color-mix(in srgb, var(--accent) 4%, var(--card)); }
+.ai-workflow__stage--idle { color: var(--ink-soft); }
+.ai-workflow__stage.is-blocked { opacity: 0.48; }
+
+.ai-workflow__stage-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink-faint);
+}
+
+.ai-workflow__stage--done .ai-workflow__stage-icon { color: var(--accent); }
+.ai-workflow__stage--failed .ai-workflow__stage-icon,
+.ai-workflow__stage--stopped .ai-workflow__stage-icon { color: var(--warm); }
+
+.ai-workflow__spinner {
+  width: 13px;
+  height: 13px;
+  border: 2px solid var(--hairline-strong);
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: ai-workflow-spin 0.7s linear infinite;
+}
+
+@keyframes ai-workflow-spin { to { transform: rotate(360deg); } }
+
+.ai-workflow__stage-body {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.ai-workflow__stage-title {
+  color: var(--ink-strong);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.ai-workflow__note,
+.ai-workflow__reason {
+  margin-top: 2px;
+  color: var(--ink-soft);
+  font-size: 0.74rem;
+  line-height: 1.35;
+}
+
+.ai-workflow__note--ok { color: var(--accent); }
+.ai-workflow__note--warn { color: var(--warm); }
+.ai-workflow__reason strong { color: var(--warm); font-weight: 650; }
+
+.ai-workflow__stage-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ai-workflow,
+  .ai-workflow.is-leaving { animation: none; transition: opacity 120ms linear; }
+  .ai-workflow__spinner { animation: none; }
+}
+
+/* -------- Segmented control (Polish stages) -------- */
+
+/* Inline row of radio-backed labels that behaves like a button group.
+   Used in the Options menu for "Tailor only / Review only / Both". */
+.segmented-control {
+  display: inline-flex;
+  align-items: stretch;
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--r-sm);
+  overflow: hidden;
+  margin-top: var(--s1);
+}
+
+.segmented-control__option {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px var(--s2);
+  font-size: 0.76rem;
+  font-weight: 500;
+  color: var(--ink-soft);
+  background: var(--card-soft);
+  cursor: pointer;
+  border-right: 1px solid var(--hairline-strong);
+  transition: color 120ms var(--ease), background 120ms var(--ease);
+  white-space: nowrap;
+  user-select: none;
+}
+
+.segmented-control__option:last-child { border-right: 0; }
+
+.segmented-control__option:hover {
+  color: var(--ink);
+  background: var(--card-hover);
+}
+
+.segmented-control__option.is-selected {
+  color: var(--accent-deep);
+  background: var(--accent-soft);
+  font-weight: 600;
+}
+
+/* Stack the "Polish stages" label above its helper line (the field span keeps
+   strong + small inline by default, unlike .check-row). Scoped by id so other
+   fields' inline parenthetical hints are unaffected. */
+#polish-stages-label strong,
+#polish-stages-label small {
+  display: block;
+}
+#polish-stages-label small {
+  margin-top: 1px;
+}
+
+/* Visually hide the radio input — the label is the interactive target. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* -------- App-styled confirm / alert dialog (useDialog system) -------- */
+
+/* Body text inside the ConfirmDialog card. Kept calm and readable — no noise. */
+.confirm-dialog__message {
+  margin: 0;
+  font-size: 0.86rem;
+  line-height: 1.5;
+  color: var(--ink);
+}
+
+/* Danger variant for destructive actions (Delete / Remove). Overrides the
+   accent-green fill with the app's danger token so the button reads as
+   "irreversible" without inventing a new pattern. Double-class selector
+   outranks the single-class .primary-button rules in sources.css even though
+   shell.css loads earlier in the bundle (same pattern the masthead uses). */
+.primary-button.primary-button--danger {
+  background: var(--danger);
+  border-color: oklch(0.35 0.1 30);
+  box-shadow: var(--shadow-inset), 0 1px 2px oklch(0.45 0.12 30 / 0.25);
+}
+
+.primary-button.primary-button--danger:hover:not(:disabled) {
+  background: oklch(0.38 0.11 30);
+  border-color: oklch(0.32 0.1 30);
+  box-shadow: var(--shadow-inset), 0 4px 12px oklch(0.45 0.12 30 / 0.3);
+}

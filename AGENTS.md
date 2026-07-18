@@ -1,308 +1,223 @@
-# Role-Fit AI Agent Guide
+# Typeset Workspace Agent Guide
 
-Operational rules for coding agents working in the Role-Fit AI repository.
+Provider-agnostic working agreements for the npm-workspaces monorepo. The
+repository contains two products over two private shared packages:
 
-Role-Fit AI is a local-first resume-polishing web app: a React 19 + Vite +
-TypeScript frontend with a Node `server.ts` API layer for AI provider calls.
-It helps a job seeker tailor a resume to a target job description without
-inventing experience, employers, dates, metrics, education, tools, or
-production outcomes. Framework and dependency versions live in `package.json`.
+- **Typeset** is a static, browser-only resume editor.
+- **RoleFit AI** is a local-first resume-tailoring workbench with a loopback
+  Node server, AI providers, local workspace storage, and a browser extension.
 
-Product, UI, server, and testing philosophy live in `docs/engineering/`.
-This root guide is the operating contract: safety, continuity, scope, and
-verification.
+Do not apply one app's runtime, privacy, product, or deployment assumptions to
+the other. `CLAUDE.md` adds provider-specific tool guidance; the nearest
+`AGENTS.md` wins for its scope.
 
----
+## Instruction Precedence
 
-## Priority Order
+1. The user's current request.
+2. Safety, data integrity, secret handling, and truthful resume output.
+3. This guide and the nearest scoped `AGENTS.md`.
+4. The affected app's `PRODUCT.md` and `DESIGN.md`.
+5. Root architecture/development docs and the relevant engineering docs.
+6. Current continuity decisions and existing conventions.
 
-When rules conflict, follow this order:
+Do not preserve stale guidance. When ownership or a durable contract changes,
+update the owning guide and documentation in the same change.
 
-1. Explicit user request
-2. Safety, secrets, and resume/job-data privacy
-3. Current state in `CONTINUITY.md`
-4. Existing architecture and product conventions
-5. Scope minimization
-6. Local style preferences
+## Documentation And Guidance Map
 
-Never sacrifice correctness, security, privacy, or truthful resume output for
-style. Use bracketed placeholders for missing facts, for example
-`[add metric: users, time saved, performance gain, or scope]`.
+- `README.md` — workspace entry point and common commands.
+- `docs/README.md` — documentation index.
+- `docs/architecture.md` — workspace boundaries, dependency direction, and
+  shared-versus-host ownership.
+- `docs/development.md` — commands, ports, generated assets, and verification
+  matrix.
+- `docs/git-workflow.md` — repository-wide branch, commit, PR, and staging
+  conventions.
+- `apps/typeset/AGENTS.md` and `{README,PRODUCT,DESIGN}.md` — standalone
+  Typeset shell, behavior, and visual contract.
+- `apps/role-fit-ai/{README,PRODUCT,DESIGN}.md` and
+  `apps/role-fit-ai/docs/engineering/` — RoleFit behavior and engineering
+  contracts.
+- `packages/engine/AGENTS.md` — engine package boundary and public contract;
+  its nested guides own resume domain/files and deterministic layout/PDF.
+- `packages/editor/AGENTS.md` — editor package boundary, shared styles, and
+  host seams; its nested guides own hooks, chrome, and direct editing.
+- `CONTINUITY.md` — monorepo decisions and handoff state. RoleFit's scoped
+  ledger may hold app-only operational detail; do not duplicate the same fact
+  in both ledgers.
 
----
+## Workspace Ownership
 
-## Non-Negotiables
+The dependency direction is:
 
-- Read `CONTINUITY.md` before acting.
-- Do not rely on prior chat context unless the durable fact is recorded in
-  `CONTINUITY.md`.
-- Do not overwrite unrelated work or user-edited files.
-- Keep API keys server-side; never expose provider keys to browser code.
-- Do not print secrets, tokens, broad environment dumps, raw resume text, raw
-  job descriptions, or AI prompts in chat unless the user explicitly requests
-  that local debugging output.
-- Do not ask the user to paste secrets.
-- Do not invent employers, dates, metrics, education, tools, experience, or
-  outcomes in resume output.
-- Do not broaden scope, add speculative abstractions (multi-user, accounts,
-  SaaS, payments, analytics, native packaging), or introduce new global UX
-  systems unless the request requires it.
-- Keep patches reviewable, reversible, and tied to the request.
-- Verify important changes before finalizing; explain skipped checks.
+```text
+@typeset/engine -> @typeset/editor -> apps/typeset
+                                  -> apps/role-fit-ai
+```
 
----
+- `packages/engine/` owns deterministic, reusable resume-domain behavior:
+  `ResumeData`, document style, the strict `.resume` codec, bundled fonts,
+  measurement, layout, DOM/print painting, and PDF emission. Most of the
+  package is React-free; `typeset/render/dom.tsx` is the intentional rendering
+  boundary. Node server imports must stay on React-free engine subpaths.
+- `packages/editor/` owns the reusable React editing surface: document/history
+  hooks, the contenteditable adapter, formatting toolbar/popovers, editor
+  chrome, and shared editor styles. It depends on the engine, never on an app.
+- `apps/typeset/` owns only the standalone product shell: file lifecycle,
+  browser autosave, Typeset identity, static deployment, and composition of the
+  shared packages.
+- `apps/role-fit-ai/` owns RoleFit orchestration: job intake, AI workflow,
+  provider settings, tracker/workspace persistence, browser extension, host
+  navigation, review rail, and the RoleFit-only editor overlay.
+- The root owns the lockfile, shared TypeScript configuration, cross-workspace
+  scripts, repository docs, CI, and app-specific deploy workflows.
 
-## Working Checklist
+Apps never import from each other. Packages never import from apps. A package
+must not absorb an app-specific workflow merely because two components look
+similar.
 
-Before code:
+## Modularity, Reuse, And Maintainability
 
-1. Read `CONTINUITY.md`.
-2. Confirm scope; ask only if ambiguity blocks safe progress.
-3. Inspect the files you will touch.
-4. Read the relevant engineering doc:
-   - UI: `docs/engineering/ui-principles.md`
-   - Server / AI provider: `docs/engineering/ai-server.md`
-   - Tests: `docs/engineering/testing.md`
-   - Git workflow: `docs/engineering/git-workflow.md`
-5. For non-trivial work, name the verification plan.
+- Find the current owner before adding a type, transform, option list, state
+  field, component, or CSS rule. Extend one source of truth rather than creating
+  a parallel representation.
+- Share behavior when the contract is genuinely common to both consumers or
+  forms a stable domain boundary. Keep feature-specific composition beside its
+  app until a second real consumer demonstrates the shared contract.
+- Extract by responsibility, not line count. Useful seams isolate pure logic,
+  side effects, volatile provider/platform behavior, or a focused test surface.
+  Avoid pass-through wrappers, speculative utilities, broad barrels, and
+  components that grow unrelated modes and boolean props.
+- Keep domain logic independent of React and the DOM where practical. React
+  components adapt deterministic helpers to state and events; hooks own
+  cohesive state/effect lifecycles; app shells compose them.
+- Keep side effects at explicit boundaries: browser/file lifecycle in app
+  shells or focused hooks, editor DOM work in the editor adapter, PDF/download
+  work at export boundaries, and server I/O in RoleFit server modules.
+- Keep state close to its owner. Prefer derived state over synchronized copies;
+  keep reducer transitions serializable and atomic; pass values and callbacks
+  into reusable controls rather than giving them hidden storage access.
+- Use shared primitives and tokens for repeated interaction and visual
+  contracts. Shared component changes must preserve every host's accessibility,
+  error handling, responsive behavior, and styling seams.
+- Treat files near 300 lines, unrelated effects in one hook/component, or
+  repeated edits across distant modules as prompts to inspect cohesion. A large
+  cohesive controller may remain intact when extraction would only thread many
+  refs without isolating behavior; document that decision in its scoped guide.
+- Do not weaken validation, privacy, deterministic layout, or truthful AI
+  behavior to make an abstraction easier to reuse.
 
-While coding:
+Before moving app code into a package, verify:
 
-- Match local patterns and helpers before adding new ones.
-- Prefer local improvements over architecture rewrites.
-- Avoid formatting churn unrelated to the task.
-- Do not build fake loading states or mock systems.
-- Surface meaningful errors; do not hide failures behind silent fallbacks.
+1. At least two consumers need the same behavior, not merely similar markup.
+2. The API can be expressed without importing host state or product language.
+3. The dependency direction stays acyclic.
+4. Styling and accessibility contracts remain host-safe.
+5. Focused package tests and both affected integrations can verify the move.
 
-Before finishing:
+## Shared Product And Data Invariants
 
-- Run the relevant verification checklist.
-- Update `CONTINUITY.md` only for meaningful state changes.
-- Call out residual risks and skipped checks.
-- For non-trivial tasks, start the final reply with a compact ledger snapshot:
-  Goal, Now, Next, and Open Questions. Trivial Q&A may skip it.
-
-Pause and ask before changing AI-provider defaults, resume-block schemas,
-API-key loading or persistence, destructive git operations, workflow-critical
-UI patterns, infrastructure/platform shape, paid/vendor dependencies, or
-remote writes.
-
----
-
-## Continuity
-
-`CONTINUITY.md` is the canonical workspace memory for handoff. Keep entries
-factual, compact, and verifiable.
-
-Required behavior:
-
-- Tag entries with `[USER]`, `[CODE]`, `[TOOL]`, or `[ASSUMPTION]`.
-- Include an ISO timestamp on every entry.
-- Use `UNCONFIRMED` instead of guessing.
-- Capture active risks, durable decisions, current state, and next steps.
-
-Bounds:
-
-- Snapshot: max 25 lines.
-- Done (recent): max 7 bullets.
-- Working Set: max 12 paths.
-- Receipts: keep only the last 10-20 entries.
-
-If a section grows noisy, compress older entries into milestone bullets with a
-commit, doc path, or log path pointer. Durable decisions use lightweight
-ADR-style entries, for example:
-`D001 ACTIVE: keep the app local-first and personal-use focused.`
-
----
-
-## Task Routing
-
-Use the relevant docs and repo surfaces by task shape:
-
-- UI work: read `docs/engineering/ui-principles.md`; reuse the shared
-  `src/sections/` components (`NavMenu`, the `*Menu.tsx` menus, `shared.ts`) and
-  `src/styles/`; preserve the navbar-inputs (Resume/Job/AI/Options menus +
-  Polish) → full-width tabbed studio workflow; keep labels and hints short;
-  visual QA is flag-first (skip by default; flag real layout/theming risk and
-  let the user decide).
-- Server / AI work: read `docs/engineering/ai-server.md`; keep API keys
-  server-side; keep `server.ts` focused on local serving, job import, DOCX
-  import/export, workspace storage, and AI provider calls.
-- Resume engine work: keep scoring and keyword extraction in
-  `src/resumeEngine.ts` or similarly focused helpers. The only local
-  fallbacks are the distiller and the fit estimate (D011).
-- Testing work: read `docs/engineering/testing.md`; choose checks based on
-  affected behavior and blast radius.
-- Git/PR work: read `docs/engineering/git-workflow.md` before naming a branch,
-  committing, pushing, or drafting PR copy.
-
-Multiple agents may work in this repo. Route by task shape and verified tool
-access, not model brand.
-
-### Subagent Orchestration
-
-When delegating to subagents (Claude's `.claude/agents/*` or any equivalent),
-the orchestrator owns this contract — subagents do not see each other's
-instructions:
-
-- Sequence: implementation agent first, adversarial review second, verifier
-  last. Docs-only or trivial copy changes may skip review, never verification.
-- Parallelize UI and server implementation agents only when their write scopes
-  are disjoint (e.g. `src/` vs `server/`); never two writers in the same files.
-- The reviewer reasons over the diff and inspects; the verifier owns builds
-  and syntax checks. Do not run the build twice across the two roles.
-- `src/resumeEngine.ts` and `src/resume/` are anti-fabrication-critical logic,
-  not UI: changes there always get an adversarial review pass before
-  finalizing, regardless of which agent implemented them.
-- Delegate multi-file implementation to the matching agent; the orchestrator
-  may handle trivial single-file edits directly.
-- Subagents do not read or update `CONTINUITY.md` (an explicit exception to
-  the read-first non-negotiable, which binds the orchestrator): the
-  orchestrator reads it before delegating, distills relevant state into the
-  task brief, and records outcomes after.
-- Subagents never stage, commit, or push, and never make live AI-provider
-  calls unless the task brief explicitly says to; they report back instead.
-
----
-
-## Refactors And Modularity
-
-Refactor only when the current task requires it, the existing structure blocks
-correctness, or the change clearly reduces future complexity and can be safely
-verified. No drive-by refactors during feature work.
-
-Split growing workflows into components, hooks, services, and utilities when
-that improves cohesion. Keep public interfaces stable and isolate volatile
-logic behind small helpers.
-
-File-size guidance:
-
-- About 300 LOC for hand-written files is a soft target, not a rule.
-- Above about 400 LOC, either justify cohesion or propose a focused split if
-  the task already touches that file.
-- `src/App.tsx` is already over the target; treat continued growth as a prompt
-  to extract focused hooks/helpers when touching it. (`src/resumeEngine.ts` is
-  now a thin barrel re-exporting the focused modules under `src/resume/`, and
-  the `/api/polish` flow is split across `server/ai/*` — keep new logic in those
-  focused modules rather than regrowing a single file.)
-
----
-
-## Safety And Data
-
-- Treat resumes, job descriptions, API keys, and personal background as
-  sensitive.
-- Keep personal resumes, application trackers, exported drafts, rendered
-  previews, and job-specific artifacts in ignored local storage, primarily
-  `job-search-workspace/`.
-- Remote API calls must be read-only unless the user explicitly requests a
-  write; dry-run requested writes when possible.
-- Never run commands that delete resume/workspace data or call destructive
-  remote APIs without explicit instruction.
-- Do not commit `.env`, `node_modules/`, `dist/`, exported resumes/TEX/PDF/DOCX
-  files, root-level resume artifacts, or `job-search-workspace/` contents
-  except its `README.md`.
-- Keep generated resume claims grounded in user-provided facts.
-
-For PDFs, uploaded resumes, long documents, or similar sources, read the full
-source before drafting, then re-check the source before finalizing for factual
-accuracy, invented details, and style constraints. Label paraphrases when the
-user needs source-faithful handling.
-
----
-
-## Accuracy And Current Info
-
-When a request depends on "latest", "current", recent APIs, pricing, release
-notes, model availability, or similar changing facts:
-
-- Establish the current date/time when it matters.
-- Prefer official sources: vendor docs, upstream repositories, changelogs, and
-  release notes.
-- Use documentation tools when available; pin the relevant library and version.
-- Use web search when it materially improves correctness, preferring official
-  docs over secondary explainers.
-
----
-
-## Git Rules
-
-Default to local-only work unless the user explicitly asks to stage, commit,
-push, open a PR, or merge.
-
-- Never overwrite unrelated changes.
-- Never use destructive git operations without explicit instruction.
-- Never rebase, amend, push, switch branches, or delete branches unless
-  requested.
-- Check `git status --short` before staging so unrelated work is visible.
-- Stage only relevant files.
-- Do not stage `.env`, `job-search-workspace/` contents except
-  `job-search-workspace/README.md`, or exported resumes/TEX/PDF/DOCX files. The
-  `.gitignore` already guards these; verify with `git status --short`.
-- Stage and commit `AGENTS.md` and `CLAUDE.md` like any other tracked file when
-  they're part of the change; do not single them out to exclude. `CONTINUITY.md`
-  and `.claude/` are gitignored and won't appear as staging candidates.
-- Use non-interactive git commands.
-
----
-
-## Verification
-
-Read `docs/engineering/testing.md` for full pass criteria.
-
-- UI: no console errors, stable layout, navbar-inputs + studio workflow
-  preserved. Visual QA is flag-first: skip by default, flag changes with real
-  layout/theming risk for the user to decide, never run unsolicited; note when
-  it was skipped.
-- Server / AI: `npx tsc -p tsconfig.server.json` passes; affected routes return the
-  expected status and JSON shape; the deterministic distill fallback still
-  runs when the AI call cannot (tailor/review/cover fail plainly — D011).
-- Build: `npm run build` succeeds when frontend source or types changed.
-- Refactors: existing behavior preserved, `npm run build` succeeds, and search
-  confirms old symbols are gone.
-- Docs-only: verify referenced paths and links; runtime checks are not
-  required.
-
----
+- `ResumeData` is the canonical editable model in both apps.
+- `.resume` uses `format: "typeset-resume"` and `schemaVersion: 1`; it is the
+  only portable editable format. PDF is final output.
+- Session ids never cross the file boundary. View-only preferences such as zoom
+  and spell-check never enter `.resume` files.
+- Editor, browser print, and dedicated PDF output derive from the same document,
+  style, fonts, metrics, and layout contract.
+- Treat resume and job-search content as personal data. Typeset never sends
+  resume content to an application service. RoleFit sends only the inputs
+  required for the user-selected local CLI or API workflow and keeps its local
+  workspace ignored.
+- AI output must remain evidence-grounded. Never invent employers, dates,
+  metrics, education, tools, experience, or outcomes.
 
 ## Commands
 
-Run from the project root.
+Run commands from the repository root. There is intentionally no ambiguous
+root `dev`, `build`, or `preview` command.
 
-- Build: `npm run build`
-- Dev: `npm run dev` (starts the API-backed local server on `PORT` or `5181`)
-- Preview: `npm run preview`
-- Server type check: `npx tsc -p tsconfig.server.json` (the server runs under Node's native TypeScript type stripping; this is the syntax + type gate)
+```bash
+npm install
+npm run dev:typeset
+npm run dev:rolefit
+npm run build:typeset
+npm run build:rolefit
+npm run check
+npm test
+```
 
-Port `5181` is canonical for this project (reserved range `5181-5183`). If
-`5181` is already bound, treat that as a signal the app is already running and
-connect to `http://localhost:5181` instead of starting a second dev server or
-changing ports. Sibling reservations: careflow `5173-5180`, portfolio
-`5184-5185`.
+Use workspace commands for focused work:
 
-Use `.env` for provider keys and overrides:
-`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`,
-`OPENROUTER_API_KEY`, `GROQ_API_KEY`, `TOGETHER_API_KEY`, `MISTRAL_API_KEY`,
-`AI_API_KEY`, `AI_PROVIDER`, `AI_BASE_URL`, `AI_MODEL`, `OPENAI_MODEL`, and
-`PORT`. Optional security override: `EXTENSION_ALLOWED_ORIGINS` (comma-separated
-exact extension origins) hard-restricts the browser-extension routes to those
-origins; unset = any extension-scheme origin is accepted.
+```bash
+npm run check --workspace packages/engine
+npm run check --workspace packages/editor
+npm run check --workspace apps/typeset
+npm run check --workspace apps/role-fit-ai
+```
 
----
+See `docs/development.md` for the verification matrix and focused evals.
+Typeset uses port 5186 (HMR 24686); RoleFit uses port 5181. A bound canonical
+port normally means that app is already running; reuse it rather than selecting
+another port.
 
-## Communication
+## Working Method
 
-- Think privately.
-- Skip preambles unless they help.
-- Report actions, blockers, verification, and final outputs.
-- Do not print hidden reasoning.
-- Use bracketed prompts for missing user facts, for example
-  `[add metric: users, time saved, performance gain, or scope]`.
+Before changing code or project files:
 
----
+1. Read `CONTINUITY.md`, this guide, and the nearest scoped guide.
+2. Read the affected app's product/design contract or package README.
+3. Map callers, state owner, side effects, output paths, and all consumers of a
+   shared contract.
+4. Define acceptance criteria and the smallest meaningful verification.
+5. Inspect the dirty worktree and preserve unrelated changes.
 
-## Definition Of Done
+While working:
 
-A task is complete when the requested behavior works or the question is
-answered, the diff is scoped, relevant checks ran or were explained, meaningful
-continuity state is updated, and residual risks are clear.
+- Keep changes tied to the request and its necessary cleanup.
+- Make one responsibility-level extraction at a time and verify before stacking
+  another structural change.
+- Surface actionable failures; do not add silent fallbacks or empty catches.
+- Ask before adding a dependency or changing schemas, provider defaults,
+  deployment shape, public runtime exposure, or paid services.
+
+## Verification And Definition Of Done
+
+- Run the narrowest owner-level check while iterating, then every affected
+  consumer check in proportion to blast radius.
+- A package change is not verified by one app build. Check the package and each
+  app whose integration contract changed.
+- UI changes require browser evidence when layout, interaction, or responsive
+  behavior materially changes; otherwise state why visual QA was not needed.
+- PDF changes require rendered-output comparison; file changes require valid
+  round trips plus malformed-input rejection.
+- AI/prompt/sanitizer changes require the relevant offline adversarial probes.
+  Live provider evals run only when explicitly justified and authorized.
+- Documentation-only changes require path/link/command verification rather
+  than an unnecessary runtime build.
+- Update affected docs and continuity when behavior, ownership, or a durable
+  decision changes.
+
+A task is complete only when the requested outcome works, affected contracts
+agree, checks are reported honestly, and residual risks are explicit.
+
+## Safety And Git
+
+- Never expose secrets, broad environment dumps, private resume/job text, or
+  provider response bodies.
+- Never commit `.env`, personal workspace data, generated resume/PDF artifacts,
+  `node_modules`, or `dist`.
+- Do not stage, commit, push, switch branches, rewrite history, or make remote
+  writes unless the user asks.
+- Never overwrite unrelated work or use destructive git commands without clear
+  authorization.
+- Run git commands from the repository root; stage exact paths and keep
+  behavior slices reviewable.
+- Treat `AGENTS.md` and `CLAUDE.md` as normal tracked files when requested.
+
+## Continuity
+
+Keep continuity factual and bounded. Tag entries with an ISO date and
+`[USER]`, `[CODE]`, `[TOOL]`, or `[ASSUMPTION]`; write `UNCONFIRMED` rather than
+guessing. Root continuity owns cross-workspace architecture and deploy state;
+app continuity owns only app-specific detail. Supersede changed facts instead
+of appending contradictory narratives.
