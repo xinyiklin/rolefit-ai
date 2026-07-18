@@ -53,9 +53,10 @@ typesetting guide when a change affects painted output or layout provenance.
 
 ## Verification
 
-1. Run `npm run eval:editor` after value/display, whitespace, deletion-format,
+1. Run `npm run eval:editor --workspace packages/editor` after value/display, whitespace, deletion-format,
    selection, or drag-hit-area changes.
-2. Run `npm run build` after component, hook, or action-contract changes.
+2. Run `npm run check --workspace packages/editor` after component, hook, or
+   action-contract changes, then build both apps when the public contract moved.
 3. Check direct typing, trailing spaces, delete-and-retype formatting, range
    formatting, undo/redo, right-click commands, drag, and keyboard reorder in a
    real browser for material editor work.

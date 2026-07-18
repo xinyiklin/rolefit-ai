@@ -2,14 +2,13 @@
 
 .studio-pane {
   display: grid;
-  grid-template-columns: clamp(184px, 14vw, 226px) minmax(0, 1fr);
+  grid-template-columns: clamp(148px, 11.5vw, 176px) minmax(0, 1fr);
   min-height: 0;
   background: var(--paper);
 }
 
-/* Left rail column: the numbered tab list at the top and the persistent
-   sessions panel pinned to the bottom. Owns the column's border + tint so both
-   regions sit on one continuous surface. */
+/* Left rail column: the stable tab axis. Session awareness lives in the app
+   masthead, so the rail remains focused on workspace navigation. */
 .studio-sidebar {
   display: flex;
   flex-direction: column;
@@ -17,18 +16,10 @@
   min-height: 0;
   border-right: 1px solid var(--hairline);
   background: var(--card-soft);
+  overflow: hidden;
 }
 
-/* Bottom-pinned rail region (concurrent-sessions panel). margin-top:auto pushes
-   it to the foot of the rail so it fills the space below the tab list. */
-.studio-sidebar__footer {
-  margin-top: auto;
-  min-height: 0;
-  padding: var(--s3) var(--s3) var(--s4);
-  border-top: 1px solid var(--hairline-soft);
-}
-
-/* -------- Sessions rail (concurrent tabs) -------- */
+/* -------- Sessions menu (concurrent tabs) -------- */
 
 .sessions-rail {
   display: flex;
@@ -42,7 +33,7 @@
   align-items: baseline;
   justify-content: space-between;
   gap: var(--s2);
-  padding: 0 var(--s2);
+  padding: 0 var(--s1);
 }
 
 /* Mono small-caps eyebrow, matching the tab-group labels above. */
@@ -72,7 +63,7 @@
   flex-direction: column;
   gap: 2px;
   /* Cap the height so many concurrent tabs scroll instead of shoving the rail. */
-  max-height: 40vh;
+  max-height: min(44vh, 360px);
   overflow-y: auto;
   scrollbar-width: thin;
   scrollbar-color: var(--hairline-strong) transparent;
@@ -107,6 +98,26 @@
   background: var(--ink-faint);
 }
 
+.polish-spinner {
+  width: 10px;
+  height: 10px;
+  border: 2px solid var(--accent-veil);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: session-spinner 0.8s linear infinite;
+}
+
+@keyframes session-spinner {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .polish-spinner {
+    border-color: var(--accent);
+    animation: none;
+  }
+}
+
 .sessions-rail__job {
   min-width: 0;
   overflow: hidden;
@@ -122,7 +133,7 @@
   font-weight: 400;
 }
 
-/* Phase sits on its own line under the label (the rail is narrow), quiet accent. */
+/* Phase sits on its own line under the label, in a quiet accent. */
 .sessions-rail__phase {
   grid-column: 2;
   color: var(--accent);
@@ -155,6 +166,7 @@
 
 /* Group eyebrow — mono small-caps label above each entry group, hairline above. */
 .studio-tabs__group {
+  width: 100%;
   margin-top: var(--s3);
   padding-top: var(--s3);
   border-top: 1px solid var(--hairline-soft);
@@ -196,7 +208,13 @@
   font-weight: 500;
   text-align: left;
   cursor: pointer;
-  transition: color 160ms var(--ease), background 160ms var(--ease), box-shadow 160ms var(--ease);
+  width: 100%;
+  transition:
+    width 240ms var(--ease),
+    padding 240ms var(--ease),
+    color 160ms var(--ease),
+    background 160ms var(--ease),
+    box-shadow 160ms var(--ease);
 }
 
 .studio-tab + .studio-tab {
@@ -216,6 +234,9 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  opacity: 1;
+  transform: translateX(0);
+  transition: opacity 140ms var(--ease), transform 180ms var(--ease);
 }
 
 .studio-tab:hover {
@@ -315,11 +336,6 @@
   min-height: 0;
 }
 
-/* Restore the toolbar inset so it aligns with other tabs' content. */
-.studio-body[data-tab="resume"] .studio-card__head {
-  padding: var(--s4) var(--s5) 0;
-}
-
 /* -------- Studio card -------- */
 
 .studio-card {
@@ -350,8 +366,7 @@
   margin-bottom: 0;
 }
 
-/* Right-side cluster in a card head (e.g. the Resume tab's Format menu next to
-   the score-context note). */
+/* Right-side cluster in a card head for compact metadata and actions. */
 .studio-card__tools {
   display: inline-flex;
   align-items: center;
@@ -359,17 +374,6 @@
   flex-wrap: wrap;
   gap: var(--s2);
   min-width: 0;
-}
-
-/* Hairline that groups the view/format controls (Zoom · Format · Style) apart
-   from the Export action. Collapses when the toolbar wraps so it never dangles
-   at the start of a wrapped row. */
-.studio-card__tool-divider {
-  width: 1px;
-  height: 20px;
-  margin-inline: var(--s1);
-  background: var(--hairline);
-  flex: none;
 }
 
 .studio-card__head h2 {
@@ -399,90 +403,6 @@
   border-radius: var(--r-pill);
   background: var(--warm);
   flex: none;
-}
-
-/* Fit verdict readout in the resume header: the same color-coded band the
-   review rail uses (verdict-pill), shrunk to toolbar scale, with a quiet
-   provenance note (AI-judged vs Estimated) beside it. The user wants the
-   verdict at a glance, not a raw number. */
-.fit-readout {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  white-space: nowrap;
-}
-
-/* Scoped under .fit-readout so this wins over the base .verdict-pill rules in
-   review.css / pipeline-review.css, which import after studio.css. */
-.fit-readout .verdict-pill--inline {
-  min-height: 22px;
-  padding: 0 var(--s2);
-  font-size: 0.72rem;
-}
-
-.fit-readout__source {
-  color: var(--ink-soft);
-  font-size: 0.72rem;
-}
-
-/* Page-zoom select beside the Format menu (Google-Docs style). */
-.doc-zoom {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--s1);
-}
-
-.doc-zoom__label {
-  color: var(--ink-soft);
-  font-size: 0.7rem;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
-.doc-zoom select {
-  width: auto;
-  min-height: 26px;
-  padding: 0 var(--s1) 0 var(--s2);
-  font-size: 0.76rem;
-}
-
-/* Spell-check toggle beside Zoom: an editor-display control (like Zoom, it
-   never touches the export), shaped like the Format/Style triggers — a quiet
-   transparent pill with icon + label. Accent-tinted when on so the red-underline
-   state reads at a glance; plain and muted when off. */
-.doc-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 28px;
-  padding: 0 var(--s2);
-  border: 1px solid transparent;
-  border-radius: var(--r-sm);
-  background: transparent;
-  color: var(--ink-soft);
-  font-family: var(--font-ui);
-  font-size: 0.76rem;
-  font-weight: 600;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: color 150ms var(--ease), background 150ms var(--ease), border-color 150ms var(--ease);
-}
-
-.doc-toggle:hover {
-  color: var(--ink);
-  background: var(--card-soft);
-}
-
-.doc-toggle.is-on {
-  color: var(--accent-deep);
-  background: var(--accent-soft);
-  border-color: var(--accent-veil);
-}
-
-.doc-toggle:focus-visible {
-  outline: 2px solid var(--accent-veil);
-  outline-offset: 1px;
 }
 
 /* -------- Page-title vocabulary -------- */

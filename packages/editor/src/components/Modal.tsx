@@ -1,5 +1,7 @@
-import { useEffect, useId, useRef, type ReactNode } from "react";
+import { useId, useRef, type ReactNode } from "react";
 import { X } from "lucide-react";
+
+import { useModalFocus } from "../hooks/useModalFocus.ts";
 
 // One modal shell for every dialog / system message: a dimmed backdrop, a
 // centered panel with a titled header + close button, Escape-to-close, and
@@ -15,53 +17,13 @@ export function Modal({
   children: ReactNode;
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
-  const onCloseRef = useRef(onClose);
   const titleId = useId();
-
-  useEffect(() => {
-    onCloseRef.current = onClose;
-  }, [onClose]);
-
-  useEffect(() => {
-    const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    (panelRef.current?.querySelector<HTMLElement>("[data-autofocus]") ?? panelRef.current)?.focus();
-
-    function onKey(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        onCloseRef.current();
-        return;
-      }
-      if (event.key !== "Tab" || !panelRef.current) return;
-      const focusable = Array.from(
-        panelRef.current.querySelectorAll<HTMLElement>(
-          "button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href], [tabindex]:not([tabindex='-1'])"
-        )
-      ).filter((element) => element.getClientRects().length > 0);
-      if (!focusable.length) {
-        event.preventDefault();
-        panelRef.current.focus();
-        return;
-      }
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first.focus();
-      }
-    }
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("keydown", onKey);
-      document.body.style.overflow = previousOverflow;
-      previouslyFocused?.focus();
-    };
-  }, []);
+  const handleKeyDown = useModalFocus({
+    active: true,
+    containerRef: panelRef,
+    initialFocusSelector: "[data-autofocus]",
+    onClose
+  });
 
   return (
     // Backdrop closes on click; the panel stops propagation so inner clicks don't.
@@ -73,6 +35,7 @@ export function Modal({
         aria-modal="true"
         aria-labelledby={titleId}
         tabIndex={-1}
+        onKeyDown={handleKeyDown}
         onMouseDown={(event) => event.stopPropagation()}
       >
         <header className="modal__head">

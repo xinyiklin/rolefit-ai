@@ -10,10 +10,10 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { paragraphItems } from "@typeset/engine/typeset/measure.ts";
+import { breakParagraph } from "@typeset/engine/typeset/linebreak.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const { paragraphItems } = await import(join(here, "../measure.ts"));
-const { breakParagraph } = await import(join(here, "../linebreak.ts"));
 
 const truth = JSON.parse(readFileSync(join(here, "linebreak-truth.json"), "utf8"));
 
@@ -33,7 +33,7 @@ function lineText(line) {
 // (– — ’); engine run text carries them too, so compare as-is.
 let failures = 0;
 truth.cases.forEach((c, i) => {
-  const lines = breakParagraph(paragraphItems(c.input, truth.sizeBp), truth.columnBp, "left");
+  const lines = breakParagraph(paragraphItems(c.input, truth.sizeBp, "latin-modern", 0), truth.columnBp, "left");
   const ends = lines.slice(0, -1).map((l) => lineText(l).trim().split(/\s+/).pop());
   const ok = JSON.stringify(ends) === JSON.stringify(c.ends);
   if (!ok) {

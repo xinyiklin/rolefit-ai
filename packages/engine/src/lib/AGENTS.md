@@ -74,7 +74,7 @@ grammar, margin table, or link-normalization path.
 
 For model, transform, or codec changes:
 
-1. Run `npm run eval:resume-file` for editable-file contract changes, plus the
+1. Run `npm run eval:resume-file --workspace packages/engine` for editable-file contract changes, plus the
    smallest probe for other pure functions.
 2. Verify a current v1 save/open round trip without session ids.
 3. Check unsupported schema-version rejection; no prototype-version migration
@@ -82,7 +82,8 @@ For model, transform, or codec changes:
 4. Check malformed, unknown-field, invalid-bound, and
    oversized-input rejection.
 5. Confirm unrelated marks/content survive transformations.
-6. Run `npm run build`, or `npm run check` before handing off a broad change.
+6. Run `npm run check --workspace packages/engine`, then affected app checks
+   before handing off a shared contract change.
 
 If no focused harness exists, add or run a small deterministic eval when the
 logic is durable enough to regress; otherwise report the exact manual probe.

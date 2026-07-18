@@ -10,7 +10,8 @@
   },
   "scripts": {
     "eval:editor": "node --experimental-strip-types src/sections/editor/__evals__/typeset-editing.mjs",
-    "eval": "npm run eval:editor",
+    "eval:hooks": "node --experimental-strip-types src/hooks/__evals__/resume-editor-structure.mjs",
+    "eval": "npm run eval:editor && npm run eval:hooks",
     "test": "npm run eval",
     "typecheck": "tsc --noEmit",
     "check": "npm run typecheck && npm run eval"

@@ -28,6 +28,7 @@ async function load(rel) {
 
 const { verdictFromScore, VERDICT_LABEL, VERDICT_TONE, verdictPillClass } = await load("../fitVerdict.ts");
 const { appFitVerdict, fitTone } = await load("../applicationDisplay.ts");
+const { displayVerdictReason } = await load("../verdictReason.ts");
 
 let pass = 0;
 let fail = 0;
@@ -80,6 +81,23 @@ for (const score of [95, 78, 55, 20]) {
 // pill-class transform matches the review rail's (don-t-apply).
 check("pill class for DON'T APPLY", verdictPillClass("DON'T APPLY") === "verdict-pill--don-t-apply");
 check("label map complete", VERDICT_LABEL["STRETCH"] === "Stretch");
+
+check(
+  "legacy server cap reason becomes concise user copy",
+  displayVerdictReason("Server verdict: 1 missing required qualification capped the fit score at 79, setting the REASONABLE FIT band.")
+    === "One required qualification is missing. Fit score capped at 79."
+);
+check(
+  "legacy stretch reason drops backend jargon",
+  displayVerdictReason("Server verdict: recomputed from requirement-coverage evidence to the STRETCH band (score 62).")
+    === "Important requirement gaps remain. Fit score: 62."
+);
+check(
+  "legacy don't-apply reason drops backend jargon",
+  displayVerdictReason("Server verdict: recomputed from requirement-coverage evidence to the DON'T APPLY band (score 32).")
+    === "The reviewed evidence does not cover enough key requirements. Fit score: 32."
+);
+check("model-authored reason passes through", displayVerdictReason("The role needs production Go experience.") === "The role needs production Go experience.");
 
 console.log(`\n${pass}/${pass + fail} fit-verdict checks passed.`);
 assert.equal(fail, 0, `${fail} fit-verdict checks failed`);

@@ -1,6 +1,6 @@
 // Single source of truth for resume SECTION vocabulary + classification, shared by
-// the client scorer (src/resume/text.ts, scoring.ts) and the client editor parser
-// (src/lib/resumeData.ts).
+// the client scorer (src/resume/text.ts, scoring.ts) and the shared Typeset
+// document parser (@typeset/engine/lib/resumeData.ts).
 //
 // It's a plain .ts module, kept dependency-free, so both Node (native TypeScript
 // type stripping) and the bundler can import it directly. Before this, the same

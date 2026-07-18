@@ -184,6 +184,17 @@ assert.deepEqual(
 );
 assert.deepEqual(fabList.preferredQualifications, [], "fabricated 'Rust and blockchain' preferred-qual dropped");
 
+// A single invented branded tool used to hide inside an otherwise grounded
+// sentence because the generic token-overlap ratio still cleared 60%.
+assert.deepEqual(
+  sanitizeDistill(
+    { responsibilities: ["Build reliable Kubernetes APIs for healthcare systems"] },
+    "You will build reliable APIs for healthcare systems and collaborate with product teams."
+  ).responsibilities,
+  [],
+  "a mostly copied duty cannot smuggle an unmentioned curated technology"
+);
+
 // --- ANTI-FAB: seniority/domain signals are grounded like content lists ---
 // (previously passed through with only shape-cleaning — an invented signal became
 // a scored JD keyword and biased the review model).

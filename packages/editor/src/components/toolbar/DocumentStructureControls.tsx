@@ -45,7 +45,11 @@ export function DocumentStructureControls({
   }, [confirming]);
 
   return (
-    <div className="top-toolbar__group" role="group" aria-label="Document structure">
+    <div
+      className="top-toolbar__group top-toolbar__document-structure"
+      role="group"
+      aria-label="Document structure"
+    >
       <Popover
         ariaLabel="Header"
         align="start"

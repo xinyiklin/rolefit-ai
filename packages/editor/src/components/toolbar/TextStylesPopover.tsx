@@ -11,7 +11,8 @@ import { useId } from "react";
 
 import { Popover } from "../Popover";
 import type { DocStyleControls } from "../../hooks/useDocStyle";
-import { FONT_FAMILY_OPTIONS, TEXT_STYLE_DEFAULTS } from "@typeset/engine/lib/documentStyle.ts";
+import { TEXT_STYLE_DEFAULTS } from "@typeset/engine/lib/documentStyle.ts";
+import { FontFamilyControl } from "./FontFamilyControl";
 import { FontSizeControl } from "./FontSizeControl";
 import { ToolbarButton } from "./ToolbarButton";
 import {
@@ -92,17 +93,12 @@ function FieldStyleRow({
     <div className="style-popover__field-style">
       <span className="style-popover__field-style-label">{label}</span>
       <div className="style-popover__field-style-controls">
-        <select
+        <FontFamilyControl
           className="style-popover__entry-font"
-          aria-label={`${label}: font`}
-          value={fontState ?? ""}
-          onChange={(event) => onFontChange?.(field, event.target.value as FieldFontFamily)}
-        >
-          {fontState === null ? <option value="" disabled aria-label="Mixed" /> : null}
-          {FONT_FAMILY_OPTIONS.map((option) => (
-            <option key={option.value} value={option.value}>{option.label}</option>
-          ))}
-        </select>
+          ariaLabel={`${label}: font`}
+          value={fontState}
+          onChange={(family) => onFontChange?.(field, family as FieldFontFamily)}
+        />
         <FontSizeControl
           className="style-popover__field-size"
           value={sizeState}

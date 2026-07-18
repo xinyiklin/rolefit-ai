@@ -1,7 +1,8 @@
 // Application tracker — JSON file as DB.
 // Stored at <workspaceDir>/applications.json which is gitignored.
 
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { dedupeSourceUrls } from "../../src/lib/jobIdentity.ts";
 
@@ -21,38 +22,112 @@ export const APPLICATION_ID_RE = /^[A-Za-z0-9_-]{1,80}$/;
 const MAX_APPLICATIONS = 500;
 const MAX_FIELD = 50_000;
 const MAX_RESUME_DATA_BYTES = 400_000;
+// A legacy row can predate createdAt/updatedAt. Its optimistic-concurrency
+// revision must still be stable across GET and the later PUT; generating "now"
+// during each read makes the first edit conflict with itself. Rows with a real
+// createdAt use that as their one-time migration revision, while the oldest
+// undated rows use this fixed sentinel until their first successful edit writes
+// a current updatedAt.
+const LEGACY_APPLICATION_REVISION = "1970-01-01T00:00:00.000Z";
 
 export function applicationsFilePath(workspaceDir: string): string {
   return join(workspaceDir, "applications.json");
 }
 
+export class ApplicationsStorageError extends Error {
+  status: number;
+  currentApplications?: unknown[];
+  constructor(
+    message = "Application tracker data could not be read safely. Repair or restore applications.json before saving.",
+    status = 500,
+    currentApplications?: unknown[]
+  ) {
+    super(message);
+    this.name = "ApplicationsStorageError";
+    this.status = status;
+    this.currentApplications = currentApplications;
+  }
+}
+
+function isMissingFile(error: unknown): boolean {
+  return Boolean(error && typeof error === "object" && "code" in error && error.code === "ENOENT");
+}
+
+export function sanitizeApplications(applications: unknown) {
+  return (Array.isArray(applications) ? applications : [])
+    .map(sanitizeApplication)
+    .filter(isPresent)
+    .slice(0, MAX_APPLICATIONS);
+}
+
+function duplicateApplicationId(applications: { id: string }[]): string | null {
+  const ids = new Set<string>();
+  for (const application of applications) {
+    if (ids.has(application.id)) return application.id;
+    ids.add(application.id);
+  }
+  return null;
+}
+
 export async function readApplications(workspaceDir: string) {
   const path = applicationsFilePath(workspaceDir);
+  let text: string;
   try {
-    const text = await readFile(path, "utf8");
+    text = await readFile(path, "utf8");
+  } catch (error) {
+    if (isMissingFile(error)) return [];
+    throw new ApplicationsStorageError();
+  }
+
+  try {
     const data: unknown = JSON.parse(text);
-    const apps = Array.isArray((data as { applications?: unknown })?.applications)
-      ? (data as { applications: unknown[] }).applications
-      : [];
-    return apps.map(sanitizeApplication).filter(isPresent);
+    if (!data || typeof data !== "object" || !Array.isArray((data as { applications?: unknown }).applications)) {
+      throw new Error("Invalid applications file shape.");
+    }
+    const apps = (data as { applications: unknown[] }).applications;
+    const sane = sanitizeApplications(apps);
+    // Never silently erase an invalid on-disk record during the next merge/write.
+    // A malformed saved file needs explicit repair, with the original bytes left
+    // untouched for recovery.
+    if (apps.length > MAX_APPLICATIONS || sane.length !== apps.length || duplicateApplicationId(sane)) {
+      throw new Error("Invalid application record.");
+    }
+    return sane;
   } catch {
-    return [];
+    throw new ApplicationsStorageError();
   }
 }
 
 export async function writeApplications(workspaceDir: string, applications: unknown) {
   await mkdir(workspaceDir, { recursive: true });
   const path = applicationsFilePath(workspaceDir);
-  const sane = (Array.isArray(applications) ? applications : [])
-    .map(sanitizeApplication)
-    .filter(isPresent)
-    .slice(0, MAX_APPLICATIONS);
+  if (!Array.isArray(applications) || applications.length > MAX_APPLICATIONS) {
+    throw new ApplicationsStorageError(
+      `The tracker supports at most ${MAX_APPLICATIONS} applications. No tracker changes were saved.`,
+      400
+    );
+  }
+  const sane = sanitizeApplications(applications);
+  if (sane.length !== applications.length) {
+    throw new ApplicationsStorageError("One or more applications are invalid. No tracker changes were saved.", 400);
+  }
+  if (duplicateApplicationId(sane)) {
+    throw new ApplicationsStorageError("Application ids must be unique. No tracker changes were saved.", 400);
+  }
   const payload = JSON.stringify(
     { savedAt: new Date().toISOString(), applications: sane },
     null,
     2
   );
-  await writeFile(path, payload, "utf8");
+  // A crash or process kill during writeFile must not truncate the user's tracker.
+  // Write a private sibling file, then atomically replace the committed snapshot.
+  const temporaryPath = `${path}.${process.pid}.${randomUUID()}.tmp`;
+  try {
+    await writeFile(temporaryPath, payload, { encoding: "utf8", mode: 0o600 });
+    await rename(temporaryPath, path);
+  } finally {
+    await rm(temporaryPath, { force: true }).catch(() => undefined);
+  }
   return sane;
 }
 
@@ -63,6 +138,7 @@ const APPLICATION_PRIORITIES = ["High", "Medium", "Low"] as const;
 const SALARY_PERIODS = ["yr", "mo", "hr"] as const;
 const RESUME_SECTION_TYPES = ["standard", "skills", "summary"] as const;
 const REVIEW_GAP_SEVERITIES = ["BLOCKER", "HIGH", "MEDIUM", "LOW"] as const;
+const REVIEW_VERDICTS = ["STRONG FIT", "REASONABLE FIT", "STRETCH", "DON'T APPLY"] as const;
 // Per-stage AI-usage provenance: which model produced each pipeline stage's
 // output (distill / tailor / review / cover / answers). `source` is required and
 // enumerated; a stage whose source is not one of these is dropped entirely so a
@@ -106,8 +182,8 @@ function sanitizeContacts(raw: unknown) {
 function sanitizeResumeArtifacts(raw: unknown) {
   if (!raw || typeof raw !== "object") return undefined;
   const r = raw as Record<string, unknown>;
-  const hasTex = Boolean(r.hasTex);
-  const hasPdf = Boolean(r.hasPdf);
+  const hasTex = r.hasTex === true;
+  const hasPdf = r.hasPdf === true;
   if (!hasTex && !hasPdf) return undefined;
   return {
     hasTex,
@@ -192,8 +268,8 @@ function sanitizeEvidenceType(value: unknown): "exact" | "adjacent" | "none" | u
   return inList(EVIDENCE_TYPES, value) ? value : undefined;
 }
 
-function sanitizeReviewGapSeverity(value: unknown): "BLOCKER" | "HIGH" | "MEDIUM" | "LOW" {
-  return inList(REVIEW_GAP_SEVERITIES, value) ? value : "MEDIUM";
+function sanitizeReviewGapSeverity(value: unknown): "BLOCKER" | "HIGH" | "MEDIUM" | "LOW" | undefined {
+  return inList(REVIEW_GAP_SEVERITIES, value) ? value : undefined;
 }
 
 function sanitizeMissingRequiredSkills(raw: unknown) {
@@ -205,7 +281,7 @@ function sanitizeMissingRequiredSkills(raw: unknown) {
       return {
         keyword: sanitizeString(item?.keyword, 160),
         evidenceType,
-        canHonestlyAdd: evidenceType === "exact" && Boolean(item?.canHonestlyAdd),
+        canHonestlyAdd: evidenceType === "exact" && item?.canHonestlyAdd === true,
         reason: sanitizeString(item?.reason, 800)
       };
     })
@@ -220,8 +296,9 @@ function sanitizeReview(raw: unknown) {
   // parse boundary (each field still runs through a sanitizer).
   const list = (v: unknown): any[] => (Array.isArray(v) ? v : []);
   const rec = (r.recommendation && typeof r.recommendation === "object" ? r.recommendation : {}) as Record<string, unknown>;
+  if (!inList(REVIEW_VERDICTS, r.verdict)) return undefined;
   const review = {
-    verdict: sanitizeString(r.verdict, 40),
+    verdict: r.verdict,
     verdictReason: sanitizeString(r.verdictReason, 1_000),
     riskFlags: list(r.riskFlags)
       .slice(0, 12)
@@ -230,26 +307,28 @@ function sanitizeReview(raw: unknown) {
     gaps: list(r.gaps)
       .slice(0, 12)
       .map((g) => {
+        const gap = sanitizeString(g?.gap, 400);
+        const severity = sanitizeReviewGapSeverity(g?.severity);
+        if (!gap || !severity) return null;
         const evidenceType = sanitizeEvidenceType(g?.evidenceType);
         return {
-          gap: sanitizeString(g?.gap, 400),
-          severity: sanitizeReviewGapSeverity(g?.severity),
+          gap,
+          severity,
           evidenceType,
-          canHonestlyAdd: evidenceType === "exact" && Boolean(g?.canHonestlyAdd),
+          canHonestlyAdd: evidenceType === "exact" && g?.canHonestlyAdd === true,
           evidence: sanitizeString(g?.evidence, 800),
           suggestedEdit: sanitizeString(g?.suggestedEdit, 800)
         };
       })
-      .filter((g) => g.gap),
+      .filter(isPresent),
     recommendation: {
-      applyAsIs: Boolean(rec.applyAsIs),
+      applyAsIs: rec.applyAsIs === true,
       reason: sanitizeString(rec.reason, 1_000),
       coverLetterAngle: sanitizeString(rec.coverLetterAngle, 1_000),
       topEdits: list(rec.topEdits).slice(0, 8).map((e) => sanitizeString(e, 300)).filter(Boolean)
     }
   };
-  // Drop an empty snapshot entirely so it doesn't clutter storage.
-  if (!review.verdict && !review.riskFlags.length && !review.gaps.length) return undefined;
+  // A valid verdict is required above; optional subfields may safely be empty.
   return review;
 }
 
@@ -361,6 +440,10 @@ function sanitizeApplication(raw: unknown) {
   const status = inList(APPLICATION_STATUSES, r.status) ? r.status : "interested";
   const source = inList(APPLICATION_SOURCES, r.source) ? r.source : "";
   const now = new Date().toISOString();
+  const legacyCreatedAt = typeof r.createdAt === "string" ? r.createdAt.trim().slice(0, 100) : "";
+  const storedUpdatedAt = typeof r.updatedAt === "string" ? r.updatedAt.trim().slice(0, 100) : "";
+  const createdAt = legacyCreatedAt || now;
+  const updatedAt = storedUpdatedAt || legacyCreatedAt || LEGACY_APPLICATION_REVISION;
   const jobUrl = typeof r.jobUrl === "string" ? r.jobUrl.slice(0, 2_000) : "";
 
   return {
@@ -375,9 +458,9 @@ function sanitizeApplication(raw: unknown) {
     jobDescription: typeof r.jobDescription === "string" ? r.jobDescription.slice(0, MAX_FIELD) : "",
     rawJobDescription: typeof r.rawJobDescription === "string" ? r.rawJobDescription.slice(0, MAX_FIELD) : "",
     status,
-    createdAt: typeof r.createdAt === "string" ? r.createdAt : now,
+    createdAt,
     appliedAt: typeof r.appliedAt === "string" ? r.appliedAt : "",
-    updatedAt: typeof r.updatedAt === "string" ? r.updatedAt : now,
+    updatedAt,
     followupAt: typeof r.followupAt === "string" ? r.followupAt : "",
     location: typeof r.location === "string" ? r.location.slice(0, 200) : "",
     jobType: typeof r.jobType === "string" ? r.jobType.slice(0, 60) : "",
@@ -406,4 +489,105 @@ function sanitizeApplication(raw: unknown) {
     applicationAnswers: sanitizeApplicationAnswers(r.applicationAnswers),
     aiUsage: sanitizeAiUsage(r.aiUsage)
   };
+}
+
+export type ApplicationMutation = {
+  id: string;
+  operation: "upsert" | "delete";
+  baseUpdatedAt: string | null;
+};
+
+function parseApplicationMutations(raw: unknown): ApplicationMutation[] {
+  if (!Array.isArray(raw) || raw.length === 0 || raw.length > MAX_APPLICATIONS) {
+    throw new ApplicationsStorageError(
+      "Each tracker save must name between 1 and 500 application mutations.",
+      400
+    );
+  }
+
+  const ids = new Set<string>();
+  return raw.map((value) => {
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+      throw new ApplicationsStorageError("One or more application mutations are invalid.", 400);
+    }
+    const record = value as Record<string, unknown>;
+    const id = typeof record.id === "string" ? record.id : "";
+    const operation = record.operation;
+    const baseUpdatedAt = record.baseUpdatedAt;
+    if (
+      !APPLICATION_ID_RE.test(id) ||
+      (operation !== "upsert" && operation !== "delete") ||
+      (baseUpdatedAt !== null && (typeof baseUpdatedAt !== "string" || baseUpdatedAt.length > 100)) ||
+      ids.has(id)
+    ) {
+      throw new ApplicationsStorageError("One or more application mutations are invalid.", 400);
+    }
+    ids.add(id);
+    return { id, operation, baseUpdatedAt };
+  });
+}
+
+/**
+ * Apply an explicitly described client mutation set to the latest disk state.
+ * Unchanged rows come from `existing`, never the client's possibly stale full
+ * snapshot. Every changed row carries the `updatedAt` value the client edited,
+ * so two tabs cannot silently overwrite the same application.
+ */
+export function reconcileApplicationMutations(
+  existing: ReturnType<typeof sanitizeApplications>,
+  incoming: ReturnType<typeof sanitizeApplications>,
+  rawMutations: unknown
+) {
+  if (duplicateApplicationId(existing) || duplicateApplicationId(incoming)) {
+    throw new ApplicationsStorageError("Application ids must be unique. No tracker changes were saved.", 400);
+  }
+
+  const mutations = parseApplicationMutations(rawMutations);
+  const mutationById = new Map(mutations.map((mutation) => [mutation.id, mutation]));
+  const existingById = new Map(existing.map((application) => [application.id, application]));
+  const incomingById = new Map(incoming.map((application) => [application.id, application]));
+
+  for (const mutation of mutations) {
+    const current = existingById.get(mutation.id);
+    const requested = incomingById.get(mutation.id);
+    if (mutation.operation === "upsert" && !requested) {
+      throw new ApplicationsStorageError("An upsert mutation must include its application record.", 400);
+    }
+    if (mutation.operation === "delete" && requested) {
+      throw new ApplicationsStorageError("A delete mutation must omit its application record.", 400);
+    }
+
+    const revisionMatches = current
+      ? mutation.baseUpdatedAt === current.updatedAt
+      : mutation.baseUpdatedAt === null;
+    if (!revisionMatches) {
+      throw new ApplicationsStorageError(
+        "This application changed in another tab. The latest saved tracker has been restored; review it before trying again.",
+        409,
+        existing
+      );
+    }
+  }
+
+  const reconciled = incoming.map((application) => {
+    const mutation = mutationById.get(application.id);
+    if (mutation?.operation === "upsert") return application;
+    const current = existingById.get(application.id);
+    if (!current) {
+      throw new ApplicationsStorageError(
+        "A new application must include an upsert mutation. No tracker changes were saved.",
+        400
+      );
+    }
+    // The client sends a full snapshot for optimistic UI, but an unmutated row
+    // may be stale. Preserve the current server copy so unrelated-tab edits live.
+    return current;
+  });
+
+  const includedIds = new Set(reconciled.map((application) => application.id));
+  for (const current of existing) {
+    if (includedIds.has(current.id) || mutationById.get(current.id)?.operation === "delete") continue;
+    reconciled.push(current);
+  }
+  return reconciled;
 }

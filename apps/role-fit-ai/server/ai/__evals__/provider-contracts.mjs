@@ -8,7 +8,7 @@ import {
   buildCodexCliArgs
 } from "../../ai-cli/index.ts";
 import {
-  buildOpenAiCompatibleHeaders,
+  buildAnthropicMessagesBody,
   callOpenAiResponsesWithFetch
 } from "../clients.ts";
 import {
@@ -17,22 +17,81 @@ import {
 } from "../providers.ts";
 import {
   assertUsableApplicationAnswerOutput,
-  normalizeApplicationQuestions
+  bindApplicationAnswers,
+  bindApplicationRoleDescriptions,
+  normalizeApplicationQuestions,
+  normalizeApplicationRoleEvidence
 } from "../applicationAnswers.ts";
+import {
+  cliReasoningEffortOptionsFor,
+  modelOptionsByProvider,
+  providerOptions
+} from "../../../src/config/aiOptions.ts";
 
 const ENV_KEYS = [
-  "AI_API_KEY", "AI_PROVIDER", "OPENAI_API_KEY", "ANTHROPIC_API_KEY", "GEMINI_API_KEY",
-  "OPENROUTER_API_KEY", "GROQ_API_KEY", "TOGETHER_API_KEY", "MISTRAL_API_KEY",
-  "OPENAI_COMPATIBLE_API_KEY", "LOCAL_AI_API_KEY"
+  "AI_PROVIDER", "AI_MODEL", "OPENAI_API_KEY", "ANTHROPIC_API_KEY",
+  "OPENAI_MODEL", "ANTHROPIC_MODEL", "CLAUDE_CLI_MODEL", "CODEX_CLI_MODEL", "ANTIGRAVITY_CLI_MODEL"
 ];
 const savedEnv = new Map(ENV_KEYS.map((key) => [key, process.env[key]]));
 for (const key of ENV_KEYS) delete process.env[key];
 
 try {
+  assert.deepEqual(
+    providerOptions.map(({ value }) => value),
+    ["claude-cli", "codex-cli", "antigravity-cli", "openai", "anthropic"],
+    "only the three verified CLIs and two native APIs are exposed"
+  );
+  assert(
+    Object.values(modelOptionsByProvider).flat().every(({ value }) => value !== "custom"),
+    "unverified custom model ids stay out of every provider menu"
+  );
+  assert.deepEqual(
+    modelOptionsByProvider["claude-cli"].map(({ value, label }) => [value, label]),
+    [
+      ["claude-fable-5", "Fable 5"],
+      ["claude-sonnet-5", "Sonnet 5"],
+      ["claude-sonnet-4-6", "Sonnet 4.6"],
+      ["claude-opus-4-8", "Opus 4.8"],
+      ["claude-opus-4-7", "Opus 4.7"],
+      ["claude-opus-4-6", "Opus 4.6"],
+      ["claude-haiku-4-5", "Haiku 4.5"]
+    ],
+    "Claude CLI exposes every current or still-available concrete model with concise labels"
+  );
+  assert.deepEqual(
+    cliReasoningEffortOptionsFor("codex-cli", "gpt-5.6-sol")?.map(({ value }) => value),
+    ["low", "medium", "high", "xhigh", "max", "ultra"]
+  );
+  assert.deepEqual(
+    cliReasoningEffortOptionsFor("codex-cli", "gpt-5.6-luna")?.map(({ value }) => value),
+    ["low", "medium", "high", "xhigh", "max"]
+  );
+
+  const defaults = resolveProviderRequest({});
+  assert.equal(defaults.provider, "claude-cli");
+  assert.equal(defaults.model, "claude-sonnet-5", "headless Claude CLI uses a current concrete installed model id");
+  process.env.AI_MODEL = "headless-model-override";
+  assert.equal(
+    resolveProviderRequest({}).model,
+    "headless-model-override",
+    "AI_MODEL overrides actual dispatch on the documented headless/default path"
+  );
+  assert.equal(
+    resolveProviderRequest({ provider: "claude-cli" }).model,
+    "claude-sonnet-5",
+    "an explicit provider uses its provider-specific default instead of a global headless override"
+  );
+  delete process.env.AI_MODEL;
+
   assert.throws(
     () => resolveProviderRequest({ provider: "opneai", model: "gpt-test" }),
     /Unknown AI provider/,
     "an explicit provider typo must not silently become OpenAI"
+  );
+  assert.throws(
+    () => resolveProviderRequest({ provider: "claude-cli", model: "x".repeat(81) }),
+    /Model name is too long/,
+    "model ids are rejected rather than silently truncated"
   );
 
   process.env.OPENAI_API_KEY = "openai-only-test-key";
@@ -41,11 +100,13 @@ try {
     /Add an API key/,
     "OPENAI_API_KEY must not authenticate Anthropic"
   );
-  assert.throws(
-    () => resolveProviderRequest({ provider: "openrouter", model: "model-test" }),
-    /Add an API key/,
-    "OPENAI_API_KEY must not authenticate OpenRouter"
-  );
+  for (const removed of ["gemini", "openrouter", "groq", "together", "mistral", "local", "openai-compatible"]) {
+    assert.throws(
+      () => resolveProviderRequest({ provider: removed, model: "model-test" }),
+      /Unknown AI provider/,
+      `${removed} must stay unavailable until it has a supported, verified adapter`
+    );
+  }
 
   const review = resolveReviewOnlyProviderRequest({
     provider: "openai",
@@ -58,24 +119,6 @@ try {
   assert.equal(review.provider, "claude-cli", "review-only resolves the audit namespace directly");
   assert.equal(review.model, "claude-test");
 
-  const local = resolveProviderRequest({
-    provider: "local",
-    apiKey: "",
-    apiBaseUrl: "http://127.0.0.1:11434/v1",
-    model: "llama-test"
-  });
-  assert.equal(local.apiKey, "", "loopback local inference may omit a key and never inherits OPENAI_API_KEY");
-  assert.throws(
-    () => resolveProviderRequest({
-      provider: "local",
-      apiKey: "",
-      apiBaseUrl: "https://models.example/v1",
-      model: "llama-test"
-    }),
-    /Add an API key/,
-    "a remote compatible endpoint still requires a key"
-  );
-  assert.deepEqual(buildOpenAiCompatibleHeaders(""), { "Content-Type": "application/json" });
   delete process.env.OPENAI_API_KEY;
 
   process.env.AI_PROVIDER = "opneai";
@@ -94,15 +137,54 @@ try {
       headers: { "Content-Type": "application/json" }
     });
   };
+  const requestController = new AbortController();
   const parsed = await callOpenAiResponsesWithFetch({
     apiKey: "test-key",
     model: "gpt-test",
     systemPrompt: "system",
-    userPrompt: "user"
+    userPrompt: "user",
+    signal: requestController.signal
   }, fakeFetch);
   assert.deepEqual(parsed, { ok: true });
   assert.equal(captured.input, "https://api.openai.com/v1/responses");
+  assert.equal(captured.init.signal, requestController.signal, "request cancellation reaches hosted-provider fetch");
   assert.equal(JSON.parse(captured.init.body).store, false, "Responses requests opt out of storage");
+
+  for (const [upstreamStatus, expectedStatus] of [
+    [401, 401], [403, 401], [429, 429], [408, 504], [504, 504],
+    [413, 413], [400, 400], [404, 400], [500, 502]
+  ]) {
+    await assert.rejects(
+      () => callOpenAiResponsesWithFetch({
+        apiKey: "test-key", model: "gpt-test", systemPrompt: "system", userPrompt: "user"
+      }, async () => new Response(JSON.stringify({ error: { code: "synthetic", type: "probe" } }), {
+        status: upstreamStatus,
+        headers: { "Content-Type": "application/json" }
+      })),
+      (error) => error?.status === expectedStatus,
+      `upstream ${upstreamStatus} maps to safe local ${expectedStatus}`
+    );
+  }
+  await assert.rejects(
+    () => callOpenAiResponsesWithFetch({
+      apiKey: "test-key", model: "gpt-test", systemPrompt: "system", userPrompt: "user"
+    }, async () => new Response("x".repeat(2_000_001), {
+      status: 200,
+      headers: { "Content-Type": "application/json" }
+    })),
+    /too much data/,
+    "hosted-provider response bodies are byte-bounded"
+  );
+
+  const sonnetBody = buildAnthropicMessagesBody({
+    model: "claude-sonnet-5",
+    systemPrompt: "system",
+    userPrompt: "user"
+  });
+  assert.deepEqual(sonnetBody.thinking, { type: "disabled" }, "Sonnet 5 preserves bounded no-thinking behavior explicitly");
+  assert.equal("temperature" in sonnetBody, false, "Claude requests omit unsupported sampling parameters");
+  const fableBody = buildAnthropicMessagesBody({ model: "claude-fable-5", systemPrompt: "system", userPrompt: "user" });
+  assert.equal("thinking" in fableBody, false, "models with always-on adaptive thinking are not sent an invalid disable flag");
 
   const claude = buildClaudeCliArgs({ model: "claude-test", reasoningEffort: "low", systemPrompt: "system" });
   assert(claude.includes("--no-session-persistence"));
@@ -116,8 +198,10 @@ try {
   }
   assert.equal(codex[codex.indexOf("-C") + 1], "/tmp/rolefit-test");
 
-  const agy = buildAntigravityCliArgs({ model: "Gemini Test" });
+  const agy = buildAntigravityCliArgs({ model: "Gemini Test", userPrompt: "Return JSON" });
   assert(agy.includes("--sandbox"), "Antigravity runs with terminal restrictions");
+  assert.equal(agy[agy.indexOf("-p") + 1], "Return JSON", "Antigravity receives the print prompt as -p's required value");
+  assert.equal(agy[agy.indexOf("--print-timeout") + 1], "230s", "Antigravity has an internal timeout below the server timeout");
 
   const normalizedQuestions = normalizeApplicationQuestions([
     "x".repeat(1_000),
@@ -138,6 +222,165 @@ try {
   assert.throws(
     () => assertUsableApplicationAnswerOutput([], true, [], []),
     /usable role descriptions/
+  );
+
+  const boundAnswers = bindApplicationAnswers(
+    [{ questionId: "question-1", question: "Why this role?", answer: "I built Python APIs that match the role's backend focus." }],
+    ["Why this role?"],
+    "This role needs Python backend APIs.",
+    "Built Python APIs for internal services."
+  );
+  assert.equal(boundAnswers[0].question, "Why this role?");
+  assert.throws(
+    () => bindApplicationAnswers(
+      [{
+        questionId: "question-1",
+        question: "Why this role?",
+        answer: "I would bring Salesforce administration alongside my Python background."
+      }],
+      ["Why this role?"],
+      "This role needs Python backend APIs.",
+      "Built Python APIs for internal services."
+    ),
+    /unsupported claim/,
+    "a curated technology absent from both the JD and candidate evidence is withheld"
+  );
+  assert.throws(
+    () => bindApplicationAnswers(
+      [{
+        questionId: "question-1",
+        question: "Why this role?",
+        answer: "I led a platform redesign at FabricatedCorp and would bring that experience here."
+      }],
+      ["Why this role?"],
+      "Acme needs Python backend API experience.",
+      "Built Python APIs for internal services."
+    ),
+    /unsupported claim/,
+    "an invented mid-sentence employer proper name is withheld"
+  );
+  assert.throws(
+    () => bindApplicationAnswers(
+      [{
+        questionId: "question-1",
+        question: "Why this role?",
+        answer: "Fabricated led a platform redesign."
+      }],
+      ["Why this role?"],
+      "Acme needs Python backend API experience.",
+      "Built Python APIs for internal services."
+    ),
+    /unsupported claim/,
+    "an unsupported single TitleCase company used as the sentence subject is withheld"
+  );
+  const targetCompanyAnswer = bindApplicationAnswers(
+    [{
+      questionId: "question-1",
+      question: "Why Acme?",
+      answer: "Acme interests me because the role matches my Python API experience."
+    }],
+    ["Why Acme?"],
+    "Acme needs Python backend API experience.",
+    "Built Python APIs for internal services."
+  );
+  assert.equal(
+    targetCompanyAnswer[0].answer,
+    "Acme interests me because the role matches my Python API experience.",
+    "a target company grounded in the JD remains valid, including at sentence start"
+  );
+  const placeholderAnswer = bindApplicationAnswers(
+    [{
+      questionId: "question-1",
+      question: "Why Acme?",
+      answer: "I am interested in this role. [add: Your specific reason for Acme]"
+    }],
+    ["Why Acme?"],
+    "Acme needs Python backend API experience.",
+    "Built Python APIs for internal services."
+  );
+  assert.equal(
+    placeholderAnswer[0].answer,
+    "I am interested in this role. [add: Your specific reason for Acme]",
+    "prompt-required placeholder contents are not treated as factual proper-name claims"
+  );
+  const grammaticalStarters = bindApplicationAnswers(
+    [
+      {
+        questionId: "question-1",
+        question: "Summarize your experience.",
+        answer: "Over the past several years, I built Python APIs."
+      },
+      {
+        questionId: "question-2",
+        question: "What else should we know?",
+        answer: "Additionally, I built Python APIs for internal services."
+      }
+    ],
+    ["Summarize your experience.", "What else should we know?"],
+    "Acme needs Python backend API experience.",
+    "Built Python APIs for internal services over several years."
+  );
+  assert.deepEqual(
+    grammaticalStarters.map(({ answer }) => answer),
+    [
+      "Over the past several years, I built Python APIs.",
+      "Additionally, I built Python APIs for internal services."
+    ],
+    "ordinary sentence-leading transitions are not misclassified as proper names"
+  );
+  assert.throws(
+    () => bindApplicationAnswers(
+      [
+        { questionId: "question-2", question: "Why this company?", answer: "Second answer" },
+        { questionId: "question-1", question: "Why this role?", answer: "First answer" }
+      ],
+      ["Why this role?", "Why this company?"],
+      "Backend role at Acme.",
+      "Backend experience."
+    ),
+    /usable application answers/,
+    "reordered answer objects fail instead of being assigned by array index"
+  );
+  assert.throws(
+    () => bindApplicationAnswers(
+      [
+        { questionId: "question-1", question: "Why this role?", answer: "First answer" },
+        { questionId: "question-1", question: "Why this company?", answer: "Duplicate id answer" }
+      ],
+      ["Why this role?", "Why this company?"],
+      "Backend role at Acme.",
+      "Backend experience."
+    ),
+    /usable application answers/,
+    "duplicate answer ids fail closed"
+  );
+
+  const roleResume = `EXPERIENCE
+Software Engineer | Acme | 2022 - Present
+- Built React interfaces for patient scheduling.
+Platform Engineer | Beta | 2020 - 2022
+- Deployed Kubernetes services for production.`;
+  const roles = normalizeApplicationRoleEvidence([
+    { label: "Software Engineer | Acme | 2022 - Present", bullets: ["Built React interfaces for patient scheduling."] },
+    { label: "Platform Engineer | Beta | 2020 - 2022", bullets: ["Deployed Kubernetes services for production."] },
+    { label: "Invented Role | Fabricated Corp", bullets: ["Made things up."] }
+  ], roleResume);
+  assert.deepEqual(roles.map(({ id, label }) => ({ id, label })), [
+    { id: "role-1", label: "Software Engineer | Acme | 2022 - Present" },
+    { id: "role-2", label: "Platform Engineer | Beta | 2020 - 2022" }
+  ], "role evidence is resume-grounded and receives server-owned ids");
+  const roleDescriptions = bindApplicationRoleDescriptions([
+    { roleId: "role-1", description: "Built React interfaces for patient scheduling." },
+    { roleId: "role-2", description: "Deployed Kubernetes services for production." }
+  ], roles, "React and Kubernetes experience preferred.");
+  assert.equal(roleDescriptions[0].role, "Software Engineer | Acme | 2022 - Present");
+  assert.throws(
+    () => bindApplicationRoleDescriptions([
+      { roleId: "role-1", description: "Built Kubernetes services for production." },
+      { roleId: "role-2", description: "Deployed Kubernetes services for production." }
+    ], roles, "Kubernetes experience preferred."),
+    /unsupported claim/,
+    "a technology grounded under another employer cannot move into this role description"
   );
 
   console.log("provider/CLI contracts: PASS");

@@ -313,9 +313,12 @@ const CONTENT_REENTRY_HEADING: RegExp[] = [
 // workaround with a lookbehind/lookahead that avoids \w on either side.
 // Fix #14: Added Flask, FastAPI, Vue, Elasticsearch, Express.js, HTML, CSS
 const TECH_KEYWORDS: Array<[string, RegExp]> = [
-  ["JavaScript", /\bjavascript\b|\bjs\b/i],
+  // Standalone "JS" only: the ".js" suffix in Next.js must not fabricate a
+  // separate JavaScript requirement.
+  ["JavaScript", /\bjavascript\b|(?:^|[^a-z0-9.])js\b/i],
   ["TypeScript", /\btypescript\b/i],
   ["React", /\breact(?:\.js|js)?\b/i],
+  ["Next.js", /\bnext(?:\.js|js)\b/i],
   ["Node.js", /\bnode(?:\.js|js)?\b/i],
   ["Python", /\bpython\b/i],
   ["Java", /\bjava\b/i],
@@ -355,7 +358,10 @@ const TECH_KEYWORDS: Array<[string, RegExp]> = [
   ["Git", /\bgit\b|\bgithub\b|\bgitlab\b/i],
   ["Agile", /\bagile\b|\bscrum\b/i],
   ["Machine learning", /\bmachine learning\b|\bml\b/i],
-  ["AI", /\bai\b|\bartificial intelligence\b|\bllm\b|\blarge language models?\b/i],
+  // LLM experience is narrower than generic AI work. Keep separate labels so
+  // the review backstop cannot use an "AI" product name as proof of LLM usage.
+  ["LLMs", /\bllms?\b|\blarge language models?\b/i],
+  ["AI", /\bai\b|\bartificial intelligence\b/i],
   ["Data structures", /\bdata structures?\b/i],
   ["Algorithms", /\balgorithms?\b/i],
   // Fix(JD-test): broaden language/framework/data-tool coverage. Appended at the
@@ -2031,6 +2037,15 @@ function extractQualifications(lines: string[]) {
   };
 }
 
+// Shared, conservative technology recognizer for distilled job metadata and
+// the AI review's exact-term cross-check. Keeping one catalog prevents the
+// distiller, reviewer prompt, and coverage backstop from disagreeing about
+// whether a concrete technology name is present.
+export function extractKnownTechKeywords(source: unknown): string[] {
+  const text = String(source ?? "");
+  return TECH_KEYWORDS.filter(([, re]) => re.test(text)).map(([label]) => label);
+}
+
 function extractTechKeywords(lines: string[], tracking: ExtractedJobTracking): string[] {
   const source = [
     tracking.title,
@@ -2042,7 +2057,7 @@ function extractTechKeywords(lines: string[], tracking: ExtractedJobTracking): s
   // Fix(JD-test): cap raised 14→18 so the broadened keyword set (Salesforce +
   // Rust/Kotlin/Terraform/… appended below the common keywords) can still surface
   // a posting's central tech instead of being crowded out by the top-14.
-  return TECH_KEYWORDS.filter(([, re]) => re.test(source)).map(([label]) => label).slice(0, 18);
+  return extractKnownTechKeywords(source).slice(0, 18);
 }
 
 // Fix #15: years regex must handle en/em dashes, and only count when within

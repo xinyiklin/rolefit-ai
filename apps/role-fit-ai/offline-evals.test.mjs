@@ -1,13 +1,14 @@
-// Repo-wide offline regression gate — the suite `npm test` runs.
+// RoleFit offline regression gate — the app workspace test runs it.
 //
-//   npm test
-//   node --test offline-evals.test.mjs
+//   npm test --workspace apps/role-fit-ai       (from the repository root)
+//   node --test offline-evals.test.mjs          (from this app directory)
 //
 // It auto-discovers every deterministic, offline eval/probe under any
-// `__evals__` directory in the repo and runs each as a child process, asserting
-// exit 0 (every eval already exits non-zero on a failed case). A new offline
-// eval — or a whole new `__evals__` directory — is gated automatically; no edit
-// here is needed to add one.
+// `__evals__` directory in the RoleFit app and runs each as a child process,
+// asserting exit 0 (every eval already exits non-zero on a failed case). A new
+// offline eval — or a whole new `__evals__` directory — is gated automatically;
+// no edit here is needed to add one. Shared package evals belong to their own
+// workspace scripts and are included by the root `npm test` fan-out.
 //
 // Design: black-box subprocess per eval, NOT in-process import. The evals use
 // several internal styles (a `checks` array, inline node:assert, custom

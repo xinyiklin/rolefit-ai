@@ -14,7 +14,7 @@
 //
 // Usage:
 //   node server/ai/__evals__/fabrication-eval.mjs
-//   EVAL_PROVIDER=codex-cli EVAL_MODEL=gpt-5.5 node server/ai/__evals__/fabrication-eval.mjs
+//   EVAL_PROVIDER=codex-cli EVAL_MODEL=gpt-5.6-sol node server/ai/__evals__/fabrication-eval.mjs
 //   EVAL_MODE=polish node server/ai/__evals__/fabrication-eval.mjs   # default: strict
 //   EVAL_MODE=both node server/ai/__evals__/fabrication-eval.mjs     # strict + polish
 //

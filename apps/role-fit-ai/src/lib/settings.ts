@@ -8,25 +8,19 @@ import { CITIZENSHIP_OPTIONS, type CitizenshipStatus } from "./candidateFacts";
 export type PersistedSettings = {
   aiProvider?: AiProviderValue;
   selectedModel?: string;
-  customModel?: string;
   cliReasoningEffort?: string;
-  apiBaseUrl?: string;
   // Independent reviewer for the strict-audit pass — its own concrete provider
   // config (synced via the copy buttons, not a live link). The reviewer API key,
   // like the primary key, is never persisted.
   auditProvider?: AiProviderValue;
   auditSelectedModel?: string;
-  auditCustomModel?: string;
   auditCliReasoningEffort?: string;
-  auditApiBaseUrl?: string;
   // Independent distiller for the /api/distill pass — its own concrete provider
   // config (synced to other stages via the copy buttons, not a live link). The
   // distill API key, like the primary and reviewer keys, is never persisted.
   distillProvider?: AiProviderValue;
   distillSelectedModel?: string;
-  distillCustomModel?: string;
   distillCliReasoningEffort?: string;
-  distillApiBaseUrl?: string;
   // Per-section expand/collapse state for the AI menu (Distill / Tailor / Review).
   sectionOpen?: { distill?: boolean; tailor?: boolean; review?: boolean };
   honestContext?: string;
@@ -74,7 +68,7 @@ function coerce(settings: PersistedSettings): PersistedSettings {
       delete bag[modelKey];
       delete bag[effortKey];
     }
-    if (bag[providerKey] && bag[modelKey] !== undefined && bag[modelKey] !== "custom") {
+    if (bag[providerKey] && bag[modelKey] !== undefined) {
       const models = modelOptionsByProvider[bag[providerKey] as AiProviderValue] ?? [];
       if (!models.some((model) => model.value === bag[modelKey])) {
         // Fall back to the provider's own default rather than a stale cross-provider id.

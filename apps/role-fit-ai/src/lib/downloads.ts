@@ -1,27 +1,6 @@
-export function arrayBufferToBase64(buffer: ArrayBuffer) {
-  let binary = "";
-  const bytes = new Uint8Array(buffer);
-  const chunkSize = 0x8000;
-  for (let index = 0; index < bytes.length; index += chunkSize) {
-    binary += String.fromCharCode(...bytes.subarray(index, index + chunkSize));
-  }
-  return window.btoa(binary);
-}
-
-export function downloadBlob(blob: Blob, fileName: string) {
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = fileName;
-  document.body.append(link);
-  link.click();
-  link.remove();
-  // Defer revoke so Gecko (Firefox) can start reading the blob from the object
-  // URL after the click event finishes. Revoking in the same synchronous tick
-  // races that fetch and can cancel the download or produce a 0-byte file.
-  // Behavior-preserving in Chromium, which queues the download before returning.
-  setTimeout(() => URL.revokeObjectURL(url), 0);
-}
+// downloadBlob lives in the shared engine (@typeset/engine/lib/download.ts) —
+// import it from there. This file keeps only the RoleFit-specific naming and
+// text-scanning helpers below.
 
 // Pull the applicant's name from a resume's plain text so downloads can be named
 // after the person. Scans the first lines and takes the first "First Last"
@@ -42,6 +21,10 @@ export function extractApplicantName(text: string): string {
   return "";
 }
 
+export function resolveResumeApplicantName(structuredName: string | null | undefined, resumeText: string): string {
+  return (structuredName ?? "").replace(/<\/?[a-z]+>/gi, "").trim() || extractApplicantName(resumeText);
+}
+
 // Filesystem-safe slug: keep letters/digits, collapse the rest to underscores.
 // Internal to buildResumeFileName below.
 function slugForFile(value: string): string {
@@ -52,11 +35,37 @@ function slugForFile(value: string): string {
     .slice(0, 60);
 }
 
-// Download name: Name_Company_Resume.ext, degrading to Name_Resume, then Resume.
-export function buildResumeFileName(name: string, company: string, ext: string): string {
+// Shared document identity: Name_Company_Resume, degrading to Name_Resume,
+// Company_Resume, then Resume. The editable header and both download formats
+// use this same base so the title never disagrees with the exported file.
+export function buildResumeDocumentTitle(name: string, company: string): string {
   const parts = [slugForFile(name), slugForFile(company)].filter(Boolean);
   parts.push("Resume");
-  return `${parts.join("_")}.${ext}`;
+  return parts.join("_");
+}
+
+export function buildResumeFileName(name: string, company: string, ext: string): string {
+  return `${buildResumeDocumentTitle(name, company)}.${ext}`;
+}
+
+// Job intake and workspace resume loading are independent async paths. When
+// the company arrives first, the initial automatic title is Company_Resume.
+// Complete that title once the applicant name arrives, but preserve anything
+// the user has edited to a non-automatic value.
+export function completeAutoResumeDocumentTitle(
+  currentTitle: string,
+  name: string,
+  company: string,
+  placeholderTitle: string
+): string {
+  if (!name.trim() || !company.trim()) return currentTitle;
+  const automaticTitles = new Set([
+    placeholderTitle,
+    "Resume",
+    buildResumeDocumentTitle(name, ""),
+    buildResumeDocumentTitle("", company)
+  ]);
+  return automaticTitles.has(currentTitle) ? buildResumeDocumentTitle(name, company) : currentTitle;
 }
 
 // Sanitize a user-typed file name into a safe base (extension excluded): the

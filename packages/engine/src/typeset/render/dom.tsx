@@ -192,11 +192,13 @@ type RuleBox = (yAbs: number, thickness: number, lineTop: number) => { top: stri
 function PageLines({
   page,
   unit,
-  ruleBox
+  ruleBox,
+  highlightFieldKey
 }: {
   page: LayoutPage;
   unit: Unit;
   ruleBox: RuleBox;
+  highlightFieldKey?: string | null;
 }) {
   return (
     <>
@@ -220,6 +222,7 @@ function PageLines({
               const box = faceBox(seg.family, seg.face);
               const font = fontFace(seg.family, seg.face);
               const key = seg.src ? fieldKey(seg.src) : undefined;
+              const highlighted = Boolean(key && key === highlightFieldKey && !seg.marker);
               const style: React.CSSProperties = {
                 position: "absolute",
                 left: unit(seg.x),
@@ -252,6 +255,7 @@ function PageLines({
                         target="_blank"
                         rel="noreferrer"
                         data-tsdf={key}
+                        className={highlighted ? "tsd-run--highlighted" : undefined}
                         style={{ ...style, color: "#000", textDecoration: "none" }}
                       >
                         {seg.text}
@@ -260,6 +264,7 @@ function PageLines({
                       <span
                         data-tsdf={key}
                         data-tsdm={seg.marker ? "1" : undefined}
+                        className={highlighted ? "tsd-run--highlighted" : undefined}
                         style={style}
                       >
                         {seg.text}
@@ -284,6 +289,7 @@ function PageLines({
                   key={si}
                   data-tsdf={key}
                   data-tsdm={seg.marker ? "1" : undefined}
+                  className={highlighted ? "tsd-run--highlighted" : undefined}
                   style={style}
                 >
                   {seg.text}
@@ -323,7 +329,8 @@ export function TypesetDomPages({
   editable = false,
   spellCheck = false,
   hostRef,
-  onDoc
+  onDoc,
+  highlightFieldKey
 }: {
   schema: TypesetSchema;
   docStyle: DocumentStyle;
@@ -337,6 +344,9 @@ export function TypesetDomPages({
   spellCheck?: boolean;
   hostRef?: React.Ref<HTMLDivElement>;
   onDoc?: (doc: LayoutDocument) => void;
+  // Transient render flag: paint this field's runs with tsd-run--highlighted
+  // (the host styles the class). Not document state; never affects layout.
+  highlightFieldKey?: string | null;
 }) {
   const family = documentFontFamily(docStyle.fontFamily);
   const [loadedFamily, setLoadedFamily] = useState<DocumentFontFamily | null>(null);
@@ -430,7 +440,7 @@ export function TypesetDomPages({
           aria-label={`Resume page ${i + 1}`}
           style={{ position: "relative", overflow: "hidden", width: unit(PAGE_WIDTH_BP), height: unit(PAGE_HEIGHT_BP) }}
         >
-          <PageLines page={page} unit={unit} ruleBox={ruleBox} />
+          <PageLines page={page} unit={unit} ruleBox={ruleBox} highlightFieldKey={highlightFieldKey} />
         </div>
       ))}
     </div>

@@ -1,13 +1,4 @@
-export type ResumeScore = {
-  overall: number;
-  keywordFit: number;
-  bulletQuality: number;
-  structure: number;
-  concision: number;
-  seniority: number;
-};
-
-// AI-judged fit on the same 0-100 scale as the local engine, scoring the
+// AI-judged fit on a 0-100 scale, scoring the
 // original (base) resume and the tailored rewrite against one job in a single
 // call so the lift between them is directly comparable. Populated only when an
 // AI polish/strict review runs.
@@ -26,12 +17,10 @@ export type MissingRequiredSkill = {
   reason: string;
 };
 
-// A base/tailored comparison restored from a saved pipeline snapshot. We no
-// longer hold the original base resume to recompute locally, so the numbers and
-// their provenance ("ai" vs. "local") are carried through verbatim — a local
-// estimate must not later render as "AI-judged".
+// A base/tailored AI comparison restored from a saved pipeline snapshot. Legacy
+// local estimates are deliberately ignored by the restore path.
 export type SavedFitComparison = {
-  source: "ai" | "local";
+  source: "ai";
   base: number;
   tailored: number;
 };
@@ -122,13 +111,12 @@ export type DroppedSuggestions = {
 export type PolishedResume = {
   polishedText: string;
   coverLetterText?: string;
-  source?: "ai" | "local";
-  score: ResumeScore;
+  source?: "ai";
   aiScore?: AiFitScore;
   savedFit?: SavedFitComparison;
   missingKeywords: string[];
   // 1-3 bullets from the AI describing what changed (or why nothing needed
-  // changing). Absent on local-engine results (which still produce strengths/fixes).
+  // changing). Absent when no Tailor pass ran.
   changeSummary?: string[];
   missingRequiredSkills?: MissingRequiredSkill[];
   suggestedChanges?: TailorSuggestion[];
@@ -142,7 +130,7 @@ export type PolishedResume = {
   // Server-reported outcome of the strict-review pass: "off" = not requested,
   // "failed" = requested but produced nothing usable (strictReview absent isn't
   // enough to tell those apart), "ok" = strictReview is populated. Absent =
-  // legacy response or a local-fallback result that never called the server.
+  // legacy response or a result that has not run AI Review.
   reviewStatus?: "ok" | "failed" | "off";
 };
 

@@ -2,9 +2,9 @@
 //
 // The engine owns the fonts because they implement its measurement contract:
 // the committed metrics are extracted from these exact files, and the PDF
-// emitter embeds their sfnt siblings. Consumers must serve them at /fonts/ —
-// fontRegistry's assetPath and the @font-face rules both hardcode that URL —
-// so each app mirrors them into its own static root at predev/prebuild time.
+// emitter embeds their sfnt siblings. Each app mirrors them into public/fonts/
+// at predev/prebuild time. Vite rewrites the CSS URLs for the configured app
+// base, while PDF callers pass that same deployment-aware base explicitly.
 // public/fonts/ is therefore generated output and gitignored; edit the sources
 // under packages/engine/fonts/ (or regenerate them) instead.
 

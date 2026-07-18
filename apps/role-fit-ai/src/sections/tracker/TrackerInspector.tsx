@@ -14,6 +14,7 @@ import {
   nextAction
 } from "../../lib/applicationDisplay";
 import { describeProviderModel } from "../../config/aiOptions";
+import { displayVerdictReason } from "../../lib/verdictReason";
 
 const AI_USAGE_STAGES: { key: string; label: string }[] = [
   { key: "distill", label: "Distill" },
@@ -115,7 +116,9 @@ export function TrackerInspector({
           </span>
         </div>
         <p className="application-detail-score__reason">
-          {selected.review?.verdictReason || "Use Polish to refresh fit, gaps, and interview risks."}
+          {selected.review?.verdictReason
+            ? displayVerdictReason(selected.review.verdictReason)
+            : "Use Polish to refresh fit, gaps, and interview risks."}
         </p>
       </div>
 

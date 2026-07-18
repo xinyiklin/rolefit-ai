@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { AlertCircle, Check, CheckCheck, Clipboard, PlusCircle, Pencil, RotateCcw, X } from "lucide-react";
 import type { PolishedResume, ResumeDiff, StrictReviewRewrite, TailorSuggestion } from "../resumeEngine";
-import type { ResumeData, ResumeEntry } from "../lib/resumeData";
+import type { ResumeData, ResumeEntry } from "@typeset/engine/lib/resumeData.ts";
 import { renderInlineMarks, stripInlineMarks } from "../lib/inlineMarks";
 import type { ResumeEditorActions } from "../hooks/useResumeEditor";
 import type { TailorChangeTarget } from "../resume/types";
 import type { JobConstraint } from "../lib/jobConstraints";
+import { displayVerdictReason } from "../lib/verdictReason";
 
 type BulletTarget = { sectionId: string; entryId: string; bulletId: string };
 
@@ -73,7 +74,7 @@ type SuggestionStatus =
 
 type ReviewActionStatus = {
   label: string;
-  tone: "ready" | "edits" | "evidence" | "stop";
+  tone: "ready" | "edits" | "evidence";
   title: string;
 };
 
@@ -112,13 +113,9 @@ function applySuggestionTarget(actions: ResumeEditorActions, suggestion: TailorS
 function reviewActionStatus(result: PolishedResume, pendingEdits: number): ReviewActionStatus | null {
   const sr = result.strictReview;
   if (!sr) return null;
-  if (sr.verdict === "DON'T APPLY") {
-    return {
-      label: "do not apply",
-      tone: "stop",
-      title: "The reviewer found a hard mismatch or blocker for this role."
-    };
-  }
+  // The verdict pill already says "don't apply". A second action pill with the
+  // same instruction adds no information and produced a visible duplicate.
+  if (sr.verdict === "DON'T APPLY") return null;
 
   const missingEvidence =
     sr.gaps.some((gap) => !gap.canHonestlyAdd && (gap.severity === "BLOCKER" || gap.severity === "HIGH")) ||
@@ -346,7 +343,7 @@ export function ReviewRail({ result, resume, actions, resumeDiff, jobConstraints
     <aside className="review-rail" aria-label="Recruiter review">
       {reviewStale ? (
         <p className="rr-stale-notice" role="status">
-          This review reflects a previous job description — re-Polish to refresh.
+          This review reflects a previous job description. Polish again to refresh it.
         </p>
       ) : null}
       {sr ? (
@@ -361,7 +358,7 @@ export function ReviewRail({ result, resume, actions, resumeDiff, jobConstraints
               </span>
             ) : null}
           </div>
-          <p className="review-rail__reason">{sr.verdictReason}</p>
+          <p className="review-rail__reason">{displayVerdictReason(sr.verdictReason)}</p>
         </>
       ) : (
         <div className={`review-rail__verdict${reviewStale ? " review-rail__verdict--stale" : ""}`}>
@@ -376,7 +373,7 @@ export function ReviewRail({ result, resume, actions, resumeDiff, jobConstraints
             <h3>Before you apply</h3>
           </header>
           <p className="rr-advisory__note">
-            These are the job's conditions, not fit factors — check they work for you.
+            These are the job's conditions, not fit factors. Check that they work for you.
           </p>
           <ul className="rr-advisory__list">
             {jobConstraints.map((c) => (
@@ -412,7 +409,7 @@ export function ReviewRail({ result, resume, actions, resumeDiff, jobConstraints
           precisely then. */}
       {result.droppedSuggestions && result.droppedSuggestions.unsupported > 0 ? (
         <p className="review-rail__note review-rail__note--withheld" role="status">
-          {result.droppedSuggestions.unsupported} AI {result.droppedSuggestions.unsupported === 1 ? "edit was" : "edits were"} withheld — the wording wasn’t supported by your resume or honest context, so the anti-fabrication guardrail dropped {result.droppedSuggestions.unsupported === 1 ? "it" : "them"}. Nothing unverified reached your draft.
+          {result.droppedSuggestions.unsupported} AI {result.droppedSuggestions.unsupported === 1 ? "edit was" : "edits were"} withheld because the wording wasn’t supported by your resume or honest context. Nothing unverified reached your draft.
         </p>
       ) : null}
 
@@ -691,7 +688,7 @@ export function ReviewRail({ result, resume, actions, resumeDiff, jobConstraints
                       <>
                         <span className="rr-edit__state rr-edit__state--stale">
                           <AlertCircle size={12} aria-hidden="true" />
-                          Bullet changed — apply manually
+                          Bullet changed. Apply manually.
                         </span>
                         <button
                           type="button"
@@ -724,7 +721,7 @@ export function ReviewRail({ result, resume, actions, resumeDiff, jobConstraints
               </p>
               <p className="rr-gap__line">
                 <em>{gap.canHonestlyAdd ? "✓ Can honestly add" : "✗ Cannot add"}</em>
-                {gap.suggestedEdit ? ` — ${gap.suggestedEdit}` : ""}
+                {gap.suggestedEdit ? `. ${gap.suggestedEdit}` : ""}
               </p>
               {!gap.canHonestlyAdd && onAddHonestContext ? (
                 <button
@@ -783,7 +780,7 @@ export function ReviewRail({ result, resume, actions, resumeDiff, jobConstraints
               </p>
               <p className="rr-gap__line">
                 <em>{evidenceLabel(item.evidenceType)}</em>
-                {item.reason ? ` — ${item.reason}` : ""}
+                {item.reason ? `. ${item.reason}` : ""}
               </p>
               {onAddHonestContext ? (
                 <button
@@ -819,7 +816,7 @@ export function ReviewRail({ result, resume, actions, resumeDiff, jobConstraints
           <p className="diff-legend">
             <span className="diff-seg diff-seg--added">added</span>
             <span className="diff-seg diff-seg--removed">removed</span>
-            <span>Read every change before exporting — added claims are yours to defend.</span>
+            <span>Read every change before exporting. Added claims are yours to defend.</span>
           </p>
           <div className="diff-inline" role="region" aria-label="Full resume diff, original versus tailored">
             {resumeDiff.segments.length ? (

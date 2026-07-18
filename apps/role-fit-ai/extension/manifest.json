@@ -1,11 +1,11 @@
 {
   "manifest_version": 3,
-  "name": "Role-Fit AI",
+  "name": "RoleFit AI",
   "version": "1.0.0",
-  "description": "Instant fit score and job import for Role-Fit AI — your local resume tailoring assistant.",
+  "description": "Import job postings into RoleFit AI for AI-powered resume tailoring and review.",
   "action": {
     "default_popup": "popup.html",
-    "default_title": "Role-Fit AI",
+    "default_title": "RoleFit AI",
     "default_icon": {
       "16": "icons/icon.svg",
       "32": "icons/icon.svg",

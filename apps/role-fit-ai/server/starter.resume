@@ -1,7 +1,7 @@
 {
-  "format": "rolefit.resume",
-  "version": 1,
-  "data": {
+  "format": "typeset-resume",
+  "schemaVersion": 1,
+  "document": {
     "name": "Your Name",
     "contact": [
       "you@email.com",
@@ -11,51 +11,43 @@
     ],
     "sections": [
       {
-        "id": "section-1",
         "heading": "Education",
         "type": "standard",
         "items": [
           {
-            "id": "entry-2",
             "titleLeft": "University Name",
-            "subtitleLeft": "B.S. in Computer Science",
             "titleRight": "City, State",
+            "subtitleLeft": "B.S. in Computer Science",
             "subtitleRight": "Aug. 2022 -- May 2026",
             "bullets": []
           }
         ]
       },
       {
-        "id": "section-3",
         "heading": "Experience",
         "type": "standard",
         "items": [
           {
-            "id": "entry-4",
             "titleLeft": "Company Name",
-            "subtitleLeft": "Software Engineering Intern",
             "titleRight": "City, State",
+            "subtitleLeft": "Software Engineering Intern",
             "subtitleRight": "Jun. 2025 -- Aug. 2025",
             "bullets": [
               {
-                "id": "bullet-5",
                 "text": "Accomplishment with a metric — what you built, shipped, or improved and by how much."
               },
               {
-                "id": "bullet-6",
                 "text": "Second accomplishment. Keep each bullet to one tight sentence."
               }
             ]
           },
           {
-            "id": "entry-7",
             "titleLeft": "Another Company",
-            "subtitleLeft": "Role Title",
             "titleRight": "Remote",
+            "subtitleLeft": "Role Title",
             "subtitleRight": "Jan. 2025 -- May 2025",
             "bullets": [
               {
-                "id": "bullet-8",
                 "text": "What you owned and what the outcome was."
               }
             ]
@@ -63,36 +55,30 @@
         ]
       },
       {
-        "id": "section-9",
         "heading": "Projects",
         "type": "standard",
         "items": [
           {
-            "id": "entry-10",
             "titleLeft": "<b>Project Name</b>",
-            "subtitleLeft": "<i>React, Node.js, PostgreSQL</i>",
             "titleRight": "",
+            "subtitleLeft": "<i>React, Node.js, PostgreSQL</i>",
             "subtitleRight": "",
             "bullets": [
               {
-                "id": "bullet-11",
                 "text": "One-sentence description of what the project does and your role in building it."
               },
               {
-                "id": "bullet-12",
                 "text": "Technical detail or user impact worth calling out."
               }
             ]
           },
           {
-            "id": "entry-13",
             "titleLeft": "<b>Another Project</b>",
-            "subtitleLeft": "<i>Python, FastAPI</i>",
             "titleRight": "",
+            "subtitleLeft": "<i>Python, FastAPI</i>",
             "subtitleRight": "",
             "bullets": [
               {
-                "id": "bullet-14",
                 "text": "What it does and what you learned or shipped."
               }
             ]
@@ -100,12 +86,10 @@
         ]
       },
       {
-        "id": "section-15",
         "heading": "Technical Skills",
         "type": "skills",
         "items": [
           {
-            "id": "entry-16",
             "titleLeft": "Languages",
             "titleRight": "",
             "subtitleLeft": "Python, TypeScript, JavaScript, SQL, Java",
@@ -113,7 +97,6 @@
             "bullets": []
           },
           {
-            "id": "entry-17",
             "titleLeft": "Frameworks",
             "titleRight": "",
             "subtitleLeft": "React, Node.js, Express, FastAPI",
@@ -121,7 +104,6 @@
             "bullets": []
           },
           {
-            "id": "entry-18",
             "titleLeft": "Tools",
             "titleRight": "",
             "subtitleLeft": "Git, Docker, AWS, PostgreSQL, Redis",
@@ -131,5 +113,35 @@
         ]
       }
     ]
+  },
+  "style": {
+    "fontFamily": "latin-modern",
+    "baseFontSizePt": 10,
+    "letterSpacingPt": 0,
+    "lineHeight": 1.18,
+    "entryIndentPt": 10.8,
+    "entryEndIndentPt": 0,
+    "nameContactGapPt": 0.9962640099626402,
+    "contactGapPt": 18.13200498132005,
+    "headerSectionGapPt": 9.315068493150685,
+    "sectionGapPt": 9.315068493150685,
+    "sectionEntryGapPt": 4.602739726027398,
+    "entryGapPt": 4.602739726027398,
+    "titleSubGapPt": 1.9726027397260275,
+    "headBulletGapPt": 4.602739726027398,
+    "skillsRowGapPt": 0,
+    "bulletGapPt": 2.1917808219178085,
+    "headingCase": "smallcaps",
+    "sectionRule": true,
+    "contactDivider": "|",
+    "headerAlign": "center",
+    "bodyAlign": "left",
+    "headingAlign": "left",
+    "nameSize": "huge",
+    "pageMargins": "normal",
+    "pageMarginTopPt": 36,
+    "pageMarginRightPt": 36,
+    "pageMarginBottomPt": 36,
+    "pageMarginLeftPt": 36
   }
 }

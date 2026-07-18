@@ -13,8 +13,9 @@
  *   - Tab / Shift-Tab are trapped within the card
  *   - Focus is restored to the previously focused element on close
  */
-import { useEffect, useRef, type KeyboardEvent } from "react";
+import { useRef } from "react";
 import type { DialogTone } from "../hooks/useDialog";
+import { useModalFocus } from "@typeset/editor/hooks/useModalFocus.ts";
 
 type ConfirmDialogProps = {
   kind: "confirm" | "alert";
@@ -26,10 +27,6 @@ type ConfirmDialogProps = {
   onConfirm: () => void;
   onCancel: () => void;
 };
-
-// Elements that can receive focus for the trap check.
-const FOCUSABLE_SELECTORS =
-  'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 export function ConfirmDialog({
   kind,
@@ -43,61 +40,12 @@ export function ConfirmDialog({
 }: ConfirmDialogProps) {
   const cardRef = useRef<HTMLDivElement>(null);
   const confirmBtnRef = useRef<HTMLButtonElement>(null);
-  // Remember what was focused before the dialog opened so we can restore it.
-  const previousFocusRef = useRef<Element | null>(null);
-
-  // Capture the currently-focused element and focus the confirm button.
-  useEffect(() => {
-    previousFocusRef.current = document.activeElement;
-    // A small delay lets the portal finish mounting before focusing.
-    const id = setTimeout(() => {
-      confirmBtnRef.current?.focus();
-    }, 16);
-    return () => clearTimeout(id);
-  }, []);
-
-  // Restore focus when the dialog unmounts.
-  useEffect(() => {
-    return () => {
-      if (previousFocusRef.current instanceof HTMLElement) {
-        previousFocusRef.current.focus();
-      }
-    };
-  }, []);
-
-  // Focus trap + Escape handler on keydown.
-  function handleKeyDown(event: KeyboardEvent<HTMLDivElement>) {
-    if (event.key === "Escape") {
-      event.preventDefault();
-      onCancel();
-      return;
-    }
-
-    if (event.key !== "Tab") return;
-
-    const card = cardRef.current;
-    if (!card) return;
-
-    const focusable = Array.from(card.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTORS));
-    if (focusable.length === 0) return;
-
-    const first = focusable[0];
-    const last = focusable[focusable.length - 1];
-
-    if (event.shiftKey) {
-      // Shift+Tab: if at the first element, wrap to last.
-      if (document.activeElement === first) {
-        event.preventDefault();
-        last.focus();
-      }
-    } else {
-      // Tab: if at the last element, wrap to first.
-      if (document.activeElement === last) {
-        event.preventDefault();
-        first.focus();
-      }
-    }
-  }
+  const handleKeyDown = useModalFocus({
+    active: true,
+    containerRef: cardRef,
+    initialFocusRef: confirmBtnRef,
+    onClose: onCancel
+  });
 
   const isDanger = tone === "danger";
 
@@ -109,8 +57,8 @@ export function ConfirmDialog({
       aria-label={title ?? (kind === "confirm" ? "Confirm action" : "Alert")}
       onKeyDown={handleKeyDown}
     >
-      <div className="rename-dialog__backdrop" onClick={onCancel} />
-      <div className="rename-dialog__card" ref={cardRef}>
+      <div className="rename-dialog__backdrop" aria-hidden="true" onMouseDown={onCancel} />
+      <div className="rename-dialog__card" ref={cardRef} tabIndex={-1}>
         {title && (
           <p className="rename-dialog__head">{title}</p>
         )}

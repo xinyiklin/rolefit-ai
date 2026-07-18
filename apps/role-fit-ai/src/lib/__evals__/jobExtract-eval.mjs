@@ -17,7 +17,13 @@ function sectionBody(text, heading, nextHeading) {
   return text.match(new RegExp(heading + ":\\n([\\s\\S]*?)\\n\\n" + nextHeading + ":", "i"))?.[1] ?? "";
 }
 
-const { extractJobPosting } = await loadJobExtract();
+const { extractJobPosting, extractKnownTechKeywords } = await loadJobExtract();
+
+assert.deepEqual(
+  extractKnownTechKeywords("Required: Python, TypeScript, React, Next.js, SQL, AWS, and modern LLMs."),
+  ["TypeScript", "React", "Next.js", "Python", "SQL", "AWS", "LLMs"],
+  "shared technology recognizer keeps the Brellium stack, including Next.js and LLMs"
+);
 
 const americanAirlinesShape = `
 Posting Start Date: 6/9/26

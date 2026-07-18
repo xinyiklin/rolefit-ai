@@ -1,10 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Download, Eye, Minus, Plus, RotateCcw, X } from "lucide-react";
 import { Document, Page, pdfjs } from "react-pdf";
 import "react-pdf/dist/Page/TextLayer.css";
 import "react-pdf/dist/Page/AnnotationLayer.css";
 
-import { downloadBlob } from "../lib/downloads";
+import { downloadBlob } from "@typeset/engine/lib/download.ts";
+import { useModalFocus } from "@typeset/editor/hooks/useModalFocus.ts";
 
 // Use the bundled worker so no extra static-asset config is needed.
 pdfjs.GlobalWorkerOptions.workerSrc = new URL(
@@ -33,7 +34,15 @@ export default function PreviewOverlay({
 }: PreviewOverlayProps) {
   const [numPages, setNumPages] = useState<number | null>(null);
   const [zoomIndex, setZoomIndex] = useState(DEFAULT_ZOOM_INDEX);
+  const chromeRef = useRef<HTMLDivElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
   const zoom = ZOOM_STEPS[zoomIndex];
+  const handleModalKeyDown = useModalFocus({
+    active: isOpen,
+    containerRef: chromeRef,
+    initialFocusRef: closeButtonRef,
+    onClose
+  });
 
   // Reset zoom when a new PDF loads.
   useEffect(() => {
@@ -45,10 +54,6 @@ export default function PreviewOverlay({
   useEffect(() => {
     if (!isOpen) return;
     function onKeyDown(e: KeyboardEvent) {
-      // Stop here so an Escape that dismisses this (topmost) preview doesn't also
-      // reach a modal's window-level Escape handler underneath it. The preview's
-      // listener is on `document`, which bubbles before `window`.
-      if (e.key === "Escape") { e.stopPropagation(); onClose(); return; }
       if (!(e.metaKey || e.ctrlKey) || e.altKey || e.shiftKey) return;
       if (e.key === "=" || e.key === "+") {
         e.preventDefault();
@@ -63,7 +68,7 @@ export default function PreviewOverlay({
     }
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [isOpen, onClose]);
+  }, [isOpen]);
 
   function handleDownload() {
     if (!pdfUrl) return;
@@ -76,10 +81,16 @@ export default function PreviewOverlay({
   if (!isOpen) return null;
 
   return (
-    <div className="preview-overlay" role="dialog" aria-label="Resume PDF preview" aria-modal="true">
-      <div className="preview-overlay__backdrop" onClick={onClose} />
+    <div
+      className="preview-overlay"
+      role="dialog"
+      aria-label="Resume PDF preview"
+      aria-modal="true"
+      onKeyDown={handleModalKeyDown}
+    >
+      <div className="preview-overlay__backdrop" aria-hidden="true" onMouseDown={onClose} />
 
-      <div className="preview-overlay__chrome">
+      <div className="preview-overlay__chrome" ref={chromeRef} tabIndex={-1}>
         <div className="preview-overlay__head">
           <span className="preview-overlay__title">
             <Eye size={14} aria-hidden="true" />
@@ -139,6 +150,7 @@ export default function PreviewOverlay({
             </button>
 
             <button
+              ref={closeButtonRef}
               className="preview-overlay__close"
               type="button"
               onClick={onClose}

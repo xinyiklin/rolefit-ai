@@ -9,7 +9,18 @@
 // the browser: the resume text never leaves the page — only the same font files
 // the app already serves are fetched from the same origin.
 
-import { PDFDocument, PDFName, PDFString, setCharacterSpacing, type PDFFont, type PDFPage, type PDFRef } from "pdf-lib";
+import {
+  PDFArray,
+  PDFDict,
+  PDFDocument,
+  PDFName,
+  PDFStream,
+  PDFString,
+  setCharacterSpacing,
+  type PDFFont,
+  type PDFPage,
+  type PDFRef
+} from "pdf-lib";
 import fontkit from "@pdf-lib/fontkit";
 
 import { DOCUMENT_FONT_FAMILIES, type DocumentFontFamily } from "../fontRegistry.ts";
@@ -34,7 +45,7 @@ const faceKey = (family: DocumentFontFamily, face: FaceName) => `${family}:${fac
 function sfntUrl(family: DocumentFontFamily, face: FaceName, base: string): string {
   const woff2 = DOCUMENT_FONT_FAMILIES[family].faces[face].assetPath; // /fonts/<name>.woff2
   const file = woff2.replace(/^\/fonts\//, "").replace(/\.woff2$/i, `.${SFNT_EXT[family]}`);
-  return `${base}/${file}`;
+  return `${base.replace(/\/+$/, "")}/${file}`;
 }
 
 // Every (family, face) the document actually paints. A resume typically uses one
@@ -53,12 +64,40 @@ function usedFaces(doc: LayoutDocument): Array<{ family: DocumentFontFamily; fac
 
 export type FontBytes = Map<string, Uint8Array>; // faceKey → sfnt bytes
 
-// Browser-side loader: fetch the sfnt files the document needs from the same
-// origin the app already serves fonts from.
-export async function fetchFontBytes(doc: LayoutDocument, base = "/fonts"): Promise<FontBytes> {
+const pdfName = (value: string) => PDFName.of(value);
+
+/**
+ * pdf-lib 1.17.1 checks a legacy `font.cff` marker that @pdf-lib/fontkit 1.1.1
+ * does not expose for OpenType/CFF fonts. It consequently labels the full OTF
+ * program as CIDFontType2 + FontFile2 (TrueType), which tolerant viewers render
+ * but Poppler correctly warns is a type mismatch. Once the font has finished
+ * encoding every run, correct only the PDF resource declarations; the embedded
+ * bytes, glyph ids, widths, and Identity CID-to-GID mapping stay unchanged.
+ */
+async function declareOpenTypeCffFont(pdf: PDFDocument, font: PDFFont): Promise<void> {
+  await font.embed();
+  const root = pdf.context.lookup(font.ref, PDFDict);
+  const descendants = root.lookup(pdfName("DescendantFonts"), PDFArray);
+  const descendant = descendants.lookup(0, PDFDict);
+  const descriptor = descendant.lookup(pdfName("FontDescriptor"), PDFDict);
+  const fontFile = descriptor.get(pdfName("FontFile2"));
+  if (!fontFile) throw new Error("Latin Modern PDF font is missing its embedded OpenType program.");
+  const stream = pdf.context.lookup(fontFile, PDFStream);
+
+  descendant.set(pdfName("Subtype"), pdfName("CIDFontType0"));
+  descriptor.delete(pdfName("FontFile2"));
+  descriptor.set(pdfName("FontFile3"), fontFile);
+  stream.dict.set(pdfName("Subtype"), pdfName("OpenType"));
+}
+
+// Browser-side loader: fetch the sfnt files the document needs from the host's
+// deployment-aware asset base. Requiring the base prevents a shared consumer
+// from silently falling back to the domain root when it is deployed below a
+// path prefix (for example, a GitHub Pages project site).
+export async function fetchFontBytes(doc: LayoutDocument, fontAssetBaseUrl: string): Promise<FontBytes> {
   const entries = await Promise.all(
     usedFaces(doc).map(async ({ family, face }) => {
-      const url = sfntUrl(family, face, base);
+      const url = sfntUrl(family, face, fontAssetBaseUrl);
       const res = await fetch(url);
       if (!res.ok) throw new Error(`font fetch failed: ${url}`);
       return [faceKey(family, face), new Uint8Array(await res.arrayBuffer())] as const;
@@ -153,6 +192,13 @@ export async function emitPdf(
       }
     }
     if (annots.length) setAnnots(page, annots);
+  }
+
+  // Draw calls mark their fonts modified. Embed once after all pages are
+  // painted, then repair the CFF resource declarations so save() preserves the
+  // corrected graph rather than re-embedding the stale pdf-lib form.
+  for (const [key, font] of embedded) {
+    if (key.startsWith("latin-modern:")) await declareOpenTypeCffFont(pdf, font);
   }
   return pdf.save();
 }

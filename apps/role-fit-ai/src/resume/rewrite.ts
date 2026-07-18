@@ -2,8 +2,8 @@
 // strips duplicated contact lines, dedupes SUMMARY/SKILLS sections, and
 // restores section spacing. The deterministic local REWRITE engine that used
 // to live here (polishResume) and the local cover-letter draft were removed by
-// user decision (D011): the only local fallbacks the app keeps are the distill
-// engine and the fit estimate.
+// user decision (D011): the only local fallback the app keeps is the job
+// distiller. Fit scoring and verdicts belong exclusively to AI Review.
 
 import { isBullet, isContactLine, isKnownSection, sectionName } from "./text";
 

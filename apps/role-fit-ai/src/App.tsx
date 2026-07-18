@@ -6,8 +6,21 @@ import {
 } from "./resumeEngine";
 
 import { useDebouncedValue } from "./hooks/useDebouncedValue";
-import { useDocStyle } from "./hooks/useDocStyle";
-import { useEditorPrefs } from "./hooks/useEditorPrefs";
+import { useDocStyle } from "@typeset/editor/hooks/useDocStyle.ts";
+import { FormattingToolbar } from "@typeset/editor/components/toolbar/FormattingToolbar.tsx";
+import {
+  type InlineFormatState,
+  type TypesetEditorHandle
+} from "@typeset/editor/sections/editor/TypesetEditor.tsx";
+import { DOC_PAGE_WIDTH_PX, DOC_STYLE_BOUNDS } from "@typeset/engine/lib/documentStyle.ts";
+import {
+  STYLE_FIELD_MARK_DEFAULTS,
+  globalAlignmentState,
+  styleFieldDefaultSizePt,
+  styleFieldFontStates,
+  styleFieldMarkStates,
+  styleFieldSizeStates
+} from "@typeset/engine/lib/styleFieldFormatting.ts";
 import { useAiSettings } from "./hooks/useAiSettings";
 import { useApplicationAnswers } from "./hooks/useApplicationAnswers";
 import {
@@ -30,12 +43,17 @@ import {
 } from "./hooks/useAutosaveDraft";
 import { useTabPresence } from "./hooks/useTabPresence";
 import { type PresencePhase } from "./lib/tabPresence";
-import { sanitizeFileBase } from "./lib/downloads";
+import {
+  buildResumeDocumentTitle,
+  completeAutoResumeDocumentTitle,
+  resolveResumeApplicantName,
+  sanitizeFileBase
+} from "./lib/downloads";
 import { buildStageRequestFields, type StageId } from "./lib/aiRequest";
 import { useDraggableDock } from "./hooks/useDraggableDock";
 import { buildCandidateFactsContext, mergeHonestContext } from "./lib/candidateFacts";
 import { extractJobPosting, type ExtractedJobTracking } from "./lib/jobExtract";
-import { serializeResumeData } from "./lib/resumeData";
+import { serializeResumeData } from "./lib/resumeText";
 import { defaultTailorModes, type TailorMode } from "./lib/tailorScope";
 import type { StageAiUsage } from "./lib/aiUsage";
 import { useDuplicateGuard } from "./hooks/useDuplicateGuard";
@@ -49,14 +67,14 @@ import { ProviderSection } from "./sections/ProviderSection";
 import { Masthead } from "./sections/Masthead";
 import { JobMenu } from "./sections/JobMenu";
 import { PolishMenu } from "./sections/PolishMenu";
-import { PolishProgress, DistillProgress, TaskProgress } from "./sections/PolishProgress";
-import { SessionsRail } from "./sections/SessionsRail";
+import { AiWorkflowProgress, TaskProgress } from "./sections/AiWorkflowProgress";
+import type { AiWorkflowStage } from "./lib/aiWorkflow";
+import { SessionsMenu } from "./sections/SessionsRail";
 import { ResumeMenu } from "./sections/ResumeMenu";
 import { StudioPane } from "./sections/StudioPane";
 import { ExportMenu } from "./sections/ExportRail";
 import { ApplyDownloadDialog } from "./sections/ApplyDownloadDialog";
-import { ResumePrintLayer } from "./sections/ResumePrintLayer";
-import { ViewportGate } from "./sections/ViewportGate";
+import { ResumePrintLayer } from "@typeset/editor/sections/ResumePrintLayer.tsx";
 import { ResumeTab } from "./sections/tabs/ResumeTab";
 import { MaterialsTab } from "./sections/tabs/MaterialsTab";
 import type { TrackerView } from "./sections/tabs/TrackerTab";
@@ -91,10 +109,32 @@ const STAGE_SECTIONS: { id: StageId; title: string }[] = [
   { id: "review", title: "Review" }
 ];
 
-// The engine's built-in resume layout (there is no template picker anymore —
-// the owned typeset engine renders one style). Recorded on Applications for
-// historical bookkeeping (Application.templateId).
-const RESUME_TEMPLATE_ID = "jakes";
+const EMPTY_INLINE_FORMAT: InlineFormatState = {
+  canFormat: false,
+  bold: false,
+  italic: false,
+  underline: false,
+  fontFamily: null,
+  fontSizePt: null,
+  alignment: null,
+  alignmentScope: null,
+  entryField: null,
+  linkHref: null,
+  linkText: "",
+  linkAutomatic: false,
+  canLink: false,
+  canClearFormatting: false
+};
+
+const DEFAULT_DOCUMENT_TITLE = "Resume";
+const LEGACY_DEFAULT_DOCUMENT_TITLE = "Resume draft";
+const DOCUMENT_TITLE_STORAGE_KEY = "rolefit:documentTitle";
+const OUTPUT_TABS: OutputTabDescriptor[] = [
+  { id: "resume", label: "Resume" },
+  { id: "materials", label: "Materials" },
+  { id: "applications", label: "Applications" },
+  { id: "analytics", label: "Analytics" }
+];
 
 // ============ Types ============
 
@@ -102,6 +142,17 @@ function definedTracking(tracking: ExtractedJobTracking) {
   return Object.fromEntries(
     Object.entries(tracking).filter(([, value]) => value !== undefined && value !== "" && value !== null)
   ) as ExtractedJobTracking;
+}
+
+function documentTitleForJob(tracking: ExtractedJobTracking, applicantName: string): string {
+  const company = (tracking.company || "").trim();
+  return buildResumeDocumentTitle(applicantName, company);
+}
+
+function browserTabTitle(tracking: ExtractedJobTracking): string {
+  const company = (tracking.company || "").trim();
+  const role = (tracking.role || "").trim();
+  return [...(company ? [company] : []), ...(role ? [role] : []), "RoleFit AI"].join(" - ");
 }
 
 // ============ App ============
@@ -127,6 +178,19 @@ function App() {
   const [jobDescription, setJobDescription] = useState("");
   const [jobUrl, setJobUrl] = useState("");
   const [importedJob, setImportedJob] = useState<ImportedJobSnapshot | null>(null);
+  // Tab-local document identity: independent tailoring sessions can name their
+  // drafts independently, and the same title becomes the default PDF/.resume
+  // file name. Successful imports/distills replace it with the new job target.
+  const [documentTitle, setDocumentTitle] = useState(() => {
+    try {
+      const stored = sessionStorage.getItem(DOCUMENT_TITLE_STORAGE_KEY)?.trim();
+      // `Resume draft` was the old generated default, not a user-authored file
+      // contract. Normalize that one known value to the current D075 fallback.
+      return !stored || stored === LEGACY_DEFAULT_DOCUMENT_TITLE ? DEFAULT_DOCUMENT_TITLE : stored;
+    } catch {
+      return DEFAULT_DOCUMENT_TITLE;
+    }
+  });
   // Per-stage AI usage snapshot (distill/tailor/review/cover), captured across
   // the pipeline and snapshotted onto the Application at Apply time. Keys are
   // deleted (not set to "none") when a fresh polish run starts, so a stale
@@ -146,21 +210,21 @@ function App() {
   const [fileError, setFileError] = useState("");
   const [fileStatus, setFileStatus] = useState("");
   const [linkStatus, setLinkStatus] = useState("");
-  // Surfaces polish-flow feedback the user otherwise never sees: AI-failure
-  // reasons (the local fallback still renders) and the pre-flight guards
-  // ("load a resume", "select a section to tailor"). Rendered in an aria-live
-  // banner below the masthead.
+  // Surfaces polish-flow feedback beside the Polish action.
   const [polishStatus, setPolishStatus] = useState("");
+  const polishStatusIsError = /failed|stopped|too little|already tracked|no review attempt|changed/i.test(polishStatus);
   // Holds the imported job's text when an extension import arrives with the "Tailor
   // automatically" toggle on, so the app jumps straight to polish once a resume is
   // ready (no manual click). Scoping to the specific job — not a bare flag — means a
   // later import/paste/edit, or a toggle-OFF import, can never trigger a surprise
   // polish against the wrong posting.
   const [autoTailorJob, setAutoTailorJob] = useState<string | null>(null);
-  // Resume export (PDF / `.resume`) state + handlers live in useResumeExport;
-  // exportStatus stays here because non-export handlers (polish, workspace,
-  // track) write it too.
+  // Export and Apply report to their own local action surfaces instead of a
+  // shared global toast.
   const [exportStatus, setExportStatus] = useState("");
+  const exportStatusIsError = /failed|could not|couldn't|unavailable|load a resume/i.test(exportStatus);
+  const [applyStatus, setApplyStatus] = useState("");
+  const applyStatusIsError = /failed|could not|couldn't/i.test(applyStatus);
   // All auto-saved AI preferences (primary provider/model, the reviewer-override
   // audit* fields, and the polish prefs that persist with them) plus the
   // debounced localStorage write live in useAiSettings. API keys are not
@@ -225,8 +289,8 @@ function App() {
     editedResume,
     dirty: resumeEdited,
     // Free-form hand-edits only (NOT accepting/undoing a reviewed suggestion).
-    // Gates AI fit provenance so applying the AI's own suggestions keeps the
-    // verdict "AI-judged"; arbitrary typing downgrades it to "Estimated".
+    // Gates fit provenance so applying reviewed suggestions keeps the AI score;
+    // arbitrary typing makes it stale until AI Review runs again.
     manualEdited: resumeManuallyEdited,
     canUndo: canUndoResume,
     canRedo: canRedoResume,
@@ -236,7 +300,25 @@ function App() {
     markClean: markResumeClean,
     actions: resumeEditorActions
   } = useResumeEditor();
+  const typesetEditorRef = useRef<TypesetEditorHandle>(null);
+  const [inlineFormat, setInlineFormat] = useState<InlineFormatState>(EMPTY_INLINE_FORMAT);
+  const [linkEditorOpen, setLinkEditorOpen] = useState(false);
   const currentResumeText = serializedResume || result?.polishedText || "";
+
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(DOCUMENT_TITLE_STORAGE_KEY, documentTitle.trim() || DEFAULT_DOCUMENT_TITLE);
+    } catch {
+      // Session storage can be blocked; the in-memory title still works.
+    }
+  }, [documentTitle]);
+
+  const setImportedJobAndDocumentTitle = useCallback((snapshot: ImportedJobSnapshot | null) => {
+    setImportedJob(snapshot);
+    if (!snapshot) return;
+    const applicantName = resolveResumeApplicantName(editedResume?.name, currentResumeText || resumeText);
+    setDocumentTitle(documentTitleForJob(snapshot.tracking, applicantName));
+  }, [currentResumeText, editedResume?.name, resumeText]);
   // Per-section tailoring choice. Off is the implicit default (absent key); the
   // map stores only "tailor"/"include" so the three states are mutually exclusive
   // by construction.
@@ -251,12 +333,40 @@ function App() {
       return next;
     });
   }, []);
-  // User typography for the HTML resume page (Format menu): persisted CSS vars
-  // applied to the editor and the print mirror.
+  // Shared Typeset formatting state. Print-affecting values travel with the
+  // strict .resume file; zoom and spellcheck remain local view preferences.
   const docStyle = useDocStyle();
-  // Editor-only display prefs (e.g. spellcheck underlines) — persisted apart
-  // from docStyle since they never affect the resume output.
-  const editorPrefs = useEditorPrefs();
+  const globalAlignments = useMemo(
+    () => editedResume ? globalAlignmentState(editedResume, docStyle.style) : null,
+    [docStyle.style, editedResume]
+  );
+  const styleMarkStates = useMemo(
+    () => editedResume ? styleFieldMarkStates(editedResume) : undefined,
+    [editedResume]
+  );
+  const styleFontStates = useMemo(
+    () => editedResume ? styleFieldFontStates(editedResume, docStyle.style.fontFamily) : undefined,
+    [docStyle.style.fontFamily, editedResume]
+  );
+  const styleSizeStates = useMemo(
+    () => editedResume ? styleFieldSizeStates(editedResume, docStyle.style.baseFontSizePt) : undefined,
+    [docStyle.style.baseFontSizePt, editedResume]
+  );
+  const fitResumePage = useCallback(() => {
+    const pane = document.querySelector<HTMLElement>(".resume-workbench__editor");
+    if (!pane) return;
+    const styles = window.getComputedStyle(pane);
+    const contentWidth = pane.clientWidth - parseFloat(styles.paddingLeft) - parseFloat(styles.paddingRight);
+    // Clamp to the engine's actual zoom bounds (not a stale hardcoded 0.4)
+    // so Fit can never persist a value the ZoomControl's own min/max can't
+    // re-enter. Both bounds sit on a 2-decimal boundary, so flooring to the
+    // nearest 1% below can't push the result back out of range.
+    const fit = Math.max(
+      DOC_STYLE_BOUNDS.zoom.min,
+      Math.min(DOC_STYLE_BOUNDS.zoom.max, contentWidth / DOC_PAGE_WIDTH_PX)
+    );
+    docStyle.set("zoom", Math.floor(fit * 100) / 100);
+  }, [docStyle]);
 
   // Distill the job once per (description, url, import) instead of on every
   // render. The full extractJobPosting parser is ~1500 LOC; running it in the
@@ -281,6 +391,29 @@ function App() {
       : definedTracking(extractJobPosting(jobDescription, { url: jobUrl }).tracking);
   }, [jobDescription, jobUrl, importedJob]);
 
+  // Keep browser tabs distinguishable when several applications are open.
+  // The shared distilled metadata is authoritative, so imported and manually
+  // entered jobs use the same Company - Role - RoleFit AI format.
+  useEffect(() => {
+    document.title = browserTabTitle(jobTracking);
+    return () => {
+      document.title = "RoleFit AI";
+    };
+  }, [jobTracking.company, jobTracking.role]);
+
+  // The job and workspace resume load independently. If job intake initially
+  // produced Company_Resume, complete it when the structured applicant name
+  // becomes available. Only known automatic fallbacks are eligible, so a title
+  // the user edited remains untouched.
+  useEffect(() => {
+    const applicantName = resolveResumeApplicantName(editedResume?.name, resumeText);
+    const company = (jobTracking.company ?? "").trim();
+    if (!applicantName || !company) return;
+    setDocumentTitle((current) =>
+      completeAutoResumeDocumentTitle(current, applicantName, company, DEFAULT_DOCUMENT_TITLE)
+    );
+  }, [editedResume?.name, jobTracking.company, resumeText]);
+
   // Derive a short job-label for the autosave + cross-tab presence context (role
   // + company only — never the full JD body). Uses the shared `jobTracking` so
   // the label matches the AI-distilled role/company shown elsewhere in the app,
@@ -294,7 +427,7 @@ function App() {
   // Debounced autosave to localStorage whenever the editor has unsaved edits.
   // getJobKeyHash is a lazy closure: duplicateGuard is declared later in this
   // component and is only read inside the debounced write, after mount.
-  useAutosaveDraft({
+  const draftAutosaveState = useAutosaveDraft({
     editedResume,
     dirty: resumeEdited,
     jobLabel: _autosaveJobLabel,
@@ -307,6 +440,7 @@ function App() {
     applications,
     isLoading: isApplicationsLoading,
     error: applicationsError,
+    pendingWrites: pendingApplicationWrites,
     upsert: upsertApplication,
     saveApplication,
     patchApplication,
@@ -344,7 +478,8 @@ function App() {
     dismissAnswersProgress,
     retryAnswers
   } = useApplicationAnswers({
-    resumeText,
+    resumeText: currentResumeText || resumeText,
+    resumeData: editedResume,
     jobDescription,
     jobUrl,
     honestContext: requestHonestContext,
@@ -459,46 +594,39 @@ function App() {
   // The job link has its own field now: the description textarea holds the text
   // we tailor against, while `jobUrl` is optional metadata saved with the
   // application for pipeline tracking only — it is never sent to the model.
+  const resumeReady = (currentResumeText || resumeText).trim().length > 80;
   const canPolish = useMemo(() => {
     return Boolean(
       editedResume &&
+        resumeReady &&
         Object.values(tailorModes).some((mode) => mode === "tailor") &&
         jobDescription.trim().length > 40
     );
-  }, [editedResume, jobDescription, tailorModes]);
+  }, [editedResume, jobDescription, resumeReady, tailorModes]);
 
-  // Debounce the live inputs so per-keystroke synchronous scoring doesn't jank
-  // typing on large resumes. The polished `result` stays immediate.
-  const debouncedResumeText = useDebouncedValue(resumeText);
-  const debouncedJobDescription = useDebouncedValue(jobDescription);
-  // The edited resume is debounced before the heavy match/diff/fit recompute so
-  // typing in the editor stays smooth (the editor preview itself updates live).
+  // The edited resume is debounced before the diff recompute so typing in the
+  // editor stays smooth (the editor preview itself updates live).
   const debouncedCurrentResumeText = useDebouncedValue(currentResumeText);
 
-  // Every score/diff/match derivation the UI shows is pure (read-only) and lives
+  // Every review-score/diff derivation the UI shows is pure (read-only) and lives
   // in useResumeAnalysis, so it stays decoupled from App's setters.
   const {
     resumeDiff,
     fitComparison,
     headlineScore,
-    scoreContext,
-    fitVerdict,
     jobConstraints,
     resultSourceLabel
   } = useResumeAnalysis({
     resumeText,
     jobDescription,
-    debouncedResumeText,
-    debouncedJobDescription,
     debouncedCurrentResumeText,
-    // Gate AI fit provenance on FREE edits only — accepting the AI's reviewed
-    // suggestions keeps the verdict "AI-judged" (it describes that proposal).
+    // Gate AI fit provenance on FREE edits only. Accepting reviewed suggestions
+    // keeps the score attached to the proposal the reviewer judged.
     isEdited: resumeManuallyEdited,
     result
   });
 
   // ----- Derived (non-memo) -----
-  const resumeReady = (currentResumeText || resumeText).trim().length > 80;
   const jobReady = jobDescription.trim().length > 40;
   // Quiet target label for the Materials tab plan rail header.
   // Only derived when a job description is present; never invents content.
@@ -520,17 +648,10 @@ function App() {
     : !editedResume || !Object.values(tailorModes).some((mode) => mode === "tailor")
     ? "Load a resume and set at least one section to Tailor."
     : "Add more resume text in the Resume menu (a few lines at least).";
-  const outputTabs: OutputTabDescriptor[] = [
-    { id: "resume", label: "Resume" },
-    { id: "materials", label: "Materials" },
-    { id: "applications", label: "Applications" },
-    { id: "analytics", label: "Analytics" }
-  ];
 
   // ----- Resume export (engine PDF / .resume save) -----
   const {
     coverCopied,
-    downloadStatus,
     isRenderingPdf,
     resetStatuses: resetExportStatuses,
     handleCopyCoverLetter,
@@ -542,6 +663,7 @@ function App() {
     result,
     editedResume,
     currentResumeText,
+    documentTitle,
     jobUrl,
     // Name downloads after the same company the application is saved with
     // (distilled from the posting), not just a URL guess. Thunk: currentJobTracking
@@ -563,7 +685,8 @@ function App() {
     isExtractingLink,
     distillProgress,
     distillProgressVisible,
-    setDistillProgressVisible,
+    distillContinuesToPolish,
+    dismissDistillProgress,
     distillRetry,
     handleManualJobDescriptionChange,
     handleExtractFromLink,
@@ -573,7 +696,7 @@ function App() {
     setJobUrl,
     jobDescription,
     setJobDescription,
-    setImportedJob,
+    setImportedJob: setImportedJobAndDocumentTitle,
     setResult,
     applyCoverLetter,
     setPipelineAiUsage,
@@ -581,7 +704,8 @@ function App() {
     setAutoTailorJob,
     setPolishStatus,
     setLinkStatus,
-    duplicateWarnNote: duplicateGuard.duplicateWarnNote,
+    confirmDuplicateBeforeDistill: duplicateGuard.confirmDuplicateBeforeDistill,
+    confirmDuplicateAfterDistill: duplicateGuard.confirmDuplicateAfterDistill,
     distillRequestFields,
     tailorModes,
     editedResume
@@ -622,6 +746,34 @@ function App() {
     confirmDuplicateBeforePolish: duplicateGuard.confirmDuplicateBeforePolish
   });
 
+  const aiWorkflowStages: AiWorkflowStage[] = [];
+  if (distillProgressVisible) {
+    aiWorkflowStages.push({ key: "distill", state: distillProgress, onRetry: distillRetry });
+  }
+  if (polishProgressVisible || (distillProgressVisible && distillContinuesToPolish)) {
+    if (polishStages !== "review") {
+      aiWorkflowStages.push({
+        key: "tailor",
+        state: polishProgress.tailor,
+        onRetry: () => void retryStage("tailor"),
+        onStop: stopPolish
+      });
+    }
+    if (polishStages !== "tailor") {
+      aiWorkflowStages.push({
+        key: "review",
+        state: polishProgress.review,
+        onRetry: () => void retryStage("review"),
+        onStop: stopPolish
+      });
+    }
+  }
+
+  function dismissAiWorkflow() {
+    dismissDistillProgress();
+    setPolishProgressVisible(false);
+  }
+
   // Cross-tab presence: each browser tab is an independent tailoring session, so
   // we publish this tab's coarse phase (derived from existing flow state — never
   // instrumented into the stage runners) and read back the OTHER live tabs for
@@ -645,7 +797,7 @@ function App() {
   // Apply clears `resumeEdited` (markResumeClean) since the work is then persisted
   // and a copy exported; editing again re-arms it.
   useBeforeUnloadGuard(
-    resumeEdited || isPolishing || distillProgress.status === "running"
+    resumeEdited || isPolishing || distillProgress.status === "running" || pendingApplicationWrites > 0
   );
 
   // ----- Handlers -----
@@ -686,7 +838,8 @@ function App() {
     seedResumeData,
     currentResumeText,
     resumeText,
-    editedResume
+    editedResume,
+    docStyle
   });
 
   // Auto-tailor: when an extension import requested it (toggle on), jump straight to
@@ -712,7 +865,7 @@ function App() {
   function handleAddHonestContext(keyword: string) {
     const alreadyPresent = honestContext.toLowerCase().includes(keyword.toLowerCase());
     if (!alreadyPresent) {
-      const template = `${keyword}: [describe your exact experience — what you did, where, when]`;
+      const template = `${keyword}: [describe your exact experience: what you did, where, and when]`;
       setHonestContext(honestContext ? `${honestContext}\n${template}` : template);
     }
     setPolishMenuOpen(true);
@@ -720,7 +873,7 @@ function App() {
     window.requestAnimationFrame(() => {
       honestContextTextareaRef.current?.focus();
     });
-    setPolishStatus(`Added evidence prompt for "${keyword}" — fill it in, then Polish again.`);
+    setPolishStatus(`Added an evidence prompt for "${keyword}". Fill it in, then Polish again.`);
   }
 
   // Reads the memoized distillation above (apply/export callers run at click time,
@@ -738,6 +891,8 @@ function App() {
     applyMergeTargetRef,
     applyDownloadPrompt,
     setApplyDownloadPrompt,
+    isApplying,
+    applySaveError,
     handleApply,
     handleApplyDownloadPick,
     handleApplyOnly
@@ -749,7 +904,6 @@ function App() {
     currentResumeText,
     resumeText,
     editedResume,
-    selectedTemplateId: RESUME_TEMPLATE_ID,
     coverLetterText,
     headlineScore,
     fitComparison,
@@ -765,7 +919,7 @@ function App() {
     getResumeArtifacts,
     clearAutosaveDraft,
     markResumeClean,
-    setExportStatus,
+    setApplyStatus,
     setActiveOutputTab,
     setExpandedApplicationId
   });
@@ -780,6 +934,11 @@ function App() {
     setJobDescription(app.jobDescription || "");
     setJobUrl(app.jobUrl || "");
     setImportedJob(null);
+    const applicantName = resolveResumeApplicantName(
+      app.resumeData?.name,
+      app.polishedText || currentResumeText || resumeText
+    );
+    setDocumentTitle(documentTitleForJob({ role: app.role, title: app.title, company: app.company }, applicantName));
     // Restore a consistent AI-usage/raw-text pair regardless of which branch
     // below runs — a tracker-restore must not carry over the PREVIOUS working
     // job's provider attribution or raw text.
@@ -802,11 +961,11 @@ function App() {
         ...restoredAnalysis,
         polishedText: restoredResume,
         coverLetterText: app.coverLetterText || undefined,
-        // Restore the saved comparison with its original provenance — never
-        // relabel a local estimate as AI-judged.
+        // Restore only a saved AI comparison. Legacy deterministic estimates
+        // are intentionally ignored and require a fresh AI Review.
         savedFit:
-          typeof app.baseFitScore === "number" && typeof app.tailoredFitScore === "number"
-            ? { source: app.fitScoreSource === "ai" ? "ai" : "local", base: app.baseFitScore, tailored: app.tailoredFitScore }
+          app.fitScoreSource === "ai" && typeof app.baseFitScore === "number" && typeof app.tailoredFitScore === "number"
+            ? { source: "ai", base: app.baseFitScore, tailored: app.tailoredFitScore }
             : undefined,
         missingRequiredSkills: missingRequiredSkillsFromApplication(app)
       });
@@ -897,16 +1056,16 @@ function App() {
     setIsApplicationModalOpen(true);
   }
 
-  function handleSaveApplicationFromModal(application: Application) {
-    saveApplication(application);
-    setExpandedApplicationId(application.id);
+  async function handleSaveApplicationFromModal(application: Application): Promise<boolean> {
+    const saved = await saveApplication(application);
+    if (saved) setExpandedApplicationId(application.id);
+    return saved;
   }
 
   // ----- Render -----
 
   return (
     <div className="app-shell">
-      <ViewportGate />
       <Masthead
         onApply={handleApply}
         applyDisabled={!jobUrl.trim() && !jobDescription.trim()}
@@ -915,6 +1074,12 @@ function App() {
         canPolish={canPolish}
         isPolishing={isPolishing}
         polishHint={polishGateHint}
+        polishStatus={polishStatus}
+        polishStatusIsError={polishStatusIsError}
+        onDismissPolishStatus={() => setPolishStatus("")}
+        applyStatus={applyStatus}
+        applyStatusIsError={applyStatusIsError}
+        onDismissApplyStatus={() => setApplyStatus("")}
         resumeControl={
           <ResumeMenu
             baseResumeName={baseResumeName}
@@ -989,21 +1154,10 @@ function App() {
             honestContextRef={honestContextTextareaRef}
           />
         }
+        sessionsControl={
+          <SessionsMenu self={{ jobLabel: _autosaveJobLabel, phase: _myPhase }} others={otherSessions} />
+        }
       />
-
-      {polishStatus ? (
-        <div className="polish-toast" role="status" aria-live="polite">
-          <span className="polish-toast__text">{polishStatus}</span>
-          <button
-            type="button"
-            className="polish-toast__dismiss"
-            onClick={() => setPolishStatus("")}
-            aria-label="Dismiss message"
-          >
-            ×
-          </button>
-        </div>
-      ) : null}
 
       {polishProgressVisible ||
       distillProgressVisible ||
@@ -1015,27 +1169,11 @@ function App() {
           onPointerDown={dock.onPointerDown}
           aria-label="Task progress"
         >
-          {/* Distill renders first (top): in the normal flow the job is
-              distilled before it's tailored, so top-to-bottom mirrors the order
-              the steps actually ran. Polish (Tailor→Review), then the on-demand
-              cover/answers, follow. */}
-          {distillProgressVisible ? (
-            <DistillProgress
-              state={distillProgress}
-              onRetry={distillRetry}
-              onDismiss={() => setDistillProgressVisible(false)}
-            />
-          ) : null}
-          {polishProgressVisible ? (
-            <PolishProgress
-              stages={polishStages}
-              progress={polishProgress}
-              onRetry={retryStage}
-              onStop={stopPolish}
-              onDismiss={() => setPolishProgressVisible(false)}
-              busy={isPolishing}
-            />
-          ) : null}
+          <AiWorkflowProgress
+            stages={aiWorkflowStages}
+            onDismiss={dismissAiWorkflow}
+            busy={isExtractingLink || isPolishing}
+          />
           <TaskProgress
             stageKey="cover"
             state={coverProgress}
@@ -1055,39 +1193,135 @@ function App() {
         <StudioPane
           activeOutputTab={activeOutputTab}
           setActiveOutputTab={setActiveOutputTab}
-          outputTabs={outputTabs}
-          railFooter={<SessionsRail self={{ jobLabel: _autosaveJobLabel, phase: _myPhase }} others={otherSessions} />}
+          outputTabs={OUTPUT_TABS}
           overlay={
-            <Suspense fallback={null}>
-              {/* Saved-application resume preview (react-pdf): views a PDF saved
-                  in the tracker. The live editor is its own WYSIWYG preview, so
-                  there is no separate compile-preview of the current resume. */}
-              <PreviewOverlay
-                isOpen={!!resumePreview}
-                pdfUrl={resumePreview?.url ?? ""}
-                fileName={resumePreview?.name ?? "resume.pdf"}
-                onClose={() => setResumePreview(null)}
-              />
-            </Suspense>
+            resumePreview ? (
+              <Suspense fallback={null}>
+                {/* Saved-application resume preview (react-pdf): views a PDF saved
+                    in the tracker. The live editor is its own WYSIWYG preview, so
+                    there is no separate compile-preview of the current resume. */}
+                <PreviewOverlay
+                  isOpen
+                  pdfUrl={resumePreview.url}
+                  fileName={resumePreview.name}
+                  onClose={() => setResumePreview(null)}
+                />
+              </Suspense>
+            ) : null
           }
         >
           {activeOutputTab === "resume" ? (
             <ResumeTab
+              documentTitle={documentTitle}
+              onDocumentTitleChange={setDocumentTitle}
               editedResume={editedResume}
               actions={resumeEditorActions}
               canUndo={canUndoResume}
               canRedo={canRedoResume}
               dirty={resumeEdited}
+              draftAutosaveState={draftAutosaveState}
               isWorkspaceBootstrapping={isWorkspaceBootstrapping}
-              hasResult={Boolean(result)}
               resultSourceLabel={resultSourceLabel}
-              scoreContext={scoreContext}
-              fitVerdict={fitVerdict}
               jobConstraints={jobConstraints}
               result={result}
               resumeDiff={resumeDiff}
               docStyle={docStyle}
-              editorPrefs={editorPrefs}
+              formattingToolbar={(
+                <FormattingToolbar
+                  onUndo={() => {
+                    if (typesetEditorRef.current) typesetEditorRef.current.undo();
+                    else resumeEditorActions.undo();
+                  }}
+                  onRedo={() => {
+                    if (typesetEditorRef.current) typesetEditorRef.current.redo();
+                    else resumeEditorActions.redo();
+                  }}
+                  canUndo={canUndoResume}
+                  canRedo={canRedoResume}
+                  formattingDisabled={!editedResume}
+                  inlineFormatting={{
+                    fontFamily: {
+                      value: inlineFormat.fontFamily,
+                      onChange: (fontFamily) => typesetEditorRef.current?.setFontFamily(fontFamily),
+                      disabled: false
+                    },
+                    fontSize: {
+                      value: inlineFormat.fontSizePt,
+                      onChange: (fontSizePt) => typesetEditorRef.current?.setFontSize(fontSizePt),
+                      disabled: false
+                    },
+                    alignment: {
+                      value: inlineFormat.alignment,
+                      onChange: (alignment) => typesetEditorRef.current?.setAlignment(alignment),
+                      disabled: false
+                    },
+                    bold: {
+                      onToggle: () => typesetEditorRef.current?.toggleMark("bold"),
+                      pressed: inlineFormat.bold,
+                      disabled: inlineFormat.alignmentScope === "heading" && docStyle.style.headingCase === "smallcaps"
+                    },
+                    italic: {
+                      onToggle: () => typesetEditorRef.current?.toggleMark("italic"),
+                      pressed: inlineFormat.italic,
+                      disabled: inlineFormat.alignmentScope === "heading" && docStyle.style.headingCase === "smallcaps"
+                    },
+                    underline: {
+                      onToggle: () => typesetEditorRef.current?.toggleMark("underline"),
+                      pressed: inlineFormat.underline,
+                      disabled: inlineFormat.alignmentScope === "heading" && docStyle.style.headingCase === "smallcaps"
+                    },
+                    link: {
+                      href: inlineFormat.linkHref,
+                      text: inlineFormat.linkText,
+                      automatic: inlineFormat.linkAutomatic,
+                      onApply: ({ text, href }) => typesetEditorRef.current?.applyLink(text, href),
+                      onRemove: () => typesetEditorRef.current?.removeLink(),
+                      disabled: !inlineFormat.canLink,
+                      open: linkEditorOpen,
+                      onOpenChange: setLinkEditorOpen
+                    },
+                    clearFormatting: {
+                      onClear: () => typesetEditorRef.current?.clearFormatting(),
+                      disabled: !inlineFormat.canClearFormatting
+                    }
+                  }}
+                  docStyle={docStyle}
+                  globalAlignments={globalAlignments ?? undefined}
+                  onGlobalAlignmentChange={(scope, alignment) => {
+                    resumeEditorActions.clearAlignmentOverrides(scope);
+                    setInlineFormat((current) => current.alignmentScope === scope ? { ...current, alignment } : current);
+                    if (scope === "body") docStyle.set("bodyAlign", alignment);
+                    else if (scope === "header") docStyle.set("headerAlign", alignment === "justify" ? "left" : alignment);
+                    else docStyle.set("headingAlign", alignment === "justify" ? "left" : alignment);
+                  }}
+                  styleMarkStates={styleMarkStates}
+                  onStyleFieldMarkChange={(field, mark, on) => {
+                    resumeEditorActions.setStyleFieldMark(field, mark, on);
+                    setInlineFormat((current) => current.entryField === field ? { ...current, [mark]: on } : current);
+                  }}
+                  styleFontStates={styleFontStates}
+                  onStyleFieldFontChange={(field, family) => {
+                    resumeEditorActions.setStyleFieldFont(field, family === docStyle.style.fontFamily ? "default" : family);
+                    setInlineFormat((current) => current.entryField === field ? { ...current, fontFamily: family } : current);
+                  }}
+                  styleSizeStates={styleSizeStates}
+                  onStyleFieldSizeChange={(field, sizePt) => {
+                    const isDefault = Math.abs(sizePt - styleFieldDefaultSizePt(field, docStyle.style.baseFontSizePt)) < 0.05;
+                    resumeEditorActions.setStyleFieldSize(field, isDefault ? "default" : sizePt);
+                    setInlineFormat((current) => current.entryField === field ? { ...current, fontSizePt: sizePt } : current);
+                  }}
+                  onResetStyleFormatting={() => {
+                    resumeEditorActions.resetStyleFieldFormatting();
+                    setInlineFormat((current) => current.entryField
+                      ? { ...current, ...STYLE_FIELD_MARK_DEFAULTS[current.entryField] }
+                      : current);
+                  }}
+                  onFitZoom={fitResumePage}
+                />
+              )}
+              editorRef={typesetEditorRef}
+              onInlineFormatStateChange={setInlineFormat}
+              onRequestLinkEditor={() => setLinkEditorOpen(true)}
               tailorModes={tailorModes}
               onSetTailorMode={setTailorMode}
               onAddHonestContext={handleAddHonestContext}
@@ -1101,8 +1335,9 @@ function App() {
                   canExport={canExportResume}
                   defaultFileBaseName={resumeDownloadName("pdf").replace(/\.pdf$/i, "")}
                   isRenderingPdf={isRenderingPdf}
-                  exportStatus={exportStatus}
-                  downloadStatus={downloadStatus}
+                  status={exportStatus}
+                  statusIsError={exportStatusIsError}
+                  onDismissStatus={() => setExportStatus("")}
                   onDownloadPdf={handleDownloadPdf}
                   onDownloadResume={handleDownloadResume}
                 />
@@ -1117,6 +1352,7 @@ function App() {
                 applications={applications}
                 applicationsPath={applicationsPath}
                 applicationsError={applicationsError}
+                pendingApplicationWrites={pendingApplicationWrites}
                 isApplicationsLoading={isApplicationsLoading}
                 pipelineFilter={pipelineFilter}
                 setPipelineFilter={setPipelineFilter}
@@ -1138,7 +1374,11 @@ function App() {
             </Suspense>
           ) : null}
 
-          {activeOutputTab === "materials" ? (
+          <div
+            className="materials-tab-mount"
+            hidden={activeOutputTab !== "materials"}
+            aria-hidden={activeOutputTab !== "materials"}
+          >
             <MaterialsTab
               coverLetterText={coverLetterText}
               onGenerateCoverLetter={handleGenerateCoverLetter}
@@ -1158,7 +1398,7 @@ function App() {
               onSaveAnswers={handleSaveAnswers}
               jobTarget={materialsJobTarget}
             />
-          ) : null}
+          </div>
 
           {activeOutputTab === "analytics" ? (
             <Suspense fallback={<p className="pipeline-note" role="status">Loading analytics…</p>}>
@@ -1189,6 +1429,8 @@ function App() {
         <ApplyDownloadDialog
           label={applyDownloadPrompt.label}
           defaultFileBaseName={resumeDownloadName("pdf").replace(/\.pdf$/i, "")}
+          busy={isApplying}
+          error={applySaveError}
           onDownload={handleApplyDownloadPick}
           onSkip={() => {
             // True cancel path (backdrop click / × / Escape) — abandons the

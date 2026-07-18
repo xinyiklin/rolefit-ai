@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   BriefcaseBusiness,
@@ -31,13 +31,15 @@ import {
 } from "../hooks/useApplications";
 import { STATUS_LABEL, fitTone, formatSalary } from "../lib/applicationDisplay";
 import { VERDICT_LABEL, verdictFromScore } from "../lib/fitVerdict";
+import { displayVerdictReason } from "../lib/verdictReason";
+import { useModalFocus } from "@typeset/editor/hooks/useModalFocus.ts";
 
 type ApplicationModalProps = {
   open: boolean;
   // null = add mode (blank form); an application = detail/edit mode.
   application: Application | null;
   onClose: () => void;
-  onSave: (application: Application) => void;
+  onSave: (application: Application) => Promise<boolean>;
   onDelete?: (id: string, title: string) => void;
   // Load this application's job target + resume snapshot into the Polish editor.
   onLoad?: (application: Application) => void;
@@ -155,6 +157,10 @@ export function ApplicationModal({ open, application, onClose, onSave, onDelete,
   const [form, setForm] = useState<FormState>(() => formFromApplication(application));
   const [copied, setCopied] = useState("");
   const [copyFailed, setCopyFailed] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
+  const panelRef = useRef<HTMLElement>(null);
+  const companyInputRef = useRef<HTMLInputElement>(null);
 
   // Re-seed whenever the modal opens or targets a different application. Use
   // the stable id, not the whole application object, so async tracker refreshes
@@ -164,16 +170,20 @@ export function ApplicationModal({ open, application, onClose, onSave, onDelete,
     setForm(formFromApplication(application));
     setTab("overview");
     setCopied("");
+    setSaveError("");
+    setIsSaving(false);
   }, [open, applicationId]);
 
-  useEffect(() => {
-    if (!open) return;
-    function onKey(event: KeyboardEvent) {
-      if (event.key === "Escape") onClose();
-    }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose, open]);
+  const requestClose = () => {
+    if (!isSaving) onClose();
+  };
+
+  const handleModalKeyDown = useModalFocus({
+    active: open,
+    containerRef: panelRef,
+    initialFocusRef: companyInputRef,
+    onClose: requestClose
+  });
 
   const fitNumber = useMemo(() => {
     if (!form.fitScore.trim()) return null;
@@ -279,23 +289,40 @@ export function ApplicationModal({ open, application, onClose, onSave, onDelete,
       contacts: cleanContacts.length ? cleanContacts : undefined,
       applicationAnswers: cleanAnswers.length ? cleanAnswers : undefined,
       fitScore: fitNumber,
-      // For a brand-new manual entry, seed the tailored slot so the score shows
-      // up as a local estimate; for an existing one keep the saved comparison.
-      tailoredFitScore: isEdit ? base.tailoredFitScore ?? null : fitNumber,
-      fitScoreSource: isEdit ? base.fitScoreSource ?? null : fitNumber === null ? null : "local",
+      // A manually entered tracker number is not an AI Review result. Keep it as
+      // the standalone fitScore only; comparison/provenance require AI Review.
+      tailoredFitScore: isEdit ? base.tailoredFitScore ?? null : null,
+      fitScoreSource: isEdit ? base.fitScoreSource ?? null : null,
       updatedAt: now
     };
   }
 
-  function save(statusOverride: ApplicationStatus = form.status) {
-    onSave(buildApplication(statusOverride));
+  async function save(statusOverride: ApplicationStatus = form.status) {
+    if (isSaving) return;
+    setIsSaving(true);
+    setSaveError("");
+    let saved = false;
+    try {
+      saved = await onSave(buildApplication(statusOverride));
+    } catch {
+      // Keep the form recoverable if a future persistence adapter rejects.
+    }
+    if (!saved) {
+      setSaveError("Could not save this application because storage was unavailable or the record changed elsewhere. Your edits are still here; review and retry.");
+      setIsSaving(false);
+      return;
+    }
+    setIsSaving(false);
     onClose();
   }
 
   const canSave =
     form.company.trim().length > 1 || form.role.trim().length > 1 || form.jobUrl.trim().length > 6;
-  const ringTone = fitTone(fitNumber);
-  const fitVerdictDerived = verdictFromScore(fitNumber);
+  // Keep legacy local estimates in the saved record, but never present them as
+  // current fit. New scores arrive only from AI Review and are read-only here.
+  const displayedFitNumber = application?.fitScoreSource === "local" ? null : fitNumber;
+  const ringTone = fitTone(displayedFitNumber);
+  const fitVerdictDerived = verdictFromScore(displayedFitNumber);
   const review = application?.review;
   const gaps = application?.missingRequiredSkills ?? [];
   const headerName = [form.company.trim(), form.role.trim()].filter(Boolean).join(" · ") || "New application";
@@ -316,34 +343,41 @@ export function ApplicationModal({ open, application, onClose, onSave, onDelete,
   ];
 
   return (
-    <div className="application-modal" role="dialog" aria-modal="true" aria-labelledby="application-modal-title">
-      <button type="button" className="application-modal__scrim" aria-label="Close application" onClick={onClose} />
-      <section className="application-modal__panel">
+    <div
+      className="application-modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="application-modal-title"
+      onKeyDown={handleModalKeyDown}
+    >
+      <div className="application-modal__scrim" aria-hidden="true" onMouseDown={requestClose} />
+      <section className="application-modal__panel" ref={panelRef} tabIndex={-1} aria-busy={isSaving}>
         <header className="application-modal__head">
           <div>
             <h2 id="application-modal-title" className="page-serif">{isEdit ? headerName : "Add application"}</h2>
+            {saveError ? <p className="application-modal__save-error" role="alert">{saveError}</p> : null}
           </div>
           <div className="application-modal__actions">
             {isEdit && onLoad ? (
-              <button type="button" className="secondary-button is-compact" onClick={() => onLoad(application as Application)}>
+              <button type="button" className="secondary-button is-compact" onClick={() => onLoad(application as Application)} disabled={isSaving}>
                 <ExternalLink size={14} aria-hidden="true" /> Open in Polish
               </button>
             ) : null}
             {!isEdit ? (
-              <button type="button" className="secondary-button is-compact" disabled={!canSave} onClick={() => save("interested")}>
-                Save draft
+              <button type="button" className="secondary-button is-compact" disabled={!canSave || isSaving} onClick={() => void save("interested")}>
+                {isSaving ? "Saving…" : "Save draft"}
               </button>
             ) : null}
-            <button type="button" className="primary-button is-compact" disabled={!canSave} onClick={() => save()}>
-              {isEdit ? "Save changes" : "Save application"}
+            <button type="button" className="primary-button is-compact" disabled={!canSave || isSaving} onClick={() => void save()}>
+              {isSaving ? "Saving…" : isEdit ? "Save changes" : "Save application"}
             </button>
-            <button type="button" className="ghost-button is-icon" aria-label="Close" onClick={onClose}>
+            <button type="button" className="ghost-button is-icon" aria-label="Close" onClick={requestClose} disabled={isSaving}>
               <X size={16} aria-hidden="true" />
             </button>
           </div>
         </header>
 
-        <nav className="application-modal__tabs" aria-label="Application sections">
+        <nav className="application-modal__tabs" aria-label="Application sections" inert={isSaving}>
           {TABS.map(({ id, label, icon: Icon }) => (
             <button
               type="button"
@@ -357,14 +391,14 @@ export function ApplicationModal({ open, application, onClose, onSave, onDelete,
           ))}
         </nav>
 
-        <div className="application-modal__body">
+        <div className="application-modal__body" inert={isSaving}>
           {tab === "overview" ? (
             <>
               <section className="application-form">
                 <div className="application-form__grid">
                   <label className="field">
                     <span>Company</span>
-                    <input className="text-input" value={form.company} onChange={(e) => update("company", e.target.value)} placeholder="Notion, Stripe, Databricks" />
+                    <input ref={companyInputRef} className="text-input" value={form.company} onChange={(e) => update("company", e.target.value)} placeholder="Notion, Stripe, Databricks" />
                   </label>
                   <label className="field">
                     <span>Role / job title</span>
@@ -402,7 +436,7 @@ export function ApplicationModal({ open, application, onClose, onSave, onDelete,
                   <label className="field">
                     <span>Job type</span>
                     <select value={form.jobType} onChange={(e) => update("jobType", e.target.value)}>
-                      <option value="">—</option>
+                      <option value="">Not specified</option>
                       {JOB_TYPES.map((type) => (
                         <option key={type} value={type}>{type}</option>
                       ))}
@@ -479,9 +513,9 @@ export function ApplicationModal({ open, application, onClose, onSave, onDelete,
                 <div className="figures-strip figures-strip--compact" aria-label="Fit score">
                   <span className="figures-strip__item">
                     <em>Fit score</em>
-                    <strong className={`application-fit application-fit--${ringTone}`}>{fitNumber === null ? "--" : `${fitNumber}%`}</strong>
+                    <strong className={`application-fit application-fit--${ringTone}`}>{displayedFitNumber === null ? "--" : `${displayedFitNumber}%`}</strong>
                   </span>
-                  {fitNumber !== null ? (
+                  {displayedFitNumber !== null ? (
                     <>
                       <span className="figures-strip__divider" aria-hidden="true" />
                       <span className="figures-strip__item">
@@ -491,11 +525,9 @@ export function ApplicationModal({ open, application, onClose, onSave, onDelete,
                     </>
                   ) : null}
                 </div>
-                <label className="field application-match-card__score">
-                  <span>Fit score</span>
-                  <input className="text-input" inputMode="numeric" value={form.fitScore} onChange={(e) => update("fitScore", e.target.value.replace(/[^\d]/g, "").slice(0, 3))} placeholder="86" />
-                </label>
-                {review?.verdictReason ? <p>{review.verdictReason}</p> : <p>Run Polish to replace this with an AI-reviewed fit, gaps, and interview risks.</p>}
+                {review?.verdictReason
+                  ? <p>{displayVerdictReason(review.verdictReason)}</p>
+                  : <p>Run Polish to replace this with an AI-reviewed fit, gaps, and interview risks.</p>}
                 {gaps.length ? (
                   <div className="application-match-card__gaps">
                     <strong>Top gaps</strong>
@@ -531,12 +563,12 @@ export function ApplicationModal({ open, application, onClose, onSave, onDelete,
                 </div>
                 {form.contacts.length ? (
                   form.contacts.map((contact, index) => (
-                    <div className="application-contact-row" key={index}>
-                      <input className="text-input" value={contact.name ?? ""} onChange={(e) => updateContact(index, "name", e.target.value)} placeholder="Name" />
-                      <input className="text-input" value={contact.title ?? ""} onChange={(e) => updateContact(index, "title", e.target.value)} placeholder="Title (Recruiter…)" />
-                      <input className="text-input" value={contact.email ?? ""} onChange={(e) => updateContact(index, "email", e.target.value)} placeholder="Email" />
-                      <input className="text-input" value={contact.phone ?? ""} onChange={(e) => updateContact(index, "phone", e.target.value)} placeholder="Phone" />
-                      <button type="button" className="ghost-button is-icon" aria-label="Remove contact" onClick={() => removeContact(index)}>
+                    <div className="application-contact-row" key={index} role="group" aria-label={`Contact ${index + 1}`}>
+                      <input aria-label={`Contact ${index + 1} name`} className="text-input" value={contact.name ?? ""} onChange={(e) => updateContact(index, "name", e.target.value)} placeholder="Name" />
+                      <input aria-label={`Contact ${index + 1} title`} className="text-input" value={contact.title ?? ""} onChange={(e) => updateContact(index, "title", e.target.value)} placeholder="Title (Recruiter…)" />
+                      <input aria-label={`Contact ${index + 1} email`} className="text-input" value={contact.email ?? ""} onChange={(e) => updateContact(index, "email", e.target.value)} placeholder="Email" />
+                      <input aria-label={`Contact ${index + 1} phone`} className="text-input" value={contact.phone ?? ""} onChange={(e) => updateContact(index, "phone", e.target.value)} placeholder="Phone" />
+                      <button type="button" className="ghost-button is-icon" aria-label={`Remove contact ${index + 1}`} onClick={() => removeContact(index)}>
                         <Trash2 size={14} aria-hidden="true" />
                       </button>
                     </div>
@@ -552,7 +584,7 @@ export function ApplicationModal({ open, application, onClose, onSave, onDelete,
                   {review.verdict ? (
                     <p className="application-review__verdict">
                       <strong>{review.verdict}</strong>
-                      {review.verdictReason ? ` — ${review.verdictReason}` : ""}
+                      {review.verdictReason ? `. ${displayVerdictReason(review.verdictReason)}` : ""}
                     </p>
                   ) : null}
                   {review.riskFlags?.length ? (
@@ -599,8 +631,7 @@ export function ApplicationModal({ open, application, onClose, onSave, onDelete,
                 {artifacts?.hasPdf ? (
                   <>
                     <p className="application-muted">
-                      Saved {artifacts.savedAt ? new Date(artifacts.savedAt).toLocaleDateString() : ""}
-                      {artifacts.templateId ? ` · ${artifacts.templateId} template` : ""}.
+                      Saved {artifacts.savedAt ? new Date(artifacts.savedAt).toLocaleDateString() : ""}.
                     </p>
                     <div className="application-doc-card__actions">
                       {onPreviewResume ? (
@@ -650,14 +681,14 @@ export function ApplicationModal({ open, application, onClose, onSave, onDelete,
               </div>
               {form.answers.length ? (
                 form.answers.map((entry, index) => (
-                  <div className="application-qa" key={index}>
+                  <div className="application-qa" key={index} role="group" aria-label={`Application question ${index + 1}`}>
                     <div className="application-qa__head">
-                      <input className="text-input" value={entry.question} onChange={(e) => updateAnswer(index, "question", e.target.value)} placeholder="Question the application asked…" />
-                      <button type="button" className="ghost-button is-icon" aria-label="Remove question" onClick={() => removeAnswer(index)}>
+                      <input aria-label={`Application question ${index + 1}`} className="text-input" value={entry.question} onChange={(e) => updateAnswer(index, "question", e.target.value)} placeholder="Question the application asked…" />
+                      <button type="button" className="ghost-button is-icon" aria-label={`Remove application question ${index + 1}`} onClick={() => removeAnswer(index)}>
                         <Trash2 size={14} aria-hidden="true" />
                       </button>
                     </div>
-                    <textarea className="textarea" value={entry.answer} onChange={(e) => updateAnswer(index, "answer", e.target.value)} rows={4} placeholder="Your answer." />
+                    <textarea aria-label={`Answer to application question ${index + 1}`} className="textarea" value={entry.answer} onChange={(e) => updateAnswer(index, "answer", e.target.value)} rows={4} placeholder="Your answer." />
                   </div>
                 ))
               ) : (
@@ -675,13 +706,13 @@ export function ApplicationModal({ open, application, onClose, onSave, onDelete,
           </span>
           <div className="application-modal__actions">
             {isEdit && onDelete ? (
-              <button type="button" className="secondary-button is-compact danger-button" onClick={() => onDelete((application as Application).id, (application as Application).title)}>
+              <button type="button" className="secondary-button is-compact danger-button" disabled={isSaving} onClick={() => onDelete((application as Application).id, (application as Application).title)}>
                 <Trash2 size={14} aria-hidden="true" /> Delete
               </button>
             ) : null}
-            <button type="button" className="secondary-button is-compact" onClick={onClose}>Close</button>
-            <button type="button" className="primary-button is-compact" disabled={!canSave} onClick={() => save()}>
-              {isEdit ? "Save changes" : "Save application"}
+            <button type="button" className="secondary-button is-compact" onClick={requestClose} disabled={isSaving}>Close</button>
+            <button type="button" className="primary-button is-compact" disabled={!canSave || isSaving} onClick={() => void save()}>
+              {isSaving ? "Saving…" : isEdit ? "Save changes" : "Save application"}
             </button>
           </div>
         </footer>

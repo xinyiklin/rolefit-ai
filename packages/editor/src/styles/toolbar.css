@@ -3,6 +3,7 @@
 
 .top-toolbar {
   --toolbar-control-height: 32px;
+  --toolbar-row-height: 48px;
   position: sticky;
   top: 0;
   z-index: 40;
@@ -14,6 +15,8 @@
   border-bottom: 1px solid var(--hairline);
   isolation: isolate;
   user-select: none;
+  container-name: typeset-toolbar;
+  container-type: inline-size;
 }
 
 .top-toolbar__primary-row,
@@ -21,7 +24,9 @@
   display: flex;
   align-items: center;
   min-width: 0;
-  min-height: 48px;
+  height: var(--toolbar-row-height);
+  min-height: var(--toolbar-row-height);
+  box-sizing: border-box;
 }
 
 .top-toolbar__primary-row {
@@ -35,6 +40,12 @@
   gap: 7px;
   padding: 6px 12px;
   background: var(--card-soft);
+}
+
+.top-toolbar__secondary-row--formatting {
+  position: relative;
+  flex-wrap: nowrap;
+  overflow: visible;
 }
 
 .top-toolbar__identity {
@@ -118,6 +129,25 @@
   white-space: nowrap;
 }
 
+.top-toolbar__document-context {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  max-width: 34ch;
+  overflow: hidden;
+  color: var(--ink-soft);
+  font-size: 0.72rem;
+  font-weight: 450;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.top-toolbar__document-context::before {
+  content: "·";
+  margin-inline: 3px 5px;
+  color: var(--ink-faint);
+}
+
 .top-toolbar__save-status {
   display: inline-flex;
   flex: 0 0 auto;
@@ -179,6 +209,13 @@
   gap: 3px;
 }
 
+.top-toolbar__group--typography-overflow,
+.top-toolbar__divider--overflow-typography,
+.top-toolbar__group--body-align-overflow,
+.top-toolbar__divider--overflow-alignment {
+  display: none;
+}
+
 .top-toolbar__divider {
   flex: 0 0 auto;
   width: 1px;
@@ -187,13 +224,22 @@
   background: var(--hairline);
 }
 
-.top-toolbar__spacer {
-  flex: 1 1 auto;
-  min-width: 8px;
+.top-toolbar__main-tools,
+.top-toolbar__overflow-tools {
+  display: contents;
 }
 
-.top-toolbar__font-control,
-.top-toolbar__zoom-select {
+.top-toolbar__more-trigger {
+  display: none;
+}
+
+.top-toolbar__more-trigger .toolbar-tooltip__bubble {
+  right: 0;
+  left: auto;
+  translate: 0 -2px;
+}
+
+.top-toolbar__font-control {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -203,29 +249,108 @@
   white-space: nowrap;
 }
 
-.top-toolbar__font-control select,
-.top-toolbar__zoom-select select {
+.font-family-control {
+  position: relative;
+  display: inline-flex;
+  min-width: 0;
+  width: 128px;
+}
+
+.font-family-control__trigger {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 18px;
+  align-items: center;
+  width: 100%;
   height: var(--toolbar-control-height);
+  padding: 0 5px 0 9px;
   color: var(--ink);
   background: var(--card);
   border: 1px solid var(--hairline);
   border-radius: var(--r-md);
   outline: none;
-  font-size: 0.75rem;
-  font-weight: 520;
+  font: 520 0.75rem/1 var(--font-ui);
+  text-align: left;
   cursor: pointer;
-  transition:
-    border-color 140ms var(--ease),
-    box-shadow 140ms var(--ease),
-    background 140ms var(--ease);
+  transition: border-color 140ms var(--ease), box-shadow 140ms var(--ease), background 140ms var(--ease);
 }
 
-.top-toolbar__font-control select {
-  padding: 0 8px;
+.font-family-control__trigger > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.top-toolbar__font-control--family select {
-  width: 142px;
+.font-family-control__trigger > svg {
+  justify-self: center;
+  color: var(--ink-muted);
+  transition: transform 140ms var(--ease);
+}
+
+.font-family-control.is-open .font-family-control__trigger > svg {
+  transform: rotate(180deg);
+}
+
+.font-family-control__trigger:hover:not(:disabled) {
+  background: var(--card-hover);
+  border-color: var(--hairline-strong);
+}
+
+.font-family-control__trigger:focus-visible,
+.font-family-control.is-open .font-family-control__trigger {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-veil);
+}
+
+.font-family-control__trigger:disabled {
+  color: var(--ink-faint);
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+.font-family-control__menu {
+  z-index: 120;
+  display: grid;
+  gap: 2px;
+  padding: 4px;
+  color: var(--ink);
+  background: var(--card);
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-lift);
+}
+
+.font-family-control__menu button {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 16px;
+  align-items: center;
+  width: 100%;
+  min-height: 30px;
+  padding: 5px 7px;
+  color: var(--ink);
+  background: transparent;
+  border: 0;
+  border-radius: var(--r-sm);
+  outline: none;
+  font: 520 0.75rem/1.2 var(--font-ui);
+  text-align: left;
+  cursor: pointer;
+}
+
+.font-family-control__menu button > svg {
+  justify-self: center;
+  color: var(--accent);
+  opacity: 0;
+}
+
+.font-family-control__menu button.is-selected > svg {
+  opacity: 1;
+}
+
+.font-family-control__menu button:hover,
+.font-family-control__menu button:focus-visible,
+.font-family-control__menu button.is-selected {
+  color: var(--accent-deep);
+  background: var(--accent-veil);
 }
 
 .font-size-control {
@@ -237,6 +362,7 @@
   background: var(--card);
   border: 1px solid var(--hairline);
   border-radius: var(--r-md);
+  font: 520 0.75rem/1 var(--font-ui);
   transition: border-color 140ms var(--ease), box-shadow 140ms var(--ease), background 140ms var(--ease);
 }
 
@@ -306,6 +432,7 @@
   border: 1px solid var(--hairline-strong);
   border-radius: var(--r-md);
   box-shadow: var(--shadow-lift);
+  font: 520 0.75rem/1.2 var(--font-ui);
   transform: translateX(-50%);
 }
 
@@ -316,6 +443,7 @@
   background: transparent;
   border: 0;
   border-radius: var(--r-sm);
+  font: inherit;
   text-align: center;
   cursor: pointer;
 }
@@ -342,33 +470,104 @@
   opacity: 0.65;
 }
 
-.top-toolbar__zoom-select select {
-  width: 78px;
-  padding: 0 5px;
-  text-align: center;
+.top-toolbar__zoom {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
 }
 
-.top-toolbar__font-control select:hover:not(:disabled),
-.top-toolbar__zoom-select select:hover:not(:disabled) {
+.top-toolbar__zoom-combobox {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 20px;
+  width: 72px;
+  height: var(--toolbar-control-height);
+  overflow: hidden;
+  color: var(--ink);
+  background: var(--card);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-md);
+  transition: border-color 140ms var(--ease), box-shadow 140ms var(--ease), background 140ms var(--ease);
+}
+
+.top-toolbar__zoom-combobox:hover {
   background: var(--card-hover);
   border-color: var(--hairline-strong);
 }
 
-.top-toolbar__font-control select:focus-visible,
-.top-toolbar__zoom-select select:focus-visible {
+.top-toolbar__zoom-combobox:focus-within {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--accent-veil);
 }
 
-.top-toolbar__font-control select:disabled {
-  color: var(--ink-faint);
-  cursor: not-allowed;
-  opacity: 0.65;
+.top-toolbar__zoom-combobox input {
+  min-width: 0;
+  height: 100%;
+  padding: 0 1px 0 6px;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  outline: 0;
+  font: 520 0.75rem/1 var(--font-ui);
+  text-align: left;
 }
 
-.top-toolbar__zoom {
-  flex: 0 0 auto;
-  gap: 2px;
+.top-toolbar__zoom-toggle {
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 100%;
+  padding: 0;
+  color: var(--ink-muted);
+  background: transparent;
+  border: 0;
+  outline: 0;
+  cursor: pointer;
+}
+
+.top-toolbar__zoom-toggle:hover {
+  color: var(--ink-strong);
+  background: var(--paper-deep);
+}
+
+.top-toolbar__zoom-toggle svg {
+  transition: rotate 140ms var(--ease);
+}
+
+.top-toolbar__zoom.is-open .top-toolbar__zoom-toggle svg {
+  rotate: 180deg;
+}
+
+.zoom-control__menu {
+  z-index: 100;
+  display: grid;
+  max-height: 280px;
+  padding: 4px;
+  overflow-y: auto;
+  color: var(--ink);
+  background: var(--card);
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-lift);
+  font: 520 0.75rem/1.2 var(--font-ui);
+}
+
+.zoom-control__menu button {
+  min-height: 28px;
+  padding: 4px 8px;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  border-radius: var(--r-sm);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.zoom-control__menu button:hover,
+.zoom-control__menu button.is-selected {
+  color: var(--accent);
+  background: var(--accent-veil);
 }
 
 /* Toolbar commands and their delayed, non-interactive tooltips. */
@@ -526,6 +725,11 @@
     transition-delay: 420ms;
   }
 
+  .top-toolbar__more-trigger .toolbar-tooltip:hover > .toolbar-tooltip__bubble,
+  .top-toolbar__more-trigger .toolbar-tooltip:has(:focus-visible) > .toolbar-tooltip__bubble {
+    translate: 0 0;
+  }
+
   .popover.is-open > .toolbar-tooltip .toolbar-tooltip__bubble {
     opacity: 0;
     visibility: hidden;
@@ -537,70 +741,7 @@
   }
 }
 
-@media (max-width: 1100px) {
-  .top-toolbar__primary-row {
-    gap: var(--s2);
-    padding-inline: 10px;
-  }
-
-  .top-toolbar__product-name {
-    font-size: 0.84rem;
-  }
-
-  .top-toolbar__title-field {
-    max-width: 28ch;
-  }
-
-  .top-toolbar__file-actions .toolbar-button--text {
-    padding-inline: 8px;
-  }
-
-  .top-toolbar__secondary-row {
-    padding-inline: 9px;
-  }
-
-  .top-toolbar__font-control--family select {
-    width: 126px;
-  }
-}
-
-@media (max-width: 900px) {
-  .top-toolbar__product-name,
-  .top-toolbar__identity-divider {
-    display: none;
-  }
-
-  .top-toolbar__title-field {
-    max-width: 24ch;
-  }
-
-  .top-toolbar__save-status {
-    font-size: 0.6875rem;
-  }
-
-  .top-toolbar__group--typography,
-  .top-toolbar__group--body-align,
-  .top-toolbar__divider--direct-typography,
-  .top-toolbar__divider--direct-alignment {
-    display: none;
-  }
-}
-
-@media (max-width: 720px) {
-  .top-toolbar__primary-row {
-    padding-inline: 8px;
-  }
-
-  .top-toolbar__secondary-row {
-    gap: 5px;
-    padding-inline: 7px;
-  }
-
-  .top-toolbar__file-actions {
-    gap: 1px;
-  }
-
-  .top-toolbar__file-actions > .toolbar-tooltip:first-child .toolbar-button__label,
+@container typeset-toolbar (max-width: 1210px) {
   .top-toolbar__group--style .toolbar-button__label,
   .top-toolbar__group--style .toolbar-button__trailing {
     display: none;
@@ -610,45 +751,168 @@
     width: var(--toolbar-control-height);
     padding: 0;
   }
+}
 
-  .top-toolbar__secondary-row {
-    overflow-x: auto;
-    overscroll-behavior-x: contain;
-    scrollbar-width: none;
+/* Label-first disclosure seam: a host may set `data-toolbar-labels="text"` on
+   the wrapper around the toolbar to opt into label-first disclosure instead
+   of the default icon-first collapse above. A host that has no standalone
+   file-action cluster in this row can afford to keep style-menu labels
+   readable longer, and can afford to keep document-structure labels/icons
+   legible further down before the icon-only fallback. Typeset never sets the
+   attribute, so it is unaffected. */
+[data-toolbar-labels="text"] .top-toolbar__document-structure .toolbar-button__icon {
+  display: none;
+}
+
+/* The 1190.01px lower edge interlocks exactly with the 1210px band above so
+   the two disclosure states hand off without a gap; retune them together. */
+@container typeset-toolbar (min-width: 1190.01px) and (max-width: 1210px) {
+  [data-toolbar-labels="text"] .top-toolbar__group--style {
+    gap: 0;
   }
 
-  .top-toolbar__secondary-row::-webkit-scrollbar {
-    display: none;
+  [data-toolbar-labels="text"] .top-toolbar__group--style .toolbar-button__label,
+  [data-toolbar-labels="text"] .top-toolbar__group--style .toolbar-button__trailing {
+    display: inline;
   }
 
-  .top-toolbar__spacer {
-    min-width: 4px;
+  [data-toolbar-labels="text"] .top-toolbar__group--style .toolbar-button--text {
+    width: auto;
+    padding-inline: 6px;
   }
 }
 
-@media (max-width: 620px) {
+@container typeset-toolbar (max-width: 1100px) {
+  .top-toolbar__document-context {
+    max-width: 24ch;
+  }
+}
+
+@container typeset-toolbar (max-width: 1040px) {
+  .top-toolbar__document-context {
+    display: none;
+  }
+
+  .top-toolbar__secondary-row--formatting {
+    align-items: center;
+    gap: 7px;
+    padding: 6px 12px;
+    overflow: visible;
+  }
+
+  .top-toolbar__main-tools {
+    display: flex;
+    flex: 1 1 auto;
+    align-items: center;
+    gap: 7px;
+    width: 100%;
+    min-width: 0;
+    height: var(--toolbar-control-height);
+  }
+
+  .top-toolbar__overflow-tools {
+    display: none;
+  }
+
+  .top-toolbar__secondary-row--formatting.is-more-open .top-toolbar__overflow-tools {
+    position: absolute;
+    z-index: 80;
+    top: calc(100% + 6px);
+    right: 12px;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+    width: max-content;
+    max-width: calc(100cqi - 24px);
+    min-height: var(--toolbar-row-height);
+    padding: 8px;
+    box-sizing: border-box;
+    background: var(--card);
+    border: 1px solid var(--hairline-strong);
+    border-radius: var(--r-lg);
+    box-shadow: var(--shadow-lift);
+  }
+
+  .top-toolbar__more-trigger {
+    display: flex;
+    flex: 0 0 auto;
+  }
+}
+
+@container typeset-toolbar (max-width: 900px) {
+  .top-toolbar__file-actions .toolbar-button__label,
+  .top-toolbar__file-actions .toolbar-button__trailing,
+  .top-toolbar__document-structure .toolbar-button__label,
+  .top-toolbar__document-structure .toolbar-button__trailing {
+    display: none;
+  }
+
+  .top-toolbar__file-actions .toolbar-button--text,
+  .top-toolbar__document-structure .toolbar-button--text {
+    width: var(--toolbar-control-height);
+    padding: 0;
+  }
+
+  .top-toolbar__group--body-align-primary,
+  .top-toolbar__divider--direct-alignment {
+    display: none;
+  }
+
+  .top-toolbar__secondary-row--formatting.is-more-open .top-toolbar__group--body-align-overflow {
+    display: flex;
+  }
+
+  .top-toolbar__secondary-row--formatting.is-more-open .top-toolbar__divider--overflow-alignment {
+    display: block;
+  }
+}
+
+/* Label-first disclosure seam (continued from the 1210px band above): a host
+   opted in via `data-toolbar-labels="text"` keeps its document-structure
+   label/trailing readable through this narrower edge instead of collapsing to
+   icon-only alongside file actions. */
+@container typeset-toolbar (max-width: 900px) {
+  [data-toolbar-labels="text"] .top-toolbar__document-structure .toolbar-button__label,
+  [data-toolbar-labels="text"] .top-toolbar__document-structure .toolbar-button__trailing {
+    display: inline;
+  }
+
+  [data-toolbar-labels="text"] .top-toolbar__document-structure .toolbar-button--text {
+    width: auto;
+    padding-inline: 9px;
+  }
+}
+
+@container typeset-toolbar (max-width: 720px) {
+  .top-toolbar__product-name,
+  .top-toolbar__identity-divider {
+    display: none;
+  }
+
+  .top-toolbar__group--typography-primary,
+  .top-toolbar__divider--direct-typography {
+    display: none;
+  }
+
+  .top-toolbar__secondary-row--formatting.is-more-open .top-toolbar__group--typography-overflow {
+    display: flex;
+  }
+
+  .top-toolbar__secondary-row--formatting.is-more-open .top-toolbar__divider--overflow-typography {
+    display: block;
+  }
+}
+
+@container typeset-toolbar (max-width: 620px) {
   .top-toolbar__save-status {
     max-width: 90px;
     overflow: hidden;
     text-overflow: ellipsis;
   }
 
-  .top-toolbar__title-field {
-    max-width: 18ch;
-  }
-
   .top-toolbar__file-actions .toolbar-button--text {
     padding-inline: 6px;
-  }
-}
-
-@media (pointer: coarse) {
-  .top-toolbar {
-    --toolbar-control-height: 40px;
-  }
-
-  .top-toolbar__title-field input {
-    height: 40px;
   }
 }
 

@@ -66,11 +66,11 @@ function coalesceKeyFor(action: Action): string | null {
     case "setHeading":
       return `heading:${action.sectionId}`;
     case "updateEntry":
-      return `entry:${action.sectionId}:${action.entryId}:${action.field}`;
+      return action.coalesce === false ? null : `entry:${action.sectionId}:${action.entryId}:${action.field}`;
     case "updateSkillsRow":
       return `skills:${action.sectionId}:${action.entryId}`;
     case "updateBullet":
-      return `bullet:${action.sectionId}:${action.entryId}:${action.bulletId}`;
+      return action.coalesce === false ? null : `bullet:${action.sectionId}:${action.entryId}:${action.bulletId}`;
     default:
       return null;
   }
@@ -93,7 +93,14 @@ type Action =
   | { type: "insertEntry"; sectionId: string; afterEntryId: string; position?: "above" | "below" }
   | { type: "removeEntry"; sectionId: string; entryId: string }
   | { type: "reorderEntries"; sectionId: string; from: number; to: number }
-  | { type: "updateEntry"; sectionId: string; entryId: string; field: EntryTextField; value: string }
+  | {
+      type: "updateEntry";
+      sectionId: string;
+      entryId: string;
+      field: EntryTextField;
+      value: string;
+      coalesce?: boolean;
+    }
   | { type: "updateSkillsRow"; sectionId: string; entryId: string; label: string; skills: string }
   // Bulk emphasis from Styles applies/removes a mark on one entry field across
   // every standard entry. It remains ordinary formatting that can be changed
@@ -110,7 +117,14 @@ type Action =
   | { type: "insertBullet"; sectionId: string; entryId: string; afterBulletId: string; position?: "above" | "below" }
   | { type: "removeBullet"; sectionId: string; entryId: string; bulletId: string }
   | { type: "reorderBullets"; sectionId: string; entryId: string; from: number; to: number }
-  | { type: "updateBullet"; sectionId: string; entryId: string; bulletId: string; value: string }
+  | {
+      type: "updateBullet";
+      sectionId: string;
+      entryId: string;
+      bulletId: string;
+      value: string;
+      coalesce?: boolean;
+    }
   // Typeset-editor structural edits (Enter/Backspace inside a bullet or summary
   // paragraph). The caller pre-computes mark-balanced halves / joined text; the
   // reducer owns the new ids so each edit stays one undo step.
@@ -141,7 +155,9 @@ function mapEntry(section: ResumeSectionData, entryId: string, fn: (entry: Resum
 
 // ----- reducer -----
 
-function reduceResumeData(data: ResumeData, action: Action): ResumeData {
+// Exported for the package's co-located structural eval
+// (`__evals__/resume-editor-structure.mjs`), not for host consumption.
+export function reduceResumeData(data: ResumeData, action: Action): ResumeData {
   switch (action.type) {
     case "setName":
       return { ...data, name: action.name };
@@ -366,7 +382,9 @@ function reduceResumeData(data: ResumeData, action: Action): ResumeData {
   }
 }
 
-function rootReducer(state: State, action: Action): State {
+// Exported for the package's co-located structural eval
+// (`__evals__/resume-editor-structure.mjs`), not for host consumption.
+export function rootReducer(state: State, action: Action): State {
   if (action.type === "seed")
     return { data: action.data, dirty: false, past: [], future: [], coalesceKey: null, coalesceAt: 0 };
   // Mark the model as saved without reseeding. Undo history remains useful, but
@@ -461,8 +479,13 @@ export function useResumeEditor() {
       removeEntry: (sectionId: string, entryId: string) => dispatch({ type: "removeEntry", sectionId, entryId }),
       reorderEntries: (sectionId: string, from: number, to: number) =>
         dispatch({ type: "reorderEntries", sectionId, from, to }),
-      updateEntry: (sectionId: string, entryId: string, field: EntryTextField, value: string) =>
-        dispatch({ type: "updateEntry", sectionId, entryId, field, value }),
+      updateEntry: (
+        sectionId: string,
+        entryId: string,
+        field: EntryTextField,
+        value: string,
+        options?: { coalesce?: boolean }
+      ) => dispatch({ type: "updateEntry", sectionId, entryId, field, value, coalesce: options?.coalesce }),
       updateSkillsRow: (sectionId: string, entryId: string, label: string, skills: string) =>
         dispatch({ type: "updateSkillsRow", sectionId, entryId, label, skills }),
       setStyleFieldMark: (field: StyleTextField, mark: FieldMark, on: boolean) =>
@@ -480,8 +503,13 @@ export function useResumeEditor() {
         dispatch({ type: "removeBullet", sectionId, entryId, bulletId }),
       reorderBullets: (sectionId: string, entryId: string, from: number, to: number) =>
         dispatch({ type: "reorderBullets", sectionId, entryId, from, to }),
-      updateBullet: (sectionId: string, entryId: string, bulletId: string, value: string) =>
-        dispatch({ type: "updateBullet", sectionId, entryId, bulletId, value }),
+      updateBullet: (
+        sectionId: string,
+        entryId: string,
+        bulletId: string,
+        value: string,
+        options?: { coalesce?: boolean }
+      ) => dispatch({ type: "updateBullet", sectionId, entryId, bulletId, value, coalesce: options?.coalesce }),
       splitBullet: (sectionId: string, entryId: string, bulletId: string, before: string, after: string) =>
         dispatch({ type: "splitBullet", sectionId, entryId, bulletId, before, after }),
       mergeBulletUp: (sectionId: string, entryId: string, bulletId: string, joined: string) =>

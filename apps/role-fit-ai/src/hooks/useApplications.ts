@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { EvidenceType, MissingRequiredSkill, StrictReviewSeverity } from "../resumeEngine";
 import { inferApplicationTitle, inferCompanyFromUrl } from "../lib/jobTarget";
 import { sourceFromUrl, type ExtractedJobTracking } from "../lib/jobExtract";
-import type { ResumeData } from "../lib/resumeData";
+import type { ResumeData } from "@typeset/engine/lib/resumeData.ts";
 import { dedupeSourceUrls, normalizeJobUrl, findDuplicateApplications } from "../lib/jobIdentity";
 import type { DuplicateTarget } from "../lib/jobIdentity";
 import type { ApplicationAiUsage } from "../lib/aiUsage";
@@ -133,8 +133,8 @@ export type Application = {
   // tailored draft, so the pipeline can show the lift tailoring produced.
   baseFitScore?: number | null;
   tailoredFitScore?: number | null;
-  // Which engine produced the pair, so a restored local estimate isn't shown as
-  // AI-judged after reload.
+  // Which engine produced the pair. "local" is accepted only for backward
+  // compatibility with saved records and is never restored as an AI judgment.
   fitScoreSource?: "ai" | "local" | null;
   templateId?: string;
   // Structured editor snapshot captured at Apply time. `polishedText` stays as
@@ -275,24 +275,61 @@ function mergeSourceUrls(existing: Application, incoming: Application, now: stri
 
 type EditableField = "title" | "company" | "role" | "source" | "notes" | "followupAt" | "jobUrl";
 
+type ApplicationMutation = {
+  id: string;
+  operation: "upsert" | "delete";
+  baseUpdatedAt: string | null;
+};
+
+class ApplicationConflictError extends Error {
+  applications: Application[];
+
+  constructor(message: string, applications: Application[]) {
+    super(message);
+    this.name = "ApplicationConflictError";
+    this.applications = applications;
+  }
+}
+
 export function useApplications() {
   const [applications, setApplications] = useState<Application[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
   const [storagePath, setStoragePath] = useState("");
+  const [pendingWrites, setPendingWrites] = useState(0);
+  // Synchronous source for optimistic mutations. Keeping mutation side effects
+  // out of React state-updater callbacks avoids duplicate writes under Strict
+  // Mode and lets callers await the exact write they initiated.
+  const applicationsRef = useRef<Application[]>([]);
   const persistVersion = useRef(0);
   const persistQueue = useRef<Promise<void>>(Promise.resolve());
+  // Last server-confirmed snapshot, updated after every successful queued
+  // write (even when a newer optimistic write is already pending). Rolling a
+  // failed latest write back to its immediate `previous` state can resurrect
+  // an earlier optimistic edit whose own request also failed. This ref always
+  // represents the durable state we can safely return to.
+  const confirmedApplications = useRef<Application[]>([]);
+  const conflictMessage = useRef("");
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
+      const loadVersion = persistVersion.current;
       try {
         const res = await fetch("/api/applications");
         const data = await res.json();
         if (cancelled) return;
         if (!res.ok) throw new Error(data.error ?? "Failed to load applications.");
-        setApplications(Array.isArray(data.applications) ? data.applications : []);
+        // A mutation started while the initial GET was in flight. Its queued
+        // write/rollback is now authoritative; never replace it with this older
+        // read snapshot.
+        if (loadVersion !== persistVersion.current) return;
+        const loaded = Array.isArray(data.applications) ? data.applications : [];
+        confirmedApplications.current = loaded;
+        applicationsRef.current = loaded;
+        setApplications(loaded);
         setStoragePath(typeof data.path === "string" ? data.path : "");
+        conflictMessage.current = "";
         setError("");
       } catch (err) {
         if (!cancelled) setError(err instanceof Error ? err.message : "Failed to load applications.");
@@ -305,21 +342,35 @@ export function useApplications() {
     };
   }, []);
 
-  // `deleteIds` names records this write REMOVES. The server's read-merge
-  // resurrects on-disk entries missing from the request (multi-tab protection),
-  // so a deleting operation (the duplicate merge) must list them explicitly —
-  // sending a shorter list alone would be silently undone.
-  const persist = useCallback(async (next: Application[], previous: Application[], deleteIds?: string[]) => {
+  // Every changed record carries the revision this tab started from. The server
+  // preserves unmutated disk rows and rejects a stale same-record edit with 409,
+  // preventing one tab from silently overwriting a newer edit in another.
+  const persist = useCallback(async (next: Application[], mutations: ApplicationMutation[]) => {
+    setPendingWrites((count) => count + 1);
+    // A mutation started after a surfaced conflict is an explicit user retry.
+    // Clear the prior notice then; already-queued writes do not pass this branch
+    // after the conflict arrives, so they cannot silently erase the warning.
+    if (conflictMessage.current) {
+      conflictMessage.current = "";
+      setError("");
+    }
     const requestId = persistVersion.current + 1;
     persistVersion.current = requestId;
     const write = persistQueue.current.catch(() => undefined).then(async () => {
       const res = await fetch("/api/applications", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ applications: next, ...(deleteIds?.length ? { deleteIds } : {}) })
+        body: JSON.stringify({ applications: next, mutations })
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Save failed.");
+      if (!res.ok) {
+        const message = typeof data.error === "string" ? data.error : "Save failed.";
+        if (res.status === 409 && Array.isArray(data.applications)) {
+          throw new ApplicationConflictError(message, data.applications);
+        }
+        throw new Error(message);
+      }
+      if (!Array.isArray(data.applications)) throw new Error("Save returned an invalid applications list.");
       return data;
     });
     persistQueue.current = write.then(
@@ -329,49 +380,64 @@ export function useApplications() {
 
     try {
       const data = await write;
+      confirmedApplications.current = data.applications;
       // Trust the server-sanitized list back
       if (requestId === persistVersion.current) {
-        if (Array.isArray(data.applications)) setApplications(data.applications);
-        setError("");
+        applicationsRef.current = data.applications;
+        setApplications(data.applications);
+        setError(conflictMessage.current);
       }
+      return true;
     } catch (err) {
-      if (requestId === persistVersion.current) {
-        setApplications(previous);
-        setError(err instanceof Error ? err.message : "Save failed.");
+      if (err instanceof ApplicationConflictError) {
+        confirmedApplications.current = err.applications;
+        conflictMessage.current = err.message;
+        setError(err.message);
       }
+      if (requestId === persistVersion.current) {
+        applicationsRef.current = confirmedApplications.current;
+        setApplications(confirmedApplications.current);
+        setError(conflictMessage.current || (err instanceof Error ? err.message : "Save failed."));
+      }
+      return false;
+    } finally {
+      setPendingWrites((count) => Math.max(0, count - 1));
     }
   }, []);
 
   const upsert = useCallback(
     (incoming: Application) => {
-      setApplications((current) => {
-        const now = new Date().toISOString();
-        const idx = current.findIndex((a) => a.id === incoming.id || sameApplicationTarget(a, incoming));
-        const merged: Application = idx >= 0
-          ? {
-              ...current[idx],
-              ...incoming,
-              id: current[idx].id,
-              title: current[idx].title || incoming.title,
-              company: current[idx].company || incoming.company,
-              role: current[idx].role || incoming.role,
-              source: current[idx].source || incoming.source,
-              jobUrl: incoming.jobUrl || current[idx].jobUrl,
-              jobDescription: incoming.jobDescription || current[idx].jobDescription,
-              rawJobDescription: incoming.rawJobDescription || current[idx].rawJobDescription,
-              sourceUrls: mergeSourceUrls(current[idx], incoming, now),
-              updatedAt: now,
-              createdAt: current[idx].createdAt
-            }
-          : { ...incoming, createdAt: now, updatedAt: now };
+      const current = applicationsRef.current;
+      const now = new Date().toISOString();
+      const idx = current.findIndex((a) => a.id === incoming.id || sameApplicationTarget(a, incoming));
+      const merged: Application = idx >= 0
+        ? {
+            ...current[idx],
+            ...incoming,
+            id: current[idx].id,
+            title: current[idx].title || incoming.title,
+            company: current[idx].company || incoming.company,
+            role: current[idx].role || incoming.role,
+            source: current[idx].source || incoming.source,
+            jobUrl: incoming.jobUrl || current[idx].jobUrl,
+            jobDescription: incoming.jobDescription || current[idx].jobDescription,
+            rawJobDescription: incoming.rawJobDescription || current[idx].rawJobDescription,
+            sourceUrls: mergeSourceUrls(current[idx], incoming, now),
+            updatedAt: now,
+            createdAt: current[idx].createdAt
+          }
+        : { ...incoming, createdAt: now, updatedAt: now };
 
-        const next = idx >= 0
-          ? current.map((a, i) => (i === idx ? merged : a))
-          : [merged, ...current];
-
-        void persist(next, current);
-        return next;
-      });
+      const next = idx >= 0
+        ? current.map((a, i) => (i === idx ? merged : a))
+        : [merged, ...current];
+      applicationsRef.current = next;
+      setApplications(next);
+      return persist(next, [{
+        id: merged.id,
+        operation: "upsert",
+        baseUpdatedAt: idx >= 0 ? current[idx].updatedAt : null
+      }]);
     },
     [persist]
   );
@@ -383,17 +449,21 @@ export function useApplications() {
   // and createdAt are pinned. A new id (no match) is prepended.
   const saveApplication = useCallback(
     (incoming: Application) => {
-      setApplications((current) => {
-        const now = new Date().toISOString();
-        const idx = current.findIndex((a) => a.id === incoming.id);
-        const merged: Application =
-          idx >= 0
-            ? { ...current[idx], ...incoming, id: current[idx].id, createdAt: current[idx].createdAt, updatedAt: now }
-            : { ...incoming, createdAt: incoming.createdAt || now, updatedAt: now };
-        const next = idx >= 0 ? current.map((a, i) => (i === idx ? merged : a)) : [merged, ...current];
-        void persist(next, current);
-        return next;
-      });
+      const current = applicationsRef.current;
+      const now = new Date().toISOString();
+      const idx = current.findIndex((a) => a.id === incoming.id);
+      const merged: Application =
+        idx >= 0
+          ? { ...current[idx], ...incoming, id: current[idx].id, createdAt: current[idx].createdAt, updatedAt: now }
+          : { ...incoming, createdAt: incoming.createdAt || now, updatedAt: now };
+      const next = idx >= 0 ? current.map((a, i) => (i === idx ? merged : a)) : [merged, ...current];
+      applicationsRef.current = next;
+      setApplications(next);
+      return persist(next, [{
+        id: merged.id,
+        operation: "upsert",
+        baseUpdatedAt: idx >= 0 ? current[idx].updatedAt : null
+      }]);
     },
     [persist]
   );
@@ -404,100 +474,87 @@ export function useApplications() {
   // write win over the in-flight pre-artifact Apply write.
   const patchApplication = useCallback(
     (id: string, patch: Partial<Application>) => {
-      setApplications((current) => {
-        const idx = current.findIndex((a) => a.id === id);
-        if (idx < 0) return current;
-        const next = current.map((a, i) =>
-          i === idx ? { ...a, ...patch, id: a.id, updatedAt: new Date().toISOString() } : a
-        );
-        void persist(next, current);
-        return next;
-      });
+      const current = applicationsRef.current;
+      const idx = current.findIndex((a) => a.id === id);
+      if (idx < 0) return;
+      const next = current.map((a, i) =>
+        i === idx ? { ...a, ...patch, id: a.id, updatedAt: new Date().toISOString() } : a
+      );
+      applicationsRef.current = next;
+      setApplications(next);
+      void persist(next, [{ id, operation: "upsert", baseUpdatedAt: current[idx].updatedAt }]);
     },
     [persist]
   );
 
   const updateStatus = useCallback(
     (id: string, status: ApplicationStatus) => {
-      setApplications((current) => {
-        const now = new Date().toISOString();
-        const next = current.map((a) =>
-          a.id === id
-            ? {
-                ...a,
-                status,
-                updatedAt: now,
-                appliedAt: status === "applied" && !a.appliedAt ? now : a.appliedAt
-              }
-            : a
-        );
-        void persist(next, current);
-        return next;
-      });
+      const current = applicationsRef.current;
+      const existing = current.find((a) => a.id === id);
+      if (!existing) return;
+      const now = new Date().toISOString();
+      const next = current.map((a) =>
+        a.id === id
+          ? {
+              ...a,
+              status,
+              updatedAt: now,
+              appliedAt: status === "applied" && !a.appliedAt ? now : a.appliedAt
+            }
+          : a
+      );
+      applicationsRef.current = next;
+      setApplications(next);
+      void persist(next, [{ id, operation: "upsert", baseUpdatedAt: existing.updatedAt }]);
     },
     [persist]
   );
 
   const updateNotes = useCallback(
     (id: string, notes: string) => {
-      setApplications((current) => {
-        const next = current.map((a) =>
-          a.id === id ? { ...a, notes, updatedAt: new Date().toISOString() } : a
-        );
-        void persist(next, current);
-        return next;
-      });
+      const current = applicationsRef.current;
+      const existing = current.find((a) => a.id === id);
+      if (!existing) return;
+      const next = current.map((a) =>
+        a.id === id ? { ...a, notes, updatedAt: new Date().toISOString() } : a
+      );
+      applicationsRef.current = next;
+      setApplications(next);
+      void persist(next, [{ id, operation: "upsert", baseUpdatedAt: existing.updatedAt }]);
     },
     [persist]
   );
 
   const updateField = useCallback(
     (id: string, field: EditableField, value: string) => {
-      setApplications((current) => {
-        const next = current.map((a) =>
-          a.id === id ? { ...a, [field]: value, updatedAt: new Date().toISOString() } : a
-        );
-        void persist(next, current);
-        return next;
-      });
+      const current = applicationsRef.current;
+      const existing = current.find((a) => a.id === id);
+      if (!existing) return;
+      const next = current.map((a) =>
+        a.id === id ? { ...a, [field]: value, updatedAt: new Date().toISOString() } : a
+      );
+      applicationsRef.current = next;
+      setApplications(next);
+      void persist(next, [{ id, operation: "upsert", baseUpdatedAt: existing.updatedAt }]);
     },
     [persist]
   );
 
   const remove = useCallback(
     (id: string) => {
-      // Snapshot the pre-delete list so a failed DELETE can roll back (same
-      // contract as `persist`, which restores `previous` on error).
-      let snapshot: Application[] = [];
-      setApplications((current) => {
-        snapshot = current;
-        return current.filter((a) => a.id !== id);
-      });
-      const requestId = ++persistVersion.current;
-      const write = persistQueue.current.catch(() => undefined).then(async () => {
-        const res = await fetch(`/api/applications/${encodeURIComponent(id)}`, { method: "DELETE" });
-        const data = await res.json();
-        // 404 = already deleted (e.g. by another tab) — the optimistic removal
-        // is correct, so treat it as success rather than rolling back.
-        if (!res.ok && res.status !== 404) throw new Error(data.error ?? "Delete failed.");
-        return data;
-      });
-      persistQueue.current = write.then(() => undefined, () => undefined);
-      void write.then(
-        (data) => {
-          if (requestId === persistVersion.current && Array.isArray(data.applications)) {
-            setApplications(data.applications);
-          }
-        },
-        (err) => {
-          if (requestId === persistVersion.current) {
-            setApplications(snapshot);
-            setError(err instanceof Error ? err.message : "Delete failed.");
-          }
-        }
-      );
+      const current = applicationsRef.current;
+      const existing = current.find((a) => a.id === id);
+      if (!existing) return;
+      const next = current.filter((a) => a.id !== id);
+      applicationsRef.current = next;
+      setApplications(next);
+      // Use the same serialized full-snapshot write as every other mutation
+      // and name the deletion explicitly. This also means a delete queued after
+      // an optimistic edit carries that edit's revision instead of silently
+      // removing a newer server record.
+      void persist(next, [{ id, operation: "delete", baseUpdatedAt: existing.updatedAt }]);
     },
-    []
+    [persist]
   );
 
   // Find an existing application matching the current job target — by
@@ -538,61 +595,79 @@ export function useApplications() {
   // so a stale group (already merged in another tab) can't drop data.
   const mergeApplications = useCallback(
     (memberIds: string[], canonicalId: string) => {
-      setApplications((current) => {
-        const ids = new Set(memberIds);
-        const members = current.filter((a) => ids.has(a.id));
-        const canonical = members.find((a) => a.id === canonicalId);
-        if (!canonical || members.length < 2) return current;
-        const now = new Date().toISOString();
-        const others = members.filter((a) => a.id !== canonicalId);
+      const current = applicationsRef.current;
+      const ids = new Set(memberIds);
+      const members = current.filter((a) => ids.has(a.id));
+      const canonical = members.find((a) => a.id === canonicalId);
+      if (!canonical || members.length < 2) return;
+      const now = new Date().toISOString();
+      const others = members.filter((a) => a.id !== canonicalId);
 
-        // Union sourceUrls: every member's sourceUrls + every non-canonical
-        // member's primary jobUrl. Dedup/primary-exclusion/cap/earliest-addedAt
-        // rules live in the shared dedupeSourceUrls (one implementation with
-        // the upsert merge and the server sanitizer).
-        const candidates: { url?: string; source?: string; addedAt?: string }[] = [
-          ...members.flatMap((member) => member.sourceUrls ?? []),
-          ...others
-            .map((member) => (member.jobUrl ?? "").trim())
-            .filter(Boolean)
-            .map((url) => ({ url, source: sourceFromUrl(url) || undefined, addedAt: now }))
-        ];
-        const deduped = dedupeSourceUrls(candidates, canonical.jobUrl, now, MAX_SOURCE_URLS);
-        const sourceUrls = deduped.length ? deduped : undefined;
-
-        // ISO timestamps sort lexically, so min() is a plain string comparison.
-        const earliestCreatedAt = members
-          .map((m) => m.createdAt)
+      // Union sourceUrls: every member's sourceUrls + every non-canonical
+      // member's primary jobUrl. Dedup/primary-exclusion/cap/earliest-addedAt
+      // rules live in the shared dedupeSourceUrls (one implementation with
+      // the upsert merge and the server sanitizer).
+      const candidates: { url?: string; source?: string; addedAt?: string }[] = [
+        ...members.flatMap((member) => member.sourceUrls ?? []),
+        ...others
+          .map((member) => (member.jobUrl ?? "").trim())
           .filter(Boolean)
-          .sort()[0] || canonical.createdAt;
+          .map((url) => ({ url, source: sourceFromUrl(url) || undefined, addedAt: now }))
+      ];
+      const deduped = dedupeSourceUrls(candidates, canonical.jobUrl, now, MAX_SOURCE_URLS);
+      const sourceUrls = deduped.length ? deduped : undefined;
 
-        const merged: Application = {
-          ...canonical,
-          sourceUrls,
-          rawJobDescription: canonical.rawJobDescription || others.find((m) => m.rawJobDescription)?.rawJobDescription,
-          aiUsage: canonical.aiUsage ?? others.find((m) => m.aiUsage)?.aiUsage,
-          createdAt: earliestCreatedAt,
-          updatedAt: now
-        };
+      // ISO timestamps sort lexically, so min() is a plain string comparison.
+      const earliestCreatedAt = members
+        .map((m) => m.createdAt)
+        .filter(Boolean)
+        .sort()[0] || canonical.createdAt;
 
-        const next = current
-          .filter((a) => !ids.has(a.id) || a.id === canonicalId)
-          .map((a) => (a.id === canonicalId ? merged : a));
-        // Name the removed members explicitly — without deleteIds the server's
-        // multi-tab read-merge would resurrect them from disk on this very write.
-        void persist(next, current, others.map((a) => a.id));
-        return next;
-      });
+      const merged: Application = {
+        ...canonical,
+        sourceUrls,
+        rawJobDescription: canonical.rawJobDescription || others.find((m) => m.rawJobDescription)?.rawJobDescription,
+        aiUsage: canonical.aiUsage ?? others.find((m) => m.aiUsage)?.aiUsage,
+        createdAt: earliestCreatedAt,
+        updatedAt: now
+      };
+
+      const next = current
+        .filter((a) => !ids.has(a.id) || a.id === canonicalId)
+        .map((a) => (a.id === canonicalId ? merged : a));
+      applicationsRef.current = next;
+      setApplications(next);
+      void persist(next, [
+        { id: canonical.id, operation: "upsert", baseUpdatedAt: canonical.updatedAt },
+        ...others.map((application): ApplicationMutation => ({
+          id: application.id,
+          operation: "delete",
+          baseUpdatedAt: application.updatedAt
+        }))
+      ]);
     },
     [persist]
   );
 
   const refresh = useCallback(async () => {
     try {
+      // A GET racing an older queued PUT can finish last with the pre-write
+      // snapshot and make a successful local edit appear to vanish. Read only
+      // after this tab's queued mutations have settled.
+      await persistQueue.current.catch(() => undefined);
+      const refreshVersion = persistVersion.current;
       const res = await fetch("/api/applications");
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Failed to load applications.");
-      setApplications(Array.isArray(data.applications) ? data.applications : []);
+      // A new mutation began after the queue wait. Its persist response (or
+      // rollback) owns state; this GET may have observed the pre-mutation disk
+      // snapshot and must not overwrite it.
+      if (refreshVersion !== persistVersion.current) return;
+      const loaded = Array.isArray(data.applications) ? data.applications : [];
+      confirmedApplications.current = loaded;
+      applicationsRef.current = loaded;
+      setApplications(loaded);
+      conflictMessage.current = "";
       setError("");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load applications.");
@@ -604,6 +679,7 @@ export function useApplications() {
     isLoading,
     error,
     storagePath,
+    pendingWrites,
     upsert,
     saveApplication,
     patchApplication,

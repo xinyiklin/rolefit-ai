@@ -49,7 +49,20 @@ partnering with analytics stakeholders on governance policies and cataloging.
 Requirements: seven years building batch and streaming data platforms, deep
 Python expertise, Kafka, warehouse cost optimization, and dbt modeling rigor.
 Preferred: fintech reporting background, Scala, Iceberg, and lakehouse designs.
+Adjacent collaboration touches React, PostgreSQL, JavaScript, cloud,
+Kubernetes, and healthcare systems.
 `.trim();
+
+// Keeps the entire original role body but adds a materially different scope.
+// This lands between the possible (60%) and high-confidence (85%) overlap
+// floors, proving that the fuzzy-warning band still catches plausible reposts.
+const PARTIAL_REPOST_BODY = `${JD_BODY}
+Additional scope includes payments observability, incident command, capacity
+forecasting, service ownership, dependency mapping, privacy reviews, audit
+controls, release coordination, accessibility testing, localization support,
+vendor assessment, cost modeling, experimentation design, customer research,
+feature flags, performance budgets, browser automation, security triage,
+data retention, operational readiness, migration planning, and documentation.`;
 
 // ── URL normalization ────────────────────────────────────────────────────────
 check(
@@ -144,6 +157,12 @@ check("locations: different cities contradict", locationsCompatible("Austin, TX"
 // ── Fingerprints ─────────────────────────────────────────────────────────────
 check("identical text similarity 1", jdSimilarity(jdFingerprint(JD_BODY), jdFingerprint(JD_BODY)), 1);
 check("different roles similarity low", jdSimilarity(jdFingerprint(JD_BODY), jdFingerprint(OTHER_BODY)) < 0.3, true);
+check(
+  "weak-overlap fixture stays around reported 10%",
+  jdSimilarity(jdFingerprint(JD_BODY), jdFingerprint(OTHER_BODY)) >= 0.08 &&
+    jdSimilarity(jdFingerprint(JD_BODY), jdFingerprint(OTHER_BODY)) < 0.12,
+  true
+);
 check("empty fingerprint never matches", jdSimilarity(jdFingerprint(""), jdFingerprint(JD_BODY)), 0);
 
 // ── Layered matcher ──────────────────────────────────────────────────────────
@@ -219,16 +238,38 @@ const baseApp = {
   }, { level: "repost", confidence: "high" });
 }
 
-// Same company + title, different description, compatible location → possible only.
+// Same company + title with weak description overlap must NOT warn. Metadata
+// alone used to produce a possible match even around 5-10% similarity.
 {
   const matches = findDuplicateApplications(
     { jobUrl: "", jobText: OTHER_BODY, company: "Acme", role: "Software Engineer II", location: "New York" },
     [baseApp]
   );
-  check("same title, different JD → possible same-company-role", {
+  check("same title with weak JD overlap → no warning", matches.length, 0);
+}
+
+// Substantial descriptions in the fuzzy band still produce an advisory match.
+{
+  const overlap = jdSimilarity(jdFingerprint(PARTIAL_REPOST_BODY), jdFingerprint(JD_BODY));
+  const matches = findDuplicateApplications(
+    { jobUrl: "", jobText: PARTIAL_REPOST_BODY, company: "Acme", role: "Software Engineer II", location: "New York" },
+    [baseApp]
+  );
+  check("partial repost fixture stays in 60-85% warning band", overlap >= 0.6 && overlap < 0.85, true);
+  check("same title with meaningful JD overlap → possible", {
     level: matches[0]?.level,
     confidence: matches[0]?.confidence
   }, { level: "same-company-role", confidence: "possible" });
+}
+
+// Short snippets cannot create fuzzy duplicates even when every token matches.
+{
+  const snippet = "Build React services with TypeScript and PostgreSQL for customer-facing products.";
+  const matches = findDuplicateApplications(
+    { jobUrl: "", jobText: snippet, company: "Acme", role: "Software Engineer II", location: "New York" },
+    [{ ...baseApp, jobDescription: snippet }]
+  );
+  check("identical short snippets → no fuzzy warning", matches.length, 0);
 }
 
 // Same company + title, different description AND contradicting location → no match.

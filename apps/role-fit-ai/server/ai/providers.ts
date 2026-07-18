@@ -1,5 +1,5 @@
 // Provider identity + per-request configuration resolution: which provider/
-// model/key/base-URL/reasoning-effort a request resolves to, plus the default
+// model/key/reasoning-effort a request resolves to, plus the default
 // provider and the validation shared by /api/polish and /api/application-answers.
 
 import { UserSafeAiError } from "./errors.ts";
@@ -9,7 +9,6 @@ import { UserSafeAiError } from "./errors.ts";
 type ProviderRequestBody = {
   provider?: unknown;
   apiKey?: unknown;
-  apiBaseUrl?: unknown;
   model?: unknown;
   reasoningEffort?: unknown;
 };
@@ -17,7 +16,6 @@ type ProviderRequestBody = {
 type AuditRequestBody = {
   auditProvider?: unknown;
   auditApiKey?: unknown;
-  auditApiBaseUrl?: unknown;
   auditModel?: unknown;
   auditReasoningEffort?: unknown;
 };
@@ -29,7 +27,6 @@ type ReviewOnlyRequestBody = ProviderRequestBody & AuditRequestBody;
 export type ResolvedProviderConfig = {
   provider: string;
   apiKey: string;
-  apiBaseUrl: string;
   model: string;
   reasoningEffort: string;
 };
@@ -52,22 +49,11 @@ export function getDefaultModel(): string {
   return process.env.AI_MODEL ?? providerDefaultModel(getDefaultProvider());
 }
 
-function defaultCompatibleBaseUrl(): string {
-  return process.env.AI_BASE_URL ?? process.env.OPENAI_COMPATIBLE_BASE_URL ?? "";
-}
-
 export function providerLabel(provider: string): string {
   return (
     {
       openai: "OpenAI",
       anthropic: "Claude",
-      gemini: "Gemini",
-      openrouter: "OpenRouter",
-      groq: "Groq",
-      together: "Together AI",
-      mistral: "Mistral",
-      local: "Local AI",
-      "openai-compatible": "OpenAI-compatible provider",
       "claude-cli": "Claude Code",
       "codex-cli": "Codex CLI",
       "antigravity-cli": "Antigravity CLI"
@@ -80,13 +66,6 @@ export function providerLabel(provider: string): string {
 const KNOWN_PROVIDERS = new Set([
   "openai",
   "anthropic",
-  "gemini",
-  "openrouter",
-  "groq",
-  "together",
-  "mistral",
-  "openai-compatible",
-  "local",
   "claude-cli",
   "codex-cli",
   "antigravity-cli"
@@ -98,18 +77,11 @@ function isKnownProvider(value: unknown): boolean {
   return KNOWN_PROVIDERS.has(String(value ?? "").trim().toLowerCase());
 }
 
-function isExactLoopbackBaseUrl(value: string): boolean {
-  try {
-    const url = new URL(value);
-    return ["localhost", "127.0.0.1", "[::1]", "::1"].includes(url.hostname.toLowerCase());
-  } catch {
-    return false;
-  }
-}
-
-export function normalizeProvider(provider: unknown): string {
-  const normalized = String(provider ?? "").trim().toLowerCase();
-  return KNOWN_PROVIDERS.has(normalized) ? normalized : "openai";
+function normalizeProvider(provider: unknown): string {
+  // Every caller validates membership first; keep normalization free of a paid
+  // provider fallback so a future call site cannot silently turn a typo into an
+  // OpenAI dispatch.
+  return String(provider ?? "").trim().toLowerCase();
 }
 
 export function isCliProvider(provider: string): boolean {
@@ -123,7 +95,7 @@ function normalizeCliReasoningEffort(provider: string, effort: unknown): string 
 
   const allowed = {
     "claude-cli": ["low", "medium", "high", "xhigh", "max"],
-    "codex-cli": ["low", "medium", "high", "xhigh"]
+    "codex-cli": ["low", "medium", "high", "xhigh", "max", "ultra"]
   }[provider];
 
   return allowed?.includes(normalized) ? normalized : null;
@@ -132,56 +104,27 @@ function normalizeCliReasoningEffort(provider: string, effort: unknown): string 
 function providerDefaultModel(provider: string): string {
   return (
     {
-      openai: process.env.OPENAI_MODEL ?? "gpt-5.5",
+      openai: process.env.OPENAI_MODEL ?? "gpt-5.6-terra",
       anthropic: process.env.ANTHROPIC_MODEL ?? "claude-sonnet-5",
-      gemini: process.env.GEMINI_MODEL ?? "gemini-3.5-flash",
-      openrouter: process.env.OPENROUTER_MODEL ?? "anthropic/claude-sonnet-4.6",
-      groq: process.env.GROQ_MODEL ?? "openai/gpt-oss-120b",
-      together: process.env.TOGETHER_MODEL ?? "openai/gpt-oss-20b",
-      mistral: process.env.MISTRAL_MODEL ?? "mistral-large-latest",
-      "openai-compatible": process.env.AI_MODEL ?? process.env.OPENAI_MODEL ?? "gpt-5.5",
-      local: process.env.LOCAL_AI_MODEL ?? "llama3.2",
-      "claude-cli": process.env.CLAUDE_CLI_MODEL ?? "",
-      "codex-cli": process.env.CODEX_CLI_MODEL ?? "",
-      "antigravity-cli": process.env.ANTIGRAVITY_CLI_MODEL ?? ""
-    }[provider] ?? process.env.OPENAI_MODEL ?? "gpt-5.5"
+      "claude-cli": process.env.CLAUDE_CLI_MODEL ?? "claude-sonnet-5",
+      "codex-cli": process.env.CODEX_CLI_MODEL ?? "gpt-5.6-sol",
+      "antigravity-cli": process.env.ANTIGRAVITY_CLI_MODEL ?? "Gemini 3.5 Flash (High)"
+    }[provider] ?? process.env.OPENAI_MODEL ?? "gpt-5.6-terra"
   );
 }
 
 function providerApiKey(provider: string, requestApiKey: string): string {
   if (requestApiKey) return requestApiKey;
-  // Credential boundary: never let an OpenAI key bleed into another vendor or
-  // into a loopback local server merely because it is present in the process.
+  // Credential boundary: never let an OpenAI key bleed into Claude or vice
+  // versa merely because another provider key is present in the process.
   const providerSpecific = {
     openai: process.env.OPENAI_API_KEY,
-    anthropic: process.env.ANTHROPIC_API_KEY,
-    gemini: process.env.GEMINI_API_KEY,
-    openrouter: process.env.OPENROUTER_API_KEY,
-    groq: process.env.GROQ_API_KEY,
-    together: process.env.TOGETHER_API_KEY,
-    mistral: process.env.MISTRAL_API_KEY,
-    "openai-compatible": process.env.OPENAI_COMPATIBLE_API_KEY,
-    local: process.env.LOCAL_AI_API_KEY
+    anthropic: process.env.ANTHROPIC_API_KEY
   }[provider];
-  return providerSpecific || process.env.AI_API_KEY || "";
+  return providerSpecific || "";
 }
 
-function providerBaseUrl(provider: string, requestBaseUrl: unknown): string {
-  return (
-    String(requestBaseUrl ?? "").trim() ||
-    {
-      openrouter: process.env.OPENROUTER_BASE_URL || "https://openrouter.ai/api/v1",
-      groq: process.env.GROQ_BASE_URL || "https://api.groq.com/openai/v1",
-      together: process.env.TOGETHER_BASE_URL || "https://api.together.xyz/v1",
-      mistral: process.env.MISTRAL_BASE_URL || "https://api.mistral.ai/v1",
-      local: process.env.LOCAL_AI_BASE_URL || "http://localhost:11434/v1",
-      "openai-compatible": defaultCompatibleBaseUrl()
-    }[provider] ||
-    defaultCompatibleBaseUrl()
-  );
-}
-
-// Resolve provider, key, base URL, model, and reasoning effort from a request
+// Resolve provider, key, model, and reasoning effort from a request
 // body, applying the same validation handlePolish used. Throws UserSafeAiError
 // (handled by each route's catch) on a missing key, bad model, or unsupported
 // CLI effort. Shared by /api/polish and /api/application-answers.
@@ -198,14 +141,25 @@ export function resolveProviderRequest(body: ProviderRequestBody): ResolvedProvi
   }
   const provider = normalizeProvider(requestedProvider || getDefaultProvider());
   const requestApiKey = String(body.apiKey ?? "").trim();
+  if (requestApiKey.length > 1_000) {
+    throw new UserSafeAiError("API key is too long. Check AI settings and try again.", 400);
+  }
   const apiKey = providerApiKey(provider, requestApiKey);
-  const apiBaseUrl = providerBaseUrl(provider, body.apiBaseUrl);
-  const requestedModel = String(body.model ?? "").trim().slice(0, 80);
-  const model = requestedModel || providerDefaultModel(provider);
+  const requestedModel = String(body.model ?? "").trim();
+  if (requestedModel.length > 80) {
+    throw new UserSafeAiError("Model name is too long. Check AI settings and try again.", 400);
+  }
+  // AI_MODEL is the documented override for the HEADLESS/default path. An
+  // explicit request provider keeps its provider-specific default so a stale
+  // global override cannot silently select an incompatible model after the user
+  // chooses another provider in the UI.
+  const model = requestedModel || (requestedProvider ? providerDefaultModel(provider) : getDefaultModel());
+  if (model.length > 120) {
+    throw new UserSafeAiError("Configured model name is too long. Check AI settings and try again.", 400);
+  }
   const reasoningEffort = normalizeCliReasoningEffort(provider, body.reasoningEffort);
 
-  const unauthenticatedLoopbackLocal = provider === "local" && isExactLoopbackBaseUrl(apiBaseUrl);
-  if (!apiKey && !isCliProvider(provider) && !unauthenticatedLoopbackLocal) {
+  if (!apiKey && !isCliProvider(provider)) {
     throw new UserSafeAiError(
       `Add an API key in AI settings or set the ${provider.toUpperCase()} API key in .env before starting the app.`,
       401
@@ -232,7 +186,7 @@ export function resolveProviderRequest(body: ProviderRequestBody): ResolvedProvi
     throw new UserSafeAiError("Unsupported reasoning effort for the selected CLI provider.", 400);
   }
 
-  return { provider, apiKey, apiBaseUrl, model, reasoningEffort };
+  return { provider, apiKey, model, reasoningEffort };
 }
 
 // Review-only requests do not dispatch the Tailor provider. Resolve the audit*
@@ -251,7 +205,6 @@ export function resolveReviewOnlyProviderRequest(body: ReviewOnlyRequestBody): R
   return resolveProviderRequest({
     provider: raw,
     apiKey: body.auditApiKey,
-    apiBaseUrl: body.auditApiBaseUrl,
     model: body.auditModel,
     reasoningEffort: body.auditReasoningEffort
   });
@@ -282,7 +235,6 @@ export function resolveAuditProviderRequest(
   return resolveProviderRequest({
     provider: raw,
     apiKey: body.auditApiKey,
-    apiBaseUrl: body.auditApiBaseUrl,
     model: body.auditModel,
     reasoningEffort: body.auditReasoningEffort
   });

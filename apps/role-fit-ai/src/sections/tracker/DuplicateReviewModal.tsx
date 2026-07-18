@@ -1,9 +1,10 @@
-import { useEffect, useRef, type KeyboardEvent } from "react";
+import { useEffect, useRef } from "react";
 import { X } from "lucide-react";
 import type { Application, ApplicationStatus } from "../../hooks/useApplications";
 import type { DuplicateGroup } from "../../lib/jobIdentity";
 import { STATUS_LABEL, displayCompany, displayRole, formatCompactDate, hostLabel } from "../../lib/applicationDisplay";
 import { useDialog } from "../../hooks/useDialog";
+import { useModalFocus } from "@typeset/editor/hooks/useModalFocus.ts";
 
 type DuplicateReviewModalProps = {
   groups: DuplicateGroup<Application>[];
@@ -34,9 +35,6 @@ function mostAdvancedId(applications: Application[]): string {
     return app.createdAt < best.createdAt ? app : best;
   }, applications[0]).id;
 }
-
-const FOCUSABLE_SELECTORS =
-  'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 function GroupCard({
   group,
@@ -135,55 +133,24 @@ function GroupCard({
 export function DuplicateReviewModal({ groups, onClose, onMerge }: DuplicateReviewModalProps) {
   const panelRef = useRef<HTMLDivElement>(null);
   const closeBtnRef = useRef<HTMLButtonElement>(null);
-  const previousFocusRef = useRef<Element | null>(null);
-
-  useEffect(() => {
-    previousFocusRef.current = document.activeElement;
-    const id = setTimeout(() => closeBtnRef.current?.focus(), 16);
-    return () => clearTimeout(id);
-  }, []);
-
-  useEffect(() => {
-    return () => {
-      if (previousFocusRef.current instanceof HTMLElement) previousFocusRef.current.focus();
-    };
-  }, []);
+  const handleKeyDown = useModalFocus({
+    active: groups.length > 0,
+    containerRef: panelRef,
+    initialFocusRef: closeBtnRef,
+    onClose
+  });
 
   // Auto-close once every group has been merged away.
   useEffect(() => {
     if (groups.length === 0) onClose();
   }, [groups.length, onClose]);
 
-  function handleKeyDown(event: KeyboardEvent<HTMLDivElement>) {
-    if (event.key === "Escape") {
-      event.preventDefault();
-      onClose();
-      return;
-    }
-    if (event.key !== "Tab") return;
-    const panel = panelRef.current;
-    if (!panel) return;
-    const focusable = Array.from(panel.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTORS));
-    if (focusable.length === 0) return;
-    const first = focusable[0];
-    const last = focusable[focusable.length - 1];
-    if (event.shiftKey) {
-      if (document.activeElement === first) {
-        event.preventDefault();
-        last.focus();
-      }
-    } else if (document.activeElement === last) {
-      event.preventDefault();
-      first.focus();
-    }
-  }
-
   if (groups.length === 0) return null;
 
   return (
     <div className="application-modal" role="dialog" aria-modal="true" aria-labelledby="duplicate-review-title" onKeyDown={handleKeyDown}>
-      <button type="button" className="application-modal__scrim" aria-label="Close" onClick={onClose} />
-      <section className="application-modal__panel duplicate-review-modal" ref={panelRef}>
+      <div className="application-modal__scrim" aria-hidden="true" onMouseDown={onClose} />
+      <section className="application-modal__panel duplicate-review-modal" ref={panelRef} tabIndex={-1}>
         <header className="application-modal__head">
           <div>
             <h2 id="duplicate-review-title" className="page-serif">

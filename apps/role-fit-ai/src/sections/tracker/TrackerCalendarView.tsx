@@ -133,6 +133,12 @@ export function TrackerCalendarView({
 
   return (
     <div className="tracker-layout tracker-layout--calendar">
+      <div
+        className="calendar-grid-scroll"
+        role="region"
+        aria-label="Application calendar. Scroll horizontally to see all seven days."
+        tabIndex={0}
+      >
         <div className="calendar-grid">
           {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
             <span className="calendar-grid__weekday table-eyebrow" key={day}>
@@ -145,11 +151,23 @@ export function TrackerCalendarView({
             const isOutside = day.getMonth() !== month.getMonth();
             const isToday = key === todayKey;
             const isSelected = key === selectedDate;
+            const fullDate = day.toLocaleDateString([], {
+              weekday: "long",
+              month: "long",
+              day: "numeric",
+              year: "numeric"
+            });
+            const eventSummary = cellEvents.length
+              ? `, ${cellEvents.length} ${cellEvents.length === 1 ? "event" : "events"}`
+              : ", no events";
             return (
               <button
                 type="button"
                 className={`calendar-cell ${isOutside ? "is-outside" : ""} ${isToday ? "is-today" : ""} ${isSelected ? "is-selected" : ""}`}
                 key={key}
+                aria-label={`${fullDate}${eventSummary}`}
+                aria-current={isToday ? "date" : undefined}
+                aria-pressed={isSelected}
                 onClick={() => setSelectedDate(key)}
               >
                 <span>{day.getDate()}</span>
@@ -166,6 +184,7 @@ export function TrackerCalendarView({
             );
           })}
         </div>
+      </div>
 
         <TrackerCalendarRail
           selectedDate={selectedDate}

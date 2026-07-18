@@ -16,6 +16,7 @@ import {
 } from "./jobExtract";
 import type { AiRequestFields } from "./aiRequest";
 import type { StageAiUsage } from "./aiUsage";
+import { ApiError, classifyFailure, type ClassifiedFailure } from "./failures";
 
 // The structured fields /api/distill returns (already grounded/anti-fab on the
 // server). Every field is optional at runtime — the model output is untrusted.
@@ -102,7 +103,12 @@ function buildExtractedFromAi(fields: Partial<AiDistillFields>, sourceText: stri
   return result;
 }
 
-export type DistillResult = { extracted: ExtractedJobPosting; source: "ai" | "local"; usage: StageAiUsage };
+export type DistillResult = {
+  extracted: ExtractedJobPosting;
+  source: "ai" | "local";
+  usage: StageAiUsage;
+  failure?: ClassifiedFailure;
+};
 
 function definedFields<T extends Record<string, unknown>>(obj: T): Partial<T> {
   return Object.fromEntries(Object.entries(obj).filter(([, v]) => v !== undefined && v !== "")) as Partial<T>;
@@ -170,16 +176,26 @@ function hasUsableAiContent(fields: Partial<AiDistillFields>): boolean {
 // `aiRequest` is only used for fallback attribution (which provider/model was
 // CONFIGURED when the AI content turned out unusable) — it does not affect
 // which branch is taken.
+// `localExtracted` lets a caller that already ran extractJobPosting on this
+// same text/url (e.g. the duplicate-before gate) hand the result in instead of
+// paying for a second pass through the deterministic parser. Only consulted on
+// the local-fallback branch — the AI-success branch never needed a local parse.
 export function extractedFromAiOrLocal(
   fields: Partial<AiDistillFields> | null,
   text: string,
   url?: string,
-  aiRequest?: Partial<AiRequestFields>
+  aiRequest?: Partial<AiRequestFields>,
+  localExtracted?: ExtractedJobPosting
 ): DistillResult {
   if (fields && hasUsableAiContent(fields)) {
     return { extracted: buildExtractedFromAi(fields, text, url), source: "ai", usage: aiUsageFromFields(fields) };
   }
-  return { extracted: extractJobPosting(text, { url }), source: "local", usage: localFallbackUsage(aiRequest) };
+  return {
+    extracted: localExtracted ?? extractJobPosting(text, { url }),
+    source: "local",
+    usage: localFallbackUsage(aiRequest),
+    failure: classifyFailure(new ApiError("The distiller returned no usable job requirements", 502))
+  };
 }
 
 // Distill raw posting text. AI-first with a deterministic fallback on any failure.
@@ -187,16 +203,30 @@ export function extractedFromAiOrLocal(
 // plus a StageAiUsage snapshot for the app's per-stage AI-usage tracker.
 export async function distillJobPosting(
   text: string,
-  options: { url?: string; signal?: AbortSignal; aiRequest?: Partial<AiRequestFields> } = {}
+  options: {
+    url?: string;
+    signal?: AbortSignal;
+    aiRequest?: Partial<AiRequestFields>;
+    // Precomputed extractJobPosting(text, { url }) result from a caller's own
+    // gate parse (same text/url). Every local-fallback branch below reuses it
+    // instead of re-running the parser; falls back to computing it here, once,
+    // memoized, when the caller didn't have one ready (or its text/url diverged
+    // from what it fed the gate parse — see useJobIntake.ts call sites).
+    localExtracted?: ExtractedJobPosting;
+  } = {}
 ): Promise<DistillResult> {
-  const { url, signal, aiRequest } = options;
+  const { url, signal, aiRequest, localExtracted } = options;
+  let memoizedLocalExtracted: ExtractedJobPosting | undefined;
+  const resolveLocalExtracted = (): ExtractedJobPosting =>
+    localExtracted ?? (memoizedLocalExtracted ??= extractJobPosting(text, { url }));
   // No AI attempted at all (text too short to bother calling out).
-  const localOnly = (): DistillResult => ({ extracted: extractJobPosting(text, { url }), source: "local", usage: localOnlyUsage() });
+  const localOnly = (): DistillResult => ({ extracted: resolveLocalExtracted(), source: "local", usage: localOnlyUsage() });
   // An AI call was made but didn't produce a usable result.
-  const localAfterAttempt = (): DistillResult => ({
-    extracted: extractJobPosting(text, { url }),
+  const localAfterAttempt = (failure: ClassifiedFailure): DistillResult => ({
+    extracted: resolveLocalExtracted(),
     source: "local",
-    usage: localFallbackUsage(aiRequest)
+    usage: localFallbackUsage(aiRequest),
+    failure
   });
   if (text.trim().length < 40) return localOnly();
 
@@ -207,13 +237,29 @@ export async function distillJobPosting(
       body: JSON.stringify({ text, url, ...(aiRequest ?? {}) }),
       signal
     });
-    if (!res.ok) return localAfterAttempt();
-    const fields = (await res.json()) as Partial<AiDistillFields> | null;
-    if (!fields || fields.source !== "ai") return localAfterAttempt();
-    return extractedFromAiOrLocal(fields, text, url, aiRequest);
+    if (!res.ok) {
+      let message = "AI distill request failed";
+      try {
+        const body = (await res.json()) as { error?: unknown };
+        if (typeof body.error === "string" && body.error.trim()) message = body.error.trim();
+      } catch {
+        // The status code still classifies a non-JSON failure safely.
+      }
+      return localAfterAttempt(classifyFailure(new ApiError(message, res.status)));
+    }
+    let fields: Partial<AiDistillFields> | null;
+    try {
+      fields = (await res.json()) as Partial<AiDistillFields> | null;
+    } catch {
+      return localAfterAttempt(classifyFailure(new ApiError("The distiller returned an unparseable response", 502)));
+    }
+    if (!fields || fields.source !== "ai") {
+      return localAfterAttempt(classifyFailure(new ApiError("The distiller returned an invalid response", 502)));
+    }
+    return extractedFromAiOrLocal(fields, text, url, aiRequest, localExtracted);
   } catch (error) {
     // A genuine cancel should propagate; everything else falls back locally.
     if (error instanceof DOMException && error.name === "AbortError") throw error;
-    return localAfterAttempt();
+    return localAfterAttempt(classifyFailure(error));
   }
 }

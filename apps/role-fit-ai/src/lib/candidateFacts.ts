@@ -27,9 +27,9 @@ export type CandidateFacts = {
 
 const CITIZENSHIP_CONTEXT: Record<CitizenshipStatus, string> = {
   unspecified: "",
-  "us-citizen": "Citizenship: U.S. citizen — eligible for security clearances and positions requiring U.S. citizenship.",
-  "permanent-resident": "Citizenship: U.S. permanent resident (green card holder) — authorized to work, not eligible for positions requiring U.S. citizenship or security clearances.",
-  "foreign-national": "Citizenship: foreign national — not a U.S. citizen or permanent resident."
+  "us-citizen": "Citizenship: U.S. citizen; eligible for security clearances and positions requiring U.S. citizenship.",
+  "permanent-resident": "Citizenship: U.S. permanent resident (green card holder); authorized to work, but not eligible for positions requiring U.S. citizenship or security clearances.",
+  "foreign-national": "Citizenship: foreign national; not a U.S. citizen or permanent resident."
 };
 
 // Returns "" until the user picks a citizenship status — citizenship is the

@@ -17,11 +17,13 @@
  */
 import { useState } from "react";
 import type { ChangeEvent } from "react";
+import type { ResumeData } from "@typeset/engine/lib/resumeData.ts";
+import { parseResumeFile, serializeResumeFile } from "@typeset/engine/lib/resumeFile.ts";
+import type { DocStyleControls } from "@typeset/editor/hooks/useDocStyle.ts";
 import type { ConfirmOptions } from "./useDialog";
 import type { AutosavedDraft } from "./useAutosaveDraft";
-import { loadLastBaseResumeName, saveLastBaseResumeName } from "../lib/baseResumePrefs";
-import { serializeResumeData, type ResumeData } from "../lib/resumeData";
-import { parseResumeFile, serializeResumeFile } from "../lib/resumeFile";
+import { loadLastBaseResumeName, saveLastBaseResumeName } from "../lib/baseResumePrefs.ts";
+import { serializeResumeData } from "../lib/resumeText.ts";
 import type { PolishedResume } from "../resumeEngine";
 
 export type WorkspaceBaseResume = {
@@ -62,6 +64,46 @@ export type JobWorkspace = {
   files: string[];
 };
 
+type PreparedResumeCandidate =
+  | {
+      kind: "resume";
+      parsed: ReturnType<typeof parseResumeFile>;
+    }
+  | {
+      kind: "text";
+      text: string;
+    };
+
+type UploadFileLike = {
+  name: string;
+  text: () => Promise<string>;
+};
+
+function prepareResumeText(text: string, structured: boolean): PreparedResumeCandidate {
+  return structured ? { kind: "resume", parsed: parseResumeFile(text) } : { kind: "text", text };
+}
+
+/** Validate the extension and fully read/parse an upload without mutating UI state. */
+export async function prepareResumeUpload(file: UploadFileLike): Promise<PreparedResumeCandidate> {
+  if (/\.pdf$/i.test(file.name)) {
+    throw new Error(
+      "PDF uploads are text-only and cannot preserve layout. Upload a .resume file for format-preserving edits, or paste extracted PDF text."
+    );
+  }
+  const structured = /\.resume$/i.test(file.name);
+  if (!structured && !/\.(txt|md|csv)$/i.test(file.name)) {
+    throw new Error("Upload a .resume file to restore a saved editor state, or TXT, MD, or CSV for text-only polishing.");
+  }
+
+  let text: string;
+  try {
+    text = await file.text();
+  } catch {
+    throw new Error("The file could not be read. Try pasting the resume text instead.");
+  }
+  return prepareResumeText(text, structured);
+}
+
 type UseWorkspaceResumeArgs = {
   confirm: (opts: ConfirmOptions) => Promise<boolean>;
   confirmReplaceEditor: () => Promise<boolean>;
@@ -86,6 +128,7 @@ type UseWorkspaceResumeArgs = {
   currentResumeText: string;
   resumeText: string;
   editedResume: ResumeData | null;
+  docStyle: DocStyleControls;
 };
 
 export function useWorkspaceResume({
@@ -108,7 +151,8 @@ export function useWorkspaceResume({
   seedResumeData,
   currentResumeText,
   resumeText,
-  editedResume
+  editedResume,
+  docStyle
 }: UseWorkspaceResumeArgs) {
   const [workspacePath, setWorkspacePath] = useState("");
   const [workspaceFiles, setWorkspaceFiles] = useState<string[]>([]);
@@ -127,13 +171,31 @@ export function useWorkspaceResume({
   // triggered on first mount before the user has made any edits. It is false on
   // explicit Reload, Load-version, and Restore actions where the user could have
   // unsaved edits they'd lose.
-  async function applyWorkspaceBaseResume(baseResume: WorkspaceBaseResume, status: string, skipConfirm = false) {
-    if (!baseResume.exists || !baseResume.text) return;
+  async function applyWorkspaceBaseResume(
+    baseResume: WorkspaceBaseResume,
+    status: string,
+    skipConfirm = false,
+    clearRecoveryOnCommit = false
+  ): Promise<boolean> {
+    if (!baseResume.exists || !baseResume.text) return false;
+
+    let candidate: PreparedResumeCandidate;
+    try {
+      candidate = prepareResumeText(baseResume.text, baseResume.kind === "resume");
+    } catch (error) {
+      setFileStatus(error instanceof Error ? error.message : "This .resume file could not be read.");
+      return false;
+    }
 
     if (!skipConfirm && resumeEdited) {
-      if (!(await confirmReplaceEditor())) return;
-      // User confirmed the replace — the autosaved draft of the old edits is
-      // now superseded; clear it so the restore bar doesn't linger.
+      if (!(await confirmReplaceEditor())) return false;
+      clearRecoveryOnCommit = true;
+    }
+
+    // Validation and any required confirmation have both succeeded. Recovery
+    // data is superseded only at this commit boundary, never while a file is
+    // still unread, malformed, or awaiting user confirmation.
+    if (clearRecoveryOnCommit) {
       clearAutosaveDraft();
       setPendingAutosaveDraft(null);
     }
@@ -147,25 +209,20 @@ export function useWorkspaceResume({
     setPolishStatus("");
     resetExportStatuses();
     setExportStatus("");
-    // A `.resume` base is a lossless structured save — parse it and seed the
-    // editor directly from the ResumeData (mirrors restoring a tracked
-    // application's resumeData) rather than round-tripping through the
-    // plain-text parser.
-    if (baseResume.kind === "resume") {
-      try {
-        const parsed = parseResumeFile(baseResume.text);
-        setResumeText(serializeResumeData(parsed));
-        seedResumeData(parsed);
-      } catch (error) {
-        setFileStatus(error instanceof Error ? error.message : "This .resume file could not be read.");
-        return;
-      }
+    // A `.resume` base is a lossless structured save. It was parsed above,
+    // before this commit began, so malformed content cannot partially replace
+    // file identity, editor state, AI output, or recovery state.
+    if (candidate.kind === "resume") {
+      setResumeText(serializeResumeData(candidate.parsed.data));
+      seedResumeData(candidate.parsed.data);
+      docStyle.replaceDocumentStyle(candidate.parsed.documentStyle);
     } else {
       // Make the loaded base resume editable straight away (pre-polish).
-      setResumeText(baseResume.text);
-      seedResumeEditor(baseResume.text, "");
+      setResumeText(candidate.text);
+      seedResumeEditor(candidate.text, "");
     }
     setFileStatus(status);
+    return true;
   }
 
   function updateWorkspaceState(workspace: JobWorkspace) {
@@ -221,8 +278,9 @@ export function useWorkspaceResume({
           try {
             if (workspace.baseResume.kind === "resume") {
               const parsed = parseResumeFile(starterText);
-              setResumeText(serializeResumeData(parsed));
-              seedResumeData(parsed);
+              setResumeText(serializeResumeData(parsed.data));
+              seedResumeData(parsed.data);
+              docStyle.replaceDocumentStyle(parsed.documentStyle);
             } else {
               setResumeText(starterText);
               seedResumeEditor(starterText, "");
@@ -259,6 +317,14 @@ export function useWorkspaceResume({
         throw new Error(workspace.error ?? "Base resume save failed.");
       }
 
+      // Save preserves the user's work, so no replace confirmation is needed.
+      // Validate the server-returned file and commit it before clearing the
+      // autosave that is now persisted in the workspace.
+      const applied = await applyWorkspaceBaseResume(workspace.baseResume, "", true, true);
+      if (!applied) {
+        setWorkspaceStatus("Saved the base resume, but its returned file could not be loaded. The current editor was kept.");
+        return;
+      }
       updateWorkspaceState({
         path: workspace.path ?? workspacePath,
         baseResume: workspace.baseResume,
@@ -266,10 +332,6 @@ export function useWorkspaceResume({
         baseResumeHistory: workspace.baseResumeHistory,
         files: workspace.files ?? workspaceFiles
       });
-      // Save preserves the user's work — no confirm needed; also clear the
-      // autosave since the edits are now persisted to the workspace file.
-      clearAutosaveDraft();
-      await applyWorkspaceBaseResume(workspace.baseResume, "", true);
       setWorkspaceStatus("Saved.");
     } catch (error) {
       setWorkspaceStatus(error instanceof Error ? error.message : "Base resume save failed.");
@@ -319,10 +381,9 @@ export function useWorkspaceResume({
   }
 
   async function restoreBaseResume(key: string) {
+    const replacingEditedResume = resumeEdited;
     if (resumeEdited) {
       if (!(await confirmReplaceEditor())) return;
-      clearAutosaveDraft();
-      setPendingAutosaveDraft(null);
     }
     setIsSavingBaseResume(true);
     setWorkspaceStatus("Restoring from history…");
@@ -340,6 +401,16 @@ export function useWorkspaceResume({
       if (!response.ok || !workspace.baseResume) {
         throw new Error(workspace.error ?? "Restore failed.");
       }
+      const applied = await applyWorkspaceBaseResume(
+        workspace.baseResume,
+        "",
+        true,
+        replacingEditedResume
+      ); // confirmed above
+      if (!applied) {
+        setWorkspaceStatus("The restored base resume could not be loaded. The current editor was kept.");
+        return;
+      }
       updateWorkspaceState({
         path: workspace.path ?? workspacePath,
         baseResume: workspace.baseResume,
@@ -347,7 +418,6 @@ export function useWorkspaceResume({
         baseResumeHistory: workspace.baseResumeHistory,
         files: workspace.files ?? workspaceFiles
       });
-      await applyWorkspaceBaseResume(workspace.baseResume, "", true); // confirmed above
       setWorkspaceStatus("Restored.");
     } catch (error) {
       setWorkspaceStatus(error instanceof Error ? error.message : "Restore failed.");
@@ -365,7 +435,7 @@ export function useWorkspaceResume({
     let text: string;
     if (/\.resume$/i.test(targetName)) {
       if (editedResume) {
-        text = serializeResumeFile(editedResume);
+        text = serializeResumeFile(editedResume, docStyle.style);
       } else {
         targetName = targetName.replace(/\.resume$/i, ".txt");
         text = currentResumeText || resumeText;
@@ -378,10 +448,9 @@ export function useWorkspaceResume({
   }
 
   async function loadBaseResumeVersion(fileName: string) {
+    const replacingEditedResume = resumeEdited;
     if (resumeEdited) {
       if (!(await confirmReplaceEditor())) return;
-      clearAutosaveDraft();
-      setPendingAutosaveDraft(null);
     }
     setIsSavingBaseResume(true);
     setWorkspaceStatus("Loading base resume version…");
@@ -398,6 +467,16 @@ export function useWorkspaceResume({
       if (!response.ok || !workspace.baseResume) {
         throw new Error(workspace.error ?? "Base resume load failed.");
       }
+      const applied = await applyWorkspaceBaseResume(
+        workspace.baseResume,
+        "",
+        true,
+        replacingEditedResume
+      ); // confirmed above
+      if (!applied) {
+        setWorkspaceStatus("The selected base resume could not be loaded. The current editor was kept.");
+        return;
+      }
       updateWorkspaceState({
         path: workspace.path ?? workspacePath,
         baseResume: workspace.baseResume,
@@ -405,7 +484,6 @@ export function useWorkspaceResume({
         baseResumeHistory: workspace.baseResumeHistory,
         files: workspace.files ?? workspaceFiles
       });
-      await applyWorkspaceBaseResume(workspace.baseResume, "", true); // confirmed above
       setWorkspaceStatus("");
     } catch (error) {
       setWorkspaceStatus(error instanceof Error ? error.message : "Base resume load failed.");
@@ -417,11 +495,23 @@ export function useWorkspaceResume({
   async function handleFileUpload(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
+    // Capture the input before any await — React may recycle the synthetic
+    // event, and failed/cancelled selections must be reset so the same path can
+    // be chosen again after the file is repaired.
+    const input = event.target;
+
+    let candidate: PreparedResumeCandidate;
+    try {
+      // Preflight extension, read bytes, and strictly parse `.resume` content
+      // before confirmation or any state-clearing commit work begins.
+      candidate = await prepareResumeUpload(file);
+    } catch (error) {
+      setFileError(error instanceof Error ? error.message : "The file could not be read. Try pasting the resume text instead.");
+      input.value = "";
+      return;
+    }
 
     if (resumeEdited) {
-      // Capture the input element before the await — the synthetic event may be
-      // recycled by React and event.target will be null after an async boundary.
-      const input = event.target;
       if (!(await confirmReplaceEditor())) {
         // Reset the file input so the same file can be chosen again later.
         input.value = "";
@@ -440,40 +530,17 @@ export function useWorkspaceResume({
     setResult(null);
     applyCoverLetter("");
 
-    if (/\.pdf$/i.test(file.name)) {
-      setFileError(
-        "PDF uploads are text-only and cannot preserve layout. Upload a .resume file for format-preserving edits, or paste extracted PDF text."
-      );
-      return;
-    }
-
-    if (/\.resume$/i.test(file.name)) {
-      // A `.resume` file is the lossless structured save — parse it straight
-      // into the editor's ResumeData (ids are remapped on load, see resumeFile.ts).
-      try {
-        const text = await file.text();
-        const parsed = parseResumeFile(text);
-        setResumeText(serializeResumeData(parsed));
-        seedResumeData(parsed);
-        setFileStatus(".resume file loaded into the editor.");
-      } catch (error) {
-        setFileError(error instanceof Error ? error.message : "This .resume file could not be read.");
-      }
-      return;
-    }
-
-    if (!/\.(txt|md|csv)$/i.test(file.name)) {
-      setFileError("Upload a .resume file to restore a saved editor state, or TXT, MD, or CSV for text-only polishing.");
-      return;
-    }
-
-    try {
-      const text = await file.text();
-      setResumeText(text);
-      seedResumeEditor(text, "");
+    if (candidate.kind === "resume") {
+      // The strict codec already validated and restored fresh session ids at
+      // the preflight boundary; this branch is commit-only.
+      setResumeText(serializeResumeData(candidate.parsed.data));
+      seedResumeData(candidate.parsed.data);
+      docStyle.replaceDocumentStyle(candidate.parsed.documentStyle);
+      setFileStatus(".resume file loaded into the editor.");
+    } else {
+      setResumeText(candidate.text);
+      seedResumeEditor(candidate.text, "");
       setFileStatus("Text file loaded. Export as PDF, or save as .resume to keep editing it later.");
-    } catch {
-      setFileError("The file could not be read. Try pasting the resume text instead.");
     }
   }
 

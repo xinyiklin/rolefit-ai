@@ -24,14 +24,14 @@ const STAGES: { key: StageKey; label: string }[] = [
 // collapsible section. The header line carries a "Copy from" control that copies
 // one of the OTHER two stages' settings into this one (one-shot copy, not a live
 // link). The body is the full provider menu (provider / model / reasoning effort /
-// key / base URL). Each stage holds its own concrete config, passed as one
+// key). Each stage holds its own concrete config, passed as one
 // `StageConfig` object with a single `onChange` patcher instead of 12 flat props.
 type ProviderSectionProps = {
   stage: StageKey;
   title: string;
   config: StageConfig;
   onChange: (patch: Partial<StageConfig>) => void;
-  // Switching provider resets key/base-URL/model/effort/custom-model, so it stays
+  // Switching provider resets key/model/effort, so it stays
   // its own callback rather than a plain onChange({ provider }) patch.
   onProviderChange: (provider: AiProviderValue) => void;
   open: boolean;
@@ -39,14 +39,9 @@ type ProviderSectionProps = {
   onCopyFrom: (from: StageKey) => void;
 };
 
-const OPENAI_COMPATIBLE = ["openrouter", "groq", "together", "mistral", "local"];
-
 function keyPlaceholder(provider: AiProviderValue): string {
-  if (provider === "claude-cli") return "Not used — auth via `claude auth login`";
-  if (provider === "codex-cli") return "Not used — auth via `codex login`";
-  if (provider === "antigravity-cli") return "Not used — auth via `agy auth login`";
   if (provider === "openai") return "Uses OPENAI_API_KEY when blank";
-  return "Uses this provider's .env key when blank";
+  return "Uses ANTHROPIC_API_KEY when blank";
 }
 
 export function ProviderSection({
@@ -59,33 +54,30 @@ export function ProviderSection({
   onToggle,
   onCopyFrom
 }: ProviderSectionProps) {
-  const { provider, apiKey, apiBaseUrl, selectedModel, customModel, cliReasoningEffort } = config;
+  const { provider, apiKey, selectedModel, cliReasoningEffort } = config;
   const isCliProvider = provider === "claude-cli" || provider === "codex-cli" || provider === "antigravity-cli";
   const modelOptions = modelOptionsByProvider[provider] ?? [];
-  const effortOptions =
-    cliReasoningEffortOptionsFor(provider, selectedModel === "custom" ? customModel : selectedModel) ?? [];
-  const selectedProviderOption = providerOptions.find((option) => option.value === provider);
-  const customModelPlaceholder = selectedProviderOption?.model || "model-id";
-  const effectiveModel = selectedModel === "custom" ? customModel : selectedModel;
-  const summary = describeProviderModel(provider, effectiveModel);
+  const effortOptions = cliReasoningEffortOptionsFor(provider, selectedModel) ?? [];
+  const summary = describeProviderModel(provider, selectedModel);
 
   const copyControl = (
-    <div className="stage-copy">
-      <span className="stage-copy__label">Copy from</span>
-      <div className="segmented" role="group" aria-label={`Copy ${title} settings from another stage`}>
-        {STAGES.filter((s) => s.key !== stage).map((s) => (
-          <button
-            key={s.key}
-            type="button"
-            className="segmented__btn"
-            title={`Copy settings from ${s.label}`}
-            onClick={() => onCopyFrom(s.key)}
-          >
-            {s.label}
-          </button>
+    <label className="stage-copy">
+      <span className="stage-copy__label">Copy settings</span>
+      <select
+        className="stage-copy__select"
+        aria-label={`Copy ${title} settings from another stage`}
+        value=""
+        onChange={(event) => {
+          const from = event.target.value as StageKey;
+          if (from) onCopyFrom(from);
+        }}
+      >
+        <option value="">From…</option>
+        {STAGES.filter((item) => item.key !== stage).map((item) => (
+          <option key={item.key} value={item.key}>{item.label}</option>
         ))}
-      </div>
-    </div>
+      </select>
+    </label>
   );
 
   return (
@@ -124,46 +116,23 @@ export function ProviderSection({
           ) : null}
         </div>
 
-        {selectedModel === "custom" ? (
+        {isCliProvider ? (
+          <p className="provider-card__auth-note">Uses the signed-in local CLI session. No API key is sent.</p>
+        ) : (
           <label className="field">
-            <span>Custom model</span>
-            <input
-              className="text-input"
-              value={customModel}
-              onChange={(event) => onChange({ customModel: event.target.value })}
-              placeholder={customModelPlaceholder}
-              type="text"
-            />
+            <span>API key</span>
+            <div className="input-with-icon">
+              <KeyRound size={15} aria-hidden="true" />
+              <input
+                autoComplete="off"
+                value={apiKey}
+                onChange={(event) => onChange({ apiKey: event.target.value })}
+                placeholder={keyPlaceholder(provider)}
+                type="password"
+              />
+            </div>
           </label>
-        ) : null}
-
-        <label className="field">
-          <span>API key</span>
-          <div className="input-with-icon">
-            <KeyRound size={15} aria-hidden="true" />
-            <input
-              autoComplete="off"
-              value={apiKey}
-              onChange={(event) => onChange({ apiKey: event.target.value })}
-              placeholder={keyPlaceholder(provider)}
-              disabled={isCliProvider}
-              type="password"
-            />
-          </div>
-        </label>
-
-        {OPENAI_COMPATIBLE.includes(provider) ? (
-          <label className="field">
-            <span>Base URL</span>
-            <input
-              className="text-input"
-              value={apiBaseUrl}
-              onChange={(event) => onChange({ apiBaseUrl: event.target.value })}
-              placeholder="https://provider.example/v1"
-              type="url"
-            />
-          </label>
-        ) : null}
+        )}
       </div>
     </MenuSection>
   );

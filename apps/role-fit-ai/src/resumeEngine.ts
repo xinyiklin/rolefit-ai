@@ -3,7 +3,6 @@
 // API so existing importers keep working unchanged.
 
 export type {
-  ResumeScore,
   AiFitScore,
   EvidenceType,
   MissingRequiredSkill,
@@ -28,6 +27,6 @@ export type {
 } from "./resume/types";
 
 export { extractKeywords } from "./resume/keywords";
-export { analyzeResumeText } from "./resume/scoring";
+export { analyzeResumeText } from "./resume/analysis";
 export { normalizePolishedResume } from "./resume/rewrite";
 export { buildResumeDiff } from "./resume/diff";

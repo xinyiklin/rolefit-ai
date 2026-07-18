@@ -21,9 +21,7 @@ function seedStage(stage: StageId, saved: PersistedSettings): StageConfig {
     return {
       provider,
       apiKey: "",
-      apiBaseUrl: saved.apiBaseUrl ?? "",
-      selectedModel: saved.selectedModel ?? "claude-sonnet-5",
-      customModel: saved.customModel ?? "",
+      selectedModel: saved.selectedModel ?? providerOptions.find((option) => option.value === provider)?.model ?? "claude-sonnet-5",
       cliReasoningEffort: saved.cliReasoningEffort ?? defaultCliReasoningEffort(provider)
     };
   }
@@ -32,9 +30,7 @@ function seedStage(stage: StageId, saved: PersistedSettings): StageConfig {
     return {
       provider,
       apiKey: "",
-      apiBaseUrl: saved.auditApiBaseUrl ?? "",
-      selectedModel: saved.auditSelectedModel ?? "claude-sonnet-5",
-      customModel: saved.auditCustomModel ?? "",
+      selectedModel: saved.auditSelectedModel ?? providerOptions.find((option) => option.value === provider)?.model ?? "claude-sonnet-5",
       cliReasoningEffort: saved.auditCliReasoningEffort ?? defaultCliReasoningEffort(provider)
     };
   }
@@ -42,15 +38,13 @@ function seedStage(stage: StageId, saved: PersistedSettings): StageConfig {
   return {
     provider,
     apiKey: "",
-    apiBaseUrl: saved.distillApiBaseUrl ?? "",
-    selectedModel: saved.distillSelectedModel ?? "claude-sonnet-5",
-    customModel: saved.distillCustomModel ?? "",
+    selectedModel: saved.distillSelectedModel ?? providerOptions.find((option) => option.value === provider)?.model ?? "claude-sonnet-5",
     cliReasoningEffort: saved.distillCliReasoningEffort ?? defaultCliReasoningEffort(provider)
   };
 }
 
 // Owns every auto-saved AI preference: each stage's (Distill/Tailor/Review)
-// provider/model/key/base-URL/reasoning-effort config, plus the polish prefs
+// provider/model/key/reasoning-effort config, plus the polish prefs
 // that persist alongside them (honest context and custom instructions). All of
 // these share one debounced localStorage write, so they live together here
 // rather than scattered across App. API keys for every stage are intentionally
@@ -64,12 +58,20 @@ export function useAiSettings() {
     review: seedStage("review", saved)
   }));
 
-  // Per-section expand/collapse state for the AI menu (Distill / Tailor / Review),
-  // persisted so a collapsed section stays collapsed across reloads. All start open.
-  const [sectionOpen, setSectionOpen] = useState<{ distill: boolean; tailor: boolean; review: boolean }>({
-    distill: saved.sectionOpen?.distill ?? true,
-    tailor: saved.sectionOpen?.tailor ?? true,
-    review: saved.sectionOpen?.review ?? true
+  // AI setup is an accordion, not three simultaneous provider consoles. Honor a
+  // single saved section; normalize an older all-open preference to Tailor, the
+  // stage most people adjust. Every stage still exposes its provider/model
+  // summary while collapsed.
+  const [sectionOpen, setSectionOpen] = useState<{ distill: boolean; tailor: boolean; review: boolean }>(() => {
+    const stored = {
+      distill: saved.sectionOpen?.distill ?? false,
+      tailor: saved.sectionOpen?.tailor ?? true,
+      review: saved.sectionOpen?.review ?? false
+    };
+    const openStages = (Object.keys(stored) as StageId[]).filter((stage) => stored[stage]);
+    if (openStages.length <= 1) return stored;
+    const preferred = openStages.includes("tailor") ? "tailor" : openStages[0];
+    return { distill: preferred === "distill", tailor: preferred === "tailor", review: preferred === "review" };
   });
 
   const [honestContext, setHonestContext] = useState(saved.honestContext ?? "");
@@ -89,19 +91,13 @@ export function useAiSettings() {
       saveSettings({
         aiProvider: stages.tailor.provider,
         selectedModel: stages.tailor.selectedModel,
-        customModel: stages.tailor.customModel,
         cliReasoningEffort: stages.tailor.cliReasoningEffort,
-        apiBaseUrl: stages.tailor.apiBaseUrl,
         auditProvider: stages.review.provider,
         auditSelectedModel: stages.review.selectedModel,
-        auditCustomModel: stages.review.customModel,
         auditCliReasoningEffort: stages.review.cliReasoningEffort,
-        auditApiBaseUrl: stages.review.apiBaseUrl,
         distillProvider: stages.distill.provider,
         distillSelectedModel: stages.distill.selectedModel,
-        distillCustomModel: stages.distill.customModel,
         distillCliReasoningEffort: stages.distill.cliReasoningEffort,
-        distillApiBaseUrl: stages.distill.apiBaseUrl,
         sectionOpen,
         honestContext,
         customInstructions,
@@ -134,8 +130,7 @@ export function useAiSettings() {
       const next = { ...prev };
       for (const stage of STAGE_IDS) {
         const config = prev[stage];
-        const model = config.selectedModel === "custom" ? config.customModel : config.selectedModel;
-        const options = cliReasoningEffortOptionsFor(config.provider, model);
+        const options = cliReasoningEffortOptionsFor(config.provider, config.selectedModel);
         if (options && options.length > 0 && !options.some((option) => option.value === config.cliReasoningEffort)) {
           next[stage] = { ...config, cliReasoningEffort: defaultCliReasoningEffort(config.provider) };
           changed = true;
@@ -149,7 +144,7 @@ export function useAiSettings() {
     setStages((prev) => ({ ...prev, [stage]: { ...prev[stage], ...patch } }));
   }
 
-  // Switching a stage's provider resets its key/base-URL/model/effort/custom-model
+  // Switching a stage's provider resets its key/model/effort
   // to that provider's defaults, mirroring the original per-stage handlers.
   function changeStageProvider(stage: StageId, value: AiProviderValue) {
     const option = providerOptions.find((item) => item.value === value);
@@ -158,16 +153,17 @@ export function useAiSettings() {
       [stage]: {
         provider: value,
         apiKey: "",
-        apiBaseUrl: option?.baseUrl ?? "",
         selectedModel: option?.model ?? "",
-        customModel: "",
         cliReasoningEffort: defaultCliReasoningEffort(value)
       }
     }));
   }
 
   function toggleSection(stage: StageId) {
-    setSectionOpen((prev) => ({ ...prev, [stage]: !prev[stage] }));
+    setSectionOpen((prev) => {
+      if (prev[stage]) return { ...prev, [stage]: false };
+      return { distill: stage === "distill", tailor: stage === "tailor", review: stage === "review" };
+    });
   }
 
   // The segmented [Distill | Tailor | Review] buttons in each section COPY one

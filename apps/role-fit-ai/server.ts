@@ -1,14 +1,15 @@
 import { createServer } from "node:http";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { readFile } from "node:fs/promises";
-import { extname, join, resolve, sep } from "node:path";
+import { dirname, extname, join, resolve, sep } from "node:path";
+import { fileURLToPath } from "node:url";
 import { createServer as createViteServer } from "vite";
 import { handlePolish } from "./server/ai/polish.ts";
 import { handleDistill } from "./server/ai/distill.ts";
 import { getDefaultModel, getDefaultProvider } from "./server/ai/providers.ts";
 import { handleApplicationAnswers } from "./server/ai/applicationAnswers.ts";
 import { handleCoverLetter } from "./server/ai/coverLetter.ts";
-import { sendJson } from "./server/http.ts";
+import { isApiPathname, sendJson } from "./server/http.ts";
 import {
   ensureJobWorkspace,
   handleRestoreBaseResume,
@@ -32,6 +33,9 @@ import {
 
 const root = process.cwd();
 const isProduction = process.env.NODE_ENV === "production";
+const engineFontsRoot = dirname(
+  fileURLToPath(import.meta.resolve("@typeset/engine/fonts/LMRoman10-Regular.woff2"))
+);
 
 async function loadLocalEnv() {
   try {
@@ -55,7 +59,18 @@ const port = Number(process.env.PORT ?? 5181);
 // Bind to loopback by default: this app has no auth and exposes URL-fetch and
 // file-storage endpoints, so it must not be reachable from other devices on the
 // network. Set HOST=0.0.0.0 to opt into LAN access.
-const host = process.env.HOST || "127.0.0.1";
+const host = (process.env.HOST || "127.0.0.1").trim().toLowerCase();
+
+function isLoopbackBindHost(value: string): boolean {
+  if (["localhost", "::1", "[::1]", "0:0:0:0:0:0:0:1"].includes(value)) return true;
+  const match = value.match(/^127\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  return Boolean(match && match.slice(1).every((part) => Number(part) <= 255));
+}
+
+function hostHeaderFor(value: string): string {
+  const bare = value.replace(/^\[|\]$/g, "");
+  return bare.includes(":") ? `[${bare}]:${port}` : `${bare}:${port}`;
+}
 
 function decodeRouteSegment(value: string): string | null {
   try {
@@ -66,7 +81,10 @@ function decodeRouteSegment(value: string): string | null {
 }
 
 async function serveStatic(req: IncomingMessage, res: ServerResponse): Promise<void> {
-  const url = new URL(req.url ?? "/", `http://${req.headers.host}`);
+  // Parse the request target against a fixed local base. The Host header is
+  // untrusted and validated separately for API routes; using it as a URL base
+  // lets a malformed Host throw before the guard can return a controlled 4xx.
+  const url = new URL(req.url ?? "/", "http://localhost");
   const pathname = url.pathname === "/" ? "/index.html" : url.pathname;
   const distRoot = resolve(join(root, "dist"));
   const filePath = resolve(join(distRoot, pathname));
@@ -96,7 +114,7 @@ async function serveStatic(req: IncomingMessage, res: ServerResponse): Promise<v
     // Unmatched /api/* paths fall through to static serving in production;
     // serving index.html as 200 would turn a mistyped or removed route into
     // an opaque JSON parse error client-side instead of a visible 404.
-    if (pathname.startsWith("/api/")) {
+    if (isApiPathname(pathname)) {
       sendJson(res, 404, { error: "Not found." });
       return;
     }
@@ -106,18 +124,66 @@ async function serveStatic(req: IncomingMessage, res: ServerResponse): Promise<v
   }
 }
 
+async function serveEngineFont(pathname: string, res: ServerResponse): Promise<void> {
+  const match = pathname.match(/^\/fonts\/([A-Za-z0-9][A-Za-z0-9._-]*\.(?:woff2|otf|ttf))$/);
+  if (!match) {
+    res.writeHead(404);
+    res.end("Not found");
+    return;
+  }
+
+  const filePath = resolve(join(engineFontsRoot, match[1]));
+  if (!filePath.startsWith(engineFontsRoot + sep)) {
+    res.writeHead(403);
+    res.end("Forbidden");
+    return;
+  }
+
+  try {
+    const data = await readFile(filePath);
+    const type = filePath.endsWith(".woff2")
+      ? "font/woff2"
+      : filePath.endsWith(".otf")
+      ? "font/otf"
+      : "font/ttf";
+    res.writeHead(200, { "Content-Type": type, "Cache-Control": "no-cache" });
+    res.end(data);
+  } catch {
+    res.writeHead(404);
+    res.end("Not found");
+  }
+}
+
 const vite = isProduction
   ? null
   : await createViteServer({
       root,
       appType: "spa",
+      optimizeDeps: {
+        include: ["pdf-lib", "@pdf-lib/fontkit"]
+      },
       server: {
         middlewareMode: true
       }
     });
 
 const server = createServer((req, res) => {
-  const pathname = new URL(req.url ?? "/", `http://${req.headers.host}`).pathname;
+  let routeUrl: URL;
+  try {
+    routeUrl = new URL(req.url ?? "/", "http://localhost");
+  } catch {
+    sendJson(res, 400, { error: "Malformed request URL." });
+    return;
+  }
+  const pathname = routeUrl.pathname;
+
+  // In development, serve the engine-owned font assets directly. Vite's SPA
+  // fallback would otherwise answer a missing generated public/font file with
+  // index.html and fontkit would report the opaque "Unknown font format".
+  if (!isProduction && pathname.startsWith("/fonts/")) {
+    void serveEngineFont(pathname, res);
+    return;
+  }
 
   // The extension's analyze/import routes are handled BEFORE the localhost CSRF
   // guard: they are called cross-origin from a chrome-extension:// page (an
@@ -130,13 +196,15 @@ const server = createServer((req, res) => {
     return;
   }
 
-  // Same-origin/Host guard for the local API (default 127.0.0.1 mode): a website the
+  // Same-origin/Host guard for the local API (any loopback bind): a website the
   // user visits must not be able to drive this server cross-origin (CSRF) or read the
   // resume via DNS-rebinding. A rebind/cross-site request carries a foreign Host or
-  // Origin. Skipped under an explicit HOST override (LAN access is already an opt-in
-  // "no auth, reachable" mode). Static asset requests are unaffected.
-  if (pathname.startsWith("/api/") && host === "127.0.0.1") {
+  // Origin. Skipped only for a non-loopback HOST override (LAN access is already
+  // an opt-in "no auth, reachable" mode). Static asset requests are unaffected.
+  const loopbackBind = isLoopbackBindHost(host);
+  if (isApiPathname(pathname) && loopbackBind) {
     const allowedHosts = new Set([`localhost:${port}`, `127.0.0.1:${port}`, `[::1]:${port}`]);
+    allowedHosts.add(hostHeaderFor(host));
     if (!allowedHosts.has(req.headers.host ?? "")) {
       sendJson(res, 403, { error: "Forbidden host." });
       return;
@@ -158,7 +226,6 @@ const server = createServer((req, res) => {
   // Polled same-origin by the app's useExtensionInbox hook; CSRF/Host-guarded
   // above like every other /api/ route (so a foreign page can't drain it).
   if (pathname === "/api/extension/inbox") {
-    const routeUrl = new URL(req.url ?? "/", `http://${req.headers.host}`);
     const tabId = routeUrl.searchParams.get("tabId") || "";
     const claimToken = cleanExtensionClaimToken(routeUrl.searchParams.get("claimToken"));
     void handleExtensionInbox(req, res, tabId, claimToken);
@@ -254,6 +321,14 @@ const server = createServer((req, res) => {
     return;
   }
 
+  // Never let an unknown API URL reach Vite's SPA fallback (development) or
+  // index.html (production). Clients should receive a stable JSON 404 instead
+  // of a misleading 200 HTML response and a downstream JSON parse failure.
+  if (isApiPathname(pathname)) {
+    sendJson(res, 404, { error: "API route not found." });
+    return;
+  }
+
   if (vite) {
     vite.middlewares(req, res, () => {
       res.writeHead(404);
@@ -267,8 +342,8 @@ const server = createServer((req, res) => {
 
 server.listen(port, host, () => {
   console.log(`RoleFit AI running at http://localhost:${port}/`);
-  if (host === "0.0.0.0") {
-    console.log("⚠️  Bound to 0.0.0.0 (HOST override): reachable from your local network. This app has no auth.");
+  if (!isLoopbackBindHost(host)) {
+    console.log(`⚠️  Bound to ${host} (HOST override): potentially reachable from your network. This app has no auth.`);
   }
   console.log(`Default AI provider: ${getDefaultProvider()}`);
   console.log(`Default AI model: ${getDefaultModel() || "(CLI default)"}`);

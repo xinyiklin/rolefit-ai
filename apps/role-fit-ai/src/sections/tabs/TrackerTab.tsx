@@ -94,6 +94,7 @@ type TrackerTabProps = {
   applications: Application[];
   applicationsPath: string;
   applicationsError: string;
+  pendingApplicationWrites: number;
   isApplicationsLoading: boolean;
   pipelineFilter: "all" | ApplicationStatus;
   setPipelineFilter: (v: "all" | ApplicationStatus) => void;
@@ -131,6 +132,7 @@ export function TrackerTab({
   applications,
   applicationsPath,
   applicationsError,
+  pendingApplicationWrites,
   isApplicationsLoading,
   pipelineFilter,
   setPipelineFilter,
@@ -353,6 +355,11 @@ export function TrackerTab({
           {applicationsPath ? (
             <span className="workspace-page__path">
               {applicationsPath.replace(/^.*?job-search-workspace\//, "job-search-workspace/")}
+            </span>
+          ) : null}
+          {pendingApplicationWrites > 0 ? (
+            <span className="workspace-page__saving" role="status" aria-live="polite">
+              Saving {pendingApplicationWrites > 1 ? `${pendingApplicationWrites} changes` : "change"}…
             </span>
           ) : null}
         </div>

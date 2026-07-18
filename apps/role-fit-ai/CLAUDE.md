@@ -1,47 +1,29 @@
-# Role-Fit AI — Claude Overrides
+# RoleFit AI — Claude Overrides
 
-`AGENTS.md` is the canonical guide. It is imported below, so its rules load
-into context every session — no separate read step. `CONTINUITY.md` is **not**
-imported (it changes constantly); read it fresh before acting. This file adds
-only Claude-tool-specific behavior; when it conflicts with `AGENTS.md`, this
-file wins.
+The root and app `AGENTS.md` files are canonical and imported below. Read
+`CONTINUITY.md` fresh. The imports do not load nested guides; read the nearest
+`src/`, `server/`, `server/ai/`, or `extension/` guide before scoped work.
 
+@../../AGENTS.md
 @AGENTS.md
 
-## Tool Use
+## Tool use
 
-- `Read` before `Edit` / `Write`; never `Write` without reading first.
-- Prefer `Grep` / `Glob` over shell `grep` / `find` for codebase searches.
-- Use `Edit` for targeted changes; reserve `Write` for new files or
-  intentional full-file replacements of a file you have already read.
-- Run commands via `Bash` from the project root. (Port `5181` rules and the
-  env/command reference live in `AGENTS.md` › Commands.)
+- Read before editing; prefer targeted edits over full replacement.
+- Run commands from the repository root with the RoleFit workspace named.
+- Use `npm run dev:rolefit` for port 5181. A bound port usually means the app is
+  already running; inspect and reuse it.
+- Do not inspect or print `.env` values. Verify credential wiring from code.
 
 ## Visual QA
 
-Verify major UI changes in a browser when feasible (`AGENTS.md` default).
-Pick the tool by what you're verifying:
+Default to the app's flag-first policy. When a change has real layout,
+responsive, editor, or theming risk, flag it for the user before browser work.
+If authorized, inspect `http://localhost:5181` in the normal masthead + studio
+workflow, including keyboard behavior and console state.
 
-- **Layout / responsive / visual fidelity** → **Claude in Chrome**
-  (`mcp__Claude_in_Chrome`): real window, accurate at any width
-  (`resize_window`, e.g. 1440 / 768 / 375), faithful screenshots.
-- **Content / computed styles / tokens / console** → **Claude Preview**
-  (`mcp__Claude_Preview`): `preview_snapshot` / `preview_inspect` are
-  deterministic (no pixel-guessing); `preview_screenshot` for a glance, fall
-  back to snapshot/inspect if blank.
-- If the chosen tool's bridge isn't connected, use the other and note the gap.
+## Sensitive data
 
-**Default: skip visual QA.** Only run it when the change carries real
-layout/theming risk (new components, responsive breakpoints, editor surfaces,
-token/color changes). When that threshold is met, flag it and let the user
-decide — don't run unsolicited. When running: Chrome is the default tool;
-`navigate` to `http://localhost:5181` after `npm run dev`, then
-`get_page_text` / `read_page` / `computer`.
-
-## Resume And Job Data Handling
-
-`AGENTS.md` covers resume/job-data privacy in full. Claude-tool-specific
-addition: do not `Read` `.env` to display its contents in chat — to confirm a
-key is wired, inspect `process.env` access patterns in `server/ai/providers.ts`
-instead. A key typed into the AI menu is intentionally transient page memory;
-never use browser inspection to print, persist, or echo its value.
+Never use browser or shell inspection to print transient AI-menu keys, raw
+resume/job content, prompts, or private workspace files. Use synthetic fixtures
+for routine tests.

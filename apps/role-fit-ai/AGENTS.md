@@ -1,335 +1,146 @@
-# Role-Fit AI Agent Guide
-
-Operational rules for coding agents working in the Role-Fit AI repository.
-
-Role-Fit AI is a local-first resume-polishing web app: a React 19 + Vite +
-TypeScript frontend with a Node `server.ts` API layer for AI provider calls.
-It helps a job seeker tailor a resume to a target job description without
-inventing experience, employers, dates, metrics, education, tools, or
-production outcomes. Framework and dependency versions live in `package.json`.
-
-Product, UI, server, and testing philosophy live in `docs/engineering/`.
-This root guide is the operating contract: safety, continuity, scope, and
-verification.
-
----
-
-## Priority Order
-
-When rules conflict, follow this order:
-
-1. Explicit user request
-2. Safety, secrets, and resume/job-data privacy
-3. Current state in `CONTINUITY.md`
-4. Existing architecture and product conventions
-5. Scope minimization
-6. Local style preferences
-
-Never sacrifice correctness, security, privacy, or truthful resume output for
-style. Use bracketed placeholders for missing facts, for example
-`[add metric: users, time saved, performance gain, or scope]`.
-
----
-
-## Non-Negotiables
-
-- Read `CONTINUITY.md` before acting.
-- Do not rely on prior chat context unless the durable fact is recorded in
-  `CONTINUITY.md`.
-- Do not overwrite unrelated work or user-edited files.
-- Keep `.env` provider keys server-only. A key entered in the AI menu may live
-  only in page memory for that session and travel in a same-origin request to
-  the local `/api/*` route. The local server may use it only to authenticate the
-  selected hosted/custom provider call; never persist, log, or echo it.
-- Do not print secrets, tokens, broad environment dumps, raw resume text, raw
-  job descriptions, or AI prompts in chat unless the user explicitly requests
-  that local debugging output.
-- Do not ask the user to paste secrets.
-- Do not invent employers, dates, metrics, education, tools, experience, or
-  outcomes in resume output.
-- Do not broaden scope, add speculative abstractions (multi-user, accounts,
-  SaaS, payments, analytics, native packaging), or introduce new global UX
-  systems unless the request requires it.
-- Keep patches reviewable, reversible, and tied to the request.
-- Verify important changes before finalizing; explain skipped checks.
-
----
-
-## Working Checklist
-
-Before code:
-
-1. Read `CONTINUITY.md`.
-2. Confirm scope; ask only if ambiguity blocks safe progress.
-3. Inspect the files you will touch.
-4. Read the relevant engineering doc:
-   - UI: `docs/engineering/ui-principles.md`
-   - Server / AI provider: `docs/engineering/ai-server.md`
-   - Tests: `docs/engineering/testing.md`
-   - Git workflow: `docs/engineering/git-workflow.md`
-5. For non-trivial work, name the verification plan.
-
-While coding:
-
-- Match local patterns and helpers before adding new ones.
-- Prefer local improvements over architecture rewrites.
-- Avoid formatting churn unrelated to the task.
-- Do not build fake loading states or mock systems.
-- Surface meaningful errors; do not hide failures behind silent fallbacks.
-
-Before finishing:
-
-- Run the relevant verification checklist.
-- Update `CONTINUITY.md` only for meaningful state changes.
-- Call out residual risks and skipped checks.
-- For non-trivial tasks, start the final reply with a compact ledger snapshot:
-  Goal, Now, Next, and Open Questions. Trivial Q&A may skip it.
-
-Pause and ask before changing AI-provider defaults, resume-block schemas,
-API-key loading or persistence, destructive git operations, workflow-critical
-UI patterns, infrastructure/platform shape, paid/vendor dependencies, or
-remote writes.
-
----
-
-## Continuity
-
-`CONTINUITY.md` is the canonical workspace memory for handoff. Keep entries
-factual, compact, and verifiable.
-
-Required behavior:
-
-- Tag entries with `[USER]`, `[CODE]`, `[TOOL]`, or `[ASSUMPTION]`.
-- Include an ISO timestamp on every entry.
-- Use `UNCONFIRMED` instead of guessing.
-- Capture active risks, durable decisions, current state, and next steps.
-
-Bounds:
-
-- Snapshot: max 25 lines.
-- Done (recent): max 7 bullets.
-- Working Set: max 12 paths.
-- Receipts: keep only the last 10-20 entries.
-
-If a section grows noisy, compress older entries into milestone bullets with a
-commit, doc path, or log path pointer. Durable decisions use lightweight
-ADR-style entries, for example:
-`D001 ACTIVE: keep the app local-first and personal-use focused.`
-
----
-
-## Task Routing
-
-Use the relevant docs and repo surfaces by task shape:
-
-- UI work: read `docs/engineering/ui-principles.md`; reuse the shared
-  `src/sections/` components (`NavMenu`, the `*Menu.tsx` menus, `shared.ts`) and
-  `src/styles/`; preserve the navbar-inputs (Resume/Job/AI/Options menus +
-  Polish) → full-width tabbed studio workflow; keep labels and hints short;
-  keep the engine-painted `TypesetEditor` as the sole resume editor (text/input
-  events, structural chrome, and layout provenance stay in its focused editor
-  modules; do not reintroduce a parallel HTML editor or DOM-pagination loop);
-  visual QA is flag-first (skip by default; flag real layout/theming risk and
-  let the user decide).
-- Server / AI work: read `docs/engineering/ai-server.md`; keep `.env` keys
-  server-only and menu-entered keys transient as described above; keep
-  `server.ts` focused on local serving, job import, workspace storage, and AI
-  provider calls. A fresh standalone Review
-  audits the current edited resume as-is and sends no prior suggestions; the
-  internal Review leg of Both may receive only the sanitized suggestions from
-  that same Tailor run. When budgeting structured prompt payloads, clip fields
-  before serialization so embedded JSON remains valid — never slice serialized
-  JSON.
-- Resume engine work: keep scoring and keyword extraction in
-  `src/resumeEngine.ts` or similarly focused helpers. The only local
-  fallbacks are the distiller and the fit estimate (D011).
-- Testing work: read `docs/engineering/testing.md`; choose checks based on
-  affected behavior and blast radius.
-- Git/PR work: read `docs/engineering/git-workflow.md` before naming a branch,
-  committing, pushing, or drafting PR copy.
-
-Multiple agents may work in this repo. Route by task shape and verified tool
-access, not model brand.
-
-### Subagent Orchestration
-
-When delegating to subagents (Claude's `.claude/agents/*` or any equivalent),
-the orchestrator owns this contract — subagents do not see each other's
-instructions:
-
-- Sequence: implementation agent first, adversarial review second, verifier
-  last. Docs-only or trivial copy changes may skip review, never verification.
-- Parallelize UI and server implementation agents only when their write scopes
-  are disjoint (e.g. `src/` vs `server/`); never two writers in the same files.
-- The reviewer reasons over the diff and inspects; the verifier owns builds
-  and syntax checks. Do not run the build twice across the two roles.
-- `src/resumeEngine.ts` and `src/resume/` are anti-fabrication-critical logic,
-  not UI: changes there always get an adversarial review pass before
-  finalizing, regardless of which agent implemented them.
-- Prompt, grounding, sanitizer, and scoring changes under `server/ai/` also
-  require an adversarial review plus the relevant offline evals before
-  finalizing; prompt wording is executable product behavior, not docs-only copy.
-- Delegate multi-file implementation to the matching agent; the orchestrator
-  may handle trivial single-file edits directly.
-- Subagents do not read or update `CONTINUITY.md` (an explicit exception to
-  the read-first non-negotiable, which binds the orchestrator): the
-  orchestrator reads it before delegating, distills relevant state into the
-  task brief, and records outcomes after.
-- Subagents never stage, commit, or push, and never make live AI-provider
-  calls unless the task brief explicitly says to; they report back instead.
-
----
-
-## Refactors And Modularity
-
-Refactor only when the current task requires it, the existing structure blocks
-correctness, or the change clearly reduces future complexity and can be safely
-verified. No drive-by refactors during feature work.
-
-Split growing workflows into components, hooks, services, and utilities when
-that improves cohesion. Keep public interfaces stable and isolate volatile
-logic behind small helpers.
-
-File-size guidance:
-
-- About 300 LOC for hand-written files is a soft target, not a rule.
-- Above about 400 LOC, either justify cohesion or propose a focused split if
-  the task already touches that file.
-- `src/App.tsx` is already over the target; treat continued growth as a prompt
-  to extract focused hooks/helpers when touching it. (`src/resumeEngine.ts` is
-  now a thin barrel re-exporting the focused modules under `src/resume/`, and
-  the `/api/polish` flow is split across `server/ai/*` — keep new logic in those
-  focused modules rather than regrowing a single file.)
-
----
-
-## Safety And Data
-
-- Treat resumes, job descriptions, API keys, and personal background as
-  sensitive.
-- Keep personal resumes, application trackers, exported drafts, rendered
-  previews, and job-specific artifacts in ignored local storage, primarily
-  `job-search-workspace/`.
-- Remote API calls must be read-only unless the user explicitly requests a
-  write; dry-run requested writes when possible.
-- Never run commands that delete resume/workspace data or call destructive
-  remote APIs without explicit instruction.
-- Do not commit `.env`, `node_modules/`, `dist/`, exported resumes/`.resume`/PDF
-  files, root-level resume artifacts, or `job-search-workspace/` contents
-  except its `README.md`.
-- Keep generated resume claims grounded in user-provided facts.
-
-For PDFs, uploaded resumes, long documents, or similar sources, read the full
-source before drafting, then re-check the source before finalizing for factual
-accuracy, invented details, and style constraints. Label paraphrases when the
-user needs source-faithful handling.
-
----
-
-## Accuracy And Current Info
-
-When a request depends on "latest", "current", recent APIs, pricing, release
-notes, model availability, or similar changing facts:
-
-- Establish the current date/time when it matters.
-- Prefer official sources: vendor docs, upstream repositories, changelogs, and
-  release notes.
-- Use documentation tools when available; pin the relevant library and version.
-- Use web search when it materially improves correctness, preferring official
-  docs over secondary explainers.
-
----
-
-## Git Rules
-
-Default to local-only work unless the user explicitly asks to stage, commit,
-push, open a PR, or merge.
-
-- Never overwrite unrelated changes.
-- Never use destructive git operations without explicit instruction.
-- Never rebase, amend, push, switch branches, or delete branches unless
-  requested.
-- Check `git status --short` before staging so unrelated work is visible.
-- Stage only relevant files.
-- Do not stage `.env`, `job-search-workspace/` contents except
-  `job-search-workspace/README.md`, or exported resumes/`.resume`/PDF files. The
-  `.gitignore` already guards these; verify with `git status --short`.
-- Stage and commit `AGENTS.md` and `CLAUDE.md` like any other tracked file when
-  they're part of the change; do not single them out to exclude. `CONTINUITY.md`
-  and `.claude/` are gitignored and won't appear as staging candidates.
-- Use non-interactive git commands.
-
----
-
-## Verification
-
-Read `docs/engineering/testing.md` for full pass criteria.
-
-- UI: no console errors, stable layout, navbar-inputs + studio workflow
-  preserved. Visual QA is flag-first: skip by default, flag changes with real
-  layout/theming risk for the user to decide, never run unsolicited; note when
-  it was skipped.
-- Server / AI: `npx tsc -p tsconfig.server.json` passes; affected routes return the
-  expected status and JSON shape; the deterministic distill fallback still
-  runs when the AI call cannot (tailor/review/cover/application-answer
-  generation fail plainly — D011).
-- Build: `npm run build` succeeds when frontend source or types changed.
-- Refactors: existing behavior preserved, `npm run build` succeeds, and search
-  confirms old symbols are gone.
-- Docs-only: verify referenced paths and links; runtime checks are not
-  required.
-
----
-
-## Commands
-
-Run from the project root.
-
-- Build: `npm run build`
-- Dev: `npm run dev` (starts the API-backed local server on `PORT` or `5181`)
-- Preview: `npm run preview`
-- Server type check: `npx tsc -p tsconfig.server.json` (the server runs under Node's native TypeScript type stripping; this is the syntax + type gate)
-
-Port `5181` is canonical for this project (reserved range `5181-5183`). If
-`5181` is already bound, treat that as a signal the app is already running and
-connect to `http://localhost:5181` instead of starting a second dev server or
-changing ports. Sibling reservations: careflow `5173-5180`, portfolio
-`5184-5185`.
-
-Use `.env` for server-owned provider configuration. Supported key variables are
-`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`,
-`OPENROUTER_API_KEY`, `GROQ_API_KEY`, `TOGETHER_API_KEY`, `MISTRAL_API_KEY`,
-and the shared fallback `AI_API_KEY`. `AI_PROVIDER` selects the headless/default
-provider. Model overrides are provider-specific (`OPENAI_MODEL`,
-`ANTHROPIC_MODEL`, `GEMINI_MODEL`, `OPENROUTER_MODEL`, `GROQ_MODEL`,
-`TOGETHER_MODEL`, `MISTRAL_MODEL`, `LOCAL_AI_MODEL`, `CLAUDE_CLI_MODEL`,
-`CODEX_CLI_MODEL`, `ANTIGRAVITY_CLI_MODEL`). Base-URL overrides are likewise
-provider-specific (`OPENROUTER_BASE_URL`, `GROQ_BASE_URL`, `TOGETHER_BASE_URL`,
-`MISTRAL_BASE_URL`, `LOCAL_AI_BASE_URL`). For request resolution, `AI_MODEL` and
-`AI_BASE_URL` / `OPENAI_COMPATIBLE_BASE_URL` apply only to the headless
-`openai-compatible` provider; they are not global overrides for every provider.
-
-`PORT` changes the port. The server binds to loopback by default. `HOST=0.0.0.0`
-is an explicit, unauthenticated LAN-exposure override; never use it on a public
-or untrusted network. `EXTENSION_ALLOWED_ORIGINS` (comma-separated exact
-extension origins) hard-restricts the browser-extension routes; unset means any
-supported extension-scheme origin is accepted.
-
----
-
-## Communication
-
-- Think privately.
-- Skip preambles unless they help.
-- Report actions, blockers, verification, and final outputs.
-- Do not print hidden reasoning.
-- Use bracketed prompts for missing user facts, for example
-  `[add metric: users, time saved, performance gain, or scope]`.
-
----
-
-## Definition Of Done
-
-A task is complete when the requested behavior works or the question is
-answered, the diff is scoped, relevant checks ran or were explained, meaningful
-continuity state is updated, and residual risks are clear.
+# RoleFit AI Agent Guide
+
+Applies to `apps/role-fit-ai/`. Follow the repository root `AGENTS.md` first.
+RoleFit AI is the local-first resume-tailoring host over shared
+`@typeset/engine` and `@typeset/editor` packages. It adds a loopback Node
+server, AI workflow, local workspace/tracker, and browser extension; it does not
+own a second resume model, editor, layout engine, or PDF implementation.
+
+## Guidance map
+
+- `README.md` — product setup, providers, extension, workspace, and app layout.
+- `PRODUCT.md` — RoleFit behavior, workflow, and trust contract.
+- `DESIGN.md` — Drafting Desk visual system and host/shared styling boundary.
+- `docs/engineering/ui-principles.md` — host UI and responsive behavior.
+- `docs/engineering/ai-server.md` — AI/server request and trust boundaries.
+- `docs/engineering/testing.md` — RoleFit-focused verification.
+- root `docs/{architecture,development,git-workflow}.md` — monorepo ownership,
+  commands, and repository workflow.
+- `src/AGENTS.md` — client orchestration and shared-package integration.
+- `src/hooks/AGENTS.md` — cohesive workflow/state hooks.
+- `src/sections/AGENTS.md` — RoleFit UI composition and reusable host controls.
+- `server/AGENTS.md` — local server, workspace, job import, applications, and
+  extension route boundaries.
+- `server/ai/AGENTS.md` — provider, prompt, sanitizer, review, and eval rules.
+- `extension/AGENTS.md` — MV3 popup and local bridge contract.
+- root/package guides — shared engine/editor behavior. Read those before
+  changing a package or shared control.
+
+## Product and safety invariants
+
+- Resume/job data and provider credentials are sensitive. Never print or log
+  raw resumes, job descriptions, prompts, provider bodies, API keys, or broad
+  environments without explicit local-debug authorization.
+- `.env` keys stay server-side. A key entered in the AI menu may live only in
+  page memory and the same-origin request that uses it; never persist, log, or
+  echo it.
+- Never invent employers, dates, metrics, education, tools, experience, or
+  outcomes. Missing facts become gaps or bracketed prompts for human evidence.
+- AI Review is the sole owner of fit score, coverage, verdict, reason, gaps,
+  and recommendation. The server validates the response contract and
+  anti-fabrication-sensitive edits; it does not calculate a replacement review.
+- A failed Distill/Tailor/Review stage stops the selected pipeline. Distill may
+  retain a deterministic local brief for inspection, but a failed AI Distill
+  cannot auto-launch Tailor or Review.
+- Duplicate checks gate the pipeline before and after Distill. Stop means no
+  downstream request; Continue is acknowledged for that job target.
+- Keep the server loopback-only by default. `HOST=0.0.0.0` exposes an
+  unauthenticated local tool to the LAN and is never acceptable on an untrusted
+  or public network.
+- Keep personal artifacts inside ignored `job-search-workspace/`; never commit
+  its contents except the instructional README.
+
+## App ownership
+
+RoleFit owns:
+
+- `server.ts` and `server/`: local HTTP/Vite composition, provider calls, safe
+  job import, workspace/application persistence, and extension routes;
+- `src/hooks/`: RoleFit workflow state and effects;
+- `src/sections/`: masthead, menus, tabs, tracker, materials, review rail,
+  reusable AI workflow progress, dialogs, and host composition;
+- `src/sections/editor/RoleFitEditorOverlay.tsx`: the section-scope and review
+  overlay injected into the shared editor;
+- `src/lib/` and `src/resume/`: RoleFit-only job, workflow, evidence, and
+  deterministic mechanical analysis helpers;
+- `extension/`: a vanilla MV3 client of the local extension API.
+
+RoleFit consumes, but does not fork:
+
+- `@typeset/engine`: canonical resume model, `.resume` codec, layout, fonts,
+  DOM/print, and PDF;
+- `@typeset/editor`: document/history/style hooks, direct editor, toolbars,
+  popovers, and shared editor styles.
+
+If behavior belongs to both apps, evaluate the package contract using root
+`docs/architecture.md`. If it carries RoleFit provider, tracker, job, review,
+or workspace state, keep it here and expose the smallest host seam instead.
+
+## Maintainability and reuse
+
+- Keep `App.tsx` as composition. New workflow state belongs in a focused hook;
+  deterministic transforms belong in `src/lib/` or `src/resume/`; reusable
+  presentation belongs in a focused section component.
+- One hook owns one cohesive async/state lifecycle. Do not split ownership of
+  the same progress, abort, retry, or persistence state between App and a hook.
+- Reuse `AiWorkflowProgress` for ordered/retryable task stages and existing
+  dialog/menu primitives for repeated interactions. Do not build parallel
+  progress cards, modal shells, provider selectors, or status vocabularies.
+- Keep host components declarative: values/callbacks in, UI out. Network,
+  storage, and cross-tab effects stay in hooks or server modules.
+- Keep client and server request types/conventions aligned. Validate unknown
+  data at boundaries and preserve user-safe classified errors.
+- Prefer small explicit interfaces over mode-heavy components. Extract only a
+  stable responsibility, real duplication, a useful test seam, or volatile
+  platform/provider behavior.
+- Prompt wording is executable behavior. Prompt, grounding, sanitizer, or
+  review-contract changes require adversarial probes and must not be treated as
+  docs-only edits.
+
+## Working method
+
+Before editing:
+
+1. Read root and app continuity plus the nearest scoped guide.
+2. Read the affected product/design or engineering contract.
+3. Trace callers, state owner, request/response shape, persistence, and shared
+   package consumers.
+4. Define fail/stop/retry behavior for any async workflow change.
+5. Inspect the dirty tree and preserve unrelated work.
+
+Pause before changing provider defaults, editable schema, API-key handling,
+public exposure, destructive storage behavior, deploy shape, paid dependencies,
+or remote writes.
+
+## Commands and verification
+
+Run from the repository root:
+
+```bash
+npm run dev:rolefit
+npm run build:rolefit
+npm run check --workspace apps/role-fit-ai
+npm test --workspace apps/role-fit-ai
+npx tsc -p apps/role-fit-ai/tsconfig.server.json --noEmit
+```
+
+RoleFit uses port 5181. Reuse a bound canonical listener rather than starting a
+second server.
+
+- Client/type changes: RoleFit build, plus focused evals.
+- Server/AI changes: server TypeScript gate, affected route/eval, and full app
+  check when the contract is shared.
+- Shared engine/editor changes: follow root impact matrix and verify both apps.
+- Material UI changes: follow RoleFit's flag-first visual-QA policy and report
+  whether browser QA ran.
+- Docs-only changes: verify local links, paths, commands, and stale references;
+  runtime builds are not required unless the audit uncovers a code mismatch.
+
+Update root continuity for cross-workspace decisions and the app ledger only
+for RoleFit-specific operational detail. Do not duplicate the same receipt.
+
+## Git
+
+Follow root `docs/git-workflow.md`. Work locally unless the user asks for git
+actions. Never stage `.env`, generated outputs/fonts, resumes/PDFs, or private
+workspace data. Stage exact paths in this frequently dirty worktree.

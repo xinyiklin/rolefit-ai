@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Check, ChevronDown, Download, FileJson, X } from "lucide-react";
+import { useModalFocus } from "@typeset/editor/hooks/useModalFocus.ts";
 
 // The owned engine's PDF is the only file-export format (D014). Kept as a named
 // union so EXPORT_META / the rename target stay self-documenting.
@@ -28,8 +29,9 @@ type ExportMenuProps = {
   // dialog. e.g. "Xinyi_Lin_Stripe_Resume".
   defaultFileBaseName: string;
   isRenderingPdf: boolean;
-  exportStatus: string;
-  downloadStatus: string;
+  status?: string;
+  statusIsError?: boolean;
+  onDismissStatus?: () => void;
   // The download handlers accept the user's chosen base name (extension
   // excluded); when omitted they fall back to the system name.
   onDownloadPdf: (fileBaseName?: string) => void | Promise<void>;
@@ -40,8 +42,9 @@ export function ExportMenu({
   canExport,
   defaultFileBaseName,
   isRenderingPdf,
-  exportStatus,
-  downloadStatus,
+  status,
+  statusIsError = false,
+  onDismissStatus,
   onDownloadPdf,
   onDownloadResume
 }: ExportMenuProps) {
@@ -50,7 +53,17 @@ export function ExportMenu({
   const [renameValue, setRenameValue] = useState("");
   const [isOpen, setIsOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const renameCardRef = useRef<HTMLFormElement>(null);
   const renameInputRef = useRef<HTMLInputElement>(null);
+  const handleRenameKeyDown = useModalFocus({
+    active: renameFormat !== null,
+    containerRef: renameCardRef,
+    initialFocusRef: renameInputRef,
+    returnFocusRef: triggerRef,
+    onClose: cancelRename,
+    selectInitialText: true
+  });
 
   // Open the rename dialog for a save action, pre-filled with the system name.
   function requestExport(format: RenameTarget) {
@@ -74,14 +87,6 @@ export function ExportMenu({
     else onDownloadResume(base);
   }
 
-  // Focus + select the file name when the dialog opens so renaming is one move.
-  useEffect(() => {
-    if (renameFormat && renameInputRef.current) {
-      renameInputRef.current.focus();
-      renameInputRef.current.select();
-    }
-  }, [renameFormat]);
-
   useEffect(() => {
     if (!isOpen) return;
     function onPointerDown(event: PointerEvent) {
@@ -104,6 +109,7 @@ export function ExportMenu({
   return (
     <div className="export-menu" ref={menuRef} aria-label="Export">
       <button
+        ref={triggerRef}
         className="secondary-button is-compact export-menu__trigger"
         type="button"
         onClick={() => setIsOpen((open) => !open)}
@@ -115,6 +121,21 @@ export function ExportMenu({
         <span>Export</span>
         <ChevronDown size={13} aria-hidden="true" />
       </button>
+
+      {status && !isOpen && !renameFormat ? (
+        <div
+          className={`export-menu__feedback${statusIsError ? " export-menu__feedback--error" : ""}`}
+          role={statusIsError ? "alert" : "status"}
+          aria-live={statusIsError ? "assertive" : "polite"}
+        >
+          <span>{status}</span>
+          {onDismissStatus ? (
+            <button type="button" onClick={onDismissStatus} aria-label="Dismiss export message">
+              <X size={13} aria-hidden="true" />
+            </button>
+          ) : null}
+        </div>
+      ) : null}
 
       {isOpen ? (
         <div className="export-menu__popover" role="menu" aria-label="Export options">
@@ -146,7 +167,7 @@ export function ExportMenu({
               onClick={() => requestExport("resume")}
               title={
                 canExport
-                  ? "Download resume data (.resume) — re-loadable save"
+                  ? "Download resume data (.resume), a re-loadable save"
                   : "Load a resume to enable exports"
               }
             >
@@ -155,21 +176,22 @@ export function ExportMenu({
             </button>
           </div>
 
-          {exportStatus || downloadStatus ? (
-            <div className="export-menu__status" role="status">
-              {exportStatus ? <span>{exportStatus}</span> : null}
-              {exportStatus && downloadStatus ? <span className="sep">·</span> : null}
-              {downloadStatus ? <span>{downloadStatus}</span> : null}
-            </div>
-          ) : null}
         </div>
       ) : null}
 
       {renameFormat ? (
-        <div className="rename-dialog" role="dialog" aria-modal="true" aria-label="Name your download">
-          <div className="rename-dialog__backdrop" onClick={cancelRename} />
+        <div
+          className="rename-dialog"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Name your download"
+          onKeyDown={handleRenameKeyDown}
+        >
+          <div className="rename-dialog__backdrop" aria-hidden="true" onMouseDown={cancelRename} />
           <form
+            ref={renameCardRef}
             className="rename-dialog__card"
+            tabIndex={-1}
             onSubmit={(event) => {
               event.preventDefault();
               confirmRename();
@@ -188,9 +210,6 @@ export function ExportMenu({
                   type="text"
                   value={renameValue}
                   onChange={(event) => setRenameValue(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Escape") cancelRename();
-                  }}
                   aria-label="File name, without extension"
                   spellCheck={false}
                 />
@@ -200,7 +219,7 @@ export function ExportMenu({
               </span>
             </label>
             <p className="rename-dialog__hint">
-              The system named this for you — rename it before saving if you like.
+              The system named this for you. Rename it before saving if you like.
             </p>
             <footer className="rename-dialog__actions">
               <button type="button" className="ghost-button is-compact" onClick={cancelRename}>

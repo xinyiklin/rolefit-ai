@@ -199,12 +199,6 @@
   border: 1px solid var(--hairline-strong);
 }
 
-.rec-pill--stop {
-  background: var(--danger-soft);
-  color: var(--danger);
-  border: 1px solid var(--danger-line);
-}
-
 /* Gap cards */
 .severity-tag {
   display: inline-flex;

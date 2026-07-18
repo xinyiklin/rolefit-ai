@@ -10,13 +10,26 @@
 // routes exactly once. Everything else (JSON I/O, base64 decode, HTTP helpers) is
 // imported directly, matching the server/ai/* module style.
 
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { join, resolve, sep } from "node:path";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { readBody, sendJson } from "../http.ts";
 import { base64ToBuffer } from "../base64.ts";
 import { jobWorkspaceDir } from "../workspace.ts";
-import { APPLICATION_ID_RE, readApplications, writeApplications, applicationsFilePath } from "./index.ts";
+import {
+  APPLICATION_ID_RE,
+  ApplicationsStorageError,
+  applicationsFilePath,
+  readApplications,
+  reconcileApplicationMutations,
+  sanitizeApplications,
+  writeApplications
+} from "./index.ts";
+
+function storageErrorMessage(error: unknown, fallback: string): string {
+  return error instanceof ApplicationsStorageError ? error.message : fallback;
+}
 
 function applicationResumeDir(id: string): string | null {
   if (!APPLICATION_ID_RE.test(id)) return null;
@@ -35,7 +48,7 @@ export async function handleListApplications(req: IncomingMessage, res: ServerRe
       path: applicationsFilePath(jobWorkspaceDir)
     });
   } catch (error) {
-    sendJson(res, 500, { error: error instanceof Error ? error.message : "Application list failed." });
+    sendJson(res, 500, { error: storageErrorMessage(error, "Application list failed.") });
   }
 }
 
@@ -58,24 +71,32 @@ function withApplicationsLock<T>(task: () => Promise<T>): Promise<T> {
 export async function handleSaveApplications(req: IncomingMessage, res: ServerResponse): Promise<void> {
   try {
     const body = JSON.parse(await readBody(req)) as Record<string, unknown>;
-    const incoming = Array.isArray(body.applications) ? body.applications : [];
-    // Optional explicit deletions, applied atomically with the write. The
-    // read-merge below deliberately RESURRECTS on-disk entries missing from the
-    // request (multi-tab protection), so an operation that removes records —
-    // the tracker's duplicate merge — must name them here or they come back.
-    const deleteIds = new Set(
-      (Array.isArray(body.deleteIds) ? body.deleteIds : []).filter((id) => typeof id === "string" && id)
-    );
+    if (!Array.isArray(body.applications)) {
+      sendJson(res, 400, { error: "Applications must be an array." });
+      return;
+    }
+    const incoming = sanitizeApplications(body.applications);
+    if (body.applications.length > 500 || incoming.length !== body.applications.length) {
+      sendJson(res, 400, { error: "One or more applications are invalid. No tracker changes were saved." });
+      return;
+    }
     const applications = await withApplicationsLock(async () => {
-      // Merge with the on-disk list so entries added by other tabs aren't lost.
+      // Reconcile the client's explicit mutation set against the latest disk
+      // snapshot. Unchanged rows stay server-authoritative, while changed rows
+      // must still match the revision the client originally edited.
       const existing = await readApplications(jobWorkspaceDir);
-      const incomingIds = new Set(incoming.map((a) => a?.id).filter(Boolean));
-      const preserved = existing.filter((a) => !incomingIds.has(a.id) && !deleteIds.has(a.id));
-      return writeApplications(jobWorkspaceDir, [...incoming, ...preserved]);
+      const reconciled = reconcileApplicationMutations(existing, incoming, body.mutations);
+      return writeApplications(jobWorkspaceDir, reconciled);
     });
     sendJson(res, 200, { applications });
   } catch (error) {
-    sendJson(res, 400, { error: error instanceof Error ? error.message : "Application save failed." });
+    const status = error instanceof ApplicationsStorageError ? error.status : 400;
+    sendJson(res, status, {
+      error: storageErrorMessage(error, "Application save failed. Check the request and try again."),
+      ...(status === 409 && error instanceof ApplicationsStorageError && Array.isArray(error.currentApplications)
+        ? { applications: error.currentApplications }
+        : {})
+    });
   }
 }
 
@@ -85,11 +106,21 @@ export async function handleDeleteApplication(req: IncomingMessage, res: ServerR
     return;
   }
   try {
+    const body = JSON.parse(await readBody(req)) as Record<string, unknown>;
+    const baseUpdatedAt = body.baseUpdatedAt;
+    if (typeof baseUpdatedAt !== "string" || !baseUpdatedAt.trim() || baseUpdatedAt.length > 100) {
+      sendJson(res, 400, { error: "Delete requires the application's current baseUpdatedAt revision." });
+      return;
+    }
     const applications = await withApplicationsLock(async () => {
       const existing = await readApplications(jobWorkspaceDir);
-      const filtered = existing.filter((a) => a.id !== id);
-      if (filtered.length === existing.length) return null;
-      return writeApplications(jobWorkspaceDir, filtered);
+      const current = existing.find((application) => application.id === id);
+      if (!current) return null;
+      const filtered = existing.filter((application) => application.id !== id);
+      const reconciled = reconcileApplicationMutations(existing, filtered, [
+        { id, operation: "delete", baseUpdatedAt: baseUpdatedAt.trim() }
+      ]);
+      return writeApplications(jobWorkspaceDir, reconciled);
     });
     if (applications === null) {
       sendJson(res, 404, { error: "Application not found." });
@@ -97,7 +128,13 @@ export async function handleDeleteApplication(req: IncomingMessage, res: ServerR
     }
     sendJson(res, 200, { applications });
   } catch (error) {
-    sendJson(res, 500, { error: error instanceof Error ? error.message : "Delete failed." });
+    const status = error instanceof ApplicationsStorageError ? error.status : 400;
+    sendJson(res, status, {
+      error: storageErrorMessage(error, "Delete failed."),
+      ...(status === 409 && error instanceof ApplicationsStorageError && Array.isArray(error.currentApplications)
+        ? { applications: error.currentApplications }
+        : {})
+    });
   }
 }
 
@@ -112,25 +149,40 @@ export async function handleSaveApplicationResume(req: IncomingMessage, res: Ser
     const body = JSON.parse(await readBody(req));
     const pdfBase64 = typeof body.pdfBase64 === "string" ? body.pdfBase64 : "";
     const fileName = typeof body.fileName === "string" ? body.fileName.slice(0, 200) : "";
-    const templateId = typeof body.templateId === "string" ? body.templateId.slice(0, 80) : "";
     if (!pdfBase64) { sendJson(res, 400, { error: "No resume artifacts to save." }); return; }
     // Size cap: pdf ~8MB decoded.
     let pdfBuffer: Buffer | null = null;
     if (pdfBase64) {
       pdfBuffer = base64ToBuffer(pdfBase64, "PDF");
       if (pdfBuffer.length > 8_000_000) { sendJson(res, 413, { error: "PDF too large." }); return; }
+      if (pdfBuffer.length < 5 || pdfBuffer.subarray(0, 5).toString("ascii") !== "%PDF-") {
+        sendJson(res, 400, { error: "PDF data was not a valid PDF file." });
+        return;
+      }
     }
     await mkdir(dir, { recursive: true });
     let hasPdf = false;
     if (pdfBuffer) {
-      await writeFile(join(dir, "resume.pdf"), pdfBuffer);
+      const filePath = join(dir, "resume.pdf");
+      const temporaryPath = `${filePath}.${process.pid}.${randomUUID()}.tmp`;
+      try {
+        await writeFile(temporaryPath, pdfBuffer, { mode: 0o600 });
+        await rename(temporaryPath, filePath);
+      } finally {
+        await rm(temporaryPath, { force: true }).catch(() => undefined);
+      }
       hasPdf = true;
     }
     sendJson(res, 200, {
-      resumeArtifacts: { hasPdf, fileName, templateId, savedAt: new Date().toISOString() }
+      resumeArtifacts: { hasPdf, fileName, savedAt: new Date().toISOString() }
     });
   } catch (error) {
-    sendJson(res, 400, { error: error instanceof Error ? error.message : "Saving resume artifacts failed." });
+    const safeValidationMessage = error instanceof Error && /^PDF (?:data was not valid base64|file is too large)\.$/.test(error.message)
+      ? error.message
+      : null;
+    sendJson(res, safeValidationMessage ? 400 : 500, {
+      error: safeValidationMessage ?? "Saving the resume artifact failed. No file was replaced."
+    });
   }
 }
 

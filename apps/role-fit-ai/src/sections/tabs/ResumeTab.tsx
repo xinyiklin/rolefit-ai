@@ -1,74 +1,49 @@
-import { useEffect, useState, type ReactNode } from "react";
-import { SpellCheck } from "lucide-react";
+import { useCallback, useEffect, useState, type ReactNode, type RefObject } from "react";
 
 import type { PolishedResume, ResumeDiff } from "../../resumeEngine";
-import type { ResumeData } from "../../lib/resumeData";
-import { isFieldFullyMarked, type FieldMark } from "../../lib/inlineMarksText";
+import type { ResumeData } from "@typeset/engine/lib/resumeData.ts";
 import type { TailorMode } from "../../lib/tailorScope";
 import type { ResumeEditorActions } from "../../hooks/useResumeEditor";
 import type { TailorChangeTarget } from "../../resume/types";
-import { DOC_PAGE_WIDTH_PX, DOC_ZOOM_OPTIONS, type DocStyleControls } from "../../hooks/useDocStyle";
-import type { EditorPrefsControls } from "../../hooks/useEditorPrefs";
-import { verdictPillClass, type FitVerdict } from "../../hooks/useResumeAnalysis";
+import type { DocStyleControls } from "@typeset/editor/hooks/useDocStyle.ts";
+import { nextZoomOption } from "@typeset/engine/lib/documentStyle.ts";
+import { DocumentToolbar } from "@typeset/editor/components/toolbar/DocumentToolbar.tsx";
+import {
+  TypesetEditor,
+  type InlineFormatState,
+  type TypesetEditorHandle,
+  type TypesetEditorOverlayContext
+} from "@typeset/editor/sections/editor/TypesetEditor.tsx";
 import type { JobConstraint } from "../../lib/jobConstraints";
 import type { AutosavedDraft } from "../../hooks/useAutosaveDraft";
-import { FormatMenu } from "../FormatMenu";
-import { StyleMenu } from "../StyleMenu";
-import { TypesetEditor } from "../editor/TypesetEditor";
+import type { DraftAutosaveState } from "../../hooks/useAutosaveDraft";
+import { fieldKeyForReviewTarget } from "../../lib/reviewTarget.ts";
+import { RoleFitEditorOverlay } from "../editor/RoleFitEditorOverlay.tsx";
 import { ReviewRail } from "../ReviewRail";
-
-// Standard-entry title/subtitle values that carry text (skills/summary items
-// reuse those columns for other meanings, so they're excluded).
-function entryFieldValues(data: ResumeData | null, field: "title" | "subtitle"): string[] {
-  if (!data) return [];
-  const key = field === "title" ? "titleLeft" : "subtitleLeft";
-  return data.sections
-    .filter((section) => section.type !== "skills" && section.type !== "summary")
-    .flatMap((section) => section.items.map((entry) => entry[key]))
-    .filter((value) => value.trim());
-}
-
-// Chip state: once any entry carries the mark, "on" means EVERY entry does;
-// before that the whole-field render flag stands in (untouched resumes).
-function entriesMarkOn(
-  data: ResumeData | null,
-  field: "title" | "subtitle",
-  mark: FieldMark,
-  flag: boolean
-): boolean {
-  const values = entryFieldValues(data, field);
-  if (!values.length) return flag;
-  const marked = new RegExp(`<${mark === "bold" ? "b" : "i"}>`, "i");
-  if (!values.some((value) => marked.test(value))) return flag;
-  return values.every((value) => isFieldFullyMarked(value, mark));
-}
+import { ViewportGate } from "../ViewportGate";
 
 type ResumeTabProps = {
+  documentTitle: string;
+  onDocumentTitleChange: (title: string) => void;
   editedResume: ResumeData | null;
   actions: ResumeEditorActions;
   canUndo: boolean;
   canRedo: boolean;
   dirty: boolean;
+  draftAutosaveState: DraftAutosaveState;
   // True only for the first workspace check. Manual Reload actions do not
   // replace the live editor with this arrival state.
   isWorkspaceBootstrapping: boolean;
-  // Whether a polish has produced a tailored draft; before that the editor
-  // holds the untailored source, so the heading shouldn't claim "tailored".
-  hasResult: boolean;
   resultSourceLabel: string;
-  scoreContext: string;
-  // Qualitative fit band (Strong fit / Reasonable fit / Stretch / Don't apply)
-  // + provenance. Null until a resume and job are loaded. Replaces the raw score
-  // number: the user wants the verdict, not a figure.
-  fitVerdict: FitVerdict | null;
   // JD lifestyle/logistical conditions for the pre-apply advisory (not fit).
   jobConstraints?: JobConstraint[];
   result: PolishedResume | null;
   resumeDiff: ResumeDiff | null;
   docStyle: DocStyleControls;
-  // Editor-only display prefs (spellcheck). Separate from docStyle: never
-  // affects layout/export, and Format's "Reset to defaults" must not touch it.
-  editorPrefs: EditorPrefsControls;
+  formattingToolbar: ReactNode;
+  editorRef: RefObject<TypesetEditorHandle | null>;
+  onInlineFormatStateChange: (state: InlineFormatState) => void;
+  onRequestLinkEditor: () => void;
   tailorModes: Record<string, TailorMode>;
   onSetTailorMode: (sectionId: string, mode: TailorMode) => void;
   exportControl?: ReactNode;
@@ -90,21 +65,24 @@ type ResumeTabProps = {
 // review exists it docks beside the editor as an actionable rail — accept,
 // modify, or apply-all the suggested edits without leaving the document.
 export function ResumeTab({
+  documentTitle,
+  onDocumentTitleChange,
   editedResume,
   actions,
   canUndo,
   canRedo,
   dirty,
+  draftAutosaveState,
   isWorkspaceBootstrapping,
-  hasResult,
   resultSourceLabel,
-  scoreContext,
-  fitVerdict,
   jobConstraints,
   result,
   resumeDiff,
   docStyle,
-  editorPrefs,
+  formattingToolbar,
+  editorRef,
+  onInlineFormatStateChange,
+  onRequestLinkEditor,
   tailorModes,
   onSetTailorMode,
   exportControl,
@@ -115,20 +93,19 @@ export function ResumeTab({
   onDismissAutosaveDraft,
   reviewStale
 }: ResumeTabProps) {
-  // Intercept Ctrl/Cmd +/- to control editor zoom instead of browser zoom.
+  // Intercept Ctrl/Cmd +/-/0 to control editor zoom instead of browser zoom.
+  // Deliberately unconditional (no focus/modal gating) — matches the deleted
+  // hook's original scope, including its incidental double-fire with
+  // PreviewOverlay's own Ctrl+/-/0 handler while the PDF preview is open.
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
       if (!(e.metaKey || e.ctrlKey) || e.altKey || e.shiftKey) return;
-      const zoomOptions = DOC_ZOOM_OPTIONS as readonly number[];
-      const currentIndex = zoomOptions.indexOf(docStyle.style.zoom);
       if (e.key === "=" || e.key === "+") {
         e.preventDefault();
-        const next = currentIndex < zoomOptions.length - 1 ? currentIndex + 1 : currentIndex;
-        if (next !== currentIndex) docStyle.set("zoom", zoomOptions[next]);
+        docStyle.set("zoom", nextZoomOption(docStyle.style.zoom, 1));
       } else if (e.key === "-") {
         e.preventDefault();
-        const prev = currentIndex > 0 ? currentIndex - 1 : currentIndex;
-        if (prev !== currentIndex) docStyle.set("zoom", zoomOptions[prev]);
+        docStyle.set("zoom", nextZoomOption(docStyle.style.zoom, -1));
       } else if (e.key === "0") {
         e.preventDefault();
         docStyle.set("zoom", 1);
@@ -139,104 +116,64 @@ export function ResumeTab({
   }, [docStyle]);
 
   const [highlightTarget, setHighlightTarget] = useState<TailorChangeTarget | null>(null);
-
-  // Entry emphasis is real inline formatting, applied in bulk from the Style
-  // menu and overridable per entry. The whole-field flag stays as the fallback
-  // for entries with no marks (and clears once marks become authoritative).
-  const titlesBold = entriesMarkOn(editedResume, "title", "bold", docStyle.style.boldTitles);
-  const subtitlesItalic = entriesMarkOn(editedResume, "subtitle", "italic", docStyle.style.italicSubtitles);
-  const handleEntriesMark = (field: "title" | "subtitle", mark: FieldMark, on: boolean) => {
-    actions.setEntriesMark(field, mark, on);
-    if (field === "title" && mark === "bold") docStyle.set("boldTitles", false);
-    else if (field === "subtitle" && mark === "italic") docStyle.set("italicSubtitles", false);
-  };
+  const highlightedFieldKey = editedResume ? fieldKeyForReviewTarget(editedResume, highlightTarget) : null;
+  const renderOverlay = useCallback(
+    (context: TypesetEditorOverlayContext) => (
+      <RoleFitEditorOverlay
+        {...context}
+        actions={actions}
+        tailorModes={tailorModes}
+        onSetTailorMode={onSetTailorMode}
+        highlightTarget={highlightTarget}
+      />
+    ),
+    [actions, highlightTarget, onSetTailorMode, tailorModes]
+  );
 
   const hasReview = Boolean(result?.strictReview || result?.suggestedChanges?.length);
   const hasSuggestions = Boolean(result?.suggestedChanges?.length);
-  const title = hasSuggestions || result?.source === "local" ? "Resume draft" : hasResult ? "Tailored resume" : "Resume draft";
-  const sourceLabel = hasSuggestions ? "AI suggestions" : result?.source === "local" ? "Local analysis" : resultSourceLabel;
+  const sourceLabel = hasSuggestions ? "AI suggestions" : resultSourceLabel;
   const jobTargetLabel = [jobTarget?.role, jobTarget?.company].filter(Boolean).join(" at ");
+  const documentContext = [sourceLabel, jobTargetLabel].filter(Boolean).join(" · ");
   return (
     <section className="studio-card studio-card--flush">
-      <div className="studio-card__head">
-        <h2>
-          {title}
-          {(sourceLabel || dirty || jobTargetLabel) ? (
-            <span className="studio-card__head-meta">
-              {sourceLabel ? ` · ${sourceLabel}` : ""}
-              {dirty ? " · edited" : ""}
-              {jobTargetLabel ? ` · ${jobTargetLabel}` : ""}
-            </span>
-          ) : null}
-        </h2>
-        <div className="studio-card__tools">
-          <label className="doc-zoom" title="Page zoom (100% = actual size)">
-            <span className="doc-zoom__label">Zoom</span>
-            <select
-              value={String(docStyle.style.zoom)}
-              onChange={(event) => {
-                if (event.target.value === "fit") {
-                  // One-shot Fit: size the fixed 816px logical page to the
-                  // editor pane's content width (like Docs' Fit).
-                  const pane = document.querySelector(".resume-workbench__editor");
-                  if (pane) {
-                    const cs = window.getComputedStyle(pane);
-                    const content = pane.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
-                    const fit = Math.max(0.4, Math.min(2, content / DOC_PAGE_WIDTH_PX));
-                    docStyle.set("zoom", Math.floor(fit * 100) / 100);
-                  }
-                  return;
-                }
-                docStyle.set("zoom", Number(event.target.value));
-              }}
-              aria-label="Page zoom"
-            >
-              <option value="fit">Fit</option>
-              {DOC_ZOOM_OPTIONS.map((z) => (
-                <option key={z} value={String(z)}>
-                  {Math.round(z * 100)}%
-                </option>
-              ))}
-              {!DOC_ZOOM_OPTIONS.some((z) => z === docStyle.style.zoom) ? (
-                <option value={String(docStyle.style.zoom)}>{Math.round(docStyle.style.zoom * 100)}%</option>
-              ) : null}
-            </select>
-          </label>
-          <button
-            type="button"
-            className={`doc-toggle${editorPrefs.prefs.spellCheck ? " is-on" : ""}`}
-            aria-pressed={editorPrefs.prefs.spellCheck}
-            onClick={() => editorPrefs.set("spellCheck", !editorPrefs.prefs.spellCheck)}
-            title={
-              editorPrefs.prefs.spellCheck
-                ? "Spell check on — hiding it removes the red typo underlines"
-                : "Spell check off — turn on to underline possible typos"
-            }
-          >
-            <SpellCheck size={14} aria-hidden={true} />
-            <span className="doc-toggle__label">Spell check</span>
-          </button>
-          <FormatMenu docStyle={docStyle} />
-          <StyleMenu
-            docStyle={docStyle}
-            titlesBold={titlesBold}
-            subtitlesItalic={subtitlesItalic}
-            onEntriesMark={handleEntriesMark}
-          />
-          <span className="studio-card__tool-divider" aria-hidden="true" />
-          {exportControl}
-          {fitVerdict ? (
-            <span className="fit-readout" title={`${fitVerdict.label} — ${fitVerdict.source}`}>
-              <strong className={`verdict-pill verdict-pill--inline ${verdictPillClass(fitVerdict.verdict)}`}>
-                {fitVerdict.label}
-              </strong>
-              <span className="fit-readout__source">{fitVerdict.source}</span>
-            </span>
-          ) : scoreContext ? (
-            <span className="studio-card__meta">{scoreContext}</span>
-          ) : null}
-        </div>
-      </div>
+      <header
+        className="top-toolbar resume-tab__toolbar"
+        aria-label="Resume editor toolbar"
+        data-toolbar-labels="text"
+      >
+        <DocumentToolbar
+          documentTitle={documentTitle}
+          onDocumentTitleChange={onDocumentTitleChange}
+          documentContext={documentContext}
+          saveStatus={
+            !dirty
+              ? undefined
+              : draftAutosaveState === "error"
+                ? { state: "error", label: "Recovery save failed" }
+                : draftAutosaveState === "saved"
+                  ? { state: "saved", label: "Recovery draft saved" }
+                  : { state: "saving", label: "Saving recovery draft" }
+          }
+          documentStructure={{
+            name: editedResume?.name ?? "",
+            contact: editedResume?.contact ?? [],
+            disabled: !editedResume,
+            onSetName: actions.setName,
+            onUpdateContact: actions.updateContact,
+            onAddContact: actions.addContact,
+            onRemoveContact: actions.removeContact,
+            onAddSection: (type, position) => editorRef.current?.addSection(type, position)
+          }}
+          docStyle={docStyle}
+          actions={(
+            <div className="studio-card__tools">
+              {exportControl}
+            </div>
+          )}
+        />
+        {formattingToolbar}
+      </header>
 
       <div className={`resume-workbench${hasReview ? " has-rail" : ""}`}>
         {/* Floated as an overlay so appearing/dismissing never reflows the
@@ -275,28 +212,31 @@ export function ResumeTab({
             if (!(e.target as HTMLElement).closest?.(".resume-doc")) e.preventDefault();
           }}
         >
-          {editedResume ? (
-            <TypesetEditor
-              data={editedResume}
-              actions={actions}
-              canUndo={canUndo}
-              canRedo={canRedo}
-              docStyle={docStyle}
-              spellCheck={editorPrefs.prefs.spellCheck}
-              tailorModes={tailorModes}
-              onSetTailorMode={onSetTailorMode}
-              highlightTarget={highlightTarget}
-            />
-          ) : isWorkspaceBootstrapping ? (
-            <p className="resume-doc__boot" role="status" aria-live="polite">
-              Opening workspace…
-            </p>
-          ) : (
-            <div className="resume-doc__empty">
-              <strong>Bring a resume to the desk</strong>
-              <span>Open Resume above to upload a source file.</span>
-            </div>
-          )}
+          <ViewportGate>
+            {editedResume ? (
+              <TypesetEditor
+                ref={editorRef}
+                data={editedResume}
+                actions={actions}
+                canUndo={canUndo}
+                canRedo={canRedo}
+                docStyle={docStyle}
+                onInlineFormatStateChange={onInlineFormatStateChange}
+                onRequestLinkEditor={onRequestLinkEditor}
+                overlay={renderOverlay}
+                highlightFieldKey={highlightedFieldKey}
+              />
+            ) : isWorkspaceBootstrapping ? (
+              <p className="resume-doc__boot" role="status" aria-live="polite">
+                Opening workspace…
+              </p>
+            ) : (
+              <div className="resume-doc__empty">
+                <strong>Bring a resume to the desk</strong>
+                <span>Open Resume above to upload a source file.</span>
+              </div>
+            )}
+          </ViewportGate>
         </div>
 
         {hasReview && result ? (

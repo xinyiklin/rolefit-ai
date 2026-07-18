@@ -82,7 +82,7 @@ export const FONT_FAMILY_OPTIONS = [
 // One source of truth for UI constraints, local-state coercion, and strict file
 // validation. Point-gap bounds preserve the calibrated editor ranges.
 export const DOC_STYLE_BOUNDS = {
-  zoom: { min: 0.4, max: 2, step: 0.01 },
+  zoom: { min: 0.5, max: 2, step: 0.01 },
   baseFontSizePt: { min: 8, max: 12, step: 0.5 },
   letterSpacingPt: { min: -0.2, max: 0.5, step: 0.05 },
   lineHeight: { min: 1, max: 2, step: 0.01 },

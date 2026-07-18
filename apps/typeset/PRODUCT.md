@@ -20,6 +20,19 @@ browser typesetting engine owns pagination and PDF output. Success means a user
 can reopen a `.resume` file, make precise edits with confidence, and export the
 same document they see on screen.
 
+## Product Boundary
+
+Typeset is the standalone, browser-only host for the shared Typeset engine and
+editor packages. It owns file lifecycle, browser autosave, product identity,
+and static deployment. The packages own the resume model, `.resume` contract,
+layout, PDF output, editing behavior, and formatting controls shared with
+RoleFit AI.
+
+RoleFit concepts do not belong in this product: no job intake, AI providers,
+tailoring stages, review verdicts, application tracker, local server, or remote
+resume-data requests. Sharing the editor must not weaken Typeset's local-only
+privacy promise or turn the standalone shell into a configurable host framework.
+
 ## Brand Personality
 
 Calm, exact, capable. The product should feel like a focused document tool built
@@ -51,5 +64,6 @@ and implementation or conversion language in the user experience.
 Target WCAG 2.2 AA for application chrome. Provide complete keyboard access,
 visible focus states, semantic toolbar and popover behavior, non-color status
 cues, reduced-motion support, and minimum practical touch targets on tablets.
-Below the supported authoring width, show a clear small-screen gate instead of a
-compromised editor.
+Keep the editor available at compact widths: auto-fit the page, progressively
+disclose toolbar controls, and hide file actions at 400px and below rather than
+blocking access with a screen-size gate.

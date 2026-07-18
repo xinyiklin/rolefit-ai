@@ -51,6 +51,7 @@ export function JobMenu({
               value={jobUrl}
               onChange={(event) => setJobUrl(event.target.value)}
               placeholder="https://… (job posting URL)"
+              disabled={isExtractingLink}
             />
           </div>
           <button
@@ -73,6 +74,7 @@ export function JobMenu({
           onChange={(event) => setJobDescription(event.target.value)}
           placeholder="Paste responsibilities, qualifications, and preferred skills."
           rows={16}
+          disabled={isExtractingLink}
         />
       </label>
       <div className="job-distill-row">

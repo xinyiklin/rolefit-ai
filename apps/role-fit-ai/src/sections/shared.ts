@@ -1,7 +1,7 @@
 // Types + helpers shared across the section components.
 
-// "review" is gone as a tab: the recruiter review docks in the Resume tab's
-// rail, and the local fit analytics live in the header's Fit popover.
+// "review" is gone as a tab: the AI recruiter review docks in the Resume tab's
+// rail.
 // "pipeline" and "calendar" are gone as top-level tabs: they merged into
 // "applications" as a Table / Calendar view switcher (TrackerTab).
 // "cover" and "questions" are gone as separate tabs: they merged into
@@ -40,10 +40,9 @@ export type ApplicationAnswersResult = {
 } | null;
 
 // Before/after fit numbers for the original (base) vs. tailored resume against
-// one job. `source` records whether the numbers came from the AI judge (scored
-// both in one call) or the deterministic local engine fallback.
+// one job. AI Review scores both in one call; there is no local fallback.
 export type FitComparison = {
-  source: "ai" | "local";
+  source: "ai";
   base: number;
   tailored: number;
   reason: string;

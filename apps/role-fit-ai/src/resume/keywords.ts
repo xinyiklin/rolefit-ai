@@ -78,10 +78,9 @@ export const ROLE_KEYWORDS: Array<{ keyword: string; aliases: string[] }> = [
   { keyword: "performance", aliases: ["performance", "latency"] },
   // Catalog coverage gaps surfaced by auditing this user's real applications:
   // cloud providers appear in well over half the saved JDs yet were entirely
-  // absent here, so the resume's genuine matches went uncredited and the
-  // rewrite's skills section couldn't surface them. These add recognition only —
-  // a term is still counted exactly when it literally appears (keywordFit never
-  // invents coverage). Aliases avoid false-positive-prone bare words (e.g.
+  // absent here, so the editor's mechanical missing-keyword hints overlooked
+  // genuine matches and the rewrite's skills section couldn't surface them.
+  // These add recognition only; aliases avoid false-positive-prone bare words (e.g.
   // "golang" not bare "go", "spring boot" not bare "spring", "express.js" not
   // bare "express"). Multi-word/short terms (aws, c#, ci/cd, k8s) only become
   // matchable/extractable BECAUSE they are listed here — the generic token path
@@ -184,10 +183,8 @@ const STOP_WORDS = new Set([
   "you",
   "your",
   // Generic JD-prose filler that is not a skill and forms no useful skill bigram.
-  // keywordFit (40% of the score) is coverage of extractKeywords(jobText); these
-  // padded into the keyword set as guaranteed "misses", deflating a genuinely
-  // strong resume's fit purely from verbose postings. Removing them never invents
-  // coverage — it only stops counting prose noise as a missing requirement.
+  // Excluding it keeps the editor's mechanical missing-keyword hints from being
+  // padded with prose noise. These hints do not score or review the resume.
   "ability",
   "code",
   "deep",
@@ -212,11 +209,9 @@ const STOP_WORDS = new Set([
   // (src/lib/jobExtract.ts), not raw prose: 66/67 saved JDs literally contain the
   // section headers "Tech Stack / Keywords:", "Seniority Signals:", "Domain
   // Signals:", and "Company / Product Context:". Those scaffold tokens are NOT
-  // skills, yet extractKeywords was surfacing them and scoreKeywordFit then
-  // counted them as required keywords the resume can never contain ("domain
-  // signals" appears in no resume) — guaranteed misses that deflated keywordFit
-  // (40% of the score) on every tailored resume. Dropping the template furniture
-  // never invents coverage; it stops scoring the distiller's own labels. (These
+  // skills, yet extractKeywords was surfacing them as missing-keyword hints the
+  // resume can never contain ("domain signals" appears in no resume). Dropping
+  // the template furniture keeps the hints focused on job content. (These
   // affect only the generic-token path; ROLE_KEYWORDS alias matching, e.g.
   // "full-stack", is independent of STOP_WORDS.)
   "context",
@@ -224,8 +219,8 @@ const STOP_WORDS = new Set([
   "keywords",
   // "product" is part of the distiller's "Company / Product Context:" scaffold label
   // emitted on essentially every JD, so leaving it un-stopworded makes it a SYSTEMATIC
-  // phantom-missing keyword that deflates keywordFit on every resume lacking the word.
-  // That systematic deflation outweighs losing it as a (weak, generic) keyword on the
+  // phantom missing-keyword hint on every resume lacking the word. That systematic
+  // noise outweighs losing it as a (weak, generic) keyword on the
   // occasional genuinely product-focused JD.
   "product",
   "seniority",

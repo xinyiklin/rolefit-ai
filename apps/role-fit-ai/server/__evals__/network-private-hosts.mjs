@@ -39,6 +39,14 @@ const PRIVATE = [
   "192.168.0.1",
   "0.0.0.0",
   "100.64.0.1", // CGNAT
+  "192.0.2.1", // documentation
+  "198.18.0.1", // benchmark
+  "198.51.100.5", // documentation
+  "203.0.113.8", // documentation
+  "224.0.0.1", // multicast
+  "255.255.255.255", // reserved/broadcast
+  "ff02::1", // IPv6 multicast
+  "2001:db8::1", // IPv6 documentation
 ];
 for (const h of PRIVATE) {
   assert.equal(isPrivateHost(h), true, `must be treated as private: ${h}`);
@@ -59,6 +67,7 @@ for (const h of PUBLIC) {
 // --- end-to-end through the URL guard used by /api/import-job ---
 assert.equal(isPublicHttpUrl(new URL("http://[::ffff:7f00:1]/jobs")), false, "mapped-loopback URL rejected");
 assert.equal(isPublicHttpUrl(new URL("http://[fe80::1]/")), false, "link-local URL rejected");
+assert.equal(isPublicHttpUrl(new URL("https://user:secret@example.com/job")), false, "credential-bearing URL rejected");
 assert.equal(isPublicHttpUrl(new URL("https://boards.greenhouse.io/acme/jobs/123")), true, "real job URL allowed");
 
 console.log("network private-host probes passed");

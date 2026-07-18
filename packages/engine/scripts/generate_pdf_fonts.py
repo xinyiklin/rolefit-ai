@@ -23,11 +23,14 @@ Reproducible toolchain (same pins as generate_font_assets.py):
 
 Run (any working directory — paths are anchored to the repository):
   python3 scripts/generate_pdf_fonts.py
+  python3 scripts/generate_pdf_fonts.py --check
 """
 
 from __future__ import annotations
 
+import argparse
 import glob
+from io import BytesIO
 import os
 
 from fontTools.ttLib import TTFont
@@ -44,10 +47,18 @@ FONTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file_
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help="verify committed OTF/TTF siblings without replacing them",
+    )
+    args = parser.parse_args()
+
     woff2_files = sorted(glob.glob(os.path.join(FONTS_DIR, "*.woff2")))
     if not woff2_files:
         raise SystemExit(f"no woff2 fonts found in {FONTS_DIR}")
-    stale = []
+    problems = []
     total_bytes = 0
     for source in woff2_files:
         # recalcTimestamp=False keeps head.modified from the source so reruns
@@ -59,20 +70,34 @@ def main() -> None:
             + strip_unmodeled_kerning(font)
         )
         if removed:
-            stale.append(f"{source}: {removed} unmodeled shaping rules still present")
+            problems.append(f"{source}: {removed} unmodeled shaping rules still present")
         extension = "otf" if font.sfntVersion == "OTTO" else "ttf"
         base = os.path.splitext(os.path.basename(source))[0]
         destination = os.path.join(FONTS_DIR, f"{base}.{extension}")
         font.flavor = None  # write a plain sfnt, not woff/woff2
-        font.save(destination, reorderTables=True)
-        size = os.path.getsize(destination)
+        output = BytesIO()
+        font.save(output, reorderTables=True)
+        font.close()
+        payload = output.getvalue()
+        if args.check:
+            matches_committed = False
+            if os.path.exists(destination):
+                with open(destination, "rb") as destination_file:
+                    matches_committed = destination_file.read() == payload
+            if not matches_committed:
+                problems.append(f"{destination}: generated PDF font is stale")
+        else:
+            with open(destination, "wb") as destination_file:
+                destination_file.write(payload)
+        size = len(payload)
         total_bytes += size
         print(f"{base}.{extension}\t{size:>8} B")
-    print(f"\n{len(woff2_files)} fonts, {total_bytes / 1024 / 1024:.2f} MB total")
-    if stale:
+    verb = "Verified" if args.check else "Generated"
+    print(f"\n{verb} {len(woff2_files)} fonts, {total_bytes / 1024 / 1024:.2f} MB total")
+    if problems:
         raise SystemExit(
-            "woff2 sources carry ligatures the engine does not model — regenerate them "
-            "with scripts/generate_font_assets.py:\n  " + "\n  ".join(stale)
+            "PDF font verification failed. Regenerate the webfonts first when shaping "
+            "rules changed, then regenerate the PDF siblings:\n  " + "\n  ".join(problems)
         )
 
 

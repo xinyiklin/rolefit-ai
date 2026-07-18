@@ -1,97 +1,22 @@
 /* -------- Responsive -------- */
 
 @media (max-width: 1080px) {
-  .app-shell { height: auto; min-height: 100vh; }
-
-  .workspace-grid {
-    grid-template-columns: 1fr;
-    overflow: visible;
-  }
-
   .studio-pane {
-    grid-template-columns: 1fr;
-    /* Tabs row hugs its content; the main row takes the slack. With `auto auto`
-       the stretched pane inflated the tab bar to fill half the viewport. */
-    grid-template-rows: auto minmax(0, 1fr);
+    grid-template-columns: 52px minmax(0, 1fr);
   }
 
-  /* The rail collapses to a horizontal tab bar; the sessions panel belongs to
-     the vertical rail only, so drop it (and the column border) here. */
+  /* Keep the navigation axis stable. The desktop rail collapses to an icon
+     strip instead of becoming a second top navbar. */
   .studio-sidebar {
-    border-right: 0;
-  }
-
-  .studio-sidebar__footer {
-    display: none;
+    border-right: 1px solid var(--hairline);
   }
 
   .studio-tabs {
-    flex-direction: row;
     align-items: center;
-    gap: var(--s1);
-    overflow-x: auto;
-    padding: var(--s1) var(--s5);
-    border-right: 0;
-    border-bottom: 1px solid var(--hairline);
-    scrollbar-width: none;
-  }
-
-  .studio-tabs::-webkit-scrollbar { display: none; }
-
-  /* In the horizontal bar the groups must run inline too — the desktop rules
-     stack each group's label over its tabs and add a TOP rule between groups,
-     which in a row reads as side-by-side columns with a stray hairline. Lay the
-     label + tabs in one line and turn the divider into a vertical rule. */
-  .studio-tabs__group {
-    display: flex;
-    flex-direction: row;
-    align-items: center;
-    gap: var(--s1);
-    margin-top: 0;
-    padding-top: 0;
-    border-top: 0;
-  }
-
-  .studio-tabs__group:not(:first-child) {
-    margin-left: var(--s2);
-    padding-left: var(--s2);
-    border-left: 1px solid var(--hairline-soft);
+    padding: var(--s3) var(--s2);
   }
 
   .studio-tabs__group-label {
-    margin-bottom: 0;
-    white-space: nowrap;
-  }
-
-  .studio-tab {
-    flex: 0 0 auto;
-    min-height: 38px;
-    min-width: max-content;
-  }
-
-  .studio-body {
-    overflow: visible;
-    max-height: none;
-  }
-
-}
-
-@media (max-width: 900px) {
-  /* Tight masthead: keep the menu labels, drop the state words (the dot in
-     each trigger still carries ready/empty). */
-  .nav-menu__sub { display: none; }
-}
-
-@media (min-width: 761px) and (max-width: 900px) {
-  /* Seal-first intermediate masthead. The full wordmark stays as the document
-     h1 for assistive technology, while the visible seal gives the menus and
-     paired actions enough room to remain one deliberate row. */
-  .masthead {
-    gap: var(--s3);
-    padding-inline: var(--s4);
-  }
-
-  .masthead__brand h1 {
     position: absolute;
     width: 1px;
     height: 1px;
@@ -100,36 +25,184 @@
     overflow: hidden;
     clip-path: inset(50%);
     white-space: nowrap;
-    border: 0;
   }
 
-  .masthead__actions {
-    padding-left: var(--s3);
+  .studio-tab {
+    position: relative;
+    justify-content: center;
+    width: 36px;
+    min-width: 36px;
+    min-height: 36px;
+    padding: 0;
+  }
+
+  .studio-tab__label {
+    position: absolute;
+    left: 100%;
+    opacity: 0;
+    transform: translateX(-6px);
+    pointer-events: none;
+  }
+
+  .studio-tab em {
+    position: absolute;
+    top: -3px;
+    right: -3px;
+    min-width: 14px;
+    height: 14px;
+    padding-inline: 3px;
+    font-size: 0.55rem;
+  }
+}
+
+@media (max-width: 1180px) {
+  /* First disclosure: remove secondary state words while preserving the menu
+     names. Readiness remains available inside each menu. */
+  .nav-menu__sub { display: none; }
+}
+
+@media (max-width: 1080px) {
+  /* Tighten the masthead alongside the rail collapse, but keep the visible
+     wordmark until the much narrower action breakpoint. */
+
+  .masthead {
+    gap: var(--s3);
+    padding-inline: var(--s4);
+  }
+
+}
+
+@media (max-width: 940px) {
+  /* Menus disclose to identical icon controls. Parent and intra-group gaps
+     match so all five icons read as one evenly spaced sequence. */
+  .masthead__menus,
+  .masthead .menu-group {
+    gap: 8px;
+  }
+
+  .masthead .nav-menu__label,
+  .masthead .nav-menu__caret {
+    display: none;
+  }
+
+  .masthead .nav-menu__trigger {
+    justify-content: center;
+    width: 34px;
+    height: 32px;
+    padding-inline: 0;
+    border: 1px solid var(--hairline-soft);
+    background: var(--card-soft);
+  }
+
+  .masthead .nav-menu__trigger > svg:first-child {
+    display: block;
+  }
+
+  .masthead .nav-menu__tooltip {
+    position: absolute;
+    top: calc(100% + 7px);
+    left: 50%;
+    z-index: 70;
+    display: block;
+    width: max-content;
+    max-width: 180px;
+    padding: 5px 8px;
+    border: 1px solid var(--hairline);
+    border-radius: var(--r-sm);
+    background: var(--ink-strong);
+    color: var(--paper);
+    box-shadow: var(--shadow-rest);
+    font-size: 0.68rem;
+    line-height: 1.2;
+    pointer-events: none;
+    opacity: 0;
+    transform: translate(-50%, -2px);
+    transition: opacity 120ms var(--ease), transform 120ms var(--ease);
+  }
+
+  .masthead .nav-menu__trigger[aria-expanded="false"]:hover + .nav-menu__tooltip,
+  .masthead .nav-menu__trigger[aria-expanded="false"]:focus-visible + .nav-menu__tooltip {
+    opacity: 1;
+    transform: translate(-50%, 0);
   }
 }
 
 @media (max-width: 760px) {
   .masthead {
-    flex-wrap: wrap;
-    padding: var(--s3) var(--s4);
-    row-gap: var(--s2);
+    gap: 4px;
+    padding-inline: 5px;
   }
 
-  .masthead__brand h1 { font-size: 0.92rem; }
+  .masthead__brand {
+    flex: 0 0 auto;
+    gap: 0;
+    margin-right: auto;
+  }
 
-  .masthead__menus {
-    order: 3;
-    width: 100%;
+  .masthead__mark {
+    display: none;
+  }
+
+  .masthead__brand h1 {
+    font-size: 0.9rem;
+    white-space: nowrap;
+  }
+
+  .masthead__menus,
+  .masthead .menu-group {
+    gap: 3px;
+  }
+
+  .masthead .nav-menu__trigger {
+    width: 28px;
+    height: 30px;
   }
 
   .masthead__actions {
-    border-left: 0;
+    flex: 0 0 auto;
+    gap: 3px;
     padding-left: 0;
   }
 
-  .studio-tabs,
-  .studio-body { padding-left: var(--s4); padding-right: var(--s4); }
+  .masthead__actions .masthead__polish.masthead__polish,
+  .masthead__actions .masthead__apply.masthead__apply {
+    width: auto;
+    height: 30px;
+    gap: 4px;
+    padding-inline: 5px;
+    font-size: 0.7rem;
+  }
 
+  .studio-body { padding-left: var(--s4); padding-right: var(--s4); }
+}
+
+@media (max-width: 360px) {
+  .masthead {
+    gap: 2px;
+    padding-inline: 3px;
+  }
+
+  .masthead__brand h1 {
+    font-size: 0.78rem;
+  }
+
+  .masthead__menus,
+  .masthead .menu-group {
+    gap: 2px;
+  }
+
+  .masthead .nav-menu__trigger {
+    width: 25px;
+    height: 28px;
+  }
+
+  .masthead__actions .masthead__polish.masthead__polish,
+  .masthead__actions .masthead__apply.masthead__apply {
+    height: 28px;
+    gap: 2px;
+    padding-inline: 3px;
+    font-size: 0.64rem;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

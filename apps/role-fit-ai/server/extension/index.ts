@@ -1,46 +1,15 @@
 // Browser-extension support helpers.
 //
 // This module is pure, dependency-free logic used by the /api/extension/*
-// routes in server.ts. It does a fast, deterministic keyword-overlap "quick
-// score" of a base resume against a job page, plus job-meta extraction and the
-// layered tracked-application duplicate lookup. It never fabricates resume
-// content — quickScore only reports which KNOWN tech keywords overlap; it does
-// not invent or rewrite any resume claim. The authoritative, anti-fabrication-
-// gated polish still runs server-side via /api/polish.
+// routes in server.ts. It owns job-meta extraction and the layered tracked-
+// application duplicate lookup. Fit scoring belongs exclusively to AI Review
+// in the main app; the extension does not estimate or review qualifications.
 //
 // URL normalization + the layered duplicate matcher live in the shared
 // src/lib/jobIdentity.ts (importable from Node and the bundler both) so the
 // client tracker and the extension route can never drift.
 
 import { findDuplicateApplications, type DuplicateMatch } from "../../src/lib/jobIdentity.ts";
-
-// Known tech keywords for overlap scoring. Single-token entries use a
-// word-boundary match (so "go" never matches inside "golang"); multi-word
-// entries use a plain substring match after lowercasing.
-const TECH_KEYWORDS = [
-  "javascript", "typescript", "python", "java", "c++", "c#", "go", "rust", "kotlin", "swift", "scala", "php", "ruby",
-  "react", "vue", "angular", "svelte", "next.js", "nuxt",
-  "node.js", "express", "fastapi", "django", "flask", "spring", "rails",
-  "aws", "gcp", "azure", "docker", "kubernetes", "terraform", "helm",
-  "sql", "postgresql", "postgres", "mysql", "mongodb", "redis", "elasticsearch", "kafka", "snowflake",
-  "graphql", "rest", "grpc", "microservices", "websocket",
-  "machine learning", "deep learning", "pytorch", "tensorflow", "llm", "nlp", "spark", "airflow",
-  "git", "linux", "bash", "agile", "scrum", "jira", "ci/cd", "github actions", "jenkins"
-];
-
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-// Build a case-insensitive, boundary-aware matcher for a single-token keyword.
-// Boundaries use lookbehind/lookahead so partial matches are rejected: "go"
-// will not match inside "golang" or "ago", and "rust" will not match
-// "trustworthy". Word characters AND "." / "#" / "+" / "/" count as part of a
-// token so "next.js", "c#", "c++", and "ci/cd" keep their own boundaries.
-function buildTokenMatcher(keyword: string): RegExp {
-  const escaped = escapeRegExp(keyword);
-  return new RegExp(`(?<![A-Za-z0-9.#+/])${escaped}(?![A-Za-z0-9.#+/])`, "i");
-}
 
 // Find the best stored-application duplicate for the current job page, using the
 // LAYERED matcher (ATS posting id / normalized URL / requisition id in the JD /
@@ -59,58 +28,6 @@ export function findMatchingApplication(url: unknown, applications: unknown, pag
   if (!target.jobUrl.trim() && !target.jobText.trim()) return null;
   const matches = findDuplicateApplications(target, applications);
   return matches.length ? matches[0] : null;
-}
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.max(min, Math.min(max, value));
-}
-
-// Fast keyword-overlap fit estimate. Reports which KNOWN tech keywords are in
-// the job text and which of those also appear in the resume text. This is a
-// rough triage signal only — it never invents resume content; the
-// anti-fabrication-gated polish path is authoritative.
-export function quickScore(
-  resumeText: unknown,
-  jobText: unknown
-): { score: number; verdict: string; matched: string[]; missing: string[] } {
-  const resume = String(resumeText || "");
-  const job = String(jobText || "");
-  const resumeLower = resume.toLowerCase();
-  const jobLower = job.toLowerCase();
-
-  const inJob: string[] = [];
-  for (const keyword of TECH_KEYWORDS) {
-    const hit = keyword.includes(" ")
-      ? jobLower.includes(keyword)
-      : buildTokenMatcher(keyword).test(job);
-    if (hit) inJob.push(keyword);
-  }
-
-  if (inJob.length === 0) {
-    return { score: 55, verdict: "Stretch", matched: [], missing: [] };
-  }
-
-  const matched: string[] = [];
-  const missing: string[] = [];
-  for (const keyword of inJob) {
-    const inResume = keyword.includes(" ")
-      ? resumeLower.includes(keyword)
-      : buildTokenMatcher(keyword).test(resume);
-    if (inResume) matched.push(keyword);
-    else missing.push(keyword);
-  }
-
-  const ratio = matched.length / inJob.length;
-  const score = clamp(Math.round(ratio * 65 + 25), 20, 95);
-  const verdict =
-    score >= 85 ? "Strong fit" : score >= 70 ? "Reasonable fit" : score >= 55 ? "Stretch" : "Don't apply";
-
-  return {
-    score,
-    verdict,
-    matched: matched.slice(0, 8),
-    missing: missing.slice(0, 5)
-  };
 }
 
 // Best-effort title/company extraction from a job page title and body text.

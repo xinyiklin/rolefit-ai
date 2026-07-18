@@ -21,7 +21,6 @@ import {
 } from "@typeset/engine/lib/documentStyle.ts";
 import { useResumeEditor } from "@typeset/editor/hooks/useResumeEditor.ts";
 import {
-  downloadResumeFile,
   parseResumeFile,
   readResumeFile,
   resumeFileName,
@@ -29,7 +28,7 @@ import {
   type ParsedResumeFile
 } from "@typeset/engine/lib/resumeFile.ts";
 import type { ResumeData } from "@typeset/engine/lib/resumeData.ts";
-import { downloadBlob } from "@typeset/engine/lib/download.ts";
+import { downloadBlob, downloadResumeFile } from "@typeset/engine/lib/download.ts";
 import {
   STYLE_FIELD_MARK_DEFAULTS,
   globalAlignmentState,
@@ -296,7 +295,8 @@ export default function App() {
       const { emitPdf, fetchFontBytes } = await import("@typeset/engine/typeset/pdf/emit.ts");
       const schema = toTypesetSchema(resume);
       const doc = layoutResume(schema, docStyle.style);
-      const fonts = await fetchFontBytes(doc);
+      const fontAssetBaseUrl = `${import.meta.env.BASE_URL.replace(/\/$/, "")}/fonts`;
+      const fonts = await fetchFontBytes(doc, fontAssetBaseUrl);
       const bytes = await emitPdf(doc, fonts, {
         title: schema.name ? `${schema.name} — Resume` : "Resume"
       });
@@ -317,12 +317,12 @@ export default function App() {
     docStyle.set("zoom", Math.round(fit * 100) / 100);
   }, [docStyle]);
 
-  // At supported tablet widths, start with the whole sheet visible. Desktop
+  // At compact widths, start with the whole sheet visible. Desktop
   // keeps the familiar 100% default, and the choice remains user-adjustable.
   useEffect(() => {
     if (!resume || autoFitRef.current) return;
     autoFitRef.current = true;
-    if (window.innerWidth > 720 && window.innerWidth < 900 && docStyle.style.zoom >= 1) fitPage();
+    if (window.innerWidth < 900 && docStyle.style.zoom >= 1) fitPage();
   }, [docStyle.style.zoom, fitPage, resume]);
 
   const undo = useCallback(() => {
@@ -542,11 +542,6 @@ export default function App() {
       ) : null}
 
       <main className="document-workspace" ref={workspaceRef} aria-label="Resume editor">
-        <div className="mobile-gate">
-          <strong>Open this editor on a larger screen</strong>
-          <p>Typeset is designed for precise desktop and tablet editing. File actions remain available above.</p>
-        </div>
-
         {resume ? (
           <section className="document-canvas" aria-label="Editable resume pages">
             <TypesetEditor

@@ -2,17 +2,24 @@ import { useEffect, useRef, useState } from "react";
 import { buildStageRequestFields, type StageConfig } from "../lib/aiRequest";
 import { classifyFailure, ApiError } from "../lib/failures";
 import type { ApplicationAnswersResult } from "../sections/shared";
-import type { StageState } from "../sections/PolishProgress";
+import {
+  workflowInputFingerprint,
+  workflowRequestIsCurrent,
+  type AiStageState as StageState
+} from "../lib/aiWorkflow";
+import { buildApplicationRoleEvidence } from "../lib/applicationAnswerEvidence";
+import type { ResumeData } from "@typeset/engine/lib/resumeData.ts";
 import { makeApplicationDraft, type Application } from "./useApplications";
 
 type UseApplicationAnswersArgs = {
   resumeText: string;
+  resumeData: ResumeData | null;
   jobDescription: string;
   jobUrl: string;
   honestContext: string;
   customInstructions: string;
   aiRequest: StageConfig;
-  upsertApplication: (app: Application) => void;
+  upsertApplication: (app: Application) => Promise<boolean>;
   findForTarget: (url: string, desc: string) => Application | undefined;
 };
 
@@ -22,6 +29,7 @@ type UseApplicationAnswersArgs = {
 // helpers, which are passed in.
 export function useApplicationAnswers({
   resumeText,
+  resumeData,
   jobDescription,
   jobUrl,
   honestContext,
@@ -45,18 +53,60 @@ export function useApplicationAnswers({
   // handleGenerateAnswers needs the questions list, which only MaterialsTab
   // holds at click time. A ref (not state): nothing renders from it.
   const lastRequestRef = useRef<{ questions: string[]; includeRoleDescriptions: boolean } | null>(null);
+  const requestGenerationRef = useRef(0);
+  const requestAbortRef = useRef<AbortController | null>(null);
+  const inputFingerprint = workflowInputFingerprint({
+    resumeText,
+    resumeData,
+    jobDescription,
+    jobUrl,
+    honestContext,
+    customInstructions,
+    aiRequest: buildStageRequestFields(aiRequest)
+  });
+  const inputFingerprintRef = useRef(inputFingerprint);
+  inputFingerprintRef.current = inputFingerprint;
+  const contentFingerprint = workflowInputFingerprint({ resumeText, resumeData, jobDescription, jobUrl });
+  const previousContentFingerprintRef = useRef(contentFingerprint);
 
-  // Drafts are tied to the current resume + job; clear them (and the tab badge)
-  // when either changes — mirrors how the polish result resets on input change.
-  // The dock card and its replayable request die with the inputs they belonged
-  // to: a stale failed card's Retry would otherwise replay the OLD questions
-  // against the NEW resume/job.
+  // Any request-input change invalidates only an IN-FLIGHT generation. Completed
+  // output may already contain user edits in MaterialsTab, so settings/provider
+  // changes must never clear it.
   useEffect(() => {
-    setAnswersResult(null);
-    setAnswersStatus("");
-    setAnswersProgress({ status: "idle" });
-    lastRequestRef.current = null;
-  }, [resumeText, jobDescription]);
+    const hadActiveRequest = requestAbortRef.current !== null;
+    requestGenerationRef.current += 1;
+    requestAbortRef.current?.abort();
+    requestAbortRef.current = null;
+    setIsGeneratingAnswers(false);
+    if (hadActiveRequest) {
+      setAnswersStatus("Resume, job, or AI settings changed. The in-flight answer request was cancelled.");
+      setAnswersProgress({
+        status: "stopped",
+        errorHeadline: "Inputs changed",
+        error: "Generate again when the current resume, job, and AI settings are ready."
+      });
+    }
+  }, [inputFingerprint]);
+
+  // Resume/job changes make a completed draft stale, but preserving it is safer
+  // than erasing user-edited answers. The next explicit Generate replaces it.
+  useEffect(() => {
+    if (previousContentFingerprintRef.current === contentFingerprint) return;
+    previousContentFingerprintRef.current = contentFingerprint;
+    if (!answersResult) return;
+    setAnswersStatus("Resume or job changed. Existing answer drafts were kept; review them or generate a fresh set.");
+    setAnswersProgress({
+      status: "stopped",
+      errorHeadline: "Draft inputs changed",
+      error: "Existing drafts are preserved for review and may no longer match the current resume or job."
+    });
+  }, [answersResult, contentFingerprint]);
+
+  useEffect(() => () => {
+    requestGenerationRef.current += 1;
+    requestAbortRef.current?.abort();
+    requestAbortRef.current = null;
+  }, []);
 
   async function handleGenerateAnswers({
     questions,
@@ -65,10 +115,36 @@ export function useApplicationAnswers({
     questions: string[];
     includeRoleDescriptions: boolean;
   }) {
-    lastRequestRef.current = { questions, includeRoleDescriptions };
+    requestGenerationRef.current += 1;
+    const generation = requestGenerationRef.current;
+    requestAbortRef.current?.abort();
+    requestAbortRef.current = null;
+    setIsGeneratingAnswers(false);
+    const submittedQuestions = [...questions];
+    lastRequestRef.current = { questions: submittedQuestions, includeRoleDescriptions };
+    const roleEvidence = includeRoleDescriptions ? buildApplicationRoleEvidence(resumeData) : [];
+    if (includeRoleDescriptions && !roleEvidence.length) {
+      setAnswersStatus("No structured work-experience roles with bullets are available to describe.");
+      setAnswersProgress({
+        status: "failed",
+        errorHeadline: "No work roles found",
+        error: "Add a bulleted Experience or Employment section, or turn off role descriptions."
+      });
+      return;
+    }
     setIsGeneratingAnswers(true);
     setAnswersStatus("Drafting application answers...");
     setAnswersProgress({ status: "running" });
+    const controller = new AbortController();
+    requestAbortRef.current = controller;
+    const requestFingerprint = inputFingerprintRef.current;
+    const isCurrent = () => workflowRequestIsCurrent(
+      generation,
+      requestGenerationRef.current,
+      requestFingerprint,
+      inputFingerprintRef.current,
+      controller.signal
+    );
     try {
       const response = await fetch("/api/application-answers", {
         method: "POST",
@@ -79,11 +155,14 @@ export function useApplicationAnswers({
           jobText: jobDescription,
           honestContext,
           customInstructions,
-          questions,
-          includeRoleDescriptions
-        })
+          questions: submittedQuestions,
+          includeRoleDescriptions,
+          roleEvidence
+        }),
+        signal: controller.signal
       });
       const data = await response.json();
+      if (!isCurrent()) return;
       if (!response.ok) throw new ApiError(data.error ?? "Could not generate answers.", response.status);
       setAnswersResult({
         answers: Array.isArray(data.answers) ? data.answers : [],
@@ -95,12 +174,16 @@ export function useApplicationAnswers({
       );
       setAnswersProgress({ status: "done", note: `${count} answer${count === 1 ? "" : "s"} drafted`, noteTone: "ok" });
     } catch (error) {
+      if (!isCurrent()) return;
       const message = error instanceof Error ? error.message.replace(/[.。]\s*$/, "") : "request failed";
       setAnswersStatus(`Could not generate answers: ${message}.`);
       const f = classifyFailure(error);
       setAnswersProgress({ status: "failed", errorHeadline: f.headline, error: f.detail });
     } finally {
-      setIsGeneratingAnswers(false);
+      if (isCurrent()) {
+        requestAbortRef.current = null;
+        setIsGeneratingAnswers(false);
+      }
     }
   }
 
@@ -111,7 +194,7 @@ export function useApplicationAnswers({
     void handleGenerateAnswers(lastRequestRef.current);
   }
 
-  function handleSaveAnswers(items: { question: string; answer: string }[]) {
+  async function handleSaveAnswers(items: { question: string; answer: string }[]) {
     if (!items.length) return;
     if (!jobUrl.trim() && !jobDescription.trim()) {
       setAnswersStatus("Add a job link or description before saving answers to the pipeline.");
@@ -124,16 +207,20 @@ export function useApplicationAnswers({
       const byQuestion = new Map<string, { question: string; answer: string; savedAt: string }>();
       for (const a of existing.applicationAnswers ?? []) byQuestion.set(a.question, a);
       for (const a of saved) byQuestion.set(a.question, a);
-      upsertApplication({ ...existing, applicationAnswers: Array.from(byQuestion.values()) });
-      setAnswersStatus(`Saved ${saved.length} answer${saved.length === 1 ? "" : "s"} to "${existing.title}" in the pipeline.`);
+      const didSave = await upsertApplication({ ...existing, applicationAnswers: Array.from(byQuestion.values()) });
+      setAnswersStatus(didSave
+        ? `Saved ${saved.length} answer${saved.length === 1 ? "" : "s"} to "${existing.title}" in the pipeline.`
+        : "Could not save answers because the pipeline changed or storage was unavailable. Review the latest entry and retry.");
       return;
     }
     const app: Application = {
       ...makeApplicationDraft(jobUrl, jobDescription),
       applicationAnswers: saved
     };
-    upsertApplication(app);
-    setAnswersStatus(`Saved ${saved.length} answer${saved.length === 1 ? "" : "s"} to a new pipeline entry, "${app.title}".`);
+    const didSave = await upsertApplication(app);
+    setAnswersStatus(didSave
+      ? `Saved ${saved.length} answer${saved.length === 1 ? "" : "s"} to a new pipeline entry, "${app.title}".`
+      : "Could not save answers because the pipeline changed or storage was unavailable. Review the latest entries and retry.");
   }
 
   return {

@@ -15,7 +15,6 @@ import {
   type DocStyle,
   type DocumentStyle
 } from "./documentStyle.ts";
-import { downloadBlob } from "./download.ts";
 
 export const RESUME_FILE_MAGIC = "typeset-resume" as const;
 export const RESUME_FILE_SCHEMA_VERSION = 1 as const;
@@ -396,10 +395,4 @@ export function resumeFileName(suggestedName: string): string {
     .trim()
     .slice(0, 120);
   return `${safeBase || "Untitled resume"}.resume`;
-}
-
-export function downloadResumeFile(data: ResumeData, style: DocStyle, suggestedName = data.name): string {
-  const filename = resumeFileName(suggestedName);
-  downloadBlob(new Blob([serializeResumeFile(data, style)], { type: "application/json" }), filename);
-  return filename;
 }

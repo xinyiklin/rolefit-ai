@@ -18,6 +18,22 @@ const sourceExtentOf = (extent: Extent) => ({
   bottom: extent.firstPage === extent.lastPage ? extent.bottom : extent.top + 24
 });
 
+// The editor is shared by hosts with different shell class names. Resolve the
+// nearest real vertical scroll container from computed layout instead of
+// reaching for a host-owned selector.
+function nearestVerticalScroller(start: HTMLElement | null): HTMLElement | null {
+  let current = start?.parentElement ?? null;
+  while (current) {
+    const overflowY = window.getComputedStyle(current).overflowY;
+    const canScroll = overflowY === "auto" || overflowY === "scroll" || overflowY === "overlay";
+    if (canScroll && current.scrollHeight > current.clientHeight) {
+      return current;
+    }
+    current = current.parentElement;
+  }
+  return null;
+}
+
 type StructureControllerArgs = {
   actions: ResumeEditorActions;
   dataRef: MutableRefObject<ResumeData>;
@@ -295,7 +311,7 @@ export function useTypesetStructure({
       dragRef.current = plan;
       setDrag(plan);
 
-      const scroller = wrapRef.current?.closest<HTMLElement>(".document-workspace") ?? null;
+      const scroller = nearestVerticalScroller(wrapRef.current);
       let pointerY = event.clientY;
 
       const pickSlot = () => {

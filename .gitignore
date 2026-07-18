@@ -14,7 +14,9 @@ dist
 .claude/
 .playwright-cli/
 output/playwright/
+tmp/
 .impeccable/
 
 # Generated: mirrored from packages/engine/fonts by the app sync-fonts script.
 apps/typeset/public/fonts/
+apps/role-fit-ai/public/fonts/

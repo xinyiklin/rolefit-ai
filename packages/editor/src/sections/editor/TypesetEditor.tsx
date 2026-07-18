@@ -18,7 +18,8 @@ import {
   useLayoutEffect,
   useMemo,
   useRef,
-  useState
+  useState,
+  type ReactNode
 } from "react";
 
 import type { ResumeData, ResumeSectionType } from "@typeset/engine/lib/resumeData.ts";
@@ -40,7 +41,7 @@ import { pageGeometry } from "@typeset/engine/typeset/blocks.ts";
 import type { LayoutDocument } from "@typeset/engine/typeset/layout.ts";
 import { TypesetDomPages } from "@typeset/engine/typeset/render/dom.tsx";
 import { toTypesetSchema } from "@typeset/engine/typeset/schema.ts";
-import { anchorsFromDoc } from "./typesetStructure.ts";
+import { anchorsFromDoc, type BlockAnchor, type TypesetAnchors } from "./typesetStructure.ts";
 import { TypesetStructureOverlay } from "./TypesetStructureOverlay.tsx";
 import { TypesetContextMenu } from "./TypesetContextMenu.tsx";
 import { useTypesetStructure, type PendingCaret } from "./useTypesetStructure.ts";
@@ -108,6 +109,18 @@ export type TypesetEditorHandle = {
   addSection: (type: ResumeSectionType, position: "top" | "bottom") => void;
 };
 
+// The geometry/anchor context a host overlay positions itself from — the same
+// values the built-in structure overlay uses. `anchor` is the hovered block,
+// falling back to the block containing the caret.
+export type TypesetEditorOverlayContext = {
+  data: ResumeData;
+  anchors: TypesetAnchors | null;
+  anchor: BlockAnchor | null;
+  pageOrigins: { left: number; top: number }[];
+  zoom: number;
+  geometry: ReturnType<typeof pageGeometry>;
+};
+
 type TypesetEditorProps = {
   data: ResumeData;
   actions: ResumeEditorActions;
@@ -118,6 +131,12 @@ type TypesetEditorProps = {
   // Opens the toolbar link editor (used by the right-click "Add/Edit link"
   // items, which have no URL field of their own).
   onRequestLinkEditor?: () => void;
+  // Host-specific chrome rendered inside the editor wrapper, absolutely
+  // positioned from the overlay context (e.g. role-fit-ai's tailor chips).
+  overlay?: (context: TypesetEditorOverlayContext) => ReactNode;
+  // Transient field highlight (threaded to the engine painter) plus a
+  // scroll-into-view after each repaint. Not document state.
+  highlightFieldKey?: string | null;
 };
 
 const EMPTY_FORMAT_STATE: InlineFormatState = {
@@ -209,7 +228,9 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
   canRedo,
   docStyle,
   onInlineFormatStateChange,
-  onRequestLinkEditor
+  onRequestLinkEditor,
+  overlay,
+  highlightFieldKey = null
 }, ref) {
   // Defer visual auto-linking: while a URL word is being typed (its trailing edge
   // is the caret), suppress ITS auto-link in the render only — { field key, the
@@ -1065,6 +1086,16 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
     commitHistory,
     setNonce
   });
+  // Bring the highlighted field into view after every repaint that carries it
+  // (a repaint can move the field to another page).
+  useLayoutEffect(() => {
+    const host = hostRef.current;
+    if (!host || !highlightFieldKey) return;
+    host
+      .querySelector<HTMLElement>(`[data-tsdf="${CSS.escape(highlightFieldKey)}"]:not([data-tsdm])`)
+      ?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }, [docVersion, highlightFieldKey]);
+
   const overlayAnchor = hovered ?? activeAnchor;
   const { contextMenu, menuItems, openContextMenu, closeContextMenu } = useTypesetContextMenu({
     data,
@@ -1106,6 +1137,7 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
         spellCheck={docStyle.style.spellCheck}
         hostRef={hostRef}
         onDoc={onDoc}
+        highlightFieldKey={highlightFieldKey}
       />
       <TypesetStructureOverlay
         data={data}
@@ -1118,6 +1150,9 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
         onBeginDrag={beginDrag}
         onMoveByKeyboard={moveByKeyboard}
       />
+      {overlay
+        ? overlay({ data, anchors, anchor: overlayAnchor, pageOrigins, zoom, geometry: geo })
+        : null}
       {contextMenu ? (
         <TypesetContextMenu
           x={contextMenu.x}

@@ -6,6 +6,10 @@
 @import "./shell.css";
 @import "./sources.css";
 @import "./studio.css";
+@import "@typeset/editor/styles/resume-document.css";
+@import "@typeset/editor/styles/editor-overlay.css";
+@import "@typeset/editor/styles/toolbar.css";
+@import "@typeset/editor/styles/popovers.css";
 @import "./resume-document.css";
 @import "./resume-editor.css";
 @import "./review.css";

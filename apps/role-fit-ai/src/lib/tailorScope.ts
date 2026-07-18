@@ -1,4 +1,4 @@
-import type { ResumeData, ResumeEntry, ResumeSectionData, ResumeSectionType } from "./resumeData";
+import type { ResumeData, ResumeEntry, ResumeSectionData, ResumeSectionType } from "@typeset/engine/lib/resumeData.ts";
 
 export type TailorScopeBullet = {
   id: string;

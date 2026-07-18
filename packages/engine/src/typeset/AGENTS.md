@@ -1,7 +1,7 @@
 # Deterministic Typesetting Guide
 
-Applies to `src/typeset/`. Also read it when changing font-generation scripts or
-`public/fonts/`, because those assets implement this directory's measurement
+Applies to `src/typeset/`. Also read it when changing engine font-generation
+scripts or `packages/engine/fonts/`, because those assets implement this directory's measurement
 contract. Follow the repository root guide first.
 
 ## Module Ownership
@@ -46,6 +46,8 @@ it truthfully.
 - Supported families are Latin Modern, Source Serif 4, and Source Sans 3. A new
   family requires bundled web and PDF faces, generated metrics, license text,
   and full editor/PDF parity verification.
+- PDF font loading receives a deployment-aware asset base from each host. Do
+  not restore a domain-root `/fonts/` default inside the engine.
 
 ## Font And Shaping Pipeline
 
@@ -57,6 +59,10 @@ it truthfully.
 - Browser fonts, PDF fonts, and committed metrics share one shaping model:
   `liga` is limited to `ff`, `fi`, `fl`, `ffi`, and `ffl`; unmodeled default-on
   GSUB behavior is removed; GPOS kerning retains only modeled pure pairs.
+- Latin Modern's full OpenType/CFF programs must be declared as
+  `CIDFontType0` + `FontFile3`/`OpenType` in emitted PDFs. Keep the identity
+  CID-to-GID map used by the engine's glyph ids; `pdf-roundtrip.mjs` locks the
+  declaration, searchable text layer, and exact run positions.
 - Do not patch generated fonts or metrics by hand. Change the pinned generator,
   regenerate all affected artifacts, and preserve license/checksum provenance.
 
@@ -64,18 +70,20 @@ it truthfully.
 
 Choose checks based on the changed boundary:
 
-- Any engine change: run `npm run build` and the narrowest deterministic probe.
+- Any engine change: run the narrowest deterministic probe and
+  `npm run check --workspace packages/engine`.
 - Font, metrics, measurement, or PDF emitter change: run
-  `npm run eval:pdf-font-parity`.
-- Font pipeline change: run `python3 scripts/generate_font_assets.py --check`;
-  regenerate PDF fonts when the WOFF2 contract changes.
+  `npm run eval:pdf-font-parity --workspace packages/engine`.
+- Font pipeline change: run `npm run fonts:check --workspace packages/engine`;
+  regenerate both web/metrics assets and PDF fonts when the WOFF2 contract changes.
 - Layout or DOM paint change: inspect representative editor pages in a real
   browser, including selection/caret behavior where provenance is involved.
 - Browser-print change: inspect print media/preview and confirm chrome exclusion,
   pagination, fonts, marks, rules, alignment, links, and whitespace.
 - Dedicated PDF change: export and render the emitted PDF, then compare fonts,
   marks, links, rules, alignment, whitespace, and page breaks with the editor.
-- Broad engine work: run `npm run check` after the focused probes.
+- Broad engine work: run the engine check plus both affected app builds after
+  the focused probes.
 
 Do not claim parity from build success alone. Report which consumers and font
 families were actually exercised.

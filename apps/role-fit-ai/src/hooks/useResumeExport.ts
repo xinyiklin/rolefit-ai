@@ -1,11 +1,13 @@
 import { useState } from "react";
 
-import type { DocStyle } from "./useDocStyle";
+import type { DocStyle } from "@typeset/engine/lib/documentStyle.ts";
+import type { ResumeData } from "@typeset/engine/lib/resumeData.ts";
+import { serializeResumeFile } from "@typeset/engine/lib/resumeFile.ts";
+import { toTypesetSchema } from "@typeset/engine/typeset/schema.ts";
+import { downloadBlob } from "@typeset/engine/lib/download.ts";
 import type { PolishedResume } from "../resumeEngine";
-import { buildResumeFileName, downloadBlob, extractApplicantName, sanitizeFileBase } from "../lib/downloads";
+import { buildResumeFileName, extractApplicantName, sanitizeFileBase } from "../lib/downloads";
 import { inferCompanyFromUrl } from "../lib/jobTarget";
-import { toTemplateSchema, type ResumeData } from "../lib/resumeData";
-import { serializeResumeFile } from "../lib/resumeFile";
 
 type UseResumeExportArgs = {
   result: PolishedResume | null;
@@ -20,6 +22,9 @@ type UseResumeExportArgs = {
   // falling back to the raw polish output. Used for the file-name heuristic
   // when no structured model exists yet.
   currentResumeText: string;
+  // Editable document identity from the Resume tab. It is the canonical
+  // default base name for both PDF and `.resume` saves.
+  documentTitle: string;
   jobUrl: string;
   // Resolver for the employer name used in download file names. Returns the
   // distilled/tracked company (the same value the application is saved with) so
@@ -27,13 +32,25 @@ type UseResumeExportArgs = {
   // only when this is empty. A thunk so the distiller runs lazily at save time.
   resolveJobCompany?: () => string;
   resumeText: string;
-  // The editor's Format-menu values. The engine consumes them directly.
+  // The shared formatting toolbar's document values. The engine consumes them
+  // directly.
   docStyle: DocStyle;
   // The status line is owned by App because several non-export handlers
   // (polish, workspace, track) also write to it; this hook reports export
   // progress through it.
   setExportStatus: (value: string) => void;
 };
+
+function pdfExportFailureMessage(error: unknown): string {
+  const detail = error instanceof Error ? error.message : "";
+  if (/font|Unknown font format/i.test(detail)) {
+    return "PDF export failed. The bundled document fonts could not be loaded. Try again.";
+  }
+  if (/dynamically imported module|Outdated Optimize Dep/i.test(detail)) {
+    return "PDF export failed. The export tools could not be loaded. Refresh RoleFit AI and try again.";
+  }
+  return "PDF export failed. Try again.";
+}
 
 // Owns the resume export surface: engine PDF render/preview and the `.resume`
 // save, plus the per-action status/flag state those buttons read.
@@ -42,37 +59,43 @@ export function useResumeExport({
   coverLetterText,
   editedResume,
   currentResumeText,
+  documentTitle,
   jobUrl,
   resolveJobCompany,
   resumeText,
   docStyle,
   setExportStatus
 }: UseResumeExportArgs) {
-  // Typeset the structured resume with the owned engine and serialize to PDF
+  // Typeset the structured resume with the shared engine and serialize to PDF
   // bytes — fully client-side. Dynamic imports keep pdf-lib + the engine out
   // of the main bundle until first use.
   async function renderEnginePdfBytes(): Promise<Uint8Array> {
     if (!editedResume) throw new Error("No structured resume to typeset.");
     const [{ layoutResume }, { emitPdf, fetchFontBytes }] = await Promise.all([
-      import("../typeset/layout.ts"),
-      import("../typeset/pdf/emit.ts")
+      import("@typeset/engine/typeset/layout.ts"),
+      import("@typeset/engine/typeset/pdf/emit.ts")
     ]);
-    const fonts = await fetchFontBytes();
-    const schema = toTemplateSchema(editedResume);
-    return emitPdf(layoutResume(schema, docStyle), fonts, {
-      title: schema.name ? `${schema.name} — Resume` : "Resume"
+    const schema = toTypesetSchema(editedResume);
+    const document = layoutResume(schema, docStyle);
+    // `fetchFontBytes` receives a host-owned public asset base. Vite rewrites
+    // CSS font URLs for sub-path deployments, but it cannot rewrite a runtime
+    // string inside the PDF emitter. Respect BASE_URL explicitly so the Pages
+    // demo fetches /rolefit-ai/fonts/* while local development still uses
+    // /fonts/*.
+    const publicBase = import.meta.env.BASE_URL.replace(/\/$/, "");
+    const fonts = await fetchFontBytes(document, `${publicBase}/fonts`);
+    return emitPdf(document, fonts, {
+      title: documentTitle.trim() || (schema.name ? `${schema.name} Resume` : "Resume")
     });
   }
 
   const [coverCopied, setCoverCopied] = useState(false);
-  const [downloadStatus, setDownloadStatus] = useState("");
   const [isRenderingPdf, setIsRenderingPdf] = useState(false);
 
   // Clear stale download confirmations when a new polish starts. The shared
   // exportStatus line is reset by App alongside this call.
   function resetStatuses() {
     setCoverCopied(false);
-    setDownloadStatus("");
   }
 
   async function handleCopyCoverLetter() {
@@ -82,23 +105,21 @@ export function useResumeExport({
       await navigator.clipboard.writeText(letter);
       setCoverCopied(true);
       window.setTimeout(() => setCoverCopied(false), 1800);
-      setDownloadStatus("");
     } catch {
-      setDownloadStatus("Clipboard is unavailable in this browser context. Select the cover letter text and copy it manually.");
+      setExportStatus("Copy failed. Select the cover letter text and copy it manually.");
     }
   }
 
-  // Name downloads after the applicant (+ company when a job link gives one):
-  // Xinyi_Lin_Stripe_Resume.pdf → Xinyi_Lin_Resume.pdf → Resume.pdf. The export
-  // rail offers this as the pre-filled default in a rename dialog; when the user
-  // edits it, `overrideBase` carries their chosen base name (extension excluded)
-  // and we sanitize + re-attach the correct extension so they cannot break it.
+  // The editable document title is the canonical default for both save formats.
+  // The export menu still offers it in a rename dialog; `overrideBase` carries
+  // that one-off choice and is sanitized before the extension is re-attached.
   function resumeDownloadName(ext: string, overrideBase?: string): string {
     if (overrideBase && overrideBase.trim()) {
       return `${sanitizeFileBase(overrideBase)}.${ext}`;
     }
-    // Prefer the distilled/tracked company (matches the saved application) and
-    // fall back to the URL-derived guess only when it is empty.
+    if (documentTitle.trim()) return `${sanitizeFileBase(documentTitle)}.${ext}`;
+    // Compatibility fallback for a missing title: prefer the distilled/tracked
+    // company (matches the saved application), then the URL-derived guess.
     const company = (resolveJobCompany?.() || "").trim() || inferCompanyFromUrl(jobUrl);
     // Prefer the structured model's name; fall back to scanning the serialized
     // text only when there is no structured model yet (text-only polish result).
@@ -108,7 +129,7 @@ export function useResumeExport({
     return buildResumeFileName(applicant, company, ext);
   }
 
-  // "PDF": typeset by the owned engine, serialized client-side (D014).
+  // "PDF": typeset by the shared engine, serialized client-side (D014).
   async function handleDownloadPdf(overrideBase?: string) {
     // The engine typesets the structured model only; say so rather than
     // no-opping (canExport also allows a text-only polish result).
@@ -124,7 +145,7 @@ export function useResumeExport({
       downloadBlob(new Blob([bytes as BlobPart], { type: "application/pdf" }), fileName);
       setExportStatus(`Downloaded ${fileName}.`);
     } catch (error) {
-      setExportStatus(error instanceof Error ? `PDF export failed: ${error.message}` : "PDF export failed.");
+      setExportStatus(pdfExportFailureMessage(error));
     } finally {
       setIsRenderingPdf(false);
     }
@@ -139,7 +160,7 @@ export function useResumeExport({
       return;
     }
     const fileName = resumeDownloadName("resume", overrideBase);
-    downloadBlob(new Blob([serializeResumeFile(editedResume)], { type: "application/json" }), fileName);
+    downloadBlob(new Blob([serializeResumeFile(editedResume, docStyle)], { type: "application/json" }), fileName);
     setExportStatus(`Saved ${fileName}.`);
   }
 
@@ -160,7 +181,6 @@ export function useResumeExport({
 
   return {
     coverCopied,
-    downloadStatus,
     isRenderingPdf,
     resetStatuses,
     handleCopyCoverLetter,

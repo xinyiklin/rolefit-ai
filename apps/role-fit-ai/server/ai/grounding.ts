@@ -306,14 +306,28 @@ export function findUngroundedClaimTerm(proposedText: unknown, grounding: unknow
   const groundingLower = String(grounding ?? "").toLowerCase();
   const groundingTokens = tokenize(groundingLower);
   const markStripped = String(proposedText ?? "").replace(/<\/?(?:b|i|u)>/gi, " ");
-  const proposedLower = markStripped.toLowerCase();
-  const proposedTokens = new Set(stripBoundaryDots(proposedLower).match(/[a-z0-9.#+]+/g) ?? []);
 
   for (const match of markStripped.matchAll(/\b[A-Z][A-Za-z0-9.+#]{2,}\b/g)) {
     const token = match[0].toLowerCase();
     if (match.index === 0 && LEADING_ACTION_VERBS.has(token)) continue;
     if (!isGrounded(groundingLower, groundingTokens, token)) return match[0];
   }
+  return findUngroundedCuratedClaimTerm(proposedText, grounding);
+}
+
+// Curated-only companion to findUngroundedClaimTerm. Extraction surfaces such
+// as Distill legitimately paraphrase ordinary prose, so treating every new
+// capitalized word as a factual claim would false-drop useful duties. Concrete
+// technology concepts, branded tools, and distinctive short tech tokens are a
+// narrower class: if one appears in model-authored extraction prose, it must be
+// present in the source posting. Keeping this helper beside the owning lexicons
+// avoids a second, inevitably drifting technology list in distill.ts.
+export function findUngroundedCuratedClaimTerm(proposedText: unknown, grounding: unknown): string | null {
+  const groundingLower = String(grounding ?? "").toLowerCase();
+  const groundingTokens = tokenize(groundingLower);
+  const proposedLower = String(proposedText ?? "").replace(/<\/?(?:b|i|u)>/gi, " ").toLowerCase();
+  const proposedTokens = new Set(stripBoundaryDots(proposedLower).match(/[a-z0-9.#+]+/g) ?? []);
+
   for (const concept of LOWERCASE_TECH_CONCEPTS) {
     if (proposedLower.includes(concept) && !isGrounded(groundingLower, groundingTokens, concept)) return concept;
   }
@@ -322,6 +336,71 @@ export function findUngroundedClaimTerm(proposedText: unknown, grounding: unknow
   }
   for (const token of SHORT_TECH_TOKENS) {
     if (proposedTokens.has(token) && !isGrounded(groundingLower, groundingTokens, token)) return token;
+  }
+  return null;
+}
+
+function isProseSentenceStart(text: string, index: number): boolean {
+  const prefix = text.slice(0, index);
+  // Beginning of the response, a new line, or the first word after terminal
+  // punctuation (with optional closing quotes/brackets) is ordinary sentence
+  // capitalization, not evidence of a proper-name claim by itself.
+  return /(?:^|[.!?]["')\]]*\s+|[\r\n]\s*)$/.test(prefix);
+}
+
+const PROPER_SUBJECT_CLAIM_VERBS = new Set([
+  "is", "was", "has", "had", "led", "built", "launched", "offers", "offered", "develops", "developed",
+  "creates", "created", "designs", "designed", "delivers", "delivered", "manages", "managed", "owns", "owned",
+  "operates", "operated", "provides", "provided", "produces", "produced", "founded", "acquired", "maintains",
+  "maintained", "supports", "supported", "implements", "implemented", "transformed", "achieved", "reduced",
+  "increased", "grew", "scaled", "deployed", "migrated", "introduced", "invented", "runs", "ran", "works",
+  "specializes", "focuses", "serves"
+]);
+
+function sentenceLeadingTokenActsAsEntitySubject(text: string, endIndex: number): boolean {
+  // Entity-subject claims put the predicate immediately after the name:
+  // "Fabricated led/built/launched/offers ...". Skip only lightweight
+  // punctuation between them; a general adverbial starter such as "Over the
+  // past..." or "Additionally, I..." has a non-claim next word and is grammar.
+  const next = text.slice(endIndex).match(/^[\s,:;—-]*([A-Za-z]+)/)?.[1]?.toLowerCase() ?? "";
+  return PROPER_SUBJECT_CLAIM_VERBS.has(next);
+}
+
+// Proper-name gate for application prose. Unlike resume-field rewrites, a
+// truthful answer is expected to name the target company/product from the JD,
+// so candidate evidence is not the only allowed source. Reject an unsupported
+// mid-sentence TitleCase/CamelCase/all-caps token only when it appears in neither
+// the candidate evidence nor the job text. Prompt-required [add: ...]
+// placeholders are questions to the user, not asserted facts, so they are
+// removed before scanning. At sentence start, simple TitleCase is grammatical
+// unless it directly acts as the subject of a bounded claim verb ("Fabricated
+// led ..."). Internal-CamelCase and all-caps tokens remain intrinsically
+// claim-shaped even in first position; this avoids a vocabulary allowlist whose
+// inevitable omissions reject ordinary transitions such as "Additionally".
+export function findUngroundedProseProperClaimTerm(
+  text: unknown,
+  candidateEvidence: unknown,
+  jobText: unknown
+): string | null {
+  const prose = String(text ?? "")
+    // Preserve line breaks/rough offsets so sentence-start detection after a
+    // placeholder still sees the same structure while ignoring its contents.
+    .replace(/\[(?:add|insert|todo)\b[^\]]*\]/gi, (placeholder) => placeholder.replace(/[^\r\n]/g, " "))
+    .replace(/<\/?(?:b|i|u)>/gi, " ");
+  const properToken = /\b(?:[A-Z][A-Za-z0-9.+#]{2,}|[a-z][A-Za-z0-9]*[A-Z][A-Za-z0-9]*)\b/g;
+  for (const match of prose.matchAll(properToken)) {
+    const token = match[0];
+    if (isTermGrounded(token, candidateEvidence) || isTermGrounded(token, jobText)) continue;
+    const sentenceStart = isProseSentenceStart(prose, match.index ?? 0);
+    if (sentenceStart) {
+      const letters = token.replace(/[^A-Za-z]/g, "");
+      const internalCamelCase = /[a-z][A-Z]/.test(token);
+      const allCaps = letters.length >= 2 && letters === letters.toUpperCase();
+      if (!internalCamelCase && !allCaps && !sentenceLeadingTokenActsAsEntitySubject(prose, (match.index ?? 0) + token.length)) {
+        continue;
+      }
+    }
+    return token;
   }
   return null;
 }

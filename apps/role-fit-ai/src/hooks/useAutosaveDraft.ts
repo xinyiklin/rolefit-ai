@@ -1,5 +1,6 @@
-import { useEffect, useRef } from "react";
-import { serializeResumeData, type ResumeData } from "../lib/resumeData";
+import { useEffect, useRef, useState } from "react";
+import type { ResumeData } from "@typeset/engine/lib/resumeData.ts";
+import { serializeResumeData } from "../lib/resumeText";
 import { getTabId, liveTabIds } from "../lib/tabPresence";
 import type { StageAiUsage } from "../lib/aiUsage";
 
@@ -74,11 +75,14 @@ function parseDraft(raw: string | null): AutosavedDraft | null {
 
 // Write THIS tab's draft. Called inside a debounce, so all serialization happens
 // off the hot render path.
-function saveAutosaveDraft(draft: AutosavedDraft): void {
+function saveAutosaveDraft(draft: AutosavedDraft): boolean {
   try {
     localStorage.setItem(keyForTab(getTabId()), JSON.stringify(draft));
+    return true;
   } catch {
-    // localStorage may be full or blocked — fail silently, never throw.
+    // localStorage may be full or blocked. The hook exposes this failure beside
+    // the document title without logging private resume content.
+    return false;
   }
 }
 
@@ -182,8 +186,11 @@ type UseAutosaveDraftArgs = {
 // Debounced autosave: whenever the editor has unsaved edits, write the
 // serialized resume to localStorage so a reload / crash / close can recover.
 // 1200 ms debounce balances responsiveness against write frequency.
-export function useAutosaveDraft({ editedResume, dirty, jobLabel, pipelineAiUsage, jobRawText, getJobKeyHash }: UseAutosaveDraftArgs): void {
+export type DraftAutosaveState = "idle" | "pending" | "saved" | "error";
+
+export function useAutosaveDraft({ editedResume, dirty, jobLabel, pipelineAiUsage, jobRawText, getJobKeyHash }: UseAutosaveDraftArgs): DraftAutosaveState {
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [state, setState] = useState<DraftAutosaveState>("idle");
   // Latest usage/raw-text read inside the debounced write without re-triggering
   // the effect (and its debounce reset) on every distill/tailor/review tick —
   // only dirty/editedResume/jobLabel changes should reschedule the write.
@@ -197,16 +204,18 @@ export function useAutosaveDraft({ editedResume, dirty, jobLabel, pipelineAiUsag
         clearTimeout(timerRef.current);
         timerRef.current = null;
       }
+      setState("idle");
       return;
     }
 
     if (timerRef.current !== null) clearTimeout(timerRef.current);
+    setState("pending");
     timerRef.current = setTimeout(() => {
       timerRef.current = null;
       const resumeText = serializeResumeData(editedResume);
       if (!resumeText.trim()) return;
       const { pipelineAiUsage: usage, jobRawText: rawText, getJobKeyHash: getHash } = latestExtras.current;
-      saveAutosaveDraft({
+      const saved = saveAutosaveDraft({
         resumeText,
         savedAt: new Date().toISOString(),
         jobLabel,
@@ -214,6 +223,7 @@ export function useAutosaveDraft({ editedResume, dirty, jobLabel, pipelineAiUsag
         ...(rawText ? { jobRawText: rawText } : {}),
         ...(getHash ? { jobKeyHash: getHash() } : {})
       });
+      setState(saved ? "saved" : "error");
     }, 1200);
 
     return () => {
@@ -223,6 +233,8 @@ export function useAutosaveDraft({ editedResume, dirty, jobLabel, pipelineAiUsag
       }
     };
   }, [editedResume, dirty, jobLabel]);
+
+  return state;
 }
 
 // beforeunload guard: warn before closing when there are unsaved edits.

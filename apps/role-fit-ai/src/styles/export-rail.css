@@ -43,7 +43,6 @@
   padding: 0 var(--s1);
 }
 
-.export-menu__status,
 .export-menu__tip {
   display: flex;
   align-items: center;
@@ -54,17 +53,64 @@
   line-height: 1.35;
 }
 
-.export-menu__status {
-  color: var(--accent-deep);
-}
-
-.export-menu__status .sep {
-  color: var(--ink-faint);
-  margin: 0 var(--s1);
-}
-
 .export-menu__tip {
   color: var(--ink-faint);
+}
+
+/* Export feedback stays attached to the control that caused it. */
+.export-menu__feedback {
+  position: absolute;
+  top: calc(100% + var(--s2));
+  right: 0;
+  z-index: 29;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s2);
+  width: min(340px, calc(100vw - var(--s5) * 2));
+  padding: var(--s2) var(--s3);
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--r-lg);
+  background: var(--card);
+  box-shadow: var(--shadow-lift);
+  color: var(--ink);
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+
+.export-menu__feedback--error {
+  border-color: var(--danger-line);
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.export-menu__feedback > span {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.export-menu__feedback > button {
+  flex: 0 0 auto;
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: currentColor;
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.export-menu__feedback > button:hover {
+  background: var(--card-hover);
+}
+
+.export-menu__feedback > button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .export-menu__tip code {
@@ -283,6 +329,13 @@
   font-size: 0.71rem;
   line-height: 1.4;
   color: var(--ink-faint);
+}
+
+.rename-dialog__error {
+  margin: 0;
+  color: var(--danger);
+  font-size: 0.72rem;
+  line-height: 1.45;
 }
 
 .rename-dialog__actions {

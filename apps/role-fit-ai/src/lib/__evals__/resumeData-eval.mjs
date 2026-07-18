@@ -1,19 +1,20 @@
 // Probes for the plain-text -> structured resume parser (parseResumeData) and its
-// inverse (serializeResumeData). The parser seeds the editor from pasted text, so
-// a header-detection regression silently destroys a resume's structure. Before
-// these probes it only recognized ALL-CAPS headers, so a normally-formatted
-// Title-Case resume collapsed its entire body into the contact line.
+// inverse (serializeResumeData). The parser seeds the editor from pasted text,
+// so a header-detection regression silently destroys a resume's structure.
+// Before these probes it only recognized ALL-CAPS headers, so a normally-
+// formatted Title-Case resume collapsed its entire body into the contact line.
 //
 //   node src/lib/__evals__/resumeData-eval.mjs
 //
-// resumeData.ts imports siblings, so it must be BUNDLED before import.
+// resumeText.ts imports the shared engine, so bundle the integration boundary
+// before importing it in Node.
 
 import { Buffer } from "node:buffer";
 import { fileURLToPath } from "node:url";
 import * as esbuild from "esbuild";
 
 async function load() {
-  const entry = fileURLToPath(new URL("../resumeData.ts", import.meta.url));
+  const entry = fileURLToPath(new URL("../resumeText.ts", import.meta.url));
   const result = await esbuild.build({
     entryPoints: [entry],
     bundle: true,

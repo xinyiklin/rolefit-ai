@@ -1,30 +1,67 @@
 # Typeset Workspace
 
-One npm-workspaces monorepo, two apps over a shared deterministic resume
-typesetting engine. The layering is `engine → editor → apps`.
+An npm-workspaces monorepo containing two resume products over one deterministic
+document engine and one reusable editing surface.
 
-| Workspace | What it is |
-| --- | --- |
-| [`packages/engine`](packages/engine) | `@typeset/engine` — deterministic layout (measure → linebreak → blocks → layout), the resume model, the strict `.resume` codec, DOM + PDF backends, bundled fonts and committed metrics. |
-| [`packages/editor`](packages/editor) | `@typeset/editor` — the direct-edit contenteditable page, formatting toolbar and popovers, history/style hooks, styles. |
-| [`apps/typeset`](apps/typeset) | **Typeset** — the standalone local-first resume editor, deployed at [typeset.xinyiklin.com](https://typeset.xinyiklin.com). |
-| [`apps/role-fit-ai`](apps/role-fit-ai) | **RoleFit AI** — a local-first resume tailoring workbench: job intake, AI polish/review, application tracker, browser extension. Runs on your own machine. |
-
-Each app has its own README, product docs, and deploy pipeline
-(`deploy-typeset.yml` → EC2/nginx behind Caddy; `deploy-pages.yml` → a
-static UI demo on GitHub Pages).
-
-## Run
-
-```bash
-npm install          # one install for every workspace
-npm run dev:typeset  # the editor on http://localhost:5186
-npm run dev:rolefit  # the workbench on http://localhost:5181
-npm run check        # every workspace's gate: builds, typechecks, evals
+```text
+@typeset/engine -> @typeset/editor -> Typeset
+                                  -> RoleFit AI
 ```
 
-Requires Node ≥ 22.6 (the evals run TypeScript via
-`--experimental-strip-types`); CI and Docker use Node 24.
+| Workspace | Responsibility |
+| --- | --- |
+| [`packages/engine`](packages/engine) | `@typeset/engine`: resume model, strict `.resume` codec, fonts, deterministic layout, DOM/print rendering, and PDF emission. |
+| [`packages/editor`](packages/editor) | `@typeset/editor`: direct editing, history/style hooks, document toolbar/popovers, and shared editor styles. |
+| [`apps/typeset`](apps/typeset) | **Typeset**: the standalone browser-only editor at [typeset.xinyiklin.com](https://typeset.xinyiklin.com). |
+| [`apps/role-fit-ai`](apps/role-fit-ai) | **RoleFit AI**: the local-first job-tailoring workbench, loopback server, tracker, and browser extension. |
+
+The packages are private workspace source packages, not independently published
+libraries. Apps compose them and own their own product identity, lifecycle, and
+host-specific workflows; apps never import from each other.
+
+## Start here
+
+```bash
+npm install
+npm run dev:typeset  # http://localhost:5186
+npm run dev:rolefit  # http://localhost:5181
+npm run check        # every workspace's type/build/eval gate
+```
+
+Requires Node 22.6 or newer; Node 24 matches CI and the Typeset Docker build.
+
+Focused commands:
+
+```bash
+npm run build:typeset
+npm run build:rolefit
+npm run check --workspace packages/engine
+npm run check --workspace packages/editor
+npm run check --workspace apps/typeset
+npm run check --workspace apps/role-fit-ai
+```
+
+There is intentionally no ambiguous root `dev`, `build`, or `preview` script.
+Use the named root command or an explicit workspace command.
+
+## Documentation
+
+- [Architecture and ownership](docs/architecture.md)
+- [Development and verification](docs/development.md)
+- [Git workflow](docs/git-workflow.md)
+- [Typeset product docs](apps/typeset/README.md)
+- [RoleFit AI product docs](apps/role-fit-ai/README.md)
+- [Agent guidance](AGENTS.md)
+
+## Deployment
+
+- `.github/workflows/deploy-typeset.yml` verifies the engine, editor, and
+  Typeset app, then builds `apps/typeset/Dockerfile` for the configured EC2
+  host. The public Typeset runtime is static Nginx content.
+- `.github/workflows/deploy-pages.yml` publishes only the RoleFit frontend as a
+  GitHub Pages demo. AI, local workspace storage, job import, tracker writes,
+  and extension workflows require the loopback RoleFit server and are not
+  available in that static demo.
 
 ## License
 

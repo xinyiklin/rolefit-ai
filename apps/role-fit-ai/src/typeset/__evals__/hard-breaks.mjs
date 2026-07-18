@@ -2,13 +2,10 @@
 //
 //   node src/typeset/__evals__/hard-breaks.mjs
 import assert from "node:assert/strict";
-import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
-
-const here = dirname(fileURLToPath(import.meta.url));
-const { paragraphItems } = await import(join(here, "../measure.ts"));
-const { breakParagraph } = await import(join(here, "../linebreak.ts"));
-const { layoutResume } = await import(join(here, "../layout.ts"));
+import { DOC_STYLE_DEFAULTS } from "@typeset/engine/lib/documentStyle.ts";
+import { paragraphItems } from "@typeset/engine/typeset/measure.ts";
+import { breakParagraph } from "@typeset/engine/typeset/linebreak.ts";
+import { layoutResume } from "@typeset/engine/typeset/layout.ts";
 
 const SIZE = 10;
 const WIDE_COLUMN = 1000;
@@ -23,7 +20,7 @@ const lineText = (line) => {
   return text;
 };
 
-const items = paragraphItems("Alpha\nBeta", SIZE);
+const items = paragraphItems("Alpha\nBeta", SIZE, "latin-modern", 0);
 assert.equal(items.filter((item) => item.kind === "forcedBreak").length, 1, "newline tokenizes as one forced break");
 assert.deepEqual(
   breakParagraph(items, WIDE_COLUMN, "left").map(lineText),
@@ -31,7 +28,7 @@ assert.deepEqual(
   "a hard break wins even when both phrases fit on one line"
 );
 
-const markedLines = breakParagraph(paragraphItems("<b>Bold\nstill bold</b>", SIZE), WIDE_COLUMN, "left");
+const markedLines = breakParagraph(paragraphItems("<b>Bold\nstill bold</b>", SIZE, "latin-modern", 0), WIDE_COLUMN, "left");
 assert.deepEqual(markedLines.map(lineText), ["Bold", "still bold"], "inline marks do not swallow the break");
 assert.equal(
   markedLines.every((line) => line.runs.every((run) => run.style.face === "bold")),
@@ -40,7 +37,7 @@ assert.equal(
 );
 
 assert.deepEqual(
-  breakParagraph(paragraphItems("A\n\nB\n", SIZE), WIDE_COLUMN, "left").map(lineText),
+  breakParagraph(paragraphItems("A\n\nB\n", SIZE, "latin-modern", 0), WIDE_COLUMN, "left").map(lineText),
   ["A", "", "B", ""],
   "repeated and trailing hard breaks preserve blank visual lines"
 );
@@ -71,7 +68,7 @@ const layout = layoutResume(
       }
     ]
   },
-  {}
+  DOC_STYLE_DEFAULTS
 );
 const placed = layout.pages.flatMap((page) => page.lines);
 const bulletLines = placed.filter((line) =>

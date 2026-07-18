@@ -1,5 +1,5 @@
 // Offline, deterministic probes for the tailor-suggestion sanitizer and the
-// fit-score/verdict rules. No model calls, no network, runs in <1s:
+// AI-review response contracts. No model calls, no network, runs in <1s:
 //
 //   node server/ai/__evals__/sanitize-probes.mjs
 //
@@ -8,24 +8,22 @@
 // - formatted bullets (<b> editor tokens) silently killing ALL suggestions
 // - "Windows"/"Linux" fabrications laundered through inferred-evidence prose,
 //   including a hits:[] + evidence:"n/a" evasion of the hit-keyword gate
-// - verdict/score disagreement at band edges
+// - invalid AI-authored score/verdict pairs reaching the UI
 // All fixture text is synthetic. Exit code is non-zero on any failure.
 
 import {
+  hasUngroundedNumericClaim,
   makeRewriteGrounder,
+  sanitizeAiFitScore,
+  sanitizeMissingRequiredSkills,
   sanitizeTailorSuggestions,
   sanitizeStrictReview,
   summarizeDroppedSuggestions
 } from "../sanitize.ts";
-import {
-  applyGapCapsAndVerdict,
-  coverageHasEligibilityBlocker,
-  displayCoverageFromRequirements,
-  missingRequiredFromCoverage,
-  scoreFromRequirementCoverage
-} from "../scoring.ts";
 import { findUngroundedJdTerm } from "../grounding.ts";
-import { buildPolishPrompts, serializeJsonForPrompt } from "../prompts.ts";
+import { buildPolishPrompts, buildStrictReviewPrompts, serializeJsonForPrompt } from "../prompts.ts";
+import { resolveReviewOutcome, reviewFailureFromReason } from "../polish.ts";
+import { UserSafeAiError } from "../errors.ts";
 
 const scope = {
   sections: [
@@ -72,14 +70,18 @@ const MULTI = {
 };
 const MULTI_JOB = "Requirements: Python, TypeScript, Node.js, Docker, LLM integration.";
 
-function survives({ proposedText, hits = [], honest = "", evidence = "quotes the EHR migration bullet", evidenceType = "exact" }) {
+function sanitizedSuggestion({ proposedText, hits = [], honest = "", evidence = "quotes the EHR migration bullet", evidenceType = "exact" }) {
   return sanitizeTailorSuggestions(
     [{ target: { sectionId: "s", entryId: "e", bulletId: "b", field: "bullet" }, proposedText, evidenceType, evidence, hits }],
     scope,
     {},
     honest,
     JD
-  ).length === 1;
+  );
+}
+
+function survives(input) {
+  return sanitizedSuggestion(input).length === 1;
 }
 
 const evasionStats = {};
@@ -90,6 +92,14 @@ sanitizeTailorSuggestions(
 
 const DONT = "DON'T APPLY";
 const checks = [
+  ["string booleans cannot mark missing-skill evidence honestly addable", (() => {
+    const items = sanitizeMissingRequiredSkills(
+      [{ keyword: "PostgreSQL", evidenceType: "exact", canHonestlyAdd: "false", reason: "Resume lists PostgreSQL" }],
+      "Required: PostgreSQL",
+      "Resume lists PostgreSQL"
+    );
+    return items.length === 1 && items[0].canHonestlyAdd === false;
+  })()],
   // --- editor inline-mark vocabulary vs real markup smuggling ---
   ["<b> editor token passes", survives({ proposedText: "Led the <b>EHR migration</b> with validation checks and rollback." })],
   ["<i>/<u> editor tokens pass", survives({ proposedText: "Led the migration with <i>validation</i> and <u>rollback</u> phases." })],
@@ -109,7 +119,10 @@ const checks = [
   ["mid-sentence ungrounded JD term rejected (hits omitted)", !survives({ proposedText: "Coordinated rollout across Linux servers." })],
   ["JD term grounded by honest context passes", survives({ proposedText: "Deployed Kubernetes workloads on EKS for an internal service.", hits: ["Kubernetes"], honest: "Exact evidence: I deployed and monitored Kubernetes workloads on Amazon EKS in 2023." })],
   ["inflection tolerance (Postgres/PostgreSQL) passes", survives({ proposedText: "Tuned PostgreSQL queries for the reporting workload.", hits: ["PostgreSQL"] })],
-  ["hit keyword reported but not written passes", survives({ proposedText: "Led an EHR migration with validation checks.", hits: ["Windows"] })],
+  ["hit keyword reported but not written is stripped from the surviving suggestion", (() => {
+    const output = sanitizedSuggestion({ proposedText: "Led an EHR migration with validation checks.", hits: ["Windows"] });
+    return output.length === 1 && output[0].hits.length === 0;
+  })()],
   ["non-JD proper claim absent from evidence is rejected", !survives({ proposedText: "Presented findings to the Cardiology team weekly." })],
   ["non-JD invented metric is rejected", !survives({ proposedText: "Led the EHR migration, reducing incidents by 99%." })],
   ["non-JD invented known tool is rejected", !survives({ proposedText: "Built GraphQL reporting services for the clinic." })],
@@ -323,6 +336,26 @@ const checks = [
     );
     return out.rewrites.length === 0;
   })()],
+  ["review rewrite: duplicate bullet text fails closed instead of borrowing corpus evidence", (() => {
+    const duplicateScope = { sections: [{ id: "exp", heading: "Experience", type: "standard", entries: [
+      { id: "python-role", titleLeft: "Python Engineer", titleRight: "", subtitleLeft: "", subtitleRight: "", bullets: [
+        { id: "a", text: "Built the reporting service." }
+      ] },
+      { id: "node-role", titleLeft: "Node Engineer", titleRight: "", subtitleLeft: "", subtitleRight: "", bullets: [
+        { id: "b", text: "Built the reporting service." }
+      ] }
+    ] }] };
+    const corpus = "Python Engineer\nBuilt the reporting service.\nNode Engineer\nBuilt the reporting service.";
+    const out = sanitizeStrictReview(
+      { verdict: "STRETCH", rewrites: [{
+        original: "Built the reporting service.",
+        rewrite: "Built the Python reporting service."
+      }] },
+      "Requirements: Python.", corpus,
+      { rewriteGrounder: makeRewriteGrounder(duplicateScope, "", corpus) }
+    );
+    return out.rewrites.length === 0;
+  })()],
   ["review rewrite WITHOUT grounder keeps corpus behavior (backward-compat)", (() => {
     const corpus = "Python, TypeScript, SQL\nBuilt a resume review engine on a Node provider adapter with a deterministic fallback.";
     const out = sanitizeStrictReview(
@@ -452,510 +485,160 @@ const checks = [
     return typeof flagged === "string" && flagged.toLowerCase() === "salesforce";
   })()],
 
-  // --- arithmetic requirement-coverage scoring + gap caps (primary + only path).
-  // --- Model-authored score buckets (scoreFromBuckets) and holistic fitScore
-  // --- (sanitizeAiScore) were REMOVED: scoring is server arithmetic only, so a
-  // --- reviewer that (against the prompt) emits fitBuckets/fitScore cannot move
-  // --- the score — there is no code path that reads them. ---
-  ["requirement coverage derives base/tailored without model numbers", (() => {
-    const s = scoreFromRequirementCoverage([
-      { category: "Required tech", requirement: "React", importance: "high", baseStatus: "covered", tailoredStatus: "covered" },
-      { category: "Required tech", requirement: "TypeScript", importance: "high", baseStatus: "adjacent", tailoredStatus: "covered" },
-      { category: "Required experience", requirement: "REST API development", importance: "high", baseStatus: "covered", tailoredStatus: "covered" },
-      { category: "Required experience", requirement: "Automated testing", importance: "medium", baseStatus: "covered", tailoredStatus: "covered" },
-      { category: "Required years", requirement: "Entry level", importance: "medium", baseStatus: "covered", tailoredStatus: "covered" },
-      { category: "Preferred", requirement: "Healthcare domain", importance: "low", baseStatus: "missing", tailoredStatus: "adjacent" }
-    ], { riskFlags: [] });
-    return s && s.tailored > s.base && s.tailored <= 100 && /TypeScript/.test(s.liftReason);
-  })()],
-  ["requirement coverage weighting makes critical misses hurt more", (() => {
-    const s = scoreFromRequirementCoverage([
-      { category: "Required tech", requirement: "Java", importance: "critical", baseStatus: "missing", tailoredStatus: "missing" },
-      { category: "Required tech", requirement: "Git", importance: "low", baseStatus: "covered", tailoredStatus: "covered" },
-      { category: "Required experience", requirement: "Backend APIs", importance: "high", baseStatus: "covered", tailoredStatus: "covered" },
-      { category: "Required experience", requirement: "Testing", importance: "medium", baseStatus: "covered", tailoredStatus: "covered" },
-      { category: "Required years", requirement: "New grad", importance: "medium", baseStatus: "covered", tailoredStatus: "covered" },
-      { category: "Preferred", requirement: "Healthcare", importance: "low", baseStatus: "missing", tailoredStatus: "missing" }
-    ], { riskFlags: [] });
-    return s && s.tailored < 70;
-  })()],
-  ["sparse requirement coverage falls back to null", scoreFromRequirementCoverage([
-    { category: "Required tech", requirement: "React", importance: "high", baseStatus: "covered", tailoredStatus: "covered" }
-  ], { riskFlags: [] }) === null],
-
-  // --- displayCoverageFromRequirements: the user-visible coverage table is now
-  // --- DERIVED from requirementCoverage (server-owned) instead of a model-authored
-  // --- strictReview.coverage array that scoring never read (so it could drift).
-  // --- It maps requirement->keyword, tailoredStatus/tailoredEvidence->status/where,
-  // --- coerces the status enum via sanitizeRequirementCoverage, orders
-  // --- critical->high->medium->low (stable within tier), and caps at 12. ---
-  ["displayCoverage maps requirement/tailoredStatus/tailoredEvidence to the client {category,keyword,status,where} shape, ordered by importance", (() => {
-    const out = displayCoverageFromRequirements([
-      { category: "Required tech", requirement: "React", importance: "high", baseStatus: "adjacent", tailoredStatus: "covered", tailoredEvidence: "Frontend project uses React" },
-      { category: "Required experience", requirement: "REST APIs", importance: "medium", baseStatus: "missing", tailoredStatus: "adjacent", tailoredEvidence: "" },
-      { category: "Required tech", requirement: "Go", importance: "critical", baseStatus: "missing", tailoredStatus: "missing", tailoredEvidence: "Not in resume" },
-      { category: "Preferred", requirement: "GraphQL", importance: "low", baseStatus: "missing", tailoredStatus: "missing", tailoredEvidence: "Not in resume" }
-    ]);
-    return out.length === 4
-      && Object.keys(out[0]).sort().join(",") === "category,keyword,status,where"
-      && out[0].keyword === "Go" && out[0].status === "missing" // critical first
-      && out[1].keyword === "React" && out[1].status === "covered" && out[1].where === "Frontend project uses React"
-      && out[2].keyword === "REST APIs" && out[2].where === "" // empty tailoredEvidence passes through, empty allowed
-      && out[3].keyword === "GraphQL";
-  })()],
-  ["displayCoverage coerces a garbage tailoredStatus to a valid enum (via sanitizeRequirementCoverage)", (() => {
-    const out = displayCoverageFromRequirements([
-      { category: "Required tech", requirement: "React", importance: "high", tailoredStatus: "🚀 great" }
-    ]);
-    return out.length === 1 && out[0].status === "missing"; // unknown status -> baseStatus fallback -> "missing"
-  })()],
-  ["displayCoverage caps the table at 12 rows", (() => {
-    const rows = Array.from({ length: 20 }, (_, i) => ({
-      category: "Required tech", requirement: `Skill ${i}`, importance: "medium", baseStatus: "covered", tailoredStatus: "covered"
-    }));
-    return displayCoverageFromRequirements(rows).length === 12;
-  })()],
-  ["displayCoverage drops un-bucketable rows and returns [] when none survive (empty fallback)", (() => {
-    // sanitizeRequirementCoverage drops rows whose category matches no scoring
-    // bucket, so a table of only non-bucketing rows yields an empty display — the
-    // same [] the old sanitizer produced when the model omitted coverage.
-    const out = displayCoverageFromRequirements([
-      { category: "Vibes", requirement: "Culture fit", importance: "high", baseStatus: "covered", tailoredStatus: "covered" }
-    ]);
-    return Array.isArray(out) && out.length === 0 && displayCoverageFromRequirements(null).length === 0;
-  })()],
-  ["displayCoverage is stable within an importance tier (input order preserved)", (() => {
-    const out = displayCoverageFromRequirements([
-      { category: "Required tech", requirement: "Alpha", importance: "high", baseStatus: "covered", tailoredStatus: "covered" },
-      { category: "Required tech", requirement: "Beta", importance: "high", baseStatus: "covered", tailoredStatus: "adjacent" },
-      { category: "Required tech", requirement: "Gamma", importance: "high", baseStatus: "covered", tailoredStatus: "missing" }
-    ]);
-    return out.map((r) => r.keyword).join(",") === "Alpha,Beta,Gamma";
-  })()],
-  ["BLOCKER gap caps both scores into DON'T-APPLY band", (() => {
-    const r = applyGapCapsAndVerdict({ base: 73, tailored: 83, liftReason: "" }, { gaps: [{ severity: "BLOCKER" }] });
-    return r.aiScore.base === 45 && r.aiScore.tailored === 45 && r.verdict === DONT;
-  })()],
-  // Graduated HIGH-gap cap: one missing required skill no longer pins to 69.
-  ["1 HIGH gap caps at 79 -> REASONABLE FIT", (() => {
-    const r = applyGapCapsAndVerdict({ base: 60, tailored: 83, liftReason: "" }, { gaps: [{ severity: "HIGH" }] });
-    return r.aiScore.tailored === 79 && r.verdict === "REASONABLE FIT" && r.aiScore.base === 60;
-  })()],
-  ["2 HIGH gaps cap at 69 -> STRETCH (old flat behavior)", (() => {
-    const r = applyGapCapsAndVerdict({ base: 90, tailored: 88, liftReason: "" }, { gaps: [{ severity: "HIGH" }, { severity: "HIGH" }] });
-    return r.aiScore.tailored === 69 && r.verdict === "STRETCH";
-  })()],
-  ["3+ HIGH gaps cap at 60 -> STRETCH", (() => {
-    const r = applyGapCapsAndVerdict({ base: 90, tailored: 88, liftReason: "" }, { gaps: [{ severity: "HIGH" }, { severity: "HIGH" }, { severity: "HIGH" }] });
-    return r.aiScore.tailored === 60 && r.verdict === "STRETCH";
-  })()],
-  ["BLOCKER still overrides HIGH count -> DON'T APPLY", (() => {
-    const r = applyGapCapsAndVerdict({ base: 90, tailored: 88, liftReason: "" }, { gaps: [{ severity: "HIGH" }, { severity: "BLOCKER" }] });
-    return r.aiScore.tailored === 45 && r.verdict === DONT;
-  })()],
-  ["strict-review gap with unsafe suggestedEdit keeps gap but blanks edit", (() => {
-    const review = sanitizeStrictReview({
-      verdict: "STRETCH",
-      gaps: [
-        {
-          gap: "Active Secret clearance",
-          severity: "BLOCKER",
-          evidenceType: "none",
-          canHonestlyAdd: false,
-          evidence: "Not in resume",
-          suggestedEdit: "Add clearance\nSecond line"
-        }
-      ]
-    }, "Requires Active Secret clearance.", "React projects");
-    const r = applyGapCapsAndVerdict({ base: 82, tailored: 84, liftReason: "" }, review);
-    return review?.gaps?.length === 1 && review.gaps[0].suggestedEdit === "" && r.verdict === DONT;
-  })()],
-  ["no qualifying gaps: verdict derived from sum", (() => {
-    const r = applyGapCapsAndVerdict({ base: 73, tailored: 86, liftReason: "" }, { gaps: [{ severity: "MEDIUM" }] });
-    return r.aiScore.tailored === 86 && r.verdict === "STRONG FIT";
-  })()],
-
-  // --- coverage-table eligibility blocker (Fix 2): a hard gate reported only as
-  // --- a missing critical/high requirementCoverage row, NOT as a BLOCKER gap,
-  // --- must still force the DON'T APPLY band ---
-  ["coverage: missing critical clearance row (no BLOCKER gap) -> caps base+tailored <=45, DON'T APPLY", (() => {
-    // The reviewer reports the hard gate as a coverage ROW (category carries the
-    // "clearance" keyword), tailoredStatus "missing", and NO gap at severity
-    // BLOCKER. Category must carry a bucketable token (sanitizeRequirementCoverage
-    // drops un-bucketable rows) — "Active Secret clearance required" buckets as
-    // seniority AND matches the eligibility sub-lexicon.
-    const coverage = [
-      { category: "Active Secret clearance required", requirement: "TS/SCI clearance", importance: "critical", baseStatus: "missing", tailoredStatus: "missing" },
-      { category: "Required tech", requirement: "React", importance: "high", baseStatus: "covered", tailoredStatus: "covered" },
-      { category: "Required experience", requirement: "Backend APIs", importance: "high", baseStatus: "covered", tailoredStatus: "covered" },
-      { category: "Required years", requirement: "Entry level", importance: "medium", baseStatus: "covered", tailoredStatus: "covered" }
-    ];
-    const hasBlocker = coverageHasEligibilityBlocker(coverage);
-    const r = applyGapCapsAndVerdict({ base: 88, tailored: 90, liftReason: "" }, { gaps: [] }, hasBlocker);
-    return hasBlocker && r.aiScore.base <= 45 && r.aiScore.tailored <= 45 && r.verdict === DONT;
-  })()],
-  ["coverage: missing work-auth/license rows also trigger the blocker", (() => {
-    const visa = coverageHasEligibilityBlocker([
-      { category: "Work authorization", requirement: "Must be authorized to work in the US without sponsorship", importance: "critical", baseStatus: "missing", tailoredStatus: "missing" },
-      { category: "Required tech", requirement: "Python", importance: "high", baseStatus: "covered", tailoredStatus: "covered" },
-      { category: "Required experience", requirement: "Data pipelines", importance: "high", baseStatus: "covered", tailoredStatus: "covered" },
-      { category: "Required years", requirement: "Mid level", importance: "medium", baseStatus: "covered", tailoredStatus: "covered" }
-    ]);
-    const license = coverageHasEligibilityBlocker([
-      { category: "Certification", requirement: "Active RN license required", importance: "high", baseStatus: "missing", tailoredStatus: "missing" },
-      { category: "Required tech", requirement: "EHR systems", importance: "high", baseStatus: "covered", tailoredStatus: "covered" },
-      { category: "Required experience", requirement: "Patient intake", importance: "high", baseStatus: "covered", tailoredStatus: "covered" },
-      { category: "Required years", requirement: "Entry level", importance: "medium", baseStatus: "covered", tailoredStatus: "covered" }
-    ]);
-    return visa && license;
-  })()],
-  ["coverage: missing '5+ years experience' seniority row (NOT eligibility) -> NOT a blocker", (() => {
-    const coverage = [
-      { category: "Required years", requirement: "5+ years of experience", importance: "high", baseStatus: "missing", tailoredStatus: "missing" },
-      { category: "Required tech", requirement: "React", importance: "high", baseStatus: "covered", tailoredStatus: "covered" },
-      { category: "Required experience", requirement: "Frontend work", importance: "high", baseStatus: "covered", tailoredStatus: "covered" },
-      { category: "Preferred", requirement: "GraphQL", importance: "low", baseStatus: "covered", tailoredStatus: "covered" }
-    ];
-    const hasBlocker = coverageHasEligibilityBlocker(coverage);
-    // No coverage blocker, no gaps -> applyGapCapsAndVerdict leaves the score
-    // uncapped (only normal scoring / HIGH-gap caps would apply elsewhere).
-    const r = applyGapCapsAndVerdict({ base: 70, tailored: 78, liftReason: "" }, { gaps: [] }, hasBlocker);
-    return hasBlocker === false && r.aiScore.tailored === 78 && r.verdict === "REASONABLE FIT";
-  })()],
-  ["coverage: COVERED clearance row (satisfied) -> NOT a blocker", (() => {
-    const hasBlocker = coverageHasEligibilityBlocker([
-      { category: "Eligibility", requirement: "Active Secret clearance", importance: "critical", baseStatus: "covered", tailoredStatus: "covered" },
-      { category: "Required tech", requirement: "Java", importance: "high", baseStatus: "covered", tailoredStatus: "covered" },
-      { category: "Required experience", requirement: "Backend services", importance: "high", baseStatus: "covered", tailoredStatus: "covered" },
-      { category: "Required years", requirement: "Mid level", importance: "medium", baseStatus: "covered", tailoredStatus: "covered" }
-    ]);
-    return hasBlocker === false;
-  })()],
-  ["coverage: low-importance missing eligibility row -> NOT a blocker (only critical/high escalate)", (() => {
-    const hasBlocker = coverageHasEligibilityBlocker([
-      { category: "Preferred certification", requirement: "AWS certification a plus", importance: "low", baseStatus: "missing", tailoredStatus: "missing" },
-      { category: "Required tech", requirement: "Node.js", importance: "high", baseStatus: "covered", tailoredStatus: "covered" },
-      { category: "Required experience", requirement: "API design", importance: "high", baseStatus: "covered", tailoredStatus: "covered" },
-      { category: "Required years", requirement: "Entry level", importance: "medium", baseStatus: "covered", tailoredStatus: "covered" }
-    ]);
-    return hasBlocker === false;
-  })()],
-  ["coverage: eligibility keyword only in requirement under a NON-bucketing category ('Eligibility'/'Education') -> still fires the blocker + caps", (() => {
-    // The gate keyword lives in `requirement`; the `category` ("Eligibility",
-    // "Education") does NOT match any scoring bucket, so sanitizeRequirementCoverage
-    // would DROP these rows. The raw-row scan must still catch them — otherwise an
-    // ineligible role keeps a Strong-fit verdict. Locks the adversarial-review fix.
-    const clearance = coverageHasEligibilityBlocker([
-      { category: "Eligibility", requirement: "Must hold an active Top Secret/SCI clearance", importance: "critical", baseStatus: "missing", tailoredStatus: "missing" },
-      { category: "Skills", requirement: "Go", importance: "high", baseStatus: "covered", tailoredStatus: "covered" }
-    ]);
-    const degree = coverageHasEligibilityBlocker([
-      { category: "Education", requirement: "Bachelor's degree in Nursing required", importance: "critical", baseStatus: "missing", tailoredStatus: "missing" }
-    ]);
-    const r = applyGapCapsAndVerdict({ base: 84, tailored: 88, liftReason: "" }, { gaps: [] }, clearance);
-    return clearance === true && degree === true && r.aiScore.tailored <= 45 && r.verdict === DONT;
-  })()],
-  // --- broadened eligibility lexicon: hard gates the old regex missed now fire,
-  // --- each ISOLATED from any legacy keyword so it proves the new term closed a
-  // --- real gap (a candidate could otherwise keep a Strong-fit verdict on a role
-  // --- they're formally ineligible for). ---
-  ["coverage: broadened gates (authorized-to-work / green card / TS-SCI / polygraph / PR) each fire the blocker", (() => {
-    const fires = (requirement) => coverageHasEligibilityBlocker([
-      { category: "Eligibility", requirement, importance: "critical", baseStatus: "missing", tailoredStatus: "missing" }
-    ]);
-    return (
-      fires("Must be legally authorized to work in the US") &&  // no sponsor/visa/citizen keyword — old regex missed it
-      fires("Must hold a valid green card") &&
-      fires("Must hold an active TS/SCI") &&                    // abbreviation, no literal "clearance"
-      fires("Must pass a counterintelligence polygraph") &&
-      fires("Permanent residency required")
-    );
-  })()],
-  // --- and the broadening must NOT false-fire on lookalike SKILL rows: a missing
-  // --- critical security/leadership/finance/ML requirement is a HIGH gap, never a
-  // --- hard DON'T-APPLY blocker. Locks the substring-safety choices (full-word
-  // --- "authorization"; dropped bare "ead" vs finance EAD; right-bounded "green
-  // --- card"; "resid(ent|ency|ence)" vs "residual"). These are wrong-direction
-  // --- collisions — each would tell the user not to apply to a role they qualify
-  // --- for — so they are the load-bearing anti-regression locks. ---
-  ["coverage: eligibility broadening does NOT false-fire on lookalike skill rows (unauthorized access / leadership / EAD metric / residual / cardigan)", (() => {
-    const fires = (requirement) => coverageHasEligibilityBlocker([
-      { category: "Required experience", requirement, importance: "critical", baseStatus: "missing", tailoredStatus: "missing" }
-    ]);
-    return (
-      fires("Prevent unauthorized access to production systems") === false &&  // security SKILL, not work-auth
-      fires("Proven leadership of engineering teams") === false &&             // "ead" inside "leadership"
-      fires("Ready to ship features on a weekly cadence") === false &&         // "ead" inside "ready"
-      fires("Experience building evergreen card-sorting UIs") === false &&     // "green card" inside "evergreen card"
-      fires("Model EAD, PD, and LGD for the loan book") === false &&           // finance Exposure At Default, not the doc
-      fires("Experience with permanent residual connections") === false &&     // ML residual, not residency
-      fires("Build a green cardigan catalog") === false                        // "green card" prefix of "cardigan"
-    );
-  })()],
-  ["applyGapCapsAndVerdict default hasCoverageBlocker preserves existing gap-only behavior", (() => {
-    // Two-arg call (legacy signature) must behave exactly as before: no coverage
-    // blocker, gap-based caps only.
-    const r = applyGapCapsAndVerdict({ base: 73, tailored: 86, liftReason: "" }, { gaps: [{ severity: "HIGH" }] });
-    return r.aiScore.tailored === 79 && r.verdict === "REASONABLE FIT";
-  })()],
-
-  // --- null aiScore (sparse review, no numeric score) still honors a hard
-  // --- blocker: eligibility gate must force DON'T APPLY, not inherit the model's
-  // --- verdict. Locks the applyGapCapsAndVerdict null-score hardening. ---
-  ["null aiScore + coverage blocker -> DON'T APPLY (not the model's verdict)", (() => {
-    const r = applyGapCapsAndVerdict(null, { verdict: "STRETCH", gaps: [] }, true);
-    return r.aiScore === null && r.verdict === DONT;
-  })()],
-  ["null aiScore + BLOCKER gap -> DON'T APPLY", (() => {
-    const r = applyGapCapsAndVerdict(null, { verdict: "REASONABLE FIT", gaps: [{ severity: "BLOCKER" }] });
-    return r.aiScore === null && r.verdict === DONT;
-  })()],
-  ["null aiScore, no blocker -> sanitized verdict passes through unchanged", (() => {
-    const r = applyGapCapsAndVerdict(null, { verdict: "STRETCH", gaps: [{ severity: "HIGH" }] });
-    return r.aiScore === null && r.verdict === "STRETCH";
-  })()],
-  ["null aiScore, no strict review -> verdict null", (() => {
-    const r = applyGapCapsAndVerdict(null, null);
-    return r.aiScore === null && r.verdict === null;
-  })()],
-
-  // --- score-gameability reconciliation: cap on missing-required coverage rows
-  // --- even when the model omits them from the gaps array ---
-  ["missingRequiredFromCoverage counts critical/high missing required rows only", (() => {
-    const cov = [
-      { category: "Required tech", requirement: "Kubernetes", importance: "critical", baseStatus: "missing", tailoredStatus: "missing" },
-      { category: "Required experience", requirement: "Distributed systems", importance: "high", baseStatus: "missing", tailoredStatus: "missing" },
-      { category: "Required tech", requirement: "React", importance: "high", baseStatus: "covered", tailoredStatus: "covered" },
-      { category: "Preferred", requirement: "GraphQL", importance: "low", baseStatus: "missing", tailoredStatus: "missing" },
-      { category: "Required tech", requirement: "SQL", importance: "medium", baseStatus: "missing", tailoredStatus: "missing" }
-    ];
-    return missingRequiredFromCoverage(cov) === 2; // clearance/covered/preferred/medium excluded
-  })()],
-  ["reconcile: 2 missing required coverage rows the gaps array omitted -> cap 69 (not gameable)", (() => {
-    const r = applyGapCapsAndVerdict({ base: 90, tailored: 92, liftReason: "" }, { gaps: [] }, false, 2);
-    return r.aiScore.tailored === 69 && r.verdict === "STRETCH";
-  })()],
-  ["reconcile: honest reply (gaps agree with coverage) is unchanged", (() => {
-    const r = applyGapCapsAndVerdict({ base: 90, tailored: 88, liftReason: "" }, { gaps: [{ severity: "HIGH" }] }, false, 1);
-    return r.aiScore.tailored === 79 && r.verdict === "REASONABLE FIT";
-  })()],
-  ["reconcile: gaps stronger than coverage still governs (max, not override)", (() => {
-    const r = applyGapCapsAndVerdict({ base: 90, tailored: 88, liftReason: "" }, { gaps: [{ severity: "HIGH" }, { severity: "HIGH" }, { severity: "HIGH" }] }, false, 1);
-    return r.aiScore.tailored === 60; // max(3 gaps, 1 coverage) = 3 -> 60
-  })()],
-
-  // --- Fix 1 lock: scoring is coverage-arithmetic ONLY; model-authored fitScore
-  // --- / fitBuckets on the same reply cannot move the score. scoreFromRequirement-
-  // --- Coverage reads only the coverage rows, so stray numeric fields are inert. ---
-  ["model-authored fitScore/fitBuckets on the reply do NOT change the coverage score", (() => {
-    const rows = [
-      { category: "Required tech", requirement: "React", importance: "high", baseStatus: "covered", tailoredStatus: "covered" },
-      { category: "Required tech", requirement: "TypeScript", importance: "high", baseStatus: "adjacent", tailoredStatus: "covered" },
-      { category: "Required experience", requirement: "REST API development", importance: "high", baseStatus: "covered", tailoredStatus: "covered" },
-      { category: "Required experience", requirement: "Automated testing", importance: "medium", baseStatus: "covered", tailoredStatus: "covered" },
-      { category: "Required years", requirement: "Entry level", importance: "medium", baseStatus: "covered", tailoredStatus: "covered" },
-      { category: "Preferred", requirement: "Healthcare domain", importance: "low", baseStatus: "missing", tailoredStatus: "adjacent" }
-    ];
-    const clean = scoreFromRequirementCoverage(rows, { riskFlags: [] });
-    // Attach a wildly optimistic model score/buckets to a copy of the reply; the
-    // score function ignores them entirely (identical output, no read path).
-    const withModelNumbers = scoreFromRequirementCoverage(rows, { riskFlags: [], fitScore: { base: 99, tailored: 100 }, fitBuckets: { tailored: { requiredTech: 40, requiredDomains: 25, seniority: 15, preferred: 10, clarity: 10 } } });
-    return clean && withModelNumbers
-      && withModelNumbers.base === clean.base && withModelNumbers.tailored === clean.tailored;
-  })()],
-
-  // --- Fix 3 lock: applyGapCapsAndVerdict returns a deterministic capReason the
-  // --- route uses to replace a stale model verdictReason when the server verdict
-  // --- overrides the model's. The reason names only in-review facts. ---
-  ["capReason names the eligibility blocker when it forces DON'T APPLY", (() => {
-    const r = applyGapCapsAndVerdict({ base: 88, tailored: 90, liftReason: "" }, { gaps: [] }, true);
-    return r.verdict === DONT && /eligibility/i.test(r.capReason) && /DON'T APPLY/.test(r.capReason);
-  })()],
-  ["capReason counts the missing required qualifications that capped the score", (() => {
-    const r = applyGapCapsAndVerdict({ base: 90, tailored: 92, liftReason: "" }, { gaps: [{ severity: "HIGH" }, { severity: "HIGH" }] });
-    // 2 HIGH gaps -> cap 69 -> STRETCH; the reason states the count and the band.
-    return r.verdict === "STRETCH" && /2 missing required qualifications/.test(r.capReason) && /69/.test(r.capReason);
-  })()],
-  ["capReason singular for 1 missing required qualification", (() => {
-    const r = applyGapCapsAndVerdict({ base: 90, tailored: 92, liftReason: "" }, { gaps: [{ severity: "HIGH" }] });
-    return /1 missing required qualification\b/.test(r.capReason) && /79/.test(r.capReason);
-  })()],
-  ["null-score + blocker capReason still forces DON'T APPLY reason", (() => {
-    const r = applyGapCapsAndVerdict(null, { verdict: "STRETCH", gaps: [] }, true);
-    return r.aiScore === null && r.verdict === DONT && /eligibility/i.test(r.capReason);
-  })()],
-  ["non-binding cap yields coverage-band wording, not a capped claim", (() => {
-    // 1 HIGH gap -> cap 79, but the score (55) is already below it: the band
-    // came from the score, so the reason must not attribute it to the cap.
-    const r = applyGapCapsAndVerdict({ base: 50, tailored: 55, liftReason: "" }, { gaps: [{ severity: "HIGH" }] });
-    return r.verdict === "STRETCH" && /requirement-coverage/i.test(r.capReason) && !/capped/.test(r.capReason);
-  })()],
-  ["uncapped score still yields a coverage-band capReason (no stale-reason gap)", (() => {
-    const r = applyGapCapsAndVerdict({ base: 73, tailored: 86, liftReason: "" }, { gaps: [{ severity: "MEDIUM" }] });
-    // No HIGH gaps / blocker -> verdict from the raw tailored score; capReason
-    // still populated so the route always has a server sentence to swap in.
-    return r.verdict === "STRONG FIT" && /requirement-coverage/i.test(r.capReason);
-  })()],
-
   // --- surface withheld fabrications: split unsupported (anti-fab) vs benign drops ---
   ["summarizeDroppedSuggestions: null when empty; splits unsupported vs benign", (() => {
     const empty = summarizeDroppedSuggestions({});
     const some = summarizeDroppedSuggestions({ ungroundedJdTerm: 2, missingEvidence: 1, duplicateTarget: 1, emptyOrUnchanged: 3 });
     return empty === null && some.total === 7 && some.unsupported === 3;
   })()],
-
-  // --- Fix A lock: a reply whose strictReview shape is missing/non-object yields
-  // --- NO usable strictReview, so the route must return aiScore=null even if the
-  // --- requirementCoverage array would have scored. The self-contradictory state
-  // --- being closed: reviewStatus="failed" beside a real, UNCAPPED coverage score.
-  // ---
-  // --- sanitize-level lock (the input to the route's branch): a missing/non-object
-  // --- strictReview sanitizes to null, which is exactly the condition on which the
-  // --- route (server/ai/polish.ts) takes the `else { aiScore: null }` branch and
-  // --- never calls scoreFromRequirementCoverage. The route logic is reviewed;
-  // --- this locks the sanitizer contract the route relies on. ---
-  ["Fix A: missing strictReview sanitizes to null even though coverage would score", (() => {
-    // Six-row coverage table: enough grounded decision coverage to be scorable.
-    // proves the score is available yet the review shape is unusable.
-    const coverage = [
-      { category: "Required tech", requirement: "React", importance: "high", baseStatus: "covered", tailoredStatus: "covered" },
-      { category: "Required tech", requirement: "TypeScript", importance: "high", baseStatus: "adjacent", tailoredStatus: "covered" },
-      { category: "Required experience", requirement: "REST API development", importance: "high", baseStatus: "covered", tailoredStatus: "covered" },
-      { category: "Required experience", requirement: "Automated testing", importance: "medium", baseStatus: "covered", tailoredStatus: "covered" },
-      { category: "Required years", requirement: "Entry level", importance: "medium", baseStatus: "covered", tailoredStatus: "covered" },
-      { category: "Preferred", requirement: "Healthcare domain", importance: "low", baseStatus: "missing", tailoredStatus: "adjacent" }
-    ];
-    const coverageScorable = scoreFromRequirementCoverage(coverage, { riskFlags: [] }) !== null;
-    // A reply that carried valid coverage but no strictReview object: the strict
-    // review sanitizes to null (undefined AND non-object both), so the route's
-    // truthy `if (strictReviewResult)` branch never runs and aiScore stays null.
-    const missingObj = sanitizeStrictReview(undefined, "", "");
-    const nonObj = sanitizeStrictReview("not an object", "", "");
-    return coverageScorable && missingObj === null && nonObj === null;
+  ["free prose cannot introduce a metric absent from resume or honest context", (() => {
+    return hasUngroundedNumericClaim("Improved throughput by 40%.", "Improved throughput for the reporting service.")
+      && !hasUngroundedNumericClaim("Improved throughput by 40%.", "Exact result: improved throughput by 40%.");
   })()],
 
-  // --- coverage grounding: reviewer statuses are claims, not trusted facts. ---
-  ["coverage grounding keeps real evidence, downgrades fabricated evidence, and aligns display/score/cap", (() => {
-    const jobText = "Required: React, TypeScript, Node.js, Python, SQL, Kubernetes, REST API development, and entry-level experience. Preferred: healthcare domain.";
-    const resume = "Skills: React, TypeScript, Node.js, Python, SQL. Entry level candidate. Built REST API development for healthcare workflows.";
-    const grounding = { jobText, baseResume: resume, tailoredResume: resume, honestContext: "" };
-    const rows = [
-      ...["React", "TypeScript", "Node.js", "Python", "SQL", "Kubernetes"].map((requirement) => ({
-        category: "Required tech", requirement, importance: "high", baseStatus: "covered", tailoredStatus: "covered",
-        baseEvidence: `Skills section lists ${requirement}`, tailoredEvidence: `Skills section lists ${requirement}`
-      })),
-      { category: "Required experience", requirement: "REST API development", importance: "high", baseStatus: "covered", tailoredStatus: "covered", baseEvidence: "Built REST API development", tailoredEvidence: "Built REST API development" },
-      { category: "Required years", requirement: "Entry level", importance: "medium", baseStatus: "covered", tailoredStatus: "covered", baseEvidence: "Resume states entry level candidate", tailoredEvidence: "Resume states entry level candidate" },
-      { category: "Preferred", requirement: "Healthcare domain", importance: "low", baseStatus: "covered", tailoredStatus: "covered", baseEvidence: "Healthcare workflows", tailoredEvidence: "Healthcare workflows" }
-    ];
-    const legacy = scoreFromRequirementCoverage(rows, { riskFlags: [] });
-    const grounded = scoreFromRequirementCoverage(rows, { riskFlags: [] }, grounding);
-    const display = displayCoverageFromRequirements(rows, grounding);
-    const react = display.find((row) => row.keyword === "React");
-    const kubernetes = display.find((row) => row.keyword === "Kubernetes");
-    const missing = missingRequiredFromCoverage(rows, grounding);
-    const capped = applyGapCapsAndVerdict(grounded, { gaps: [] }, false, missing);
-    return legacy?.tailored === 100
-      && grounded?.tailored > 79 && grounded.tailored < legacy.tailored
-      && react?.status === "covered" && /React/.test(react.where)
-      && kubernetes?.status === "missing" && kubernetes.where === "Not in resume"
-      && missing === 1 && capped.aiScore?.tailored === 79;
+  // --- AI-owned review contract: the server validates shape and consistency
+  // --- without calculating or changing the model's judgment. ---
+  ["AI fit score passes through unchanged when it matches the AI verdict", (() => {
+    const score = sanitizeAiFitScore({ base: 76, tailored: 88, liftReason: "The tailored draft surfaces exact evidence." }, "STRONG FIT");
+    return score?.base === 76 && score.tailored === 88
+      && score.liftReason === "The tailored draft surfaces exact evidence.";
   })()],
-  ["coverage grounding does not count honest context as document coverage", (() => {
-    const rows = [{
-      category: "Required tech", requirement: "GraphQL", importance: "high",
-      baseStatus: "covered", tailoredStatus: "covered",
-      baseEvidence: "Honest context says GraphQL", tailoredEvidence: "Honest context says GraphQL"
-    }];
-    const out = displayCoverageFromRequirements(rows, {
-      jobText: "GraphQL is required.", baseResume: "", tailoredResume: "", honestContext: "I use GraphQL."
+  ["AI fit score rejects missing, out-of-range, and contradictory values", (() => {
+    return sanitizeAiFitScore(null, "STRETCH") === null
+      && sanitizeAiFitScore({ base: 70, tailored: 101, liftReason: "" }, "STRONG FIT") === null
+      && sanitizeAiFitScore({ base: 70, tailored: 30, liftReason: "" }, "STRONG FIT") === null
+      && sanitizeAiFitScore({ base: 70.5, tailored: 75, liftReason: "" }, "REASONABLE FIT") === null
+      && sanitizeAiFitScore({ base: "70", tailored: 75, liftReason: "" }, "REASONABLE FIT") === null;
+  })()],
+  ["AI review coverage is shape-sanitized without local status reinterpretation", (() => {
+    const review = sanitizeStrictReview({
+      verdict: "REASONABLE FIT",
+      verdictReason: "Direct evidence covers most core requirements.",
+      coverage: [
+        { category: "Required tech", keyword: "Python", status: "covered", where: "Technical Skills: Python" },
+        { category: "Required experience", keyword: "AWS deployments", status: "adjacent", where: "Technical Skills: AWS" },
+        { category: "Required tech", keyword: "Bad enum", status: "unknown", where: "ignored" },
+        { category: "Invented category", keyword: "Python", status: "covered", where: "ignored" },
+        { category: "Required tech", keyword: "Kubernetes", status: "missing", where: "ignored" }
+      ],
+      gaps: [],
+      rewrites: [],
+      riskFlags: [],
+      recommendation: {}
+    }, "Python and AWS deployments are required.", "Technical Skills: Python, AWS");
+    return review?.coverage.length === 2
+      && review.coverage[0].status === "covered"
+      && review.coverage[1].status === "adjacent";
+  })()],
+  ["invalid gap severity is dropped and string booleans do not become true", (() => {
+    const review = sanitizeStrictReview({
+      verdict: "STRETCH",
+      gaps: [
+        { gap: "Python", severity: "CRITICAL", evidenceType: "none", evidence: "No evidence" },
+        { gap: "AWS", severity: "HIGH", evidenceType: "exact", canHonestlyAdd: "false", evidence: "Skills list AWS" }
+      ],
+      recommendation: { applyAsIs: "false" }
+    }, "Python and AWS are required.", "Skills: AWS");
+    return review?.gaps.length === 1
+      && review.gaps[0].gap === "AWS"
+      && review.gaps[0].canHonestlyAdd === false
+      && review.recommendation.applyAsIs === false;
+  })()],
+  ["invalid AI verdict makes the whole review unusable instead of defaulting locally", (() => {
+    return sanitizeStrictReview({ verdict: "MAYBE", recommendation: {} }, "Python required.", "Python") === null;
+  })()],
+
+  // Review's score, verdict, and evidence are one model-authored judgment. A
+  // contradictory/missing score fails the contract instead of surfacing only
+  // the favorable prose as a scoreless success.
+  ["out-of-band aiScore invalidates the whole review", (() => {
+    const reviewParsed = {
+      strictReview: {
+        verdict: "STRONG FIT",
+        verdictReason: "Direct evidence covers the core Python and PostgreSQL requirements.",
+        coverage: [
+          { category: "Required tech", keyword: "Python", status: "covered", where: "Skills: Python" },
+          { category: "Required tech", keyword: "PostgreSQL", status: "covered", where: "Experience: PostgreSQL" }
+        ],
+        gaps: [], rewrites: [], riskFlags: [], recommendation: {}
+      },
+      // 82 sits in the REASONABLE band, contradicting the model's STRONG FIT
+      // verdict (which needs >= 85), so sanitizeAiFitScore rejects it.
+      aiScore: { base: 70, tailored: 82, liftReason: "" }
+    };
+    const jobText = "Requirements: Python and PostgreSQL.";
+    const grounding = "Skills: Python, PostgreSQL\nExperience: Tuned PostgreSQL queries in Python.";
+    const scoreRejected = sanitizeAiFitScore(reviewParsed.aiScore, "STRONG FIT") === null;
+    const { strictReview, aiScore } = resolveReviewOutcome(reviewParsed, jobText, grounding);
+    return scoreRejected && aiScore === null && strictReview === null;
+  })()],
+  ["a missing aiScore invalidates the whole review", (() => {
+    const reviewParsed = {
+      strictReview: {
+        verdict: "REASONABLE FIT",
+        verdictReason: "Most core requirements are directly evidenced.",
+        coverage: [{ category: "Required tech", keyword: "Python", status: "covered", where: "Skills: Python" }],
+        gaps: [], rewrites: [], riskFlags: [], recommendation: {}
+      }
+      // no aiScore field at all
+    };
+    const { strictReview, aiScore } = resolveReviewOutcome(reviewParsed, "Python required.", "Skills: Python");
+    return aiScore === null && strictReview === null;
+  })()],
+  ["a valid in-band aiScore is surfaced alongside its grounded review", (() => {
+    const reviewParsed = {
+      strictReview: {
+        verdict: "STRONG FIT",
+        verdictReason: "Direct evidence covers the required stack.",
+        coverage: [{ category: "Required tech", keyword: "Python", status: "covered", where: "Skills: Python" }],
+        gaps: [], rewrites: [], riskFlags: [], recommendation: {}
+      },
+      aiScore: { base: 74, tailored: 90, liftReason: "Tailored draft surfaces exact evidence." }
+    };
+    const { strictReview, aiScore } = resolveReviewOutcome(reviewParsed, "Python required.", "Skills: Python");
+    return strictReview !== null && aiScore?.tailored === 90 && aiScore.base === 74;
+  })()],
+  ["an empty-shell review (no coverage rows) is still dropped, regardless of score", (() => {
+    const reviewParsed = {
+      strictReview: {
+        verdict: "STRONG FIT", verdictReason: "Looks strong.",
+        coverage: [], gaps: [], rewrites: [], riskFlags: [], recommendation: {}
+      },
+      aiScore: { base: 74, tailored: 90, liftReason: "" }
+    };
+    const { strictReview, aiScore } = resolveReviewOutcome(reviewParsed, "Python required.", "Skills: Python");
+    // No inspectable coverage -> the whole review is unusable (would be
+    // reviewStatus="failed"), and the score cannot stand alone.
+    return strictReview === null && aiScore === null;
+  })()],
+  ["a null review pass (failed/unparseable) yields no review and no score", (() => {
+    const { strictReview, aiScore } = resolveReviewOutcome(null, "Python required.", "Skills: Python");
+    return strictReview === null && aiScore === null;
+  })()],
+  ["review failures preserve actionable safe classifications without leaking raw errors", (() => {
+    const rateLimit = reviewFailureFromReason(
+      new UserSafeAiError("OpenAI rate limit or quota was reached. Wait, then try again.", 429),
+      "openai"
+    );
+    const unknown = reviewFailureFromReason(new Error("secret upstream payload"), "openai");
+    return rateLimit.status === 429
+      && /rate limit/i.test(rateLimit.message)
+      && unknown.status === 502
+      && !unknown.message.includes("secret upstream payload");
+  })()],
+  ["strict-review prompt assigns score, verdict, and coverage to the AI", (() => {
+    const { userPrompt } = buildStrictReviewPrompts({
+      jobText: "Required Qualifications: Python and TypeScript. 0-6 years of experience.",
+      resumeText: "Technical Skills: Python, TypeScript.",
+      suggestedChanges: [],
+      honestContext: "",
+      customInstructions: ""
     });
-    return out[0]?.status === "missing" && out[0]?.where === "Not in resume";
-  })()],
-  ["coverage grounding recognizes honest-context evidence only after Tailor surfaces it", (() => {
-    const rows = [{
-      category: "Required tech", requirement: "GraphQL", importance: "high",
-      baseStatus: "missing", tailoredStatus: "covered",
-      baseEvidence: "Not in resume", tailoredEvidence: "Skills section lists GraphQL"
-    }];
-    const out = displayCoverageFromRequirements(rows, {
-      jobText: "GraphQL is required.", baseResume: "Skills: React", tailoredResume: "Skills: React, GraphQL", honestContext: "I use GraphQL."
-    });
-    return out[0]?.status === "covered" && /GraphQL/.test(out[0].where);
-  })()],
-  ["coverage grounding drops model-invented requirements absent from the JD", (() => {
-    const rows = ["COBOL", "Fortran", "Hadoop", "Mainframe"].map((requirement) => ({
-      category: "Required tech", requirement, importance: "low", baseStatus: "covered", tailoredStatus: "covered",
-      baseEvidence: `Skills section lists ${requirement}`, tailoredEvidence: `Skills section lists ${requirement}`
-    }));
-    const grounding = {
-      jobText: "Required: React and TypeScript.",
-      baseResume: "Skills: COBOL, Fortran, Hadoop, Mainframe.",
-      tailoredResume: "Skills: COBOL, Fortran, Hadoop, Mainframe.",
-      honestContext: ""
-    };
-    return scoreFromRequirementCoverage(rows, { riskFlags: [] }, grounding) === null
-      && displayCoverageFromRequirements(rows, grounding).length === 0
-      && missingRequiredFromCoverage(rows, grounding) === 0;
-  })()],
-  ["coverage grounding turns a fabricated covered eligibility claim into a blocker", (() => {
-    const rows = [{
-      category: "Eligibility", requirement: "Active Secret clearance", importance: "critical",
-      tailoredStatus: "covered", tailoredEvidence: "Resume shows Active Secret clearance"
-    }];
-    return coverageHasEligibilityBlocker(rows, {
-      jobText: "Active Secret clearance is required.", baseResume: "React developer", tailoredResume: "React developer", honestContext: ""
-    });
-  })()],
-  ["coverage grounding treats adjacent eligibility evidence as unmet", (() => {
-    const rows = [{
-      category: "Eligibility", requirement: "Active Secret clearance", importance: "critical",
-      tailoredStatus: "adjacent", tailoredEvidence: "Eligible to obtain Secret clearance"
-    }];
-    return coverageHasEligibilityBlocker(rows, {
-      jobText: "Active Secret clearance is required.", baseResume: "Eligible to obtain Secret clearance",
-      tailoredResume: "Eligible to obtain Secret clearance", honestContext: ""
-    });
-  })()],
-  ["coverage grounding rejects padded composite requirements", (() => {
-    const rows = [{
-      category: "Required tech", requirement: "React TypeScript Kubernetes", importance: "high",
-      baseStatus: "covered", tailoredStatus: "covered",
-      baseEvidence: "Skills list React and TypeScript", tailoredEvidence: "Skills list React and TypeScript"
-    }];
-    const grounding = {
-      jobText: "React and TypeScript are required.",
-      baseResume: "Skills: React, TypeScript", tailoredResume: "Skills: React, TypeScript", honestContext: ""
-    };
-    return displayCoverageFromRequirements(rows, grounding).length === 0
-      && scoreFromRequirementCoverage(rows, { riskFlags: [] }, grounding) === null;
-  })()],
-  ["coverage grounding keeps established technology aliases", (() => {
-    const rows = [
-      { category: "Required tech", requirement: "Kubernetes", importance: "high", baseStatus: "covered", tailoredStatus: "covered", baseEvidence: "Skills list k8s", tailoredEvidence: "Skills list k8s" },
-      { category: "Required tech", requirement: "PostgreSQL", importance: "high", baseStatus: "covered", tailoredStatus: "covered", baseEvidence: "Skills list Postgres", tailoredEvidence: "Skills list Postgres" },
-      { category: "Required tech", requirement: "TypeScript", importance: "high", baseStatus: "covered", tailoredStatus: "covered", baseEvidence: "Skills list TS", tailoredEvidence: "Skills list TS" },
-      { category: "Required tech", requirement: "React.js", importance: "high", baseStatus: "covered", tailoredStatus: "covered", baseEvidence: "Skills list React", tailoredEvidence: "Skills list React" }
-    ];
-    const grounding = {
-      jobText: "Kubernetes, PostgreSQL, TypeScript, and React.js are required.",
-      baseResume: "Skills: k8s, Postgres, TS, React", tailoredResume: "Skills: k8s, Postgres, TS, React", honestContext: ""
-    };
-    const display = displayCoverageFromRequirements(rows, grounding);
-    return display.length === 4 && display.every((row) => row.status === "covered");
-  })()],
-  ["coverage grounding preserves numeric seniority and ranges", (() => {
-    const row = {
-      category: "Required years", requirement: "3-5 years React", importance: "high",
-      baseStatus: "covered", tailoredStatus: "covered",
-      baseEvidence: "3 years using React", tailoredEvidence: "3 years using React"
-    };
-    const grounding = {
-      jobText: "Requires 3-5 years of React experience.",
-      baseResume: "Skills: React", tailoredResume: "Skills: React", honestContext: ""
-    };
-    const display = displayCoverageFromRequirements([row], grounding);
-    return display[0]?.status === "missing";
+    return /"aiScore"/.test(userPrompt)
+      && /"coverage"/.test(userPrompt)
+      && /You own the complete fit judgment/.test(userPrompt)
+      && /does not recompute, cap, or replace your judgment/.test(userPrompt)
+      && !/requirementCoverage|server calculates the score|recomputed server-side/i.test(userPrompt);
   })()],
 
   // --- adversarial review safety: gaps, collision-prone tech, negation, and
@@ -966,18 +649,18 @@ const checks = [
       gaps: [{ gap: "Active Secret clearance", severity: "BLOCKER", evidenceType: "none", evidence: "No evidence" }],
       recommendation: {}
     }, "Required: React experience.", "Skills: React");
-    const capped = applyGapCapsAndVerdict({ base: 90, tailored: 90, liftReason: "" }, review, false, 0);
-    return review?.gaps.length === 0 && capped.verdict === "STRONG FIT" && capped.aiScore?.tailored === 90;
+    return review?.gaps.length === 0 && review.verdict === "STRONG FIT";
   })()],
-  ["preferred-only HIGH gap stays visible but cannot cap", (() => {
+  ["preferred-only HIGH gap stays visible without local score metadata", (() => {
     const job = "Preferred qualifications:\nGraphQL";
     const review = sanitizeStrictReview({
       verdict: "STRONG FIT",
       gaps: [{ gap: "GraphQL", severity: "HIGH", evidenceType: "none", evidence: "No evidence" }],
       recommendation: {}
     }, job, "Skills: React");
-    const capped = applyGapCapsAndVerdict({ base: 90, tailored: 90, liftReason: "" }, review, false, 0);
-    return review?.gaps[0]?.capEligible === false && capped.aiScore?.tailored === 90;
+    return review?.gaps[0]?.gap === "GraphQL"
+      && !("capEligible" in review.gaps[0])
+      && review.verdict === "STRONG FIT";
   })()],
   ["strict-review exact gap evidence is downgraded when resume support is absent", (() => {
     const review = sanitizeStrictReview({
@@ -1021,117 +704,6 @@ const checks = [
     return withoutAttestation?.gaps[0]?.suggestedEdit === ""
       && withAttestation?.gaps[0]?.suggestedEdit === "Reduced latency by 40%.";
   })()],
-  ["driver-license logistical row is excluded from missing-required caps and blockers", (() => {
-    const rows = [{
-      category: "Required years", requirement: "Valid driver's license", importance: "critical",
-      baseStatus: "missing", tailoredStatus: "missing", baseEvidence: "Not in resume", tailoredEvidence: "Not in resume"
-    }];
-    const grounding = { jobText: "A valid driver's license is required for travel.", baseResume: "", tailoredResume: "", honestContext: "" };
-    return missingRequiredFromCoverage(rows, grounding) === 0
-      && coverageHasEligibilityBlocker(rows, grounding) === false;
-  })()],
-  ["degree-or-equivalent requirement is not a hard blocker", (() => {
-    const rows = [{
-      category: "Education", requirement: "Bachelor’s degree or equivalent experience", importance: "critical",
-      tailoredStatus: "missing", tailoredEvidence: "Not in resume"
-    }];
-    const grounding = {
-      jobText: "Bachelor’s degree or equivalent experience is required.",
-      baseResume: "", tailoredResume: "", honestContext: ""
-    };
-    return coverageHasEligibilityBlocker(rows, grounding) === false;
-  })()],
-  ["mandatory professional license and mandatory degree remain blockers", (() => {
-    const rows = [
-      { category: "Eligibility", requirement: "Active RN license", importance: "critical", tailoredStatus: "missing", tailoredEvidence: "Not in resume" },
-      { category: "Education", requirement: "Bachelor's degree", importance: "critical", tailoredStatus: "missing", tailoredEvidence: "Not in resume" }
-    ];
-    const jobText = "Active RN license is required.\nBachelor's degree is mandatory.";
-    const grounding = { jobText, baseResume: "", tailoredResume: "", honestContext: "" };
-    return rows.every((row) => coverageHasEligibilityBlocker([row], grounding));
-  })()],
-  ["collision-prone tech tokens do not false-cover", (() => {
-    const cases = [
-      [".NET", ".NET development is required.", "Led a net-zero initiative."],
-      ["C", "C programming is required.", "Partnered with the C-suite."],
-      ["R", "R programming is required.", "Worked with R&D leaders."],
-      ["Go", "Go programming is required.", "Led go-to-market planning."],
-      ["TypeScript", "TypeScript is required.", "Held TS/SCI clearance."],
-      ["TS/SCI clearance", "TS/SCI clearance is required.", "Skills: TypeScript."]
-    ];
-    return cases.every(([requirement, jobText, resume]) => {
-      const rows = [{
-        category: /clearance/i.test(requirement) ? "Required years" : "Required tech",
-        requirement, importance: "high", baseStatus: "covered", tailoredStatus: "covered",
-        baseEvidence: resume, tailoredEvidence: resume
-      }];
-      const display = displayCoverageFromRequirements(rows, { jobText, baseResume: resume, tailoredResume: resume, honestContext: "" });
-      return display[0]?.status === "missing";
-    });
-  })()],
-  ["collision-prone tech tokens do not earn adjacent credit inside composite labels", (() => {
-    const cases = [
-      [".NET development", "Led net-zero development."],
-      ["C programming", "Partnered with the C-suite on programming priorities."],
-      ["R analytics", "Supported R&D analytics."],
-      ["Go backend services", "Led go-to-market work for backend services."],
-      ["TypeScript development", "Held TS/SCI clearance and supported software development."]
-    ];
-    return cases.every(([requirement, resume]) => {
-      const rows = [{
-        category: "Required tech", requirement, importance: "high",
-        baseStatus: "adjacent", tailoredStatus: "adjacent", baseEvidence: resume, tailoredEvidence: resume
-      }];
-      const display = displayCoverageFromRequirements(rows, {
-        jobText: `${requirement} is required.`, baseResume: resume, tailoredResume: resume, honestContext: ""
-      });
-      return display[0]?.status === "missing";
-    });
-  })()],
-  ["legitimate adjacent JavaScript evidence for TypeScript remains adjacent", (() => {
-    const rows = [{
-      category: "Required tech", requirement: "TypeScript development", importance: "high",
-      baseStatus: "adjacent", tailoredStatus: "adjacent",
-      baseEvidence: "JavaScript development", tailoredEvidence: "JavaScript development"
-    }];
-    const display = displayCoverageFromRequirements(rows, {
-      jobText: "TypeScript development is required.",
-      baseResume: "JavaScript development", tailoredResume: "JavaScript development", honestContext: ""
-    });
-    return display[0]?.status === "adjacent";
-  })()],
-  ["negated resume evidence cannot count as covered", (() => {
-    const cases = [
-      ["Python", "No Python experience"],
-      ["Kubernetes", "Built services without Kubernetes"]
-    ];
-    return cases.every(([requirement, resume]) => {
-      const rows = [{
-        category: "Required tech", requirement, importance: "high",
-        baseStatus: "covered", tailoredStatus: "covered", baseEvidence: resume, tailoredEvidence: resume
-      }];
-      const display = displayCoverageFromRequirements(rows, {
-        jobText: `${requirement} is required.`, baseResume: resume, tailoredResume: resume, honestContext: ""
-      });
-      return display[0]?.status === "missing";
-    });
-  })()],
-  ["sparse or single-required-bucket coverage returns null", (() => {
-    const four = ["React", "TypeScript", "Node.js", "SQL"].map((requirement) => ({
-      category: "Required tech", requirement, importance: "high", baseStatus: "covered", tailoredStatus: "covered",
-      baseEvidence: requirement, tailoredEvidence: requirement
-    }));
-    const six = [...four, "Python", "Java"].map((row) => typeof row === "string" ? ({
-      category: "Required tech", requirement: row, importance: "high", baseStatus: "covered", tailoredStatus: "covered",
-      baseEvidence: row, tailoredEvidence: row
-    }) : row);
-    const jobText = "React TypeScript Node.js SQL Python and Java are required.";
-    const resume = "React TypeScript Node.js SQL Python Java";
-    const grounding = { jobText, baseResume: resume, tailoredResume: resume, honestContext: "" };
-    return scoreFromRequirementCoverage(four, { riskFlags: [] }, grounding) === null
-      && scoreFromRequirementCoverage(six, { riskFlags: [] }, grounding) === null;
-  })()],
-
   // --- JSON prompt budgets preserve syntax and caller-owned inputs. ---
   ["serializeJsonForPrompt is bounded, deterministic, valid JSON, and non-mutating", (() => {
     const input = {

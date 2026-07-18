@@ -1,6 +1,9 @@
 import type { Application, ApplicationStatus } from "../hooks/useApplications";
 import type { StrictReviewVerdict } from "../resume/types";
+import { fitScore } from "./applicationFacts";
 import { VERDICT_LABEL, VERDICT_TONE, verdictFromScore } from "./fitVerdict";
+
+export { displayCompany, fitScore, parseDate } from "./applicationFacts";
 
 export const STATUS_LABEL: Record<ApplicationStatus, string> = {
   interested: "Saved",
@@ -20,10 +23,6 @@ export const BOARD_STATUSES: ApplicationStatus[] = [
   "withdrawn"
 ];
 
-export function displayCompany(app: Application) {
-  return app.company?.trim() || app.title.split(/[|·-]/)[0]?.trim() || "Unknown company";
-}
-
 export function displayRole(app: Application) {
   return app.role?.trim() || "Role not set";
 }
@@ -40,19 +39,11 @@ export function companyInitials(name: string) {
     .join("");
 }
 
-export function fitScore(app: Application) {
-  return typeof app.fitScore === "number"
-    ? app.fitScore
-    : typeof app.tailoredFitScore === "number"
-    ? app.tailoredFitScore
-    : null;
-}
-
-// Score -> tone (fit-color class only). Thresholds MIRROR verdictForScore in
-// server/ai/sanitize.ts (STRONG FIT >=85, REASONABLE FIT >=70, STRETCH >=46,
-// DON'T APPLY <46) and verdictFromScore in lib/fitVerdict.ts — keep in sync. The
+// Score -> tone (fit-color class only). Thresholds mirror the AI Review contract
+// (STRONG FIT >=85, REASONABLE FIT >=70, STRETCH >=46, DON'T APPLY <46) and
+// verdictFromScore in lib/fitVerdict.ts — keep in sync. The
 // fit LABEL now always comes from the shared verdict vocabulary (appFitVerdict /
-// fitVerdict.ts) so the tracker, review pane, and resume header never disagree.
+// fitVerdict.ts) so the tracker and review pane never disagree.
 // The old fitLabel "Strong/Good/Stretch/Weak match" vocabulary was removed — it
 // was the source of the tracker-vs-review mismatch.
 export function fitTone(score: number | null) {
@@ -66,8 +57,8 @@ export function fitTone(score: number | null) {
 // The application's fit as a VERDICT band, in the SAME vocabulary the review
 // pane and resume header use — so the tracker can never show "Good match" while
 // strict review says "Reasonable fit". Prefer the verdict captured at apply time
-// (the real, gap-capped strict-review verdict); otherwise derive it from the
-// stored score. Label AND tone come from the same verdict so they agree.
+// (the AI review verdict); otherwise derive it from a non-local stored score.
+// Label AND tone come from the same verdict so they agree.
 export function appFitVerdict(
   app: Application
 ): { verdict: StrictReviewVerdict; label: string; tone: "strong" | "good" | "stretch" | "weak" } | null {
@@ -148,12 +139,6 @@ export function formatCompactDate(iso: string) {
 
 export function dateKey(date: Date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-}
-
-export function parseDate(value?: string) {
-  if (!value) return null;
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? null : date;
 }
 
 export function averageFit(applications: Application[]) {

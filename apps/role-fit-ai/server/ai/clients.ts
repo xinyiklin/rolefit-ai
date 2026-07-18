@@ -5,12 +5,12 @@
 
 import { callAntigravityCli, callClaudeCli, callCodexCli } from "../ai-cli/index.ts";
 import { fetchWithTimeout } from "../http.ts";
-import { chatCompletionsEndpoint } from "../network.ts";
 import { UserSafeAiError } from "./errors.ts";
 import { parseAiJson } from "./json.ts";
 import { providerLabel } from "./providers.ts";
 
 const OUTPUT_TOKEN_LIMIT = 8192;
+const MAX_PROVIDER_RESPONSE_BYTES = 2_000_000;
 
 // The built prompt pair + resolved provider config dispatched to one provider.
 // `provider` is optional: dispatchProvider routes on it, but the per-provider
@@ -20,9 +20,9 @@ type ProviderCallArgs = {
   model: string;
   reasoningEffort?: string | null;
   apiKey?: string;
-  apiBaseUrl?: string;
   systemPrompt: string;
   userPrompt: string;
+  signal?: AbortSignal;
 };
 
 // Optional dispatch-attempt collector (same additive pattern as the sanitizer's
@@ -43,19 +43,6 @@ function extractOutputText(response: any): string {
   );
 }
 
-function extractChatText(response: any): string {
-  const message = response.choices?.[0]?.message?.content;
-  if (typeof message === "string") return message;
-  if (Array.isArray(message)) {
-    return message
-      .map((part: any) => (typeof part?.text === "string" ? part.text : ""))
-      .filter(Boolean)
-      .join("\n");
-  }
-  if (typeof response.choices?.[0]?.text === "string") return response.choices[0].text;
-  return "";
-}
-
 function extractAnthropicText(response: any): string {
   return (
     response.content
@@ -65,21 +52,43 @@ function extractAnthropicText(response: any): string {
   );
 }
 
-function extractGeminiText(response: any): string {
-  return (
-    response.candidates?.[0]?.content?.parts
-      ?.map((part: any) => (typeof part?.text === "string" ? part.text : ""))
-      .filter(Boolean)
-      .join("\n") ?? ""
-  );
-}
-
 function providerErrorDebug(data: any) {
   const error = data?.error ?? data;
-  return {
-    code: typeof error?.code === "string" ? error.code : undefined,
-    type: typeof error?.type === "string" ? error.type : undefined
+  const safeIdentifier = (value: unknown): string | undefined => {
+    const candidate = typeof value === "string" ? value : "";
+    return /^[A-Za-z0-9_.:-]{1,80}$/.test(candidate) ? candidate : undefined;
   };
+  return {
+    code: safeIdentifier(error?.code),
+    type: safeIdentifier(error?.type)
+  };
+}
+
+async function readProviderJson(response: Response): Promise<any> {
+  const declaredLength = Number(response.headers.get("content-length") ?? 0);
+  if (Number.isFinite(declaredLength) && declaredLength > MAX_PROVIDER_RESPONSE_BYTES) {
+    await response.body?.cancel().catch(() => undefined);
+    throw new UserSafeAiError("AI provider returned too much data. Try again or switch providers.", 502);
+  }
+  if (!response.body) return {};
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > MAX_PROVIDER_RESPONSE_BYTES) {
+      await reader.cancel().catch(() => undefined);
+      throw new UserSafeAiError("AI provider returned too much data. Try again or switch providers.", 502);
+    }
+    chunks.push(value);
+  }
+  try {
+    return JSON.parse(Buffer.concat(chunks.map((chunk) => Buffer.from(chunk))).toString("utf8"));
+  } catch {
+    return {};
+  }
 }
 
 function providerRequestFailed(provider: string, response: Response, data: any): never {
@@ -88,10 +97,37 @@ function providerRequestFailed(provider: string, response: Response, data: any):
     status: response.status,
     ...providerErrorDebug(data)
   });
-  throw new UserSafeAiError(
-    `${providerLabel(provider)} request failed. Check the selected model, API key, and account access, then try again.`,
-    502
-  );
+  if (response.status === 401 || response.status === 403) {
+    throw new UserSafeAiError(
+      `${providerLabel(provider)} rejected the credentials or account access. Check the API key and account, then try again.`,
+      401
+    );
+  }
+  if (response.status === 429) {
+    throw new UserSafeAiError(
+      `${providerLabel(provider)} rate limit or quota was reached. Wait, check the account quota, or switch providers.`,
+      429
+    );
+  }
+  if (response.status === 408 || response.status === 504) {
+    throw new UserSafeAiError(
+      `${providerLabel(provider)} timed out before finishing. Try again or switch providers.`,
+      504
+    );
+  }
+  if (response.status === 413) {
+    throw new UserSafeAiError(
+      `${providerLabel(provider)} rejected the request as too large. Shorten the resume or job text and try again.`,
+      413
+    );
+  }
+  if (response.status === 400 || response.status === 404) {
+    throw new UserSafeAiError(
+      `${providerLabel(provider)} rejected the selected model or request configuration. Check AI settings and try again.`,
+      400
+    );
+  }
+  throw new UserSafeAiError(`${providerLabel(provider)} request failed. Try again or switch providers.`, 502);
 }
 
 function isMaxTokenFinishReason(reason: unknown): boolean {
@@ -115,17 +151,6 @@ function assertNotTruncated(provider: string, truncated: unknown): void {
   }
 }
 
-function chatProviderSupportsJsonMode(provider: string): boolean {
-  return provider !== "local";
-}
-
-function jsonModeUnsupported(response: Response, data: any): boolean {
-  if (![400, 422].includes(response.status)) return false;
-  const error = data?.error ?? data;
-  const message = String(error?.message ?? error?.code ?? error?.type ?? "");
-  return /response[_\s-]?format|responsemime|json/i.test(message);
-}
-
 // Pure request-body seam for deterministic privacy/shape probes. OpenAI's
 // Responses API stores responses by default unless `store:false` is explicit;
 // resume and job text are sensitive, so every call opts out.
@@ -147,14 +172,8 @@ export function buildOpenAiResponsesBody({ model, systemPrompt, userPrompt }: Pr
   };
 }
 
-export function buildOpenAiCompatibleHeaders(apiKey?: string): Record<string, string> {
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
-  if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
-  return headers;
-}
-
 export async function callOpenAiResponsesWithFetch(
-  { apiKey, model, systemPrompt, userPrompt }: ProviderCallArgs,
+  { apiKey, model, systemPrompt, userPrompt, signal }: ProviderCallArgs,
   request: typeof fetchWithTimeout = fetchWithTimeout
 ): Promise<unknown> {
   const response = await request("https://api.openai.com/v1/responses", {
@@ -163,10 +182,11 @@ export async function callOpenAiResponsesWithFetch(
       "Content-Type": "application/json",
       Authorization: `Bearer ${apiKey}`
     },
-    body: JSON.stringify(buildOpenAiResponsesBody({ model, systemPrompt, userPrompt }))
+    body: JSON.stringify(buildOpenAiResponsesBody({ model, systemPrompt, userPrompt })),
+    signal
   });
 
-  const data: any = await response.json().catch(() => ({}));
+  const data: any = await readProviderJson(response);
   if (!response.ok) {
     providerRequestFailed("openai", response, data);
   }
@@ -175,61 +195,20 @@ export async function callOpenAiResponsesWithFetch(
   return parseAiJson(extractOutputText(data));
 }
 
-async function callOpenAiCompatibleChat({ provider = "", apiKey, apiBaseUrl, model, systemPrompt, userPrompt }: ProviderCallArgs): Promise<unknown> {
-  const endpoint = chatCompletionsEndpoint(apiBaseUrl);
-  const headers = buildOpenAiCompatibleHeaders(apiKey);
-  // Local loopback servers such as Ollama commonly require no authentication.
-  // Hosted/remote compatible providers are still rejected at config resolution
-  // when no key is available.
-  const requestBody: {
-    model: string;
-    messages: { role: string; content: string }[];
-    temperature: number;
-    max_tokens: number;
-    response_format?: { type: string };
-  } = {
+export function buildAnthropicMessagesBody({ model, systemPrompt, userPrompt }: ProviderCallArgs) {
+  return {
     model,
-    messages: [
-      { role: "system", content: systemPrompt },
-      { role: "user", content: userPrompt }
-    ],
-    temperature: 0.2,
-    max_tokens: OUTPUT_TOKEN_LIMIT
+    max_tokens: OUTPUT_TOKEN_LIMIT,
+    system: systemPrompt,
+    messages: [{ role: "user", content: userPrompt }],
+    // Sonnet 5 changed omitted-thinking behavior from off to adaptive. This
+    // bounded JSON workflow does not benefit from hidden reasoning consuming
+    // the output budget, so preserve the prior low-latency contract explicitly.
+    ...(model === "claude-sonnet-5" ? { thinking: { type: "disabled" } } : {})
   };
-  if (chatProviderSupportsJsonMode(provider)) {
-    requestBody.response_format = { type: "json_object" };
-  }
-
-  let response = await fetchWithTimeout(endpoint, {
-    method: "POST",
-    headers,
-    body: JSON.stringify(requestBody)
-  });
-
-  let data: any = await response.json().catch(() => ({}));
-  if (!response.ok && requestBody.response_format && jsonModeUnsupported(response, data)) {
-    console.warn("[ai] chat provider rejected native JSON mode; retrying without response_format", {
-      provider,
-      status: response.status,
-      ...providerErrorDebug(data)
-    });
-    delete requestBody.response_format;
-    response = await fetchWithTimeout(endpoint, {
-      method: "POST",
-      headers,
-      body: JSON.stringify(requestBody)
-    });
-    data = await response.json().catch(() => ({}));
-  }
-  if (!response.ok) {
-    providerRequestFailed(provider, response, data);
-  }
-  assertNotTruncated(provider, isMaxTokenFinishReason(data.choices?.[0]?.finish_reason));
-
-  return parseAiJson(extractChatText(data));
 }
 
-async function callAnthropicMessages({ apiKey, model, systemPrompt, userPrompt }: ProviderCallArgs): Promise<unknown> {
+async function callAnthropicMessages({ apiKey, model, systemPrompt, userPrompt, signal }: ProviderCallArgs): Promise<unknown> {
   // No `temperature` and no trailing assistant prefill: both return a 400 on the
   // current Anthropic models this app offers — `temperature` is removed on Opus
   // 4.7/4.8, and a last-assistant-turn prefill is rejected on Sonnet 4.6 and
@@ -242,15 +221,11 @@ async function callAnthropicMessages({ apiKey, model, systemPrompt, userPrompt }
       "x-api-key": apiKey,
       "anthropic-version": "2023-06-01"
     },
-    body: JSON.stringify({
-      model,
-      max_tokens: OUTPUT_TOKEN_LIMIT,
-      system: systemPrompt,
-      messages: [{ role: "user", content: userPrompt }]
-    })
+    body: JSON.stringify(buildAnthropicMessagesBody({ model, systemPrompt, userPrompt })),
+    signal
   });
 
-  const data: any = await response.json().catch(() => ({}));
+  const data: any = await readProviderJson(response);
   if (!response.ok) {
     providerRequestFailed("anthropic", response, data);
   }
@@ -259,66 +234,13 @@ async function callAnthropicMessages({ apiKey, model, systemPrompt, userPrompt }
   return parseAiJson(extractAnthropicText(data));
 }
 
-async function callGeminiGenerateContent({ apiKey, model, systemPrompt, userPrompt }: ProviderCallArgs): Promise<unknown> {
-  const safeModel = encodeURIComponent(model.replace(/^models\//, ""));
-  const requestBody: {
-    systemInstruction: { parts: { text: string }[] };
-    contents: { role: string; parts: { text: string }[] }[];
-    generationConfig: { temperature: number; responseMimeType?: string; maxOutputTokens: number };
-  } = {
-    systemInstruction: { parts: [{ text: systemPrompt }] },
-    contents: [
-      { role: "user", parts: [{ text: userPrompt }] }
-    ],
-    generationConfig: {
-      temperature: 0.2,
-      responseMimeType: "application/json",
-      maxOutputTokens: OUTPUT_TOKEN_LIMIT
-    }
-  };
-  let response = await fetchWithTimeout(`https://generativelanguage.googleapis.com/v1beta/models/${safeModel}:generateContent`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-goog-api-key": apiKey
-    },
-    body: JSON.stringify(requestBody)
-  });
-
-  let data: any = await response.json().catch(() => ({}));
-  if (!response.ok && jsonModeUnsupported(response, data)) {
-    console.warn("[ai] Gemini rejected native JSON mode; retrying without responseMimeType", {
-      provider: "gemini",
-      status: response.status,
-      ...providerErrorDebug(data)
-    });
-    delete requestBody.generationConfig.responseMimeType;
-    response = await fetchWithTimeout(`https://generativelanguage.googleapis.com/v1beta/models/${safeModel}:generateContent`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-goog-api-key": apiKey
-      },
-      body: JSON.stringify(requestBody)
-    });
-    data = await response.json().catch(() => ({}));
-  }
-  if (!response.ok) {
-    providerRequestFailed("gemini", response, data);
-  }
-  assertNotTruncated("gemini", isMaxTokenFinishReason(data.candidates?.[0]?.finishReason));
-
-  return parseAiJson(extractGeminiText(data));
-}
-
-async function dispatchProvider({ provider, model, reasoningEffort, apiKey, apiBaseUrl, systemPrompt, userPrompt }: ProviderCallArgs): Promise<unknown> {
-  if (provider === "claude-cli") return parseAiJson(await callClaudeCli({ model, reasoningEffort, systemPrompt, userPrompt }));
-  if (provider === "codex-cli") return parseAiJson(await callCodexCli({ model, reasoningEffort, systemPrompt, userPrompt }));
-  if (provider === "antigravity-cli") return parseAiJson(await callAntigravityCli({ model, systemPrompt, userPrompt }));
-  if (provider === "anthropic") return callAnthropicMessages({ apiKey, model, systemPrompt, userPrompt });
-  if (provider === "gemini") return callGeminiGenerateContent({ apiKey, model, systemPrompt, userPrompt });
-  if (provider === "openai") return callOpenAiResponsesWithFetch({ apiKey, model, systemPrompt, userPrompt });
-  return callOpenAiCompatibleChat({ provider, apiKey, apiBaseUrl, model, systemPrompt, userPrompt });
+async function dispatchProvider({ provider, model, reasoningEffort, apiKey, systemPrompt, userPrompt, signal }: ProviderCallArgs): Promise<unknown> {
+  if (provider === "claude-cli") return parseAiJson(await callClaudeCli({ model, reasoningEffort, systemPrompt, userPrompt, signal }));
+  if (provider === "codex-cli") return parseAiJson(await callCodexCli({ model, reasoningEffort, systemPrompt, userPrompt, signal }));
+  if (provider === "antigravity-cli") return parseAiJson(await callAntigravityCli({ model, systemPrompt, userPrompt, signal }));
+  if (provider === "anthropic") return callAnthropicMessages({ apiKey, model, systemPrompt, userPrompt, signal });
+  if (provider === "openai") return callOpenAiResponsesWithFetch({ apiKey, model, systemPrompt, userPrompt, signal });
+  throw new UserSafeAiError("Unsupported AI provider. Pick one of the configured CLI or API providers.", 400);
 }
 
 // Dispatch a built {systemPrompt, userPrompt} pair to the configured provider

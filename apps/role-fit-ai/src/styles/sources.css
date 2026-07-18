@@ -457,9 +457,9 @@ select,
   outline-offset: 2px;
 }
 
-.primary-button:active:not(:disabled),
-.secondary-button:active:not(:disabled),
-.ghost-button:active:not(:disabled) { transform: translateY(1px); }
+.primary-button:active:not(:disabled):not([aria-disabled="true"]),
+.secondary-button:active:not(:disabled):not([aria-disabled="true"]),
+.ghost-button:active:not(:disabled):not([aria-disabled="true"]) { transform: translateY(1px); }
 
 .primary-button {
   width: 100%;
@@ -485,7 +485,7 @@ select,
   font-size: 0.8rem;
 }
 
-.primary-button:hover:not(:disabled) {
+.primary-button:hover:not(:disabled):not([aria-disabled="true"]) {
   background: var(--accent-deep);
   box-shadow: var(--shadow-inset), 0 6px 16px var(--accent-glow);
 }
@@ -500,12 +500,27 @@ select,
   cursor: not-allowed;
 }
 
+.primary-button[aria-disabled="true"] {
+  color: var(--ink-faint);
+  background: var(--card-soft);
+  border-color: var(--hairline-soft);
+  box-shadow: none;
+  opacity: 0.66;
+}
+
 .secondary-button:disabled,
 .ghost-button:disabled {
   color: var(--ink-faint);
   border-color: var(--hairline-soft);
   background: transparent;
   cursor: not-allowed;
+}
+
+.secondary-button[aria-disabled="true"],
+.ghost-button[aria-disabled="true"] {
+  opacity: 0.48;
+  cursor: not-allowed;
+  box-shadow: none;
 }
 
 .secondary-button:disabled svg,
@@ -524,7 +539,7 @@ select,
 
 .secondary-button.is-compact { min-height: 26px; padding: 0 var(--s2); font-size: 0.74rem; }
 
-.secondary-button:hover:not(:disabled) {
+.secondary-button:hover:not(:disabled):not([aria-disabled="true"]) {
   border-color: var(--accent);
   color: var(--accent-deep);
   background: var(--accent-soft);
@@ -551,7 +566,7 @@ select,
   justify-content: center;
 }
 
-.ghost-button:hover:not(:disabled) {
+.ghost-button:hover:not(:disabled):not([aria-disabled="true"]) {
   color: var(--ink-strong);
   background: var(--card-soft);
   border-color: var(--hairline);
@@ -649,9 +664,8 @@ select,
   padding-bottom: var(--s3);
 }
 
-/* "Copy from" control on each section's title line: copies one of the other two
-   stages' settings into this one. Separate outlined pills, compact so they fit
-   beside the title. */
+/* One compact copy control per stage. Keeping it as a select avoids presenting
+   both source stages as equally prominent actions in every collapsed header. */
 .stage-copy {
   display: flex;
   align-items: center;
@@ -664,27 +678,28 @@ select,
   color: var(--ink-faint);
 }
 
-.segmented {
-  display: inline-flex;
-  gap: var(--s1);
-}
-
-.segmented__btn {
-  padding: 3px 10px;
+.stage-copy__select {
+  width: 82px;
+  height: 27px;
+  padding: 0 22px 0 8px;
   border: 1px solid var(--hairline);
   border-radius: var(--r-md);
   background: var(--card);
   font: inherit;
-  font-size: 0.72rem;
+  font-size: 0.68rem;
   color: var(--ink-muted);
   cursor: pointer;
-  transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
 }
 
-.segmented__btn:hover {
+.stage-copy__select:hover {
   border-color: var(--hairline-strong);
   background: var(--paper-deep);
   color: var(--ink);
+}
+
+.stage-copy__select:focus-visible {
+  outline: 2px solid var(--accent-glow);
+  outline-offset: 1px;
 }
 
 /* Bordered card holding one stage's provider fields, set off from the section
@@ -718,6 +733,13 @@ select,
   min-width: 0;
 }
 
+.provider-card__auth-note {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 0.7rem;
+  line-height: 1.45;
+}
+
 /* Keep the three selects on one baseline even when a label wraps to two lines
    (the narrow "Reasoning effort" column): the label row flexes, the control
    pins to the bottom of the equal-height cells. */
@@ -748,331 +770,9 @@ select,
   text-overflow: ellipsis;
 }
 
-
-/* -------- Format menu (resume typography controls) -------- */
-
-.format-menu .nav-menu__popover {
-  width: min(316px, 92vw);
-  max-height: min(88vh, 720px);
-  padding: var(--s3);
-  gap: var(--s2);
-}
-
-/* Style menu carries chip groups; width is tuned so the widest row (the three
-   heading-case chips) fits on a single line without wrapping. */
-.style-menu .nav-menu__popover {
-  width: min(332px, 92vw);
-  max-height: min(88vh, 720px);
-  padding: var(--s3);
-  gap: var(--s2);
-}
-
 /* AI menu is a wider panel so each stage's Provider / Model / effort row fits on
    one line; sections are divided by the .menu-section hairline. */
 .ai-menu .nav-menu__popover {
   width: min(380px, 94vw);
   max-height: min(86vh, 720px);
-}
-
-/* In the Format menu the first .format-style-group sat below the sliders and
-   wanted a divider; as the Style menu's first group it has nothing above it, so
-   drop the leading rule/padding. */
-.style-menu .format-slider-groups .format-style-group:first-child {
-  margin-top: 0;
-  padding-top: 0;
-  border-top: 0;
-}
-
-/* Style menu foot: a single full-width "Jake's defaults" action. */
-.style-menu__foot {
-  padding-top: var(--s2);
-  border-top: 1px solid var(--hairline-soft);
-}
-
-.style-menu__foot .secondary-button {
-  width: 100%;
-}
-
-/* Preset picker — one connected segmented control. */
-.format-presets {
-  display: flex;
-  gap: 2px;
-  padding: 3px;
-  border: 1px solid var(--hairline);
-  border-radius: var(--r-pill);
-  background: var(--card-soft);
-}
-
-.format-preset {
-  flex: 1 1 0;
-  appearance: none;
-  border: 0;
-  border-radius: var(--r-pill);
-  padding: 5px 8px;
-  background: transparent;
-  color: var(--ink-muted);
-  font-family: var(--font-ui);
-  font-size: 0.72rem;
-  font-weight: 600;
-  line-height: 1;
-  cursor: pointer;
-  transition: color 0.12s var(--ease), background-color 0.12s var(--ease), box-shadow 0.12s var(--ease);
-}
-
-.format-preset:hover:not(:disabled):not(.is-active) {
-  color: var(--ink);
-}
-
-.format-preset.is-active {
-  color: var(--accent-deep);
-  background: var(--card-elev);
-  box-shadow: var(--shadow-rest);
-}
-
-.format-preset:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
-
-.format-preset:focus-visible {
-  outline: 2px solid var(--accent-glow);
-  outline-offset: 1px;
-}
-
-/* Vertical stack of labelled slider groups. */
-.format-slider-groups {
-  display: grid;
-  gap: var(--s3);
-}
-
-.format-slider-group {
-  display: grid;
-  gap: var(--s2);
-}
-
-.format-slider-group__label {
-  display: flex;
-  align-items: center;
-  gap: var(--s2);
-  font-size: 0.6rem;
-  font-weight: 700;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
-  color: var(--ink-faint);
-}
-
-/* Hairline trailing the group caption. */
-.format-slider-group__label::after {
-  content: "";
-  flex: 1;
-  height: 1px;
-  background: var(--hairline-soft);
-}
-
-/* Single-column control list: label · full-width slider · value per row. */
-.format-rows {
-  display: grid;
-  gap: 9px;
-}
-
-.format-row {
-  display: grid;
-  grid-template-columns: 104px 1fr 40px;
-  align-items: center;
-  gap: var(--s2);
-  margin-top: 0;
-}
-
-.format-row__label {
-  font-size: 0.74rem;
-  color: var(--ink-muted);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.format-row__value {
-  font-family: var(--font-mono);
-  font-size: 0.66rem;
-  color: var(--ink-faint);
-  text-align: right;
-}
-
-/* Custom range slider — thin filled track + ringed thumb, cross-browser.
-   The fill % is fed in as the inline --fill var from React. */
-.format-row__slider {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 100%;
-  height: 16px;
-  margin: 0;
-  background: linear-gradient(
-      to right,
-      var(--accent) 0 var(--fill, 50%),
-      var(--hairline) var(--fill, 50%) 100%
-    )
-    no-repeat center / 100% 4px;
-  border-radius: 999px;
-  cursor: pointer;
-}
-
-.format-row__slider::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  background: var(--card-elev);
-  border: 2px solid var(--accent);
-  box-shadow: 0 1px 2px oklch(0.2 0.01 160 / 0.25);
-  cursor: grab;
-  transition: transform 0.1s var(--ease);
-}
-
-.format-row__slider:active::-webkit-slider-thumb {
-  transform: scale(1.12);
-}
-
-.format-row__slider::-moz-range-track {
-  height: 4px;
-  border-radius: 999px;
-  background: transparent;
-}
-
-.format-row__slider::-moz-range-thumb {
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  background: var(--card-elev);
-  border: 2px solid var(--accent);
-  box-shadow: 0 1px 2px oklch(0.2 0.01 160 / 0.25);
-  cursor: grab;
-}
-
-.format-row__slider:focus-visible {
-  outline: none;
-}
-
-.format-row__slider:focus-visible::-webkit-slider-thumb {
-  box-shadow: 0 0 0 3px var(--accent-glow);
-}
-
-.format-row__slider:focus-visible::-moz-range-thumb {
-  box-shadow: 0 0 0 3px var(--accent-glow);
-}
-
-/* The Style block is a different KIND of control (emphasis, not spacing), so it
-   gets a full-width rule + extra breathing room to set it apart from the spacing
-   list above — instead of the lighter caption hairline the spacing groups use. */
-.format-style-group {
-  margin-top: var(--s1);
-  padding-top: var(--s3);
-  border-top: 1px solid var(--hairline);
-}
-
-.format-style-group .format-slider-group__label::after {
-  display: none;
-}
-
-/* Emphasis controls: each emphasis kind (Bold / Italic) owns a row of toggle
-   chips for the parts it applies to — semantically grouped instead of five
-   look-alike switches. The kind label previews its own style (bold / italic). */
-.format-emphasis {
-  display: grid;
-  gap: var(--s2);
-}
-
-.format-emphasis__row {
-  display: grid;
-  grid-template-columns: 46px 1fr;
-  align-items: center;
-  gap: var(--s2);
-}
-
-.format-emphasis__kind {
-  font-size: 0.72rem;
-  color: var(--ink-muted);
-}
-
-.format-emphasis__chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.format-chip {
-  appearance: none;
-  border: 1px solid var(--hairline);
-  border-radius: var(--r-pill);
-  padding: 4px 11px;
-  background: var(--card-soft);
-  color: var(--ink-muted);
-  font-family: var(--font-ui);
-  font-size: 0.72rem;
-  font-weight: 600;
-  line-height: 1;
-  cursor: pointer;
-  transition: color 0.12s var(--ease), background-color 0.12s var(--ease), border-color 0.12s var(--ease);
-}
-
-.format-chip:hover:not(.is-on):not(:disabled) {
-  border-color: var(--hairline-strong);
-  color: var(--ink);
-}
-
-/* e.g. Bold headings has no effect under small caps (no bold small-caps face). */
-.format-chip:disabled {
-  cursor: default;
-  opacity: 0.45;
-  color: var(--ink-faint);
-}
-
-.format-chip.is-on {
-  background: var(--accent-soft);
-  border-color: var(--accent-veil);
-  color: var(--accent-deep);
-}
-
-.format-chip:focus-visible {
-  outline: 2px solid var(--accent-glow);
-  outline-offset: 1px;
-}
-
-/* Free-form contact divider (up to 2 chars), styled to sit beside the chips. */
-.format-divider-input {
-  width: 3.2ch;
-  border: 1px solid var(--hairline);
-  border-radius: var(--r-pill);
-  padding: 4px 8px;
-  background: var(--card-soft);
-  color: var(--ink);
-  font-family: var(--font-ui);
-  font-size: 0.72rem;
-  font-weight: 600;
-  line-height: 1;
-  text-align: center;
-  transition: border-color 0.12s var(--ease);
-}
-
-.format-divider-input:hover {
-  border-color: var(--hairline-strong);
-}
-
-.format-divider-input:focus-visible {
-  outline: 2px solid var(--accent-glow);
-  outline-offset: 1px;
-  border-color: var(--accent-veil);
-}
-
-.format-menu__foot {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--s1);
-  padding-top: var(--s2);
-  border-top: 1px solid var(--hairline-soft);
-}
-
-.format-menu__foot .secondary-button {
-  justify-content: center;
-  min-height: 28px;
 }

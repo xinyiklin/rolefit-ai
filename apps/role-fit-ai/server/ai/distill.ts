@@ -12,12 +12,19 @@
 // reply never breaks distillation.
 
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { readBody, sendJson, FetchTimeoutError } from "../http.ts";
+import {
+  FetchTimeoutError,
+  isRequestAborted,
+  readBody,
+  requestAbortSignal,
+  sendJson
+} from "../http.ts";
 import { UserSafeAiError, safeConfigErrorMessage } from "./errors.ts";
 import { providerLabel, resolveProviderRequest } from "./providers.ts";
 import { callConfiguredProvider } from "./clients.ts";
 import { clipForPrompt, fenceUntrusted, inputFirewallRule } from "./prompts.ts";
 import { AUTH_STEMS, mentionsAuthStem } from "./eligibilityLexicon.ts";
+import { findUngroundedCuratedClaimTerm } from "./grounding.ts";
 
 // Optional dispatch-attempt collector: callConfiguredProvider bumps `attempts`.
 type AttemptStats = { attempts?: number };
@@ -154,6 +161,12 @@ function distinctiveTokenKeys(value: unknown, stopwords: Set<string>): string[] 
 // invented technology claim (TS/SCI -> TypeScript, net-zero -> .NET, etc.).
 function atomicTechClaimsGrounded(claim: unknown, sourceText: string): boolean {
   const text = String(claim ?? "");
+  // Generic token overlap is not enough for concrete tools: a mostly copied
+  // duty could smuggle one invented technology (for example, adding Kubernetes
+  // to an otherwise grounded API sentence) and still clear the 60% list-item
+  // threshold below. Reuse the central curated technology lexicons so every
+  // known concept/tool/short token in extraction prose must occur in the source.
+  if (findUngroundedCuratedClaimTerm(text, sourceText)) return false;
   const claimsTypeScript = /\bTypeScript\b/i.test(text)
     || /(?:^|[^A-Za-z0-9/])TS(?!\s*\/\s*SCI\b|[A-Za-z0-9])/i.test(text);
   if (claimsTypeScript && !groundedTech("ts", sourceText)) return false;
@@ -409,8 +422,8 @@ export function sanitizeDistill(parsed: unknown, sourceText: string) {
     requiredQualifications: groundedList(obj.requiredQualifications, { maxItems: 12 }, sourceTokens, sourceText),
     preferredQualifications: groundedList(obj.preferredQualifications, { maxItems: 12 }, sourceTokens, sourceText),
     techKeywords,
-    // senioritySignals/domainSignals feed the local keyword score (~40%) and the
-    // review model, so they get the same source-grounding as the content lists —
+    // senioritySignals/domainSignals feed AI Review and the visible job brief,
+    // so they get the same source-grounding as the content lists —
     // an invented "fintech" domain or "staff-level" seniority signal is dropped.
     senioritySignals: groundedList(obj.senioritySignals, { maxItems: 8, maxLen: 60 }, sourceTokens, sourceText),
     domainSignals: groundedList(obj.domainSignals, { maxItems: 8, maxLen: 40 }, sourceTokens, sourceText)
@@ -423,14 +436,22 @@ export function sanitizeDistill(parsed: unknown, sourceText: string) {
 // also distill through that route, client-side from the receiving tab — the
 // server-side import pass only resolves the raw page text). Throws on
 // no-provider / timeout / unreadable output so callers can decide how to degrade.
-// apiKey / apiBaseUrl are intentionally NOT returned — the route echoes only the
+// apiKey is intentionally NOT returned — the route echoes only the
 // non-secret resolved config.
-export async function distillToFields({ jobText, body = {} }: { jobText: string; body?: Record<string, unknown> }) {
-  const { provider, apiKey, apiBaseUrl, model, reasoningEffort } = resolveProviderRequest(body);
+export async function distillToFields({
+  jobText,
+  body = {},
+  signal
+}: {
+  jobText: string;
+  body?: Record<string, unknown>;
+  signal?: AbortSignal;
+}) {
+  const { provider, apiKey, model, reasoningEffort } = resolveProviderRequest(body);
   const { systemPrompt, userPrompt } = buildDistillPrompts({ jobText });
   const stats: AttemptStats = {};
   const parsed = await callConfiguredProvider(
-    { provider, model, reasoningEffort, apiKey, apiBaseUrl, systemPrompt, userPrompt },
+    { provider, model, reasoningEffort, apiKey, systemPrompt, userPrompt, signal },
     stats
   );
   return {
@@ -449,6 +470,7 @@ export async function handleDistill(req: IncomingMessage, res: ServerResponse): 
   }
   // Actual default validation happens inside the guarded resolver below.
   let provider = "claude-cli";
+  const request = requestAbortSignal(req, res);
   try {
     const body = JSON.parse(await readBody(req, 2_000_000));
     const jobText = String(body.text ?? "");
@@ -458,8 +480,8 @@ export async function handleDistill(req: IncomingMessage, res: ServerResponse): 
     }
     // Resolve once for the error label / key validation, then distill.
     provider = resolveProviderRequest(body).provider;
-    const result = await distillToFields({ jobText, body });
-    // Echo the RESOLVED provider/model/reasoningEffort (never the apiKey/apiBaseUrl)
+    const result = await distillToFields({ jobText, body, signal: request.signal });
+    // Echo the RESOLVED provider/model/reasoningEffort (never the API key)
     // plus the dispatch attempt count so the client can record which model actually
     // produced the brief.
     sendJson(res, 200, {
@@ -471,11 +493,12 @@ export async function handleDistill(req: IncomingMessage, res: ServerResponse): 
       attempts: result.attempts
     });
   } catch (error) {
+    if (isRequestAborted(error, req, res)) return;
     if (error instanceof UserSafeAiError) {
       sendJson(res, error.status, { error: error.message });
       return;
     }
-    if (error instanceof FetchTimeoutError || (error instanceof Error && /timed out after/i.test(error.message))) {
+    if (error instanceof FetchTimeoutError || (error instanceof Error && /timed out|timeout/i.test(error.message))) {
       sendJson(res, 504, { error: `${providerLabel(provider)} timed out. Try again or switch providers.` });
       return;
     }
@@ -489,5 +512,7 @@ export async function handleDistill(req: IncomingMessage, res: ServerResponse): 
       return;
     }
     sendJson(res, 500, { error: "Could not distill the job posting with AI." });
+  } finally {
+    request.dispose();
   }
 }

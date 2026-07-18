@@ -1,24 +1,31 @@
-/* Resume workspace layout. The editable page and its structural chrome live
-   in resume-document.css beside the owned typeset renderer. */
+/* Resume workspace layout. Typeset's document row and formatting row live
+   inside this tab, so they start at the studio-main edge instead of spanning
+   over RoleFit's navigation rail. */
 
-.studio-card__head-meta {
-  color: var(--ink-soft);
-  font-weight: 400;
-  font-size: 0.82rem;
-  font-family: var(--font-ui);
-  vertical-align: baseline;
+.resume-tab__toolbar {
+  position: relative;
+  top: auto;
+  flex: 0 0 auto;
+  z-index: 20;
 }
 
-@media (max-width: 820px) {
-  .studio-body[data-tab="resume"] .studio-card__head {
-    flex-wrap: wrap;
-    align-items: flex-start;
-  }
+.resume-tab__toolbar .top-toolbar__primary-row {
+  height: var(--toolbar-row-height);
+  min-height: var(--toolbar-row-height);
+  padding-block: 6px;
+}
 
-  .studio-body[data-tab="resume"] .studio-card__tools {
-    flex-wrap: wrap;
-    justify-content: flex-start;
-  }
+.resume-tab__toolbar .studio-card__tools {
+  flex: 0 0 auto;
+  flex-wrap: nowrap;
+}
+
+/* RoleFit's export menu keeps its text label without the leading icon. The
+   label-first toolbar disclosure at this container width now lives in
+   packages/editor/src/styles/toolbar.css, scoped by the host seam attribute
+   [data-toolbar-labels="text"] set on this tab's toolbar header. */
+.resume-tab__toolbar .export-menu__trigger > svg:first-child {
+  display: none;
 }
 
 /* Edit-and-check split: the owned page on the left, then the actionable

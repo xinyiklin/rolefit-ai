@@ -8,8 +8,9 @@
 // close over the same workspace directory without a factory.
 
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { mkdir, readFile, readdir, rename, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
 import { extname, join } from "node:path";
+import { parseResumeFile } from "@typeset/engine/lib/resumeFile.ts";
 import { readBody, sendJson } from "./http.ts";
 
 // A loaded base resume (or the "none found" sentinel). Optional fields carry the
@@ -32,6 +33,61 @@ const baseResumeCandidates = [
   "base-resume.csv"
 ];
 const baseResumeVariantPattern = /^base-resume(?:-[A-Za-z0-9][A-Za-z0-9_-]*)?\.resume$/;
+const MAX_BASE_RESUME_BYTES = 200_000;
+
+export class WorkspaceStorageError extends Error {
+  constructor(message = "The base-resume workspace could not be read safely. Check the workspace files and try again.") {
+    super(message);
+    this.name = "WorkspaceStorageError";
+  }
+}
+
+function isMissingFile(error: unknown): boolean {
+  return Boolean(error && typeof error === "object" && "code" in error && error.code === "ENOENT");
+}
+
+// Serialize reads with mutations as well as mutation-to-mutation cycles. A save
+// archives the current file before atomically installing its replacement; a read
+// in that short interval must not mistake the workspace for an empty fresh install.
+let workspaceQueue: Promise<unknown> = Promise.resolve();
+function withWorkspaceLock<T>(task: () => Promise<T>): Promise<T> {
+  const run = workspaceQueue.then(task);
+  workspaceQueue = run.then(() => undefined, () => undefined);
+  return run;
+}
+
+let lastTrashStampMs = 0;
+function nextTrashStamp(): string {
+  const now = Math.max(Date.now(), lastTrashStampMs + 1);
+  lastTrashStampMs = now;
+  return new Date(now).toISOString().replace(/[:.]/g, "-");
+}
+
+function validateBaseResumeText(fileName: string, data: Buffer): string {
+  if (data.byteLength > MAX_BASE_RESUME_BYTES) {
+    throw new WorkspaceStorageError("The base resume is too large to read safely.");
+  }
+  const text = data.toString("utf8");
+  if (text.trim().length < 80) throw new WorkspaceStorageError("The base resume is empty or too short to load.");
+  if (extname(fileName).toLowerCase() === ".resume") {
+    try {
+      parseResumeFile(text);
+    } catch {
+      throw new WorkspaceStorageError("The saved .resume file is invalid. Restore a valid version from history before continuing.");
+    }
+  }
+  return text;
+}
+
+async function atomicWriteWorkspaceFile(filePath: string, data: string | Buffer): Promise<void> {
+  const temporaryPath = `${filePath}.${process.pid}.${Date.now()}.tmp`;
+  try {
+    await writeFile(temporaryPath, data, { mode: 0o600 });
+    await rename(temporaryPath, filePath);
+  } finally {
+    await rm(temporaryPath, { force: true }).catch(() => undefined);
+  }
+}
 
 export async function ensureJobWorkspace(): Promise<void> {
   await mkdir(jobWorkspaceDir, { recursive: true });
@@ -45,8 +101,9 @@ async function readWorkspaceFiles(): Promise<string[]> {
       .map((entry) => entry.name)
       .filter((name) => name !== ".DS_Store")
       .sort((a, b) => a.localeCompare(b));
-  } catch {
-    return [];
+  } catch (error) {
+    if (isMissingFile(error)) return [];
+    throw new WorkspaceStorageError();
   }
 }
 
@@ -92,10 +149,9 @@ export async function readWorkspaceBaseResume(requestedFileName?: string): Promi
     const filePath = join(jobWorkspaceDir, fileName);
     try {
       const data = await readFile(filePath);
-      // Cap generously: a .resume file is raw JSON the client must JSON.parse, so
-      // truncation would corrupt it — 200k covers a full structured resume.
-      const text = data.toString("utf8").slice(0, 200_000);
-      if (text.trim().length < 80) continue;
+      // Never truncate a structured file: validate the complete bytes before
+      // exposing it to the client, which otherwise receives corrupt JSON.
+      const text = validateBaseResumeText(fileName, data);
       return {
         exists: true,
         fileName,
@@ -103,10 +159,15 @@ export async function readWorkspaceBaseResume(requestedFileName?: string): Promi
         kind: extname(fileName).toLowerCase().replace(".", "") || "text",
         text
       };
-    } catch {
-      // Try the next supported base-resume file.
+    } catch (error) {
+      if (isMissingFile(error)) continue;
+      if (error instanceof WorkspaceStorageError) throw error;
+      throw new WorkspaceStorageError();
     }
   }
+
+  // An explicit version selection never falls through to the starter template.
+  if (requestedFileName) return { exists: false };
 
   // No workspace file found — fall back to the bundled starter .resume so the
   // editor is never empty on a fresh install.
@@ -142,7 +203,7 @@ async function readBaseResumeOptions(): Promise<{ fileName: string; label: strin
 async function clearBaseResumeFiles(): Promise<void> {
   const trashDir = join(jobWorkspaceDir, ".trash");
   await mkdir(trashDir, { recursive: true });
-  const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+  const stamp = nextTrashStamp();
   await Promise.all(
     baseResumeCandidates.map(async (name) => {
       try {
@@ -158,7 +219,7 @@ async function clearBaseResumeFiles(): Promise<void> {
 async function trashBaseFile(name: string): Promise<void> {
   const trashDir = join(jobWorkspaceDir, ".trash");
   await mkdir(trashDir, { recursive: true });
-  const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+  const stamp = nextTrashStamp();
   try {
     await rename(join(jobWorkspaceDir, name), join(trashDir, `${stamp}__${name}`));
   } catch (error) {
@@ -184,8 +245,9 @@ async function readBaseResumeHistory(perVariant = 3): Promise<HistoryGroup[]> {
   let entries: string[];
   try {
     entries = await readdir(trashDir);
-  } catch {
-    return [];
+  } catch (error) {
+    if (isMissingFile(error)) return [];
+    throw new WorkspaceStorageError();
   }
   // Matches: 2026-06-10T16-30-45-123Z__base-resume[-variant].(resume|txt|md|csv)
   const baseResumePattern = /^(.+?)__(base-resume(?:-[A-Za-z0-9][A-Za-z0-9_-]*)?)\.(resume|txt|md|csv)$/;
@@ -227,6 +289,16 @@ async function readBaseResumeHistory(perVariant = 3): Promise<HistoryGroup[]> {
   });
 }
 
+async function workspaceSnapshot(baseResume?: BaseResumeResult) {
+  return {
+    path: jobWorkspaceDir,
+    baseResume: baseResume ?? await readWorkspaceBaseResume(),
+    baseResumeOptions: await readBaseResumeOptions(),
+    baseResumeHistory: await readBaseResumeHistory(),
+    files: await readWorkspaceFiles()
+  };
+}
+
 export async function handleWorkspace(req: IncomingMessage, res: ServerResponse): Promise<void> {
   if (req.method !== "GET") {
     sendJson(res, 405, { error: "Use GET." });
@@ -234,16 +306,15 @@ export async function handleWorkspace(req: IncomingMessage, res: ServerResponse)
   }
 
   try {
-    await ensureJobWorkspace();
-    sendJson(res, 200, {
-      path: jobWorkspaceDir,
-      baseResume: await readWorkspaceBaseResume(),
-      baseResumeOptions: await readBaseResumeOptions(),
-      baseResumeHistory: await readBaseResumeHistory(),
-      files: await readWorkspaceFiles()
+    const snapshot = await withWorkspaceLock(async () => {
+      await ensureJobWorkspace();
+      return workspaceSnapshot();
     });
+    sendJson(res, 200, snapshot);
   } catch (error) {
-    sendJson(res, 500, { error: error instanceof Error ? error.message : "Workspace check failed." });
+    sendJson(res, 500, {
+      error: error instanceof WorkspaceStorageError ? error.message : "Workspace check failed."
+    });
   }
 }
 
@@ -254,41 +325,43 @@ export async function handleSelectBaseResume(req: IncomingMessage, res: ServerRe
   }
 
   try {
-    await ensureJobWorkspace();
     const body = JSON.parse(await readBody(req, 2_000));
     const fileName = assertBaseResumeFileName(body.fileName);
-    const baseResume = await readWorkspaceBaseResume(fileName);
-    if (!baseResume.exists) {
+    const snapshot = await withWorkspaceLock(async () => {
+      await ensureJobWorkspace();
+      const baseResume = await readWorkspaceBaseResume(fileName);
+      return baseResume.exists ? workspaceSnapshot(baseResume) : null;
+    });
+    if (!snapshot) {
       sendJson(res, 404, { error: "Base resume version not found." });
       return;
     }
-    sendJson(res, 200, {
-      path: jobWorkspaceDir,
-      baseResume,
-      baseResumeOptions: await readBaseResumeOptions(),
-      baseResumeHistory: await readBaseResumeHistory(),
-      files: await readWorkspaceFiles()
-    });
+    sendJson(res, 200, snapshot);
   } catch (error) {
-    sendJson(res, 400, { error: error instanceof Error ? error.message : "Base resume load failed." });
+    sendJson(res, error instanceof WorkspaceStorageError ? 500 : 400, {
+      error: error instanceof WorkspaceStorageError
+        ? error.message
+        : error instanceof Error ? error.message : "Base resume load failed."
+    });
   }
 }
 
 export async function handleWorkspaceBaseResume(req: IncomingMessage, res: ServerResponse): Promise<void> {
   if (req.method === "DELETE") {
     try {
-      await ensureJobWorkspace();
-      await clearBaseResumeFiles();
+      const snapshot = await withWorkspaceLock(async () => {
+        await ensureJobWorkspace();
+        await clearBaseResumeFiles();
+        return workspaceSnapshot({ exists: false });
+      });
       sendJson(res, 200, {
         removed: true,
-        path: jobWorkspaceDir,
-        baseResume: { exists: false },
-        baseResumeOptions: await readBaseResumeOptions(),
-        baseResumeHistory: await readBaseResumeHistory(),
-        files: await readWorkspaceFiles()
+        ...snapshot
       });
     } catch (error) {
-      sendJson(res, 500, { error: error instanceof Error ? error.message : "Base resume removal failed." });
+      sendJson(res, 500, {
+        error: error instanceof WorkspaceStorageError ? error.message : "Base resume removal failed."
+      });
     }
     return;
   }
@@ -299,7 +372,6 @@ export async function handleWorkspaceBaseResume(req: IncomingMessage, res: Serve
   }
 
   try {
-    await ensureJobWorkspace();
     const body = JSON.parse(await readBody(req));
     const fileName = String(body.fileName ?? "").trim();
     const extension = extname(fileName).toLowerCase();
@@ -309,16 +381,15 @@ export async function handleWorkspaceBaseResume(req: IncomingMessage, res: Serve
       return;
     }
 
-    // A .resume envelope is raw JSON the client must JSON.parse, so truncating it
-    // mid-document would write a corrupt file — reject oversize outright. Plain
-    // text (.txt/.md/.csv) can be capped by slicing without breaking its format.
+    // Never silently slice a user's resume. Reject an oversized payload before
+    // archiving the current version, and validate strict .resume JSON likewise.
     const isResume = extension === ".resume";
     const rawText = String(body.text ?? "");
-    if (isResume && rawText.length > 200_000) {
+    if (Buffer.byteLength(rawText, "utf8") > MAX_BASE_RESUME_BYTES) {
       sendJson(res, 413, { error: "Resume file is too large to save." });
       return;
     }
-    const text = isResume ? rawText : rawText.slice(0, 200_000);
+    const text = rawText;
     if (text.trim().length < 80) {
       sendJson(res, 400, { error: "Base resume text is too short to save." });
       return;
@@ -329,29 +400,38 @@ export async function handleWorkspaceBaseResume(req: IncomingMessage, res: Serve
     let targetName = "base-resume.txt";
     if (isResume) {
       targetName = baseResumeVariantPattern.test(fileName) ? assertBaseResumeFileName(fileName) : "base-resume.resume";
+      try {
+        parseResumeFile(text);
+      } catch {
+        sendJson(res, 400, { error: "Save a valid Typeset .resume file." });
+        return;
+      }
     }
-    if (targetName === "base-resume.resume" || !isResume) {
-      await clearBaseResumeFiles();
-    } else {
-      // Named variant: back it up before overwriting so it appears in version history.
-      await trashBaseFile(targetName);
-    }
-    await writeFile(join(jobWorkspaceDir, targetName), text, "utf8");
-    sendJson(res, 200, {
-      saved: true,
-      path: jobWorkspaceDir,
-      baseResume: {
+    const snapshot = await withWorkspaceLock(async () => {
+      await ensureJobWorkspace();
+      if (targetName === "base-resume.resume" || !isResume) {
+        await clearBaseResumeFiles();
+      } else {
+        // Named variant: back it up before overwriting so it appears in version history.
+        await trashBaseFile(targetName);
+      }
+      await atomicWriteWorkspaceFile(join(jobWorkspaceDir, targetName), text);
+      return workspaceSnapshot({
         exists: true,
         fileName: targetName,
+        label: baseResumeLabel(targetName),
         kind: isResume ? "resume" : "txt",
         text
-      },
-      baseResumeOptions: await readBaseResumeOptions(),
-      baseResumeHistory: await readBaseResumeHistory(),
-      files: await readWorkspaceFiles()
+      });
+    });
+    sendJson(res, 200, {
+      saved: true,
+      ...snapshot
     });
   } catch (error) {
-    sendJson(res, 400, { error: error instanceof Error ? error.message : "Base resume save failed." });
+    sendJson(res, error instanceof WorkspaceStorageError ? 500 : 400, {
+      error: error instanceof WorkspaceStorageError ? error.message : "Base resume save failed."
+    });
   }
 }
 
@@ -361,7 +441,6 @@ export async function handleRestoreBaseResume(req: IncomingMessage, res: ServerR
     return;
   }
   try {
-    await ensureJobWorkspace();
     const body = JSON.parse(await readBody(req, 1_000));
     const key = String(body.key ?? "");
     if (!key || key.includes("/") || key.includes("..")) {
@@ -380,25 +459,28 @@ export async function handleRestoreBaseResume(req: IncomingMessage, res: ServerR
     const targetName = keyMatch[1];
     const isNamedVariant = baseResumeVariantPattern.test(targetName) && targetName !== "base-resume.resume";
 
-    // Read the archived file, back up the current version, write the restored version.
-    const data = await readFile(sourcePath);
-    if (isNamedVariant) {
-      await trashBaseFile(targetName);
-    } else {
-      await clearBaseResumeFiles();
-    }
-    await writeFile(join(jobWorkspaceDir, targetName), data);
+    const snapshot = await withWorkspaceLock(async () => {
+      await ensureJobWorkspace();
+      // Validate the archived bytes before moving the current good version.
+      const data = await readFile(sourcePath);
+      validateBaseResumeText(targetName, data);
+      if (isNamedVariant) {
+        await trashBaseFile(targetName);
+      } else {
+        await clearBaseResumeFiles();
+      }
+      await atomicWriteWorkspaceFile(join(jobWorkspaceDir, targetName), data);
+      return workspaceSnapshot(await readWorkspaceBaseResume(targetName));
+    });
 
     sendJson(res, 200, {
       restored: true,
-      path: jobWorkspaceDir,
-      baseResume: await readWorkspaceBaseResume(),
-      baseResumeOptions: await readBaseResumeOptions(),
-      baseResumeHistory: await readBaseResumeHistory(),
-      files: await readWorkspaceFiles()
+      ...snapshot
     });
   } catch (error) {
-    const msg = (error as NodeJS.ErrnoException)?.code === "ENOENT" ? "History entry not found." : error instanceof Error ? error.message : "Restore failed.";
-    sendJson(res, 400, { error: msg });
+    const msg = (error as NodeJS.ErrnoException)?.code === "ENOENT"
+      ? "History entry not found."
+      : error instanceof WorkspaceStorageError ? error.message : "Restore failed.";
+    sendJson(res, error instanceof WorkspaceStorageError ? 500 : 400, { error: msg });
   }
 }

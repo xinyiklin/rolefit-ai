@@ -122,7 +122,7 @@ Requirements:
 
 ```bash
 npm install
-npm run dev
+npm run dev:typeset
 ```
 
 Open [http://localhost:5186](http://localhost:5186). The port is fixed; if it is
@@ -132,32 +132,36 @@ Useful checks — all from the repository root:
 
 ```bash
 npm run check        # every workspace's own gate (build + evals)
-npm run build
-npm run preview
+npm run build:typeset
+npm run preview --workspace apps/typeset
 
-# focused evals are app-scoped
-npm run eval:resume-file     --workspace apps/typeset
-npm run eval:editor          --workspace apps/typeset
-npm run eval:pdf-font-parity --workspace apps/typeset
+# focused evals are owned by the shared packages
+npm run eval:resume-file     --workspace packages/engine
+npm run eval:editor          --workspace packages/editor
+npm run eval:pdf-font-parity --workspace packages/engine
 ```
 
-`npm run check` is the local and CI verification gate: it runs the TypeScript
-production build and all three deterministic evals. The focused eval commands
-are faster iteration targets for the `.resume` codec, direct-editing adapter,
-and PDF-font shaping contract respectively. `npm run preview` serves the latest
-production build on port 5186. There is no separate lint command.
+`npm run check` is the repository-wide local and CI gate: it checks both shared
+packages and both application workspaces. The focused eval commands are faster
+iteration targets for the `.resume` codec, direct-editing adapter, and PDF-font
+shaping contract respectively. The explicit workspace preview command serves
+the latest Typeset production build on port 5186. There is no separate lint
+command.
 
 ## Architecture
 
 This repository is an npm-workspaces monorepo. The root owns the lockfile,
 shared tooling, and the deployment pipeline. The reusable typesetting core lives
-in `packages/*`; `apps/typeset` is a thin standalone shell over it (and the only
-app today). The layering is `engine → editor → app`.
+in `packages/*`; `apps/typeset` is a thin standalone shell over it, while
+`apps/role-fit-ai` is a separate local-first product that consumes the same
+editor and engine. The layering is `engine → editor → apps`; the applications
+never import each other. See the [workspace architecture](../../docs/architecture.md)
+for the complete ownership contract.
 
 ```text
 package.json                       workspace root (workspaces, root scripts)
 tsconfig.base.json                 shared compiler options (each workspace extends)
-Dockerfile                         builds apps/typeset from the workspace root
+apps/typeset/Dockerfile            builds Typeset from the workspace root
 packages/engine/                   @typeset/engine — deterministic core, no editor
   src/lib/                         resume model, .resume codec, style contract,
                                      inline-mark grammar, links, typography
@@ -171,11 +175,12 @@ packages/editor/                   @typeset/editor — editing surface over the 
   src/sections/ResumePrintLayer.tsx  off-screen browser-print document
   src/hooks/                       useResumeEditor (history), useDocStyle (style/view)
   src/components/                  Modal, Popover, toolbar/ (controls + popovers)
-  src/styles/                      tokens, shell, toolbar, popovers, document, print
+  src/styles/                      shared tokens, toolbar, popovers, modal, document, print
 apps/typeset/                      the standalone Typeset site
   index.html · vite.config.ts · tsconfig.json
   PRODUCT.md · DESIGN.md           product and visual contracts
   src/main.tsx · src/App.tsx       entry + shell (file lifecycle, autosave, toolbar)
+  src/styles/app.css               standalone shell, status, file-drop, host controls
   scripts/sync-fonts.mjs           mirrors engine fonts into public/ at predev/prebuild
 ```
 
@@ -196,11 +201,13 @@ pinned, checksum-verified sources — these fonts are the source of truth, and e
 app mirrors them into its own `public/fonts/` at build time. Its header records
 the reproducible Python tooling; run it with `--check` to verify those committed
 outputs. `generate_pdf_fonts.py` beside it derives the matching OTF/TTF files
-consumed by the client-side PDF emitter. Both anchor their paths to the package
-root, so they run from any working directory. After a font-pipeline change,
-regenerate both formats and run the font-parity eval. Source Serif 4 and Source
-Sans 3 use the SIL Open Font License stored in `fonts/SourceSerif4-OFL.txt` and
-`fonts/SourceSans3-OFL.txt`. Latin Modern's GUST Font License is stored in
+consumed by the client-side PDF emitter; both generators support non-destructive
+verification through `npm run fonts:check --workspace packages/engine`. Both
+anchor their paths to the package root, so they run from any working directory.
+After a font-pipeline change, regenerate both formats and run the font-parity
+eval. Source Serif 4 and Source Sans 3 use the SIL Open Font License stored in
+`fonts/SourceSerif4-OFL.txt` and `fonts/SourceSans3-OFL.txt`. Latin Modern's
+GUST Font License is stored in
 `fonts/LatinModern-GUST-FONT-LICENSE.txt`.
 
 ## Privacy model
@@ -220,17 +227,17 @@ asset requests; it does not receive the document being edited.
 
 Typeset is deployed at [typeset.xinyiklin.com](https://typeset.xinyiklin.com).
 Because the build is a static site, any static host can serve the contents of
-`dist/`:
+`apps/typeset/dist/`:
 
 ```bash
 npm ci
-npm run build
+npm run build:typeset
 ```
 
 For self-hosting with the checked-in Docker image:
 
 ```bash
-docker build -t typeset .
+docker build -f apps/typeset/Dockerfile -t typeset .
 docker run --rm -p 127.0.0.1:5186:8080 typeset
 ```
 
@@ -247,15 +254,17 @@ resume.example.com {
 }
 ```
 
-The GitHub workflow runs `npm run check` for pull requests. On configured pushes
-to `main`, it rebuilds and restarts the same static Nginx container on the EC2
-host that serves [typeset.xinyiklin.com](https://typeset.xinyiklin.com).
+The GitHub workflow checks the engine, editor, and Typeset workspaces for
+matching pull requests. On configured pushes to `main`, it rebuilds and
+restarts the same static Nginx container on the EC2 host that serves
+[typeset.xinyiklin.com](https://typeset.xinyiklin.com).
 
 ## Viewport support
 
-Typeset targets modern desktop and tablet browsers. A focused small-screen
-gate is preferable to degrading the document editor into a compromised phone UI.
+Typeset targets modern desktop and tablet browsers, but it does not block
+smaller viewports. The editor auto-fits at compact widths and remains available
+inside its scrollable workspace; file actions are hidden at 400px and below.
 
 ## License
 
-[MIT](LICENSE) © 2026 Xinyi Lin
+[MIT](../../LICENSE) © 2026 Xinyi Lin

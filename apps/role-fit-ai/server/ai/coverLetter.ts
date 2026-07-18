@@ -6,7 +6,7 @@
 // is blanked so callers can surface generation failure and offer Retry.
 
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { FetchTimeoutError, readBody, sendJson } from "../http.ts";
+import { FetchTimeoutError, isRequestAborted, readBody, requestAbortSignal, sendJson } from "../http.ts";
 import { UserSafeAiError, safeConfigErrorMessage } from "./errors.ts";
 import { resolveProviderRequest } from "./providers.ts";
 import {
@@ -17,6 +17,7 @@ import {
 } from "./prompts.ts";
 import { callConfiguredProvider } from "./clients.ts";
 import { proseHasUngroundedTerm } from "./grounding.ts";
+import { hasUngroundedNumericClaim } from "./sanitize.ts";
 
 // Upper bound on a returned cover letter (~3 paragraphs / 180-280 words is ~2k
 // chars; this just caps a pathological provider response, matching the per-field
@@ -33,11 +34,11 @@ type CoverLetterArgs = {
   model: string;
   reasoningEffort?: string | null;
   apiKey?: string;
-  apiBaseUrl?: string;
   jobText: string;
   resumeText: string;
   honestContext: string;
   customInstructions: string;
+  signal?: AbortSignal;
 };
 
 // Build the cover-letter prompt, call the provider, and apply the grounding
@@ -51,11 +52,11 @@ export async function generateGroundedCoverLetter({
   model,
   reasoningEffort,
   apiKey,
-  apiBaseUrl,
   jobText,
   resumeText,
   honestContext,
-  customInstructions
+  customInstructions,
+  signal
 }: CoverLetterArgs, stats?: AttemptStats): Promise<string> {
   const { systemPrompt, userPrompt } = buildCoverLetterPrompts({
     jobText: clipForPrompt(jobText, COVER_JOB_CHAR_LIMIT, "job description"),
@@ -68,13 +69,17 @@ export async function generateGroundedCoverLetter({
     model,
     reasoningEffort,
     apiKey,
-    apiBaseUrl,
     systemPrompt,
-    userPrompt
+    userPrompt,
+    signal
   }, stats);
   const letter = String((parsed as { coverLetterText?: unknown }).coverLetterText ?? "").trim().slice(0, COVER_LETTER_CHAR_LIMIT);
-  if (proseHasUngroundedTerm(letter, jobText.toLowerCase(), `${resumeText}\n${honestContext}`.toLowerCase())) {
-    console.warn("[ai] cover letter introduced an ungrounded JD skill term; returning an empty result", { provider });
+  const grounding = `${resumeText}\n${honestContext}`;
+  if (
+    proseHasUngroundedTerm(letter, jobText.toLowerCase(), grounding.toLowerCase())
+    || hasUngroundedNumericClaim(letter, grounding)
+  ) {
+    console.warn("[ai] cover letter introduced an ungrounded claim; returning an empty result", { provider });
     return "";
   }
   return letter;
@@ -86,6 +91,7 @@ export async function handleCoverLetter(req: IncomingMessage, res: ServerRespons
     return;
   }
 
+  const request = requestAbortSignal(req, res);
   try {
     const body = JSON.parse(await readBody(req, 1_000_000));
     const resumeText = String(body.resumeText ?? "").slice(0, 45_000);
@@ -103,7 +109,7 @@ export async function handleCoverLetter(req: IncomingMessage, res: ServerRespons
     }
 
     const resolved = resolveProviderRequest(body);
-    const { provider, apiKey, apiBaseUrl, model, reasoningEffort } = resolved;
+    const { provider, apiKey, model, reasoningEffort } = resolved;
 
     const coverStats: AttemptStats = {};
     const coverLetterText = await generateGroundedCoverLetter({
@@ -111,21 +117,22 @@ export async function handleCoverLetter(req: IncomingMessage, res: ServerRespons
       model,
       reasoningEffort,
       apiKey,
-      apiBaseUrl,
       jobText,
       resumeText,
       honestContext,
-      customInstructions
+      customInstructions,
+      signal: request.signal
     }, coverStats);
 
-    // Echo the resolved provider/model/reasoningEffort (never the apiKey/apiBaseUrl).
+    // Echo the resolved provider/model/reasoningEffort (never the API key).
     sendJson(res, 200, { coverLetterText, model, provider, reasoningEffort, attempts: coverStats.attempts ?? 1 });
   } catch (error) {
+    if (isRequestAborted(error, req, res)) return;
     if (error instanceof UserSafeAiError) {
       sendJson(res, error.status, { error: error.message });
       return;
     }
-    if (error instanceof FetchTimeoutError) {
+    if (error instanceof FetchTimeoutError || (error instanceof Error && /timed out|timeout/i.test(error.message))) {
       sendJson(res, 504, { error: "The AI provider timed out. Try again or switch providers." });
       return;
     }
@@ -139,5 +146,7 @@ export async function handleCoverLetter(req: IncomingMessage, res: ServerRespons
       return;
     }
     sendJson(res, 500, { error: "Could not generate a cover letter. Check AI settings and try again." });
+  } finally {
+    request.dispose();
   }
 }

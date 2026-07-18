@@ -21,20 +21,16 @@
 //
 // Reading the output:
 //   - suggestionCounts + targetJaccard: do runs converge on the same weak spots
-//   - aiTailored spread: scoring consistency (post arithmetic-bucket derivation)
+//   - aiTailored spread: reviewer scoring consistency
 //   - banned / suspectNewTokens: brochure vocabulary / possible ungrounded terms
 //     (suspect tokens are heuristic — verbs like "Hardened" are benign; any
 //     TECH-looking token here warrants opening the saved run JSON)
-//   - localBase/localTailored: deterministic keyword-engine score (built from
-//     src/resumeEngine.ts via esbuild when available; skipped otherwise)
-
-import { execSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { handlePolish } from "../polish.ts";
-import { serializeResumeData } from "../../../src/lib/resumeData.ts";
+import { serializeResumeData } from "../../../src/lib/resumeText.ts";
+import { parseResumeFile } from "@typeset/engine/lib/resumeFile.ts";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 const PROVIDER = process.env.EVAL_PROVIDER || "claude-cli";
@@ -55,25 +51,13 @@ mkdirSync(OUT_DIR, { recursive: true });
 
 const jdRaw = readFileSync(jdPath, "utf8");
 const jobText = jdPath.endsWith(".json") ? JSON.parse(jdRaw).tailoringText : jdRaw;
-// A .resume base is a { format, version, data } JSON envelope — serialize its
-// ResumeData to plain text; any other file is already plain text.
+// A .resume base is the strict shared Typeset v1 envelope. Validate and
+// serialize its document to plain text; any other file is already plain text.
 const resumeRaw = readFileSync(resumePath, "utf8");
 const resumePlain = resumePath.endsWith(".resume")
-  ? serializeResumeData(JSON.parse(resumeRaw).data)
+  ? serializeResumeData(parseResumeFile(resumeRaw).data)
   : resumeRaw;
 const label = jdPath.replace(/^.*\//, "").replace(/\.(json|txt)$/, "");
-
-// Optional deterministic scorer: bundle src/resumeEngine.ts on demand.
-let analyzeResumeText = null;
-try {
-  const bundle = join(tmpdir(), "rolefit-engine-bundle.mjs");
-  if (!existsSync(bundle)) {
-    execSync(`npx esbuild "${join(ROOT, "src/resumeEngine.ts")}" --bundle --format=esm --platform=node --outfile="${bundle}" --log-level=error`, { cwd: ROOT, stdio: "pipe" });
-  }
-  ({ analyzeResumeText } = await import(bundle));
-} catch {
-  console.log("(local-engine scoring skipped: esbuild bundle unavailable)");
-}
 
 // --- plain text -> tailorScope, mirroring the frontend defaults: tailor
 // experience/projects/skills, omit education/identity/contact ---
@@ -134,7 +118,8 @@ const baseLower = `${baseText}\n${resumePlain}`.toLowerCase();
 const mockReq = (b) => ({ method: "POST", on(e, cb) { if (e === "data") cb(Buffer.from(JSON.stringify(b))); if (e === "end") cb(); return this; } });
 const mockRes = () => ({ statusCode: null, payload: null, writeHead(s) { this.statusCode = s; return this; }, end(t) { this.payload = t; } });
 
-const BANNED = /\b(seamless(?:ly)?|robust|cutting[- ]edge|innovative|dynamic|passionate|world[- ]class|state[- ]of[- ]the[- ]art|spearheaded|revolutioniz\w*|leverag\w+ synerg\w+|powerful)\b/gi;
+// Mirrors the banned brochure/AI-tell vocabulary in prompts.ts accomplishmentStyleRules.
+const BANNED = /\b(seamless(?:ly)?|robust|cutting[- ]edge|innovative|dynamic|passionate|world[- ]class|state[- ]of[- ]the[- ]art|spearheaded|revolutioniz\w*|leverag\w+ synerg\w+|powerful|leveraged?|utilized?|showcas\w+|pivotal|intricate|in the realm of|results[- ]driven|proven track record)\b/gi;
 const TECH_TOKEN = /\b[A-Z][A-Za-z0-9.#+]{1,14}(?:\.[a-z]{2,3})?\b/g;
 const COMMON_WORDS = /^(The|And|For|With|Via|Into|From|When|While|Across|Built|Designed|Implemented|Reduced|Added|Migrated|Automated|Debugged|Hardened|Gathered|Collected|Translated|Coordinated|Supported|Worked|Led|Wrote|Tuned|Using|Per|Each|That|This|Then|Over|Under|All|Its|Their|Real|New|More|Most|One|Two|Single|Page|Data|Code|Team|User|Users|Job|Jobs|Add|Metric)$/i;
 
@@ -157,9 +142,6 @@ async function runOnce(n) {
   const banned = [...new Set((allProposed.match(BANNED) ?? []).map((w) => w.toLowerCase()))];
   const suspectNewTokens = [...new Set(allProposed.match(TECH_TOKEN) ?? [])]
     .filter((tok) => tok.length > 2 && !baseLower.includes(tok.toLowerCase()) && !COMMON_WORDS.test(tok));
-  const local = analyzeResumeText
-    ? { base: analyzeResumeText(baseText, jobText).score, tailored: analyzeResumeText(data.polishedText, jobText).score }
-    : null;
   return {
     n, secs, status: 200,
     suggestions: sugg.length,
@@ -175,10 +157,6 @@ async function runOnce(n) {
     verdict: data.strictReview?.verdict ?? null,
     gapKeywords: (data.strictReview?.gaps ?? []).map((g) => g.gap).slice(0, 8),
     riskFlagCount: (data.strictReview?.riskFlags ?? []).length,
-    localBase: local?.base.overall ?? null,
-    localTailored: local?.tailored.overall ?? null,
-    localKeywordFitBase: local?.base.keywordFit ?? null,
-    localKeywordFitTailored: local?.tailored.keywordFit ?? null,
     changeSummaryCount: (data.changeSummary ?? []).length
   };
 }
@@ -208,8 +186,7 @@ if (ok.length >= 2) {
   const bannedAny = ok.some((r) => r.banned.length);
   console.log(
     `\nConsistency: targetJaccard%=[${jac.join(",")}] suggestionCounts=[${ok.map((r) => r.suggestions).join(",")}] ` +
-    `aiTailored=[${tailored.join(",")}] spread=${spread ?? "n/a"} verdicts=[${ok.map((r) => r.verdict).join(",")}] ` +
-    `localDelta=[${ok.map((r) => r.localTailored !== null ? r.localTailored - r.localBase : "n/a").join(",")}]`
+    `aiTailored=[${tailored.join(",")}] spread=${spread ?? "n/a"} verdicts=[${ok.map((r) => r.verdict).join(",")}]`
   );
   if (bannedAny) { console.log("FAIL: banned brochure vocabulary in proposed text"); exitCode = 1; }
   if (spread !== null && spread > 10) { console.log(`WARN: aiTailored spread ${spread} > 10`); }

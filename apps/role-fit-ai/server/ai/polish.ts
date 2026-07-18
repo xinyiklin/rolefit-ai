@@ -8,7 +8,14 @@
 // types live in sibling modules under server/ai/.
 
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { FetchTimeoutError, readBody, sendJson } from "../http.ts";
+import {
+  FetchTimeoutError,
+  RequestAbortedError,
+  isRequestAborted,
+  readBody,
+  requestAbortSignal,
+  sendJson
+} from "../http.ts";
 import { UserSafeAiError, safeConfigErrorMessage } from "./errors.ts";
 import {
   providerLabel,
@@ -27,25 +34,40 @@ import { callConfiguredProvider } from "./clients.ts";
 import { proseHasUngroundedTerm } from "./grounding.ts";
 import { generateGroundedCoverLetter } from "./coverLetter.ts";
 import {
+  hasUngroundedNumericClaim,
   makeRewriteGrounder,
   makeRewriteNumericGrounder,
   missingRequiredSkillsFromStrictReview,
+  sanitizeAiFitScore,
   sanitizeMissingRequiredSkills,
   sanitizeStrictReview,
   sanitizeTailorSuggestions,
-  summarizeDroppedSuggestions,
-  tailorTargetKeys
+  summarizeDroppedSuggestions
 } from "./sanitize.ts";
-import {
-  applyGapCapsAndVerdict,
-  coverageHasEligibilityBlocker,
-  displayCoverageFromRequirements,
-  missingRequiredFromCoverage,
-  scoreFromRequirementCoverage
-} from "./scoring.ts";
 
 // Optional dispatch-attempt collector: callConfiguredProvider bumps `attempts`.
 type AttemptStats = { attempts?: number };
+
+type ReviewFailure = { message: string; status: number };
+
+/** Preserve actionable provider failures without exposing raw provider bodies. */
+export function reviewFailureFromReason(reason: unknown, provider: string): ReviewFailure {
+  if (reason instanceof UserSafeAiError) {
+    return { message: reason.message, status: reason.status };
+  }
+  if (reason instanceof FetchTimeoutError || (reason instanceof Error && /timed out|timeout/i.test(reason.message))) {
+    return {
+      message: `${providerLabel(provider)} timed out before finishing the review. Try again or switch providers.`,
+      status: 504
+    };
+  }
+  const configMessage = safeConfigErrorMessage(reason instanceof Error ? reason.message : "");
+  if (configMessage) return { message: configMessage, status: 400 };
+  return {
+    message: `${providerLabel(provider)} did not return a usable review. Try again or switch providers.`,
+    status: 502
+  };
+}
 
 // The server-normalized tailor scope (built by normalizeTailorScope from the
 // untrusted request body) and the shapes its serializer consumes.
@@ -95,7 +117,10 @@ export function groundChangeSummary(changeSummary: string[], jobText: unknown, g
   if (!changeSummary.length) return changeSummary;
   const jobLower = String(jobText ?? "").toLowerCase();
   const grounding = String(groundingText ?? "").toLowerCase();
-  return changeSummary.filter((bullet) => !proseHasUngroundedTerm(bullet, jobLower, grounding));
+  return changeSummary.filter((bullet) =>
+    !proseHasUngroundedTerm(bullet, jobLower, grounding)
+    && !hasUngroundedNumericClaim(bullet, grounding)
+  );
 }
 
 // section is untrusted request-body JSON (already `any` from JSON.parse); it is
@@ -229,6 +254,45 @@ function scopeToText(scope: NormalizedScope, suggestions: PolishSuggestion[] = [
   return lines.join("\n").trim();
 }
 
+// Compose the two AI-review contracts into the route's review outcome. AI Review
+// owns the entire fit judgment; the server only validates shape and consistency:
+//
+//   1. sanitizeStrictReview validates the review's shape, enums, and grounding.
+//   2. A review with no requirement rows OR a blank verdict reason is an empty
+//      shell — rejected so a verdict never displays without inspectable support.
+//   3. sanitizeAiFitScore validates the AI-authored score against numeric bounds
+//      and the model's own verdict band.
+//
+// A score that fails step 3 (missing, non-integer, out of range, or
+// band-inconsistent — e.g. STRONG FIT paired with a tailored 82) makes the
+// entire Review output unusable. Score, verdict, coverage, and recommendation
+// are one model-authored judgment contract; surfacing only the favorable prose
+// while silently hiding its contradictory number would turn a schema failure
+// into apparent Review success. The server never repairs or substitutes either
+// half — the stage fails visibly and the user can retry or switch providers.
+export function resolveReviewOutcome(
+  reviewParsed: { strictReview?: unknown; aiScore?: unknown } | null,
+  jobText: string,
+  groundingText: string,
+  options: Parameters<typeof sanitizeStrictReview>[3] = {}
+): {
+  strictReview: ReturnType<typeof sanitizeStrictReview>;
+  aiScore: ReturnType<typeof sanitizeAiFitScore>;
+} {
+  let strictReview = reviewParsed
+    ? sanitizeStrictReview(reviewParsed.strictReview, jobText, groundingText, options)
+    : null;
+  if (strictReview && (!strictReview.coverage.length || !strictReview.verdictReason.trim())) {
+    strictReview = null;
+  }
+  const aiScore = strictReview
+    ? sanitizeAiFitScore(reviewParsed?.aiScore, strictReview.verdict)
+    : null;
+  return strictReview && aiScore
+    ? { strictReview, aiScore }
+    : { strictReview: null, aiScore: null };
+}
+
 export async function handlePolish(req: IncomingMessage, res: ServerResponse): Promise<void> {
   if (req.method !== "POST") {
     sendJson(res, 405, { error: "Use POST." });
@@ -239,6 +303,7 @@ export async function handlePolish(req: IncomingMessage, res: ServerResponse): P
   // the try via resolveProviderRequest so an invalid AI_PROVIDER returns JSON
   // instead of escaping the route before its error handler.
   let provider = "claude-cli";
+  const request = requestAbortSignal(req, res);
   try {
     const body = JSON.parse(await readBody(req, 1_000_000));
     const tailorScope = normalizeTailorScope(body.tailorScope);
@@ -248,8 +313,8 @@ export async function handlePolish(req: IncomingMessage, res: ServerResponse): P
     const scopeText = scopeToText(tailorScope);
     const editableText = scopeToText(tailorScope, [], true);
     const jobText = String(body.jobText ?? "").slice(0, 35_000);
-    const includeCoverLetter = Boolean(body.includeCoverLetter);
-    const strictReview = Boolean(body.strictReview);
+    const includeCoverLetter = body.includeCoverLetter === true;
+    const strictReview = body.strictReview === true;
     // `stages` lets the client run the tailor pass and the strict-review pass
     // independently. Back-compat: callers that only send `strictReview`
     // (e.g. the fabrication eval) still get the legacy mapping —
@@ -280,7 +345,7 @@ export async function handlePolish(req: IncomingMessage, res: ServerResponse): P
       ? resolveProviderRequest(body)
       : resolveReviewOnlyProviderRequest(body);
     provider = resolved.provider;
-    const { apiKey, apiBaseUrl, model, reasoningEffort } = resolved;
+    const { apiKey, model, reasoningEffort } = resolved;
 
     // Tailor pass. In review-only mode there are no model-authored suggestions
     // to generate, so even the tailor prompt is not constructed: this avoids
@@ -303,9 +368,9 @@ export async function handlePolish(req: IncomingMessage, res: ServerResponse): P
         model,
         reasoningEffort,
         apiKey,
-        apiBaseUrl,
         systemPrompt: tailorPrompts.systemPrompt,
-        userPrompt: tailorPrompts.userPrompt
+        userPrompt: tailorPrompts.userPrompt,
+        signal: request.signal
       }, tailorStats);
     } else {
       parsed = { suggestedChanges: Array.isArray(body.suggestedChanges) ? body.suggestedChanges : [] };
@@ -316,23 +381,14 @@ export async function handlePolish(req: IncomingMessage, res: ServerResponse): P
     const suggestedChanges = sanitizeTailorSuggestions(parsedObj.suggestedChanges, tailorScope, suggestionDropStats, honestContext, jobText);
     const rawSuggestionCount = Array.isArray(parsedObj.suggestedChanges) ? parsedObj.suggestedChanges.length : 0;
     if (runTailor && rawSuggestionCount > 0 && suggestedChanges.length === 0) {
-      // Shape-only: reason counts, never suggestion text. An all-drop reaching
+      // Counts only, never suggestion text or model-supplied identifiers. An all-drop reaching
       // the user as "no suggestions" is indistinguishable from a clean pass
-      // without this. The target shapes (ids/field only — structural, never
-      // proposedText/evidence/resume content) reveal HOW the model mis-targeted
-      // (e.g. heading/label in place of the section/entry id) so the resolver
-      // and prompt can be corrected against real failures, not guesses.
-      const droppedTargets = (Array.isArray(parsedObj.suggestedChanges) ? parsedObj.suggestedChanges : [])
-        .map((c: any) => {
-          const t = c && typeof c === "object" && c.target && typeof c.target === "object" ? c.target : (c ?? {});
-          return { sectionId: t.sectionId, entryId: t.entryId, bulletId: t.bulletId, field: t.field };
-        });
+      // without this. IDs are untrusted model output and may contain copied
+      // resume text, so they are deliberately excluded from diagnostics.
       console.warn("[ai] every tailor suggestion was dropped in sanitization", {
         provider,
         rawSuggestionCount,
-        ...suggestionDropStats,
-        droppedTargets,
-        validTargetKeys: tailorTargetKeys(tailorScope)
+        ...suggestionDropStats
       });
     }
     // Surface the anti-fabrication catches: a silent all-drop otherwise looks
@@ -366,13 +422,6 @@ export async function handlePolish(req: IncomingMessage, res: ServerResponse): P
     // rewrites, the cover letter, or the summary introduce that is absent from
     // here is unsupported.
     const groundingText = `${polishedText}\n${honestContext}`;
-    const coverageGrounding = {
-      jobText,
-      baseResume: scopeText,
-      tailoredResume: polishedText,
-      honestContext
-    };
-
     // changeSummary is free model prose; drop bullets that overclaim a change
     // that never landed. Filter BEFORE the usable-response guard so a reply whose
     // only "content" was fabricated summary bullets surfaces as a retryable 502
@@ -415,9 +464,9 @@ export async function handlePolish(req: IncomingMessage, res: ServerResponse): P
             model: audit.model,
             reasoningEffort: audit.reasoningEffort,
             apiKey: audit.apiKey,
-            apiBaseUrl: audit.apiBaseUrl,
             systemPrompt: reviewPrompts.systemPrompt,
-            userPrompt: reviewPrompts.userPrompt
+            userPrompt: reviewPrompts.userPrompt,
+            signal: request.signal
           }, auditStats);
         })();
     // No cover letter in review-only mode: the cover pass tailors prose off the
@@ -433,11 +482,11 @@ export async function handlePolish(req: IncomingMessage, res: ServerResponse): P
           model,
           reasoningEffort,
           apiKey,
-          apiBaseUrl,
           jobText,
           resumeText: polishedText,
           honestContext,
-          customInstructions
+          customInstructions,
+          signal: request.signal
         });
     // Secondary passes are OPTIONAL enhancements over an already-usable primary
     // rewrite. A failure in either (provider 5xx, timeout, unreadable JSON
@@ -447,15 +496,16 @@ export async function handlePolish(req: IncomingMessage, res: ServerResponse): P
     // review falls back to strictReview:null + reviewStatus:"failed"; a rejected
     // or blank cover returns "" + coverStatus:"failed".
     const [reviewSettled, coverSettled] = await Promise.allSettled([reviewPromise, coverPromise]);
-    // Model output from the review pass: read the two fields defensively.
-    let reviewParsed: { strictReview?: unknown; requirementCoverage?: unknown } | null = null;
+    if (request.signal.aborted) throw new RequestAbortedError();
+    // Model output from the review pass: read the review and its AI-authored
+    // base/tailored score defensively. Neither is recomputed locally.
+    let reviewParsed: { strictReview?: unknown; aiScore?: unknown } | null = null;
     if (reviewSettled.status === "fulfilled") {
-      reviewParsed = reviewSettled.value as { strictReview?: unknown; requirementCoverage?: unknown } | null;
+      reviewParsed = reviewSettled.value as { strictReview?: unknown; aiScore?: unknown } | null;
     } else {
       console.warn("[ai] strict review pass failed; returning primary rewrite without it", {
         provider: audit.provider,
-        errorName: reviewSettled.reason instanceof Error ? reviewSettled.reason.name : typeof reviewSettled.reason,
-        errorMessage: reviewSettled.reason instanceof Error ? reviewSettled.reason.message : String(reviewSettled.reason)
+        errorName: reviewSettled.reason instanceof Error ? reviewSettled.reason.name : typeof reviewSettled.reason
       });
     }
     let coverLetterText = "";
@@ -466,78 +516,25 @@ export async function handlePolish(req: IncomingMessage, res: ServerResponse): P
     } else if (coverRequested) {
       console.warn("[ai] cover letter pass failed; returning primary rewrite without it", {
         provider,
-        errorName: coverSettled.reason instanceof Error ? coverSettled.reason.name : typeof coverSettled.reason,
-        errorMessage: coverSettled.reason instanceof Error ? coverSettled.reason.message : String(coverSettled.reason)
+        errorName: coverSettled.reason instanceof Error ? coverSettled.reason.name : typeof coverSettled.reason
       });
     }
-    let strictReviewResult:
-      | (NonNullable<ReturnType<typeof sanitizeStrictReview>> & { coverage?: ReturnType<typeof displayCoverageFromRequirements> })
-      | null = reviewParsed
-      ? sanitizeStrictReview(reviewParsed.strictReview, jobText, groundingText, {
-          // Entry-scope one-click rewrites so the review pass can't reintroduce a
-          // misattribution the tailor gate drops (match rewrite.original -> entry).
-          rewriteGrounder: makeRewriteGrounder(tailorScope, honestContext, groundingText),
-          rewriteNumericGrounder: makeRewriteNumericGrounder(tailorScope, honestContext),
-          suggestedEditNumericGrounding: honestContext
-        })
-      : null;
-    // Attach the user-visible coverage table, DERIVED from the reviewer's
-    // requirementCoverage rows (server-owned) instead of the model-authored
-    // strictReview.coverage array that used to duplicate them. Do this BEFORE the
-    // verdict-override merge below so the returned object always carries the
-    // coverage array the client type expects; when requirementCoverage is unusable
-    // the derived array is [] (the same empty fallback as the old sanitizer).
-    if (strictReviewResult) {
-      strictReviewResult = {
-        ...strictReviewResult,
-        coverage: displayCoverageFromRequirements(reviewParsed?.requirementCoverage, coverageGrounding)
-      };
-    }
-
-    // Scoring is SERVER ARITHMETIC ONLY: the reviewer extracts per-requirement
-    // evidence/statuses, then scoreFromRequirementCoverage calculates every
-    // point. Model-authored numbers (fitScore/fitBuckets) never enter scoring —
-    // the reviewer prompt forbids them, and a null coverage score is a valid
-    // outcome (the client falls back to its local estimated score; we never
-    // synthesize a number). Gap caps live on strictReview (gap/blocker ladders),
-    // so a coverage score can only be trusted alongside a usable strictReview.
-    // When strictReviewResult is null the score never passed applyGapCapsAndVerdict
-    // and would surface UNCAPPED next to reviewStatus="failed" — a self-contradictory
-    // pair. So aiScore is null in that branch and the client falls back to its
-    // local estimate (the design).
-    let reconciled: ReturnType<typeof applyGapCapsAndVerdict>;
-    if (strictReviewResult) {
-      const coverageScore = scoreFromRequirementCoverage(
-        reviewParsed?.requirementCoverage,
-        strictReviewResult,
-        coverageGrounding
-      );
-      // A hard eligibility gate (clearance/work-auth/license/cert/degree) the
-      // model reports only as a missing critical/high requirementCoverage row —
-      // not as a BLOCKER gap — must still force the DON'T APPLY band. Derive that
-      // synthetic blocker from the same coverage table the score is built from.
-      const hasCoverageBlocker = coverageHasEligibilityBlocker(reviewParsed?.requirementCoverage, coverageGrounding);
-      // Reconcile score-source with cap-source: cap on the missing-required rows
-      // the coverage table reports even if the model omitted them from `gaps`.
-      const coverageMissingCount = missingRequiredFromCoverage(reviewParsed?.requirementCoverage, coverageGrounding);
-      reconciled = applyGapCapsAndVerdict(coverageScore, strictReviewResult, hasCoverageBlocker, coverageMissingCount);
-    } else {
-      reconciled = { aiScore: null, verdict: null, capReason: "" };
-    }
-    if (strictReviewResult && reconciled.verdict && reconciled.verdict !== strictReviewResult.verdict) {
-      // The server recomputed the verdict from coverage evidence and it disagrees
-      // with the model's. Swap the verdict AND replace the model's verdictReason:
-      // the model wrote a justification for a verdict it no longer holds, so
-      // leaving it would show the user a rationale for a verdict the model never
-      // chose. reconciled.capReason names the mechanism that moved it, stated
-      // only from facts already in the sanitized review (gap counts/severities,
-      // missing-required coverage count, blocker presence) — no new claims.
-      strictReviewResult = {
-        ...strictReviewResult,
-        verdict: reconciled.verdict,
-        verdictReason: reconciled.capReason || strictReviewResult.verdictReason
-      };
-    }
+    // AI Review owns score + verdict + coverage; the server only validates the
+    // contract. A missing/invalid/contradictory score invalidates the whole
+    // review rather than creating a scoreless success — see resolveReviewOutcome.
+    // The entry-scoped rewrite grounders keep the
+    // review pass from reintroducing a misattribution the tailor gate drops
+    // (match rewrite.original -> entry).
+    const { strictReview: strictReviewResult, aiScore } = resolveReviewOutcome(
+      reviewParsed,
+      jobText,
+      groundingText,
+      {
+        rewriteGrounder: makeRewriteGrounder(tailorScope, honestContext, groundingText),
+        rewriteNumericGrounder: makeRewriteNumericGrounder(tailorScope, honestContext),
+        suggestedEditNumericGrounding: honestContext
+      }
+    );
 
     const strictMissingRequiredSkills = missingRequiredSkillsFromStrictReview(strictReviewResult);
 
@@ -547,10 +544,23 @@ export async function handlePolish(req: IncomingMessage, res: ServerResponse): P
     // the pass rejected, returned no parseable object, or its shape did not
     // sanitize (strictReviewResult is null in every one of those cases, since it
     // is only computed from a non-null reviewParsed); "ok" = a sanitized
-    // strictReview is returned. Absent field = legacy client.
+    // strictReview plus its valid score is returned. resolveReviewOutcome returns
+    // both fields or neither, so a missing/invalid score is a failed Review, not
+    // a scoreless success. Absent field = legacy client.
     const reviewStatus = !runReview
       ? "off"
       : (!strictReviewResult ? "failed" : "ok");
+    const reviewFailure = reviewStatus !== "failed"
+      ? null
+      : reviewSettled.status === "rejected"
+        ? reviewFailureFromReason(reviewSettled.reason, audit.provider)
+        : {
+            message: `${providerLabel(audit.provider)} returned an invalid review. Retry, or switch providers.`,
+            status: 502
+          };
+    const reviewFailureEcho = reviewFailure
+      ? { reviewError: reviewFailure.message, reviewErrorStatus: reviewFailure.status }
+      : {};
 
     // The audit echo accompanies any response that ran the review pass — both
     // "both" and review-only — and is ALWAYS fully populated when review ran,
@@ -581,9 +591,10 @@ export async function handlePolish(req: IncomingMessage, res: ServerResponse): P
         changeSummary: [],
         missingRequiredSkills: strictMissingRequiredSkills,
         droppedSuggestions,
-        aiScore: reconciled.aiScore,
+        aiScore,
         strictReview: strictReviewResult,
         reviewStatus,
+        ...reviewFailureEcho,
         coverStatus,
         model,
         reasoningEffort,
@@ -601,9 +612,10 @@ export async function handlePolish(req: IncomingMessage, res: ServerResponse): P
       missingRequiredSkills: missingRequiredSkills.length ? missingRequiredSkills : strictMissingRequiredSkills,
       suggestedChanges,
       droppedSuggestions,
-      aiScore: reconciled.aiScore,
+      aiScore,
       strictReview: strictReviewResult,
       reviewStatus,
+      ...reviewFailureEcho,
       model,
       reasoningEffort,
       provider,
@@ -613,11 +625,12 @@ export async function handlePolish(req: IncomingMessage, res: ServerResponse): P
       ...auditEcho
     });
   } catch (error) {
+    if (isRequestAborted(error, req, res)) return;
     if (error instanceof UserSafeAiError) {
       sendJson(res, error.status, { error: error.message });
       return;
     }
-    if (error instanceof FetchTimeoutError || (error instanceof Error && /timed out after/i.test(error.message))) {
+    if (error instanceof FetchTimeoutError || (error instanceof Error && /timed out|timeout/i.test(error.message))) {
       sendJson(res, 504, { error: `${providerLabel(provider)} timed out. Try again or switch providers.` });
       return;
     }
@@ -634,11 +647,12 @@ export async function handlePolish(req: IncomingMessage, res: ServerResponse): P
 
     console.warn("[ai] polish failed", {
       provider,
-      errorName: error instanceof Error ? error.name : typeof error,
-      errorMessage: error instanceof Error ? error.message : String(error)
+      errorName: error instanceof Error ? error.name : typeof error
     });
     sendJson(res, 500, {
       error: `${providerLabel(provider)} did not return a usable draft. Check the selected provider and model, then try again.`
     });
+  } finally {
+    request.dispose();
   }
 }

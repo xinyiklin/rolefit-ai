@@ -22,7 +22,7 @@ import {
 import type { ApplyDuplicateResolution } from "./useDuplicateGuard";
 import type { ExtractedJobTracking } from "../lib/jobExtract";
 import type { StageAiUsage } from "../lib/aiUsage";
-import type { ResumeData } from "../lib/resumeData";
+import type { ResumeData } from "@typeset/engine/lib/resumeData.ts";
 import type { PolishedResume } from "../resumeEngine";
 import type { FitComparison, OutputTab } from "../sections/shared";
 
@@ -38,14 +38,13 @@ type UseApplyFlowArgs = {
   currentResumeText: string;
   resumeText: string;
   editedResume: ResumeData | null;
-  selectedTemplateId: string;
   coverLetterText: string;
   headlineScore: number | null;
   fitComparison: FitComparison | null;
   pipelineAiUsage: Record<string, StageAiUsage>;
   applications: Application[];
   findForTarget: (url: string, desc: string) => Application | undefined;
-  upsertApplication: (app: Application) => void;
+  upsertApplication: (app: Application) => Promise<boolean>;
   patchApplication: (id: string, patch: Partial<Application>) => void;
   currentJobTracking: () => ExtractedJobTracking;
   resolveApplyDuplicate: () => Promise<ApplyDuplicateResolution>;
@@ -54,7 +53,7 @@ type UseApplyFlowArgs = {
   getResumeArtifacts: () => Promise<{ pdfBase64: string | null; fileName: string } | null>;
   clearAutosaveDraft: () => void;
   markResumeClean: () => void;
-  setExportStatus: (value: string) => void;
+  setApplyStatus: (value: string) => void;
   setActiveOutputTab: (tab: OutputTab) => void;
   setExpandedApplicationId: (id: string | null) => void;
 };
@@ -67,7 +66,6 @@ export function useApplyFlow({
   currentResumeText,
   resumeText,
   editedResume,
-  selectedTemplateId,
   coverLetterText,
   headlineScore,
   fitComparison,
@@ -83,7 +81,7 @@ export function useApplyFlow({
   getResumeArtifacts,
   clearAutosaveDraft,
   markResumeClean,
-  setExportStatus,
+  setApplyStatus,
   setActiveOutputTab,
   setExpandedApplicationId
 }: UseApplyFlowArgs) {
@@ -95,6 +93,9 @@ export function useApplyFlow({
   const applyMergeTargetRef = useRef<string | null>(null);
   // Post-Apply download prompt: holds the just-applied role's label while open.
   const [applyDownloadPrompt, setApplyDownloadPrompt] = useState<{ label: string } | null>(null);
+  const [isApplying, setIsApplying] = useState(false);
+  const [applySaveError, setApplySaveError] = useState("");
+  const applyCommitInFlightRef = useRef(false);
 
   // Render the current resume to PDF and persist it under the applied
   // application, then attach the returned metadata. Best-effort: Apply has
@@ -115,8 +116,8 @@ export function useApplyFlow({
       const data = await res.json();
       if (!res.ok || !data.resumeArtifacts) return;
       patchApplication(id, { resumeArtifacts: data.resumeArtifacts });
-      setExportStatus(
-        `Applied "${label}" — saved resume ${data.resumeArtifacts.hasPdf ? "PDF" : "(PDF could not be typeset)"}.`
+      setApplyStatus(
+        `Applied "${label}". Saved resume ${data.resumeArtifacts.hasPdf ? "PDF" : "without a PDF because typesetting failed"}.`
       );
     } catch {
       // Best-effort: the application is already saved.
@@ -126,8 +127,11 @@ export function useApplyFlow({
   // The actual apply: save the application, snapshot artifacts, update UI.
   // Called directly when the user has opted to skip the download dialog, or
   // from the dialog's Download / Apply-only callbacks.
-  function commitApply() {
-    if (!jobUrl.trim() && !jobDescription.trim()) return;
+  async function commitApply(): Promise<boolean> {
+    if ((!jobUrl.trim() && !jobDescription.trim()) || applyCommitInFlightRef.current) return false;
+    applyCommitInFlightRef.current = true;
+    setIsApplying(true);
+    setApplySaveError("");
     const sr = result?.strictReview;
     const hasStructuredSuggestions = Boolean(result?.suggestedChanges?.length);
     const acceptedStructuredSuggestions =
@@ -139,13 +143,11 @@ export function useApplyFlow({
     // A duplicate scan in handleApply may have already identified which record
     // this apply should merge into (exact/high confidence, user-confirmed when
     // not "interested"). Prefer that over the exact-only findForTarget lookup;
-    // consumed here regardless of hit/miss so it can never leak into a later,
-    // unrelated commit (e.g. Apply-only clicked twice, or a stale ref from an
-    // abandoned flow).
+    // Retain the target until persistence succeeds so a recoverable retry keeps
+    // the user's confirmed merge decision; cancel and success both clear it.
     const existing =
       (applyMergeTargetRef.current ? applications.find((a) => a.id === applyMergeTargetRef.current) : undefined) ??
       findForTarget(jobUrl, jobDescription);
-    applyMergeTargetRef.current = null;
     const now = new Date().toISOString();
     const status: ApplicationStatus =
       existing && existing.status && existing.status !== "interested" ? existing.status : "applied";
@@ -155,11 +157,10 @@ export function useApplyFlow({
       id: existing?.id ?? draft.id,
       status,
       appliedAt: existing?.appliedAt ?? now,
-      fitScore: headlineScore ?? result?.score.overall ?? null,
+      fitScore: headlineScore,
       baseFitScore: fitComparison?.base ?? null,
       tailoredFitScore: fitComparison?.tailored ?? null,
       fitScoreSource: fitComparison?.source ?? null,
-      templateId: selectedTemplateId,
       resumeData: editedResume ?? undefined,
       polishedText: sentResume,
       resumeUsed: usedBase ? "base" : "tailored",
@@ -199,16 +200,34 @@ export function useApplyFlow({
           }
         : undefined
     };
-    upsertApplication(app);
+    let saved = false;
+    try {
+      saved = await upsertApplication(app);
+    } catch {
+      // The store normally converts request failures to `false`; keep this
+      // boundary fail-closed if a future adapter rejects unexpectedly.
+    }
+    if (!saved) {
+      const message = "Application could not be saved. Your recovery draft is still available; retry Apply.";
+      setApplySaveError(message);
+      setApplyStatus(message);
+      applyCommitInFlightRef.current = false;
+      setIsApplying(false);
+      return false;
+    }
+    applyMergeTargetRef.current = null;
     // Edits are now tracked in the application record and an artifact is saved to
     // disk — clear the recovery draft AND mark the editor clean so the before-unload
     // guard stops warning. A later edit re-flips `dirty` and re-arms the guard.
     clearAutosaveDraft();
     markResumeClean();
-    setExportStatus(`Applied — saved "${existing?.title || app.title}" to Applications (${usedBase ? "original" : "tailored"} resume).`);
+    setApplyStatus(`Applied. Saved "${existing?.title || app.title}" to Applications (${usedBase ? "original" : "tailored"} resume).`);
     setActiveOutputTab("applications");
     setExpandedApplicationId(existing?.id ?? app.id);
     void saveAppliedResumeArtifacts(existing?.id ?? app.id, existing?.title || app.title);
+    applyCommitInFlightRef.current = false;
+    setIsApplying(false);
+    return true;
   }
 
   // Apply button handler: runs the layered duplicate scan first (warn / confirm
@@ -216,6 +235,7 @@ export function useApplyFlow({
   // (no download dialog) or shows the pre-apply dialog for the file name.
   async function handleApply() {
     if (!jobUrl.trim() && !jobDescription.trim()) return;
+    setApplyStatus("");
     // Reset before evaluating so a prior call's stale target can never leak
     // into an unrelated apply. The dialogs, acknowledgment, and merge-target
     // decision live in useDuplicateGuard; commitApply consumes the ref.
@@ -225,29 +245,32 @@ export function useApplyFlow({
     applyMergeTargetRef.current = resolution.mergeTargetId;
 
     if (!canExportResume) {
-      commitApply();
+      await commitApply();
       return;
     }
     const existing = findForTarget(jobUrl, jobDescription);
     const draft = makeApplicationDraft(jobUrl, jobDescription, currentJobTracking());
+    setApplySaveError("");
     setApplyDownloadPrompt({ label: existing?.title || draft.title });
   }
 
-  function handleApplyDownloadPick(fileBaseName: string) {
+  async function handleApplyDownloadPick(fileBaseName: string) {
+    if (!(await commitApply())) return;
     setApplyDownloadPrompt(null);
-    commitApply();
-    void handleDownloadPdf(fileBaseName || undefined);
+    await handleDownloadPdf(fileBaseName || undefined);
   }
 
-  function handleApplyOnly() {
+  async function handleApplyOnly() {
+    if (!(await commitApply())) return;
     setApplyDownloadPrompt(null);
-    commitApply();
   }
 
   return {
     applyMergeTargetRef,
     applyDownloadPrompt,
     setApplyDownloadPrompt,
+    isApplying,
+    applySaveError,
     handleApply,
     handleApplyDownloadPick,
     handleApplyOnly

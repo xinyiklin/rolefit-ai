@@ -17,9 +17,6 @@ type StudioPaneProps = {
   outputTabs: OutputTabDescriptor[];
   children: ReactNode;
   footer?: ReactNode;
-  // Pinned to the bottom of the left rail (below the tab list) — e.g. the
-  // concurrent-sessions panel. Rendered outside the tablist for a11y.
-  railFooter?: ReactNode;
   overlay?: ReactNode;
 };
 
@@ -29,7 +26,6 @@ export function StudioPane({
   outputTabs,
   children,
   footer,
-  railFooter,
   overlay
 }: StudioPaneProps) {
   // APG tabs keyboard model: roving tabindex + arrow/Home/End move selection and
@@ -87,6 +83,7 @@ export function StudioPane({
                   onKeyDown={(event) => onTabKeyDown(event, posIndex)}
                   role="tab"
                   tabIndex={activeOutputTab === tab.id ? 0 : -1}
+                  title={tab.label}
                   type="button"
                 >
                   <span className="studio-tab__icon" aria-hidden="true">
@@ -100,7 +97,6 @@ export function StudioPane({
           </div>
         ))}
       </nav>
-        {railFooter ? <div className="studio-sidebar__footer">{railFooter}</div> : null}
       </div>
 
       <section className="studio-main" aria-label="Selected output">

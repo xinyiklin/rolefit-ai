@@ -79,12 +79,23 @@ function ApplicationRow({
   onRowContextMenu: (app: Application, event: { clientX: number; clientY: number }) => void;
 }) {
   const verdict = appFitVerdict(app);
+  const appliedLabel = app.appliedAt ? formatCompactDate(app.appliedAt) : "date not set";
+  const rowLabel = [
+    displayCompany(app),
+    displayRole(app),
+    `stage ${STATUS_LABEL[app.status]}`,
+    `applied ${appliedLabel}`,
+    `${priorityFor(app)} priority`,
+    nextAction(app),
+    verdict ? `fit ${verdict.label}` : "fit not scored"
+  ].join(", ");
   return (
     <button
       type="button"
-      role="row"
       className={`applications-table__row ${isSelected ? "is-selected" : ""}`}
-      title="Right-click for actions · double-click to open"
+      aria-label={rowLabel}
+      aria-pressed={isSelected}
+      title="Right-click for actions. Double-click to open."
       onClick={() => onSelect(app.id)}
       onDoubleClick={() => onDoubleClick(app)}
       onContextMenu={(event) => {
@@ -92,29 +103,29 @@ function ApplicationRow({
         onRowContextMenu(app, event);
       }}
     >
-      <span className="application-company" role="cell">
+      <span className="application-company">
         <em data-len={companyInitials(displayCompany(app)).length}>{companyInitials(displayCompany(app))}</em>
         <strong>{displayCompany(app)}</strong>
         {isDuplicate ? (
           <span
             className="application-duplicate-badge"
-            title="Possible duplicate — review in Review duplicates"
+            title="Possible duplicate. Review it in Review duplicates."
           >
             <Copy size={12} aria-hidden="true" />
           </span>
         ) : null}
       </span>
-      <span role="cell" className={displayRole(app) === "Role not set" ? "text-placeholder" : ""}>
+      <span className={displayRole(app) === "Role not set" ? "text-placeholder" : ""}>
         {displayRole(app)}
       </span>
-      <span role="cell">
+      <span>
         <span className={`stage-dot stage-dot--${app.status}`} aria-hidden="true" />
         <span className="stage-dot-label">{STATUS_LABEL[app.status]}</span>
       </span>
-      <span role="cell" className="table-date">
+      <span className="table-date">
         {app.appliedAt ? formatCompactDate(app.appliedAt) : "-"}
       </span>
-      <span role="cell" className="applications-table__cell--priority">
+      <span className="applications-table__cell--priority">
         {priorityFor(app) === "Medium" ? (
           <span className="priority-default">{priorityFor(app)}</span>
         ) : (
@@ -127,14 +138,13 @@ function ApplicationRow({
         )}
       </span>
       <span
-        role="cell"
         className={`applications-table__cell--next-action${
           nextAction(app) === "Awaiting response" ? " next-action-default" : ""
         }`}
       >
         {nextAction(app)}
       </span>
-      <span role="cell">
+      <span>
         <span className={`application-fit application-fit--${verdict?.tone ?? "neutral"}`}>
           {verdict ? verdict.label : "--"}
         </span>
@@ -159,16 +169,15 @@ export function TrackerTableView({
   const groups = grouped ? groupByMonth(visible) : [];
 
   return (
-    <div className="applications-table" role="table" aria-label="Applications">
-      <div className="applications-table__row applications-table__row--head" role="row">
+    <div className="applications-table" role="region" aria-label="Applications">
+      <div className="applications-table__row applications-table__row--head">
         {COLUMNS.map((col) => {
           const isActive = sort.key === col.key;
           return (
             <button
               type="button"
               key={col.key}
-              role="columnheader"
-              aria-sort={isActive ? (sort.dir === "asc" ? "ascending" : "descending") : "none"}
+              aria-label={`Sort by ${col.label}${isActive ? `, currently ${sort.dir === "asc" ? "ascending" : "descending"}` : ""}`}
               className={`table-eyebrow table-sort ${isActive ? "is-active" : ""}${
                 col.key === "priority"
                   ? " applications-table__cell--priority"
@@ -195,9 +204,8 @@ export function TrackerTableView({
       {visible.length ? (
         grouped ? (
           groups.map(({ month, rows }) => (
-            <div key={month} role="rowgroup">
-              {/* Month divider — aria-hidden keeps the role=table semantics clean */}
-              <div className="applications-table__month-divider" role="presentation" aria-hidden="true">
+            <div key={month} role="group" aria-label={month}>
+              <div className="applications-table__month-divider" aria-hidden="true">
                 <span className="table-eyebrow">{month}</span>
                 <span className="applications-table__month-count">{rows.length}</span>
               </div>
@@ -215,7 +223,7 @@ export function TrackerTableView({
             </div>
           ))
         ) : (
-          <div role="rowgroup">
+          <div>
             {visible.map((app) => (
               <ApplicationRow
                 key={app.id}
@@ -230,7 +238,7 @@ export function TrackerTableView({
           </div>
         )
       ) : (
-        <div className="applications-empty" role="row">
+        <div className="applications-empty" role="status">
           <BriefcaseBusiness size={24} aria-hidden="true" />
           <strong>{allCount ? "No matching applications" : "No applications yet"}</strong>
           <span>

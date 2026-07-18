@@ -106,13 +106,32 @@ function greenhouseParam(value: unknown, pattern: RegExp): string {
   return pattern.test(param) ? param : "";
 }
 
-function greenhouseJobAppUrl(u: URL): URL | null {
+function greenhouseBoardFromWrapperHtml(html: string): string {
+  const source = String(html || "");
+  const patterns = [
+    /(?:https?:)?\/\/boards\.greenhouse\.io\/embed\/job_board\/js\?[^"'<>]*?\bfor=([a-z0-9][a-z0-9_-]{0,80})(?=(?:&(?:amp;)?|["'<>\s]|$))/i,
+    /(?:https?:)?\/\/job-boards\.greenhouse\.io\/embed\/job_app\?[^"'<>]*?\bfor=([a-z0-9][a-z0-9_-]{0,80})(?=(?:&(?:amp;)?|["'<>\s]|$))/i,
+    /(?:https?:)?\/\/boards-api\.greenhouse\.io\/v1\/boards\/([a-z0-9][a-z0-9_-]{0,80})(?=\/)/i
+  ];
+  for (const pattern of patterns) {
+    const board = greenhouseParam(source.match(pattern)?.[1], /^[a-z0-9][a-z0-9_-]{0,80}$/i);
+    if (board) return board;
+  }
+  return "";
+}
+
+export function greenhouseJobAppUrl(u: URL, wrapperHtml = ""): URL | null {
   const isGreenhouseHost = /(^|\.)greenhouse\.io$/i.test(u.hostname);
-  const boardFromSearch = greenhouseParam(u.searchParams.get("board") || u.searchParams.get("for"), /^[a-z0-9][a-z0-9_-]{0,80}$/i);
+  const boardFromSearch = greenhouseParam(
+    u.searchParams.get("board") || u.searchParams.get("for"),
+    /^[a-z0-9][a-z0-9_-]{0,80}$/i
+  );
   const tokenFromSearch = greenhouseParam(u.searchParams.get("gh_jid") || u.searchParams.get("token"), /^\d{3,20}$/);
-  if (boardFromSearch && tokenFromSearch) {
+  const boardFromWrapper = tokenFromSearch ? greenhouseBoardFromWrapperHtml(wrapperHtml) : "";
+  const board = boardFromSearch || boardFromWrapper;
+  if (board && tokenFromSearch) {
     const appUrl = new URL("https://job-boards.greenhouse.io/embed/job_app");
-    appUrl.searchParams.set("for", boardFromSearch);
+    appUrl.searchParams.set("for", board);
     appUrl.searchParams.set("token", tokenFromSearch);
     return appUrl;
   }
@@ -178,8 +197,8 @@ const GREENHOUSE_CACHE_TTL_MS = 120_000;
 const GREENHOUSE_CACHE_MAX = 8;
 const greenhouseTextCache = new Map<string, { text: string; at: number }>();
 
-async function importFromGreenhouse(jobUrl: URL): Promise<string> {
-  const appUrl = greenhouseJobAppUrl(jobUrl);
+async function importFromGreenhouse(jobUrl: URL, wrapperHtml = ""): Promise<string> {
+  const appUrl = greenhouseJobAppUrl(jobUrl, wrapperHtml);
   if (!appUrl) return "";
   const cached = greenhouseTextCache.get(appUrl.href);
   if (cached && Date.now() - cached.at < GREENHOUSE_CACHE_TTL_MS) return cached.text;
@@ -205,10 +224,26 @@ export async function resolveImportedJobText(text: unknown, url: unknown): Promi
   } catch {
     return fallbackText;
   }
-  if (!isPublicHttpUrl(jobUrl) || !greenhouseJobAppUrl(jobUrl)) return fallbackText;
+  if (!isPublicHttpUrl(jobUrl)) return fallbackText;
 
   try {
-    const greenhouseText = await importFromGreenhouse(jobUrl);
+    // Direct Greenhouse links already carry the board and token. Branded
+    // careers wrappers often expose only gh_jid in the URL and keep the board
+    // slug in their HTML, so fetch that wrapper once and resolve its canonical
+    // Greenhouse job before falling back to captured page text.
+    if (greenhouseJobAppUrl(jobUrl)) {
+      const greenhouseText = await importFromGreenhouse(jobUrl);
+      return greenhouseText || fallbackText;
+    }
+    const wrapperToken = greenhouseParam(
+      jobUrl.searchParams.get("gh_jid") || jobUrl.searchParams.get("token"),
+      /^\d{3,20}$/
+    );
+    if (!wrapperToken) return fallbackText;
+    const wrapperResponse = await fetchPublicHtml(jobUrl, { Accept: "text/html" });
+    if (!wrapperResponse.ok) return fallbackText;
+    const wrapperHtml = await wrapperResponse.text();
+    const greenhouseText = await importFromGreenhouse(jobUrl, wrapperHtml);
     return greenhouseText || fallbackText;
   } catch {
     return fallbackText;
@@ -285,8 +320,8 @@ export async function handleImportJob(req: IncomingMessage, res: ServerResponse)
 
   let jobUrl: URL;
   try {
-    const { url } = JSON.parse(await readBody(req));
-    jobUrl = new URL(String(url ?? ""));
+    const { url } = JSON.parse(await readBody(req, 10_000));
+    jobUrl = new URL(String(url ?? "").slice(0, 2_000));
   } catch {
     sendJson(res, 400, { error: "Enter a valid job posting URL." });
     return;
@@ -325,6 +360,14 @@ export async function handleImportJob(req: IncomingMessage, res: ServerResponse)
     }
 
     const html = await response.text();
+    // A branded careers page can carry only gh_jid in its visible URL while an
+    // embed script identifies the Greenhouse board. Resolve that canonical job
+    // before the generic scraper accepts navigation/company chrome as a JD.
+    const wrappedGreenhouseText = await importFromGreenhouse(jobUrl, html);
+    if (wrappedGreenhouseText) {
+      sendJson(res, 200, { text: wrappedGreenhouseText.slice(0, 16_000) });
+      return;
+    }
     const text = linkedInJobText(html) || htmlToText(html);
 
     if (text.length < 200 || isMostlyCodeShaped(text)) {

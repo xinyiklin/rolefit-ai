@@ -1,7 +1,11 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { buildStageRequestFields, type StageConfig } from "../lib/aiRequest";
 import { AI_UNAVAILABLE, ApiError, classifyFailure } from "../lib/failures";
-import type { StageState } from "../sections/PolishProgress";
+import {
+  workflowInputFingerprint,
+  workflowRequestIsCurrent,
+  type AiStageState as StageState
+} from "../lib/aiWorkflow";
 import type { StageAiUsage } from "../lib/aiUsage";
 
 type UseCoverLetterArgs = {
@@ -57,6 +61,44 @@ export function useCoverLetter({
   // inline coverStatus line. Independent of coverStatus (which stays for the
   // Materials-tab inline copy) — this feeds the dock only.
   const [coverProgress, setCoverProgress] = useState<StageState>({ status: "idle" });
+  const requestGenerationRef = useRef(0);
+  const requestAbortRef = useRef<AbortController | null>(null);
+  const inputFingerprint = workflowInputFingerprint({
+    currentResumeText,
+    resumeText,
+    jobText,
+    honestContext,
+    customInstructions,
+    aiRequest: buildStageRequestFields(aiRequest)
+  });
+  const inputFingerprintRef = useRef(inputFingerprint);
+  inputFingerprintRef.current = inputFingerprint;
+
+  const invalidateCoverRequest = useCallback(() => {
+    requestGenerationRef.current += 1;
+    requestAbortRef.current?.abort();
+    requestAbortRef.current = null;
+    setIsGeneratingCover(false);
+  }, []);
+
+  useEffect(() => {
+    const hadActiveRequest = requestAbortRef.current !== null;
+    invalidateCoverRequest();
+    if (hadActiveRequest) {
+      setCoverStatus("Resume, job, or AI settings changed. Generate a new cover letter for the current inputs.");
+      setCoverProgress({
+        status: "stopped",
+        errorHeadline: "Inputs changed",
+        error: "The previous cover-letter request was cancelled before it could replace this draft."
+      });
+    }
+  }, [inputFingerprint, invalidateCoverRequest]);
+
+  useEffect(() => () => {
+    requestGenerationRef.current += 1;
+    requestAbortRef.current?.abort();
+    requestAbortRef.current = null;
+  }, []);
 
   // Set or clear the cover letter from an external owner (polish pass,
   // application restore, a fresh-start resume/job swap). Always clears the
@@ -65,10 +107,11 @@ export function useCoverLetter({
   // NOT route through this. Also resets the dock card so a stale done/failed
   // card can't outlive a letter that was just replaced out from under it.
   const applyCoverLetter = useCallback((text: string) => {
+    invalidateCoverRequest();
     setCoverLetterText(text);
     setCoverStatus("");
     setCoverProgress({ status: "idle" });
-  }, []);
+  }, [invalidateCoverRequest]);
 
   // Consume the optional cover-letter outcome returned by a combined Polish
   // request. This is deliberately separate from applyCoverLetter: workspace
@@ -78,6 +121,7 @@ export function useCoverLetter({
   // on-demand generator below.
   const applyPolishCoverResult = useCallback((result: PolishCoverResult) => {
     if (result.status === "off") return;
+    invalidateCoverRequest();
 
     const text = result.coverLetterText?.trim() ?? "";
     if (result.status === "ok" && text) {
@@ -109,19 +153,31 @@ export function useCoverLetter({
     onUsage?.({
       source: "none",
       requestedProvider: aiRequest.provider,
-      requestedModel: aiRequest.selectedModel === "custom" ? aiRequest.customModel.trim() : aiRequest.selectedModel,
+      requestedModel: aiRequest.selectedModel,
       completedAt: new Date().toISOString()
     });
-  }, [aiRequest, onUsage]);
+  }, [aiRequest, invalidateCoverRequest, onUsage]);
 
   const dismissCoverProgress = useCallback(() => setCoverProgress({ status: "idle" }), []);
 
   async function handleGenerateCoverLetter() {
+    invalidateCoverRequest();
     const resume = currentResumeText.trim() || resumeText.trim();
     if (resume.length < 80 || jobText.trim().length < 40) {
       setCoverStatus("Add your resume and the job description first.");
       return;
     }
+    const controller = new AbortController();
+    requestAbortRef.current = controller;
+    const generation = requestGenerationRef.current;
+    const requestFingerprint = inputFingerprintRef.current;
+    const isCurrent = () => workflowRequestIsCurrent(
+      generation,
+      requestGenerationRef.current,
+      requestFingerprint,
+      inputFingerprintRef.current,
+      controller.signal
+    );
     setIsGeneratingCover(true);
     setCoverStatus("Drafting cover letter...");
     setCoverProgress({ status: "running" });
@@ -135,9 +191,11 @@ export function useCoverLetter({
           jobText,
           honestContext,
           customInstructions
-        })
+        }),
+        signal: controller.signal
       });
       const data = await response.json();
+      if (!isCurrent()) return;
       if (!response.ok) throw new ApiError(data.error ?? "Could not generate a cover letter.", response.status);
       const ai = String(data.coverLetterText ?? "").trim();
       if (ai) {
@@ -165,11 +223,12 @@ export function useCoverLetter({
         onUsage?.({
           source: "none",
           requestedProvider: aiRequest.provider,
-          requestedModel: aiRequest.selectedModel === "custom" ? aiRequest.customModel.trim() : aiRequest.selectedModel,
+          requestedModel: aiRequest.selectedModel,
           completedAt: new Date().toISOString()
         });
       }
     } catch (error) {
+      if (!isCurrent()) return;
       const message = error instanceof Error ? error.message.replace(/[.。]\s*$/, "") : "request failed";
       // No local fallback letter (D011): fail plainly with a classified reason.
       const f = classifyFailure(error);
@@ -178,11 +237,14 @@ export function useCoverLetter({
       onUsage?.({
         source: "none",
         requestedProvider: aiRequest.provider,
-        requestedModel: aiRequest.selectedModel === "custom" ? aiRequest.customModel.trim() : aiRequest.selectedModel,
+        requestedModel: aiRequest.selectedModel,
         completedAt: new Date().toISOString()
       });
     } finally {
-      setIsGeneratingCover(false);
+      if (isCurrent()) {
+        requestAbortRef.current = null;
+        setIsGeneratingCover(false);
+      }
     }
   }
 

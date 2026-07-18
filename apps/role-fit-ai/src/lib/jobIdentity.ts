@@ -20,9 +20,10 @@
 //           overlap (or overlap alone when the      /possible "same-company-role"
 //           company is unknown)
 //
-// "Truly separate openings with the same title" stay unmatched: same company +
-// same title with incompatible locations and low description overlap returns
-// no match at all.
+// "Truly separate openings with the same title" stay unmatched: company/title
+// metadata alone is not duplicate evidence. The fuzzy tier also requires two
+// substantial descriptions with meaningful overlap; low-overlap or incomplete
+// descriptions return no match at all.
 
 // ── Public types ─────────────────────────────────────────────────────────────
 export type AtsPostingKey = {
@@ -352,6 +353,11 @@ export function locationsCompatible(a?: string | null, b?: string | null): boole
 
 const FINGERPRINT_CHARS = 15_000;
 const FINGERPRINT_MAX_TOKENS = 1_500;
+// Fuzzy duplicate warnings need enough content on BOTH sides to distinguish a
+// real repost from company boilerplate or a few shared role terms. Exact URL /
+// ATS-id and requisition-id tiers do not depend on these floors.
+const COMPARABLE_FINGERPRINT_MIN_TOKENS = 40;
+const POSSIBLE_REPOST_MIN_SIMILARITY = 0.6;
 
 // Compact content fingerprint of a job description: the set of distinct
 // substantial tokens. Set-of-tokens (vs shingles) is deliberately loose so a
@@ -449,6 +455,9 @@ function matchSignatures(a: Signature, b: Signature): MatchResult | null {
 
   const similarity = jdSimilarity(a.fingerprint, b.fingerprint);
   const similarityPct = Math.round(similarity * 100);
+  const descriptionsComparable =
+    a.fingerprint.size >= COMPARABLE_FINGERPRINT_MIN_TOKENS &&
+    b.fingerprint.size >= COMPARABLE_FINGERPRINT_MIN_TOKENS;
 
   // Tier 3: a requisition id printed in both descriptions. Skipped when both
   // sides name a company and they differ (job numbers collide across ATSes).
@@ -460,23 +469,28 @@ function matchSignatures(a: Signature, b: Signature): MatchResult | null {
   // Tier 4: company + title + description overlap.
   if (a.company && b.company && a.company === b.company) {
     const sameRole = Boolean(a.role && b.role && a.role === b.role);
-    if (sameRole && similarity >= 0.85) {
+    if (descriptionsComparable && sameRole && similarity >= 0.85) {
       return { level: "repost", confidence: "high", evidence: ["Same company and title", `${similarityPct}% description overlap`] };
     }
-    if (!sameRole && similarity >= 0.9) {
+    if (descriptionsComparable && !sameRole && similarity >= 0.9) {
       return { level: "repost", confidence: "high", evidence: ["Same company", `${similarityPct}% description overlap (retitled posting)`] };
     }
-    if (sameRole && locationsCompatible(a.location, b.location)) {
-      // Same title at the same company but the descriptions don't line up: could
-      // be a refresh OR a separate opening — flag, never auto-merge.
+    if (
+      descriptionsComparable &&
+      sameRole &&
+      locationsCompatible(a.location, b.location) &&
+      similarity >= POSSIBLE_REPOST_MIN_SIMILARITY
+    ) {
+      // Same title, compatible location, and meaningfully similar substantial
+      // descriptions could indicate a refresh — flag, never auto-merge.
       return {
         level: "same-company-role",
         confidence: "possible",
-        evidence: ["Same company and title", similarity > 0 ? `${similarityPct}% description overlap` : "descriptions not comparable"]
+        evidence: ["Same company and title", `${similarityPct}% description overlap`]
       };
     }
-    // Same company + same title + contradicting locations + low overlap:
-    // treated as truly separate openings — no match.
+    // Same metadata with weak/incomplete description evidence (or contradicting
+    // locations below the high-confidence overlap) is a separate opening.
   }
 
   // Company unknown on a side (common for board pages): near-identical

@@ -36,6 +36,13 @@
   font-feature-settings: "tnum";
 }
 
+.workspace-page__saving {
+  color: var(--accent-strong);
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  font-weight: 700;
+}
+
 .workspace-page__actions {
   display: flex;
   align-items: center;
@@ -350,7 +357,7 @@
 }
 
 /* First group's divider row: suppress the top rule (table already has none there) */
-.applications-table > div[role="rowgroup"]:first-child .applications-table__month-divider {
+.applications-table__row--head + [role="group"] .applications-table__month-divider {
   border-top: 0;
 }
 
@@ -1114,14 +1121,29 @@ button.table-sort svg {
   text-align: center;
 }
 
-.calendar-grid {
-  display: grid;
-  grid-template-columns: repeat(7, minmax(104px, 1fr));
+.calendar-grid-scroll {
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
   border: 1px solid var(--hairline);
   border-radius: var(--r-lg);
   background: var(--hairline-soft);
   box-shadow: var(--shadow-rest);
-  overflow: hidden;
+  overscroll-behavior-inline: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.calendar-grid-scroll:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(104px, 1fr));
+  width: 100%;
+  min-width: 728px;
+  background: var(--hairline-soft);
   /* The grid background shows through the 1px cell gaps as crisp gridlines, so
      the cells themselves carry no borders (no doubled edges, no last-column seam). */
   gap: 1px;
@@ -1133,7 +1155,7 @@ button.table-sort svg {
   min-height: 30px;
   background: var(--card-soft);
   color: var(--ink-faint);
-  font-size: 0.6rem;
+  font-size: 0.65rem;
   letter-spacing: 0.1em;
   /* Eyebrow styling is applied via .table-eyebrow class in TSX */
 }
@@ -1167,7 +1189,6 @@ button.table-sort svg {
 
 .calendar-cell.is-outside > span {
   color: var(--ink-faint);
-  opacity: 0.5;
 }
 
 /* Date number: fixed 22px run so plain numbers and the today disc share a baseline */
@@ -1449,21 +1470,6 @@ button.table-sort svg {
   align-content: start;
 }
 
-/* Pipeline funnel: wider span */
-.analytics-panel--wide {
-  grid-column: span 5;
-}
-
-/* Stage distribution and Activity: narrower */
-.analytics-panel--narrow {
-  grid-column: span 4;
-}
-
-/* When only two narrow panels, the last one stretches to fill remainder */
-.analytics-panel--wide + .analytics-panel--narrow + .analytics-panel--narrow {
-  grid-column: span 3;
-}
-
 /* Flat zones (no border/shadow, hairline-separated) for list sections */
 .analytics-panel--flat {
   grid-column: span 6;
@@ -1568,7 +1574,6 @@ button.table-sort svg {
 .analytics-funnel__row--offer i { background: var(--accent-veil); }
 .analytics-funnel__row--rejected i { background: var(--danger-soft); }
 
-.analytics-bars,
 .analytics-timeline {
   display: grid;
   grid-template-columns: repeat(6, 1fr);
@@ -1581,7 +1586,6 @@ button.table-sort svg {
   grid-template-columns: repeat(auto-fill, minmax(36px, 1fr));
 }
 
-.analytics-bar,
 .analytics-tick {
   display: grid;
   grid-template-rows: 1fr auto auto;
@@ -1593,7 +1597,6 @@ button.table-sort svg {
   font-size: 0.62rem;
 }
 
-.analytics-bar span,
 .analytics-tick span {
   align-self: end;
   width: 32px;
@@ -1602,41 +1605,10 @@ button.table-sort svg {
   background: var(--accent);
 }
 
-.analytics-bar strong,
 .analytics-tick strong {
   color: var(--ink-strong);
   font-family: var(--font-mono);
   font-size: 0.7rem;
-}
-
-.analytics-recs {
-  display: grid;
-  gap: var(--s2);
-}
-
-
-.analytics-recs div {
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  align-items: center;
-  gap: var(--s2);
-  padding: var(--s2) 0;
-  border-bottom: 1px solid var(--hairline-soft);
-  text-align: left;
-}
-
-.analytics-recs div:last-child {
-  border-bottom: 0;
-}
-
-.analytics-recs span { color: var(--ink-strong); font-size: 0.74rem; }
-.analytics-recs em {
-  color: var(--ink-faint);
-  font-size: 0.66rem;
-  font-style: normal;
-  font-family: var(--font-mono);
-  font-feature-settings: "tnum";
-  font-variant-numeric: tabular-nums;
 }
 
 /* -------- Inspector / side-panel fact ledger -------- */
@@ -1713,6 +1685,14 @@ button.table-sort svg {
   margin-top: 2px;
   color: var(--ink-soft);
   font-size: 0.72rem;
+}
+
+.application-modal__head .application-modal__save-error {
+  max-width: 58ch;
+  margin-top: var(--s1);
+  color: var(--danger);
+  font-size: 0.7rem;
+  line-height: 1.4;
 }
 
 .application-modal__foot {
@@ -1865,10 +1845,11 @@ button.table-sort svg {
   justify-items: start;
   align-content: start;
   gap: var(--s3);
-  padding: var(--s4);
-  border: 1px solid var(--hairline);
-  border-radius: var(--r-lg);
-  background: var(--card-soft);
+  padding: var(--s3) var(--s4);
+  border: 0;
+  border-left: 1px solid var(--hairline);
+  border-radius: 0;
+  background: transparent;
   text-align: left;
 }
 
@@ -1936,16 +1917,6 @@ button.table-sort svg {
   gap: var(--s3);
 }
 
-/* Match card extras */
-.application-match-card__score {
-  width: 100%;
-  text-align: left;
-}
-
-.application-match-card__score input {
-  text-align: center;
-}
-
 .application-match-card__gaps {
   display: grid;
   gap: var(--s2);
@@ -1991,10 +1962,9 @@ button.table-sort svg {
 .application-qa {
   display: grid;
   gap: var(--s2);
-  padding: var(--s3);
-  border: 1px solid var(--hairline);
-  border-radius: var(--r-md);
-  background: var(--card-soft);
+  padding: var(--s3) 0;
+  border-top: 1px solid var(--hairline-soft);
+  background: transparent;
 }
 
 .application-qa__head {
@@ -2011,10 +1981,10 @@ button.table-sort svg {
 .application-review {
   display: grid;
   gap: var(--s2);
-  padding: var(--s3);
-  border: 1px solid var(--hairline);
-  border-radius: var(--r-md);
-  background: var(--card-soft);
+  padding: var(--s3) 0 0;
+  border: 0;
+  border-top: 1px solid var(--hairline);
+  background: transparent;
 }
 
 .application-review__verdict {
@@ -2033,10 +2003,9 @@ button.table-sort svg {
 .application-review__list li {
   display: grid;
   gap: 2px;
-  padding: var(--s2) var(--s3);
-  border: 1px solid var(--hairline-soft);
-  border-radius: var(--r-sm);
-  background: var(--warm-veil);
+  padding: var(--s2) 0;
+  border-bottom: 1px solid var(--hairline-soft);
+  background: transparent;
   font-size: 0.78rem;
 }
 
@@ -2054,10 +2023,14 @@ button.table-sort svg {
 .application-doc-card {
   display: grid;
   gap: var(--s2);
-  padding: var(--s3);
-  border: 1px solid var(--hairline);
-  border-radius: var(--r-md);
-  background: var(--card-soft);
+  padding: 0;
+  background: transparent;
+}
+
+.application-doc-card + .application-doc-card {
+  margin-top: var(--s2);
+  padding-top: var(--s3);
+  border-top: 1px solid var(--hairline);
 }
 
 .application-doc-card__head {
@@ -2078,9 +2051,10 @@ button.table-sort svg {
   margin: 0;
   padding: var(--s3);
   overflow: auto;
-  border: 1px solid var(--hairline);
-  border-radius: var(--r-sm);
-  background: var(--card);
+  border: 0;
+  border-left: 2px solid var(--hairline-strong);
+  border-radius: 0;
+  background: transparent;
   color: var(--ink);
   font-family: inherit;
   font-size: 0.78rem;
@@ -2149,9 +2123,6 @@ button.table-sort svg {
 
 @media (max-width: 1280px) {
   .analytics-panel { grid-column: span 6; }
-  .analytics-panel--wide,
-  .analytics-panel--narrow { grid-column: span 6; }
-  .analytics-panel--wide + .analytics-panel--narrow + .analytics-panel--narrow { grid-column: span 6; }
 }
 
 @media (max-width: 1080px) {
@@ -2159,6 +2130,12 @@ button.table-sort svg {
   .tracker-layout--calendar,
   .application-modal__body {
     grid-template-columns: 1fr;
+  }
+
+  .application-match-card {
+    padding-inline: var(--s3);
+    border-left: 0;
+    border-top: 1px solid var(--hairline);
   }
 
   /* Drop the sticky behavior but stay a containing block so the corner open
@@ -2176,6 +2153,7 @@ button.table-sort svg {
 
   .calendar-grid {
     grid-template-columns: repeat(7, minmax(92px, 1fr));
+    min-width: 644px;
   }
 
   /* Single column: the rail stacks below the calendar, so let it flow at its
@@ -2237,12 +2215,22 @@ button.table-sort svg {
   }
 
   .analytics-panel,
-  .analytics-panel--wide,
-  .analytics-panel--narrow,
   .analytics-panel--flat,
   .analytics-panel--half { grid-column: 1 / -1; }
 
   .application-form__grid { grid-template-columns: 1fr; }
+  .application-contact-row {
+    grid-template-columns: 1fr;
+    padding-top: var(--s3);
+    border-top: 1px solid var(--hairline-soft);
+  }
+  .application-contact-row:first-child {
+    padding-top: 0;
+    border-top: 0;
+  }
+  .application-contact-row > .is-icon {
+    justify-self: end;
+  }
   .application-modal { padding: var(--s3); }
   .application-modal__panel { width: 100%; max-height: calc(100vh - 24px); padding: var(--s4); }
 }

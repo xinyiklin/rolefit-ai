@@ -183,6 +183,21 @@ shadows. Elevation appears only when an object is physically above the canvas.
 Components feel refined and restrained. Standard affordances are used without
 ornamental reinterpretation.
 
+### Shared Surface Boundary
+
+The document page, direct-editing behavior, toolbar controls, popovers, and
+their base styles are owned by `@typeset/editor`; the document rendering and
+measurement contract is owned by `@typeset/engine`. Typeset composes those
+surfaces with its own file/status row and product identity.
+
+- Put reusable editor behavior and base styles in the owning package, then
+  verify both Typeset and RoleFit AI.
+- Keep autosave copy, filename lifecycle, file actions, and Typeset-only
+  responsive composition in this app.
+- Prefer narrow values, callbacks, and deliberate slots over app-mode flags.
+- Never fork shared page geometry or toolbar behavior to make a host-specific
+  visual adjustment.
+
 ### Buttons
 
 - **Shape:** Compact rounded rectangle (6px), never a decorative pill.
@@ -218,10 +233,20 @@ ornamental reinterpretation.
 The two-row top toolbar is the application shell. The first row owns file
 lifecycle and status, with autosave state grouped directly beside the expanding
 filename field. The field reserves only its content width, so short filenames do
-not leave an invisible gap before status. A blank filename resolves to
+not leave an invisible gap before status. Responsive disclosure may remove
+adjacent labels, but it does not impose a narrower filename cap; the field
+shrinks only when the remaining row width truly requires it. A blank filename resolves to
 `Untitled resume` on blur. The
 second row owns document commands, formatting, and zoom.
-At tablet widths labels may compact, but Open, Save, and Export remain visible.
+Typeset does not hard-gate compact viewports. At 400px and below the file-action
+cluster is hidden, the document remains editable, and the initial view auto-fits
+the page within the scrollable workspace.
+Zoom is a conventional editable percent combobox before the selected font,
+accepting custom values from 50–200% as well as Fit page and common presets.
+At tablet widths formatting-menu labels compact first; menu icons then move
+into an anchored More overlay, followed by alignment at the next narrower
+threshold. The overlay floats above the page without changing toolbar or canvas
+geometry. Open, Save, and Export labels remain visible until that later stage.
 Selected-text family, a minus / editable preset-custom size / plus control, and
 selected-paragraph alignment stay directly available at wider widths. With a
 caret, these controls report and change the next-typing style. There is no global

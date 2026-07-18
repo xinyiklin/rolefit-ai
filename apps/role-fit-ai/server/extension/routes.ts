@@ -13,11 +13,10 @@
 
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { readBody, sendJson } from "../http.ts";
-import { serializeResumeData } from "../../src/lib/resumeData.ts";
 import { readApplications } from "../applications/index.ts";
-import { jobWorkspaceDir, readWorkspaceBaseResume } from "../workspace.ts";
+import { jobWorkspaceDir } from "../workspace.ts";
 import { resolveImportedJobText } from "../jobImport.ts";
-import { quickScore, findMatchingApplication, extractJobMeta } from "./index.ts";
+import { findMatchingApplication, extractJobMeta } from "./index.ts";
 
 // Pending browser-extension import. `status` is "distilling" while the server
 // PREPARES the posting text in the BACKGROUND (resolving the raw capture — e.g.
@@ -210,9 +209,9 @@ export async function handleExtensionRoutes(req: IncomingMessage, res: ServerRes
       sendJson(res, 400, { error: "Invalid JSON." });
       return;
     }
-    const capturedText = typeof body.text === "string" ? body.text : "";
-    const url = typeof body.url === "string" ? body.url : "";
-    const pageTitle = typeof body.pageTitle === "string" ? body.pageTitle : undefined;
+    const capturedText = typeof body.text === "string" ? body.text.slice(0, 50_000) : "";
+    const url = typeof body.url === "string" ? body.url.slice(0, 2_000) : "";
+    const pageTitle = typeof body.pageTitle === "string" ? body.pageTitle.slice(0, 500) : undefined;
     if (!capturedText.trim() || !url.trim()) {
       sendJson(res, 400, { error: "A job page text and url are required." });
       return;
@@ -221,30 +220,9 @@ export async function handleExtensionRoutes(req: IncomingMessage, res: ServerRes
 
     const { title, company } = extractJobMeta(text, pageTitle);
 
-    let resumeText = "";
-    try {
-      const baseResume = await readWorkspaceBaseResume();
-      if (baseResume && baseResume.text) {
-        if (baseResume.kind === "resume") {
-          // A .resume base is a { format, version, data } envelope of raw JSON on
-          // disk. Serialize its ResumeData to the plain text the quick scorer
-          // expects; fall back to the raw text if the envelope can't be parsed.
-          try {
-            resumeText = serializeResumeData(JSON.parse(baseResume.text).data);
-          } catch {
-            resumeText = baseResume.text;
-          }
-        } else {
-          resumeText = baseResume.text;
-        }
-      }
-    } catch {
-      resumeText = "";
-    }
-
-    const fit = resumeText.trim().length >= 100 ? quickScore(resumeText, text) : null;
-
-    let previousApp: { id: string; status: string; appliedAt: string | null; fitScore: number | null } | null = null;
+    // The extension intentionally does not read or score the base resume. It
+    // identifies/imports the posting; AI Review in the main app owns fit.
+    let previousApp: { id: string; status: string; appliedAt: string | null } | null = null;
     let duplicateMatch: { level: string; confidence: string; evidence: string[] } | null = null;
     try {
       const apps = await readApplications(jobWorkspaceDir);
@@ -260,14 +238,11 @@ export async function handleExtensionRoutes(req: IncomingMessage, res: ServerRes
           id: string;
           status: string;
           appliedAt?: string;
-          tailoredFitScore?: number | null;
-          fitScore?: number | null;
         };
         previousApp = {
           id: app.id,
           status: app.status,
-          appliedAt: app.appliedAt || null,
-          fitScore: app.tailoredFitScore || app.fitScore || null
+          appliedAt: app.appliedAt || null
         };
         duplicateMatch = {
           level: best.level,
@@ -276,14 +251,15 @@ export async function handleExtensionRoutes(req: IncomingMessage, res: ServerRes
         };
       }
     } catch {
-      previousApp = null;
-      duplicateMatch = null;
+      // A corrupt tracker must not become a false "no duplicate" result. That
+      // could prompt another application while the source data still needs repair.
+      sendJson(res, 500, { error: "The application tracker could not be checked safely." });
+      return;
     }
 
     sendJson(res, 200, {
       title: title ?? null,
       company: company ?? null,
-      fit,
       previousApp,
       match: duplicateMatch
     });
@@ -302,8 +278,8 @@ export async function handleExtensionRoutes(req: IncomingMessage, res: ServerRes
       sendJson(res, 400, { error: "Invalid JSON." });
       return;
     }
-    const text = typeof body.text === "string" ? body.text : "";
-    const url = typeof body.url === "string" ? body.url : "";
+    const text = typeof body.text === "string" ? body.text.slice(0, 50_000) : "";
+    const url = typeof body.url === "string" ? body.url.slice(0, 2_000) : "";
     const autoTailor = body.autoTailor === true;
     // Default TRUE for back-compat: older extension versions send no distillAi
     // field, and their behavior was to distill. Only an explicit `false` opts out.
@@ -327,7 +303,7 @@ export async function handleExtensionRoutes(req: IncomingMessage, res: ServerRes
     // distill — each import is its own claimable entry.
     extensionInbox.push({
       id: importId,
-      text: text.slice(0, 50_000),
+      text,
       url,
       fields: null,
       autoTailor,

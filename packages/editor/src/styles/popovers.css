@@ -580,25 +580,14 @@
   gap: 6px;
 }
 
-.style-popover__entry-font {
+.style-popover__entry-font.font-family-control {
   width: 100%;
+}
+
+.style-popover__entry-font .font-family-control__trigger {
   height: 30px;
-  padding: 0 24px 0 9px;
-  color: var(--ink);
-  background: var(--card);
-  border: 1px solid var(--hairline);
-  border-radius: var(--r-md);
-  outline: none;
-  font: 590 0.72rem/1 var(--font-ui);
-}
-
-.style-popover__entry-font:hover {
-  border-color: var(--hairline-strong);
-}
-
-.style-popover__entry-font:focus-visible {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-veil);
+  font-size: 0.72rem;
+  font-weight: 590;
 }
 
 /* The size control reuses the toolbar's FontSizeControl for identical UI/UX and
@@ -607,7 +596,7 @@
    pick up the popover's larger base size). */
 .style-popover__field-size.font-size-control {
   height: 30px;
-  font-size: 0.72rem;
+  font-size: 0.75rem;
 }
 
 .style-popover__toggle-row {

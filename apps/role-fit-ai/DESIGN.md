@@ -1,5 +1,5 @@
 ---
-name: Role-Fit AI
+name: RoleFit AI
 description: Editorial print-desk design system for a local-first resume-tailoring studio
 colors:
   paper: "oklch(0.956 0.006 150)"
@@ -12,7 +12,7 @@ colors:
   ink-strong: "oklch(0.18 0.014 160)"
   ink-muted: "oklch(0.41 0.014 160)"
   ink-soft: "oklch(0.5 0.014 160)"
-  ink-faint: "oklch(0.58 0.012 160)"
+  ink-faint: "oklch(0.51 0.012 160)"
   hairline: "oklch(0.885 0.008 150)"
   hairline-soft: "oklch(0.925 0.006 150)"
   hairline-strong: "oklch(0.81 0.01 150)"
@@ -112,15 +112,16 @@ components:
     padding: "0 8px"
 ---
 
-# Design System: Role-Fit AI
+# Design System: RoleFit AI
 
 ## 1. Overview
 
 **Creative North Star: "The Drafting Desk"**
 
-Role-Fit AI is a drafting desk, not a dashboard. Content surfaces read as
+RoleFit AI is a drafting desk, not a dashboard. Content surfaces read as
 paper sheets laid on a deeper desk tone; the chrome around them borrows from
-print production: a newspaper masthead with a double rule, an icon-led
+print production: a newspaper masthead joined to the workspace by one crisp
+hairline, an icon-led
 tab rail grouped like a table of contents, dotted-leader ledger rows, mono
 indices and tabular figures. The serif voice appears only in identity chrome (wordmark,
 page titles), the way a paper's nameplate differs from its body type. The tool
@@ -134,8 +135,8 @@ shimmer, decorative motion, and nested card-in-card containers. Status is
 stated quietly (a small dot beside a word), never shouted (filled pills,
 banners, badges everywhere).
 
-Layout is structural and predictable: masthead menus (Resume, Job, AI,
-Options) plus the Polish action on top, full-width tabbed studio below, export
+Layout is structural and predictable: masthead menus (Sessions, Resume, Job,
+AI, Options) plus the Polish action on top, full-width tabbed studio below, export
 rail at the bottom of the resume tab. Breakpoints (1280/1180/1080/900/820/760
 px) collapse structure; they never fluidly rescale type. Desktop ~1440px is
 the primary canvas; content wraps rather than clips below it.
@@ -147,6 +148,19 @@ the primary canvas; content wraps rather than clips below it.
 - One committed accent (Forest Ink) reserved for action and selection.
 - Dot-plus-word status vocabulary; ledger rows for label/value facts.
 - Density with calm: compact spacing, short labels, restrained contrast.
+
+### Shared editor boundary
+
+The resume page, document/formatting toolbar family, popovers, font controls,
+and direct-edit behavior come from `@typeset/editor` over `@typeset/engine`.
+RoleFit frames that shared surface with Drafting Desk host chrome and injects
+only its section-scope/review overlay. Do not fork shared markup or layout CSS
+for a RoleFit-only tweak; add a narrow host seam and verify both products.
+
+`packages/editor/src/styles/` owns shared editor/tooling behavior. RoleFit's
+`src/styles/` owns the masthead, studio, tracker, materials, review, workflow,
+and host-specific integration overrides. The cascade between them is a public
+integration contract, not permission to duplicate the shared component.
 
 ## 2. Colors
 
@@ -173,7 +187,7 @@ quiet semantic signals; nothing is ever pure white or pure black.
   `--card-hover` 0.976): content surfaces, quiet wells, raised inputs and
   popovers, row hover. All hue 150, chroma ≤ 0.005.
 - **Ink family** (`--ink-strong` 0.18 → `--ink` 0.25 → `--ink-muted` 0.41 →
-  `--ink-soft` 0.5 → `--ink-faint` 0.58, hue 160): the only text colors.
+  `--ink-soft` 0.5 → `--ink-faint` 0.51, hue 160): the only text colors.
   Hierarchy comes from stepping down this ramp, not from new hues.
   `--ink-faint` is the floor; it was darkened to pass WCAG AA and must not be
   lightened.
@@ -248,8 +262,8 @@ never mono.
 The system is hairline-structured and near-flat. Depth is conveyed by tonal
 paper layers (desk `--paper-deep` → sheet `--card` → raised `--card-elev`)
 and 1px hairlines; shadows exist only as whispers at 3–8% alpha to settle
-sheets onto the desk. The masthead's signature "double rule" is elevation as
-print: a 1px solid border plus a 3px offset hairline shadow, no blur at all.
+sheets onto the desk. The fixed-height masthead uses one 1px structural rule
+so its lower edge meets the sidebar and workspace without a false gap.
 
 ### Shadow Vocabulary
 
@@ -322,8 +336,14 @@ interactive control shares the same focus treatment: 2px Forest Ink outline,
 - **Focus:** border flips to Forest Ink plus a 3px `--accent-glow` ring.
 - **Upload box:** dashed `--hairline-strong` border on `--card-soft`,
   accent-tinted on hover.
-- **Native appearance** is stripped from text fields only; checkboxes,
-  radios, and selects keep native controls.
+- **Native appearance** is stripped from text fields only; checkboxes and
+  radios keep native controls. Editor font-family choices use the shared custom
+  dropdown so the toolbar and Styles matrix have the same visual and keyboard
+  behavior in every browser.
+- **AI setup** is a one-open-section accordion. Collapsed Distill/Tailor/Review
+  rows retain their effective provider/model summary; CLI rows show signed-in
+  session guidance and no API-key field, while native API rows may reveal the
+  transient key input.
 
 ### Navigation
 
@@ -340,8 +360,11 @@ interactive control shares the same focus treatment: 2px Forest Ink outline,
   small-caps mono group eyebrows (DRAFT / TRACK) above hairline-separated
   groups. The active entry is the rail's one committed moment: an
   `--accent-soft` washed row with a `--accent-veil` ring, deep-accent icon,
-  ink-strong label. Below 1080px the rail flattens to a horizontal pill bar.
-  APG tabs keyboard model is mandatory.
+  ink-strong label. Below 1080px it collapses in place to a 52px icon rail; it
+  never changes axis into a top navbar. APG tabs keyboard model is mandatory.
+- **Narrow authoring:** at 720px and below, only the Resume tab's precise editor
+  becomes the width notice. The masthead, tab rail, Materials, Applications,
+  and Analytics remain part of the working product, including under high zoom.
 
 ### Ledger Rows (signature)
 
@@ -391,8 +414,9 @@ The table reads as a logbook register, not a CRM grid.
 
 ### Do:
 
-- **Do** use only `src/styles/tokens.css` variables and the per-surface CSS
-  classes in `src/styles/`; if a value is not a token, it does not ship.
+- **Do** use package tokens/classes for shared editor behavior and
+  `src/styles/tokens.css` plus per-surface app classes for RoleFit host chrome;
+  if a value has no owning token, it does not ship.
 - **Do** state status as a small dot beside plain sentence-case text
   (`.stage-dot`, `.nav-menu__sub`, `.studio-card__meta`).
 - **Do** set numbers, dates, scores, and indices in JetBrains Mono with

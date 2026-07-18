@@ -10,6 +10,7 @@
 export type FailureKind =
   | "timeout"
   | "auth"
+  | "rate-limit"
   | "config"
   | "too-large"
   | "truncated"
@@ -40,6 +41,7 @@ export class ApiError extends Error {
 const HEADLINES: Record<FailureKind, string> = {
   timeout: "Timed out",
   auth: "Authentication error",
+  "rate-limit": "Rate limit reached",
   config: "Configuration error",
   "too-large": "Request too large",
   truncated: "Response cut off",
@@ -80,22 +82,27 @@ export function classifyFailure(error: unknown): ClassifiedFailure {
     return classifiedFrom("auth", detail);
   }
 
-  // 3. Timeout.
+  // 3. Provider account quota / rate limit.
+  if (httpStatus === 429 || /rate limit|quota/i.test(message)) {
+    return classifiedFrom("rate-limit", detail);
+  }
+
+  // 4. Timeout.
   if (httpStatus === 504 || /timed out|timeout/i.test(message)) {
     return classifiedFrom("timeout", detail);
   }
 
-  // 4. Request too large for the provider/model.
+  // 5. Request too large for the provider/model.
   if (httpStatus === 413 || /too large/i.test(message)) {
     return classifiedFrom("too-large", detail);
   }
 
-  // 5. Provider cut its response short before finishing (output-token limit).
+  // 6. Provider cut its response short before finishing (output-token limit).
   if (/cut its response|output-token limit|truncated/i.test(message)) {
     return classifiedFrom("truncated", detail);
   }
 
-  // 6. 400s: split provider/model/base-url/reasoning-effort misconfiguration
+  // 7. 400s: split provider/model/base-url/reasoning-effort misconfiguration
   // from plain missing-input validation errors.
   if (httpStatus === 400) {
     if (/base url|provider|model|reasoning effort/i.test(message)) {
@@ -104,12 +111,12 @@ export function classifyFailure(error: unknown): ClassifiedFailure {
     return classifiedFrom("validation", detail);
   }
 
-  // 7. Provider returned something we couldn't use (bad JSON, empty body, etc).
+  // 8. Provider returned something we couldn't use (bad JSON, empty body, etc).
   if (httpStatus === 502 || /did not include usable|unparseable|did not return json|parse/i.test(message)) {
     return classifiedFrom("parse", detail);
   }
 
-  // 8. Generic provider/server failure (matches the 500 fallback status).
+  // 9. Generic provider/server failure (matches the 500 fallback status).
   return classifiedFrom("api", detail);
 }
 

@@ -6,6 +6,7 @@ import { lookup as dnsLookup } from "node:dns/promises";
 import type { LookupAddress } from "node:dns";
 import type { Readable } from "node:stream";
 import { createBrotliDecompress, createGunzip, createInflate } from "node:zlib";
+import { FetchTimeoutError } from "./http.ts";
 
 export class BlockedHostError extends Error {}
 export class DnsError extends Error {}
@@ -31,7 +32,9 @@ function isLocalHost(hostname: string): boolean {
   return host === "localhost" || host === "127.0.0.1" || host === "::1" || host === "[::1]";
 }
 
-// Returns true for any IPv4 literal in a loopback/private/link-local/CGNAT/unspecified range.
+// Returns true for any IPv4 literal that is not globally routable. Job-page
+// imports have no legitimate use for private, documentation, benchmark,
+// multicast, or reserved destinations.
 function isPrivateIPv4(ip: string): boolean {
   const octets = ip.split(".");
   if (octets.length !== 4) return false;
@@ -45,6 +48,13 @@ function isPrivateIPv4(ip: string): boolean {
   if (a === 172 && b >= 16 && b <= 31) return true; // 172.16.0.0/12
   if (a === 192 && b === 168) return true; // 192.168.0.0/16
   if (a === 100 && b >= 64 && b <= 127) return true; // CGNAT 100.64.0.0/10
+  if (a === 192 && b === 0) return true; // IETF protocol assignments 192.0.0.0/24
+  if (a === 192 && b === 0 && parts[2] === 2) return true; // documentation 192.0.2.0/24
+  if (a === 192 && b === 88 && parts[2] === 99) return true; // deprecated 6to4 relay anycast
+  if (a === 198 && (b === 18 || b === 19)) return true; // benchmark 198.18.0.0/15
+  if (a === 198 && b === 51 && parts[2] === 100) return true; // documentation 198.51.100.0/24
+  if (a === 203 && b === 0 && parts[2] === 113) return true; // documentation 203.0.113.0/24
+  if (a >= 224) return true; // multicast + reserved 224.0.0.0/4, 240.0.0.0/4
   return false;
 }
 
@@ -119,6 +129,8 @@ function isPrivateIPv6(ip: string): boolean {
   }
   if ((h[0] & 0xfe00) === 0xfc00) return true; // fc00::/7 (ULA)
   if ((h[0] & 0xffc0) === 0xfe80) return true; // fe80::/10 (link-local)
+  if ((h[0] & 0xff00) === 0xff00) return true; // ff00::/8 (multicast)
+  if (h[0] === 0x2001 && h[1] === 0x0db8) return true; // documentation 2001:db8::/32
   return false;
 }
 
@@ -163,42 +175,13 @@ async function assertPublicHost(hostname: string): Promise<[LookupAddress, ...Lo
 
 export function isPublicHttpUrl(url: URL): boolean {
   if (!["http:", "https:"].includes(url.protocol)) return false;
+  if (url.username || url.password) return false;
   // Only the protocol-default port (URL.port is "" for 80/443). A redirect to a
   // non-standard port (e.g. :8080, :22) would turn a job-page fetch into an
   // arbitrary-port probe from the user's IP; real job postings use default ports.
   if (url.port !== "") return false;
 
   return !isPrivateHost(url.hostname);
-}
-
-export function chatCompletionsEndpoint(rawBaseUrl: string | null | undefined): URL {
-  const raw = String(rawBaseUrl ?? "").trim();
-  if (!raw) throw new Error("Add an OpenAI-compatible base URL.");
-
-  let url: URL;
-  try {
-    url = new URL(raw);
-  } catch {
-    throw new Error("Enter a valid OpenAI-compatible base URL.");
-  }
-
-  if (!["http:", "https:"].includes(url.protocol)) {
-    throw new Error("AI base URL must start with http:// or https://.");
-  }
-
-  if (url.protocol === "http:" && !isLocalHost(url.hostname)) {
-    throw new Error("Use https:// for remote AI providers. http:// is only allowed for localhost.");
-  }
-
-  if (url.protocol === "https:" && isPrivateHost(url.hostname) && !isLocalHost(url.hostname)) {
-    throw new Error("Private-network AI base URLs are blocked. Use localhost for local AI or a public https provider URL.");
-  }
-
-  url.hash = "";
-  url.search = "";
-  const path = url.pathname.replace(/\/+$/, "");
-  url.pathname = path.endsWith("/chat/completions") ? path : `${path || "/v1"}/chat/completions`;
-  return url;
 }
 
 const MAX_FETCH_BYTES = 5_000_000;
@@ -283,7 +266,7 @@ function pinnedFetch(
     );
     const timer = setTimeout(() => {
       req.destroy();
-      finish(reject, new BlockedHostError("The job page request timed out."));
+      finish(reject, new FetchTimeoutError("The job page request timed out."));
     }, timeoutMs);
     req.on("error", (error: Error) => finish(reject, error));
     req.end();

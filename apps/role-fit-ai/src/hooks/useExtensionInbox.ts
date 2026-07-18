@@ -57,7 +57,7 @@ function clearExtensionImportParam(): void {
  * Callback refs keep the latest closures without re-subscribing the listeners.
  */
 export function useExtensionInbox(
-  onImport: (item: ExtensionImport) => void,
+  onImport: (item: ExtensionImport) => void | Promise<void>,
   onDistilling?: () => void
 ): void {
   const onImportRef = useRef(onImport);
@@ -79,8 +79,16 @@ export function useExtensionInbox(
     // unclaimed fallback) while hidden for the rest of its life.
     let claimActive = Boolean(claimToken);
     let cancelled = false;
+    let checking = false;
+    let transientRetries = 0;
     const schedule = (ms: number) => {
       if (!cancelled) timer = setTimeout(() => void checkInbox(), ms);
+    };
+    const scheduleTransientRetry = () => {
+      if (distilling || claimActive || transientRetries < 3) {
+        transientRetries += 1;
+        schedule(Math.min(4_000, 1_000 * transientRetries));
+      }
     };
 
     async function checkInbox(): Promise<void> {
@@ -88,7 +96,7 @@ export function useExtensionInbox(
         clearTimeout(timer);
         timer = null;
       }
-      if (cancelled) return;
+      if (cancelled || checking) return;
       // Hidden tabs stay hands-off for NEW, unclaimed imports so a backgrounded
       // tab never claims one meant for the visible tab. But a tab that already
       // owns an in-flight import KEEPS polling while hidden: otherwise the
@@ -109,6 +117,7 @@ export function useExtensionInbox(
       ) {
         return;
       }
+      checking = true;
       try {
         // Carry this tab's session id so the server hands each import to exactly
         // one tab — the one that claimed it — instead of every polling tab.
@@ -116,6 +125,15 @@ export function useExtensionInbox(
         if (claimToken) params.set("claimToken", claimToken);
         const res = await fetch(`/api/extension/inbox?${params.toString()}`);
         const data: unknown = await res.json();
+        if (!res.ok) {
+          // Keep an owned claim alive across transient server failures. A failed
+          // poll is not a delivery and must never clear the token or reservation.
+          if (res.status === 408 || res.status === 425 || res.status === 429 || res.status >= 500) {
+            scheduleTransientRetry();
+          }
+          return;
+        }
+        transientRetries = 0;
         if (data === null || typeof data !== "object") {
           distilling = false;
           // A poll that carried a claim token but got back null/no-entry means
@@ -154,7 +172,7 @@ export function useExtensionInbox(
             obj.fields !== null && typeof obj.fields === "object"
               ? (obj.fields as Record<string, unknown>)
               : null;
-          onImportRef.current({
+          await onImportRef.current({
             text: obj.text,
             url: obj.url,
             fields,
@@ -170,9 +188,12 @@ export function useExtensionInbox(
           if (claimToken) clearExtensionImportParam();
         }
       } catch {
-        // Transient error: keep retrying ONLY if a distill is in flight (so we
-        // don't poll forever when the server is simply down / idle).
-        if (distilling) schedule(2000);
+        // A claim-token tab already owns this import even before the first
+        // successful progress response, so network/JSON failures must retry for
+        // either ownership signal. Tokenless idle tabs still avoid polling forever.
+        scheduleTransientRetry();
+      } finally {
+        checking = false;
       }
     }
 
