@@ -461,7 +461,9 @@ function providerPayloadMatches(value: unknown, ownership: RoleFitServerOwnershi
 
 function readDesktopMode(): DesktopMode {
   const argument = process.argv.find((value) => value.startsWith("--rolefit-mode="));
-  const rawMode = process.env.ROLEFIT_DESKTOP_MODE ?? argument?.split("=", 2)[1] ?? "development";
+  const rawMode = process.env.ROLEFIT_DESKTOP_MODE ??
+    argument?.split("=", 2)[1] ??
+    (app.isPackaged ? "production" : "development");
   if (rawMode !== "development" && rawMode !== "production") {
     throw new Error("ROLEFIT_DESKTOP_MODE must be development or production.");
   }
