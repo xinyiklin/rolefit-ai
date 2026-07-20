@@ -1,7 +1,10 @@
-export const ROLEFIT_DESKTOP_API_VERSION = 5 as const;
+export const ROLEFIT_DESKTOP_API_VERSION = 6 as const;
 export const ROLEFIT_DESKTOP_SETTINGS_SCHEMA_VERSION = 1 as const;
 export const ROLEFIT_PROVIDER_GUIDANCE_MAX_LENGTH = 240 as const;
 export const ROLEFIT_API_KEY_MAX_BYTES = 16_384 as const;
+export const ROLEFIT_EXTENSION_ORIGIN_MAX_LENGTH = 128 as const;
+export const ROLEFIT_EXTENSION_ORIGIN_MAX_COUNT = 4 as const;
+export const ROLEFIT_EXTENSION_PAIRING_REQUEST_MAX_COUNT = 8 as const;
 
 // Const enums inline into the compiled sandboxed preload, so this file remains
 // the one source of truth without emitting a forbidden neighboring require.
@@ -13,6 +16,9 @@ export const enum RoleFitDesktopIpcChannel {
   GetRuntimeInfo = "rolefit:companion:get-runtime-info",
   GetLocalSiteSettings = "rolefit:companion:get-local-site-settings",
   ApplyLocalSitePort = "rolefit:companion:apply-local-site-port",
+  GetExtensionPairingSettings = "rolefit:companion:get-extension-pairing-settings",
+  SaveExtensionOrigin = "rolefit:companion:save-extension-origin",
+  RemoveExtensionOrigin = "rolefit:companion:remove-extension-origin",
   GetProviderConnections = "rolefit:companion:get-provider-connections",
   SaveApiProvider = "rolefit:companion:save-api-provider",
   RemoveProvider = "rolefit:companion:remove-provider",
@@ -49,6 +55,16 @@ export type RoleFitDesktopSiteSettings = Readonly<{
   source: RoleFitDesktopSiteSettingsSource;
   locked: boolean;
   warning: RoleFitDesktopSiteSettingsWarning | null;
+}>;
+
+/**
+ * Exact, non-secret browser-extension origins approved by the user. The local
+ * server reflects only these origins on extension analyze/import responses.
+ */
+export type RoleFitExtensionPairingSettings = Readonly<{
+  schemaVersion: typeof ROLEFIT_DESKTOP_SETTINGS_SCHEMA_VERSION;
+  origins: readonly string[];
+  pendingOrigins: readonly string[];
 }>;
 
 export const ROLEFIT_CLI_PROVIDER_IDS = Object.freeze([
@@ -125,6 +141,9 @@ export type RoleFitCliTerminalSignInResult = Readonly<{
 export type RoleFitDesktopRuntimeInfoRequest = readonly [];
 export type RoleFitDesktopSiteSettingsRequest = readonly [];
 export type RoleFitApplyLocalSitePortRequest = readonly [number];
+export type RoleFitExtensionPairingSettingsRequest = readonly [];
+export type RoleFitSaveExtensionOriginRequest = readonly [string];
+export type RoleFitRemoveExtensionOriginRequest = readonly [string];
 export type RoleFitProviderConnectionsRequest = readonly [];
 export type RoleFitSaveApiProviderRequest = readonly [RoleFitApiProviderId, string];
 export type RoleFitRemoveProviderRequest = readonly [RoleFitProviderId];
@@ -139,6 +158,9 @@ export type RoleFitDesktopApi = Readonly<{
   getRuntimeInfo(): Promise<RoleFitDesktopRuntimeInfo>;
   getLocalSiteSettings(): Promise<RoleFitDesktopSiteSettings>;
   applyLocalSitePort(port: number): Promise<RoleFitDesktopSiteSettings>;
+  getExtensionPairingSettings(): Promise<RoleFitExtensionPairingSettings>;
+  saveExtensionOrigin(origin: string): Promise<RoleFitExtensionPairingSettings>;
+  removeExtensionOrigin(origin: string): Promise<RoleFitExtensionPairingSettings>;
   getProviderConnections(): Promise<readonly RoleFitProviderConnection[]>;
   saveApiProvider(
     provider: RoleFitApiProviderId,
@@ -157,6 +179,16 @@ export type RoleFitDesktopApi = Readonly<{
   openProviderInstallGuide(provider: RoleFitCliProviderId): Promise<void>;
   openBrowserApp(): Promise<void>;
 }>;
+
+export function normalizeRoleFitExtensionOrigin(value: unknown): string {
+  const origin = typeof value === "string" ? value.trim().replace(/\/$/, "") : "";
+  if (!origin || origin.length > ROLEFIT_EXTENSION_ORIGIN_MAX_LENGTH) return "";
+  if (/^chrome-extension:\/\/[a-p]{32}$/.test(origin)) return origin;
+  if (/^moz-extension:\/\/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(origin)) {
+    return origin.toLowerCase();
+  }
+  return "";
+}
 
 export function isRoleFitCliProviderId(value: unknown): value is RoleFitCliProviderId {
   return value === "claude-cli" ||

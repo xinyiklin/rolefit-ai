@@ -26,6 +26,7 @@ import {
 } from "./applications/routes.ts";
 import {
   cleanExtensionClaimToken,
+  handleExtensionPairingRequests,
   handleExtensionInbox,
   handleExtensionRoutes
 } from "./extension/routes.ts";
@@ -279,7 +280,9 @@ export async function startRoleFitServer(options: RoleFitServerOptions): Promise
 
     // The extension's analyze/import routes are handled BEFORE the localhost
     // CSRF guard and enforce their own extension-origin contract.
-    if (pathname === "/api/extension/analyze" || pathname === "/api/extension/import") {
+    if (pathname === "/api/extension/analyze" ||
+        pathname === "/api/extension/import" ||
+        pathname === "/api/extension/pairing-request") {
       void handleExtensionRoutes(req, res, pathname, workspaceDir);
       return;
     }
@@ -332,6 +335,11 @@ export async function startRoleFitServer(options: RoleFitServerOptions): Promise
       const tabId = routeUrl.searchParams.get("tabId") || "";
       const claimToken = cleanExtensionClaimToken(routeUrl.searchParams.get("claimToken"));
       void handleExtensionInbox(req, res, tabId, claimToken);
+      return;
+    }
+
+    if (pathname === "/api/extension/pairing-requests") {
+      handleExtensionPairingRequests(req, res);
       return;
     }
 

@@ -81,7 +81,8 @@ a:focus-visible {
 .provider-card__text-action,
 .provider-key-form input,
 .site-port-form input,
-.site-port-form button {
+.site-port-form button,
+.extension-pairing-form button {
   -webkit-app-region: no-drag;
 }
 
@@ -286,6 +287,104 @@ p {
 
 .site-port-form p {
   grid-column: 1 / -1;
+  margin: 0;
+  color: var(--ink-faint);
+  font-size: 8px;
+  line-height: 1.35;
+}
+
+.extension-pairing-form {
+  min-height: 48px;
+  padding: 8px 10px;
+  display: grid;
+  gap: 6px;
+  border-bottom: 1px solid var(--line);
+}
+
+.extension-pairing-form__heading {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--ink-soft);
+  font-size: 9px;
+  font-weight: 760;
+  letter-spacing: 0.075em;
+  text-transform: uppercase;
+}
+
+.extension-pairing-form__heading strong {
+  color: var(--forest);
+  font-size: 8px;
+}
+
+.extension-request-list,
+.extension-pairing-list {
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+  list-style: none;
+}
+
+.extension-request-list:empty,
+.extension-pairing-list:empty {
+  display: none;
+}
+
+.extension-request-list li,
+.extension-pairing-list li {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.extension-request-list code,
+.extension-pairing-list code {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--forest-deep);
+  font: 8px/1.35 "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.extension-request-list button,
+.extension-pairing-list button {
+  padding: 2px 0;
+  border: 0;
+  color: var(--red);
+  background: transparent;
+  cursor: pointer;
+  font-size: 8px;
+  font-weight: 750;
+}
+
+.extension-request-list button {
+  min-height: 28px;
+  padding: 0 9px;
+  border: 1px solid var(--forest-deep);
+  border-radius: 2px;
+  color: #fffdf5;
+  background: var(--forest-deep);
+  text-decoration: none;
+}
+
+.extension-request-list button:hover:not(:disabled) {
+  border-color: var(--forest);
+  background: var(--forest);
+}
+
+.extension-request-list button:disabled,
+.extension-pairing-list button:disabled {
+  color: var(--ink-faint);
+  cursor: wait;
+}
+
+.extension-pairing-form p {
   margin: 0;
   color: var(--ink-faint);
   font-size: 8px;
@@ -680,9 +779,11 @@ p {
     grid-template-columns: 1fr;
   }
 
+
   .site-port-form button {
     justify-self: start;
   }
+
 
   .provider-key-form .provider-card__action,
   .provider-key-form .provider-card__text-action {

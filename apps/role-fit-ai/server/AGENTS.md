@@ -32,9 +32,11 @@ for provider, prompt, sanitizer, and review work.
   `127.0.0.1`, and `[::1]`. Cross-origin extension analyze/import routes must
   match an exact, explicitly configured `EXTENSION_ALLOWED_ORIGINS` entry and
   reflect only that Origin. An extension scheme is not an identity; an
-  unset/invalid allowlist rejects every extension request. Never admit another
-  installed extension, arbitrary web Origins, an absent/malformed Origin, or
-  wildcard CORS.
+  unset/invalid allowlist rejects every analyze/import request. A syntactically
+  valid extension origin may enqueue only a bounded, expiring pairing request;
+  that route exposes no tracker/import data and requires explicit companion
+  approval before the origin enters the allowlist. Never admit another installed
+  extension, arbitrary web Origins, an absent/malformed Origin, or wildcard CORS.
 - The ordinary `/api/*` Host/Origin guard is a browser CSRF/DNS-rebinding
   boundary, not authentication for native clients. Do not add broad web CORS,
   bearer handling, or public Electron-management routes to this runtime. The
@@ -65,8 +67,9 @@ for provider, prompt, sanitizer, and review work.
   Browser requests select a provider/model/effort but never carry a managed
   API key; `.env` keys remain an explicit standalone/headless fallback.
 - Keep extension claim tokens as inbox-routing values only. They must never
-  authorize companion IPC or CLI status/sign-in actions, and extension routes
-  must never be surfaced through the compact companion.
+  authorize companion IPC or CLI status/sign-in actions. Only bounded pending
+  origin requests may surface in the companion; posting, tracker, claim-token,
+  resume, and provider payloads must not cross that boundary.
 - Do not import React-bearing editor modules from the Node server. Import only
   React-free engine/domain subpaths.
 - Keep storage mutation serialized/atomic where concurrent tabs or routes can

@@ -12,8 +12,9 @@ V3 client of the local RoleFit server.
   must require the popup's exact configured Origin through
   `EXTENSION_ALLOWED_ORIGINS`; an extension URL scheme alone is never an
   identity, and an unset/invalid allowlist must reject every analyze/import
-  request. Preserve exact-Origin CORS and the claim-token handoff into a fresh
-  app tab.
+  request. A valid unapproved origin may request first-use approval but receives
+  no tracker/import data until the user approves it in the companion. Preserve
+  exact-Origin CORS and the claim-token handoff into a fresh app tab.
 - Chrome and Firefox host match patterns cannot safely express one localhost
   port, so the manifest permits only the `http://localhost/*` host while the
   popup keeps its API target fixed to the canonical port `5181`. Companion

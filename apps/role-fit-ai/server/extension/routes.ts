@@ -146,6 +146,9 @@ const EXTENSION_ORIGIN_PROTOCOLS = new Set([
 const EXTENSION_ORIGIN_MAX_LENGTH = 256;
 const EXTENSION_ORIGIN_CONFIG_MAX_LENGTH = 4_096;
 const EXTENSION_ORIGIN_MAX_COUNT = 16;
+const EXTENSION_PAIRING_REQUEST_TTL_MS = 10 * 60 * 1000;
+const EXTENSION_PAIRING_REQUEST_MAX = 8;
+let pendingExtensionPairingRequests: Array<{ origin: string; requestedAt: number }> = [];
 
 function normalizeExtensionOrigin(value: unknown): string | null {
   const raw = typeof value === "string" ? value : "";
@@ -170,6 +173,17 @@ function normalizeExtensionOrigin(value: unknown): string | null {
       parsed.search ||
       parsed.hash
     ) {
+      return null;
+    }
+    if (parsed.protocol === "chrome-extension:" && !/^[a-p]{32}$/.test(parsed.host)) {
+      return null;
+    }
+    if (parsed.protocol === "moz-extension:" &&
+        !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(parsed.host)) {
+      return null;
+    }
+    if (parsed.protocol === "safari-web-extension:" &&
+        !/^[A-Za-z0-9](?:[A-Za-z0-9.-]{0,126}[A-Za-z0-9])?$/.test(parsed.host)) {
       return null;
     }
     const normalized = `${parsed.protocol}//${parsed.host}`;
@@ -211,6 +225,38 @@ export function isAllowedExtensionOrigin(
   return normalized !== null && configuredOrigins.has(normalized);
 }
 
+function pruneExtensionPairingRequests(now = Date.now()): void {
+  pendingExtensionPairingRequests = pendingExtensionPairingRequests
+    .filter((request) => now - request.requestedAt < EXTENSION_PAIRING_REQUEST_TTL_MS)
+    .slice(-EXTENSION_PAIRING_REQUEST_MAX);
+}
+
+function queueExtensionPairingRequest(origin: string, now = Date.now()): void {
+  pruneExtensionPairingRequests(now);
+  pendingExtensionPairingRequests = pendingExtensionPairingRequests
+    .filter((request) => request.origin !== origin);
+  pendingExtensionPairingRequests.push({ origin, requestedAt: now });
+  if (pendingExtensionPairingRequests.length > EXTENSION_PAIRING_REQUEST_MAX) {
+    pendingExtensionPairingRequests.shift();
+  }
+}
+
+export function listPendingExtensionPairingOrigins(now = Date.now()): readonly string[] {
+  pruneExtensionPairingRequests(now);
+  return pendingExtensionPairingRequests.map((request) => request.origin);
+}
+
+export function handleExtensionPairingRequests(
+  req: IncomingMessage,
+  res: ServerResponse
+): void {
+  if (req.method !== "GET") {
+    sendJson(res, 405, { error: "Use GET." });
+    return;
+  }
+  sendJson(res, 200, { origins: listPendingExtensionPairingOrigins() });
+}
+
 // analyze + import: called cross-origin by the extension popup. Require a
 // configured exact extension Origin (a real chrome/moz/safari extension fetch
 // sends one) and reflect that exact Origin back — never a bare "*", a scheme-
@@ -222,14 +268,39 @@ export async function handleExtensionRoutes(
   pathname: string,
   workspaceDir = jobWorkspaceDir
 ): Promise<void> {
-  const origin = req.headers.origin;
-  if (!isAllowedExtensionOrigin(origin)) {
+  const origin = normalizeExtensionOrigin(req.headers.origin);
+  if (!origin) {
     sendJson(res, 403, { error: "Forbidden." });
     return;
   }
 
   res.setHeader("Access-Control-Allow-Origin", origin);
   res.setHeader("Vary", "Origin");
+  if (pathname === "/api/extension/pairing-request") {
+    if (req.method === "OPTIONS") {
+      res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+      res.writeHead(204);
+      res.end();
+      return;
+    }
+    if (req.method !== "POST") {
+      sendJson(res, 405, { error: "Use POST." });
+      return;
+    }
+    if (isAllowedExtensionOrigin(origin)) {
+      sendJson(res, 200, { status: "paired" });
+      return;
+    }
+    queueExtensionPairingRequest(origin);
+    sendJson(res, 202, { status: "pending" });
+    return;
+  }
+
+  if (!isAllowedExtensionOrigin(origin)) {
+    sendJson(res, 403, { error: "Extension not paired.", code: "extension-not-paired" });
+    return;
+  }
+
   if (req.method === "OPTIONS") {
     res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
     res.setHeader("Access-Control-Allow-Headers", "Content-Type");

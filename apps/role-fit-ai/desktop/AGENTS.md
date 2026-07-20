@@ -28,10 +28,11 @@ Applies to `apps/role-fit-ai/desktop/` and `tsconfig.desktop.json`.
   keys are write-only from the renderer, with no read, reveal, export, HTTP,
   argv, or environment path.
 - Desktop settings own a separate atomic, versioned, non-secret document under
-  Electron `userData`. It currently contains only the local site port, defaults
-  to `5181`, validates availability before save, and restarts through the normal
-  Electron quit lifecycle. `ROLEFIT_DESKTOP_PORT` is an explicit locked
-  per-launch override; settings never contain secrets or workspace paths.
+  Electron `userData`. It contains the local site port plus the bounded exact
+  origins the user approved for browser-extension access. Port changes validate
+  availability; port and pairing changes restart through the normal Electron
+  quit lifecycle. `ROLEFIT_DESKTOP_PORT` is an explicit locked per-launch
+  override; settings never contain secrets or workspace paths.
 - `runtime-paths.cts` owns the source-versus-package application, server, and
   writable-workspace resolution. `build-package.mjs` owns the minimal staged
   runtime; `forge.config.cjs` owns ASAR, native makers, signing/notarization,
@@ -119,8 +120,11 @@ Applies to `apps/role-fit-ai/desktop/` and `tsconfig.desktop.json`.
   environment while retaining only required executable/config discovery state.
   Live sign-in tests are explicit and opt-in.
 - Keep browser and extension behavior separate from companion IPC. Extension
-  claim tokens remain browser inbox-routing values. Never imply that the saved
-  companion port rewrites extension configuration or import routes.
+  claim tokens remain browser inbox-routing values. A valid unapproved
+  extension origin may enqueue only a bounded short-lived access request; the
+  exact origin becomes active only after explicit approval in the trusted
+  companion. Never imply that the saved companion port rewrites extension
+  configuration or import routes.
 - Treat companion process tests as explicit integration tests. They use isolated
   ports/state and fake CLI binaries and prove exact-sender rejection, bounded
   status/sign-in behavior, and clean shutdown with no orphan listener or child.

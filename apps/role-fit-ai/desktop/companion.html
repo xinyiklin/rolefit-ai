@@ -70,6 +70,16 @@
             <p id="local-site-port-status" role="status" aria-live="polite">Loading port setting&#8230;</p>
           </form>
 
+          <section class="extension-pairing-form" id="extension-pairing-panel" aria-labelledby="extension-pairing-title">
+            <div class="extension-pairing-form__heading">
+              <span id="extension-pairing-title">Browser extension</span>
+              <strong id="extension-pairing-count">Checking</strong>
+            </div>
+            <ul class="extension-request-list" id="extension-request-list" aria-label="Extension access requests"></ul>
+            <ul class="extension-pairing-list" id="extension-pairing-list" aria-label="Paired browser extensions"></ul>
+            <p id="extension-pairing-status" role="status" aria-live="polite">Loading extension pairing&#8230;</p>
+          </section>
+
           <ol class="provider-list" id="provider-list" data-provider-list aria-busy="true"></ol>
           <p class="provider-announcement visually-hidden" id="provider-announcement" aria-live="polite"></p>
         </section>

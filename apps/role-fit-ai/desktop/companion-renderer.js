@@ -41,6 +41,9 @@ const requiredBridgeMethods = Object.freeze([
   "getRuntimeInfo",
   "getLocalSiteSettings",
   "applyLocalSitePort",
+  "getExtensionPairingSettings",
+  "saveExtensionOrigin",
+  "removeExtensionOrigin",
   "getProviderConnections",
   "saveApiProvider",
   "removeProvider",
@@ -60,6 +63,10 @@ const elements = Object.freeze({
   sitePortInput: document.getElementById("local-site-port"),
   sitePortApply: document.getElementById("apply-local-site-port"),
   sitePortStatus: document.getElementById("local-site-port-status"),
+  extensionPairingCount: document.getElementById("extension-pairing-count"),
+  extensionRequestList: document.getElementById("extension-request-list"),
+  extensionPairingList: document.getElementById("extension-pairing-list"),
+  extensionPairingStatus: document.getElementById("extension-pairing-status"),
   openRoleFit: document.getElementById("open-rolefit-browser"),
   providerList: document.getElementById("provider-list"),
   providerSummary: document.getElementById("provider-summary"),
@@ -77,6 +84,8 @@ let pollTimer = 0;
 let siteSettings = null;
 let sitePortApplyPending = false;
 let sitePortConfirmValue = null;
+let extensionPairingSettings = null;
+let extensionPairingPending = false;
 
 function hasUsableBridge() {
   return Boolean(
@@ -173,12 +182,108 @@ async function loadLocalSiteSettings() {
     siteSettings = settings;
     elements.sitePortInput.value = String(settings.localSitePort);
     updateSitePortControls();
+    updateExtensionPairingControls();
   } catch {
     siteSettings = null;
     elements.sitePortInput.disabled = true;
     elements.sitePortApply.disabled = true;
     elements.sitePortStatus.textContent = "Port setting unavailable. Restart the companion and try again.";
   }
+}
+
+function normalizeExtensionOriginInput(value) {
+  const origin = String(value ?? "").trim().replace(/\/$/, "");
+  if (/^chrome-extension:\/\/[a-p]{32}$/.test(origin)) return origin;
+  if (/^moz-extension:\/\/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(origin)) {
+    return origin.toLowerCase();
+  }
+  return "";
+}
+
+function extensionPairingMessage() {
+  if (!siteSettings) return "Local site settings are unavailable.";
+  if (siteSettings.localSitePort !== 5_181) return "Set the local site port to 5181 before pairing.";
+  const count = extensionPairingSettings?.origins?.length ?? 0;
+  const pendingCount = extensionPairingSettings?.pendingOrigins?.length ?? 0;
+  if (pendingCount > 0) return "Approve the extension request to enable job imports.";
+  return count === 0
+    ? "Open the RoleFit browser extension once to request access."
+    : `${count} browser extension${count === 1 ? "" : "s"} paired.`;
+}
+
+function renderExtensionPairings() {
+  const pendingFragment = document.createDocumentFragment();
+  const pairedFragment = document.createDocumentFragment();
+  const origins = Array.isArray(extensionPairingSettings?.origins)
+    ? extensionPairingSettings.origins
+    : [];
+  const pendingOrigins = Array.isArray(extensionPairingSettings?.pendingOrigins)
+    ? extensionPairingSettings.pendingOrigins.filter((origin) => !origins.includes(origin))
+    : [];
+  for (const origin of pendingOrigins) {
+    const item = document.createElement("li");
+    const value = createTextElement("code", "", origin);
+    value.title = origin;
+    const approve = createTextElement("button", "", "Approve");
+    approve.type = "button";
+    approve.dataset.extensionRequestOrigin = origin;
+    approve.disabled = extensionPairingPending || siteSettings?.localSitePort !== 5_181;
+    approve.setAttribute("aria-label", `Approve browser extension ${origin}`);
+    item.append(value, approve);
+    pendingFragment.append(item);
+  }
+  for (const origin of origins) {
+    const item = document.createElement("li");
+    const value = createTextElement("code", "", origin);
+    value.title = origin;
+    const remove = createTextElement("button", "", "Remove");
+    remove.type = "button";
+    remove.dataset.extensionOrigin = origin;
+    remove.disabled = extensionPairingPending;
+    remove.setAttribute("aria-label", `Remove paired extension ${origin}`);
+    item.append(value, remove);
+    pairedFragment.append(item);
+  }
+  elements.extensionRequestList.replaceChildren(pendingFragment);
+  elements.extensionPairingList.replaceChildren(pairedFragment);
+  elements.extensionPairingCount.textContent = pendingOrigins.length > 0
+    ? `${pendingOrigins.length} awaiting approval`
+    : origins.length > 0
+      ? `${origins.length} paired`
+      : "Not paired";
+}
+
+function updateExtensionPairingControls({ preserveStatus = false } = {}) {
+  renderExtensionPairings();
+  if (!preserveStatus) elements.extensionPairingStatus.textContent = extensionPairingMessage();
+}
+
+async function loadExtensionPairingSettings() {
+  try {
+    const settings = await bridge.getExtensionPairingSettings();
+    if (!settings || typeof settings !== "object" ||
+        !Array.isArray(settings.origins) || !Array.isArray(settings.pendingOrigins)) {
+      throw new Error("Invalid extension pairing settings.");
+    }
+    extensionPairingSettings = settings;
+    updateExtensionPairingControls();
+  } catch {
+    extensionPairingSettings = null;
+    elements.extensionPairingCount.textContent = "Unavailable";
+    elements.extensionRequestList.replaceChildren();
+    elements.extensionPairingList.replaceChildren();
+    elements.extensionPairingStatus.textContent = "Extension pairing unavailable. Restart the companion and try again.";
+  }
+}
+
+function extensionPairingErrorMessage(error) {
+  const message = error instanceof Error ? error.message : String(error);
+  if (message.includes("exact extension origin")) return message;
+  if (message.includes("up to")) return message;
+  if (message.includes("standalone RoleFit server")) return message;
+  if (message.includes("port 5181")) return message;
+  if (message.includes("already restarting")) return message;
+  return "The extension pairing could not be saved. Check app permissions and try again.";
 }
 
 function localSitePortErrorMessage(error) {
@@ -382,6 +487,7 @@ function schedulePoll(signInRunning) {
     ? PROVIDER_SIGN_IN_POLL_INTERVAL_MS
     : PROVIDER_VISIBLE_POLL_INTERVAL_MS;
   pollTimer = window.setTimeout(() => {
+    void loadExtensionPairingSettings();
     void refreshProviders({ announceResult: false });
   }, delay);
 }
@@ -549,6 +655,8 @@ function initializeUnavailableState() {
   elements.sitePortInput.disabled = true;
   elements.sitePortApply.disabled = true;
   elements.sitePortStatus.textContent = "Port setting unavailable.";
+  elements.extensionPairingCount.textContent = "Unavailable";
+  elements.extensionPairingStatus.textContent = "Extension pairing unavailable.";
   elements.runtimeVersion.textContent = "Companion unavailable";
   renderProviders();
   elements.providerSummary.textContent = "Restart the RoleFit companion to manage providers.";
@@ -621,7 +729,10 @@ document.addEventListener("visibilitychange", () => {
     pollTimer = 0;
     return;
   }
-  if (hasUsableBridge()) void refreshProviders({ announceResult: false });
+  if (hasUsableBridge()) {
+    void loadExtensionPairingSettings();
+    void refreshProviders({ announceResult: false });
+  }
 });
 
 elements.sitePortInput.addEventListener("input", () => {
@@ -634,6 +745,48 @@ elements.sitePortInput.addEventListener("input", () => {
     : port === siteSettings.localSitePort && siteSettings.warning === null
       ? currentPortStatus(siteSettings)
       : `Apply to restart RoleFit at localhost:${port}.`;
+});
+
+elements.extensionRequestList.addEventListener("click", async (event) => {
+  const button = event.target instanceof Element
+    ? event.target.closest("[data-extension-request-origin]")
+    : null;
+  if (!(button instanceof HTMLButtonElement) || button.disabled || extensionPairingPending) return;
+  const origin = normalizeExtensionOriginInput(button.dataset.extensionRequestOrigin);
+  if (!origin) return;
+  extensionPairingPending = true;
+  updateExtensionPairingControls({ preserveStatus: true });
+  elements.extensionPairingStatus.textContent = "Approving extension…";
+  try {
+    extensionPairingSettings = await bridge.saveExtensionOrigin(origin);
+    updateExtensionPairingControls({ preserveStatus: true });
+    elements.extensionPairingStatus.textContent = "Paired. Restarting the local service…";
+  } catch (error) {
+    extensionPairingPending = false;
+    updateExtensionPairingControls({ preserveStatus: true });
+    elements.extensionPairingStatus.textContent = extensionPairingErrorMessage(error);
+  }
+});
+
+elements.extensionPairingList.addEventListener("click", async (event) => {
+  const button = event.target instanceof Element
+    ? event.target.closest("[data-extension-origin]")
+    : null;
+  if (!(button instanceof HTMLButtonElement) || button.disabled || extensionPairingPending) return;
+  const origin = normalizeExtensionOriginInput(button.dataset.extensionOrigin);
+  if (!origin) return;
+  extensionPairingPending = true;
+  updateExtensionPairingControls({ preserveStatus: true });
+  elements.extensionPairingStatus.textContent = "Removing pairing…";
+  try {
+    extensionPairingSettings = await bridge.removeExtensionOrigin(origin);
+    updateExtensionPairingControls({ preserveStatus: true });
+    elements.extensionPairingStatus.textContent = "Removed. Restarting the local service…";
+  } catch (error) {
+    extensionPairingPending = false;
+    updateExtensionPairingControls({ preserveStatus: true });
+    elements.extensionPairingStatus.textContent = extensionPairingErrorMessage(error);
+  }
 });
 
 elements.sitePortForm.addEventListener("submit", async (event) => {
@@ -664,6 +817,7 @@ elements.sitePortForm.addEventListener("submit", async (event) => {
     elements.sitePortInput.disabled = true;
     elements.sitePortApply.disabled = true;
     elements.sitePortStatus.textContent = `Saved. Restarting at localhost:${port}…`;
+    updateExtensionPairingControls();
   } catch (error) {
     sitePortApplyPending = false;
     sitePortConfirmValue = null;
@@ -692,6 +846,7 @@ if (hasUsableBridge()) {
   elements.bridgeStatus.textContent = "Companion ready.";
   void loadRuntimeInfo();
   void loadLocalSiteSettings();
+  void loadExtensionPairingSettings();
   void refreshProviders({ announceResult: false });
 } else {
   initializeUnavailableState();

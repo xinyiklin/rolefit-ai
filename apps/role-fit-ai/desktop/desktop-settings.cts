@@ -11,7 +11,10 @@ import {
 import { createServer } from "node:net";
 import { join } from "node:path";
 import {
+  ROLEFIT_EXTENSION_ORIGIN_MAX_COUNT,
   ROLEFIT_DESKTOP_SETTINGS_SCHEMA_VERSION,
+  normalizeRoleFitExtensionOrigin,
+  type RoleFitExtensionPairingSettings,
   type RoleFitDesktopSiteSettings
 } from "./ipc-contract.cjs";
 
@@ -20,11 +23,13 @@ export const DEFAULT_ROLEFIT_LOCAL_SITE_PORT = 5_181 as const;
 const SETTINGS_DIRECTORY_NAME = "desktop-settings";
 const SETTINGS_FILE_NAME = "settings.json";
 const MAX_SETTINGS_FILE_BYTES = 4_096;
-const SETTINGS_KEYS = new Set(["schemaVersion", "localSitePort"]);
+const LEGACY_SETTINGS_KEYS = new Set(["schemaVersion", "localSitePort"]);
+const SETTINGS_KEYS = new Set(["schemaVersion", "localSitePort", "extensionOrigins"]);
 
 type PersistedDesktopSettings = Readonly<{
   schemaVersion: typeof ROLEFIT_DESKTOP_SETTINGS_SCHEMA_VERSION;
   localSitePort: number;
+  extensionOrigins: readonly string[];
 }>;
 
 export type DesktopSettingsOptions = Readonly<{
@@ -37,6 +42,9 @@ export type DesktopSettingsOptions = Readonly<{
 export type DesktopSettingsManager = Readonly<{
   load(): Promise<RoleFitDesktopSiteSettings>;
   saveLocalSitePort(port: number): Promise<RoleFitDesktopSiteSettings>;
+  loadExtensionPairingSettings(): Promise<RoleFitExtensionPairingSettings>;
+  saveExtensionOrigin(origin: string): Promise<RoleFitExtensionPairingSettings>;
+  removeExtensionOrigin(origin: string): Promise<RoleFitExtensionPairingSettings>;
 }>;
 
 export class DesktopSettingsLockedError extends Error {
@@ -95,10 +103,38 @@ function createSettingsState(
   });
 }
 
+function createExtensionPairingSettings(
+  origins: readonly string[]
+): RoleFitExtensionPairingSettings {
+  return Object.freeze({
+    schemaVersion: ROLEFIT_DESKTOP_SETTINGS_SCHEMA_VERSION,
+    origins: Object.freeze([...origins]),
+    pendingOrigins: Object.freeze([])
+  });
+}
+
+function validateExtensionOrigins(value: unknown): readonly string[] {
+  if (value === undefined) return Object.freeze([]);
+  if (!Array.isArray(value) || value.length > ROLEFIT_EXTENSION_ORIGIN_MAX_COUNT) {
+    throw new Error("Invalid desktop settings.");
+  }
+  const origins: string[] = [];
+  for (const candidate of value) {
+    const origin = normalizeRoleFitExtensionOrigin(candidate);
+    if (!origin || origins.includes(origin)) throw new Error("Invalid desktop settings.");
+    origins.push(origin);
+  }
+  return Object.freeze(origins);
+}
+
 function parsePersistedSettings(value: unknown): PersistedDesktopSettings {
   if (!isPlainObject(value)) throw new Error("Invalid desktop settings.");
   const keys = Object.keys(value);
-  if (keys.length !== SETTINGS_KEYS.size || !keys.every((key) => SETTINGS_KEYS.has(key))) {
+  const isLegacy = keys.length === LEGACY_SETTINGS_KEYS.size &&
+    keys.every((key) => LEGACY_SETTINGS_KEYS.has(key));
+  const isCurrent = keys.length === SETTINGS_KEYS.size &&
+    keys.every((key) => SETTINGS_KEYS.has(key));
+  if (!isLegacy && !isCurrent) {
     throw new Error("Invalid desktop settings.");
   }
   if (value.schemaVersion !== ROLEFIT_DESKTOP_SETTINGS_SCHEMA_VERSION) {
@@ -106,14 +142,16 @@ function parsePersistedSettings(value: unknown): PersistedDesktopSettings {
   }
   return Object.freeze({
     schemaVersion: ROLEFIT_DESKTOP_SETTINGS_SCHEMA_VERSION,
-    localSitePort: validateLocalSitePort(value.localSitePort)
+    localSitePort: validateLocalSitePort(value.localSitePort),
+    extensionOrigins: validateExtensionOrigins(value.extensionOrigins)
   });
 }
 
-function serializeSettings(port: number): string {
+function serializeSettings(port: number, extensionOrigins: readonly string[]): string {
   return `${JSON.stringify({
     schemaVersion: ROLEFIT_DESKTOP_SETTINGS_SCHEMA_VERSION,
-    localSitePort: validateLocalSitePort(port)
+    localSitePort: validateLocalSitePort(port),
+    extensionOrigins: validateExtensionOrigins(extensionOrigins)
   })}\n`;
 }
 
@@ -231,7 +269,7 @@ export function createDesktopSettingsManager(
     }
   };
 
-  const persist = async (port: number): Promise<void> => {
+  const persist = async (port: number, extensionOrigins: readonly string[]): Promise<void> => {
     await mkdir(settingsDirectory, { recursive: true, mode: 0o700 });
     if (platform !== "win32") await chmod(settingsDirectory, 0o700);
 
@@ -241,7 +279,7 @@ export function createDesktopSettingsManager(
     );
     const handle = await open(temporaryPath, "wx", 0o600);
     try {
-      await handle.writeFile(serializeSettings(port), "utf8");
+      await handle.writeFile(serializeSettings(port, extensionOrigins), "utf8");
       await handle.sync();
     } catch (error) {
       await handle.close().catch(() => undefined);
@@ -270,9 +308,61 @@ export function createDesktopSettingsManager(
     if (environmentPort !== undefined) throw new DesktopSettingsLockedError();
     const validPort = validateLocalSitePort(port);
     if (!(await isPortAvailable(validPort))) throw new DesktopSitePortUnavailableError();
-    await persist(validPort);
+    const currentOrigins = await loadPersistedOrigins();
+    await persist(validPort, currentOrigins);
     return createSettingsState(validPort, "saved");
   });
 
-  return Object.freeze({ load, saveLocalSitePort });
+  const loadPersistedOrigins = async (): Promise<readonly string[]> => {
+    try {
+      if (!(await fileExists(settingsPath))) return Object.freeze([]);
+      const metadata = await lstat(settingsPath);
+      if (!metadata.isFile() || metadata.isSymbolicLink() || metadata.size > MAX_SETTINGS_FILE_BYTES) {
+        return Object.freeze([]);
+      }
+      const parsed = parsePersistedSettings(
+        JSON.parse(await readFile(settingsPath, "utf8")) as unknown
+      );
+      return parsed.extensionOrigins;
+    } catch {
+      return Object.freeze([]);
+    }
+  };
+
+  const loadExtensionPairingSettings = (): Promise<RoleFitExtensionPairingSettings> => queue(async () =>
+    createExtensionPairingSettings(await loadPersistedOrigins())
+  );
+
+  const saveExtensionOrigin = (value: string): Promise<RoleFitExtensionPairingSettings> => queue(async () => {
+    const origin = normalizeRoleFitExtensionOrigin(value);
+    if (!origin) throw new Error("Enter a valid Chrome, Edge, or Firefox extension origin.");
+    const currentOrigins = await loadPersistedOrigins();
+    if (currentOrigins.includes(origin)) return createExtensionPairingSettings(currentOrigins);
+    if (currentOrigins.length >= ROLEFIT_EXTENSION_ORIGIN_MAX_COUNT) {
+      throw new Error(`RoleFit supports up to ${ROLEFIT_EXTENSION_ORIGIN_MAX_COUNT} paired extension origins.`);
+    }
+    const current = await loadPersisted();
+    const origins = Object.freeze([...currentOrigins, origin]);
+    await persist(current.localSitePort, origins);
+    return createExtensionPairingSettings(origins);
+  });
+
+  const removeExtensionOrigin = (value: string): Promise<RoleFitExtensionPairingSettings> => queue(async () => {
+    const origin = normalizeRoleFitExtensionOrigin(value);
+    if (!origin) throw new Error("Enter a valid Chrome, Edge, or Firefox extension origin.");
+    const currentOrigins = await loadPersistedOrigins();
+    const origins = Object.freeze(currentOrigins.filter((candidate) => candidate !== origin));
+    if (origins.length === currentOrigins.length) return createExtensionPairingSettings(currentOrigins);
+    const current = await loadPersisted();
+    await persist(current.localSitePort, origins);
+    return createExtensionPairingSettings(origins);
+  });
+
+  return Object.freeze({
+    load,
+    saveLocalSitePort,
+    loadExtensionPairingSettings,
+    saveExtensionOrigin,
+    removeExtensionOrigin
+  });
 }

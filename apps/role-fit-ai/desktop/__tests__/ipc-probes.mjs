@@ -6,11 +6,13 @@ import {
   ROLEFIT_API_KEY_MAX_BYTES,
   ROLEFIT_DESKTOP_API_VERSION,
   ROLEFIT_DESKTOP_SETTINGS_SCHEMA_VERSION,
+  ROLEFIT_EXTENSION_ORIGIN_MAX_COUNT,
   ROLEFIT_PROVIDER_GUIDANCE_MAX_LENGTH,
   createRoleFitDesktopRuntimeInfo,
   isRoleFitApiProviderId,
   isRoleFitCliProviderId,
   isRoleFitProviderId,
+  normalizeRoleFitExtensionOrigin,
   normalizeRoleFitDesktopPlatform
 } from "../../dist-electron/desktop/ipc-contract.cjs";
 import {
@@ -25,6 +27,9 @@ const channels = Object.freeze({
   runtime: "rolefit:companion:get-runtime-info",
   settings: "rolefit:companion:get-local-site-settings",
   applyPort: "rolefit:companion:apply-local-site-port",
+  extensionSettings: "rolefit:companion:get-extension-pairing-settings",
+  saveExtension: "rolefit:companion:save-extension-origin",
+  removeExtension: "rolefit:companion:remove-extension-origin",
   providers: "rolefit:companion:get-provider-connections",
   saveApi: "rolefit:companion:save-api-provider",
   remove: "rolefit:companion:remove-provider",
@@ -49,6 +54,12 @@ const siteSettings = Object.freeze({
   source: "default",
   locked: false,
   warning: null
+});
+const firefoxOrigin = "moz-extension://b933a57d-2237-411b-b6db-5ea8fca14731";
+const extensionPairingSettings = Object.freeze({
+  schemaVersion: 1,
+  origins: Object.freeze([firefoxOrigin]),
+  pendingOrigins: Object.freeze([])
 });
 const longGuidance = "g".repeat(ROLEFIT_PROVIDER_GUIDANCE_MAX_LENGTH + 20);
 const providerConnections = Object.freeze([
@@ -110,8 +121,9 @@ const providerConnections = Object.freeze([
   })
 ]);
 
-assert.equal(ROLEFIT_DESKTOP_API_VERSION, 5);
+assert.equal(ROLEFIT_DESKTOP_API_VERSION, 6);
 assert.equal(ROLEFIT_DESKTOP_SETTINGS_SCHEMA_VERSION, 1);
+assert.equal(ROLEFIT_EXTENSION_ORIGIN_MAX_COUNT, 4);
 assert.equal(ROLEFIT_API_KEY_MAX_BYTES, 16_384);
 assert.equal(normalizeRoleFitDesktopPlatform("darwin"), "darwin");
 assert.equal(normalizeRoleFitDesktopPlatform("freebsd"), "other");
@@ -121,8 +133,10 @@ assert.equal(isRoleFitApiProviderId("openai"), true);
 assert.equal(isRoleFitApiProviderId("claude-cli"), false);
 assert.equal(isRoleFitProviderId("anthropic"), true);
 assert.equal(isRoleFitProviderId("shell"), false);
+assert.equal(normalizeRoleFitExtensionOrigin(`${firefoxOrigin}/`), firefoxOrigin);
+assert.equal(normalizeRoleFitExtensionOrigin("https://example.com"), "");
 assert.deepEqual(runtimeInfo, {
-  apiVersion: 5,
+  apiVersion: 6,
   runtime: "electron-companion",
   platform: "darwin",
   appVersion: "0.1.0",
@@ -192,6 +206,9 @@ let openedTerminalProvider = null;
 let openedInstallGuide = null;
 let browserOpenCount = 0;
 let appliedLocalSitePort = null;
+let savedExtensionOrigin = null;
+let removedExtensionOrigin = null;
+let extensionPairingFailure = null;
 let siteSettingsFailure = null;
 let saveShouldLeak = false;
 let terminalShouldLeak = false;
@@ -216,6 +233,20 @@ const options = {
     appliedLocalSitePort = port;
     if (siteSettingsFailure) throw siteSettingsFailure;
     return { ...siteSettings, localSitePort: port, source: "saved" };
+  },
+  getExtensionPairingSettings: () => ({
+    ...extensionPairingSettings,
+    workspaceDir: "/must-not-cross-ipc"
+  }),
+  saveExtensionOrigin: async (origin) => {
+    savedExtensionOrigin = origin;
+    if (extensionPairingFailure) throw extensionPairingFailure;
+    return extensionPairingSettings;
+  },
+  removeExtensionOrigin: async (origin) => {
+    removedExtensionOrigin = origin;
+    if (extensionPairingFailure) throw extensionPairingFailure;
+    return { schemaVersion: 1, origins: [], pendingOrigins: [] };
   },
   getProviderConnections: async () => connectionsResult,
   saveApiProvider: async (provider, apiKey) => {
@@ -283,6 +314,20 @@ assert.deepEqual(appliedSiteSettings, {
   localSitePort: 5_191,
   source: "saved"
 });
+const handledExtensionSettings = await installedHandlers.get(channels.extensionSettings)(requestEvent());
+assert.deepEqual(handledExtensionSettings, extensionPairingSettings);
+assert.notEqual(handledExtensionSettings, extensionPairingSettings);
+assert.doesNotMatch(JSON.stringify(handledExtensionSettings), /workspace/);
+assert.deepEqual(
+  await installedHandlers.get(channels.saveExtension)(requestEvent(), `${firefoxOrigin}/`),
+  extensionPairingSettings
+);
+assert.equal(savedExtensionOrigin, firefoxOrigin);
+assert.deepEqual(
+  await installedHandlers.get(channels.removeExtension)(requestEvent(), firefoxOrigin),
+  { schemaVersion: 1, origins: [], pendingOrigins: [] }
+);
+assert.equal(removedExtensionOrigin, firefoxOrigin);
 const handledConnections = await installedHandlers.get(channels.providers)(requestEvent());
 assert.deepEqual(handledConnections.map(({ id }) => id), providerIds);
 assert.equal(handledConnections.length, 5);
@@ -391,6 +436,24 @@ await assert.rejects(
   /Untrusted/
 );
 assert.equal(appliedLocalSitePort, appliedPortBeforeUntrusted);
+await assert.rejects(
+  installedHandlers.get(channels.extensionSettings)(requestEvent(), "extra"),
+  /does not accept arguments/
+);
+await assert.rejects(
+  installedHandlers.get(channels.saveExtension)(requestEvent(), "https://example.com"),
+  /Invalid browser-extension origin/
+);
+await assert.rejects(
+  installedHandlers.get(channels.removeExtension)(requestEvent(), "moz-extension://not-a-uuid"),
+  /Invalid browser-extension origin/
+);
+const extensionOriginBeforeUntrusted = savedExtensionOrigin;
+await assert.rejects(
+  installedHandlers.get(channels.saveExtension)(requestEvent({ senderId: 99 }), firefoxOrigin),
+  /Untrusted/
+);
+assert.equal(savedExtensionOrigin, extensionOriginBeforeUntrusted);
 await assert.rejects(
   installedHandlers.get(channels.providers)(requestEvent(), "extra"),
   /does not accept arguments/
@@ -518,6 +581,23 @@ assert.match(sanitizedSettingsError.message, /could not be saved/);
 assert.doesNotMatch(sanitizedSettingsError.message, /private settings path/);
 siteSettingsFailure = null;
 
+extensionPairingFailure = new Error("private settings path must not cross IPC");
+let sanitizedPairingError = null;
+try {
+  await installedHandlers.get(channels.saveExtension)(requestEvent(), firefoxOrigin);
+} catch (error) {
+  sanitizedPairingError = error;
+}
+assert.ok(sanitizedPairingError instanceof Error);
+assert.match(sanitizedPairingError.message, /could not be saved/);
+assert.doesNotMatch(sanitizedPairingError.message, /private settings path/);
+extensionPairingFailure = new Error("Browser extension pairing requires local site port 5181.");
+await assert.rejects(
+  installedHandlers.get(channels.saveExtension)(requestEvent(), firefoxOrigin),
+  /requires local site port 5181/
+);
+extensionPairingFailure = null;
+
 connectionsResult = providerConnections.slice(0, 4);
 await assert.rejects(
   installedHandlers.get(channels.providers)(requestEvent()),
@@ -560,6 +640,9 @@ assert.match(preload, new RegExp(bridgeKey));
 assert.match(preloadSource, /RoleFitDesktopIpcChannel\.GetRuntimeInfo/);
 assert.match(preloadSource, /RoleFitDesktopIpcChannel\.GetLocalSiteSettings/);
 assert.match(preloadSource, /RoleFitDesktopIpcChannel\.ApplyLocalSitePort/);
+assert.match(preloadSource, /RoleFitDesktopIpcChannel\.GetExtensionPairingSettings/);
+assert.match(preloadSource, /RoleFitDesktopIpcChannel\.SaveExtensionOrigin/);
+assert.match(preloadSource, /RoleFitDesktopIpcChannel\.RemoveExtensionOrigin/);
 assert.match(preloadSource, /RoleFitDesktopIpcChannel\.GetProviderConnections/);
 assert.match(preloadSource, /RoleFitDesktopIpcChannel\.SaveApiProvider/);
 assert.match(preloadSource, /RoleFitDesktopIpcChannel\.RemoveProvider/);
@@ -623,6 +706,11 @@ vm.runInNewContext(preload, {
           if (channel === channels.settings || channel === channels.applyPort) {
             return Promise.resolve(siteSettings);
           }
+          if (channel === channels.extensionSettings ||
+              channel === channels.saveExtension ||
+              channel === channels.removeExtension) {
+            return Promise.resolve(extensionPairingSettings);
+          }
           if (channel === channels.providers) return Promise.resolve(providerConnections);
           if (channel === channels.saveApi ||
               channel === channels.remove ||
@@ -650,14 +738,17 @@ assert.deepEqual(
     "applyLocalSitePort",
     "beginCliSignIn",
     "cancelCliSignIn",
+    "getExtensionPairingSettings",
     "getLocalSiteSettings",
     "getProviderConnections",
     "getRuntimeInfo",
     "openBrowserApp",
     "openCliSignInTerminal",
     "openProviderInstallGuide",
+    "removeExtensionOrigin",
     "removeProvider",
     "saveApiProvider",
+    "saveExtensionOrigin",
     "setCliProviderEnabled"
   ]
 );
@@ -668,6 +759,9 @@ assert.equal("on" in exposedApi, false);
 await exposedApi.getRuntimeInfo();
 await exposedApi.getLocalSiteSettings();
 await exposedApi.applyLocalSitePort(5_191);
+await exposedApi.getExtensionPairingSettings();
+await exposedApi.saveExtensionOrigin(firefoxOrigin);
+await exposedApi.removeExtensionOrigin(firefoxOrigin);
 await exposedApi.getProviderConnections();
 await exposedApi.saveApiProvider("openai", "sk-private");
 await exposedApi.removeProvider("anthropic");
@@ -681,6 +775,9 @@ assert.deepEqual(invocations, [
   { channel: channels.runtime, args: [] },
   { channel: channels.settings, args: [] },
   { channel: channels.applyPort, args: [5_191] },
+  { channel: channels.extensionSettings, args: [] },
+  { channel: channels.saveExtension, args: [firefoxOrigin] },
+  { channel: channels.removeExtension, args: [firefoxOrigin] },
   { channel: channels.providers, args: [] },
   { channel: channels.saveApi, args: ["openai", "sk-private"] },
   { channel: channels.remove, args: ["anthropic"] },

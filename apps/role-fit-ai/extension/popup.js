@@ -92,6 +92,34 @@ function renderError(title, msg = '') {
   );
 }
 
+function renderPairingError(requested) {
+  return el('div', { className: 'state-error', role: 'alert' },
+    el('div', { className: 'error-card' },
+      el('div', { className: 'error-mark', textContent: '!' }),
+      el('div', { className: 'error-body' },
+        el('div', { className: 'error-title', textContent: requested ? 'Approve in companion' : 'Extension access unavailable' }),
+        el('div', {
+          className: 'error-msg',
+          textContent: requested
+            ? 'RoleFit sent a one-time access request to the local companion. Open the companion, approve the browser extension, then reopen this popup.'
+            : 'RoleFit could not request access. Restart the local companion on port 5181, then reopen this popup.'
+        })
+      )
+    )
+  );
+}
+
+async function requestExtensionPairing() {
+  try {
+    const response = await fetch(`${API_BASE}/api/extension/pairing-request`, {
+      method: 'POST'
+    });
+    return response.status === 202 || response.status === 200;
+  } catch {
+    return false;
+  }
+}
+
 function renderResult(data, onImport) {
   const { title, company, previousApp } = data;
   const si = statusInfo(previousApp);
@@ -240,12 +268,12 @@ async function handleImport(btn, pageData, autoTailor, distillAi, cookieStoreId)
         claimToken
       })
     });
-    if (!res.ok) throw new Error(`Server error ${res.status}`);
+    if (!res.ok) throw new Error(`server-status:${res.status}`);
   } catch {
     // The import never reached the inbox — don't mislead the user into
     // thinking the job was captured. Re-enable so they can retry.
     btn.disabled = false;
-    btn.textContent = 'Import failed. Is RoleFit AI running?';
+    btn.textContent = 'Import failed. Reopen the popup to check pairing.';
     return;
   }
 
@@ -330,6 +358,8 @@ async function main() {
     loadingEl.replaceWith(
       isConnRefused
         ? renderError('RoleFit AI is not running', 'Open the app at localhost:5181, then reopen this popup.')
+        : msg.includes('server-status:403')
+          ? renderPairingError(await requestExtensionPairing())
         : renderError(
             'Could not check this posting',
             msg.includes('server-status:429')

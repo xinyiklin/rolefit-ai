@@ -3,7 +3,7 @@
 // server.ts. The safe public-URL fetch, SSRF guards, and timeout handling live in
 // ./network.ts; readBody/sendJson and the FetchTimeoutError type come from
 // ./http.ts. resolveImportedJobText is exported for the browser-extension route,
-// which resolves a captured Greenhouse link into the full posting body.
+// which resolves a captured known-ATS link into the full posting body.
 
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { FetchTimeoutError, readBody, sendJson } from "./http.ts";
@@ -196,6 +196,9 @@ function greenhouseEmbeddedJobText(html: string): string {
 const GREENHOUSE_CACHE_TTL_MS = 120_000;
 const GREENHOUSE_CACHE_MAX = 8;
 const greenhouseTextCache = new Map<string, { text: string; at: number }>();
+const ASHBY_CACHE_TTL_MS = 120_000;
+const ASHBY_CACHE_MAX = 8;
+const ashbyTextCache = new Map<string, { text: string; at: number }>();
 
 async function importFromGreenhouse(jobUrl: URL, wrapperHtml = ""): Promise<string> {
   const appUrl = greenhouseJobAppUrl(jobUrl, wrapperHtml);
@@ -227,6 +230,18 @@ export async function resolveImportedJobText(text: unknown, url: unknown): Promi
   if (!isPublicHttpUrl(jobUrl)) return fallbackText;
 
   try {
+    const ashbyTarget = ashbyPostingApiTarget(jobUrl);
+    if (ashbyTarget) {
+      const ashbyText = await importFromAshby(ashbyTarget);
+      return ashbyText || fallbackText;
+    }
+
+    const workdayApi = workdayCxsUrl(jobUrl);
+    if (workdayApi) {
+      const workdayText = await importFromWorkday(workdayApi);
+      return workdayText || fallbackText;
+    }
+
     // Direct Greenhouse links already carry the board and token. Branded
     // careers wrappers often expose only gh_jid in the URL and keep the board
     // slug in their HTML, so fetch that wrapper once and resolve its canonical
@@ -250,11 +265,101 @@ export async function resolveImportedJobText(text: unknown, url: unknown): Promi
   }
 }
 
+const ASHBY_JOB_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const ASHBY_BOARD_PATTERN = /^[a-z0-9][a-z0-9_-]{0,80}$/i;
+const ASHBY_WRAPPER_BOARDS = new Map([
+  ["joinhandshake.com", "handshake"],
+  ["www.joinhandshake.com", "handshake"]
+]);
+
+export function ashbyPostingApiTarget(u: URL): { apiUrl: URL; jobId: string } | null {
+  let board = "";
+  let jobId = "";
+  if (u.hostname.toLowerCase() === "jobs.ashbyhq.com") {
+    const parts = u.pathname.split("/").filter(Boolean);
+    board = parts[0] ?? "";
+    jobId = parts[1] ?? "";
+  } else {
+    board = ASHBY_WRAPPER_BOARDS.get(u.hostname.toLowerCase()) ?? "";
+    jobId = u.searchParams.get("ashby_jid") ?? "";
+  }
+  if (!ASHBY_BOARD_PATTERN.test(board) || !ASHBY_JOB_ID_PATTERN.test(jobId)) return null;
+  return {
+    apiUrl: new URL(
+      `https://api.ashbyhq.com/posting-api/job-board/${encodeURIComponent(board)}?includeCompensation=true`
+    ),
+    jobId: jobId.toLowerCase()
+  };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function ashbyLine(value: unknown): string {
+  return typeof value === "string" ? htmlToText(value).replace(/\s+/g, " ").trim().slice(0, 500) : "";
+}
+
+export function ashbyPostingText(value: unknown, jobId: string): string {
+  if (!isRecord(value) || !Array.isArray(value.jobs)) return "";
+  const posting = value.jobs.find((candidate) =>
+    isRecord(candidate) &&
+    typeof candidate.id === "string" &&
+    candidate.id.toLowerCase() === jobId.toLowerCase()
+  );
+  if (!isRecord(posting)) return "";
+  const description = typeof posting.descriptionPlain === "string"
+    ? htmlToText(posting.descriptionPlain)
+    : htmlToText(posting.descriptionHtml);
+  if (description.length < 200) return "";
+  const compensation = isRecord(posting.compensation)
+    ? ashbyLine(posting.compensation.compensationTierSummary)
+    : "";
+  const header = [
+    ["Role", posting.title],
+    ["Location", posting.location],
+    ["Employment type", posting.employmentType],
+    ["Workplace", posting.workplaceType],
+    ["Department", posting.department],
+    ["Team", posting.team],
+    ["Compensation", compensation]
+  ].map(([label, field]) => {
+    const line = ashbyLine(field);
+    return line ? `${label}: ${line}` : "";
+  }).filter(Boolean);
+  return htmlToText([...header, "", description].join("\n"));
+}
+
+async function importFromAshby(
+  target: { apiUrl: URL; jobId: string }
+): Promise<string> {
+  const cacheKey = `${target.apiUrl.href}#${target.jobId}`;
+  const cached = ashbyTextCache.get(cacheKey);
+  if (cached && Date.now() - cached.at < ASHBY_CACHE_TTL_MS) return cached.text;
+  const response = await fetchPublicHtml(target.apiUrl, { Accept: "application/json" });
+  if (!response.ok) return "";
+  let value: unknown;
+  try {
+    value = JSON.parse(await response.text()) as unknown;
+  } catch {
+    return "";
+  }
+  const text = ashbyPostingText(value, target.jobId);
+  if (text) {
+    ashbyTextCache.set(cacheKey, { text, at: Date.now() });
+    if (ashbyTextCache.size > ASHBY_CACHE_MAX) {
+      const oldest = ashbyTextCache.keys().next().value;
+      if (oldest !== undefined) ashbyTextCache.delete(oldest);
+    }
+  }
+  return text;
+}
+
 // Workday job pages render the description client-side, but expose it via their
 // CXS JSON API. Rewrite a public job URL to that endpoint when we recognize the
 // host. Career-site links use /Site/job/Loc/Title_R123 (older) or
 // /Site/details/Title_R123 (newer share links); both map to .../wday/cxs/<tenant>/<site>/job/...
-function workdayCxsUrl(u: URL): URL | null {
+export function workdayCxsUrl(u: URL): URL | null {
   if (!/(^|\.)myworkdayjobs\.com$/i.test(u.hostname)) return null;
   const tenant = u.hostname.split(".")[0];
   const segs = u.pathname.split("/").filter(Boolean);
@@ -340,6 +445,15 @@ export async function handleImportJob(req: IncomingMessage, res: ServerResponse)
       const workdayText = await importFromWorkday(workdayApi);
       if (workdayText) {
         sendJson(res, 200, { text: workdayText.slice(0, 16_000) });
+        return;
+      }
+    }
+
+    const ashbyTarget = ashbyPostingApiTarget(jobUrl);
+    if (ashbyTarget) {
+      const ashbyText = await importFromAshby(ashbyTarget);
+      if (ashbyText) {
+        sendJson(res, 200, { text: ashbyText.slice(0, 16_000) });
         return;
       }
     }

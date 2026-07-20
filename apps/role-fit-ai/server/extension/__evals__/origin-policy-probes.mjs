@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 
 import {
+  handleExtensionPairingRequests,
   handleExtensionRoutes,
   isAllowedExtensionOrigin,
+  listPendingExtensionPairingOrigins,
   parseAllowedExtensionOrigins
 } from "../routes.ts";
 
@@ -91,8 +93,26 @@ try {
     "/api/extension/import"
   );
   assert.equal(denied.status, 403);
-  assert.deepEqual(JSON.parse(denied.body), { error: "Forbidden." });
-  assert.equal(denied.headers.has("access-control-allow-origin"), false);
+  assert.deepEqual(JSON.parse(denied.body), {
+    error: "Extension not paired.",
+    code: "extension-not-paired"
+  });
+  assert.equal(denied.headers.get("access-control-allow-origin"), chromeOrigin);
+
+  const pairingRequest = new FakeResponse();
+  await handleExtensionRoutes(
+    { method: "POST", headers: { origin: chromeOrigin } },
+    pairingRequest,
+    "/api/extension/pairing-request"
+  );
+  assert.equal(pairingRequest.status, 202);
+  assert.deepEqual(JSON.parse(pairingRequest.body), { status: "pending" });
+  assert.deepEqual(listPendingExtensionPairingOrigins(), [chromeOrigin]);
+
+  const pending = new FakeResponse();
+  handleExtensionPairingRequests({ method: "GET", headers: {} }, pending);
+  assert.equal(pending.status, 200);
+  assert.deepEqual(JSON.parse(pending.body), { origins: [chromeOrigin] });
 
   process.env.EXTENSION_ALLOWED_ORIGINS = chromeOrigin;
   const allowed = new FakeResponse();
@@ -106,6 +126,15 @@ try {
   assert.equal(allowed.headers.get("vary"), "Origin");
   assert.equal(allowed.headers.get("access-control-allow-methods"), "GET, POST, OPTIONS");
   assert.equal(allowed.headers.get("access-control-allow-headers"), "Content-Type");
+
+  const alreadyPaired = new FakeResponse();
+  await handleExtensionRoutes(
+    { method: "POST", headers: { origin: chromeOrigin } },
+    alreadyPaired,
+    "/api/extension/pairing-request"
+  );
+  assert.equal(alreadyPaired.status, 200);
+  assert.deepEqual(JSON.parse(alreadyPaired.body), { status: "paired" });
 
   const nearMatch = new FakeResponse();
   await handleExtensionRoutes(

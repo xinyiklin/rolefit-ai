@@ -3,12 +3,15 @@ import type { IpcMain, IpcMainInvokeEvent } from "electron";
 import {
   ROLEFIT_API_KEY_MAX_BYTES,
   ROLEFIT_DESKTOP_SETTINGS_SCHEMA_VERSION,
+  ROLEFIT_EXTENSION_ORIGIN_MAX_COUNT,
+  ROLEFIT_EXTENSION_PAIRING_REQUEST_MAX_COUNT,
   ROLEFIT_PROVIDER_IDS,
   ROLEFIT_PROVIDER_GUIDANCE_MAX_LENGTH,
   RoleFitDesktopIpcChannel,
   isRoleFitApiProviderId,
   isRoleFitCliProviderId,
   isRoleFitProviderId,
+  normalizeRoleFitExtensionOrigin,
   type RoleFitApiProviderId,
   type RoleFitApplyLocalSitePortRequest,
   type RoleFitBeginCliSignInRequest,
@@ -20,6 +23,10 @@ import {
   type RoleFitDesktopRuntimeInfo,
   type RoleFitDesktopSiteSettings,
   type RoleFitDesktopSiteSettingsRequest,
+  type RoleFitExtensionPairingSettings,
+  type RoleFitExtensionPairingSettingsRequest,
+  type RoleFitSaveExtensionOriginRequest,
+  type RoleFitRemoveExtensionOriginRequest,
   type RoleFitOpenBrowserAppRequest,
   type RoleFitOpenCliSignInTerminalRequest,
   type RoleFitOpenProviderInstallGuideRequest,
@@ -41,6 +48,9 @@ export type CompanionIpcOptions = {
   getRuntimeInfo(): RoleFitDesktopRuntimeInfo;
   getLocalSiteSettings(): RoleFitDesktopSiteSettings;
   applyLocalSitePort(port: number): Promise<RoleFitDesktopSiteSettings>;
+  getExtensionPairingSettings(): Promise<RoleFitExtensionPairingSettings>;
+  saveExtensionOrigin(origin: string): Promise<RoleFitExtensionPairingSettings>;
+  removeExtensionOrigin(origin: string): Promise<RoleFitExtensionPairingSettings>;
   getProviderConnections(): Promise<readonly RoleFitProviderConnection[]>;
   saveApiProvider(
     provider: RoleFitApiProviderId,
@@ -133,6 +143,12 @@ function requireLocalSitePort(value: unknown): number {
   return value as number;
 }
 
+function requireExtensionOrigin(value: unknown): string {
+  const origin = normalizeRoleFitExtensionOrigin(value);
+  if (!origin) throw new Error("Invalid browser-extension origin.");
+  return origin;
+}
+
 function copySiteSettings(settings: RoleFitDesktopSiteSettings): RoleFitDesktopSiteSettings {
   if (!settings || typeof settings !== "object" ||
       settings.schemaVersion !== ROLEFIT_DESKTOP_SETTINGS_SCHEMA_VERSION ||
@@ -157,6 +173,32 @@ function copySiteSettings(settings: RoleFitDesktopSiteSettings): RoleFitDesktopS
   };
 }
 
+function copyExtensionPairingSettings(
+  settings: RoleFitExtensionPairingSettings
+): RoleFitExtensionPairingSettings {
+  if (!settings || typeof settings !== "object" ||
+      settings.schemaVersion !== ROLEFIT_DESKTOP_SETTINGS_SCHEMA_VERSION ||
+      !Array.isArray(settings.origins) ||
+      settings.origins.length > ROLEFIT_EXTENSION_ORIGIN_MAX_COUNT ||
+      !Array.isArray(settings.pendingOrigins) ||
+      settings.pendingOrigins.length > ROLEFIT_EXTENSION_PAIRING_REQUEST_MAX_COUNT) {
+    throw new Error("Invalid extension pairing settings.");
+  }
+  const origins = settings.origins.map(requireExtensionOrigin);
+  if (new Set(origins).size !== origins.length) {
+    throw new Error("Invalid extension pairing settings.");
+  }
+  const pendingOrigins = settings.pendingOrigins.map(requireExtensionOrigin);
+  if (new Set(pendingOrigins).size !== pendingOrigins.length) {
+    throw new Error("Invalid extension pairing settings.");
+  }
+  return {
+    schemaVersion: ROLEFIT_DESKTOP_SETTINGS_SCHEMA_VERSION,
+    origins,
+    pendingOrigins
+  };
+}
+
 function sanitizedSiteSettingsError(error: unknown): Error {
   const code = error && typeof error === "object" && "code" in error
     ? String((error as { code?: unknown }).code ?? "")
@@ -168,6 +210,26 @@ function sanitizedSiteSettingsError(error: unknown): Error {
     return new Error("That local site port is already in use. Choose another port.");
   }
   return new Error("The local site port could not be saved. Check app permissions and try again.");
+}
+
+function sanitizedExtensionPairingError(error: unknown): Error {
+  const message = error instanceof Error ? error.message : "";
+  if (message.includes("valid Chrome, Edge, or Firefox extension origin")) {
+    return new Error("Enter the exact extension origin shown in the RoleFit browser popup.");
+  }
+  if (message.includes("up to")) {
+    return new Error(`RoleFit supports up to ${ROLEFIT_EXTENSION_ORIGIN_MAX_COUNT} paired browser extensions.`);
+  }
+  if (message.includes("standalone RoleFit server")) {
+    return new Error("Stop the standalone RoleFit server, then reopen the companion before pairing the extension.");
+  }
+  if (message.includes("local site port 5181")) {
+    return new Error("Browser extension pairing requires local site port 5181.");
+  }
+  if (message.includes("restart is already scheduled")) {
+    return new Error("The companion is already restarting.");
+  }
+  return new Error("The browser extension pairing could not be saved. Check app permissions and try again.");
 }
 
 function isAuthState(value: unknown): value is RoleFitProviderConnection["authState"] {
@@ -273,6 +335,9 @@ export function installCompanionIpc(options: CompanionIpcOptions): () => void {
     RoleFitDesktopIpcChannel.GetRuntimeInfo,
     RoleFitDesktopIpcChannel.GetLocalSiteSettings,
     RoleFitDesktopIpcChannel.ApplyLocalSitePort,
+    RoleFitDesktopIpcChannel.GetExtensionPairingSettings,
+    RoleFitDesktopIpcChannel.SaveExtensionOrigin,
+    RoleFitDesktopIpcChannel.RemoveExtensionOrigin,
     RoleFitDesktopIpcChannel.GetProviderConnections,
     RoleFitDesktopIpcChannel.SaveApiProvider,
     RoleFitDesktopIpcChannel.RemoveProvider,
@@ -313,6 +378,40 @@ export function installCompanionIpc(options: CompanionIpcOptions): () => void {
           return copySiteSettings(await options.applyLocalSitePort(port));
         } catch (error) {
           throw sanitizedSiteSettingsError(error);
+        }
+      }
+    );
+    options.ipc.handle(
+      RoleFitDesktopIpcChannel.GetExtensionPairingSettings,
+      async (event: IpcMainInvokeEvent, ...args: RoleFitExtensionPairingSettingsRequest) => {
+        requireTrustedRequest(event, options);
+        requireNoArguments(args, "Extension-pairing-settings");
+        return copyExtensionPairingSettings(await options.getExtensionPairingSettings());
+      }
+    );
+    options.ipc.handle(
+      RoleFitDesktopIpcChannel.SaveExtensionOrigin,
+      async (event: IpcMainInvokeEvent, ...args: RoleFitSaveExtensionOriginRequest) => {
+        requireTrustedRequest(event, options);
+        if (args.length !== 1) throw new Error("Save-extension-origin IPC requires one origin.");
+        const origin = requireExtensionOrigin(args[0]);
+        try {
+          return copyExtensionPairingSettings(await options.saveExtensionOrigin(origin));
+        } catch (error) {
+          throw sanitizedExtensionPairingError(error);
+        }
+      }
+    );
+    options.ipc.handle(
+      RoleFitDesktopIpcChannel.RemoveExtensionOrigin,
+      async (event: IpcMainInvokeEvent, ...args: RoleFitRemoveExtensionOriginRequest) => {
+        requireTrustedRequest(event, options);
+        if (args.length !== 1) throw new Error("Remove-extension-origin IPC requires one origin.");
+        const origin = requireExtensionOrigin(args[0]);
+        try {
+          return copyExtensionPairingSettings(await options.removeExtensionOrigin(origin));
+        } catch (error) {
+          throw sanitizedExtensionPairingError(error);
         }
       }
     );

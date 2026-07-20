@@ -25,11 +25,14 @@ import { hardenWindow, installSessionSecurity } from "./security.cjs";
 import {
   ROLEFIT_API_PROVIDER_IDS,
   ROLEFIT_CLI_PROVIDER_IDS,
+  ROLEFIT_EXTENSION_PAIRING_REQUEST_MAX_COUNT,
   ROLEFIT_PROVIDER_IDS,
   createRoleFitDesktopRuntimeInfo,
+  normalizeRoleFitExtensionOrigin,
   type RoleFitCliProviderStatus,
   type RoleFitDesktopRuntimeInfo,
   type RoleFitDesktopSiteSettings,
+  type RoleFitExtensionPairingSettings,
   type RoleFitProviderConnection,
   type RoleFitProviderId
 } from "./ipc-contract.cjs";
@@ -95,6 +98,7 @@ let cliProviderManager: CliProviderManager | null = null;
 let providerVault: ProviderVault | null = null;
 let desktopSettingsManager: DesktopSettingsManager | null = null;
 let localSiteSettings: RoleFitDesktopSiteSettings | null = null;
+let extensionPairingSettings: RoleFitExtensionPairingSettings | null = null;
 let removeSessionSecurity: (() => void) | null = null;
 let removeDesktopIpc: (() => void) | null = null;
 let shuttingDown = false;
@@ -131,10 +135,53 @@ function getLocalSiteSettings(): RoleFitDesktopSiteSettings {
   return localSiteSettings;
 }
 
+async function getExtensionPairingSettings(): Promise<RoleFitExtensionPairingSettings> {
+  if (!extensionPairingSettings) throw new Error("Extension pairing settings are unavailable.");
+  if (!desktopServer || localSiteSettings?.localSitePort !== 5_181) {
+    return extensionPairingSettings;
+  }
+  const response = await fetch(`${desktopServer.origin}/api/extension/pairing-requests`, {
+    cache: "no-store",
+    headers: { Accept: "application/json" },
+    redirect: "error",
+    signal: AbortSignal.timeout(1_000)
+  });
+  if (!response.ok || !response.headers.get("content-type")?.includes("application/json")) {
+    throw new Error("Extension pairing requests are unavailable.");
+  }
+  const body = await response.text();
+  if (body.length > 4_096) throw new Error("Extension pairing response is too large.");
+  const value = JSON.parse(body) as unknown;
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("Invalid extension pairing response.");
+  }
+  const origins = (value as { origins?: unknown }).origins;
+  if (!Array.isArray(origins) || origins.length > ROLEFIT_EXTENSION_PAIRING_REQUEST_MAX_COUNT) {
+    throw new Error("Invalid extension pairing response.");
+  }
+  const pendingOrigins = origins.map(normalizeRoleFitExtensionOrigin);
+  if (pendingOrigins.some((origin) => !origin) || new Set(pendingOrigins).size !== pendingOrigins.length) {
+    throw new Error("Invalid extension pairing response.");
+  }
+  return Object.freeze({
+    schemaVersion: extensionPairingSettings.schemaVersion,
+    origins: extensionPairingSettings.origins,
+    pendingOrigins: Object.freeze(pendingOrigins)
+  });
+}
+
 function requireOwnedServerForProviderMutation(): void {
   if (desktopServer?.ownership !== "owned") {
     throw new Error(
       "Stop the standalone RoleFit server and reopen RoleFit through this companion before changing providers."
+    );
+  }
+}
+
+function requireOwnedServerForExtensionPairing(): void {
+  if (desktopServer?.ownership !== "owned") {
+    throw new Error(
+      "Stop the standalone RoleFit server and reopen RoleFit through this companion before pairing the browser extension."
     );
   }
 }
@@ -523,14 +570,17 @@ async function inspectSmokeRenderer(
     "applyLocalSitePort",
     "beginCliSignIn",
     "cancelCliSignIn",
+    "getExtensionPairingSettings",
     "getLocalSiteSettings",
     "getProviderConnections",
     "getRuntimeInfo",
     "openBrowserApp",
     "openCliSignInTerminal",
     "openProviderInstallGuide",
+    "removeExtensionOrigin",
     "removeProvider",
     "saveApiProvider",
+    "saveExtensionOrigin",
     "setCliProviderEnabled"
   ];
 
@@ -803,6 +853,11 @@ async function startDesktop(): Promise<void> {
       probeLocalSitePortAvailability(candidatePort)
   });
   localSiteSettings = await desktopSettingsManager.load();
+  extensionPairingSettings = await desktopSettingsManager.loadExtensionPairingSettings();
+  desktopServerSourceEnvironment.EXTENSION_ALLOWED_ORIGINS =
+    extensionPairingSettings.origins.length > 0
+      ? extensionPairingSettings.origins.join(",")
+      : undefined;
   const port = localSiteSettings.localSitePort;
 
   desktopServer = await startOrReuseDesktopServer({
@@ -861,6 +916,26 @@ async function startDesktop(): Promise<void> {
       localSiteSettings = await desktopSettingsManager.saveLocalSitePort(nextPort);
       scheduleDesktopRelaunch();
       return localSiteSettings;
+    },
+    getExtensionPairingSettings,
+    saveExtensionOrigin: async (origin) => {
+      if (relaunchScheduled) throw new Error("A companion restart is already scheduled.");
+      requireOwnedServerForExtensionPairing();
+      if (localSiteSettings?.localSitePort !== 5_181) {
+        throw new Error("Browser extension pairing requires local site port 5181.");
+      }
+      if (!desktopSettingsManager) throw new Error("Extension pairing settings are unavailable.");
+      extensionPairingSettings = await desktopSettingsManager.saveExtensionOrigin(origin);
+      scheduleDesktopRelaunch();
+      return extensionPairingSettings;
+    },
+    removeExtensionOrigin: async (origin) => {
+      if (relaunchScheduled) throw new Error("A companion restart is already scheduled.");
+      requireOwnedServerForExtensionPairing();
+      if (!desktopSettingsManager) throw new Error("Extension pairing settings are unavailable.");
+      extensionPairingSettings = await desktopSettingsManager.removeExtensionOrigin(origin);
+      scheduleDesktopRelaunch();
+      return extensionPairingSettings;
     },
     getProviderConnections,
     saveApiProvider: async (provider, apiKey) => {

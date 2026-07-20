@@ -40,8 +40,8 @@ saves the structured resume data so you can reload it later or move it between t
 ## Highlights
 
 - **Resume input** — ingest a `.txt`, `.md`, or `.csv` resume (or paste text) into the typeset editor as a one-time conversion into the structured model, or load a previously saved `.resume` file directly; paste extracted PDF text when the original is only available as PDF.
-- **Job-link import** — paste a posting URL and pull the description in one click: Workday-aware (reads its CXS JSON API for `/job/` and `/details/` links), with Greenhouse-wrapper resolution and a generic HTML→text fallback for other boards. The posting is distilled before polishing — **AI-first** via the configured provider, with server-side grounding/sanitization checks and a deterministic parser that can preserve a local brief for inspection when AI fails. A failed AI Distill remains failed and cannot auto-launch Tailor or Review. The compact brief keeps role context, responsibilities, requirements, preferred qualifications, and technical/domain signals while dropping ATS/navigation/marketing/legal furniture. The link itself is kept only for pipeline tracking and is **never sent to the model**.
-- **Development browser extension (Chrome/Firefox)** — the unpacked extension can check whether a posting is already tracked and import it into a fresh RoleFit tab during source development. Packaged-companion pairing is not included in 0.1.0, so extension import is disabled there by default. The extension does not estimate fit locally; score and verdict come from AI Review in the app. See [Browser extension](#browser-extension).
+- **Job-link import** — paste a posting URL and pull the description in one click: Workday-aware through CXS JSON, Ashby-aware through its public posting API (including Handshake's branded wrapper), with Greenhouse-wrapper resolution and a generic HTML→text fallback for other boards. The posting is distilled before polishing — **AI-first** via the configured provider, with server-side grounding/sanitization checks and a deterministic parser that can preserve a local brief for inspection when AI fails. A failed AI Distill remains failed and cannot auto-launch Tailor or Review. The compact brief keeps role context, responsibilities, requirements, preferred qualifications, and technical/domain signals while dropping ATS/navigation/marketing/legal furniture. The link itself is kept only for pipeline tracking and is **never sent to the model**.
+- **Paired browser extension (Chrome/Firefox)** — the unpacked extension can check whether a posting is already tracked and import it into a fresh RoleFit tab. On first use it sends a bounded local access request; approve that exact browser origin once in the companion. The extension does not estimate fit locally; score and verdict come from AI Review in the app. See [Browser extension](#browser-extension).
 - **Explicit five-provider setup** — the companion can add **Claude Code CLI**, **Codex CLI**, **Antigravity CLI**, **OpenAI API**, and **Claude API**. CLI paths use their provider-owned account sessions and API paths use a locally encrypted key. The browser AI menu shows only providers the user explicitly added, keeps configured-but-unready providers visible with reconnect guidance, and never silently switches a stage to a paid provider.
 - **AI-owned fit review** — the selected Review model judges the complete requirement set and returns the coverage table, base/tailored scores, verdict, explanation, gaps, and recommendation. RoleFit validates the response contract but does not recalculate or replace that judgment locally.
 - **Strict recruiter review mode** — audit the current edited draft as-is, or audit the sanitized proposal produced moments earlier in **Both**, for a verdict (STRONG FIT / REASONABLE FIT / STRETCH / DON'T APPLY), AI fit scores, gap severity, targeted bullet rewrites, interview risk flags, ready / edits-pending / missing-evidence status, and a cover-letter angle.
@@ -50,7 +50,7 @@ saves the structured resume data so you can reload it later or move it between t
 - **WYSIWYG editor + PDF export** — the editor *is* the preview: it and the exported PDF use the same shared Typeset layout engine, so visible line breaks and page flow match the export exactly. No external toolchain to install — typesetting and PDF generation run in the browser.
 - **`.resume` save/load** — download the structured resume data as a `.resume` file (lossless JSON, formatting preserved) and reload it later, or keep it as a portable backup of your work.
 - **On-disk pipeline tracker** — a sortable, paginated applications table (right-click any row for quick actions: open details, change stage, in-app PDF preview of the saved resume, or delete) alongside a calendar view of submissions and upcoming follow-ups. Tracks status / source / company / role / follow-up date / notes / resume snapshot per application, and survives browser wipes.
-- **Local-first personal workflow** — the browser app, server, development extension bridge, and workspace files run on your own device. Source development uses the gitignored `job-search-workspace/`; an installed companion uses `app.getPath("userData")/workspace/`. Origin-scoped browser storage may contain recovery resume/job drafts plus user settings and context, but never API keys. The Electron companion encrypts supported API keys with the operating system through `safeStorage` and stores only encrypted bytes locally beneath its own `userData`; keys never enter browser storage, browser requests, status payloads, or logs. A companion-owned server receives decrypted keys only in memory through a private parent/child channel. AI-backed import, polish, cover-letter, and application-answer features still send the relevant job/resume text directly from the local server to the provider you choose; resume/job payloads do not cross Electron IPC.
+- **Local-first personal workflow** — the browser app, server, paired extension bridge, and workspace files run on your own device. Source development uses the gitignored `job-search-workspace/`; an installed companion uses `app.getPath("userData")/workspace/`. Origin-scoped browser storage may contain recovery resume/job drafts plus user settings and context, but never API keys. The Electron companion encrypts supported API keys with the operating system through `safeStorage` and stores only encrypted bytes locally beneath its own `userData`; keys never enter browser storage, browser requests, status payloads, or logs. A companion-owned server receives decrypted keys only in memory through a private parent/child channel. AI-backed import, polish, cover-letter, and application-answer features still send the relevant job/resume text directly from the local server to the provider you choose; resume/job payloads do not cross Electron IPC.
 
 ## Stack
 
@@ -206,11 +206,13 @@ generation fail plainly; no local draft, score, or verdict silently stands in.
 
 ## Browser extension
 
-The unpacked Chrome/Firefox extension is a source-development feature. The
-packaged 0.1.0 companion does not include extension-origin pairing, so its
-extension routes reject imports by default. With an exact development origin
-explicitly allowed, the popup brings RoleFit import and duplicate checking to
-the job board. On any posting, click the **RoleFit AI** toolbar icon to see:
+The unpacked Chrome/Firefox extension uses an explicit first-use approval in
+the local companion. On a job page, open the popup; if the browser is not yet
+approved, it sends a bounded local request. Open the companion and select
+**Approve** under **Browser extension**, then reopen the popup. That exact
+origin remains paired until removed. Once approved, the popup brings RoleFit
+import and duplicate checking to the job board. On any posting, click the
+**RoleFit AI** toolbar icon to see:
 
 - whether you've **already tracked or applied** to that posting (matched by ATS posting id, normalized URL, requisition id, or company/title/description overlap), and
 - a one-click **Import to RoleFit AI** that opens a fresh independent RoleFit tab, lets the server prepare the raw page text, then has that tab distill it with its own Distill provider before loading the Job field. **Polish automatically after import** can run polish as soon as the brief and your base resume are ready. Turning **Distill with AI** off skips the provider call, imports the prepared local text, and retains deterministic tracking extraction.
@@ -221,8 +223,9 @@ HTTP on the `localhost` hostname across ports because Chrome and Firefox host
 match patterns cannot safely pin one localhost port. The popup itself remains
 fixed to port `5181`; a custom companion port supports direct browser use but
 not extension imports. The routes it calls require the exact installed popup
-Origin configured through `EXTENSION_ALLOWED_ORIGINS` and reflect only that
-non-wildcard Origin; an unset allowlist rejects every extension caller. The
+Origin approved in the companion and reflect only that non-wildcard Origin.
+Unapproved callers may only enqueue a short-lived pairing request; they cannot
+analyze or import a posting. The
 inbox the app reads is same-origin and CSRF-guarded. The server-side import step prepares the captured posting text
 (for example, resolving a fuller board description when possible); the
 receiving tab then runs the app's Distill stage with its selected CLI or native
@@ -232,16 +235,14 @@ posting, while other open tabs continue their current jobs; the app also shows
 a small read-only "other sessions" card when another tab is active. The
 extension never reads the base resume or produces a fit judgment.
 
-Load the unpacked extension from `apps/role-fit-ai/extension/`, inspect its
-popup, and copy `location.origin` from the popup console:
+Load the unpacked extension from `apps/role-fit-ai/extension/`:
 
 - **Chrome / Edge** — open `chrome://extensions`, enable **Developer mode**, click **Load unpacked**, and select the `extension/` folder.
 - **Firefox** — open `about:debugging#/runtime/this-firefox`, click **Load Temporary Add-on…**, and select `extension/manifest.json`.
 
-Then put that exact value in `.env`, for example
-`EXTENSION_ALLOWED_ORIGINS=chrome-extension://<installed-id>`, and start RoleFit.
-See [`extension/README.md`](extension/README.md) for multiple-browser and
-packaged-companion limitations.
+Start the companion on port `5181`, open the extension on a job page, approve
+the pending request in the companion, and reopen the popup. See
+[`extension/README.md`](extension/README.md) for the complete flow.
 
 ## Install and local data
 
@@ -312,7 +313,7 @@ server/
   base64.ts                     # base64 <-> Buffer helpers (base-resume / PDF artifact I/O)
   extension/                     # browser-extension API routes, duplicate status, inbox handoff
   http.ts                       # JSON/body/fetch utilities
-  jobImport.ts                  # /api/import-job: ATS scrapers (Workday/Greenhouse/LinkedIn → text)
+  jobImport.ts                  # /api/import-job: ATS resolvers (Workday/Ashby/Greenhouse/LinkedIn → text)
   network.ts                    # job-link fetch + SSRF guards
   starter.resume                # bundled starter resume seeded when the workspace has no base resume
   workspace.ts                  # base-resume workspace storage + .trash version history

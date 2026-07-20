@@ -175,7 +175,8 @@ owns:
   format); a previously saved `.resume` file loads its `ResumeData` directly
 - job posting import (`/api/import-job`, `server/jobImport.ts`): fetch a public posting URL —
   Workday CXS JSON when the host is recognized (`*.myworkdayjobs.com`,
-  `/job/` and `/details/` links), Greenhouse canonical job HTML for direct
+  `/job/` and `/details/` links), Ashby's public posting API for direct board
+  URLs and approved branded `ashby_jid` wrappers, Greenhouse canonical job HTML for direct
   board URLs and branded wrappers that expose a numeric `gh_jid` plus a
   validated board slug in their HTML, LinkedIn visible job body + criteria
   rows when present, otherwise a generic HTML→text scrape — behind SSRF
@@ -228,7 +229,7 @@ owns:
   `match: { level, confidence, evidence }` (evidence capped at 3 strings), or
   `previousApp`/`match` null when nothing matches; `import` (POST) stores the
   page text and returns immediately, then a BACKGROUND server pass only
-  RESOLVES the raw job text (e.g. fetching the full Greenhouse posting body) —
+  RESOLVES the raw job text (e.g. fetching the full Workday, Ashby, or Greenhouse posting body) —
   it makes no AI call, because the server cannot read the receiving tab's
   provider settings. The background pass survives the popup closing on focus
   loss, and a burst of imports is serialized to one in-flight resolve; `inbox`
@@ -253,9 +254,11 @@ owns:
   `safari-web-extension://`). The validated exact Origin is reflected back —
   never a wildcard, scheme-only match, path-bearing value, or absent Origin.
   When the allowlist is unset, invalid, or does not contain the caller, the
-  routes return `403`; the public companion is intentionally fail-closed until
-  an extension pairing/configuration surface exists. Manifest host permission
-  provides connectivity only and cannot authorize the caller.
+  routes return `403`. A valid unapproved extension may call only the bounded
+  `/api/extension/pairing-request` route; the trusted companion reads the
+  short-lived pending origin and requires explicit approval before persisting
+  it and restarting the owned server. Manifest host permission provides
+  connectivity only and cannot authorize the caller.
   `inbox` is polled same-origin by the app and stays behind
   the localhost CSRF/Host guard with no CORS header. The extension never reads
   the base resume or calculates a local fit estimate. Fit score, coverage, and
@@ -465,9 +468,10 @@ locally generated draft, score, review, or verdict stands in.
 
 Keep the import pipeline split by responsibility:
 
-- `server/network.ts` fetches the page safely, handles Workday CXS JSON
-  when available, falls back to HTML→text extraction, enforces timeouts,
-  and applies SSRF checks on the original URL and every redirect hop.
+- `server/jobImport.ts` selects constrained Workday CXS, Ashby public-posting,
+  Greenhouse, LinkedIn, or generic HTML extraction. `server/network.ts` performs
+  each public fetch, enforces timeouts, and applies SSRF checks on the original
+  URL and every redirect hop.
 - `src/lib/jobExtract.ts` is the dependency-free distiller. It should keep
   résumé-tailoring content (role intro, seniority/employment metadata,
   responsibilities, requirements, preferred qualifications) in a compact

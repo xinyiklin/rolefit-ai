@@ -61,6 +61,8 @@ await assert.rejects(
 const tempRoot = await mkdtemp(join(tmpdir(), "rolefit-desktop-settings-"));
 const settingsDirectory = join(tempRoot, "desktop-settings");
 const settingsPath = join(settingsDirectory, "settings.json");
+const firefoxOrigin = "moz-extension://b933a57d-2237-411b-b6db-5ea8fca14731";
+const chromeOrigin = "chrome-extension://abcdefghijklmnopabcdefghijklmnop";
 try {
   let portAvailable = true;
   const probedPorts = [];
@@ -82,6 +84,11 @@ try {
     warning: null
   });
   assert.equal(Object.isFrozen(defaults), true);
+  assert.deepEqual(await manager.loadExtensionPairingSettings(), {
+    schemaVersion: 1,
+    origins: [],
+    pendingOrigins: []
+  });
 
   await assert.rejects(manager.saveLocalSitePort(0), /integer from 1 through 65535/);
   assert.deepEqual(probedPorts, []);
@@ -104,7 +111,8 @@ try {
   assert.equal(Object.isFrozen(saved), true);
   assert.deepEqual(JSON.parse(await readFile(settingsPath, "utf8")), {
     schemaVersion: 1,
-    localSitePort: 5_191
+    localSitePort: 5_191,
+    extensionOrigins: []
   });
   assert.doesNotMatch(await readFile(settingsPath, "utf8"), /workspace|api|key|secret/i);
   assert.deepEqual(
@@ -122,6 +130,37 @@ try {
     isPortAvailable: async () => true
   }).load();
   assert.deepEqual(reloaded, saved);
+
+  const pairedFirefox = await manager.saveExtensionOrigin(`${firefoxOrigin}/`);
+  assert.deepEqual(pairedFirefox, {
+    schemaVersion: 1,
+    origins: [firefoxOrigin],
+    pendingOrigins: []
+  });
+  assert.equal(Object.isFrozen(pairedFirefox), true);
+  assert.equal(Object.isFrozen(pairedFirefox.origins), true);
+  assert.deepEqual(await manager.saveExtensionOrigin(firefoxOrigin), pairedFirefox);
+  assert.deepEqual(await manager.saveExtensionOrigin(chromeOrigin), {
+    schemaVersion: 1,
+    origins: [firefoxOrigin, chromeOrigin],
+    pendingOrigins: []
+  });
+  assert.deepEqual(JSON.parse(await readFile(settingsPath, "utf8")), {
+    schemaVersion: 1,
+    localSitePort: 5_191,
+    extensionOrigins: [firefoxOrigin, chromeOrigin]
+  });
+  await assert.rejects(manager.saveExtensionOrigin("https://example.com"), /valid Chrome/);
+  assert.deepEqual(await manager.removeExtensionOrigin(firefoxOrigin), {
+    schemaVersion: 1,
+    origins: [chromeOrigin],
+    pendingOrigins: []
+  });
+  assert.deepEqual(await manager.removeExtensionOrigin(firefoxOrigin), {
+    schemaVersion: 1,
+    origins: [chromeOrigin],
+    pendingOrigins: []
+  });
 
   const environmentOverride = createDesktopSettingsManager({
     userDataDirectory: tempRoot,
@@ -152,7 +191,9 @@ try {
     "{not-json",
     JSON.stringify({ schemaVersion: 2, localSitePort: 5_194 }),
     JSON.stringify({ schemaVersion: 1, localSitePort: 0 }),
-    JSON.stringify({ schemaVersion: 1, localSitePort: 5_194, workspaceDir: "/private" })
+    JSON.stringify({ schemaVersion: 1, localSitePort: 5_194, workspaceDir: "/private" }),
+    JSON.stringify({ schemaVersion: 1, localSitePort: 5_194, extensionOrigins: ["https://example.com"] }),
+    JSON.stringify({ schemaVersion: 1, localSitePort: 5_194, extensionOrigins: [firefoxOrigin, firefoxOrigin] })
   ];
   for (const document of malformedDocuments) {
     await writeFile(settingsPath, document, "utf8");
@@ -169,7 +210,21 @@ try {
   await manager.saveLocalSitePort(5_195);
   assert.deepEqual(JSON.parse(await readFile(settingsPath, "utf8")), {
     schemaVersion: 1,
-    localSitePort: 5_195
+    localSitePort: 5_195,
+    extensionOrigins: []
+  });
+
+  await writeFile(settingsPath, JSON.stringify({ schemaVersion: 1, localSitePort: 5_195 }), "utf8");
+  assert.deepEqual(await manager.loadExtensionPairingSettings(), {
+    schemaVersion: 1,
+    origins: [],
+    pendingOrigins: []
+  });
+  await manager.saveExtensionOrigin(firefoxOrigin);
+  assert.deepEqual(JSON.parse(await readFile(settingsPath, "utf8")), {
+    schemaVersion: 1,
+    localSitePort: 5_195,
+    extensionOrigins: [firefoxOrigin]
   });
 
   await mkdir(join(tempRoot, "queued", "desktop-settings"), { recursive: true });

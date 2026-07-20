@@ -271,10 +271,11 @@ and does not own workspace/tracker files. Focused companion probes should cover:
   recording a transient loading state as failure;
 - browser autosave/editor/tracker behavior remaining independent of Electron,
   plus the existing `npm run dev:rolefit` and extension contract staying green;
-- extension analyze/import rejecting every extension-scheme caller when
-  `EXTENSION_ALLOWED_ORIGINS` is unset, accepting and reflecting only exact
-  configured Chrome/Firefox/Safari origins, and rejecting near-match,
-  path-bearing, absent, malformed, and oversized identities without CORS;
+- extension analyze/import rejecting unapproved extension callers, accepting
+  and reflecting only exact configured Chrome/Firefox/Safari origins, allowing
+  valid unapproved origins to enqueue only a bounded short-lived pairing
+  request, and rejecting near-match, path-bearing, absent, malformed, and
+  oversized identities without CORS;
 - changing ports being reported as a new browser-storage origin, and the
   extension remaining truthfully default-port-only rather than silently
   claiming custom-port import support;

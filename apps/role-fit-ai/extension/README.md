@@ -12,9 +12,9 @@ match patterns cannot safely pin one localhost port. The popup target itself
 remains fixed to canonical port `5181`. A custom companion port is therefore
 for direct browser use, not extension imports.
 The server also requires this installed extension's exact Origin. A manifest
-host permission permits the request but does not prove which extension sent it;
-RoleFit rejects all extension analyze/import requests until
-`EXTENSION_ALLOWED_ORIGINS` is configured.
+host permission permits the request but does not prove which extension sent it.
+On first use, the popup sends a short-lived local access request; approve that
+exact origin once in the companion before analyze/import becomes available.
 For imports, the server prepares the raw posting text; the receiving RoleFit tab
 then runs its own Distill-stage CLI or native API provider, or falls straight to the
 deterministic parser when **Distill with AI** is off. Start the app
@@ -27,28 +27,14 @@ deterministic parser when **Distill with AI** is off. Start the app
 - **Firefox** — open `about:debugging#/runtime/this-firefox`, click
   **Load Temporary Add-on…**, and select `manifest.json`.
 
-After loading the extension, inspect its popup and evaluate `location.origin`
-in the popup console. Configure that complete value before starting RoleFit,
-for example:
-
-```bash
-# .env for npm run dev:rolefit, or export before a source-run companion
-EXTENSION_ALLOWED_ORIGINS=chrome-extension://abcdefghijklmnopabcdefghijklmnop
-```
-
-Use a comma-separated list only when this same local server intentionally
-serves more than one installed browser/profile. Values must be exact origins
-with no path, query, fragment, port, or trailing slash. Unpacked Chrome ids can
+After loading the extension, start the RoleFit companion on port `5181` and
+open the popup on a job page. The first request is intentionally blocked and
+appears in the companion under **Browser extension**. Select **Approve** once,
+allow the companion to restart its local service, and reopen the popup. Remove
+the paired origin from the companion to revoke access. Unpacked Chrome ids can
 change if the extension is moved or reloaded under a different identity;
-Firefox's manifest add-on id is stable, but its `moz-extension://` Origin is
-browser/profile-specific, so copy the actual `location.origin` in either
-browser.
-
-The packaged public companion has no extension pairing UI in this phase and is
-fail-closed by default. Launching it without an explicitly inherited
-`EXTENSION_ALLOWED_ORIGINS` keeps browser extension import disabled; direct
-browser RoleFit use remains available. Do not place a shared token in the
-manifest or add a public Chrome manifest key as a workaround.
+Firefox origins are browser/profile-specific, so each distinct installation
+requires its own one-time approval.
 
 ## Files
 

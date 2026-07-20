@@ -6,6 +6,7 @@ import type {
   RoleFitDesktopApi,
   RoleFitDesktopRuntimeInfo,
   RoleFitDesktopSiteSettings,
+  RoleFitExtensionPairingSettings,
   RoleFitProviderConnection,
   RoleFitProviderId
 } from "./ipc-contract.cjs";
@@ -29,6 +30,20 @@ const desktopApi: RoleFitDesktopApi = Object.freeze({
       RoleFitDesktopIpcChannel.ApplyLocalSitePort,
       port
     ) as Promise<RoleFitDesktopSiteSettings>,
+  getExtensionPairingSettings: () =>
+    ipcRenderer.invoke(
+      RoleFitDesktopIpcChannel.GetExtensionPairingSettings
+    ) as Promise<RoleFitExtensionPairingSettings>,
+  saveExtensionOrigin: (origin: string) =>
+    ipcRenderer.invoke(
+      RoleFitDesktopIpcChannel.SaveExtensionOrigin,
+      origin
+    ) as Promise<RoleFitExtensionPairingSettings>,
+  removeExtensionOrigin: (origin: string) =>
+    ipcRenderer.invoke(
+      RoleFitDesktopIpcChannel.RemoveExtensionOrigin,
+      origin
+    ) as Promise<RoleFitExtensionPairingSettings>,
   getProviderConnections: () =>
     ipcRenderer.invoke(
       RoleFitDesktopIpcChannel.GetProviderConnections
