@@ -12,7 +12,6 @@ const PROCESS_OUTPUT_LIMIT_BYTES = 32 * 1_024;
 const INSTALL_TIMEOUT_MS = 120_000;
 const INSTALL_PATH_TIMEOUT_MS = 60_000;
 const UNINSTALL_TIMEOUT_MS = 120_000;
-const REMOVAL_TIMEOUT_MS = 60_000;
 
 function fail(message) {
   throw new Error(`RoleFit Windows installer smoke: ${message}`);
@@ -49,15 +48,6 @@ async function waitForRegularFile(path, label, timeoutMs) {
     await delay(250);
   }
   fail(`timed out waiting for ${label}: ${path}`);
-}
-
-async function waitForRemoval(path, label, timeoutMs) {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    if (!(await pathInfo(path))) return;
-    await delay(250);
-  }
-  fail(`timed out waiting for ${label} removal: ${path}`);
 }
 
 function runProcess(executable, args, label, timeoutMs, environment = process.env) {
@@ -136,16 +126,16 @@ async function uninstallInstalledApp(paths, environment) {
       UNINSTALL_TIMEOUT_MS,
       environment
     );
-    await waitForRemoval(paths.versionDirectory, "installed version directory", REMOVAL_TIMEOUT_MS);
     await requireRegularFile(paths.tombstone, "Squirrel uninstall tombstone");
   } catch (error) {
     uninstallError = error;
   }
 
   if (await pathInfo(paths.installRoot)) {
-    // Squirrel intentionally recreates the package root with a .dead tombstone
-    // after removing the installed payload. Remove that test residue so later
-    // steps cannot accidentally exercise stale state on this runner.
+    // Squirrel intentionally swallows immediate directory-deletion failures,
+    // recreates or retains the package root, and writes a .dead tombstone.
+    // Remove this exact isolated test install after Update.exe exits; failure
+    // here still catches a RoleFit process that holds the installed payload.
     await rm(paths.installRoot, { recursive: true, force: true });
   }
   if (await pathInfo(paths.installRoot)) {
