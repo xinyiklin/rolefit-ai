@@ -18,7 +18,7 @@ const dropCspInDev: Plugin = {
 export default defineConfig({
   root: resolve(appRoot, "landing"),
   base: "/",
-  publicDir: false,
+  publicDir: resolve(appRoot, "landing/public"),
   plugins: [dropCspInDev],
   build: {
     outDir: resolve(appRoot, "dist-landing"),

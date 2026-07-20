@@ -10,7 +10,7 @@ export const DOWNLOAD_TARGETS = [
     detail: "M1 or newer",
     format: "DMG",
     assetName: (version: string) =>
-      `RoleFit-Local-Companion-${version}-macos-arm64.dmg`,
+      `RoleFit-AI-${version}-macos-arm64.dmg`,
   },
   {
     id: "macos-x64",
@@ -19,7 +19,7 @@ export const DOWNLOAD_TARGETS = [
     detail: "Intel processor",
     format: "DMG",
     assetName: (version: string) =>
-      `RoleFit-Local-Companion-${version}-macos-x64.dmg`,
+      `RoleFit-AI-${version}-macos-x64.dmg`,
   },
   {
     id: "windows-x64",
@@ -28,7 +28,7 @@ export const DOWNLOAD_TARGETS = [
     detail: "x64 setup",
     format: "EXE",
     assetName: (version: string) =>
-      `RoleFit-Local-Companion-${version}-windows-x64.exe`,
+      `RoleFit-AI-${version}-windows-x64.exe`,
   },
 ] as const;
 
@@ -122,8 +122,8 @@ export function parseLatestRelease(value: unknown): ReleaseCatalog | null {
     resolvedDownloads[target.id] = asset;
   }
 
-  const macosArm64ArchiveName = `RoleFit-Local-Companion-${version}-macos-arm64.zip`;
-  const macosX64ArchiveName = `RoleFit-Local-Companion-${version}-macos-x64.zip`;
+  const macosArm64ArchiveName = `RoleFit-AI-${version}-macos-arm64.zip`;
+  const macosX64ArchiveName = `RoleFit-AI-${version}-macos-x64.zip`;
   const macosArm64 = parseAsset(
     assetsByName.get(macosArm64ArchiveName),
     macosArm64ArchiveName,

@@ -44,7 +44,10 @@ import {
   type DesktopSettingsManager
 } from "./desktop-settings.cjs";
 
-const APP_NAME = "RoleFit Local Companion";
+// Preserve the existing runtime name because Electron derives the userData
+// directory from it. Packaging and window chrome use the public name RoleFit AI.
+const INTERNAL_APP_NAME = "RoleFit Local Companion";
+const PUBLIC_APP_NAME = "RoleFit AI";
 const DEFAULT_HOST = "127.0.0.1" as const;
 const PROVIDER_SNAPSHOT_REFRESH_INTERVAL_MS = 5_000;
 
@@ -80,7 +83,7 @@ type SmokeResult = {
   correctTitle: boolean;
 };
 
-app.setName(APP_NAME);
+app.setName(INTERNAL_APP_NAME);
 if (process.platform === "win32") {
   app.setAppUserModelId("com.squirrel.RoleFitLocalCompanion.RoleFitLocalCompanion");
 }
@@ -560,7 +563,7 @@ async function inspectSmokeRenderer(
         sitePortLocked: Boolean(document.querySelector('#local-site-port')?.disabled),
         sitePortLockReported: document.querySelector('#local-site-port-status')?.textContent?.includes('ROLEFIT_DESKTOP_PORT') ?? false,
         fullWorkspaceAbsent: !document.querySelector('header[aria-label="Workspace header"], main[aria-label="Output workspace"]'),
-        correctTitle: document.title === 'RoleFit Local Companion'
+        correctTitle: document.title === 'RoleFit AI'
       });
     }, 900))
   `) as SmokeResult;
@@ -704,7 +707,7 @@ function createMainWindow(
 ): BrowserWindow {
   const smokeMode = process.env.ROLEFIT_DESKTOP_SMOKE === "companion";
   const window = new BrowserWindow({
-    title: APP_NAME,
+    title: PUBLIC_APP_NAME,
     width: 760,
     height: 760,
     minWidth: 620,
@@ -817,7 +820,7 @@ function failStartup(error: unknown): void {
   const message = safeErrorMessage(error);
   console.error(`[companion] ${message}`);
   if (process.env.ROLEFIT_DESKTOP_SMOKE !== "companion") {
-    dialog.showErrorBox(`${APP_NAME} could not start`, message);
+    dialog.showErrorBox(`${PUBLIC_APP_NAME} could not start`, message);
   }
   void shutdownAndExit(1);
 }

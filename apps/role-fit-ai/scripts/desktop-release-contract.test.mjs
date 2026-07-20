@@ -61,11 +61,11 @@ test("release tags and target names are strict and architecture-specific", () =>
   );
 
   assert.deepEqual(expectedTargetAssets(VERSION, "macos", "arm64"), [
-    "RoleFit-Local-Companion-0.1.0-macos-arm64.dmg",
-    "RoleFit-Local-Companion-0.1.0-macos-arm64.zip",
+    "RoleFit-AI-0.1.0-macos-arm64.dmg",
+    "RoleFit-AI-0.1.0-macos-arm64.zip",
   ]);
   assert.deepEqual(expectedTargetAssets(VERSION, "windows", "x64"), [
-    "RoleFit-Local-Companion-0.1.0-windows-x64.exe",
+    "RoleFit-AI-0.1.0-windows-x64.exe",
   ]);
   assert.throws(() => expectedTargetAssets(VERSION, "windows", "arm64"), /unsupported/);
 });

@@ -38,6 +38,11 @@ Applies to `apps/role-fit-ai/desktop/` and `tsconfig.desktop.json`.
   runtime; `forge.config.cjs` owns ASAR, native makers, signing/notarization,
   fuses, identity, and immutable package layout. Generated staging and outputs
   stay under ignored `.forge/`.
+- The installed product, window title, release title, and public artifacts use
+  **RoleFit AI**. Preserve the legacy `rolefit-local-companion`, Windows
+  executable/Squirrel identity `RoleFitLocalCompanion`, AppUserModelID, bundle
+  ID, and Electron runtime name as internal compatibility identities so
+  upgrades and user data stay in place.
 - Provider connection composition owns the complete five-provider state and
   sends bounded, versioned credential snapshots only to a server process the
   companion owns. A reused standalone listener never receives vault data and
@@ -174,7 +179,7 @@ npm run test:desktop:package-layout --workspace apps/role-fit-ai
 npm run package:rolefit:desktop
 npm run test:rolefit:desktop:packaged
 npm run make:rolefit:desktop
-npm run test:desktop:windows-installer --workspace apps/role-fit-ai -- --installer=.forge/release/RoleFit-Local-Companion-0.1.0-windows-x64.exe
+npm run test:desktop:windows-installer --workspace apps/role-fit-ai -- --installer=.forge/release/RoleFit-AI-0.1.1-windows-x64.exe
 npm run test:rolefit:release
 ```
 

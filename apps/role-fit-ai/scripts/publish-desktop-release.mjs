@@ -223,8 +223,8 @@ export async function publishRelease({
       "--draft",
       "--title",
       preview
-        ? `RoleFit Local Companion ${version} — unsigned preview ${previewTag.previewLabel}`
-        : `RoleFit Local Companion ${version}`,
+        ? `RoleFit AI ${version} — unsigned preview ${previewTag.previewLabel}`
+        : `RoleFit AI ${version}`,
       "--notes-file",
       releaseNotesPath,
     ];

@@ -37,13 +37,13 @@ const packageDirectory = join(
   appRoot,
   ".forge",
   "out",
-  `RoleFit Local Companion-${platform}-${arch}`
+  `RoleFit AI-${platform}-${arch}`
 );
 const appBundle = platform === "darwin"
-  ? join(packageDirectory, "RoleFit Local Companion.app")
+  ? join(packageDirectory, "RoleFit AI.app")
   : packageDirectory;
 const executable = explicitExecutable || (platform === "darwin"
-  ? join(appBundle, "Contents", "MacOS", "RoleFitLocalCompanion")
+  ? join(appBundle, "Contents", "MacOS", "RoleFit AI")
   : join(packageDirectory, "RoleFitLocalCompanion.exe"));
 const executableInfo = await lstat(executable);
 assert(executableInfo.isFile() && !executableInfo.isSymbolicLink(),

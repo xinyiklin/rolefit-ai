@@ -159,9 +159,9 @@ names rather than overwrite one architecture with another.
 - Repository rules must protect `refs/tags/rolefit-v*` so only authorized
   release maintainers can create them and no actor can update or delete an
   existing release tag.
-- `0.1.0` remains accurate while the companion is prerelease software. The
-  first public installer may keep `0.1.0`; any behavior or compatibility
-  change after a published release requires a version bump.
+- Prerelease status alone is not a reason to reuse a package version. Any
+  behavior or compatibility change after a published preview or stable release
+  requires a version bump.
 - A tag is immutable. Corrections use a new patch version, never replacement
   binaries under an existing tag.
 - GitHub Release assets are the canonical rollback set. Removing an older
@@ -382,13 +382,13 @@ Squirrel lifecycle as well:
 
 ```bash
 npm run collect:desktop:artifacts --workspace apps/role-fit-ai -- --arch=x64 --platform=win32 --checksums=false
-npm run test:desktop:windows-installer --workspace apps/role-fit-ai -- --installer=apps/role-fit-ai/.forge/release/RoleFit-Local-Companion-0.1.0-windows-x64.exe
+npm run test:desktop:windows-installer --workspace apps/role-fit-ai -- --installer=apps/role-fit-ai/.forge/release/RoleFit-AI-0.1.1-windows-x64.exe
 ```
 
 Generated staging, unpacked applications, maker output, normalized artifacts,
 and CI downloads live under `apps/role-fit-ai/.forge/` and are ignored. The
 collector writes deterministic names such as
-`RoleFit-Local-Companion-0.1.0-macos-arm64.dmg` and a local
+`RoleFit-AI-0.1.1-macos-arm64.dmg` and a local
 `SHA256SUMS.txt`; the publication job creates one checksum file over all five
 release artifacts.
 
