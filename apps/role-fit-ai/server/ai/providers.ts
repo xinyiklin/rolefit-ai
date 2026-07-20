@@ -3,19 +3,23 @@
 // provider and the validation shared by /api/polish and /api/application-answers.
 
 import { UserSafeAiError } from "./errors.ts";
+import {
+  getManagedApiKey,
+  getManagedProviderConnection,
+  isCompanionManaged,
+  type RoleFitManagedProviderId
+} from "../provider-connections.ts";
 
 // Request bodies are boundary data ("parse, don't validate"): every field is
 // untyped input coerced defensively below, so they carry `unknown` fields.
 type ProviderRequestBody = {
   provider?: unknown;
-  apiKey?: unknown;
   model?: unknown;
   reasoningEffort?: unknown;
 };
 
 type AuditRequestBody = {
   auditProvider?: unknown;
-  auditApiKey?: unknown;
   auditModel?: unknown;
   auditReasoningEffort?: unknown;
 };
@@ -113,8 +117,13 @@ function providerDefaultModel(provider: string): string {
   );
 }
 
-function providerApiKey(provider: string, requestApiKey: string): string {
-  if (requestApiKey) return requestApiKey;
+function providerApiKey(provider: string): string {
+  if (provider === "openai" || provider === "anthropic") {
+    // Once the companion snapshot boundary is active it is authoritative,
+    // including the absence of a credential. Never fall through to a process
+    // or `.env` key in companion-managed mode.
+    if (isCompanionManaged()) return getManagedApiKey(provider) ?? "";
+  }
   // Credential boundary: never let an OpenAI key bleed into Claude or vice
   // versa merely because another provider key is present in the process.
   const providerSpecific = {
@@ -122,6 +131,24 @@ function providerApiKey(provider: string, requestApiKey: string): string {
     anthropic: process.env.ANTHROPIC_API_KEY
   }[provider];
   return providerSpecific || "";
+}
+
+function assertCompanionProviderReady(provider: RoleFitManagedProviderId): void {
+  if (!isCompanionManaged()) return;
+
+  const connection = getManagedProviderConnection(provider);
+  if (!connection) {
+    throw new UserSafeAiError(
+      `Add ${providerLabel(provider)} in RoleFit Companion before trying again.`,
+      409
+    );
+  }
+  if (!connection.ready) {
+    throw new UserSafeAiError(
+      `Reconnect ${providerLabel(provider)} in RoleFit Companion before trying again.`,
+      409
+    );
+  }
 }
 
 // Resolve provider, key, model, and reasoning effort from a request
@@ -139,12 +166,11 @@ export function resolveProviderRequest(body: ProviderRequestBody): ResolvedProvi
       400
     );
   }
-  const provider = normalizeProvider(requestedProvider || getDefaultProvider());
-  const requestApiKey = String(body.apiKey ?? "").trim();
-  if (requestApiKey.length > 1_000) {
-    throw new UserSafeAiError("API key is too long. Check AI settings and try again.", 400);
-  }
-  const apiKey = providerApiKey(provider, requestApiKey);
+  const provider = normalizeProvider(
+    requestedProvider || getDefaultProvider()
+  ) as RoleFitManagedProviderId;
+  assertCompanionProviderReady(provider);
+  const apiKey = providerApiKey(provider);
   const requestedModel = String(body.model ?? "").trim();
   if (requestedModel.length > 80) {
     throw new UserSafeAiError("Model name is too long. Check AI settings and try again.", 400);
@@ -161,7 +187,7 @@ export function resolveProviderRequest(body: ProviderRequestBody): ResolvedProvi
 
   if (!apiKey && !isCliProvider(provider)) {
     throw new UserSafeAiError(
-      `Add an API key in AI settings or set the ${provider.toUpperCase()} API key in .env before starting the app.`,
+      `Add this provider in RoleFit Companion or set the ${provider.toUpperCase()} API key in .env before starting the app.`,
       401
     );
   }
@@ -204,7 +230,6 @@ export function resolveReviewOnlyProviderRequest(body: ReviewOnlyRequestBody): R
   }
   return resolveProviderRequest({
     provider: raw,
-    apiKey: body.auditApiKey,
     model: body.auditModel,
     reasoningEffort: body.auditReasoningEffort
   });
@@ -234,7 +259,6 @@ export function resolveAuditProviderRequest(
   }
   return resolveProviderRequest({
     provider: raw,
-    apiKey: body.auditApiKey,
     model: body.auditModel,
     reasoningEffort: body.auditReasoningEffort
   });

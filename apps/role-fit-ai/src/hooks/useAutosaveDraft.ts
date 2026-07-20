@@ -9,8 +9,9 @@ import type { StageAiUsage } from "../lib/aiUsage";
 // sessions) never clobber one another's live draft. The bare prefix on its own
 // is the LEGACY single-slot key from before per-tab isolation — still honored as
 // a recoverable orphan so an in-flight draft survives the upgrade.
-// Stores ONLY the user's own serialized resume text + a timestamp + a light
-// job-target label. NO job description body, NO API keys, NO secrets.
+// Stores the user's serialized resume text, timestamp, light job-target label,
+// and optional recovery-only raw job text / AI-usage snapshot. API keys and
+// provider credentials are never stored here.
 const AUTOSAVE_PREFIX = "rolefit:draftAutosave";
 const LEGACY_AUTOSAVE_KEY = AUTOSAVE_PREFIX;
 

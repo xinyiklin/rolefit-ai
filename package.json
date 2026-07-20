@@ -1,18 +1,29 @@
 {
-  "name": "typeset-workspace",
+  "name": "rolefit-ai-workspace",
   "private": true,
   "workspaces": [
     "apps/*",
     "packages/*"
   ],
   "engines": {
-    "node": ">=22.6"
+    "node": ">=22.18"
   },
   "scripts": {
     "dev:typeset": "npm run dev --workspace apps/typeset",
     "dev:rolefit": "npm run dev --workspace apps/role-fit-ai",
+    "dev:rolefit:desktop": "npm run dev:desktop --workspace apps/role-fit-ai",
+    "dev:rolefit:landing": "npm run dev:landing --workspace apps/role-fit-ai",
     "build:typeset": "npm run build --workspace apps/typeset",
     "build:rolefit": "npm run build --workspace apps/role-fit-ai",
+    "build:rolefit:landing": "npm run build:landing --workspace apps/role-fit-ai",
+    "build:rolefit:desktop": "npm run build:desktop --workspace apps/role-fit-ai",
+    "build:rolefit:desktop:package": "npm run build:desktop:package --workspace apps/role-fit-ai",
+    "package:rolefit:desktop": "npm run package:desktop --workspace apps/role-fit-ai --",
+    "make:rolefit:desktop": "npm run make:desktop --workspace apps/role-fit-ai --",
+    "test:rolefit:desktop": "npm run test:desktop:smoke --workspace apps/role-fit-ai",
+    "test:rolefit:desktop:packaged": "npm run test:desktop:packaged --workspace apps/role-fit-ai --",
+    "test:rolefit:release": "npm run test:desktop:release --workspace apps/role-fit-ai",
+    "test:rolefit:windows-runtime": "npm run test:desktop:windows-runtime --workspace apps/role-fit-ai",
     "check": "npm run check --workspaces --if-present",
     "test": "npm run test --workspaces --if-present"
   }

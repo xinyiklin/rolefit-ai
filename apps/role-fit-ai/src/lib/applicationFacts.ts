@@ -20,6 +20,10 @@ export function fitScore(app: Application) {
 
 export function parseDate(value?: string) {
   if (!value) return null;
-  const date = new Date(value);
+  const trimmed = value.trim();
+  const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(trimmed);
+  const date = dateOnly
+    ? new Date(Number(dateOnly[1]), Number(dateOnly[2]) - 1, Number(dateOnly[3]))
+    : new Date(trimmed);
   return Number.isNaN(date.getTime()) ? null : date;
 }

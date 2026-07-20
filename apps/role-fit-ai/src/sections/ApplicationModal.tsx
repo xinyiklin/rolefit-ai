@@ -701,7 +701,7 @@ export function ApplicationModal({ open, application, onClose, onSave, onDelete,
         <footer className="application-modal__foot">
           <span>
             {isEdit
-              ? "Edits save to the local tracker (job-search-workspace/applications.json)."
+              ? "Edits save to the local workspace tracker."
               : "Tip: attach the job description here, then use Job target to tailor."}
           </span>
           <div className="application-modal__actions">

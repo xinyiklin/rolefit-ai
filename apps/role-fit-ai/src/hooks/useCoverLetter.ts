@@ -16,6 +16,8 @@ type UseCoverLetterArgs = {
   honestContext: string;
   customInstructions: string;
   aiRequest: StageConfig;
+  providerReady: boolean;
+  providerMessage: string;
   // Generation fallback only (used when currentResumeText is empty). The letter
   // is a SINGLE owned value — App clears/sets it at the same discrete events it
   // resets `result` (base-resume load, job import, application restore), so there
@@ -50,6 +52,8 @@ export function useCoverLetter({
   honestContext,
   customInstructions,
   aiRequest,
+  providerReady,
+  providerMessage,
   resumeText,
   onUsage
 }: UseCoverLetterArgs) {
@@ -165,6 +169,15 @@ export function useCoverLetter({
     const resume = currentResumeText.trim() || resumeText.trim();
     if (resume.length < 80 || jobText.trim().length < 40) {
       setCoverStatus("Add your resume and the job description first.");
+      return;
+    }
+    if (!providerReady) {
+      setCoverStatus(providerMessage);
+      setCoverProgress({
+        status: "failed",
+        errorHeadline: "Provider unavailable",
+        error: providerMessage
+      });
       return;
     }
     const controller = new AbortController();

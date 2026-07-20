@@ -1,6 +1,6 @@
-# Typeset Workspace — Claude Overrides
+# RoleFit AI Repository — Claude Overrides
 
-`AGENTS.md` is the canonical workspace guide and is imported below. Read
+`AGENTS.md` is the canonical repository guide and is imported below. Read
 `CONTINUITY.md` fresh before acting. The root import does not load nested
 guides: explicitly read the nearest app/package `AGENTS.md` before scoped work.
 

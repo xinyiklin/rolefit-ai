@@ -1,6 +1,16 @@
 # RoleFit AI
 
-A **local-first** resume tailoring webapp. Import a job posting (paste it, or pull it straight from the link), tailor your base resume from your workspace, score the draft against the job description, and export to PDF or save a re-loadable `.resume` file — without storing your personal data in a hosted app.
+A **companion-launched, browser-primary, local-first** resume tailoring
+workbench backed by a loopback Node server. Import a job posting (paste it, or pull it straight from
+the link), tailor your base resume from your workspace, score the draft against
+the job description, and export to PDF or save a re-loadable `.resume` file —
+without storing your personal data in a hosted app. The installed Electron
+companion starts the local service, manages the five supported local
+providers, and opens RoleFit in the default browser; it is not a second RoleFit
+interface. Resume editing stays in the browser, while tracker and workspace
+storage remain owned by the local server.
+
+[Product site and companion downloads](https://rolefit.xinyiklin.com/)
 
 > Built for an entry-level SDE job hunt: tight workflow loop, blunt recruiter-style audit before applying, and a local pipeline tracker so you never lose track of a role.
 
@@ -19,7 +29,7 @@ The on-disk **application tracker** — a sortable, paginated table with right-c
 </tr>
 </table>
 
-_Screenshots use demo workspace data and may trail minor UI refinements._
+_Screenshots use fictitious demo workspace data and reflect the current browser UI._
 
 The engine-painted page is the editor and source of truth: type directly in the
 export layout, use its margin controls to add, remove, reorder, or scope
@@ -30,9 +40,9 @@ saves the structured resume data so you can reload it later or move it between t
 ## Highlights
 
 - **Resume input** — ingest a `.txt`, `.md`, or `.csv` resume (or paste text) into the typeset editor as a one-time conversion into the structured model, or load a previously saved `.resume` file directly; paste extracted PDF text when the original is only available as PDF.
-- **Job-link import** — paste a posting URL and pull the description in one click: Workday-aware (reads its CXS JSON API for `/job/` and `/details/` links), with Greenhouse-wrapper resolution and a generic HTML→text fallback for other boards. The posting is distilled before polishing — **AI-first** via the configured provider, with server-side grounding/sanitization checks and a deterministic parser that can preserve a local brief for inspection when AI fails. A failed AI Distill remains failed and cannot auto-launch Tailor or Review. The compact brief keeps role context, responsibilities, requirements, preferred qualifications, and technical/domain signals while dropping ATS/navigation/marketing/legal furniture. The link itself is kept only for pipeline tracking and is **never sent to the model**.
-- **Browser extension (Chrome/Firefox)** — on any job posting, click the toolbar icon to check whether you've **already tracked or applied** to that posting and **Import** it into a fresh RoleFit tab. The server prepares the raw page text, then that tab distills it with its own Distill provider before loading the Job field — with optional **Polish automatically** and **Distill with AI** toggles. Duplicate gates can stop before or after Distill; an AI failure also stops the selected pipeline. The extension does not estimate fit locally; score and verdict come from AI Review in the app. Manifest V3; the extension talks only to your local `http://localhost:5181` server. See [Browser extension](#browser-extension).
-- **Subscription-friendly, verified provider set** — the default is the **Claude Code CLI** path, with other **account-backed CLI tools** (`Codex CLI`, `Antigravity CLI`) available when the installed CLI and signed-in account grant access. These paths avoid configuring a separate metered API key in RoleFit, but remain subject to each provider's plan and usage limits. The only direct API paths are **OpenAI** and **Claude (Anthropic)**. The AI menu keeps separate provider/model controls for Distill, Tailor, and Review in a one-section-at-a-time accordion, with copy controls when you want stages aligned. CLI sections show signed-in-session guidance instead of an irrelevant API-key field.
+- **Job-link import** — paste a posting URL and pull the description in one click: Workday-aware through CXS JSON, Ashby-aware through its public posting API (including Handshake's branded wrapper), with Greenhouse-wrapper resolution and a generic HTML→text fallback for other boards. The posting is distilled before polishing — **AI-first** via the configured provider, with server-side grounding/sanitization checks and a deterministic parser that can preserve a local brief for inspection when AI fails. A failed AI Distill remains failed and cannot auto-launch Tailor or Review. The compact brief keeps role context, responsibilities, requirements, preferred qualifications, and technical/domain signals while dropping ATS/navigation/marketing/legal furniture. The link itself is kept only for pipeline tracking and is **never sent to the model**.
+- **Paired browser extension (Chrome/Firefox)** — the unpacked extension can check whether a posting is already tracked and import it into a fresh RoleFit tab. On first use it sends a bounded local access request; approve that exact browser origin once in the companion. The extension does not estimate fit locally; score and verdict come from AI Review in the app. See [Browser extension](#browser-extension).
+- **Explicit five-provider setup** — the companion can add **Claude Code CLI**, **Codex CLI**, **Antigravity CLI**, **OpenAI API**, and **Claude API**. CLI paths use their provider-owned account sessions and API paths use a locally encrypted key. The browser AI menu shows only providers the user explicitly added, keeps configured-but-unready providers visible with reconnect guidance, and never silently switches a stage to a paid provider.
 - **AI-owned fit review** — the selected Review model judges the complete requirement set and returns the coverage table, base/tailored scores, verdict, explanation, gaps, and recommendation. RoleFit validates the response contract but does not recalculate or replace that judgment locally.
 - **Strict recruiter review mode** — audit the current edited draft as-is, or audit the sanitized proposal produced moments earlier in **Both**, for a verdict (STRONG FIT / REASONABLE FIT / STRETCH / DON'T APPLY), AI fit scores, gap severity, targeted bullet rewrites, interview risk flags, ready / edits-pending / missing-evidence status, and a cover-letter angle.
 - **One typeset editing surface** — direct text editing, inline emphasis, undo/redo, keyboard caret movement, structural add/remove/reorder controls, per-section Tailor/Include/Off scope, and review-field highlighting all operate on the exported page layout.
@@ -40,17 +50,23 @@ saves the structured resume data so you can reload it later or move it between t
 - **WYSIWYG editor + PDF export** — the editor *is* the preview: it and the exported PDF use the same shared Typeset layout engine, so visible line breaks and page flow match the export exactly. No external toolchain to install — typesetting and PDF generation run in the browser.
 - **`.resume` save/load** — download the structured resume data as a `.resume` file (lossless JSON, formatting preserved) and reload it later, or keep it as a portable backup of your work.
 - **On-disk pipeline tracker** — a sortable, paginated applications table (right-click any row for quick actions: open details, change stage, in-app PDF preview of the saved resume, or delete) alongside a calendar view of submissions and upcoming follow-ups. Tracks status / source / company / role / follow-up date / notes / resume snapshot per application, and survives browser wipes.
-- **Local-first personal workflow** — the app, server, extension bridge, and workspace files run on your own device; workspace files live in `job-search-workspace/`, and keys loaded from `.env` stay server-side. A key typed into the AI menu lives only in page memory for that session and is sent to the local API for the request; the local server uses it to authenticate the selected OpenAI or Claude API call, but does not save, log, or echo it. AI-backed import, polish, cover-letter, and application-answer features send the relevant job/resume text through the CLI or API provider you choose.
+- **Local-first personal workflow** — the browser app, server, paired extension bridge, and workspace files run on your own device. Source development uses the gitignored `job-search-workspace/`; an installed companion uses `app.getPath("userData")/workspace/`. Origin-scoped browser storage may contain recovery resume/job drafts plus user settings and context, but never API keys. The Electron companion encrypts supported API keys with the operating system through `safeStorage` and stores only encrypted bytes locally beneath its own `userData`; keys never enter browser storage, browser requests, status payloads, or logs. A companion-owned server receives decrypted keys only in memory through a private parent/child channel. AI-backed import, polish, cover-letter, and application-answer features still send the relevant job/resume text directly from the local server to the provider you choose; resume/job payloads do not cross Electron IPC.
 
 ## Stack
 
-React 19 · TypeScript · Vite · Node.js (`server.ts` with focused helpers under `server/`) · shared `@typeset/engine` / `@typeset/editor` workspaces · custom CSS · `lucide-react` icons
+React 19 · TypeScript · Vite · Node.js (reusable `server/runtime.ts`) ·
+Electron 43 provider companion · shared `@typeset/engine` / `@typeset/editor`
+workspaces · custom CSS · `lucide-react` icons
 
 No hosted RoleFit backend, database, or account system. Supported provider integrations: Claude Code CLI · Codex CLI · Antigravity CLI · OpenAI API · Claude API.
 
 ## Run
 
-From the repository root:
+For the supported installed product flow, run the RoleFit companion and choose
+**Open RoleFit**. It starts the loopback server and opens the Drafting Desk in
+the default browser.
+
+For source development from the repository root:
 
 ```bash
 npm install
@@ -59,26 +75,78 @@ npm run dev:rolefit
 
 Visit `http://localhost:5181`.
 
-The server binds to loopback by default. `HOST=0.0.0.0` is an explicit,
-unauthenticated LAN-exposure override; never use it on a public or untrusted
-network.
+The standalone source command is a contributor path and cannot use the
+companion-managed provider vault. The server binds to loopback by default.
+`HOST=0.0.0.0` is an explicit, unauthenticated LAN-exposure override; never use
+it on a public or untrusted network.
+
+To run the supported companion development target:
+
+```bash
+npm run dev:rolefit:desktop
+```
+
+The browser remains the only RoleFit product UI. Electron starts or compatibly
+reuses the same numeric-loopback server, renders only a compact local `file:`
+setup window, and opens the selected local site in the system browser. The
+default is `http://localhost:5181`; **Local site port** accepts an available
+integer from 1 through 65535 and applies it through a clean companion restart.
+`ROLEFIT_DESKTOP_PORT` is a locked per-launch override. Its typed
+preload exposes fixed write-only API-key setup, provider removal/status, CLI
+sign-in, installation-guidance, and browser-open methods for the closed
+five-provider catalog. The companion never renders the Drafting Desk,
+duplicates product APIs, or receives resume/job payloads over Electron IPC. Its
+local server owns workspace and tracker files. Changing the port also changes
+the browser origin, so browser-local draft and preference storage is separate
+on the new port. Packaged workspace files and provider configuration stay in
+the same operating-system `userData` directory.
+The browser extension remains fixed to the canonical port `5181` in this phase.
+
+Distribution scaffolding can build native macOS arm64/x64 DMG and ZIP artifacts
+and a Windows x64 Squirrel installer. Public releases fail closed unless the
+native signing credentials are available; local artifacts remain
+non-publicly-trusted test builds (macOS receives only a local ad-hoc signature).
+The current Windows PFX inputs are a compatibility seam, not a recommended way
+to procure a new public-trust certificate; a new signing identity should use a
+reviewed hardware-backed managed signer before the first Windows tag.
+Auto-update, a custom protocol, database, RoleFit account, and sync are not
+implemented. See the
+[distribution and cloud architecture plan](docs/engineering/distribution-cloud-plan.md).
+
+Use Node 24 on a matching native host for packaging:
+
+```bash
+npm run build:rolefit:desktop:package
+npm run package:rolefit:desktop
+npm run make:rolefit:desktop
+npm run test:rolefit:desktop:packaged
+```
 
 ## AI setup
 
-Pick providers/models from the top-bar AI menu, or set keys in `.env`. The menu
-is a compact accordion split by pipeline stage; at most one section is expanded,
-while collapsed sections keep their effective provider/model summary visible:
+Add providers in the Electron companion, then choose among those configured
+providers and their models in the browser's top-bar AI menu. Its Distill,
+Tailor, and Review sections stay expanded together; there is no per-section
+collapse control:
 
 - **Distill** — job-link, paste, and import distillation into a compact job brief.
 - **Tailor** — evidence-grounded resume suggestions, cover letter, and application-answer drafting.
 - **Review** — strict recruiter-style audit of the current edited draft.
 
 Each stage has its own provider/model/effort settings; use **Copy from** in the
-menu to sync one stage from another. CLI providers use the signed-in local
-session, so their sections expose no API-key input. OpenAI/Claude API sections
-may accept a one-session key: it stays in page memory, is sent only to the local
-`/api/*` route to authenticate that selected call, and is never persisted,
-logged, or echoed. Keys in `.env` stay server-side:
+menu to sync one stage from another. The browser never renders or submits an
+API-key field. The companion accepts OpenAI and Claude keys as write-only
+values, encrypts them through Electron `safeStorage`, and never reveals a saved
+key. Removing an API provider deletes its encrypted RoleFit credential;
+removing a CLI only removes it from RoleFit and does not log the provider CLI
+out globally.
+
+A server started through the companion receives managed API credentials only
+through its private in-memory process channel; it neither inherits those keys
+nor loads the app-local `.env`. A standalone development server cannot receive
+the vault; while one is being reused, stop it and reopen RoleFit through the
+companion before adding, removing, or enabling providers. `.env` remains an
+explicit server-side fallback for standalone headless/development use:
 
 ```bash
 # pick one (or set multiple and switch in-app)
@@ -86,11 +154,22 @@ OPENAI_API_KEY=...
 ANTHROPIC_API_KEY=...
 ```
 
-To avoid configuring a separate metered API key in RoleFit, use an account-backed CLI provider (the default is Claude Code CLI; override with `AI_PROVIDER` or the in-app AI menu). Availability and usage limits come from the installed CLI and signed-in provider account:
+To avoid configuring a separate metered API key, add an account-backed CLI
+provider in the companion. **Sign in** starts a fixed provider-owned flow and
+**Use terminal** launches the same fixed command in an external terminal when
+interactive input is required;
+RoleFit never asks for a vendor username, password, MFA value, OAuth code, or
+recovery token. Claude Code and Codex normally open their own browser login.
+Antigravity 1.1.x requires its interactive `agy` terminal flow and exposes no
+non-interactive auth-status command. When the user adds an installed `agy`, the
+companion therefore shows **Ready to verify** with `authState` still `unknown`,
+not a false signed-in claim. The first actual Antigravity provider request
+verifies the provider-owned session and reports actionable sign-in guidance if
+that request fails authentication:
 
 ```bash
 # requires a current Claude Code installation and an account with CLI access
-claude auth login
+claude auth login --claudeai
 
 # requires a current Codex CLI installation and an account with CLI access
 codex login
@@ -100,7 +179,22 @@ codex login
 agy
 ```
 
-The app shells out to these CLIs for AI-backed import, polish, cover-letter, and application-answer requests — no API key required. The app is still local-first and personal-use: you run the server on your own machine, and the CLI auth/session stays tied to that device. Antigravity 1.1.x requires its non-interactive prompt in the local process argument list; unlike the Claude and Codex wrappers, that path cannot keep resume/job text exclusively on stdin while the subprocess is running.
+When a supported CLI executable is missing, the companion shows **Not
+installed**, links to that provider's official installation instructions, and
+offers **Check again**; it never silently runs a package manager or elevated
+installer. The browser can report that its local provider registry is
+unavailable, but a normal web page cannot reliably distinguish a closed
+companion from one that is not installed. The public product/download page does
+not attempt that detection: the companion is required, and the page shows the
+three supported platform choices with a safe GitHub Releases fallback until a
+complete signed release exists.
+
+The local server shells out to configured, ready CLIs for AI-backed import,
+polish, cover-letter, and application-answer requests — no API key required.
+The CLI auth/session remains provider-owned and tied to the device.
+Antigravity 1.1.x requires its non-interactive prompt in the local process
+argument list; unlike the Claude and Codex wrappers, that path cannot keep
+resume/job text exclusively on stdin while the subprocess is running.
 
 > **Provider support:** RoleFit intentionally exposes only the three subscription CLIs plus the native OpenAI Responses and Claude Messages APIs. Other adapters were removed until they have current contracts and live verification. CLI entitlements and API model access still depend on the signed-in account.
 
@@ -112,34 +206,105 @@ generation fail plainly; no local draft, score, or verdict silently stands in.
 
 ## Browser extension
 
-A lightweight Chrome/Firefox popup that brings RoleFit import and duplicate checking to the job board. On any posting, click the **RoleFit AI** toolbar icon to see:
+The unpacked Chrome/Firefox extension uses an explicit first-use approval in
+the local companion. On a job page, open the popup; if the browser is not yet
+approved, it sends a bounded local request. Open the companion and select
+**Approve** under **Browser extension**, then reopen the popup. That exact
+origin remains paired until removed. Once approved, the popup brings RoleFit
+import and duplicate checking to the job board. On any posting, click the
+**RoleFit AI** toolbar icon to see:
 
 - whether you've **already tracked or applied** to that posting (matched by ATS posting id, normalized URL, requisition id, or company/title/description overlap), and
-- a one-click **Import to RoleFit AI** that opens a fresh independent RoleFit tab, lets the server prepare the raw page text, then has that tab distill it with its own Distill provider before loading the Job field. **Polish automatically after import** can run polish as soon as the brief and your base resume are ready, and **Distill with AI** can be turned off to use the deterministic parser for that import.
+- a one-click **Import to RoleFit AI** that opens a fresh independent RoleFit tab, lets the server prepare the raw page text, then has that tab distill it with its own Distill provider before loading the Job field. **Polish automatically after import** can run polish as soon as the brief and your base resume are ready. Turning **Distill with AI** off skips the provider call, imports the prepared local text, and retains deterministic tracking extraction.
 
-It is Manifest V3 and talks **only** to your local server at `http://localhost:5181`: the routes it calls accept extension-origin requests only (with a reflected, non-wildcard CORS origin), and the inbox the app reads is same-origin and CSRF-guarded. The server-side import step prepares the captured posting text (for example, resolving a fuller board description when possible); the receiving tab then runs the app's Distill stage with its selected CLI or native API provider, or skips that provider call when **Distill with AI** is off. Imports carry a short local claim token so the newly-opened tab receives its own posting, while other open tabs continue their current jobs; the app also shows a small read-only "other sessions" card when another tab is active. The extension never reads the base resume or produces a fit judgment.
+It is Manifest V3 and sends requests **only** to your local server at
+`http://localhost:5181`. The manifest grants `http://localhost/*`, which covers
+HTTP on the `localhost` hostname across ports because Chrome and Firefox host
+match patterns cannot safely pin one localhost port. The popup itself remains
+fixed to port `5181`; a custom companion port supports direct browser use but
+not extension imports. The routes it calls require the exact installed popup
+Origin approved in the companion and reflect only that non-wildcard Origin.
+Unapproved callers may only enqueue a short-lived pairing request; they cannot
+analyze or import a posting. The
+inbox the app reads is same-origin and CSRF-guarded. The server-side import step prepares the captured posting text
+(for example, resolving a fuller board description when possible); the
+receiving tab then runs the app's Distill stage with its selected CLI or native
+API provider, or skips that provider call when **Distill with AI** is off.
+Imports carry a short local claim token so the newly-opened tab receives its own
+posting, while other open tabs continue their current jobs; the app also shows
+a small read-only "other sessions" card when another tab is active. The
+extension never reads the base resume or produces a fit judgment.
 
-Start the app first (`npm run dev:rolefit` from the repository root), then load
-the unpacked extension from `apps/role-fit-ai/extension/`:
+Load the unpacked extension from `apps/role-fit-ai/extension/`:
 
 - **Chrome / Edge** — open `chrome://extensions`, enable **Developer mode**, click **Load unpacked**, and select the `extension/` folder.
 - **Firefox** — open `about:debugging#/runtime/this-firefox`, click **Load Temporary Add-on…**, and select `extension/manifest.json`.
 
-## Workspace
+Start the companion on port `5181`, open the extension on a job page, approve
+the pending request in the companion, and reopen the popup. See
+[`extension/README.md`](extension/README.md) for the complete flow.
 
-The app creates `job-search-workspace/` for your private local data:
+## Install and local data
+
+The macOS DMG lets the user place `RoleFit Local Companion.app` where they
+choose, normally `/Applications`. The Windows Squirrel installer is per-user
+and normally installs beneath
+`%LOCALAPPDATA%\RoleFitLocalCompanion\app-<version>\`. Installation files and
+personal data are separate.
+
+The installed companion uses Electron's platform `userData` directory:
+
+- macOS: `~/Library/Application Support/RoleFit Local Companion/`
+- Windows: `%APPDATA%\RoleFit Local Companion\`
+
+Under that directory, `workspace/` contains resumes, tracker data, and saved
+application artifacts; `provider-vault/providers.json` contains only provider
+configuration plus operating-system-encrypted API-key bytes; and
+`desktop-settings/settings.json` contains the local-site port. There is no
+custom workspace-location picker in 0.1.0. `ROLEFIT_WORKSPACE_DIR` is an
+explicit source-development/test override, not a supported installed-app
+setting.
+
+Browser recovery is separate from the on-disk workspace. The active localhost
+origin may store a serialized recovery resume, optional raw job text, AI usage,
+stage settings, honest context, custom instructions, and work-authorization
+preferences in browser storage. It never stores API keys. Changing the local
+port creates a different browser origin, so that recovery data and those
+preferences do not move automatically.
+
+For a portable resume backup, download a `.resume` file. For a full local
+workspace backup, close the companion and copy its `workspace/` directory.
+That copy does not include browser-origin recovery/preferences or a portable
+API-key export; add API keys again on a new device. Before uninstalling, make
+the backup you want. To erase RoleFit's retained local data, remove the
+separate `userData` directory and clear site data in your browser for every
+RoleFit loopback origin you used, including each configured port under
+`http://127.0.0.1:<port>` or `http://localhost:<port>`.
+
+### Workspace contents
+
+The local server creates one private workspace. Its default path depends on how
+RoleFit starts:
+
+- Installed companion: the platform `userData` path above plus `workspace/`
+- Source development: `apps/role-fit-ai/job-search-workspace/`
+
+The workspace contains:
 
 - `base-resume.resume` (or `.txt`, `.md`, `.csv`) — auto-loaded on startup
 - `applications.json` — the pipeline tracker's on-disk store
 - Anything else you drop in there
 
-This folder is gitignored except its README. Personal resumes, `.resume`/PDF files, and root-level resume artifacts are also gitignored as a privacy guard.
+The source-development folder is gitignored except its README. Personal
+resumes, `.resume`/PDF files, and root-level resume artifacts are also
+gitignored as a privacy guard.
 
 ## Project layout
 
 ```
-server.ts                       # HTTP entry point: route dispatch + CSRF/Host guard
+server.ts                       # thin local web-server launcher
 server/
+  runtime.ts                    # reusable HTTP/Vite lifecycle + route composition
   ai/                            # /api/polish + /api/distill: routes, providers,
                                  #   clients, prompts, sanitize, grounding, eligibilityLexicon,
                                  #   json, errors, coverLetter + applicationAnswers
@@ -148,7 +313,7 @@ server/
   base64.ts                     # base64 <-> Buffer helpers (base-resume / PDF artifact I/O)
   extension/                     # browser-extension API routes, duplicate status, inbox handoff
   http.ts                       # JSON/body/fetch utilities
-  jobImport.ts                  # /api/import-job: ATS scrapers (Workday/Greenhouse/LinkedIn → text)
+  jobImport.ts                  # /api/import-job: ATS resolvers (Workday/Ashby/Greenhouse/LinkedIn → text)
   network.ts                    # job-link fetch + SSRF guards
   starter.resume                # bundled starter resume seeded when the workspace has no base resume
   workspace.ts                  # base-resume workspace storage + .trash version history
@@ -168,8 +333,11 @@ src/
 ../../packages/engine/           # canonical resume model, strict `.resume` codec, layout, DOM/print, PDF, fonts
 ../../packages/editor/           # shared direct editor, history/style hooks, formatting toolbar, editor CSS
 extension/                       # Chrome/Firefox MV3 popup (import + duplicate/applied status)
+desktop/                         # required product launcher, provider manager, vault + trust boundary
+landing/                         # isolated public product/download page
+dist-electron/                   # generated companion CommonJS output; gitignored
 docs/engineering/                # RoleFit contributor notes (server/AI, UI, testing)
-job-search-workspace/            # local-only; gitignored except README
+job-search-workspace/            # source-development workspace; gitignored except README
 ```
 
 ## Monorepo and scripts
@@ -184,7 +352,11 @@ Run from the repository root:
 
 ```bash
 npm run dev:rolefit
+npm run dev:rolefit:desktop      # supported companion flow
+npm run build:rolefit:landing    # isolated Pages artifact
 npm run build:rolefit
+npm run build:rolefit:desktop
+npm run test:rolefit:desktop     # explicit companion integration smoke
 npm run check --workspace apps/role-fit-ai
 npm run preview --workspace apps/role-fit-ai
 ```

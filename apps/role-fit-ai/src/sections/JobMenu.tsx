@@ -11,6 +11,8 @@ type JobMenuProps = {
   onDistillPaste: () => void;
   linkStatus: string;
   jobReady: boolean;
+  distillProviderReady: boolean;
+  distillProviderMessage: string;
 };
 
 // Navbar dropdown for the job target: the optional posting URL (with one-click
@@ -24,7 +26,9 @@ export function JobMenu({
   isExtractingLink,
   onDistillPaste,
   linkStatus,
-  jobReady
+  jobReady,
+  distillProviderReady,
+  distillProviderMessage
 }: JobMenuProps) {
   const distillReady = jobDescription.trim().length >= 80;
   return (
@@ -58,8 +62,10 @@ export function JobMenu({
             type="button"
             className="secondary-button is-compact link-extract"
             onClick={onExtractFromLink}
-            disabled={!jobUrl.trim() || isExtractingLink}
-            title="Fetch the posting and extract the description into the box below"
+            disabled={!jobUrl.trim() || isExtractingLink || !distillProviderReady}
+            title={distillProviderReady
+              ? "Fetch the posting and extract the description into the box below"
+              : distillProviderMessage}
           >
             <DownloadCloud size={13} aria-hidden="true" />
             <span>{isExtractingLink ? "Extracting…" : "Extract"}</span>
@@ -82,13 +88,19 @@ export function JobMenu({
           type="button"
           className="secondary-button is-compact"
           onClick={onDistillPaste}
-          disabled={!distillReady || isExtractingLink}
-          title="Run the pasted text through the same structured-brief distiller the link extractor uses"
+          disabled={!distillReady || isExtractingLink || !distillProviderReady}
+          title={distillProviderReady
+            ? "Run the pasted text through the same structured-brief distiller the link extractor uses"
+            : distillProviderMessage}
         >
           <Sparkles size={13} aria-hidden="true" />
           <span>Distill paste</span>
         </button>
-        <small className="job-distill-hint">For links the server can't fetch: paste the page text, then distill.</small>
+        <small className="job-distill-hint">
+          {distillProviderReady
+            ? "For links the server can't fetch: paste the page text, then distill."
+            : distillProviderMessage}
+        </small>
       </div>
       {linkStatus ? <p className="micro-status">{linkStatus}</p> : null}
     </NavMenu>

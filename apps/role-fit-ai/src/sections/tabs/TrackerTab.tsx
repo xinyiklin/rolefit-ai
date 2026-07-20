@@ -353,9 +353,7 @@ export function TrackerTab({
         <div className="workspace-page__title-row">
           <h2 className="page-serif">Applications</h2>
           {applicationsPath ? (
-            <span className="workspace-page__path">
-              {applicationsPath.replace(/^.*?job-search-workspace\//, "job-search-workspace/")}
-            </span>
+            <span className="workspace-page__path">{applicationsPath}</span>
           ) : null}
           {pendingApplicationWrites > 0 ? (
             <span className="workspace-page__saving" role="status" aria-live="polite">

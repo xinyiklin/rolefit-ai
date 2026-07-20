@@ -604,68 +604,34 @@ select,
   color: var(--ink-muted);
 }
 
-/* Collapsible per-stage sections (Distill / Tailor / Review) in the AI menu.
-   Adjacent sections are divided by a hairline; the header row toggles the body. */
+/* Permanently visible per-stage sections (Distill / Tailor / Review) in the AI
+   menu. Adjacent stages are divided by a hairline, with no nested disclosure. */
 .menu-section + .menu-section {
   border-top: 1px solid var(--hairline-soft);
 }
 
-/* Header row: the title + caret toggle the body; a right-aligned control (copy
-   buttons when open, effective-provider summary when collapsed) shares the line. */
+/* Static stage heading with the one-shot Copy settings control aligned right. */
 .menu-section__header {
   display: flex;
   align-items: center;
   gap: var(--s2);
-}
-
-.menu-section__toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--s1);
   padding: var(--s3) 0;
-  background: none;
-  border: none;
-  color: inherit;
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
 }
 
-.menu-section__toggle:hover .menu-subhead__title,
-.menu-section__toggle:focus-visible .menu-subhead__title {
-  color: var(--ink);
+.menu-section__header .menu-subhead__title {
+  margin: 0;
 }
 
-.menu-section__header > .stage-copy,
-.menu-section__value {
+.menu-section__header > .stage-copy {
   margin-left: auto;
-}
-
-.menu-section__value {
-  max-width: 62%;
-  overflow: hidden;
-  font-size: 0.72rem;
-  color: var(--ink-muted);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.menu-section__chev {
-  flex: none;
-  color: var(--ink-faint);
-  transition: transform 0.15s ease;
-}
-
-.menu-section.is-open .menu-section__chev {
-  transform: rotate(180deg);
 }
 
 .menu-section__body {
   padding-bottom: var(--s3);
 }
 
-/* One compact copy control per stage. Keeping it as a select avoids presenting
-   both source stages as equally prominent actions in every collapsed header. */
+/* One compact copy control per stage avoids presenting both source stages as
+   equally prominent actions in every always-visible header. */
 .stage-copy {
   display: flex;
   align-items: center;
@@ -738,6 +704,21 @@ select,
   color: var(--ink-soft);
   font-size: 0.7rem;
   line-height: 1.45;
+}
+
+.provider-card__availability {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--s2);
+}
+
+.provider-card__availability.is-blocked .provider-card__auth-note {
+  color: var(--warm);
+}
+
+.provider-card__availability .ghost-button {
+  flex: 0 0 auto;
 }
 
 /* Keep the three selects on one baseline even when a label wraps to two lines

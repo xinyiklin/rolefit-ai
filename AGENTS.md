@@ -1,11 +1,11 @@
-# Typeset Workspace Agent Guide
+# RoleFit AI Repository Agent Guide
 
-Provider-agnostic working agreements for the npm-workspaces monorepo. The
-repository contains two products over two private shared packages:
+Provider-agnostic working agreements for the RoleFit AI npm-workspaces
+repository. It contains two products over two private shared packages:
 
-- **Typeset** is a static, browser-only resume editor.
 - **RoleFit AI** is a local-first resume-tailoring workbench with a loopback
   Node server, AI providers, local workspace storage, and a browser extension.
+- **Typeset** is a static, browser-only resume editor.
 
 Do not apply one app's runtime, privacy, product, or deployment assumptions to
 the other. `CLAUDE.md` adds provider-specific tool guidance; the nearest
@@ -33,11 +33,11 @@ update the owning guide and documentation in the same change.
   matrix.
 - `docs/git-workflow.md` — repository-wide branch, commit, PR, and staging
   conventions.
-- `apps/typeset/AGENTS.md` and `{README,PRODUCT,DESIGN}.md` — standalone
-  Typeset shell, behavior, and visual contract.
 - `apps/role-fit-ai/{README,PRODUCT,DESIGN}.md` and
   `apps/role-fit-ai/docs/engineering/` — RoleFit behavior and engineering
   contracts.
+- `apps/typeset/AGENTS.md` and `{README,PRODUCT,DESIGN}.md` — standalone
+  Typeset shell, behavior, and visual contract.
 - `packages/engine/AGENTS.md` — engine package boundary and public contract;
   its nested guides own resume domain/files and deterministic layout/PDF.
 - `packages/editor/AGENTS.md` — editor package boundary, shared styles, and

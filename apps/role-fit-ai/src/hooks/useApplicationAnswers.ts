@@ -19,6 +19,8 @@ type UseApplicationAnswersArgs = {
   honestContext: string;
   customInstructions: string;
   aiRequest: StageConfig;
+  providerReady: boolean;
+  providerMessage: string;
   upsertApplication: (app: Application) => Promise<boolean>;
   findForTarget: (url: string, desc: string) => Application | undefined;
 };
@@ -35,6 +37,8 @@ export function useApplicationAnswers({
   honestContext,
   customInstructions,
   aiRequest,
+  providerReady,
+  providerMessage,
   upsertApplication,
   findForTarget
 }: UseApplicationAnswersArgs) {
@@ -122,6 +126,15 @@ export function useApplicationAnswers({
     setIsGeneratingAnswers(false);
     const submittedQuestions = [...questions];
     lastRequestRef.current = { questions: submittedQuestions, includeRoleDescriptions };
+    if (!providerReady) {
+      setAnswersStatus(providerMessage);
+      setAnswersProgress({
+        status: "failed",
+        errorHeadline: "Provider unavailable",
+        error: providerMessage
+      });
+      return;
+    }
     const roleEvidence = includeRoleDescriptions ? buildApplicationRoleEvidence(resumeData) : [];
     if (includeRoleDescriptions && !roleEvidence.length) {
       setAnswersStatus("No structured work-experience roles with bullets are available to describe.");

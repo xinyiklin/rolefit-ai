@@ -3,7 +3,7 @@ Solo project template: keep this concise, but include enough context for future
 self-review and portfolio/code-history clarity.
 
 Before drafting PR copy or choosing a PR title, check
-docs/engineering/git-workflow.md.
+docs/git-workflow.md.
 -->
 
 ## Summary

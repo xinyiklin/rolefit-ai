@@ -9,8 +9,11 @@ browser-side effects; components render them and App composes them.
   auto-polish intent.
 - `usePolishPipeline` owns Tailor/Review orchestration, abort/retry, and progress.
 - `useDuplicateGuard` owns duplicate acknowledgments and pipeline/apply gates.
-- `useAiSettings` owns per-stage provider/model/effort preferences and
-  transient in-memory API keys.
+- `useAiSettings` owns per-stage provider/model/effort preferences, never API
+  credentials.
+- `useAvailableProviders` owns the one same-origin provider-registry fetch and
+  reconciliation lifecycle. It keeps the closed catalog metadata separate from
+  configured/readiness state and must not silently select a paid replacement.
 - `useWorkspaceResume`, `useApplyFlow`, and `useApplications` own their local
   server/storage lifecycles.
 - `useResumeEditor` is a RoleFit adapter over the shared editor hook; keep
@@ -30,5 +33,16 @@ browser-side effects; components render them and App composes them.
   layout. They may call deterministic helpers and local APIs.
 - Surface classified user-safe errors. Never expose raw provider bodies, secret
   values, or private inputs in status text.
+- Provider availability effects fetch shape-only state; they never request,
+  cache, or infer API keys, account identity, executable paths, or raw CLI
+  output.
+- Automatic extension imports must await the shared initial provider fetch;
+  transient `loading` is not a terminal provider failure. Provider readiness is
+  a preflight signal, not semantic request input, so background readiness polls
+  must not invalidate an already-running AI request.
+- Distill stale-input guards cover only the job source and Distill-stage AI
+  settings. Resume bootstrap and Tailor-mode reconciliation are downstream
+  auto-Tailor inputs; they must not cancel an extension Distill that is already
+  running.
 - Add a focused eval for durable sequencing, identity, or state-transition
   rules that can be tested without React/browser orchestration.

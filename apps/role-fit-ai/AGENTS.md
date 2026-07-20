@@ -14,6 +14,10 @@ own a second resume model, editor, layout engine, or PDF implementation.
 - `docs/engineering/ui-principles.md` — host UI and responsive behavior.
 - `docs/engineering/ai-server.md` — AI/server request and trust boundaries.
 - `docs/engineering/testing.md` — RoleFit-focused verification.
+- `docs/engineering/desktop-architecture-plan.md` — companion trust boundary,
+  local settings, provider registry, and lifecycle phases.
+- `docs/engineering/distribution-cloud-plan.md` — native artifact matrix,
+  signing/release contract, and deferred hosted work.
 - root `docs/{architecture,development,git-workflow}.md` — monorepo ownership,
   commands, and repository workflow.
 - `src/AGENTS.md` — client orchestration and shared-package integration.
@@ -31,9 +35,19 @@ own a second resume model, editor, layout engine, or PDF implementation.
 - Resume/job data and provider credentials are sensitive. Never print or log
   raw resumes, job descriptions, prompts, provider bodies, API keys, or broad
   environments without explicit local-debug authorization.
-- `.env` keys stay server-side. A key entered in the AI menu may live only in
-  page memory and the same-origin request that uses it; never persist, log, or
-  echo it.
+- Managed API keys are write-only from the companion renderer, encrypted with
+  Electron `safeStorage`, persisted only as encrypted bytes beneath Electron
+  `userData`, and delivered only in memory to a companion-owned server. Never
+  put them in browser storage, HTTP, argv, environment variables, status
+  responses, or logs. `.env` remains an explicit standalone/headless fallback.
+- The browser lists only providers explicitly added through the companion.
+  Configured-but-unready providers remain visible with reconnect guidance; a
+  missing provider must never trigger a silent fallback to a paid provider.
+- Provider readiness must not overclaim authentication. Antigravity 1.1.x has
+  no non-interactive auth-status command, so an installed/configured manual
+  provider may be request-eligible as ready-to-verify while `authState` remains
+  unknown; the first actual provider request verifies the session or fails with
+  recovery guidance.
 - Never invent employers, dates, metrics, education, tools, experience, or
   outcomes. Missing facts become gaps or bracketed prompts for human evidence.
 - AI Review is the sole owner of fit score, coverage, verdict, reason, gaps,
@@ -47,8 +61,10 @@ own a second resume model, editor, layout engine, or PDF implementation.
 - Keep the server loopback-only by default. `HOST=0.0.0.0` exposes an
   unauthenticated local tool to the LAN and is never acceptable on an untrusted
   or public network.
-- Keep personal artifacts inside ignored `job-search-workspace/`; never commit
-  its contents except the instructional README.
+- Keep personal artifacts inside the host-supplied runtime workspace. Source
+  development uses ignored `job-search-workspace/`; never commit its contents
+  except the instructional README. Packaged runs use
+  `app.getPath("userData")/workspace/` outside the application bundle.
 
 ## App ownership
 
@@ -64,6 +80,12 @@ RoleFit owns:
 - `src/lib/` and `src/resume/`: RoleFit-only job, workflow, evidence, and
   deterministic mechanical analysis helpers;
 - `extension/`: a vanilla MV3 client of the local extension API.
+- `desktop/`: the compact five-provider manager, encrypted API-key vault,
+  provider-owned CLI setup, private owned-server credential bridge, and local
+  server lifecycle. It never owns the Drafting Desk or personal workspace.
+- `landing/`: the isolated static product/download site. It may read public
+  GitHub release metadata but never bundles the Drafting Desk, calls loopback,
+  detects an installation, or receives local data.
 
 RoleFit consumes, but does not fork:
 
@@ -118,14 +140,21 @@ Run from the repository root:
 
 ```bash
 npm run dev:rolefit
+npm run build:rolefit:landing
 npm run build:rolefit
+npm run build:rolefit:desktop
+npm run make:rolefit:desktop
+npm run test:rolefit:desktop:packaged
 npm run check --workspace apps/role-fit-ai
 npm test --workspace apps/role-fit-ai
 npx tsc -p apps/role-fit-ai/tsconfig.server.json --noEmit
 ```
 
-RoleFit uses port 5181. Reuse a bound canonical listener rather than starting a
-second server.
+Standalone source development and extension imports use canonical port 5181.
+The installed product is launched through the companion, which
+may persist another numeric-loopback port for direct browser use; changing it
+changes browser-origin storage and does not retarget the extension. Reuse a
+compatible bound listener rather than starting a second server.
 
 - Client/type changes: RoleFit build, plus focused evals.
 - Server/AI changes: server TypeScript gate, affected route/eval, and full app

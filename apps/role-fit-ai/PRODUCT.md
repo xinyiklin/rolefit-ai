@@ -7,11 +7,21 @@ product
 ## Users
 
 One job seeker (the project owner) tailoring a resume to a specific job
-description on a desktop browser (Chrome, ~1440px) during focused
-application-prep sessions. They know the resume content intimately; the tool's
-job is to speed up tailoring, reviewing, and exporting while detecting and
-surfacing potentially unsupported claims for human review. Local-first,
-single-user; no accounts, no hosted RoleFit service.
+description in a desktop browser (Chrome, ~1440px) during focused
+application-prep sessions. The browser is the product surface. A required
+device-local Electron companion starts and keeps the loopback server available, shows
+the complete five-provider setup catalog, encrypts supported API keys locally,
+starts fixed provider-owned CLI sign-in flows, and opens RoleFit in the default
+browser. It is not a second Drafting Desk and does not own resume editing,
+tracker state, or workspace files. The user knows the resume content
+intimately; the tool's job is to speed up tailoring, reviewing, and exporting
+while detecting and surfacing potentially unsupported claims for human review.
+Local-first, single-user; no RoleFit accounts, hosted backend, cloud credential
+service, database, or synchronization. Native macOS and Windows distribution is
+implemented as a signed-release pipeline, while the browser remains the only
+working product surface and local non-publicly-trusted artifacts remain
+development-only. The public site is a static product/download page, never a
+hosted copy of the workbench.
 
 ## Product Purpose
 
@@ -26,6 +36,25 @@ be saved/reloaded as a `.resume` file). Success = a one-page,
 interview-defensible resume exported in minutes after every AI proposal has been
 reviewed against source evidence.
 
+Provider setup is explicit: the companion offers Claude Code, Codex, and
+Antigravity CLIs plus OpenAI and Claude APIs, while the browser shows only
+providers the user added. A configured provider that becomes unavailable stays
+visible but disabled with reconnect guidance; a never-added provider is absent.
+Because Antigravity 1.1.x has no non-interactive auth-status command, an added,
+installed Antigravity CLI is request-eligible as **Ready to verify** while its
+auth state remains unknown; the first real provider request verifies the
+provider-owned session or reports sign-in recovery guidance.
+With none configured, editing, tracking, and export remain available while AI
+actions stop with a direct instruction to add a provider. RoleFit never chooses
+a paid replacement silently.
+
+The companion defaults to local port `5181` and may persist another available
+port after explicit confirmation and restart. Browser-local state is scoped by
+origin, so a different port has separate draft/preferences storage. Workspace
+and provider data keep their operating-system-local locations, and extension
+imports remain on canonical port `5181` until multi-port extension support has
+its own trust contract.
+
 ## Brand Personality
 
 Calm, dense, trustworthy. A compact desktop-first job-prep workspace that
@@ -33,7 +62,9 @@ disappears into the task. Quiet competence, not salesmanship.
 
 ## Anti-references
 
-- Marketing landing pages, oversized heroes, gradient-heavy surfaces.
+- Marketing landing-page patterns inside the Drafting Desk, oversized in-app
+  heroes, and gradient-heavy working surfaces. The separate public product page
+  follows its own calm editorial contract.
 - SaaS dashboard clichés (hero metrics, identical card grids).
 - Sales-style or hype copy; in-product manuals and multi-sentence help essays.
 - Fake loading states, shimmer, decorative motion.
@@ -65,6 +96,10 @@ disappears into the task. Quiet competence, not salesmanship.
 7. Preserve product boundaries: RoleFit owns job/AI/tracker orchestration and
    host chrome; shared document editing, formatting, layout, files, and PDF
    remain package-owned and consistent with standalone Typeset.
+8. Keep provider setup local and least-privileged: API keys are write-only from
+   the companion renderer, encrypted through Electron `safeStorage`, and never
+   enter browser storage or HTTP. CLI authentication stays provider-owned;
+   RoleFit never asks for provider passwords, MFA values, or OAuth codes.
 
 ## Accessibility & Inclusion
 

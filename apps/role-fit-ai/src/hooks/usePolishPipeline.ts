@@ -34,6 +34,7 @@ import {
   type PolishProgressState
 } from "../lib/aiWorkflow";
 import type { OutputTab } from "../sections/shared";
+import type { ProviderReadiness } from "./useAvailableProviders";
 import type { PolishCoverResult } from "./useCoverLetter";
 
 function idleProgress(): PolishProgressState {
@@ -79,6 +80,8 @@ type UsePolishPipelineArgs = {
   polishStages: "tailor" | "review" | "both";
   tailor: StageConfig;
   review: StageConfig;
+  ensureTailorProviderReady: () => Promise<ProviderReadiness>;
+  ensureReviewProviderReady: () => Promise<ProviderReadiness>;
   setResult: (updater: PolishedResume | null | ((prev: PolishedResume | null) => PolishedResume | null)) => void;
   applyPolishCoverResult: (result: PolishCoverResult) => void;
   setActiveOutputTab: (tab: OutputTab) => void;
@@ -100,6 +103,8 @@ export function usePolishPipeline({
   polishStages,
   tailor,
   review,
+  ensureTailorProviderReady,
+  ensureReviewProviderReady,
   setResult,
   applyPolishCoverResult,
   setActiveOutputTab,
@@ -140,6 +145,17 @@ export function usePolishPipeline({
   });
   const inputFingerprintRef = useRef(inputFingerprint);
   inputFingerprintRef.current = inputFingerprint;
+
+  async function selectedProviderBlocker(
+    includeTailor: boolean,
+    includeReview: boolean
+  ): Promise<string | null> {
+    const checks: Promise<ProviderReadiness>[] = [];
+    if (includeTailor) checks.push(ensureTailorProviderReady());
+    if (includeReview) checks.push(ensureReviewProviderReady());
+    const results = await Promise.all(checks);
+    return results.find((result) => !result.ready)?.message ?? null;
+  }
 
   function runIdentityMatches(generation: number, ctx: PolishContext): boolean {
     return workflowRequestIsCurrent(
@@ -538,6 +554,16 @@ export function usePolishPipeline({
     polishRunLockRef.current = true;
     polishGenerationRef.current += 1;
     const generation = polishGenerationRef.current;
+    const providerBlocker = await selectedProviderBlocker(
+      polishStages !== "review",
+      polishStages !== "tailor"
+    );
+    if (generation !== polishGenerationRef.current) return;
+    if (providerBlocker) {
+      setPolishStatus(providerBlocker);
+      polishRunLockRef.current = false;
+      return;
+    }
     const ctx = buildPolishContext();
     if (!ctx) {
       polishRunLockRef.current = false;
@@ -644,6 +670,16 @@ export function usePolishPipeline({
     polishRunLockRef.current = true;
     polishGenerationRef.current += 1;
     const generation = polishGenerationRef.current;
+    const providerBlocker = await selectedProviderBlocker(
+      stage === "tailor",
+      stage === "review" || polishStages === "both"
+    );
+    if (generation !== polishGenerationRef.current) return;
+    if (providerBlocker) {
+      setPolishStatus(providerBlocker);
+      polishRunLockRef.current = false;
+      return;
+    }
     const reviewSnapshot = stage === "review" ? reviewSnapshotRef.current : null;
     if (stage === "review" && !reviewSnapshot) {
       setPolishStatus("There is no review attempt to retry. Start a new Review instead.");

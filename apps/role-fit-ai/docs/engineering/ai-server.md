@@ -3,28 +3,120 @@
 Paths in this document are relative to `apps/role-fit-ai/`. Run commands from
 the repository root.
 
-RoleFit AI's server is a single Node entry point (`server.ts`) that
-serves the Vite frontend in development, exposes a small set of local
-API routes, and owns all outbound AI provider calls. Keys loaded from
-`.env` never leave the server. A key entered in the AI menu is a transient
-page-memory value sent to a same-origin local `/api/*` route for that request;
-the local server uses it only as authentication for the selected native API
-provider call. It must never be persisted, logged, or echoed.
+RoleFit AI's reusable server runtime (`server/runtime.ts`) serves the Vite
+frontend in development, exposes a small set of local API routes, and owns all
+outbound AI provider calls. The thin web entry point (`server.ts`) supplies the
+current browser-host defaults and owns process-signal shutdown. The Electron
+provider companion encrypts managed OpenAI/Claude keys with `safeStorage` and
+sends decrypted credentials only in memory to a server process it owns. Keys
+never enter browser storage, HTTP, argv, logs, or provider-status payloads.
+Explicit `.env` keys remain a server-side standalone/headless fallback.
+The Electron-owned utility server starts with an empty authoritative provider
+snapshot before listening, does not load the app-local `.env`, and receives no
+managed API credential through its inherited process environment.
 
 ## Port
 
-The canonical dev/preview port is `5181` (overridable via `PORT`;
-reserved range `5181-5183`). If `5181` is already bound, the app is
-almost certainly already running — reuse the existing instance instead
-of starting a second process or switching ports. Sibling reservations:
-careflow `5173-5180`, portfolio `5184-5185`; do not mix them up.
+The canonical standalone dev/preview port is `5181` (overridable via `PORT`;
+reserved range `5181-5183`). If `5181` is already bound, the app is almost
+certainly already running — reuse the existing instance instead of starting a
+second process or silently switching ports. Sibling reservations: careflow
+`5173-5180`, portfolio `5184-5185`; do not mix them up.
+
+The Electron-owned server defaults to `5181`, but the companion can save a
+validated local site port from `1` through `65535` at
+`userData/desktop-settings/settings.json`. Applying it checks loopback
+availability and relaunches through normal server cleanup.
+`ROLEFIT_DESKTOP_PORT` is a locked per-launch companion override and is
+separate from standalone `PORT`. The companion opens the active
+`http://localhost:<port>` origin in the system browser, whose API calls remain
+relative and same-origin.
+
+Port `5181` remains the browser-extension route-target contract. The extension
+does not follow a custom companion port, so custom-port
+operation is direct-browser-only in this phase. A port change also changes the
+browser origin: origin-scoped `localStorage` is separate at the new port. The
+port change never relocates the active workspace or provider state; packaged
+runs keep those under `userData`.
+This service is not a general cross-origin desktop bridge. Do not add blanket
+CORS or turn the hosted product/download page into a client of the local server.
+
+## Browser / Companion Trust Boundary
+
+- The browser is the only RoleFit product UI. Electron must not load the React
+  renderer or become a second tracker/editor/workspace host. Its compact local
+  `file:` page is the setup surface for the closed catalog of three CLIs and two
+  API providers.
+- The existing local `/api/*` surface is same-origin and unauthenticated. Its
+  Host/Origin guard reduces DNS-rebinding and browser CSRF risk; it does not
+  authenticate native processes, prove server identity, or authorize a hosted
+  web origin.
+- The companion uses typed IPC between its exact local main frame and Electron
+  main for write-only API-key setup, shape-only provider status, fixed CLI
+  sign-in/install guidance, a fixed main-owned external-terminal sign-in
+  fallback, and opening RoleFit in the system browser. The renderer supplies
+  only a closed provider id for terminal handoff, never a command, arguments,
+  shell text, working directory, or environment values. Stored keys are never
+  returned. Renderer `window.open` requests are always denied; typed IPC can
+  reach only main-owned official install guides or the selected local RoleFit
+  origin. There is no RoleFit login/pairing system.
+- `/api/providers` is an ordinary read-only, same-origin server route, not an
+  Electron management endpoint. It exposes only closed provider ids, kind,
+  configured/readiness, and bounded auth state so the browser can show only
+  providers the user added.
+- The local server remains the only owner of AI execution. The companion may
+  start fixed, allowlisted CLI status/sign-in processes and send one bounded
+  credential snapshot to its owned server over their private parent/child
+  channel, but it must not expose executable paths, raw stdout/stderr, broad
+  environment data, provider tokens, renderer-supplied argv, filesystem
+  methods, or workspace/tracker routes.
+- Reused standalone listeners never receive the Electron vault. In that mode
+  the provider route reports `companionManaged: false`; only explicit `.env`
+  credentials remain available for standalone/headless use. Companion
+  save/remove/enable actions are refused until the user stops that listener and
+  reopens RoleFit through the companion, so setup cannot report success while
+  the browser registry remains unchanged.
+- CLI credentials remain owned by the provider CLI. Parse bounded status output
+  into installed/signed-in/signed-out/unknown booleans, discard the output, and
+  never return account identifiers. Every desktop status/sign-in child and
+  every server AI CLI child receives a deliberately sanitized environment:
+  preserve executable and provider-config discovery such as `PATH`, home, and
+  CLI config locations, but strip native API/token/service-account credentials
+  and Electron/Node injection variables so a subscription-CLI request cannot
+  silently fall through to browser- or server-managed API credentials.
+- Antigravity 1.1.x exposes no non-interactive auth-status command. Its
+  installed/configured manual state is request-eligible as ready-to-verify
+  while `authState` remains unknown; this must never be presented as detected
+  sign-in. The first real Antigravity provider request verifies the
+  provider-owned session and returns sanitized recovery guidance on auth
+  failure.
+- Browser-extension origins and inbox claim tokens are a separate trust domain.
+  Never route extension requests through companion IPC or treat a claim token
+  as authentication for CLI status/sign-in actions.
 
 ## Server Boundaries
 
-The server layer (`server.ts` routing to focused `server/` modules) owns:
+The server layer (`server/runtime.ts` routing to focused `server/` modules)
+owns:
 
 - local HTTP serving with Vite middleware in development
+- an explicit start/close lifecycle for the local web server and isolated
+  server probes; importing the runtime never binds a port or creates storage
+- separate application and workspace paths so launch working directories cannot
+  redirect personal data; application assets come from `appRoot`, while all
+  writable resume/tracker state stays under `workspaceDir`
+- `/api/health`, a non-content identity/version probe with an opaque workspace
+  fingerprint (never a workspace path) used only for local compatibility
+  checks. It is predictable metadata, not authentication, and must never grant
+  companion access or establish browser trust
 - `.env` loading and process environment hygiene
+- a validated in-memory provider snapshot from the owning Electron parent,
+  atomically replaced and cleared on shutdown; it contains the only decrypted
+  managed API credentials and must never be accepted from HTTP, environment,
+  argv, or a reused listener
+- `/api/providers`, a shape-only same-origin registry of configured/readiness
+  state. It never returns keys, account identifiers, executable paths, versions,
+  raw CLI output, operation ids, or workspace details
 - `/api/polish` AI provider routing — subscription CLIs (Claude Code,
   Codex CLI, Antigravity CLI) shelled out to local subprocesses,
   plus the native OpenAI and Anthropic APIs. The route supports independent
@@ -83,7 +175,8 @@ The server layer (`server.ts` routing to focused `server/` modules) owns:
   format); a previously saved `.resume` file loads its `ResumeData` directly
 - job posting import (`/api/import-job`, `server/jobImport.ts`): fetch a public posting URL —
   Workday CXS JSON when the host is recognized (`*.myworkdayjobs.com`,
-  `/job/` and `/details/` links), Greenhouse canonical job HTML for direct
+  `/job/` and `/details/` links), Ashby's public posting API for direct board
+  URLs and approved branded `ashby_jid` wrappers, Greenhouse canonical job HTML for direct
   board URLs and branded wrappers that expose a numeric `gh_jid` plus a
   validated board slug in their HTML, LinkedIn visible job body + criteria
   rows when present, otherwise a generic HTML→text scrape — behind SSRF
@@ -136,7 +229,7 @@ The server layer (`server.ts` routing to focused `server/` modules) owns:
   `match: { level, confidence, evidence }` (evidence capped at 3 strings), or
   `previousApp`/`match` null when nothing matches; `import` (POST) stores the
   page text and returns immediately, then a BACKGROUND server pass only
-  RESOLVES the raw job text (e.g. fetching the full Greenhouse posting body) —
+  RESOLVES the raw job text (e.g. fetching the full Workday, Ashby, or Greenhouse posting body) —
   it makes no AI call, because the server cannot read the receiving tab's
   provider settings. The background pass survives the popup closing on focus
   loss, and a burst of imports is serialized to one in-flight resolve; `inbox`
@@ -155,21 +248,26 @@ The server layer (`server.ts` routing to focused `server/` modules) owns:
   builds that omit it keep distilling); both flags are stored on the inbox entry
   and returned in the `inbox` delivery payload so the claiming tab knows whether
   to run the AI distiller or fall straight to the deterministic parser.
-  `analyze` / `import` are
-  reachable cross-origin from the
-  extension popup and are gated to extension-scheme Origins
-  (`chrome-extension://`, `moz-extension://`, `safari-web-extension://`)
-  with the validated Origin reflected back — never a wildcard, never an
-  absent Origin. By default any well-formed supported extension Origin is
-  accepted; `EXTENSION_ALLOWED_ORIGINS` optionally pins an exact allowlist.
+  `analyze` / `import` are reachable cross-origin from the extension popup and
+  require its exact, explicitly configured `EXTENSION_ALLOWED_ORIGINS` identity
+  (`chrome-extension://`, `moz-extension://`, or
+  `safari-web-extension://`). The validated exact Origin is reflected back —
+  never a wildcard, scheme-only match, path-bearing value, or absent Origin.
+  When the allowlist is unset, invalid, or does not contain the caller, the
+  routes return `403`. A valid unapproved extension may call only the bounded
+  `/api/extension/pairing-request` route; the trusted companion reads the
+  short-lived pending origin and requires explicit approval before persisting
+  it and restarting the owned server. Manifest host permission provides
+  connectivity only and cannot authorize the caller.
   `inbox` is polled same-origin by the app and stays behind
   the localhost CSRF/Host guard with no CORS header. The extension never reads
   the base resume or calculates a local fit estimate. Fit score, coverage, and
   verdict come only from AI Review in the app; its output still requires human
   review.
-- workspace file storage under `job-search-workspace/` (auto-load,
-  upload, save, reload — `server/workspace.ts`, which also owns the
-  base-resume version history in `.trash/`)
+- workspace file storage under the host-supplied `workspaceDir` (auto-load,
+  upload, save, reload; source development defaults to `job-search-workspace/`,
+  while packaged runs use `app.getPath("userData")/workspace/`).
+  `server/workspace.ts` also owns the base-resume version history in `.trash/`.
 
 Deterministic keyword and mechanical resume analysis live in focused client
 helpers under `src/resume/` and `src/resumeEngine.ts`. They may describe text or
@@ -263,12 +361,14 @@ modules under `server/ai/` so no single file carries the whole pipeline:
 
 ## AI Provider Layer
 
-The provider is chosen per request. The frontend AI menu has separate
-Distill, Tailor, and Review stage configs: `/api/distill` receives the
+The provider is chosen per request from the companion-managed configured
+registry. The frontend AI menu has separate Distill, Tailor, and Review stage
+configs and shows only providers the user explicitly added: `/api/distill` receives the
 Distill config, `/api/polish` receives the Tailor config as `provider` /
 `model` / `reasoningEffort`, and the strict-review pass receives the
-Review config as `audit*` fields. If a request omits provider fields
-(headless/API use), the server defaults to the **Claude Code CLI**
+Review config as `audit*` fields. Browser requests contain provider, model, and
+reasoning settings but no API credentials. If a request omits provider fields
+(standalone/headless API use), the server defaults to the **Claude Code CLI**
 (`claude-cli`) — an account-backed CLI path rather than a separately configured
 hosted API key (`getDefaultProvider()` in `server/ai/providers.ts`). Setting
 `AI_PROVIDER` supplies that headless fallback. A non-empty, unrecognized
@@ -278,9 +378,9 @@ OpenAI. When OpenAI is selected explicitly, its model comes from
 and the Antigravity CLI `agy`, which replaced the retired Gemini CLI) are
 similar paths for their vendors. They avoid a separate metered API key in
 RoleFit, but access and usage limits remain governed by the installed CLI and
-signed-in provider account. The frontend already defaults
-all three stages to `claude-cli`, so this mostly affects the headless /
-no-provider request path.
+signed-in provider account. This default is a standalone/headless request
+fallback, not permission for the browser to show or select an unconfigured
+provider.
 
 Per-provider rules:
 
@@ -289,25 +389,25 @@ Per-provider rules:
   retired Gemini CLI) shell out to local subprocesses via `server/ai-cli/`
   using the CLI's existing account auth. RoleFit needs no API key for these
   paths; provider entitlements and usage limits still apply. Antigravity 1.1.x
-  requires the print prompt as `-p`'s argv value; stdin is not a supported prompt
-  source, so its local process argument list briefly contains the request.
+  has no non-interactive auth-status command, so an installed/configured
+  Antigravity provider stays `authState: "unknown"` and is ready-to-verify on
+  first use rather than falsely labeled signed in. It also requires the print
+  prompt as `-p`'s argv value; stdin is not a supported prompt source, so its
+  local process argument list briefly contains the request.
 - **OpenAI API** uses the Responses API with `store:false` and native JSON mode.
   The supported GPT-5.6 choices are Sol, Terra, and Luna; the balanced default is
   `gpt-5.6-terra`.
 - **Claude API** uses Anthropic Messages. The call sends no `temperature` and no
   trailing assistant prefill because current Claude models reject those patterns.
   JSON is enforced by the strict-output prompt plus `parseAiJson`.
-- Accept one-request `apiKey`, `provider`, and `model` values from the UI for
-  ad-hoc use. The menu hides `apiKey` for CLI providers and shows the signed-in
-  session contract instead. A native API key may live only in page memory
-  for the session and in the same-origin request body. The local server uses it
-  only to authenticate the selected API call; never persist,
-  log, or echo it. Distill uses
-  that same request shape on `/api/distill`; Review uses the parallel
-  `auditProvider`, `auditApiKey`, `auditModel`, and
-  `auditReasoningEffort` fields on `/api/polish`.
+- Managed browser requests accept provider/model/effort identifiers only. The
+  server resolves an OpenAI/Claude key from the companion-owned in-memory
+  credential snapshot immediately before dispatch; there is no browser
+  `apiKey` or `auditApiKey` request field. Never persist, log, echo, or expose
+  the decrypted snapshot.
 - `.env` keys: `OPENAI_API_KEY` and `ANTHROPIC_API_KEY`. Keys are strictly
-  provider-specific; no generic key falls through to another vendor.
+  provider-specific; no generic key falls through to another vendor. They are
+  an explicit standalone/headless fallback, not companion-managed storage.
 - Default provider: `AI_PROVIDER`.
 - Provider-specific model overrides: `OPENAI_MODEL`, `ANTHROPIC_MODEL`,
   `CLAUDE_CLI_MODEL`, `CODEX_CLI_MODEL`, and `ANTIGRAVITY_CLI_MODEL`.
@@ -368,9 +468,10 @@ locally generated draft, score, review, or verdict stands in.
 
 Keep the import pipeline split by responsibility:
 
-- `server/network.ts` fetches the page safely, handles Workday CXS JSON
-  when available, falls back to HTML→text extraction, enforces timeouts,
-  and applies SSRF checks on the original URL and every redirect hop.
+- `server/jobImport.ts` selects constrained Workday CXS, Ashby public-posting,
+  Greenhouse, LinkedIn, or generic HTML extraction. `server/network.ts` performs
+  each public fetch, enforces timeouts, and applies SSRF checks on the original
+  URL and every redirect hop.
 - `src/lib/jobExtract.ts` is the dependency-free distiller. It should keep
   résumé-tailoring content (role intro, seniority/employment metadata,
   responsibilities, requirements, preferred qualifications) in a compact
@@ -415,9 +516,9 @@ In the response:
 ## Validation And Error Handling
 
 - Validate request data before calling a provider.
-- Do not add default fallbacks that hide missing required values — an
-  empty `apiKey` should fail loudly, not silently call a different
-  provider or return canned text.
+- Do not add default fallbacks that hide missing provider state. An
+  unconfigured or unready provider must fail loudly, not silently call a
+  different provider or return canned text.
 - Do not leave empty `catch` blocks. Surface provider errors with
   user-safe, classified wording. Authentication, rate-limit/quota, provider
   configuration, timeout, and generic provider failures must not collapse into
@@ -461,9 +562,10 @@ In the response:
   under `src/typeset/__evals__/` guard hard breaks, migration-era layout parity,
   and PDF round trips; the engine package owns the canonical deterministic
   layout and font-parity suites.
-- Keep `job-search-workspace/` the canonical location for personal
-  resumes, application trackers, exported drafts, and job-specific
-  files. The folder is gitignored except for its `README.md`.
+- Keep the host-supplied runtime workspace the canonical location for personal
+  resumes, application trackers, exported drafts, and job-specific files.
+  Source development uses `job-search-workspace/`, which is gitignored except
+  for its `README.md`; packaged runs use `app.getPath("userData")/workspace/`.
 - Serialize tracker/base-resume mutations and publish them atomically so
   concurrent local requests cannot expose a partial file. Tracker writes name
   every changed id plus its pre-edit `updatedAt`; the server keeps unmutated
@@ -480,13 +582,25 @@ In the response:
 
 ## Deployment And Infrastructure
 
-- Current shape is local-first: no hosted RoleFit backend, no database, no
-  account system. The server binds to loopback by default; the optional
-  `HOST=0.0.0.0` override exposes the unauthenticated app to the LAN and must
-  never be used on a public or untrusted network.
+- Current shape is local-first: no hosted RoleFit backend, database, or account
+  system. The ordinary browser entry remains the product host. The extracted
+  server lifecycle and explicit `appRoot` / `workspaceDir` contract remain the
+  canonical local web-server foundation. Electron uses that lifecycle to keep
+  the service available, but it loads only its compact static companion page;
+  RoleFit itself opens in the default browser. The packaged production server
+  is bundled beneath read-only application resources, while its workspace,
+  provider vault, and desktop settings write only beneath operating-system
+  `userData`. The standalone web entry binds to loopback by default; its
+  optional `HOST=0.0.0.0` override exposes the unauthenticated app to the LAN
+  and must never be used on a public or untrusted network.
 - Do not introduce infrastructure, platform changes, or paid / vendor
   dependencies without asking.
-- Do not add Electron / Tauri / native desktop packaging unless the user
-  explicitly requests it.
+- Companion work follows the saved
+  [architecture plan](desktop-architecture-plan.md) and
+  [distribution plan](distribution-cloud-plan.md). Native macOS arm64/x64 and
+  Windows x64 packaging plus the fail-closed signed-release workflow are the
+  authorized D0-D4 slice. No database, RoleFit authentication, synchronization,
+  hosted credential service, hosted download/R2 change, custom protocol,
+  auto-update, or site-to-companion pairing belongs to that slice.
 - Do not make remote API writes unless explicitly requested. Dry-run
   write-oriented remote commands first when possible.

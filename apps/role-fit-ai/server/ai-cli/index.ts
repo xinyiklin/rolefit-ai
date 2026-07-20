@@ -4,13 +4,19 @@
 // paid API tokens. Each helper spawns the local CLI binary and returns the model
 // response as a string (the polish route then parses it as JSON).
 
-import { spawn } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
 import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, win32 } from "node:path";
+import crossSpawn from "cross-spawn";
 
-import { CLAUDE_CLI_AUTH_MESSAGE, CLAUDE_CLI_FAILED_MESSAGE, CLAUDE_CLI_TIMEOUT_MESSAGE } from "../ai/errors.ts";
+import {
+  CLAUDE_CLI_AUTH_MESSAGE,
+  CLAUDE_CLI_FAILED_MESSAGE,
+  CLAUDE_CLI_TIMEOUT_MESSAGE,
+  UserSafeAiError
+} from "../ai/errors.ts";
 import { RequestAbortedError } from "../http.ts";
 
 type RunCliOptions = { timeoutMs?: number; cwd?: string; signal?: AbortSignal };
@@ -39,7 +45,115 @@ type CliArgs = {
 // few KB; this leaves ample headroom while bounding both captured streams.
 const MAX_CLI_STREAM_BYTES = 2_000_000;
 
-function terminateChild(child: ChildProcessWithoutNullStreams): void {
+// Account-backed provider CLIs need executable discovery, their provider-owned
+// config/session locations, ordinary locale/temp state, and explicit network
+// trust configuration. Copy only that closed set: a denylist would inevitably
+// forward unrelated cloud, package-registry, database, or application secrets.
+// Keep this policy aligned with desktop/cli-providers.cts.
+const AI_CLI_CHILD_ALLOWED_ENV_KEYS = new Set([
+  "PATH",
+  "HOME",
+  "USERPROFILE",
+  "USER",
+  "LOGNAME",
+  "SHELL",
+  "HOMEDRIVE",
+  "HOMEPATH",
+  "TMPDIR",
+  "TMP",
+  "TEMP",
+  "LANG",
+  "LC_ALL",
+  "LC_CTYPE",
+  "TZ",
+  "TERM",
+  "COLORTERM",
+  "XDG_CONFIG_HOME",
+  "XDG_DATA_HOME",
+  "XDG_CACHE_HOME",
+  "APPDATA",
+  "LOCALAPPDATA",
+  "SYSTEMROOT",
+  "WINDIR",
+  "COMSPEC",
+  "PATHEXT",
+  "HTTP_PROXY",
+  "HTTPS_PROXY",
+  "ALL_PROXY",
+  "NO_PROXY",
+  "http_proxy",
+  "https_proxy",
+  "all_proxy",
+  "no_proxy",
+  "SSL_CERT_FILE",
+  "SSL_CERT_DIR",
+  "NODE_EXTRA_CA_CERTS",
+  "CODEX_HOME",
+  "CLAUDE_CONFIG_DIR"
+]);
+
+export function buildAiCliProcessEnvironment(
+  source: NodeJS.ProcessEnv,
+  platform: NodeJS.Platform = process.platform
+): NodeJS.ProcessEnv {
+  const environment: NodeJS.ProcessEnv = {};
+  if (platform === "win32") {
+    const sourceByName = new Map(
+      Object.entries(source).map(([key, value]) => [key.toUpperCase(), value] as const)
+    );
+    for (const allowedKey of AI_CLI_CHILD_ALLOWED_ENV_KEYS) {
+      const key = allowedKey.toUpperCase();
+      const value = sourceByName.get(key);
+      if (!(key in environment) && value !== undefined) environment[key] = value;
+    }
+  } else {
+    for (const [key, value] of Object.entries(source)) {
+      if (AI_CLI_CHILD_ALLOWED_ENV_KEYS.has(key) && value !== undefined) {
+        environment[key] = value;
+      }
+    }
+  }
+  return environment;
+}
+
+function environmentValue(
+  environment: Readonly<NodeJS.ProcessEnv>,
+  name: string
+): string | undefined {
+  const key = Object.keys(environment).find((candidate) => candidate.toUpperCase() === name);
+  return key ? environment[key] : undefined;
+}
+
+export function resolveWindowsCliTreeKill(
+  pid: number,
+  environment: Readonly<NodeJS.ProcessEnv>
+): Readonly<{ executable: string; args: readonly string[] }> {
+  if (!Number.isInteger(pid) || pid <= 0) throw new Error("Invalid owned AI CLI process id.");
+  const configuredRoot = environmentValue(environment, "SYSTEMROOT");
+  const systemRoot = configuredRoot && win32.isAbsolute(configuredRoot) && !configuredRoot.includes("\0")
+    ? configuredRoot
+    : "C:\\Windows";
+  return Object.freeze({
+    executable: win32.join(systemRoot, "System32", "taskkill.exe"),
+    args: Object.freeze(["/pid", String(pid), "/t", "/f"])
+  });
+}
+
+function terminateChild(
+  child: ChildProcessWithoutNullStreams,
+  environment: Readonly<NodeJS.ProcessEnv>
+): void {
+  if (process.platform === "win32" && child.pid !== undefined) {
+    const launch = resolveWindowsCliTreeKill(child.pid, environment);
+    const outcome = spawnSync(launch.executable, [...launch.args], {
+      stdio: "ignore",
+      windowsHide: true,
+      env: { ...environment },
+      timeout: 5_000,
+      killSignal: "SIGKILL"
+    });
+    if (!outcome.error && outcome.status === 0) return;
+  }
   child.kill("SIGTERM");
   setTimeout(() => child.kill("SIGKILL"), 2_000).unref?.();
 }
@@ -61,8 +175,16 @@ export function runCli(
 ): Promise<RunCliResult> {
   if (signal?.aborted) return Promise.reject(new RequestAbortedError());
   return new Promise<RunCliResult>((resolve, reject) => {
+    const childEnvironment = buildAiCliProcessEnvironment(process.env);
     // stdio ["pipe","pipe","pipe"] guarantees non-null stdin/stdout/stderr at runtime.
-    const child = spawn(command, args, { stdio: ["pipe", "pipe", "pipe"], cwd }) as ChildProcessWithoutNullStreams;
+    // cross-spawn preserves argv-array semantics on native binaries and safely
+    // resolves/escapes npm .cmd shims on Windows. Never replace it with a joined
+    // shell string: args can contain paths, model labels, and private prompts.
+    const child = crossSpawn(command, args, {
+      stdio: ["pipe", "pipe", "pipe"],
+      cwd,
+      env: childEnvironment
+    }) as ChildProcessWithoutNullStreams;
     let stdout = "";
     let stderr = "";
     let stdoutBytes = 0;
@@ -80,7 +202,7 @@ export function runCli(
       reject(error);
     };
     const onAbort = (): void => {
-      terminateChild(child);
+      terminateChild(child, childEnvironment);
       rejectOnce(new RequestAbortedError());
     };
     const appendBounded = (stream: "stdout" | "stderr", chunk: Buffer): void => {
@@ -89,7 +211,7 @@ export function runCli(
       if (stream === "stdout") stdoutBytes += bytes;
       else stderrBytes += bytes;
       if ((stream === "stdout" ? stdoutBytes : stderrBytes) > MAX_CLI_STREAM_BYTES) {
-        terminateChild(child);
+        terminateChild(child, childEnvironment);
         rejectOnce(new Error(`${command} returned too much output. Try again or choose another provider.`));
         return;
       }
@@ -97,9 +219,11 @@ export function runCli(
       else stderr += chunk.toString();
     };
     timer = setTimeout(() => {
-      terminateChild(child);
+      terminateChild(child, childEnvironment);
       const error = new Error(`${command} timed out after ${Math.round(timeoutMs / 1000)}s. Try again or switch to a faster model.`) as CliError;
       error.timedOut = true;
+      error.stdout = stdout;
+      error.stderr = stderr;
       rejectOnce(error);
     }, timeoutMs);
     signal?.addEventListener("abort", onAbort, { once: true });
@@ -127,6 +251,7 @@ export function runCli(
         // claude writes its JSON result (incl. auth/401 errors) to stdout even on
         // a non-zero exit, which would otherwise be lost.
         error.stdout = stdout;
+        error.stderr = stderr;
         error.exitCode = code;
         rejectOnce(error);
       }
@@ -145,7 +270,7 @@ export function runCli(
 export function buildClaudeCliArgs({ model, reasoningEffort, systemPrompt }: CliArgs): string[] {
   const args = [
     "-p", "--tools", "", "--no-session-persistence",
-    "--setting-sources", "", "--strict-mcp-config", "--mcp-config", "{}",
+    "--setting-sources", "", "--strict-mcp-config", "--mcp-config", '{"mcpServers":{}}',
     "--disable-slash-commands", "--no-chrome", "--output-format", "json"
   ];
   if (systemPrompt) args.push("--append-system-prompt", systemPrompt);
@@ -198,25 +323,31 @@ export async function callClaudeCli({ model, reasoningEffort, systemPrompt, user
 // errors.ts' SAFE set so /api/polish surfaces them verbatim instead of "did not
 // return a usable draft". `stdout` is claude's JSON result (present on a non-zero
 // exit); `sourceError` is the rejected runCli error (carries the timeout flag).
-function classifyClaudeFailure(stdout: string, sourceError?: CliError): Error {
+export function classifyClaudeFailure(stdout: string, sourceError?: CliError): Error {
   let message = "";
   let authStatus = 0;
   try {
-    const envelope = JSON.parse(stdout);
+    const envelope = JSON.parse(stdout) as Record<string, unknown>;
     message = String(envelope.result ?? envelope.error ?? "");
     authStatus = Number(envelope.api_error_status) || 0;
   } catch {
     // stdout wasn't JSON (e.g. an empty/garbled non-zero exit).
   }
-  if (authStatus === 401 || /not logged in|please run \/login|invalid authentication|failed to authenticate|unauthorized|\b401\b/i.test(message)) {
-    return new Error(CLAUDE_CLI_AUTH_MESSAGE);
+  // Stderr remains private and is only inspected for the same narrow auth
+  // category as Claude's JSON envelope. Never return or log it.
+  const diagnostic = `${message}\n${sourceError?.stderr ?? ""}`;
+  if (
+    authStatus === 401 ||
+    /not logged in|please run \/login|invalid authentication|failed to authenticate|unauthorized|\b401\b/i.test(diagnostic)
+  ) {
+    return new UserSafeAiError(CLAUDE_CLI_AUTH_MESSAGE, 401);
   }
   // No CLI-reported error to classify and the call timed out → the actionable
   // cause is the timeout, not a generic CLI error.
   if (!message && (sourceError?.timedOut || /timed out/i.test(sourceError?.message ?? ""))) {
-    return new Error(CLAUDE_CLI_TIMEOUT_MESSAGE);
+    return new UserSafeAiError(CLAUDE_CLI_TIMEOUT_MESSAGE, 504);
   }
-  return new Error(CLAUDE_CLI_FAILED_MESSAGE);
+  return new UserSafeAiError(CLAUDE_CLI_FAILED_MESSAGE, 500);
 }
 
 // ----- Codex CLI (codex exec) -----

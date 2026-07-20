@@ -11,6 +11,11 @@ and `docs/engineering/ui-principles.md`.
 - Reuse `NavMenu`, `MenuSection`, provider controls, dialog primitives, and
   `AiWorkflowProgress` for repeated host interactions. Do not introduce a
   second modal shell, provider picker, stage card, or status vocabulary.
+- Provider selectors show only explicitly configured providers. Keep an
+  unavailable configured selection visible but disabled with reconnect/setup
+  guidance; never render an API-key field or silently choose a paid provider.
+  With no provider, keep editing/tracker/export usable and direct setup to the
+  companion.
 - Keep components declarative. Network, storage, cross-tab, and pipeline state
   belong in hooks; components receive values and callbacks.
 - Keep feature-specific composition near its tab/menu. Extract a shared section

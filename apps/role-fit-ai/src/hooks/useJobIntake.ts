@@ -38,6 +38,7 @@ import type { StageAiUsage } from "../lib/aiUsage";
 import type { TailorMode } from "../lib/tailorScope";
 import type { PolishedResume } from "../resumeEngine";
 import type { ResumeData } from "@typeset/engine/lib/resumeData.ts";
+import type { ProviderReadiness } from "./useAvailableProviders";
 
 export type ImportedJobSnapshot = {
   url: string;
@@ -91,6 +92,7 @@ type UseJobIntakeArgs = {
     facts: ExtractedJobTracking
   ) => Promise<{ proceed: boolean; note: string | null }>;
   distillRequestFields: () => Record<string, unknown>;
+  ensureProviderReady: () => Promise<ProviderReadiness>;
   tailorModes: Record<string, TailorMode>;
   editedResume: ResumeData | null;
 };
@@ -111,6 +113,7 @@ export function useJobIntake({
   confirmDuplicateBeforeDistill,
   confirmDuplicateAfterDistill,
   distillRequestFields,
+  ensureProviderReady,
   tailorModes,
   editedResume
 }: UseJobIntakeArgs) {
@@ -144,11 +147,15 @@ export function useJobIntake({
   const distillSettledRef = useRef<Promise<void>>(Promise.resolve());
   const distillGenerationRef = useRef(0);
   const distillAbortRef = useRef<AbortController | null>(null);
+  // Distill consumes only the job source and its stage-local AI settings.
+  // Resume/workspace bootstrap and Tailor-mode reconciliation may finish after
+  // a fresh extension tab claims its import; neither changes the in-flight
+  // Distill request, so neither belongs in its stale-input guard. The latest
+  // resume and modes are read only after Distill when deciding whether an
+  // automatic Tailor can begin.
   const distillInputFingerprint = workflowInputFingerprint({
     jobUrl,
     jobDescription,
-    editedResume,
-    tailorModes,
     aiRequest: distillRequestFields()
   });
   const distillInputFingerprintRef = useRef(distillInputFingerprint);
@@ -280,6 +287,13 @@ export function useJobIntake({
   async function handleExtractFromLink() {
     const url = jobUrl.trim();
     if (!url) return;
+    const readiness = await ensureProviderReady();
+    if (!readiness.ready) {
+      setLinkStatus(readiness.message);
+      setDistillProgress({ status: "failed", errorHeadline: "Provider unavailable", error: readiness.message });
+      setDistillProgressVisible(true);
+      return;
+    }
     const releaseDistillRun = tryClaimDistillRun();
     if (!releaseDistillRun) return;
     const request = startDistillRequest();
@@ -384,6 +398,13 @@ export function useJobIntake({
   async function handleDistillPaste() {
     const raw = jobDescription;
     if (!raw.trim() || distillBusyRef.current) return;
+    const readiness = await ensureProviderReady();
+    if (!readiness.ready) {
+      setLinkStatus(readiness.message);
+      setDistillProgress({ status: "failed", errorHeadline: "Provider unavailable", error: readiness.message });
+      setDistillProgressVisible(true);
+      return;
+    }
     // Strip HTML tags only if the paste looks tag-shaped (text from "View
     // source" or a copied editor block). Plain copy-paste from a rendered page
     // doesn't need this and passes through untouched.
@@ -521,6 +542,14 @@ export function useJobIntake({
   async function retryImportDistill() {
     const payload = distillImportRef.current;
     if (!payload) return;
+    if (payload.distillAi) {
+      const readiness = await ensureProviderReady();
+      if (!readiness.ready) {
+        setDistillProgress({ status: "failed", errorHeadline: "Provider unavailable", error: readiness.message });
+        setDistillProgressVisible(true);
+        return;
+      }
+    }
     const releaseDistillRun = tryClaimDistillRun();
     if (!releaseDistillRun) return;
     const request = startDistillRequest();
@@ -619,6 +648,8 @@ export function useJobIntake({
   // deterministic engine is the fallback.
   useExtensionInbox(
     async (item: ExtensionImport) => {
+      const { text, url, fields, autoTailor, distillAi } = item;
+      const readiness = distillAi ? await ensureProviderReady() : null;
       const releaseDistillRun = await waitAndClaimDistillRun();
       const request = startDistillRequest();
       setIsExtractingLink(true);
@@ -630,7 +661,6 @@ export function useJobIntake({
       // with distillRequestFields() to honor the tab's Distill selection. `fields`
       // arrives null from the current server; the extractedFromAiOrLocal branch is
       // kept only as defensive back-compat (an older server that still sends fields).
-      const { text, url, fields, autoTailor, distillAi } = item;
       // Remember the raw import (incl. its distillAi choice, so Retry can never
       // fire an AI call the user opted out of) for the card's Retry below.
       // Store the URL trimmed so a retry keeps importedJob.url === jobUrl.trim()
@@ -682,6 +712,16 @@ export function useJobIntake({
               } and it'll polish automatically.`
             : "Job imported from the browser extension."
         );
+        return;
+      }
+
+      if (readiness && !readiness.ready) {
+        if (rawTrimmed.length >= 40) applyRawImportedJob(rawTrimmed, trimmedUrl);
+        setAutoTailorJob(null);
+        setDistillRetrySource("import");
+        setDistillProgress({ status: "failed", errorHeadline: "Provider unavailable", error: readiness.message });
+        setDistillProgressVisible(true);
+        setPolishStatus(`Job imported without AI Distill. ${readiness.message}`);
         return;
       }
 

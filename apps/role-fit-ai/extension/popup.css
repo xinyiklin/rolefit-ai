@@ -137,6 +137,11 @@ body {
   padding: 13px 14px;
 }
 
+.error-body {
+  min-width: 0;
+  flex: 1;
+}
+
 .error-mark {
   flex-shrink: 0;
   width: 20px;

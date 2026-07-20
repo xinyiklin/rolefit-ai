@@ -39,7 +39,7 @@ inputs pane was folded into the masthead by explicit user request,
   own live preview, so there is no separate compile-preview; its margin
   controls own add/remove/reorder, section type, and per-section tailor scope;
   the suggestion/recruiter-review rail docks beside it post-polish), Materials (cover letter
-  + application questions), Applications (table / board / calendar tracker
+  + application questions), Applications (table / calendar tracker
   views), Analytics — plus the template/export rail below
 
 Polish should feel like a review queue, not a hidden overwrite. By default,
@@ -142,9 +142,9 @@ Never show:
 - The AI menu is split into Distill, Tailor, and Review sections. Each
   section owns a concrete provider/model/effort config; **Copy from** is a
   one-shot sync between stages, not a live link.
-- Treat those sections as an accordion: at most one is expanded, collapsed
-  sections keep their effective provider/model summary, and opening one closes
-  the others. Do not return to three simultaneous provider consoles.
+- Keep all three sections expanded together. There is no section toggle,
+  collapsed summary, or persisted open/collapse preference; the user can scan
+  and edit all three stage configurations without changing view state.
 - Distill, Tailor, and Review share one ordered workflow indicator. It shows
   every selected stage and its real `Step n of total` position; a failed or
   user-stopped stage leaves later stages visible as not run and never advances
@@ -157,10 +157,13 @@ Never show:
   only models verified against the installed CLI or current first-party API;
   do not add a custom-model escape hatch for unverified IDs.
 - Provider, model, and effort preferences may persist in localStorage so the
-  three stage configurations survive reloads. CLI providers show a signed-in
-  session note and no API-key field. `apiKey` is only a native OpenAI/Claude API
-  affordance: it may live in page memory for that session and in the same-origin
-  request to local `/api/*`; never persist, log, or echo it.
+  three stage configurations survive reloads. CLI providers show connection
+  guidance and no API-key field. Native OpenAI/Claude API credentials are added
+  only through the local provider companion; the browser never collects,
+  stores, renders, or submits them. The AI menu shows only explicitly added
+  providers and makes an added-but-unready provider visibly unavailable.
+  Antigravity may be request-eligible as **Ready to verify** while its auth
+  state remains unknown; never describe that state as signed in.
 
 ## Interaction
 

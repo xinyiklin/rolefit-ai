@@ -5,7 +5,16 @@ RoleFit AI. Click the toolbar icon to see whether you've already tracked or
 applied to that posting and import it into a fresh app tab. Fit score, coverage,
 and verdict are produced only by AI Review in the main app.
 
-It talks **only** to your local RoleFit AI server at `http://localhost:5181`.
+It sends requests **only** to your local RoleFit AI server at
+`http://localhost:5181`. The manifest grants `http://localhost/*`, which covers
+HTTP on the `localhost` hostname across ports because Chrome and Firefox host
+match patterns cannot safely pin one localhost port. The popup target itself
+remains fixed to canonical port `5181`. A custom companion port is therefore
+for direct browser use, not extension imports.
+The server also requires this installed extension's exact Origin. A manifest
+host permission permits the request but does not prove which extension sent it.
+On first use, the popup sends a short-lived local access request; approve that
+exact origin once in the companion before analyze/import becomes available.
 For imports, the server prepares the raw posting text; the receiving RoleFit tab
 then runs its own Distill-stage CLI or native API provider, or falls straight to the
 deterministic parser when **Distill with AI** is off. Start the app
@@ -18,11 +27,20 @@ deterministic parser when **Distill with AI** is off. Start the app
 - **Firefox** — open `about:debugging#/runtime/this-firefox`, click
   **Load Temporary Add-on…**, and select `manifest.json`.
 
+After loading the extension, start the RoleFit companion on port `5181` and
+open the popup on a job page. The first request is intentionally blocked and
+appears in the companion under **Browser extension**. Select **Approve** once,
+allow the companion to restart its local service, and reopen the popup. Remove
+the paired origin from the companion to revoke access. Unpacked Chrome ids can
+change if the extension is moved or reloaded under a different identity;
+Firefox origins are browser/profile-specific, so each distinct installation
+requires its own one-time approval.
+
 ## Files
 
 | File | Role |
 | --- | --- |
-| `manifest.json` | MV3 manifest — `activeTab` + `scripting` + `storage` + `cookies` (the last so imports can open in the source tab's Firefox container), host access to `localhost:5181` only |
+| `manifest.json` | MV3 manifest: `activeTab` + `scripting` + `storage` + `cookies` (the last so imports can open in the source tab's Firefox container), with `http://localhost/*` connectivity for the fixed port `5181` popup target; host permission is not server authorization |
 | `popup.html` / `popup.css` / `popup.js` | the popup UI (vanilla ESM, no build step) |
 | `icons/icon.svg` | toolbar icon |
 

@@ -1,41 +1,24 @@
-import type { ReactNode } from "react";
-import { ChevronDown } from "lucide-react";
+import { useId, type ReactNode } from "react";
 
 type MenuSectionProps = {
   title: string;
-  // Compact right-aligned summary of the current setting (e.g. the effective
-  // provider), shown on the header line while the section is collapsed so it
-  // still reads at a glance without expanding.
-  summary?: ReactNode;
-  // Control rendered on the title line while the section is open (e.g. the copy
-  // buttons). Rendered as a sibling of the toggle button — never nested — so its
-  // own clicks don't collapse the section.
+  // Optional stage-local control kept beside the static heading.
   headerControl?: ReactNode;
-  // Collapse state is owned by the caller so it can be persisted.
-  open: boolean;
-  onToggle: () => void;
   children: ReactNode;
 };
 
-// A collapsible section inside a menu popover. The title toggles the body; when
-// collapsed the header shows the effective setting, when open it shows the
-// header control. Used for the AI menu's per-stage provider blocks (Distill /
-// Tailor / Review), each independently expandable.
-export function MenuSection({ title, summary, headerControl, open, onToggle, children }: MenuSectionProps) {
+// A permanently visible semantic section inside the AI menu. Distill, Tailor,
+// and Review are one compact setup form, so stage headings label content rather
+// than acting as nested disclosure controls.
+export function MenuSection({ title, headerControl, children }: MenuSectionProps) {
+  const headingId = useId();
   return (
-    <div className={`menu-section${open ? " is-open" : ""}`}>
+    <section className="menu-section" aria-labelledby={headingId}>
       <div className="menu-section__header">
-        <button type="button" className="menu-section__toggle" aria-expanded={open} onClick={onToggle}>
-          <span className="menu-subhead__title">{title}</span>
-          <ChevronDown size={14} aria-hidden={true} className="menu-section__chev" />
-        </button>
-        {open
-          ? headerControl ?? null
-          : summary
-            ? <span className="menu-section__value">{summary}</span>
-            : null}
+        <h3 id={headingId} className="menu-subhead__title">{title}</h3>
+        {headerControl ?? null}
       </div>
-      {open ? <div className="menu-section__body">{children}</div> : null}
-    </div>
+      <div className="menu-section__body">{children}</div>
+    </section>
   );
 }

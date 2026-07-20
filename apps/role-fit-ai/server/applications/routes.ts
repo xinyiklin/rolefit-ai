@@ -4,11 +4,10 @@
 // process-local promise lock (withApplicationsLock) that guards
 // applications.json against overlapping cycles.
 //
-// jobWorkspaceDir is imported from ../workspace.ts (the single source of truth
-// for the workspace directory) rather than injected via a factory; the module
-// state (the write queue) is module-level because the server instantiates these
-// routes exactly once. Everything else (JSON I/O, base64 decode, HTTP helpers) is
-// imported directly, matching the server/ai/* module style.
+// Browser-mode callers retain jobWorkspaceDir as the default; embedded runtimes
+// inject their writable workspace directory through the route boundary. The
+// write queue remains module-level because the server instantiates these routes
+// exactly once.
 
 import { randomUUID } from "node:crypto";
 import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
@@ -20,7 +19,6 @@ import { jobWorkspaceDir } from "../workspace.ts";
 import {
   APPLICATION_ID_RE,
   ApplicationsStorageError,
-  applicationsFilePath,
   readApplications,
   reconcileApplicationMutations,
   sanitizeApplications,
@@ -31,21 +29,27 @@ function storageErrorMessage(error: unknown, fallback: string): string {
   return error instanceof ApplicationsStorageError ? error.message : fallback;
 }
 
-function applicationResumeDir(id: string): string | null {
+function applicationResumeDir(id: string, workspaceDir: string): string | null {
   if (!APPLICATION_ID_RE.test(id)) return null;
-  const dir = join(jobWorkspaceDir, "applications", id);
+  const dir = join(workspaceDir, "applications", id);
   // Defense in depth: ensure the resolved path stays inside the workspace.
-  const base = resolve(jobWorkspaceDir, "applications");
+  const base = resolve(workspaceDir, "applications");
   if (!resolve(dir).startsWith(base + sep) && resolve(dir) !== base) return null;
   return dir;
 }
 
-export async function handleListApplications(req: IncomingMessage, res: ServerResponse): Promise<void> {
+export async function handleListApplications(
+  req: IncomingMessage,
+  res: ServerResponse,
+  workspaceDir = jobWorkspaceDir
+): Promise<void> {
   try {
-    const applications = await readApplications(jobWorkspaceDir);
+    const applications = await readApplications(workspaceDir);
     sendJson(res, 200, {
       applications,
-      path: applicationsFilePath(jobWorkspaceDir)
+      // The browser only needs a human-readable storage label. Do not expose
+      // the host account's absolute workspace path across the HTTP boundary.
+      path: "workspace/applications.json"
     });
   } catch (error) {
     sendJson(res, 500, { error: storageErrorMessage(error, "Application list failed.") });
@@ -68,7 +72,11 @@ function withApplicationsLock<T>(task: () => Promise<T>): Promise<T> {
   return run;
 }
 
-export async function handleSaveApplications(req: IncomingMessage, res: ServerResponse): Promise<void> {
+export async function handleSaveApplications(
+  req: IncomingMessage,
+  res: ServerResponse,
+  workspaceDir = jobWorkspaceDir
+): Promise<void> {
   try {
     const body = JSON.parse(await readBody(req)) as Record<string, unknown>;
     if (!Array.isArray(body.applications)) {
@@ -84,9 +92,9 @@ export async function handleSaveApplications(req: IncomingMessage, res: ServerRe
       // Reconcile the client's explicit mutation set against the latest disk
       // snapshot. Unchanged rows stay server-authoritative, while changed rows
       // must still match the revision the client originally edited.
-      const existing = await readApplications(jobWorkspaceDir);
+      const existing = await readApplications(workspaceDir);
       const reconciled = reconcileApplicationMutations(existing, incoming, body.mutations);
-      return writeApplications(jobWorkspaceDir, reconciled);
+      return writeApplications(workspaceDir, reconciled);
     });
     sendJson(res, 200, { applications });
   } catch (error) {
@@ -100,7 +108,12 @@ export async function handleSaveApplications(req: IncomingMessage, res: ServerRe
   }
 }
 
-export async function handleDeleteApplication(req: IncomingMessage, res: ServerResponse, id: string): Promise<void> {
+export async function handleDeleteApplication(
+  req: IncomingMessage,
+  res: ServerResponse,
+  id: string,
+  workspaceDir = jobWorkspaceDir
+): Promise<void> {
   if (req.method !== "DELETE") {
     sendJson(res, 405, { error: "Use DELETE." });
     return;
@@ -113,14 +126,14 @@ export async function handleDeleteApplication(req: IncomingMessage, res: ServerR
       return;
     }
     const applications = await withApplicationsLock(async () => {
-      const existing = await readApplications(jobWorkspaceDir);
+      const existing = await readApplications(workspaceDir);
       const current = existing.find((application) => application.id === id);
       if (!current) return null;
       const filtered = existing.filter((application) => application.id !== id);
       const reconciled = reconcileApplicationMutations(existing, filtered, [
         { id, operation: "delete", baseUpdatedAt: baseUpdatedAt.trim() }
       ]);
-      return writeApplications(jobWorkspaceDir, reconciled);
+      return writeApplications(workspaceDir, reconciled);
     });
     if (applications === null) {
       sendJson(res, 404, { error: "Application not found." });
@@ -141,9 +154,14 @@ export async function handleDeleteApplication(req: IncomingMessage, res: ServerR
 // Persist a tailored resume's compiled PDF for one application under
 // job-search-workspace/applications/<id>/ (gitignored). The returned
 // resumeArtifacts mirrors the shape the application sanitizer stores.
-export async function handleSaveApplicationResume(req: IncomingMessage, res: ServerResponse, id: string): Promise<void> {
+export async function handleSaveApplicationResume(
+  req: IncomingMessage,
+  res: ServerResponse,
+  id: string,
+  workspaceDir = jobWorkspaceDir
+): Promise<void> {
   if (req.method !== "POST") { sendJson(res, 405, { error: "Use POST." }); return; }
-  const dir = applicationResumeDir(id);
+  const dir = applicationResumeDir(id, workspaceDir);
   if (!dir) { sendJson(res, 400, { error: "Invalid application id." }); return; }
   try {
     const body = JSON.parse(await readBody(req));
@@ -189,9 +207,14 @@ export async function handleSaveApplicationResume(req: IncomingMessage, res: Ser
 // Stream a saved resume PDF back as a file download. The browser names it via
 // the <a download> attribute; the Content-Disposition filename is only a
 // fallback, so a fixed "resume" name is fine here.
-export async function handleApplicationResumeFile(req: IncomingMessage, res: ServerResponse, id: string): Promise<void> {
+export async function handleApplicationResumeFile(
+  req: IncomingMessage,
+  res: ServerResponse,
+  id: string,
+  workspaceDir = jobWorkspaceDir
+): Promise<void> {
   if (req.method !== "GET") { sendJson(res, 405, { error: "Use GET." }); return; }
-  const dir = applicationResumeDir(id);
+  const dir = applicationResumeDir(id, workspaceDir);
   if (!dir) { sendJson(res, 400, { error: "Invalid application id." }); return; }
   const filePath = join(dir, "resume.pdf");
   try {

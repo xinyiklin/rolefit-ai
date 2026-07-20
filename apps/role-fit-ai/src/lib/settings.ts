@@ -2,27 +2,22 @@ import type { AiProviderValue } from "../config/aiOptions";
 import { modelOptionsByProvider, providerOptions } from "../config/aiOptions";
 import { CITIZENSHIP_OPTIONS, type CitizenshipStatus } from "./candidateFacts";
 
-// Auto-saved UI preferences (localStorage). Intentionally excludes the API key:
-// the app never persists secrets — CLI providers need no key, and API keys come
-// from .env or a one-request field.
+// Auto-saved browser UI preferences (localStorage). Credentials are absent by
+// construction: supported API keys live only in the local provider companion.
 export type PersistedSettings = {
   aiProvider?: AiProviderValue;
   selectedModel?: string;
   cliReasoningEffort?: string;
   // Independent reviewer for the strict-audit pass — its own concrete provider
-  // config (synced via the copy buttons, not a live link). The reviewer API key,
-  // like the primary key, is never persisted.
+  // config (synced via the copy buttons, not a live link).
   auditProvider?: AiProviderValue;
   auditSelectedModel?: string;
   auditCliReasoningEffort?: string;
   // Independent distiller for the /api/distill pass — its own concrete provider
-  // config (synced to other stages via the copy buttons, not a live link). The
-  // distill API key, like the primary and reviewer keys, is never persisted.
+  // config (synced to other stages via the copy buttons, not a live link).
   distillProvider?: AiProviderValue;
   distillSelectedModel?: string;
   distillCliReasoningEffort?: string;
-  // Per-section expand/collapse state for the AI menu (Distill / Tailor / Review).
-  sectionOpen?: { distill?: boolean; tailor?: boolean; review?: boolean };
   honestContext?: string;
   customInstructions?: string;
   strictReview?: boolean;
@@ -86,20 +81,9 @@ function coerce(settings: PersistedSettings): PersistedSettings {
     if (bag[providerKey] === "") delete bag[providerKey];
     if (bag[modelKey] === "") delete bag[modelKey];
   }
-  // Section open/collapse map: keep only well-formed boolean fields; drop the rest
-  // so a corrupt value can't leave a section stuck. An absent field defaults open.
-  if (settings.sectionOpen !== undefined) {
-    const raw = settings.sectionOpen;
-    if (!raw || typeof raw !== "object") {
-      delete settings.sectionOpen;
-    } else {
-      const cleaned: { distill?: boolean; tailor?: boolean; review?: boolean } = {};
-      for (const key of ["distill", "tailor", "review"] as const) {
-        if (typeof raw[key] === "boolean") cleaned[key] = raw[key];
-      }
-      settings.sectionOpen = cleaned;
-    }
-  }
+  // The AI stage sections are permanently visible. Drop the retired accordion
+  // preference from older browser storage on the next normal save.
+  delete (settings as unknown as Record<string, unknown>).sectionOpen;
   if (settings.strictReview !== undefined && typeof settings.strictReview !== "boolean") {
     delete settings.strictReview;
   }

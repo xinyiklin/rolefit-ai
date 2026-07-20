@@ -4,8 +4,8 @@
 // handlers plus the file readers/writers they share live here. JSON I/O and HTTP
 // helpers are imported directly, matching the server/ai/* module style.
 //
-// jobWorkspaceDir is exported so the application-tracker and extension routes can
-// close over the same workspace directory without a factory.
+// Browser-mode callers retain the process.cwd() defaults, while embedded runtimes
+// can pass explicit read-only app and writable workspace locations.
 
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { mkdir, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
@@ -24,8 +24,17 @@ type BaseResumeResult = {
   paragraphs?: number;
 };
 
-const root = process.cwd();
-export const jobWorkspaceDir = join(root, "job-search-workspace");
+export type WorkspaceLocations = {
+  appRoot: string;
+  workspaceDir: string;
+};
+
+const defaultAppRoot = process.cwd();
+export const jobWorkspaceDir = join(defaultAppRoot, "job-search-workspace");
+const defaultWorkspaceLocations: WorkspaceLocations = {
+  appRoot: defaultAppRoot,
+  workspaceDir: jobWorkspaceDir
+};
 const baseResumeCandidates = [
   "base-resume.resume",
   "base-resume.txt",
@@ -89,13 +98,13 @@ async function atomicWriteWorkspaceFile(filePath: string, data: string | Buffer)
   }
 }
 
-export async function ensureJobWorkspace(): Promise<void> {
-  await mkdir(jobWorkspaceDir, { recursive: true });
+export async function ensureJobWorkspace(workspaceDir = jobWorkspaceDir): Promise<void> {
+  await mkdir(workspaceDir, { recursive: true });
 }
 
-async function readWorkspaceFiles(): Promise<string[]> {
+async function readWorkspaceFiles(locations: WorkspaceLocations): Promise<string[]> {
   try {
-    const entries = await readdir(jobWorkspaceDir, { withFileTypes: true });
+    const entries = await readdir(locations.workspaceDir, { withFileTypes: true });
     return entries
       .filter((entry) => entry.isFile())
       .map((entry) => entry.name)
@@ -136,17 +145,20 @@ function baseResumeLabel(fileName: string): string {
     .join(" ");
 }
 
-export async function readWorkspaceBaseResume(requestedFileName?: string): Promise<BaseResumeResult> {
+export async function readWorkspaceBaseResume(
+  requestedFileName?: string,
+  locations: WorkspaceLocations = defaultWorkspaceLocations
+): Promise<BaseResumeResult> {
   const candidates = requestedFileName
     ? [assertBaseResumeFileName(requestedFileName)]
     : [
-        ...(await readBaseResumeOptions()).map((option) => option.fileName),
+        ...(await readBaseResumeOptions(locations)).map((option) => option.fileName),
         ...baseResumeCandidates.filter((name) => !baseResumeVariantPattern.test(name))
       ];
 
   const uniqueCandidates = [...new Set(candidates)];
   for (const fileName of uniqueCandidates) {
-    const filePath = join(jobWorkspaceDir, fileName);
+    const filePath = join(locations.workspaceDir, fileName);
     try {
       const data = await readFile(filePath);
       // Never truncate a structured file: validate the complete bytes before
@@ -172,7 +184,7 @@ export async function readWorkspaceBaseResume(requestedFileName?: string): Promi
   // No workspace file found — fall back to the bundled starter .resume so the
   // editor is never empty on a fresh install.
   try {
-    const starterPath = join(root, "server/starter.resume");
+    const starterPath = join(locations.appRoot, "server/starter.resume");
     const starterText = await readFile(starterPath, "utf8");
     return { exists: false, text: starterText, kind: "resume", fileName: "starter.resume" };
   } catch {
@@ -180,8 +192,8 @@ export async function readWorkspaceBaseResume(requestedFileName?: string): Promi
   }
 }
 
-async function readBaseResumeOptions(): Promise<{ fileName: string; label: string; kind: string }[]> {
-  const files = await readWorkspaceFiles();
+async function readBaseResumeOptions(locations: WorkspaceLocations): Promise<{ fileName: string; label: string; kind: string }[]> {
+  const files = await readWorkspaceFiles(locations);
   return files
     .filter((name) => baseResumeVariantPattern.test(name))
     .map((fileName) => ({
@@ -197,17 +209,17 @@ async function readBaseResumeOptions(): Promise<{ fileName: string; label: strin
 }
 
 // Clear the app-managed default base resume, but never hard-delete: move every
-// known default format into job-search-workspace/.trash/ with a timestamp so a
-// removed or replaced base resume is always recoverable. Named variants such as
-// base-resume-fullstack.resume stay in place.
-async function clearBaseResumeFiles(): Promise<void> {
-  const trashDir = join(jobWorkspaceDir, ".trash");
+// known default format into the active workspace's .trash/ directory with a
+// timestamp so a removed or replaced base resume is always recoverable. Named
+// variants such as base-resume-fullstack.resume stay in place.
+async function clearBaseResumeFiles(locations: WorkspaceLocations): Promise<void> {
+  const trashDir = join(locations.workspaceDir, ".trash");
   await mkdir(trashDir, { recursive: true });
   const stamp = nextTrashStamp();
   await Promise.all(
     baseResumeCandidates.map(async (name) => {
       try {
-        await rename(join(jobWorkspaceDir, name), join(trashDir, `${stamp}__${name}`));
+        await rename(join(locations.workspaceDir, name), join(trashDir, `${stamp}__${name}`));
       } catch (error) {
         if ((error as NodeJS.ErrnoException)?.code !== "ENOENT") throw error;
       }
@@ -216,12 +228,12 @@ async function clearBaseResumeFiles(): Promise<void> {
 }
 
 // Back up a single base-resume file (including named variants) to .trash/.
-async function trashBaseFile(name: string): Promise<void> {
-  const trashDir = join(jobWorkspaceDir, ".trash");
+async function trashBaseFile(name: string, locations: WorkspaceLocations): Promise<void> {
+  const trashDir = join(locations.workspaceDir, ".trash");
   await mkdir(trashDir, { recursive: true });
   const stamp = nextTrashStamp();
   try {
-    await rename(join(jobWorkspaceDir, name), join(trashDir, `${stamp}__${name}`));
+    await rename(join(locations.workspaceDir, name), join(trashDir, `${stamp}__${name}`));
   } catch (error) {
     if ((error as NodeJS.ErrnoException)?.code !== "ENOENT") throw error;
   }
@@ -240,8 +252,8 @@ type HistoryGroup = { variant: string; label: string; entries: HistoryEntry[] };
 // The variant identity is the file stem (extension-agnostic) so a Default whose
 // history spans base-resume.resume and base-resume.txt consolidates into one group.
 // Matches both default (base-resume.resume) and named variants (base-resume-fullstack.resume).
-async function readBaseResumeHistory(perVariant = 3): Promise<HistoryGroup[]> {
-  const trashDir = join(jobWorkspaceDir, ".trash");
+async function readBaseResumeHistory(locations: WorkspaceLocations, perVariant = 3): Promise<HistoryGroup[]> {
+  const trashDir = join(locations.workspaceDir, ".trash");
   let entries: string[];
   try {
     entries = await readdir(trashDir);
@@ -289,17 +301,21 @@ async function readBaseResumeHistory(perVariant = 3): Promise<HistoryGroup[]> {
   });
 }
 
-async function workspaceSnapshot(baseResume?: BaseResumeResult) {
+async function workspaceSnapshot(locations: WorkspaceLocations, baseResume?: BaseResumeResult) {
   return {
-    path: jobWorkspaceDir,
-    baseResume: baseResume ?? await readWorkspaceBaseResume(),
-    baseResumeOptions: await readBaseResumeOptions(),
-    baseResumeHistory: await readBaseResumeHistory(),
-    files: await readWorkspaceFiles()
+    path: locations.workspaceDir,
+    baseResume: baseResume ?? await readWorkspaceBaseResume(undefined, locations),
+    baseResumeOptions: await readBaseResumeOptions(locations),
+    baseResumeHistory: await readBaseResumeHistory(locations),
+    files: await readWorkspaceFiles(locations)
   };
 }
 
-export async function handleWorkspace(req: IncomingMessage, res: ServerResponse): Promise<void> {
+export async function handleWorkspace(
+  req: IncomingMessage,
+  res: ServerResponse,
+  locations: WorkspaceLocations = defaultWorkspaceLocations
+): Promise<void> {
   if (req.method !== "GET") {
     sendJson(res, 405, { error: "Use GET." });
     return;
@@ -307,8 +323,8 @@ export async function handleWorkspace(req: IncomingMessage, res: ServerResponse)
 
   try {
     const snapshot = await withWorkspaceLock(async () => {
-      await ensureJobWorkspace();
-      return workspaceSnapshot();
+      await ensureJobWorkspace(locations.workspaceDir);
+      return workspaceSnapshot(locations);
     });
     sendJson(res, 200, snapshot);
   } catch (error) {
@@ -318,7 +334,11 @@ export async function handleWorkspace(req: IncomingMessage, res: ServerResponse)
   }
 }
 
-export async function handleSelectBaseResume(req: IncomingMessage, res: ServerResponse): Promise<void> {
+export async function handleSelectBaseResume(
+  req: IncomingMessage,
+  res: ServerResponse,
+  locations: WorkspaceLocations = defaultWorkspaceLocations
+): Promise<void> {
   if (req.method !== "POST") {
     sendJson(res, 405, { error: "Use POST." });
     return;
@@ -328,9 +348,9 @@ export async function handleSelectBaseResume(req: IncomingMessage, res: ServerRe
     const body = JSON.parse(await readBody(req, 2_000));
     const fileName = assertBaseResumeFileName(body.fileName);
     const snapshot = await withWorkspaceLock(async () => {
-      await ensureJobWorkspace();
-      const baseResume = await readWorkspaceBaseResume(fileName);
-      return baseResume.exists ? workspaceSnapshot(baseResume) : null;
+      await ensureJobWorkspace(locations.workspaceDir);
+      const baseResume = await readWorkspaceBaseResume(fileName, locations);
+      return baseResume.exists ? workspaceSnapshot(locations, baseResume) : null;
     });
     if (!snapshot) {
       sendJson(res, 404, { error: "Base resume version not found." });
@@ -346,13 +366,17 @@ export async function handleSelectBaseResume(req: IncomingMessage, res: ServerRe
   }
 }
 
-export async function handleWorkspaceBaseResume(req: IncomingMessage, res: ServerResponse): Promise<void> {
+export async function handleWorkspaceBaseResume(
+  req: IncomingMessage,
+  res: ServerResponse,
+  locations: WorkspaceLocations = defaultWorkspaceLocations
+): Promise<void> {
   if (req.method === "DELETE") {
     try {
       const snapshot = await withWorkspaceLock(async () => {
-        await ensureJobWorkspace();
-        await clearBaseResumeFiles();
-        return workspaceSnapshot({ exists: false });
+        await ensureJobWorkspace(locations.workspaceDir);
+        await clearBaseResumeFiles(locations);
+        return workspaceSnapshot(locations, { exists: false });
       });
       sendJson(res, 200, {
         removed: true,
@@ -408,15 +432,15 @@ export async function handleWorkspaceBaseResume(req: IncomingMessage, res: Serve
       }
     }
     const snapshot = await withWorkspaceLock(async () => {
-      await ensureJobWorkspace();
+      await ensureJobWorkspace(locations.workspaceDir);
       if (targetName === "base-resume.resume" || !isResume) {
-        await clearBaseResumeFiles();
+        await clearBaseResumeFiles(locations);
       } else {
         // Named variant: back it up before overwriting so it appears in version history.
-        await trashBaseFile(targetName);
+        await trashBaseFile(targetName, locations);
       }
-      await atomicWriteWorkspaceFile(join(jobWorkspaceDir, targetName), text);
-      return workspaceSnapshot({
+      await atomicWriteWorkspaceFile(join(locations.workspaceDir, targetName), text);
+      return workspaceSnapshot(locations, {
         exists: true,
         fileName: targetName,
         label: baseResumeLabel(targetName),
@@ -435,7 +459,11 @@ export async function handleWorkspaceBaseResume(req: IncomingMessage, res: Serve
   }
 }
 
-export async function handleRestoreBaseResume(req: IncomingMessage, res: ServerResponse): Promise<void> {
+export async function handleRestoreBaseResume(
+  req: IncomingMessage,
+  res: ServerResponse,
+  locations: WorkspaceLocations = defaultWorkspaceLocations
+): Promise<void> {
   if (req.method !== "POST") {
     sendJson(res, 405, { error: "Use POST." });
     return;
@@ -447,7 +475,7 @@ export async function handleRestoreBaseResume(req: IncomingMessage, res: ServerR
       sendJson(res, 400, { error: "Invalid history key." });
       return;
     }
-    const trashDir = join(jobWorkspaceDir, ".trash");
+    const trashDir = join(locations.workspaceDir, ".trash");
     const sourcePath = join(trashDir, key);
 
     // Extract the original filename from the key (after the stamp prefix).
@@ -460,17 +488,17 @@ export async function handleRestoreBaseResume(req: IncomingMessage, res: ServerR
     const isNamedVariant = baseResumeVariantPattern.test(targetName) && targetName !== "base-resume.resume";
 
     const snapshot = await withWorkspaceLock(async () => {
-      await ensureJobWorkspace();
+      await ensureJobWorkspace(locations.workspaceDir);
       // Validate the archived bytes before moving the current good version.
       const data = await readFile(sourcePath);
       validateBaseResumeText(targetName, data);
       if (isNamedVariant) {
-        await trashBaseFile(targetName);
+        await trashBaseFile(targetName, locations);
       } else {
-        await clearBaseResumeFiles();
+        await clearBaseResumeFiles(locations);
       }
-      await atomicWriteWorkspaceFile(join(jobWorkspaceDir, targetName), data);
-      return workspaceSnapshot(await readWorkspaceBaseResume(targetName));
+      await atomicWriteWorkspaceFile(join(locations.workspaceDir, targetName), data);
+      return workspaceSnapshot(locations, await readWorkspaceBaseResume(targetName, locations));
     });
 
     sendJson(res, 200, {

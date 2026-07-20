@@ -348,7 +348,7 @@ export function useWorkspaceResume({
     if (
       !(await confirm({
         title: "Remove base resume?",
-        message: `Remove the base resume "${baseResumeName}"? A backup is kept in job-search-workspace/.trash, and the resume text stays in the editor.`,
+        message: `Remove the base resume "${baseResumeName}"? A backup is kept in the local workspace's .trash folder, and the resume text stays in the editor.`,
         confirmLabel: "Remove",
         tone: "danger"
       }))
