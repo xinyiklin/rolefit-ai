@@ -239,7 +239,7 @@ jobs:
         shell: pwsh
         run: >-
           npm run test:desktop:windows-installer --workspace apps/role-fit-ai --
-          --installer=apps/role-fit-ai/.forge/release/RoleFit-Local-Companion-${{ needs.validate.outputs.version }}-windows-x64.exe
+          --installer=.forge/release/RoleFit-Local-Companion-${{ needs.validate.outputs.version }}-windows-x64.exe
 
       - name: Verify Windows preview asset
         shell: pwsh
