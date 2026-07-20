@@ -63,7 +63,7 @@ module.exports = {
     overwrite: true,
     appBundleId: "ai.rolefit.companion",
     appCategoryType: "public.app-category.productivity",
-    executableName: WINDOWS_IDENTITY,
+    executableName: process.platform === "win32" ? WINDOWS_IDENTITY : PRODUCT_NAME,
     icon: path.join(assets, process.platform === "win32" ? "icon.ico" : "icon.icns"),
     osxSign: macSigning,
     osxNotarize: macNotarize,

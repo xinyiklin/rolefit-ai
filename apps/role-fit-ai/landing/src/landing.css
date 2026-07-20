@@ -763,9 +763,10 @@ section[id] {
   font-size: 0.83rem;
 }
 
-.download-row__format {
+/* Same specificity as `.download-row > p`; source order lets the mono size win. */
+p.download-row__format {
   font-family: var(--mono);
-  font-size: 0.7rem !important;
+  font-size: 0.7rem;
   letter-spacing: 0.03em;
 }
 
@@ -877,6 +878,7 @@ section[id] {
   .hero__copy > :nth-child(2) { animation-delay: 0.04s; }
   .hero__copy > :nth-child(3) { animation-delay: 0.08s; }
   .hero__copy > :nth-child(4) { animation-delay: 0.12s; }
+  .hero__copy > :nth-child(5) { animation-delay: 0.16s; }
   .app-frame--hero { animation-delay: 0.08s; }
 }
 

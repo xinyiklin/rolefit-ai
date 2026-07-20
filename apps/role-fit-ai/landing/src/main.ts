@@ -49,8 +49,35 @@ function setStatus(text: string, available = false, preview = false): void {
   }
 }
 
+function setReleaseChannelCopy(preview: boolean): void {
+  const channelLabel = document.getElementById("release-channel-label");
+  const downloadLabel = document.getElementById("release-download-label");
+  const safetyNote = document.getElementById("release-safety-note");
+
+  if (channelLabel) {
+    channelLabel.replaceChildren();
+    const dot = document.createElement("span");
+    dot.setAttribute("aria-hidden", "true");
+    channelLabel.append(
+      dot,
+      preview
+        ? "Unsigned desktop preview · macOS + Windows"
+        : "Signed desktop release · macOS + Windows",
+    );
+  }
+  if (downloadLabel) {
+    downloadLabel.textContent = preview ? "Unsigned desktop preview" : "Desktop release";
+  }
+  if (safetyNote) {
+    safetyNote.textContent = preview
+      ? "This preview is unsigned. macOS Gatekeeper and Windows SmartScreen will show the expected unidentified-publisher warning."
+      : "Signed release artifacts include SHA-256 checksums. Verify the checksum before opening an installer.";
+  }
+}
+
 function applyCatalog(catalog: ReleaseCatalog): void {
   const preview = catalog.channel === "unsigned-preview";
+  setReleaseChannelCopy(preview);
   setStatus(
     preview
       ? `Unsigned preview ${catalog.version} ${catalog.previewLabel} is available. macOS and Windows will show security warnings.`
@@ -86,9 +113,7 @@ function applyCatalog(catalog: ReleaseCatalog): void {
   for (const archive of archives.reverse()) {
     const anchor = document.createElement("a");
     anchor.href = archive.url;
-    anchor.append(archive.name);
-    const releasesIcon = allReleases?.querySelector("svg");
-    if (releasesIcon) anchor.append(releasesIcon.cloneNode(true));
+    anchor.append(`${archive.name} ↗`);
     links.prepend(anchor);
   }
 }
