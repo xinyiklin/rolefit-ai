@@ -164,12 +164,12 @@ const childEnvironment = {
   PATH: `${fakeBin}${delimiter}${process.env.PATH ?? ""}`,
   ROLEFIT_DESKTOP_USER_DATA: userData,
   ROLEFIT_DESKTOP_PORT: String(port),
-  ROLEFIT_DESKTOP_MODE: "production",
   ROLEFIT_DESKTOP_SMOKE: "companion",
   ROLEFIT_DESKTOP_SMOKE_HOLD_MS: "2500",
   ROLEFIT_DESKTOP_SMOKE_SERVER_PID_FILE: pidFile,
   ELECTRON_RUN_AS_NODE: "1"
 };
+delete childEnvironment.ROLEFIT_DESKTOP_MODE;
 delete childEnvironment.ROLEFIT_WORKSPACE_DIR;
 
 const child = spawn(executable, [], {
