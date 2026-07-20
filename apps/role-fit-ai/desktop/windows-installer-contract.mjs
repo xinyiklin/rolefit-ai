@@ -25,6 +25,7 @@ export function resolveWindowsSquirrelPaths(localAppData, version) {
     installRoot,
     versionDirectory,
     executable: win32.join(versionDirectory, WINDOWS_EXECUTABLE_NAME),
-    updater: win32.join(installRoot, "Update.exe")
+    updater: win32.join(installRoot, "Update.exe"),
+    tombstone: win32.join(installRoot, ".dead")
   });
 }

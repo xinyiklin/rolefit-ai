@@ -51,13 +51,13 @@ async function waitForRegularFile(path, label, timeoutMs) {
   fail(`timed out waiting for ${label}: ${path}`);
 }
 
-async function waitForRemoval(path, timeoutMs) {
+async function waitForRemoval(path, label, timeoutMs) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     if (!(await pathInfo(path))) return;
     await delay(250);
   }
-  fail(`Squirrel uninstall did not remove ${path}`);
+  fail(`timed out waiting for ${label} removal: ${path}`);
 }
 
 function runProcess(executable, args, label, timeoutMs, environment = process.env) {
@@ -136,15 +136,16 @@ async function uninstallInstalledApp(paths, environment) {
       UNINSTALL_TIMEOUT_MS,
       environment
     );
-    await waitForRemoval(paths.installRoot, REMOVAL_TIMEOUT_MS);
+    await waitForRemoval(paths.versionDirectory, "installed version directory", REMOVAL_TIMEOUT_MS);
+    await requireRegularFile(paths.tombstone, "Squirrel uninstall tombstone");
   } catch (error) {
     uninstallError = error;
   }
 
   if (await pathInfo(paths.installRoot)) {
-    // The GitHub runner is ephemeral, but remove a failed test install so later
-    // steps cannot accidentally exercise stale binaries. This exact root was
-    // verified absent before this smoke started.
+    // Squirrel intentionally recreates the package root with a .dead tombstone
+    // after removing the installed payload. Remove that test residue so later
+    // steps cannot accidentally exercise stale state on this runner.
     await rm(paths.installRoot, { recursive: true, force: true });
   }
   if (await pathInfo(paths.installRoot)) {
