@@ -33,7 +33,6 @@ async function runWindowsProbe() {
   const implementationPath = join(root, "fake-cli.mjs");
   const pidPath = join(root, "child.pid");
   const originalPath = process.env.PATH;
-  const originalPidPath = process.env.ROLEFIT_WINDOWS_CLI_PID_FILE;
   try {
     await writeFile(
       implementationPath,
@@ -41,8 +40,10 @@ async function runWindowsProbe() {
         'import { appendFileSync } from "node:fs";',
         'let stdin = "";',
         'for await (const chunk of process.stdin) stdin += chunk;',
-        'if (process.env.ROLEFIT_WINDOWS_CLI_PID_FILE) {',
-        '  appendFileSync(process.env.ROLEFIT_WINDOWS_CLI_PID_FILE, `${process.pid}\\n`);',
+        'const pidFlagIndex = process.argv.indexOf("--rolefit-probe-pid-file");',
+        'if (pidFlagIndex >= 0) {',
+        '  appendFileSync(process.argv[pidFlagIndex + 1], `${process.pid}\\n`);',
+        '  process.argv.splice(pidFlagIndex, 2);',
         '}',
         'if (process.argv[2] === "--sleep") {',
         '  await new Promise((resolve) => setTimeout(resolve, Number(process.argv[3])));',
@@ -58,13 +59,12 @@ async function runWindowsProbe() {
       "utf8"
     );
     process.env.PATH = `${root}${delimiter}${originalPath ?? ""}`;
-    process.env.ROLEFIT_WINDOWS_CLI_PID_FILE = pidPath;
 
     const privateArgument = 'private & | < > ^ %PATH% ! " ( ) , ; * ? [ ] space\\tail';
     const stdin = "private stdin payload";
     const completed = await runCli(
       "rolefit-fake",
-      ["--probe", privateArgument],
+      ["--rolefit-probe-pid-file", pidPath, "--probe", privateArgument],
       stdin,
       { timeoutMs: 5_000, cwd: root }
     );
@@ -74,10 +74,12 @@ async function runWindowsProbe() {
     }, "Windows .cmd execution must preserve private argv without shell interpretation");
 
     await assert.rejects(
-      () => runCli("rolefit-fake", ["--sleep", "120000"], undefined, {
-        timeoutMs: 250,
-        cwd: root
-      }),
+      () => runCli(
+        "rolefit-fake",
+        ["--rolefit-probe-pid-file", pidPath, "--sleep", "120000"],
+        undefined,
+        { timeoutMs: 250, cwd: root },
+      ),
       /timed out/
     );
     const childPid = await readPid(pidPath);
@@ -88,8 +90,6 @@ async function runWindowsProbe() {
   } finally {
     if (originalPath === undefined) delete process.env.PATH;
     else process.env.PATH = originalPath;
-    if (originalPidPath === undefined) delete process.env.ROLEFIT_WINDOWS_CLI_PID_FILE;
-    else process.env.ROLEFIT_WINDOWS_CLI_PID_FILE = originalPidPath;
     await rm(root, { recursive: true, force: true });
   }
 }
