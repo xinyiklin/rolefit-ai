@@ -187,18 +187,18 @@ jobs:
           RELEASE_VERSION: ${{ needs.validate.outputs.version }}
         run: |
           set -euo pipefail
-          app_path="apps/role-fit-ai/.forge/out/RoleFit Local Companion-darwin-${RELEASE_ARCH}/RoleFit Local Companion.app"
+          app_path="apps/role-fit-ai/.forge/out/RoleFit AI-darwin-${RELEASE_ARCH}/RoleFit AI.app"
           test -d "$app_path"
           codesign --verify --deep --strict --verbose=2 "$app_path"
           xcrun stapler validate "$app_path"
           spctl --assess --type execute --verbose=4 "$app_path"
 
-          zip_path="apps/role-fit-ai/.forge/release/RoleFit-Local-Companion-${RELEASE_VERSION}-macos-${RELEASE_ARCH}.zip"
+          zip_path="apps/role-fit-ai/.forge/release/RoleFit-AI-${RELEASE_VERSION}-macos-${RELEASE_ARCH}.zip"
           zip_verify_root="$RUNNER_TEMP/rolefit-zip-verify"
           test -s "$zip_path"
           mkdir "$zip_verify_root"
           ditto -x -k "$zip_path" "$zip_verify_root"
-          zip_app_path="$zip_verify_root/RoleFit Local Companion.app"
+          zip_app_path="$zip_verify_root/RoleFit AI.app"
           test -d "$zip_app_path"
           codesign --verify --deep --strict --verbose=2 "$zip_app_path"
           xcrun stapler validate "$zip_app_path"
@@ -213,7 +213,7 @@ jobs:
           RELEASE_VERSION: ${{ needs.validate.outputs.version }}
         run: |
           set -euo pipefail
-          dmg_path="apps/role-fit-ai/.forge/release/RoleFit-Local-Companion-${RELEASE_VERSION}-macos-${RELEASE_ARCH}.dmg"
+          dmg_path="apps/role-fit-ai/.forge/release/RoleFit-AI-${RELEASE_VERSION}-macos-${RELEASE_ARCH}.dmg"
           test -s "$dmg_path"
           codesign --verify --strict --verbose=2 "$dmg_path"
           xcrun notarytool submit "$dmg_path" \
@@ -243,8 +243,8 @@ jobs:
         with:
           name: rolefit-release-macos-${{ matrix.arch }}
           path: |
-            apps/role-fit-ai/.forge/release/RoleFit-Local-Companion-${{ needs.validate.outputs.version }}-macos-${{ matrix.arch }}.dmg
-            apps/role-fit-ai/.forge/release/RoleFit-Local-Companion-${{ needs.validate.outputs.version }}-macos-${{ matrix.arch }}.zip
+            apps/role-fit-ai/.forge/release/RoleFit-AI-${{ needs.validate.outputs.version }}-macos-${{ matrix.arch }}.dmg
+            apps/role-fit-ai/.forge/release/RoleFit-AI-${{ needs.validate.outputs.version }}-macos-${{ matrix.arch }}.zip
           if-no-files-found: error
           compression-level: 0
           retention-days: 7
@@ -354,8 +354,8 @@ jobs:
         env:
           RELEASE_VERSION: ${{ needs.validate.outputs.version }}
         run: |
-          $packagedApp = "apps/role-fit-ai/.forge/out/RoleFit Local Companion-win32-x64/RoleFitLocalCompanion.exe"
-          $installer = "apps/role-fit-ai/.forge/release/RoleFit-Local-Companion-$env:RELEASE_VERSION-windows-x64.exe"
+          $packagedApp = "apps/role-fit-ai/.forge/out/RoleFit AI-win32-x64/RoleFitLocalCompanion.exe"
+          $installer = "apps/role-fit-ai/.forge/release/RoleFit-AI-$env:RELEASE_VERSION-windows-x64.exe"
           foreach ($path in @($packagedApp, $installer)) {
             if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
               throw "Expected signed Windows file is missing: $path"
@@ -376,7 +376,7 @@ jobs:
         shell: pwsh
         run: >-
           npm run test:desktop:windows-installer --workspace apps/role-fit-ai --
-          --installer=.forge/release/RoleFit-Local-Companion-${{ needs.validate.outputs.version }}-windows-x64.exe
+          --installer=.forge/release/RoleFit-AI-${{ needs.validate.outputs.version }}-windows-x64.exe
 
       - name: Verify Windows release asset
         shell: pwsh
@@ -391,7 +391,7 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: rolefit-release-windows-x64
-          path: apps/role-fit-ai/.forge/release/RoleFit-Local-Companion-${{ needs.validate.outputs.version }}-windows-x64.exe
+          path: apps/role-fit-ai/.forge/release/RoleFit-AI-${{ needs.validate.outputs.version }}-windows-x64.exe
           if-no-files-found: error
           compression-level: 0
           retention-days: 7

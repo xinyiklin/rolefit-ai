@@ -54,7 +54,7 @@ for (const file of files) {
 
 const manifest = JSON.parse(await readFile(join(stageRoot, "package.json"), "utf8"));
 assert.equal(manifest.name, "rolefit-local-companion");
-assert.equal(manifest.productName, "RoleFit Local Companion");
+assert.equal(manifest.productName, "RoleFit AI");
 assert.equal(manifest.main, "dist-electron/desktop/main.cjs");
 assert.equal(manifest.license, "MIT");
 assert.equal(manifest.config.forge, "./forge.config.cjs");

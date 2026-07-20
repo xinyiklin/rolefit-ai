@@ -5,7 +5,7 @@ import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { assertRolefitReleaseVersion } from "./desktop-release-contract.mjs";
 
-const PRODUCT_ASSET_PREFIX = "RoleFit-Local-Companion";
+const PRODUCT_ASSET_PREFIX = "RoleFit-AI";
 
 function fail(message) {
   throw new Error(`RoleFit release assets: ${message}`);

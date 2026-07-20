@@ -2,7 +2,7 @@ const path = require("node:path");
 const { spawnSync } = require("node:child_process");
 const { flipFuses, FuseV1Options, FuseVersion } = require("@electron/fuses");
 
-const PRODUCT_NAME = "RoleFit Local Companion";
+const PRODUCT_NAME = "RoleFit AI";
 const WINDOWS_IDENTITY = "RoleFitLocalCompanion";
 const releaseBuild = process.env.ROLEFIT_RELEASE_BUILD === "1";
 const assets = path.join(__dirname, "assets");
@@ -141,7 +141,7 @@ module.exports = {
         authors: "RoleFit AI",
         description: "Local provider companion for RoleFit AI.",
         exe: `${WINDOWS_IDENTITY}.exe`,
-        setupExe: "RoleFit-Local-Companion-Setup.exe",
+        setupExe: "RoleFit-AI-Setup.exe",
         setupIcon: path.join(assets, "icon.ico"),
         noDelta: true,
         noMsi: true,

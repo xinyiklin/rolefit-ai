@@ -250,11 +250,13 @@ the pending request in the companion, and reopen the popup. See
 
 ## Install and local data
 
-The macOS DMG lets the user place `RoleFit Local Companion.app` where they
-choose, normally `/Applications`. The Windows Squirrel installer is per-user
-and normally installs beneath
+The macOS DMG lets the user place `RoleFit AI.app` where they choose, normally
+`/Applications`. The Windows Squirrel installer is per-user and normally installs beneath
 `%LOCALAPPDATA%\RoleFitLocalCompanion\app-<version>\`. Installation files and
-personal data are separate.
+personal data are separate. The public application name is **RoleFit AI**;
+Windows upgrade and cross-version data directories retain their original
+internal identity so an update does not create a second installation or lose
+saved settings.
 
 The installed companion uses Electron's platform `userData` directory:
 

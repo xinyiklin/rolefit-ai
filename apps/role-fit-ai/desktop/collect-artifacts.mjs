@@ -79,7 +79,7 @@ async function main() {
   const artifacts = [];
   if (platform === "darwin") {
     const dmg = await requireRegularFile(
-      join(makeRoot, `RoleFit Local Companion-${version}-${arch}.dmg`)
+      join(makeRoot, `RoleFit AI-${version}-${arch}.dmg`)
     );
     const zip = await requireRegularFile(
       join(
@@ -87,23 +87,23 @@ async function main() {
         "zip",
         "darwin",
         arch,
-        `RoleFit Local Companion-darwin-${arch}-${version}.zip`
+        `RoleFit AI-darwin-${arch}-${version}.zip`
       )
     );
     artifacts.push(
-      [dmg, `RoleFit-Local-Companion-${version}-macos-${arch}.dmg`],
-      [zip, `RoleFit-Local-Companion-${version}-macos-${arch}.zip`]
+      [dmg, `RoleFit-AI-${version}-macos-${arch}.dmg`],
+      [zip, `RoleFit-AI-${version}-macos-${arch}.zip`]
     );
   } else {
     const squirrelRoot = join(makeRoot, "squirrel.windows", arch);
     const setup = await findOnlyFile(
       squirrelRoot,
-      (path) => basename(path) === "RoleFit-Local-Companion-Setup.exe",
+      (path) => basename(path) === "RoleFit-AI-Setup.exe",
       "Squirrel setup executable"
     );
     artifacts.push([
       setup,
-      `RoleFit-Local-Companion-${version}-windows-${arch}.exe`
+      `RoleFit-AI-${version}-windows-${arch}.exe`
     ]);
   }
 

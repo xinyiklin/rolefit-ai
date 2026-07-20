@@ -31,8 +31,8 @@ function validPayload({ preview = false } = {}) {
     assets: [
       ...DOWNLOAD_TARGETS.map((target) =>
         asset(target.assetName(version), {}, releaseTag)),
-      asset(`RoleFit-Local-Companion-${version}-macos-arm64.zip`, {}, releaseTag),
-      asset(`RoleFit-Local-Companion-${version}-macos-x64.zip`, {}, releaseTag),
+      asset(`RoleFit-AI-${version}-macos-arm64.zip`, {}, releaseTag),
+      asset(`RoleFit-AI-${version}-macos-x64.zip`, {}, releaseTag),
       asset("SHA256SUMS.txt", { size: 512 }, releaseTag),
     ],
   };
