@@ -40,6 +40,11 @@ GitHub Release (versioned installer source of truth)
              +-- optional R2 mirror in a later phase
 ```
 
+Until project-owned signing identities are available, a second tag family,
+`rolefit-preview-vX.Y.Z-beta.N`, may produce an explicitly unsigned GitHub
+prerelease. It uses separate jobs and authorization, receives no signing
+secrets, and never satisfies or weakens the stable `rolefit-v*` contract.
+
 GitHub Pages is a static product/download surface built from an entry graph
 separate from the Drafting Desk. It never connects directly to the companion,
 receives local data, or becomes an alternate runtime for the loopback browser
@@ -57,7 +62,7 @@ become an application API or a source of mutable, unversioned installers.
 | Boundary | Allowed | Forbidden |
 | --- | --- | --- |
 | GitHub Actions | source, lockfile, build output, signing material scoped to the job | resumes, job content, provider credentials, local workspace data |
-| GitHub Releases | installers, archives, checksums, release notes | app data, API keys, CLI sessions, unsigned public release assets |
+| GitHub Releases | signed installers; explicitly labeled unsigned prerelease installers; archives, checksums, release notes | app data, API keys, CLI sessions, unsigned assets presented as stable or platform-trusted releases |
 | GitHub Pages | static product explanation and canonical release links | Drafting Desk bundle, loopback calls/pairing, install detection, broad CORS, managed credentials, hosted AI execution |
 | Packaged companion | encrypted provider vault, local server lifecycle, provider status | RoleFit account state, cloud sync, browser content over privileged IPC |
 | Local server | local workspace and user-selected provider requests | public bind, cloud credential storage, release-management authority |
@@ -146,6 +151,9 @@ names rather than overwrite one architecture with another.
 - `apps/role-fit-ai/package.json` is the RoleFit version source of truth.
 - Release tags use `rolefit-vX.Y.Z` so they cannot collide with Typeset or
   workspace-wide tags.
+- Unsigned preview tags use `rolefit-preview-vX.Y.Z-beta.N`. Their base version
+  must exactly match the package version, `N` is a positive integer, and the
+  GitHub Release must remain marked as a prerelease.
 - The workflow fails before packaging unless the tag suffix exactly matches
   the package version.
 - Repository rules must protect `refs/tags/rolefit-v*` so only authorized
@@ -161,10 +169,12 @@ names rather than overwrite one architecture with another.
 
 ## Signing and notarization
 
-Public release jobs fail closed if platform signing material is incomplete.
-Local `package`/`make` commands may create clearly local, non-publicly-trusted artifacts
-for verification (macOS receives only an ad-hoc local signature), but the
-release workflow must never publish them.
+Stable public release jobs fail closed if platform signing material is
+incomplete. Local `package`/`make` commands may create non-publicly-trusted
+artifacts for verification (macOS receives only an ad-hoc local signature).
+Those artifacts may enter only the dedicated unsigned-preview workflow, which
+must identify them as unsigned in the tag, GitHub prerelease state, release
+title and notes, landing status, and platform format labels.
 
 macOS CI requires:
 
@@ -209,7 +219,16 @@ always-running cleanup step.
 8. The release job receives `contents: write`; every earlier job receives only
    `contents: read`.
 
-No pull-request workflow receives release secrets. Forked or untrusted code
+The unsigned-preview workflow mirrors the ancestry, native packaging, packaged
+smoke, Windows installer lifecycle, artifact-set, checksum, tag-movement, and
+atomic draft/publication gates. It deliberately omits signing environments,
+Apple notarization, Authenticode verification, and every signing secret. It
+instead verifies the macOS app's ad-hoc integrity signature and confirms the
+Windows installer is not Authenticode-signed. Its only write-capable job uses
+the `rolefit-preview-release` environment restricted to
+`rolefit-preview-v*` tags.
+
+No pull-request or unsigned-preview workflow receives release secrets. Forked or untrusted code
 cannot trigger signing. Release creation is all-or-nothing: one failed platform
 job prevents publication.
 
@@ -234,13 +253,15 @@ companion-launched browser workbench and states that the installed companion is
 required. It never tries to distinguish a closed companion from a missing one.
 
 On load, the page reads the bounded public GitHub Releases list because this
-monorepo may publish products other than RoleFit. It accepts only the newest
-non-draft, non-prerelease `rolefit-vX.Y.Z` entry whose release URL and complete
-macOS arm64/x64 DMG + ZIP, Windows x64 EXE, and checksum asset set match the
-canonical repository contract exactly. A 404-equivalent empty list, rate limit,
-network failure, malformed tag, wrong origin, duplicate, unexpected, or partial
-asset set leaves all three platform rows visible but links them to the Releases
-page instead of constructing a broken asset URL.
+monorepo may publish products other than RoleFit. It prefers the newest
+complete non-draft, non-prerelease `rolefit-vX.Y.Z` entry. When none exists, it
+may accept the newest complete `rolefit-preview-vX.Y.Z-beta.N` prerelease and
+must disclose its unsigned status and expected platform warnings. Both channels
+require a canonical release URL and the exact macOS arm64/x64 DMG + ZIP,
+Windows x64 EXE, and checksum asset set. A 404-equivalent empty list, rate
+limit, network failure, malformed tag, wrong origin, duplicate, unexpected, or
+partial asset set leaves all three platform rows visible but links them to the
+Releases page instead of constructing a broken asset URL.
 
 ## Failure, rollback, and recovery
 
@@ -258,10 +279,11 @@ page instead of constructing a broken asset URL.
 ## Implementation phases
 
 D0-D4 are implemented in the repository. Local verification can prove the
-staged/package layout and native package available on the current host; public
-signing/notarization and cross-platform execution remain workflow gates until
-the tag-restricted environments and signing secrets are configured and an
-authorized release tag is pushed. D5 is intentionally not started.
+staged/package layout and native package available on the current host. The
+unsigned preview channel proves native cross-platform execution without
+claiming platform trust; stable signing/notarization remains blocked until the
+tag-restricted environments and signing secrets are configured. D5 is
+intentionally not started.
 
 ### D0 - Architecture extraction
 
@@ -316,7 +338,9 @@ an authorized tag.
 
 Acceptance: hosted copy does not imply cloud execution or native-install
 detection; the full RoleFit renderer is absent from the Pages artifact; offline
-parser probes and real-browser current/mocked-release states pass.
+parser probes and real-browser current/mocked-release states pass. A complete
+signed release outranks every preview, and an accepted preview is labeled
+unsigned in the active status and each format label.
 
 ### D5 - Deferred native handoff and updates
 

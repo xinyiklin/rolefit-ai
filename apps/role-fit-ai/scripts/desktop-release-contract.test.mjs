@@ -13,7 +13,9 @@ import {
   writeReleaseChecksums,
 } from "./desktop-release-assets.mjs";
 import {
+  parseRolefitPreviewTag,
   parseRolefitReleaseTag,
+  validateRolefitPreviewRef,
   validateRolefitReleaseRef,
 } from "./desktop-release-contract.mjs";
 import { publishRelease } from "./publish-desktop-release.mjs";
@@ -45,6 +47,18 @@ test("release tags and target names are strict and architecture-specific", () =>
   assert.throws(() => parseRolefitReleaseTag("v0.1.0"), /rolefit-vX\.Y\.Z/);
   assert.throws(() => parseRolefitReleaseTag("rolefit-v01.1.0"), /rolefit-vX\.Y\.Z/);
   assert.throws(() => parseRolefitReleaseTag("rolefit-v0.1.0-beta.1"), /rolefit-vX\.Y\.Z/);
+  assert.deepEqual(parseRolefitPreviewTag("rolefit-preview-v0.1.0-beta.1"), {
+    version: VERSION,
+    previewLabel: "beta.1",
+  });
+  assert.throws(
+    () => parseRolefitPreviewTag("rolefit-preview-v0.1.0-beta.0"),
+    /rolefit-preview-vX\.Y\.Z-beta\.N/,
+  );
+  assert.throws(
+    () => parseRolefitPreviewTag("rolefit-v0.1.0"),
+    /rolefit-preview-vX\.Y\.Z-beta\.N/,
+  );
 
   assert.deepEqual(expectedTargetAssets(VERSION, "macos", "arm64"), [
     "RoleFit-Local-Companion-0.1.0-macos-arm64.dmg",
@@ -116,6 +130,7 @@ test("tag validation requires matching package version and origin/main ancestry"
     runGit(root, ["commit", "-m", "release fixture"]);
     const releaseCommit = runGit(root, ["rev-parse", "HEAD"]);
     runGit(root, ["tag", "rolefit-v0.1.0"]);
+    runGit(root, ["tag", "rolefit-preview-v0.1.0-beta.1"]);
     runGit(root, ["update-ref", "refs/remotes/origin/main", releaseCommit]);
 
     assert.deepEqual(
@@ -128,6 +143,22 @@ test("tag validation requires matching package version and origin/main ancestry"
         eventSha: releaseCommit,
       }),
       { commit: releaseCommit, tag: "rolefit-v0.1.0", version: VERSION },
+    );
+    assert.deepEqual(
+      validateRolefitPreviewRef({
+        repoRoot: root,
+        eventName: "push",
+        ref: "refs/tags/rolefit-preview-v0.1.0-beta.1",
+        refType: "tag",
+        tag: "rolefit-preview-v0.1.0-beta.1",
+        eventSha: releaseCommit,
+      }),
+      {
+        commit: releaseCommit,
+        tag: "rolefit-preview-v0.1.0-beta.1",
+        version: VERSION,
+        previewLabel: "beta.1",
+      },
     );
 
     await writeFile(join(root, "outside.txt"), "not on origin/main\n", "utf8");
@@ -168,7 +199,12 @@ function createFakeGitHub({ commit, moveTagAfterDraft = false, failUpload = fals
 
     if (args[1] === "create") {
       assert.equal(draft, null, "the fake release must be created once");
-      draft = { tagName: args[2], isDraft: true, assets: [] };
+      draft = {
+        tagName: args[2],
+        isDraft: true,
+        isPrerelease: args.includes("--prerelease"),
+        assets: [],
+      };
       return "";
     }
     if (args[1] === "upload") {
@@ -221,6 +257,29 @@ test("publication keeps the release draft until every exact remote asset is veri
     assert.equal(fake.readRelease().isDraft, false);
     assert.equal(fake.readRelease().assets.length, expectedReleaseAssets(VERSION).length + 1);
     assert.equal(fake.calls.filter((args) => args[1] === "edit").length, 1);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("preview publication stays marked as a prerelease and uses the preview tag contract", async () => {
+  const commit = "d".repeat(40);
+  const root = await makeAssetFixture();
+  const fake = createFakeGitHub({ commit });
+  try {
+    await publishRelease({
+      repository: "rolefit/example",
+      tag: `rolefit-preview-v${VERSION}-beta.1`,
+      version: VERSION,
+      commit,
+      assetsRoot: root,
+      channel: "preview",
+      executeGh: fake.executeGh,
+    });
+    assert.equal(fake.readRelease().isDraft, false);
+    assert.equal(fake.readRelease().isPrerelease, true);
+    const createCall = fake.calls.find((args) => args[1] === "create");
+    assert.ok(createCall.includes("--prerelease"));
   } finally {
     await rm(root, { recursive: true, force: true });
   }

@@ -35,11 +35,12 @@ for (const trigger of document.querySelectorAll<HTMLElement>("[data-scroll-to]")
 // valid catalog upgrades rows to direct, verified asset downloads.
 const statusEl = document.getElementById("release-status");
 
-function setStatus(text: string, available = false): void {
+function setStatus(text: string, available = false, preview = false): void {
   if (!(statusEl instanceof HTMLParagraphElement)) return;
   statusEl.hidden = false;
   statusEl.textContent = text;
   statusEl.classList.toggle("release-status--available", available);
+  statusEl.classList.toggle("release-status--preview", preview);
   if (available) {
     const dot = document.createElement("span");
     dot.className = "release-status__dot";
@@ -49,7 +50,14 @@ function setStatus(text: string, available = false): void {
 }
 
 function applyCatalog(catalog: ReleaseCatalog): void {
-  setStatus(`Version ${catalog.version} is ready to download.`, true);
+  const preview = catalog.channel === "unsigned-preview";
+  setStatus(
+    preview
+      ? `Unsigned preview ${catalog.version} ${catalog.previewLabel} is available. macOS and Windows will show security warnings.`
+      : `Signed version ${catalog.version} is ready to download.`,
+    true,
+    preview,
+  );
 
   for (const target of DOWNLOAD_TARGETS) {
     const asset = catalog.downloads[target.id];
@@ -63,7 +71,7 @@ function applyCatalog(catalog: ReleaseCatalog): void {
     action.classList.add("is-direct");
     action.setAttribute("aria-label", `Download RoleFit for ${target.platform} ${target.title}`);
     label.textContent = "Download";
-    format.textContent = `${target.format} · ${formatFileSize(asset.size)}`;
+    format.textContent = `${preview ? "Unsigned " : ""}${target.format} · ${formatFileSize(asset.size)}`;
   }
 
   const links = document.getElementById("release-links");

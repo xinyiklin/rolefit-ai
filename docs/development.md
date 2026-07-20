@@ -142,11 +142,20 @@ npm run test:desktop:windows-installer --workspace apps/role-fit-ai -- --install
 ```
 
 Local package/make output is not publicly trusted (macOS is ad-hoc signed only)
-and must not be published. The
-`rolefit-vX.Y.Z` workflow publishes only when the tag matches the RoleFit
-package version, points to a `main` ancestor, and remains on the initially
-validated commit through publish-time remote rechecks. Repository settings
-must protect `rolefit-v*` tags from unauthorized creation, update, and deletion.
+and must not be presented as a stable release. The `rolefit-vX.Y.Z` workflow
+publishes only when the tag matches the RoleFit package version, points to a
+`main` ancestor, and remains on the initially validated commit through
+publish-time remote rechecks. Repository settings must protect `rolefit-v*`
+tags from unauthorized creation, update, and deletion.
+
+When signing identities are unavailable, the separate
+`rolefit-preview-vX.Y.Z-beta.N` workflow may publish those native artifacts as
+an explicitly unsigned GitHub prerelease. Its base version must match the
+package version; it receives no signing secrets, verifies the macOS ad-hoc
+integrity signature, confirms the Windows installer is unsigned, repeats the
+packaged and installed lifecycle gates, and atomically publishes the complete
+artifact set plus checksums. Protect `rolefit-preview-v*` tags and restrict its
+write-capable `rolefit-preview-release` environment to that tag family.
 
 Release signing targets three GitHub environments that maintainers must
 restrict to the `rolefit-v*` tag policy before releasing:
@@ -159,6 +168,10 @@ restrict to the `rolefit-v*` tag policy before releasing:
 - `rolefit-release`: tag-restricted authorization boundary for the only
   `contents: write` job. Add required reviewers separately when the repository
   has an eligible reviewer who is not the release initiator.
+
+Unsigned previews use only `rolefit-preview-release` for final publication;
+the native build jobs intentionally have no GitHub environment and cannot read
+the signing environments or their secrets.
 
 The Windows pair is a compatibility path for an already-valid exportable PFX,
 not a request to fabricate placeholders or export a hardware-protected key.

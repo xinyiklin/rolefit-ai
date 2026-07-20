@@ -11,6 +11,7 @@ import {
 } from "./desktop-release-assets.mjs";
 import {
   assertRolefitReleaseVersion,
+  parseRolefitPreviewTag,
   parseRolefitReleaseTag,
 } from "./desktop-release-contract.mjs";
 
@@ -91,9 +92,17 @@ function assertRemoteTagCommit(repository, tag, expectedCommit, executeGh) {
   }
 }
 
-function assertRemoteAssets(release, expectedAssets, expectedDraftState) {
+function assertRemoteAssets(
+  release,
+  expectedAssets,
+  expectedDraftState,
+  expectedPrereleaseState,
+) {
   if (release.isDraft !== expectedDraftState) {
     fail(`release draft state is ${release.isDraft}; expected ${expectedDraftState}`);
+  }
+  if (release.isPrerelease !== expectedPrereleaseState) {
+    fail(`release prerelease state is ${release.isPrerelease}; expected ${expectedPrereleaseState}`);
   }
 
   const expectedByName = new Map(expectedAssets.map((asset) => [asset.name, asset]));
@@ -127,7 +136,7 @@ function readRemoteRelease(repository, tag, executeGh) {
     "--repo",
     repository,
     "--json",
-    "tagName,isDraft,assets",
+    "tagName,isDraft,isPrerelease,assets",
   ]);
   let release;
   try {
@@ -157,8 +166,9 @@ async function readLocalAssetMetadata(assets) {
   }));
 }
 
-async function requireReleaseNotes(version) {
-  const path = resolve(appRoot, "docs", "releases", `${version}.md`);
+async function requireReleaseNotes(version, previewLabel) {
+  const notesVersion = previewLabel ? `${version}-${previewLabel}` : version;
+  const path = resolve(appRoot, "docs", "releases", `${notesVersion}.md`);
   const metadata = await lstat(path).catch(() => null);
   if (!metadata?.isFile() || metadata.isSymbolicLink() || metadata.size <= 0) {
     fail(`curated release notes are missing for ${version}`);
@@ -172,17 +182,24 @@ export async function publishRelease({
   version,
   commit,
   assetsRoot,
+  channel = "signed",
   executeGh = runGh,
 }) {
   if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repository)) {
     fail("GITHUB_REPOSITORY must be an owner/name pair");
   }
   assertRolefitReleaseVersion(version);
-  if (parseRolefitReleaseTag(tag) !== version) fail("release tag does not match release version");
+  if (channel !== "signed" && channel !== "preview") {
+    fail("release channel must be signed or preview");
+  }
+  const preview = channel === "preview";
+  const previewTag = preview ? parseRolefitPreviewTag(tag) : null;
+  const tagVersion = previewTag?.version ?? parseRolefitReleaseTag(tag);
+  if (tagVersion !== version) fail("release tag does not match release version");
   if (!COMMIT_SHA_PATTERN.test(commit ?? "")) fail("validated release commit must be a full SHA");
 
   const expectedAssets = expectedReleaseAssets(version);
-  const releaseNotesPath = await requireReleaseNotes(version);
+  const releaseNotesPath = await requireReleaseNotes(version, previewTag?.previewLabel);
   const localAssets = await verifyReleaseAssets(assetsRoot, expectedAssets);
   const checksumPath = await writeReleaseChecksums(
     localAssets,
@@ -196,7 +213,7 @@ export async function publishRelease({
   let draftCreated = false;
   try {
     assertRemoteTagCommit(repository, tag, commit, executeGh);
-    executeGh([
+    const createArguments = [
       "release",
       "create",
       tag,
@@ -205,10 +222,14 @@ export async function publishRelease({
       "--verify-tag",
       "--draft",
       "--title",
-      `RoleFit Local Companion ${version}`,
+      preview
+        ? `RoleFit Local Companion ${version} — unsigned preview ${previewTag.previewLabel}`
+        : `RoleFit Local Companion ${version}`,
       "--notes-file",
       releaseNotesPath,
-    ]);
+    ];
+    if (preview) createArguments.push("--prerelease");
+    executeGh(createArguments);
     draftCreated = true;
     assertRemoteTagCommit(repository, tag, commit, executeGh);
 
@@ -222,10 +243,10 @@ export async function publishRelease({
       repository,
     ]);
 
-    assertRemoteAssets(readRemoteRelease(repository, tag, executeGh), remoteAssets, true);
+    assertRemoteAssets(readRemoteRelease(repository, tag, executeGh), remoteAssets, true, preview);
     assertRemoteTagCommit(repository, tag, commit, executeGh);
     executeGh(["release", "edit", tag, "--repo", repository, "--draft=false"]);
-    assertRemoteAssets(readRemoteRelease(repository, tag, executeGh), remoteAssets, false);
+    assertRemoteAssets(readRemoteRelease(repository, tag, executeGh), remoteAssets, false, preview);
   } catch (error) {
     if (draftCreated) {
       console.error(
@@ -235,7 +256,9 @@ export async function publishRelease({
     throw error;
   }
 
-  console.log(`Published ${tag} with ${remoteAssets.length} verified assets.`);
+  console.log(
+    `Published ${tag} with ${remoteAssets.length} verified ${preview ? "unsigned preview" : "signed release"} assets.`,
+  );
 }
 
 async function runFromEnvironment() {
@@ -246,6 +269,7 @@ async function runFromEnvironment() {
     version: requiredEnvironment("ROLEFIT_RELEASE_VERSION"),
     commit: requiredEnvironment("ROLEFIT_RELEASE_COMMIT"),
     assetsRoot: requiredEnvironment("ROLEFIT_RELEASE_ASSETS_DIR"),
+    channel: process.env.ROLEFIT_RELEASE_CHANNEL ?? "signed",
   });
 }
 

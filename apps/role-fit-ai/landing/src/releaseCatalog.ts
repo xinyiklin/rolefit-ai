@@ -43,6 +43,8 @@ export interface ReleaseAsset {
 export interface ReleaseCatalog {
   version: string;
   tag: string;
+  channel: "signed" | "unsigned-preview";
+  previewLabel?: string;
   releaseUrl: string;
   downloads: Record<DownloadTargetId, ReleaseAsset>;
   archives: {
@@ -89,11 +91,15 @@ function parseAsset(
 }
 
 export function parseLatestRelease(value: unknown): ReleaseCatalog | null {
-  if (!isRecord(value) || value.draft !== false || value.prerelease !== false) return null;
+  if (!isRecord(value) || value.draft !== false || typeof value.prerelease !== "boolean") {
+    return null;
+  }
 
   const tag = value.tag_name;
   if (typeof tag !== "string") return null;
-  const tagMatch = /^rolefit-v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.exec(tag);
+  const signedTagMatch = /^rolefit-v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.exec(tag);
+  const previewTagMatch = /^rolefit-preview-v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)-(beta\.[1-9]\d*)$/.exec(tag);
+  const tagMatch = value.prerelease ? previewTagMatch : signedTagMatch;
   if (!tagMatch) return null;
   const version = `${tagMatch[1]}.${tagMatch[2]}.${tagMatch[3]}`;
 
@@ -138,6 +144,8 @@ export function parseLatestRelease(value: unknown): ReleaseCatalog | null {
   return {
     version,
     tag,
+    channel: value.prerelease ? "unsigned-preview" : "signed",
+    ...(value.prerelease ? { previewLabel: tagMatch[4] } : {}),
     releaseUrl: expectedReleaseUrl,
     downloads: resolvedDownloads,
     archives: { macosArm64, macosX64 },
@@ -147,11 +155,13 @@ export function parseLatestRelease(value: unknown): ReleaseCatalog | null {
 
 export function parseReleaseList(value: unknown): ReleaseCatalog | null {
   if (!Array.isArray(value)) return null;
+  let preview: ReleaseCatalog | null = null;
   for (const candidate of value) {
     const release = parseLatestRelease(candidate);
-    if (release) return release;
+    if (release?.channel === "signed") return release;
+    if (!preview && release?.channel === "unsigned-preview") preview = release;
   }
-  return null;
+  return preview;
 }
 
 export async function fetchLatestRelease(signal?: AbortSignal): Promise<ReleaseCatalog | null> {
