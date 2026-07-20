@@ -309,7 +309,7 @@ designed and signed custom protocol/pairing contract; it is not part of D4.
 | Data | Owner | Persistence |
 | --- | --- | --- |
 | Resume, tracker, application artifacts | RoleFit server | ignored local workspace |
-| Draft/session and stage preferences | browser | existing browser storage, no secrets |
+| Recovery resume/job drafts, sessions, stage settings, and user context/preferences | browser | origin-scoped browser storage, no API keys |
 | API credential | Electron main | `safeStorage` encrypted bytes under `userData` |
 | Configured provider ids | Electron main | versioned non-secret registry under `userData` |
 | Local site port | Electron main | versioned non-secret settings under `userData` |

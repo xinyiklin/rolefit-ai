@@ -34,6 +34,8 @@ const SUPPORTED_PROVIDERS = Object.freeze([
 ]);
 
 const PROVIDER_BY_ID = new Map(SUPPORTED_PROVIDERS.map((provider) => [provider.id, provider]));
+const PROVIDER_SIGN_IN_POLL_INTERVAL_MS = 1_500;
+const PROVIDER_VISIBLE_POLL_INTERVAL_MS = 5_000;
 const bridge = window.roleFitDesktop;
 const requiredBridgeMethods = Object.freeze([
   "getRuntimeInfo",
@@ -359,7 +361,7 @@ function renderProviders() {
   elements.providerSummary.textContent = configuredCount === 0
     ? "No providers added yet. Add a CLI or API provider to begin."
     : `${configuredCount} added · ${readyCount} ready for RoleFit.`;
-  schedulePoll(signInRunning);
+  return signInRunning;
 }
 
 function renderCheckingProviders() {
@@ -369,13 +371,19 @@ function renderCheckingProviders() {
   elements.providerList.setAttribute("aria-busy", "true");
 }
 
-function schedulePoll(needed) {
+function schedulePoll(signInRunning) {
   window.clearTimeout(pollTimer);
   pollTimer = 0;
-  if (!needed || !hasUsableBridge()) return;
+  // Main owns the hidden/closed fallback refresh. While this setup window is
+  // visible, keep exactly one bounded renderer timer so an external terminal
+  // login/logout converges without requiring the user to press Check again.
+  if (!hasUsableBridge() || document.visibilityState === "hidden") return;
+  const delay = signInRunning
+    ? PROVIDER_SIGN_IN_POLL_INTERVAL_MS
+    : PROVIDER_VISIBLE_POLL_INTERVAL_MS;
   pollTimer = window.setTimeout(() => {
     void refreshProviders({ announceResult: false });
-  }, 1_500);
+  }, delay);
 }
 
 function recordsById(value) {
@@ -391,7 +399,12 @@ function recordsById(value) {
 
 async function refreshProviders({ announceResult = true } = {}) {
   if (!hasUsableBridge()) return;
+  // A poll schedules its successor only after this owning refresh settles.
+  // Clearing here prevents a slow CLI probe from overlapping the next round.
+  window.clearTimeout(pollTimer);
+  pollTimer = 0;
   const generation = ++refreshGeneration;
+  let signInRunning = false;
   elements.refreshProviders.disabled = true;
   elements.refreshProviders.classList.add("is-checking");
   elements.providerList.setAttribute("aria-busy", "true");
@@ -407,13 +420,13 @@ async function refreshProviders({ announceResult = true } = {}) {
       const record = providerRecords.get(provider.id);
       if (!record?.signInRunning) signInOperationIds.delete(provider.id);
     }
-    renderProviders();
+    signInRunning = renderProviders();
     elements.companionRoot.dataset.status = "ready";
     if (announceResult) announce("Provider status updated.");
   } catch {
     if (generation !== refreshGeneration) return;
     elements.companionRoot.dataset.status = "error";
-    renderProviders();
+    signInRunning = renderProviders();
     elements.providerSummary.textContent = "Provider status could not be checked. Try again.";
     if (announceResult) announce("Provider status could not be checked.");
   } finally {
@@ -421,6 +434,7 @@ async function refreshProviders({ announceResult = true } = {}) {
       elements.refreshProviders.disabled = false;
       elements.refreshProviders.classList.remove("is-checking");
       elements.providerList.setAttribute("aria-busy", "false");
+      schedulePoll(signInRunning);
     }
   }
 }
@@ -599,6 +613,15 @@ elements.providerList.addEventListener("click", (event) => {
 
 elements.refreshProviders.addEventListener("click", () => {
   if (hasUsableBridge()) void refreshProviders({ announceResult: true });
+});
+
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "hidden") {
+    window.clearTimeout(pollTimer);
+    pollTimer = 0;
+    return;
+  }
+  if (hasUsableBridge()) void refreshProviders({ announceResult: false });
 });
 
 elements.sitePortInput.addEventListener("input", () => {

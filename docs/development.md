@@ -1,4 +1,4 @@
-# Development And Verification
+# RoleFit AI Repository Development And Verification
 
 Run commands from the repository root. Use a named root command or an explicit
 workspace; there is no generic root `dev`, `build`, or `preview` script.
@@ -149,14 +149,16 @@ validated commit through publish-time remote rechecks. Repository settings
 must protect `rolefit-v*` tags from unauthorized creation, update, and deletion.
 
 Release signing targets three GitHub environments that maintainers must
-configure as protected before releasing:
+restrict to the `rolefit-v*` tag policy before releasing:
 
 - `rolefit-macos-signing`: `MAC_CERTIFICATE_BASE64`,
   `MAC_CERTIFICATE_PASSWORD`, `MAC_CSC_IDENTITY`, `APPLE_API_KEY_BASE64`,
   `APPLE_API_KEY_ID`, and `APPLE_API_ISSUER`;
 - `rolefit-windows-signing`: `WINDOWS_CERTIFICATE_BASE64` and
   `WINDOWS_CERTIFICATE_PASSWORD`;
-- `rolefit-release`: approval boundary for the only `contents: write` job.
+- `rolefit-release`: tag-restricted authorization boundary for the only
+  `contents: write` job. Add required reviewers separately when the repository
+  has an eligible reviewer who is not the release initiator.
 
 The Windows pair is a compatibility path for an already-valid exportable PFX,
 not a request to fabricate placeholders or export a hardware-protected key.

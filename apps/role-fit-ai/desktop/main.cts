@@ -783,6 +783,16 @@ async function startDesktop(): Promise<void> {
     ? packagedCliSearchPaths(process.platform, app.getPath("home"), process.env)
     : Object.freeze([]);
   const cliProcessEnvironment = buildCliProcessEnvironment(process.env, cliSearchPaths);
+  // The owned server has its own closed allowlist, including non-secret model
+  // and extension-origin configuration that vendor CLI children must not see.
+  // Feed it the original source with only the packaged CLI PATH augmentation;
+  // startOrReuseDesktopServer filters this object before the utility fork.
+  const desktopServerSourceEnvironment: NodeJS.ProcessEnv = {
+    ...process.env,
+    ...(cliProcessEnvironment.PATH === undefined
+      ? {}
+      : { PATH: cliProcessEnvironment.PATH })
+  };
   const mode = readDesktopMode();
   activeMode = mode;
   desktopSettingsManager = createDesktopSettingsManager({
@@ -800,7 +810,7 @@ async function startDesktop(): Promise<void> {
     serverEntry: paths.serverEntry,
     serverCwd: paths.serverCwd,
     workspaceDir: paths.workspaceDir,
-    sourceEnvironment: cliProcessEnvironment,
+    sourceEnvironment: desktopServerSourceEnvironment,
     mode,
     host: DEFAULT_HOST,
     port,

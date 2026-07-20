@@ -1,6 +1,6 @@
 import { spawn, spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { delimiter, isAbsolute, posix, win32 } from "node:path";
+import { isAbsolute, posix, win32 } from "node:path";
 import type { ChildProcess } from "node:child_process";
 import type {
   RoleFitCliAuthState,
@@ -16,26 +16,52 @@ const SIGN_IN_TERMINATE_GRACE_MS = 2_000;
 const SIGN_IN_SHUTDOWN_LIMIT_MS = 3_000;
 const SIGN_IN_MAX_DURATION_MS = 10 * 60_000;
 const TERMINAL_LAUNCH_TIMEOUT_MS = 15_000;
+const PROBE_TERMINATE_GRACE_MS = 2_000;
 
-const CLI_CHILD_ENV_BLOCKLIST = new Set([
-  // Electron/Node launch controls must not change how a vendor CLI executable
-  // starts merely because its parent is Electron.
-  "ELECTRON_RUN_AS_NODE",
-  "NODE_OPTIONS",
-  "NODE_PATH",
-  // The companion manages account-backed CLI sessions, not API/access-token
-  // login. Keep vendor keychain/config locations, but do not forward these
-  // alternate credential channels into status or sign-in commands.
-  "OPENAI_API_KEY",
-  "OPENAI_ACCESS_TOKEN",
-  "ANTHROPIC_API_KEY",
-  "ANTHROPIC_AUTH_TOKEN",
-  "CODEX_ACCESS_TOKEN",
-  "CODEX_API_KEY",
-  "CLAUDE_CODE_OAUTH_TOKEN",
-  "GOOGLE_API_KEY",
-  "GEMINI_API_KEY",
-  "GOOGLE_APPLICATION_CREDENTIALS"
+// Account-backed provider CLIs need executable discovery, their provider-owned
+// config/session locations, ordinary locale/temp state, and explicit network
+// trust configuration. Copy only that closed set: a denylist would inevitably
+// forward unrelated cloud, package-registry, database, or application secrets.
+const CLI_CHILD_ALLOWED_ENV_KEYS = new Set([
+  "PATH",
+  "HOME",
+  "USERPROFILE",
+  "USER",
+  "LOGNAME",
+  "SHELL",
+  "HOMEDRIVE",
+  "HOMEPATH",
+  "TMPDIR",
+  "TMP",
+  "TEMP",
+  "LANG",
+  "LC_ALL",
+  "LC_CTYPE",
+  "TZ",
+  "TERM",
+  "COLORTERM",
+  "XDG_CONFIG_HOME",
+  "XDG_DATA_HOME",
+  "XDG_CACHE_HOME",
+  "APPDATA",
+  "LOCALAPPDATA",
+  "SYSTEMROOT",
+  "WINDIR",
+  "COMSPEC",
+  "PATHEXT",
+  "HTTP_PROXY",
+  "HTTPS_PROXY",
+  "ALL_PROXY",
+  "NO_PROXY",
+  "http_proxy",
+  "https_proxy",
+  "all_proxy",
+  "no_proxy",
+  "SSL_CERT_FILE",
+  "SSL_CERT_DIR",
+  "NODE_EXTRA_CA_CERTS",
+  "CODEX_HOME",
+  "CLAUDE_CONFIG_DIR"
 ]);
 
 type ProviderSpec = Readonly<{
@@ -167,19 +193,32 @@ type ActiveSignIn = {
 
 export function buildCliProcessEnvironment(
   source: NodeJS.ProcessEnv,
-  additionalSearchPaths: readonly string[] = []
+  additionalSearchPaths: readonly string[] = [],
+  platform: NodeJS.Platform = process.platform
 ): NodeJS.ProcessEnv {
   const environment: NodeJS.ProcessEnv = {};
-  for (const [key, value] of Object.entries(source)) {
-    if (!CLI_CHILD_ENV_BLOCKLIST.has(key.toUpperCase()) && value !== undefined) {
-      environment[key] = value;
+  if (platform === "win32") {
+    const sourceByName = new Map(
+      Object.entries(source).map(([key, value]) => [key.toUpperCase(), value] as const)
+    );
+    for (const allowedKey of CLI_CHILD_ALLOWED_ENV_KEYS) {
+      const key = allowedKey.toUpperCase();
+      const value = sourceByName.get(key);
+      if (!(key in environment) && value !== undefined) environment[key] = value;
+    }
+  } else {
+    for (const [key, value] of Object.entries(source)) {
+      if (CLI_CHILD_ALLOWED_ENV_KEYS.has(key) && value !== undefined) {
+        environment[key] = value;
+      }
     }
   }
   if (additionalSearchPaths.length > 0) {
     const pathKey = Object.keys(environment).find((key) => key.toUpperCase() === "PATH") ?? "PATH";
-    const existing = (environment[pathKey] ?? "").split(delimiter).filter(Boolean);
+    const pathDelimiter = platform === "win32" ? ";" : ":";
+    const existing = (environment[pathKey] ?? "").split(pathDelimiter).filter(Boolean);
     const additions = additionalSearchPaths.filter((value) => isAbsolute(value) && !value.includes("\0"));
-    environment[pathKey] = [...new Set([...additions, ...existing])].join(delimiter);
+    environment[pathKey] = [...new Set([...additions, ...existing])].join(pathDelimiter);
   }
   return environment;
 }
@@ -301,6 +340,62 @@ function terminateOwnedCliProcess(
   return child.kill(signal);
 }
 
+/**
+ * Stop a bounded status probe without forgetting a process that ignores
+ * SIGTERM. Windows taskkill already terminates the owned tree forcibly; Unix
+ * probes receive a short graceful window followed by SIGKILL. The close/error
+ * listeners cancel the force timer when the process exits normally.
+ */
+export function terminateCliProbeWithGrace(
+  child: Pick<ChildProcess, "pid" | "kill" | "once" | "off">,
+  platform: NodeJS.Platform,
+  environment: Readonly<NodeJS.ProcessEnv>,
+  graceMs = PROBE_TERMINATE_GRACE_MS
+): void {
+  if (!Number.isInteger(graceMs) || graceMs < 1 || graceMs > PROBE_TERMINATE_GRACE_MS) {
+    throw new Error("CLI probe termination grace must be between 1ms and 2 seconds.");
+  }
+  if (platform === "win32") {
+    try {
+      terminateOwnedCliProcess(child, platform, environment, "SIGKILL");
+    } catch {
+      // The probe is already settling as failed. Never let cleanup throw into an
+      // output/timer callback; Windows taskkill or ChildProcess emitted failure.
+    }
+    return;
+  }
+
+  let settled = false;
+  let forceTimer: NodeJS.Timeout | null = null;
+  const finish = (): void => {
+    if (settled) return;
+    settled = true;
+    if (forceTimer) clearTimeout(forceTimer);
+    forceTimer = null;
+    child.off("close", finish);
+    child.off("error", finish);
+  };
+  child.once("close", finish);
+  child.once("error", finish);
+  try {
+    terminateOwnedCliProcess(child, platform, environment, "SIGTERM");
+  } catch {
+    finish();
+    return;
+  }
+  if (settled) return;
+  forceTimer = setTimeout(() => {
+    if (settled) return;
+    finish();
+    try {
+      terminateOwnedCliProcess(child, platform, environment, "SIGKILL");
+    } catch {
+      // Best-effort final cleanup; the bounded probe result is already failed.
+    }
+  }, graceMs);
+  forceTimer.unref?.();
+}
+
 export function resolveCliProcessLaunch(
   platform: NodeJS.Platform,
   command: ProviderSpec["command"],
@@ -363,7 +458,7 @@ function runProbeWithSpawn(
       if (settled) return;
       totalBytes += chunk.byteLength;
       if (totalBytes > request.outputLimitBytes) {
-        terminateOwnedCliProcess(child, platform, request.environment);
+        terminateCliProbeWithGrace(child, platform, request.environment);
         finish(result("failed", null));
         return;
       }
@@ -372,7 +467,7 @@ function runProbeWithSpawn(
     };
 
     timer = setTimeout(() => {
-      terminateOwnedCliProcess(child, platform, request.environment);
+      terminateCliProbeWithGrace(child, platform, request.environment);
       finish(result("failed", null));
     }, request.timeoutMs);
     timer.unref?.();
@@ -669,13 +764,14 @@ function safeOperationId(createId: () => string): string {
 export function createCliProviderManager(
   dependencies: CliProviderManagerDependencies = {}
 ): CliProviderManager {
+  const processPlatform = dependencies.processPlatform ?? process.platform;
   const childEnvironment = Object.freeze(
     buildCliProcessEnvironment(
       dependencies.processEnvironment ?? process.env,
-      dependencies.additionalSearchPaths
+      dependencies.additionalSearchPaths,
+      processPlatform
     )
   );
-  const processPlatform = dependencies.processPlatform ?? process.platform;
   const runProbe = dependencies.runProbe ?? ((request) =>
     runProbeWithSpawn(processPlatform, request));
   const spawnSignIn = dependencies.spawnSignIn ?? ((request) =>

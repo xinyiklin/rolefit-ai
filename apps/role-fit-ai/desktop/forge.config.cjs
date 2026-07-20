@@ -36,7 +36,7 @@ if (releaseBuild && process.platform === "darwin") {
     identity: requiredEnvironment("MAC_CSC_IDENTITY"),
     hardenedRuntime: true,
     entitlements: path.join(assets, "entitlements.mac.plist"),
-    entitlementsInherit: path.join(assets, "entitlements.mac.plist")
+    entitlementsInherit: path.join(assets, "entitlements.mac.inherit.plist")
   };
   macNotarize = {
     appleApiKey: requiredEnvironment("APPLE_API_KEY_PATH"),

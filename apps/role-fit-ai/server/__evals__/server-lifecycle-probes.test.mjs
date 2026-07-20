@@ -105,6 +105,18 @@ try {
     providers: []
   });
 
+  const applications = await get(runtime.port, "/api/applications");
+  assert.equal(applications.status, 200);
+  assert.deepEqual(JSON.parse(applications.body), {
+    applications: [],
+    path: "workspace/applications.json"
+  });
+  assert.doesNotMatch(
+    applications.body,
+    new RegExp(temporaryRoot.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")),
+    "the applications response must not disclose the host's absolute workspace path"
+  );
+
   const providersPost = await new Promise((resolveResponse, rejectResponse) => {
     const req = request({
       host: "127.0.0.1",

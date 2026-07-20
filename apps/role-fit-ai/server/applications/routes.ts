@@ -19,7 +19,6 @@ import { jobWorkspaceDir } from "../workspace.ts";
 import {
   APPLICATION_ID_RE,
   ApplicationsStorageError,
-  applicationsFilePath,
   readApplications,
   reconcileApplicationMutations,
   sanitizeApplications,
@@ -48,7 +47,9 @@ export async function handleListApplications(
     const applications = await readApplications(workspaceDir);
     sendJson(res, 200, {
       applications,
-      path: applicationsFilePath(workspaceDir)
+      // The browser only needs a human-readable storage label. Do not expose
+      // the host account's absolute workspace path across the HTTP boundary.
+      path: "workspace/applications.json"
     });
   } catch (error) {
     sendJson(res, 500, { error: storageErrorMessage(error, "Application list failed.") });

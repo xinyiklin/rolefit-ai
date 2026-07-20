@@ -23,13 +23,26 @@ const credentialKeys = [
   "GOOGLE_APPLICATION_CREDENTIALS"
 ];
 const blockedKeys = [...nodeInjectionKeys, ...credentialKeys];
+const unrelatedSecretKeys = [
+  "AWS_ACCESS_KEY_ID",
+  "AWS_SECRET_ACCESS_KEY",
+  "AZURE_CLIENT_SECRET",
+  "GITHUB_TOKEN",
+  "NPM_TOKEN",
+  "DATABASE_URL",
+  "ROLEFIT_ENV_PROBE"
+];
 const sessionLocationKeys = [
   "HOME",
   "PATH",
   "CLAUDE_CONFIG_DIR",
   "CODEX_HOME",
   "XDG_CONFIG_HOME",
-  "APPDATA"
+  "APPDATA",
+  "TMPDIR",
+  "LANG",
+  "HTTPS_PROXY",
+  "NODE_EXTRA_CA_CERTS"
 ];
 
 const source = {
@@ -39,9 +52,13 @@ const source = {
   CODEX_HOME: "/synthetic/codex",
   XDG_CONFIG_HOME: "/synthetic/xdg",
   APPDATA: "C:\\synthetic\\appdata",
-  ROLEFIT_ENV_PROBE: "ordinary-value",
+  TMPDIR: "/synthetic/tmp",
+  LANG: "en_US.UTF-8",
+  HTTPS_PROXY: "http://proxy.invalid:8080",
+  NODE_EXTRA_CA_CERTS: "/synthetic/ca.pem",
   OMIT_UNDEFINED: undefined,
   ...Object.fromEntries(blockedKeys.map((key) => [key, `${key.toLowerCase()}-must-not-cross`])),
+  ...Object.fromEntries(unrelatedSecretKeys.map((key) => [key, `${key.toLowerCase()}-must-not-cross`])),
   node_options: "--require case-variant-must-not-cross",
   openai_api_key: "case-variant-must-not-cross"
 };
@@ -52,21 +69,39 @@ for (const key of blockedKeys) {
 }
 assert.equal(sanitized.node_options, undefined, "Node launch-control names are removed case-insensitively");
 assert.equal(sanitized.openai_api_key, undefined, "secret environment names are removed case-insensitively");
+for (const key of unrelatedSecretKeys) {
+  assert.equal(sanitized[key], undefined, `${key} is excluded by the closed AI CLI environment policy`);
+}
 for (const key of sessionLocationKeys) {
   assert.equal(sanitized[key], source[key], `${key} remains available to provider-owned CLI sessions`);
 }
-assert.equal(sanitized.ROLEFIT_ENV_PROBE, "ordinary-value");
 assert.equal("OMIT_UNDEFINED" in sanitized, false);
 assert.equal(source.OPENAI_API_KEY, "openai_api_key-must-not-cross", "sanitizing does not mutate the source environment");
 
+assert.deepEqual(
+  buildAiCliProcessEnvironment({
+    Path: "C:\\RoleFit\\bin;C:\\Windows\\System32",
+    UserProfile: "C:\\Users\\provider",
+    AppData: "C:\\Users\\provider\\AppData\\Roaming",
+    Github_Token: "must-not-cross"
+  }, "win32"),
+  {
+    PATH: "C:\\RoleFit\\bin;C:\\Windows\\System32",
+    USERPROFILE: "C:\\Users\\provider",
+    APPDATA: "C:\\Users\\provider\\AppData\\Roaming"
+  },
+  "the Windows allowlist matches required names case-insensitively without admitting unrelated tokens"
+);
+
 const previous = new Map([
   ...blockedKeys,
+  ...unrelatedSecretKeys,
   "node_options",
   ...sessionLocationKeys,
-  "ROLEFIT_ENV_PROBE"
 ].map((key) => [key, process.env[key]]));
 try {
   for (const key of credentialKeys) process.env[key] = `${key.toLowerCase()}-must-not-cross`;
+  for (const key of unrelatedSecretKeys) process.env[key] = `${key.toLowerCase()}-must-not-cross`;
   process.env.ELECTRON_RUN_AS_NODE = "1";
   // If this reaches the child, Node exits before evaluating the probe because
   // the required module cannot be found. A successful run therefore verifies
@@ -74,7 +109,7 @@ try {
   process.env.NODE_OPTIONS = "--require rolefit-module-that-must-never-load";
   process.env.NODE_PATH = "/tmp/rolefit-injected-node-modules";
   process.env.node_options = "--require rolefit-case-variant-that-must-never-load";
-  process.env.ROLEFIT_ENV_PROBE = "ordinary-value";
+  process.env.LANG = "rolefit-test-locale";
 
   const { stdout } = await runCli(
     process.execPath,
@@ -86,7 +121,8 @@ try {
         home: process.env.HOME,
         claudeConfigDir: process.env.CLAUDE_CONFIG_DIR,
         codexHome: process.env.CODEX_HOME,
-        ordinary: process.env.ROLEFIT_ENV_PROBE
+        locale: process.env.LANG,
+        unrelatedSecrets: ${JSON.stringify(unrelatedSecretKeys)}.filter((key) => process.env[key])
       }))`
     ],
     undefined,
@@ -98,7 +134,8 @@ try {
   assert.equal(childEnvironment.home, process.env.HOME, "runCli preserves HOME for provider-owned sessions");
   assert.equal(childEnvironment.claudeConfigDir, process.env.CLAUDE_CONFIG_DIR);
   assert.equal(childEnvironment.codexHome, process.env.CODEX_HOME);
-  assert.equal(childEnvironment.ordinary, "ordinary-value");
+  assert.equal(childEnvironment.locale, "rolefit-test-locale");
+  assert.deepEqual(childEnvironment.unrelatedSecrets, []);
 
   await assert.rejects(
     runCli(

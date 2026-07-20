@@ -545,6 +545,10 @@ removeReinstalledHandlers();
 const appRoot = resolve(import.meta.dirname, "../..");
 const preload = await readFile(resolve(appRoot, "dist-electron/desktop/preload.cjs"), "utf8");
 const preloadSource = await readFile(resolve(appRoot, "desktop/preload.cts"), "utf8");
+const companionRendererSource = await readFile(
+  resolve(appRoot, "desktop/companion-renderer.js"),
+  "utf8"
+);
 const requiredModules = [...preload.matchAll(/require\(["']([^"']+)["']\)/g)]
   .map((match) => match[1]);
 assert.deepEqual([...new Set(requiredModules)], ["electron"]);
@@ -566,6 +570,37 @@ assert.match(preloadSource, /RoleFitDesktopIpcChannel\.OpenCliSignInTerminal/);
 assert.match(preloadSource, /RoleFitDesktopIpcChannel\.OpenProviderInstallGuide/);
 assert.match(preloadSource, /RoleFitDesktopIpcChannel\.OpenBrowserApp/);
 for (const channel of Object.values(channels)) assert.doesNotMatch(preloadSource, new RegExp(channel));
+assert.match(companionRendererSource, /PROVIDER_SIGN_IN_POLL_INTERVAL_MS = 1_500/);
+assert.match(companionRendererSource, /PROVIDER_VISIBLE_POLL_INTERVAL_MS = 5_000/);
+assert.match(
+  companionRendererSource,
+  /document\.visibilityState === "hidden"[\s\S]*PROVIDER_SIGN_IN_POLL_INTERVAL_MS[\s\S]*PROVIDER_VISIBLE_POLL_INTERVAL_MS/,
+  "the visible companion owns one bounded fast/idle provider refresh timer"
+);
+assert.match(
+  companionRendererSource,
+  /async function refreshProviders[\s\S]*window\.clearTimeout\(pollTimer\)[\s\S]*finally[\s\S]*schedulePoll\(signInRunning\)/,
+  "each provider refresh clears its predecessor and schedules one successor only after settling"
+);
+const renderProvidersSource = companionRendererSource.slice(
+  companionRendererSource.indexOf("function renderProviders()"),
+  companionRendererSource.indexOf("function renderCheckingProviders()")
+);
+assert.doesNotMatch(
+  renderProvidersSource,
+  /schedulePoll\(/,
+  "ordinary renders cannot start a provider poll while an owning refresh is still running"
+);
+assert.match(
+  companionRendererSource,
+  /document\.addEventListener\("visibilitychange",[\s\S]*window\.clearTimeout\(pollTimer\)[\s\S]*refreshProviders/,
+  "hidden windows stop renderer polling and refresh immediately when visible again"
+);
+assert.doesNotMatch(
+  companionRendererSource,
+  /if \(!needed \|\| !hasUsableBridge\(\)\) return/,
+  "terminal and external auth changes are not stranded behind managed-sign-in-only polling"
+);
 
 let exposedKey = null;
 let exposedApi = null;

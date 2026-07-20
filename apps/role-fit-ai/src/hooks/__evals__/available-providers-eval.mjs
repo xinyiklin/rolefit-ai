@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import {
+  fetchProviderConnections,
   parseProviderConnectionsPayload,
   providerReadiness
 } from "../useAvailableProviders.ts";
@@ -108,5 +110,48 @@ reject({ schemaVersion: 1, companionManaged: true, providers: [
 reject({ schemaVersion: 1, companionManaged: true, providers: [
   provider("anthropic", "api", false, "not-applicable", "x".repeat(241))
 ] });
+
+const originalFetch = globalThis.fetch;
+try {
+  globalThis.fetch = (_input, init = {}) => new Promise((_resolve, rejectRequest) => {
+    const signal = init.signal;
+    if (!(signal instanceof AbortSignal)) {
+      rejectRequest(new Error("missing abort signal"));
+      return;
+    }
+    const rejectAborted = () => rejectRequest(new DOMException("Aborted", "AbortError"));
+    if (signal.aborted) rejectAborted();
+    else signal.addEventListener("abort", rejectAborted, { once: true });
+  });
+
+  await assert.rejects(
+    fetchProviderConnections(new AbortController().signal, 5),
+    /Provider status request timed out/,
+    "a stalled provider status fetch is bounded"
+  );
+
+  const caller = new AbortController();
+  const externallyCanceled = fetchProviderConnections(caller.signal, 1_000);
+  caller.abort();
+  await assert.rejects(
+    externallyCanceled,
+    (error) => error instanceof Error && !/timed out/i.test(error.message),
+    "effect cleanup cancellation remains distinct from a request timeout"
+  );
+} finally {
+  globalThis.fetch = originalFetch;
+}
+
+const hookSource = await readFile(new URL("../useAvailableProviders.ts", import.meta.url), "utf8");
+assert.match(
+  hookSource,
+  /if \(activeRequestRef\.current === owner\) activeRequestRef\.current = null/,
+  "an older request can clear the shared slot only while it still owns it"
+);
+assert.match(
+  hookSource,
+  /if \(activeRequestRef\.current === activeRequest\) activeRequestRef\.current = null/,
+  "StrictMode cleanup clears only the request instance it canceled"
+);
 
 console.log("available provider response parser: PASS");

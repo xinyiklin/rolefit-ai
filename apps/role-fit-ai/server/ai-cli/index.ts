@@ -45,39 +45,72 @@ type CliArgs = {
 // few KB; this leaves ample headroom while bounding both captured streams.
 const MAX_CLI_STREAM_BYTES = 2_000_000;
 
-// RoleFit's CLI providers authenticate through their provider-owned account
-// stores. Node/Electron launch controls, native API keys, and alternate token
-// channels must not hitchhike into a Claude/Codex/Antigravity subprocess. Keep
-// PATH, HOME, and vendor config/session *locations* intact so the installed CLIs
-// can still find their account-backed sessions.
-const AI_CLI_CHILD_BLOCKED_ENV_KEYS = new Set([
-  // These can preload arbitrary code, alter module resolution, or change how an
-  // Electron-backed executable starts. Keep this fixed list aligned with the
-  // desktop CLI subprocess boundary.
-  "ELECTRON_RUN_AS_NODE",
-  "NODE_OPTIONS",
-  "NODE_PATH",
-  "OPENAI_API_KEY",
-  "OPENAI_ACCESS_TOKEN",
-  "CODEX_API_KEY",
-  "CODEX_ACCESS_TOKEN",
-  "ANTHROPIC_API_KEY",
-  "ANTHROPIC_AUTH_TOKEN",
-  "CLAUDE_CODE_OAUTH_TOKEN",
-  "GOOGLE_API_KEY",
-  "GEMINI_API_KEY",
-  // This is a service-account credential pointer, not Antigravity's local
-  // provider-owned session location. Do not let it silently switch auth modes.
-  "GOOGLE_APPLICATION_CREDENTIALS"
+// Account-backed provider CLIs need executable discovery, their provider-owned
+// config/session locations, ordinary locale/temp state, and explicit network
+// trust configuration. Copy only that closed set: a denylist would inevitably
+// forward unrelated cloud, package-registry, database, or application secrets.
+// Keep this policy aligned with desktop/cli-providers.cts.
+const AI_CLI_CHILD_ALLOWED_ENV_KEYS = new Set([
+  "PATH",
+  "HOME",
+  "USERPROFILE",
+  "USER",
+  "LOGNAME",
+  "SHELL",
+  "HOMEDRIVE",
+  "HOMEPATH",
+  "TMPDIR",
+  "TMP",
+  "TEMP",
+  "LANG",
+  "LC_ALL",
+  "LC_CTYPE",
+  "TZ",
+  "TERM",
+  "COLORTERM",
+  "XDG_CONFIG_HOME",
+  "XDG_DATA_HOME",
+  "XDG_CACHE_HOME",
+  "APPDATA",
+  "LOCALAPPDATA",
+  "SYSTEMROOT",
+  "WINDIR",
+  "COMSPEC",
+  "PATHEXT",
+  "HTTP_PROXY",
+  "HTTPS_PROXY",
+  "ALL_PROXY",
+  "NO_PROXY",
+  "http_proxy",
+  "https_proxy",
+  "all_proxy",
+  "no_proxy",
+  "SSL_CERT_FILE",
+  "SSL_CERT_DIR",
+  "NODE_EXTRA_CA_CERTS",
+  "CODEX_HOME",
+  "CLAUDE_CONFIG_DIR"
 ]);
 
 export function buildAiCliProcessEnvironment(
-  source: NodeJS.ProcessEnv
+  source: NodeJS.ProcessEnv,
+  platform: NodeJS.Platform = process.platform
 ): NodeJS.ProcessEnv {
   const environment: NodeJS.ProcessEnv = {};
-  for (const [key, value] of Object.entries(source)) {
-    if (!AI_CLI_CHILD_BLOCKED_ENV_KEYS.has(key.toUpperCase()) && value !== undefined) {
-      environment[key] = value;
+  if (platform === "win32") {
+    const sourceByName = new Map(
+      Object.entries(source).map(([key, value]) => [key.toUpperCase(), value] as const)
+    );
+    for (const allowedKey of AI_CLI_CHILD_ALLOWED_ENV_KEYS) {
+      const key = allowedKey.toUpperCase();
+      const value = sourceByName.get(key);
+      if (!(key in environment) && value !== undefined) environment[key] = value;
+    }
+  } else {
+    for (const [key, value] of Object.entries(source)) {
+      if (AI_CLI_CHILD_ALLOWED_ENV_KEYS.has(key) && value !== undefined) {
+        environment[key] = value;
+      }
     }
   }
   return environment;

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import {
   ROLEFIT_DESKTOP_COMPATIBILITY_VERSION,
   ROLEFIT_HEALTH_API_VERSION,
@@ -49,6 +50,8 @@ const environment = buildDesktopServerEnvironment(
   {
     PATH: "/usr/bin",
     HOME: "/tmp/test-home",
+    ALL_PROXY: "socks5://127.0.0.1:1080",
+    all_proxy: "socks5://127.0.0.1:1081",
     OPENAI_API_KEY: "known-provider-secret",
     ANTHROPIC_API_KEY: "second-provider-secret",
     NODE_OPTIONS: "--require unexpected-module",
@@ -65,6 +68,8 @@ const environment = buildDesktopServerEnvironment(
 );
 assert.equal(environment.PATH, "/explicit/path");
 assert.equal(environment.HOME, "/tmp/test-home");
+assert.equal(environment.ALL_PROXY, "socks5://127.0.0.1:1080");
+assert.equal(environment.all_proxy, "socks5://127.0.0.1:1081");
 assert.equal(environment.OPENAI_API_KEY, undefined);
 assert.equal(environment.ANTHROPIC_API_KEY, undefined);
 assert.equal(environment.NODE_ENV, "production");
@@ -92,13 +97,37 @@ const packagedGuiEnvironment = buildCliProcessEnvironment(
   ["/opt/homebrew/bin", "/usr/local/bin"]
 );
 const ownedServerEnvironment = buildDesktopServerEnvironment(
-  packagedGuiEnvironment,
+  {
+    ...packagedGuiEnvironment,
+    AI_PROVIDER: "codex-cli",
+    EXTENSION_ALLOWED_ORIGINS: "chrome-extension://rolefit-test",
+    AWS_SECRET_ACCESS_KEY: "must-not-cross"
+  },
   { NODE_ENV: "production", ROLEFIT_APP_ROOT: "/tmp/app" }
 );
 assert.equal(
   ownedServerEnvironment.PATH,
   "/opt/homebrew/bin:/usr/local/bin:/usr/bin",
   "the owned server inherits the companion's fixed GUI CLI search path"
+);
+assert.equal(ownedServerEnvironment.AI_PROVIDER, "codex-cli");
+assert.equal(
+  ownedServerEnvironment.EXTENSION_ALLOWED_ORIGINS,
+  "chrome-extension://rolefit-test",
+  "server-only non-secret configuration survives the separate server allowlist"
+);
+assert.equal(ownedServerEnvironment.AWS_SECRET_ACCESS_KEY, undefined);
+
+const mainSource = await readFile(new URL("../main.cts", import.meta.url), "utf8");
+assert.match(
+  mainSource,
+  /const desktopServerSourceEnvironment:[\s\S]*\.\.\.process\.env[\s\S]*PATH: cliProcessEnvironment\.PATH/,
+  "main augments the server source PATH without reusing the stricter CLI child environment"
+);
+assert.match(
+  mainSource,
+  /sourceEnvironment: desktopServerSourceEnvironment/,
+  "the owned server receives its own allowlisted environment source"
 );
 
 const sourcePaths = resolveDesktopRuntimePaths({

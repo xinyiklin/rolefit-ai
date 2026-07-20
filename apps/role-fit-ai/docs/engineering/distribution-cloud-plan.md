@@ -215,8 +215,9 @@ job prevents publication.
 
 The native jobs target GitHub environments named `rolefit-macos-signing` and
 `rolefit-windows-signing`; the final write-capable job targets
-`rolefit-release`. Maintainers must configure all three as protected
-environments before releasing. macOS signing expects
+`rolefit-release`. Maintainers must restrict all three to the `rolefit-v*` tag
+policy before releasing; required reviewers are a separate optional rule when
+an eligible non-initiating reviewer exists. macOS signing expects
 `MAC_CERTIFICATE_BASE64`, `MAC_CERTIFICATE_PASSWORD`, `MAC_CSC_IDENTITY`,
 `APPLE_API_KEY_BASE64`, `APPLE_API_KEY_ID`, and `APPLE_API_ISSUER`. Windows
 signing currently expects the compatibility secrets
@@ -259,8 +260,8 @@ page instead of constructing a broken asset URL.
 D0-D4 are implemented in the repository. Local verification can prove the
 staged/package layout and native package available on the current host; public
 signing/notarization and cross-platform execution remain workflow gates until
-the protected environments are configured and an authorized release tag is
-pushed. D5 is intentionally not started.
+the tag-restricted environments and signing secrets are configured and an
+authorized release tag is pushed. D5 is intentionally not started.
 
 ### D0 - Architecture extraction
 

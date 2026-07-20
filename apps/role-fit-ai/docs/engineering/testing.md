@@ -314,17 +314,18 @@ directory with isolated `userData`, verifies the browser bundle/font/workspace
 and vault locations, then proves clean utility-server shutdown and
 port release. Native release verification additionally checks the macOS app,
 ZIP, and DMG signatures/notarization or both the Windows app executable and
-installer Authenticode signature. Windows then silently installs that exact
-normalized setup, invokes the common packaged smoke with the absolute installed
-executable, uninstalls through Squirrel in `finally`, and verifies the install
-root was removed.
+installer Authenticode signature plus trusted timestamp. Windows then silently
+installs that exact normalized setup, invokes the common packaged smoke with
+the absolute installed executable, uninstalls through Squirrel in `finally`,
+and verifies the install root was removed.
 
 The release-contract tests remain offline: they verify canonical
 `rolefit-vX.Y.Z` tags, package-version equality, main ancestry, exact artifact
 names/counts, and publication fail-closed behavior. An actual signed release is
-not a local test. It requires protected `rolefit-macos-signing`,
-`rolefit-windows-signing`, and `rolefit-release` GitHub environments, protected
-`rolefit-v*` tags, CI secrets, and the publish-time remote-tag commit recheck.
+not a local test. It requires `rolefit-macos-signing`,
+`rolefit-windows-signing`, and `rolefit-release` GitHub environments restricted
+to `rolefit-v*`, protected `rolefit-v*` tags, CI secrets, and the publish-time
+remote-tag commit recheck.
 
 ## Chrome Visual QA
 

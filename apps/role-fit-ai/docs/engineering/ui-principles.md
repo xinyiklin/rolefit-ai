@@ -39,7 +39,7 @@ inputs pane was folded into the masthead by explicit user request,
   own live preview, so there is no separate compile-preview; its margin
   controls own add/remove/reorder, section type, and per-section tailor scope;
   the suggestion/recruiter-review rail docks beside it post-polish), Materials (cover letter
-  + application questions), Applications (table / board / calendar tracker
+  + application questions), Applications (table / calendar tracker
   views), Analytics — plus the template/export rail below
 
 Polish should feel like a review queue, not a hidden overwrite. By default,

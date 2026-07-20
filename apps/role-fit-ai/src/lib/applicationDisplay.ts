@@ -1,6 +1,6 @@
 import type { Application, ApplicationStatus } from "../hooks/useApplications";
 import type { StrictReviewVerdict } from "../resume/types";
-import { fitScore } from "./applicationFacts";
+import { fitScore, parseDate } from "./applicationFacts";
 import { VERDICT_LABEL, VERDICT_TONE, verdictFromScore } from "./fitVerdict";
 
 export { displayCompany, fitScore, parseDate } from "./applicationFacts";
@@ -124,17 +124,10 @@ export function formatSalary(
 
 export function formatCompactDate(iso: string) {
   if (!iso) return "";
-  try {
-    // Bare YYYY-MM-DD (e.g. the inspector's date input) parses as UTC midnight
-    // and renders the previous day in UTC-negative zones; anchor it to local time.
-    const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso.trim());
-    const date = dateOnly
-      ? new Date(Number(dateOnly[1]), Number(dateOnly[2]) - 1, Number(dateOnly[3]))
-      : new Date(iso);
-    return date.toLocaleDateString([], { month: "short", day: "numeric" });
-  } catch {
-    return iso;
-  }
+  const date = parseDate(iso);
+  return date
+    ? date.toLocaleDateString([], { month: "short", day: "numeric" })
+    : iso;
 }
 
 export function dateKey(date: Date) {

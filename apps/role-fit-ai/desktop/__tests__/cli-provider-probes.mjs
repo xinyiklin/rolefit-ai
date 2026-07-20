@@ -6,7 +6,8 @@ import {
   createCliProviderManager,
   packagedCliSearchPaths,
   resolveCliProcessLaunch,
-  resolveWindowsTreeKillLaunch
+  resolveWindowsTreeKillLaunch,
+  terminateCliProbeWithGrace
 } from "../../dist-electron/desktop/cli-providers.cjs";
 
 function completed(stdout = "", stderr = "", exitCode = 0) {
@@ -15,6 +16,16 @@ function completed(stdout = "", stderr = "", exitCode = 0) {
 
 class FakeSignInProcess extends EventEmitter {
   kills = [];
+
+  kill(signal = "SIGTERM") {
+    this.kills.push(signal);
+    return true;
+  }
+}
+
+class FakeProbeProcess extends EventEmitter {
+  kills = [];
+  pid = 4321;
 
   kill(signal = "SIGTERM") {
     this.kills.push(signal);
@@ -59,6 +70,10 @@ assert.deepEqual(
     HOME: "/tmp/provider-home",
     CODEX_HOME: "/tmp/codex-home",
     CLAUDE_CONFIG_DIR: "/tmp/claude-home",
+    TMPDIR: "/tmp/provider-temp",
+    LANG: "en_US.UTF-8",
+    HTTPS_PROXY: "http://proxy.invalid:8080",
+    NODE_EXTRA_CA_CERTS: "/tmp/provider-ca.pem",
     ELECTRON_RUN_AS_NODE: "1",
     NODE_OPTIONS: "--require unexpected-module",
     NODE_PATH: "/tmp/injected-modules",
@@ -72,15 +87,63 @@ assert.deepEqual(
     CLAUDE_CODE_OAUTH_TOKEN: "must-not-cross",
     GOOGLE_API_KEY: "must-not-cross",
     GEMINI_API_KEY: "must-not-cross",
-    GOOGLE_APPLICATION_CREDENTIALS: "/tmp/must-not-cross.json"
+    GOOGLE_APPLICATION_CREDENTIALS: "/tmp/must-not-cross.json",
+    AWS_ACCESS_KEY_ID: "must-not-cross",
+    AWS_SECRET_ACCESS_KEY: "must-not-cross",
+    AZURE_CLIENT_SECRET: "must-not-cross",
+    GITHUB_TOKEN: "must-not-cross",
+    NPM_TOKEN: "must-not-cross",
+    DATABASE_URL: "must-not-cross",
+    ROLEFIT_PRIVATE_SECRET: "must-not-cross"
   }),
   {
     PATH: "/usr/bin",
     HOME: "/tmp/provider-home",
     CODEX_HOME: "/tmp/codex-home",
-    CLAUDE_CONFIG_DIR: "/tmp/claude-home"
+    CLAUDE_CONFIG_DIR: "/tmp/claude-home",
+    TMPDIR: "/tmp/provider-temp",
+    LANG: "en_US.UTF-8",
+    HTTPS_PROXY: "http://proxy.invalid:8080",
+    NODE_EXTRA_CA_CERTS: "/tmp/provider-ca.pem"
   },
-  "CLI session locations cross the boundary, while Electron/Node hazards and alternate tokens do not"
+  "only system, locale, temp, network trust, and provider session locations cross the CLI boundary"
+);
+
+assert.deepEqual(
+  buildCliProcessEnvironment({
+    Path: "C:\\RoleFit\\bin;C:\\Windows\\System32",
+    UserProfile: "C:\\Users\\provider",
+    AppData: "C:\\Users\\provider\\AppData\\Roaming",
+    Github_Token: "must-not-cross"
+  }, [], "win32"),
+  {
+    PATH: "C:\\RoleFit\\bin;C:\\Windows\\System32",
+    USERPROFILE: "C:\\Users\\provider",
+    APPDATA: "C:\\Users\\provider\\AppData\\Roaming"
+  },
+  "the Windows allowlist matches required names case-insensitively without admitting unrelated tokens"
+);
+
+const stubbornProbe = new FakeProbeProcess();
+terminateCliProbeWithGrace(stubbornProbe, "darwin", {}, 5);
+assert.deepEqual(stubbornProbe.kills, ["SIGTERM"]);
+for (let attempt = 0; attempt < 100 && stubbornProbe.kills.length < 2; attempt += 1) {
+  await new Promise((resolve) => setTimeout(resolve, 5));
+}
+assert.deepEqual(
+  stubbornProbe.kills,
+  ["SIGTERM", "SIGKILL"],
+  "a status probe that ignores SIGTERM is force-killed after the bounded grace"
+);
+
+const exitingProbe = new FakeProbeProcess();
+terminateCliProbeWithGrace(exitingProbe, "darwin", {}, 5);
+exitingProbe.emit("close", 0, null);
+await new Promise((resolve) => setTimeout(resolve, 10));
+assert.deepEqual(
+  exitingProbe.kills,
+  ["SIGTERM"],
+  "a status probe that exits during the grace is not killed again"
 );
 
 assert.deepEqual(
@@ -163,7 +226,10 @@ const manager = createCliProviderManager({
     CLAUDE_CODE_OAUTH_TOKEN: "must-not-cross",
     GOOGLE_API_KEY: "must-not-cross",
     GEMINI_API_KEY: "must-not-cross",
-    GOOGLE_APPLICATION_CREDENTIALS: "/tmp/must-not-cross.json"
+    GOOGLE_APPLICATION_CREDENTIALS: "/tmp/must-not-cross.json",
+    AWS_SECRET_ACCESS_KEY: "must-not-cross",
+    GITHUB_TOKEN: "must-not-cross",
+    DATABASE_URL: "must-not-cross"
   },
   createOperationId: () => `operation-${nextOperation++}`
 });

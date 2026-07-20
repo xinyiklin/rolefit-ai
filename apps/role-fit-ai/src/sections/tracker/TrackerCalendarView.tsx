@@ -3,7 +3,8 @@ import type { Application, ApplicationStatus } from "../../hooks/useApplications
 import {
   dateKey,
   displayCompany,
-  displayRole
+  displayRole,
+  parseDate
 } from "../../lib/applicationDisplay";
 import { TrackerCalendarRail } from "./TrackerCalendarRail";
 
@@ -39,8 +40,8 @@ function buildCalendarDays(month: Date) {
 function applicationEvents(applications: Application[]): CalendarEvent[] {
   return applications.flatMap((app) => {
     const events: CalendarEvent[] = [];
-    const applied = app.appliedAt ? new Date(app.appliedAt) : null;
-    const followup = app.followupAt ? new Date(app.followupAt) : null;
+    const applied = parseDate(app.appliedAt);
+    const followup = parseDate(app.followupAt);
     if (applied && !Number.isNaN(applied.getTime())) {
       events.push({
         id: `${app.id}-applied`,

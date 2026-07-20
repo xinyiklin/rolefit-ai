@@ -6,6 +6,16 @@ import {
   topTrackedCompanies,
   trackingHygiene
 } from "../applicationAnalytics.ts";
+import { parseDate } from "../applicationFacts.ts";
+
+const priorTimeZone = process.env.TZ;
+process.env.TZ = "America/New_York";
+const localDateOnly = parseDate("2026-07-20");
+assert.equal(localDateOnly?.getFullYear(), 2026);
+assert.equal(localDateOnly?.getMonth(), 6);
+assert.equal(localDateOnly?.getDate(), 20, "date-only tracker values stay on their local calendar day");
+if (priorTimeZone === undefined) delete process.env.TZ;
+else process.env.TZ = priorTimeZone;
 
 const base = {
   title: "Role",

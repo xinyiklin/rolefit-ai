@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import { resolve } from "node:path";
 import {
   hardenWindow,
   isAllowedRendererPermission,
@@ -7,6 +9,19 @@ import {
 } from "../../dist-electron/desktop/security.cjs";
 
 const companionUrl = "file:///tmp/rolefit%20companion/companion.html";
+
+const desktopRoot = resolve(import.meta.dirname, "..");
+const [mainEntitlements, inheritedEntitlements, forgeConfigSource] = await Promise.all([
+  readFile(resolve(desktopRoot, "assets/entitlements.mac.plist"), "utf8"),
+  readFile(resolve(desktopRoot, "assets/entitlements.mac.inherit.plist"), "utf8"),
+  readFile(resolve(desktopRoot, "forge.config.cjs"), "utf8")
+]);
+assert.match(mainEntitlements, /com\.apple\.security\.automation\.apple-events/);
+assert.doesNotMatch(inheritedEntitlements, /com\.apple\.security\.automation\.apple-events/);
+assert.match(
+  forgeConfigSource,
+  /entitlementsInherit: path\.join\(assets, "entitlements\.mac\.inherit\.plist"\)/
+);
 
 assert.equal(isTrustedCompanionUrl(companionUrl, companionUrl), true);
 assert.equal(isTrustedCompanionUrl(`${companionUrl}#section`, companionUrl), false);

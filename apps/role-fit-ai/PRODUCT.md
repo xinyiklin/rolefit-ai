@@ -10,8 +10,8 @@ One job seeker (the project owner) tailoring a resume to a specific job
 description in a desktop browser (Chrome, ~1440px) during focused
 application-prep sessions. The browser is the product surface. A required
 device-local Electron companion starts and keeps the loopback server available, shows
-the complete five-provider setup catalog, encrypt supported API keys locally,
-start fixed provider-owned CLI sign-in flows, and open RoleFit in the default
+the complete five-provider setup catalog, encrypts supported API keys locally,
+starts fixed provider-owned CLI sign-in flows, and opens RoleFit in the default
 browser. It is not a second Drafting Desk and does not own resume editing,
 tracker state, or workspace files. The user knows the resume content
 intimately; the tool's job is to speed up tailoring, reviewing, and exporting

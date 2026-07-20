@@ -56,6 +56,7 @@ const PROVIDER_KEYS = new Set(["id", "kind", "configured", "ready", "authState",
 const MAX_RESPONSE_BYTES = 16 * 1_024;
 const MAX_GUIDANCE_LENGTH = 240;
 const DEFAULT_POLL_INTERVAL_MS = 5_000;
+const DEFAULT_REQUEST_TIMEOUT_MS = 4_000;
 const INITIAL_PROVIDER_SNAPSHOT: ProviderSnapshot = Object.freeze({
   status: "loading",
   companionManaged: false,
@@ -146,26 +147,52 @@ export function parseProviderConnectionsPayload(value: unknown): ParsedProviderC
   });
 }
 
-async function fetchProviderConnections(signal: AbortSignal): Promise<ParsedProviderConnections> {
-  const response = await fetch("/api/providers", {
-    cache: "no-store",
-    headers: { Accept: "application/json" },
-    redirect: "error",
-    signal
-  });
-  const declaredLength = Number(response.headers.get("content-length") ?? 0);
-  if (
-    !response.ok ||
-    !response.headers.get("content-type")?.toLowerCase().includes("application/json") ||
-    declaredLength > MAX_RESPONSE_BYTES
-  ) {
-    throw new Error("Provider status is unavailable.");
+export async function fetchProviderConnections(
+  signal: AbortSignal,
+  timeoutMs = DEFAULT_REQUEST_TIMEOUT_MS
+): Promise<ParsedProviderConnections> {
+  if (!Number.isInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 60_000) {
+    throw new TypeError("Invalid provider status timeout.");
   }
-  const body = await response.text();
-  if (new TextEncoder().encode(body).byteLength > MAX_RESPONSE_BYTES) {
-    throw new Error("Provider status is unavailable.");
+  const requestController = new AbortController();
+  let timedOut = false;
+  const abortFromCaller = (): void => requestController.abort(signal.reason);
+  if (signal.aborted) abortFromCaller();
+  else signal.addEventListener("abort", abortFromCaller, { once: true });
+  const timer = setTimeout(() => {
+    timedOut = true;
+    requestController.abort();
+  }, timeoutMs);
+
+  try {
+    const response = await fetch("/api/providers", {
+      cache: "no-store",
+      headers: { Accept: "application/json" },
+      redirect: "error",
+      signal: requestController.signal
+    });
+    const declaredLength = Number(response.headers.get("content-length") ?? 0);
+    if (
+      !response.ok ||
+      !response.headers.get("content-type")?.toLowerCase().includes("application/json") ||
+      declaredLength > MAX_RESPONSE_BYTES
+    ) {
+      throw new Error("Provider status is unavailable.");
+    }
+    const body = await response.text();
+    if (new TextEncoder().encode(body).byteLength > MAX_RESPONSE_BYTES) {
+      throw new Error("Provider status is unavailable.");
+    }
+    return parseProviderConnectionsPayload(JSON.parse(body) as unknown);
+  } catch (error) {
+    if (timedOut && !signal.aborted) {
+      throw new Error("Provider status request timed out.");
+    }
+    throw error;
+  } finally {
+    clearTimeout(timer);
+    signal.removeEventListener("abort", abortFromCaller);
   }
-  return parseProviderConnectionsPayload(JSON.parse(body) as unknown);
 }
 
 export function providerReadiness(
@@ -193,8 +220,10 @@ export function useAvailableProviders(
 ): AvailableProvidersState {
   const [snapshot, setSnapshot] = useState<ProviderSnapshot>(INITIAL_PROVIDER_SNAPSHOT);
   const snapshotRef = useRef<ProviderSnapshot>(INITIAL_PROVIDER_SNAPSHOT);
-  const activeRequestRef = useRef<Promise<void> | null>(null);
-  const abortRef = useRef<AbortController | null>(null);
+  const activeRequestRef = useRef<{
+    controller: AbortController;
+    promise: Promise<void>;
+  } | null>(null);
   const mountedRef = useRef(false);
 
   const commitSnapshot = useCallback((next: ProviderSnapshot): void => {
@@ -203,10 +232,14 @@ export function useAvailableProviders(
   }, []);
 
   const refresh = useCallback(async (): Promise<void> => {
-    if (activeRequestRef.current) return activeRequestRef.current;
+    if (activeRequestRef.current) return activeRequestRef.current.promise;
     const controller = new AbortController();
-    abortRef.current = controller;
-    const request = (async () => {
+    const owner = {
+      controller,
+      promise: Promise.resolve()
+    };
+    activeRequestRef.current = owner;
+    owner.promise = Promise.resolve().then(async () => {
       try {
         const parsed = await fetchProviderConnections(controller.signal);
         if (!mountedRef.current || controller.signal.aborted) return;
@@ -236,12 +269,10 @@ export function useAvailableProviders(
             : "The local provider service is unavailable. Start or restart RoleFit Companion."
         });
       } finally {
-        if (abortRef.current === controller) abortRef.current = null;
-        activeRequestRef.current = null;
+        if (activeRequestRef.current === owner) activeRequestRef.current = null;
       }
-    })();
-    activeRequestRef.current = request;
-    return request;
+    });
+    return owner.promise;
   }, [commitSnapshot]);
 
   // Automatic extension imports can arrive during the first provider fetch.
@@ -274,9 +305,9 @@ export function useAvailableProviders(
       mountedRef.current = false;
       window.clearTimeout(timer);
       document.removeEventListener("visibilitychange", handleVisibility);
-      abortRef.current?.abort();
-      abortRef.current = null;
-      activeRequestRef.current = null;
+      const activeRequest = activeRequestRef.current;
+      activeRequest?.controller.abort();
+      if (activeRequestRef.current === activeRequest) activeRequestRef.current = null;
     };
   }, [pollIntervalMs, refresh]);
 
