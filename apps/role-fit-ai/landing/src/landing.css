@@ -605,6 +605,14 @@ code {
   color: var(--forest-deep);
 }
 
+.release-status--preview {
+  color: #815817;
+}
+
+.release-status--preview .release-status__dot {
+  background: #a36e16;
+}
+
 .release-status__dot {
   width: 8px;
   height: 8px;

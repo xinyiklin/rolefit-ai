@@ -17,11 +17,13 @@ tracker state, or workspace files. The user knows the resume content
 intimately; the tool's job is to speed up tailoring, reviewing, and exporting
 while detecting and surfacing potentially unsupported claims for human review.
 Local-first, single-user; no RoleFit accounts, hosted backend, cloud credential
-service, database, or synchronization. Native macOS and Windows distribution is
-implemented as a signed-release pipeline, while the browser remains the only
-working product surface and local non-publicly-trusted artifacts remain
-development-only. The public site is a static product/download page, never a
-hosted copy of the workbench.
+service, database, or synchronization. Native macOS and Windows distribution
+keeps a fail-closed signed-release pipeline and a separate, explicitly unsigned
+preview channel while project-owned signing identities are unavailable.
+Preview downloads are checksum-covered GitHub prereleases and must disclose
+the expected Gatekeeper or SmartScreen warning. The browser remains the only
+working product surface. The public site is a static product/download page,
+never a hosted copy of the workbench.
 
 ## Product Purpose
 

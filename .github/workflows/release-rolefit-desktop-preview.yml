@@ -1,0 +1,303 @@
+name: RoleFit desktop unsigned preview
+
+on:
+  push:
+    tags:
+      - "rolefit-preview-v*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rolefit-desktop-preview-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    name: Validate preview source
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    outputs:
+      commit: ${{ steps.contract.outputs.commit }}
+      tag: ${{ steps.contract.outputs.tag }}
+      version: ${{ steps.contract.outputs.version }}
+      preview-label: ${{ steps.contract.outputs.preview-label }}
+    steps:
+      - name: Checkout complete preview history
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+          persist-credentials: false
+
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          package-manager-cache: false
+
+      - name: Validate preview tag, package version, and main ancestry
+        id: contract
+        env:
+          ROLEFIT_RELEASE_CHANNEL: preview
+        run: node apps/role-fit-ai/scripts/desktop-release-contract.mjs
+
+      - name: Install the locked workspace
+        run: npm ci
+
+      - name: Check shared engine
+        run: npm run check --workspace packages/engine
+
+      - name: Check shared editor
+        run: npm run check --workspace packages/editor
+
+      - name: Check RoleFit
+        run: npm run check --workspace apps/role-fit-ai
+
+      - name: Probe release and preview contracts
+        run: npm run test:desktop:release --workspace apps/role-fit-ai
+
+  build-macos:
+    name: Build unsigned macOS preview ${{ matrix.arch }}
+    needs: validate
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: arm64
+            runner: macos-15
+            machine: arm64
+          - arch: x64
+            runner: macos-15-intel
+            machine: x86_64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    steps:
+      - name: Checkout validated preview commit
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          ref: ${{ needs.validate.outputs.commit }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Confirm native runner and commit
+        shell: bash
+        env:
+          EXPECTED_COMMIT: ${{ needs.validate.outputs.commit }}
+          EXPECTED_MACHINE: ${{ matrix.machine }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_COMMIT"
+          test "$(uname -m)" = "$EXPECTED_MACHINE"
+
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          architecture: ${{ matrix.arch }}
+          package-manager-cache: false
+
+      - name: Install the locked workspace
+        run: npm ci
+
+      - name: Make ad-hoc-signed macOS preview artifacts
+        run: >-
+          npm run make:desktop --workspace apps/role-fit-ai --
+          --arch=${{ matrix.arch }} --platform=darwin
+
+      - name: Smoke packaged macOS application
+        run: >-
+          npm run test:desktop:packaged --workspace apps/role-fit-ai --
+          --arch=${{ matrix.arch }} --platform=darwin
+
+      - name: Collect deterministic macOS artifacts
+        run: >-
+          npm run collect:desktop:artifacts --workspace apps/role-fit-ai --
+          --arch=${{ matrix.arch }} --platform=darwin --checksums=false
+
+      - name: Verify ad-hoc app integrity in package and ZIP
+        shell: bash
+        env:
+          RELEASE_ARCH: ${{ matrix.arch }}
+          RELEASE_VERSION: ${{ needs.validate.outputs.version }}
+        run: |
+          set -euo pipefail
+          app_path="apps/role-fit-ai/.forge/out/RoleFit Local Companion-darwin-${RELEASE_ARCH}/RoleFit Local Companion.app"
+          test -d "$app_path"
+          codesign --verify --deep --strict --verbose=2 "$app_path"
+          codesign --display --verbose=4 "$app_path" 2>&1 | grep -F "Signature=adhoc"
+
+          zip_path="apps/role-fit-ai/.forge/release/RoleFit-Local-Companion-${RELEASE_VERSION}-macos-${RELEASE_ARCH}.zip"
+          zip_verify_root="$RUNNER_TEMP/rolefit-preview-zip-verify"
+          test -s "$zip_path"
+          mkdir "$zip_verify_root"
+          ditto -x -k "$zip_path" "$zip_verify_root"
+          zip_app_path="$zip_verify_root/RoleFit Local Companion.app"
+          test -d "$zip_app_path"
+          codesign --verify --deep --strict --verbose=2 "$zip_app_path"
+          codesign --display --verbose=4 "$zip_app_path" 2>&1 | grep -F "Signature=adhoc"
+
+          dmg_path="apps/role-fit-ai/.forge/release/RoleFit-Local-Companion-${RELEASE_VERSION}-macos-${RELEASE_ARCH}.dmg"
+          test -s "$dmg_path"
+
+      - name: Verify macOS preview assets
+        run: >-
+          node apps/role-fit-ai/scripts/desktop-release-assets.mjs
+          --version "${{ needs.validate.outputs.version }}"
+          --platform macos
+          --arch "${{ matrix.arch }}"
+          --root apps/role-fit-ai/.forge/release
+
+      - name: Upload verified macOS preview assets
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: rolefit-preview-macos-${{ matrix.arch }}
+          path: |
+            apps/role-fit-ai/.forge/release/RoleFit-Local-Companion-${{ needs.validate.outputs.version }}-macos-${{ matrix.arch }}.dmg
+            apps/role-fit-ai/.forge/release/RoleFit-Local-Companion-${{ needs.validate.outputs.version }}-macos-${{ matrix.arch }}.zip
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
+
+      - name: Remove extracted preview app
+        if: always()
+        shell: bash
+        run: rm -rf "$RUNNER_TEMP/rolefit-preview-zip-verify"
+
+  build-windows:
+    name: Build unsigned Windows preview x64
+    needs: validate
+    runs-on: windows-2025
+    timeout-minutes: 60
+    steps:
+      - name: Checkout validated preview commit
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          ref: ${{ needs.validate.outputs.commit }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Confirm native runner and commit
+        shell: pwsh
+        env:
+          EXPECTED_COMMIT: ${{ needs.validate.outputs.commit }}
+        run: |
+          if ((git rev-parse HEAD) -ne $env:EXPECTED_COMMIT) {
+            throw "Checkout does not match the validated preview commit."
+          }
+          if ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -ne "X64") {
+            throw "Windows preview must run on native x64."
+          }
+
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          architecture: x64
+          package-manager-cache: false
+
+      - name: Install the locked workspace
+        run: npm ci
+
+      - name: Probe native Windows CLI execution and cleanup
+        shell: pwsh
+        run: npm run test:desktop:windows-runtime --workspace apps/role-fit-ai
+
+      - name: Make unsigned Windows preview installer
+        shell: pwsh
+        run: >-
+          npm run make:desktop --workspace apps/role-fit-ai --
+          --arch=x64 --platform=win32
+
+      - name: Smoke packaged Windows application
+        shell: pwsh
+        run: >-
+          npm run test:desktop:packaged --workspace apps/role-fit-ai --
+          --arch=x64 --platform=win32
+
+      - name: Collect deterministic Windows artifact
+        shell: pwsh
+        run: >-
+          npm run collect:desktop:artifacts --workspace apps/role-fit-ai --
+          --arch=x64 --platform=win32 --checksums=false
+
+      - name: Confirm installer is explicitly unsigned
+        shell: pwsh
+        env:
+          RELEASE_VERSION: ${{ needs.validate.outputs.version }}
+        run: |
+          $installer = "apps/role-fit-ai/.forge/release/RoleFit-Local-Companion-$env:RELEASE_VERSION-windows-x64.exe"
+          if (-not (Test-Path -LiteralPath $installer -PathType Leaf)) {
+            throw "Expected Windows preview installer is missing: $installer"
+          }
+          $signature = Get-AuthenticodeSignature -LiteralPath $installer
+          if ($signature.Status -ne [System.Management.Automation.SignatureStatus]::NotSigned) {
+            throw "Windows preview installer must remain explicitly unsigned; status was $($signature.Status)."
+          }
+
+      - name: Install, smoke, and uninstall Windows preview
+        shell: pwsh
+        run: >-
+          npm run test:desktop:windows-installer --workspace apps/role-fit-ai --
+          --installer=apps/role-fit-ai/.forge/release/RoleFit-Local-Companion-${{ needs.validate.outputs.version }}-windows-x64.exe
+
+      - name: Verify Windows preview asset
+        shell: pwsh
+        run: >-
+          node apps/role-fit-ai/scripts/desktop-release-assets.mjs
+          --version "${{ needs.validate.outputs.version }}"
+          --platform windows
+          --arch x64
+          --root apps/role-fit-ai/.forge/release
+
+      - name: Upload verified Windows preview asset
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: rolefit-preview-windows-x64
+          path: apps/role-fit-ai/.forge/release/RoleFit-Local-Companion-${{ needs.validate.outputs.version }}-windows-x64.exe
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
+
+  publish:
+    name: Publish verified unsigned preview
+    needs:
+      - validate
+      - build-macos
+      - build-windows
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment:
+      name: rolefit-preview-release
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout preview publisher
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          ref: ${{ needs.validate.outputs.commit }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          package-manager-cache: false
+
+      - name: Download all preview artifacts without merging names
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          pattern: rolefit-preview-*
+          path: apps/role-fit-ai/.forge/downloaded-release
+          merge-multiple: false
+
+      - name: Create draft, verify assets, and publish prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ROLEFIT_RELEASE_CHANNEL: preview
+          ROLEFIT_RELEASE_TAG: ${{ needs.validate.outputs.tag }}
+          ROLEFIT_RELEASE_VERSION: ${{ needs.validate.outputs.version }}
+          ROLEFIT_RELEASE_COMMIT: ${{ needs.validate.outputs.commit }}
+          ROLEFIT_RELEASE_ASSETS_DIR: apps/role-fit-ai/.forge/downloaded-release
+        run: node apps/role-fit-ai/scripts/publish-desktop-release.mjs

@@ -103,9 +103,12 @@ the same operating-system `userData` directory.
 The browser extension remains fixed to the canonical port `5181` in this phase.
 
 Distribution scaffolding can build native macOS arm64/x64 DMG and ZIP artifacts
-and a Windows x64 Squirrel installer. Public releases fail closed unless the
-native signing credentials are available; local artifacts remain
-non-publicly-trusted test builds (macOS receives only a local ad-hoc signature).
+and a Windows x64 Squirrel installer. Stable public releases fail closed unless
+the native signing credentials are available. A separate
+`rolefit-preview-vX.Y.Z-beta.N` workflow may publish checksum-covered unsigned
+GitHub prereleases while those identities are unavailable: macOS receives only
+an ad-hoc integrity signature and is not notarized, while the Windows installer
+is not Authenticode-signed. Both platforms therefore show security warnings.
 The current Windows PFX inputs are a compatibility seam, not a recommended way
 to procure a new public-trust certificate; a new signing identity should use a
 reviewed hardware-backed managed signer before the first Windows tag.
@@ -186,8 +189,9 @@ installer. The browser can report that its local provider registry is
 unavailable, but a normal web page cannot reliably distinguish a closed
 companion from one that is not installed. The public product/download page does
 not attempt that detection: the companion is required, and the page shows the
-three supported platform choices with a safe GitHub Releases fallback until a
-complete signed release exists.
+three supported platform choices with a safe GitHub Releases fallback. It
+prefers a complete signed release and may offer a complete unsigned prerelease
+only with an explicit warning beside the download controls.
 
 The local server shells out to configured, ready CLIs for AI-backed import,
 polish, cover-letter, and application-answer requests — no API key required.

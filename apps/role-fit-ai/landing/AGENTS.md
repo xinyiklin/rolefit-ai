@@ -16,14 +16,20 @@ root and RoleFit app guides first.
   browser. The public page only explains and distributes that local runtime.
 - Show macOS Apple silicon, macOS Intel, and Windows x64 choices explicitly.
   Do not guess architecture from user-agent data.
-- Direct links are fail-closed: accept only a complete, canonical
-  `rolefit-vX.Y.Z` GitHub Release with the exact expected assets. The repository
-  may also publish other products, so select the newest valid RoleFit release
-  from the bounded public release list rather than trusting repository-wide
-  `/latest`. On a missing,
+- Direct links are fail-closed: accept either a complete canonical signed
+  `rolefit-vX.Y.Z` release or, only when no complete signed release exists, a
+  complete `rolefit-preview-vX.Y.Z-beta.N` GitHub prerelease with the exact
+  expected assets. Prefer the newest complete signed RoleFit release even when
+  a newer unsigned preview exists. The repository may also publish other
+  products, so select from the bounded public release list rather than trusting
+  repository-wide `/latest`. On a missing,
   partial, malformed, rate-limited, or unavailable response, retain the three
   choices but link safely to the Releases page instead of inventing an asset
   URL.
+- An unsigned preview must be labeled as unsigned beside the active download
+  status and in every artifact format label. State that macOS Gatekeeper and
+  Windows SmartScreen warnings are expected; never describe a preview as
+  signed, notarized, trusted, or verified by a platform identity.
 
 ## Design and verification
 

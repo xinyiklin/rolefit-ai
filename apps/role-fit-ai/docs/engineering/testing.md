@@ -200,14 +200,17 @@ npm run test:landing --workspace apps/role-fit-ai
 
 The build must emit only `apps/role-fit-ai/dist-landing/`. Its guard requires
 the public marker and one landing manifest entry and rejects known loopback
-origins and product API paths. The offline release probe covers a valid complete
-release plus malformed tags, draft/prerelease state, wrong origins, zero-sized,
-missing, duplicate, and unexpected assets.
+origins and product API paths. The offline release probe covers valid complete
+signed and unsigned-preview releases, signed-release precedence, and malformed
+tags, mismatched draft/prerelease state, wrong origins, zero-sized, missing,
+duplicate, and unexpected assets.
 
 Real-browser QA must cover desktop and 390px widths, a clean console, keyboard
 focus, and both release states: the live empty/unavailable response links every
-platform row to GitHub Releases, while a mocked complete release produces the
-exact Apple silicon DMG/ZIP, Intel DMG/ZIP, Windows x64 EXE, and checksum links.
+platform row to GitHub Releases, while mocked complete signed and unsigned
+preview releases produce the exact Apple silicon DMG/ZIP, Intel DMG/ZIP,
+Windows x64 EXE, and checksum links. Preview QA must show the unsigned warning
+and format labels at both widths; a signed release must outrank every preview.
 Request inspection must show only static page assets and public
 `api.github.com` release metadata, never RoleFit `/api/*`, localhost probing, or
 companion detection.
