@@ -1,6 +1,9 @@
 # --- Dependencies & build output ---
 node_modules/
 dist/
+dist-landing/
+dist-electron/
+.forge/
 *.tsbuildinfo
 
 # --- Editor / IDE ---

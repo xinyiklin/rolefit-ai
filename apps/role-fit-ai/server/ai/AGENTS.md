@@ -34,8 +34,11 @@ sanitizer code is executable product behavior and anti-fabrication-critical.
   Browser disconnect or Stop must terminate matching provider work and never
   advance a later stage.
 - Credentials are provider-specific. Supported providers are Claude Code,
-  Codex, and Antigravity CLIs plus native OpenAI and Anthropic APIs. Unknown or
-  removed providers fail closed.
+  Codex, and Antigravity CLIs plus native OpenAI and Anthropic APIs. Browser
+  requests never carry managed API keys: a companion-owned server resolves API
+  credentials from its private in-memory snapshot, while standalone/headless
+  use may resolve explicit provider-specific `.env` keys. Unknown, removed,
+  unconfigured, or unready providers fail closed without a paid fallback.
 
 ## Maintainability
 

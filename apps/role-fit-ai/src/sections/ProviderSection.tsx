@@ -1,65 +1,58 @@
-import { KeyRound } from "lucide-react";
 import {
   cliReasoningEffortOptionsFor,
-  describeProviderModel,
   modelOptionsByProvider,
   providerOptions
 } from "../config/aiOptions";
 import type { AiProviderValue } from "../config/aiOptions";
+import type {
+  AvailableProviderConnection,
+  ProviderAvailabilityStatus
+} from "../hooks/useAvailableProviders";
 import type { StageConfig, StageId } from "../lib/aiRequest";
 import { MenuSection } from "./MenuSection";
 import { ModelSelectOptions } from "./ModelSelectOptions";
 
 export type StageKey = StageId;
 
-// The three pipeline stages, in pipeline order. The copy control in each section
-// lists the OTHER two (a stage never copies from itself).
 const STAGES: { key: StageKey; label: string }[] = [
   { key: "distill", label: "Distill" },
   { key: "tailor", label: "Tailor" },
   { key: "review", label: "Review" }
 ];
 
-// One pipeline stage's provider config (Distill / Tailor / Review), rendered as a
-// collapsible section. The header line carries a "Copy from" control that copies
-// one of the OTHER two stages' settings into this one (one-shot copy, not a live
-// link). The body is the full provider menu (provider / model / reasoning effort /
-// key). Each stage holds its own concrete config, passed as one
-// `StageConfig` object with a single `onChange` patcher instead of 12 flat props.
 type ProviderSectionProps = {
   stage: StageKey;
   title: string;
   config: StageConfig;
+  providers: readonly AvailableProviderConnection[];
+  availabilityStatus: ProviderAvailabilityStatus;
+  availabilityMessage: string;
+  onRefreshProviders: () => void | Promise<void>;
   onChange: (patch: Partial<StageConfig>) => void;
-  // Switching provider resets key/model/effort, so it stays
-  // its own callback rather than a plain onChange({ provider }) patch.
   onProviderChange: (provider: AiProviderValue) => void;
-  open: boolean;
-  onToggle: () => void;
   onCopyFrom: (from: StageKey) => void;
 };
-
-function keyPlaceholder(provider: AiProviderValue): string {
-  if (provider === "openai") return "Uses OPENAI_API_KEY when blank";
-  return "Uses ANTHROPIC_API_KEY when blank";
-}
 
 export function ProviderSection({
   stage,
   title,
   config,
+  providers,
+  availabilityStatus,
+  availabilityMessage,
+  onRefreshProviders,
   onChange,
   onProviderChange,
-  open,
-  onToggle,
   onCopyFrom
 }: ProviderSectionProps) {
-  const { provider, apiKey, selectedModel, cliReasoningEffort } = config;
-  const isCliProvider = provider === "claude-cli" || provider === "codex-cli" || provider === "antigravity-cli";
-  const modelOptions = modelOptionsByProvider[provider] ?? [];
-  const effortOptions = cliReasoningEffortOptionsFor(provider, selectedModel) ?? [];
-  const summary = describeProviderModel(provider, selectedModel);
-
+  const { provider, selectedModel, cliReasoningEffort } = config;
+  const providerById = new Map(providers.map((connection) => [connection.id, connection]));
+  const availableOptions = providerOptions.filter((option) => providerById.has(option.value));
+  const selectedConnection = providerById.get(provider);
+  const modelOptions = selectedConnection ? modelOptionsByProvider[provider] ?? [] : [];
+  const effortOptions = selectedConnection
+    ? cliReasoningEffortOptionsFor(provider, selectedModel) ?? []
+    : [];
   const copyControl = (
     <label className="stage-copy">
       <span className="stage-copy__label">Copy settings</span>
@@ -81,28 +74,44 @@ export function ProviderSection({
   );
 
   return (
-    <MenuSection title={title} summary={summary} headerControl={copyControl} open={open} onToggle={onToggle}>
+    <MenuSection title={title} headerControl={copyControl}>
       <div className="provider-card">
-        {/* Provider + Model + (Reasoning effort) share one row; the row is 2-wide
-            when the provider has no effort control (hosted) and 3-wide when it does. */}
         <div className={`provider-card__row${effortOptions.length ? " provider-card__row--3" : ""}`}>
           <label className="field">
             <span>Provider</span>
-            <select value={provider} onChange={(event) => onProviderChange(event.target.value as AiProviderValue)}>
-              {providerOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
+            <select
+              value={selectedConnection ? provider : ""}
+              disabled={availabilityStatus === "loading" || availableOptions.length === 0}
+              onChange={(event) => {
+                if (event.target.value) onProviderChange(event.target.value as AiProviderValue);
+              }}
+            >
+              {!selectedConnection ? (
+                <option value="" disabled>
+                  {availableOptions.length ? "Choose an added provider…" : "No providers added"}
                 </option>
-              ))}
+              ) : null}
+              {availableOptions.map((option) => {
+                const connection = providerById.get(option.value);
+                return (
+                  <option key={option.value} value={option.value}>
+                    {option.label}{connection?.ready ? "" : " — reconnect"}
+                  </option>
+                );
+              })}
             </select>
           </label>
-          <label className="field">
-            <span>Model</span>
-            <select value={selectedModel} onChange={(event) => onChange({ selectedModel: event.target.value })}>
-              <ModelSelectOptions options={modelOptions} />
-            </select>
-          </label>
-          {effortOptions.length ? (
+
+          {selectedConnection ? (
+            <label className="field">
+              <span>Model</span>
+              <select value={selectedModel} onChange={(event) => onChange({ selectedModel: event.target.value })}>
+                <ModelSelectOptions options={modelOptions} />
+              </select>
+            </label>
+          ) : null}
+
+          {selectedConnection && effortOptions.length ? (
             <label className="field">
               <span>Effort</span>
               <select value={cliReasoningEffort} onChange={(event) => onChange({ cliReasoningEffort: event.target.value })}>
@@ -116,23 +125,16 @@ export function ProviderSection({
           ) : null}
         </div>
 
-        {isCliProvider ? (
-          <p className="provider-card__auth-note">Uses the signed-in local CLI session. No API key is sent.</p>
-        ) : (
-          <label className="field">
-            <span>API key</span>
-            <div className="input-with-icon">
-              <KeyRound size={15} aria-hidden="true" />
-              <input
-                autoComplete="off"
-                value={apiKey}
-                onChange={(event) => onChange({ apiKey: event.target.value })}
-                placeholder={keyPlaceholder(provider)}
-                type="password"
-              />
-            </div>
-          </label>
-        )}
+        {!selectedConnection?.ready ? (
+          <div className="provider-card__availability is-blocked">
+            <p className="provider-card__auth-note">
+              {selectedConnection ? selectedConnection.guidance : availabilityMessage}
+            </p>
+            <button className="ghost-button is-compact" type="button" onClick={() => void onRefreshProviders()}>
+              Check providers
+            </button>
+          </div>
+        ) : null}
       </div>
     </MenuSection>
   );

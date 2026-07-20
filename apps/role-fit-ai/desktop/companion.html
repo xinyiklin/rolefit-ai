@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; base-uri 'none'; form-action 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'"
+    />
+    <title>RoleFit Local Companion</title>
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='8' fill='%23275747'/%3E%3Cpath d='M16 17h18c9 0 14 5 14 13 0 6-3 10-9 12l10 13H38L29 43h-3v12H16V17zm10 8v10h7c3 0 5-2 5-5s-2-5-5-5h-7z' fill='%23f7f5ed'/%3E%3C/svg%3E"
+    />
+    <link rel="stylesheet" href="./companion.css" />
+    <script src="./companion-renderer.js" defer></script>
+  </head>
+  <body data-companion-root data-status="loading">
+    <div class="companion-shell">
+      <header class="titlebar">
+        <div class="brand" aria-label="RoleFit AI companion">
+          <span class="brand__mark" aria-hidden="true">RF</span>
+          <span class="brand__copy">
+            <strong>RoleFit AI</strong>
+            <small>Provider companion</small>
+          </span>
+        </div>
+        <button class="open-app-button" id="open-rolefit-browser" type="button">
+          <span>Open RoleFit</span>
+          <span class="open-app-button__arrow" aria-hidden="true">&#8599;</span>
+        </button>
+      </header>
+
+      <main id="main-content">
+        <section class="providers" aria-labelledby="providers-title">
+          <header class="section-heading">
+            <div>
+              <h1 id="providers-title">Provider connections</h1>
+              <p id="provider-summary">Checking five supported providers.</p>
+            </div>
+            <button class="refresh-button" id="refresh-providers" type="button">
+              <span class="refresh-button__icon" aria-hidden="true">&#8635;</span>
+              <span>Check again</span>
+            </button>
+          </header>
+
+          <div class="bridge-line" id="bridge-line" role="status" aria-live="polite">
+            <span class="bridge-line__dot" aria-hidden="true"></span>
+            <span id="bridge-status">Checking the local companion&#8230;</span>
+          </div>
+
+          <form class="site-port-form" id="local-site-port-form" novalidate>
+            <label class="site-port-form__field" for="local-site-port">
+              <span>Local site port</span>
+              <input
+                id="local-site-port"
+                name="localSitePort"
+                type="number"
+                min="1"
+                max="65535"
+                step="1"
+                inputmode="numeric"
+                autocomplete="off"
+                aria-describedby="local-site-port-status"
+                disabled
+              />
+            </label>
+            <button id="apply-local-site-port" type="submit" disabled>Apply &amp; restart</button>
+            <p id="local-site-port-status" role="status" aria-live="polite">Loading port setting&#8230;</p>
+          </form>
+
+          <ol class="provider-list" id="provider-list" data-provider-list aria-busy="true"></ol>
+          <p class="provider-announcement visually-hidden" id="provider-announcement" aria-live="polite"></p>
+        </section>
+      </main>
+
+      <footer class="footer">
+        <span>Companion service</span>
+        <span id="runtime-version">Version checking&#8230;</span>
+      </footer>
+    </div>
+  </body>
+</html>

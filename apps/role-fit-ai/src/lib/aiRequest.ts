@@ -7,19 +7,17 @@ export type StageId = "distill" | "tailor" | "review";
 
 export type StageConfig = {
   provider: AiProviderValue;
-  apiKey: string;
   selectedModel: string;
   cliReasoningEffort: string;
 };
 
 export type AiRequestFields = {
   provider: AiProviderValue;
-  apiKey: string;
   model: string;
   reasoningEffort: string;
 };
 
-// Resolve the provider/key/model fields shared by every non-audit AI request
+// Resolve the provider/model fields shared by every non-audit AI request
 // body (`/api/polish`'s tailor stage, `/api/distill`, `/api/application-answers`,
 // `/api/cover-letter`): uses the exact field names the server expects, so the
 // call sites cannot drift apart.
@@ -28,7 +26,6 @@ export type AiRequestFields = {
 export function buildStageRequestFields(config: StageConfig): AiRequestFields {
   return {
     provider: config.provider,
-    apiKey: config.apiKey,
     model: config.selectedModel,
     reasoningEffort: config.cliReasoningEffort
   };
@@ -36,7 +33,6 @@ export function buildStageRequestFields(config: StageConfig): AiRequestFields {
 
 export type AuditRequestFields = {
   auditProvider: string;
-  auditApiKey: string;
   auditModel: string;
   auditReasoningEffort: string;
 };
@@ -48,7 +44,6 @@ export type AuditRequestFields = {
 export function buildAuditRequestFields(config: StageConfig): AuditRequestFields {
   return {
     auditProvider: config.provider,
-    auditApiKey: config.apiKey,
     auditModel: config.selectedModel,
     auditReasoningEffort: config.cliReasoningEffort
   };

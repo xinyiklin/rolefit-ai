@@ -5,16 +5,22 @@ import assert from "node:assert/strict";
 import {
   buildAntigravityCliArgs,
   buildClaudeCliArgs,
-  buildCodexCliArgs
+  buildCodexCliArgs,
+  classifyClaudeFailure
 } from "../../ai-cli/index.ts";
 import {
   buildAnthropicMessagesBody,
   callOpenAiResponsesWithFetch
 } from "../clients.ts";
 import {
+  resolveAuditProviderRequest,
   resolveProviderRequest,
   resolveReviewOnlyProviderRequest
 } from "../providers.ts";
+import {
+  applyProviderSnapshot,
+  clearProviderSnapshot
+} from "../../provider-connections.ts";
 import {
   assertUsableApplicationAnswerOutput,
   bindApplicationAnswers,
@@ -95,9 +101,18 @@ try {
   );
 
   process.env.OPENAI_API_KEY = "openai-only-test-key";
+  assert.equal(
+    resolveProviderRequest({
+      provider: "openai",
+      apiKey: "request-body-key-must-be-ignored",
+      model: "gpt-test"
+    }).apiKey,
+    "openai-only-test-key",
+    "standalone API dispatch uses the provider-specific .env key, never a request-body key"
+  );
   assert.throws(
     () => resolveProviderRequest({ provider: "anthropic", model: "claude-test" }),
-    /Add an API key/,
+    /Add this provider in RoleFit Companion/,
     "OPENAI_API_KEY must not authenticate Anthropic"
   );
   for (const removed of ["gemini", "openrouter", "groq", "together", "mistral", "local", "openai-compatible"]) {
@@ -120,6 +135,105 @@ try {
   assert.equal(review.model, "claude-test");
 
   delete process.env.OPENAI_API_KEY;
+  assert.throws(
+    () => resolveProviderRequest({
+      provider: "openai",
+      apiKey: "request-body-only-key",
+      model: "gpt-test"
+    }),
+    (error) => error?.status === 401 && /RoleFit Companion/.test(error.message),
+    "a request-body apiKey cannot authenticate a standalone hosted-provider request"
+  );
+  assert.throws(
+    () => resolveReviewOnlyProviderRequest({
+      auditProvider: "openai",
+      auditApiKey: "request-body-only-audit-key",
+      auditModel: "gpt-test"
+    }),
+    (error) => error?.status === 401 && /RoleFit Companion/.test(error.message),
+    "a request-body auditApiKey cannot authenticate a standalone review request"
+  );
+
+  applyProviderSnapshot({
+    type: "rolefit-provider-snapshot",
+    schemaVersion: 1,
+    providers: [
+      {
+        id: "claude-cli",
+        kind: "cli",
+        configured: true,
+        ready: true,
+        authState: "signed-in",
+        guidance: "Claude Code is connected through its local CLI session."
+      },
+      {
+        id: "codex-cli",
+        kind: "cli",
+        configured: true,
+        ready: false,
+        authState: "signed-out",
+        guidance: "Codex CLI needs sign-in through the companion."
+      },
+      {
+        id: "openai",
+        kind: "api",
+        configured: true,
+        ready: true,
+        authState: "not-applicable",
+        guidance: "OpenAI API access is stored securely on this device."
+      }
+    ],
+    credentials: { openai: "synthetic-managed-openai-key" }
+  });
+  assert.equal(
+    resolveProviderRequest({
+      provider: "openai",
+      apiKey: "request-body-key-must-not-override-vault",
+      model: "gpt-test"
+    }).apiKey,
+    "synthetic-managed-openai-key",
+    "native API dispatch resolves the companion-managed in-memory credential"
+  );
+  assert.equal(
+    resolveProviderRequest({ provider: "claude-cli", model: "claude-test" }).provider,
+    "claude-cli",
+    "a configured ready CLI remains available on a companion-managed server"
+  );
+  assert.throws(
+    () => resolveProviderRequest({ provider: "codex-cli", model: "gpt-test" }),
+    (error) => error?.status === 409 && /Reconnect Codex CLI in RoleFit Companion/.test(error.message),
+    "a configured but unready companion CLI fails with actionable recovery"
+  );
+  process.env.ANTHROPIC_API_KEY = "headless-key-must-not-bypass-companion";
+  assert.throws(
+    () => resolveProviderRequest({ provider: "anthropic", model: "claude-test" }),
+    (error) => error?.status === 409 && /Add Claude in RoleFit Companion/.test(error.message),
+    "an absent companion provider fails even when a headless .env key exists"
+  );
+  delete process.env.ANTHROPIC_API_KEY;
+  assert.equal(
+    resolveReviewOnlyProviderRequest({
+      auditProvider: "openai",
+      auditApiKey: "request-body-audit-key-must-not-override-vault",
+      auditModel: "gpt-test"
+    }).apiKey,
+    "synthetic-managed-openai-key",
+    "review-only resolution ignores auditApiKey and uses the companion vault"
+  );
+  const managedPrimary = resolveProviderRequest({
+    provider: "claude-cli",
+    model: "claude-test"
+  });
+  assert.equal(
+    resolveAuditProviderRequest({
+      auditProvider: "openai",
+      auditApiKey: "request-body-audit-key-must-not-override-vault",
+      auditModel: "gpt-test"
+    }, managedPrimary).apiKey,
+    "synthetic-managed-openai-key",
+    "independent-review resolution also ignores request-body auditApiKey"
+  );
+  clearProviderSnapshot();
 
   process.env.AI_PROVIDER = "opneai";
   assert.throws(
@@ -191,6 +305,32 @@ try {
   assert.equal(claude[claude.indexOf("--tools") + 1], "", "Claude tools remain disabled");
   assert.equal(claude[claude.indexOf("--setting-sources") + 1], "", "Claude does not load user/project settings");
   assert(claude.includes("--strict-mcp-config"), "Claude ignores ambient MCP configuration");
+  assert.equal(
+    claude[claude.indexOf("--mcp-config") + 1],
+    '{"mcpServers":{}}',
+    "Claude receives the current valid empty MCP configuration schema"
+  );
+
+  const claudeStderrAuth = classifyClaudeFailure("", {
+    stderr: "Not logged in. Please run /login.",
+    message: "claude exited with code 1"
+  });
+  assert.equal(claudeStderrAuth.status, 401, "Claude stderr participates in private auth classification");
+  assert.equal(
+    classifyClaudeFailure(JSON.stringify({ api_error_status: 401, result: "Unauthorized" })).status,
+    401,
+    "Claude authentication failures retain their HTTP category"
+  );
+  assert.equal(
+    classifyClaudeFailure("", { timedOut: true, message: "claude timed out" }).status,
+    504,
+    "Claude timeouts retain their HTTP category"
+  );
+  assert.equal(
+    classifyClaudeFailure("", { message: "claude exited with code 1" }).status,
+    500,
+    "unclassified Claude failures are no longer mislabeled as configuration errors"
+  );
 
   const codex = buildCodexCliArgs({ model: "gpt-test", reasoningEffort: "medium" }, "/tmp/rolefit-test", "/tmp/rolefit-test/out");
   for (const flag of ["--ephemeral", "--ignore-user-config", "--ignore-rules", "-C"]) {
@@ -385,6 +525,7 @@ Platform Engineer | Beta | 2020 - 2022
 
   console.log("provider/CLI contracts: PASS");
 } finally {
+  clearProviderSnapshot();
   for (const [key, value] of savedEnv) {
     if (value === undefined) delete process.env[key];
     else process.env[key] = value;

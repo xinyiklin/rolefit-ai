@@ -13,14 +13,12 @@ const STAGE_IDS: StageId[] = ["distill", "tailor", "review"];
 
 // Seed one stage's config from the persisted settings, using each stage's own
 // key prefix (Tailor's is unprefixed for back-compat with the original
-// single-stage settings shape; Review/Distill use audit*/distill*). API keys
-// are never persisted, so every stage always starts with an empty key.
+// single-stage settings shape; Review/Distill use audit*/distill*).
 function seedStage(stage: StageId, saved: PersistedSettings): StageConfig {
   if (stage === "tailor") {
     const provider = saved.aiProvider ?? "claude-cli";
     return {
       provider,
-      apiKey: "",
       selectedModel: saved.selectedModel ?? providerOptions.find((option) => option.value === provider)?.model ?? "claude-sonnet-5",
       cliReasoningEffort: saved.cliReasoningEffort ?? defaultCliReasoningEffort(provider)
     };
@@ -29,7 +27,6 @@ function seedStage(stage: StageId, saved: PersistedSettings): StageConfig {
     const provider = saved.auditProvider ?? "claude-cli";
     return {
       provider,
-      apiKey: "",
       selectedModel: saved.auditSelectedModel ?? providerOptions.find((option) => option.value === provider)?.model ?? "claude-sonnet-5",
       cliReasoningEffort: saved.auditCliReasoningEffort ?? defaultCliReasoningEffort(provider)
     };
@@ -37,18 +34,16 @@ function seedStage(stage: StageId, saved: PersistedSettings): StageConfig {
   const provider = saved.distillProvider ?? "claude-cli";
   return {
     provider,
-    apiKey: "",
     selectedModel: saved.distillSelectedModel ?? providerOptions.find((option) => option.value === provider)?.model ?? "claude-sonnet-5",
     cliReasoningEffort: saved.distillCliReasoningEffort ?? defaultCliReasoningEffort(provider)
   };
 }
 
 // Owns every auto-saved AI preference: each stage's (Distill/Tailor/Review)
-// provider/model/key/reasoning-effort config, plus the polish prefs
+// provider/model/reasoning-effort config, plus the polish prefs
 // that persist alongside them (honest context and custom instructions). All of
 // these share one debounced localStorage write, so they live together here
-// rather than scattered across App. API keys for every stage are intentionally
-// NOT persisted.
+// rather than scattered across App. Credentials stay in the local companion.
 export function useAiSettings() {
   const saved = useMemo(() => loadSettings(), []);
 
@@ -57,22 +52,6 @@ export function useAiSettings() {
     tailor: seedStage("tailor", saved),
     review: seedStage("review", saved)
   }));
-
-  // AI setup is an accordion, not three simultaneous provider consoles. Honor a
-  // single saved section; normalize an older all-open preference to Tailor, the
-  // stage most people adjust. Every stage still exposes its provider/model
-  // summary while collapsed.
-  const [sectionOpen, setSectionOpen] = useState<{ distill: boolean; tailor: boolean; review: boolean }>(() => {
-    const stored = {
-      distill: saved.sectionOpen?.distill ?? false,
-      tailor: saved.sectionOpen?.tailor ?? true,
-      review: saved.sectionOpen?.review ?? false
-    };
-    const openStages = (Object.keys(stored) as StageId[]).filter((stage) => stored[stage]);
-    if (openStages.length <= 1) return stored;
-    const preferred = openStages.includes("tailor") ? "tailor" : openStages[0];
-    return { distill: preferred === "distill", tailor: preferred === "tailor", review: preferred === "review" };
-  });
 
   const [honestContext, setHonestContext] = useState(saved.honestContext ?? "");
   const [customInstructions, setCustomInstructions] = useState(saved.customInstructions ?? "");
@@ -98,7 +77,6 @@ export function useAiSettings() {
         distillProvider: stages.distill.provider,
         distillSelectedModel: stages.distill.selectedModel,
         distillCliReasoningEffort: stages.distill.cliReasoningEffort,
-        sectionOpen,
         honestContext,
         customInstructions,
         polishStages,
@@ -110,7 +88,6 @@ export function useAiSettings() {
     return () => clearTimeout(id);
   }, [
     stages,
-    sectionOpen,
     honestContext,
     customInstructions,
     polishStages,
@@ -144,7 +121,7 @@ export function useAiSettings() {
     setStages((prev) => ({ ...prev, [stage]: { ...prev[stage], ...patch } }));
   }
 
-  // Switching a stage's provider resets its key/model/effort
+  // Switching a stage's provider resets its model/effort
   // to that provider's defaults, mirroring the original per-stage handlers.
   function changeStageProvider(stage: StageId, value: AiProviderValue) {
     const option = providerOptions.find((item) => item.value === value);
@@ -152,25 +129,16 @@ export function useAiSettings() {
       ...prev,
       [stage]: {
         provider: value,
-        apiKey: "",
         selectedModel: option?.model ?? "",
         cliReasoningEffort: defaultCliReasoningEffort(value)
       }
     }));
   }
 
-  function toggleSection(stage: StageId) {
-    setSectionOpen((prev) => {
-      if (prev[stage]) return { ...prev, [stage]: false };
-      return { distill: stage === "distill", tailor: stage === "tailor", review: stage === "review" };
-    });
-  }
-
   // The segmented [Distill | Tailor | Review] buttons in each section COPY one
   // stage's full provider config into another (e.g. clicking "Distill" inside the
   // Tailor section copies Distill's settings onto Tailor). It's a one-shot copy,
-  // not a live link — the stages can diverge again afterward. Includes the API key
-  // (in-memory only) so a copied hosted-provider stage is immediately usable.
+  // not a live link — the stages can diverge again afterward.
   function copyStage(from: StageId, to: StageId) {
     if (from === to) return;
     setStages((prev) => ({ ...prev, [to]: { ...prev[from] } }));
@@ -180,8 +148,6 @@ export function useAiSettings() {
     stages,
     updateStage,
     changeStageProvider,
-    sectionOpen,
-    toggleSection,
     copyStage,
     honestContext,
     setHonestContext,

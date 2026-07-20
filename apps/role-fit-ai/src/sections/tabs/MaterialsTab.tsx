@@ -27,6 +27,8 @@ export type MaterialsTabProps = {
   isGeneratingAnswers: boolean;
   resumeReady: boolean;
   jobReady: boolean;
+  aiProviderReady: boolean;
+  aiProviderMessage: string;
   canSave: boolean;
   onGenerate: (opts: { questions: string[]; includeRoleDescriptions: boolean }) => void;
   onSaveAnswers: (items: { question: string; answer: string }[]) => void;
@@ -47,6 +49,8 @@ export function MaterialsTab({
   isGeneratingAnswers,
   resumeReady,
   jobReady,
+  aiProviderReady,
+  aiProviderMessage,
   canSave,
   onGenerate,
   onSaveAnswers,
@@ -117,14 +121,16 @@ export function MaterialsTab({
 
   // ---- Derived ----
   const hasCoverDraft = Boolean(coverLetterText);
-  const canGenerate = resumeReady && jobReady;
+  const canGenerate = resumeReady && jobReady && aiProviderReady;
   const gateHint = canGenerate
     ? ""
-    : resumeReady
-    ? "Add the job description (Job menu, top bar) first."
-    : jobReady
+    : !resumeReady && !jobReady
+    ? "Add your resume and the job description first."
+    : !resumeReady
     ? "Add your resume first."
-    : "Add your resume and the job description first.";
+    : !jobReady
+    ? "Add the job description (Job menu, top bar) first."
+    : aiProviderMessage;
   const nothingChosen = buildQuestionList().length === 0 && !includeRoles;
   const hasAnswerDrafts = drafts.length > 0 || roleDrafts.length > 0;
   const selectedToSave =

@@ -128,8 +128,8 @@ page titles), the way a paper's nameplate differs from its body type. The tool
 is calm, dense, and trustworthy; it disappears into the task of tailoring a
 resume.
 
-The system explicitly rejects what PRODUCT.md rejects: marketing landing
-pages and oversized heroes, gradient-heavy surfaces, SaaS dashboard clichés
+Inside the Drafting Desk, the system explicitly rejects marketing landing-page
+patterns and oversized in-app heroes, gradient-heavy surfaces, SaaS dashboard clichés
 (hero metrics, identical card grids), sales-style copy, fake loading states,
 shimmer, decorative motion, and nested card-in-card containers. Status is
 stated quietly (a small dot beside a word), never shouted (filled pills,
@@ -148,6 +148,20 @@ the primary canvas; content wraps rather than clips below it.
 - One committed accent (Forest Ink) reserved for action and selection.
 - Dot-plus-word status vocabulary; ledger rows for label/value facts.
 - Density with calm: compact spacing, short labels, restrained contrast.
+
+### Public product/download page
+
+`landing/` is a separate public composition, not a route or mode of the
+Drafting Desk. It may use an editorial product-page hierarchy and a larger
+serif hero while retaining RoleFit's paper, forest, hairline, mono-label, and
+truthful-copy vocabulary. It shows real product captures, the local runtime
+boundary, and explicit macOS Apple silicon, macOS Intel, and Windows x64
+  download rows. It must not imitate the working app shell, use gradients or
+  template-style feature cards, imply hosted execution, guess the user's
+  architecture, or attempt native-install detection. At a missing or invalid
+  release, it keeps the platform choices visible and states that no complete
+  verified installer set is available instead of rendering a broken primary
+  action.
 
 ### Shared editor boundary
 
@@ -340,10 +354,12 @@ interactive control shares the same focus treatment: 2px Forest Ink outline,
   radios keep native controls. Editor font-family choices use the shared custom
   dropdown so the toolbar and Styles matrix have the same visual and keyboard
   behavior in every browser.
-- **AI setup** is a one-open-section accordion. Collapsed Distill/Tailor/Review
-  rows retain their effective provider/model summary; CLI rows show signed-in
-  session guidance and no API-key field, while native API rows may reveal the
-  transient key input.
+- **AI setup** keeps Distill, Tailor, and Review expanded together with no
+  per-section collapse affordance. Each stage retains its own concrete
+  provider/model/effort controls and **Copy from** action. Provider rows come
+  from the local companion's explicitly added registry; added-but-unready rows
+  show reconnect guidance. API credentials are never rendered or entered in
+  the browser.
 
 ### Navigation
 
@@ -433,8 +449,9 @@ The table reads as a logbook register, not a CRM grid.
 
 ### Don't:
 
-- **Don't** build marketing landing pages, oversized heroes, or
-  gradient-heavy surfaces (PRODUCT.md anti-reference, verbatim).
+- **Don't** put marketing landing-page patterns, oversized heroes, or
+  gradient-heavy surfaces inside the Drafting Desk. The isolated public page
+  follows the scoped contract above.
 - **Don't** reach for SaaS dashboard clichés: hero metrics and identical
   card grids are banned; use the figures strip and ledger rows.
 - **Don't** write sales-style or hype copy, in-product manuals, or

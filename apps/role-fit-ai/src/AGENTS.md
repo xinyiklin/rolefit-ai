@@ -29,6 +29,13 @@ owns the RoleFit React host and its integration with shared Typeset packages.
   untrusted until validated/coerced.
 - Keep failure, retry, stop, and downstream-stage semantics explicit. A failed
   stage never advances by inference or fallback.
+- Keep the complete provider/model catalog app-owned for validation, but render
+  only providers returned as configured by the same-origin provider registry.
+  Configured-but-unready selections remain visible and disabled; no-provider
+  state disables AI without disabling the rest of the browser app.
+- The browser must never collect, persist, render, or submit managed API keys.
+  Provider setup and secret mutation belong to the Electron companion; browser
+  requests contain provider/model/effort choices only.
 
 ## Maintainability
 

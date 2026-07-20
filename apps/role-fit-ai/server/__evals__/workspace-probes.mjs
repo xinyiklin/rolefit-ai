@@ -10,6 +10,10 @@ const repoAppRoot = dirname(dirname(dirname(fileURLToPath(import.meta.url))));
 const starter = await readFile(join(repoAppRoot, "server", "starter.resume"), "utf8");
 const isolatedRoot = await mkdtemp(join(tmpdir(), "rolefit-workspace-"));
 const originalCwd = process.cwd();
+const locations = {
+  appRoot: repoAppRoot,
+  workspaceDir: join(isolatedRoot, "explicit-workspace")
+};
 
 class FakeResponse {
   status = 0;
@@ -34,22 +38,30 @@ try {
   const {
     WorkspaceStorageError,
     handleWorkspaceBaseResume,
-    jobWorkspaceDir,
     readWorkspaceBaseResume
   } = await import(`../workspace.ts?workspace-probe=${Date.now()}`);
-  await mkdir(jobWorkspaceDir, { recursive: true });
+  await mkdir(locations.workspaceDir, { recursive: true });
 
-  assert.equal((await readWorkspaceBaseResume("base-resume.resume")).exists, false, "missing explicit version does not become starter");
+  assert.equal(
+    (await readWorkspaceBaseResume("base-resume.resume", locations)).exists,
+    false,
+    "missing explicit version does not become starter"
+  );
+  assert.equal(
+    (await readWorkspaceBaseResume(undefined, locations)).text,
+    starter,
+    "starter reads from the explicit app root"
+  );
 
-  await writeFile(join(jobWorkspaceDir, "base-resume.resume"), "{" + "x".repeat(100), "utf8");
+  await writeFile(join(locations.workspaceDir, "base-resume.resume"), "{" + "x".repeat(100), "utf8");
   await assert.rejects(
-    () => readWorkspaceBaseResume(),
+    () => readWorkspaceBaseResume(undefined, locations),
     (error) => error instanceof WorkspaceStorageError,
     "corrupt saved .resume fails closed instead of falling through to starter"
   );
 
-  await writeFile(join(jobWorkspaceDir, "base-resume.resume"), starter, "utf8");
-  assert.equal((await readWorkspaceBaseResume()).exists, true, "valid strict .resume loads");
+  await writeFile(join(locations.workspaceDir, "base-resume.resume"), starter, "utf8");
+  assert.equal((await readWorkspaceBaseResume(undefined, locations)).exists, true, "valid strict .resume loads");
 
   const first = JSON.parse(starter);
   first.document.name = "First Concurrent Save";
@@ -58,16 +70,16 @@ try {
   const firstRes = new FakeResponse();
   const secondRes = new FakeResponse();
   await Promise.all([
-    handleWorkspaceBaseResume(request("POST", { fileName: "base-resume.resume", text: JSON.stringify(first) }), firstRes),
-    handleWorkspaceBaseResume(request("POST", { fileName: "base-resume.resume", text: JSON.stringify(second) }), secondRes)
+    handleWorkspaceBaseResume(request("POST", { fileName: "base-resume.resume", text: JSON.stringify(first) }), firstRes, locations),
+    handleWorkspaceBaseResume(request("POST", { fileName: "base-resume.resume", text: JSON.stringify(second) }), secondRes, locations)
   ]);
   assert.equal(firstRes.status, 200);
   assert.equal(secondRes.status, 200);
-  const final = JSON.parse(await readFile(join(jobWorkspaceDir, "base-resume.resume"), "utf8"));
+  const final = JSON.parse(await readFile(join(locations.workspaceDir, "base-resume.resume"), "utf8"));
   assert.equal(final.document.name, "Second Concurrent Save", "serialized saves preserve invocation order");
-  const history = await readdir(join(jobWorkspaceDir, ".trash"));
+  const history = await readdir(join(locations.workspaceDir, ".trash"));
   assert.equal(history.length, 2, "both superseded versions remain recoverable with collision-free names");
-  assert.equal((await readdir(jobWorkspaceDir)).some((name) => name.endsWith(".tmp")), false, "atomic writes leave no temporary file");
+  assert.equal((await readdir(locations.workspaceDir)).some((name) => name.endsWith(".tmp")), false, "atomic writes leave no temporary file");
 
   console.log("workspace persistence probes: PASS");
 } finally {

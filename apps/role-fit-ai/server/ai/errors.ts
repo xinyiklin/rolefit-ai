@@ -9,16 +9,13 @@ export class UserSafeAiError extends Error {
   }
 }
 
-// Actionable claude-cli failure messages. Exported so server/ai-cli/index.ts
-// throws the EXACT strings the SAFE set matches (single source of truth — the
-// set is exact-match, so a drifting copy would silently fall back to a generic
-// 500). A 401 here usually means the spawned `claude` had no valid login,
-// commonly because the app server was launched from a context without the
-// user's Claude Code auth (e.g. started from inside another Claude Code session).
+// Actionable claude-cli failure messages. The adapter wraps these in
+// UserSafeAiError with the correct HTTP status. A 401 means the provider-owned
+// session needs attention; recovery belongs in RoleFit Companion.
 export const CLAUDE_CLI_AUTH_MESSAGE =
-  "Claude Code couldn't authenticate (401). Run `claude` in your terminal to sign in, then start the app from that same terminal and try again.";
+  "Claude Code couldn't authenticate (401). Open RoleFit Companion, sign in or reconnect Claude Code, then check providers and retry.";
 export const CLAUDE_CLI_FAILED_MESSAGE =
-  "Claude Code couldn't complete the request — the `claude` CLI errored. Run `claude` in your terminal to confirm it's signed in and the model is available, then start the app from that same terminal and try again.";
+  "Claude Code couldn't complete the request. In RoleFit Companion, check the Claude Code connection, confirm the selected model is available, then retry.";
 export const CLAUDE_CLI_TIMEOUT_MESSAGE =
   "Claude Code timed out before finishing. Try again, or switch to a faster model or lower the reasoning effort.";
 
@@ -26,9 +23,6 @@ export const CLAUDE_CLI_TIMEOUT_MESSAGE =
 // user-safe wording. Routes map these to a 400 (not a generic 500) so the user
 // sees the precise remediation. Shared by /api/polish and /api/application-answers.
 const SAFE_CONFIG_MESSAGES = new Set([
-  CLAUDE_CLI_AUTH_MESSAGE,
-  CLAUDE_CLI_FAILED_MESSAGE,
-  CLAUDE_CLI_TIMEOUT_MESSAGE,
   "codex is not installed or not on PATH.",
   "claude is not installed or not on PATH.",
   "agy is not installed or not on PATH.",

@@ -5,7 +5,16 @@ RoleFit AI. Click the toolbar icon to see whether you've already tracked or
 applied to that posting and import it into a fresh app tab. Fit score, coverage,
 and verdict are produced only by AI Review in the main app.
 
-It talks **only** to your local RoleFit AI server at `http://localhost:5181`.
+It sends requests **only** to your local RoleFit AI server at
+`http://localhost:5181`. The manifest grants `http://localhost/*`, which covers
+HTTP on the `localhost` hostname across ports because Chrome and Firefox host
+match patterns cannot safely pin one localhost port. The popup target itself
+remains fixed to canonical port `5181`. A custom companion port is therefore
+for direct browser use, not extension imports.
+The server also requires this installed extension's exact Origin. A manifest
+host permission permits the request but does not prove which extension sent it;
+RoleFit rejects all extension analyze/import requests until
+`EXTENSION_ALLOWED_ORIGINS` is configured.
 For imports, the server prepares the raw posting text; the receiving RoleFit tab
 then runs its own Distill-stage CLI or native API provider, or falls straight to the
 deterministic parser when **Distill with AI** is off. Start the app
@@ -18,11 +27,34 @@ deterministic parser when **Distill with AI** is off. Start the app
 - **Firefox** — open `about:debugging#/runtime/this-firefox`, click
   **Load Temporary Add-on…**, and select `manifest.json`.
 
+After loading the extension, inspect its popup and evaluate `location.origin`
+in the popup console. Configure that complete value before starting RoleFit,
+for example:
+
+```bash
+# .env for npm run dev:rolefit, or export before a source-run companion
+EXTENSION_ALLOWED_ORIGINS=chrome-extension://abcdefghijklmnopabcdefghijklmnop
+```
+
+Use a comma-separated list only when this same local server intentionally
+serves more than one installed browser/profile. Values must be exact origins
+with no path, query, fragment, port, or trailing slash. Unpacked Chrome ids can
+change if the extension is moved or reloaded under a different identity;
+Firefox's manifest add-on id is stable, but its `moz-extension://` Origin is
+browser/profile-specific, so copy the actual `location.origin` in either
+browser.
+
+The packaged public companion has no extension pairing UI in this phase and is
+fail-closed by default. Launching it without an explicitly inherited
+`EXTENSION_ALLOWED_ORIGINS` keeps browser extension import disabled; direct
+browser RoleFit use remains available. Do not place a shared token in the
+manifest or add a public Chrome manifest key as a workaround.
+
 ## Files
 
 | File | Role |
 | --- | --- |
-| `manifest.json` | MV3 manifest — `activeTab` + `scripting` + `storage` + `cookies` (the last so imports can open in the source tab's Firefox container), host access to `localhost:5181` only |
+| `manifest.json` | MV3 manifest: `activeTab` + `scripting` + `storage` + `cookies` (the last so imports can open in the source tab's Firefox container), with `http://localhost/*` connectivity for the fixed port `5181` popup target; host permission is not server authorization |
 | `popup.html` / `popup.css` / `popup.js` | the popup UI (vanilla ESM, no build step) |
 | `icons/icon.svg` | toolbar icon |
 

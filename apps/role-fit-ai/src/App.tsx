@@ -22,6 +22,7 @@ import {
   styleFieldSizeStates
 } from "@typeset/engine/lib/styleFieldFormatting.ts";
 import { useAiSettings } from "./hooks/useAiSettings";
+import { useAvailableProviders } from "./hooks/useAvailableProviders";
 import { useApplicationAnswers } from "./hooks/useApplicationAnswers";
 import {
   useApplications,
@@ -79,6 +80,7 @@ import { ResumeTab } from "./sections/tabs/ResumeTab";
 import { MaterialsTab } from "./sections/tabs/MaterialsTab";
 import type { TrackerView } from "./sections/tabs/TrackerTab";
 import type { OutputTab, OutputTabDescriptor } from "./sections/shared";
+import { providerLabel } from "./config/aiOptions";
 
 const PreviewOverlay = lazy(() => import("./sections/PreviewOverlay"));
 const ApplicationModal = lazy(() =>
@@ -227,15 +229,15 @@ function App() {
   const applyStatusIsError = /failed|could not|couldn't/i.test(applyStatus);
   // All auto-saved AI preferences (primary provider/model, the reviewer-override
   // audit* fields, and the polish prefs that persist with them) plus the
-  // debounced localStorage write live in useAiSettings. API keys are not
-  // persisted. Destructured into the same names the handlers + JSX already use.
+  // debounced localStorage write live in useAiSettings. Credentials are owned
+  // by the local companion and have no browser state. Destructured into the
+  // same names the handlers + JSX already use.
+  const providerAvailability = useAvailableProviders();
   const ai = useAiSettings();
   const {
     stages,
     updateStage,
     changeStageProvider,
-    sectionOpen,
-    toggleSection,
     copyStage,
     honestContext,
     setHonestContext,
@@ -250,6 +252,53 @@ function App() {
     customInstructions,
     setCustomInstructions
   } = ai;
+  const availableProviderById = useMemo(
+    () => new Map(providerAvailability.providers.map((provider) => [provider.id, provider])),
+    [providerAvailability.providers]
+  );
+  const providerReady = useCallback(
+    (provider: (typeof stages)[StageId]["provider"]) => availableProviderById.get(provider)?.ready === true,
+    [availableProviderById]
+  );
+  const providerRecoveryMessage = useCallback(
+    (provider: (typeof stages)[StageId]["provider"]) => {
+      if (providerAvailability.status === "loading") {
+        return "Checking providers in RoleFit Companion…";
+      }
+      if (!providerAvailability.companionManaged) return providerAvailability.message;
+      const connection = availableProviderById.get(provider);
+      if (!connection) return `Add ${providerLabel(provider)} in RoleFit Companion.`;
+      return connection.ready ? "" : connection.guidance;
+    },
+    [availableProviderById, providerAvailability.companionManaged, providerAvailability.message, providerAvailability.status]
+  );
+  const distillProviderReady = providerReady(stages.distill.provider);
+  const tailorProviderReady = providerReady(stages.tailor.provider);
+  const reviewProviderReady = providerReady(stages.review.provider);
+  const distillProviderMessage = providerRecoveryMessage(stages.distill.provider);
+  const tailorProviderMessage = providerRecoveryMessage(stages.tailor.provider);
+  const reviewProviderMessage = providerRecoveryMessage(stages.review.provider);
+  const ensureDistillProvider = useCallback(
+    () => providerAvailability.ensureProvider(stages.distill.provider),
+    [providerAvailability.ensureProvider, stages.distill.provider]
+  );
+  const ensureTailorProvider = useCallback(
+    () => providerAvailability.ensureProvider(stages.tailor.provider),
+    [providerAvailability.ensureProvider, stages.tailor.provider]
+  );
+  const ensureReviewProvider = useCallback(
+    () => providerAvailability.ensureProvider(stages.review.provider),
+    [providerAvailability.ensureProvider, stages.review.provider]
+  );
+  const selectedPolishProvidersReady =
+    (polishStages === "review" || tailorProviderReady) &&
+    (polishStages === "tailor" || reviewProviderReady);
+  const polishProviderMessage =
+    polishStages !== "review" && !tailorProviderReady
+      ? tailorProviderMessage
+      : polishStages !== "tailor" && !reviewProviderReady
+        ? reviewProviderMessage
+        : "";
   const candidateFactsContext = buildCandidateFactsContext({ citizenshipStatus, legallyAuthorizedToWork, requiresSponsorship });
   const requestHonestContext = mergeHonestContext(honestContext, candidateFactsContext);
   // Distill runs on its own concrete provider config (synced to other stages via
@@ -485,6 +534,8 @@ function App() {
     honestContext: requestHonestContext,
     customInstructions,
     aiRequest: stages.tailor,
+    providerReady: tailorProviderReady,
+    providerMessage: tailorProviderMessage,
     upsertApplication,
     findForTarget
   });
@@ -508,6 +559,8 @@ function App() {
     honestContext: requestHonestContext,
     customInstructions,
     aiRequest: stages.tailor,
+    providerReady: tailorProviderReady,
+    providerMessage: tailorProviderMessage,
     resumeText,
     onUsage: (usage) => setPipelineAiUsage((prev) => ({ ...prev, cover: usage }))
   });
@@ -600,9 +653,10 @@ function App() {
       editedResume &&
         resumeReady &&
         Object.values(tailorModes).some((mode) => mode === "tailor") &&
-        jobDescription.trim().length > 40
+        jobDescription.trim().length > 40 &&
+        selectedPolishProvidersReady
     );
-  }, [editedResume, jobDescription, resumeReady, tailorModes]);
+  }, [editedResume, jobDescription, resumeReady, selectedPolishProvidersReady, tailorModes]);
 
   // The edited resume is debounced before the diff recompute so typing in the
   // editor stays smooth (the editor preview itself updates live).
@@ -647,6 +701,8 @@ function App() {
     ? "Add the job description from the Job menu to polish."
     : !editedResume || !Object.values(tailorModes).some((mode) => mode === "tailor")
     ? "Load a resume and set at least one section to Tailor."
+    : !selectedPolishProvidersReady
+    ? polishProviderMessage
     : "Add more resume text in the Resume menu (a few lines at least).";
 
   // ----- Resume export (engine PDF / .resume save) -----
@@ -707,6 +763,7 @@ function App() {
     confirmDuplicateBeforeDistill: duplicateGuard.confirmDuplicateBeforeDistill,
     confirmDuplicateAfterDistill: duplicateGuard.confirmDuplicateAfterDistill,
     distillRequestFields,
+    ensureProviderReady: ensureDistillProvider,
     tailorModes,
     editedResume
   });
@@ -736,6 +793,8 @@ function App() {
     polishStages,
     tailor: stages.tailor,
     review: stages.review,
+    ensureTailorProviderReady: ensureTailorProvider,
+    ensureReviewProviderReady: ensureReviewProvider,
     setResult,
     applyPolishCoverResult,
     setActiveOutputTab,
@@ -1112,22 +1171,26 @@ function App() {
             onDistillPaste={handleDistillPaste}
             linkStatus={linkStatus}
             jobReady={jobReady}
+            distillProviderReady={distillProviderReady}
+            distillProviderMessage={distillProviderMessage}
           />
         }
         aiControl={
           <AiMenu>
-            {/* Pipeline order: Distill → Tailor → Review. Each stage is its own
-                concrete provider; the segmented buttons copy settings between them. */}
+            {/* Pipeline order: Distill → Tailor → Review. All three stage
+                settings stay visible; Copy settings performs a one-shot sync. */}
             {STAGE_SECTIONS.map(({ id, title }) => (
               <ProviderSection
                 key={id}
                 stage={id}
                 title={title}
                 config={stages[id]}
+                providers={providerAvailability.providers}
+                availabilityStatus={providerAvailability.status}
+                availabilityMessage={providerAvailability.message}
+                onRefreshProviders={providerAvailability.refresh}
                 onChange={(patch) => updateStage(id, patch)}
                 onProviderChange={(provider) => changeStageProvider(id, provider)}
-                open={sectionOpen[id]}
-                onToggle={() => toggleSection(id)}
                 onCopyFrom={(from) => copyStage(from, id)}
               />
             ))}
@@ -1393,6 +1456,8 @@ function App() {
               isGeneratingAnswers={isGeneratingAnswers}
               resumeReady={resumeReady}
               jobReady={jobReady}
+              aiProviderReady={tailorProviderReady}
+              aiProviderMessage={tailorProviderMessage}
               canSave={Boolean(jobUrl.trim() || jobDescription.trim())}
               onGenerate={handleGenerateAnswers}
               onSaveAnswers={handleSaveAnswers}

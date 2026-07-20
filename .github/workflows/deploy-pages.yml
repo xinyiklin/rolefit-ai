@@ -1,9 +1,7 @@
-name: RoleFit AI Pages demo
+name: RoleFit AI product site
 
-# Builds the Vite frontend and publishes the static bundle to GitHub Pages.
-# Note: this is a static-only demo. Anything that calls the local Node server
-# (AI polish, job import, the on-disk tracker) will not function here;
-# the hosted build is the UI shell only.
+# Publishes only the static product/download entry. The full RoleFit renderer,
+# loopback API, provider bridge, and workspace remain companion-served locally.
 
 on:
   push:
@@ -17,10 +15,7 @@ on:
       - ".github/workflows/deploy-pages.yml"
   workflow_dispatch:
 
-permissions:
-  contents: read
-  pages: write
-  id-token: write
+permissions: {}
 
 # Allow one concurrent deploy; let an in-progress run finish before the next.
 concurrency:
@@ -30,42 +25,46 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          persist-credentials: false
 
       - name: Setup Node
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
-          cache: npm
+          package-manager-cache: false
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Build (base path scoped to the project page)
-        run: npm run build --workspace apps/role-fit-ai -- --base=/rolefit-ai/
-
-      - name: Add SPA 404 fallback
-        run: cp apps/role-fit-ai/dist/index.html apps/role-fit-ai/dist/404.html
-
-      - name: Configure Pages
-        uses: actions/configure-pages@v6
-        with:
-          enablement: true
+      - name: Build isolated product site
+        run: npm run build:landing --workspace apps/role-fit-ai
 
       - name: Upload artifact
-        uses: actions/upload-pages-artifact@v5
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5
         with:
-          path: apps/role-fit-ai/dist
+          path: apps/role-fit-ai/dist-landing
 
   deploy:
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
+      - name: Configure Pages
+        uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6
+        with:
+          enablement: true
+
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v5
+        uses: actions/deploy-pages@cd2ce8fcbc39b97be8ca5fce6e763baed58fa128 # v5

@@ -6,10 +6,8 @@
 // as it lived in server.ts. cleanExtensionClaimToken is a pure export because
 // the server dispatcher also needs it to sanitize the inbox route's query param.
 //
-// The two shared helpers that cross the module boundary — resolveImportedJobText
-// (from ../jobImport.ts) and readWorkspaceBaseResume (from ../workspace.ts) —
-// plus jobWorkspaceDir are imported directly now that those subsystems are their
-// own modules, so no dependency-injection factory is needed.
+// Browser-mode callers retain jobWorkspaceDir as the default; embedded runtimes
+// inject their writable workspace directory through the extension route boundary.
 
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { readBody, sendJson } from "../http.ts";
@@ -132,55 +130,98 @@ async function runExtensionPrepare(importId: number, text: string, url: string):
 
 // Browser-extension API. These routes are reached cross-origin from a
 // chrome-extension:// (or moz-/safari-) page, so they bypass the localhost
-// same-origin CSRF guard (dispatched BEFORE it) and instead validate the
-// extension Origin scheme directly. They never write resume data. The analyze
-// route is a read-only keyword triage; the import route appends a captured job page
-// to a claimable inbox queue AND kicks off a background PREPARE step (serialized
-// via runExtensionPrepare) that only resolves the raw text (no provider call) —
-// the AI distill runs later in the receiving tab with its own Distill provider.
-// The routes remain extension-Origin-gated and never write resume data.
-const EXTENSION_ORIGIN_SCHEMES = ["chrome-extension://", "moz-extension://", "safari-web-extension://"];
+// same-origin CSRF guard (dispatched BEFORE it). An extension scheme is not an
+// identity: any installed extension can request localhost. Require an exact,
+// explicitly configured extension Origin instead. They never write resume data.
+// The analyze route is a read-only keyword triage; the import route appends a
+// captured job page to a claimable inbox queue AND kicks off a background PREPARE
+// step (serialized via runExtensionPrepare) that only resolves the raw text (no
+// provider call) — the AI distill runs later in the receiving tab with its own
+// Distill provider.
+const EXTENSION_ORIGIN_PROTOCOLS = new Set([
+  "chrome-extension:",
+  "moz-extension:",
+  "safari-web-extension:"
+]);
+const EXTENSION_ORIGIN_MAX_LENGTH = 256;
+const EXTENSION_ORIGIN_CONFIG_MAX_LENGTH = 4_096;
+const EXTENSION_ORIGIN_MAX_COUNT = 16;
 
-// Optional HARD allowlist of exact extension origins, comma-separated, e.g.
-//   EXTENSION_ALLOWED_ORIGINS="chrome-extension://<id>,moz-extension://<uuid>"
-// When set, ONLY those origins may reach the extension routes — locking out every
-// other installed extension that can also see localhost. When unset (default),
-// any well-formed extension-scheme origin is accepted: a locally-loaded
-// extension's origin is browser/profile-specific (Chrome derives the id from a
-// key; Firefox uses a random per-install UUID), so it can't be pinned ahead of
-// time without breaking the user's own extension. Read the exact value to lock
-// down from the extension page's console: `location.origin`.
-//
-// Read LAZILY (memoized on first request), not at module load: this module is
-// imported by server.ts before its top-level `await loadLocalEnv()` runs, so a
-// module-load-time read would freeze the allowlist BEFORE `.env` is parsed and
-// silently turn an `.env`-configured lockdown into a no-op. Requests only
-// arrive after listen(), which is after loadLocalEnv(), so first-request
-// evaluation observes the loaded values.
-let extensionAllowedOrigins: Set<string> | null = null;
-function allowedExtensionOrigins(): Set<string> {
-  extensionAllowedOrigins ??= new Set(
-    String(process.env.EXTENSION_ALLOWED_ORIGINS ?? "")
-      .split(",")
-      .map((o) => o.trim())
-      .filter(Boolean)
-  );
-  return extensionAllowedOrigins;
+function normalizeExtensionOrigin(value: unknown): string | null {
+  const raw = typeof value === "string" ? value : "";
+  const candidate = raw.trim();
+  if (
+    !candidate ||
+    candidate.length > EXTENSION_ORIGIN_MAX_LENGTH ||
+    /\p{Cc}/u.test(raw)
+  ) {
+    return null;
+  }
+
+  try {
+    const parsed = new URL(candidate);
+    if (
+      !EXTENSION_ORIGIN_PROTOCOLS.has(parsed.protocol) ||
+      !parsed.host ||
+      parsed.username ||
+      parsed.password ||
+      parsed.port ||
+      parsed.pathname ||
+      parsed.search ||
+      parsed.hash
+    ) {
+      return null;
+    }
+    const normalized = `${parsed.protocol}//${parsed.host}`;
+    return candidate === normalized ? normalized : null;
+  } catch {
+    return null;
+  }
 }
 
-function isAllowedExtensionOrigin(origin: string | undefined): origin is string {
-  if (!origin) return false; // never allow an absent Origin (a same-machine process/page)
-  const allowlist = allowedExtensionOrigins();
-  if (allowlist.size > 0) return allowlist.has(origin);
-  return EXTENSION_ORIGIN_SCHEMES.some((scheme) => origin.startsWith(scheme));
+/**
+ * Parse the explicit extension identity allowlist. Invalid/oversized input
+ * yields only the valid bounded entries (or an empty set), which keeps the
+ * route fail-closed without turning an operator typo into scheme-wide access.
+ */
+export function parseAllowedExtensionOrigins(value: unknown): ReadonlySet<string> {
+  if (
+    typeof value !== "string" ||
+    Buffer.byteLength(value, "utf8") > EXTENSION_ORIGIN_CONFIG_MAX_LENGTH
+  ) {
+    return new Set();
+  }
+  const candidates = value.split(",");
+  if (candidates.length > EXTENSION_ORIGIN_MAX_COUNT) return new Set();
+  const origins = new Set<string>();
+  for (const candidate of candidates) {
+    const origin = normalizeExtensionOrigin(candidate);
+    if (origin) origins.add(origin);
+  }
+  return origins;
+}
+
+export function isAllowedExtensionOrigin(
+  origin: string | undefined,
+  configuredOrigins: ReadonlySet<string> = parseAllowedExtensionOrigins(
+    process.env.EXTENSION_ALLOWED_ORIGINS
+  )
+): origin is string {
+  const normalized = normalizeExtensionOrigin(origin);
+  return normalized !== null && configuredOrigins.has(normalized);
 }
 
 // analyze + import: called cross-origin by the extension popup. Require a
-// recognized extension-scheme Origin (a real chrome/moz/safari extension fetch
-// always sends one) and reflect that exact Origin back — never a bare "*", and
-// never allow an absent Origin, so no same-machine process or web page can
-// reach these by omitting the header.
-export async function handleExtensionRoutes(req: IncomingMessage, res: ServerResponse, pathname: string): Promise<void> {
+// configured exact extension Origin (a real chrome/moz/safari extension fetch
+// sends one) and reflect that exact Origin back — never a bare "*", a scheme-
+// only match, or an absent Origin. When EXTENSION_ALLOWED_ORIGINS is unset or
+// invalid, every extension request is rejected.
+export async function handleExtensionRoutes(
+  req: IncomingMessage,
+  res: ServerResponse,
+  pathname: string,
+  workspaceDir = jobWorkspaceDir
+): Promise<void> {
   const origin = req.headers.origin;
   if (!isAllowedExtensionOrigin(origin)) {
     sendJson(res, 403, { error: "Forbidden." });
@@ -225,7 +266,7 @@ export async function handleExtensionRoutes(req: IncomingMessage, res: ServerRes
     let previousApp: { id: string; status: string; appliedAt: string | null } | null = null;
     let duplicateMatch: { level: string; confidence: string; evidence: string[] } | null = null;
     try {
-      const apps = await readApplications(jobWorkspaceDir);
+      const apps = await readApplications(workspaceDir);
       // Layered lookup (posting id / normalized URL / requisition id / company +
       // title + description overlap) with the captured page text as jobText, so a
       // duplicate is caught even when the URL differs across boards. previousApp

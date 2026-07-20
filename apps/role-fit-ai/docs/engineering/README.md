@@ -4,6 +4,8 @@ These notes own RoleFit-specific implementation contracts:
 
 - [UI principles](ui-principles.md)
 - [AI / server guidelines](ai-server.md)
+- [Browser-primary provider companion architecture and phased plan](desktop-architecture-plan.md)
+- [Companion distribution, public product page, and cloud boundary](distribution-cloud-plan.md)
 - [Testing](testing.md)
 
 Repository-wide ownership, commands, and contribution workflow live at the
