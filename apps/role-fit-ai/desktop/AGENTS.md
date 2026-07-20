@@ -140,7 +140,8 @@ Applies to `apps/role-fit-ai/desktop/` and `tsconfig.desktop.json`.
   container. On a clean native Windows runner, silently install the normalized
   Squirrel setup, run the common packaged smoke against the absolute installed
   executable, then uninstall through the installed `Update.exe` in `finally`
-  and verify the package root is gone.
+  and verify the versioned payload is gone and Squirrel's intentional `.dead`
+  uninstall tombstone exists before removing that test residue.
 - Public release builds must fail closed without platform signing material.
   macOS and Windows signing jobs target
   `rolefit-macos-signing`/`rolefit-windows-signing`; only `rolefit-release` may

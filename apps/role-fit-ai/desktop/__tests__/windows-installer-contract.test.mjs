@@ -16,7 +16,8 @@ test("Windows installer paths match the reviewed Squirrel package identity", () 
       installRoot: "C:\\Users\\runneradmin\\AppData\\Local\\RoleFitLocalCompanion",
       versionDirectory: "C:\\Users\\runneradmin\\AppData\\Local\\RoleFitLocalCompanion\\app-0.1.0",
       executable: "C:\\Users\\runneradmin\\AppData\\Local\\RoleFitLocalCompanion\\app-0.1.0\\RoleFitLocalCompanion.exe",
-      updater: "C:\\Users\\runneradmin\\AppData\\Local\\RoleFitLocalCompanion\\Update.exe"
+      updater: "C:\\Users\\runneradmin\\AppData\\Local\\RoleFitLocalCompanion\\Update.exe",
+      tombstone: "C:\\Users\\runneradmin\\AppData\\Local\\RoleFitLocalCompanion\\.dead"
     }
   );
 });
