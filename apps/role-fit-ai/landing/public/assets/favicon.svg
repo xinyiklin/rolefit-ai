@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="RoleFit AI">
+  <style>
+    .tile { fill: #eef2ef; }
+    .mark { fill: #23664f; }
+    @media (prefers-color-scheme: dark) {
+      .tile { fill: #16241e; }
+      .mark { fill: #cfe6dc; }
+    }
+  </style>
+  <rect class="tile" width="64" height="64" rx="14"/>
+  <text class="mark" x="32" y="47" text-anchor="middle"
+        font-family="Charter, Georgia, 'Times New Roman', serif"
+        font-weight="700" font-size="46">R</text>
+</svg>

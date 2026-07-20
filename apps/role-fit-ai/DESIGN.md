@@ -152,16 +152,17 @@ the primary canvas; content wraps rather than clips below it.
 ### Public product/download page
 
 `landing/` is a separate public composition, not a route or mode of the
-Drafting Desk. It may use an editorial product-page hierarchy and a larger
-serif hero while retaining RoleFit's paper, forest, hairline, mono-label, and
-truthful-copy vocabulary. It shows real product captures, the local runtime
-boundary, and explicit macOS Apple silicon, macOS Intel, and Windows x64
-  download rows. It must not imitate the working app shell, use gradients or
-  template-style feature cards, imply hosted execution, guess the user's
-  architecture, or attempt native-install detection. At a missing or invalid
-  release, it keeps the platform choices visible and states that no complete
-  verified installer set is available instead of rendering a broken primary
-  action.
+Drafting Desk. It shares the compact creator-level masthead, screenshot-led
+product framing, and clear project boundary used across Xinyi Lin's portfolio,
+including Careflow, while retaining RoleFit's paper, forest, hairline,
+mono-label, and truthful-copy vocabulary. It may use a larger serif hero and
+shows real product captures, the local runtime boundary, and explicit macOS
+Apple silicon, macOS Intel, and Windows x64 download rows. It must not imitate
+the working app shell, use gradients or template-style feature cards, imply
+hosted execution, guess the user's architecture, or attempt native-install
+detection. At a missing or invalid release, it keeps the platform choices
+visible and states that no complete verified installer set is available instead
+of rendering a broken primary action.
 
 ### Shared editor boundary
 
