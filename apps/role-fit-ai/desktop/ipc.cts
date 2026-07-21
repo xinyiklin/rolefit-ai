@@ -18,10 +18,7 @@ import {
   normalizeRoleFitExtensionOrigin,
   type RoleFitApiProviderId,
   type RoleFitApplyLocalSitePortRequest,
-  type RoleFitBeginCliSignInRequest,
-  type RoleFitCancelCliSignInRequest,
   type RoleFitCliProviderId,
-  type RoleFitCliSignInResult,
   type RoleFitCliTerminalSignInResult,
   type RoleFitDesktopRuntimeInfoRequest,
   type RoleFitDesktopRuntimeInfo,
@@ -74,8 +71,6 @@ export type CompanionIpcOptions = {
     provider: RoleFitCliProviderId,
     enabled: boolean
   ): Promise<RoleFitProviderConnection>;
-  beginCliSignIn(provider: RoleFitBeginCliSignInRequest[0]): Promise<RoleFitCliSignInResult>;
-  cancelCliSignIn(operationId: RoleFitCancelCliSignInRequest[0]): Promise<boolean>;
   openCliSignInTerminal(
     provider: RoleFitCliProviderId
   ): Promise<RoleFitCliTerminalSignInResult>;
@@ -126,14 +121,6 @@ function requireTrustedRequest(
 
 function requireNoArguments(args: readonly unknown[], label: string): void {
   if (args.length !== 0) throw new Error(`${label} IPC does not accept arguments.`);
-}
-
-function requireOperationId(value: unknown): string {
-  const operationId = typeof value === "string" ? value.trim() : "";
-  if (!/^[A-Za-z0-9._:-]{8,128}$/.test(operationId)) {
-    throw new Error("Invalid CLI sign-in operation id.");
-  }
-  return operationId;
 }
 
 function requireApiKey(value: unknown): string {
@@ -270,13 +257,11 @@ function copyProviderConnection(
       connection.setupFlow !== metadata.setupFlow ||
       typeof connection.configured !== "boolean" ||
       typeof connection.ready !== "boolean" ||
-      typeof connection.signInRunning !== "boolean" ||
       typeof connection.guidance !== "string" ||
       !isAuthState(connection.authState) ||
       (metadata.kind === "cli" && typeof connection.installed !== "boolean") ||
       (metadata.kind === "api" && connection.installed !== null) ||
-      (metadata.kind === "api" && connection.authState !== "not-applicable") ||
-      (metadata.kind === "api" && connection.signInRunning)) {
+      (metadata.kind === "api" && connection.authState !== "not-applicable")) {
     throw new Error("Invalid provider connection status.");
   }
   return {
@@ -287,7 +272,6 @@ function copyProviderConnection(
     installed: connection.installed,
     authState: connection.authState,
     setupFlow: connection.setupFlow,
-    signInRunning: connection.signInRunning,
     guidance: connection.guidance.slice(0, ROLEFIT_PROVIDER_GUIDANCE_MAX_LENGTH)
   };
 }
@@ -309,25 +293,6 @@ function copyProviderConnections(
     if (!connection) throw new Error("Invalid provider connection list.");
     return connection;
   });
-}
-
-function copySignInResult(result: RoleFitCliSignInResult): RoleFitCliSignInResult {
-  if (!result || typeof result !== "object" ||
-      (result.status !== "started" &&
-        result.status !== "manual" &&
-        result.status !== "already-running") ||
-      typeof result.guidance !== "string" ||
-      (result.operationId !== null && typeof result.operationId !== "string")) {
-    throw new Error("Invalid CLI sign-in result.");
-  }
-  const operationId = result.operationId === null
-    ? null
-    : requireOperationId(result.operationId);
-  return {
-    status: result.status,
-    operationId,
-    guidance: result.guidance.slice(0, ROLEFIT_PROVIDER_GUIDANCE_MAX_LENGTH)
-  };
 }
 
 function copyTerminalSignInResult(
@@ -465,8 +430,6 @@ export function installCompanionIpc(options: CompanionIpcOptions): () => void {
     RoleFitDesktopIpcChannel.SaveApiProvider,
     RoleFitDesktopIpcChannel.RemoveProvider,
     RoleFitDesktopIpcChannel.SetCliProviderEnabled,
-    RoleFitDesktopIpcChannel.BeginCliSignIn,
-    RoleFitDesktopIpcChannel.CancelCliSignIn,
     RoleFitDesktopIpcChannel.OpenCliSignInTerminal,
     RoleFitDesktopIpcChannel.OpenProviderInstallGuide,
     RoleFitDesktopIpcChannel.OpenBrowserApp,
@@ -592,24 +555,6 @@ export function installCompanionIpc(options: CompanionIpcOptions): () => void {
           await options.setCliProviderEnabled(args[0], args[1]),
           args[0]
         );
-      }
-    );
-    options.ipc.handle(
-      RoleFitDesktopIpcChannel.BeginCliSignIn,
-      async (event: IpcMainInvokeEvent, ...args: RoleFitBeginCliSignInRequest) => {
-        requireTrustedRequest(event, options);
-        if (args.length !== 1 || !isRoleFitCliProviderId(args[0])) {
-          throw new Error("Invalid CLI provider id.");
-        }
-        return copySignInResult(await options.beginCliSignIn(args[0]));
-      }
-    );
-    options.ipc.handle(
-      RoleFitDesktopIpcChannel.CancelCliSignIn,
-      async (event: IpcMainInvokeEvent, ...args: RoleFitCancelCliSignInRequest) => {
-        requireTrustedRequest(event, options);
-        if (args.length !== 1) throw new Error("Cancel CLI sign-in requires one operation id.");
-        return options.cancelCliSignIn(requireOperationId(args[0]));
       }
     );
     options.ipc.handle(

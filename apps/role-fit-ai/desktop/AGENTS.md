@@ -80,9 +80,10 @@ Applies to `apps/role-fit-ai/desktop/` and `tsconfig.desktop.json`.
   companion window is hidden or closed. Snapshot refreshes and mutations are
   serialized so an older probe cannot overwrite a newer vault change; renderer
   polling must not be the sole owner of browser-visible readiness.
-- CLI provider adapters own fixed installation/status/sign-in commands, the
-  fixed external-terminal fallback, a sanitized child environment, bounded
-  process output/lifetime, and shape-only status parsing. The local server
+- CLI provider adapters own fixed installation/status commands, official
+  install/sign-in-guide links, the fixed external-terminal sign-in, a sanitized
+  child environment, bounded process output/lifetime, and shape-only status
+  parsing. The local server
   still owns AI execution; Electron must not fork prompts, model options,
   sanitizers, cancellation rules, or provider response handling.
 
@@ -132,10 +133,11 @@ Applies to `apps/role-fit-ai/desktop/` and `tsconfig.desktop.json`.
   downgrade to plaintext.
 - Expose no generic command, shell, filesystem, workspace, tracker, environment,
   raw stdout/stderr, or raw IPC capability. Accept only known provider IDs and
-  fixed main-owned save/remove/status/sign-in/install-guidance actions. Official
-  installation URLs are allowlisted and main-owned; never accept an external
-  URL from the renderer, run package managers or elevated commands, or accept
-  renderer-supplied shell text.
+  fixed main-owned save/remove/status/external-terminal-sign-in/
+  install-and-sign-in-guide actions. Official install/sign-in-guide URLs are
+  allowlisted and main-owned; never accept an external URL from the renderer,
+  run package managers or elevated commands, or accept renderer-supplied shell
+  text.
 - Keep external-terminal sign-in equally closed: the renderer supplies only a
   known CLI provider id, Electron main maps it to one fixed command/argv pair,
   and platform launchers receive no renderer-authored executable, command,
@@ -146,12 +148,12 @@ Applies to `apps/role-fit-ai/desktop/` and `tsconfig.desktop.json`.
 - Keep CLI process output shape-only: never return
   executable paths, account identifiers, raw auth output, broad environment
   data, workspace fingerprints, or provider tokens.
-- Bound status/sign-in startup, runtime, and output; discard process output after
-  parsing; keep sign-in single-flight per provider; redact failures; and
-  terminate only owned children. Strip native API/token/service-account
-  credentials plus Electron/Node injection variables from every CLI child
-  environment while retaining only required executable/config discovery state.
-  Live sign-in tests are explicit and opt-in.
+- Bound status-probe and external-terminal sign-in startup, runtime, and output;
+  discard process output after parsing; redact failures; and terminate only
+  owned children. Strip native API/token/service-account credentials plus
+  Electron/Node injection variables from every CLI child environment while
+  retaining only required executable/config discovery state. Live sign-in tests
+  are explicit and opt-in.
 - Keep browser and extension behavior separate from companion IPC. Extension
   claim tokens remain browser inbox-routing values. A valid unapproved
   extension origin may enqueue only a bounded short-lived access request; the
@@ -160,7 +162,8 @@ Applies to `apps/role-fit-ai/desktop/` and `tsconfig.desktop.json`.
   configuration or import routes.
 - Treat companion process tests as explicit integration tests. They use isolated
   ports/state and fake CLI binaries and prove exact-sender rejection, bounded
-  status/sign-in behavior, and clean shutdown with no orphan listener or child.
+  status-probe and external-terminal sign-in behavior, and clean shutdown with
+  no orphan listener or child.
 - Keep package resources read-only and all mutable workspace, vault, and
   settings data under operating-system `userData`. Never package `.env`, a
   personal workspace/vault, tests, source maps, unrelated workspace apps, or a
@@ -207,7 +210,7 @@ npm run test:desktop:package-layout --workspace apps/role-fit-ai
 npm run package:rolefit:desktop
 npm run test:rolefit:desktop:packaged
 npm run make:rolefit:desktop
-npm run test:desktop:windows-installer --workspace apps/role-fit-ai -- --installer=.forge/release/RoleFit-AI-0.1.1-windows-x64.exe
+npm run test:desktop:windows-installer --workspace apps/role-fit-ai -- --installer=.forge/release/RoleFit-AI-0.2.0-windows-x64.exe
 npm run test:rolefit:release
 ```
 

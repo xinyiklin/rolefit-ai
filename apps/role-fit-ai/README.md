@@ -93,9 +93,9 @@ setup window, and opens the selected local site in the system browser. The
 default is `http://localhost:5181`; **Local site port** accepts an available
 integer from 1 through 65535 and applies it through a clean companion restart.
 `ROLEFIT_DESKTOP_PORT` is a locked per-launch override. Its typed
-preload exposes fixed write-only API-key setup, provider removal/status, CLI
-sign-in, installation-guidance, and browser-open methods for the closed
-five-provider catalog. The companion never renders the Drafting Desk,
+preload exposes fixed write-only API-key setup, provider removal/status,
+external-terminal sign-in, install/sign-in-guide, and browser-open methods for
+the closed five-provider catalog. The companion never renders the Drafting Desk,
 duplicates product APIs, or receives resume/job payloads over Electron IPC. Its
 local server owns workspace and tracker files. Changing the port also changes
 the browser origin, so browser-local draft and preference storage is separate
@@ -159,17 +159,20 @@ ANTHROPIC_API_KEY=...
 ```
 
 To avoid configuring a separate metered API key, add an account-backed CLI
-provider in the companion. **Sign in** starts a fixed provider-owned flow and
-**Use terminal** launches the same fixed command in an external terminal when
-interactive input is required;
-RoleFit never asks for a vendor username, password, MFA value, OAuth code, or
-recovery token. Claude Code and Codex normally open their own browser login.
-Antigravity 1.1.x requires its interactive `agy` terminal flow and exposes no
-non-interactive auth-status command. When the user adds an installed `agy`, the
-companion therefore shows **Ready to verify** with `authState` still `unknown`,
-not a false signed-in claim. The first actual Antigravity provider request
-verifies the provider-owned session and reports actionable sign-in guidance if
-that request fails authentication:
+provider in the companion. Once added, each CLI row offers **Sign-in guide**,
+which opens that provider's official installation and sign-in documentation in
+your browser, and **Terminal ↗**, which launches the provider's own login
+command in an external terminal. RoleFit runs no in-app login form and never
+asks for a vendor username, password, MFA value, OAuth code, or recovery token;
+signing in happens entirely through the provider's own CLI. Claude Code and
+Codex expose a machine-readable auth status, so the companion can show
+**Sign-in required** or **Ready** for them. Antigravity 1.1.x exposes no
+non-interactive auth-status command, so an installed `agy` shows **Ready to
+verify** with `authState` still `unknown`, not a false signed-in claim. The
+first actual Antigravity provider request verifies the provider-owned session
+and reports actionable guidance if that request fails authentication.
+
+The CLIs sign in with their own commands — the same ones **Terminal ↗** runs:
 
 ```bash
 # requires a current Claude Code installation and an account with CLI access

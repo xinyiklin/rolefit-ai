@@ -42,8 +42,6 @@ export const enum RoleFitDesktopIpcChannel {
   SaveApiProvider = "rolefit:companion:save-api-provider",
   RemoveProvider = "rolefit:companion:remove-provider",
   SetCliProviderEnabled = "rolefit:companion:set-cli-provider-enabled",
-  BeginCliSignIn = "rolefit:companion:begin-cli-sign-in",
-  CancelCliSignIn = "rolefit:companion:cancel-cli-sign-in",
   OpenCliSignInTerminal = "rolefit:companion:open-cli-sign-in-terminal",
   OpenProviderInstallGuide = "rolefit:companion:open-provider-install-guide",
   OpenBrowserApp = "rolefit:companion:open-browser-app",
@@ -131,7 +129,6 @@ export type RoleFitCliProviderStatus = Readonly<{
   installed: boolean;
   authState: RoleFitCliAuthState;
   signInFlow: "managed" | "manual";
-  signInRunning: boolean;
   guidance: string;
 }>;
 
@@ -147,13 +144,6 @@ export type RoleFitProviderConnection = Readonly<{
   installed: boolean | null;
   authState: RoleFitProviderAuthState;
   setupFlow: RoleFitProviderSetupFlow;
-  signInRunning: boolean;
-  guidance: string;
-}>;
-
-export type RoleFitCliSignInResult = Readonly<{
-  status: "started" | "manual" | "already-running";
-  operationId: string | null;
   guidance: string;
 }>;
 
@@ -234,8 +224,6 @@ export type RoleFitProviderConnectionsRequest = readonly [];
 export type RoleFitSaveApiProviderRequest = readonly [RoleFitApiProviderId, string];
 export type RoleFitRemoveProviderRequest = readonly [RoleFitProviderId];
 export type RoleFitSetCliProviderEnabledRequest = readonly [RoleFitCliProviderId, boolean];
-export type RoleFitBeginCliSignInRequest = readonly [RoleFitCliProviderId];
-export type RoleFitCancelCliSignInRequest = readonly [string];
 export type RoleFitOpenCliSignInTerminalRequest = readonly [RoleFitCliProviderId];
 export type RoleFitOpenProviderInstallGuideRequest = readonly [RoleFitCliProviderId];
 export type RoleFitOpenBrowserAppRequest = readonly [];
@@ -262,8 +250,6 @@ export type RoleFitDesktopApi = Readonly<{
     provider: RoleFitCliProviderId,
     enabled: boolean
   ): Promise<RoleFitProviderConnection>;
-  beginCliSignIn(provider: RoleFitCliProviderId): Promise<RoleFitCliSignInResult>;
-  cancelCliSignIn(operationId: string): Promise<boolean>;
   openCliSignInTerminal(
     provider: RoleFitCliProviderId
   ): Promise<RoleFitCliTerminalSignInResult>;

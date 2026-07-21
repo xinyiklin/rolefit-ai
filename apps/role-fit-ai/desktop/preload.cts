@@ -2,7 +2,6 @@ import type {
   RoleFitApiProviderId,
   RoleFitCliProviderId,
   RoleFitConnectionStatus,
-  RoleFitCliSignInResult,
   RoleFitCliTerminalSignInResult,
   RoleFitDesktopApi,
   RoleFitDesktopRuntimeInfo,
@@ -69,16 +68,6 @@ const desktopApi: RoleFitDesktopApi = Object.freeze({
       provider,
       enabled
     ) as Promise<RoleFitProviderConnection>,
-  beginCliSignIn: (provider: RoleFitCliProviderId) =>
-    ipcRenderer.invoke(
-      RoleFitDesktopIpcChannel.BeginCliSignIn,
-      provider
-    ) as Promise<RoleFitCliSignInResult>,
-  cancelCliSignIn: (operationId: string) =>
-    ipcRenderer.invoke(
-      RoleFitDesktopIpcChannel.CancelCliSignIn,
-      operationId
-    ) as Promise<boolean>,
   openCliSignInTerminal: (provider: RoleFitCliProviderId) =>
     ipcRenderer.invoke(
       RoleFitDesktopIpcChannel.OpenCliSignInTerminal,

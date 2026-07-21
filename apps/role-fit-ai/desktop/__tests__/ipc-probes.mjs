@@ -41,8 +41,6 @@ const channels = Object.freeze({
   saveApi: "rolefit:companion:save-api-provider",
   remove: "rolefit:companion:remove-provider",
   configureCli: "rolefit:companion:set-cli-provider-enabled",
-  begin: "rolefit:companion:begin-cli-sign-in",
-  cancel: "rolefit:companion:cancel-cli-sign-in",
   terminal: "rolefit:companion:open-cli-sign-in-terminal",
   installGuide: "rolefit:companion:open-provider-install-guide",
   open: "rolefit:companion:open-browser-app",
@@ -83,7 +81,6 @@ const providerConnections = Object.freeze([
     installed: true,
     authState: "signed-out",
     setupFlow: "managed-login",
-    signInRunning: false,
     guidance: longGuidance
   }),
   Object.freeze({
@@ -94,7 +91,6 @@ const providerConnections = Object.freeze([
     installed: true,
     authState: "signed-in",
     setupFlow: "managed-login",
-    signInRunning: false,
     guidance: "Ready to use."
   }),
   Object.freeze({
@@ -105,7 +101,6 @@ const providerConnections = Object.freeze([
     installed: false,
     authState: "unknown",
     setupFlow: "manual-login",
-    signInRunning: false,
     guidance: "Install Antigravity before enabling it."
   }),
   Object.freeze({
@@ -116,7 +111,6 @@ const providerConnections = Object.freeze([
     installed: null,
     authState: "not-applicable",
     setupFlow: "api-key",
-    signInRunning: false,
     guidance: "Stored securely on this device.",
     apiKey: "must-not-cross-ipc"
   }),
@@ -128,7 +122,6 @@ const providerConnections = Object.freeze([
     installed: null,
     authState: "not-applicable",
     setupFlow: "api-key",
-    signInRunning: false,
     guidance: "Add an Anthropic API key."
   })
 ]);
@@ -245,8 +238,6 @@ let savedApiProvider = null;
 let savedApiKey = null;
 let removedProvider = null;
 let configuredCli = null;
-let beganProvider = null;
-let canceledOperation = null;
 let openedTerminalProvider = null;
 let openedInstallGuide = null;
 let browserOpenCount = 0;
@@ -343,18 +334,6 @@ const options = {
     configuredCli = { provider, enabled };
     return connectionFor(provider, { configured: enabled });
   },
-  beginCliSignIn: async (provider) => {
-    beganProvider = provider;
-    return {
-      status: "started",
-      operationId: "signin-operation-1",
-      guidance: "Complete the official provider flow."
-    };
-  },
-  cancelCliSignIn: async (operationId) => {
-    canceledOperation = operationId;
-    return true;
-  },
   openCliSignInTerminal: async (provider) => {
     openedTerminalProvider = provider;
     if (terminalShouldLeak) throw new Error("private terminal launcher diagnostic");
@@ -426,8 +405,7 @@ assert.deepEqual(
     "installed",
     "kind",
     "ready",
-    "setupFlow",
-    "signInRunning"
+    "setupFlow"
   ]
 );
 assert.doesNotMatch(JSON.stringify(handledConnections), /must-not-cross-ipc/);
@@ -458,20 +436,6 @@ assert.equal(
   "claude-cli"
 );
 assert.deepEqual(configuredCli, { provider: "claude-cli", enabled: true });
-assert.deepEqual(
-  await installedHandlers.get(channels.begin)(requestEvent(), "claude-cli"),
-  {
-    status: "started",
-    operationId: "signin-operation-1",
-    guidance: "Complete the official provider flow."
-  }
-);
-assert.equal(beganProvider, "claude-cli");
-assert.equal(
-  await installedHandlers.get(channels.cancel)(requestEvent(), "signin-operation-1"),
-  true
-);
-assert.equal(canceledOperation, "signin-operation-1");
 const terminalResult = await installedHandlers.get(channels.terminal)(
   requestEvent(),
   "antigravity-cli"
@@ -743,14 +707,6 @@ await assert.rejects(
   /Invalid CLI-provider/
 );
 await assert.rejects(
-  installedHandlers.get(channels.begin)(requestEvent(), "shell"),
-  /Invalid CLI provider/
-);
-await assert.rejects(
-  installedHandlers.get(channels.cancel)(requestEvent(), "short"),
-  /Invalid CLI sign-in operation/
-);
-await assert.rejects(
   installedHandlers.get(channels.terminal)(requestEvent(), "openai"),
   /Invalid CLI provider/
 );
@@ -945,8 +901,6 @@ assert.match(preloadSource, /RoleFitDesktopIpcChannel\.GetProviderConnections/);
 assert.match(preloadSource, /RoleFitDesktopIpcChannel\.SaveApiProvider/);
 assert.match(preloadSource, /RoleFitDesktopIpcChannel\.RemoveProvider/);
 assert.match(preloadSource, /RoleFitDesktopIpcChannel\.SetCliProviderEnabled/);
-assert.match(preloadSource, /RoleFitDesktopIpcChannel\.BeginCliSignIn/);
-assert.match(preloadSource, /RoleFitDesktopIpcChannel\.CancelCliSignIn/);
 assert.match(preloadSource, /RoleFitDesktopIpcChannel\.OpenCliSignInTerminal/);
 assert.match(preloadSource, /RoleFitDesktopIpcChannel\.OpenProviderInstallGuide/);
 assert.match(preloadSource, /RoleFitDesktopIpcChannel\.OpenBrowserApp/);
@@ -956,16 +910,15 @@ assert.match(preloadSource, /RoleFitDesktopIpcChannel\.RestoreWorkspaceFromFile/
 assert.match(preloadSource, /RoleFitDesktopIpcChannel\.OpenWorkspaceFolder/);
 assert.match(preloadSource, /RoleFitDesktopIpcChannel\.GetConnectionStatus/);
 for (const channel of Object.values(channels)) assert.doesNotMatch(preloadSource, new RegExp(channel));
-assert.match(companionRendererSource, /PROVIDER_SIGN_IN_POLL_INTERVAL_MS = 1_500/);
 assert.match(companionRendererSource, /PROVIDER_VISIBLE_POLL_INTERVAL_MS = 5_000/);
 assert.match(
   companionRendererSource,
-  /document\.visibilityState === "hidden"[\s\S]*PROVIDER_SIGN_IN_POLL_INTERVAL_MS[\s\S]*PROVIDER_VISIBLE_POLL_INTERVAL_MS/,
-  "the visible companion owns one bounded fast/idle provider refresh timer"
+  /function schedulePoll\(\)[\s\S]*document\.visibilityState === "hidden"[\s\S]*PROVIDER_VISIBLE_POLL_INTERVAL_MS/,
+  "the visible companion owns one bounded provider refresh timer at the normal cadence"
 );
 assert.match(
   companionRendererSource,
-  /async function refreshProviders[\s\S]*window\.clearTimeout\(pollTimer\)[\s\S]*finally[\s\S]*schedulePoll\(signInRunning\)/,
+  /async function refreshProviders[\s\S]*window\.clearTimeout\(pollTimer\)[\s\S]*finally[\s\S]*schedulePoll\(\)/,
   "each provider refresh clears its predecessor and schedules one successor only after settling"
 );
 const renderProvidersSource = companionRendererSource.slice(
@@ -1052,14 +1005,6 @@ vm.runInNewContext(preload, {
               channel === channels.configureCli) {
             return Promise.resolve(providerConnections[0]);
           }
-          if (channel === channels.begin) {
-            return Promise.resolve({
-              status: "started",
-              operationId: "signin-operation-1",
-              guidance: "Continue."
-            });
-          }
-          if (channel === channels.cancel) return Promise.resolve(true);
           if (channel === channels.workspaceOverview) {
             return Promise.resolve({
               workspacePath: "/private/rolefit/workspaces/job-search-workspace",
@@ -1091,8 +1036,6 @@ assert.deepEqual(
   [
     "applyLocalSitePort",
     "backupWorkspaceToFile",
-    "beginCliSignIn",
-    "cancelCliSignIn",
     "getConnectionStatus",
     "getExtensionPairingSettings",
     "getLocalSiteSettings",
@@ -1125,8 +1068,6 @@ await exposedApi.getProviderConnections();
 await exposedApi.saveApiProvider("openai", "sk-private");
 await exposedApi.removeProvider("anthropic");
 await exposedApi.setCliProviderEnabled("codex-cli", true);
-await exposedApi.beginCliSignIn("claude-cli");
-await exposedApi.cancelCliSignIn("signin-operation-1");
 await exposedApi.openCliSignInTerminal("codex-cli");
 await exposedApi.openProviderInstallGuide("antigravity-cli");
 await exposedApi.openBrowserApp();
@@ -1146,8 +1087,6 @@ assert.deepEqual(invocations, [
   { channel: channels.saveApi, args: ["openai", "sk-private"] },
   { channel: channels.remove, args: ["anthropic"] },
   { channel: channels.configureCli, args: ["codex-cli", true] },
-  { channel: channels.begin, args: ["claude-cli"] },
-  { channel: channels.cancel, args: ["signin-operation-1"] },
   { channel: channels.terminal, args: ["codex-cli"] },
   { channel: channels.installGuide, args: ["antigravity-cli"] },
   { channel: channels.open, args: [] },

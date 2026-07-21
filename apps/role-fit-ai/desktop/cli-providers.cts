@@ -1,20 +1,15 @@
 import { spawn, spawnSync } from "node:child_process";
-import { randomUUID } from "node:crypto";
 import { isAbsolute, posix, win32 } from "node:path";
 import type { ChildProcess } from "node:child_process";
 import type {
   RoleFitCliAuthState,
   RoleFitCliProviderId,
   RoleFitCliProviderStatus,
-  RoleFitCliSignInResult,
   RoleFitCliTerminalSignInResult
 } from "./ipc-contract.cjs";
 
 const PROBE_TIMEOUT_MS = 5_000;
 const PROBE_OUTPUT_LIMIT_BYTES = 16 * 1_024;
-const SIGN_IN_TERMINATE_GRACE_MS = 2_000;
-const SIGN_IN_SHUTDOWN_LIMIT_MS = 3_000;
-const SIGN_IN_MAX_DURATION_MS = 10 * 60_000;
 const TERMINAL_LAUNCH_TIMEOUT_MS = 15_000;
 const PROBE_TERMINATE_GRACE_MS = 2_000;
 
@@ -131,19 +126,6 @@ export type CliProbeResult = Readonly<{
 
 export type CliProbeRunner = (request: CliProbeRequest) => Promise<CliProbeResult>;
 
-export type CliSignInRequest = Readonly<{
-  command: ProviderSpec["command"];
-  args: readonly string[];
-  environment: Readonly<NodeJS.ProcessEnv>;
-}>;
-
-export type CliSignInProcess = Pick<
-  ChildProcess,
-  "kill" | "once" | "off"
->;
-
-export type CliSignInSpawner = (request: CliSignInRequest) => CliSignInProcess;
-
 export type CliTerminalSignInRequest = Readonly<{
   providerId: RoleFitCliProviderId;
   command: ProviderSpec["command"];
@@ -157,39 +139,20 @@ export type CliTerminalLauncher = (
 
 export type CliProviderManagerDependencies = Readonly<{
   runProbe?: CliProbeRunner;
-  spawnSignIn?: CliSignInSpawner;
   launchTerminal?: CliTerminalLauncher;
   processPlatform?: NodeJS.Platform;
   terminalPlatform?: NodeJS.Platform;
   processEnvironment?: NodeJS.ProcessEnv;
   additionalSearchPaths?: readonly string[];
-  createOperationId?: () => string;
-  signInMaxDurationMs?: number;
-  signInTerminateGraceMs?: number;
 }>;
 
 export type CliProviderManager = Readonly<{
   getStatuses(): Promise<readonly RoleFitCliProviderStatus[]>;
-  beginSignIn(id: RoleFitCliProviderId): Promise<RoleFitCliSignInResult>;
   openSignInInTerminal(
     id: RoleFitCliProviderId
   ): Promise<RoleFitCliTerminalSignInResult>;
-  cancelSignIn(operationId: string): Promise<boolean>;
   shutdown(): Promise<void>;
 }>;
-
-type ActiveSignIn = {
-  operationId: string;
-  providerId: RoleFitCliProviderId;
-  child: CliSignInProcess;
-  lifetimeTimer: NodeJS.Timeout | null;
-  forceTimer: NodeJS.Timeout | null;
-  settled: boolean;
-  closed: Promise<void>;
-  resolveClosed(): void;
-  onExit: () => void;
-  onError: () => void;
-};
 
 export function buildCliProcessEnvironment(
   source: NodeJS.ProcessEnv,
@@ -483,33 +446,6 @@ function runProbeWithSpawn(
   });
 }
 
-function spawnManagedSignIn(
-  platform: NodeJS.Platform,
-  request: CliSignInRequest
-): CliSignInProcess {
-  const launch = resolveCliProcessLaunch(
-    platform,
-    request.command,
-    request.args,
-    request.environment
-  );
-  const child = spawn(launch.executable, [...launch.args], {
-    stdio: "ignore",
-    windowsHide: true,
-    env: request.environment
-  });
-  return {
-    kill: (signal = "SIGTERM") => terminateOwnedCliProcess(
-      child,
-      platform,
-      request.environment,
-      typeof signal === "string" ? signal : "SIGTERM"
-    ),
-    once: child.once.bind(child) as CliSignInProcess["once"],
-    off: child.off.bind(child) as CliSignInProcess["off"]
-  };
-}
-
 type TerminalProcessRequest = Readonly<{
   executable: string;
   args: readonly string[];
@@ -732,33 +668,15 @@ function authStateFor(id: RoleFitCliProviderId, probe: CliProbeResult): RoleFitC
 function guidanceFor(
   spec: ProviderSpec,
   installed: boolean,
-  authState: RoleFitCliAuthState,
-  signInRunning: boolean
+  authState: RoleFitCliAuthState
 ): string {
   if (!installed) return `Install ${spec.label} to connect this provider.`;
   if (spec.id === "antigravity-cli") {
     return "Antigravity is installed. Its CLI does not expose a non-interactive sign-in check, so RoleFit verifies the session when first used.";
   }
-  if (signInRunning) return `${spec.label} sign-in is open. Finish it in your browser.`;
   if (authState === "signed-in") return `${spec.label} is connected through its local CLI session.`;
   if (authState === "signed-out") return `Sign in to ${spec.label} to use this provider.`;
   return `${spec.label} is installed, but RoleFit could not confirm its sign-in status.`;
-}
-
-function signInResult(
-  status: RoleFitCliSignInResult["status"],
-  operationId: string | null,
-  guidance: string
-): RoleFitCliSignInResult {
-  return Object.freeze({ status, operationId, guidance });
-}
-
-function safeOperationId(createId: () => string): string {
-  const value = createId().trim();
-  if (!/^[A-Za-z0-9_-]{1,100}$/.test(value)) {
-    throw new Error("Could not start CLI sign-in.");
-  }
-  return value;
 }
 
 export function createCliProviderManager(
@@ -774,114 +692,12 @@ export function createCliProviderManager(
   );
   const runProbe = dependencies.runProbe ?? ((request) =>
     runProbeWithSpawn(processPlatform, request));
-  const spawnSignIn = dependencies.spawnSignIn ?? ((request) =>
-    spawnManagedSignIn(processPlatform, request));
   const launchTerminal = dependencies.launchTerminal ?? ((request) =>
     launchInSystemTerminal(dependencies.terminalPlatform ?? processPlatform, request));
-  const createOperationId = dependencies.createOperationId ?? randomUUID;
-  const signInMaxDurationMs = dependencies.signInMaxDurationMs ?? SIGN_IN_MAX_DURATION_MS;
-  const signInTerminateGraceMs = dependencies.signInTerminateGraceMs ?? SIGN_IN_TERMINATE_GRACE_MS;
-  if (!Number.isInteger(signInMaxDurationMs) || signInMaxDurationMs < 1 || signInMaxDurationMs > SIGN_IN_MAX_DURATION_MS) {
-    throw new Error("CLI sign-in maximum duration must be between 1ms and 10 minutes.");
-  }
-  if (!Number.isInteger(signInTerminateGraceMs) || signInTerminateGraceMs < 1 || signInTerminateGraceMs > SIGN_IN_TERMINATE_GRACE_MS) {
-    throw new Error("CLI sign-in termination grace must be between 1ms and 2 seconds.");
-  }
-  let activeSignIn: ActiveSignIn | null = null;
   let shutDown = false;
 
   const requireActiveManager = (): void => {
     if (shutDown) throw new Error("CLI provider manager is shut down.");
-  };
-
-  const finishSignIn = (operation: ActiveSignIn): void => {
-    if (operation.settled) return;
-    operation.settled = true;
-    if (operation.lifetimeTimer) clearTimeout(operation.lifetimeTimer);
-    operation.lifetimeTimer = null;
-    if (operation.forceTimer) clearTimeout(operation.forceTimer);
-    operation.forceTimer = null;
-    operation.child.off("exit", operation.onExit);
-    operation.child.off("error", operation.onError);
-    if (activeSignIn === operation) activeSignIn = null;
-    operation.resolveClosed();
-  };
-
-  const requestSignInTermination = (operation: ActiveSignIn): void => {
-    if (operation.settled || operation.forceTimer) return;
-    operation.child.kill("SIGTERM");
-    operation.forceTimer = setTimeout(() => {
-      if (activeSignIn === operation && !operation.settled) {
-        operation.child.kill("SIGKILL");
-      }
-    }, signInTerminateGraceMs);
-    operation.forceTimer.unref?.();
-  };
-
-  const beginSignIn = async (id: RoleFitCliProviderId): Promise<RoleFitCliSignInResult> => {
-    requireActiveManager();
-    const spec = PROVIDER_SPEC_BY_ID.get(id);
-    if (!spec) throw new Error("Unsupported CLI provider.");
-
-    if (!spec.signInArgs) {
-      return signInResult(
-        "manual",
-        null,
-        "Open a terminal and run `agy` to complete or confirm Google sign-in."
-      );
-    }
-
-    if (activeSignIn) {
-      return signInResult(
-        "already-running",
-        activeSignIn.operationId,
-        "A CLI sign-in is already running. Finish or cancel it before starting another."
-      );
-    }
-
-    const operationId = safeOperationId(createOperationId);
-    let child: CliSignInProcess;
-    try {
-      child = spawnSignIn(Object.freeze({
-        command: spec.command,
-        args: spec.signInArgs,
-        environment: childEnvironment
-      }));
-    } catch {
-      throw new Error("Could not start CLI sign-in.");
-    }
-
-    let resolveClosed = (): void => {};
-    const closed = new Promise<void>((resolve) => {
-      resolveClosed = resolve;
-    });
-    const operation: ActiveSignIn = {
-      operationId,
-      providerId: id,
-      child,
-      lifetimeTimer: null,
-      forceTimer: null,
-      settled: false,
-      closed,
-      resolveClosed,
-      onExit: () => {},
-      onError: () => {}
-    };
-    operation.onExit = () => finishSignIn(operation);
-    operation.onError = () => finishSignIn(operation);
-    activeSignIn = operation;
-    child.once("exit", operation.onExit);
-    child.once("error", operation.onError);
-    operation.lifetimeTimer = setTimeout(() => {
-      requestSignInTermination(operation);
-    }, signInMaxDurationMs);
-    operation.lifetimeTimer.unref?.();
-
-    return signInResult(
-      "started",
-      operationId,
-      `${spec.label} sign-in opened. Finish it in your browser.`
-    );
   };
 
   const openSignInInTerminal = async (
@@ -908,13 +724,6 @@ export function createCliProviderManager(
     });
   };
 
-  const cancelSignIn = async (operationId: string): Promise<boolean> => {
-    const operation = activeSignIn;
-    if (!operation || operation.operationId !== operationId) return false;
-    requestSignInTermination(operation);
-    return true;
-  };
-
   const getStatuses = async (): Promise<readonly RoleFitCliProviderStatus[]> => {
     requireActiveManager();
     const statuses = await Promise.all(PROVIDER_SPECS.map(async (spec) => {
@@ -932,44 +741,25 @@ export function createCliProviderManager(
           await safeProbe(runProbe, spec, spec.statusArgs, childEnvironment)
         );
       }
-      const signInRunning = activeSignIn?.providerId === spec.id;
       return Object.freeze({
         id: spec.id,
         label: spec.label,
         installed,
         authState,
         signInFlow: spec.signInArgs ? "managed" as const : "manual" as const,
-        signInRunning,
-        guidance: guidanceFor(spec, installed, authState, signInRunning)
+        guidance: guidanceFor(spec, installed, authState)
       });
     }));
     return Object.freeze(statuses);
   };
 
   const shutdown = async (): Promise<void> => {
-    if (shutDown) return;
     shutDown = true;
-    const operation = activeSignIn;
-    if (!operation) return;
-    await cancelSignIn(operation.operationId);
-    await Promise.race([
-      operation.closed,
-      new Promise<void>((resolve) => {
-        const timer = setTimeout(resolve, SIGN_IN_SHUTDOWN_LIMIT_MS);
-        timer.unref?.();
-      })
-    ]);
-    if (activeSignIn === operation && !operation.settled) {
-      operation.child.kill("SIGKILL");
-      finishSignIn(operation);
-    }
   };
 
   return Object.freeze({
     getStatuses,
-    beginSignIn,
     openSignInInTerminal,
-    cancelSignIn,
     shutdown
   });
 }

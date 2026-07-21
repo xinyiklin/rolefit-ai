@@ -14,15 +14,6 @@ function completed(stdout = "", stderr = "", exitCode = 0) {
   return { kind: "completed", exitCode, stdout, stderr };
 }
 
-class FakeSignInProcess extends EventEmitter {
-  kills = [];
-
-  kill(signal = "SIGTERM") {
-    this.kills.push(signal);
-    return true;
-  }
-}
-
 class FakeProbeProcess extends EventEmitter {
   kills = [];
   pid = 4321;
@@ -193,19 +184,12 @@ const probeResponses = new Map([
   ["codex login status", completed("", "warning\nLogged in using ChatGPT\n")],
   ["agy --version", completed("1.1.4\n")]
 ]);
-const spawned = [];
 const terminalLaunches = [];
-let nextOperation = 1;
 const manager = createCliProviderManager({
   runProbe: async (request) => {
     probeRequests.push(request);
     return probeResponses.get(`${request.command} ${request.args.join(" ")}`) ??
       { kind: "failed", exitCode: null, stdout: "", stderr: "" };
-  },
-  spawnSignIn: (request) => {
-    const child = new FakeSignInProcess();
-    spawned.push({ request, child });
-    return child;
   },
   launchTerminal: async (request) => {
     terminalLaunches.push(request);
@@ -230,8 +214,7 @@ const manager = createCliProviderManager({
     AWS_SECRET_ACCESS_KEY: "must-not-cross",
     GITHUB_TOKEN: "must-not-cross",
     DATABASE_URL: "must-not-cross"
-  },
-  createOperationId: () => `operation-${nextOperation++}`
+  }
 });
 
 const initial = await manager.getStatuses();
@@ -242,7 +225,6 @@ assert.deepEqual(initial, [
     installed: true,
     authState: "signed-out",
     signInFlow: "managed",
-    signInRunning: false,
     guidance: "Sign in to Claude Code to use this provider."
   },
   {
@@ -251,7 +233,6 @@ assert.deepEqual(initial, [
     installed: true,
     authState: "signed-in",
     signInFlow: "managed",
-    signInRunning: false,
     guidance: "Codex CLI is connected through its local CLI session."
   },
   {
@@ -260,7 +241,6 @@ assert.deepEqual(initial, [
     installed: true,
     authState: "unknown",
     signInFlow: "manual",
-    signInRunning: false,
     guidance: "Antigravity is installed. Its CLI does not expose a non-interactive sign-in check, so RoleFit verifies the session when first used."
   }
 ]);
@@ -294,59 +274,6 @@ for (const request of probeRequests) {
   assert.equal(Object.isFrozen(request.environment), true);
   assert.doesNotMatch(JSON.stringify(request.environment), /must-not-cross|unexpected-module/);
 }
-
-const claudeLogin = await manager.beginSignIn("claude-cli");
-assert.deepEqual(claudeLogin, {
-  status: "started",
-  operationId: "operation-1",
-  guidance: "Claude Code sign-in opened. Finish it in your browser."
-});
-assert.deepEqual(spawned[0].request, {
-  command: "claude",
-  args: ["auth", "login", "--claudeai"],
-  environment: {
-    PATH: "/usr/local/bin:/usr/bin",
-    HOME: "/tmp/provider-home",
-    CODEX_HOME: "/tmp/codex-home",
-    CLAUDE_CONFIG_DIR: "/tmp/claude-home"
-  }
-});
-assert.equal(Object.isFrozen(spawned[0].request.environment), true);
-assert.doesNotMatch(JSON.stringify(spawned[0].request.environment), /must-not-cross|unexpected-module/);
-assert.equal((await manager.getStatuses())[0].signInRunning, true);
-
-const coalesced = await manager.beginSignIn("codex-cli");
-assert.equal(coalesced.status, "already-running");
-assert.equal(coalesced.operationId, claudeLogin.operationId);
-assert.equal(spawned.length, 1, "a second sign-in cannot spawn while the first is active");
-assert.equal(await manager.cancelSignIn("wrong-operation"), false);
-assert.equal(await manager.cancelSignIn(claudeLogin.operationId), true);
-assert.deepEqual(spawned[0].child.kills, ["SIGTERM"]);
-spawned[0].child.emit("exit", 0, null);
-assert.equal((await manager.getStatuses())[0].signInRunning, false);
-
-const codexLogin = await manager.beginSignIn("codex-cli");
-assert.equal(codexLogin.status, "started");
-assert.deepEqual(spawned[1].request, {
-  command: "codex",
-  args: ["login"],
-  environment: {
-    PATH: "/usr/local/bin:/usr/bin",
-    HOME: "/tmp/provider-home",
-    CODEX_HOME: "/tmp/codex-home",
-    CLAUDE_CONFIG_DIR: "/tmp/claude-home"
-  }
-});
-spawned[1].child.emit("error", new Error("synthetic private diagnostic"));
-assert.equal((await manager.getStatuses())[1].signInRunning, false, "process errors clean up the active operation");
-
-const antigravityLogin = await manager.beginSignIn("antigravity-cli");
-assert.deepEqual(antigravityLogin, {
-  status: "manual",
-  operationId: null,
-  guidance: "Open a terminal and run `agy` to complete or confirm Google sign-in."
-});
-assert.equal(spawned.length, 2, "Antigravity never launches an unsupported hidden auth flow");
 
 assert.deepEqual(await manager.openSignInInTerminal("claude-cli"), {
   status: "opened",
@@ -428,40 +355,8 @@ assert(missingStatuses.every((status) => status.installed === false));
 assert(missingStatuses.every((status) => status.authState === "unknown"));
 await missingManager.shutdown();
 
-const lifetimeChildren = [];
-const lifetimeManager = createCliProviderManager({
-  runProbe: async () => completed("synthetic"),
-  spawnSignIn: (request) => {
-    const child = new FakeSignInProcess();
-    lifetimeChildren.push({ request, child });
-    return child;
-  },
-  createOperationId: () => "bounded-operation",
-  signInMaxDurationMs: 5,
-  signInTerminateGraceMs: 5
-});
-await lifetimeManager.beginSignIn("codex-cli");
-// Wait on the observable kill sequence instead of assuming two nested timers
-// always complete inside one fixed 20 ms window on a busy test runner.
-for (let attempt = 0; attempt < 100 && lifetimeChildren[0].child.kills.length < 2; attempt += 1) {
-  await new Promise((resolve) => setTimeout(resolve, 5));
-}
-assert.deepEqual(
-  lifetimeChildren[0].child.kills,
-  ["SIGTERM", "SIGKILL"],
-  "a sign-in that exceeds its maximum lifetime is terminated and then force-killed"
-);
-lifetimeChildren[0].child.emit("exit", null, "SIGKILL");
-assert.equal((await lifetimeManager.getStatuses())[1].signInRunning, false);
-await lifetimeManager.shutdown();
-
-const shutdownLogin = await manager.beginSignIn("claude-cli");
-const shutdownPromise = manager.shutdown();
-assert.deepEqual(spawned[2].child.kills, ["SIGTERM"]);
-spawned[2].child.emit("exit", 0, null);
-await shutdownPromise;
 await manager.shutdown();
-assert.equal(await manager.cancelSignIn(shutdownLogin.operationId), false);
+await manager.shutdown();
 await assert.rejects(() => manager.getStatuses(), /shut down/);
 
 console.log("desktop CLI provider manager probes: passed");

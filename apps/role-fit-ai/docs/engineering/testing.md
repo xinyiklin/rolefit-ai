@@ -262,9 +262,8 @@ and does not own workspace/tracker files. Focused companion probes should cover:
   `authState` remains unknown; it is never labeled signed in, and the first
   actual provider request owns authentication verification and recovery errors;
 - fake-binary cases for absent, malformed, timed-out, and oversized status
-  output, plus fixed browser/terminal sign-in argv, sanitized child
-  environments, per-provider single-flight, bounded lifetime, redacted
-  failures, and clean child-process shutdown;
+  output, plus fixed external-terminal sign-in argv, the install/sign-in-guide
+  URL opening, sanitized child environments, and redacted failures;
 - the default/saved/environment local-site-port states, integer/range and
   occupied-port rejection, atomic settings persistence under isolated
   `userData`, environment locking, and `Apply & restart` using the normal clean

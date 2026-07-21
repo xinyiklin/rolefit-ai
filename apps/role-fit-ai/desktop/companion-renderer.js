@@ -34,7 +34,6 @@ const SUPPORTED_PROVIDERS = Object.freeze([
 ]);
 
 const PROVIDER_BY_ID = new Map(SUPPORTED_PROVIDERS.map((provider) => [provider.id, provider]));
-const PROVIDER_SIGN_IN_POLL_INTERVAL_MS = 1_500;
 const PROVIDER_VISIBLE_POLL_INTERVAL_MS = 5_000;
 const WORKSPACE_POLL_INTERVAL_MS = 5_000;
 const CONNECTION_POLL_INTERVAL_MS = 5_000;
@@ -51,8 +50,6 @@ const requiredBridgeMethods = Object.freeze([
   "saveApiProvider",
   "removeProvider",
   "setCliProviderEnabled",
-  "beginCliSignIn",
-  "cancelCliSignIn",
   "openCliSignInTerminal",
   "openProviderInstallGuide",
   "openBrowserApp",
@@ -108,7 +105,6 @@ const elements = Object.freeze({
 
 const pendingProviders = new Set();
 const replacingApiProviders = new Set();
-const signInOperationIds = new Map();
 let providerRecords = new Map();
 let refreshGeneration = 0;
 let pollTimer = 0;
@@ -165,6 +161,50 @@ function createButton(label, action, providerId, className = "provider-card__act
   button.disabled = pendingProviders.has(providerId);
   const provider = PROVIDER_BY_ID.get(providerId);
   button.setAttribute("aria-label", `${label} ${provider?.name ?? "provider"}`);
+  return button;
+}
+
+function createTerminalButton(providerId) {
+  const button = createButton("Terminal", "terminal-sign-in", providerId, "provider-card__text-action");
+  const arrow = createTextElement("span", "action-arrow", "↗");
+  arrow.setAttribute("aria-hidden", "true");
+  button.append(arrow);
+  return button;
+}
+
+// Remove lives outside the card, in the right-hand spacing, as a trash icon.
+function createRemoveButton(providerId) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "provider-remove";
+  button.dataset.providerAction = "remove";
+  button.dataset.providerId = providerId;
+  button.disabled = pendingProviders.has(providerId);
+  const provider = PROVIDER_BY_ID.get(providerId);
+  button.setAttribute("aria-label", `Remove ${provider?.name ?? "provider"}`);
+  button.title = "Remove";
+  const NS = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(NS, "svg");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("fill", "none");
+  svg.setAttribute("stroke", "currentColor");
+  svg.setAttribute("stroke-width", "1.6");
+  svg.setAttribute("stroke-linecap", "round");
+  svg.setAttribute("stroke-linejoin", "round");
+  svg.setAttribute("aria-hidden", "true");
+  svg.setAttribute("focusable", "false");
+  for (const d of [
+    "M5 7h14",
+    "M9 7V5.5A1.5 1.5 0 0 1 10.5 4h3A1.5 1.5 0 0 1 15 5.5V7",
+    "M7 7l0.9 12.1A1.5 1.5 0 0 0 9.4 20.5h5.2a1.5 1.5 0 0 0 1.5-1.4L17 7",
+    "M10 11v6",
+    "M14 11v6"
+  ]) {
+    const path = document.createElementNS(NS, "path");
+    path.setAttribute("d", d);
+    svg.append(path);
+  }
+  button.append(svg);
   return button;
 }
 
@@ -342,7 +382,6 @@ function connectionStatus(provider, record) {
     }
     return { key: "not-added", label: "Not added" };
   }
-  if (record.signInRunning) return { key: "signing-in", label: "Sign-in in progress" };
   if (record.ready) {
     return record.setupFlow === "manual-login" && record.authState === "unknown"
       ? { key: "connected", label: "Ready to verify" }
@@ -396,15 +435,9 @@ function apiKeyForm(provider, replacing) {
 function renderApiActions(provider, record, actions) {
   if (!record?.configured || replacingApiProviders.has(provider.id)) {
     actions.append(apiKeyForm(provider, replacingApiProviders.has(provider.id)));
-    if (record?.configured) {
-      actions.append(createButton("Remove", "remove", provider.id, "provider-card__text-action is-danger"));
-    }
     return;
   }
-  actions.append(
-    createButton("Replace key", "replace-key", provider.id),
-    createButton("Remove", "remove", provider.id, "provider-card__text-action is-danger")
-  );
+  actions.append(createButton("Replace key", "replace-key", provider.id));
 }
 
 function renderCliActions(provider, record, actions) {
@@ -419,44 +452,27 @@ function renderCliActions(provider, record, actions) {
   if (record.installed === false) {
     actions.append(
       createButton("Install guide", "install", provider.id, "provider-card__action provider-card__action--primary"),
-      createButton("Check again", "refresh", provider.id, "provider-card__text-action"),
-      createButton("Remove", "remove", provider.id, "provider-card__text-action is-danger")
+      createButton("Check again", "refresh", provider.id, "provider-card__text-action")
     );
     return;
   }
 
-  if (record.signInRunning) {
-    const operationId = signInOperationIds.get(provider.id);
-    const cancel = createButton(
-      operationId ? "Cancel sign-in" : "Sign-in open",
-      "cancel-sign-in",
-      provider.id,
-      "provider-card__action is-cancel"
-    );
-    if (!operationId) cancel.disabled = true;
-    actions.append(cancel);
-  } else {
-    const manual = record.setupFlow === "manual-login";
-    if (manual && record.authState === "unknown") {
-      actions.append(createButton(
-        record.ready ? "Open Terminal" : "Sign in in terminal",
-        "terminal-sign-in",
+  // A manual CLI (no machine-readable auth status) can never be confirmed
+  // signed in, so it always offers the guide; a managed CLI offers it only
+  // while it is not yet ready. Terminal sits to the left of the right-aligned
+  // primary; Remove is a trash icon outside the card (see renderProviders).
+  const manual = record.setupFlow === "manual-login";
+  if (manual || !record.ready) {
+    actions.append(
+      createTerminalButton(provider.id),
+      createButton(
+        "Sign-in guide",
+        "install",
         provider.id,
-        record.ready ? "provider-card__text-action" : "provider-card__action provider-card__action--primary"
-      ));
-    } else if (!record.ready) {
-      actions.append(
-        createButton(
-          "Sign in",
-          "sign-in",
-          provider.id,
-          "provider-card__action provider-card__action--primary"
-        ),
-        createButton("Use terminal", "terminal-sign-in", provider.id, "provider-card__text-action")
-      );
-    }
+        "provider-card__action provider-card__action--primary"
+      )
+    );
   }
-  actions.append(createButton("Remove", "remove", provider.id, "provider-card__text-action is-danger"));
 }
 
 function renderProviders() {
@@ -464,19 +480,20 @@ function renderProviders() {
   const isInitialRender = elements.providerList.dataset.rendered !== "true";
   let configuredCount = 0;
   let readyCount = 0;
-  let signInRunning = false;
 
   SUPPORTED_PROVIDERS.forEach((provider) => {
     const record = providerRecords.get(provider.id);
     const status = connectionStatus(provider, record);
     if (record?.configured) configuredCount += 1;
     if (record?.ready) readyCount += 1;
-    if (record?.signInRunning) signInRunning = true;
 
     const item = document.createElement("li");
-    item.className = `provider-card${isInitialRender ? " is-entering" : ""}`;
+    item.className = `provider-row${isInitialRender ? " is-entering" : ""}`;
     item.dataset.providerId = provider.id;
-    item.dataset.status = status.key;
+
+    const card = document.createElement("div");
+    card.className = "provider-card";
+    card.dataset.status = status.key;
 
     const body = document.createElement("div");
     body.className = "provider-card__body";
@@ -490,13 +507,19 @@ function renderProviders() {
       heading,
       createTextElement("span", "provider-card__state", status.label)
     );
-    item.append(body);
+    card.append(body);
 
     const actions = document.createElement("div");
     actions.className = "provider-card__actions";
     if (provider.kind === "api") renderApiActions(provider, record, actions);
     else renderCliActions(provider, record, actions);
-    item.append(actions);
+    card.append(actions);
+    item.append(card);
+
+    // Remove is a trash icon in the right-hand spacing, outside the card.
+    if (record?.configured) {
+      item.append(createRemoveButton(provider.id));
+    }
     fragment.append(item);
   });
 
@@ -506,7 +529,6 @@ function renderProviders() {
   elements.providerSummary.textContent = configuredCount === 0
     ? "No providers added yet"
     : `${configuredCount} added · ${readyCount} ready`;
-  return signInRunning;
 }
 
 function renderCheckingProviders() {
@@ -516,20 +538,17 @@ function renderCheckingProviders() {
   elements.providerList.setAttribute("aria-busy", "true");
 }
 
-function schedulePoll(signInRunning) {
+function schedulePoll() {
   window.clearTimeout(pollTimer);
   pollTimer = 0;
   // Main owns the hidden/closed fallback refresh. While this setup window is
   // visible, keep exactly one bounded renderer timer so an external terminal
   // login/logout converges without requiring the user to press Check again.
   if (!hasUsableBridge() || document.visibilityState === "hidden") return;
-  const delay = signInRunning
-    ? PROVIDER_SIGN_IN_POLL_INTERVAL_MS
-    : PROVIDER_VISIBLE_POLL_INTERVAL_MS;
   pollTimer = window.setTimeout(() => {
     void loadExtensionPairingSettings();
     void refreshProviders({ announceResult: false });
-  }, delay);
+  }, PROVIDER_VISIBLE_POLL_INTERVAL_MS);
 }
 
 function recordsById(value) {
@@ -550,7 +569,6 @@ async function refreshProviders({ announceResult = true } = {}) {
   window.clearTimeout(pollTimer);
   pollTimer = 0;
   const generation = ++refreshGeneration;
-  let signInRunning = false;
   elements.refreshProviders.disabled = true;
   elements.refreshProviders.classList.add("is-checking");
   elements.providerList.setAttribute("aria-busy", "true");
@@ -562,17 +580,13 @@ async function refreshProviders({ announceResult = true } = {}) {
       throw new Error("Incomplete provider status.");
     }
     providerRecords = nextRecords;
-    for (const provider of SUPPORTED_PROVIDERS) {
-      const record = providerRecords.get(provider.id);
-      if (!record?.signInRunning) signInOperationIds.delete(provider.id);
-    }
-    signInRunning = renderProviders();
+    renderProviders();
     elements.companionRoot.dataset.status = "ready";
     if (announceResult) announce("Provider status updated.");
   } catch {
     if (generation !== refreshGeneration) return;
     elements.companionRoot.dataset.status = "error";
-    signInRunning = renderProviders();
+    renderProviders();
     elements.providerSummary.textContent = "Provider status check failed";
     if (announceResult) announce("Provider status could not be checked.");
   } finally {
@@ -580,7 +594,7 @@ async function refreshProviders({ announceResult = true } = {}) {
       elements.refreshProviders.disabled = false;
       elements.refreshProviders.classList.remove("is-checking");
       elements.providerList.setAttribute("aria-busy", "false");
-      schedulePoll(signInRunning);
+      schedulePoll();
     }
   }
 }
@@ -625,37 +639,6 @@ async function saveApiProvider(providerId, form) {
     pendingProviders.delete(providerId);
     await refreshProviders({ announceResult: false });
   }
-}
-
-async function beginCliSignIn(providerId) {
-  if (pendingProviders.has(providerId)) return;
-  pendingProviders.add(providerId);
-  renderProviders();
-  try {
-    const result = await bridge.beginCliSignIn(providerId);
-    const operationId = result && typeof result.operationId === "string"
-      ? result.operationId.trim()
-      : "";
-    if (operationId) signInOperationIds.set(providerId, operationId);
-    announce(safeGuidance(result?.guidance, "Complete sign-in with the provider, then check again."));
-  } catch {
-    announce("The provider-owned sign-in flow could not start. Check the CLI and try again.");
-  } finally {
-    pendingProviders.delete(providerId);
-    await refreshProviders({ announceResult: false });
-  }
-}
-
-async function cancelCliSignIn(providerId) {
-  const operationId = signInOperationIds.get(providerId);
-  if (!operationId) return;
-  await runProviderAction(
-    providerId,
-    () => bridge.cancelCliSignIn(operationId),
-    "CLI sign-in canceled.",
-    "The CLI sign-in flow could not be canceled cleanly."
-  );
-  signInOperationIds.delete(providerId);
 }
 
 async function openCliSignInTerminal(providerId) {
@@ -991,18 +974,14 @@ elements.providerList.addEventListener("click", (event) => {
   } else if (action === "cancel-replace") {
     replacingApiProviders.delete(providerId);
     renderProviders();
-  } else if (action === "sign-in") {
-    void beginCliSignIn(providerId);
   } else if (action === "terminal-sign-in") {
     void openCliSignInTerminal(providerId);
-  } else if (action === "cancel-sign-in") {
-    void cancelCliSignIn(providerId);
   } else if (action === "install") {
     void runProviderAction(
       providerId,
       () => bridge.openProviderInstallGuide(providerId),
-      "Official installation instructions opened in your browser.",
-      "The official installation instructions could not be opened."
+      "Official setup docs (install and sign-in) opened in your browser.",
+      "The official setup docs could not be opened."
     );
   } else if (action === "refresh") {
     void refreshProviders({ announceResult: true });

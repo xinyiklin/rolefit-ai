@@ -1,13 +1,14 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
-  <circle cx="12" cy="12" r="12" fill="#1a2e1a"/>
-  <text
-    x="12"
-    y="16.5"
-    font-family="system-ui, -apple-system, sans-serif"
-    font-size="13"
-    font-weight="700"
-    fill="#ffffff"
-    text-anchor="middle"
-    letter-spacing="-0.5"
-  >R</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="RoleFit AI">
+  <style>
+    .tile { fill: #eef2ef; }
+    .mark { fill: #23664f; }
+    @media (prefers-color-scheme: dark) {
+      .tile { fill: #16241e; }
+      .mark { fill: #cfe6dc; }
+    }
+  </style>
+  <rect class="tile" width="64" height="64" rx="14"/>
+  <text class="mark" x="32" y="47" text-anchor="middle"
+        font-family="Charter, Georgia, 'Times New Roman', serif"
+        font-weight="700" font-size="46">R</text>
 </svg>

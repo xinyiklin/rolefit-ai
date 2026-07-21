@@ -641,7 +641,6 @@ function apiProviderConnection(
     installed: null,
     authState: "not-applicable",
     setupFlow: "api-key",
-    signInRunning: false,
     guidance: configured
       ? ready
         ? `${label} API access is stored securely on this device.`
@@ -682,7 +681,6 @@ function cliProviderConnection(
     installed: status.installed,
     authState: status.authState,
     setupFlow,
-    signInRunning: status.signInRunning,
     guidance
   });
 }
@@ -895,9 +893,8 @@ function providerStatusesMatch(value: unknown): value is readonly RoleFitProvide
       (typeof status.installed === "boolean" || status.installed === null) &&
       (status.authState === "signed-in" || status.authState === "signed-out" || status.authState === "unknown" || status.authState === "not-applicable") &&
       (status.setupFlow === "managed-login" || status.setupFlow === "manual-login" || status.setupFlow === "api-key") &&
-      typeof status.signInRunning === "boolean" &&
       typeof status.guidance === "string" &&
-      Object.keys(status).length === 9;
+      Object.keys(status).length === 8;
   });
 }
 
@@ -1062,8 +1059,6 @@ async function inspectSmokeRenderer(
   const expectedBridgeKeys = [
     "applyLocalSitePort",
     "backupWorkspaceToFile",
-    "beginCliSignIn",
-    "cancelCliSignIn",
     "getConnectionStatus",
     "getExtensionPairingSettings",
     "getLocalSiteSettings",
@@ -1218,10 +1213,16 @@ function createMainWindow(
   const smokeMode = process.env.ROLEFIT_DESKTOP_SMOKE === "companion";
   const window = new BrowserWindow({
     title: PUBLIC_APP_NAME,
+    // Packaged builds take the "R" icon from the signed executable (forge
+    // `icon.ico`/`icon.icns`); dev needs it pointed at the source asset so the
+    // window/taskbar icon is the same "R" mark, not the default Electron icon.
+    icon: app.isPackaged
+      ? undefined
+      : join(__dirname, "..", "..", "desktop", "assets", "icon.ico"),
     width: 760,
-    height: 760,
+    height: 560,
     minWidth: 620,
-    minHeight: 620,
+    minHeight: 520,
     show: !smokeMode,
     backgroundColor: "#eef1ec",
     autoHideMenuBar: process.platform !== "darwin",
@@ -1288,7 +1289,7 @@ async function shutdownAndExit(exitCode: number): Promise<void> {
     await cliProviderManager?.shutdown();
   } catch {
     finalExitCode = 1;
-    console.error("[companion] A CLI sign-in process did not stop cleanly.");
+    console.error("[companion] The CLI provider manager did not stop cleanly.");
   } finally {
     cliProviderManager = null;
     providerVault = null;
@@ -1474,19 +1475,6 @@ async function startDesktop(): Promise<void> {
       await requireProviderVault().setCliProviderEnabled(provider, enabled);
       await synchronizeProviderSnapshot();
       return getProviderConnection(provider);
-    },
-    beginCliSignIn: async (provider) => {
-      if (!cliProviderManager) throw new Error("CLI provider manager is unavailable.");
-      const connection = await getProviderConnection(provider);
-      if (!connection.configured) throw new Error("Add this CLI provider before signing in.");
-      const result = await cliProviderManager.beginSignIn(provider);
-      await synchronizeProviderSnapshot();
-      return result;
-    },
-    cancelCliSignIn: async (operationId) => {
-      const canceled = await (cliProviderManager?.cancelSignIn(operationId) ?? Promise.resolve(false));
-      await synchronizeProviderSnapshot();
-      return canceled;
     },
     openCliSignInTerminal: async (provider) => {
       if (!cliProviderManager) throw new Error("CLI provider manager is unavailable.");
