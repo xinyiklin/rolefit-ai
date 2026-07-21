@@ -24,6 +24,9 @@ import {
   handleSaveApplicationResume,
   handleSaveApplications
 } from "./applications/routes.ts";
+import { handleWorkspaceBackup, handleWorkspaceRestore } from "./workspaceBackup.ts";
+import { handleBrowserPreferences } from "./browserPreferences.ts";
+import { handlePresence, handleWorkspaceActivity } from "./presence.ts";
 import {
   cleanExtensionClaimToken,
   handleExtensionPairingRequests,
@@ -370,6 +373,31 @@ export async function startRoleFitServer(options: RoleFitServerOptions): Promise
 
     if (pathname === "/api/workspace") {
       void handleWorkspace(req, res, workspaceLocations);
+      return;
+    }
+
+    if (pathname === "/api/workspace/backup") {
+      void handleWorkspaceBackup(req, res, workspaceDir);
+      return;
+    }
+
+    if (pathname === "/api/workspace/restore") {
+      void handleWorkspaceRestore(req, res, workspaceDir);
+      return;
+    }
+
+    if (pathname === "/api/workspace/browser-preferences") {
+      void handleBrowserPreferences(req, res, workspaceDir);
+      return;
+    }
+
+    if (pathname === "/api/workspace/activity") {
+      handleWorkspaceActivity(req, res);
+      return;
+    }
+
+    if (pathname === "/api/presence") {
+      void handlePresence(req, res);
       return;
     }
 

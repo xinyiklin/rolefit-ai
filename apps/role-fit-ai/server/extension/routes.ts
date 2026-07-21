@@ -11,7 +11,7 @@
 
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { readBody, sendJson } from "../http.ts";
-import { readApplications } from "../applications/index.ts";
+import { readApplications, withApplicationsLock } from "../applications/index.ts";
 import { jobWorkspaceDir } from "../workspace.ts";
 import { resolveImportedJobText } from "../jobImport.ts";
 import { findMatchingApplication, extractJobMeta } from "./index.ts";
@@ -337,7 +337,7 @@ export async function handleExtensionRoutes(
     let previousApp: { id: string; status: string; appliedAt: string | null } | null = null;
     let duplicateMatch: { level: string; confidence: string; evidence: string[] } | null = null;
     try {
-      const apps = await readApplications(workspaceDir);
+      const apps = await withApplicationsLock(() => readApplications(workspaceDir));
       // Layered lookup (posting id / normalized URL / requisition id / company +
       // title + description overlap) with the captured page text as jobText, so a
       // duplicate is caught even when the URL differs across boards. previousApp
