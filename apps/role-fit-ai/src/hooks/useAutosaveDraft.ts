@@ -3,17 +3,16 @@ import type { ResumeData } from "@typeset/engine/lib/resumeData.ts";
 import { serializeResumeData } from "../lib/resumeText";
 import { getTabId, liveTabIds } from "../lib/tabPresence";
 import type { StageAiUsage } from "../lib/aiUsage";
+import { keyForTab, tabIdFromKey } from "../lib/autosaveDraftRegistry.ts";
 
-// localStorage key PREFIX for the autosaved draft. Each tab namespaces its draft
-// under `${AUTOSAVE_PREFIX}:${tabId}` so concurrent tabs (independent tailoring
+// Each tab namespaces its draft under its own tab-id key (see
+// lib/autosaveDraftRegistry.ts) so concurrent tabs (independent tailoring
 // sessions) never clobber one another's live draft. The bare prefix on its own
 // is the LEGACY single-slot key from before per-tab isolation — still honored as
 // a recoverable orphan so an in-flight draft survives the upgrade.
 // Stores the user's serialized resume text, timestamp, light job-target label,
 // and optional recovery-only raw job text / AI-usage snapshot. API keys and
 // provider credentials are never stored here.
-const AUTOSAVE_PREFIX = "rolefit:draftAutosave";
-const LEGACY_AUTOSAVE_KEY = AUTOSAVE_PREFIX;
 
 // A recovered draft from a CLOSED tab is offered for at most this long. Older
 // orphans are garbage-collected rather than resurfaced.
@@ -39,18 +38,6 @@ export type AutosavedDraft = {
   // No JD text is stored, only the hash.
   jobKeyHash?: string;
 };
-
-function keyForTab(tabId: string): string {
-  return `${AUTOSAVE_PREFIX}:${tabId}`;
-}
-
-// The tab id encoded in an autosave key, or "" for the legacy bare key. Returns
-// null for keys that aren't autosave keys at all.
-function tabIdFromKey(key: string): string | null {
-  if (key === LEGACY_AUTOSAVE_KEY) return "";
-  if (key.startsWith(`${AUTOSAVE_PREFIX}:`)) return key.slice(AUTOSAVE_PREFIX.length + 1);
-  return null;
-}
 
 function parseDraft(raw: string | null): AutosavedDraft | null {
   if (!raw) return null;
