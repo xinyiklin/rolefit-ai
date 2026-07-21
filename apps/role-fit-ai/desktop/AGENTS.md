@@ -6,10 +6,10 @@ Applies to `apps/role-fit-ai/desktop/` and `tsconfig.desktop.json`.
 
 - The ordinary browser is the only RoleFit product surface. `desktop/` owns a
   compact Electron companion for keeping the local server available, managing
-  exactly three subscription CLIs plus the OpenAI and Claude API providers, and
-  opening RoleFit in the default browser. It does not own resume editing,
-  application navigation, tracker/workspace persistence, or the shared React
-  renderer.
+  exactly three subscription CLIs plus the OpenAI and Claude API providers,
+  hosting the workspace Backup/Restore/Open-folder actions, and opening RoleFit
+  in the default browser. It does not own resume editing, application
+  navigation, tracker/workspace persistence, or the shared React renderer.
 - `main.cts` owns companion lifecycle, single-instance behavior, server
   composition, the compact local window, system-browser launch, and clean
   shutdown of processes it created. Its `BrowserWindow` loads only the static
@@ -33,6 +33,34 @@ Applies to `apps/role-fit-ai/desktop/` and `tsconfig.desktop.json`.
   availability; port and pairing changes restart through the normal Electron
   quit lifecycle. `ROLEFIT_DESKTOP_PORT` is an explicit locked per-launch
   override; settings never contain secrets or workspace paths.
+- The companion window is a tabbed shell (Providers / Workspace / Connection).
+  The Workspace tab is the product home of portable workspace backup and
+  restore (`docs/engineering/workspace-backup.md` owns the wire contract). Main
+  owns the whole flow: it fetches `/api/workspace/backup|restore|activity` on
+  the owned/reused loopback origin, drives the native save/open/confirm
+  dialogs, writes the envelope verbatim, and never logs envelope contents. The
+  shared bounded-response helper enforces actual streamed byte limits without
+  trusting `Content-Length`, including for a compatible reused listener. Backup
+  saves use an owner-only sibling temporary file plus final rename so a failed
+  write cannot truncate an existing backup. The renderer receives only
+  shape-only results, the home-relative display path,
+  and the chosen backup file name — never another absolute path — and its
+  ~5-second activity poll runs only while the Workspace tab is active and
+  visible. Restore always passes through a native confirmation that defaults
+  to Cancel, and the server's live-browser-tab 409 message is surfaced
+  verbatim. The Workspace tab also shows name-derived state (base-resume
+  presence and the application count) computed in main from directory entries
+  and one bounded shape-only `applications.json` read; file contents never
+  cross IPC. The Connection tab surfaces live loopback truth — port, canonical
+  site URL, owned/reused/starting/unreachable from a fresh health probe (never
+  stale startup ownership), and the beaconed browser-tab count, which is the
+  companion's single visible session indicator; the Workspace overview still
+  carries the tab count so Restore stays gated while browser tabs are live. The byte-limit
+  and managed-naming mirrors in `ipc-contract.cts` must stay in lockstep with
+  `src/lib/workspaceBackupContract.ts`; `ipc-probes.mjs` cross-checks them
+  against that source. Companion copy is state-first: statuses report state in
+  one short line, caveats live in `title` tooltips or native dialogs, and no
+  panel carries an explainer paragraph.
 - `runtime-paths.cts` owns the source-versus-package application, server, and
   writable-workspace resolution. `build-package.mjs` owns the minimal staged
   runtime; `forge.config.cjs` owns ASAR, native makers, signing/notarization,

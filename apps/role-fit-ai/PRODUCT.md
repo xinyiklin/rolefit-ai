@@ -32,7 +32,9 @@ tailored resume: AI proposals constrained by server-side grounding and
 anti-fabrication checks, a recruiter-style review with fit scoring and gap
 analysis, application-question drafts, one owned typeset editor that is both the
 WYSIWYG preview and the PDF export, a re-loadable `.resume` save file, and a
-lightweight application pipeline tracker. An original resume (text) is converted
+lightweight application pipeline tracker. A versioned `.rolefit-backup` file
+ports the saved local workspace and allowlisted RoleFit preferences between
+devices without creating an account or synchronization service. An original resume (text) is converted
 once into the structured model, which is the source of truth thereafter (and can
 be saved/reloaded as a `.resume` file). Success = a one-page,
 interview-defensible resume exported in minutes after every AI proposal has been
@@ -102,6 +104,15 @@ disappears into the task. Quiet competence, not salesmanship.
    the companion renderer, encrypted through Electron `safeStorage`, and never
    enter browser storage or HTTP. CLI authentication stays provider-owned;
    RoleFit never asks for provider passwords, MFA values, or OAuth codes.
+9. Make portability explicit and recoverable: the companion's Workspace tab
+   owns Back up and Restore. A backup includes only validated app-managed
+   resumes, history, tracker data, saved PDFs, and mirrored allowlisted
+   browser preferences. It excludes provider setup, API keys, CLI sessions,
+   arbitrary workspace files, and unsaved recovery drafts. Restore refuses to
+   run while live RoleFit browser tabs are detected, validates a complete
+   staging workspace before replacement, and keeps the previous saved
+   workspace as a local safety copy; the browser adopts restored preferences
+   on its next load.
 
 ## Accessibility & Inclusion
 

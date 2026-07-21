@@ -49,6 +49,7 @@ saves the structured resume data so you can reload it later or move it between t
 - **Ordered AI workflow** — Distill, Tailor, and Review share one reusable progress surface with exact step counts, specific failure reasons, Retry/Stop behavior, and later stages marked not run after a failure.
 - **WYSIWYG editor + PDF export** — the editor *is* the preview: it and the exported PDF use the same shared Typeset layout engine, so visible line breaks and page flow match the export exactly. No external toolchain to install — typesetting and PDF generation run in the browser.
 - **`.resume` save/load** — download the structured resume data as a `.resume` file (lossless JSON, formatting preserved) and reload it later, or keep it as a portable backup of your work.
+- **Portable workspace backup + restore** — the companion's Workspace tab saves one versioned `.rolefit-backup` containing validated base resumes, resume history, tracker records, saved application PDFs, and mirrored allowlisted RoleFit preferences. Restore validates every checksum and domain file in a staging workspace before replacing the active saved workspace, then keeps the previous workspace as a local safety copy. The JSON backup is not encrypted and never contains provider keys, CLI sessions, arbitrary workspace files, or unsaved recovery drafts.
 - **On-disk pipeline tracker** — a sortable, paginated applications table (right-click any row for quick actions: open details, change stage, in-app PDF preview of the saved resume, or delete) alongside a calendar view of submissions and upcoming follow-ups. Tracks status / source / company / role / follow-up date / notes / resume snapshot per application, and survives browser wipes.
 - **Local-first personal workflow** — the browser app, server, paired extension bridge, and workspace files run on your own device. Source development uses the gitignored `job-search-workspace/`; an installed companion uses `app.getPath("userData")/workspace/`. Origin-scoped browser storage may contain recovery resume/job drafts plus user settings and context, but never API keys. The Electron companion encrypts supported API keys with the operating system through `safeStorage` and stores only encrypted bytes locally beneath its own `userData`; keys never enter browser storage, browser requests, status payloads, or logs. A companion-owned server receives decrypted keys only in memory through a private parent/child channel. AI-backed import, polish, cover-letter, and application-answer features still send the relevant job/resume text directly from the local server to the provider you choose; resume/job payloads do not cross Electron IPC.
 
@@ -275,14 +276,26 @@ Browser recovery is separate from the on-disk workspace. The active localhost
 origin may store a serialized recovery resume, optional raw job text, AI usage,
 stage settings, honest context, custom instructions, and work-authorization
 preferences in browser storage. It never stores API keys. Changing the local
-port creates a different browser origin, so that recovery data and those
-preferences do not move automatically.
+port creates a different browser origin. RoleFit mirrors the allowlisted
+preferences into the workspace's `browser-preferences.json`, and a fresh origin
+with no saved RoleFit preferences adopts that mirror on load, so settings
+survive a port change; unsaved recovery drafts remain origin-scoped and do not
+move.
 
-For a portable resume backup, download a `.resume` file. For a full local
-workspace backup, close the companion and copy its `workspace/` directory.
-That copy does not include browser-origin recovery/preferences or a portable
-API-key export; add API keys again on a new device. Before uninstalling, make
-the backup you want. To erase RoleFit's retained local data, remove the
+For a portable resume-only backup, download a `.resume` file. For the saved
+RoleFit workspace, open the companion's **Workspace** tab and choose **Back
+up workspace**. The resulting `.rolefit-backup` is unencrypted JSON containing
+app-managed base resumes, resume history, tracker data, saved application
+PDFs, and the mirrored allowlisted RoleFit preferences. It excludes arbitrary
+files in the workspace, unsaved recovery drafts, provider configuration/API
+keys, CLI sessions, and companion port settings. Close RoleFit browser tabs
+before choosing **Restore backup** — the server refuses to restore while live
+tabs are detected. RoleFit validates the complete backup in a staging
+directory, moves the current saved workspace to a timestamped sibling safety
+directory, and installs the restored workspace; the browser adopts the
+restored preferences and clears superseded recovery drafts the next time it
+loads. Add providers again on a new device. Before uninstalling, make the
+backup you want. To erase RoleFit's retained local data, remove the
 separate `userData` directory and clear site data in your browser for every
 RoleFit loopback origin you used, including each configured port under
 `http://127.0.0.1:<port>` or `http://localhost:<port>`.
@@ -299,7 +312,10 @@ The workspace contains:
 
 - `base-resume.resume` (or `.txt`, `.md`, `.csv`) — auto-loaded on startup
 - `applications.json` — the pipeline tracker's on-disk store
-- Anything else you drop in there
+- `applications/<id>/resume.pdf` — saved tailored PDFs attached to tracker rows
+- `.trash/` — recoverable base-resume history
+- `browser-preferences.json` — mirrored allowlisted RoleFit preferences
+- Anything else you drop in there (left out of portable backups)
 
 The source-development folder is gitignored except its README. Personal
 resumes, `.resume`/PDF files, and root-level resume artifacts are also

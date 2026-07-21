@@ -120,6 +120,15 @@ Good server verification covers:
   snapshot, legacy rows without `updatedAt` receive a stable first-edit
   revision, and corrupt application JSON or malformed strict `.resume` data
   fails closed without destructive reseeding
+- portable workspace backup includes only app-managed resumes/history, tracker
+  data, saved PDFs, and mirrored allowlisted RoleFit preferences; validates
+  decoded sizes and SHA-256 digests; rejects duplicate/traversing paths and
+  malformed domain files; and completes backup -> restore -> backup without
+  byte drift. Every restore failure must leave the active workspace unchanged,
+  a successful restore retains the previous saved workspace as a sibling
+  safety copy and stages `source: "restore"` preferences, restore refuses with
+  409 while live tab presence is reported, and a corrupt preference mirror
+  never blocks backing up resumes
 - routine AI logs remain shape-only and exclude model-authored target IDs,
   free-form error text, provider bodies, and private prompt content
 
