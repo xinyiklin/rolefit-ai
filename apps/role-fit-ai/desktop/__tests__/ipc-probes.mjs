@@ -8,10 +8,17 @@ import {
   ROLEFIT_DESKTOP_SETTINGS_SCHEMA_VERSION,
   ROLEFIT_EXTENSION_ORIGIN_MAX_COUNT,
   ROLEFIT_PROVIDER_GUIDANCE_MAX_LENGTH,
+  ROLEFIT_WORKSPACE_BACKUP_MAX_JSON_BYTES,
+  ROLEFIT_WORKSPACE_BASE_RESUME_RE,
+  ROLEFIT_WORKSPACE_LEGACY_BASE_RESUME_RE,
+  ROLEFIT_WORKSPACE_MESSAGE_MAX_LENGTH,
+  ROLEFIT_WORKSPACE_STAT_FILE_MAX_BYTES,
   createRoleFitDesktopRuntimeInfo,
   isRoleFitApiProviderId,
   isRoleFitCliProviderId,
+  isRoleFitConnectionServerState,
   isRoleFitProviderId,
+  isRoleFitWorkspaceBackupFileName,
   normalizeRoleFitExtensionOrigin,
   normalizeRoleFitDesktopPlatform
 } from "../../dist-electron/desktop/ipc-contract.cjs";
@@ -38,7 +45,12 @@ const channels = Object.freeze({
   cancel: "rolefit:companion:cancel-cli-sign-in",
   terminal: "rolefit:companion:open-cli-sign-in-terminal",
   installGuide: "rolefit:companion:open-provider-install-guide",
-  open: "rolefit:companion:open-browser-app"
+  open: "rolefit:companion:open-browser-app",
+  workspaceOverview: "rolefit:companion:get-workspace-overview",
+  workspaceBackup: "rolefit:companion:backup-workspace-to-file",
+  workspaceRestore: "rolefit:companion:restore-workspace-from-file",
+  workspaceFolder: "rolefit:companion:open-workspace-folder",
+  connectionStatus: "rolefit:companion:get-connection-status"
 });
 const providerIds = Object.freeze([
   "claude-cli",
@@ -121,10 +133,43 @@ const providerConnections = Object.freeze([
   })
 ]);
 
-assert.equal(ROLEFIT_DESKTOP_API_VERSION, 6);
+assert.equal(ROLEFIT_DESKTOP_API_VERSION, 9);
 assert.equal(ROLEFIT_DESKTOP_SETTINGS_SCHEMA_VERSION, 1);
 assert.equal(ROLEFIT_EXTENSION_ORIGIN_MAX_COUNT, 4);
 assert.equal(ROLEFIT_API_KEY_MAX_BYTES, 16_384);
+assert.equal(ROLEFIT_WORKSPACE_MESSAGE_MAX_LENGTH, 240);
+// The desktop project cannot import app src modules, so its byte-limit and
+// managed-naming mirrors must stay in lockstep with the shared
+// workspace-backup contract source.
+const workspaceContractSource = await readFile(
+  resolve(import.meta.dirname, "../../src/lib/workspaceBackupContract.ts"),
+  "utf8"
+);
+const sharedJsonLimit = workspaceContractSource
+  .match(/MAX_WORKSPACE_BACKUP_JSON_BYTES = ([\d_]+)/)?.[1];
+assert.equal(Number(sharedJsonLimit?.replaceAll("_", "")), ROLEFIT_WORKSPACE_BACKUP_MAX_JSON_BYTES);
+const sharedFileLimit = workspaceContractSource
+  .match(/MAX_WORKSPACE_BACKUP_FILE_BYTES = ([\d_]+)/)?.[1];
+assert.equal(Number(sharedFileLimit?.replaceAll("_", "")), ROLEFIT_WORKSPACE_STAT_FILE_MAX_BYTES);
+assert.ok(workspaceContractSource.includes(ROLEFIT_WORKSPACE_BASE_RESUME_RE.source));
+assert.ok(workspaceContractSource.includes(ROLEFIT_WORKSPACE_LEGACY_BASE_RESUME_RE.source));
+assert.equal(ROLEFIT_WORKSPACE_BASE_RESUME_RE.test("base-resume-swe_2.resume"), true);
+assert.equal(ROLEFIT_WORKSPACE_BASE_RESUME_RE.test("base-resume.txt"), false);
+assert.equal(ROLEFIT_WORKSPACE_LEGACY_BASE_RESUME_RE.test("base-resume.txt"), true);
+assert.equal(isRoleFitConnectionServerState("owned"), true);
+assert.equal(isRoleFitConnectionServerState("reused"), true);
+assert.equal(isRoleFitConnectionServerState("starting"), true);
+assert.equal(isRoleFitConnectionServerState("unreachable"), true);
+assert.equal(isRoleFitConnectionServerState("stopped"), false);
+assert.equal(isRoleFitWorkspaceBackupFileName("RoleFit-Workspace-2026-07-20.rolefit-backup"), true);
+assert.equal(isRoleFitWorkspaceBackupFileName("my backup (2).rolefit-backup"), true);
+assert.equal(isRoleFitWorkspaceBackupFileName("../escape.rolefit-backup"), false);
+assert.equal(isRoleFitWorkspaceBackupFileName("nested/name.rolefit-backup"), false);
+assert.equal(isRoleFitWorkspaceBackupFileName("windows\\name.rolefit-backup"), false);
+assert.equal(isRoleFitWorkspaceBackupFileName("C:drive.rolefit-backup"), false);
+assert.equal(isRoleFitWorkspaceBackupFileName(".hidden.rolefit-backup"), false);
+assert.equal(isRoleFitWorkspaceBackupFileName("plain.json"), false);
+assert.equal(isRoleFitWorkspaceBackupFileName(`${"n".repeat(300)}.rolefit-backup`), false);
 assert.equal(normalizeRoleFitDesktopPlatform("darwin"), "darwin");
 assert.equal(normalizeRoleFitDesktopPlatform("freebsd"), "other");
 assert.equal(isRoleFitCliProviderId("claude-cli"), true);
@@ -136,7 +181,7 @@ assert.equal(isRoleFitProviderId("shell"), false);
 assert.equal(normalizeRoleFitExtensionOrigin(`${firefoxOrigin}/`), firefoxOrigin);
 assert.equal(normalizeRoleFitExtensionOrigin("https://example.com"), "");
 assert.deepEqual(runtimeInfo, {
-  apiVersion: 6,
+  apiVersion: 9,
   runtime: "electron-companion",
   platform: "darwin",
   appVersion: "0.1.0",
@@ -212,6 +257,37 @@ let extensionPairingFailure = null;
 let siteSettingsFailure = null;
 let saveShouldLeak = false;
 let terminalShouldLeak = false;
+let workspaceOverviewResult = {
+  workspacePath: "/private/rolefit/workspaces/job-search-workspace",
+  workspaceDisplayPath: "~/workspaces/job-search-workspace",
+  activeBrowserTabs: 0,
+  serverReady: true,
+  hasBaseResume: true,
+  applicationCount: 12,
+  stagingDir: "/must-not-cross-ipc"
+};
+let connectionStatusResult = {
+  port: 5_181,
+  siteUrl: "http://localhost:5181",
+  serverState: "owned",
+  activeBrowserTabs: 2,
+  serverPid: "must-not-cross-ipc"
+};
+let workspaceBackupResult = {
+  status: "saved",
+  filePath: "RoleFit-Workspace-2026-07-20.rolefit-backup",
+  fileCount: 4,
+  includesPreferences: true,
+  absolutePath: "/must-not-cross-ipc"
+};
+let workspaceRestoreResult = {
+  status: "restored",
+  restoredFiles: 4,
+  previousWorkspaceKept: true,
+  previousDir: "/must-not-cross-ipc"
+};
+let workspaceFolderOpens = 0;
+let workspaceFolderFailure = null;
 
 function connectionFor(id, overrides = {}) {
   const connection = providerConnections.find((candidate) => candidate.id === id);
@@ -293,7 +369,15 @@ const options = {
   },
   openBrowserApp: async () => {
     browserOpenCount += 1;
-  }
+  },
+  getWorkspaceOverview: async () => workspaceOverviewResult,
+  backupWorkspaceToFile: async () => workspaceBackupResult,
+  restoreWorkspaceFromFile: async () => workspaceRestoreResult,
+  openWorkspaceFolder: async () => {
+    workspaceFolderOpens += 1;
+    if (workspaceFolderFailure) throw workspaceFolderFailure;
+  },
+  getConnectionStatus: async () => connectionStatusResult
 };
 
 const removeHandlers = installCompanionIpc(options);
@@ -401,6 +485,178 @@ await installedHandlers.get(channels.installGuide)(requestEvent(), "antigravity-
 assert.equal(openedInstallGuide, "antigravity-cli");
 await installedHandlers.get(channels.open)(requestEvent());
 assert.equal(browserOpenCount, 1);
+
+const handledWorkspaceOverview = await installedHandlers.get(channels.workspaceOverview)(requestEvent());
+assert.deepEqual(handledWorkspaceOverview, {
+  workspacePath: "/private/rolefit/workspaces/job-search-workspace",
+  workspaceDisplayPath: "~/workspaces/job-search-workspace",
+  activeBrowserTabs: 0,
+  serverReady: true,
+  hasBaseResume: true,
+  applicationCount: 12
+});
+assert.notEqual(handledWorkspaceOverview, workspaceOverviewResult);
+assert.doesNotMatch(JSON.stringify(handledWorkspaceOverview), /must-not-cross-ipc/);
+workspaceOverviewResult = { ...workspaceOverviewResult, activeBrowserTabs: null, applicationCount: null };
+const handledNullOverview = await installedHandlers.get(channels.workspaceOverview)(requestEvent());
+assert.equal(handledNullOverview.activeBrowserTabs, null);
+assert.equal(handledNullOverview.applicationCount, null);
+workspaceOverviewResult = { ...workspaceOverviewResult, activeBrowserTabs: -1 };
+await assert.rejects(
+  installedHandlers.get(channels.workspaceOverview)(requestEvent()),
+  /workspace overview is unavailable/
+);
+workspaceOverviewResult = { ...workspaceOverviewResult, activeBrowserTabs: 2, workspacePath: "" };
+await assert.rejects(
+  installedHandlers.get(channels.workspaceOverview)(requestEvent()),
+  /workspace overview is unavailable/
+);
+workspaceOverviewResult = { ...workspaceOverviewResult, workspacePath: "/private/rolefit/workspaces/job-search-workspace", applicationCount: 1.5 };
+await assert.rejects(
+  installedHandlers.get(channels.workspaceOverview)(requestEvent()),
+  /workspace overview is unavailable/
+);
+workspaceOverviewResult = { ...workspaceOverviewResult, applicationCount: 12, hasBaseResume: "yes" };
+await assert.rejects(
+  installedHandlers.get(channels.workspaceOverview)(requestEvent()),
+  /workspace overview is unavailable/
+);
+workspaceOverviewResult = {
+  workspacePath: "/private/rolefit/workspaces/job-search-workspace",
+  workspaceDisplayPath: "~/workspaces/job-search-workspace",
+  activeBrowserTabs: 2,
+  serverReady: true,
+  hasBaseResume: true,
+  applicationCount: 12
+};
+
+const handledConnectionStatus = await installedHandlers.get(channels.connectionStatus)(requestEvent());
+assert.deepEqual(handledConnectionStatus, {
+  port: 5_181,
+  siteUrl: "http://localhost:5181",
+  serverState: "owned",
+  activeBrowserTabs: 2
+});
+assert.notEqual(handledConnectionStatus, connectionStatusResult);
+assert.doesNotMatch(JSON.stringify(handledConnectionStatus), /must-not-cross-ipc/);
+connectionStatusResult = { ...connectionStatusResult, serverState: "unreachable", activeBrowserTabs: null };
+const handledUnreachableStatus = await installedHandlers.get(channels.connectionStatus)(requestEvent());
+assert.equal(handledUnreachableStatus.serverState, "unreachable");
+assert.equal(handledUnreachableStatus.activeBrowserTabs, null);
+connectionStatusResult = { ...connectionStatusResult, serverState: "stopped" };
+await assert.rejects(
+  installedHandlers.get(channels.connectionStatus)(requestEvent()),
+  /connection status is unavailable/
+);
+connectionStatusResult = { ...connectionStatusResult, serverState: "owned", siteUrl: "https://example.com" };
+await assert.rejects(
+  installedHandlers.get(channels.connectionStatus)(requestEvent()),
+  /connection status is unavailable/
+);
+connectionStatusResult = { ...connectionStatusResult, siteUrl: "http://localhost:5181", port: 0 };
+await assert.rejects(
+  installedHandlers.get(channels.connectionStatus)(requestEvent()),
+  /connection status is unavailable/
+);
+connectionStatusResult = {
+  port: 5_181,
+  siteUrl: "http://localhost:5181",
+  serverState: "owned",
+  activeBrowserTabs: 2
+};
+
+const handledBackup = await installedHandlers.get(channels.workspaceBackup)(requestEvent());
+assert.deepEqual(handledBackup, {
+  status: "saved",
+  filePath: "RoleFit-Workspace-2026-07-20.rolefit-backup",
+  fileCount: 4,
+  includesPreferences: true
+});
+assert.doesNotMatch(JSON.stringify(handledBackup), /must-not-cross-ipc/);
+workspaceBackupResult = { status: "cancelled", ignored: "extra" };
+assert.deepEqual(
+  await installedHandlers.get(channels.workspaceBackup)(requestEvent()),
+  { status: "cancelled" }
+);
+workspaceBackupResult = {
+  status: "error",
+  message: `  private\n${"m".repeat(ROLEFIT_WORKSPACE_MESSAGE_MAX_LENGTH + 40)}  `
+};
+const backupError = await installedHandlers.get(channels.workspaceBackup)(requestEvent());
+assert.equal(backupError.status, "error");
+assert.equal(backupError.message.length, ROLEFIT_WORKSPACE_MESSAGE_MAX_LENGTH);
+assert.doesNotMatch(backupError.message, /\n/);
+workspaceBackupResult = {
+  status: "saved",
+  filePath: "/Users/private/RoleFit-Workspace-2026-07-20.rolefit-backup",
+  fileCount: 4,
+  includesPreferences: false
+};
+await assert.rejects(
+  installedHandlers.get(channels.workspaceBackup)(requestEvent()),
+  /workspace backup did not complete/
+);
+try {
+  await installedHandlers.get(channels.workspaceBackup)(requestEvent());
+  assert.fail("An absolute backup path crossed IPC.");
+} catch (error) {
+  assert.doesNotMatch(error.message, /Users\/private/);
+}
+workspaceBackupResult = { status: "saved", filePath: "ok.rolefit-backup", fileCount: -1, includesPreferences: false };
+await assert.rejects(
+  installedHandlers.get(channels.workspaceBackup)(requestEvent()),
+  /workspace backup did not complete/
+);
+workspaceBackupResult = {
+  status: "saved",
+  filePath: "RoleFit-Workspace-2026-07-20.rolefit-backup",
+  fileCount: 4,
+  includesPreferences: true
+};
+
+const handledRestore = await installedHandlers.get(channels.workspaceRestore)(requestEvent());
+assert.deepEqual(handledRestore, {
+  status: "restored",
+  restoredFiles: 4,
+  previousWorkspaceKept: true
+});
+assert.doesNotMatch(JSON.stringify(handledRestore), /must-not-cross-ipc/);
+workspaceRestoreResult = { status: "cancelled" };
+assert.deepEqual(
+  await installedHandlers.get(channels.workspaceRestore)(requestEvent()),
+  { status: "cancelled" }
+);
+workspaceRestoreResult = {
+  status: "error",
+  message: "Close the RoleFit browser tabs before restoring, then try again."
+};
+assert.deepEqual(
+  await installedHandlers.get(channels.workspaceRestore)(requestEvent()),
+  workspaceRestoreResult
+);
+workspaceRestoreResult = { status: "restored", restoredFiles: 1.5, previousWorkspaceKept: false };
+await assert.rejects(
+  installedHandlers.get(channels.workspaceRestore)(requestEvent()),
+  /workspace restore did not complete/
+);
+workspaceRestoreResult = { status: "error", message: "   " };
+await assert.rejects(
+  installedHandlers.get(channels.workspaceRestore)(requestEvent()),
+  /workspace restore did not complete/
+);
+workspaceRestoreResult = { status: "restored", restoredFiles: 4, previousWorkspaceKept: true };
+
+await installedHandlers.get(channels.workspaceFolder)(requestEvent());
+assert.equal(workspaceFolderOpens, 1);
+workspaceFolderFailure = new Error("ENOENT: /private/workspace/path leaked");
+try {
+  await installedHandlers.get(channels.workspaceFolder)(requestEvent());
+  assert.fail("A failing workspace-folder open did not reject.");
+} catch (error) {
+  assert.match(error.message, /workspace folder could not be opened/);
+  assert.doesNotMatch(error.message, /private\/workspace\/path/);
+}
+workspaceFolderFailure = null;
 
 assert.throws(
   () => installedHandlers.get(channels.runtime)(requestEvent({ senderId: 99 })),
@@ -510,6 +766,48 @@ await assert.rejects(
   installedHandlers.get(channels.open)(requestEvent(), "extra"),
   /does not accept arguments/
 );
+await assert.rejects(
+  installedHandlers.get(channels.workspaceOverview)(requestEvent(), "extra"),
+  /does not accept arguments/
+);
+await assert.rejects(
+  installedHandlers.get(channels.workspaceBackup)(requestEvent(), "extra"),
+  /does not accept arguments/
+);
+await assert.rejects(
+  installedHandlers.get(channels.workspaceRestore)(requestEvent(), "extra"),
+  /does not accept arguments/
+);
+await assert.rejects(
+  installedHandlers.get(channels.workspaceFolder)(requestEvent(), "extra"),
+  /does not accept arguments/
+);
+await assert.rejects(
+  installedHandlers.get(channels.connectionStatus)(requestEvent(), "extra"),
+  /does not accept arguments/
+);
+await assert.rejects(
+  installedHandlers.get(channels.connectionStatus)(requestEvent({ senderId: 99 })),
+  /Untrusted/
+);
+const workspaceFolderOpensBeforeUntrusted = workspaceFolderOpens;
+await assert.rejects(
+  installedHandlers.get(channels.workspaceBackup)(requestEvent({ senderId: 99 })),
+  /Untrusted/
+);
+await assert.rejects(
+  installedHandlers.get(channels.workspaceRestore)(requestEvent({ senderId: 99 })),
+  /Untrusted/
+);
+await assert.rejects(
+  installedHandlers.get(channels.workspaceFolder)(requestEvent({ senderId: 99 })),
+  /Untrusted/
+);
+await assert.rejects(
+  installedHandlers.get(channels.workspaceOverview)(requestEvent({ senderId: 99 })),
+  /Untrusted/
+);
+assert.equal(workspaceFolderOpens, workspaceFolderOpensBeforeUntrusted);
 const saveCallsBeforeUntrusted = savedApiKey;
 await assert.rejects(
   installedHandlers.get(channels.saveApi)(
@@ -652,6 +950,11 @@ assert.match(preloadSource, /RoleFitDesktopIpcChannel\.CancelCliSignIn/);
 assert.match(preloadSource, /RoleFitDesktopIpcChannel\.OpenCliSignInTerminal/);
 assert.match(preloadSource, /RoleFitDesktopIpcChannel\.OpenProviderInstallGuide/);
 assert.match(preloadSource, /RoleFitDesktopIpcChannel\.OpenBrowserApp/);
+assert.match(preloadSource, /RoleFitDesktopIpcChannel\.GetWorkspaceOverview/);
+assert.match(preloadSource, /RoleFitDesktopIpcChannel\.BackupWorkspaceToFile/);
+assert.match(preloadSource, /RoleFitDesktopIpcChannel\.RestoreWorkspaceFromFile/);
+assert.match(preloadSource, /RoleFitDesktopIpcChannel\.OpenWorkspaceFolder/);
+assert.match(preloadSource, /RoleFitDesktopIpcChannel\.GetConnectionStatus/);
 for (const channel of Object.values(channels)) assert.doesNotMatch(preloadSource, new RegExp(channel));
 assert.match(companionRendererSource, /PROVIDER_SIGN_IN_POLL_INTERVAL_MS = 1_500/);
 assert.match(companionRendererSource, /PROVIDER_VISIBLE_POLL_INTERVAL_MS = 5_000/);
@@ -683,6 +986,38 @@ assert.doesNotMatch(
   companionRendererSource,
   /if \(!needed \|\| !hasUsableBridge\(\)\) return/,
   "terminal and external auth changes are not stranded behind managed-sign-in-only polling"
+);
+assert.match(companionRendererSource, /WORKSPACE_POLL_INTERVAL_MS = 5_000/);
+assert.match(companionRendererSource, /CONNECTION_POLL_INTERVAL_MS = 5_000/);
+assert.match(
+  companionRendererSource,
+  /function scheduleWorkspacePoll\(\)[\s\S]*activeTabId !== "workspace"[\s\S]*document\.visibilityState === "hidden"/,
+  "the workspace activity poll runs only while the Workspace tab is active and visible"
+);
+assert.match(
+  companionRendererSource,
+  /function scheduleConnectionPoll\(\)[\s\S]*activeTabId !== "connection"[\s\S]*document\.visibilityState === "hidden"/,
+  "the connection status poll runs only while the Connection tab is active and visible"
+);
+assert.match(
+  companionRendererSource,
+  /async function refreshConnectionStatus\(\)[\s\S]*window\.clearTimeout\(connectionPollTimer\)[\s\S]*finally[\s\S]*scheduleConnectionPoll\(\)/,
+  "each connection refresh clears its predecessor and schedules one successor only after settling"
+);
+assert.match(
+  companionRendererSource,
+  /async function refreshWorkspaceOverview\(\)[\s\S]*window\.clearTimeout\(workspacePollTimer\)[\s\S]*finally[\s\S]*scheduleWorkspacePoll\(\)/,
+  "each workspace refresh clears its predecessor and schedules one successor only after settling"
+);
+assert.match(
+  companionRendererSource,
+  /document\.addEventListener\("visibilitychange",[\s\S]*workspacePollTimer = 0/,
+  "hidden windows stop the workspace activity poll"
+);
+assert.match(
+  companionRendererSource,
+  /"ArrowRight"[\s\S]*"ArrowLeft"[\s\S]*"Home"[\s\S]*"End"/,
+  "the companion tablist supports roving arrow/Home/End keyboard switching"
 );
 
 let exposedKey = null;
@@ -725,6 +1060,25 @@ vm.runInNewContext(preload, {
             });
           }
           if (channel === channels.cancel) return Promise.resolve(true);
+          if (channel === channels.workspaceOverview) {
+            return Promise.resolve({
+              workspacePath: "/private/rolefit/workspaces/job-search-workspace",
+              workspaceDisplayPath: "~/workspaces/job-search-workspace",
+              activeBrowserTabs: 0,
+              serverReady: true
+            });
+          }
+          if (channel === channels.workspaceBackup || channel === channels.workspaceRestore) {
+            return Promise.resolve({ status: "cancelled" });
+          }
+          if (channel === channels.connectionStatus) {
+            return Promise.resolve({
+              port: 5_181,
+              siteUrl: "http://localhost:5181",
+              serverState: "owned",
+              activeBrowserTabs: 0
+            });
+          }
           return Promise.resolve(undefined);
         }
       }
@@ -736,17 +1090,22 @@ assert.deepEqual(
   Object.keys(exposedApi).sort(),
   [
     "applyLocalSitePort",
+    "backupWorkspaceToFile",
     "beginCliSignIn",
     "cancelCliSignIn",
+    "getConnectionStatus",
     "getExtensionPairingSettings",
     "getLocalSiteSettings",
     "getProviderConnections",
     "getRuntimeInfo",
+    "getWorkspaceOverview",
     "openBrowserApp",
     "openCliSignInTerminal",
     "openProviderInstallGuide",
+    "openWorkspaceFolder",
     "removeExtensionOrigin",
     "removeProvider",
+    "restoreWorkspaceFromFile",
     "saveApiProvider",
     "saveExtensionOrigin",
     "setCliProviderEnabled"
@@ -771,6 +1130,11 @@ await exposedApi.cancelCliSignIn("signin-operation-1");
 await exposedApi.openCliSignInTerminal("codex-cli");
 await exposedApi.openProviderInstallGuide("antigravity-cli");
 await exposedApi.openBrowserApp();
+await exposedApi.getWorkspaceOverview();
+await exposedApi.backupWorkspaceToFile();
+await exposedApi.restoreWorkspaceFromFile();
+await exposedApi.openWorkspaceFolder();
+await exposedApi.getConnectionStatus();
 assert.deepEqual(invocations, [
   { channel: channels.runtime, args: [] },
   { channel: channels.settings, args: [] },
@@ -786,7 +1150,12 @@ assert.deepEqual(invocations, [
   { channel: channels.cancel, args: ["signin-operation-1"] },
   { channel: channels.terminal, args: ["codex-cli"] },
   { channel: channels.installGuide, args: ["antigravity-cli"] },
-  { channel: channels.open, args: [] }
+  { channel: channels.open, args: [] },
+  { channel: channels.workspaceOverview, args: [] },
+  { channel: channels.workspaceBackup, args: [] },
+  { channel: channels.workspaceRestore, args: [] },
+  { channel: channels.workspaceFolder, args: [] },
+  { channel: channels.connectionStatus, args: [] }
 ]);
 
-console.log("desktop provider-management IPC contract and preload probes: passed");
+console.log("desktop provider-management and workspace IPC contract and preload probes: passed");

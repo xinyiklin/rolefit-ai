@@ -1,10 +1,29 @@
-export const ROLEFIT_DESKTOP_API_VERSION = 6 as const;
+export const ROLEFIT_DESKTOP_API_VERSION = 9 as const;
 export const ROLEFIT_DESKTOP_SETTINGS_SCHEMA_VERSION = 1 as const;
 export const ROLEFIT_PROVIDER_GUIDANCE_MAX_LENGTH = 240 as const;
 export const ROLEFIT_API_KEY_MAX_BYTES = 16_384 as const;
 export const ROLEFIT_EXTENSION_ORIGIN_MAX_LENGTH = 128 as const;
 export const ROLEFIT_EXTENSION_ORIGIN_MAX_COUNT = 4 as const;
 export const ROLEFIT_EXTENSION_PAIRING_REQUEST_MAX_COUNT = 8 as const;
+// Mirrors MAX_WORKSPACE_BACKUP_JSON_BYTES in src/lib/workspaceBackupContract.ts.
+// The desktop TypeScript project cannot import app src modules, so the probe
+// suite cross-checks this mirror against the shared contract source.
+export const ROLEFIT_WORKSPACE_BACKUP_MAX_JSON_BYTES = 96_000_000 as const;
+export const ROLEFIT_WORKSPACE_MESSAGE_MAX_LENGTH = 240 as const;
+export const ROLEFIT_WORKSPACE_PATH_MAX_LENGTH = 1_024 as const;
+export const ROLEFIT_WORKSPACE_BACKUP_FILE_NAME_MAX_LENGTH = 255 as const;
+// Mirrors MAX_WORKSPACE_BACKUP_FILE_BYTES in src/lib/workspaceBackupContract.ts;
+// caps the applications.json read used for the shape-only application count.
+export const ROLEFIT_WORKSPACE_STAT_FILE_MAX_BYTES = 10_000_000 as const;
+
+// Directory-entry mirrors of the managed base-resume naming in
+// src/lib/workspaceBackupContract.ts (and server/workspaceBackup.ts). The
+// desktop project cannot import app src modules; the probe suite cross-checks
+// these mirrors against the shared contract source. They classify names only —
+// file contents never cross this boundary.
+export const ROLEFIT_WORKSPACE_BASE_RESUME_RE =
+  /^base-resume(?:-[A-Za-z0-9][A-Za-z0-9_-]*)?\.resume$/;
+export const ROLEFIT_WORKSPACE_LEGACY_BASE_RESUME_RE = /^base-resume\.(?:txt|md|csv)$/;
 
 // Const enums inline into the compiled sandboxed preload, so this file remains
 // the one source of truth without emitting a forbidden neighboring require.
@@ -27,7 +46,12 @@ export const enum RoleFitDesktopIpcChannel {
   CancelCliSignIn = "rolefit:companion:cancel-cli-sign-in",
   OpenCliSignInTerminal = "rolefit:companion:open-cli-sign-in-terminal",
   OpenProviderInstallGuide = "rolefit:companion:open-provider-install-guide",
-  OpenBrowserApp = "rolefit:companion:open-browser-app"
+  OpenBrowserApp = "rolefit:companion:open-browser-app",
+  GetWorkspaceOverview = "rolefit:companion:get-workspace-overview",
+  BackupWorkspaceToFile = "rolefit:companion:backup-workspace-to-file",
+  RestoreWorkspaceFromFile = "rolefit:companion:restore-workspace-from-file",
+  OpenWorkspaceFolder = "rolefit:companion:open-workspace-folder",
+  GetConnectionStatus = "rolefit:companion:get-connection-status"
 }
 
 export type RoleFitDesktopPlatform = "darwin" | "win32" | "linux" | "other";
@@ -138,6 +162,68 @@ export type RoleFitCliTerminalSignInResult = Readonly<{
   guidance: string;
 }>;
 
+/**
+ * Shape-only workspace state for the companion Workspace tab. The absolute
+ * workspace path and its home-relative display form are the only file paths
+ * the companion renderer may receive; the stat fields are name-derived counts
+ * computed in main — file contents never cross this boundary.
+ * `activeBrowserTabs` is null whenever the local server's activity endpoint is
+ * unreachable or unimplemented; `applicationCount` is null when
+ * applications.json is missing, oversized, or unreadable.
+ */
+export type RoleFitWorkspaceOverview = Readonly<{
+  workspacePath: string;
+  workspaceDisplayPath: string;
+  activeBrowserTabs: number | null;
+  serverReady: boolean;
+  hasBaseResume: boolean;
+  applicationCount: number | null;
+}>;
+
+export type RoleFitConnectionServerState =
+  | "owned"
+  | "reused"
+  | "starting"
+  | "unreachable";
+
+/**
+ * Live loopback truth for the Connection tab: the active port, the canonical
+ * browser URL, whether the responding server is companion-owned, a reused
+ * standalone listener, still starting, or not answering health probes, and
+ * the beaconed browser-tab count (null when unknown).
+ */
+export type RoleFitConnectionStatus = Readonly<{
+  port: number;
+  siteUrl: string;
+  serverState: RoleFitConnectionServerState;
+  activeBrowserTabs: number | null;
+}>;
+
+/**
+ * Result of the main-owned backup flow. `filePath` carries only the chosen
+ * file's name (never a directory); error messages are sanitized in main.
+ */
+export type RoleFitWorkspaceBackupResult = Readonly<
+  | {
+      status: "saved";
+      filePath: string;
+      fileCount: number;
+      includesPreferences: boolean;
+    }
+  | { status: "cancelled" }
+  | { status: "error"; message: string }
+>;
+
+export type RoleFitWorkspaceRestoreResult = Readonly<
+  | {
+      status: "restored";
+      restoredFiles: number;
+      previousWorkspaceKept: boolean;
+    }
+  | { status: "cancelled" }
+  | { status: "error"; message: string }
+>;
+
 export type RoleFitDesktopRuntimeInfoRequest = readonly [];
 export type RoleFitDesktopSiteSettingsRequest = readonly [];
 export type RoleFitApplyLocalSitePortRequest = readonly [number];
@@ -153,6 +239,11 @@ export type RoleFitCancelCliSignInRequest = readonly [string];
 export type RoleFitOpenCliSignInTerminalRequest = readonly [RoleFitCliProviderId];
 export type RoleFitOpenProviderInstallGuideRequest = readonly [RoleFitCliProviderId];
 export type RoleFitOpenBrowserAppRequest = readonly [];
+export type RoleFitWorkspaceOverviewRequest = readonly [];
+export type RoleFitBackupWorkspaceToFileRequest = readonly [];
+export type RoleFitRestoreWorkspaceFromFileRequest = readonly [];
+export type RoleFitOpenWorkspaceFolderRequest = readonly [];
+export type RoleFitConnectionStatusRequest = readonly [];
 
 export type RoleFitDesktopApi = Readonly<{
   getRuntimeInfo(): Promise<RoleFitDesktopRuntimeInfo>;
@@ -178,7 +269,31 @@ export type RoleFitDesktopApi = Readonly<{
   ): Promise<RoleFitCliTerminalSignInResult>;
   openProviderInstallGuide(provider: RoleFitCliProviderId): Promise<void>;
   openBrowserApp(): Promise<void>;
+  getWorkspaceOverview(): Promise<RoleFitWorkspaceOverview>;
+  backupWorkspaceToFile(): Promise<RoleFitWorkspaceBackupResult>;
+  restoreWorkspaceFromFile(): Promise<RoleFitWorkspaceRestoreResult>;
+  openWorkspaceFolder(): Promise<void>;
+  getConnectionStatus(): Promise<RoleFitConnectionStatus>;
 }>;
+
+export function isRoleFitConnectionServerState(
+  value: unknown
+): value is RoleFitConnectionServerState {
+  return value === "owned" ||
+    value === "reused" ||
+    value === "starting" ||
+    value === "unreachable";
+}
+
+export function isRoleFitWorkspaceBackupFileName(value: unknown): value is string {
+  return typeof value === "string" &&
+    value.length <= ROLEFIT_WORKSPACE_BACKUP_FILE_NAME_MAX_LENGTH &&
+    value.endsWith(".rolefit-backup") &&
+    // A bare file name only: no separators, drive/stream colons, control
+    // characters, or leading dots that could smuggle a path across the bridge.
+    // eslint-disable-next-line no-control-regex
+    /^[A-Za-z0-9][^\\\/:*?"<>|\u0000-\u001F]*$/.test(value);
+}
 
 export function normalizeRoleFitExtensionOrigin(value: unknown): string {
   const origin = typeof value === "string" ? value.trim().replace(/\/$/, "") : "";

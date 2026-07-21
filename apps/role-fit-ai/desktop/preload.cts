@@ -1,6 +1,7 @@
 import type {
   RoleFitApiProviderId,
   RoleFitCliProviderId,
+  RoleFitConnectionStatus,
   RoleFitCliSignInResult,
   RoleFitCliTerminalSignInResult,
   RoleFitDesktopApi,
@@ -8,7 +9,10 @@ import type {
   RoleFitDesktopSiteSettings,
   RoleFitExtensionPairingSettings,
   RoleFitProviderConnection,
-  RoleFitProviderId
+  RoleFitProviderId,
+  RoleFitWorkspaceBackupResult,
+  RoleFitWorkspaceOverview,
+  RoleFitWorkspaceRestoreResult
 } from "./ipc-contract.cjs";
 import {
   RoleFitDesktopBridge,
@@ -86,7 +90,27 @@ const desktopApi: RoleFitDesktopApi = Object.freeze({
       provider
     ) as Promise<void>,
   openBrowserApp: () =>
-    ipcRenderer.invoke(RoleFitDesktopIpcChannel.OpenBrowserApp) as Promise<void>
+    ipcRenderer.invoke(RoleFitDesktopIpcChannel.OpenBrowserApp) as Promise<void>,
+  getWorkspaceOverview: () =>
+    ipcRenderer.invoke(
+      RoleFitDesktopIpcChannel.GetWorkspaceOverview
+    ) as Promise<RoleFitWorkspaceOverview>,
+  backupWorkspaceToFile: () =>
+    ipcRenderer.invoke(
+      RoleFitDesktopIpcChannel.BackupWorkspaceToFile
+    ) as Promise<RoleFitWorkspaceBackupResult>,
+  restoreWorkspaceFromFile: () =>
+    ipcRenderer.invoke(
+      RoleFitDesktopIpcChannel.RestoreWorkspaceFromFile
+    ) as Promise<RoleFitWorkspaceRestoreResult>,
+  openWorkspaceFolder: () =>
+    ipcRenderer.invoke(
+      RoleFitDesktopIpcChannel.OpenWorkspaceFolder
+    ) as Promise<void>,
+  getConnectionStatus: () =>
+    ipcRenderer.invoke(
+      RoleFitDesktopIpcChannel.GetConnectionStatus
+    ) as Promise<RoleFitConnectionStatus>
 });
 
 contextBridge.exposeInMainWorld(RoleFitDesktopBridge.GlobalKey, desktopApi);

@@ -2,6 +2,7 @@ import { createServer } from "node:net";
 import { win32 } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import type { RoleFitHealthExpectation } from "../server/health-contract.js";
+import { readBoundedResponseText } from "./bounded-response.cjs";
 
 export type RoleFitServerOwnership = "owned" | "reused";
 
@@ -161,10 +162,7 @@ async function probeHealth(origin: string, matches: HealthMatcher): Promise<Heal
     ) {
       return "incompatible";
     }
-    const declaredLength = Number(response.headers.get("content-length") ?? 0);
-    if (declaredLength > 4_096) return "incompatible";
-    const body = await response.text();
-    if (body.length > 4_096) return "incompatible";
+    const body = await readBoundedResponseText(response, 4_096);
     return matches(JSON.parse(body)) ? "compatible" : "incompatible";
   } catch {
     return "unreachable";
