@@ -20,7 +20,7 @@
     <div class="companion-shell">
       <header class="titlebar">
         <div class="brand" aria-label="RoleFit AI companion">
-          <span class="brand__mark" aria-hidden="true">RF</span>
+          <span class="brand__mark" aria-hidden="true">R</span>
           <span class="brand__copy">
             <strong>RoleFit AI</strong>
             <small>Provider companion</small>
@@ -33,11 +33,54 @@
       </header>
 
       <main id="main-content">
-        <section class="providers" aria-labelledby="providers-title">
+        <div class="bridge-line" id="bridge-line" role="status" aria-live="polite">
+          <span class="bridge-line__dot" aria-hidden="true"></span>
+          <span id="bridge-status">Checking companion&#8230;</span>
+        </div>
+
+        <div class="tab-bar" role="tablist" aria-label="Companion sections" id="companion-tablist">
+          <button
+            class="tab-bar__tab"
+            id="tab-providers"
+            type="button"
+            role="tab"
+            aria-selected="true"
+            aria-controls="panel-providers"
+            data-tab-id="providers"
+          >Providers</button>
+          <button
+            class="tab-bar__tab"
+            id="tab-workspace"
+            type="button"
+            role="tab"
+            aria-selected="false"
+            aria-controls="panel-workspace"
+            data-tab-id="workspace"
+            tabindex="-1"
+          >Workspace</button>
+          <button
+            class="tab-bar__tab"
+            id="tab-connection"
+            type="button"
+            role="tab"
+            aria-selected="false"
+            aria-controls="panel-connection"
+            data-tab-id="connection"
+            tabindex="-1"
+          >Connection</button>
+        </div>
+
+        <section
+          class="tab-panel providers"
+          id="panel-providers"
+          role="tabpanel"
+          aria-labelledby="tab-providers"
+          tabindex="0"
+        >
           <header class="section-heading">
             <div>
-              <h1 id="providers-title">Provider connections</h1>
-              <p id="provider-summary">Checking five supported providers.</p>
+              <h2 id="providers-title">Provider connections</h2>
+              <p id="provider-summary">Checking providers&#8230;</p>
             </div>
             <button class="refresh-button" id="refresh-providers" type="button">
               <span class="refresh-button__icon" aria-hidden="true">&#8635;</span>
@@ -45,9 +88,85 @@
             </button>
           </header>
 
-          <div class="bridge-line" id="bridge-line" role="status" aria-live="polite">
-            <span class="bridge-line__dot" aria-hidden="true"></span>
-            <span id="bridge-status">Checking the local companion&#8230;</span>
+          <ol class="provider-list" id="provider-list" data-provider-list aria-busy="true"></ol>
+          <p class="provider-announcement visually-hidden" id="provider-announcement" aria-live="polite"></p>
+        </section>
+
+        <section
+          class="tab-panel workspace"
+          id="panel-workspace"
+          role="tabpanel"
+          aria-labelledby="tab-workspace"
+          tabindex="0"
+          hidden
+        >
+          <header class="section-heading">
+            <div>
+              <h2 id="workspace-title">Workspace</h2>
+              <p id="workspace-summary">Checking workspace&#8230;</p>
+            </div>
+          </header>
+
+          <div class="workspace-row">
+            <span class="workspace-row__label" id="workspace-path-label">Local workspace</span>
+            <code class="workspace-path" id="workspace-path" aria-labelledby="workspace-path-label">Checking&#8230;</code>
+            <button class="workspace-open-button" id="open-workspace-folder" type="button" disabled>Open folder</button>
+          </div>
+
+          <dl class="stat-strip" id="workspace-stats">
+            <div class="stat-strip__cell">
+              <dt>Base resume</dt>
+              <dd id="stat-base-resume">&#8212;</dd>
+            </div>
+            <div class="stat-strip__cell">
+              <dt>Applications</dt>
+              <dd id="stat-applications">&#8212;</dd>
+            </div>
+          </dl>
+
+          <div class="workspace-actions">
+            <button
+              class="workspace-action workspace-action--primary"
+              id="backup-workspace"
+              type="button"
+              title="Writes one plain-JSON .rolefit-backup file"
+              disabled
+            >Back up workspace&#8230;</button>
+            <button
+              class="workspace-action"
+              id="restore-workspace"
+              type="button"
+              title="Replaces the saved workspace; the previous one is kept as a local safety copy"
+              disabled
+            >Restore backup&#8230;</button>
+          </div>
+
+          <p class="workspace-status" id="workspace-status" role="status" aria-live="polite"></p>
+
+          <p class="workspace-hint" id="workspace-hint">Plain JSON &#8212; provider keys and unsaved edits stay out.</p>
+        </section>
+
+        <section
+          class="tab-panel connection"
+          id="panel-connection"
+          role="tabpanel"
+          aria-labelledby="tab-connection"
+          tabindex="0"
+          hidden
+        >
+          <header class="section-heading">
+            <div>
+              <h2 id="connection-title">Connection</h2>
+              <p id="connection-summary">Checking the local site&#8230;</p>
+            </div>
+          </header>
+
+          <div class="connection-state-block" role="status" aria-live="polite">
+            <p class="state-line" id="connection-state" data-state="unknown">
+              <span class="state-line__dot" aria-hidden="true"></span>
+              <span id="connection-state-text">Checking&#8230;</span>
+            </p>
+            <p class="connection-tabs-line" id="connection-browser-tabs">&#8212;</p>
           </div>
 
           <form class="site-port-form" id="local-site-port-form" novalidate>
@@ -63,25 +182,23 @@
                 inputmode="numeric"
                 autocomplete="off"
                 aria-describedby="local-site-port-status"
+                title="Applies after a restart; browser storage is per-port"
                 disabled
               />
             </label>
             <button id="apply-local-site-port" type="submit" disabled>Apply &amp; restart</button>
-            <p id="local-site-port-status" role="status" aria-live="polite">Loading port setting&#8230;</p>
+            <p id="local-site-port-status" role="status" aria-live="polite"></p>
           </form>
 
           <section class="extension-pairing-form" id="extension-pairing-panel" aria-labelledby="extension-pairing-title">
             <div class="extension-pairing-form__heading">
               <span id="extension-pairing-title">Browser extension</span>
-              <strong id="extension-pairing-count">Checking</strong>
+              <strong id="extension-pairing-count">Checking&#8230;</strong>
             </div>
             <ul class="extension-request-list" id="extension-request-list" aria-label="Extension access requests"></ul>
             <ul class="extension-pairing-list" id="extension-pairing-list" aria-label="Paired browser extensions"></ul>
-            <p id="extension-pairing-status" role="status" aria-live="polite">Loading extension pairing&#8230;</p>
+            <p id="extension-pairing-status" role="status" aria-live="polite"></p>
           </section>
-
-          <ol class="provider-list" id="provider-list" data-provider-list aria-busy="true"></ol>
-          <p class="provider-announcement visually-hidden" id="provider-announcement" aria-live="polite"></p>
         </section>
       </main>
 

@@ -120,6 +120,15 @@ Good server verification covers:
   snapshot, legacy rows without `updatedAt` receive a stable first-edit
   revision, and corrupt application JSON or malformed strict `.resume` data
   fails closed without destructive reseeding
+- portable workspace backup includes only app-managed resumes/history, tracker
+  data, saved PDFs, and mirrored allowlisted RoleFit preferences; validates
+  decoded sizes and SHA-256 digests; rejects duplicate/traversing paths and
+  malformed domain files; and completes backup -> restore -> backup without
+  byte drift. Every restore failure must leave the active workspace unchanged,
+  a successful restore retains the previous saved workspace as a sibling
+  safety copy and stages `source: "restore"` preferences, restore refuses with
+  409 while live tab presence is reported, and a corrupt preference mirror
+  never blocks backing up resumes
 - routine AI logs remain shape-only and exclude model-authored target IDs,
   free-form error text, provider bodies, and private prompt content
 
@@ -253,9 +262,8 @@ and does not own workspace/tracker files. Focused companion probes should cover:
   `authState` remains unknown; it is never labeled signed in, and the first
   actual provider request owns authentication verification and recovery errors;
 - fake-binary cases for absent, malformed, timed-out, and oversized status
-  output, plus fixed browser/terminal sign-in argv, sanitized child
-  environments, per-provider single-flight, bounded lifetime, redacted
-  failures, and clean child-process shutdown;
+  output, plus fixed external-terminal sign-in argv, the install/sign-in-guide
+  URL opening, sanitized child environments, and redacted failures;
 - the default/saved/environment local-site-port states, integer/range and
   occupied-port rejection, atomic settings persistence under isolated
   `userData`, environment locking, and `Apply & restart` using the normal clean

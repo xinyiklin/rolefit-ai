@@ -1,14 +1,17 @@
 import type {
   RoleFitApiProviderId,
   RoleFitCliProviderId,
-  RoleFitCliSignInResult,
+  RoleFitConnectionStatus,
   RoleFitCliTerminalSignInResult,
   RoleFitDesktopApi,
   RoleFitDesktopRuntimeInfo,
   RoleFitDesktopSiteSettings,
   RoleFitExtensionPairingSettings,
   RoleFitProviderConnection,
-  RoleFitProviderId
+  RoleFitProviderId,
+  RoleFitWorkspaceBackupResult,
+  RoleFitWorkspaceOverview,
+  RoleFitWorkspaceRestoreResult
 } from "./ipc-contract.cjs";
 import {
   RoleFitDesktopBridge,
@@ -65,16 +68,6 @@ const desktopApi: RoleFitDesktopApi = Object.freeze({
       provider,
       enabled
     ) as Promise<RoleFitProviderConnection>,
-  beginCliSignIn: (provider: RoleFitCliProviderId) =>
-    ipcRenderer.invoke(
-      RoleFitDesktopIpcChannel.BeginCliSignIn,
-      provider
-    ) as Promise<RoleFitCliSignInResult>,
-  cancelCliSignIn: (operationId: string) =>
-    ipcRenderer.invoke(
-      RoleFitDesktopIpcChannel.CancelCliSignIn,
-      operationId
-    ) as Promise<boolean>,
   openCliSignInTerminal: (provider: RoleFitCliProviderId) =>
     ipcRenderer.invoke(
       RoleFitDesktopIpcChannel.OpenCliSignInTerminal,
@@ -86,7 +79,27 @@ const desktopApi: RoleFitDesktopApi = Object.freeze({
       provider
     ) as Promise<void>,
   openBrowserApp: () =>
-    ipcRenderer.invoke(RoleFitDesktopIpcChannel.OpenBrowserApp) as Promise<void>
+    ipcRenderer.invoke(RoleFitDesktopIpcChannel.OpenBrowserApp) as Promise<void>,
+  getWorkspaceOverview: () =>
+    ipcRenderer.invoke(
+      RoleFitDesktopIpcChannel.GetWorkspaceOverview
+    ) as Promise<RoleFitWorkspaceOverview>,
+  backupWorkspaceToFile: () =>
+    ipcRenderer.invoke(
+      RoleFitDesktopIpcChannel.BackupWorkspaceToFile
+    ) as Promise<RoleFitWorkspaceBackupResult>,
+  restoreWorkspaceFromFile: () =>
+    ipcRenderer.invoke(
+      RoleFitDesktopIpcChannel.RestoreWorkspaceFromFile
+    ) as Promise<RoleFitWorkspaceRestoreResult>,
+  openWorkspaceFolder: () =>
+    ipcRenderer.invoke(
+      RoleFitDesktopIpcChannel.OpenWorkspaceFolder
+    ) as Promise<void>,
+  getConnectionStatus: () =>
+    ipcRenderer.invoke(
+      RoleFitDesktopIpcChannel.GetConnectionStatus
+    ) as Promise<RoleFitConnectionStatus>
 });
 
 contextBridge.exposeInMainWorld(RoleFitDesktopBridge.GlobalKey, desktopApi);

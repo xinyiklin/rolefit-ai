@@ -6,10 +6,10 @@ Applies to `apps/role-fit-ai/desktop/` and `tsconfig.desktop.json`.
 
 - The ordinary browser is the only RoleFit product surface. `desktop/` owns a
   compact Electron companion for keeping the local server available, managing
-  exactly three subscription CLIs plus the OpenAI and Claude API providers, and
-  opening RoleFit in the default browser. It does not own resume editing,
-  application navigation, tracker/workspace persistence, or the shared React
-  renderer.
+  exactly three subscription CLIs plus the OpenAI and Claude API providers,
+  hosting the workspace Backup/Restore/Open-folder actions, and opening RoleFit
+  in the default browser. It does not own resume editing, application
+  navigation, tracker/workspace persistence, or the shared React renderer.
 - `main.cts` owns companion lifecycle, single-instance behavior, server
   composition, the compact local window, system-browser launch, and clean
   shutdown of processes it created. Its `BrowserWindow` loads only the static
@@ -33,6 +33,34 @@ Applies to `apps/role-fit-ai/desktop/` and `tsconfig.desktop.json`.
   availability; port and pairing changes restart through the normal Electron
   quit lifecycle. `ROLEFIT_DESKTOP_PORT` is an explicit locked per-launch
   override; settings never contain secrets or workspace paths.
+- The companion window is a tabbed shell (Providers / Workspace / Connection).
+  The Workspace tab is the product home of portable workspace backup and
+  restore (`docs/engineering/workspace-backup.md` owns the wire contract). Main
+  owns the whole flow: it fetches `/api/workspace/backup|restore|activity` on
+  the owned/reused loopback origin, drives the native save/open/confirm
+  dialogs, writes the envelope verbatim, and never logs envelope contents. The
+  shared bounded-response helper enforces actual streamed byte limits without
+  trusting `Content-Length`, including for a compatible reused listener. Backup
+  saves use an owner-only sibling temporary file plus final rename so a failed
+  write cannot truncate an existing backup. The renderer receives only
+  shape-only results, the home-relative display path,
+  and the chosen backup file name — never another absolute path — and its
+  ~5-second activity poll runs only while the Workspace tab is active and
+  visible. Restore always passes through a native confirmation that defaults
+  to Cancel, and the server's live-browser-tab 409 message is surfaced
+  verbatim. The Workspace tab also shows name-derived state (base-resume
+  presence and the application count) computed in main from directory entries
+  and one bounded shape-only `applications.json` read; file contents never
+  cross IPC. The Connection tab surfaces live loopback truth — port, canonical
+  site URL, owned/reused/starting/unreachable from a fresh health probe (never
+  stale startup ownership), and the beaconed browser-tab count, which is the
+  companion's single visible session indicator; the Workspace overview still
+  carries the tab count so Restore stays gated while browser tabs are live. The byte-limit
+  and managed-naming mirrors in `ipc-contract.cts` must stay in lockstep with
+  `src/lib/workspaceBackupContract.ts`; `ipc-probes.mjs` cross-checks them
+  against that source. Companion copy is state-first: statuses report state in
+  one short line, caveats live in `title` tooltips or native dialogs, and no
+  panel carries an explainer paragraph.
 - `runtime-paths.cts` owns the source-versus-package application, server, and
   writable-workspace resolution. `build-package.mjs` owns the minimal staged
   runtime; `forge.config.cjs` owns ASAR, native makers, signing/notarization,
@@ -52,9 +80,10 @@ Applies to `apps/role-fit-ai/desktop/` and `tsconfig.desktop.json`.
   companion window is hidden or closed. Snapshot refreshes and mutations are
   serialized so an older probe cannot overwrite a newer vault change; renderer
   polling must not be the sole owner of browser-visible readiness.
-- CLI provider adapters own fixed installation/status/sign-in commands, the
-  fixed external-terminal fallback, a sanitized child environment, bounded
-  process output/lifetime, and shape-only status parsing. The local server
+- CLI provider adapters own fixed installation/status commands, official
+  install/sign-in-guide links, the fixed external-terminal sign-in, a sanitized
+  child environment, bounded process output/lifetime, and shape-only status
+  parsing. The local server
   still owns AI execution; Electron must not fork prompts, model options,
   sanitizers, cancellation rules, or provider response handling.
 
@@ -104,10 +133,11 @@ Applies to `apps/role-fit-ai/desktop/` and `tsconfig.desktop.json`.
   downgrade to plaintext.
 - Expose no generic command, shell, filesystem, workspace, tracker, environment,
   raw stdout/stderr, or raw IPC capability. Accept only known provider IDs and
-  fixed main-owned save/remove/status/sign-in/install-guidance actions. Official
-  installation URLs are allowlisted and main-owned; never accept an external
-  URL from the renderer, run package managers or elevated commands, or accept
-  renderer-supplied shell text.
+  fixed main-owned save/remove/status/external-terminal-sign-in/
+  install-and-sign-in-guide actions. Official install/sign-in-guide URLs are
+  allowlisted and main-owned; never accept an external URL from the renderer,
+  run package managers or elevated commands, or accept renderer-supplied shell
+  text.
 - Keep external-terminal sign-in equally closed: the renderer supplies only a
   known CLI provider id, Electron main maps it to one fixed command/argv pair,
   and platform launchers receive no renderer-authored executable, command,
@@ -118,12 +148,12 @@ Applies to `apps/role-fit-ai/desktop/` and `tsconfig.desktop.json`.
 - Keep CLI process output shape-only: never return
   executable paths, account identifiers, raw auth output, broad environment
   data, workspace fingerprints, or provider tokens.
-- Bound status/sign-in startup, runtime, and output; discard process output after
-  parsing; keep sign-in single-flight per provider; redact failures; and
-  terminate only owned children. Strip native API/token/service-account
-  credentials plus Electron/Node injection variables from every CLI child
-  environment while retaining only required executable/config discovery state.
-  Live sign-in tests are explicit and opt-in.
+- Bound status-probe and external-terminal sign-in startup, runtime, and output;
+  discard process output after parsing; redact failures; and terminate only
+  owned children. Strip native API/token/service-account credentials plus
+  Electron/Node injection variables from every CLI child environment while
+  retaining only required executable/config discovery state. Live sign-in tests
+  are explicit and opt-in.
 - Keep browser and extension behavior separate from companion IPC. Extension
   claim tokens remain browser inbox-routing values. A valid unapproved
   extension origin may enqueue only a bounded short-lived access request; the
@@ -132,7 +162,8 @@ Applies to `apps/role-fit-ai/desktop/` and `tsconfig.desktop.json`.
   configuration or import routes.
 - Treat companion process tests as explicit integration tests. They use isolated
   ports/state and fake CLI binaries and prove exact-sender rejection, bounded
-  status/sign-in behavior, and clean shutdown with no orphan listener or child.
+  status-probe and external-terminal sign-in behavior, and clean shutdown with
+  no orphan listener or child.
 - Keep package resources read-only and all mutable workspace, vault, and
   settings data under operating-system `userData`. Never package `.env`, a
   personal workspace/vault, tests, source maps, unrelated workspace apps, or a
@@ -179,7 +210,7 @@ npm run test:desktop:package-layout --workspace apps/role-fit-ai
 npm run package:rolefit:desktop
 npm run test:rolefit:desktop:packaged
 npm run make:rolefit:desktop
-npm run test:desktop:windows-installer --workspace apps/role-fit-ai -- --installer=.forge/release/RoleFit-AI-0.1.1-windows-x64.exe
+npm run test:desktop:windows-installer --workspace apps/role-fit-ai -- --installer=.forge/release/RoleFit-AI-0.2.0-windows-x64.exe
 npm run test:rolefit:release
 ```
 

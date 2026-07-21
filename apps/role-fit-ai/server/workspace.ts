@@ -59,7 +59,7 @@ function isMissingFile(error: unknown): boolean {
 // archives the current file before atomically installing its replacement; a read
 // in that short interval must not mistake the workspace for an empty fresh install.
 let workspaceQueue: Promise<unknown> = Promise.resolve();
-function withWorkspaceLock<T>(task: () => Promise<T>): Promise<T> {
+export function withWorkspaceLock<T>(task: () => Promise<T>): Promise<T> {
   const run = workspaceQueue.then(task);
   workspaceQueue = run.then(() => undefined, () => undefined);
   return run;
@@ -72,7 +72,7 @@ function nextTrashStamp(): string {
   return new Date(now).toISOString().replace(/[:.]/g, "-");
 }
 
-function validateBaseResumeText(fileName: string, data: Buffer): string {
+export function validateBaseResumeText(fileName: string, data: Buffer): string {
   if (data.byteLength > MAX_BASE_RESUME_BYTES) {
     throw new WorkspaceStorageError("The base resume is too large to read safely.");
   }

@@ -7,17 +7,18 @@ import {
   ROLEFIT_EXTENSION_PAIRING_REQUEST_MAX_COUNT,
   ROLEFIT_PROVIDER_IDS,
   ROLEFIT_PROVIDER_GUIDANCE_MAX_LENGTH,
+  ROLEFIT_WORKSPACE_MESSAGE_MAX_LENGTH,
+  ROLEFIT_WORKSPACE_PATH_MAX_LENGTH,
   RoleFitDesktopIpcChannel,
   isRoleFitApiProviderId,
   isRoleFitCliProviderId,
+  isRoleFitConnectionServerState,
   isRoleFitProviderId,
+  isRoleFitWorkspaceBackupFileName,
   normalizeRoleFitExtensionOrigin,
   type RoleFitApiProviderId,
   type RoleFitApplyLocalSitePortRequest,
-  type RoleFitBeginCliSignInRequest,
-  type RoleFitCancelCliSignInRequest,
   type RoleFitCliProviderId,
-  type RoleFitCliSignInResult,
   type RoleFitCliTerminalSignInResult,
   type RoleFitDesktopRuntimeInfoRequest,
   type RoleFitDesktopRuntimeInfo,
@@ -35,7 +36,16 @@ import {
   type RoleFitProviderId,
   type RoleFitRemoveProviderRequest,
   type RoleFitSaveApiProviderRequest,
-  type RoleFitSetCliProviderEnabledRequest
+  type RoleFitSetCliProviderEnabledRequest,
+  type RoleFitBackupWorkspaceToFileRequest,
+  type RoleFitConnectionStatus,
+  type RoleFitConnectionStatusRequest,
+  type RoleFitOpenWorkspaceFolderRequest,
+  type RoleFitRestoreWorkspaceFromFileRequest,
+  type RoleFitWorkspaceBackupResult,
+  type RoleFitWorkspaceOverview,
+  type RoleFitWorkspaceOverviewRequest,
+  type RoleFitWorkspaceRestoreResult
 } from "./ipc-contract.cjs";
 import { isTrustedCompanionUrl } from "./security.cjs";
 
@@ -61,13 +71,16 @@ export type CompanionIpcOptions = {
     provider: RoleFitCliProviderId,
     enabled: boolean
   ): Promise<RoleFitProviderConnection>;
-  beginCliSignIn(provider: RoleFitBeginCliSignInRequest[0]): Promise<RoleFitCliSignInResult>;
-  cancelCliSignIn(operationId: RoleFitCancelCliSignInRequest[0]): Promise<boolean>;
   openCliSignInTerminal(
     provider: RoleFitCliProviderId
   ): Promise<RoleFitCliTerminalSignInResult>;
   openProviderInstallGuide(provider: RoleFitCliProviderId): Promise<void>;
   openBrowserApp(): Promise<void>;
+  getWorkspaceOverview(): Promise<RoleFitWorkspaceOverview>;
+  backupWorkspaceToFile(): Promise<RoleFitWorkspaceBackupResult>;
+  restoreWorkspaceFromFile(): Promise<RoleFitWorkspaceRestoreResult>;
+  openWorkspaceFolder(): Promise<void>;
+  getConnectionStatus(): Promise<RoleFitConnectionStatus>;
 };
 
 const PROVIDER_METADATA = Object.freeze({
@@ -108,14 +121,6 @@ function requireTrustedRequest(
 
 function requireNoArguments(args: readonly unknown[], label: string): void {
   if (args.length !== 0) throw new Error(`${label} IPC does not accept arguments.`);
-}
-
-function requireOperationId(value: unknown): string {
-  const operationId = typeof value === "string" ? value.trim() : "";
-  if (!/^[A-Za-z0-9._:-]{8,128}$/.test(operationId)) {
-    throw new Error("Invalid CLI sign-in operation id.");
-  }
-  return operationId;
 }
 
 function requireApiKey(value: unknown): string {
@@ -252,13 +257,11 @@ function copyProviderConnection(
       connection.setupFlow !== metadata.setupFlow ||
       typeof connection.configured !== "boolean" ||
       typeof connection.ready !== "boolean" ||
-      typeof connection.signInRunning !== "boolean" ||
       typeof connection.guidance !== "string" ||
       !isAuthState(connection.authState) ||
       (metadata.kind === "cli" && typeof connection.installed !== "boolean") ||
       (metadata.kind === "api" && connection.installed !== null) ||
-      (metadata.kind === "api" && connection.authState !== "not-applicable") ||
-      (metadata.kind === "api" && connection.signInRunning)) {
+      (metadata.kind === "api" && connection.authState !== "not-applicable")) {
     throw new Error("Invalid provider connection status.");
   }
   return {
@@ -269,7 +272,6 @@ function copyProviderConnection(
     installed: connection.installed,
     authState: connection.authState,
     setupFlow: connection.setupFlow,
-    signInRunning: connection.signInRunning,
     guidance: connection.guidance.slice(0, ROLEFIT_PROVIDER_GUIDANCE_MAX_LENGTH)
   };
 }
@@ -293,25 +295,6 @@ function copyProviderConnections(
   });
 }
 
-function copySignInResult(result: RoleFitCliSignInResult): RoleFitCliSignInResult {
-  if (!result || typeof result !== "object" ||
-      (result.status !== "started" &&
-        result.status !== "manual" &&
-        result.status !== "already-running") ||
-      typeof result.guidance !== "string" ||
-      (result.operationId !== null && typeof result.operationId !== "string")) {
-    throw new Error("Invalid CLI sign-in result.");
-  }
-  const operationId = result.operationId === null
-    ? null
-    : requireOperationId(result.operationId);
-  return {
-    status: result.status,
-    operationId,
-    guidance: result.guidance.slice(0, ROLEFIT_PROVIDER_GUIDANCE_MAX_LENGTH)
-  };
-}
-
 function copyTerminalSignInResult(
   result: RoleFitCliTerminalSignInResult
 ): RoleFitCliTerminalSignInResult {
@@ -323,6 +306,111 @@ function copyTerminalSignInResult(
   return {
     status: "opened",
     guidance: result.guidance.slice(0, ROLEFIT_PROVIDER_GUIDANCE_MAX_LENGTH)
+  };
+}
+
+function requireWorkspacePathString(value: unknown): string {
+  const path = typeof value === "string" ? value.trim() : "";
+  if (!path || path.length > ROLEFIT_WORKSPACE_PATH_MAX_LENGTH) {
+    throw new Error("Invalid workspace overview.");
+  }
+  return path;
+}
+
+function isNullableCount(value: unknown): value is number | null {
+  return value === null || (Number.isSafeInteger(value) && (value as number) >= 0);
+}
+
+function copyWorkspaceOverview(overview: RoleFitWorkspaceOverview): RoleFitWorkspaceOverview {
+  if (!overview || typeof overview !== "object" ||
+      typeof overview.serverReady !== "boolean" ||
+      !isNullableCount(overview.activeBrowserTabs) ||
+      typeof overview.hasBaseResume !== "boolean" ||
+      !isNullableCount(overview.applicationCount)) {
+    throw new Error("Invalid workspace overview.");
+  }
+  return {
+    workspacePath: requireWorkspacePathString(overview.workspacePath),
+    workspaceDisplayPath: requireWorkspacePathString(overview.workspaceDisplayPath),
+    activeBrowserTabs: overview.activeBrowserTabs,
+    serverReady: overview.serverReady,
+    hasBaseResume: overview.hasBaseResume,
+    applicationCount: overview.applicationCount
+  };
+}
+
+const CONNECTION_SITE_URL_RE = /^http:\/\/(?:localhost|127\.0\.0\.1):\d{1,5}$/;
+
+function copyConnectionStatus(status: RoleFitConnectionStatus): RoleFitConnectionStatus {
+  if (!status || typeof status !== "object" ||
+      !Number.isInteger(status.port) ||
+      status.port < 1 ||
+      status.port > 65_535 ||
+      typeof status.siteUrl !== "string" ||
+      !CONNECTION_SITE_URL_RE.test(status.siteUrl) ||
+      !isRoleFitConnectionServerState(status.serverState) ||
+      !isNullableCount(status.activeBrowserTabs)) {
+    throw new Error("Invalid connection status.");
+  }
+  return {
+    port: status.port,
+    siteUrl: status.siteUrl,
+    serverState: status.serverState,
+    activeBrowserTabs: status.activeBrowserTabs
+  };
+}
+
+function requireWorkspaceMessage(value: unknown): string {
+  const message = typeof value === "string" ? value.replace(/\s+/g, " ").trim() : "";
+  if (!message) throw new Error("Invalid workspace operation message.");
+  return message.slice(0, ROLEFIT_WORKSPACE_MESSAGE_MAX_LENGTH);
+}
+
+function copyWorkspaceBackupResult(
+  result: RoleFitWorkspaceBackupResult
+): RoleFitWorkspaceBackupResult {
+  if (!result || typeof result !== "object") {
+    throw new Error("Invalid workspace backup result.");
+  }
+  if (result.status === "cancelled") return { status: "cancelled" };
+  if (result.status === "error") {
+    return { status: "error", message: requireWorkspaceMessage(result.message) };
+  }
+  if (result.status !== "saved" ||
+      !isRoleFitWorkspaceBackupFileName(result.filePath) ||
+      !Number.isSafeInteger(result.fileCount) ||
+      result.fileCount < 0 ||
+      typeof result.includesPreferences !== "boolean") {
+    throw new Error("Invalid workspace backup result.");
+  }
+  return {
+    status: "saved",
+    filePath: result.filePath,
+    fileCount: result.fileCount,
+    includesPreferences: result.includesPreferences
+  };
+}
+
+function copyWorkspaceRestoreResult(
+  result: RoleFitWorkspaceRestoreResult
+): RoleFitWorkspaceRestoreResult {
+  if (!result || typeof result !== "object") {
+    throw new Error("Invalid workspace restore result.");
+  }
+  if (result.status === "cancelled") return { status: "cancelled" };
+  if (result.status === "error") {
+    return { status: "error", message: requireWorkspaceMessage(result.message) };
+  }
+  if (result.status !== "restored" ||
+      !Number.isSafeInteger(result.restoredFiles) ||
+      result.restoredFiles < 0 ||
+      typeof result.previousWorkspaceKept !== "boolean") {
+    throw new Error("Invalid workspace restore result.");
+  }
+  return {
+    status: "restored",
+    restoredFiles: result.restoredFiles,
+    previousWorkspaceKept: result.previousWorkspaceKept
   };
 }
 
@@ -342,11 +430,14 @@ export function installCompanionIpc(options: CompanionIpcOptions): () => void {
     RoleFitDesktopIpcChannel.SaveApiProvider,
     RoleFitDesktopIpcChannel.RemoveProvider,
     RoleFitDesktopIpcChannel.SetCliProviderEnabled,
-    RoleFitDesktopIpcChannel.BeginCliSignIn,
-    RoleFitDesktopIpcChannel.CancelCliSignIn,
     RoleFitDesktopIpcChannel.OpenCliSignInTerminal,
     RoleFitDesktopIpcChannel.OpenProviderInstallGuide,
-    RoleFitDesktopIpcChannel.OpenBrowserApp
+    RoleFitDesktopIpcChannel.OpenBrowserApp,
+    RoleFitDesktopIpcChannel.GetWorkspaceOverview,
+    RoleFitDesktopIpcChannel.BackupWorkspaceToFile,
+    RoleFitDesktopIpcChannel.RestoreWorkspaceFromFile,
+    RoleFitDesktopIpcChannel.OpenWorkspaceFolder,
+    RoleFitDesktopIpcChannel.GetConnectionStatus
   ] as const;
   companionHandlersInstalled = true;
   try {
@@ -467,24 +558,6 @@ export function installCompanionIpc(options: CompanionIpcOptions): () => void {
       }
     );
     options.ipc.handle(
-      RoleFitDesktopIpcChannel.BeginCliSignIn,
-      async (event: IpcMainInvokeEvent, ...args: RoleFitBeginCliSignInRequest) => {
-        requireTrustedRequest(event, options);
-        if (args.length !== 1 || !isRoleFitCliProviderId(args[0])) {
-          throw new Error("Invalid CLI provider id.");
-        }
-        return copySignInResult(await options.beginCliSignIn(args[0]));
-      }
-    );
-    options.ipc.handle(
-      RoleFitDesktopIpcChannel.CancelCliSignIn,
-      async (event: IpcMainInvokeEvent, ...args: RoleFitCancelCliSignInRequest) => {
-        requireTrustedRequest(event, options);
-        if (args.length !== 1) throw new Error("Cancel CLI sign-in requires one operation id.");
-        return options.cancelCliSignIn(requireOperationId(args[0]));
-      }
-    );
-    options.ipc.handle(
       RoleFitDesktopIpcChannel.OpenCliSignInTerminal,
       async (event: IpcMainInvokeEvent, ...args: RoleFitOpenCliSignInTerminalRequest) => {
         requireTrustedRequest(event, options);
@@ -514,6 +587,66 @@ export function installCompanionIpc(options: CompanionIpcOptions): () => void {
         requireTrustedRequest(event, options);
         requireNoArguments(args, "Open-browser");
         await options.openBrowserApp();
+      }
+    );
+    options.ipc.handle(
+      RoleFitDesktopIpcChannel.GetWorkspaceOverview,
+      async (event: IpcMainInvokeEvent, ...args: RoleFitWorkspaceOverviewRequest) => {
+        requireTrustedRequest(event, options);
+        requireNoArguments(args, "Workspace-overview");
+        try {
+          return copyWorkspaceOverview(await options.getWorkspaceOverview());
+        } catch {
+          throw new Error("The workspace overview is unavailable.");
+        }
+      }
+    );
+    options.ipc.handle(
+      RoleFitDesktopIpcChannel.BackupWorkspaceToFile,
+      async (event: IpcMainInvokeEvent, ...args: RoleFitBackupWorkspaceToFileRequest) => {
+        requireTrustedRequest(event, options);
+        requireNoArguments(args, "Workspace-backup");
+        try {
+          return copyWorkspaceBackupResult(await options.backupWorkspaceToFile());
+        } catch {
+          throw new Error("The workspace backup did not complete. Try again.");
+        }
+      }
+    );
+    options.ipc.handle(
+      RoleFitDesktopIpcChannel.RestoreWorkspaceFromFile,
+      async (event: IpcMainInvokeEvent, ...args: RoleFitRestoreWorkspaceFromFileRequest) => {
+        requireTrustedRequest(event, options);
+        requireNoArguments(args, "Workspace-restore");
+        try {
+          return copyWorkspaceRestoreResult(await options.restoreWorkspaceFromFile());
+        } catch {
+          throw new Error("The workspace restore did not complete. Try again.");
+        }
+      }
+    );
+    options.ipc.handle(
+      RoleFitDesktopIpcChannel.OpenWorkspaceFolder,
+      async (event: IpcMainInvokeEvent, ...args: RoleFitOpenWorkspaceFolderRequest) => {
+        requireTrustedRequest(event, options);
+        requireNoArguments(args, "Open-workspace-folder");
+        try {
+          await options.openWorkspaceFolder();
+        } catch {
+          throw new Error("The workspace folder could not be opened.");
+        }
+      }
+    );
+    options.ipc.handle(
+      RoleFitDesktopIpcChannel.GetConnectionStatus,
+      async (event: IpcMainInvokeEvent, ...args: RoleFitConnectionStatusRequest) => {
+        requireTrustedRequest(event, options);
+        requireNoArguments(args, "Connection-status");
+        try {
+          return copyConnectionStatus(await options.getConnectionStatus());
+        } catch {
+          throw new Error("The connection status is unavailable.");
+        }
       }
     );
   } catch (error) {

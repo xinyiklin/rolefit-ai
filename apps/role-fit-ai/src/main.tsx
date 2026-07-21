@@ -3,6 +3,7 @@ import ReactDOM from "react-dom/client";
 import App from "./App";
 import { DialogProvider } from "./hooks/useDialog";
 import { migrateLegacyDocStylePrefs } from "./lib/docStyleMigration";
+import { adoptWorkspacePreferences } from "./lib/browserPrefsSync";
 import "./styles/index.css";
 
 // One-shot, idempotent: carries a returning user's pre-monorepo docStyle/
@@ -53,6 +54,12 @@ class AppErrorBoundary extends React.Component<
     return this.props.children;
   }
 }
+
+// Adopt any workspace-mirrored/restored browser preferences before the app's
+// own state (which reads settings/lastBaseResume on mount) ever renders. Bound
+// to ~1.5s and fail-open internally (see browserPrefsSync.ts), so a slow or
+// unreachable server delays first paint only briefly and never blocks it.
+await adoptWorkspacePreferences();
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>

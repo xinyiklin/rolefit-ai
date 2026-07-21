@@ -22,6 +22,7 @@ import {
   readApplications,
   reconcileApplicationMutations,
   sanitizeApplications,
+  withApplicationsLock,
   writeApplications
 } from "./index.ts";
 
@@ -44,7 +45,7 @@ export async function handleListApplications(
   workspaceDir = jobWorkspaceDir
 ): Promise<void> {
   try {
-    const applications = await readApplications(workspaceDir);
+    const applications = await withApplicationsLock(() => readApplications(workspaceDir));
     sendJson(res, 200, {
       applications,
       // The browser only needs a human-readable storage label. Do not expose
@@ -62,16 +63,6 @@ export async function handleListApplications(
 // the same disk state and the second write would drop the first's entry. A
 // simple promise chain makes each cycle atomic within this process — sufficient
 // for the single-server local app.
-let applicationsWriteQueue: Promise<unknown> = Promise.resolve();
-function withApplicationsLock<T>(task: () => Promise<T>): Promise<T> {
-  const run = applicationsWriteQueue.then(task);
-  applicationsWriteQueue = run.then(
-    () => undefined,
-    () => undefined
-  );
-  return run;
-}
-
 export async function handleSaveApplications(
   req: IncomingMessage,
   res: ServerResponse,
@@ -178,9 +169,9 @@ export async function handleSaveApplicationResume(
         return;
       }
     }
-    await mkdir(dir, { recursive: true });
-    let hasPdf = false;
-    if (pdfBuffer) {
+    const hasPdf = await withApplicationsLock(async () => {
+      await mkdir(dir, { recursive: true });
+      if (!pdfBuffer) return false;
       const filePath = join(dir, "resume.pdf");
       const temporaryPath = `${filePath}.${process.pid}.${randomUUID()}.tmp`;
       try {
@@ -189,8 +180,8 @@ export async function handleSaveApplicationResume(
       } finally {
         await rm(temporaryPath, { force: true }).catch(() => undefined);
       }
-      hasPdf = true;
-    }
+      return true;
+    });
     sendJson(res, 200, {
       resumeArtifacts: { hasPdf, fileName, savedAt: new Date().toISOString() }
     });
@@ -218,7 +209,7 @@ export async function handleApplicationResumeFile(
   if (!dir) { sendJson(res, 400, { error: "Invalid application id." }); return; }
   const filePath = join(dir, "resume.pdf");
   try {
-    const data = await readFile(filePath);
+    const data = await withApplicationsLock(() => readFile(filePath));
     res.writeHead(200, {
       "Content-Type": "application/pdf",
       "Content-Disposition": `attachment; filename="resume.pdf"`,

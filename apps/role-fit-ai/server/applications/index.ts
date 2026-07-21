@@ -49,6 +49,19 @@ export class ApplicationsStorageError extends Error {
   }
 }
 
+// Serialize every tracker read-modify-write cycle and any workspace-wide
+// snapshot/restore that must observe applications.json and its PDF artifacts as
+// one consistent state.
+let applicationsWriteQueue: Promise<unknown> = Promise.resolve();
+export function withApplicationsLock<T>(task: () => Promise<T>): Promise<T> {
+  const run = applicationsWriteQueue.then(task);
+  applicationsWriteQueue = run.then(
+    () => undefined,
+    () => undefined
+  );
+  return run;
+}
+
 function isMissingFile(error: unknown): boolean {
   return Boolean(error && typeof error === "object" && "code" in error && error.code === "ENOENT");
 }

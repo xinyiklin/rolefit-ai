@@ -16,6 +16,25 @@ import {
 import {
   resolveDesktopRuntimePaths
 } from "../../dist-electron/desktop/runtime-paths.cjs";
+import {
+  readBoundedResponseText
+} from "../../dist-electron/desktop/bounded-response.cjs";
+
+assert.equal(
+  await readBoundedResponseText(new Response("safe"), 4),
+  "safe",
+  "bounded response reads the exact supported body"
+);
+await assert.rejects(
+  () => readBoundedResponseText(new Response("oversized-without-trusted-length"), 8),
+  /response is too large/,
+  "bounded response stops an oversized streamed body even without trusting Content-Length"
+);
+await assert.rejects(
+  () => readBoundedResponseText(new Response("safe", { headers: { "Content-Length": "999" } }), 8),
+  /response is too large/,
+  "bounded response rejects an oversized declared length before reading"
+);
 
 const workspaceA = "/tmp/rolefit-contract-a";
 const workspaceB = "/tmp/rolefit-contract-b";

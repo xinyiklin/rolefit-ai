@@ -1,7 +1,9 @@
 import { app, BrowserWindow, dialog, ipcMain, safeStorage, session, shell, utilityProcess } from "electron";
 import squirrelStartup from "electron-squirrel-startup";
-import { mkdir, writeFile } from "node:fs/promises";
-import { isAbsolute, join, resolve } from "node:path";
+import { randomUUID } from "node:crypto";
+import type { Dirent } from "node:fs";
+import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
+import { basename, dirname, isAbsolute, join, resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 import { setTimeout as delay } from "node:timers/promises";
 import {
@@ -27,16 +29,26 @@ import {
   ROLEFIT_CLI_PROVIDER_IDS,
   ROLEFIT_EXTENSION_PAIRING_REQUEST_MAX_COUNT,
   ROLEFIT_PROVIDER_IDS,
+  ROLEFIT_WORKSPACE_BACKUP_MAX_JSON_BYTES,
+  ROLEFIT_WORKSPACE_BASE_RESUME_RE,
+  ROLEFIT_WORKSPACE_LEGACY_BASE_RESUME_RE,
+  ROLEFIT_WORKSPACE_STAT_FILE_MAX_BYTES,
   createRoleFitDesktopRuntimeInfo,
+  isRoleFitWorkspaceBackupFileName,
   normalizeRoleFitExtensionOrigin,
   type RoleFitCliProviderStatus,
+  type RoleFitConnectionStatus,
   type RoleFitDesktopRuntimeInfo,
   type RoleFitDesktopSiteSettings,
   type RoleFitExtensionPairingSettings,
   type RoleFitProviderConnection,
-  type RoleFitProviderId
+  type RoleFitProviderId,
+  type RoleFitWorkspaceBackupResult,
+  type RoleFitWorkspaceOverview,
+  type RoleFitWorkspaceRestoreResult
 } from "./ipc-contract.cjs";
 import { installCompanionIpc } from "./ipc.cjs";
+import { readBoundedResponseText } from "./bounded-response.cjs";
 import { resolveDesktopRuntimePaths } from "./runtime-paths.cjs";
 import {
   createDesktopSettingsManager,
@@ -50,6 +62,9 @@ const INTERNAL_APP_NAME = "RoleFit Local Companion";
 const PUBLIC_APP_NAME = "RoleFit AI";
 const DEFAULT_HOST = "127.0.0.1" as const;
 const PROVIDER_SNAPSHOT_REFRESH_INTERVAL_MS = 5_000;
+const WORKSPACE_ACTIVITY_TIMEOUT_MS = 1_500;
+const WORKSPACE_TRANSFER_TIMEOUT_MS = 120_000;
+const WORKSPACE_SMALL_RESPONSE_MAX_BYTES = 4_096;
 
 type DesktopMode = "development" | "production";
 
@@ -79,6 +94,18 @@ type SmokeResult = {
   sitePortValue: string;
   sitePortLocked: boolean;
   sitePortLockReported: boolean;
+  tabLists: number;
+  tabCount: number;
+  tabPanels: number;
+  visibleTabPanels: number;
+  selectedTabId: string;
+  workspaceControlsPresent: boolean;
+  connectionControlsPresent: boolean;
+  explainerParagraphsAbsent: boolean;
+  workspaceOverview: unknown;
+  workspaceOverviewError: string | null;
+  connectionStatus: unknown;
+  connectionStatusError: string | null;
   fullWorkspaceAbsent: boolean;
   correctTitle: boolean;
 };
@@ -113,6 +140,8 @@ let providerSnapshotRefreshTimer: NodeJS.Timeout | null = null;
 let providerBackgroundRefreshes = 0;
 let providerRefreshWarningActive = false;
 let relaunchScheduled = false;
+let activeWorkspaceDir: string | null = null;
+let workspaceTransferActive = false;
 
 const PROVIDER_INSTALL_GUIDES = Object.freeze({
   "claude-cli": "https://code.claude.com/docs/en/getting-started",
@@ -189,6 +218,405 @@ function requireOwnedServerForExtensionPairing(): void {
   }
 }
 
+function requireWorkspaceDir(): string {
+  if (!activeWorkspaceDir) throw new Error("The workspace location is unavailable.");
+  return activeWorkspaceDir;
+}
+
+function toWorkspaceDisplayPath(workspacePath: string): string {
+  try {
+    const home = app.getPath("home");
+    if (home && workspacePath === home) return "~";
+    if (home && workspacePath.startsWith(home + sep)) {
+      return `~${workspacePath.slice(home.length)}`;
+    }
+  } catch {
+    // Fall through to the absolute path when no home directory is resolvable.
+  }
+  return workspacePath;
+}
+
+// Server workspace errors are written as user-safe classified messages; keep
+// them verbatim but bounded and single-line, and never surface anything else.
+function serverWorkspaceErrorMessage(body: string, fallback: string): string {
+  try {
+    const value = JSON.parse(body) as unknown;
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+      const error = (value as { error?: unknown }).error;
+      if (typeof error === "string") {
+        const message = error.replace(/\s+/g, " ").trim().slice(0, 240);
+        if (message) return message;
+      }
+    }
+  } catch {
+    // Ignore unreadable error bodies; the fallback below is already user-safe.
+  }
+  return fallback;
+}
+
+async function readWorkspaceActivity(origin: string): Promise<number | null> {
+  try {
+    const response = await fetch(`${origin}/api/workspace/activity`, {
+      cache: "no-store",
+      headers: { Accept: "application/json" },
+      redirect: "error",
+      signal: AbortSignal.timeout(WORKSPACE_ACTIVITY_TIMEOUT_MS)
+    });
+    if (!response.ok || !response.headers.get("content-type")?.includes("application/json")) {
+      return null;
+    }
+    const body = await readBoundedResponseText(response, WORKSPACE_SMALL_RESPONSE_MAX_BYTES);
+    const value = JSON.parse(body) as unknown;
+    const activeTabs = value && typeof value === "object" && !Array.isArray(value)
+      ? (value as { activeTabs?: unknown }).activeTabs
+      : undefined;
+    return typeof activeTabs === "number" && Number.isSafeInteger(activeTabs) && activeTabs >= 0
+      ? activeTabs
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+async function safeWorkspaceDirents(directory: string): Promise<Dirent[]> {
+  try {
+    return await readdir(directory, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+}
+
+// Shape-only application count: a bounded, defensive read of applications.json
+// that never throws and never lets record contents cross IPC.
+async function readApplicationCount(filePath: string): Promise<number | null> {
+  try {
+    const details = await stat(filePath);
+    if (!details.isFile() || details.size > ROLEFIT_WORKSPACE_STAT_FILE_MAX_BYTES) return null;
+    const value = JSON.parse(await readFile(filePath, "utf8")) as unknown;
+    if (Array.isArray(value)) return value.length;
+    if (value && typeof value === "object") {
+      const applications = (value as { applications?: unknown }).applications;
+      if (Array.isArray(applications)) return applications.length;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+type WorkspaceStats = Readonly<{
+  hasBaseResume: boolean;
+  applicationCount: number | null;
+}>;
+
+const EMPTY_WORKSPACE_STATS: WorkspaceStats = Object.freeze({
+  hasBaseResume: false,
+  applicationCount: null
+});
+
+async function readWorkspaceStats(workspaceDir: string): Promise<WorkspaceStats> {
+  try {
+    const rootEntries = await safeWorkspaceDirents(workspaceDir);
+    const hasBaseResume = rootEntries.some((entry) => entry.isFile() &&
+      (ROLEFIT_WORKSPACE_BASE_RESUME_RE.test(entry.name) ||
+        ROLEFIT_WORKSPACE_LEGACY_BASE_RESUME_RE.test(entry.name)));
+    const applicationCount = rootEntries.some((entry) => entry.isFile() && entry.name === "applications.json")
+      ? await readApplicationCount(join(workspaceDir, "applications.json"))
+      : null;
+    return Object.freeze({ hasBaseResume, applicationCount });
+  } catch {
+    return EMPTY_WORKSPACE_STATS;
+  }
+}
+
+async function getWorkspaceOverview(): Promise<RoleFitWorkspaceOverview> {
+  const workspacePath = requireWorkspaceDir();
+  const [activeBrowserTabs, stats] = await Promise.all([
+    desktopServer ? readWorkspaceActivity(desktopServer.origin) : Promise.resolve(null),
+    readWorkspaceStats(workspacePath)
+  ]);
+  return Object.freeze({
+    workspacePath,
+    workspaceDisplayPath: toWorkspaceDisplayPath(workspacePath),
+    activeBrowserTabs,
+    serverReady: desktopServer !== null,
+    hasBaseResume: stats.hasBaseResume,
+    applicationCount: stats.applicationCount
+  });
+}
+
+async function probeServerAlive(origin: string): Promise<boolean> {
+  try {
+    const response = await fetch(`${origin}/api/health`, {
+      cache: "no-store",
+      headers: { Accept: "application/json" },
+      redirect: "error",
+      signal: AbortSignal.timeout(WORKSPACE_ACTIVITY_TIMEOUT_MS)
+    });
+    return response.ok &&
+      Boolean(response.headers.get("content-type")?.includes("application/json"));
+  } catch {
+    return false;
+  }
+}
+
+async function getConnectionStatus(): Promise<RoleFitConnectionStatus> {
+  const settings = getLocalSiteSettings();
+  const server = desktopServer;
+  const siteUrl = server
+    ? canonicalBrowserOrigin(server.origin)
+    : `http://localhost:${settings.localSitePort}`;
+  let serverState: RoleFitConnectionStatus["serverState"] = "starting";
+  let activeBrowserTabs: number | null = null;
+  if (server) {
+    // Re-probe health so a listener that died after startup reports
+    // "unreachable" instead of stale ownership.
+    const alive = await probeServerAlive(server.origin);
+    serverState = alive ? server.ownership : "unreachable";
+    if (alive) activeBrowserTabs = await readWorkspaceActivity(server.origin);
+  }
+  return Object.freeze({
+    port: settings.localSitePort,
+    siteUrl,
+    serverState,
+    activeBrowserTabs
+  });
+}
+
+function workspaceBackupFileName(disposition: string | null): string {
+  const match = disposition?.match(/filename="([^"]+)"/);
+  const candidate = match?.[1]?.trim() ?? "";
+  if (isRoleFitWorkspaceBackupFileName(candidate)) return candidate;
+  return `RoleFit-Workspace-${new Date().toISOString().slice(0, 10)}.rolefit-backup`;
+}
+
+function defaultBackupSavePath(fileName: string): string {
+  try {
+    return join(app.getPath("downloads"), fileName);
+  } catch {
+    return fileName;
+  }
+}
+
+function workspaceError(message: string): Readonly<{ status: "error"; message: string }> {
+  return Object.freeze({ status: "error" as const, message });
+}
+
+async function backupWorkspaceToFile(): Promise<RoleFitWorkspaceBackupResult> {
+  if (workspaceTransferActive) {
+    return workspaceError("A workspace backup or restore is already running.");
+  }
+  const server = desktopServer;
+  const window = mainWindow;
+  if (!server) {
+    return workspaceError("The local RoleFit server is not running. Restart the companion and try again.");
+  }
+  if (!window || window.isDestroyed()) {
+    return workspaceError("The companion window is unavailable.");
+  }
+  workspaceTransferActive = true;
+  try {
+    let response: Response;
+    try {
+      response = await fetch(`${server.origin}/api/workspace/backup`, {
+        cache: "no-store",
+        headers: { Accept: "application/vnd.rolefit.workspace-backup+json, application/json" },
+        redirect: "error",
+        signal: AbortSignal.timeout(WORKSPACE_TRANSFER_TIMEOUT_MS)
+      });
+    } catch {
+      return workspaceError("The local RoleFit server could not be reached for the backup.");
+    }
+    if (!response.ok) {
+      const errorBody = await readBoundedResponseText(response, WORKSPACE_SMALL_RESPONSE_MAX_BYTES)
+        .catch(() => "");
+      return workspaceError(
+        serverWorkspaceErrorMessage(errorBody, "The workspace could not be backed up safely.")
+      );
+    }
+    let body: string;
+    try {
+      body = await readBoundedResponseText(response, ROLEFIT_WORKSPACE_BACKUP_MAX_JSON_BYTES);
+    } catch {
+      return workspaceError("The workspace backup is larger than the supported 96 MB limit.");
+    }
+    // Minimal shape probe only; the server already validated the envelope and
+    // the file is written verbatim. Never log or echo envelope contents.
+    let fileCount = 0;
+    let includesPreferences = false;
+    try {
+      const envelope = JSON.parse(body) as unknown;
+      if (!envelope || typeof envelope !== "object" || Array.isArray(envelope) ||
+          !Array.isArray((envelope as { files?: unknown }).files)) {
+        throw new Error("Unexpected backup envelope.");
+      }
+      fileCount = (envelope as { files: readonly unknown[] }).files.length;
+      includesPreferences = "browser" in envelope;
+    } catch {
+      return workspaceError("The local server returned an unexpected backup format.");
+    }
+    const saveResult = await dialog.showSaveDialog(window, {
+      title: "Save workspace backup",
+      defaultPath: defaultBackupSavePath(
+        workspaceBackupFileName(response.headers.get("content-disposition"))
+      ),
+      filters: [{ name: "RoleFit workspace backup", extensions: ["rolefit-backup"] }]
+    });
+    if (saveResult.canceled || !saveResult.filePath) {
+      return Object.freeze({ status: "cancelled" as const });
+    }
+    const targetPath = saveResult.filePath.endsWith(".rolefit-backup")
+      ? saveResult.filePath
+      : `${saveResult.filePath}.rolefit-backup`;
+    const temporaryPath = join(dirname(targetPath), `.rolefit-backup-${process.pid}-${randomUUID()}.tmp`);
+    try {
+      // Never truncate an existing backup before the replacement bytes are
+      // complete. The sibling temporary file keeps the final rename on the same
+      // volume and owner-only permissions protect the sensitive plaintext JSON.
+      await writeFile(temporaryPath, body, { encoding: "utf8", mode: 0o600, flag: "wx" });
+      await rename(temporaryPath, targetPath);
+    } catch {
+      return workspaceError("The backup file could not be written. Choose another location and try again.");
+    } finally {
+      await rm(temporaryPath, { force: true }).catch(() => undefined);
+    }
+    return Object.freeze({
+      status: "saved" as const,
+      filePath: basename(targetPath),
+      fileCount,
+      includesPreferences
+    });
+  } finally {
+    workspaceTransferActive = false;
+  }
+}
+
+async function restoreWorkspaceFromFile(): Promise<RoleFitWorkspaceRestoreResult> {
+  if (workspaceTransferActive) {
+    return workspaceError("A workspace backup or restore is already running.");
+  }
+  const server = desktopServer;
+  const window = mainWindow;
+  if (!server) {
+    return workspaceError("The local RoleFit server is not running. Restart the companion and try again.");
+  }
+  if (!window || window.isDestroyed()) {
+    return workspaceError("The companion window is unavailable.");
+  }
+  workspaceTransferActive = true;
+  try {
+    const openResult = await dialog.showOpenDialog(window, {
+      title: "Restore workspace backup",
+      properties: ["openFile"],
+      filters: [{ name: "RoleFit workspace backup", extensions: ["rolefit-backup"] }]
+    });
+    const backupPath = openResult.filePaths[0];
+    if (openResult.canceled || !backupPath) {
+      return Object.freeze({ status: "cancelled" as const });
+    }
+    try {
+      const details = await stat(backupPath);
+      if (!details.isFile()) {
+        return workspaceError("Choose a regular .rolefit-backup file.");
+      }
+      // Refuse oversized files before reading them into memory.
+      if (details.size > ROLEFIT_WORKSPACE_BACKUP_MAX_JSON_BYTES) {
+        return workspaceError("That file is larger than the supported 96 MB backup limit.");
+      }
+    } catch {
+      return workspaceError("The selected backup file could not be read.");
+    }
+    let body: string;
+    try {
+      body = (await readFile(backupPath, "utf8")).replace(/^\uFEFF/, "");
+    } catch {
+      return workspaceError("The selected backup file could not be read.");
+    }
+    try {
+      const value = JSON.parse(body) as unknown;
+      if (!value || typeof value !== "object" || Array.isArray(value)) {
+        throw new Error("Not a backup envelope.");
+      }
+    } catch {
+      return workspaceError("This is not a valid RoleFit workspace backup.");
+    }
+    const confirmation = await dialog.showMessageBox(window, {
+      type: "warning",
+      buttons: ["Cancel", "Replace Workspace"],
+      defaultId: 0,
+      cancelId: 0,
+      message: "Replace the saved workspace with this backup?",
+      detail: "The current saved workspace is kept as a local safety copy. Close any open RoleFit browser tabs first."
+    });
+    if (confirmation.response !== 1) {
+      return Object.freeze({ status: "cancelled" as const });
+    }
+    let response: Response;
+    try {
+      response = await fetch(`${server.origin}/api/workspace/restore`, {
+        method: "POST",
+        cache: "no-store",
+        headers: {
+          Accept: "application/vnd.rolefit.workspace-backup+json, application/json",
+          "Content-Type": "application/json"
+        },
+        redirect: "error",
+        body,
+        signal: AbortSignal.timeout(WORKSPACE_TRANSFER_TIMEOUT_MS)
+      });
+    } catch {
+      return workspaceError("The local RoleFit server could not be reached for the restore.");
+    }
+    const responseBody = await readBoundedResponseText(response, WORKSPACE_SMALL_RESPONSE_MAX_BYTES)
+      .catch(() => "");
+    if (!response.ok) {
+      // 409 carries the server's live-browser-tab refusal; surface it verbatim.
+      return workspaceError(serverWorkspaceErrorMessage(
+        responseBody,
+        response.status === 409
+          ? "Close the open RoleFit browser tabs, then try the restore again."
+          : "The workspace could not be restored safely."
+      ));
+    }
+    try {
+      const value = JSON.parse(responseBody) as unknown;
+      if (!value || typeof value !== "object" || Array.isArray(value)) {
+        throw new Error("Unexpected restore response.");
+      }
+      const record = value as { restored?: unknown; restoredFiles?: unknown; previousWorkspaceKept?: unknown };
+      if (record.restored !== true ||
+          typeof record.restoredFiles !== "number" ||
+          !Number.isSafeInteger(record.restoredFiles) ||
+          record.restoredFiles < 0 ||
+          typeof record.previousWorkspaceKept !== "boolean") {
+        throw new Error("Unexpected restore response.");
+      }
+      return Object.freeze({
+        status: "restored" as const,
+        restoredFiles: record.restoredFiles,
+        previousWorkspaceKept: record.previousWorkspaceKept
+      });
+    } catch {
+      return workspaceError("The local server returned an unexpected restore response.");
+    }
+  } finally {
+    workspaceTransferActive = false;
+  }
+}
+
+async function openWorkspaceFolder(): Promise<void> {
+  const workspacePath = requireWorkspaceDir();
+  try {
+    // The server's ensureJobWorkspace performs the same recursive mkdir before
+    // touching the workspace; opening an empty-but-real folder mirrors that.
+    await mkdir(workspacePath, { recursive: true });
+  } catch {
+    throw new Error("The workspace folder could not be created. Check folder permissions.");
+  }
+  const failure = await shell.openPath(workspacePath);
+  if (failure) throw new Error("The workspace folder could not be opened.");
+}
+
 function configuredProviderIds(state: ProviderVaultConfiguredState): Set<RoleFitProviderId> {
   return new Set(
     state.providers
@@ -213,7 +641,6 @@ function apiProviderConnection(
     installed: null,
     authState: "not-applicable",
     setupFlow: "api-key",
-    signInRunning: false,
     guidance: configured
       ? ready
         ? `${label} API access is stored securely on this device.`
@@ -254,7 +681,6 @@ function cliProviderConnection(
     installed: status.installed,
     authState: status.authState,
     setupFlow,
-    signInRunning: status.signInRunning,
     guidance
   });
 }
@@ -419,6 +845,39 @@ function siteSettingsMatch(
     Object.keys(settings).length === 5;
 }
 
+function nullableCountMatches(value: unknown): boolean {
+  return value === null ||
+    (typeof value === "number" && Number.isSafeInteger(value) && value >= 0);
+}
+
+function workspaceOverviewMatches(value: unknown, expectedPath: string | null): boolean {
+  if (!expectedPath || !value || typeof value !== "object" || Array.isArray(value)) return false;
+  const overview = value as Record<string, unknown>;
+  return overview.workspacePath === expectedPath &&
+    typeof overview.workspaceDisplayPath === "string" &&
+    overview.workspaceDisplayPath.length > 0 &&
+    nullableCountMatches(overview.activeBrowserTabs) &&
+    overview.serverReady === true &&
+    typeof overview.hasBaseResume === "boolean" &&
+    nullableCountMatches(overview.applicationCount) &&
+    Object.keys(overview).length === 6;
+}
+
+function connectionStatusMatches(
+  value: unknown,
+  expectedPort: number,
+  expectedSiteUrl: string,
+  expectedState: RoleFitServerOwnership
+): boolean {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const status = value as Record<string, unknown>;
+  return status.port === expectedPort &&
+    status.siteUrl === expectedSiteUrl &&
+    status.serverState === expectedState &&
+    nullableCountMatches(status.activeBrowserTabs) &&
+    Object.keys(status).length === 4;
+}
+
 function providerStatusesMatch(value: unknown): value is readonly RoleFitProviderConnection[] {
   if (!Array.isArray(value) || value.length !== 5) return false;
   const expectedIds = [...ROLEFIT_PROVIDER_IDS].sort();
@@ -434,9 +893,8 @@ function providerStatusesMatch(value: unknown): value is readonly RoleFitProvide
       (typeof status.installed === "boolean" || status.installed === null) &&
       (status.authState === "signed-in" || status.authState === "signed-out" || status.authState === "unknown" || status.authState === "not-applicable") &&
       (status.setupFlow === "managed-login" || status.setupFlow === "manual-login" || status.setupFlow === "api-key") &&
-      typeof status.signInRunning === "boolean" &&
       typeof status.guidance === "string" &&
-      Object.keys(status).length === 9;
+      Object.keys(status).length === 8;
   });
 }
 
@@ -517,10 +975,24 @@ async function inspectSmokeRenderer(
       let providerStatus = null;
       let providerStatusError = null;
       let providerMutationError = null;
+      let workspaceOverview = null;
+      let workspaceOverviewError = null;
+      let connectionStatus = null;
+      let connectionStatusError = null;
       try {
         runtimeInfo = bridge ? await bridge.getRuntimeInfo() : null;
       } catch (error) {
         runtimeInfoError = error instanceof Error ? error.message : String(error);
+      }
+      try {
+        workspaceOverview = bridge ? await bridge.getWorkspaceOverview() : null;
+      } catch (error) {
+        workspaceOverviewError = error instanceof Error ? error.message : String(error);
+      }
+      try {
+        connectionStatus = bridge ? await bridge.getConnectionStatus() : null;
+      } catch (error) {
+        connectionStatusError = error instanceof Error ? error.message : String(error);
       }
       try {
         localSiteSettings = bridge ? await bridge.getLocalSiteSettings() : null;
@@ -562,6 +1034,19 @@ async function inspectSmokeRenderer(
         sitePortValue: document.querySelector('#local-site-port')?.value ?? '',
         sitePortLocked: Boolean(document.querySelector('#local-site-port')?.disabled),
         sitePortLockReported: document.querySelector('#local-site-port-status')?.textContent?.includes('ROLEFIT_DESKTOP_PORT') ?? false,
+        tabLists: document.querySelectorAll('[role="tablist"]').length,
+        tabCount: document.querySelectorAll('[role="tab"]').length,
+        tabPanels: document.querySelectorAll('[role="tabpanel"]').length,
+        visibleTabPanels: [...document.querySelectorAll('[role="tabpanel"]')].filter((panel) => !panel.hidden).length,
+        selectedTabId: document.querySelector('[role="tab"][aria-selected="true"]')?.id ?? '',
+        workspaceControlsPresent: ['workspace-path', 'open-workspace-folder', 'backup-workspace', 'restore-workspace', 'workspace-status', 'stat-base-resume', 'stat-applications'].every((id) => Boolean(document.getElementById(id))) &&
+          ['workspace-activity', 'stat-pdfs', 'stat-history'].every((id) => !document.getElementById(id)),
+        connectionControlsPresent: ['connection-state', 'connection-state-text', 'connection-browser-tabs'].every((id) => Boolean(document.getElementById(id))),
+        explainerParagraphsAbsent: [...document.querySelectorAll('main p')].every((paragraph) => (paragraph.textContent ?? '').trim().length <= 80),
+        workspaceOverview,
+        workspaceOverviewError,
+        connectionStatus,
+        connectionStatusError,
         fullWorkspaceAbsent: !document.querySelector('header[aria-label="Workspace header"], main[aria-label="Output workspace"]'),
         correctTitle: document.title === 'RoleFit AI'
       });
@@ -573,17 +1058,20 @@ async function inspectSmokeRenderer(
   const expectedSiteSettings = getLocalSiteSettings();
   const expectedBridgeKeys = [
     "applyLocalSitePort",
-    "beginCliSignIn",
-    "cancelCliSignIn",
+    "backupWorkspaceToFile",
+    "getConnectionStatus",
     "getExtensionPairingSettings",
     "getLocalSiteSettings",
     "getProviderConnections",
     "getRuntimeInfo",
+    "getWorkspaceOverview",
     "openBrowserApp",
     "openCliSignInTerminal",
     "openProviderInstallGuide",
+    "openWorkspaceFolder",
     "removeExtensionOrigin",
     "removeProvider",
+    "restoreWorkspaceFromFile",
     "saveApiProvider",
     "saveExtensionOrigin",
     "setCliProviderEnabled"
@@ -622,6 +1110,23 @@ async function inspectSmokeRenderer(
     result.sitePortValue !== String(expectedSiteSettings.localSitePort) ||
     result.sitePortLocked !== expectedSiteSettings.locked ||
     result.sitePortLockReported !== expectedSiteSettings.locked ||
+    result.tabLists !== 1 ||
+    result.tabCount !== 3 ||
+    result.tabPanels !== 3 ||
+    result.visibleTabPanels !== 1 ||
+    result.selectedTabId !== "tab-providers" ||
+    !result.workspaceControlsPresent ||
+    !result.connectionControlsPresent ||
+    !result.explainerParagraphsAbsent ||
+    result.workspaceOverviewError !== null ||
+    !workspaceOverviewMatches(result.workspaceOverview, activeWorkspaceDir) ||
+    result.connectionStatusError !== null ||
+    !connectionStatusMatches(
+      result.connectionStatus,
+      expectedSiteSettings.localSitePort,
+      canonicalBrowserOrigin(serverOrigin),
+      ownership
+    ) ||
     (holdMs >= PROVIDER_SNAPSHOT_REFRESH_INTERVAL_MS && result.providerBackgroundRefreshes < 1) ||
     !result.fullWorkspaceAbsent ||
     !result.correctTitle ||
@@ -708,10 +1213,16 @@ function createMainWindow(
   const smokeMode = process.env.ROLEFIT_DESKTOP_SMOKE === "companion";
   const window = new BrowserWindow({
     title: PUBLIC_APP_NAME,
+    // Packaged builds take the "R" icon from the signed executable (forge
+    // `icon.ico`/`icon.icns`); dev needs it pointed at the source asset so the
+    // window/taskbar icon is the same "R" mark, not the default Electron icon.
+    icon: app.isPackaged
+      ? undefined
+      : join(__dirname, "..", "..", "desktop", "assets", "icon.ico"),
     width: 760,
-    height: 760,
+    height: 560,
     minWidth: 620,
-    minHeight: 620,
+    minHeight: 520,
     show: !smokeMode,
     backgroundColor: "#eef1ec",
     autoHideMenuBar: process.platform !== "darwin",
@@ -778,12 +1289,13 @@ async function shutdownAndExit(exitCode: number): Promise<void> {
     await cliProviderManager?.shutdown();
   } catch {
     finalExitCode = 1;
-    console.error("[companion] A CLI sign-in process did not stop cleanly.");
+    console.error("[companion] The CLI provider manager did not stop cleanly.");
   } finally {
     cliProviderManager = null;
     providerVault = null;
     desktopSettingsManager = null;
     localSiteSettings = null;
+    activeWorkspaceDir = null;
   }
   try {
     if (mainWindow && !mainWindow.isDestroyed()) mainWindow.destroy();
@@ -833,6 +1345,9 @@ async function startDesktop(): Promise<void> {
     userDataDirectory: app.getPath("userData"),
     workspaceOverride: process.env.ROLEFIT_WORKSPACE_DIR
   });
+  // The same runtime-paths resolution feeds ROLEFIT_WORKSPACE_DIR to the owned
+  // server, so the Workspace tab always describes the server's workspace.
+  activeWorkspaceDir = paths.workspaceDir;
   await mkdir(paths.serverCwd, { recursive: true });
   const cliSearchPaths = app.isPackaged
     ? packagedCliSearchPaths(process.platform, app.getPath("home"), process.env)
@@ -961,19 +1476,6 @@ async function startDesktop(): Promise<void> {
       await synchronizeProviderSnapshot();
       return getProviderConnection(provider);
     },
-    beginCliSignIn: async (provider) => {
-      if (!cliProviderManager) throw new Error("CLI provider manager is unavailable.");
-      const connection = await getProviderConnection(provider);
-      if (!connection.configured) throw new Error("Add this CLI provider before signing in.");
-      const result = await cliProviderManager.beginSignIn(provider);
-      await synchronizeProviderSnapshot();
-      return result;
-    },
-    cancelCliSignIn: async (operationId) => {
-      const canceled = await (cliProviderManager?.cancelSignIn(operationId) ?? Promise.resolve(false));
-      await synchronizeProviderSnapshot();
-      return canceled;
-    },
     openCliSignInTerminal: async (provider) => {
       if (!cliProviderManager) throw new Error("CLI provider manager is unavailable.");
       const connection = await getProviderConnection(provider);
@@ -986,7 +1488,12 @@ async function startDesktop(): Promise<void> {
     },
     openBrowserApp: async () => {
       await shell.openExternal(browserOrigin);
-    }
+    },
+    getWorkspaceOverview,
+    backupWorkspaceToFile,
+    restoreWorkspaceFromFile,
+    openWorkspaceFolder,
+    getConnectionStatus
   });
   mainWindow = createMainWindow(
     companionPath,

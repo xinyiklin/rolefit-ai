@@ -8,8 +8,8 @@ This plan supersedes both the earlier full-app Electron host and the interim
 three-provider companion. RoleFit remains a browser-primary local application.
 Electron is a compact local provider manager: it starts the trusted loopback
 service, stores supported API credentials locally, connects supported
-subscription CLIs, launches provider-owned sign-in, and opens RoleFit in the
-default browser.
+subscription CLIs, links to official install/sign-in docs and offers an
+external-terminal sign-in, and opens RoleFit in the default browser.
 
 There is still no RoleFit account, application login, database, cloud sync, or
 second Drafting Desk.
@@ -27,8 +27,8 @@ The supported provider catalog is:
 
 | Provider | Kind | Companion setup |
 | --- | --- | --- |
-| Claude Code | CLI | detect `claude`, launch provider-owned Claude subscription sign-in |
-| Codex | CLI | detect `codex`, launch provider-owned ChatGPT sign-in |
+| Claude Code | CLI | detect `claude`, link to official install/sign-in docs and offer an external-terminal sign-in |
+| Codex | CLI | detect `codex`, link to official install/sign-in docs and offer an external-terminal sign-in |
 | Antigravity | CLI | detect `agy`, hand off to its interactive provider-owned terminal flow |
 | OpenAI | API | accept and securely persist one local API key |
 | Claude | API | accept and securely persist one local API key |
@@ -80,7 +80,8 @@ Electron main owns:
 - single-instance application lifecycle and the local provider window;
 - starting or compatibly inspecting the loopback RoleFit server;
 - the encrypted API credential vault and non-secret enabled-provider registry;
-- fixed CLI installation/status probes and fixed provider-owned sign-in flows;
+- fixed CLI installation/status probes, official install/sign-in doc links, and
+  a fixed external-terminal sign-in;
 - sending a bounded in-memory provider snapshot to a server process it owns;
 - opening RoleFit and official installation guidance in the system browser;
 - the read-only packaged runtime and native macOS/Windows distribution seams.
@@ -253,6 +254,13 @@ fallback, not an app-created credential store.
 
 ## CLI install and login UX
 
+> **Superseded (managed in-app sign-in removed):** RoleFit no longer spawns a
+> managed login child. CLI rows now link to official install/sign-in docs
+> (**Sign-in guide**) and offer an external-terminal sign-in (**Terminal ↗**).
+> The single-flight/time-bounded/cancellable spawned-login details below are
+> retained only as historical context; the external-terminal sign-in and the
+> official install/sign-in-guide links remain valid.
+
 The companion may provide a RoleFit connection screen. It must not provide a
 username/password form or handle provider passwords, MFA, SSO, authorization
 codes, refresh tokens, or CLI credential files.
@@ -295,8 +303,10 @@ designed and signed custom protocol/pairing contract; it is not part of D4.
   denied. Typed IPC can open only the selected local RoleFit origin or an
   official guide selected from a closed provider id.
 - Provider status is bounded and shape-only. Raw CLI/API output is discarded.
-- Sign-in is single-flight, time-bounded, cancellable, and terminates only
-  owned children.
+- *(Historical: the managed in-app sign-in was removed.)* The retained
+  external-terminal sign-in and bounded status probes terminate only owned
+  children; the earlier managed login was single-flight, time-bounded, and
+  cancellable.
 - The public loopback server never receives an Electron management bearer or
   vault mutation route. Browser and extension tokens never authorize IPC.
 - Numeric-loopback bind, Host/Origin/CSRF guards, and extension CORS remain
@@ -315,7 +325,7 @@ designed and signed custom protocol/pairing contract; it is not part of D4.
 | Local site port | Electron main | versioned non-secret settings under `userData` |
 | Decrypted API credential | owned local server | memory only, private parent channel |
 | CLI credential/session | provider CLI | provider-owned local credential store |
-| CLI status/sign-in progress | Electron main | memory only |
+| CLI status-probe progress | Electron main | memory only |
 
 No SQLite, RoleFit authentication, cloud synchronization, provider account
 creation, or hosted credential service is introduced.
@@ -404,6 +414,13 @@ tracker, extension inbox, and multi-tab behavior remain browser-owned.
 
 ### Phase P4 — Provider-owned login and install recovery
 
+> **Superseded (managed in-app sign-in removed):** RoleFit no longer spawns a
+> managed login child. CLI rows now link to official install/sign-in docs
+> (**Sign-in guide**) and offer an external-terminal sign-in (**Terminal ↗**).
+> The browser-opening/spawned-login steps below are retained only as historical
+> context; the install-recovery links and the external-terminal sign-in remain
+> valid.
+
 1. Add official installation links for missing CLIs and `Check again`.
 2. Keep Claude/Codex fixed browser-opening login flows.
 3. Add explicit terminal fallback where interactive input is required.
@@ -464,7 +481,7 @@ Manual verification:
 1. Start with isolated workspace/user-data and an owned server.
 2. Add fake/synthetic OpenAI and Claude API keys; confirm only configured state
    returns and no key appears in DOM, IPC results, HTTP, logs, or browser storage.
-3. Add/remove each CLI using fake status/login processes; verify installed,
+3. Add/remove each CLI using fake status processes; verify installed,
    signed-out, configured, ready, and reconnect states.
 4. Confirm browser menus show only configured providers across all three stages.
 5. Confirm no provider disables AI but leaves editing/tracker/export usable.
@@ -473,7 +490,8 @@ Manual verification:
    provider discovery instead of recording `loading` as a failed Distill.
 8. Close the setup window, change a fake CLI auth result, and confirm the owned
    server snapshot refreshes without renderer IPC.
-9. Confirm shutdown leaves no owned server or login child and clears snapshots.
+9. Confirm shutdown leaves no owned server or owned child process and clears
+   snapshots.
 
 Live API-key validation, provider login, and AI generation require explicit
 authorization and synthetic/approved content because they may open account

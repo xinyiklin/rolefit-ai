@@ -1,6 +1,6 @@
-import type { AiProviderValue } from "../config/aiOptions";
-import { modelOptionsByProvider, providerOptions } from "../config/aiOptions";
-import { CITIZENSHIP_OPTIONS, type CitizenshipStatus } from "./candidateFacts";
+import type { AiProviderValue } from "../config/aiOptions.ts";
+import { modelOptionsByProvider, providerOptions } from "../config/aiOptions.ts";
+import { CITIZENSHIP_OPTIONS, type CitizenshipStatus } from "./candidateFacts.ts";
 
 // Auto-saved browser UI preferences (localStorage). Credentials are absent by
 // construction: supported API keys live only in the local provider companion.
@@ -42,6 +42,26 @@ const STAGE_FIELD_GROUPS: Array<[keyof PersistedSettings, keyof PersistedSetting
   ["auditProvider", "auditSelectedModel", "auditCliReasoningEffort"],
   ["distillProvider", "distillSelectedModel", "distillCliReasoningEffort"]
 ];
+const PERSISTED_SETTING_KEYS = [
+  "aiProvider",
+  "selectedModel",
+  "cliReasoningEffort",
+  "auditProvider",
+  "auditSelectedModel",
+  "auditCliReasoningEffort",
+  "distillProvider",
+  "distillSelectedModel",
+  "distillCliReasoningEffort",
+  "honestContext",
+  "customInstructions",
+  "strictReview",
+  "polishStages",
+  "citizenshipStatus",
+  "legallyAuthorizedToWork",
+  "requiresSponsorship",
+  "workAuthorization",
+  "sponsorship"
+] as const satisfies readonly (keyof PersistedSettings)[];
 
 // Reconcile persisted values that may be stale (older app version, a renamed
 // provider, a removed model option, or hand-edited storage). An unknown provider
@@ -52,7 +72,15 @@ const STAGE_FIELD_GROUPS: Array<[keyof PersistedSettings, keyof PersistedSetting
 // the submitted model disagree. The empty string is checked with `!== undefined`
 // (not truthiness) so a saved "" still reconciles to the provider default; no
 // provider now ships a blank-value model or effort option.
-function coerce(settings: PersistedSettings): PersistedSettings {
+export function normalizeSettings(value: unknown): PersistedSettings {
+  const source = value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+  const allowed: Record<string, unknown> = {};
+  for (const key of PERSISTED_SETTING_KEYS) {
+    if (Object.prototype.hasOwnProperty.call(source, key)) allowed[key] = source[key];
+  }
+  const settings = allowed as PersistedSettings;
   // Untyped alias for the mutations below — every field here is a plain string
   // (or undefined), so indexing through the strongly-typed PersistedSettings
   // would fight the compiler for no safety benefit.
@@ -118,6 +146,10 @@ function coerce(settings: PersistedSettings): PersistedSettings {
   }
   delete settings.workAuthorization;
   delete settings.sponsorship;
+  if (typeof settings.honestContext !== "string") delete settings.honestContext;
+  else settings.honestContext = settings.honestContext.slice(0, 50_000);
+  if (typeof settings.customInstructions !== "string") delete settings.customInstructions;
+  else settings.customInstructions = settings.customInstructions.slice(0, 50_000);
   return settings;
 }
 
@@ -127,16 +159,41 @@ export function loadSettings(): PersistedSettings {
     const raw = localStorage.getItem(KEY);
     if (!raw) return {};
     const parsed = JSON.parse(raw);
-    return parsed && typeof parsed === "object" ? coerce(parsed as PersistedSettings) : {};
+    return normalizeSettings(parsed);
   } catch {
     return {};
   }
 }
 
+// Whether settings have EVER been saved under this browser origin — distinct
+// from loadSettings() returning {} for both "never saved" and "saved but
+// blank". browserPrefsSync.ts's boot-time adoption decision needs to tell a
+// fresh origin (e.g. a new companion port) apart from one with existing,
+// possibly-empty preferences.
+export function hasStoredSettings(): boolean {
+  if (typeof localStorage === "undefined") return false;
+  try {
+    return localStorage.getItem(KEY) !== null;
+  } catch {
+    return false;
+  }
+}
+
+// Set once by browserPrefsSync.ts when it loads (see that file's top comment).
+// saveSettings notifies this listener so a local preference change mirrors to
+// the server. settings.ts never imports browserPrefsSync.ts directly — that
+// would import loadSettings/normalizeSettings back out of this module and
+// cycle; the listener indirection breaks the cycle instead.
+let settingsSaveListener: (() => void) | null = null;
+export function setSettingsSaveListener(listener: (() => void) | null): void {
+  settingsSaveListener = listener;
+}
+
 export function saveSettings(settings: PersistedSettings): void {
   if (typeof localStorage === "undefined") return;
   try {
-    localStorage.setItem(KEY, JSON.stringify(settings));
+    localStorage.setItem(KEY, JSON.stringify(normalizeSettings(settings)));
+    settingsSaveListener?.();
   } catch {
     // Storage unavailable or over quota — preferences just won't persist.
   }

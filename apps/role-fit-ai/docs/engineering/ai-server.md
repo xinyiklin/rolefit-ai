@@ -52,11 +52,12 @@ CORS or turn the hosted product/download page into a client of the local server.
   authenticate native processes, prove server identity, or authorize a hosted
   web origin.
 - The companion uses typed IPC between its exact local main frame and Electron
-  main for write-only API-key setup, shape-only provider status, fixed CLI
-  sign-in/install guidance, a fixed main-owned external-terminal sign-in
-  fallback, and opening RoleFit in the system browser. The renderer supplies
-  only a closed provider id for terminal handoff, never a command, arguments,
-  shell text, working directory, or environment values. Stored keys are never
+  main for write-only API-key setup, shape-only provider status, opening the
+  official CLI install/sign-in guide (official docs), a fixed main-owned
+  external-terminal sign-in, and opening RoleFit in the system browser. The
+  renderer supplies only a closed provider id for terminal handoff, never a
+  command, arguments, shell text, working directory, or environment values.
+  Stored keys are never
   returned. Renderer `window.open` requests are always denied; typed IPC can
   reach only main-owned official install guides or the selected local RoleFit
   origin. There is no RoleFit login/pairing system.
@@ -65,9 +66,10 @@ CORS or turn the hosted product/download page into a client of the local server.
   configured/readiness, and bounded auth state so the browser can show only
   providers the user added.
 - The local server remains the only owner of AI execution. The companion may
-  start fixed, allowlisted CLI status/sign-in processes and send one bounded
-  credential snapshot to its owned server over their private parent/child
-  channel, but it must not expose executable paths, raw stdout/stderr, broad
+  start fixed, allowlisted CLI status probes and the external-terminal sign-in,
+  and send one bounded credential snapshot to its owned server over their
+  private parent/child channel, but it must not expose executable paths, raw
+  stdout/stderr, broad
   environment data, provider tokens, renderer-supplied argv, filesystem
   methods, or workspace/tracker routes.
 - Reused standalone listeners never receive the Electron vault. In that mode
