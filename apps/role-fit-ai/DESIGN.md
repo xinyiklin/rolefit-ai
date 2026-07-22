@@ -157,7 +157,12 @@ product framing, and clear project boundary used across Xinyi Lin's portfolio,
 including Careflow, while retaining RoleFit's paper, forest, hairline,
 mono-label, and truthful-copy vocabulary. It may use a larger serif hero and
 shows real product captures, the local runtime boundary, and explicit macOS
-Apple silicon, macOS Intel, and Windows x64 download rows. It must not imitate
+Apple silicon, macOS Intel, and Windows x64 download rows. Unlike the Drafting Desk, which rejects decorative
+motion, the landing carries the restrained entrance motion shared across the
+portfolio: a one-shot fade-and-lift as sections scroll into view (never
+looping) and a small hover lift on cards — a progressive enhancement that
+collapses under `prefers-reduced-motion` and never leaves content hidden when
+scripting is unavailable. It must not imitate
 the working app shell, use gradients or template-style feature cards, imply
 hosted execution, guess the user's architecture, or attempt native-install
 detection. At a missing or invalid release, it keeps the platform choices

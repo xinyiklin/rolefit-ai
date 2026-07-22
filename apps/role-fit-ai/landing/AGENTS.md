@@ -38,6 +38,11 @@ root and RoleFit app guides first.
   consistent with the local-first trust boundary.
 - Preserve semantic landmarks, keyboard focus, WCAG AA contrast, useful image
   alternatives, and reduced-motion behavior at desktop and narrow widths.
+- The section scroll-reveal and card hover-lift are progressive enhancements,
+  not required layout. Keep them one-shot, collapse them fully under
+  `prefers-reduced-motion`, and never let a `[data-reveal]` block stay hidden
+  without JavaScript: the hidden state is gated behind the script-added
+  `.reveal-ready` class, so absent that class every block must render visible.
 - `npm run build:landing --workspace apps/role-fit-ai` must typecheck the
   landing, run the release-catalog probes, build only `dist-landing/`, and pass
   the output-boundary guard.
