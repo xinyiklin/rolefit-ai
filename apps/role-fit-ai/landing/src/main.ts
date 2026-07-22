@@ -6,6 +6,7 @@ import {
   RELEASES_URL,
   type ReleaseCatalog,
 } from "./releaseCatalog";
+import { setupReveal } from "./reveal";
 
 // In-page navigation without URL hashes: buttons carry data-scroll-to="<id>".
 const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -30,6 +31,8 @@ for (const trigger of document.querySelectorAll<HTMLElement>("[data-scroll-to]")
     if (id) scrollToTarget(id);
   });
 }
+
+setupReveal();
 
 // Release catalog: the static page links every row to the Releases page; a
 // valid catalog upgrades rows to direct, verified asset downloads.

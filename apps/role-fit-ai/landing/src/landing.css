@@ -47,7 +47,7 @@
   --ink-strong: #17201c;
   --ink: #26312c;
   --ink-muted: #5c6862;
-  --ink-faint: #738078;
+  --ink-faint: #647169;
   --hairline: #d7dcd6;
   --hairline-strong: #bdc6bf;
   --accent: #206b55;
@@ -56,6 +56,19 @@
   --on-accent: #f7fbf8;
   --warm: #8a611e;
   --warm-soft: #f4ead4;
+  /* On the dark local-first band (background: --accent-deep): text tones from
+     strong to faint, then the white-alpha hairlines and fills. */
+  --on-deep-strong: #f7faf7;
+  --on-deep: #eaf2ed;
+  --on-deep-soft: #dbe7e1;
+  --on-deep-muted: #c4d4cd;
+  --on-deep-faint: #9fc8b9;
+  --on-deep-hairline: rgb(255 255 255 / 0.12);
+  --on-deep-border: rgb(255 255 255 / 0.18);
+  --on-deep-border-hover: rgb(255 255 255 / 0.34);
+  --on-deep-connector: rgb(255 255 255 / 0.25);
+  --on-deep-fill: rgb(255 255 255 / 0.055);
+  --on-deep-fill-hover: rgb(255 255 255 / 0.09);
   --serif: "RoleFit Serif", Charter, "Bitstream Charter", Georgia, serif;
   --sans: "RoleFit Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
@@ -64,9 +77,14 @@
   --radius-card: 10px;
   --radius-shell: 14px;
   --shadow-panel: 0 1px 2px rgb(23 32 28 / 0.05);
+  --shadow-lift: 0 18px 44px -30px rgb(23 32 28 / 0.35);
   --shadow-frame: 0 24px 64px -42px rgb(23 32 28 / 0.38);
+  /* House easing for entrances and reveals (the hover lift stays on plain
+     `ease`, matching its shorter, more mechanical feel). */
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
+/* ── Base + layout ───────────────────────────────────────────────────────── */
 * {
   box-sizing: border-box;
 }
@@ -163,6 +181,7 @@ section[id] {
   transform: translateY(0);
 }
 
+/* ── Header ──────────────────────────────────────────────────────────────── */
 .site-header {
   position: sticky;
   z-index: 30;
@@ -270,6 +289,7 @@ section[id] {
   transform: translateY(1px);
 }
 
+/* ── Hero ────────────────────────────────────────────────────────────────── */
 .hero {
   display: grid;
   grid-template-columns: minmax(340px, 5fr) minmax(520px, 7fr);
@@ -366,6 +386,7 @@ section[id] {
   font-size: 0.78rem;
 }
 
+/* ── Product screenshot frame (hero + surface cards) ─────────────────────── */
 .app-frame {
   margin: 0;
   min-width: 0;
@@ -412,6 +433,7 @@ section[id] {
   height: auto;
 }
 
+/* ── Proof strip ─────────────────────────────────────────────────────────── */
 .proof-strip {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -485,6 +507,7 @@ section[id] {
   line-height: 1.7;
 }
 
+/* ── Product section (surface cards + job loop) ──────────────────────────── */
 .product {
   padding-bottom: 116px;
 }
@@ -582,10 +605,11 @@ section[id] {
   font-size: 0.76rem;
 }
 
+/* ── Local-first band (dark; see --on-deep-* tokens) ─────────────────────── */
 .local-first {
   border-block: 1px solid var(--accent-deep);
   background: var(--accent-deep);
-  color: #eaf2ed;
+  color: var(--on-deep);
 }
 
 .local-first__inner {
@@ -593,15 +617,15 @@ section[id] {
 }
 
 .section-heading--inverse h2 {
-  color: #f7faf7;
+  color: var(--on-deep-strong);
 }
 
 .section-heading--inverse .eyebrow {
-  color: #9fc8b9;
+  color: var(--on-deep-faint);
 }
 
 .section-heading--inverse > p {
-  color: #c4d4cd;
+  color: var(--on-deep-muted);
 }
 
 .boundary-grid {
@@ -613,17 +637,17 @@ section[id] {
 
 .boundary-grid article {
   padding: 26px 28px 28px;
-  border: 1px solid rgb(255 255 255 / 0.18);
+  border: 1px solid var(--on-deep-border);
   border-radius: var(--radius-card);
-  background: rgb(255 255 255 / 0.055);
+  background: var(--on-deep-fill);
 }
 
 .boundary-grid article > span {
-  color: #9fc8b9;
+  color: var(--on-deep-faint);
 }
 
 .boundary-grid h3 {
-  color: #f7faf7;
+  color: var(--on-deep-strong);
 }
 
 .boundary-grid ul {
@@ -635,8 +659,8 @@ section[id] {
 .boundary-grid li {
   position: relative;
   padding: 10px 0 10px 18px;
-  border-top: 1px solid rgb(255 255 255 / 0.12);
-  color: #c4d4cd;
+  border-top: 1px solid var(--on-deep-hairline);
+  color: var(--on-deep-muted);
   font-size: 0.84rem;
   line-height: 1.5;
 }
@@ -648,7 +672,7 @@ section[id] {
   width: 5px;
   height: 5px;
   border-radius: 50%;
-  background: #9fc8b9;
+  background: var(--on-deep-faint);
   content: "";
 }
 
@@ -658,16 +682,17 @@ section[id] {
   gap: 15px;
   align-items: center;
   margin-top: 38px;
-  color: #dbe7e1;
+  color: var(--on-deep-soft);
   font-family: var(--mono);
   font-size: 0.69rem;
 }
 
 .runtime-line i {
   height: 1px;
-  background: rgb(255 255 255 / 0.25);
+  background: var(--on-deep-connector);
 }
 
+/* ── Downloads ───────────────────────────────────────────────────────────── */
 .downloads {
   padding-block: 108px 104px;
 }
@@ -833,6 +858,7 @@ p.download-row__format {
   text-underline-offset: 4px;
 }
 
+/* ── Footer ──────────────────────────────────────────────────────────────── */
 .site-footer {
   border-top: 1px solid var(--hairline-strong);
   background: var(--card-soft);
@@ -869,23 +895,89 @@ p.download-row__format {
   text-decoration: none;
 }
 
+/* ── Motion ──────────────────────────────────────────────────────────────────
+   One motion language: a short fade + 16px lift on the house ease, shared by
+   the hero entrance and the on-scroll reveals. Both are one-shot (never loop),
+   and every rule here lives inside `no-preference` so reduced motion — and, for
+   the reveals, a missing `.reveal-ready` when JS is absent — leaves content
+   fully visible and unmoved. */
 @media (prefers-reduced-motion: no-preference) {
   .hero__copy > *,
   .app-frame--hero {
-    animation: enter 0.5s cubic-bezier(0.2, 0.6, 0.2, 1) backwards;
+    animation: enter 0.3s var(--ease) backwards;
   }
 
-  .hero__copy > :nth-child(2) { animation-delay: 0.04s; }
-  .hero__copy > :nth-child(3) { animation-delay: 0.08s; }
-  .hero__copy > :nth-child(4) { animation-delay: 0.12s; }
-  .hero__copy > :nth-child(5) { animation-delay: 0.16s; }
-  .app-frame--hero { animation-delay: 0.08s; }
+  .hero__copy > :nth-child(2) { animation-delay: 0.07s; }
+  .hero__copy > :nth-child(3) { animation-delay: 0.14s; }
+  .hero__copy > :nth-child(4) { animation-delay: 0.21s; }
+  .hero__copy > :nth-child(5) { animation-delay: 0.28s; }
+  .app-frame--hero { animation-delay: 0.12s; }
+
+  /* Below-the-fold blocks lift into place the first time they enter view. The
+     page script adds `.reveal-ready` only when it can drive the reveal, so with
+     JS disabled the hidden state never applies and content stays visible.
+     The transition lives on `.is-visible`, not on the hidden base state, so the
+     script's one-time hide is instant (never a visible-to-hidden reverse fade)
+     and only the reveal animates. */
+  html.reveal-ready [data-reveal] {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+
+  html.reveal-ready [data-reveal].is-visible {
+    opacity: 1;
+    transform: none;
+    transition:
+      opacity 0.3s var(--ease),
+      transform 0.3s var(--ease);
+  }
+
+  /* Keyboard escape hatch: if focus enters a still-pending block (a keyboard
+     user tabbing ahead of the scroll), show it immediately so the focus ring is
+     never on invisible content. `transition: none` makes it truly instant —
+     the co-applied `.is-visible` transition would otherwise fade it in. The
+     script's focusin handler then makes the reveal stick after blur. */
+  html.reveal-ready [data-reveal]:focus-within {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+
+  /* Physical hover lift on the product and boundary cards. These are never the
+     [data-reveal] element themselves (their grid containers are), so this
+     150ms transition never collides with the 300ms reveal. Each card lists only
+     the properties its own hover changes. */
+  .surface-card {
+    transition:
+      transform 150ms ease,
+      border-color 150ms ease,
+      box-shadow 150ms ease;
+  }
+
+  .boundary-grid article {
+    transition:
+      transform 150ms ease,
+      border-color 150ms ease,
+      background-color 150ms ease;
+  }
+
+  .surface-card:hover {
+    transform: translateY(-3px);
+    border-color: var(--hairline-strong);
+    box-shadow: var(--shadow-lift);
+  }
+
+  .boundary-grid article:hover {
+    transform: translateY(-3px);
+    border-color: var(--on-deep-border-hover);
+    background: var(--on-deep-fill-hover);
+  }
 }
 
 @keyframes enter {
   from {
     opacity: 0;
-    transform: translateY(10px);
+    transform: translateY(16px);
   }
 }
 
@@ -895,6 +987,7 @@ p.download-row__format {
   }
 }
 
+/* ── Responsive ──────────────────────────────────────────────────────────── */
 @media (max-width: 980px) {
   :root {
     --page: min(100% - 36px, 860px);
