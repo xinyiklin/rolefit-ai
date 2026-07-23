@@ -12,7 +12,7 @@ one deterministic document engine and one reusable editing surface.
 
 | Workspace | Responsibility |
 | --- | --- |
-| [`apps/role-fit-ai`](apps/role-fit-ai) | **RoleFit AI**: the companion-launched, browser-primary local job-tailoring workbench with a loopback server, tracker, paired browser extension, and five-provider manager. [Product site and downloads](https://rolefit.xinyiklin.com/) |
+| [`apps/role-fit-ai`](apps/role-fit-ai) | **RoleFit AI**: the companion-launched, browser-primary local job-tailoring workbench with a loopback server, portable workspace backup, tracker, paired browser extension, and five-provider manager. [Product site and downloads](https://rolefit.xinyiklin.com/) |
 | [`apps/typeset`](apps/typeset) | **Typeset**: the standalone browser-only editor at [typeset.xinyiklin.com](https://typeset.xinyiklin.com). |
 | [`packages/engine`](packages/engine) | `@typeset/engine`: resume model, strict `.resume` codec, fonts, deterministic layout, DOM/print rendering, and PDF emission. |
 | [`packages/editor`](packages/editor) | `@typeset/editor`: direct editing, history/style hooks, document toolbar/popovers, and shared editor styles. |

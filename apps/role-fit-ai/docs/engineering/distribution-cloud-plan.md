@@ -382,13 +382,13 @@ Squirrel lifecycle as well:
 
 ```bash
 npm run collect:desktop:artifacts --workspace apps/role-fit-ai -- --arch=x64 --platform=win32 --checksums=false
-npm run test:desktop:windows-installer --workspace apps/role-fit-ai -- --installer=apps/role-fit-ai/.forge/release/RoleFit-AI-0.2.0-windows-x64.exe
+npm run test:desktop:windows-installer --workspace apps/role-fit-ai -- --installer=apps/role-fit-ai/.forge/release/RoleFit-AI-0.3.0-windows-x64.exe
 ```
 
 Generated staging, unpacked applications, maker output, normalized artifacts,
 and CI downloads live under `apps/role-fit-ai/.forge/` and are ignored. The
 collector writes deterministic names such as
-`RoleFit-AI-0.2.0-macos-arm64.dmg` and a local
+`RoleFit-AI-0.3.0-macos-arm64.dmg` and a local
 `SHA256SUMS.txt`; the publication job creates one checksum file over all five
 release artifacts.
 

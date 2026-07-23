@@ -33,8 +33,10 @@ Applies to `apps/role-fit-ai/desktop/` and `tsconfig.desktop.json`.
   availability; port and pairing changes restart through the normal Electron
   quit lifecycle. `ROLEFIT_DESKTOP_PORT` is an explicit locked per-launch
   override; settings never contain secrets or workspace paths.
-- The companion window is a tabbed shell (Providers / Workspace / Connection).
-  The Workspace tab is the product home of portable workspace backup and
+- The companion window is a fixed 900x620 sidebar shell (Overview / Providers /
+  Workspace / Browser extension / Settings). The selected section survives a
+  renderer refresh for the current window session. The Workspace section is
+  the product home of portable workspace backup and
   restore (`docs/engineering/workspace-backup.md` owns the wire contract). Main
   owns the whole flow: it sends backup/restore only over the owned server's
   private utility-process channel, fetches only shape-only activity over the
@@ -46,13 +48,13 @@ Applies to `apps/role-fit-ai/desktop/` and `tsconfig.desktop.json`.
   write cannot truncate an existing backup. The renderer receives only
   shape-only results, the home-relative display path,
   and the chosen backup file name — never another absolute path — and its
-  ~5-second activity poll runs only while the Workspace tab is active and
+  ~5-second activity poll runs only while the Workspace section is active and
   visible. Restore always passes through a native confirmation that defaults
   to Cancel, and the server's live-browser-tab 409 message is surfaced
-  verbatim. The Workspace tab also shows name-derived state (base-resume
+  verbatim. The Workspace section also shows name-derived state (base-resume
   presence and the application count) computed in main from directory entries
   and one bounded shape-only `applications.json` read; file contents never
-  cross IPC. The Connection tab surfaces live loopback truth — port, canonical
+  cross IPC. Settings surfaces live loopback truth — port, canonical
   site URL, owned/reused/starting/unreachable from a fresh health probe (never
   stale startup ownership), and the beaconed browser-tab count, which is the
   companion's single visible session indicator; the Workspace overview still
@@ -212,7 +214,7 @@ npm run test:desktop:package-layout --workspace apps/role-fit-ai
 npm run package:rolefit:desktop
 npm run test:rolefit:desktop:packaged
 npm run make:rolefit:desktop
-npm run test:desktop:windows-installer --workspace apps/role-fit-ai -- --installer=.forge/release/RoleFit-AI-0.2.0-windows-x64.exe
+npm run test:desktop:windows-installer --workspace apps/role-fit-ai -- --installer=.forge/release/RoleFit-AI-0.3.0-windows-x64.exe
 npm run test:rolefit:release
 ```
 

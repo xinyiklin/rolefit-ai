@@ -27,6 +27,7 @@
         <nav class="companion-nav" aria-label="RoleFit sections">
           <button class="companion-nav__item is-active" type="button" data-companion-tab="overview" aria-current="page">Overview</button>
           <button class="companion-nav__item" type="button" data-companion-tab="providers">Providers</button>
+          <button class="companion-nav__item" type="button" data-companion-tab="workspace">Workspace</button>
           <button class="companion-nav__item" type="button" data-companion-tab="extension">Browser extension</button>
           <button class="companion-nav__item" type="button" data-companion-tab="settings">Settings</button>
         </nav>
@@ -72,6 +73,12 @@
                 <button class="text-button" type="button" data-tab-target="providers">Manage providers <span aria-hidden="true">&#8594;</span></button>
               </article>
               <article class="overview-card">
+                <span class="overview-card__label">Workspace</span>
+                <strong id="overview-workspace-summary">Checking workspace</strong>
+                <p>Back up or restore your app-managed workspace.</p>
+                <button class="text-button" type="button" data-tab-target="workspace">Manage workspace <span aria-hidden="true">&#8594;</span></button>
+              </article>
+              <article class="overview-card">
                 <span class="overview-card__label">Extension</span>
                 <strong id="overview-extension-summary">Browser extension not paired</strong>
                 <p>Import job posts from your browser.</p>
@@ -95,6 +102,54 @@
 
             <ol class="provider-list" id="provider-list" data-provider-list aria-busy="true"></ol>
             <p class="provider-announcement visually-hidden" id="provider-announcement" aria-live="polite"></p>
+          </section>
+
+          <section class="companion-panel" data-companion-panel="workspace" aria-labelledby="workspace-title" hidden>
+            <header class="panel-heading">
+              <div>
+                <h1 id="workspace-title">Workspace</h1>
+                <p id="workspace-summary">Checking your local workspace.</p>
+              </div>
+            </header>
+
+            <div class="workspace-card">
+              <div class="workspace-row">
+                <span class="workspace-row__label" id="workspace-path-label">Local workspace</span>
+                <code class="workspace-path" id="workspace-path" aria-labelledby="workspace-path-label">Checking&#8230;</code>
+                <button class="workspace-open-button" id="open-workspace-folder" type="button" disabled>Open folder</button>
+              </div>
+
+              <dl class="stat-strip" id="workspace-stats">
+                <div class="stat-strip__cell">
+                  <dt>Base resume</dt>
+                  <dd id="stat-base-resume">&#8212;</dd>
+                </div>
+                <div class="stat-strip__cell">
+                  <dt>Applications</dt>
+                  <dd id="stat-applications">&#8212;</dd>
+                </div>
+              </dl>
+            </div>
+
+            <div class="workspace-actions">
+              <button
+                class="workspace-action workspace-action--primary"
+                id="backup-workspace"
+                type="button"
+                title="Writes one plain-JSON .rolefit-backup file"
+                disabled
+              >Back up workspace&#8230;</button>
+              <button
+                class="workspace-action"
+                id="restore-workspace"
+                type="button"
+                title="Replaces the saved workspace; the previous one is kept as a local safety copy"
+                disabled
+              >Restore backup&#8230;</button>
+            </div>
+
+            <p class="workspace-status" id="workspace-status" role="status" aria-live="polite"></p>
+            <p class="workspace-hint">Plain JSON &#8212; provider keys and unsaved edits stay out.</p>
           </section>
 
           <section class="companion-panel" data-companion-panel="extension" aria-labelledby="extension-title" hidden>
@@ -149,10 +204,18 @@
           <section class="companion-panel" data-companion-panel="settings" aria-labelledby="settings-title" hidden>
             <header class="panel-heading">
               <div>
-                <h1 id="settings-title">Browser address</h1>
-                <p>Changing the port creates separate browser storage.</p>
+                <h1 id="settings-title">Settings</h1>
+                <p id="connection-summary">Checking the local service.</p>
               </div>
             </header>
+
+            <div class="connection-state-block" role="status" aria-live="polite">
+              <p class="state-line" id="connection-state" data-state="unknown">
+                <span class="state-line__dot" aria-hidden="true"></span>
+                <span id="connection-state-text">Checking&#8230;</span>
+              </p>
+              <p class="connection-tabs-line" id="connection-browser-tabs">&#8212;</p>
+            </div>
 
             <form class="site-port-form" id="local-site-port-form" novalidate>
               <label class="site-port-form__field" for="local-site-port">

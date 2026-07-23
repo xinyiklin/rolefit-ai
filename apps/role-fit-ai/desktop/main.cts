@@ -1155,10 +1155,14 @@ function createMainWindow(
     icon: app.isPackaged
       ? undefined
       : join(__dirname, "..", "..", "desktop", "assets", "icon.ico"),
-    width: 760,
-    height: 560,
-    minWidth: 620,
-    minHeight: 520,
+    width: 900,
+    height: 620,
+    minWidth: 900,
+    minHeight: 620,
+    maxWidth: 900,
+    maxHeight: 620,
+    resizable: false,
+    maximizable: false,
     show: !smokeMode,
     backgroundColor: "#eef1ec",
     autoHideMenuBar: process.platform !== "darwin",

@@ -141,16 +141,16 @@ localStorage-based cross-tab presence registry, which must not clear on
 
 ## UI and concurrency
 
-Back up and Restore live in the companion's Workspace tab, next to the local
+Back up and Restore live in the companion's Workspace section, next to the local
 workspace location and an Open-folder action. Backup writes the envelope
 through a native save dialog using an owner-only sibling temporary file and
 final rename; Restore reads through a native open dialog,
 requires a native confirmation, and reports the server's classified errors
 verbatim. Unsaved editor changes stay in the browser and are never part of a
-backup; the Workspace tab states this. Backup and restore are management
+backup; the Workspace section states this. Backup and restore are management
 operations and are not exposed as loopback HTTP routes. An owned server accepts
 them only over Electron's private parent/child process channel; if the companion
-reuses an already-running standalone server, the Workspace tab asks for a
+reuses an already-running standalone server, the Workspace section asks for a
 companion restart before enabling transfer.
 
 ## Verification

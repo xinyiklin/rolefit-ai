@@ -955,10 +955,47 @@ assert.doesNotMatch(
   /if \(!needed \|\| !hasUsableBridge\(\)\) return/,
   "terminal and external auth changes are not stranded behind managed-sign-in-only polling"
 );
+assert.match(companionRendererSource, /WORKSPACE_POLL_INTERVAL_MS = 5_000/);
+assert.match(companionRendererSource, /CONNECTION_POLL_INTERVAL_MS = 5_000/);
+assert.match(
+  companionRendererSource,
+  /function scheduleWorkspacePoll\(\)[\s\S]*activeTabId !== "workspace"[\s\S]*document\.visibilityState === "hidden"/,
+  "the workspace activity poll runs only while the Workspace section is active and visible"
+);
+assert.match(
+  companionRendererSource,
+  /function scheduleConnectionPoll\(\)[\s\S]*activeTabId !== "settings"[\s\S]*document\.visibilityState === "hidden"/,
+  "the connection status poll runs only while Settings is active and visible"
+);
+assert.match(
+  companionRendererSource,
+  /async function refreshConnectionStatus\(\)[\s\S]*window\.clearTimeout\(connectionPollTimer\)[\s\S]*finally[\s\S]*scheduleConnectionPoll\(\)/,
+  "each connection refresh clears its predecessor and schedules one successor only after settling"
+);
+assert.match(
+  companionRendererSource,
+  /async function refreshWorkspaceOverview\(\)[\s\S]*window\.clearTimeout\(workspacePollTimer\)[\s\S]*finally[\s\S]*scheduleWorkspacePoll\(\)/,
+  "each workspace refresh clears its predecessor and schedules one successor only after settling"
+);
+assert.match(
+  companionRendererSource,
+  /document\.addEventListener\("visibilitychange",[\s\S]*workspacePollTimer = 0[\s\S]*connectionPollTimer = 0/,
+  "hidden windows stop workspace and connection polling"
+);
+assert.match(
+  companionRendererSource,
+  /ACTIVE_TAB_STORAGE_KEY[\s\S]*sessionStorage\.getItem[\s\S]*sessionStorage\.setItem[\s\S]*activateTab\(storedTab\(\), \{ persist: false, refresh: false \}\)/,
+  "a renderer refresh restores the selected companion section without making it permanent app data"
+);
 assert.match(
   companionRendererSource,
   /"Sign in",\s*"terminal-sign-in"/,
   "every unavailable CLI uses the same terminal-owned Sign in action"
+);
+assert.match(
+  companionRendererSource,
+  /record\.authState === "signed-in"[\s\S]*label: "Signed in"/,
+  "an already authenticated CLI is shown as signed in even when a reused server is not companion-managed"
 );
 assert.doesNotMatch(
   companionRendererSource,

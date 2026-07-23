@@ -35,6 +35,9 @@ const SUPPORTED_PROVIDERS = Object.freeze([
 
 const PROVIDER_BY_ID = new Map(SUPPORTED_PROVIDERS.map((provider) => [provider.id, provider]));
 const PROVIDER_VISIBLE_POLL_INTERVAL_MS = 5_000;
+const WORKSPACE_POLL_INTERVAL_MS = 5_000;
+const CONNECTION_POLL_INTERVAL_MS = 5_000;
+const ACTIVE_TAB_STORAGE_KEY = "rolefit:desktop:active-tab";
 const bridge = window.roleFitDesktop;
 const requiredBridgeMethods = Object.freeze([
   "getRuntimeInfo",
@@ -50,11 +53,29 @@ const requiredBridgeMethods = Object.freeze([
   "openCliSignInTerminal",
   "openProviderInstallGuide",
   "openExtensionDirectory",
-  "openBrowserApp"
+  "openBrowserApp",
+  "getWorkspaceOverview",
+  "backupWorkspaceToFile",
+  "restoreWorkspaceFromFile",
+  "openWorkspaceFolder",
+  "getConnectionStatus"
 ]);
 
 const elements = Object.freeze({
   companionRoot: document.querySelector("[data-companion-root]"),
+  workspacePath: document.getElementById("workspace-path"),
+  workspaceSummary: document.getElementById("workspace-summary"),
+  overviewWorkspaceSummary: document.getElementById("overview-workspace-summary"),
+  openWorkspaceFolder: document.getElementById("open-workspace-folder"),
+  backupWorkspace: document.getElementById("backup-workspace"),
+  restoreWorkspace: document.getElementById("restore-workspace"),
+  workspaceStatus: document.getElementById("workspace-status"),
+  statBaseResume: document.getElementById("stat-base-resume"),
+  statApplications: document.getElementById("stat-applications"),
+  connectionSummary: document.getElementById("connection-summary"),
+  connectionState: document.getElementById("connection-state"),
+  connectionStateText: document.getElementById("connection-state-text"),
+  connectionBrowserTabs: document.getElementById("connection-browser-tabs"),
   sitePortForm: document.getElementById("local-site-port-form"),
   sitePortInput: document.getElementById("local-site-port"),
   sitePortApply: document.getElementById("apply-local-site-port"),
@@ -91,11 +112,39 @@ let sitePortConfirmValue = null;
 let extensionPairingSettings = null;
 let extensionPairingPending = false;
 let extensionPairingPopoverOpen = false;
+let activeTabId = "overview";
+let workspaceOverview = null;
+let workspaceOverviewLoaded = false;
+let workspaceOverviewGeneration = 0;
+let workspacePollTimer = 0;
+let workspaceOperationPending = false;
+let liveConnectionStatus = null;
+let connectionStatusLoaded = false;
+let connectionStatusGeneration = 0;
+let connectionPollTimer = 0;
 
-function activateTab(value) {
+function storedTab() {
+  try {
+    return window.sessionStorage.getItem(ACTIVE_TAB_STORAGE_KEY) || "overview";
+  } catch {
+    return "overview";
+  }
+}
+
+function rememberTab(tab) {
+  try {
+    window.sessionStorage.setItem(ACTIVE_TAB_STORAGE_KEY, tab);
+  } catch {
+    // Navigation still works when session storage is unavailable.
+  }
+}
+
+function activateTab(value, { persist = true, refresh = true } = {}) {
   const tab = String(value ?? "").trim();
   const panel = elements.panels.find((candidate) => candidate.dataset.companionPanel === tab);
   if (!panel) return;
+  activeTabId = tab;
+  if (persist) rememberTab(tab);
   for (const candidate of elements.panels) {
     const active = candidate === panel;
     candidate.hidden = !active;
@@ -108,6 +157,19 @@ function activateTab(value) {
     else button.removeAttribute("aria-current");
   }
   if (tab !== "extension") setExtensionPairingPopover(false);
+  if (!refresh) return;
+  if (tab === "workspace") {
+    if (hasUsableBridge()) void refreshWorkspaceOverview();
+  } else {
+    window.clearTimeout(workspacePollTimer);
+    workspacePollTimer = 0;
+  }
+  if (tab === "settings") {
+    if (hasUsableBridge()) void refreshConnectionStatus();
+  } else {
+    window.clearTimeout(connectionPollTimer);
+    connectionPollTimer = 0;
+  }
 }
 
 function setExtensionPairingPopover(open) {
@@ -353,6 +415,9 @@ function connectionStatus(provider, record) {
       ? { key: "connected", label: "Ready to verify" }
       : { key: "connected", label: "Ready" };
   }
+  if (provider.kind === "cli" && record.authState === "signed-in") {
+    return { key: "connected", label: "Signed in" };
+  }
   if (provider.kind === "cli" && record.installed === false) {
     return { key: "missing", label: "CLI not installed" };
   }
@@ -430,7 +495,7 @@ function renderCliActions(provider, record, actions) {
     return;
   }
 
-  if (!record.ready) {
+  if (!record.ready && record.authState !== "signed-in") {
     actions.append(createButton(
       "Sign in",
       "terminal-sign-in",
@@ -621,6 +686,218 @@ async function openCliSignInTerminal(providerId) {
   }
 }
 
+function statCount(value) {
+  return typeof value === "number" && Number.isInteger(value) && value >= 0
+    ? String(value)
+    : "—";
+}
+
+function renderWorkspaceOverview() {
+  const overview = workspaceOverview;
+  const overviewUsable = Boolean(overview) && hasUsableBridge();
+  const summary = overviewUsable
+    ? overview.workspaceTransferReady
+      ? "Ready to back up"
+      : overview.serverReady
+        ? "Restart RoleFit to transfer"
+        : "Local service not running"
+    : workspaceOverviewLoaded
+      ? "Workspace unavailable"
+      : "Checking workspace";
+  elements.workspaceSummary.textContent = summary;
+  elements.overviewWorkspaceSummary.textContent = summary;
+  elements.workspacePath.textContent = overview
+    ? overview.workspaceDisplayPath
+    : workspaceOverviewLoaded
+      ? "Unavailable"
+      : "Checking…";
+  elements.workspacePath.title = overview ? overview.workspaceDisplayPath : "";
+  elements.openWorkspaceFolder.disabled = !overviewUsable || workspaceOperationPending;
+  elements.statBaseResume.textContent = overviewUsable && overview.hasBaseResume === true ? "✓" : "—";
+  elements.statApplications.textContent = overviewUsable ? statCount(overview.applicationCount) : "—";
+
+  const activeTabs = overview && typeof overview.activeBrowserTabs === "number" &&
+    Number.isInteger(overview.activeBrowserTabs) && overview.activeBrowserTabs >= 0
+    ? overview.activeBrowserTabs
+    : null;
+  const busy = workspaceOperationPending || !overviewUsable || !overview?.workspaceTransferReady;
+  elements.backupWorkspace.disabled = busy;
+  const restoreBlocked = activeTabs !== null && activeTabs > 0;
+  elements.restoreWorkspace.disabled = busy || restoreBlocked;
+  if (restoreBlocked) {
+    elements.restoreWorkspace.title = "Close the open RoleFit browser tabs before restoring.";
+  } else {
+    elements.restoreWorkspace.title =
+      overviewUsable && !overview?.workspaceTransferReady
+        ? "Restart RoleFit so the desktop app owns the local service before restoring."
+        : "Replaces the saved workspace; the previous one is kept as a local safety copy";
+  }
+  elements.backupWorkspace.title = overviewUsable && !overview?.workspaceTransferReady
+    ? "Restart RoleFit so the desktop app owns the local service before backing up."
+    : "Save a portable copy of the app-managed workspace";
+}
+
+function scheduleWorkspacePoll() {
+  window.clearTimeout(workspacePollTimer);
+  workspacePollTimer = 0;
+  if (!hasUsableBridge() || activeTabId !== "workspace" || document.visibilityState === "hidden") {
+    return;
+  }
+  workspacePollTimer = window.setTimeout(() => {
+    void refreshWorkspaceOverview();
+  }, WORKSPACE_POLL_INTERVAL_MS);
+}
+
+async function refreshWorkspaceOverview() {
+  if (!hasUsableBridge()) return;
+  window.clearTimeout(workspacePollTimer);
+  workspacePollTimer = 0;
+  const generation = ++workspaceOverviewGeneration;
+  try {
+    const overview = await bridge.getWorkspaceOverview();
+    if (generation !== workspaceOverviewGeneration) return;
+    if (!overview || typeof overview !== "object" ||
+        typeof overview.workspaceDisplayPath !== "string" ||
+        !overview.workspaceDisplayPath) {
+      throw new Error("Invalid workspace overview.");
+    }
+    workspaceOverview = overview;
+  } catch {
+    if (generation !== workspaceOverviewGeneration) return;
+    workspaceOverview = null;
+  } finally {
+    if (generation === workspaceOverviewGeneration) {
+      workspaceOverviewLoaded = true;
+      renderWorkspaceOverview();
+      scheduleWorkspacePoll();
+    }
+  }
+}
+
+function renderConnectionStatus() {
+  const status = liveConnectionStatus;
+  if (!status) {
+    elements.connectionState.dataset.state = connectionStatusLoaded ? "error" : "unknown";
+    elements.connectionStateText.textContent = connectionStatusLoaded ? "Status unavailable" : "Checking…";
+    elements.connectionBrowserTabs.textContent = "—";
+    elements.connectionSummary.textContent = connectionStatusLoaded
+      ? "Local service status unavailable."
+      : "Checking the local service.";
+    return;
+  }
+  let state = "unknown";
+  let text = "Starting…";
+  let summary = "Starting the local service.";
+  if (status.serverState === "owned") {
+    state = "ok";
+    text = `Serving ${status.siteUrl} — this desktop app`;
+    summary = "Local service running.";
+  } else if (status.serverState === "reused") {
+    state = "warn";
+    text = `Already running at ${status.port} — another RoleFit process`;
+    summary = "Standalone RoleFit service detected.";
+  } else if (status.serverState === "unreachable") {
+    state = "error";
+    text = `Port ${status.port} — not responding`;
+    summary = "Local service not responding.";
+  }
+  elements.connectionState.dataset.state = state;
+  elements.connectionStateText.textContent = text;
+  elements.connectionSummary.textContent = summary;
+  const tabs = typeof status.activeBrowserTabs === "number" &&
+    Number.isInteger(status.activeBrowserTabs) && status.activeBrowserTabs >= 0
+    ? status.activeBrowserTabs
+    : null;
+  elements.connectionBrowserTabs.textContent = tabs === null
+    ? "Browser tabs unknown"
+    : tabs === 0
+      ? "No browser tabs connected"
+      : `${tabs} browser tab${tabs === 1 ? "" : "s"} connected`;
+}
+
+function scheduleConnectionPoll() {
+  window.clearTimeout(connectionPollTimer);
+  connectionPollTimer = 0;
+  if (!hasUsableBridge() || activeTabId !== "settings" || document.visibilityState === "hidden") {
+    return;
+  }
+  connectionPollTimer = window.setTimeout(() => {
+    void refreshConnectionStatus();
+  }, CONNECTION_POLL_INTERVAL_MS);
+}
+
+async function refreshConnectionStatus() {
+  if (!hasUsableBridge()) return;
+  window.clearTimeout(connectionPollTimer);
+  connectionPollTimer = 0;
+  const generation = ++connectionStatusGeneration;
+  try {
+    const status = await bridge.getConnectionStatus();
+    if (generation !== connectionStatusGeneration) return;
+    if (!status || typeof status !== "object" || typeof status.serverState !== "string") {
+      throw new Error("Invalid connection status.");
+    }
+    liveConnectionStatus = status;
+  } catch {
+    if (generation !== connectionStatusGeneration) return;
+    liveConnectionStatus = null;
+  } finally {
+    if (generation === connectionStatusGeneration) {
+      connectionStatusLoaded = true;
+      renderConnectionStatus();
+      scheduleConnectionPoll();
+    }
+  }
+}
+
+async function runWorkspaceTransfer(kind) {
+  if (!hasUsableBridge() || workspaceOperationPending) return;
+  workspaceOperationPending = true;
+  renderWorkspaceOverview();
+  elements.workspaceStatus.textContent = kind === "backup" ? "Backing up…" : "Restoring…";
+  try {
+    const result = kind === "backup"
+      ? await bridge.backupWorkspaceToFile()
+      : await bridge.restoreWorkspaceFromFile();
+    const status = result && typeof result === "object" ? result.status : "";
+    if (kind === "backup" && status === "saved") {
+      const fileName = typeof result.filePath === "string" ? result.filePath.trim() : "";
+      elements.workspaceStatus.textContent = fileName ? `Backup saved to ${fileName}` : "Backup saved.";
+    } else if (kind === "restore" && status === "restored") {
+      elements.workspaceStatus.textContent = "Workspace restored — reopen RoleFit in your browser.";
+    } else if (status === "cancelled") {
+      elements.workspaceStatus.textContent = kind === "backup" ? "Backup cancelled." : "Restore cancelled.";
+    } else {
+      const message = status === "error" && typeof result.message === "string"
+        ? result.message.trim()
+        : "";
+      elements.workspaceStatus.textContent = message ||
+        (kind === "backup"
+          ? "The workspace could not be backed up."
+          : "The workspace could not be restored.");
+    }
+  } catch {
+    elements.workspaceStatus.textContent = kind === "backup"
+      ? "The workspace could not be backed up."
+      : "The workspace could not be restored.";
+  } finally {
+    workspaceOperationPending = false;
+    await refreshWorkspaceOverview();
+  }
+}
+
+async function openWorkspaceFolder() {
+  if (!hasUsableBridge() || workspaceOperationPending) return;
+  elements.openWorkspaceFolder.disabled = true;
+  try {
+    await bridge.openWorkspaceFolder();
+  } catch {
+    elements.workspaceStatus.textContent = "The workspace folder could not be opened.";
+  } finally {
+    renderWorkspaceOverview();
+  }
+}
+
 async function loadRuntimeInfo() {
   try {
     const info = await bridge.getRuntimeInfo();
@@ -644,7 +921,14 @@ function initializeUnavailableState() {
   elements.overviewExtensionSummary.textContent = "Extension pairing unavailable";
   elements.overviewProviderSummary.textContent = "Provider status unavailable";
   elements.sidebarRuntimeStatus.textContent = "Service unavailable";
-  elements.runtimeVersion.textContent = "Local service unavailable";
+  elements.runtimeVersion.textContent = "RoleFit";
+  workspaceOverview = null;
+  workspaceOverviewLoaded = true;
+  renderWorkspaceOverview();
+  elements.workspaceStatus.textContent = "Workspace unavailable. Restart RoleFit and try again.";
+  liveConnectionStatus = null;
+  connectionStatusLoaded = true;
+  renderConnectionStatus();
   renderProviders();
   elements.providerSummary.textContent = "Restart RoleFit to manage providers.";
 }
@@ -735,12 +1019,30 @@ document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "hidden") {
     window.clearTimeout(pollTimer);
     pollTimer = 0;
+    window.clearTimeout(workspacePollTimer);
+    workspacePollTimer = 0;
+    window.clearTimeout(connectionPollTimer);
+    connectionPollTimer = 0;
     return;
   }
   if (hasUsableBridge()) {
     void loadExtensionPairingSettings();
     void refreshProviders({ announceResult: false });
+    if (activeTabId === "workspace") void refreshWorkspaceOverview();
+    if (activeTabId === "settings") void refreshConnectionStatus();
   }
+});
+
+elements.openWorkspaceFolder.addEventListener("click", () => {
+  void openWorkspaceFolder();
+});
+
+elements.backupWorkspace.addEventListener("click", () => {
+  void runWorkspaceTransfer("backup");
+});
+
+elements.restoreWorkspace.addEventListener("click", () => {
+  void runWorkspaceTransfer("restore");
 });
 
 elements.sitePortInput.addEventListener("input", () => {
@@ -862,11 +1164,14 @@ elements.openExtensionDirectory.addEventListener("click", async () => {
 });
 
 renderCheckingProviders();
+activateTab(storedTab(), { persist: false, refresh: false });
 if (hasUsableBridge()) {
   elements.sidebarRuntimeStatus.textContent = "Service ready";
   void loadRuntimeInfo();
   void loadLocalSiteSettings();
   void loadExtensionPairingSettings();
+  void refreshWorkspaceOverview();
+  void refreshConnectionStatus();
   void refreshProviders({ announceResult: false });
 } else {
   initializeUnavailableState();
