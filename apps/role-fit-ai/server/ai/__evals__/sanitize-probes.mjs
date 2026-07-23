@@ -11,9 +11,12 @@
 // - invalid AI-authored score/verdict pairs reaching the UI
 // All fixture text is synthetic. Exit code is non-zero on any failure.
 
+import assert from "node:assert/strict";
+
 import {
   hasUngroundedNumericClaim,
   makeRewriteGrounder,
+  missingRequiredSkillsFromStrictReview,
   sanitizeAiFitScore,
   sanitizeMissingRequiredSkills,
   sanitizeTailorSuggestions,
@@ -103,6 +106,8 @@ const checks = [
   // --- editor inline-mark vocabulary vs real markup smuggling ---
   ["<b> editor token passes", survives({ proposedText: "Led the <b>EHR migration</b> with validation checks and rollback." })],
   ["<i>/<u> editor tokens pass", survives({ proposedText: "Led the migration with <i>validation</i> and <u>rollback</u> phases." })],
+  ["unbalanced inline mark is rejected", !survives({ proposedText: "Led the <b>EHR migration with validation checks." })],
+  ["misnested inline marks are rejected", !survives({ proposedText: "Led the <b><i>EHR migration</b></i> with validation checks." })],
   ["tag with attributes rejected", !survives({ proposedText: "Led the <b onclick=alert(1)>migration</b> cutover." })],
   ["script tag rejected", !survives({ proposedText: "Led the <script>x</script> migration." })],
   ["non-mark tag rejected", !survives({ proposedText: "Led the <em>migration</em> cutover." })],
@@ -113,6 +118,52 @@ const checks = [
   ["adjacent evidenceType rejected", !survives({ proposedText: "Led the migration with rollback.", evidenceType: "adjacent" })],
   ["placeholder evidence n/a rejected", evasionStats.missingEvidence === 1],
   ["short junk evidence rejected", !survives({ proposedText: "Led the migration with rollback.", evidence: "yes" })],
+  ["common Codex evidence-locator wording stays grounded", survives({
+    proposedText: "Led the EHR migration with production troubleshooting and validation checks.",
+    evidence: "The existing bullet documents the EHR migration and production troubleshooting experience."
+  })],
+  ["overlong proposed text is rejected instead of silently truncated", (() => {
+    const stats = {};
+    const out = sanitizeTailorSuggestions(
+      [{ target: { sectionId: "s", entryId: "e", bulletId: "b", field: "bullet" },
+        proposedText: `Led the EHR migration ${"with validation checks ".repeat(90)}`,
+        evidenceType: "exact", evidence: "The existing bullet documents the EHR migration." }],
+      scope, stats, "", JD
+    );
+    return out.length === 0 && stats.overlongProposedText === 1;
+  })()],
+  ["honest-context attribution wording does not reject supported Claude Code/Codex skills", (() => {
+    const skillScope = { sections: [{ id: "sk", heading: "Technical Skills", type: "skills", entries: [
+      { id: "row-tool", titleLeft: "Tooling & Cloud", titleRight: "", subtitleLeft: "Git, Docker, AWS, OpenAI", subtitleRight: "", bullets: [] }
+    ] }] };
+    const honest = "When the role mentions AI-assisted development or similar tools, highlight my practical experience using Claude Code and OpenAI Codex to support implementation planning, coding, debugging, refactoring, and code review.";
+    return sanitizeTailorSuggestions(
+      [{
+        target: { sectionId: "sk", entryId: "row-tool", field: "skill" },
+        proposedText: "Git, Docker, AWS, OpenAI, Claude Code, OpenAI Codex",
+        evidenceType: "exact",
+        evidence: "The honest context explicitly states practical experience using Claude Code and OpenAI Codex for implementation planning, coding, debugging, refactoring, and code review.",
+        hits: ["AI-assisted development"]
+      }],
+      skillScope, {}, honest, "Experience with AI-assisted development tools is required."
+    ).length === 1;
+  })()],
+  ["honest-context attribution wording does not reject supported Microsoft Office skills", (() => {
+    const skillScope = { sections: [{ id: "sk", heading: "Technical Skills", type: "skills", entries: [
+      { id: "row-tool", titleLeft: "Tooling & Cloud", titleRight: "", subtitleLeft: "Git, Docker, AWS", subtitleRight: "", bullets: [] }
+    ] }] };
+    const honest = "I am proficient with Microsoft Word, Excel, and PowerPoint. When a job description mentions Microsoft Office, include this experience where relevant.";
+    return sanitizeTailorSuggestions(
+      [{
+        target: { sectionId: "sk", entryId: "row-tool", field: "skill" },
+        proposedText: "Git, Docker, AWS, Microsoft Office (Word, Excel, PowerPoint)",
+        evidenceType: "exact",
+        evidence: "The user explicitly confirms proficiency with Microsoft Word, Excel, and PowerPoint.",
+        hits: ["Microsoft Office"]
+      }],
+      skillScope, {}, honest, "Proficiency with Microsoft Office is required."
+    ).length === 1;
+  })()],
 
   // --- keyword grounding (hit-based and proposed-text based) ---
   ["hit keyword written but ungrounded rejected", !survives({ proposedText: "Led an EHR migration on Windows workstations.", hits: ["Windows"] })],
@@ -126,6 +177,13 @@ const checks = [
   ["non-JD proper claim absent from evidence is rejected", !survives({ proposedText: "Presented findings to the Cardiology team weekly." })],
   ["non-JD invented metric is rejected", !survives({ proposedText: "Led the EHR migration, reducing incidents by 99%." })],
   ["non-JD invented known tool is rejected", !survives({ proposedText: "Built GraphQL reporting services for the clinic." })],
+  ["ordinary-language fabricated outcome is rejected", !survives({
+    proposedText: "Led the EHR migration, prevented outages, and protected revenue."
+  })],
+  ["ordinary-language outcome survives when the entry evidence states it", survives({
+    proposedText: "Led the EHR migration and prevented outages.",
+    honest: "Exact evidence for this role: the EHR migration prevented outages."
+  })],
   ["grounded rewrite passes", survives({ proposedText: "Led an EHR migration with production troubleshooting and rollback.", hits: ["EHR migration"] })],
   ["lowercase concept (microservices) ungrounded rejected", !survives({ proposedText: "Decomposed the clinic reporting into microservices." })],
   ["lowercase concept (machine learning) ungrounded rejected", !survives({ proposedText: "Applied machine learning to triage reporting requests." })],
@@ -223,6 +281,37 @@ const checks = [
       ],
       skillScope, {}, "", "Requirements: Docker and Git experience."
     ).length === 1;
+  })()],
+  ["malformed read-only context cannot crash otherwise valid sanitization", (() => {
+    const malformedContextScope = {
+      sections: [{ id: "sk", heading: "Technical Skills", type: "skills", entries: [
+        { id: "row-tool", titleLeft: "Tooling", subtitleLeft: "Git, Docker", bullets: [] }
+      ] }],
+      contextSections: [null, 7, { heading: "Education", entries: [null] }]
+    };
+    try {
+      return sanitizeTailorSuggestions(
+        [{ target: { sectionId: "sk", entryId: "row-tool", field: "skill" },
+          proposedText: "Docker, Git", evidenceType: "exact", evidence: "Both tools are already listed." }],
+        malformedContextScope, {}, "", "Docker required."
+      ).length === 1;
+    } catch {
+      return false;
+    }
+  })()],
+  ["duplicate model ids are normalized to distinct suggestion ids", (() => {
+    const out = sanitizeTailorSuggestions(
+      [
+        { id: "duplicate", target: { sectionId: "proj", entryId: "rolefit", bulletId: "b1", field: "bullet" },
+          proposedText: "Built a resume review engine on a Node provider adapter with deterministic fallback behavior.",
+          evidenceType: "exact", evidence: "The existing bullet documents the Node provider adapter and deterministic fallback." },
+        { id: "duplicate", target: { sectionId: "proj", entryId: "pipe", bulletId: "b2", field: "bullet" },
+          proposedText: "Built Python ETL jobs and containerized the batch pipeline with Docker.",
+          evidenceType: "exact", evidence: "The existing bullet documents Python ETL jobs and Docker containers." }
+      ],
+      MULTI, {}, "", MULTI_JOB
+    );
+    return out.length === 2 && out[0].id !== out[1].id;
   })()],
 
   // --- entry-scoped grounding: anti-misattribution (a REAL skill relocated onto
@@ -425,7 +514,7 @@ const checks = [
     const out = sanitizeStrictReview(
       { verdict: "STRETCH", rewrites: [
         { original: "Shipped a machine learning pipeline for demand forecasting.",
-          rewrite: "Shipped a machine learning pipeline that improved demand forecasting accuracy.",
+          rewrite: "Built and shipped a machine learning pipeline for demand forecasting.",
           hits: ["machine learning"] }
       ] },
       "requirements: machine learning.", corpus
@@ -681,6 +770,27 @@ const checks = [
     return review?.gaps[0]?.evidenceType === "exact"
       && review.gaps[0].canHonestlyAdd === true;
   })()],
+  ["sentence-final gap keyword remains grounded", (() => {
+    const review = sanitizeStrictReview({
+      verdict: "REASONABLE FIT",
+      gaps: [{ gap: "GraphQL.", severity: "MEDIUM", evidenceType: "exact", canHonestlyAdd: true, evidence: "Skills list GraphQL." }],
+      recommendation: {}
+    }, "GraphQL is required.", "Skills: GraphQL.");
+    return review?.gaps[0]?.gap === "GraphQL."
+      && review.gaps[0].evidenceType === "exact"
+      && review.gaps[0].canHonestlyAdd === true;
+  })()],
+  ["review-derived missing skill preserves already-sanitized exact evidence", (() => {
+    const review = sanitizeStrictReview({
+      verdict: "REASONABLE FIT",
+      gaps: [{ gap: "GraphQL", severity: "MEDIUM", evidenceType: "exact", canHonestlyAdd: true, evidence: "Skills list GraphQL" }],
+      recommendation: {}
+    }, "GraphQL is required.", "Skills: GraphQL");
+    const missing = missingRequiredSkillsFromStrictReview(review, "GraphQL is required.", "Skills: GraphQL");
+    return missing[0]?.keyword === "GraphQL"
+      && missing[0].evidenceType === "exact"
+      && missing[0].canHonestlyAdd === true;
+  })()],
   ["strict-review .NET gap cannot ground on net-zero wording", (() => {
     const review = sanitizeStrictReview({
       verdict: "STRETCH",
@@ -731,8 +841,24 @@ const checks = [
     return (userPrompt.match(/read-only-sentinel/g) ?? []).length === 1
       && /<context_sections>[\s\S]*read-only-sentinel[\s\S]*<\/context_sections>/.test(userPrompt)
       && !/<tailor_scope>[\s\S]*read-only-sentinel[\s\S]*<\/tailor_scope>/.test(userPrompt);
+  })()],
+  ["tailor prompt does not license cross-entry context misattribution", (() => {
+    const { userPrompt } = buildPolishPrompts({
+      jobText: "Python required.",
+      tailorScope: {
+        version: 1,
+        sections: [{ id: "editable", entries: [] }],
+        contextSections: [{ id: "read-only", entries: [] }]
+      }
+    });
+    return /context sections may support corpus-level skills or summary edits/i.test(userPrompt)
+      && /must not attribute a context-only fact to a specific project or role/i.test(userPrompt);
   })()]
 ];
+
+// Floor: silently deleting a check must shrink the gate loudly, not quietly.
+// Raise this number whenever you ADD a check above.
+assert(checks.length >= 91, `sanitize probe count dropped below the floor (91): found ${checks.length}`);
 
 let failures = 0;
 for (const [name, ok] of checks) {

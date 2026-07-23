@@ -59,7 +59,7 @@ assert.equal(
   false
 );
 assert.equal(
-  isCompatibleRoleFitHealth({ ...payload, desktopCompatibilityVersion: 2 }, expected),
+  isCompatibleRoleFitHealth({ ...payload, desktopCompatibilityVersion: 3 }, expected),
   false
 );
 assert.equal(isCompatibleRoleFitHealth({ service: "role-fit-ai" }, expected), false);
@@ -138,6 +138,23 @@ assert.equal(
 assert.equal(ownedServerEnvironment.AWS_SECRET_ACCESS_KEY, undefined);
 
 const mainSource = await readFile(new URL("../main.cts", import.meta.url), "utf8");
+const serverSource = await readFile(new URL("../../server.ts", import.meta.url), "utf8");
+const runtimeSource = await readFile(new URL("../../server/runtime.ts", import.meta.url), "utf8");
+assert.doesNotMatch(
+  runtimeSource,
+  /\/api\/workspace\/(?:backup|restore)/,
+  "workspace transfer is not exposed through the browser-reachable HTTP router"
+);
+assert.match(
+  serverSource,
+  /rolefit-workspace-request[\s\S]*createWorkspaceBackup[\s\S]*restoreWorkspaceBackup[\s\S]*rolefit-workspace-response/,
+  "the companion-owned utility channel carries backup and restore requests"
+);
+assert.match(
+  mainSource,
+  /server\.backupWorkspace\(\)[\s\S]*server\.restoreWorkspace\(body\)/,
+  "desktop main uses the private child-process methods instead of loopback management routes"
+);
 assert.match(
   mainSource,
   /const desktopServerSourceEnvironment:[\s\S]*\.\.\.process\.env[\s\S]*PATH: cliProcessEnvironment\.PATH/,

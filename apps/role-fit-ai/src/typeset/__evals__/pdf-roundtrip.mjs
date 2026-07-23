@@ -173,6 +173,22 @@ if (annots !== expectedLinks) {
   failures += 1;
 }
 
+// Floors: a corrupt/truncated fixture (or an emitter regression that silently
+// produces zero output) must fail loudly instead of an all-zero "clean" pass.
+// This fixture's contact info always yields at least one automatic link
+// (email/github), so expectedLinks > 0 and annots must be too.
+if (checked === 0) {
+  console.error("pdf-roundtrip: 0 runs checked — vertical-truth.json fixture is missing/corrupt or the layout produced no text runs");
+  failures += 1;
+}
+if (expectedLinks === 0) {
+  console.error("pdf-roundtrip: expected 0 links from the layout — the fixture's contact info should always yield at least one automatic link (email/github)");
+  failures += 1;
+} else if (annots === 0) {
+  console.error("pdf-roundtrip: 0 link annotations emitted though the layout expected some — the PDF link-annotation path silently produced nothing");
+  failures += 1;
+}
+
 if (failures) {
   console.error(`pdf-roundtrip: ${failures} failures (${checked} runs checked)`);
   process.exit(1);

@@ -324,6 +324,7 @@ function isNullableCount(value: unknown): value is number | null {
 function copyWorkspaceOverview(overview: RoleFitWorkspaceOverview): RoleFitWorkspaceOverview {
   if (!overview || typeof overview !== "object" ||
       typeof overview.serverReady !== "boolean" ||
+      typeof overview.workspaceTransferReady !== "boolean" ||
       !isNullableCount(overview.activeBrowserTabs) ||
       typeof overview.hasBaseResume !== "boolean" ||
       !isNullableCount(overview.applicationCount)) {
@@ -334,6 +335,7 @@ function copyWorkspaceOverview(overview: RoleFitWorkspaceOverview): RoleFitWorks
     workspaceDisplayPath: requireWorkspacePathString(overview.workspaceDisplayPath),
     activeBrowserTabs: overview.activeBrowserTabs,
     serverReady: overview.serverReady,
+    workspaceTransferReady: overview.workspaceTransferReady,
     hasBaseResume: overview.hasBaseResume,
     applicationCount: overview.applicationCount
   };

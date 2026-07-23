@@ -126,7 +126,7 @@ const providerConnections = Object.freeze([
   })
 ]);
 
-assert.equal(ROLEFIT_DESKTOP_API_VERSION, 9);
+assert.equal(ROLEFIT_DESKTOP_API_VERSION, 10);
 assert.equal(ROLEFIT_DESKTOP_SETTINGS_SCHEMA_VERSION, 1);
 assert.equal(ROLEFIT_EXTENSION_ORIGIN_MAX_COUNT, 4);
 assert.equal(ROLEFIT_API_KEY_MAX_BYTES, 16_384);
@@ -174,7 +174,7 @@ assert.equal(isRoleFitProviderId("shell"), false);
 assert.equal(normalizeRoleFitExtensionOrigin(`${firefoxOrigin}/`), firefoxOrigin);
 assert.equal(normalizeRoleFitExtensionOrigin("https://example.com"), "");
 assert.deepEqual(runtimeInfo, {
-  apiVersion: 9,
+  apiVersion: 10,
   runtime: "electron-companion",
   platform: "darwin",
   appVersion: "0.1.0",
@@ -253,6 +253,7 @@ let workspaceOverviewResult = {
   workspaceDisplayPath: "~/workspaces/job-search-workspace",
   activeBrowserTabs: 0,
   serverReady: true,
+  workspaceTransferReady: true,
   hasBaseResume: true,
   applicationCount: 12,
   stagingDir: "/must-not-cross-ipc"
@@ -456,6 +457,7 @@ assert.deepEqual(handledWorkspaceOverview, {
   workspaceDisplayPath: "~/workspaces/job-search-workspace",
   activeBrowserTabs: 0,
   serverReady: true,
+  workspaceTransferReady: true,
   hasBaseResume: true,
   applicationCount: 12
 });
@@ -490,6 +492,7 @@ workspaceOverviewResult = {
   workspaceDisplayPath: "~/workspaces/job-search-workspace",
   activeBrowserTabs: 2,
   serverReady: true,
+  workspaceTransferReady: true,
   hasBaseResume: true,
   applicationCount: 12
 };
@@ -1010,7 +1013,10 @@ vm.runInNewContext(preload, {
               workspacePath: "/private/rolefit/workspaces/job-search-workspace",
               workspaceDisplayPath: "~/workspaces/job-search-workspace",
               activeBrowserTabs: 0,
-              serverReady: true
+              serverReady: true,
+              workspaceTransferReady: true,
+              hasBaseResume: true,
+              applicationCount: 0
             });
           }
           if (channel === channels.workspaceBackup || channel === channels.workspaceRestore) {

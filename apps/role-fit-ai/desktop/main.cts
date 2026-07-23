@@ -63,7 +63,6 @@ const PUBLIC_APP_NAME = "RoleFit AI";
 const DEFAULT_HOST = "127.0.0.1" as const;
 const PROVIDER_SNAPSHOT_REFRESH_INTERVAL_MS = 5_000;
 const WORKSPACE_ACTIVITY_TIMEOUT_MS = 1_500;
-const WORKSPACE_TRANSFER_TIMEOUT_MS = 120_000;
 const WORKSPACE_SMALL_RESPONSE_MAX_BYTES = 4_096;
 
 type DesktopMode = "development" | "production";
@@ -236,24 +235,6 @@ function toWorkspaceDisplayPath(workspacePath: string): string {
   return workspacePath;
 }
 
-// Server workspace errors are written as user-safe classified messages; keep
-// them verbatim but bounded and single-line, and never surface anything else.
-function serverWorkspaceErrorMessage(body: string, fallback: string): string {
-  try {
-    const value = JSON.parse(body) as unknown;
-    if (value && typeof value === "object" && !Array.isArray(value)) {
-      const error = (value as { error?: unknown }).error;
-      if (typeof error === "string") {
-        const message = error.replace(/\s+/g, " ").trim().slice(0, 240);
-        if (message) return message;
-      }
-    }
-  } catch {
-    // Ignore unreadable error bodies; the fallback below is already user-safe.
-  }
-  return fallback;
-}
-
 async function readWorkspaceActivity(origin: string): Promise<number | null> {
   try {
     const response = await fetch(`${origin}/api/workspace/activity`, {
@@ -340,6 +321,7 @@ async function getWorkspaceOverview(): Promise<RoleFitWorkspaceOverview> {
     workspaceDisplayPath: toWorkspaceDisplayPath(workspacePath),
     activeBrowserTabs,
     serverReady: desktopServer !== null,
+    workspaceTransferReady: desktopServer?.ownership === "owned",
     hasBaseResume: stats.hasBaseResume,
     applicationCount: stats.applicationCount
   });
@@ -383,9 +365,7 @@ async function getConnectionStatus(): Promise<RoleFitConnectionStatus> {
   });
 }
 
-function workspaceBackupFileName(disposition: string | null): string {
-  const match = disposition?.match(/filename="([^"]+)"/);
-  const candidate = match?.[1]?.trim() ?? "";
+function workspaceBackupFileName(candidate: string): string {
   if (isRoleFitWorkspaceBackupFileName(candidate)) return candidate;
   return `RoleFit-Workspace-${new Date().toISOString().slice(0, 10)}.rolefit-backup`;
 }
@@ -416,28 +396,15 @@ async function backupWorkspaceToFile(): Promise<RoleFitWorkspaceBackupResult> {
   }
   workspaceTransferActive = true;
   try {
-    let response: Response;
+    let transfer;
     try {
-      response = await fetch(`${server.origin}/api/workspace/backup`, {
-        cache: "no-store",
-        headers: { Accept: "application/vnd.rolefit.workspace-backup+json, application/json" },
-        redirect: "error",
-        signal: AbortSignal.timeout(WORKSPACE_TRANSFER_TIMEOUT_MS)
-      });
-    } catch {
-      return workspaceError("The local RoleFit server could not be reached for the backup.");
+      transfer = await server.backupWorkspace();
+    } catch (error) {
+      const message = error instanceof Error ? error.message.replace(/\s+/g, " ").trim().slice(0, 240) : "";
+      return workspaceError(message || "The workspace could not be backed up safely.");
     }
-    if (!response.ok) {
-      const errorBody = await readBoundedResponseText(response, WORKSPACE_SMALL_RESPONSE_MAX_BYTES)
-        .catch(() => "");
-      return workspaceError(
-        serverWorkspaceErrorMessage(errorBody, "The workspace could not be backed up safely.")
-      );
-    }
-    let body: string;
-    try {
-      body = await readBoundedResponseText(response, ROLEFIT_WORKSPACE_BACKUP_MAX_JSON_BYTES);
-    } catch {
+    const { body } = transfer;
+    if (Buffer.byteLength(body, "utf8") > ROLEFIT_WORKSPACE_BACKUP_MAX_JSON_BYTES) {
       return workspaceError("The workspace backup is larger than the supported 96 MB limit.");
     }
     // Minimal shape probe only; the server already validated the envelope and
@@ -458,7 +425,7 @@ async function backupWorkspaceToFile(): Promise<RoleFitWorkspaceBackupResult> {
     const saveResult = await dialog.showSaveDialog(window, {
       title: "Save workspace backup",
       defaultPath: defaultBackupSavePath(
-        workspaceBackupFileName(response.headers.get("content-disposition"))
+        workspaceBackupFileName(transfer.fileName)
       ),
       filters: [{ name: "RoleFit workspace backup", extensions: ["rolefit-backup"] }]
     });
@@ -551,53 +518,16 @@ async function restoreWorkspaceFromFile(): Promise<RoleFitWorkspaceRestoreResult
     if (confirmation.response !== 1) {
       return Object.freeze({ status: "cancelled" as const });
     }
-    let response: Response;
     try {
-      response = await fetch(`${server.origin}/api/workspace/restore`, {
-        method: "POST",
-        cache: "no-store",
-        headers: {
-          Accept: "application/vnd.rolefit.workspace-backup+json, application/json",
-          "Content-Type": "application/json"
-        },
-        redirect: "error",
-        body,
-        signal: AbortSignal.timeout(WORKSPACE_TRANSFER_TIMEOUT_MS)
-      });
-    } catch {
-      return workspaceError("The local RoleFit server could not be reached for the restore.");
-    }
-    const responseBody = await readBoundedResponseText(response, WORKSPACE_SMALL_RESPONSE_MAX_BYTES)
-      .catch(() => "");
-    if (!response.ok) {
-      // 409 carries the server's live-browser-tab refusal; surface it verbatim.
-      return workspaceError(serverWorkspaceErrorMessage(
-        responseBody,
-        response.status === 409
-          ? "Close the open RoleFit browser tabs, then try the restore again."
-          : "The workspace could not be restored safely."
-      ));
-    }
-    try {
-      const value = JSON.parse(responseBody) as unknown;
-      if (!value || typeof value !== "object" || Array.isArray(value)) {
-        throw new Error("Unexpected restore response.");
-      }
-      const record = value as { restored?: unknown; restoredFiles?: unknown; previousWorkspaceKept?: unknown };
-      if (record.restored !== true ||
-          typeof record.restoredFiles !== "number" ||
-          !Number.isSafeInteger(record.restoredFiles) ||
-          record.restoredFiles < 0 ||
-          typeof record.previousWorkspaceKept !== "boolean") {
-        throw new Error("Unexpected restore response.");
-      }
+      const record = await server.restoreWorkspace(body);
       return Object.freeze({
         status: "restored" as const,
         restoredFiles: record.restoredFiles,
         previousWorkspaceKept: record.previousWorkspaceKept
       });
-    } catch {
-      return workspaceError("The local server returned an unexpected restore response.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message.replace(/\s+/g, " ").trim().slice(0, 240) : "";
+      return workspaceError(message || "The workspace could not be restored safely.");
     }
   } finally {
     workspaceTransferActive = false;
@@ -850,7 +780,11 @@ function nullableCountMatches(value: unknown): boolean {
     (typeof value === "number" && Number.isSafeInteger(value) && value >= 0);
 }
 
-function workspaceOverviewMatches(value: unknown, expectedPath: string | null): boolean {
+function workspaceOverviewMatches(
+  value: unknown,
+  expectedPath: string | null,
+  expectedState: RoleFitServerOwnership
+): boolean {
   if (!expectedPath || !value || typeof value !== "object" || Array.isArray(value)) return false;
   const overview = value as Record<string, unknown>;
   return overview.workspacePath === expectedPath &&
@@ -858,9 +792,10 @@ function workspaceOverviewMatches(value: unknown, expectedPath: string | null): 
     overview.workspaceDisplayPath.length > 0 &&
     nullableCountMatches(overview.activeBrowserTabs) &&
     overview.serverReady === true &&
+    overview.workspaceTransferReady === (expectedState === "owned") &&
     typeof overview.hasBaseResume === "boolean" &&
     nullableCountMatches(overview.applicationCount) &&
-    Object.keys(overview).length === 6;
+    Object.keys(overview).length === 7;
 }
 
 function connectionStatusMatches(
@@ -1119,7 +1054,7 @@ async function inspectSmokeRenderer(
     !result.connectionControlsPresent ||
     !result.explainerParagraphsAbsent ||
     result.workspaceOverviewError !== null ||
-    !workspaceOverviewMatches(result.workspaceOverview, activeWorkspaceDir) ||
+    !workspaceOverviewMatches(result.workspaceOverview, activeWorkspaceDir, ownership) ||
     result.connectionStatusError !== null ||
     !connectionStatusMatches(
       result.connectionStatus,

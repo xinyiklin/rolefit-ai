@@ -13,6 +13,7 @@ import { callConfiguredProvider } from "./clients.ts";
 import {
   findUngroundedClaimTerm,
   findUngroundedCuratedClaimTerm,
+  findUngroundedOutcomeClaim,
   findUngroundedProseProperClaimTerm,
   proseHasUngroundedTerm
 } from "./grounding.ts";
@@ -157,6 +158,7 @@ export function bindApplicationAnswers(
       // candidate OR named by the target job. Anything else is an unsupported
       // model-authored claim, even when it is not a curated technology.
       || findUngroundedProseProperClaimTerm(text, groundingText, jobText)
+      || findUngroundedOutcomeClaim(text, groundingText, { candidateProse: true })
     ) {
       throw new UserSafeAiError("AI response included an unsupported claim in an application answer. The draft was withheld; try again or add honest context.", 502);
     }
@@ -221,6 +223,7 @@ export function bindApplicationRoleDescriptions(
       || proseHasUngroundedTerm(description, jobLower, roleGroundingLower)
       || hasUngroundedNumericClaim(description, roleGrounding)
       || findUngroundedClaimTerm(description, roleGrounding)
+      || findUngroundedOutcomeClaim(description, roleGrounding)
     ) {
       throw new UserSafeAiError("AI response included an unsupported claim in a role description. The draft was withheld; try again.", 502);
     }

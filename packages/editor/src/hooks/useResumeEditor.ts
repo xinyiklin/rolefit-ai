@@ -145,12 +145,30 @@ function reorder<T>(arr: T[], from: number, to: number): T[] {
   return next;
 }
 
+// Both mappers preserve identity when nothing changed (unknown id, or `fn`
+// returned its input): `rootReducer` treats `data === state.data` as "no edit",
+// so a no-op structural dispatch (same-index drop, boundary arrow-reorder,
+// stale id) must not mark the document dirty or push an identical undo step.
 function mapSection(data: ResumeData, sectionId: string, fn: (section: ResumeSectionData) => ResumeSectionData): ResumeData {
-  return { ...data, sections: data.sections.map((section) => (section.id === sectionId ? fn(section) : section)) };
+  let changed = false;
+  const sections = data.sections.map((section) => {
+    if (section.id !== sectionId) return section;
+    const next = fn(section);
+    if (next !== section) changed = true;
+    return next;
+  });
+  return changed ? { ...data, sections } : data;
 }
 
 function mapEntry(section: ResumeSectionData, entryId: string, fn: (entry: ResumeEntry) => ResumeEntry): ResumeSectionData {
-  return { ...section, items: section.items.map((entry) => (entry.id === entryId ? fn(entry) : entry)) };
+  let changed = false;
+  const items = section.items.map((entry) => {
+    if (entry.id !== entryId) return entry;
+    const next = fn(entry);
+    if (next !== entry) changed = true;
+    return next;
+  });
+  return changed ? { ...section, items } : section;
 }
 
 // ----- reducer -----
@@ -166,8 +184,10 @@ export function reduceResumeData(data: ResumeData, action: Action): ResumeData {
       return { ...data, contact: data.contact.map((c, i) => (i === action.index ? action.value : c)) };
     case "addContact":
       return { ...data, contact: [...data.contact, ""] };
-    case "removeContact":
-      return { ...data, contact: data.contact.filter((_, i) => i !== action.index) };
+    case "removeContact": {
+      const contact = data.contact.filter((_, i) => i !== action.index);
+      return contact.length === data.contact.length ? data : { ...data, contact };
+    }
 
     case "addSection": {
       const section = newSection(action.sectionType);
@@ -183,10 +203,14 @@ export function reduceResumeData(data: ResumeData, action: Action): ResumeData {
       sections.splice(index + (action.position === "above" ? 0 : 1), 0, newSection(action.sectionType));
       return { ...data, sections };
     }
-    case "removeSection":
-      return { ...data, sections: data.sections.filter((section) => section.id !== action.sectionId) };
-    case "reorderSections":
-      return { ...data, sections: reorder(data.sections, action.from, action.to) };
+    case "removeSection": {
+      const sections = data.sections.filter((section) => section.id !== action.sectionId);
+      return sections.length === data.sections.length ? data : { ...data, sections };
+    }
+    case "reorderSections": {
+      const sections = reorder(data.sections, action.from, action.to);
+      return sections === data.sections ? data : { ...data, sections };
+    }
     case "setHeading":
       // Heading edits never change the section type — type is set explicitly when
       // the section is added (prevents a rename from hiding an entry's bullets).
@@ -206,15 +230,15 @@ export function reduceResumeData(data: ResumeData, action: Action): ResumeData {
         return { ...section, items };
       });
     case "removeEntry":
-      return mapSection(data, action.sectionId, (section) => ({
-        ...section,
-        items: section.items.filter((entry) => entry.id !== action.entryId)
-      }));
+      return mapSection(data, action.sectionId, (section) => {
+        const items = section.items.filter((entry) => entry.id !== action.entryId);
+        return items.length === section.items.length ? section : { ...section, items };
+      });
     case "reorderEntries":
-      return mapSection(data, action.sectionId, (section) => ({
-        ...section,
-        items: reorder(section.items, action.from, action.to)
-      }));
+      return mapSection(data, action.sectionId, (section) => {
+        const items = reorder(section.items, action.from, action.to);
+        return items === section.items ? section : { ...section, items };
+      });
     case "updateEntry":
       return mapSection(data, action.sectionId, (section) =>
         mapEntry(section, action.entryId, (entry) => ({ ...entry, [action.field]: action.value }))
@@ -301,17 +325,17 @@ export function reduceResumeData(data: ResumeData, action: Action): ResumeData {
       );
     case "removeBullet":
       return mapSection(data, action.sectionId, (section) =>
-        mapEntry(section, action.entryId, (entry) => ({
-          ...entry,
-          bullets: entry.bullets.filter((bullet) => bullet.id !== action.bulletId)
-        }))
+        mapEntry(section, action.entryId, (entry) => {
+          const bullets = entry.bullets.filter((bullet) => bullet.id !== action.bulletId);
+          return bullets.length === entry.bullets.length ? entry : { ...entry, bullets };
+        })
       );
     case "reorderBullets":
       return mapSection(data, action.sectionId, (section) =>
-        mapEntry(section, action.entryId, (entry) => ({
-          ...entry,
-          bullets: reorder(entry.bullets, action.from, action.to)
-        }))
+        mapEntry(section, action.entryId, (entry) => {
+          const bullets = reorder(entry.bullets, action.from, action.to);
+          return bullets === entry.bullets ? entry : { ...entry, bullets };
+        })
       );
     case "updateBullet":
       return mapSection(data, action.sectionId, (section) =>

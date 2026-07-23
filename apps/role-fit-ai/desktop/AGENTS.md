@@ -36,11 +36,12 @@ Applies to `apps/role-fit-ai/desktop/` and `tsconfig.desktop.json`.
 - The companion window is a tabbed shell (Providers / Workspace / Connection).
   The Workspace tab is the product home of portable workspace backup and
   restore (`docs/engineering/workspace-backup.md` owns the wire contract). Main
-  owns the whole flow: it fetches `/api/workspace/backup|restore|activity` on
-  the owned/reused loopback origin, drives the native save/open/confirm
+  owns the whole flow: it sends backup/restore only over the owned server's
+  private utility-process channel, fetches only shape-only activity over the
+  loopback origin, and drives the native save/open/confirm
   dialogs, writes the envelope verbatim, and never logs envelope contents. The
-  shared bounded-response helper enforces actual streamed byte limits without
-  trusting `Content-Length`, including for a compatible reused listener. Backup
+  transfer controls stay disabled for a compatible reused listener because it
+  has no private parent/child channel. Backup
   saves use an owner-only sibling temporary file plus final rename so a failed
   write cannot truncate an existing backup. The renderer receives only
   shape-only results, the home-relative display path,

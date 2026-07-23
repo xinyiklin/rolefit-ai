@@ -56,6 +56,11 @@ npm run test:rolefit:desktop  # explicit companion process smoke
 npm run test:desktop:package-layout --workspace apps/role-fit-ai
 npm run test:rolefit:desktop:packaged
 npm run test:rolefit:release
+
+# Live-provider evals: drive a real AI provider; manual-only, never part of
+# `check`/`test`, run only when explicitly authorized.
+npm run eval:live:fabrication --workspace apps/role-fit-ai
+npm run eval:live:tailor --workspace apps/role-fit-ai -- <jd-file> [runs] [resume-file]
 ```
 
 Typeset preview is `npm run preview --workspace apps/typeset`. RoleFit preview

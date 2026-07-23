@@ -11,10 +11,11 @@ import {
 const companionUrl = "file:///tmp/rolefit%20companion/companion.html";
 
 const desktopRoot = resolve(import.meta.dirname, "..");
-const [mainEntitlements, inheritedEntitlements, forgeConfigSource] = await Promise.all([
+const [mainEntitlements, inheritedEntitlements, forgeConfigSource, compiledMainSource] = await Promise.all([
   readFile(resolve(desktopRoot, "assets/entitlements.mac.plist"), "utf8"),
   readFile(resolve(desktopRoot, "assets/entitlements.mac.inherit.plist"), "utf8"),
-  readFile(resolve(desktopRoot, "forge.config.cjs"), "utf8")
+  readFile(resolve(desktopRoot, "forge.config.cjs"), "utf8"),
+  readFile(resolve(desktopRoot, "../dist-electron/desktop/main.cjs"), "utf8")
 ]);
 assert.match(mainEntitlements, /com\.apple\.security\.automation\.apple-events/);
 assert.doesNotMatch(inheritedEntitlements, /com\.apple\.security\.automation\.apple-events/);
@@ -22,6 +23,74 @@ assert.match(
   forgeConfigSource,
   /entitlementsInherit: path\.join\(assets, "entitlements\.mac\.inherit\.plist"\)/
 );
+
+// Every BrowserWindow the companion creates (the main companion window and the
+// smoke-only untrusted-bridge probe window) must keep the hardened
+// webPreferences flags. Assert against the compiled dist-electron output the
+// packaged app actually runs (rebuilt by the test:desktop:security script), and
+// extract each webPreferences object by balanced braces so the assertions do
+// not depend on formatting.
+function extractWebPreferencesBlocks(source) {
+  const blocks = [];
+  const marker = /webPreferences:\s*\{/g;
+  for (let match = marker.exec(source); match !== null; match = marker.exec(source)) {
+    const start = match.index + match[0].length - 1;
+    let depth = 0;
+    let end = -1;
+    for (let index = start; index < source.length; index += 1) {
+      const character = source[index];
+      if (character === "{") depth += 1;
+      else if (character === "}") {
+        depth -= 1;
+        if (depth === 0) {
+          end = index;
+          break;
+        }
+      }
+    }
+    assert.notEqual(end, -1, "Unterminated webPreferences object in compiled desktop main.");
+    blocks.push(source.slice(start, end + 1));
+  }
+  return blocks;
+}
+
+const requiredWebPreferences = {
+  nodeIntegration: false,
+  contextIsolation: true,
+  sandbox: true,
+  webSecurity: true,
+  webviewTag: false,
+  nodeIntegrationInWorker: false,
+  nodeIntegrationInSubFrames: false,
+  allowRunningInsecureContent: false
+};
+const windowCreationCount =
+  compiledMainSource.match(/\bnew\s+(?:[\w$]+\.)?BrowserWindow\s*\(/g)?.length ?? 0;
+const webPreferencesBlocks = extractWebPreferencesBlocks(compiledMainSource);
+assert.equal(
+  windowCreationCount,
+  2,
+  "Expected exactly the two known BrowserWindow creation sites in desktop main; a new window must add its hardened webPreferences to this probe."
+);
+assert.equal(
+  webPreferencesBlocks.length,
+  windowCreationCount,
+  "Every BrowserWindow in desktop main must declare an explicit webPreferences object."
+);
+for (const [blockIndex, block] of webPreferencesBlocks.entries()) {
+  for (const [flag, safeValue] of Object.entries(requiredWebPreferences)) {
+    assert.match(
+      block,
+      new RegExp(`\\b${flag}:\\s*${safeValue}\\b`),
+      `webPreferences block ${blockIndex} must set ${flag}: ${safeValue}.`
+    );
+    assert.doesNotMatch(
+      block,
+      new RegExp(`\\b${flag}:\\s*${!safeValue}\\b`),
+      `webPreferences block ${blockIndex} must not set ${flag}: ${!safeValue}.`
+    );
+  }
+}
 
 assert.equal(isTrustedCompanionUrl(companionUrl, companionUrl), true);
 assert.equal(isTrustedCompanionUrl(`${companionUrl}#section`, companionUrl), false);

@@ -24,7 +24,6 @@ import {
   handleSaveApplicationResume,
   handleSaveApplications
 } from "./applications/routes.ts";
-import { handleWorkspaceBackup, handleWorkspaceRestore } from "./workspaceBackup.ts";
 import { handleBrowserPreferences } from "./browserPreferences.ts";
 import { handlePresence, handleWorkspaceActivity } from "./presence.ts";
 import {
@@ -63,6 +62,33 @@ export type RoleFitServerHandle = {
   mode: RoleFitServerMode;
   close(): Promise<void>;
 };
+
+const ROLEFIT_CONTENT_SECURITY_POLICY = [
+  "default-src 'self'",
+  "base-uri 'none'",
+  "object-src 'none'",
+  "frame-ancestors 'none'",
+  "form-action 'self'",
+  "img-src 'self' data: blob:",
+  "font-src 'self'",
+  "style-src 'self' 'unsafe-inline'",
+  "script-src 'self'",
+  "connect-src 'self' ws: wss:",
+  "worker-src 'self' blob:",
+  "child-src 'self' blob:"
+].join("; ");
+
+function setRoleFitSecurityHeaders(res: ServerResponse, development = false): void {
+  // Vite injects an inline React-refresh preamble in source development. Keep
+  // that one development-only exception out of packaged production responses.
+  const policy = development
+    ? ROLEFIT_CONTENT_SECURITY_POLICY.replace("script-src 'self'", "script-src 'self' 'unsafe-inline'")
+    : ROLEFIT_CONTENT_SECURITY_POLICY;
+  res.setHeader("Content-Security-Policy", policy);
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("Referrer-Policy", "no-referrer");
+  res.setHeader("X-Frame-Options", "DENY");
+}
 
 export async function loadRoleFitLocalEnv(appRoot: string): Promise<void> {
   try {
@@ -264,6 +290,7 @@ export async function startRoleFitServer(options: RoleFitServerOptions): Promise
 
   let listeningPort = configuredPort;
   const server = createServer((req, res) => {
+    setRoleFitSecurityHeaders(res, !isProduction);
     let routeUrl: URL;
     try {
       routeUrl = new URL(req.url ?? "/", "http://localhost");
@@ -373,16 +400,6 @@ export async function startRoleFitServer(options: RoleFitServerOptions): Promise
 
     if (pathname === "/api/workspace") {
       void handleWorkspace(req, res, workspaceLocations);
-      return;
-    }
-
-    if (pathname === "/api/workspace/backup") {
-      void handleWorkspaceBackup(req, res, workspaceDir);
-      return;
-    }
-
-    if (pathname === "/api/workspace/restore") {
-      void handleWorkspaceRestore(req, res, workspaceDir);
       return;
     }
 

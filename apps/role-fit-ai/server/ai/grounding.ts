@@ -252,7 +252,11 @@ export function findUngroundedJdTerm(
   if (!proseMode) {
     for (const match of markStripped.matchAll(/\b[A-Z][A-Za-z0-9.+#]{2,}\b/g)) {
       const token = match[0].toLowerCase();
-      if (match.index === 0 && LEADING_ACTION_VERBS.has(token)) continue;
+      // A normal action verb is grammatical at the start of ANY sentence, not
+      // only at absolute offset 0. Without the sentence-boundary check, a
+      // truthful two-sentence bullet such as "Built APIs. Improved deploys."
+      // falsely treats "Improved" as an invented proper-name claim.
+      if (LEADING_ACTION_VERBS.has(token) && isProseSentenceStart(markStripped, match.index ?? 0)) continue;
       if (!jobLower.includes(token)) continue;
       if (!isGrounded(grounding, groundingTokens, token)) return match[0];
     }
@@ -309,7 +313,7 @@ export function findUngroundedClaimTerm(proposedText: unknown, grounding: unknow
 
   for (const match of markStripped.matchAll(/\b[A-Z][A-Za-z0-9.+#]{2,}\b/g)) {
     const token = match[0].toLowerCase();
-    if (match.index === 0 && LEADING_ACTION_VERBS.has(token)) continue;
+    if (LEADING_ACTION_VERBS.has(token) && isProseSentenceStart(markStripped, match.index ?? 0)) continue;
     if (!isGrounded(groundingLower, groundingTokens, token)) return match[0];
   }
   return findUngroundedCuratedClaimTerm(proposedText, grounding);
@@ -346,6 +350,114 @@ function isProseSentenceStart(text: string, index: number): boolean {
   // punctuation (with optional closing quotes/brackets) is ordinary sentence
   // capitalization, not evidence of a proper-name claim by itself.
   return /(?:^|[.!?]["')\]]*\s+|[\r\n]\s*)$/.test(prefix);
+}
+
+type OutcomeClaimFamily = Readonly<{
+  label: string;
+  pattern: RegExp;
+}>;
+
+// Ordinary-English achievement claims need their own grounding backstop. The
+// technology/proper-name and numeric gates cannot see an invented outcome such
+// as "prevented outages" or "protected revenue" because every word is common
+// prose. Keep this list focused on result-bearing verbs/nouns rather than broad
+// resume action verbs such as built/implemented/developed, which are routinely
+// used for faithful paraphrases.
+const OUTCOME_VERB_FAMILIES: readonly OutcomeClaimFamily[] = Object.freeze([
+  { label: "accelerate", pattern: /\baccelerat(?:e|es|ed|ing)\b/i },
+  { label: "achieve", pattern: /\bachiev(?:e|es|ed|ing)\b/i },
+  { label: "avoid", pattern: /\bavoid(?:s|ed|ing)?\b/i },
+  { label: "boost", pattern: /\bboost(?:s|ed|ing)?\b/i },
+  { label: "cut", pattern: /\bcuts?\b|\bcutting\b/i },
+  { label: "decrease", pattern: /\bdecreas(?:e|es|ed|ing)\b/i },
+  { label: "eliminate", pattern: /\beliminat(?:e|es|ed|ing)\b/i },
+  { label: "enable", pattern: /\benabl(?:e|es|ed|ing)\b/i },
+  { label: "generate", pattern: /\bgenerat(?:e|es|ed|ing)\b/i },
+  // "growing" is frequently an adjective ("a growing customer base"), so
+  // keep this family to unambiguous past/result forms.
+  { label: "grow", pattern: /\bgrew\b|\bgrown\b/i },
+  { label: "improve", pattern: /\bimprov(?:e|es|ed|ing)\b/i },
+  { label: "increase", pattern: /\bincreas(?:e|es|ed|ing)\b/i },
+  { label: "lower", pattern: /\blower(?:s|ed|ing)?\b/i },
+  { label: "prevent", pattern: /\bprevent(?:s|ed|ing)?\b/i },
+  { label: "protect", pattern: /\bprotect(?:s|ed|ing)?\b/i },
+  { label: "reduce", pattern: /\breduc(?:e|es|ed|ing)\b/i },
+  { label: "save", pattern: /\bsav(?:e|es|ed|ing)\b/i },
+  { label: "shorten", pattern: /\bshorten(?:s|ed|ing)?\b/i },
+  { label: "strengthen", pattern: /\bstrengthen(?:s|ed|ing)?\b/i },
+  { label: "streamline", pattern: /\bstreamlin(?:e|es|ed|ing)\b/i }
+]);
+
+const OUTCOME_NOUN_FAMILIES: readonly OutcomeClaimFamily[] = Object.freeze([
+  { label: "adoption", pattern: /\badoption\b/i },
+  { label: "availability", pattern: /\bavailability\b/i },
+  { label: "churn", pattern: /\bchurn\b/i },
+  { label: "conversion", pattern: /\bconversions?\b/i },
+  { label: "cost", pattern: /\bcosts?\b/i },
+  { label: "defect", pattern: /\bdefects?\b/i },
+  { label: "downtime", pattern: /\bdowntime\b/i },
+  { label: "efficiency", pattern: /\befficien(?:cy|cies)\b/i },
+  { label: "error", pattern: /\berrors?\b/i },
+  { label: "incident", pattern: /\bincidents?\b/i },
+  { label: "latency", pattern: /\blatency\b/i },
+  { label: "loss", pattern: /\bloss(?:es)?\b/i },
+  { label: "outage", pattern: /\boutages?\b/i },
+  { label: "performance", pattern: /\bperformance\b/i },
+  { label: "profit", pattern: /\bprofits?\b/i },
+  { label: "reliability", pattern: /\breliability\b/i },
+  { label: "retention", pattern: /\bretention\b/i },
+  { label: "revenue", pattern: /\brevenue\b/i },
+  { label: "risk", pattern: /\brisks?\b/i },
+  { label: "satisfaction", pattern: /\bsatisfaction\b/i },
+  { label: "saving", pattern: /\bsavings?\b/i },
+  { label: "throughput", pattern: /\bthroughput\b/i }
+]);
+
+function proseOutcomeIsCandidateClaim(sentence: string): boolean {
+  const firstWord = sentence.trimStart().match(/^[A-Za-z]+/)?.[0]?.toLowerCase() ?? "";
+  return /\b(?:i|me|my|we|us|our)\b/i.test(sentence)
+    || LEADING_ACTION_VERBS.has(firstWord)
+    || OUTCOME_VERB_FAMILIES.some(({ pattern }) => pattern.test(sentence.trimStart().split(/\s+/, 1)[0] ?? ""));
+}
+
+function outcomeAttributionIsConditional(sentence: string, index: number): boolean {
+  const clausePrefix = sentence.slice(Math.max(0, index - 64), index);
+  return /\b(?:would|could|can|will|may|might)\b[^.;!?]*$/i.test(clausePrefix)
+    || /\b(?:aim|hope|plan|seek|intend)(?:s|ed|ing)?\s+to\b[^.;!?]*$/i.test(clausePrefix);
+}
+
+// Returns the first unsupported ordinary-language achievement family. Resume
+// rewrites use the strict default. Free-form cover/application prose opts into
+// candidateProse so target-company statements and future/conditional intent are
+// not mistaken for claims about work the candidate already performed.
+export function findUngroundedOutcomeClaim(
+  text: unknown,
+  grounding: unknown,
+  options: { candidateProse?: boolean } = {}
+): string | null {
+  const plain = String(text ?? "").replace(/<\/?(?:b|i|u)>/gi, " ");
+  const source = String(grounding ?? "");
+  if (!plain.trim()) return null;
+
+  for (const sentence of plain.split(/(?:[.!?]+\s+|[\r\n]+)/)) {
+    if (!sentence.trim()) continue;
+    if (options.candidateProse && !proseOutcomeIsCandidateClaim(sentence)) continue;
+
+    let factualOutcomeVerb = false;
+    for (const family of OUTCOME_VERB_FAMILIES) {
+      const match = family.pattern.exec(sentence);
+      if (!match || outcomeAttributionIsConditional(sentence, match.index)) continue;
+      factualOutcomeVerb = true;
+      if (!family.pattern.test(source)) return family.label;
+    }
+    if (!factualOutcomeVerb) continue;
+    for (const family of OUTCOME_NOUN_FAMILIES) {
+      const match = family.pattern.exec(sentence);
+      if (!match || outcomeAttributionIsConditional(sentence, match.index)) continue;
+      if (!family.pattern.test(source)) return family.label;
+    }
+  }
+  return null;
 }
 
 const PROPER_SUBJECT_CLAIM_VERBS = new Set([
@@ -428,7 +540,11 @@ export function proseHasUngroundedTerm(text: unknown, jobLower: string, groundin
 // false-dropped. `term` and `grounding` may be any case; both are lowercased
 // here. Multi-word terms ("machine learning") match as a normalized phrase.
 export function isTermGrounded(term: unknown, grounding: unknown): boolean {
-  const t = String(term ?? "").trim().toLowerCase();
+  // Free only sentence-final punctuation; internal product punctuation such as
+  // node.js and the leading dot in .NET remains intact. Coverage/gap keywords
+  // are model prose and commonly arrive as "GraphQL." — treating that period
+  // as part of the technology token silently drops otherwise exact evidence.
+  const t = stripBoundaryDots(String(term ?? "").trim().toLowerCase()).trim();
   if (!t) return false;
   const groundingLower = String(grounding ?? "").toLowerCase();
   // The grounding corpus repeats across a review's per-hit isTermGrounded calls,
@@ -442,7 +558,7 @@ export function isTermGrounded(term: unknown, grounding: unknown): boolean {
 // rewrites, but requirement extraction must not read the clearance acronym
 // TS/SCI as TypeScript (likewise net-zero/.NET and common short-token phrases).
 export function isClaimTermGroundedInSource(term: unknown, source: unknown): boolean {
-  const rawTerm = String(term ?? "").trim();
+  const rawTerm = stripBoundaryDots(String(term ?? "").trim()).trim();
   const rawSource = String(source ?? "");
   const normalized = rawTerm.toLowerCase();
   if (/\.net\b/i.test(rawTerm)) return /(?:^|[^a-z0-9])\.net(?![-a-z0-9])/i.test(rawSource);

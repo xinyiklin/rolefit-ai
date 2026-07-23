@@ -6,6 +6,10 @@
 
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { readBody, sendJson } from "./http.ts";
+import {
+  noteWorkspacePresenceAttempt,
+  workspaceRestoreIsActive
+} from "./workspaceRestoreGate.ts";
 
 const PRESENCE_TAB_ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
 const PRESENCE_ACTIVE_WINDOW_MS = 90_000;
@@ -38,12 +42,26 @@ export async function handlePresence(req: IncomingMessage, res: ServerResponse):
     sendJson(res, 405, { error: "Use POST." });
     return;
   }
+  if (workspaceRestoreIsActive()) {
+    noteWorkspacePresenceAttempt();
+    sendJson(res, 409, { error: "The workspace is being restored. Reload after it finishes." });
+    return;
+  }
   let body: unknown;
   try {
     body = JSON.parse(await readBody(req, MAX_PRESENCE_BODY_BYTES));
   } catch (error) {
     const tooLarge = error instanceof Error && error.message === "Request is too large.";
     sendJson(res, tooLarge ? 413 : 400, { error: tooLarge ? "The presence beacon is too large." : "Invalid presence beacon." });
+    return;
+  }
+
+  // A restore may start while this request body is in flight. Recheck before
+  // mutating the presence map and tell the restore that a live tab attempted to
+  // arrive, so it can keep/roll back the active workspace safely.
+  if (workspaceRestoreIsActive()) {
+    noteWorkspacePresenceAttempt();
+    sendJson(res, 409, { error: "The workspace is being restored. Reload after it finishes." });
     return;
   }
 

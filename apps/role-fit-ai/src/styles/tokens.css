@@ -5,13 +5,44 @@
    one committed accent for actions and selection, quiet semantic states.
    ============================================================= */
 
+@font-face {
+  font-family: "RoleFit Sans";
+  src: url("/fonts/SourceSans3-Regular.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 300 600;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "RoleFit Sans";
+  src: url("/fonts/SourceSans3-Bold.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "RoleFit Serif";
+  src: url("/fonts/SourceSerif4-Regular.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 300 600;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "RoleFit Serif";
+  src: url("/fonts/SourceSerif4-Bold.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+}
+
 :root {
   /* Type stacks — single sans family for tool chrome */
-  --font-display: "Geist", -apple-system, BlinkMacSystemFont, "Helvetica Neue", "Segoe UI", sans-serif;
-  --font-ui: "Geist", -apple-system, BlinkMacSystemFont, "Helvetica Neue", "Segoe UI", sans-serif;
-  --font-mono: "JetBrains Mono", "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
-  /* Serif — system-only; used for the brand wordmark, page h2, and print-desk identity chrome */
-  --font-serif: "Charter", "Bitstream Charter", "Iowan Old Style", "Georgia", "Cambria", "Times New Roman", serif;
+  --font-display: "RoleFit Sans", -apple-system, BlinkMacSystemFont, "Helvetica Neue", "Segoe UI", sans-serif;
+  --font-ui: "RoleFit Sans", -apple-system, BlinkMacSystemFont, "Helvetica Neue", "Segoe UI", sans-serif;
+  --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  --font-serif: "RoleFit Serif", "Charter", "Bitstream Charter", "Iowan Old Style", "Georgia", "Cambria", "Times New Roman", serif;
 
   /* Surface — green-tinted paper neutrals (never pure white/black) */
   --paper: oklch(0.956 0.006 150);

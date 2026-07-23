@@ -10,6 +10,7 @@ import {
 } from "../../ai-cli/index.ts";
 import {
   buildAnthropicMessagesBody,
+  callConfiguredProvider,
   callOpenAiResponsesWithFetch
 } from "../clients.ts";
 import {
@@ -290,6 +291,51 @@ try {
     "hosted-provider response bodies are byte-bounded"
   );
 
+  // Symmetric to the OpenAI injected-fetch block above, for the Anthropic
+  // client. callAnthropicMessages is not exported and (unlike the OpenAI helper)
+  // has no injected-fetch parameter, so it is driven end-to-end through the real
+  // dispatch (callConfiguredProvider -> anthropic) with globalThis.fetch stubbed
+  // — fully offline, no product-code seam added. Confirms the shared
+  // status-mapping + byte cap apply to the Anthropic path and that an upstream
+  // error body never leaks into the thrown, user-safe error.
+  const realFetch = globalThis.fetch;
+  try {
+    const LEAK = "SECRET_UPSTREAM_LEAK_MARKER";
+    const callAnthropicWith = (fetchImpl) => {
+      globalThis.fetch = fetchImpl;
+      return callConfiguredProvider({
+        provider: "anthropic",
+        model: "claude-test",
+        apiKey: "test-key",
+        systemPrompt: "system",
+        userPrompt: "user"
+      });
+    };
+    for (const [upstreamStatus, expectedStatus] of [
+      [401, 401], [403, 401], [429, 429], [408, 504], [504, 504],
+      [413, 413], [400, 400], [404, 400], [500, 502]
+    ]) {
+      await assert.rejects(
+        () => callAnthropicWith(async () => new Response(
+          JSON.stringify({ type: "error", error: { type: "probe", message: `${LEAK} do not surface this` } }),
+          { status: upstreamStatus, headers: { "Content-Type": "application/json" } }
+        )),
+        (error) => error?.status === expectedStatus && !error.message.includes(LEAK),
+        `Anthropic upstream ${upstreamStatus} maps to safe local ${expectedStatus} without leaking the body`
+      );
+    }
+    await assert.rejects(
+      () => callAnthropicWith(async () => new Response("x".repeat(2_000_001), {
+        status: 200,
+        headers: { "Content-Type": "application/json" }
+      })),
+      (error) => error?.status === 502 && /too much data/.test(error.message),
+      "Anthropic response bodies are byte-bounded"
+    );
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+
   const sonnetBody = buildAnthropicMessagesBody({
     model: "claude-sonnet-5",
     systemPrompt: "system",
@@ -371,6 +417,20 @@ try {
     "Built Python APIs for internal services."
   );
   assert.equal(boundAnswers[0].question, "Why this role?");
+  assert.throws(
+    () => bindApplicationAnswers(
+      [{
+        questionId: "question-1",
+        question: "Why this role?",
+        answer: "I built Python APIs that prevented outages and protected revenue."
+      }],
+      ["Why this role?"],
+      "This role needs Python backend APIs.",
+      "Built Python APIs for internal services."
+    ),
+    /unsupported claim/,
+    "ordinary-language fabricated outcomes are withheld from application answers"
+  );
   assert.throws(
     () => bindApplicationAnswers(
       [{

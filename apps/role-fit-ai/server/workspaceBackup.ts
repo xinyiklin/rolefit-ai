@@ -1,13 +1,11 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { Dirent } from "node:fs";
 import { mkdir, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
-import type { IncomingMessage, ServerResponse } from "node:http";
 import { basename, dirname, join } from "node:path";
 import {
   MAX_WORKSPACE_BACKUP_FILE_BYTES,
   MAX_WORKSPACE_BACKUP_BYTES,
   MAX_WORKSPACE_BACKUP_FILES,
-  MAX_WORKSPACE_BACKUP_JSON_BYTES,
   WORKSPACE_BACKUP_FORMAT,
   WORKSPACE_BACKUP_SCHEMA_VERSION,
   isManagedWorkspaceBackupPath,
@@ -16,9 +14,13 @@ import {
   type WorkspaceBackupEnvelope,
   type WorkspaceBackupFile
 } from "../src/lib/workspaceBackupContract.ts";
-import { readBody } from "./http.ts";
 import { readApplications, withApplicationsLock } from "./applications/index.ts";
 import { ensureJobWorkspace, validateBaseResumeText, withWorkspaceLock } from "./workspace.ts";
+import {
+  beginWorkspaceRestore,
+  endWorkspaceRestore,
+  workspaceRestoreHadPresenceAttempt
+} from "./workspaceRestoreGate.ts";
 import {
   readStoredBrowserPreferences,
   writeStoredBrowserPreferences,
@@ -232,11 +234,14 @@ export async function restoreWorkspaceBackup(
     throw new WorkspaceBackupError(error instanceof Error ? error.message : "This workspace backup is invalid.");
   }
 
-  return withWorkspaceLock(() => withApplicationsLock(async () => {
+  const restoreToken = beginWorkspaceRestore();
+  try {
+    return await withWorkspaceLock(() => withApplicationsLock(async () => {
     const currentActiveTabs = (): number => typeof activeTabs === "function" ? activeTabs() : activeTabs;
     // Presence gate: refuse to replace the workspace under a live browser tab so
     // an open Drafting Desk session cannot save over the just-restored files.
-    if (currentActiveTabs() > 0) {
+    const liveTabArrived = (): boolean => currentActiveTabs() > 0 || workspaceRestoreHadPresenceAttempt();
+    if (liveTabArrived()) {
       throw new WorkspaceBackupError(
         "Close RoleFit browser tabs before restoring, or wait a few seconds after closing them.",
         409
@@ -263,7 +268,7 @@ export async function restoreWorkspaceBackup(
       // Staging can take long enough for a browser tab to open after the first
       // gate. Recheck at the replacement boundary while the active workspace is
       // still untouched.
-      if (currentActiveTabs() > 0) {
+      if (liveTabArrived()) {
         throw new WorkspaceBackupError(
           "Close RoleFit browser tabs before restoring, or wait a few seconds after closing them.",
           409
@@ -274,6 +279,26 @@ export async function restoreWorkspaceBackup(
         previousWorkspaceKept = true;
       } catch (error) {
         if (!isMissingFile(error)) throw error;
+      }
+      // Close the final gap between moving the old workspace aside and making
+      // the staged one active. If a tab tried to arrive, roll back while the
+      // safety copy still owns the canonical previous state.
+      if (liveTabArrived()) {
+        if (previousWorkspaceKept) {
+          try {
+            await rename(previousDir, workspaceDir);
+          } catch {
+            throw new WorkspaceBackupError(
+              "Restore stopped for a browser tab, but the previous workspace could not return to the active path. It remains in the local restore-backup safety directory.",
+              500
+            );
+          }
+        }
+        previousWorkspaceKept = false;
+        throw new WorkspaceBackupError(
+          "Close RoleFit browser tabs before restoring, or wait a few seconds after closing them.",
+          409
+        );
       }
       try {
         await rename(stageDir, workspaceDir);
@@ -290,6 +315,26 @@ export async function restoreWorkspaceBackup(
         }
         throw error;
       }
+      // rename() yields to the event loop. A presence beacon can arrive while
+      // that filesystem operation is pending, so check once more after the new
+      // tree is installed. Storage APIs remain generation-gated throughout;
+      // moving the staged tree back out and restoring the safety copy is safe.
+      if (liveTabArrived()) {
+        try {
+          await rename(workspaceDir, stageDir);
+          if (previousWorkspaceKept) await rename(previousDir, workspaceDir);
+        } catch {
+          throw new WorkspaceBackupError(
+            "Restore stopped for a browser tab, but the previous workspace could not return to the active path. It remains in the local restore-backup safety directory.",
+            500
+          );
+        }
+        previousWorkspaceKept = false;
+        throw new WorkspaceBackupError(
+          "Close RoleFit browser tabs before restoring, or wait a few seconds after closing them.",
+          409
+        );
+      }
       return { restoredFiles: envelope.files.length, previousWorkspaceKept };
     } catch (error) {
       if (error instanceof WorkspaceBackupError) throw error;
@@ -297,57 +342,8 @@ export async function restoreWorkspaceBackup(
     } finally {
       await rm(stageDir, { recursive: true, force: true }).catch(() => undefined);
     }
-  }));
-}
-
-function sendBackupJson(res: ServerResponse, status: number, payload: unknown, fileName?: string): void {
-  const body = JSON.stringify(payload, null, 2);
-  res.writeHead(status, {
-    "Content-Type": "application/vnd.rolefit.workspace-backup+json; charset=utf-8",
-    "Content-Length": Buffer.byteLength(body, "utf8"),
-    "Cache-Control": "no-store",
-    "X-Content-Type-Options": "nosniff",
-    ...(fileName ? { "Content-Disposition": `attachment; filename="${fileName}"` } : {})
-  });
-  res.end(body);
-}
-
-export async function handleWorkspaceBackup(req: IncomingMessage, res: ServerResponse, workspaceDir: string): Promise<void> {
-  if (req.method !== "GET") {
-    sendBackupJson(res, 405, { error: "Use GET." });
-    return;
-  }
-  try {
-    const backup = await createWorkspaceBackup(workspaceDir);
-    sendBackupJson(res, 200, backup, `RoleFit-Workspace-${backup.createdAt.slice(0, 10)}.rolefit-backup`);
-  } catch (error) {
-    const status = error instanceof WorkspaceBackupError ? error.status : 500;
-    sendBackupJson(res, status, {
-      error: error instanceof WorkspaceBackupError ? error.message : "The workspace could not be backed up safely."
-    });
-  }
-}
-
-export async function handleWorkspaceRestore(req: IncomingMessage, res: ServerResponse, workspaceDir: string): Promise<void> {
-  if (req.method !== "POST") {
-    sendBackupJson(res, 405, { error: "Use POST." });
-    return;
-  }
-  try {
-    const raw = await readBody(req, MAX_WORKSPACE_BACKUP_JSON_BYTES);
-    const input = JSON.parse(raw) as unknown;
-    const result = await restoreWorkspaceBackup(workspaceDir, input, new Date(), countActiveTabs);
-    sendBackupJson(res, 200, { restored: true, ...result });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "";
-    const tooLarge = message === "Request is too large.";
-    const status = tooLarge ? 413 : error instanceof WorkspaceBackupError ? error.status : 400;
-    sendBackupJson(res, status, {
-      error: tooLarge
-        ? "The workspace backup is larger than the supported upload limit."
-        : error instanceof WorkspaceBackupError
-          ? error.message
-          : "This is not a valid RoleFit workspace backup."
-    });
+    }, { allowDuringRestore: true }), { allowDuringRestore: true });
+  } finally {
+    endWorkspaceRestore(restoreToken);
   }
 }

@@ -12,6 +12,7 @@ import { mkdir, readFile, readdir, rename, rm, writeFile } from "node:fs/promise
 import { extname, join } from "node:path";
 import { parseResumeFile } from "@typeset/engine/lib/resumeFile.ts";
 import { readBody, sendJson } from "./http.ts";
+import { assertWorkspaceAccessAllowed, captureWorkspaceAccess } from "./workspaceRestoreGate.ts";
 
 // A loaded base resume (or the "none found" sentinel). Optional fields carry the
 // file's text/metadata only when a resume was actually resolved.
@@ -59,8 +60,15 @@ function isMissingFile(error: unknown): boolean {
 // archives the current file before atomically installing its replacement; a read
 // in that short interval must not mistake the workspace for an empty fresh install.
 let workspaceQueue: Promise<unknown> = Promise.resolve();
-export function withWorkspaceLock<T>(task: () => Promise<T>): Promise<T> {
-  const run = workspaceQueue.then(task);
+export function withWorkspaceLock<T>(
+  task: () => Promise<T>,
+  options: { allowDuringRestore?: boolean } = {}
+): Promise<T> {
+  const capture = captureWorkspaceAccess();
+  const run = workspaceQueue.then(() => {
+    if (!options.allowDuringRestore) assertWorkspaceAccessAllowed(capture);
+    return task();
+  });
   workspaceQueue = run.then(() => undefined, () => undefined);
   return run;
 }

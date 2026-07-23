@@ -10,14 +10,21 @@ export type DesktopUtilityProcess = {
   readonly pid?: number;
   kill(): boolean;
   postMessage(message: unknown): void;
+  on(event: "message", listener: (message: unknown) => void): unknown;
   once(event: "exit", listener: (code: number) => void): unknown;
+  off(event: "message", listener: (message: unknown) => void): unknown;
   off(event: "exit", listener: (code: number) => void): unknown;
 };
+
+export type DesktopWorkspaceBackup = Readonly<{ body: string; fileName: string }>;
+export type DesktopWorkspaceRestore = Readonly<{ restoredFiles: number; previousWorkspaceKept: boolean }>;
 
 export type DesktopServerHandle = {
   origin: string;
   ownership: RoleFitServerOwnership;
   pid?: number;
+  backupWorkspace(): Promise<DesktopWorkspaceBackup>;
+  restoreWorkspace(body: string): Promise<DesktopWorkspaceRestore>;
   updateProviderSnapshot(snapshot: unknown): boolean;
   close(): Promise<void>;
   terminateNow(): void;
@@ -248,9 +255,14 @@ async function stopOwnedProcess(
 }
 
 function reusedServer(origin: string): DesktopServerHandle {
+  const unavailable = async (): Promise<never> => {
+    throw new Error("Restart the companion so it can own the local server before transferring a workspace.");
+  };
   return {
     origin,
     ownership: "reused",
+    backupWorkspace: unavailable,
+    restoreWorkspace: unavailable,
     updateProviderSnapshot: () => false,
     close: async () => undefined,
     terminateNow: () => undefined
@@ -327,10 +339,81 @@ export async function startOrReuseDesktopServer(
   }
 
   let closePromise: Promise<void> | null = null;
+  let workspaceRequestSequence = 0;
+  const pendingWorkspaceRequests = new Map<string, {
+    resolve(value: unknown): void;
+    reject(error: Error): void;
+    timer: NodeJS.Timeout;
+  }>();
+  const onWorkspaceResponse = (message: unknown): void => {
+    if (!message || typeof message !== "object" || Array.isArray(message)) return;
+    const response = message as Record<string, unknown>;
+    if (response.type !== "rolefit-workspace-response" || response.schemaVersion !== 1 ||
+        typeof response.requestId !== "string") return;
+    const pending = pendingWorkspaceRequests.get(response.requestId);
+    if (!pending) return;
+    pendingWorkspaceRequests.delete(response.requestId);
+    clearTimeout(pending.timer);
+    if (response.ok === true) pending.resolve(response.result);
+    else pending.reject(new Error(
+      typeof response.error === "string" && response.error.length <= 240
+        ? response.error
+        : "The workspace operation failed safely."
+    ));
+  };
+  serverProcess.on("message", onWorkspaceResponse);
+
+  const requestWorkspace = (operation: "backup" | "restore", body?: string): Promise<unknown> => {
+    if (closing || lifecycleExitCode !== null) {
+      return Promise.reject(new Error("The local RoleFit server is not running."));
+    }
+    const requestId = `workspace-${process.pid}-${++workspaceRequestSequence}`;
+    return new Promise((resolveRequest, rejectRequest) => {
+      const timer = setTimeout(() => {
+        pendingWorkspaceRequests.delete(requestId);
+        rejectRequest(new Error("The workspace operation timed out safely."));
+      }, 120_000);
+      pendingWorkspaceRequests.set(requestId, { resolve: resolveRequest, reject: rejectRequest, timer });
+      serverProcess.postMessage({
+        type: "rolefit-workspace-request",
+        schemaVersion: 1,
+        requestId,
+        operation,
+        ...(body === undefined ? {} : { body })
+      });
+    });
+  };
+
+  const rejectPendingWorkspaceRequests = (): void => {
+    serverProcess.off("message", onWorkspaceResponse);
+    for (const pending of pendingWorkspaceRequests.values()) {
+      clearTimeout(pending.timer);
+      pending.reject(new Error("The local RoleFit server stopped during the workspace operation."));
+    }
+    pendingWorkspaceRequests.clear();
+  };
   return {
     origin,
     ownership: "owned",
     pid: serverProcess.pid,
+    backupWorkspace: async () => {
+      const result = await requestWorkspace("backup");
+      if (!result || typeof result !== "object" || Array.isArray(result)) throw new Error("The local server returned an unexpected backup format.");
+      const record = result as Record<string, unknown>;
+      if (typeof record.body !== "string" || typeof record.fileName !== "string") throw new Error("The local server returned an unexpected backup format.");
+      return { body: record.body, fileName: record.fileName };
+    },
+    restoreWorkspace: async (body) => {
+      const result = await requestWorkspace("restore", body);
+      if (!result || typeof result !== "object" || Array.isArray(result)) throw new Error("The local server returned an unexpected restore response.");
+      const record = result as Record<string, unknown>;
+      if (!Number.isSafeInteger(record.restoredFiles) || (record.restoredFiles as number) < 0 ||
+          typeof record.previousWorkspaceKept !== "boolean") throw new Error("The local server returned an unexpected restore response.");
+      return {
+        restoredFiles: record.restoredFiles as number,
+        previousWorkspaceKept: record.previousWorkspaceKept
+      };
+    },
     updateProviderSnapshot: (snapshot) => {
       if (closing || lifecycleExitCode !== null) return false;
       serverProcess.postMessage(snapshot);
@@ -338,11 +421,13 @@ export async function startOrReuseDesktopServer(
     },
     close: () => {
       closing = true;
+      rejectPendingWorkspaceRequests();
       closePromise ??= stopOwnedProcess(serverProcess, options.shutdownTimeoutMs ?? 5_000);
       return closePromise;
     },
     terminateNow: () => {
       closing = true;
+      rejectPendingWorkspaceRequests();
       if (serverProcess.pid !== undefined) serverProcess.kill();
     }
   };

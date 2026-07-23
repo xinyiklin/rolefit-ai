@@ -5,6 +5,7 @@ import { randomUUID } from "node:crypto";
 import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { dedupeSourceUrls } from "../../src/lib/jobIdentity.ts";
+import { assertWorkspaceAccessAllowed, captureWorkspaceAccess } from "../workspaceRestoreGate.ts";
 
 // Narrowing form of filter(Boolean): drops null/undefined AND narrows the element
 // type. Behaviour-identical to filter(Boolean) for these truthy-object arrays.
@@ -53,8 +54,15 @@ export class ApplicationsStorageError extends Error {
 // snapshot/restore that must observe applications.json and its PDF artifacts as
 // one consistent state.
 let applicationsWriteQueue: Promise<unknown> = Promise.resolve();
-export function withApplicationsLock<T>(task: () => Promise<T>): Promise<T> {
-  const run = applicationsWriteQueue.then(task);
+export function withApplicationsLock<T>(
+  task: () => Promise<T>,
+  options: { allowDuringRestore?: boolean } = {}
+): Promise<T> {
+  const capture = captureWorkspaceAccess();
+  const run = applicationsWriteQueue.then(() => {
+    if (!options.allowDuringRestore) assertWorkspaceAccessAllowed(capture);
+    return task();
+  });
   applicationsWriteQueue = run.then(
     () => undefined,
     () => undefined

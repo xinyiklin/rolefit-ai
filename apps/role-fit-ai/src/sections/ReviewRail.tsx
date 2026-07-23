@@ -164,8 +164,12 @@ export function ReviewRail({ result, resume, actions, resumeDiff, jobConstraints
   const [draft, setDraft] = useState("");
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [copyFailedKey, setCopyFailedKey] = useState<string | null>(null);
+  const unsupportedDropCount = result.droppedSuggestions?.unsupported ?? 0;
+  const invalidDropCount = Math.max(0, (result.droppedSuggestions?.total ?? 0) - unsupportedDropCount);
 
-  if (!sr && !suggestions.length) return null;
+  // A provider response whose every edit was rejected is still an important
+  // result. Keep the rail mounted so the user sees why nothing was offered.
+  if (!sr && !suggestions.length && unsupportedDropCount === 0 && invalidDropCount === 0) return null;
   const rewrites = sr?.rewrites ?? [];
 
   function suggestionKey(suggestion: TailorSuggestion, index: number) {
@@ -402,14 +406,18 @@ export function ReviewRail({ result, resume, actions, resumeDiff, jobConstraints
         </section>
       ) : null}
 
-      {/* Hoisted above both edit sections: the server sets unsupported > 0 exactly
-          in the ALL-dropped case (suggestions.length === 0), which is the one
-          scenario this note exists for — an all-drop must not look identical to a
-          clean "nothing to suggest" pass. Gating it on suggestions.length hid it
-          precisely then. */}
-      {result.droppedSuggestions && result.droppedSuggestions.unsupported > 0 ? (
+      {/* Hoisted above both edit sections so an all-drop response cannot look
+          identical to a clean "nothing to suggest" pass. Evidence failures and
+          invalid response shapes are reported separately: only the former should
+          be described as unsupported resume wording. */}
+      {unsupportedDropCount > 0 ? (
         <p className="review-rail__note review-rail__note--withheld" role="status">
-          {result.droppedSuggestions.unsupported} AI {result.droppedSuggestions.unsupported === 1 ? "edit was" : "edits were"} withheld because the wording wasn’t supported by your resume or honest context. Nothing unverified reached your draft.
+          {unsupportedDropCount} AI {unsupportedDropCount === 1 ? "edit was" : "edits were"} withheld because the wording wasn’t supported by your resume or honest context. Nothing unverified reached your draft.
+        </p>
+      ) : null}
+      {invalidDropCount > 0 ? (
+        <p className="review-rail__note review-rail__note--withheld" role="status">
+          {invalidDropCount} {unsupportedDropCount > 0 ? "additional AI " : "AI "}{invalidDropCount === 1 ? "edit could" : "edits could"} not be applied safely because {invalidDropCount === 1 ? "it was" : "they were"} malformed, redundant, unchanged, or did not match an editable field.
         </p>
       ) : null}
 

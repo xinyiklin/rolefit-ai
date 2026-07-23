@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { resolve } from "node:path";
 
 export const ROLEFIT_HEALTH_API_VERSION = 1 as const;
-export const ROLEFIT_DESKTOP_COMPATIBILITY_VERSION = 1 as const;
+export const ROLEFIT_DESKTOP_COMPATIBILITY_VERSION = 2 as const;
 
 export type RoleFitHealthMode = "development" | "production";
 

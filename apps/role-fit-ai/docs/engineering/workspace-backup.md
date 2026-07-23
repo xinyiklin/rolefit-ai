@@ -31,7 +31,8 @@ Each file record carries an allowlisted slash-separated path, `utf8` or
 contract rejects unknown envelope/file keys, unsupported versions, duplicate or
 traversing paths, encoding mismatches, invalid sizes/checksums, more than 1,100
 files, any one file over 10 MB, and more than 64 MB of decoded workspace data.
-The HTTP restore body is capped at 96 MB to allow for base64 and JSON overhead.
+The companion refuses backup files over 96 MB before reading or transferring
+them, leaving room for base64 and JSON overhead.
 
 The bundle is intentionally plain, inspectable JSON and is **not encrypted**.
 Treat it like the resumes and application records it contains.
@@ -146,10 +147,11 @@ through a native save dialog using an owner-only sibling temporary file and
 final rename; Restore reads through a native open dialog,
 requires a native confirmation, and reports the server's classified errors
 verbatim. Unsaved editor changes stay in the browser and are never part of a
-backup; the Workspace tab states this. In source development without the
-companion, the same routes are reachable directly, e.g.
-`curl http://localhost:5181/api/workspace/backup > backup.rolefit-backup` and
-`curl -X POST --data-binary @backup.rolefit-backup -H "Content-Type: application/json" http://localhost:5181/api/workspace/restore`.
+backup; the Workspace tab states this. Backup and restore are management
+operations and are not exposed as loopback HTTP routes. An owned server accepts
+them only over Electron's private parent/child process channel; if the companion
+reuses an already-running standalone server, the Workspace tab asks for a
+companion restart before enabling transfer.
 
 ## Verification
 
@@ -158,7 +160,8 @@ The auto-discovered
 symlink/arbitrary-file exclusion, preference-mirror inclusion and corrupt-file
 tolerance, pre-allocation capacity bounds, checksum-preserved round trips,
 retained previous workspaces, marker-only restores, both live-tab restore
-gates, and fail-without-mutation behavior for bad checksums,
+gates, restore-generation rejection of stale queued writes, and
+fail-without-mutation behavior for bad checksums,
 tracker JSON, strict resumes, PDFs, duplicate paths, and path traversal.
 `src/hooks/__evals__/workspace-backup-lifecycle.mjs` covers the pure browser
 adoption rules.

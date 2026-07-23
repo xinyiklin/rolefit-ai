@@ -36,6 +36,8 @@
     "test:desktop:release": "node --test scripts/desktop-release-contract.test.mjs desktop/__tests__/windows-installer-contract.test.mjs",
     "test:desktop:windows-runtime": "node server/ai-cli/__evals__/windows-cli-runtime-probe.test.mjs",
     "test:server-lifecycle": "node server/__evals__/server-lifecycle-probes.test.mjs",
+    "eval:live:fabrication": "node server/ai/__evals__/fabrication-eval.mjs",
+    "eval:live:tailor": "node server/ai/__evals__/tailor-quality-eval.mjs",
     "test": "node --test offline-evals.test.mjs",
     "check": "npm run build && npm run build:landing && npm run check:desktop && npm test"
   },

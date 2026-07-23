@@ -84,6 +84,10 @@ try {
   const page = await get(runtime.port, "/");
   assert.equal(page.status, 200);
   assert.match(page.body, new RegExp(indexMarker));
+  assert.match(String(page.headers["content-security-policy"]), /default-src 'self'/);
+  assert.match(String(page.headers["content-security-policy"]), /frame-ancestors 'none'/);
+  assert.equal(page.headers["x-content-type-options"], "nosniff");
+  assert.equal(page.headers["referrer-policy"], "no-referrer");
 
   const health = await get(runtime.port, "/api/health");
   assert.equal(health.status, 200);
@@ -91,7 +95,7 @@ try {
     service: "role-fit-ai",
     status: "ok",
     apiVersion: 1,
-    desktopCompatibilityVersion: 1,
+    desktopCompatibilityVersion: 2,
     mode: "production",
     workspaceFingerprint: computeWorkspaceFingerprint(workspaceDir)
   });
@@ -152,6 +156,11 @@ try {
   assert.equal(missingApi.status, 404);
   assert.match(String(missingApi.headers["content-type"]), /application\/json/);
   assert.deepEqual(JSON.parse(missingApi.body), { error: "API route not found." });
+
+  for (const removedManagementRoute of ["/api/workspace/backup", "/api/workspace/restore"]) {
+    const removed = await get(runtime.port, removedManagementRoute);
+    assert.equal(removed.status, 404, `${removedManagementRoute} is not browser reachable`);
+  }
 
   const foreignHost = await get(runtime.port, "/api/health", { Host: "attacker.example" });
   assert.equal(foreignHost.status, 403);

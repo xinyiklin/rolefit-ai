@@ -4,6 +4,7 @@
 
 import {
   findUngroundedClaimTerm,
+  findUngroundedOutcomeClaim,
   findUngroundedJdTerm,
   isClaimTermGroundedInSource,
   isTermGrounded,
@@ -78,22 +79,50 @@ function containsStructuredMarkup(value: unknown): boolean {
   // currentText and a faithful suggestion echoes them. Strip the exact mark
   // tokens before scanning for real smuggled HTML (anything with attributes,
   // other tags, or scripts still rejects).
+  // Exact mark tokens are safe only when they are properly nested and closed.
+  // An orphan <b> or misnested <b><i>...</b></i> previously passed this scan
+  // and stored malformed inline state in the editor.
+  const stack: string[] = [];
+  for (const match of text.matchAll(/<(\/)?(b|i|u)>/gi)) {
+    const tag = match[2].toLowerCase();
+    if (!match[1]) stack.push(tag);
+    else if (stack.pop() !== tag) return true;
+  }
+  if (stack.length) return true;
   return /<\/?[a-z][^>]*>/i.test(text.replace(/<\/?(?:b|i|u)>/gi, ""));
 }
 
 const EVIDENCE_BOILERPLATE = new Set([
-  "according", "all", "and", "already", "attests", "bullet", "bullets", "context", "entry", "evidence",
-  "exact", "honest", "list", "listed", "lists", "project", "projects", "quote", "quotes",
-  "resume", "role", "row", "says", "section", "shows", "skills", "states", "the", "three", "tool",
-  "tools", "used", "uses", "using"
+  // Source-attribution scaffolding is not part of the factual claim. Models
+  // routinely prefix a close quote with phrases such as "the honest context
+  // explicitly states" or "the user confirms"; requiring those narrator words
+  // to appear inside the user's evidence incorrectly rejects an otherwise exact
+  // quote. The substantive words (tool names, proficiency, responsibilities,
+  // recency, etc.) remain outside this set and must still all be grounded.
+  "according", "all", "and", "already", "attests", "bullet", "bullets", "candidate", "clearly", "current",
+  "confirms", "contains", "context", "demonstrates", "describes", "directly", "documents", "entry", "evidence",
+  "exact", "existing", "experience", "explicit", "explicitly", "for", "includes",
+  "from", "honest", "indicates", "list", "listed", "lists", "mentions", "notes", "project", "projects", "provided",
+  "quote", "quotes", "reports", "resume", "role", "row", "says", "section", "shows", "skills", "source",
+  "states", "that", "the", "this", "three", "tool", "tools", "used", "user", "uses", "using", "with", "within"
 ]);
 
 function evidenceIsGrounded(value: unknown, grounding: unknown): boolean {
-  const tokens = (String(value ?? "").toLowerCase().match(/[a-z0-9.#+]{3,}/g) ?? [])
+  // Keep internal periods for names such as node.js/.NET, but free sentence-end
+  // punctuation before tokenizing. Without this, every normal evidence sentence
+  // ended in an impossible token such as "review." or "powerpoint." and was
+  // rejected even when the exact word appeared in honest context.
+  const evidenceText = String(value ?? "").toLowerCase().replace(/\.(?=\s|$)/g, " ");
+  const tokens = (evidenceText.match(/[a-z0-9.#+]{3,}/g) ?? [])
     .filter((token) => !EVIDENCE_BOILERPLATE.has(token));
   if (!tokens.length) return false;
   const grounded = tokens.filter((token) => isTermGrounded(token, grounding)).length;
-  return grounded === tokens.length;
+  // The prompt permits a close paraphrase, so one derivational wording change
+  // ("proficiency" for "proficient") must not invalidate a longer exact quote.
+  // Require at least 75% token grounding; short evidence remains effectively
+  // exact (1/1, 2/2, and 3/3). Proposed tool/claim/number gates below still
+  // validate the actual resume wording independently of this locator prose.
+  return grounded >= Math.ceil(tokens.length * 0.75);
 }
 
 function sameClaimTokenSet(left: unknown, right: unknown): boolean {
@@ -145,10 +174,16 @@ function contextSectionsText(scope: TailorScopeInput): string {
   if (!scope || !Array.isArray(scope.contextSections)) return "";
   const parts = [];
   for (const section of scope.contextSections) {
+    if (!section || typeof section !== "object") continue;
     parts.push(section.heading ?? "");
-    for (const entry of section.entries ?? []) {
+    if (!Array.isArray(section.entries)) continue;
+    for (const entry of section.entries) {
+      if (!entry || typeof entry !== "object") continue;
       parts.push(entry.titleLeft, entry.titleRight, entry.subtitleLeft, entry.subtitleRight);
-      for (const bullet of entry.bullets ?? []) parts.push(bullet.text);
+      if (!Array.isArray(entry.bullets)) continue;
+      for (const bullet of entry.bullets) {
+        if (bullet && typeof bullet === "object") parts.push(bullet.text);
+      }
     }
   }
   return parts.filter(Boolean).join("\n");
@@ -288,6 +323,7 @@ export function sanitizeTailorSuggestions(
   // misattribution hole corpus grounding structurally cannot see.
   const entryGrounding = buildEntryGroundingMap(scope, honestContext);
   const seen = new Set();
+  const seenIds = new Set<string>();
   const output = [];
   const drop = (reason: string): void => {
     if (dropStats) dropStats[reason] = (dropStats[reason] ?? 0) + 1;
@@ -324,7 +360,11 @@ export function sanitizeTailorSuggestions(
     const entryInfo = entryGrounding.get(`${allowed.target.sectionId}::${allowed.target.entryId}`);
     const grounding = entryInfo && entryInfo.type === "standard" ? entryInfo.text : corpusGrounding;
     const rawProposedText = item.proposedText ?? item.rewrite ?? item.text;
-    const proposedText = clippedString(rawProposedText, 1400);
+    const proposedText = String(rawProposedText ?? "").replace(/\s+/g, " ").trim();
+    // Never silently turn an overlong model response into a different, possibly
+    // malformed claim. In particular, slicing could cut a closing inline mark
+    // or sentence midway and still let the altered text reach Apply.
+    if (proposedText.length > 1400) { drop("overlongProposedText"); continue; }
     if (!proposedText || proposedText === allowed.currentText) { drop("emptyOrUnchanged"); continue; }
     const evidenceType = EVIDENCE_TYPES.has(String(item.evidenceType)) ? String(item.evidenceType) : "none";
     // Proposed edits must be directly supportable by resume or honest-context
@@ -383,8 +423,18 @@ export function sanitizeTailorSuggestions(
       drop("ungroundedClaimTerm");
       continue;
     }
+    if (findUngroundedOutcomeClaim(proposedText, grounding)) {
+      drop("ungroundedOutcome");
+      continue;
+    }
+    let id = clippedString(item.id, 120);
+    if (!id || seenIds.has(id)) {
+      let ordinal = output.length + 1;
+      do id = `suggestion-${ordinal++}`; while (seenIds.has(id));
+    }
+    seenIds.add(id);
     output.push({
-      id: clippedString(item.id, 120) || `suggestion-${output.length + 1}`,
+      id,
       target: allowed.target,
       sectionHeading: allowed.sectionHeading,
       currentText: allowed.currentText,
@@ -408,7 +458,7 @@ export function sanitizeTailorSuggestions(
 // identical to a clean "nothing to suggest" pass.
 const UNSUPPORTED_DROP_REASONS = new Set([
   "nonExactEvidence", "missingEvidence", "ungroundedEvidence", "ungroundedKeyword",
-  "ungroundedJdTerm", "ungroundedNumber", "ungroundedClaimTerm"
+  "ungroundedJdTerm", "ungroundedNumber", "ungroundedClaimTerm", "ungroundedOutcome"
 ]);
 
 // Summarize the sanitizer's dropStats (reason -> count) into a client-safe object
@@ -655,6 +705,7 @@ export function sanitizeStrictReview(
       // user attestation in honestContext can ground a newly suggested number.
       if (suggestedEdit && hasUngroundedNumericClaim(suggestedEdit, suggestedEditNumericGrounding)) suggestedEdit = "";
       if (suggestedEdit && findUngroundedClaimTerm(suggestedEdit, groundingLower)) suggestedEdit = "";
+      if (suggestedEdit && findUngroundedOutcomeClaim(suggestedEdit, groundingLower)) suggestedEdit = "";
       const rawEvidenceType = EVIDENCE_TYPES.has(String(gap.evidenceType)) ? String(gap.evidenceType) : "none";
       let evidence = clippedString(gap.evidence, 300);
       const noEvidence = !evidence || /\b(?:no evidence|not in (?:the )?resume|missing|unsupported)\b/i.test(evidence);
@@ -694,6 +745,7 @@ export function sanitizeStrictReview(
       const numericGrounding = rewriteNumericGrounder ? rewriteNumericGrounder(original) : rewriteGrounding;
       if (hasUngroundedNumericClaim(rewrite, numericGrounding)) return null;
       if (findUngroundedClaimTerm(rewrite, rewriteGrounding)) return null;
+      if (findUngroundedOutcomeClaim(rewrite, rewriteGrounding)) return null;
       // `hits` render as "✓ <keyword>" chips claiming this rewrite now COVERS
       // those JD keywords. The rewrite TEXT is grounded above, but the claimed
       // matches were not — a model could leave the text nearly unchanged and
@@ -730,7 +782,9 @@ export function sanitizeStrictReview(
   // own verdict and the server no longer substitutes a deterministic verdict.
   // Thin local alias over the shared prose-grounding predicate (jobLower/
   // groundingLower are already lower-cased above).
-  const proseIsUngrounded = (text: unknown) => proseHasUngroundedTerm(text, jobLower, groundingLower);
+  const proseIsUngrounded = (text: unknown) =>
+    proseHasUngroundedTerm(text, jobLower, groundingLower)
+    || Boolean(findUngroundedOutcomeClaim(text, groundingLower));
 
   const riskFlags = (Array.isArray(src.riskFlags) ? src.riskFlags : [])
     .map((flag) => {
@@ -774,7 +828,11 @@ export function sanitizeStrictReview(
   };
 }
 
-export function missingRequiredSkillsFromStrictReview(strictReview: { gaps?: unknown } | null | undefined) {
+export function missingRequiredSkillsFromStrictReview(
+  strictReview: { gaps?: unknown } | null | undefined,
+  jobText: unknown = "",
+  grounding: unknown = ""
+) {
   if (!strictReview || !Array.isArray(strictReview.gaps)) return [];
   return sanitizeMissingRequiredSkills(
     strictReview.gaps.map((gap) => ({
@@ -782,6 +840,8 @@ export function missingRequiredSkillsFromStrictReview(strictReview: { gaps?: unk
       evidenceType: gap.evidenceType,
       canHonestlyAdd: gap.canHonestlyAdd,
       reason: gap.evidence || gap.suggestedEdit
-    }))
+    })),
+    jobText,
+    grounding
   );
 }

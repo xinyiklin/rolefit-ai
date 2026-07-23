@@ -130,7 +130,16 @@ function isPrivateIPv6(ip: string): boolean {
   if ((h[0] & 0xfe00) === 0xfc00) return true; // fc00::/7 (ULA)
   if ((h[0] & 0xffc0) === 0xfe80) return true; // fe80::/10 (link-local)
   if ((h[0] & 0xff00) === 0xff00) return true; // ff00::/8 (multicast)
+  // Public IPv6 unicast is currently allocated from 2000::/3. Fail closed on
+  // site-local, discard-only, translation, and other special-use space outside
+  // that range instead of maintaining a fragile negative list.
+  if ((h[0] & 0xe000) !== 0x2000) return true;
+  // IETF protocol assignments 2001::/23 include Teredo, benchmarking, ORCHID,
+  // and other non-public destinations. Blocking the containing allocation also
+  // closes 2001:10::/28 and 2001:20::/28 spelling/range variants.
+  if (h[0] === 0x2001 && (h[1] & 0xfe00) === 0) return true;
   if (h[0] === 0x2001 && h[1] === 0x0db8) return true; // documentation 2001:db8::/32
+  if (h[0] === 0x3fff && (h[1] & 0xf000) === 0) return true; // documentation 3fff::/20
   return false;
 }
 
@@ -147,15 +156,21 @@ export function isPrivateHost(hostname: string): boolean {
 }
 
 // Resolves a hostname and rejects if it is a private literal or any resolved
-// address is private/link-local/loopback. Throws a tagged error otherwise.
-async function assertPublicHost(hostname: string): Promise<[LookupAddress, ...LookupAddress[]]> {
+// address is private/link-local/loopback. Throws a tagged error otherwise. The
+// `lookup` parameter defaults to the real DNS resolver; it exists only so
+// offline SSRF probes can drive the rebinding/redirect logic without real DNS,
+// and passing `undefined` keeps the default — production behavior is unchanged.
+async function assertPublicHost(
+  hostname: string,
+  lookup: typeof dnsLookup = dnsLookup
+): Promise<[LookupAddress, ...LookupAddress[]]> {
   const host = String(hostname).toLowerCase();
   if (isPrivateHost(host)) {
     throw new BlockedHostError("Private or local hosts are not allowed.");
   }
   let resolved: LookupAddress[];
   try {
-    resolved = await dnsLookup(host.replace(/^\[|\]$/g, ""), { all: true });
+    resolved = await lookup(host.replace(/^\[|\]$/g, ""), { all: true });
   } catch {
     throw new DnsError("Could not resolve the host for that URL.");
   }
@@ -203,11 +218,16 @@ function decompressResponse(res: IncomingMessage): Readable {
 // fetch-like response ({ status, ok, headers.get, text }).
 function pinnedFetch(
   url: URL,
-  { headers = {}, timeoutMs = 10_000, pinnedAddress, pinnedFamily }: PinnedFetchOptions
+  { headers = {}, timeoutMs = 10_000, pinnedAddress, pinnedFamily }: PinnedFetchOptions,
+  // `requestOverride` defaults to undefined so production selects the real
+  // node http/https request fn below; it exists only so offline probes can
+  // supply a fake transport and exercise the real byte-cap/decompress/pin logic
+  // without opening a socket. Production behavior is unchanged.
+  requestOverride?: typeof httpsRequest
 ): Promise<PinnedResponse> {
   // Both request fns are called identically here; the cast lets the union call
   // typecheck (https options are a superset, and `servername` is undefined for http).
-  const requestFn = (url.protocol === "https:" ? httpsRequest : httpRequest) as typeof httpsRequest;
+  const requestFn = requestOverride ?? ((url.protocol === "https:" ? httpsRequest : httpRequest) as typeof httpsRequest);
   return new Promise<PinnedResponse>((resolve, reject) => {
     let settled = false;
     const finish = (fn: (arg: never) => void, arg: unknown): void => {
@@ -273,23 +293,36 @@ function pinnedFetch(
   });
 }
 
+// Optional transport injection for offline SSRF probes. `lookup` and `request`
+// default (via `undefined`) to the real DNS resolver and node http/https client,
+// so production callers that omit `deps` get byte-identical behavior; the probes
+// pass fakes to drive redirect/rebinding/byte-cap logic without a socket or DNS.
+type FetchPublicHtmlDeps = {
+  lookup?: typeof dnsLookup;
+  request?: typeof httpsRequest;
+};
+
 // Fetches a job page, following redirects manually and re-validating + re-pinning
 // the host's resolved IP on every hop. Rejects private/blocked targets instead
 // of auto-following them, so a public URL can't bounce to an internal address.
-export async function fetchPublicHtml(startUrl: URL, extraHeaders: Record<string, string> = {}): Promise<PinnedResponse> {
+export async function fetchPublicHtml(
+  startUrl: URL,
+  extraHeaders: Record<string, string> = {},
+  deps: FetchPublicHtmlDeps = {}
+): Promise<PinnedResponse> {
   let current = startUrl;
   for (let hop = 0; hop < 5; hop += 1) {
     if (!isPublicHttpUrl(current)) {
       throw new BlockedHostError("Only public http or https URLs are allowed.");
     }
-    const [pinned] = await assertPublicHost(current.hostname);
+    const [pinned] = await assertPublicHost(current.hostname, deps.lookup);
 
     const response = await pinnedFetch(current, {
       headers: { "User-Agent": "Mozilla/5.0 ResumePolisher/0.1", ...extraHeaders },
       timeoutMs: 10_000,
       pinnedAddress: pinned.address,
       pinnedFamily: pinned.family
-    });
+    }, deps.request);
 
     if (response.status >= 300 && response.status < 400) {
       const location = response.headers.get("location");

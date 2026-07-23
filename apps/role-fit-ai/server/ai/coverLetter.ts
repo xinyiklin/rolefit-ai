@@ -16,7 +16,7 @@ import {
   COVER_RESUME_CHAR_LIMIT
 } from "./prompts.ts";
 import { callConfiguredProvider } from "./clients.ts";
-import { proseHasUngroundedTerm } from "./grounding.ts";
+import { findUngroundedOutcomeClaim, proseHasUngroundedTerm } from "./grounding.ts";
 import { hasUngroundedNumericClaim } from "./sanitize.ts";
 
 // Upper bound on a returned cover letter (~3 paragraphs / 180-280 words is ~2k
@@ -78,6 +78,7 @@ export async function generateGroundedCoverLetter({
   if (
     proseHasUngroundedTerm(letter, jobText.toLowerCase(), grounding.toLowerCase())
     || hasUngroundedNumericClaim(letter, grounding)
+    || findUngroundedOutcomeClaim(letter, grounding, { candidateProse: true })
   ) {
     console.warn("[ai] cover letter introduced an ungrounded claim; returning an empty result", { provider });
     return "";

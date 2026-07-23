@@ -39,17 +39,36 @@ const PRIVATE = [
   "192.168.0.1",
   "0.0.0.0",
   "100.64.0.1", // CGNAT
+  "172.16.0.1", // 172.16.0.0/12 low edge — the whole /12 was previously untested
+  "172.31.255.254", // 172.16.0.0/12 high edge
+  "192.0.0.1", // IETF protocol assignments 192.0.0.0/24
+  "192.88.99.1", // deprecated 6to4 relay anycast 192.88.99.0/24
   "192.0.2.1", // documentation
-  "198.18.0.1", // benchmark
+  "198.18.0.1", // benchmark 198.18.0.0/15 (low half)
+  "198.19.0.1", // benchmark 198.18.0.0/15 (high half — previously untested)
   "198.51.100.5", // documentation
   "203.0.113.8", // documentation
-  "224.0.0.1", // multicast
+  "224.0.0.1", // multicast 224.0.0.0/4
+  "240.0.0.1", // reserved 240.0.0.0/4 (previously untested)
   "255.255.255.255", // reserved/broadcast
   "ff02::1", // IPv6 multicast
   "2001:db8::1", // IPv6 documentation
+  "fec0::1", // deprecated site-local space (outside global unicast)
+  "64:ff9b::7f00:1", // NAT64 well-known prefix carrying loopback
+  "2001:2::1", // benchmarking inside IETF protocol assignments
+  "2001:10::1", // ORCHIDv1
+  "2001:20::1", // ORCHIDv2
+  "3fff::1", // IPv6 documentation block
 ];
 for (const h of PRIVATE) {
   assert.equal(isPrivateHost(h), true, `must be treated as private: ${h}`);
+}
+
+// --- non-IP guarded families: loopback name + mDNS/.local suffix ---
+// isPrivateHost also blocks the loopback hostname and any .local mDNS name; a
+// regression in either re-opens loopback/LAN SSRF via a name rather than a literal.
+for (const h of ["localhost", "myprinter.local", "SERVICE.LOCAL"]) {
+  assert.equal(isPrivateHost(h), true, `guarded non-IP host must be private: ${h}`);
 }
 
 // --- genuinely public hosts must NOT be falsely blocked ---
@@ -57,6 +76,8 @@ const PUBLIC = [
   "boards.greenhouse.io",
   "example.com",
   "8.8.8.8",
+  "172.15.255.255", // just below 172.16.0.0/12 — must stay public
+  "172.32.0.1", // just above 172.31.255.255 — must stay public
   "2606:4700:4700::1111", // Cloudflare public IPv6
   "2001:4860:4860::8888", // Google public IPv6 (NOT Teredo: 2001:0:: only)
 ];

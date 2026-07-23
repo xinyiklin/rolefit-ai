@@ -14,6 +14,9 @@ const jobMenu = readFileSync(new URL("../../sections/JobMenu.tsx", import.meta.u
 const applicationModal = readFileSync(new URL("../../sections/ApplicationModal.tsx", import.meta.url), "utf8");
 const menuSection = readFileSync(new URL("../../sections/MenuSection.tsx", import.meta.url), "utf8");
 const providerSection = readFileSync(new URL("../../sections/ProviderSection.tsx", import.meta.url), "utf8");
+const reviewRail = readFileSync(new URL("../../sections/ReviewRail.tsx", import.meta.url), "utf8");
+const appIndex = readFileSync(new URL("../../../index.html", import.meta.url), "utf8");
+const styleTokens = readFileSync(new URL("../../styles/tokens.css", import.meta.url), "utf8");
 const aiSettings = readHook("useAiSettings.ts");
 const persistedSettings = readFileSync(new URL("../../lib/settings.ts", import.meta.url), "utf8");
 const app = readFileSync(new URL("../../App.tsx", import.meta.url), "utf8");
@@ -245,4 +248,22 @@ assert.match(
   "loading legacy settings removes the retired accordion preference"
 );
 
-console.log("Client workflow guards eval: 60/60 checks passed");
+assert.match(
+  reviewRail,
+  /const invalidDropCount = Math\.max\(0, \(result\.droppedSuggestions\?\.total \?\? 0\) - unsupportedDropCount\)[\s\S]*if \(!sr && !suggestions\.length && unsupportedDropCount === 0 && invalidDropCount === 0\) return null/,
+  "the review rail remains visible for all-drop results and separates invalid response-shape drops"
+);
+assert.match(
+  reviewRail,
+  /\{unsupportedDropCount\} AI[\s\S]*wording wasn.t supported by your resume or honest context/,
+  "unsupported AI edits remain visible as evidence-grounding rejections"
+);
+assert.match(
+  reviewRail,
+  /\{invalidDropCount\} \{unsupportedDropCount > 0 \? "additional AI " : "AI "\}[\s\S]*not be applied safely/,
+  "invalid AI edits are visible with grammatical copy whether or not unsupported edits also exist"
+);
+assert.doesNotMatch(appIndex, /fonts\.googleapis\.com|fonts\.gstatic\.com/, "the local-first app does not fetch external web fonts");
+assert.match(styleTokens, /@font-face[\s\S]*SourceSans3-Regular\.woff2[\s\S]*SourceSerif4-Regular\.woff2/, "app chrome uses bundled local font assets");
+
+console.log("Client workflow guards eval: 65/65 checks passed");

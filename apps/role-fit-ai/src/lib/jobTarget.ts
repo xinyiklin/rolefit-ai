@@ -31,7 +31,8 @@ const JOB_BOARD_HOSTS =
 const GENERIC_URL_TOKENS = new Set([
   "job", "jobs", "job-boards", "jobboards", "boards", "board", "careers", "career",
   "apply", "applications", "application", "hire", "hiring", "work", "secure", "app",
-  "www", "recruiting", "recruit", "talent", "my", "portal", "embed", "en", "us"
+  "www", "recruiting", "recruit", "talent", "my", "portal", "embed", "en", "us",
+  "p" // breezy.hr posting paths are <tenant>.breezy.hr/p/<id>
 ]);
 
 // "remodel-health" / "acme corp" → "Remodel Health" / "Acme Corp". A run-together

@@ -146,6 +146,14 @@ truth.lines.forEach((t, i) => {
   }
 });
 
+// Floor: a corrupt/truncated/empty truth fixture (or an engine change that
+// silently matches nothing) must fail loudly instead of reporting "0
+// divergences" as a clean pass.
+if (matched === 0) {
+  console.error("vertical-parity: 0 lines matched — truth.lines is empty/corrupt, or nothing in the engine output matched it");
+  failures += 1;
+}
+
 if (failures) {
   console.error(`vertical-parity: ${failures} divergences from TeX (${matched} lines matched)`);
   process.exit(1);

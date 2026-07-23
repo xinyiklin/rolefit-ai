@@ -695,9 +695,11 @@ function renderWorkspaceOverview() {
   const overview = workspaceOverview;
   const overviewUsable = Boolean(overview) && hasUsableBridge();
   elements.workspaceSummary.textContent = overviewUsable
-    ? overview.serverReady
+    ? overview.workspaceTransferReady
       ? "Ready to back up"
-      : "Local server not running"
+      : overview.serverReady
+        ? "Restart companion to transfer"
+        : "Local server not running"
     : workspaceOverviewLoaded
       ? "Workspace unavailable"
       : "Checking workspace…";
@@ -720,7 +722,7 @@ function renderWorkspaceOverview() {
     Number.isInteger(overview.activeBrowserTabs) && overview.activeBrowserTabs >= 0
     ? overview.activeBrowserTabs
     : null;
-  const busy = workspaceOperationPending || !overviewUsable || !overview?.serverReady;
+  const busy = workspaceOperationPending || !overviewUsable || !overview?.workspaceTransferReady;
   elements.backupWorkspace.disabled = busy;
   const restoreBlocked = activeTabs !== null && activeTabs > 0;
   elements.restoreWorkspace.disabled = busy || restoreBlocked;
@@ -728,8 +730,13 @@ function renderWorkspaceOverview() {
     elements.restoreWorkspace.title = "Close the open RoleFit browser tabs before restoring.";
   } else {
     elements.restoreWorkspace.title =
-      "Replaces the saved workspace; the previous one is kept as a local safety copy";
+      overviewUsable && !overview?.workspaceTransferReady
+        ? "Restart the companion so it owns the local server before transferring a workspace."
+        : "Replaces the saved workspace; the previous one is kept as a local safety copy";
   }
+  elements.backupWorkspace.title = overviewUsable && !overview?.workspaceTransferReady
+    ? "Restart the companion so it owns the local server before transferring a workspace."
+    : "Save a portable copy of the app-managed workspace";
 }
 
 function scheduleWorkspacePoll() {

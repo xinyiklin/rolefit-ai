@@ -29,6 +29,13 @@ function lineText(line) {
   return out;
 }
 
+// Floor: a corrupt/truncated/empty truth fixture must fail loudly instead of
+// silently "passing" a forEach over zero cases.
+if (!Array.isArray(truth.cases) || truth.cases.length === 0) {
+  console.error("linebreak-truth.json has no cases — fixture is missing or corrupt");
+  process.exit(1);
+}
+
 // Truth was extracted from the PDF, where TeX ligatures are already applied
 // (– — ’); engine run text carries them too, so compare as-is.
 let failures = 0;

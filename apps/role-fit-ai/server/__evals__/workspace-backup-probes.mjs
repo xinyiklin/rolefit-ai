@@ -12,6 +12,14 @@ import {
 } from "../workspaceBackup.ts";
 import { writeStoredBrowserPreferences } from "../browserPreferences.ts";
 import { countActiveTabs, isValidPresenceTabId } from "../presence.ts";
+import { withWorkspaceLock } from "../workspace.ts";
+import {
+  beginWorkspaceRestore,
+  endWorkspaceRestore,
+  noteWorkspacePresenceAttempt,
+  workspaceRestoreHadPresenceAttempt,
+  WorkspaceRestoreConflictError
+} from "../workspaceRestoreGate.ts";
 import {
   BROWSER_PREFERENCES_FILE_NAME,
   MAX_WORKSPACE_BACKUP_BYTES,
@@ -195,6 +203,22 @@ try {
   assert.equal(presenceChecks, 2, "restore checks presence both before staging and before replacement");
   assert.deepEqual(await snapshot(targetDir), beforeFailedRestore, "a late presence refusal leaves the active workspace unchanged");
 
+  let postRenamePresenceChecks = 0;
+  await assert.rejects(
+    () => restoreWorkspaceBackup(targetDir, withBrowser, fixedDate, () => ++postRenamePresenceChecks < 3 ? 0 : 1),
+    (error) => error instanceof WorkspaceBackupError && error.status === 409,
+    "a tab arriving after the previous workspace rename triggers rollback"
+  );
+  assert.deepEqual(await snapshot(targetDir), beforeFailedRestore, "post-rename presence restores the previous active workspace");
+
+  let postInstallPresenceChecks = 0;
+  await assert.rejects(
+    () => restoreWorkspaceBackup(targetDir, withBrowser, fixedDate, () => ++postInstallPresenceChecks < 4 ? 0 : 1),
+    (error) => error instanceof WorkspaceBackupError && error.status === 409,
+    "a tab arriving while the staged workspace is installed still triggers rollback"
+  );
+  assert.deepEqual(await snapshot(targetDir), beforeFailedRestore, "post-install presence restores the previous active workspace");
+
   const badChecksum = structuredClone(withBrowser);
   badChecksum.files[0].sha256 = "0".repeat(64);
   await assert.rejects(
@@ -300,6 +324,24 @@ try {
   assert.equal(isValidPresenceTabId("tab id"), false, "whitespace is rejected");
   assert.equal(isValidPresenceTabId("tab/../etc"), false, "path and charset violations are rejected");
   assert.equal(countActiveTabs(), 0, "no presence beats have been recorded in this probe process");
+
+  // A request queued before a restore began must not wake afterward and write
+  // its stale pre-restore state over the newly installed generation.
+  let releaseQueue;
+  const queueBlocker = withWorkspaceLock(() => new Promise((resolve) => { releaseQueue = resolve; }));
+  await Promise.resolve();
+  const staleQueuedWrite = withWorkspaceLock(async () => "must-not-run");
+  const restoreToken = beginWorkspaceRestore();
+  noteWorkspacePresenceAttempt();
+  assert.equal(workspaceRestoreHadPresenceAttempt(), true, "a tab arrival attempt is visible to the active restore");
+  releaseQueue();
+  await queueBlocker;
+  await assert.rejects(
+    staleQueuedWrite,
+    (error) => error instanceof WorkspaceRestoreConflictError && error.status === 409,
+    "a storage request queued across a restore generation is rejected"
+  );
+  endWorkspaceRestore(restoreToken);
 
   console.log("workspace backup probes: PASS");
 } finally {

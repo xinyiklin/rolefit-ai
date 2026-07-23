@@ -1,4 +1,4 @@
-export const ROLEFIT_DESKTOP_API_VERSION = 9 as const;
+export const ROLEFIT_DESKTOP_API_VERSION = 10 as const;
 export const ROLEFIT_DESKTOP_SETTINGS_SCHEMA_VERSION = 1 as const;
 export const ROLEFIT_PROVIDER_GUIDANCE_MAX_LENGTH = 240 as const;
 export const ROLEFIT_API_KEY_MAX_BYTES = 16_384 as const;
@@ -166,6 +166,7 @@ export type RoleFitWorkspaceOverview = Readonly<{
   workspaceDisplayPath: string;
   activeBrowserTabs: number | null;
   serverReady: boolean;
+  workspaceTransferReady: boolean;
   hasBaseResume: boolean;
   applicationCount: number | null;
 }>;

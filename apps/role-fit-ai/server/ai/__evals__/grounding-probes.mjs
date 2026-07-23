@@ -11,7 +11,14 @@
 //   suggestedEdit, while staying backward-compatible with the no-args call
 // All fixture text is synthetic. Exit code is non-zero on any failure.
 
-import { findUngroundedJdTerm } from "../grounding.ts";
+import assert from "node:assert/strict";
+
+import {
+  findUngroundedClaimTerm,
+  findUngroundedJdTerm,
+  findUngroundedOutcomeClaim,
+  isClaimTermGroundedInSource
+} from "../grounding.ts";
 import { sanitizeStrictReview } from "../sanitize.ts";
 import { groundChangeSummary } from "../polish.ts";
 
@@ -20,7 +27,8 @@ const f = (proposed, job, grounding, opts) => findUngroundedJdTerm(proposed, job
 // "What changed" summary honesty: the summary is free model prose (NOT derived
 // from the sanitized suggestions), so it can claim a change that never landed.
 // groundChangeSummary drops a bullet naming a JD tool/term absent from the
-// tailored resume + honest context, keeping grounded/generic bullets.
+// tailored resume, keeping grounded/generic bullets. Honest context may support
+// a proposal, but cannot make the summary claim the proposal landed.
 const TAILORED = "languages: python, sql, javascript\ntools: git, docker, postgres";
 const JOB = "we need python, sql, salesforce administration, and kubernetes orchestration. docker a plus.";
 const gcs = (summary) => groundChangeSummary(summary, JOB, TAILORED);
@@ -35,6 +43,22 @@ const checks = [
     gcs(["Reorganized your Skills to surface Python and SQL first."]).length === 1],
   ["summary: generic 'tightened wording' bullet kept (no JD term)",
     gcs(["Tightened wording and removed redundancy."]).length === 1],
+  ["summary: provider prose is bounded and normalized before returning", (() => {
+    const out = gcs([`Tightened wording.\n${"removed redundant phrasing ".repeat(30)}`]);
+    return out.length === 1 && out[0].length <= 300 && !/[\r\n]/.test(out[0]);
+  })()],
+  ["summary: Claude Code/Codex addition withheld when it never reached the resume",
+    groundChangeSummary(
+      ["Add Claude Code and OpenAI Codex to surface the strongest direct match for the role's AI-tool requirement."],
+      "We value experience with AI-assisted developer tools.",
+      `${TAILORED}\ntooling: OpenAI`
+    ).length === 0],
+  ["summary: Claude Code/Codex addition kept only after it reached the resume",
+    groundChangeSummary(
+      ["Add Claude Code and OpenAI Codex to surface the strongest direct match for the role's AI-tool requirement."],
+      "We value experience with AI-assisted developer tools.",
+      `${TAILORED}\ntooling: Claude Code, OpenAI Codex`
+    ).length === 1],
   ["summary: mixed batch keeps only the honest bullets",
     gcs([
       "Reorganized your Skills to surface Python and SQL first.",
@@ -42,6 +66,14 @@ const checks = [
       "Emphasized your Docker experience."
     ]).length === 2],
   ["summary: empty list passes through unchanged", gcs([]).length === 0],
+  ["ordinary outcome detector rejects invented outage/revenue results",
+    findUngroundedOutcomeClaim("Prevented outages and protected revenue.", "Built a deterministic fallback.") === "prevent"],
+  ["ordinary outcome detector accepts a result stated in evidence",
+    findUngroundedOutcomeClaim("Prevented outages.", "The fallback prevented outages.") === null],
+  ["candidate prose permits conditional future impact",
+    findUngroundedOutcomeClaim("I could improve reliability in this role.", "Built Python APIs.", { candidateProse: true }) === null],
+  ["candidate prose rejects a resume-style fragment with a fabricated outcome",
+    findUngroundedOutcomeClaim("Built Python APIs that prevented outages.", "Built Python APIs.", { candidateProse: true }) === "prevent"],
 
   // --- detector 4: distinctive short tokens detector 1's 3-char floor misses ---
   ["lowercase nlp flagged (detector1 needs a capital)", f("built nlp models", "nlp role", "") === "nlp"],
@@ -54,6 +86,8 @@ const checks = [
   // grounding corpus is pre-lowercased by callers (the contract); a sentence-final
   // 'c#.' in it must still ground a bare 'c#' thanks to stripBoundaryDots.
   ["sentence-final corpus token grounds it", f("strong C#.", "c# required", "i use c#. daily") === null],
+  ["sentence-final long-form claim grounds without swallowing punctuation",
+    isClaimTermGroundedInSource("GraphQL.", "Required: GraphQL services.")],
   ["internal period preserved (node.js not split)", f("ran node.js services", "node.js required", "node.js in prod") === null],
 
   // --- detector 2: hyphen/slash concepts ground via phrase normalization ---
@@ -76,6 +110,11 @@ const checks = [
   ["proseMode still flags a tool skill", f("I have Kubernetes experience", "kubernetes required", "", { proseMode: true }) === "kubernetes"],
   ["proseMode still flags a short token", f("strongest in C#", "c# developer", "", { proseMode: true }) === "c#"],
   ["proseMode clean when grounded", f("I have Kubernetes experience", "kubernetes required", "ran kubernetes clusters", { proseMode: true }) === null],
+  ["second-sentence action verb is grammar, not an invented proper claim",
+    findUngroundedClaimTerm(
+      "Built JavaScript reporting tools. Improved the deployment workflow.",
+      "Built JavaScript reporting tools and maintained the deployment workflow."
+    ) === null],
 
   // --- deliberate exclusion: collision-prone short tokens never flagged ---
   ["bare 'go' is NOT flagged (verb / go-to-market collision)", f("our go-to-market plan", "go developer wanted", "", { proseMode: true }) === null],
@@ -221,6 +260,10 @@ const checks = [
     );
   })()]
 ];
+
+// Floor: silently deleting a check must shrink the gate loudly, not quietly.
+// Raise this number whenever you ADD a check above.
+assert(checks.length >= 44, `grounding probe count dropped below the floor (44): found ${checks.length}`);
 
 let failures = 0;
 for (const [name, ok] of checks) {

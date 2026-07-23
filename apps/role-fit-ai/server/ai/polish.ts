@@ -31,7 +31,7 @@ import {
   clipForPrompt
 } from "./prompts.ts";
 import { callConfiguredProvider } from "./clients.ts";
-import { proseHasUngroundedTerm } from "./grounding.ts";
+import { findUngroundedClaimTerm, findUngroundedOutcomeClaim, proseHasUngroundedTerm } from "./grounding.ts";
 import { generateGroundedCoverLetter } from "./coverLetter.ts";
 import {
   hasUngroundedNumericClaim,
@@ -108,19 +108,33 @@ function trimText(value: unknown, max = 1200): string {
 // sanitized suggestions — so a model can claim a change ("added Kubernetes to
 // your Skills") that never survived sanitization, leaving the summary describing
 // an edit the resume never received. Drop any bullet that introduces a JD
-// tool/term absent from the TAILORED resume (groundingText = polishedText, which
-// already contains every surviving change, plus honest context) using the same
-// prose-mode grounding backstop the cover letter and application answers use.
-// Honest bullets — grounded terms, or generic "reorganized/emphasized" phrasing —
-// pass untouched; curated branded tools the JD wants but the resume lacks are cut.
-export function groundChangeSummary(changeSummary: string[], jobText: unknown, groundingText: unknown): string[] {
+// tool/term absent from the TAILORED resume. Honest context may authorize a
+// proposed edit, but it must not make the summary claim that an edit landed when
+// sanitization rejected it. The general claim backstop also covers tools absent
+// from the job text (such as Claude Code or Codex) that the JD-only check cannot
+// see. Lowercase only the first character before that backstop: summaries begin
+// with ordinary action words ("Added", "Tightened"), while later TitleCase terms
+// remain available for claim checking.
+export function groundChangeSummary(changeSummary: string[], jobText: unknown, tailoredText: unknown): string[] {
   if (!changeSummary.length) return changeSummary;
   const jobLower = String(jobText ?? "").toLowerCase();
-  const grounding = String(groundingText ?? "").toLowerCase();
-  return changeSummary.filter((bullet) =>
-    !proseHasUngroundedTerm(bullet, jobLower, grounding)
-    && !hasUngroundedNumericClaim(bullet, grounding)
-  );
+  const tailored = String(tailoredText ?? "").toLowerCase();
+  return changeSummary
+    // Provider output is boundary data. Keep the UI's 1-3 short-summary
+    // contract even when a model returns a paragraph or embedded newlines.
+    .map((bullet) => String(bullet ?? "").replace(/\s+/g, " ").trim().slice(0, 300))
+    .filter(Boolean)
+    .filter((bullet) => {
+      // Section/UI nouns are capitalized conventionally in an editorial summary,
+      // not asserted technologies or employers. Remove that presentation-only
+      // capitalization before the candidate-claim gate; named tools stay intact.
+      const claimText = (bullet ? `${bullet[0].toLowerCase()}${bullet.slice(1)}` : bullet)
+        .replace(/\b(?:Resume|Section|Sections|Skill|Skills|Technical|Experience|Tooling|Tools|Requirements|Role)\b/g, (word) => word.toLowerCase());
+      return !proseHasUngroundedTerm(bullet, jobLower, tailored)
+        && !findUngroundedClaimTerm(claimText, tailored)
+        && !findUngroundedOutcomeClaim(claimText, tailored)
+        && !hasUngroundedNumericClaim(bullet, tailored);
+    });
 }
 
 // section is untrusted request-body JSON (already `any` from JSON.parse); it is
@@ -415,24 +429,25 @@ export async function handlePolish(req: IncomingMessage, res: ServerResponse): P
     // preview is then the unchanged scope.
     const polishedText = scopeToText(tailorScope, suggestedChanges);
 
-    // Grounding corpus for the secondary passes AND the change summary: the
-    // resume the user actually ends up with (every applied suggestion already
-    // past the deterministic grounding/sanitization gates) plus the honest
-    // context. A JD skill term the audit's
-    // rewrites, the cover letter, or the summary introduce that is absent from
-    // here is unsupported.
+    // Grounding corpus for secondary prose: the resume the user actually ends
+    // up with (every applied suggestion already passed sanitization) plus honest
+    // context. A JD skill term an audit rewrite or cover letter introduces that
+    // is absent from here is unsupported.
     const groundingText = `${polishedText}\n${honestContext}`;
-    // changeSummary is free model prose; drop bullets that overclaim a change
-    // that never landed. Filter BEFORE the usable-response guard so a reply whose
-    // only "content" was fabricated summary bullets surfaces as a retryable 502
-    // instead of a silent "nothing changed" success.
-    const honestChangeSummary = groundChangeSummary(changeSummary, jobText, groundingText);
+    // changeSummary is free model prose. With no accepted edits, no model prose
+    // can truthfully describe a resume change, so omit the entire section and
+    // let the explicit withheld-edits note explain the outcome. Otherwise it may
+    // mention only material in the tailored resume itself; honest context cannot
+    // turn an evidence-withheld proposal into a claimed resume change.
+    const honestChangeSummary = suggestedChanges.length
+      ? groundChangeSummary(changeSummary, jobText, polishedText)
+      : [];
 
     // Usable-response guard is a TAILOR-pass check: a model reply with no
     // suggestions, no gaps, AND no honest summary is an unusable shape. In
     // review-only mode an empty change list is valid (audit the base resume
     // as-is), so the guard must not fire.
-    if (runTailor && !suggestedChanges.length && !missingRequiredSkills.length && !honestChangeSummary.length) {
+    if (runTailor && rawSuggestionCount === 0 && !missingRequiredSkills.length && !honestChangeSummary.length) {
       throw new UserSafeAiError("AI response did not include usable resume suggestions. Try again or switch models.", 502);
     }
 
@@ -536,7 +551,11 @@ export async function handlePolish(req: IncomingMessage, res: ServerResponse): P
       }
     );
 
-    const strictMissingRequiredSkills = missingRequiredSkillsFromStrictReview(strictReviewResult);
+    const strictMissingRequiredSkills = missingRequiredSkillsFromStrictReview(
+      strictReviewResult,
+      jobText,
+      groundingText
+    );
 
     // reviewStatus lets the client distinguish a review that was never requested
     // from one that ran but produced nothing usable. "off" = review not run;
