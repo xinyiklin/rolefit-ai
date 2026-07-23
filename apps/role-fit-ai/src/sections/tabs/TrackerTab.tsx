@@ -12,7 +12,7 @@ import {
   priorityFor,
   statusCount
 } from "../../lib/applicationDisplay";
-import { groupDuplicateApplications } from "../../lib/jobIdentity";
+import { duplicateCandidateKey, groupDuplicateApplications } from "../../lib/jobIdentity";
 import { TrackerTableView } from "../tracker/TrackerTableView";
 import { TrackerCalendarView } from "../tracker/TrackerCalendarView";
 import { TrackerInspector } from "../tracker/TrackerInspector";
@@ -120,6 +120,7 @@ type TrackerTabProps = {
   // mounts while the Applications tab is open), not in the hook — the O(n²)
   // scan must not run app-wide on every applications change.
   onMergeApplications: (memberIds: string[], canonicalId: string) => void;
+  onDismissDuplicateGroup: (memberIds: string[]) => void;
 };
 
 const VIEWS: TrackerView[] = ["table", "calendar"];
@@ -149,7 +150,8 @@ export function TrackerTab({
   onDelete,
   onAddApplication,
   onRefresh,
-  onMergeApplications
+  onMergeApplications,
+  onDismissDuplicateGroup
 }: TrackerTabProps) {
   const [query, setQuery] = useState("");
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -169,9 +171,9 @@ export function TrackerTab({
       applications
         .map(
           (a) =>
-            `${a.id}|${a.jobUrl}|${a.company ?? ""}|${a.role ?? ""}|${a.title}|${a.location ?? ""}|${a.status}|${
+            `${duplicateCandidateKey(a)}|${a.status}|${
               a.appliedAt ?? ""
-            }|${a.createdAt}|${(a.rawJobDescription || a.jobDescription || "").length}|${a.sourceUrls?.length ?? 0}`
+            }|${a.createdAt}`
         )
         .join("\n"),
     [applications]
@@ -557,6 +559,7 @@ export function TrackerTab({
         <DuplicateReviewModal
           groups={duplicateGroups}
           onClose={() => setIsDuplicateModalOpen(false)}
+          onDismiss={onDismissDuplicateGroup}
           onMerge={(memberIds, canonicalId) => {
             onMergeApplications(memberIds, canonicalId);
             // Defensive: if the row currently pinned in the inspector was merged

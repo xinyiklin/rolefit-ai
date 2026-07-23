@@ -1814,6 +1814,13 @@ button.table-sort svg {
   margin-top: var(--s1);
 }
 
+.duplicate-group-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+  justify-content: flex-end;
+}
+
 .application-form {
   display: grid;
   gap: var(--s2);

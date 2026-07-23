@@ -52,12 +52,17 @@ requires its own one-time approval.
 2. It POSTs the text to `POST /api/extension/analyze`, which extracts job
    identity and checks the application tracker with a layered
    duplicate match (ATS posting id / normalized URL / requisition id in the
-   posting / company + title + description overlap), then renders the tracked-
-   status banner. When a tracked application matches,
-   the banner also shows a compact evidence line (e.g. "Same LinkedIn posting
-   (#123)"), prefixed "Possible duplicate:" for a non-exact match. Fuzzy
-   company/title matches require substantial descriptions with at least 60%
-   overlap; small amounts of shared boilerplate do not produce a warning.
+   posting / no-id company + title + description overlap), then renders the
+   tracked-status banner. Shared posting or requisition ids are exact; a
+   normalized URL is exact unless explicit ids conflict. Different explicit ids
+   default to separate postings; only an exceptionally strong
+   company/title/location/content match raises a review-only warning for a
+   likely id input error. When a tracked application matches, the banner also
+   shows a compact evidence line (e.g. "Same LinkedIn posting (#123)"),
+   prefixed "Possible duplicate:" for a non-exact match. No-id fuzzy matching
+   requires substantial descriptions with aligned metadata plus strong lexical
+   and ordered-phrase overlap; small amounts of shared boilerplate do not
+   produce a warning.
 3. **Import** POSTs the page text to `POST /api/extension/import` and opens a
    fresh app tab with a short claim token. The server prepares the raw posting
    text in the BACKGROUND (e.g. fetching the full description for a Greenhouse

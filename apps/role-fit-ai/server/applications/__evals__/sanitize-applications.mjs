@@ -35,6 +35,7 @@ try {
         { url: "   ", source: "empty" }
       ],
       rawJobDescription: "  Raw JD text here.  ",
+      duplicateDismissedIds: ["other-app", "other-app", "app_valid-123", "../bad"],
       resumeArtifacts: { hasPdf: "false", hasTex: "false", fileName: "phantom.pdf" },
       aiUsage: {
         distill: {
@@ -103,6 +104,13 @@ try {
   // rawJobDescription roundtrips (trimmed via slice, not .trim()).
   if (valid?.rawJobDescription !== "  Raw JD text here.  ") failures.push("rawJobDescription did not persist");
   if (valid?.resumeArtifacts !== undefined) failures.push("string artifact booleans created a phantom saved file");
+  if (
+    !Array.isArray(valid?.duplicateDismissedIds) ||
+    valid.duplicateDismissedIds.length !== 1 ||
+    valid.duplicateDismissedIds[0] !== "other-app"
+  ) {
+    failures.push("duplicate review dismissals did not sanitize and roundtrip");
+  }
 
   // sourceUrls: the utm variant collapses against jobUrl, the #apply dup collapses
   // against the greenhouse entry, the empty is dropped → exactly 1 survives.

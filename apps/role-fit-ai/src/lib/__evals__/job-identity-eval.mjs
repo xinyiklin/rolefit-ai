@@ -5,6 +5,7 @@
 
 import {
   atsPostingKey,
+  duplicateCandidateKey,
   findDuplicateApplications,
   groupDuplicateApplications,
   jdFingerprint,
@@ -196,7 +197,7 @@ const baseApp = {
     { jobUrl: "https://boards.greenhouse.io/acme/jobs/4012345?utm_campaign=x#app", jobText: "" },
     [baseApp]
   );
-  check("tier2: normalized url → exact", matches[0]?.confidence, "exact");
+  check("normalized url without conflicting ids → exact", matches[0]?.confidence, "exact");
 }
 
 // A record's sourceUrls participate in URL tiers.
@@ -215,24 +216,117 @@ const baseApp = {
     { jobUrl: "https://www.linkedin.com/jobs/view/111", jobText: `Requisition ID: JR-2931\n${JD_BODY}`, company: "Acme" },
     [{ ...baseApp, jobDescription: `Req ID: JR-2931\n${JD_BODY}` }]
   );
-  check("tier3: shared req id → high same-posting", {
+  check("tier2: shared req id → exact same-posting", {
     level: matches[0]?.level,
     confidence: matches[0]?.confidence
-  }, { level: "same-posting", confidence: "high" });
+  }, { level: "same-posting", confidence: "exact" });
 }
 
-// Cross-board repost: same company + title + near-identical JD, no shared URL/id.
+{
+  const matches = findDuplicateApplications(
+    { jobUrl: "", jobText: `Requisition ID: JR-2932\n${JD_BODY}`, company: "Acme", role: "Software Engineer II" },
+    [{ ...baseApp, jobUrl: "", jobDescription: `Req ID: JR-2931\n${JD_BODY}` }]
+  );
+  check("different requisition ids + near-identical content → review only", {
+    level: matches[0]?.level,
+    confidence: matches[0]?.confidence,
+    evidence: matches[0]?.evidence?.[0]
+  }, {
+    level: "same-company-role",
+    confidence: "possible",
+    evidence: "Posting IDs differ"
+  });
+}
+
+// A shared generic/company URL must not override different ids.
+{
+  const matches = findDuplicateApplications(
+    {
+      jobUrl: "https://careers.acme.com/software-engineer-ii",
+      jobText: `Requisition ID: JR-2932\n${JD_BODY}`,
+      company: "Acme",
+      role: "Software Engineer II"
+    },
+    [{
+      ...baseApp,
+      jobUrl: "https://careers.acme.com/software-engineer-ii",
+      jobDescription: `Req ID: JR-2931\n${JD_BODY}`
+    }]
+  );
+  check("different ids outrank a shared URL", {
+    level: matches[0]?.level,
+    confidence: matches[0]?.confidence
+  }, {
+    level: "same-company-role",
+    confidence: "possible"
+  });
+}
+
+{
+  const matches = findDuplicateApplications(
+    {
+      jobUrl: "https://careers.acme.com/software-engineer-ii",
+      jobText: `Requisition ID: JR-2932\n${PARTIAL_REPOST_BODY}`,
+      company: "Acme",
+      role: "Software Engineer II"
+    },
+    [{
+      ...baseApp,
+      jobUrl: "https://careers.acme.com/software-engineer-ii",
+      jobDescription: `Req ID: JR-2931\n${JD_BODY}`
+    }]
+  );
+  check("different ids + shared URL stay separate below the high guard", matches.length, 0);
+}
+
+// Different explicit posting ids default to separate jobs, but nearly identical
+// company/title/content raises a review-only warning for a likely id input error.
 {
   const matches = findDuplicateApplications(
     {
       jobUrl: "https://www.indeed.com/viewjob?jk=00000000cafebabe",
-      jobText: `${JD_BODY}\nPosted 3 days ago via Indeed.`,
+      jobText: JD_BODY,
       company: "Acme, Inc.",
       role: "Software Engineer II"
     },
     [baseApp]
   );
-  check("tier4: cross-board repost → high repost", {
+  check("different posting ids + near-identical content → review only", {
+    level: matches[0]?.level,
+    confidence: matches[0]?.confidence
+  }, {
+    level: "same-company-role",
+    confidence: "possible"
+  });
+}
+
+// Conflicting ids plus ordinary similarity are still treated as different jobs.
+{
+  const matches = findDuplicateApplications(
+    {
+      jobUrl: "https://www.indeed.com/viewjob?jk=00000000cafebabe",
+      jobText: PARTIAL_REPOST_BODY,
+      company: "Acme, Inc.",
+      role: "Software Engineer II"
+    },
+    [baseApp]
+  );
+  check("different posting ids stay separate below the high guard", matches.length, 0);
+}
+
+// With no ids on either side, near-identical substantial content and matching
+// company/title still identifies a repost.
+{
+  const matches = findDuplicateApplications(
+    {
+      jobUrl: "https://careers.acme.com/software-engineer-ii",
+      jobText: `${JD_BODY}\nPosted 3 days ago.`,
+      company: "Acme, Inc.",
+      role: "Software Engineer II"
+    },
+    [{ ...baseApp, jobUrl: "https://acme.com/openings/software-engineer-ii" }]
+  );
+  check("no-id near-identical posting → high repost", {
     level: matches[0]?.level,
     confidence: matches[0]?.confidence
   }, { level: "repost", confidence: "high" });
@@ -248,18 +342,15 @@ const baseApp = {
   check("same title with weak JD overlap → no warning", matches.length, 0);
 }
 
-// Substantial descriptions in the fuzzy band still produce an advisory match.
+// A 60%-ish bag-of-words overlap is no longer enough for an advisory match.
 {
   const overlap = jdSimilarity(jdFingerprint(PARTIAL_REPOST_BODY), jdFingerprint(JD_BODY));
   const matches = findDuplicateApplications(
     { jobUrl: "", jobText: PARTIAL_REPOST_BODY, company: "Acme", role: "Software Engineer II", location: "New York" },
     [baseApp]
   );
-  check("partial repost fixture stays in 60-85% warning band", overlap >= 0.6 && overlap < 0.85, true);
-  check("same title with meaningful JD overlap → possible", {
-    level: matches[0]?.level,
-    confidence: matches[0]?.confidence
-  }, { level: "same-company-role", confidence: "possible" });
+  check("partial repost fixture stays in the old fuzzy warning band", overlap >= 0.6 && overlap < 0.85, true);
+  check("old fuzzy band no longer warns", matches.length, 0);
 }
 
 // Short snippets cannot create fuzzy duplicates even when every token matches.
@@ -281,13 +372,40 @@ const baseApp = {
   check("truly separate opening → no match", matches.length, 0);
 }
 
-// Unknown company on the board side: near-identical body still flags a repost.
+// Even identical no-id descriptions can represent separate location-specific
+// openings. Contradictory locations are stronger evidence than content reuse.
+{
+  const matches = findDuplicateApplications(
+    { jobUrl: "", jobText: JD_BODY, company: "Acme", role: "Software Engineer II", location: "Seattle, WA" },
+    [{ ...baseApp, jobUrl: "", location: "New York, NY" }]
+  );
+  check("no-id identical descriptions in different locations → no warning", matches.length, 0);
+}
+
+// Unknown company on the board side with an explicit different posting id does
+// not fall through into content matching.
 {
   const matches = findDuplicateApplications(
     { jobUrl: "https://www.linkedin.com/jobs/view/222", jobText: JD_BODY },
     [{ ...baseApp, company: "" }]
   );
-  check("no-company near-identical JD → high repost", matches[0]?.confidence, "high");
+  check("no-company different id → no warning", matches.length, 0);
+}
+
+{
+  const matches = findDuplicateApplications(
+    { jobUrl: "https://careers.example.com/opening", jobText: JD_BODY, role: "Software Engineer II", location: "New York" },
+    [{ ...baseApp, jobUrl: "https://jobs.example.com/opening", company: "" }]
+  );
+  check("no-company no-id matching role + identical JD → high repost", matches[0]?.confidence, "high");
+}
+
+{
+  const matches = findDuplicateApplications(
+    { jobUrl: "https://careers.example.com/opening", jobText: JD_BODY, role: "Data Engineer", location: "New York" },
+    [{ ...baseApp, jobUrl: "https://jobs.example.com/opening", company: "" }]
+  );
+  check("no-company no-id contradictory roles → no warning", matches.length, 0);
 }
 
 // Different company entirely → never matches on text alone at company tier.
@@ -313,36 +431,66 @@ const baseApp = {
 
 // ── Tracker-wide grouping ────────────────────────────────────────────────────
 {
-  // Two boards of the same Compa job (LinkedIn + Ashby → different ATS ids, so
-  // they cluster on company+title+JD), one Compa app plus two unrelated jobs.
+  // Two id-less copies of the same Compa job, plus two unrelated jobs.
   const roster = [
-    { id: "li", title: "Software Engineer at Compa", company: "Compa", role: "Software Engineer", jobUrl: "https://www.linkedin.com/jobs/view/4339434305/", jobDescription: JD_BODY },
-    { id: "ashby", title: "Software Engineer at Compa", company: "Compa", role: "Software Engineer", jobUrl: "https://jobs.ashbyhq.com/compa/ffbbc5c1-f8e9-444e-b4fb-89010a4a2398", jobDescription: JD_BODY },
+    { id: "careers", title: "Software Engineer at Compa", company: "Compa", role: "Software Engineer", jobUrl: "https://compa.com/careers/software-engineer", jobDescription: JD_BODY },
+    { id: "jobs", title: "Software Engineer at Compa", company: "Compa", role: "Software Engineer", jobUrl: "https://jobs.compa.com/software-engineer", jobDescription: JD_BODY },
     { id: "other", title: "Staff Data Engineer at Globex", company: "Globex", role: "Staff Data Engineer", jobUrl: "https://boards.greenhouse.io/globex/jobs/77", jobDescription: OTHER_BODY },
     { id: "lonely", title: "Designer at Initech", company: "Initech", role: "Designer", jobUrl: "https://jobs.lever.co/initech/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee", jobDescription: "Design systems and prototypes for the Initech suite of office products." }
   ];
   const groups = groupDuplicateApplications(roster);
   check("grouping: exactly one duplicate group", groups.length, 1);
-  check("grouping: the group holds the two Compa boards", groups[0]?.applications.map((a) => a.id).sort().join(","), "ashby,li");
+  check("grouping: the group holds the two Compa copies", groups[0]?.applications.map((a) => a.id).sort().join(","), "careers,jobs");
   check("grouping: group confidence is high", groups[0]?.confidence, "high");
   check("grouping: group records the pairwise edge", groups[0]?.edges.length, 1);
   check("grouping: unrelated jobs are not grouped", groups.some((g) => g.applications.some((a) => a.id === "other" || a.id === "lonely")), false);
 }
 
 {
-  // Transitive chain: three boards of one job pairwise-match → a single group of 3.
+  // Two records share an exact posting id. A third record with a different id
+  // stays separate when its content is only ordinarily similar.
   const key = "https://boards.greenhouse.io/acme/jobs/4012345";
   const chain = [
     { id: "a", title: "Software Engineer II at Acme", company: "Acme", role: "Software Engineer II", jobUrl: key, jobDescription: JD_BODY },
     { id: "b", title: "Software Engineer II at Acme", company: "Acme", role: "Software Engineer II", jobUrl: "https://acme.com/careers?gh_jid=4012345", jobDescription: JD_BODY },
-    { id: "c", title: "Software Engineer II at Acme", company: "Acme, Inc.", role: "Software Engineer II", jobUrl: "https://www.indeed.com/viewjob?jk=00000000cafebabe", jobDescription: `${JD_BODY}\nvia Indeed` }
+    { id: "c", title: "Software Engineer II at Acme", company: "Acme, Inc.", role: "Software Engineer II", jobUrl: "https://www.indeed.com/viewjob?jk=00000000cafebabe", jobDescription: PARTIAL_REPOST_BODY }
   ];
   const groups = groupDuplicateApplications(chain);
-  check("grouping: transitive chain → one group of three", { n: groups.length, size: groups[0]?.applications.length }, { n: 1, size: 3 });
+  check("grouping: different posting id stays outside exact pair", { n: groups.length, size: groups[0]?.applications.length }, { n: 1, size: 2 });
+}
+
+{
+  const chain = [
+    { id: "a", title: "Software Engineer II at Acme", company: "Acme", role: "Software Engineer II", location: "New York", jobUrl: "https://boards.greenhouse.io/acme/jobs/4012345", jobDescription: JD_BODY },
+    { id: "b", title: "Software Engineer II at Acme", company: "Acme, Inc.", role: "Software Engineer II", location: "New York, NY", jobUrl: "https://www.indeed.com/viewjob?jk=00000000cafebabe", jobDescription: JD_BODY }
+  ];
+  const groups = groupDuplicateApplications(chain);
+  check("grouping: conflicting-id high guard creates review group", {
+    size: groups[0]?.applications.length,
+    confidence: groups[0]?.confidence
+  }, {
+    size: 2,
+    confidence: "possible"
+  });
 }
 
 check("grouping: empty roster → no groups", groupDuplicateApplications([]).length, 0);
 check("grouping: null-safe", groupDuplicateApplications(null).length, 0);
+
+{
+  const dismissed = [
+    { ...baseApp, duplicateDismissedIds: ["a2"] },
+    { ...baseApp, id: "a2", jobUrl: "https://acme.com/careers?gh_jid=4012345" }
+  ];
+  check("grouping: reviewed not-duplicate pair stays hidden", groupDuplicateApplications(dismissed).length, 0);
+}
+
+check(
+  "duplicate scan key changes for same-length content edits",
+  duplicateCandidateKey({ id: "key", jobDescription: "alpha" }) ===
+    duplicateCandidateKey({ id: "key", jobDescription: "bravo" }),
+  false
+);
 
 if (failures > 0) {
   console.log(`\n${failures} case(s) failed`);

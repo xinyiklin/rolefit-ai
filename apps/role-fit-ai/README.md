@@ -222,7 +222,14 @@ origin remains paired until removed. Once approved, the popup brings RoleFit
 import and duplicate checking to the job board. On any posting, click the
 **RoleFit AI** toolbar icon to see:
 
-- whether you've **already tracked or applied** to that posting (matched by ATS posting id, normalized URL, requisition id, or company/title/description overlap), and
+- whether you've **already tracked or applied** to that posting. A shared ATS or
+  requisition id is definitive; a normalized URL is exact unless explicit ids
+  conflict. Different explicit ids default to separate postings; only an
+  exceptionally strong company/title/location/content match raises a review-only
+  warning in case an id was entered incorrectly. When neither side has an id,
+  RoleFit requires substantial company/title/location-aligned description and
+  phrase overlap. Tracker review can merge a group or mark it **Not duplicates**
+  so that pair stays out of future duplicate review, and
 - a one-click **Import to RoleFit AI** that opens a fresh independent RoleFit tab, lets the server prepare the raw page text, then has that tab distill it with its own Distill provider before loading the Job field. **Polish automatically after import** can run polish as soon as the brief and your base resume are ready. Turning **Distill with AI** off skips the provider call, imports the prepared local text, and retains deterministic tracking extraction.
 
 It is Manifest V3 and sends requests **only** to your local server at

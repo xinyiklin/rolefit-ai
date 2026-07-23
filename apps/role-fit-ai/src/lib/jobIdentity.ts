@@ -14,15 +14,20 @@
 // merging uncertain matches:
 //
 //   Tier 1  ATS posting id parsed from the URL   → exact  "same-posting"
-//   Tier 2  normalized URL equality              → exact  "same-posting"
-//   Tier 3  requisition id found in the JD text  → high   "same-posting"
-//   Tier 4  company + title + description        → high   "repost"
-//           overlap (or overlap alone when the      /possible "same-company-role"
-//           company is unknown)
+//   Tier 2  requisition id found in the JD text  → exact  "same-posting"
+//   Tier 3  conflicting ids + exceptionally     → possible "same-company-role"
+//           strong metadata/content agreement
+//   Tier 4  normalized URL equality, unless      → exact  "same-posting"
+//           explicit ids conflict
+//   Tier 5  no ids + company/title + strong      → high   "repost"
+//           lexical and phrase overlap              /possible "same-company-role"
 //
-// "Truly separate openings with the same title" stay unmatched: company/title
-// metadata alone is not duplicate evidence. The fuzzy tier also requires two
-// substantial descriptions with meaningful overlap; low-overlap or incomplete
+// Different explicit ids normally mean separate postings. An ultra-high,
+// review-only guard catches the narrow case where an id may have been entered
+// incorrectly; it never creates an automatic merge. "Truly separate openings
+// with the same title" stay unmatched: company/title metadata alone is not
+// duplicate evidence. The no-id tier requires substantial descriptions with
+// both lexical and ordered-phrase overlap; low-overlap or incomplete
 // descriptions return no match at all.
 
 // ── Public types ─────────────────────────────────────────────────────────────
@@ -59,6 +64,8 @@ export type DuplicateCandidate = {
   title?: string;
   location?: string;
   sourceUrls?: { url?: string }[];
+  /** Tracker records the user has explicitly reviewed as separate openings. */
+  duplicateDismissedIds?: string[];
 };
 
 export type DuplicateMatch<T extends DuplicateCandidate = DuplicateCandidate> = {
@@ -100,6 +107,7 @@ type Signature = {
   role: string;
   location: string | undefined;
   fingerprint: Set<string>;
+  shingles: Set<string>;
 };
 
 // Internal — the outcome of comparing two signatures (before an application is
@@ -353,11 +361,29 @@ export function locationsCompatible(a?: string | null, b?: string | null): boole
 
 const FINGERPRINT_CHARS = 15_000;
 const FINGERPRINT_MAX_TOKENS = 1_500;
+const FINGERPRINT_MAX_SHINGLES = 2_000;
 // Fuzzy duplicate warnings need enough content on BOTH sides to distinguish a
 // real repost from company boilerplate or a few shared role terms. Exact URL /
 // ATS-id and requisition-id tiers do not depend on these floors.
-const COMPARABLE_FINGERPRINT_MIN_TOKENS = 40;
-const POSSIBLE_REPOST_MIN_SIMILARITY = 0.6;
+const COMPARABLE_FINGERPRINT_MIN_TOKENS = 50;
+const POSSIBLE_REPOST_MIN_SIMILARITY = 0.78;
+const POSSIBLE_REPOST_MIN_SEQUENCE_OVERLAP = 0.65;
+const POSSIBLE_REPOST_MIN_LENGTH_RATIO = 0.65;
+// Conflicting ids are much stronger counter-evidence than missing ids. Raise a
+// review-only candidate only when both records expose an identity and their
+// metadata plus substantial descriptions are nearly indistinguishable.
+const CONFLICTING_ID_REVIEW_MIN_TOKENS = 60;
+const CONFLICTING_ID_REVIEW_MIN_SIMILARITY = 0.96;
+const CONFLICTING_ID_REVIEW_MIN_SEQUENCE_OVERLAP = 0.94;
+const CONFLICTING_ID_REVIEW_MIN_LENGTH_RATIO = 0.9;
+
+function jdTokens(text: string | undefined | null): string[] {
+  return String(text || "")
+    .toLowerCase()
+    .slice(0, FINGERPRINT_CHARS)
+    .split(/[^a-z0-9+#.]+/)
+    .filter((token) => token.length >= 4 && !/^[\d.]+$/.test(token));
+}
 
 // Compact content fingerprint of a job description: the set of distinct
 // substantial tokens. Set-of-tokens (vs shingles) is deliberately loose so a
@@ -365,18 +391,26 @@ const POSSIBLE_REPOST_MIN_SIMILARITY = 0.6;
 // the same company (different duties/stack) score low. Bare numbers are
 // excluded — dates and salary figures churn between reposts of the same job.
 export function jdFingerprint(text: string | undefined | null): Set<string> {
-  const tokens = String(text || "")
-    .toLowerCase()
-    .slice(0, FINGERPRINT_CHARS)
-    .split(/[^a-z0-9+#.]+/);
   const set = new Set<string>();
-  for (const token of tokens) {
-    if (token.length < 4) continue;
-    if (/^[\d.]+$/.test(token)) continue;
+  for (const token of jdTokens(text)) {
     set.add(token);
     if (set.size >= FINGERPRINT_MAX_TOKENS) break;
   }
   return set;
+}
+
+// Ordered three-token shingles keep shared company boilerplate or a similar
+// keyword inventory from looking like the same posting. Reordered sections
+// still retain their within-sentence shingles, while unrelated prose that uses
+// the same vocabulary does not.
+function jdShingles(text: string | undefined | null): Set<string> {
+  const tokens = jdTokens(text);
+  const shingles = new Set<string>();
+  for (let index = 0; index + 2 < tokens.length; index += 1) {
+    shingles.add(`${tokens[index]}\u0001${tokens[index + 1]}\u0001${tokens[index + 2]}`);
+    if (shingles.size >= FINGERPRINT_MAX_SHINGLES) break;
+  }
+  return shingles;
 }
 
 // Jaccard similarity of two fingerprints, 0..1. Empty fingerprints never match.
@@ -386,6 +420,19 @@ export function jdSimilarity(a: Set<string> | undefined | null, b: Set<string> |
   let intersection = 0;
   for (const token of small) if (large.has(token)) intersection += 1;
   return intersection / (a.size + b.size - intersection);
+}
+
+function setContainment(a: Set<string>, b: Set<string>): number {
+  if (!a.size || !b.size) return 0;
+  const [small, large] = a.size <= b.size ? [a, b] : [b, a];
+  let intersection = 0;
+  for (const value of small) if (large.has(value)) intersection += 1;
+  return intersection / small.size;
+}
+
+function setSizeRatio(a: Set<string>, b: Set<string>): number {
+  if (!a.size || !b.size) return 0;
+  return Math.min(a.size, b.size) / Math.max(a.size, b.size);
 }
 
 // app.title is usually "Role at Company" (makeApplicationDraft); recover the
@@ -427,7 +474,8 @@ function buildSignature(rec: SignatureInput): Signature {
     company: normalizeCompanyName(rec?.company),
     role: normalizeRoleTitle(rec?.role || roleFromTitle(rec?.title)),
     location: rec?.location,
-    fingerprint: jdFingerprint(text)
+    fingerprint: jdFingerprint(text),
+    shingles: jdShingles(text)
   };
 }
 
@@ -435,8 +483,9 @@ function buildSignature(rec: SignatureInput): Signature {
 // Order is strongest-first; the first tier that fires wins. Symmetric in a and b,
 // so it can drive both the target-vs-list scan and the tracker-wide pairing.
 //   level      "same-posting" | "repost" | "same-company-role"
-//   confidence "exact" (safe to merge silently) | "high" (merge with user
-//              consent) | "possible" (warn only, never auto-merge)
+//   confidence "exact" (definitive identity; callers may still offer a bypass)
+//              | "high" (merge with user consent)
+//              | "possible" (warn only, never auto-merge)
 function matchSignatures(a: Signature, b: Signature): MatchResult | null {
   // Tier 1: a posting id shared by any URL of each side.
   for (const [key, meta] of a.atsKeys) {
@@ -448,41 +497,102 @@ function matchSignatures(a: Signature, b: Signature): MatchResult | null {
       };
     }
   }
-  // Tier 2: a normalized URL shared by any URL of each side.
-  for (const url of a.normUrls) {
-    if (b.normUrls.has(url)) return { level: "same-posting", confidence: "exact", evidence: ["Same posting URL"] };
+
+  // Tier 2: the same requisition id printed in both descriptions is definitive.
+  // It is skipped when both sides name different companies because internal job
+  // numbers can collide across employers.
+  if (a.reqId && a.reqId === b.reqId) {
+    const companiesConflict = Boolean(a.company && b.company && a.company !== b.company);
+    if (!companiesConflict) return { level: "same-posting", confidence: "exact", evidence: [`Same requisition ID ${a.reqId}`] };
   }
 
   const similarity = jdSimilarity(a.fingerprint, b.fingerprint);
   const similarityPct = Math.round(similarity * 100);
+  const sequenceOverlap = setContainment(a.shingles, b.shingles);
+  const lengthRatio = setSizeRatio(a.fingerprint, b.fingerprint);
   const descriptionsComparable =
     a.fingerprint.size >= COMPARABLE_FINGERPRINT_MIN_TOKENS &&
     b.fingerprint.size >= COMPARABLE_FINGERPRINT_MIN_TOKENS;
+  const aHasExplicitId = Boolean(a.atsKeys.size || a.reqId);
+  const bHasExplicitId = Boolean(b.atsKeys.size || b.reqId);
+  const compatibleLocation = locationsCompatible(a.location, b.location);
 
-  // Tier 3: a requisition id printed in both descriptions. Skipped when both
-  // sides name a company and they differ (job numbers collide across ATSes).
-  if (a.reqId && a.reqId === b.reqId) {
-    const companiesConflict = Boolean(a.company && b.company && a.company !== b.company);
-    if (!companiesConflict) return { level: "same-posting", confidence: "high", evidence: [`Same requisition ID ${a.reqId}`] };
+  // Tier 3: different explicit ids normally identify separate postings. Keep
+  // one narrow review-only escape hatch for likely data-entry errors: both
+  // sides must expose an id, agree on company/title and compatible location,
+  // and have nearly identical substantial descriptions. Evaluate this BEFORE
+  // URL equality so a shared generic/company URL cannot override contradictory
+  // posting ids. This is "possible", so callers never merge automatically.
+  if (aHasExplicitId && bHasExplicitId) {
+    const sameCompany = Boolean(a.company && b.company && a.company === b.company);
+    const sameRole = Boolean(a.role && b.role && a.role === b.role);
+    if (
+      sameCompany &&
+      sameRole &&
+      compatibleLocation &&
+      a.fingerprint.size >= CONFLICTING_ID_REVIEW_MIN_TOKENS &&
+      b.fingerprint.size >= CONFLICTING_ID_REVIEW_MIN_TOKENS &&
+      similarity >= CONFLICTING_ID_REVIEW_MIN_SIMILARITY &&
+      sequenceOverlap >= CONFLICTING_ID_REVIEW_MIN_SEQUENCE_OVERLAP &&
+      lengthRatio >= CONFLICTING_ID_REVIEW_MIN_LENGTH_RATIO
+    ) {
+      return {
+        level: "same-company-role",
+        confidence: "possible",
+        evidence: ["Posting IDs differ", "Same company and title", `${similarityPct}% description overlap`]
+      };
+    }
+    // Ordinary conflicting-id cases stay separate even when a normalized URL
+    // happens to match.
+    return null;
   }
 
-  // Tier 4: company + title + description overlap.
+  // Tier 4: a normalized URL shared by either side, provided explicit ids did
+  // not conflict above. This still catches no-id and one-sided-id records for
+  // the exact same posting URL.
+  for (const url of a.normUrls) {
+    if (b.normUrls.has(url)) return { level: "same-posting", confidence: "exact", evidence: ["Same posting URL"] };
+  }
+
+  // An id on only one side is not enough evidence to compare identities and
+  // must not fall through to content matching.
+  if (aHasExplicitId || bHasExplicitId) return null;
+
+  // Tier 5: no ids on either side, so require company/title agreement plus
+  // substantial lexical AND ordered-phrase overlap. This deliberately favors a
+  // missed advisory over a false duplicate warning.
   if (a.company && b.company && a.company === b.company) {
     const sameRole = Boolean(a.role && b.role && a.role === b.role);
-    if (descriptionsComparable && sameRole && similarity >= 0.85) {
+    if (
+      descriptionsComparable &&
+      sameRole &&
+      compatibleLocation &&
+      similarity >= 0.88 &&
+      sequenceOverlap >= 0.8 &&
+      lengthRatio >= 0.75
+    ) {
       return { level: "repost", confidence: "high", evidence: ["Same company and title", `${similarityPct}% description overlap`] };
     }
-    if (descriptionsComparable && !sameRole && similarity >= 0.9) {
+    if (
+      descriptionsComparable &&
+      !sameRole &&
+      compatibleLocation &&
+      similarity >= 0.94 &&
+      sequenceOverlap >= 0.88 &&
+      lengthRatio >= 0.82
+    ) {
       return { level: "repost", confidence: "high", evidence: ["Same company", `${similarityPct}% description overlap (retitled posting)`] };
     }
     if (
       descriptionsComparable &&
       sameRole &&
-      locationsCompatible(a.location, b.location) &&
-      similarity >= POSSIBLE_REPOST_MIN_SIMILARITY
+      compatibleLocation &&
+      similarity >= POSSIBLE_REPOST_MIN_SIMILARITY &&
+      sequenceOverlap >= POSSIBLE_REPOST_MIN_SEQUENCE_OVERLAP &&
+      lengthRatio >= POSSIBLE_REPOST_MIN_LENGTH_RATIO
     ) {
-      // Same title, compatible location, and meaningfully similar substantial
-      // descriptions could indicate a refresh — flag, never auto-merge.
+      // Same title, compatible location, and strongly similar substantial
+      // descriptions could indicate a refresh. Flag, never auto-merge.
       return {
         level: "same-company-role",
         confidence: "possible",
@@ -494,13 +604,51 @@ function matchSignatures(a: Signature, b: Signature): MatchResult | null {
   }
 
   // Company unknown on a side (common for board pages): near-identical
-  // descriptions still identify a repost. The floor on BOTH fingerprint sizes
-  // keeps trivially short texts from matching everything.
-  if ((!a.company || !b.company) && similarity >= 0.92 && a.fingerprint.size >= 60 && b.fingerprint.size >= 60) {
+  // descriptions still identify a repost. This is stricter than the
+  // company/title path because there is less corroborating metadata. Known,
+  // contradictory roles or locations are disqualifying evidence.
+  if (
+    (!a.company || !b.company) &&
+    (!a.role || !b.role || a.role === b.role) &&
+    compatibleLocation &&
+    similarity >= 0.95 &&
+    sequenceOverlap >= 0.9 &&
+    lengthRatio >= 0.85 &&
+    a.fingerprint.size >= 60 &&
+    b.fingerprint.size >= 60
+  ) {
     return { level: "repost", confidence: "high", evidence: [`${similarityPct}% identical description`] };
   }
 
   return null;
+}
+
+// A compact primitive dependency for React duplicate scans. It covers the full
+// identity content rather than text lengths, so same-length edits cannot leave a
+// stale duplicate group memoized.
+export function duplicateCandidateKey(rec: DuplicateCandidate): string {
+  const parts = [
+    rec.id,
+    rec.jobUrl,
+    rec.company,
+    rec.role,
+    rec.title,
+    rec.location,
+    rec.rawJobDescription || rec.jobDescription,
+    ...(rec.sourceUrls ?? []).map((entry) => entry?.url),
+    ...(rec.duplicateDismissedIds ?? [])
+  ];
+  let hash = 2166136261;
+  for (const value of parts) {
+    const text = String(value ?? "");
+    for (let index = 0; index < text.length; index += 1) {
+      hash ^= text.charCodeAt(index);
+      hash = Math.imul(hash, 16777619);
+    }
+    hash ^= 0;
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(36);
 }
 
 // Layered duplicate scan of the current job target against stored applications.
@@ -535,6 +683,7 @@ export function groupDuplicateApplications<T extends DuplicateCandidate>(
   const apps = (Array.isArray(applications) ? applications : []).filter((a) => a && typeof a === "object");
   const n = apps.length;
   const sigs = apps.map(buildSignature);
+  const dismissedIds = apps.map((application) => new Set(application.duplicateDismissedIds ?? []));
 
   // Union-find over app indices.
   const parent = apps.map((_, i) => i);
@@ -554,6 +703,13 @@ export function groupDuplicateApplications<T extends DuplicateCandidate>(
   const edges: ({ i: number; j: number } & MatchResult)[] = [];
   for (let i = 0; i < n; i += 1) {
     for (let j = i + 1; j < n; j += 1) {
+      if (
+        apps[i].id &&
+        apps[j].id &&
+        (dismissedIds[i].has(apps[j].id) || dismissedIds[j].has(apps[i].id))
+      ) {
+        continue;
+      }
       const match = matchSignatures(sigs[i], sigs[j]);
       if (match) {
         union(i, j);
