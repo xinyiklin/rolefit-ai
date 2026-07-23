@@ -339,6 +339,12 @@ receives provider credentials. Selecting a different companion site port does
 not rewrite the installed extension configuration or its route target; extension
 imports remain a default-port-only workflow in this phase.
 
+The desktop package stages the extension's fixed static files. On launch, the
+main process materializes them into its app-owned `userData` extension folder,
+because browsers cannot load an unpacked extension from Electron's archive. The
+trusted companion may open only that fixed folder through typed IPC; the
+renderer never receives a filesystem path or chooses files to open.
+
 ## Source ownership
 
 ```text

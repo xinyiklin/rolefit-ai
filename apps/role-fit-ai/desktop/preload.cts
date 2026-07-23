@@ -78,6 +78,8 @@ const desktopApi: RoleFitDesktopApi = Object.freeze({
       RoleFitDesktopIpcChannel.OpenProviderInstallGuide,
       provider
     ) as Promise<void>,
+  openExtensionDirectory: () =>
+    ipcRenderer.invoke(RoleFitDesktopIpcChannel.OpenExtensionDirectory) as Promise<void>,
   openBrowserApp: () =>
     ipcRenderer.invoke(RoleFitDesktopIpcChannel.OpenBrowserApp) as Promise<void>,
   getWorkspaceOverview: () =>

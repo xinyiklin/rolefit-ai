@@ -35,9 +35,6 @@ const SUPPORTED_PROVIDERS = Object.freeze([
 
 const PROVIDER_BY_ID = new Map(SUPPORTED_PROVIDERS.map((provider) => [provider.id, provider]));
 const PROVIDER_VISIBLE_POLL_INTERVAL_MS = 5_000;
-const WORKSPACE_POLL_INTERVAL_MS = 5_000;
-const CONNECTION_POLL_INTERVAL_MS = 5_000;
-const TAB_IDS = Object.freeze(["providers", "workspace", "connection"]);
 const bridge = window.roleFitDesktop;
 const requiredBridgeMethods = Object.freeze([
   "getRuntimeInfo",
@@ -52,55 +49,35 @@ const requiredBridgeMethods = Object.freeze([
   "setCliProviderEnabled",
   "openCliSignInTerminal",
   "openProviderInstallGuide",
-  "openBrowserApp",
-  "getWorkspaceOverview",
-  "backupWorkspaceToFile",
-  "restoreWorkspaceFromFile",
-  "openWorkspaceFolder",
-  "getConnectionStatus"
+  "openExtensionDirectory",
+  "openBrowserApp"
 ]);
 
 const elements = Object.freeze({
   companionRoot: document.querySelector("[data-companion-root]"),
-  bridgeLine: document.getElementById("bridge-line"),
-  bridgeStatus: document.getElementById("bridge-status"),
-  tabList: document.getElementById("companion-tablist"),
-  tabs: Object.freeze({
-    providers: document.getElementById("tab-providers"),
-    workspace: document.getElementById("tab-workspace"),
-    connection: document.getElementById("tab-connection")
-  }),
-  panels: Object.freeze({
-    providers: document.getElementById("panel-providers"),
-    workspace: document.getElementById("panel-workspace"),
-    connection: document.getElementById("panel-connection")
-  }),
-  workspacePath: document.getElementById("workspace-path"),
-  workspaceSummary: document.getElementById("workspace-summary"),
-  openWorkspaceFolder: document.getElementById("open-workspace-folder"),
-  backupWorkspace: document.getElementById("backup-workspace"),
-  restoreWorkspace: document.getElementById("restore-workspace"),
-  workspaceStatus: document.getElementById("workspace-status"),
-  statBaseResume: document.getElementById("stat-base-resume"),
-  statApplications: document.getElementById("stat-applications"),
-  connectionSummary: document.getElementById("connection-summary"),
-  connectionState: document.getElementById("connection-state"),
-  connectionStateText: document.getElementById("connection-state-text"),
-  connectionBrowserTabs: document.getElementById("connection-browser-tabs"),
   sitePortForm: document.getElementById("local-site-port-form"),
   sitePortInput: document.getElementById("local-site-port"),
   sitePortApply: document.getElementById("apply-local-site-port"),
   sitePortStatus: document.getElementById("local-site-port-status"),
   extensionPairingCount: document.getElementById("extension-pairing-count"),
+  extensionPairingPopover: document.getElementById("extension-pairing-popover"),
   extensionRequestList: document.getElementById("extension-request-list"),
   extensionPairingList: document.getElementById("extension-pairing-list"),
   extensionPairingStatus: document.getElementById("extension-pairing-status"),
+  openExtensionDirectory: document.getElementById("open-extension-directory"),
+  overviewSiteOrigin: document.getElementById("overview-site-origin"),
+  overviewProviderSummary: document.getElementById("overview-provider-summary"),
+  overviewExtensionSummary: document.getElementById("overview-extension-summary"),
+  sidebarRuntimeStatus: document.getElementById("sidebar-runtime-status"),
   openRoleFit: document.getElementById("open-rolefit-browser"),
   providerList: document.getElementById("provider-list"),
   providerSummary: document.getElementById("provider-summary"),
   providerAnnouncement: document.getElementById("provider-announcement"),
   refreshProviders: document.getElementById("refresh-providers"),
-  runtimeVersion: document.getElementById("runtime-version")
+  runtimeVersion: document.getElementById("runtime-version"),
+  tabButtons: [...document.querySelectorAll("[data-companion-tab]")],
+  panels: [...document.querySelectorAll("[data-companion-panel]")],
+  tabTargets: [...document.querySelectorAll("[data-tab-target]")]
 });
 
 const pendingProviders = new Set();
@@ -113,18 +90,34 @@ let sitePortApplyPending = false;
 let sitePortConfirmValue = null;
 let extensionPairingSettings = null;
 let extensionPairingPending = false;
-// The selected tab is remembered in memory only; every launch starts on
-// Providers.
-let activeTabId = "providers";
-let workspaceOverview = null;
-let workspaceOverviewLoaded = false;
-let workspaceOverviewGeneration = 0;
-let workspacePollTimer = 0;
-let workspaceOperationPending = false;
-let liveConnectionStatus = null;
-let connectionStatusLoaded = false;
-let connectionStatusGeneration = 0;
-let connectionPollTimer = 0;
+let extensionPairingPopoverOpen = false;
+
+function activateTab(value) {
+  const tab = String(value ?? "").trim();
+  const panel = elements.panels.find((candidate) => candidate.dataset.companionPanel === tab);
+  if (!panel) return;
+  for (const candidate of elements.panels) {
+    const active = candidate === panel;
+    candidate.hidden = !active;
+    candidate.classList.toggle("is-active", active);
+  }
+  for (const button of elements.tabButtons) {
+    const active = button.dataset.companionTab === tab;
+    button.classList.toggle("is-active", active);
+    if (active) button.setAttribute("aria-current", "page");
+    else button.removeAttribute("aria-current");
+  }
+  if (tab !== "extension") setExtensionPairingPopover(false);
+}
+
+function setExtensionPairingPopover(open) {
+  extensionPairingPopoverOpen = Boolean(open);
+  elements.extensionPairingPopover.hidden = !extensionPairingPopoverOpen;
+  elements.extensionPairingCount.setAttribute(
+    "aria-expanded",
+    String(extensionPairingPopoverOpen)
+  );
+}
 
 function hasUsableBridge() {
   return Boolean(
@@ -164,50 +157,6 @@ function createButton(label, action, providerId, className = "provider-card__act
   return button;
 }
 
-function createTerminalButton(providerId) {
-  const button = createButton("Terminal", "terminal-sign-in", providerId, "provider-card__text-action");
-  const arrow = createTextElement("span", "action-arrow", "↗");
-  arrow.setAttribute("aria-hidden", "true");
-  button.append(arrow);
-  return button;
-}
-
-// Remove lives outside the card, in the right-hand spacing, as a trash icon.
-function createRemoveButton(providerId) {
-  const button = document.createElement("button");
-  button.type = "button";
-  button.className = "provider-remove";
-  button.dataset.providerAction = "remove";
-  button.dataset.providerId = providerId;
-  button.disabled = pendingProviders.has(providerId);
-  const provider = PROVIDER_BY_ID.get(providerId);
-  button.setAttribute("aria-label", `Remove ${provider?.name ?? "provider"}`);
-  button.title = "Remove";
-  const NS = "http://www.w3.org/2000/svg";
-  const svg = document.createElementNS(NS, "svg");
-  svg.setAttribute("viewBox", "0 0 24 24");
-  svg.setAttribute("fill", "none");
-  svg.setAttribute("stroke", "currentColor");
-  svg.setAttribute("stroke-width", "1.6");
-  svg.setAttribute("stroke-linecap", "round");
-  svg.setAttribute("stroke-linejoin", "round");
-  svg.setAttribute("aria-hidden", "true");
-  svg.setAttribute("focusable", "false");
-  for (const d of [
-    "M5 7h14",
-    "M9 7V5.5A1.5 1.5 0 0 1 10.5 4h3A1.5 1.5 0 0 1 15 5.5V7",
-    "M7 7l0.9 12.1A1.5 1.5 0 0 0 9.4 20.5h5.2a1.5 1.5 0 0 0 1.5-1.4L17 7",
-    "M10 11v6",
-    "M14 11v6"
-  ]) {
-    const path = document.createElementNS(NS, "path");
-    path.setAttribute("d", d);
-    svg.append(path);
-  }
-  button.append(svg);
-  return button;
-}
-
 function announce(message) {
   elements.providerAnnouncement.textContent = "";
   window.requestAnimationFrame(() => {
@@ -222,21 +171,21 @@ function parseLocalSitePortInput() {
   return Number.isInteger(port) && port >= 1 && port <= 65_535 ? port : null;
 }
 
-// Status lines show state only, and only when there is one: locked ports and
-// saved-setting warnings. The happy path stays empty.
 function currentPortStatus(settings) {
   if (settings.locked) {
     return settings.localSitePort === 5_181
-      ? "Locked by ROLEFIT_DESKTOP_PORT"
-      : "Locked by ROLEFIT_DESKTOP_PORT — extension stays on 5181";
+      ? "Locked by ROLEFIT_DESKTOP_PORT."
+      : "Locked by ROLEFIT_DESKTOP_PORT. Extension imports still use localhost:5181.";
   }
   if (settings.warning === "saved-settings-invalid") {
-    return `Saved port invalid — using ${settings.localSitePort}`;
+    return `Saved setting was invalid. Using ${settings.localSitePort}; apply to replace it.`;
   }
   if (settings.warning === "saved-settings-unreadable") {
-    return `Saved port unreadable — using ${settings.localSitePort}`;
+    return `Saved setting could not be read. Using ${settings.localSitePort}; apply to replace it.`;
   }
-  return "";
+  return settings.localSitePort === 5_181
+    ? "RoleFit opens at localhost:5181."
+    : `RoleFit opens at localhost:${settings.localSitePort}. Browser storage is separate by port; extension imports still use localhost:5181.`;
 }
 
 function updateSitePortControls({ preserveStatus = false } = {}) {
@@ -251,10 +200,13 @@ function updateSitePortControls({ preserveStatus = false } = {}) {
     ? "Confirm & restart"
     : "Apply & restart";
   elements.sitePortInput.setCustomValidity(
-    port === null && elements.sitePortInput.value ? "Enter a port from 1 to 65535." : ""
+    port === null && elements.sitePortInput.value ? "Enter a whole number from 1 to 65535." : ""
   );
   if (!preserveStatus && siteSettings) {
     elements.sitePortStatus.textContent = currentPortStatus(siteSettings);
+  }
+  if (siteSettings) {
+    elements.overviewSiteOrigin.textContent = `localhost:${siteSettings.localSitePort}`;
   }
 }
 
@@ -270,7 +222,7 @@ async function loadLocalSiteSettings() {
     siteSettings = null;
     elements.sitePortInput.disabled = true;
     elements.sitePortApply.disabled = true;
-    elements.sitePortStatus.textContent = "Port setting unavailable";
+    elements.sitePortStatus.textContent = "Port setting unavailable. Restart RoleFit and try again.";
   }
 }
 
@@ -283,16 +235,15 @@ function normalizeExtensionOriginInput(value) {
   return "";
 }
 
-// The heading count is the pairing panel's single state line; the status line
-// below the lists is reserved for action feedback and errors.
-function extensionPairingCountText() {
-  if (!extensionPairingSettings) return "Unavailable";
-  const count = extensionPairingSettings.origins?.length ?? 0;
-  const pendingCount = extensionPairingSettings.pendingOrigins?.length ?? 0;
-  if (pendingCount > 0) return `${pendingCount} awaiting approval`;
-  if (count > 0) return `${count} paired`;
-  if (siteSettings && siteSettings.localSitePort !== 5_181) return "Needs port 5181";
-  return "Not paired";
+function extensionPairingMessage() {
+  if (!siteSettings) return "Local site settings are unavailable.";
+  if (siteSettings.localSitePort !== 5_181) return "Set the local site port to 5181 before pairing.";
+  const count = extensionPairingSettings?.origins?.length ?? 0;
+  const pendingCount = extensionPairingSettings?.pendingOrigins?.length ?? 0;
+  if (pendingCount > 0) return "Approve the extension request to enable job imports.";
+  return count === 0
+    ? "Open the RoleFit browser extension once to request access."
+    : `${count} browser extension${count === 1 ? "" : "s"} paired.`;
 }
 
 function renderExtensionPairings() {
@@ -330,12 +281,25 @@ function renderExtensionPairings() {
   }
   elements.extensionRequestList.replaceChildren(pendingFragment);
   elements.extensionPairingList.replaceChildren(pairedFragment);
-  elements.extensionPairingCount.textContent = extensionPairingCountText();
+  elements.extensionPairingCount.textContent = pendingOrigins.length > 0
+    ? `${pendingOrigins.length} awaiting approval`
+    : origins.length > 0
+      ? `${origins.length} paired`
+      : "Not paired";
+  elements.extensionPairingCount.setAttribute(
+    "aria-label",
+    `${elements.extensionPairingCount.textContent}. Manage extension access.`
+  );
+  elements.overviewExtensionSummary.textContent = pendingOrigins.length > 0
+    ? `${pendingOrigins.length} approval${pendingOrigins.length === 1 ? "" : "s"} waiting`
+    : origins.length > 0
+      ? `${origins.length} extension${origins.length === 1 ? "" : "s"} paired`
+      : "Browser extension not paired";
 }
 
 function updateExtensionPairingControls({ preserveStatus = false } = {}) {
   renderExtensionPairings();
-  if (!preserveStatus) elements.extensionPairingStatus.textContent = "";
+  if (!preserveStatus) elements.extensionPairingStatus.textContent = extensionPairingMessage();
 }
 
 async function loadExtensionPairingSettings() {
@@ -350,27 +314,29 @@ async function loadExtensionPairingSettings() {
   } catch {
     extensionPairingSettings = null;
     elements.extensionPairingCount.textContent = "Unavailable";
+    elements.extensionPairingCount.setAttribute("aria-label", "Extension access unavailable");
     elements.extensionRequestList.replaceChildren();
     elements.extensionPairingList.replaceChildren();
-    elements.extensionPairingStatus.textContent = "Pairing unavailable — restart the companion";
+    elements.extensionPairingStatus.textContent = "Extension pairing unavailable. Restart RoleFit and try again.";
+    elements.overviewExtensionSummary.textContent = "Extension pairing unavailable";
   }
 }
 
 function extensionPairingErrorMessage(error) {
   const message = error instanceof Error ? error.message : String(error);
-  if (message.includes("exact extension origin")) return "Origin must match the extension popup";
-  if (message.includes("up to")) return "Pairing limit reached";
-  if (message.includes("standalone RoleFit server")) return "Stop the standalone server first";
-  if (message.includes("port 5181")) return "Pairing needs port 5181";
-  if (message.includes("already restarting")) return "Companion already restarting";
-  return "Pairing could not be saved";
+  if (message.includes("exact extension origin")) return message;
+  if (message.includes("up to")) return message;
+  if (message.includes("standalone RoleFit server")) return message;
+  if (message.includes("port 5181")) return message;
+  if (message.includes("already restarting")) return message;
+  return "The extension pairing could not be saved. Check app permissions and try again.";
 }
 
 function localSitePortErrorMessage(error) {
   const message = error instanceof Error ? error.message : String(error);
-  if (message.includes("already in use")) return "Port already in use";
-  if (message.includes("ROLEFIT_DESKTOP_PORT")) return "Remove ROLEFIT_DESKTOP_PORT first";
-  return "Port could not be saved";
+  if (message.includes("already in use")) return "That port is already in use. Choose another port.";
+  if (message.includes("ROLEFIT_DESKTOP_PORT")) return "Remove ROLEFIT_DESKTOP_PORT before changing this setting.";
+  return "The port could not be saved. Check app permissions and try again.";
 }
 
 function connectionStatus(provider, record) {
@@ -435,9 +401,15 @@ function apiKeyForm(provider, replacing) {
 function renderApiActions(provider, record, actions) {
   if (!record?.configured || replacingApiProviders.has(provider.id)) {
     actions.append(apiKeyForm(provider, replacingApiProviders.has(provider.id)));
+    if (record?.configured) {
+      actions.append(createButton("Remove", "remove", provider.id, "provider-card__text-action is-danger"));
+    }
     return;
   }
-  actions.append(createButton("Replace key", "replace-key", provider.id));
+  actions.append(
+    createButton("Replace key", "replace-key", provider.id),
+    createButton("Remove", "remove", provider.id, "provider-card__text-action is-danger")
+  );
 }
 
 function renderCliActions(provider, record, actions) {
@@ -452,27 +424,21 @@ function renderCliActions(provider, record, actions) {
   if (record.installed === false) {
     actions.append(
       createButton("Install guide", "install", provider.id, "provider-card__action provider-card__action--primary"),
-      createButton("Check again", "refresh", provider.id, "provider-card__text-action")
+      createButton("Check again", "refresh", provider.id, "provider-card__text-action"),
+      createButton("Remove", "remove", provider.id, "provider-card__text-action is-danger")
     );
     return;
   }
 
-  // A manual CLI (no machine-readable auth status) can never be confirmed
-  // signed in, so it always offers the guide; a managed CLI offers it only
-  // while it is not yet ready. Terminal sits to the left of the right-aligned
-  // primary; Remove is a trash icon outside the card (see renderProviders).
-  const manual = record.setupFlow === "manual-login";
-  if (manual || !record.ready) {
-    actions.append(
-      createTerminalButton(provider.id),
-      createButton(
-        "Sign-in guide",
-        "install",
-        provider.id,
-        "provider-card__action provider-card__action--primary"
-      )
-    );
+  if (!record.ready) {
+    actions.append(createButton(
+      "Sign in",
+      "terminal-sign-in",
+      provider.id,
+      "provider-card__action provider-card__action--primary"
+    ));
   }
+  actions.append(createButton("Remove", "remove", provider.id, "provider-card__text-action is-danger"));
 }
 
 function renderProviders() {
@@ -488,12 +454,9 @@ function renderProviders() {
     if (record?.ready) readyCount += 1;
 
     const item = document.createElement("li");
-    item.className = `provider-row${isInitialRender ? " is-entering" : ""}`;
+    item.className = `provider-card${isInitialRender ? " is-entering" : ""}`;
     item.dataset.providerId = provider.id;
-
-    const card = document.createElement("div");
-    card.className = "provider-card";
-    card.dataset.status = status.key;
+    item.dataset.status = status.key;
 
     const body = document.createElement("div");
     body.className = "provider-card__body";
@@ -507,19 +470,13 @@ function renderProviders() {
       heading,
       createTextElement("span", "provider-card__state", status.label)
     );
-    card.append(body);
+    item.append(body);
 
     const actions = document.createElement("div");
     actions.className = "provider-card__actions";
     if (provider.kind === "api") renderApiActions(provider, record, actions);
     else renderCliActions(provider, record, actions);
-    card.append(actions);
-    item.append(card);
-
-    // Remove is a trash icon in the right-hand spacing, outside the card.
-    if (record?.configured) {
-      item.append(createRemoveButton(provider.id));
-    }
+    item.append(actions);
     fragment.append(item);
   });
 
@@ -527,8 +484,12 @@ function renderProviders() {
   elements.providerList.dataset.rendered = "true";
   elements.providerList.setAttribute("aria-busy", "false");
   elements.providerSummary.textContent = configuredCount === 0
-    ? "No providers added yet"
-    : `${configuredCount} added · ${readyCount} ready`;
+    ? "No providers added yet. Add a CLI or API provider to begin."
+    : `${configuredCount} added · ${readyCount} ready for RoleFit.`;
+  elements.overviewProviderSummary.textContent = configuredCount === 0
+    ? "No providers connected"
+    : `${readyCount} ready of ${configuredCount} connected`;
+  return false;
 }
 
 function renderCheckingProviders() {
@@ -587,7 +548,8 @@ async function refreshProviders({ announceResult = true } = {}) {
     if (generation !== refreshGeneration) return;
     elements.companionRoot.dataset.status = "error";
     renderProviders();
-    elements.providerSummary.textContent = "Provider status check failed";
+    elements.providerSummary.textContent = "Provider status could not be checked. Try again.";
+    elements.overviewProviderSummary.textContent = "Provider status unavailable";
     if (announceResult) announce("Provider status could not be checked.");
   } finally {
     if (generation === refreshGeneration) {
@@ -659,287 +621,32 @@ async function openCliSignInTerminal(providerId) {
   }
 }
 
-function setActiveTab(tabId, { focusTab = false } = {}) {
-  if (!TAB_IDS.includes(tabId)) return;
-  activeTabId = tabId;
-  for (const id of TAB_IDS) {
-    const selected = id === tabId;
-    elements.tabs[id].setAttribute("aria-selected", selected ? "true" : "false");
-    elements.tabs[id].tabIndex = selected ? 0 : -1;
-    elements.panels[id].hidden = !selected;
-  }
-  if (focusTab) elements.tabs[tabId].focus();
-  // The ~5s workspace/connection polls run only while their tab is active;
-  // leaving a tab stops its poll until the next activation refresh.
-  if (tabId === "workspace") {
-    if (hasUsableBridge()) void refreshWorkspaceOverview();
-  } else {
-    window.clearTimeout(workspacePollTimer);
-    workspacePollTimer = 0;
-  }
-  if (tabId === "connection") {
-    if (hasUsableBridge()) void refreshConnectionStatus();
-  } else {
-    window.clearTimeout(connectionPollTimer);
-    connectionPollTimer = 0;
-  }
-}
-
-function statCount(value) {
-  return typeof value === "number" && Number.isInteger(value) && value >= 0
-    ? String(value)
-    : "—";
-}
-
-function renderWorkspaceOverview() {
-  const overview = workspaceOverview;
-  const overviewUsable = Boolean(overview) && hasUsableBridge();
-  elements.workspaceSummary.textContent = overviewUsable
-    ? overview.workspaceTransferReady
-      ? "Ready to back up"
-      : overview.serverReady
-        ? "Restart companion to transfer"
-        : "Local server not running"
-    : workspaceOverviewLoaded
-      ? "Workspace unavailable"
-      : "Checking workspace…";
-  elements.workspacePath.textContent = overview
-    ? overview.workspaceDisplayPath
-    : workspaceOverviewLoaded
-      ? "Unavailable"
-      : "Checking…";
-  elements.workspacePath.title = overview ? overview.workspaceDisplayPath : "";
-  elements.openWorkspaceFolder.disabled = !overviewUsable || workspaceOperationPending;
-
-  elements.statBaseResume.textContent = overviewUsable
-    ? overview.hasBaseResume === true ? "✓" : "—"
-    : "—";
-  elements.statApplications.textContent = overviewUsable ? statCount(overview.applicationCount) : "—";
-
-  // The Connection tab owns the visible session indicator; the overview's tab
-  // count still gates Restore here so a live Drafting Desk cannot be replaced.
-  const activeTabs = overview && typeof overview.activeBrowserTabs === "number" &&
-    Number.isInteger(overview.activeBrowserTabs) && overview.activeBrowserTabs >= 0
-    ? overview.activeBrowserTabs
-    : null;
-  const busy = workspaceOperationPending || !overviewUsable || !overview?.workspaceTransferReady;
-  elements.backupWorkspace.disabled = busy;
-  const restoreBlocked = activeTabs !== null && activeTabs > 0;
-  elements.restoreWorkspace.disabled = busy || restoreBlocked;
-  if (restoreBlocked) {
-    elements.restoreWorkspace.title = "Close the open RoleFit browser tabs before restoring.";
-  } else {
-    elements.restoreWorkspace.title =
-      overviewUsable && !overview?.workspaceTransferReady
-        ? "Restart the companion so it owns the local server before transferring a workspace."
-        : "Replaces the saved workspace; the previous one is kept as a local safety copy";
-  }
-  elements.backupWorkspace.title = overviewUsable && !overview?.workspaceTransferReady
-    ? "Restart the companion so it owns the local server before transferring a workspace."
-    : "Save a portable copy of the app-managed workspace";
-}
-
-function scheduleWorkspacePoll() {
-  window.clearTimeout(workspacePollTimer);
-  workspacePollTimer = 0;
-  if (!hasUsableBridge() || activeTabId !== "workspace" || document.visibilityState === "hidden") {
-    return;
-  }
-  workspacePollTimer = window.setTimeout(() => {
-    void refreshWorkspaceOverview();
-  }, WORKSPACE_POLL_INTERVAL_MS);
-}
-
-async function refreshWorkspaceOverview() {
-  if (!hasUsableBridge()) return;
-  // Mirror the provider polling discipline: clear the pending timer, let the
-  // owning refresh settle, then schedule exactly one successor.
-  window.clearTimeout(workspacePollTimer);
-  workspacePollTimer = 0;
-  const generation = ++workspaceOverviewGeneration;
-  try {
-    const overview = await bridge.getWorkspaceOverview();
-    if (generation !== workspaceOverviewGeneration) return;
-    if (!overview || typeof overview !== "object" ||
-        typeof overview.workspaceDisplayPath !== "string" ||
-        !overview.workspaceDisplayPath) {
-      throw new Error("Invalid workspace overview.");
-    }
-    workspaceOverview = overview;
-  } catch {
-    if (generation !== workspaceOverviewGeneration) return;
-    workspaceOverview = null;
-  } finally {
-    if (generation === workspaceOverviewGeneration) {
-      workspaceOverviewLoaded = true;
-      renderWorkspaceOverview();
-      scheduleWorkspacePoll();
-    }
-  }
-}
-
-function renderConnectionStatus() {
-  const status = liveConnectionStatus;
-  if (!status) {
-    elements.connectionState.dataset.state = connectionStatusLoaded ? "error" : "unknown";
-    elements.connectionStateText.textContent = connectionStatusLoaded
-      ? "Status unavailable"
-      : "Checking…";
-    elements.connectionBrowserTabs.textContent = "—";
-    elements.connectionSummary.textContent = connectionStatusLoaded
-      ? "Status unavailable"
-      : "Checking the local site…";
-    return;
-  }
-  let state = "unknown";
-  let text = "Starting…";
-  let summary = "Starting…";
-  if (status.serverState === "owned") {
-    state = "ok";
-    text = `Serving ${status.siteUrl} — this companion`;
-    summary = "Local server running";
-  } else if (status.serverState === "reused") {
-    state = "warn";
-    text = `Already running at ${status.port} — another RoleFit`;
-    summary = "Standalone server detected";
-  } else if (status.serverState === "unreachable") {
-    state = "error";
-    text = `Port ${status.port} — not responding`;
-    summary = "Server not responding";
-  }
-  elements.connectionState.dataset.state = state;
-  elements.connectionStateText.textContent = text;
-  elements.connectionSummary.textContent = summary;
-  const tabs = typeof status.activeBrowserTabs === "number" &&
-    Number.isInteger(status.activeBrowserTabs) && status.activeBrowserTabs >= 0
-    ? status.activeBrowserTabs
-    : null;
-  elements.connectionBrowserTabs.textContent = tabs === null
-    ? "Browser tabs unknown"
-    : tabs === 0
-      ? "No browser tabs connected"
-      : `${tabs} browser tab${tabs === 1 ? "" : "s"} connected`;
-}
-
-function scheduleConnectionPoll() {
-  window.clearTimeout(connectionPollTimer);
-  connectionPollTimer = 0;
-  if (!hasUsableBridge() || activeTabId !== "connection" || document.visibilityState === "hidden") {
-    return;
-  }
-  connectionPollTimer = window.setTimeout(() => {
-    void refreshConnectionStatus();
-  }, CONNECTION_POLL_INTERVAL_MS);
-}
-
-async function refreshConnectionStatus() {
-  if (!hasUsableBridge()) return;
-  window.clearTimeout(connectionPollTimer);
-  connectionPollTimer = 0;
-  const generation = ++connectionStatusGeneration;
-  try {
-    const status = await bridge.getConnectionStatus();
-    if (generation !== connectionStatusGeneration) return;
-    if (!status || typeof status !== "object" || typeof status.serverState !== "string") {
-      throw new Error("Invalid connection status.");
-    }
-    liveConnectionStatus = status;
-  } catch {
-    if (generation !== connectionStatusGeneration) return;
-    liveConnectionStatus = null;
-  } finally {
-    if (generation === connectionStatusGeneration) {
-      connectionStatusLoaded = true;
-      renderConnectionStatus();
-      scheduleConnectionPoll();
-    }
-  }
-}
-
-async function runWorkspaceTransfer(kind) {
-  if (!hasUsableBridge() || workspaceOperationPending) return;
-  workspaceOperationPending = true;
-  renderWorkspaceOverview();
-  elements.workspaceStatus.textContent = kind === "backup"
-    ? "Backing up…"
-    : "Restoring…";
-  try {
-    const result = kind === "backup"
-      ? await bridge.backupWorkspaceToFile()
-      : await bridge.restoreWorkspaceFromFile();
-    const status = result && typeof result === "object" ? result.status : "";
-    if (kind === "backup" && status === "saved") {
-      const fileName = typeof result.filePath === "string" ? result.filePath.trim() : "";
-      elements.workspaceStatus.textContent = fileName
-        ? `Backup saved to ${fileName}`
-        : "Backup saved.";
-    } else if (kind === "restore" && status === "restored") {
-      elements.workspaceStatus.textContent = "Workspace restored — reopen RoleFit in your browser";
-    } else if (status === "cancelled") {
-      elements.workspaceStatus.textContent = kind === "backup"
-        ? "Backup cancelled."
-        : "Restore cancelled.";
-    } else {
-      const message = status === "error" && typeof result.message === "string"
-        ? result.message.trim()
-        : "";
-      elements.workspaceStatus.textContent = message ||
-        (kind === "backup"
-          ? "The workspace could not be backed up."
-          : "The workspace could not be restored.");
-    }
-  } catch {
-    elements.workspaceStatus.textContent = kind === "backup"
-      ? "The workspace could not be backed up."
-      : "The workspace could not be restored.";
-  } finally {
-    workspaceOperationPending = false;
-    await refreshWorkspaceOverview();
-  }
-}
-
-async function openWorkspaceFolder() {
-  if (!hasUsableBridge() || workspaceOperationPending) return;
-  elements.openWorkspaceFolder.disabled = true;
-  try {
-    await bridge.openWorkspaceFolder();
-  } catch {
-    elements.workspaceStatus.textContent = "The workspace folder could not be opened.";
-  } finally {
-    renderWorkspaceOverview();
-  }
-}
-
 async function loadRuntimeInfo() {
   try {
     const info = await bridge.getRuntimeInfo();
     const version = info && typeof info === "object" ? String(info.appVersion ?? "").trim() : "";
-    elements.runtimeVersion.textContent = version ? `RoleFit ${version} / local` : "RoleFit companion / local";
+    elements.runtimeVersion.textContent = version ? `RoleFit ${version}` : "RoleFit";
   } catch {
-    elements.runtimeVersion.textContent = "RoleFit companion / local";
+    elements.runtimeVersion.textContent = "RoleFit";
   }
 }
 
 function initializeUnavailableState() {
   elements.companionRoot.dataset.status = "error";
-  elements.bridgeLine.classList.add("is-error");
-  elements.bridgeStatus.textContent = "Companion bridge unavailable";
   elements.openRoleFit.disabled = true;
   elements.refreshProviders.disabled = true;
   elements.sitePortInput.disabled = true;
   elements.sitePortApply.disabled = true;
-  elements.sitePortStatus.textContent = "Port setting unavailable";
+  elements.sitePortStatus.textContent = "Port setting unavailable.";
   elements.extensionPairingCount.textContent = "Unavailable";
-  elements.runtimeVersion.textContent = "Companion unavailable";
-  workspaceOverview = null;
-  workspaceOverviewLoaded = true;
-  renderWorkspaceOverview();
-  elements.workspaceStatus.textContent = "Workspace unavailable — restart the companion";
-  liveConnectionStatus = null;
-  connectionStatusLoaded = true;
-  renderConnectionStatus();
+  elements.extensionPairingCount.setAttribute("aria-label", "Extension access unavailable");
+  elements.extensionPairingStatus.textContent = "Extension pairing unavailable.";
+  elements.overviewExtensionSummary.textContent = "Extension pairing unavailable";
+  elements.overviewProviderSummary.textContent = "Provider status unavailable";
+  elements.sidebarRuntimeStatus.textContent = "Service unavailable";
+  elements.runtimeVersion.textContent = "Local service unavailable";
   renderProviders();
-  elements.providerSummary.textContent = "Restart the companion to manage providers";
+  elements.providerSummary.textContent = "Restart RoleFit to manage providers.";
 }
 
 elements.providerList.addEventListener("submit", (event) => {
@@ -987,8 +694,8 @@ elements.providerList.addEventListener("click", (event) => {
     void runProviderAction(
       providerId,
       () => bridge.openProviderInstallGuide(providerId),
-      "Official setup docs (install and sign-in) opened in your browser.",
-      "The official setup docs could not be opened."
+      "Official installation instructions opened in your browser.",
+      "The official installation instructions could not be opened."
     );
   } else if (action === "refresh") {
     void refreshProviders({ announceResult: true });
@@ -999,54 +706,41 @@ elements.refreshProviders.addEventListener("click", () => {
   if (hasUsableBridge()) void refreshProviders({ announceResult: true });
 });
 
+for (const button of elements.tabButtons) {
+  button.addEventListener("click", () => activateTab(button.dataset.companionTab));
+}
+
+for (const button of elements.tabTargets) {
+  button.addEventListener("click", () => activateTab(button.dataset.tabTarget));
+}
+
+elements.extensionPairingCount.addEventListener("click", () => {
+  setExtensionPairingPopover(!extensionPairingPopoverOpen);
+});
+
+document.addEventListener("click", (event) => {
+  if (!extensionPairingPopoverOpen || !(event.target instanceof Node)) return;
+  if (elements.extensionPairingCount.contains(event.target) ||
+      elements.extensionPairingPopover.contains(event.target)) return;
+  setExtensionPairingPopover(false);
+});
+
+document.addEventListener("keydown", (event) => {
+  if (event.key !== "Escape" || !extensionPairingPopoverOpen) return;
+  setExtensionPairingPopover(false);
+  elements.extensionPairingCount.focus();
+});
+
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "hidden") {
     window.clearTimeout(pollTimer);
     pollTimer = 0;
-    window.clearTimeout(workspacePollTimer);
-    workspacePollTimer = 0;
-    window.clearTimeout(connectionPollTimer);
-    connectionPollTimer = 0;
     return;
   }
   if (hasUsableBridge()) {
     void loadExtensionPairingSettings();
     void refreshProviders({ announceResult: false });
-    if (activeTabId === "workspace") void refreshWorkspaceOverview();
-    if (activeTabId === "connection") void refreshConnectionStatus();
   }
-});
-
-elements.tabList.addEventListener("click", (event) => {
-  const tab = event.target instanceof Element
-    ? event.target.closest("[role='tab']")
-    : null;
-  if (!(tab instanceof HTMLButtonElement)) return;
-  setActiveTab(tab.dataset.tabId ?? "");
-});
-
-elements.tabList.addEventListener("keydown", (event) => {
-  const currentIndex = TAB_IDS.indexOf(activeTabId);
-  let nextIndex = -1;
-  if (event.key === "ArrowRight") nextIndex = (currentIndex + 1) % TAB_IDS.length;
-  else if (event.key === "ArrowLeft") nextIndex = (currentIndex + TAB_IDS.length - 1) % TAB_IDS.length;
-  else if (event.key === "Home") nextIndex = 0;
-  else if (event.key === "End") nextIndex = TAB_IDS.length - 1;
-  if (nextIndex === -1) return;
-  event.preventDefault();
-  setActiveTab(TAB_IDS[nextIndex], { focusTab: true });
-});
-
-elements.openWorkspaceFolder.addEventListener("click", () => {
-  void openWorkspaceFolder();
-});
-
-elements.backupWorkspace.addEventListener("click", () => {
-  void runWorkspaceTransfer("backup");
-});
-
-elements.restoreWorkspace.addEventListener("click", () => {
-  void runWorkspaceTransfer("restore");
 });
 
 elements.sitePortInput.addEventListener("input", () => {
@@ -1055,10 +749,10 @@ elements.sitePortInput.addEventListener("input", () => {
   const port = parseLocalSitePortInput();
   updateSitePortControls({ preserveStatus: true });
   elements.sitePortStatus.textContent = port === null
-    ? "Enter a port from 1 to 65535"
-    : port === siteSettings.localSitePort
+    ? "Enter a whole number from 1 to 65535."
+    : port === siteSettings.localSitePort && siteSettings.warning === null
       ? currentPortStatus(siteSettings)
-      : "";
+      : `Apply to restart RoleFit at localhost:${port}.`;
 });
 
 elements.extensionRequestList.addEventListener("click", async (event) => {
@@ -1070,11 +764,11 @@ elements.extensionRequestList.addEventListener("click", async (event) => {
   if (!origin) return;
   extensionPairingPending = true;
   updateExtensionPairingControls({ preserveStatus: true });
-  elements.extensionPairingStatus.textContent = "Approving…";
+  elements.extensionPairingStatus.textContent = "Approving extension…";
   try {
     extensionPairingSettings = await bridge.saveExtensionOrigin(origin);
     updateExtensionPairingControls({ preserveStatus: true });
-    elements.extensionPairingStatus.textContent = "Paired — restarting…";
+    elements.extensionPairingStatus.textContent = "Paired. Restarting the local service…";
   } catch (error) {
     extensionPairingPending = false;
     updateExtensionPairingControls({ preserveStatus: true });
@@ -1091,11 +785,11 @@ elements.extensionPairingList.addEventListener("click", async (event) => {
   if (!origin) return;
   extensionPairingPending = true;
   updateExtensionPairingControls({ preserveStatus: true });
-  elements.extensionPairingStatus.textContent = "Removing…";
+  elements.extensionPairingStatus.textContent = "Removing pairing…";
   try {
     extensionPairingSettings = await bridge.removeExtensionOrigin(origin);
     updateExtensionPairingControls({ preserveStatus: true });
-    elements.extensionPairingStatus.textContent = "Removed — restarting…";
+    elements.extensionPairingStatus.textContent = "Removed. Restarting the local service…";
   } catch (error) {
     extensionPairingPending = false;
     updateExtensionPairingControls({ preserveStatus: true });
@@ -1108,28 +802,29 @@ elements.sitePortForm.addEventListener("submit", async (event) => {
   if (!hasUsableBridge() || !siteSettings || siteSettings.locked || sitePortApplyPending) return;
   const port = parseLocalSitePortInput();
   if (port === null) {
-    elements.sitePortInput.setCustomValidity("Enter a port from 1 to 65535.");
-    elements.sitePortStatus.textContent = "Enter a port from 1 to 65535";
+    elements.sitePortInput.setCustomValidity("Enter a whole number from 1 to 65535.");
+    elements.sitePortStatus.textContent = "Enter a whole number from 1 to 65535.";
     elements.sitePortInput.focus();
     return;
   }
   if (port !== siteSettings.localSitePort && sitePortConfirmValue !== port) {
     sitePortConfirmValue = port;
     updateSitePortControls({ preserveStatus: true });
-    elements.sitePortStatus.textContent = "Press Apply again to confirm";
+    elements.sitePortStatus.textContent =
+      "Changing ports uses separate browser storage. Extension imports remain on localhost:5181.";
     return;
   }
 
   sitePortApplyPending = true;
   updateSitePortControls({ preserveStatus: true });
-  elements.sitePortStatus.textContent = "Checking port…";
+  elements.sitePortStatus.textContent = "Checking port availability…";
   try {
     siteSettings = await bridge.applyLocalSitePort(port);
     elements.sitePortInput.value = String(siteSettings.localSitePort);
     updateSitePortControls({ preserveStatus: true });
     elements.sitePortInput.disabled = true;
     elements.sitePortApply.disabled = true;
-    elements.sitePortStatus.textContent = `Saved — restarting on ${port}…`;
+    elements.sitePortStatus.textContent = `Saved. Restarting at localhost:${port}…`;
     updateExtensionPairingControls();
   } catch (error) {
     sitePortApplyPending = false;
@@ -1147,16 +842,28 @@ elements.openRoleFit.addEventListener("click", async () => {
     await bridge.openBrowserApp();
     announce("RoleFit opened in your default browser.");
   } catch {
-    announce("RoleFit could not be opened. Keep the companion running and try again.");
+    announce("RoleFit could not be opened. Keep the desktop app running and try again.");
   } finally {
     elements.openRoleFit.disabled = false;
   }
 });
 
+elements.openExtensionDirectory.addEventListener("click", async () => {
+  if (!hasUsableBridge()) return;
+  elements.openExtensionDirectory.disabled = true;
+  try {
+    await bridge.openExtensionDirectory();
+    announce("Opened the bundled browser-extension folder.");
+  } catch {
+    announce("The browser-extension folder could not be opened. Restart RoleFit and try again.");
+  } finally {
+    elements.openExtensionDirectory.disabled = false;
+  }
+});
+
 renderCheckingProviders();
 if (hasUsableBridge()) {
-  elements.bridgeLine.classList.add("is-ready");
-  elements.bridgeStatus.textContent = "Companion ready";
+  elements.sidebarRuntimeStatus.textContent = "Service ready";
   void loadRuntimeInfo();
   void loadLocalSiteSettings();
   void loadExtensionPairingSettings();

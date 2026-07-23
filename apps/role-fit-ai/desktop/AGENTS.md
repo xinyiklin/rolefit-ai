@@ -109,7 +109,8 @@ Applies to `apps/role-fit-ai/desktop/` and `tsconfig.desktop.json`.
   `localStorage`; it does not migrate browser state. The extension remains
   fixed to `5181`, so a custom port is direct-browser-only. Deny every renderer
   `window.open`; only typed IPC may reach main-owned external targets: the
-  selected browser origin and the exact official CLI installation URLs.
+  selected browser origin, the exact official CLI installation URLs, and the
+  fixed app-owned unpacked browser-extension directory.
 - Validate every IPC call against the exact companion `webContents`, main frame,
   and local `file:` URL. Expose fixed methods only; never expose `ipcRenderer`,
   generic channel names, generic send/invoke/listener methods, or renderer-

@@ -250,7 +250,11 @@ posting, while other open tabs continue their current jobs; the app also shows
 a small read-only "other sessions" card when another tab is active. The
 extension never reads the base resume or produces a fit judgment.
 
-Load the unpacked extension from `apps/role-fit-ai/extension/`:
+The installed desktop companion includes a fixed unpacked extension folder. In
+the companion, open **Browser extension** and choose **Open extension folder**;
+use that folder when your browser asks where to load the extension. Keep the
+folder in place after loading it. Source contributors can instead use
+`apps/role-fit-ai/extension/`:
 
 - **Chrome / Edge** — open `chrome://extensions`, enable **Developer mode**, click **Load unpacked**, and select the `extension/` folder.
 - **Firefox** — open `about:debugging#/runtime/this-firefox`, click **Load Temporary Add-on…**, and select `extension/manifest.json`.

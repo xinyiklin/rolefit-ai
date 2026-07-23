@@ -22,7 +22,7 @@
     />
     <meta
       property="og:image:alt"
-      content="RoleFit AI workbench with the resume editor, local companion, and application tracker"
+      content="RoleFit AI resume editor and application tracker"
     />
     <meta name="twitter:card" content="summary_large_image" />
     <meta
@@ -84,19 +84,40 @@
         <figure class="app-frame app-frame--hero">
           <div class="app-frame__bar" aria-hidden="true">
             <span></span><span></span><span></span>
-            <strong>RoleFit AI desktop</strong>
+            <strong>RoleFit AI companion</strong>
           </div>
-          <img
-            src="/assets/desktop-app.png"
-            alt="RoleFit AI desktop companion showing the local provider connections panel, with the three CLI and two API providers ready to add"
-            width="744"
-            height="521"
-            fetchpriority="high"
-          />
+          <div class="companion-preview" aria-hidden="true">
+            <aside class="companion-preview__nav">
+              <div class="companion-preview__brand"><b>R</b><span>RoleFit AI</span></div>
+              <span class="companion-preview__nav-label">Companion</span>
+              <span class="companion-preview__nav-item is-active">Overview</span>
+              <span class="companion-preview__nav-item">Providers</span>
+              <span class="companion-preview__nav-item">Browser extension</span>
+              <span class="companion-preview__nav-item">Settings</span>
+              <small>Local only</small>
+            </aside>
+            <section class="companion-preview__main">
+              <div class="companion-preview__topline"><span>Local workspace</span><strong><i></i> Ready</strong></div>
+              <div class="companion-preview__headline">
+                <p>Your workbench is ready.</p>
+                <span>Manage AI access locally, then open RoleFit in your browser.</span>
+              </div>
+              <div class="companion-preview__providers">
+                <div><b>Claude Code</b><span><i></i> Connected</span></div>
+                <div><b>Codex</b><span><i></i> Connected</span></div>
+                <div><b>OpenAI API</b><span class="is-muted">Add when needed</span></div>
+              </div>
+              <div class="companion-preview__launch">
+                <div><span>Workspaces stay on this device</span><strong>localhost:5181</strong></div>
+                <b>Open RoleFit <em>→</em></b>
+              </div>
+            </section>
+          </div>
+          <figcaption class="visually-hidden">RoleFit AI companion overview with local provider connections and a local workspace launch control.</figcaption>
         </figure>
       </section>
 
-      <section class="proof-strip section-shell" aria-label="RoleFit product facts" data-reveal>
+      <section class="proof-strip section-shell" aria-label="RoleFit product facts">
         <div><span>workspace</span><strong>Device-local</strong></div>
         <div><span>providers</span><strong>3 CLIs + 2 APIs</strong></div>
         <div><span>document</span><strong>Editor = export</strong></div>
@@ -104,7 +125,7 @@
       </section>
 
       <section class="product section-shell" id="product" aria-labelledby="product-title">
-        <header class="section-heading" data-reveal>
+        <header class="section-heading">
           <div>
             <p class="eyebrow">The working product</p>
             <h2 id="product-title">One application, kept in one place.</h2>
@@ -115,7 +136,7 @@
           </p>
         </header>
 
-        <div class="surface-grid" data-reveal>
+        <div class="surface-grid">
           <article class="surface-card surface-card--editor">
             <div class="surface-card__copy">
               <span>01 · draft + review</span>
@@ -157,7 +178,7 @@
           </article>
         </div>
 
-        <div class="job-loop" role="group" aria-label="RoleFit application workflow" data-reveal>
+        <div class="job-loop" role="group" aria-label="RoleFit application workflow">
           <div><span>input</span><strong>Job description</strong><small>Paste or import the role.</small></div>
           <div><span>draft</span><strong>Grounded edits</strong><small>Keep claims tied to evidence.</small></div>
           <div><span>verify</span><strong>Fit review</strong><small>See gaps and unsupported risk.</small></div>
@@ -167,7 +188,7 @@
 
       <section class="local-first" id="local-first" aria-labelledby="local-first-title">
         <div class="section-shell local-first__inner">
-          <header class="section-heading section-heading--inverse" data-reveal>
+          <header class="section-heading section-heading--inverse">
             <div>
               <p class="eyebrow">Runtime boundary</p>
               <h2 id="local-first-title">Your machine runs RoleFit AI.</h2>
@@ -178,7 +199,7 @@
             </p>
           </header>
 
-          <div class="boundary-grid" data-reveal>
+          <div class="boundary-grid">
             <article>
               <span>stays local</span>
               <h3>Workspace and credentials</h3>
@@ -199,14 +220,14 @@
             </article>
           </div>
 
-          <div class="runtime-line" role="group" aria-label="RoleFit local runtime flow" data-reveal>
+          <div class="runtime-line" role="group" aria-label="RoleFit local runtime flow">
             <span>RoleFit AI</span><i aria-hidden="true"></i><span>localhost browser</span><i aria-hidden="true"></i><span>your provider, on request</span>
           </div>
         </div>
       </section>
 
       <section class="downloads section-shell" id="download" aria-labelledby="download-title">
-        <header class="section-heading downloads__heading" data-reveal>
+        <header class="section-heading downloads__heading">
           <div>
             <p class="eyebrow" id="release-download-label">Desktop downloads</p>
             <h2 id="download-title">Install RoleFit AI.</h2>
@@ -223,7 +244,7 @@
           </div>
         </header>
 
-        <div class="download-list" role="list" aria-label="RoleFit AI downloads" data-reveal>
+        <div class="download-list" role="list" aria-label="RoleFit AI downloads">
           <article class="download-row" role="listitem" data-download-target="macos-arm64">
             <div class="download-row__platform"><span>macOS</span><strong>Apple silicon</strong></div>
             <p>M1 or newer</p>
@@ -250,7 +271,7 @@
           </article>
         </div>
 
-        <footer class="downloads__footer" data-reveal>
+        <footer class="downloads__footer">
           <p id="release-safety-note">
             Review the release notes and verify the SHA-256 checksum before
             opening an installer.

@@ -31,6 +31,7 @@ import {
   type RoleFitOpenBrowserAppRequest,
   type RoleFitOpenCliSignInTerminalRequest,
   type RoleFitOpenProviderInstallGuideRequest,
+  type RoleFitOpenExtensionDirectoryRequest,
   type RoleFitProviderConnection,
   type RoleFitProviderConnectionsRequest,
   type RoleFitProviderId,
@@ -75,6 +76,7 @@ export type CompanionIpcOptions = {
     provider: RoleFitCliProviderId
   ): Promise<RoleFitCliTerminalSignInResult>;
   openProviderInstallGuide(provider: RoleFitCliProviderId): Promise<void>;
+  openExtensionDirectory(): Promise<void>;
   openBrowserApp(): Promise<void>;
   getWorkspaceOverview(): Promise<RoleFitWorkspaceOverview>;
   backupWorkspaceToFile(): Promise<RoleFitWorkspaceBackupResult>;
@@ -434,6 +436,7 @@ export function installCompanionIpc(options: CompanionIpcOptions): () => void {
     RoleFitDesktopIpcChannel.SetCliProviderEnabled,
     RoleFitDesktopIpcChannel.OpenCliSignInTerminal,
     RoleFitDesktopIpcChannel.OpenProviderInstallGuide,
+    RoleFitDesktopIpcChannel.OpenExtensionDirectory,
     RoleFitDesktopIpcChannel.OpenBrowserApp,
     RoleFitDesktopIpcChannel.GetWorkspaceOverview,
     RoleFitDesktopIpcChannel.BackupWorkspaceToFile,
@@ -581,6 +584,14 @@ export function installCompanionIpc(options: CompanionIpcOptions): () => void {
           throw new Error("Invalid CLI provider id.");
         }
         await options.openProviderInstallGuide(args[0]);
+      }
+    );
+    options.ipc.handle(
+      RoleFitDesktopIpcChannel.OpenExtensionDirectory,
+      async (event: IpcMainInvokeEvent, ...args: RoleFitOpenExtensionDirectoryRequest) => {
+        requireTrustedRequest(event, options);
+        requireNoArguments(args, "Open-extension-directory");
+        await options.openExtensionDirectory();
       }
     );
     options.ipc.handle(

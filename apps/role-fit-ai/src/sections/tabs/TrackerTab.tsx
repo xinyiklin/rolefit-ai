@@ -5,12 +5,14 @@ import type { DuplicateGroup } from "../../lib/jobIdentity";
 import {
   BOARD_STATUSES,
   STATUS_LABEL,
+  activityCount,
   displayCompany,
   displayRole,
   fitScore,
+  matchesActivityFilter,
   nextAction,
   priorityFor,
-  statusCount
+  type ApplicationActivityFilter
 } from "../../lib/applicationDisplay";
 import { duplicateCandidateKey, groupDuplicateApplications } from "../../lib/jobIdentity";
 import { TrackerTableView } from "../tracker/TrackerTableView";
@@ -96,8 +98,8 @@ type TrackerTabProps = {
   applicationsError: string;
   pendingApplicationWrites: number;
   isApplicationsLoading: boolean;
-  pipelineFilter: "all" | ApplicationStatus;
-  setPipelineFilter: (v: "all" | ApplicationStatus) => void;
+  statusFilter: ApplicationActivityFilter;
+  setStatusFilter: (v: ApplicationActivityFilter) => void;
   expandedApplicationId: string | null;
   setExpandedApplicationId: (id: string | null) => void;
   trackerView: TrackerView;
@@ -135,8 +137,8 @@ export function TrackerTab({
   applicationsError,
   pendingApplicationWrites,
   isApplicationsLoading,
-  pipelineFilter,
-  setPipelineFilter,
+  statusFilter,
+  setStatusFilter,
   expandedApplicationId,
   setExpandedApplicationId,
   trackerView,
@@ -202,7 +204,7 @@ export function TrackerTab({
     const needle = query.trim().toLowerCase();
     const dirMul = sort.dir === "asc" ? 1 : -1;
     return applications
-      .filter((app) => pipelineFilter === "all" || app.status === pipelineFilter)
+      .filter((app) => matchesActivityFilter(app, statusFilter))
       .filter((app) => {
         if (!needle) return true;
         return [
@@ -223,13 +225,13 @@ export function TrackerTab({
         // Stable tie-break: newest application first, regardless of column.
         return appliedKey(b).localeCompare(appliedKey(a));
       });
-  }, [applications, pipelineFilter, query, sort]);
+  }, [applications, statusFilter, query, sort]);
 
   // Reset to the first page whenever the result set or its ordering changes, so
   // the user is never stranded on a now-empty trailing page.
   useEffect(() => {
     setPage(1);
-  }, [query, pipelineFilter, sort, pageSize]);
+  }, [query, statusFilter, sort, pageSize]);
 
   // Next action is intentionally omitted from the compact table. If the user
   // enters that layout while it is the active sort, return to the visible
@@ -402,7 +404,7 @@ export function TrackerTab({
         </div>
       ) : null}
 
-      {/* Shared toolbar: search + stage filter + view switcher */}
+      {/* Shared toolbar: search + lifecycle filter + view switcher */}
       <div className="workspace-toolbar">
         <label className="workspace-search">
           <Search size={15} aria-hidden="true" />
@@ -413,24 +415,24 @@ export function TrackerTab({
             aria-label="Search applications"
           />
         </label>
-        <div className="pipeline-filters" role="group" aria-label="Filter by stage">
+        <div className="pipeline-filters" role="group" aria-label="Filter applications by status">
           <button
             type="button"
-            className={`pipeline-filter ${pipelineFilter === "all" ? "is-active" : ""}`}
-            aria-pressed={pipelineFilter === "all"}
-            onClick={() => setPipelineFilter("all")}
+            className={`pipeline-filter ${statusFilter === "all" ? "is-active" : ""}`}
+            aria-pressed={statusFilter === "all"}
+            onClick={() => setStatusFilter("all")}
           >
             All <em>{applications.length}</em>
           </button>
-          {BOARD_STATUSES.map((status) => (
+          {(["active", "inactive"] as const).map((filter) => (
             <button
               type="button"
-              key={status}
-              className={`pipeline-filter pipeline-filter--${status} ${pipelineFilter === status ? "is-active" : ""}`}
-              aria-pressed={pipelineFilter === status}
-              onClick={() => setPipelineFilter(status)}
+              key={filter}
+              className={`pipeline-filter ${statusFilter === filter ? "is-active" : ""}`}
+              aria-pressed={statusFilter === filter}
+              onClick={() => setStatusFilter(filter)}
             >
-              {STATUS_LABEL[status]} <em>{statusCount(applications, status)}</em>
+              {filter === "active" ? "Active" : "Inactive"} <em>{activityCount(applications, filter)}</em>
             </button>
           ))}
         </div>
@@ -455,7 +457,7 @@ export function TrackerTab({
         <TrackerCalendarView
           applications={applications}
           query={query}
-          stageFilter={pipelineFilter}
+          statusFilter={statusFilter}
           setSelectedApplicationId={setExpandedApplicationId}
           onOpenApplication={onOpenApplication}
         />
