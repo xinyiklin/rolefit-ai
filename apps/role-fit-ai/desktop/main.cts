@@ -49,6 +49,7 @@ import {
 } from "./ipc-contract.cjs";
 import { installCompanionIpc } from "./ipc.cjs";
 import { readBoundedResponseText } from "./bounded-response.cjs";
+import { materializeRoleFitExtension } from "./extension-bundle.cjs";
 import { resolveDesktopRuntimePaths } from "./runtime-paths.cjs";
 import {
   createDesktopSettingsManager,
@@ -1154,10 +1155,14 @@ function createMainWindow(
     icon: app.isPackaged
       ? undefined
       : join(__dirname, "..", "..", "desktop", "assets", "icon.ico"),
-    width: 760,
-    height: 560,
-    minWidth: 620,
-    minHeight: 520,
+    width: 900,
+    height: 620,
+    minWidth: 900,
+    minHeight: 620,
+    maxWidth: 900,
+    maxHeight: 620,
+    resizable: false,
+    maximizable: false,
     show: !smokeMode,
     backgroundColor: "#eef1ec",
     autoHideMenuBar: process.platform !== "darwin",
@@ -1314,6 +1319,10 @@ async function startDesktop(): Promise<void> {
       ? extensionPairingSettings.origins.join(",")
       : undefined;
   const port = localSiteSettings.localSitePort;
+  const extensionDirectory = await materializeRoleFitExtension({
+    sourceDirectory: join(paths.appRoot, "extension"),
+    userDataDirectory: app.getPath("userData")
+  });
 
   desktopServer = await startOrReuseDesktopServer({
     appRoot: paths.appRoot,
@@ -1420,6 +1429,10 @@ async function startDesktop(): Promise<void> {
     },
     openProviderInstallGuide: async (provider) => {
       await shell.openExternal(PROVIDER_INSTALL_GUIDES[provider]);
+    },
+    openExtensionDirectory: async () => {
+      const errorMessage = await shell.openPath(extensionDirectory);
+      if (errorMessage) throw new Error("Could not open the RoleFit browser-extension folder.");
     },
     openBrowserApp: async () => {
       await shell.openExternal(browserOrigin);

@@ -44,6 +44,7 @@ export const enum RoleFitDesktopIpcChannel {
   SetCliProviderEnabled = "rolefit:companion:set-cli-provider-enabled",
   OpenCliSignInTerminal = "rolefit:companion:open-cli-sign-in-terminal",
   OpenProviderInstallGuide = "rolefit:companion:open-provider-install-guide",
+  OpenExtensionDirectory = "rolefit:companion:open-extension-directory",
   OpenBrowserApp = "rolefit:companion:open-browser-app",
   GetWorkspaceOverview = "rolefit:companion:get-workspace-overview",
   BackupWorkspaceToFile = "rolefit:companion:backup-workspace-to-file",
@@ -227,6 +228,7 @@ export type RoleFitRemoveProviderRequest = readonly [RoleFitProviderId];
 export type RoleFitSetCliProviderEnabledRequest = readonly [RoleFitCliProviderId, boolean];
 export type RoleFitOpenCliSignInTerminalRequest = readonly [RoleFitCliProviderId];
 export type RoleFitOpenProviderInstallGuideRequest = readonly [RoleFitCliProviderId];
+export type RoleFitOpenExtensionDirectoryRequest = readonly [];
 export type RoleFitOpenBrowserAppRequest = readonly [];
 export type RoleFitWorkspaceOverviewRequest = readonly [];
 export type RoleFitBackupWorkspaceToFileRequest = readonly [];
@@ -255,6 +257,7 @@ export type RoleFitDesktopApi = Readonly<{
     provider: RoleFitCliProviderId
   ): Promise<RoleFitCliTerminalSignInResult>;
   openProviderInstallGuide(provider: RoleFitCliProviderId): Promise<void>;
+  openExtensionDirectory(): Promise<void>;
   openBrowserApp(): Promise<void>;
   getWorkspaceOverview(): Promise<RoleFitWorkspaceOverview>;
   backupWorkspaceToFile(): Promise<RoleFitWorkspaceBackupResult>;

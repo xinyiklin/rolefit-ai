@@ -11,8 +11,10 @@ description in a desktop browser (Chrome, ~1440px) during focused
 application-prep sessions. The browser is the product surface. A required
 device-local Electron companion starts and keeps the loopback server available, shows
 the complete five-provider setup catalog, encrypts supported API keys locally,
-links each CLI to its official install/sign-in docs and to an external-terminal
-sign-in, and opens RoleFit in the default browser. It is not a second Drafting Desk and does not own resume editing,
+offers official installation guidance for missing CLIs and provider-owned
+external-terminal sign-in, manages portable workspace backups and extension
+pairing, and opens RoleFit in the default browser. It is not a second Drafting
+Desk and does not own resume editing,
 tracker state, or workspace files. The user knows the resume content
 intimately; the tool's job is to speed up tailoring, reviewing, and exporting
 while detecting and surfacing potentially unsupported claims for human review.
@@ -104,7 +106,7 @@ disappears into the task. Quiet competence, not salesmanship.
    the companion renderer, encrypted through Electron `safeStorage`, and never
    enter browser storage or HTTP. CLI authentication stays provider-owned;
    RoleFit never asks for provider passwords, MFA values, or OAuth codes.
-9. Make portability explicit and recoverable: the companion's Workspace tab
+9. Make portability explicit and recoverable: the companion's Workspace section
    owns Back up and Restore. A backup includes only validated app-managed
    resumes, history, tracker data, saved PDFs, and mirrored allowlisted
    browser preferences. It excludes provider setup, API keys, CLI sessions,

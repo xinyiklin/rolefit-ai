@@ -22,10 +22,20 @@ deterministic parser when **Distill with AI** is off. Start the app
 
 ## Install (unpacked)
 
+**Desktop release:** In the RoleFit companion, open **Browser extension** and
+select **Open extension folder**. The companion materializes this fixed
+extension bundle inside its app data so Chrome, Edge, and Firefox can load it
+outside Electron's packaged archive. Keep that folder in place after loading
+it. There is no browser-store package yet.
+
+**Source development:** Load this repository's `extension/` folder directly;
+the browser-specific steps below apply to either folder.
+
 - **Chrome / Edge** — open `chrome://extensions`, enable **Developer mode**,
-  click **Load unpacked**, and select this `extension/` folder.
+  click **Load unpacked**, and select the folder RoleFit opened (or this
+  `extension/` folder during source development).
 - **Firefox** — open `about:debugging#/runtime/this-firefox`, click
-  **Load Temporary Add-on…**, and select `manifest.json`.
+  **Load Temporary Add-on…**, and select `manifest.json` in that folder.
 
 After loading the extension, start the RoleFit companion on port `5181` and
 open the popup on a job page. The first request is intentionally blocked and

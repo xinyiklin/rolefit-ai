@@ -27,8 +27,7 @@ import { useApplicationAnswers } from "./hooks/useApplicationAnswers";
 import {
   useApplications,
   missingRequiredSkillsFromApplication,
-  type Application,
-  type ApplicationStatus
+  type Application
 } from "./hooks/useApplications";
 import { useResumeAnalysis } from "./hooks/useResumeAnalysis";
 import { useResumeEditor } from "./hooks/useResumeEditor";
@@ -81,6 +80,7 @@ import { MaterialsTab } from "./sections/tabs/MaterialsTab";
 import type { TrackerView } from "./sections/tabs/TrackerTab";
 import type { OutputTab, OutputTabDescriptor } from "./sections/shared";
 import { providerLabel } from "./config/aiOptions";
+import type { ApplicationActivityFilter } from "./lib/applicationDisplay";
 
 const PreviewOverlay = lazy(() => import("./sections/PreviewOverlay"));
 const ApplicationModal = lazy(() =>
@@ -307,7 +307,7 @@ function App() {
   const distillRequestFields = () => buildStageRequestFields(stages.distill);
   const [includeCoverLetter, setIncludeCoverLetter] = useState(false);
   const [activeOutputTab, setActiveOutputTab] = useState<OutputTab>("resume");
-  const [pipelineFilter, setPipelineFilter] = useState<"all" | ApplicationStatus>("all");
+  const [statusFilter, setStatusFilter] = useState<ApplicationActivityFilter>("all");
   const [trackerView, setTrackerView] = useState<TrackerView>("table");
   const [expandedApplicationId, setExpandedApplicationId] = useState<string | null>(null);
   // Saved-application resume PDF preview ({url,name} → open; null → closed).
@@ -1418,8 +1418,8 @@ function App() {
                 applicationsError={applicationsError}
                 pendingApplicationWrites={pendingApplicationWrites}
                 isApplicationsLoading={isApplicationsLoading}
-                pipelineFilter={pipelineFilter}
-                setPipelineFilter={setPipelineFilter}
+                statusFilter={statusFilter}
+                setStatusFilter={setStatusFilter}
                 expandedApplicationId={expandedApplicationId}
                 setExpandedApplicationId={setExpandedApplicationId}
                 trackerView={trackerView}

@@ -26,6 +26,10 @@ await mkdir(join(stageRoot, "server"), { recursive: true });
 
 await Promise.all([
   cp(join(appRoot, "dist"), join(stageRoot, "dist"), { recursive: true }),
+  cp(join(appRoot, "extension"), join(stageRoot, "extension"), {
+    recursive: true,
+    filter: (source) => !source.endsWith("AGENTS.md") && !source.endsWith("README.md")
+  }),
   cp(join(desktopRoot, "assets"), join(stageRoot, "assets"), { recursive: true }),
   cp(join(desktopRoot, "forge.config.cjs"), join(stageRoot, "forge.config.cjs")),
   cp(join(workspaceRoot, "LICENSE"), join(stageRoot, "LICENSE")),

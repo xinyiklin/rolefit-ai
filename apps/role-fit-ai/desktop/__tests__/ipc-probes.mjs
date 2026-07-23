@@ -43,6 +43,7 @@ const channels = Object.freeze({
   configureCli: "rolefit:companion:set-cli-provider-enabled",
   terminal: "rolefit:companion:open-cli-sign-in-terminal",
   installGuide: "rolefit:companion:open-provider-install-guide",
+  extensionDirectory: "rolefit:companion:open-extension-directory",
   open: "rolefit:companion:open-browser-app",
   workspaceOverview: "rolefit:companion:get-workspace-overview",
   workspaceBackup: "rolefit:companion:backup-workspace-to-file",
@@ -240,6 +241,7 @@ let removedProvider = null;
 let configuredCli = null;
 let openedTerminalProvider = null;
 let openedInstallGuide = null;
+let extensionDirectoryOpens = 0;
 let browserOpenCount = 0;
 let appliedLocalSitePort = null;
 let savedExtensionOrigin = null;
@@ -347,6 +349,9 @@ const options = {
   openProviderInstallGuide: async (provider) => {
     openedInstallGuide = provider;
   },
+  openExtensionDirectory: async () => {
+    extensionDirectoryOpens += 1;
+  },
   openBrowserApp: async () => {
     browserOpenCount += 1;
   },
@@ -448,6 +453,8 @@ assert.equal(terminalResult.guidance.length, ROLEFIT_PROVIDER_GUIDANCE_MAX_LENGT
 assert.doesNotMatch(JSON.stringify(terminalResult), /must-not-cross-ipc/);
 await installedHandlers.get(channels.installGuide)(requestEvent(), "antigravity-cli");
 assert.equal(openedInstallGuide, "antigravity-cli");
+await installedHandlers.get(channels.extensionDirectory)(requestEvent());
+assert.equal(extensionDirectoryOpens, 1);
 await installedHandlers.get(channels.open)(requestEvent());
 assert.equal(browserOpenCount, 1);
 
@@ -722,6 +729,10 @@ await assert.rejects(
   /Invalid CLI provider/
 );
 await assert.rejects(
+  installedHandlers.get(channels.extensionDirectory)(requestEvent(), "extra"),
+  /does not accept arguments/
+);
+await assert.rejects(
   installedHandlers.get(channels.open)(requestEvent(), "extra"),
   /does not accept arguments/
 );
@@ -906,6 +917,7 @@ assert.match(preloadSource, /RoleFitDesktopIpcChannel\.RemoveProvider/);
 assert.match(preloadSource, /RoleFitDesktopIpcChannel\.SetCliProviderEnabled/);
 assert.match(preloadSource, /RoleFitDesktopIpcChannel\.OpenCliSignInTerminal/);
 assert.match(preloadSource, /RoleFitDesktopIpcChannel\.OpenProviderInstallGuide/);
+assert.match(preloadSource, /RoleFitDesktopIpcChannel\.OpenExtensionDirectory/);
 assert.match(preloadSource, /RoleFitDesktopIpcChannel\.OpenBrowserApp/);
 assert.match(preloadSource, /RoleFitDesktopIpcChannel\.GetWorkspaceOverview/);
 assert.match(preloadSource, /RoleFitDesktopIpcChannel\.BackupWorkspaceToFile/);
@@ -948,12 +960,12 @@ assert.match(companionRendererSource, /CONNECTION_POLL_INTERVAL_MS = 5_000/);
 assert.match(
   companionRendererSource,
   /function scheduleWorkspacePoll\(\)[\s\S]*activeTabId !== "workspace"[\s\S]*document\.visibilityState === "hidden"/,
-  "the workspace activity poll runs only while the Workspace tab is active and visible"
+  "the workspace activity poll runs only while the Workspace section is active and visible"
 );
 assert.match(
   companionRendererSource,
-  /function scheduleConnectionPoll\(\)[\s\S]*activeTabId !== "connection"[\s\S]*document\.visibilityState === "hidden"/,
-  "the connection status poll runs only while the Connection tab is active and visible"
+  /function scheduleConnectionPoll\(\)[\s\S]*activeTabId !== "settings"[\s\S]*document\.visibilityState === "hidden"/,
+  "the connection status poll runs only while Settings is active and visible"
 );
 assert.match(
   companionRendererSource,
@@ -967,13 +979,28 @@ assert.match(
 );
 assert.match(
   companionRendererSource,
-  /document\.addEventListener\("visibilitychange",[\s\S]*workspacePollTimer = 0/,
-  "hidden windows stop the workspace activity poll"
+  /document\.addEventListener\("visibilitychange",[\s\S]*workspacePollTimer = 0[\s\S]*connectionPollTimer = 0/,
+  "hidden windows stop workspace and connection polling"
 );
 assert.match(
   companionRendererSource,
-  /"ArrowRight"[\s\S]*"ArrowLeft"[\s\S]*"Home"[\s\S]*"End"/,
-  "the companion tablist supports roving arrow/Home/End keyboard switching"
+  /ACTIVE_TAB_STORAGE_KEY[\s\S]*sessionStorage\.getItem[\s\S]*sessionStorage\.setItem[\s\S]*activateTab\(storedTab\(\), \{ persist: false, refresh: false \}\)/,
+  "a renderer refresh restores the selected companion section without making it permanent app data"
+);
+assert.match(
+  companionRendererSource,
+  /"Sign in",\s*"terminal-sign-in"/,
+  "every unavailable CLI uses the same terminal-owned Sign in action"
+);
+assert.match(
+  companionRendererSource,
+  /record\.authState === "signed-in"[\s\S]*label: "Signed in"/,
+  "an already authenticated CLI is shown as signed in even when a reused server is not companion-managed"
+);
+assert.doesNotMatch(
+  companionRendererSource,
+  /beginCliSignIn|cancelCliSignIn|Sign in in terminal/,
+  "the renderer never exposes an in-app credential flow or inconsistent terminal label"
 );
 
 let exposedKey = null;
@@ -1050,6 +1077,7 @@ assert.deepEqual(
     "getWorkspaceOverview",
     "openBrowserApp",
     "openCliSignInTerminal",
+    "openExtensionDirectory",
     "openProviderInstallGuide",
     "openWorkspaceFolder",
     "removeExtensionOrigin",
@@ -1076,6 +1104,7 @@ await exposedApi.removeProvider("anthropic");
 await exposedApi.setCliProviderEnabled("codex-cli", true);
 await exposedApi.openCliSignInTerminal("codex-cli");
 await exposedApi.openProviderInstallGuide("antigravity-cli");
+await exposedApi.openExtensionDirectory();
 await exposedApi.openBrowserApp();
 await exposedApi.getWorkspaceOverview();
 await exposedApi.backupWorkspaceToFile();
@@ -1095,6 +1124,7 @@ assert.deepEqual(invocations, [
   { channel: channels.configureCli, args: ["codex-cli", true] },
   { channel: channels.terminal, args: ["codex-cli"] },
   { channel: channels.installGuide, args: ["antigravity-cli"] },
+  { channel: channels.extensionDirectory, args: [] },
   { channel: channels.open, args: [] },
   { channel: channels.workspaceOverview, args: [] },
   { channel: channels.workspaceBackup, args: [] },

@@ -78,7 +78,6 @@
   --radius-shell: 14px;
   --shadow-panel: 0 1px 2px rgb(23 32 28 / 0.05);
   --shadow-lift: 0 18px 44px -30px rgb(23 32 28 / 0.35);
-  --shadow-frame: 0 24px 64px -42px rgb(23 32 28 / 0.38);
   /* House easing for entrances and reveals (the hover lift stays on plain
      `ease`, matching its shorter, more mechanical feel). */
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
@@ -397,35 +396,27 @@ section[id] {
   box-shadow: var(--shadow-panel);
 }
 
-.app-frame--hero {
-  border-radius: var(--radius-shell);
-  box-shadow: var(--shadow-frame);
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
-.app-frame__bar {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 34px;
-  padding: 0 11px;
-  border-bottom: 1px solid var(--hairline);
-  background: var(--card-soft);
+.desktop-shot {
+  margin: 0;
+  min-width: 0;
 }
 
-.app-frame__bar span {
-  width: 7px;
-  height: 7px;
-  border: 1px solid var(--hairline-strong);
-  border-radius: 50%;
-  background: var(--paper-deep);
-}
-
-.app-frame__bar strong {
-  margin-left: auto;
-  color: var(--ink-faint);
-  font-family: var(--mono);
-  font-size: 0.64rem;
-  font-weight: 400;
+.desktop-shot img {
+  width: 100%;
+  height: auto;
+  filter: drop-shadow(0 24px 30px rgb(23 32 28 / 0.18));
 }
 
 .app-frame img {
@@ -903,7 +894,7 @@ p.download-row__format {
    fully visible and unmoved. */
 @media (prefers-reduced-motion: no-preference) {
   .hero__copy > *,
-  .app-frame--hero {
+  .desktop-shot {
     animation: enter 0.3s var(--ease) backwards;
   }
 
@@ -911,7 +902,7 @@ p.download-row__format {
   .hero__copy > :nth-child(3) { animation-delay: 0.14s; }
   .hero__copy > :nth-child(4) { animation-delay: 0.21s; }
   .hero__copy > :nth-child(5) { animation-delay: 0.28s; }
-  .app-frame--hero { animation-delay: 0.12s; }
+  .desktop-shot { animation-delay: 0.12s; }
 
   /* Below-the-fold blocks lift into place the first time they enter view. The
      page script adds `.reveal-ready` only when it can drive the reveal, so with

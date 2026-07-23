@@ -167,7 +167,8 @@ assert.deepEqual(
 assert.deepEqual(
   buildCliProcessEnvironment(
     { PATH: "/usr/bin", HOME: "/Users/provider" },
-    ["/opt/homebrew/bin", "/usr/bin", "relative/bin"]
+    ["/opt/homebrew/bin", "/usr/bin", "relative/bin"],
+    "darwin"
   ),
   {
     PATH: "/opt/homebrew/bin:/usr/bin",

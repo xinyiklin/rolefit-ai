@@ -6,11 +6,14 @@ the link), tailor your base resume from your workspace, score the draft against
 the job description, and export to PDF or save a re-loadable `.resume` file —
 without storing your personal data in a hosted app. The installed Electron
 companion starts the local service, manages the five supported local
-providers, and opens RoleFit in the default browser; it is not a second RoleFit
-interface. Resume editing stays in the browser, while tracker and workspace
+providers, portable workspace backups, browser-extension pairing, and the local
+connection before opening RoleFit in the default browser. It is not a second
+Drafting Desk. Resume editing stays in the browser, while tracker and workspace
 storage remain owned by the local server.
 
 [Product site and companion downloads](https://rolefit.xinyiklin.com/)
+
+Current desktop source version: **0.3.0**.
 
 > Built for an entry-level SDE job hunt: tight workflow loop, blunt recruiter-style audit before applying, and a local pipeline tracker so you never lose track of a role.
 
@@ -49,14 +52,14 @@ saves the structured resume data so you can reload it later or move it between t
 - **Ordered AI workflow** — Distill, Tailor, and Review share one reusable progress surface with exact step counts, specific failure reasons, Retry/Stop behavior, and later stages marked not run after a failure.
 - **WYSIWYG editor + PDF export** — the editor *is* the preview: it and the exported PDF use the same shared Typeset layout engine, so visible line breaks and page flow match the export exactly. No external toolchain to install — typesetting and PDF generation run in the browser.
 - **`.resume` save/load** — download the structured resume data as a `.resume` file (lossless JSON, formatting preserved) and reload it later, or keep it as a portable backup of your work.
-- **Portable workspace backup + restore** — the companion's Workspace tab saves one versioned `.rolefit-backup` containing validated base resumes, resume history, tracker records, saved application PDFs, and mirrored allowlisted RoleFit preferences. Restore validates every checksum and domain file in a staging workspace before replacing the active saved workspace, then keeps the previous workspace as a local safety copy. The JSON backup is not encrypted and never contains provider keys, CLI sessions, arbitrary workspace files, or unsaved recovery drafts.
+- **Portable workspace backup + restore** — the companion's Workspace section saves one versioned `.rolefit-backup` containing validated base resumes, resume history, tracker records, saved application PDFs, and mirrored allowlisted RoleFit preferences. Restore validates every checksum and domain file in a staging workspace before replacing the active saved workspace, then keeps the previous workspace as a local safety copy. The JSON backup is not encrypted and never contains provider keys, CLI sessions, arbitrary workspace files, or unsaved recovery drafts.
 - **On-disk pipeline tracker** — a sortable, paginated applications table (right-click any row for quick actions: open details, change stage, in-app PDF preview of the saved resume, or delete) alongside a calendar view of submissions and upcoming follow-ups. Tracks status / source / company / role / follow-up date / notes / resume snapshot per application, and survives browser wipes.
 - **Local-first personal workflow** — the browser app, server, paired extension bridge, and workspace files run on your own device. Source development uses the gitignored `job-search-workspace/`; an installed companion uses `app.getPath("userData")/workspace/`. Origin-scoped browser storage may contain recovery resume/job drafts plus user settings and context, but never API keys. The Electron companion encrypts supported API keys with the operating system through `safeStorage` and stores only encrypted bytes locally beneath its own `userData`; keys never enter browser storage, browser requests, status payloads, or logs. A companion-owned server receives decrypted keys only in memory through a private parent/child channel. AI-backed import, polish, cover-letter, and application-answer features still send the relevant job/resume text directly from the local server to the provider you choose; resume/job payloads do not cross Electron IPC.
 
 ## Stack
 
 React 19 · TypeScript · Vite · Node.js (reusable `server/runtime.ts`) ·
-Electron 43 provider companion · shared `@typeset/engine` / `@typeset/editor`
+Electron 43 desktop companion · shared `@typeset/engine` / `@typeset/editor`
 workspaces · custom CSS · `lucide-react` icons
 
 No hosted RoleFit backend, database, or account system. Supported provider integrations: Claude Code CLI · Codex CLI · Antigravity CLI · OpenAI API · Claude API.
@@ -159,20 +162,21 @@ ANTHROPIC_API_KEY=...
 ```
 
 To avoid configuring a separate metered API key, add an account-backed CLI
-provider in the companion. Once added, each CLI row offers **Sign-in guide**,
-which opens that provider's official installation and sign-in documentation in
-your browser, and **Terminal ↗**, which launches the provider's own login
-command in an external terminal. RoleFit runs no in-app login form and never
+provider in the companion. A signed-out CLI row offers one consistent **Sign
+in** action, which launches the provider's own login command in an external
+terminal. A missing CLI offers its official **Install guide**. RoleFit runs no
+in-app login form and never
 asks for a vendor username, password, MFA value, OAuth code, or recovery token;
 signing in happens entirely through the provider's own CLI. Claude Code and
 Codex expose a machine-readable auth status, so the companion can show
-**Sign-in required** or **Ready** for them. Antigravity 1.1.x exposes no
+**Sign-in required**, **Signed in**, or **Ready** for them. Antigravity 1.1.x exposes no
 non-interactive auth-status command, so an installed `agy` shows **Ready to
 verify** with `authState` still `unknown`, not a false signed-in claim. The
 first actual Antigravity provider request verifies the provider-owned session
 and reports actionable guidance if that request fails authentication.
 
-The CLIs sign in with their own commands — the same ones **Terminal ↗** runs:
+The CLIs sign in with their own commands, the same ones the companion's **Sign
+in** action runs:
 
 ```bash
 # requires a current Claude Code installation and an account with CLI access
@@ -250,7 +254,11 @@ posting, while other open tabs continue their current jobs; the app also shows
 a small read-only "other sessions" card when another tab is active. The
 extension never reads the base resume or produces a fit judgment.
 
-Load the unpacked extension from `apps/role-fit-ai/extension/`:
+The installed desktop companion includes a fixed unpacked extension folder. In
+the companion, open **Browser extension** and choose **Open extension folder**;
+use that folder when your browser asks where to load the extension. Keep the
+folder in place after loading it. Source contributors can instead use
+`apps/role-fit-ai/extension/`:
 
 - **Chrome / Edge** — open `chrome://extensions`, enable **Developer mode**, click **Load unpacked**, and select the `extension/` folder.
 - **Firefox** — open `about:debugging#/runtime/this-firefox`, click **Load Temporary Add-on…**, and select `extension/manifest.json`.
@@ -278,7 +286,7 @@ Under that directory, `workspace/` contains resumes, tracker data, and saved
 application artifacts; `provider-vault/providers.json` contains only provider
 configuration plus operating-system-encrypted API-key bytes; and
 `desktop-settings/settings.json` contains the local-site port. There is no
-custom workspace-location picker in 0.1.0. `ROLEFIT_WORKSPACE_DIR` is an
+custom workspace-location picker. `ROLEFIT_WORKSPACE_DIR` is an
 explicit source-development/test override, not a supported installed-app
 setting.
 
@@ -293,7 +301,7 @@ survive a port change; unsaved recovery drafts remain origin-scoped and do not
 move.
 
 For a portable resume-only backup, download a `.resume` file. For the saved
-RoleFit workspace, open the companion's **Workspace** tab and choose **Back
+RoleFit workspace, open the companion's **Workspace** section and choose **Back
 up workspace**. The resulting `.rolefit-backup` is unencrypted JSON containing
 app-managed base resumes, resume history, tracker data, saved application
 PDFs, and the mirrored allowlisted RoleFit preferences. It excludes arbitrary

@@ -1,9 +1,11 @@
 import { useMemo, useState } from "react";
-import type { Application, ApplicationStatus } from "../../hooks/useApplications";
+import type { Application } from "../../hooks/useApplications";
 import {
   dateKey,
   displayCompany,
   displayRole,
+  matchesActivityFilter,
+  type ApplicationActivityFilter,
   parseDate
 } from "../../lib/applicationDisplay";
 import { TrackerCalendarRail } from "./TrackerCalendarRail";
@@ -77,7 +79,7 @@ function applicationEvents(applications: Application[]): CalendarEvent[] {
 type TrackerCalendarViewProps = {
   applications: Application[];
   query: string;
-  stageFilter: "all" | ApplicationStatus;
+  statusFilter: ApplicationActivityFilter;
   setSelectedApplicationId: (id: string | null) => void;
   onOpenApplication: (app: Application) => void;
 };
@@ -85,7 +87,7 @@ type TrackerCalendarViewProps = {
 export function TrackerCalendarView({
   applications,
   query,
-  stageFilter,
+  statusFilter,
   setSelectedApplicationId,
   onOpenApplication
 }: TrackerCalendarViewProps) {
@@ -97,15 +99,14 @@ export function TrackerCalendarView({
   const events = useMemo(() => {
     const needle = query.trim().toLowerCase();
     return applicationEvents(applications).filter((event) => {
-      // Apply stage filter
-      if (stageFilter !== "all" && event.app.status !== stageFilter) return false;
+      if (!matchesActivityFilter(event.app, statusFilter)) return false;
       // Apply search
       if (!needle) return true;
       return [displayCompany(event.app), displayRole(event.app), event.label].some((value) =>
         value.toLowerCase().includes(needle)
       );
     });
-  }, [applications, query, stageFilter]);
+  }, [applications, query, statusFilter]);
 
   const eventsByDate = useMemo(() => {
     const grouped = new Map<string, CalendarEvent[]>();

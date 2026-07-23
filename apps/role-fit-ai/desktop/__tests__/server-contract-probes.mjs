@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import { join, resolve } from "node:path";
 import {
   ROLEFIT_DESKTOP_COMPATIBILITY_VERSION,
   ROLEFIT_HEALTH_API_VERSION,
@@ -113,7 +114,8 @@ assert.equal(windowsEnvironment.Path, undefined);
 
 const packagedGuiEnvironment = buildCliProcessEnvironment(
   { PATH: "/usr/bin", HOME: "/tmp/test-home" },
-  ["/opt/homebrew/bin", "/usr/local/bin"]
+  ["/opt/homebrew/bin", "/usr/local/bin"],
+  "darwin"
 );
 const ownedServerEnvironment = buildDesktopServerEnvironment(
   {
@@ -166,30 +168,34 @@ assert.match(
   "the owned server receives its own allowlisted environment source"
 );
 
+const sourceAppRoot = resolve("/tmp/rolefit-source");
+const packagedAppRoot = resolve("/tmp/RoleFit.app/Contents/Resources/app.asar");
+const userDataDirectory = resolve("/tmp/rolefit-user-data");
+
 const sourcePaths = resolveDesktopRuntimePaths({
   packaged: false,
-  sourceAppRoot: "/tmp/rolefit-source",
-  packagedAppRoot: "/tmp/RoleFit.app/Contents/Resources/app.asar",
-  userDataDirectory: "/tmp/rolefit-user-data"
+  sourceAppRoot,
+  packagedAppRoot,
+  userDataDirectory
 });
 assert.deepEqual(sourcePaths, {
-  appRoot: "/tmp/rolefit-source",
-  serverEntry: "/tmp/rolefit-source/server.ts",
-  serverCwd: "/tmp/rolefit-source",
-  workspaceDir: "/tmp/rolefit-source/job-search-workspace"
+  appRoot: sourceAppRoot,
+  serverEntry: join(sourceAppRoot, "server.ts"),
+  serverCwd: sourceAppRoot,
+  workspaceDir: join(sourceAppRoot, "job-search-workspace")
 });
 
 const packagedPaths = resolveDesktopRuntimePaths({
   packaged: true,
-  sourceAppRoot: "/tmp/rolefit-source",
-  packagedAppRoot: "/tmp/RoleFit.app/Contents/Resources/app.asar",
-  userDataDirectory: "/tmp/rolefit-user-data"
+  sourceAppRoot,
+  packagedAppRoot,
+  userDataDirectory
 });
 assert.deepEqual(packagedPaths, {
-  appRoot: "/tmp/RoleFit.app/Contents/Resources/app.asar",
-  serverEntry: "/tmp/RoleFit.app/Contents/Resources/app.asar/dist-electron/server/server.mjs",
-  serverCwd: "/tmp/rolefit-user-data",
-  workspaceDir: "/tmp/rolefit-user-data/workspace"
+  appRoot: packagedAppRoot,
+  serverEntry: join(packagedAppRoot, "dist-electron", "server", "server.mjs"),
+  serverCwd: userDataDirectory,
+  workspaceDir: join(userDataDirectory, "workspace")
 });
 assert.throws(
   () => resolveDesktopRuntimePaths({

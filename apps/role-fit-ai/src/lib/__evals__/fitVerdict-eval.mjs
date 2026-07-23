@@ -27,7 +27,7 @@ async function load(rel) {
 }
 
 const { verdictFromScore, VERDICT_LABEL, VERDICT_TONE, verdictPillClass } = await load("../fitVerdict.ts");
-const { appFitVerdict, fitTone } = await load("../applicationDisplay.ts");
+const { activityCount, appFitVerdict, fitTone, matchesActivityFilter } = await load("../applicationDisplay.ts");
 const { displayVerdictReason } = await load("../verdictReason.ts");
 
 let pass = 0;
@@ -81,6 +81,18 @@ for (const score of [95, 78, 55, 20]) {
 // pill-class transform matches the review rail's (don-t-apply).
 check("pill class for DON'T APPLY", verdictPillClass("DON'T APPLY") === "verdict-pill--don-t-apply");
 check("label map complete", VERDICT_LABEL["STRETCH"] === "Stretch");
+
+const lifecycleApplications = [
+  { status: "interested" },
+  { status: "applied" },
+  { status: "interviewing" },
+  { status: "offer" },
+  { status: "rejected" },
+  { status: "withdrawn" }
+];
+check("all includes every application status", lifecycleApplications.every((app) => matchesActivityFilter(app, "all")));
+check("active excludes rejected and withdrawn", activityCount(lifecycleApplications, "active") === 4);
+check("inactive contains rejected and withdrawn", activityCount(lifecycleApplications, "inactive") === 2);
 
 check(
   "legacy server cap reason becomes concise user copy",

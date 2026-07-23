@@ -143,7 +143,7 @@ npm run collect:desktop:artifacts --workspace apps/role-fit-ai -- --arch=arm64 -
 npm run make:rolefit:desktop -- --arch=x64 --platform=win32
 npm run test:rolefit:desktop:packaged -- --arch=x64 --platform=win32
 npm run collect:desktop:artifacts --workspace apps/role-fit-ai -- --arch=x64 --platform=win32 --checksums=false
-npm run test:desktop:windows-installer --workspace apps/role-fit-ai -- --installer=apps/role-fit-ai/.forge/release/RoleFit-AI-0.1.1-windows-x64.exe
+npm run test:desktop:windows-installer --workspace apps/role-fit-ai -- --installer=apps/role-fit-ai/.forge/release/RoleFit-AI-0.3.0-windows-x64.exe
 ```
 
 Local package/make output is not publicly trusted (macOS is ad-hoc signed only)

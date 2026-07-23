@@ -23,6 +23,27 @@ export const BOARD_STATUSES: ApplicationStatus[] = [
   "withdrawn"
 ];
 
+export type ApplicationActivityFilter = "all" | "active" | "inactive";
+
+export function isInactiveApplication(app: Pick<Application, "status">): boolean {
+  return app.status === "rejected" || app.status === "withdrawn";
+}
+
+export function matchesActivityFilter(
+  app: Pick<Application, "status">,
+  filter: ApplicationActivityFilter
+): boolean {
+  if (filter === "all") return true;
+  return filter === "inactive" ? isInactiveApplication(app) : !isInactiveApplication(app);
+}
+
+export function activityCount(
+  applications: Application[],
+  filter: Exclude<ApplicationActivityFilter, "all">
+): number {
+  return applications.filter((app) => matchesActivityFilter(app, filter)).length;
+}
+
 export function displayRole(app: Application) {
   return app.role?.trim() || "Role not set";
 }

@@ -11,201 +11,235 @@
     <title>RoleFit AI</title>
     <link
       rel="icon"
-      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='8' fill='%23275747'/%3E%3Cpath d='M16 17h18c9 0 14 5 14 13 0 6-3 10-9 12l10 13H38L29 43h-3v12H16V17zm10 8v10h7c3 0 5-2 5-5s-2-5-5-5h-7z' fill='%23f7f5ed'/%3E%3C/svg%3E"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='8' fill='%23206b55'/%3E%3Cpath d='M16 17h18c9 0 14 5 14 13 0 6-3 10-9 12l10 13H38L29 43h-3v12H16V17zm10 8v10h7c3 0 5-2 5-5s-2-5-5-5h-7z' fill='%23f7fbf8'/%3E%3C/svg%3E"
     />
     <link rel="stylesheet" href="./companion.css" />
     <script src="./companion-renderer.js" defer></script>
   </head>
   <body data-companion-root data-status="loading">
     <div class="companion-shell">
-      <header class="titlebar">
-        <div class="brand" aria-label="RoleFit AI companion">
+      <aside class="companion-sidebar" aria-label="RoleFit desktop navigation">
+        <div class="brand" aria-label="RoleFit AI desktop app">
           <span class="brand__mark" aria-hidden="true">R</span>
-          <span class="brand__copy">
-            <strong>RoleFit AI</strong>
-            <small>Provider companion</small>
-          </span>
-        </div>
-        <button class="open-app-button" id="open-rolefit-browser" type="button">
-          <span>Open RoleFit</span>
-          <span class="open-app-button__arrow" aria-hidden="true">&#8599;</span>
-        </button>
-      </header>
-
-      <main id="main-content">
-        <div class="bridge-line" id="bridge-line" role="status" aria-live="polite">
-          <span class="bridge-line__dot" aria-hidden="true"></span>
-          <span id="bridge-status">Checking companion&#8230;</span>
+          <span class="brand__copy">RoleFit AI</span>
         </div>
 
-        <div class="tab-bar" role="tablist" aria-label="Companion sections" id="companion-tablist">
+        <nav class="companion-nav" aria-label="RoleFit sections">
+          <button class="companion-nav__item is-active" type="button" data-companion-tab="overview" aria-current="page">Overview</button>
+          <button class="companion-nav__item" type="button" data-companion-tab="providers">Providers</button>
+          <button class="companion-nav__item" type="button" data-companion-tab="workspace">Workspace</button>
+          <button class="companion-nav__item" type="button" data-companion-tab="extension">Browser extension</button>
+          <button class="companion-nav__item" type="button" data-companion-tab="settings">Settings</button>
+        </nav>
+
+        <div class="companion-sidebar__footer">
+          <div class="companion-sidebar__local">
+            <span id="runtime-version">RoleFit</span>
+            <strong id="sidebar-runtime-status">Starting service</strong>
+          </div>
           <button
-            class="tab-bar__tab"
-            id="tab-providers"
+            class="sidebar-open-app"
+            id="open-rolefit-browser"
             type="button"
-            role="tab"
-            aria-selected="true"
-            aria-controls="panel-providers"
-            data-tab-id="providers"
-          >Providers</button>
-          <button
-            class="tab-bar__tab"
-            id="tab-workspace"
-            type="button"
-            role="tab"
-            aria-selected="false"
-            aria-controls="panel-workspace"
-            data-tab-id="workspace"
-            tabindex="-1"
-          >Workspace</button>
-          <button
-            class="tab-bar__tab"
-            id="tab-connection"
-            type="button"
-            role="tab"
-            aria-selected="false"
-            aria-controls="panel-connection"
-            data-tab-id="connection"
-            tabindex="-1"
-          >Connection</button>
+            aria-label="Open RoleFit in your browser"
+            title="Open RoleFit in your browser"
+          >
+            <svg aria-hidden="true" viewBox="0 0 16 16">
+              <path d="M6 3h7v7M13 3 6.25 9.75M11 9.5V13H3V5h3.5" />
+            </svg>
+          </button>
         </div>
+      </aside>
 
-        <section
-          class="tab-panel providers"
-          id="panel-providers"
-          role="tabpanel"
-          aria-labelledby="tab-providers"
-          tabindex="0"
-        >
-          <header class="section-heading">
-            <div>
-              <h2 id="providers-title">Provider connections</h2>
-              <p id="provider-summary">Checking providers&#8230;</p>
+      <div class="companion-workspace">
+        <main id="main-content">
+          <section class="companion-panel is-active" data-companion-panel="overview" aria-labelledby="overview-title">
+            <div class="panel-intro">
+              <h1 id="overview-title">Your workbench is ready.</h1>
+              <p>Set up providers and extensions here. Your work stays on this device.</p>
             </div>
-            <button class="refresh-button" id="refresh-providers" type="button">
-              <span class="refresh-button__icon" aria-hidden="true">&#8635;</span>
-              <span>Check again</span>
-            </button>
-          </header>
 
-          <ol class="provider-list" id="provider-list" data-provider-list aria-busy="true"></ol>
-          <p class="provider-announcement visually-hidden" id="provider-announcement" aria-live="polite"></p>
-        </section>
-
-        <section
-          class="tab-panel workspace"
-          id="panel-workspace"
-          role="tabpanel"
-          aria-labelledby="tab-workspace"
-          tabindex="0"
-          hidden
-        >
-          <header class="section-heading">
-            <div>
-              <h2 id="workspace-title">Workspace</h2>
-              <p id="workspace-summary">Checking workspace&#8230;</p>
+            <div class="overview-grid">
+              <article class="overview-card overview-card--service">
+                <span class="overview-card__label">Browser workspace</span>
+                <strong id="overview-site-origin">localhost:5181</strong>
+                <p>Open the tracker and resume workspace in your browser.</p>
+                <button class="text-button" type="button" data-tab-target="settings">Browser address <span aria-hidden="true">&#8594;</span></button>
+              </article>
+              <article class="overview-card">
+                <span class="overview-card__label">Providers</span>
+                <strong id="overview-provider-summary">Checking connections</strong>
+                <p>Connect the CLI plans or API keys you want to use.</p>
+                <button class="text-button" type="button" data-tab-target="providers">Manage providers <span aria-hidden="true">&#8594;</span></button>
+              </article>
+              <article class="overview-card">
+                <span class="overview-card__label">Workspace</span>
+                <strong id="overview-workspace-summary">Checking workspace</strong>
+                <p>Back up or restore your app-managed workspace.</p>
+                <button class="text-button" type="button" data-tab-target="workspace">Manage workspace <span aria-hidden="true">&#8594;</span></button>
+              </article>
+              <article class="overview-card">
+                <span class="overview-card__label">Extension</span>
+                <strong id="overview-extension-summary">Browser extension not paired</strong>
+                <p>Import job posts from your browser.</p>
+                <button class="text-button" type="button" data-tab-target="extension">Set up extension <span aria-hidden="true">&#8594;</span></button>
+              </article>
             </div>
-          </header>
 
-          <div class="workspace-row">
-            <span class="workspace-row__label" id="workspace-path-label">Local workspace</span>
-            <code class="workspace-path" id="workspace-path" aria-labelledby="workspace-path-label">Checking&#8230;</code>
-            <button class="workspace-open-button" id="open-workspace-folder" type="button" disabled>Open folder</button>
-          </div>
-
-          <dl class="stat-strip" id="workspace-stats">
-            <div class="stat-strip__cell">
-              <dt>Base resume</dt>
-              <dd id="stat-base-resume">&#8212;</dd>
-            </div>
-            <div class="stat-strip__cell">
-              <dt>Applications</dt>
-              <dd id="stat-applications">&#8212;</dd>
-            </div>
-          </dl>
-
-          <div class="workspace-actions">
-            <button
-              class="workspace-action workspace-action--primary"
-              id="backup-workspace"
-              type="button"
-              title="Writes one plain-JSON .rolefit-backup file"
-              disabled
-            >Back up workspace&#8230;</button>
-            <button
-              class="workspace-action"
-              id="restore-workspace"
-              type="button"
-              title="Replaces the saved workspace; the previous one is kept as a local safety copy"
-              disabled
-            >Restore backup&#8230;</button>
-          </div>
-
-          <p class="workspace-status" id="workspace-status" role="status" aria-live="polite"></p>
-
-          <p class="workspace-hint" id="workspace-hint">Plain JSON &#8212; provider keys and unsaved edits stay out.</p>
-        </section>
-
-        <section
-          class="tab-panel connection"
-          id="panel-connection"
-          role="tabpanel"
-          aria-labelledby="tab-connection"
-          tabindex="0"
-          hidden
-        >
-          <header class="section-heading">
-            <div>
-              <h2 id="connection-title">Connection</h2>
-              <p id="connection-summary">Checking the local site&#8230;</p>
-            </div>
-          </header>
-
-          <div class="connection-state-block" role="status" aria-live="polite">
-            <p class="state-line" id="connection-state" data-state="unknown">
-              <span class="state-line__dot" aria-hidden="true"></span>
-              <span id="connection-state-text">Checking&#8230;</span>
-            </p>
-            <p class="connection-tabs-line" id="connection-browser-tabs">&#8212;</p>
-          </div>
-
-          <form class="site-port-form" id="local-site-port-form" novalidate>
-            <label class="site-port-form__field" for="local-site-port">
-              <span>Local site port</span>
-              <input
-                id="local-site-port"
-                name="localSitePort"
-                type="number"
-                min="1"
-                max="65535"
-                step="1"
-                inputmode="numeric"
-                autocomplete="off"
-                aria-describedby="local-site-port-status"
-                title="Applies after a restart; browser storage is per-port"
-                disabled
-              />
-            </label>
-            <button id="apply-local-site-port" type="submit" disabled>Apply &amp; restart</button>
-            <p id="local-site-port-status" role="status" aria-live="polite"></p>
-          </form>
-
-          <section class="extension-pairing-form" id="extension-pairing-panel" aria-labelledby="extension-pairing-title">
-            <div class="extension-pairing-form__heading">
-              <span id="extension-pairing-title">Browser extension</span>
-              <strong id="extension-pairing-count">Checking&#8230;</strong>
-            </div>
-            <ul class="extension-request-list" id="extension-request-list" aria-label="Extension access requests"></ul>
-            <ul class="extension-pairing-list" id="extension-pairing-list" aria-label="Paired browser extensions"></ul>
-            <p id="extension-pairing-status" role="status" aria-live="polite"></p>
           </section>
-        </section>
-      </main>
 
-      <footer class="footer">
-        <span>Companion service</span>
-        <span id="runtime-version">Version checking&#8230;</span>
-      </footer>
+          <section class="companion-panel" data-companion-panel="providers" aria-labelledby="providers-title" hidden>
+            <header class="panel-heading">
+              <div>
+                <h1 id="providers-title">Providers</h1>
+                <p id="provider-summary">Checking your provider connections.</p>
+              </div>
+              <button class="refresh-button" id="refresh-providers" type="button">
+                <span class="refresh-button__icon" aria-hidden="true">&#8635;</span>
+                <span>Check again</span>
+              </button>
+            </header>
+
+            <ol class="provider-list" id="provider-list" data-provider-list aria-busy="true"></ol>
+            <p class="provider-announcement visually-hidden" id="provider-announcement" aria-live="polite"></p>
+          </section>
+
+          <section class="companion-panel" data-companion-panel="workspace" aria-labelledby="workspace-title" hidden>
+            <header class="panel-heading">
+              <div>
+                <h1 id="workspace-title">Workspace</h1>
+                <p id="workspace-summary">Checking your local workspace.</p>
+              </div>
+            </header>
+
+            <div class="workspace-card">
+              <div class="workspace-row">
+                <span class="workspace-row__label" id="workspace-path-label">Local workspace</span>
+                <code class="workspace-path" id="workspace-path" aria-labelledby="workspace-path-label">Checking&#8230;</code>
+                <button class="workspace-open-button" id="open-workspace-folder" type="button" disabled>Open folder</button>
+              </div>
+
+              <dl class="stat-strip" id="workspace-stats">
+                <div class="stat-strip__cell">
+                  <dt>Base resume</dt>
+                  <dd id="stat-base-resume">&#8212;</dd>
+                </div>
+                <div class="stat-strip__cell">
+                  <dt>Applications</dt>
+                  <dd id="stat-applications">&#8212;</dd>
+                </div>
+              </dl>
+            </div>
+
+            <div class="workspace-actions">
+              <button
+                class="workspace-action workspace-action--primary"
+                id="backup-workspace"
+                type="button"
+                title="Writes one plain-JSON .rolefit-backup file"
+                disabled
+              >Back up workspace&#8230;</button>
+              <button
+                class="workspace-action"
+                id="restore-workspace"
+                type="button"
+                title="Replaces the saved workspace; the previous one is kept as a local safety copy"
+                disabled
+              >Restore backup&#8230;</button>
+            </div>
+
+            <p class="workspace-status" id="workspace-status" role="status" aria-live="polite"></p>
+            <p class="workspace-hint">Plain JSON &#8212; provider keys and unsaved edits stay out.</p>
+          </section>
+
+          <section class="companion-panel" data-companion-panel="extension" aria-labelledby="extension-title" hidden>
+            <header class="panel-heading">
+              <div>
+                <h1 id="extension-title">Browser extension</h1>
+                <p>Import job posts from Chrome, Edge, or Firefox. It uses <code>localhost:5181</code>.</p>
+              </div>
+              <div class="extension-pairing-control">
+                <button
+                  class="panel-count"
+                  id="extension-pairing-count"
+                  type="button"
+                  aria-controls="extension-pairing-popover"
+                  aria-expanded="false"
+                  aria-haspopup="dialog"
+                >Checking</button>
+                <section
+                  class="extension-pairing-popover"
+                  id="extension-pairing-popover"
+                  role="dialog"
+                  aria-labelledby="extension-pairing-title"
+                  hidden
+                >
+                  <div class="extension-pairing-form__heading">
+                    <span id="extension-pairing-title">Extension access</span>
+                  </div>
+                  <ul class="extension-request-list" id="extension-request-list" aria-label="Extension access requests"></ul>
+                  <ul class="extension-pairing-list" id="extension-pairing-list" aria-label="Paired browser extensions"></ul>
+                  <p id="extension-pairing-status" role="status" aria-live="polite">Loading extension pairing&#8230;</p>
+                </section>
+              </div>
+            </header>
+
+            <div class="extension-layout">
+              <section class="extension-install" aria-labelledby="extension-install-title">
+                <h2 id="extension-install-title">Get the extension</h2>
+                <p class="extension-install__supported">Chrome, Microsoft Edge, and Firefox.</p>
+                <p class="extension-install__source">Included with the desktop app. Load it unpacked; there is no store listing yet.</p>
+                <button class="extension-install__open" id="open-extension-directory" type="button">Open extension folder <span aria-hidden="true">&#8599;</span></button>
+                <ol class="extension-steps">
+                  <li><span>1</span><p><strong>Open the folder</strong><br />Use <em>Open extension folder</em> above and keep that folder in place.</p></li>
+                  <li><span>2</span><p><strong>Chrome or Edge</strong><br />Open <code>chrome://extensions</code> or <code>edge://extensions</code>, enable Developer mode, then choose <em>Load unpacked</em>.</p></li>
+                  <li><span>3</span><p><strong>Firefox</strong><br />Open <code>about:debugging#/runtime/this-firefox</code>, choose <em>Load Temporary Add-on&#8230;</em>, then select <code>manifest.json</code>.</p></li>
+                </ol>
+                <p class="extension-install__note">Extension imports require <code>localhost:5181</code>. Other local ports work in the browser only.</p>
+              </section>
+
+            </div>
+          </section>
+
+          <section class="companion-panel" data-companion-panel="settings" aria-labelledby="settings-title" hidden>
+            <header class="panel-heading">
+              <div>
+                <h1 id="settings-title">Settings</h1>
+                <p id="connection-summary">Checking the local service.</p>
+              </div>
+            </header>
+
+            <div class="connection-state-block" role="status" aria-live="polite">
+              <p class="state-line" id="connection-state" data-state="unknown">
+                <span class="state-line__dot" aria-hidden="true"></span>
+                <span id="connection-state-text">Checking&#8230;</span>
+              </p>
+              <p class="connection-tabs-line" id="connection-browser-tabs">&#8212;</p>
+            </div>
+
+            <form class="site-port-form" id="local-site-port-form" novalidate>
+              <label class="site-port-form__field" for="local-site-port">
+                <span>Local site port</span>
+                <input
+                  id="local-site-port"
+                  name="localSitePort"
+                  type="number"
+                  min="1"
+                  max="65535"
+                  step="1"
+                  inputmode="numeric"
+                  autocomplete="off"
+                  aria-describedby="local-site-port-status"
+                  disabled
+                />
+              </label>
+              <button id="apply-local-site-port" type="submit" disabled>Apply &amp; restart</button>
+              <p id="local-site-port-status" role="status" aria-live="polite">Loading port setting&#8230;</p>
+            </form>
+          </section>
+        </main>
+
+      </div>
     </div>
   </body>
 </html>

@@ -31,12 +31,18 @@ assert(files.includes("dist-electron/desktop/preload.cjs"));
 assert(files.includes("dist-electron/desktop/companion.html"));
 assert(files.includes("dist-electron/server/server.mjs"));
 assert(files.includes("server/starter.resume"));
+assert(files.includes("extension/manifest.json"));
+assert(files.includes("extension/popup.html"));
+assert(files.includes("extension/popup.css"));
+assert(files.includes("extension/popup.js"));
+assert(files.includes("extension/icons/icon.svg"));
 
 const allowedRoots = new Set([
   "LICENSE",
   "assets",
   "dist",
   "dist-electron",
+  "extension",
   "forge.config.cjs",
   "package.json",
   "server"

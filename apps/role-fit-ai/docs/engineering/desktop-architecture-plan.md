@@ -255,11 +255,12 @@ fallback, not an app-created credential store.
 ## CLI install and login UX
 
 > **Superseded (managed in-app sign-in removed):** RoleFit no longer spawns a
-> managed login child. CLI rows now link to official install/sign-in docs
-> (**Sign-in guide**) and offer an external-terminal sign-in (**Terminal ↗**).
+> managed login child. Missing CLI rows link to the official install guide;
+> signed-out CLI rows offer one **Sign in** action that opens the provider-owned
+> login command in an external terminal.
 > The single-flight/time-bounded/cancellable spawned-login details below are
 > retained only as historical context; the external-terminal sign-in and the
-> official install/sign-in-guide links remain valid.
+> official install guidance remain valid.
 
 The companion may provide a RoleFit connection screen. It must not provide a
 username/password form or handle provider passwords, MFA, SSO, authorization
@@ -339,6 +340,12 @@ receives provider credentials. Selecting a different companion site port does
 not rewrite the installed extension configuration or its route target; extension
 imports remain a default-port-only workflow in this phase.
 
+The desktop package stages the extension's fixed static files. On launch, the
+main process materializes them into its app-owned `userData` extension folder,
+because browsers cannot load an unpacked extension from Electron's archive. The
+trusted companion may open only that fixed folder through typed IPC; the
+renderer never receives a filesystem path or chooses files to open.
+
 ## Source ownership
 
 ```text
@@ -415,8 +422,9 @@ tracker, extension inbox, and multi-tab behavior remain browser-owned.
 ### Phase P4 — Provider-owned login and install recovery
 
 > **Superseded (managed in-app sign-in removed):** RoleFit no longer spawns a
-> managed login child. CLI rows now link to official install/sign-in docs
-> (**Sign-in guide**) and offer an external-terminal sign-in (**Terminal ↗**).
+> managed login child. Missing CLI rows link to the official install guide;
+> signed-out CLI rows offer one **Sign in** action that opens the provider-owned
+> login command in an external terminal.
 > The browser-opening/spawned-login steps below are retained only as historical
 > context; the install-recovery links and the external-terminal sign-in remain
 > valid.
