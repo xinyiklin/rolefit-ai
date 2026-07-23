@@ -10,6 +10,7 @@ type DuplicateReviewModalProps = {
   groups: DuplicateGroup<Application>[];
   onClose: () => void;
   onMerge: (memberIds: string[], canonicalId: string) => void;
+  onDismiss: (memberIds: string[]) => void;
 };
 
 // "Most advanced" rank for defaulting the canonical pick — NOT the same as the
@@ -38,10 +39,12 @@ function mostAdvancedId(applications: Application[]): string {
 
 function GroupCard({
   group,
-  onMerge
+  onMerge,
+  onDismiss
 }: {
   group: DuplicateGroup<Application>;
   onMerge: (memberIds: string[], canonicalId: string) => void;
+  onDismiss: (memberIds: string[]) => void;
 }) {
   const { confirm } = useDialog();
   const memberIds = group.applications.map((a) => a.id);
@@ -60,6 +63,16 @@ function GroupCard({
     });
     if (!proceed) return;
     onMerge(memberIds, canonicalId);
+  }
+
+  async function handleDismiss() {
+    const proceed = await confirm({
+      title: "Keep these applications separate?",
+      message: "They will leave duplicate review and remain as separate tracker entries.",
+      confirmLabel: "Not duplicates"
+    });
+    if (!proceed) return;
+    onDismiss(memberIds);
   }
 
   // Uncontrolled radio group (name scoped to this group) — the default is set
@@ -122,15 +135,20 @@ function GroupCard({
           </div>
         ) : null}
 
-        <button type="submit" className="secondary-button is-compact danger-button">
-          Merge {group.applications.length} into 1
-        </button>
+        <div className="duplicate-group-card__actions">
+          <button type="button" className="secondary-button is-compact" onClick={() => void handleDismiss()}>
+            Not duplicates
+          </button>
+          <button type="submit" className="secondary-button is-compact danger-button">
+            Merge {group.applications.length} into 1
+          </button>
+        </div>
       </form>
     </div>
   );
 }
 
-export function DuplicateReviewModal({ groups, onClose, onMerge }: DuplicateReviewModalProps) {
+export function DuplicateReviewModal({ groups, onClose, onMerge, onDismiss }: DuplicateReviewModalProps) {
   const panelRef = useRef<HTMLDivElement>(null);
   const closeBtnRef = useRef<HTMLButtonElement>(null);
   const handleKeyDown = useModalFocus({
@@ -167,7 +185,12 @@ export function DuplicateReviewModal({ groups, onClose, onMerge }: DuplicateRevi
 
         <div className="duplicate-review-modal__body">
           {groups.map((group, index) => (
-            <GroupCard key={group.applications.map((a) => a.id).join(",") || index} group={group} onMerge={onMerge} />
+            <GroupCard
+              key={group.applications.map((a) => a.id).join(",") || index}
+              group={group}
+              onMerge={onMerge}
+              onDismiss={onDismiss}
+            />
           ))}
         </div>
       </section>

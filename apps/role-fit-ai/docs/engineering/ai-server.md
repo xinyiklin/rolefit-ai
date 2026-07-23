@@ -221,11 +221,17 @@ owns:
   performs a LAYERED duplicate lookup of any matching tracked
   application (`findMatchingApplication` now delegates to the shared
   `findDuplicateApplications` in `src/lib/jobIdentity.ts`: ATS posting id /
-  normalized URL / requisition id in the posted text / company + title +
-  description overlap — fuzzy warnings require substantial descriptions on
-  both sides and at least 60% overlap, so shared company/title metadata or a
-  small amount of boilerplate cannot trigger them. The posted `text` is passed
-  as jobText so a duplicate is caught even when the URL differs across boards).
+  normalized URL / requisition id in the posted text / no-id company + title +
+  description overlap. Shared posting or requisition ids are exact; normalized
+  URL equality is exact unless explicit ids conflict. Different explicit ids
+  default to separate postings, but an ultra-high
+  company/title/location/content guard can raise a `possible` review warning in
+  case an id was entered incorrectly; it never auto-merges. An id on only one
+  side still stops before fuzzy comparison. The no-id fallback requires
+  substantial descriptions with strong lexical, ordered-phrase, and
+  length-ratio agreement, so shared company/title metadata or boilerplate
+  cannot trigger it. The posted `text` is passed as jobText so a duplicate can
+  still be caught when neither URL exposes an id).
   The response keeps the
   existing `previousApp` shape (built from the best match) and adds
   `match: { level, confidence, evidence }` (evidence capped at 3 strings), or

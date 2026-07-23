@@ -152,6 +152,9 @@ export type Application = {
   resumeArtifacts?: ResumeArtifacts;
   // Application-question answers the user saved from the Application Questions tab.
   applicationAnswers?: ApplicationAnswer[];
+  // Stable tracker ids the user reviewed and explicitly kept separate from this
+  // application. Either side of a pair may carry the decision.
+  duplicateDismissedIds?: string[];
 };
 
 // Build the common skeleton for a new pipeline entry from the current job
@@ -623,11 +626,15 @@ export function useApplications() {
         .filter(Boolean)
         .sort()[0] || canonical.createdAt;
 
+      const inheritedDismissals = Array.from(
+        new Set(members.flatMap((member) => member.duplicateDismissedIds ?? []))
+      ).filter((id) => !ids.has(id));
       const merged: Application = {
         ...canonical,
         sourceUrls,
         rawJobDescription: canonical.rawJobDescription || others.find((m) => m.rawJobDescription)?.rawJobDescription,
         aiUsage: canonical.aiUsage ?? others.find((m) => m.aiUsage)?.aiUsage,
+        duplicateDismissedIds: inheritedDismissals.length ? inheritedDismissals : undefined,
         createdAt: earliestCreatedAt,
         updatedAt: now
       };
@@ -645,6 +652,45 @@ export function useApplications() {
           baseUpdatedAt: application.updatedAt
         }))
       ]);
+    },
+    [persist]
+  );
+
+  // Persist the user's review decision for every pair in a duplicate cluster.
+  // The matcher treats a decision recorded on either record as sufficient, but
+  // writing it symmetrically keeps the decision intact if one row is later
+  // deleted or merged.
+  const dismissDuplicateGroup = useCallback(
+    (memberIds: string[]) => {
+      const current = applicationsRef.current;
+      const requestedIds = new Set(memberIds);
+      const members = current.filter((application) => requestedIds.has(application.id));
+      if (members.length < 2) return;
+
+      const memberIdSet = new Set(members.map((application) => application.id));
+      const now = new Date().toISOString();
+      const mutations: ApplicationMutation[] = [];
+      const next = current.map((application) => {
+        if (!memberIdSet.has(application.id)) return application;
+        const dismissed = new Set(application.duplicateDismissedIds ?? []);
+        for (const otherId of memberIdSet) {
+          if (otherId !== application.id) dismissed.add(otherId);
+        }
+        mutations.push({
+          id: application.id,
+          operation: "upsert",
+          baseUpdatedAt: application.updatedAt
+        });
+        return {
+          ...application,
+          duplicateDismissedIds: [...dismissed],
+          updatedAt: now
+        };
+      });
+
+      applicationsRef.current = next;
+      setApplications(next);
+      void persist(next, mutations);
     },
     [persist]
   );
@@ -690,6 +736,7 @@ export function useApplications() {
     findForTarget,
     findDuplicatesForTarget,
     mergeApplications,
+    dismissDuplicateGroup,
     refresh
   };
 }

@@ -501,6 +501,7 @@ function App() {
     findForTarget,
     findDuplicatesForTarget,
     mergeApplications,
+    dismissDuplicateGroup,
     refresh: refreshApplications
   } = useApplications();
 
@@ -1433,6 +1434,7 @@ function App() {
                 onAddApplication={handleAddApplication}
                 onRefresh={refreshApplications}
                 onMergeApplications={mergeApplications}
+                onDismissDuplicateGroup={dismissDuplicateGroup}
               />
             </Suspense>
           ) : null}

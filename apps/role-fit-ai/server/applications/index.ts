@@ -391,6 +391,19 @@ function sanitizeSourceUrls(raw: unknown, ownJobUrl: string) {
   return out.length ? out : undefined;
 }
 
+function sanitizeDuplicateDismissedIds(raw: unknown, ownId: string) {
+  if (!Array.isArray(raw)) return undefined;
+  const ids = Array.from(
+    new Set(
+      raw.filter(
+        (value): value is string =>
+          typeof value === "string" && value !== ownId && APPLICATION_ID_RE.test(value)
+      )
+    )
+  ).slice(0, MAX_APPLICATIONS);
+  return ids.length ? ids : undefined;
+}
+
 // Optional string subfield of an aiUsage entry: drop an empty string rather than
 // storing "" (so a caller can leave a field out and it stays out).
 function aiUsageOptionalString(value: unknown, maxLength: number): string | undefined {
@@ -508,7 +521,8 @@ function sanitizeApplication(raw: unknown) {
     missingRequiredSkills: sanitizeMissingRequiredSkills(r.missingRequiredSkills),
     resumeUsed: r.resumeUsed === "base" || r.resumeUsed === "tailored" ? r.resumeUsed : undefined,
     applicationAnswers: sanitizeApplicationAnswers(r.applicationAnswers),
-    aiUsage: sanitizeAiUsage(r.aiUsage)
+    aiUsage: sanitizeAiUsage(r.aiUsage),
+    duplicateDismissedIds: sanitizeDuplicateDismissedIds(r.duplicateDismissedIds, id)
   };
 }
 
