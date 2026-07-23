@@ -6,6 +6,9 @@ import { tmpdir } from "node:os";
 import { delimiter, isAbsolute, join, resolve } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { getCurrentFuseWire } from "@electron/fuses";
+import {
+  ROLEFIT_DESKTOP_COMPATIBILITY_VERSION
+} from "../../dist-electron/server/health-contract.js";
 
 const appRoot = resolve(import.meta.dirname, "../..");
 
@@ -203,7 +206,10 @@ try {
     ),
     prematureExit
   ]);
-  assert.match(health.body, /"desktopCompatibilityVersion":1/);
+  assert.equal(
+    JSON.parse(health.body).desktopCompatibilityVersion,
+    ROLEFIT_DESKTOP_COMPATIBILITY_VERSION
+  );
 
   const page = await waitForResponse(
     `${origin}/`,

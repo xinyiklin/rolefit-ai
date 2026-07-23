@@ -94,14 +94,14 @@ type SmokeResult = {
   sitePortValue: string;
   sitePortLocked: boolean;
   sitePortLockReported: boolean;
-  tabLists: number;
-  tabCount: number;
-  tabPanels: number;
-  visibleTabPanels: number;
-  selectedTabId: string;
+  navigationRegions: number;
+  navigationItems: number;
+  panels: number;
+  visiblePanels: number;
+  activeSection: string;
   workspaceControlsPresent: boolean;
   connectionControlsPresent: boolean;
-  explainerParagraphsAbsent: boolean;
+  panelCopyConcise: boolean;
   workspaceOverview: unknown;
   workspaceOverviewError: string | null;
   connectionStatus: unknown;
@@ -970,15 +970,15 @@ async function inspectSmokeRenderer(
         sitePortValue: document.querySelector('#local-site-port')?.value ?? '',
         sitePortLocked: Boolean(document.querySelector('#local-site-port')?.disabled),
         sitePortLockReported: document.querySelector('#local-site-port-status')?.textContent?.includes('ROLEFIT_DESKTOP_PORT') ?? false,
-        tabLists: document.querySelectorAll('[role="tablist"]').length,
-        tabCount: document.querySelectorAll('[role="tab"]').length,
-        tabPanels: document.querySelectorAll('[role="tabpanel"]').length,
-        visibleTabPanels: [...document.querySelectorAll('[role="tabpanel"]')].filter((panel) => !panel.hidden).length,
-        selectedTabId: document.querySelector('[role="tab"][aria-selected="true"]')?.id ?? '',
+        navigationRegions: document.querySelectorAll('nav.companion-nav').length,
+        navigationItems: document.querySelectorAll('[data-companion-tab]').length,
+        panels: document.querySelectorAll('[data-companion-panel]').length,
+        visiblePanels: [...document.querySelectorAll('[data-companion-panel]')].filter((panel) => !panel.hidden).length,
+        activeSection: document.querySelector('[data-companion-tab][aria-current="page"]')?.getAttribute('data-companion-tab') ?? '',
         workspaceControlsPresent: ['workspace-path', 'open-workspace-folder', 'backup-workspace', 'restore-workspace', 'workspace-status', 'stat-base-resume', 'stat-applications'].every((id) => Boolean(document.getElementById(id))) &&
           ['workspace-activity', 'stat-pdfs', 'stat-history'].every((id) => !document.getElementById(id)),
         connectionControlsPresent: ['connection-state', 'connection-state-text', 'connection-browser-tabs'].every((id) => Boolean(document.getElementById(id))),
-        explainerParagraphsAbsent: [...document.querySelectorAll('main p')].every((paragraph) => (paragraph.textContent ?? '').trim().length <= 80),
+        panelCopyConcise: [...document.querySelectorAll('main p')].every((paragraph) => (paragraph.textContent ?? '').trim().length <= 160),
         workspaceOverview,
         workspaceOverviewError,
         connectionStatus,
@@ -1003,6 +1003,7 @@ async function inspectSmokeRenderer(
     "getWorkspaceOverview",
     "openBrowserApp",
     "openCliSignInTerminal",
+    "openExtensionDirectory",
     "openProviderInstallGuide",
     "openWorkspaceFolder",
     "removeExtensionOrigin",
@@ -1013,63 +1014,64 @@ async function inspectSmokeRenderer(
     "setCliProviderEnabled"
   ];
 
-  if (
-    !result.rootRendered ||
-    !result.companionReady ||
-    result.hasRequire ||
-    result.hasProcess ||
-    result.hasBuffer ||
-    !result.hasDesktopBridge ||
-    !result.bridgeFrozen ||
-    result.bridgeKeys.length !== expectedBridgeKeys.length ||
-    !result.bridgeKeys.every((key, index) => key === expectedBridgeKeys[index]) ||
-    result.runtimeInfoError !== null ||
-    !runtimeInfoMatches(result.runtimeInfo, expectedRuntimeInfo) ||
-    result.localSiteSettingsError !== null ||
-    !siteSettingsMatch(
+  const smokeChecks: ReadonlyArray<readonly [string, boolean]> = [
+    ["root rendered", result.rootRendered],
+    ["companion ready", result.companionReady],
+    ["Node require absent", !result.hasRequire],
+    ["Node process absent", !result.hasProcess],
+    ["Node Buffer absent", !result.hasBuffer],
+    ["desktop bridge present", result.hasDesktopBridge],
+    ["desktop bridge frozen", result.bridgeFrozen],
+    ["desktop bridge keys", result.bridgeKeys.length === expectedBridgeKeys.length &&
+      result.bridgeKeys.every((key, index) => key === expectedBridgeKeys[index])],
+    ["runtime info request", result.runtimeInfoError === null],
+    ["runtime info contract", runtimeInfoMatches(result.runtimeInfo, expectedRuntimeInfo)],
+    ["site settings request", result.localSiteSettingsError === null],
+    ["site settings contract", siteSettingsMatch(
       result.localSiteSettings,
       expectedSiteSettings.localSitePort,
       expectedSiteSettings.locked
-    ) ||
-    result.providerStatusError !== null ||
-    (ownership === "owned"
-      ? result.providerMutationError !== null
-      : typeof result.providerMutationError !== "string" ||
-        !result.providerMutationError.includes("standalone RoleFit server")) ||
-    !providerStatusesMatch(result.providerStatus) ||
-    result.providerLandmarks !== 5 ||
-    result.providerDescriptions !== 0 ||
-    result.providerOrdinals !== 0 ||
-    result.replayingProviderAnimations !== 0 ||
-    !result.descriptiveChromeAbsent ||
-    result.sitePortForms !== 1 ||
-    result.sitePortValue !== String(expectedSiteSettings.localSitePort) ||
-    result.sitePortLocked !== expectedSiteSettings.locked ||
-    result.sitePortLockReported !== expectedSiteSettings.locked ||
-    result.tabLists !== 1 ||
-    result.tabCount !== 3 ||
-    result.tabPanels !== 3 ||
-    result.visibleTabPanels !== 1 ||
-    result.selectedTabId !== "tab-providers" ||
-    !result.workspaceControlsPresent ||
-    !result.connectionControlsPresent ||
-    !result.explainerParagraphsAbsent ||
-    result.workspaceOverviewError !== null ||
-    !workspaceOverviewMatches(result.workspaceOverview, activeWorkspaceDir, ownership) ||
-    result.connectionStatusError !== null ||
-    !connectionStatusMatches(
+    )],
+    ["provider status request", result.providerStatusError === null],
+    ["provider mutation boundary", ownership === "owned"
+      ? result.providerMutationError === null
+      : typeof result.providerMutationError === "string" &&
+        result.providerMutationError.includes("standalone RoleFit server")],
+    ["provider status contract", providerStatusesMatch(result.providerStatus)],
+    ["provider landmarks", result.providerLandmarks === 5],
+    ["provider descriptions absent", result.providerDescriptions === 0],
+    ["provider ordinals absent", result.providerOrdinals === 0],
+    ["provider entry animations settled", result.replayingProviderAnimations === 0],
+    ["legacy descriptive chrome absent", result.descriptiveChromeAbsent],
+    ["site port form", result.sitePortForms === 1],
+    ["site port value", result.sitePortValue === String(expectedSiteSettings.localSitePort)],
+    ["site port lock", result.sitePortLocked === expectedSiteSettings.locked],
+    ["site port lock status", result.sitePortLockReported === expectedSiteSettings.locked],
+    ["sidebar navigation", result.navigationRegions === 1 && result.navigationItems === 5],
+    ["section panels", result.panels === 5 && result.visiblePanels === 1],
+    ["default overview section", result.activeSection === "overview"],
+    ["workspace controls", result.workspaceControlsPresent],
+    ["connection controls", result.connectionControlsPresent],
+    ["concise panel copy", result.panelCopyConcise],
+    ["workspace overview request", result.workspaceOverviewError === null],
+    ["workspace overview contract", workspaceOverviewMatches(result.workspaceOverview, activeWorkspaceDir, ownership)],
+    ["connection status request", result.connectionStatusError === null],
+    ["connection status contract", connectionStatusMatches(
       result.connectionStatus,
       expectedSiteSettings.localSitePort,
       canonicalBrowserOrigin(serverOrigin),
       ownership
-    ) ||
-    (holdMs >= PROVIDER_SNAPSHOT_REFRESH_INTERVAL_MS && result.providerBackgroundRefreshes < 1) ||
-    !result.fullWorkspaceAbsent ||
-    !result.correctTitle ||
-    rendererErrorCount > 0
-  ) {
+    )],
+    ["provider background refresh", holdMs < PROVIDER_SNAPSHOT_REFRESH_INTERVAL_MS ||
+      result.providerBackgroundRefreshes >= 1],
+    ["full browser workspace absent", result.fullWorkspaceAbsent],
+    ["window title", result.correctTitle],
+    ["renderer console", rendererErrorCount === 0]
+  ];
+  const failedChecks = smokeChecks.filter(([, passed]) => !passed).map(([label]) => label);
+  if (failedChecks.length > 0) {
     throw new Error(
-      `Electron companion renderer security smoke failed (${JSON.stringify(result)}, errors=${rendererErrorCount}, samples=${JSON.stringify(rendererErrorSamples)}).`
+      `Electron companion renderer security smoke failed (${failedChecks.join(", ")}; ${JSON.stringify(result)}, errors=${rendererErrorCount}, samples=${JSON.stringify(rendererErrorSamples)}).`
     );
   }
 

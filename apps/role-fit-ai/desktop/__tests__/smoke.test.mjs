@@ -7,6 +7,10 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import electronPath from "electron";
+import {
+  ROLEFIT_DESKTOP_COMPATIBILITY_VERSION,
+  ROLEFIT_HEALTH_API_VERSION
+} from "../../dist-electron/server/health-contract.js";
 
 const appRoot = resolve(import.meta.dirname, "../..");
 const candidatePorts = [5_182, 5_183];
@@ -43,8 +47,8 @@ async function waitForHealth(origin, mode, timeoutMs = 20_000) {
         response.ok &&
         response.headers.get("content-type")?.includes("application/json") &&
         data.service === "role-fit-ai" &&
-        data.apiVersion === 1 &&
-        data.desktopCompatibilityVersion === 1 &&
+        data.apiVersion === ROLEFIT_HEALTH_API_VERSION &&
+        data.desktopCompatibilityVersion === ROLEFIT_DESKTOP_COMPATIBILITY_VERSION &&
         data.mode === mode &&
         typeof data.workspaceFingerprint === "string"
       ) {
