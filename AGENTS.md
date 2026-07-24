@@ -218,6 +218,15 @@ agree, checks are reported honestly, and residual risks are explicit.
   behavior slices reviewable.
 - Treat `AGENTS.md` and `CLAUDE.md` as normal tracked files when requested.
 
+Before a requested push, review the affected README and product/engineering
+documentation; update visitor-facing docs for changed behavior, commands, or
+availability, and update engineering docs for changed contracts. Include the
+compact, privacy-safe continuity receipt in the behavior-slice commit. When a
+product version changes, update its canonical version and user-facing version
+references, then verify the matching release/publish workflow, tag, and
+deployment path before reporting publication. Do not claim a release or deploy
+completed without its concrete workflow or live-environment receipt.
+
 ## Continuity
 
 Keep continuity factual and bounded. Tag entries with an ISO date and

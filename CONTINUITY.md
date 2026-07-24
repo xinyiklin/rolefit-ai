@@ -5,6 +5,10 @@ bounded; app-only operational detail belongs in the affected app documentation.
 
 ## 2026-07-24
 
+- [USER] Before requested pushes, review and update affected README and
+  documentation; commit compact, privacy-safe continuity with the behavior
+  slice. Version changes also update canonical/user-facing versions and require
+  a verified matching release/publish workflow before deployment is reported.
 - [TOOL] Local `main` was fast-forwarded to `origin/main` at `58fcf3f`
   (`Harden AI workflows and refresh application tracker`) before the current
   cover-letter work began.
