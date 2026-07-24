@@ -488,6 +488,7 @@ function App() {
   const {
     applications,
     isLoading: isApplicationsLoading,
+    hasLoadedApplications,
     error: applicationsError,
     pendingWrites: pendingApplicationWrites,
     upsert: upsertApplication,
@@ -765,6 +766,7 @@ function App() {
     confirmDuplicateAfterDistill: duplicateGuard.confirmDuplicateAfterDistill,
     distillRequestFields,
     ensureProviderReady: ensureDistillProvider,
+    extensionImportsReady: hasLoadedApplications,
     tailorModes,
     editedResume
   });
@@ -1047,8 +1049,13 @@ function App() {
     setActiveOutputTab("resume");
   }
 
-  // Restore the autosaved draft into the editor, then clear the prompt and the
-  // stored key so the affordance doesn't reappear.
+  // Restore the autosaved draft into the editor and clear the prompt. The
+  // stored copy deliberately survives: the editor seeds CLEAN (dirty=false), so
+  // autosave will not re-write the draft until the next edit — clearing here
+  // would leave a window where closing the tab permanently loses content that
+  // was durably recoverable a moment earlier. The draft already lives under
+  // THIS tab's key (recovery migrates orphans), and Apply / base-resume save /
+  // explicit replace / dismiss all clear it once the content is safe elsewhere.
   async function handleRestoreAutosaveDraft(draft: AutosavedDraft) {
     if (resumeEdited) {
       if (!(await confirmReplaceEditor())) return;
@@ -1068,7 +1075,6 @@ function App() {
       if (draft.pipelineAiUsage) setPipelineAiUsage(draft.pipelineAiUsage);
       if (draft.jobRawText) setJobRawText(draft.jobRawText);
     }
-    clearAutosaveDraft();
     setPendingAutosaveDraft(null);
     setFileStatus(`Restored unsaved draft${draft.jobLabel ? ` (${draft.jobLabel})` : ""}.`);
   }

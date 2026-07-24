@@ -93,6 +93,7 @@ type UseJobIntakeArgs = {
   ) => Promise<{ proceed: boolean; note: string | null }>;
   distillRequestFields: () => Record<string, unknown>;
   ensureProviderReady: () => Promise<ProviderReadiness>;
+  extensionImportsReady: boolean;
   tailorModes: Record<string, TailorMode>;
   editedResume: ResumeData | null;
 };
@@ -114,6 +115,7 @@ export function useJobIntake({
   confirmDuplicateAfterDistill,
   distillRequestFields,
   ensureProviderReady,
+  extensionImportsReady,
   tailorModes,
   editedResume
 }: UseJobIntakeArgs) {
@@ -290,6 +292,9 @@ export function useJobIntake({
     const readiness = await ensureProviderReady();
     if (!readiness.ready) {
       setLinkStatus(readiness.message);
+      // Point the failed card's Retry at THIS action — without it the button
+      // would re-dispatch whatever distill ran previously (or be absent).
+      setDistillRetrySource("link");
       setDistillProgress({ status: "failed", errorHeadline: "Provider unavailable", error: readiness.message });
       setDistillProgressVisible(true);
       return;
@@ -401,6 +406,8 @@ export function useJobIntake({
     const readiness = await ensureProviderReady();
     if (!readiness.ready) {
       setLinkStatus(readiness.message);
+      // Point the failed card's Retry at THIS action (see handleExtractFromLink).
+      setDistillRetrySource("paste");
       setDistillProgress({ status: "failed", errorHeadline: "Provider unavailable", error: readiness.message });
       setDistillProgressVisible(true);
       return;
@@ -818,7 +825,8 @@ export function useJobIntake({
       setDistillRetrySource(null);
       setDistillProgress((prev) => (prev.status === "running" ? prev : { status: "running" }));
       setDistillProgressVisible(true);
-    }
+    },
+    extensionImportsReady
   );
 
   // Resolve the distill card's Retry to the live handler for the last action, so

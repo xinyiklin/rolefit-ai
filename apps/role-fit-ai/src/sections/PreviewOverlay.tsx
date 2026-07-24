@@ -34,6 +34,7 @@ export default function PreviewOverlay({
 }: PreviewOverlayProps) {
   const [numPages, setNumPages] = useState<number | null>(null);
   const [zoomIndex, setZoomIndex] = useState(DEFAULT_ZOOM_INDEX);
+  const [downloadError, setDownloadError] = useState("");
   const chromeRef = useRef<HTMLDivElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const zoom = ZOOM_STEPS[zoomIndex];
@@ -44,9 +45,10 @@ export default function PreviewOverlay({
     onClose
   });
 
-  // Reset zoom when a new PDF loads.
+  // Reset zoom (and any stale download failure) when a new PDF loads.
   useEffect(() => {
     setNumPages(null);
+    setDownloadError("");
     if (pdfUrl) setZoomIndex(DEFAULT_ZOOM_INDEX);
   }, [pdfUrl]);
 
@@ -70,11 +72,19 @@ export default function PreviewOverlay({
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [isOpen]);
 
-  function handleDownload() {
+  async function handleDownload() {
     if (!pdfUrl) return;
-    fetch(pdfUrl)
-      .then((r) => r.blob())
-      .then((blob) => downloadBlob(blob, fileName));
+    setDownloadError("");
+    try {
+      const response = await fetch(pdfUrl);
+      // A 404/500 reply carries a JSON error body, not a PDF — blobbing it
+      // would save a corrupt "*.pdf" the user might upload to a real
+      // application. Surface the failure instead.
+      if (!response.ok) throw new Error(`Download failed (${response.status}).`);
+      downloadBlob(await response.blob(), fileName);
+    } catch {
+      setDownloadError("Download failed — the saved PDF may be missing. Re-save it from Apply, then try again.");
+    }
   }
   const canDownload = Boolean(pdfUrl);
 
@@ -161,6 +171,12 @@ export default function PreviewOverlay({
             </button>
           </div>
         </div>
+
+        {downloadError ? (
+          <p className="preview-overlay__notice" role="alert">
+            {downloadError}
+          </p>
+        ) : null}
 
         <div className="preview-overlay__body">
           {pdfUrl ? (

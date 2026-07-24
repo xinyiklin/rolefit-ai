@@ -261,6 +261,17 @@
   to { transform: rotate(360deg); }
 }
 
+/* Inline notice under the head bar (e.g. a failed download fetch). */
+.preview-overlay__notice {
+  padding: 6px var(--s3);
+  font-family: var(--font-ui);
+  font-size: 0.74rem;
+  line-height: 1.4;
+  text-align: center;
+  color: oklch(0.78 0.12 25);
+  background: rgba(0, 0, 0, 0.35);
+}
+
 /* Error */
 .preview-overlay__error {
   display: grid;

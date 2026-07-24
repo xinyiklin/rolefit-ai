@@ -401,19 +401,19 @@ named numbers.
 Inline summary figures sit in one hairline-bounded strip: tiny faint label
 over a mono 0.92rem value, items separated by 1px dividers. This replaces
 hero-metric card grids everywhere. It belongs to Analytics: tracking
-surfaces lead with the docket and the stage-filter counts, never a second
-row of summary numbers.
+surfaces lead with search, lifecycle filters, and the working register, never
+a second row of summary numbers.
 
-### Docket (signature)
+### Tracker Control Bar (signature)
 
-Tracking surfaces open with "Up next": a short ledger of actions derived
-from real data (overdue follow-ups, dates due this week, applications gone
-quiet), capped at four lines. Each line is a button: mono date tag, a 6px
-signal dot, company and role in sans, a dotted leader, the action in
-`--ink-muted`. No card box; hairline rules above and below. Empty reads
-"Nothing due." in one faint line; with zero applications the docket is
-omitted. The docket is the page's point of view: what to do now, not what
-the numbers are.
+Tracking surfaces open with one compact control row aligned to the
+register-and-inspector grid: a flexible search field, All / Active / Inactive
+lifecycle filters, per-status drill-down inside the Active and Inactive split
+controls, and one Table / Calendar switch. Filter labels stay plain and counts
+live inside the drill-down menu; the page does not grow a second summary or
+"Up next" surface above the work. Table mode groups the chronological default
+under month dividers and keeps the selected application in the right inspector.
+Calendar mode reuses the same query and lifecycle filter state.
 
 ### Page Anatomy: Sheets Center, Rail Right
 

@@ -32,8 +32,8 @@
   border: 1px solid var(--hairline);
   border-radius: var(--r-lg);
   background: var(--card-elev);
-  overflow: hidden;
-  flex-wrap: wrap;
+  overflow: visible;
+  flex-wrap: nowrap;
   /* Hairline dividers between chips via gap-free sibling borders */
 }
 
@@ -55,11 +55,22 @@
   transition: background 140ms var(--ease), color 140ms var(--ease);
 }
 
-.pipeline-filter:last-child {
-  border-right: 0;
+.pipeline-filters > .pipeline-filter:first-child {
+  border-radius: var(--r-lg) 0 0 var(--r-lg);
 }
 
-.pipeline-filter:hover:not(.is-active) {
+.pipeline-filter-menu-wrap > .pipeline-filter {
+  border-right: 1px solid var(--hairline);
+}
+
+.pipeline-filter-menu-wrap:last-child > .pipeline-filter {
+  border-right: 0;
+  border-radius: 0 var(--r-lg) var(--r-lg) 0;
+}
+
+/* Split segments own per-zone hover below — the whole-chip tint here would
+   paint both zones at once and defeat it. */
+.pipeline-filter:hover:not(.is-active):not(.pipeline-filter--split) {
   background: var(--card-soft);
   color: var(--ink-strong);
 }
@@ -69,19 +80,84 @@
   outline-offset: -2px;
 }
 
-.pipeline-filter em {
-  font-style: normal;
-  font-family: var(--font-mono);
-  font-weight: 500;
-  font-size: 0.66rem;
-  color: var(--ink-faint);
-  font-feature-settings: "tnum";
-}
-
 .pipeline-filter.is-active {
   background: var(--accent-soft);
   color: var(--accent-deep);
   font-weight: 600;
 }
 
-.pipeline-filter.is-active em { color: var(--accent); }
+.pipeline-filter__chevron {
+  margin-left: -2px;
+  color: var(--ink-faint);
+  transition: transform 140ms var(--ease);
+}
+
+.pipeline-filter__chevron.is-open {
+  transform: rotate(180deg);
+}
+
+/* -------- Split filter segment (label filters · caret discloses) -------- */
+/* The segment is two hit zones, not one: the label applies the group filter
+   instantly, the caret opens the per-status menu. overflow:hidden clips the
+   per-zone hover fill to the segment's rounded corners. */
+.pipeline-filter--split {
+  padding: 0;
+  gap: 0;
+  overflow: hidden;
+}
+
+.pipeline-filter__main,
+.pipeline-filter__disclosure {
+  display: inline-flex;
+  align-items: center;
+  height: 100%;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  transition: background 140ms var(--ease), color 140ms var(--ease);
+}
+
+.pipeline-filter__main {
+  flex: 1 1 auto;
+  justify-content: center;
+  padding: 0 var(--s2);
+  font-weight: 500;
+}
+
+.pipeline-filter__disclosure {
+  flex: 0 0 auto;
+  padding: 0 6px;
+  border-left: 1px solid var(--hairline-soft);
+  color: var(--ink-faint);
+}
+
+/* Hover affects only the hovered zone, and never overrides the active tint. */
+.pipeline-filter--split:not(.is-active) .pipeline-filter__main:hover,
+.pipeline-filter--split:not(.is-active) .pipeline-filter__disclosure:hover {
+  background: var(--card-soft);
+  color: var(--ink-strong);
+}
+
+.pipeline-filter--split.is-active .pipeline-filter__main {
+  color: var(--accent-deep);
+  font-weight: 600;
+}
+
+.pipeline-filter--split.is-active .pipeline-filter__disclosure {
+  color: var(--accent);
+  border-left-color: var(--accent-veil);
+}
+
+.pipeline-filter__main:focus-visible,
+.pipeline-filter__disclosure:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pipeline-filter__chevron {
+    transition: none;
+  }
+}

@@ -9,6 +9,7 @@ import type { ChildProcessWithoutNullStreams } from "node:child_process";
 import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, win32 } from "node:path";
+import { StringDecoder } from "node:string_decoder";
 import crossSpawn from "cross-spawn";
 
 import {
@@ -205,6 +206,16 @@ export function runCli(
       terminateChild(child, childEnvironment);
       rejectOnce(new RequestAbortedError());
     };
+    // Decode each stream through a StringDecoder so a multibyte UTF-8 character
+    // split across pipe-chunk boundaries survives intact instead of collapsing
+    // into U+FFFD (http.ts readBody documents the same hazard). The byte caps
+    // still count raw chunk bytes.
+    const stdoutDecoder = new StringDecoder("utf8");
+    const stderrDecoder = new StringDecoder("utf8");
+    const flushDecoders = (): void => {
+      stdout += stdoutDecoder.end();
+      stderr += stderrDecoder.end();
+    };
     const appendBounded = (stream: "stdout" | "stderr", chunk: Buffer): void => {
       if (settled) return;
       const bytes = chunk.length;
@@ -215,11 +226,12 @@ export function runCli(
         rejectOnce(new Error(`${command} returned too much output. Try again or choose another provider.`));
         return;
       }
-      if (stream === "stdout") stdout += chunk.toString();
-      else stderr += chunk.toString();
+      if (stream === "stdout") stdout += stdoutDecoder.write(chunk);
+      else stderr += stderrDecoder.write(chunk);
     };
     timer = setTimeout(() => {
       terminateChild(child, childEnvironment);
+      flushDecoders();
       const error = new Error(`${command} timed out after ${Math.round(timeoutMs / 1000)}s. Try again or switch to a faster model.`) as CliError;
       error.timedOut = true;
       error.stdout = stdout;
@@ -238,6 +250,7 @@ export function runCli(
     });
     child.on("close", (code) => {
       if (settled) return;
+      flushDecoders();
       if (code === 0) {
         settled = true;
         cleanup();

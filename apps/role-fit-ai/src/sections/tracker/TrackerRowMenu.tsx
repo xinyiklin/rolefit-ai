@@ -42,9 +42,20 @@ export function TrackerRowMenu({ x, y, items, onClose }: TrackerRowMenuProps) {
     setPos({ x: nx, y: ny });
   }, [x, y]);
 
-  // Focus the first item so the menu is keyboard-operable immediately.
+  // Focus the first item so the menu is keyboard-operable immediately, and
+  // restore focus to the pre-menu element on close (the originating row for
+  // Shift+F10 keyboard users) — otherwise focus drops to <body> and the user
+  // must Tab back from the top of the page. Skip the restore when the close
+  // came from clicking another control (focus already moved somewhere real).
   useEffect(() => {
+    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     menuRef.current?.querySelector<HTMLButtonElement>("button")?.focus();
+    return () => {
+      const active = document.activeElement;
+      if (opener && opener.isConnected && (active === null || active === document.body)) {
+        opener.focus();
+      }
+    };
   }, []);
 
   // Dismiss/keyboard handling. Scroll (capture) covers the studio body scroller.

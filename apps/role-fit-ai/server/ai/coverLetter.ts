@@ -6,8 +6,9 @@
 // is blanked so callers can surface generation failure and offer Retry.
 
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { FetchTimeoutError, isRequestAborted, readBody, requestAbortSignal, sendJson } from "../http.ts";
+import { FetchTimeoutError, isRequestAborted, requestAbortSignal, sendJson } from "../http.ts";
 import { UserSafeAiError, safeConfigErrorMessage } from "./errors.ts";
+import { readAiJsonBody } from "./json.ts";
 import { resolveProviderRequest } from "./providers.ts";
 import {
   buildCoverLetterPrompts,
@@ -94,7 +95,7 @@ export async function handleCoverLetter(req: IncomingMessage, res: ServerRespons
 
   const request = requestAbortSignal(req, res);
   try {
-    const body = JSON.parse(await readBody(req, 1_000_000));
+    const body = await readAiJsonBody(req, 1_000_000);
     const resumeText = String(body.resumeText ?? "").slice(0, 45_000);
     const jobText = String(body.jobText ?? "").slice(0, 35_000);
     const honestContext = String(body.honestContext ?? "").slice(0, 8_000);

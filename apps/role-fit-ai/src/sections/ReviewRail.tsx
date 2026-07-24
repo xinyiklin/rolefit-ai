@@ -7,6 +7,7 @@ import type { ResumeEditorActions } from "../hooks/useResumeEditor";
 import type { TailorChangeTarget } from "../resume/types";
 import type { JobConstraint } from "../lib/jobConstraints";
 import { displayVerdictReason } from "../lib/verdictReason";
+import { verdictPillClass } from "../lib/fitVerdict";
 
 type BulletTarget = { sectionId: string; entryId: string; bulletId: string };
 
@@ -353,7 +354,7 @@ export function ReviewRail({ result, resume, actions, resumeDiff, jobConstraints
       {sr ? (
         <>
           <div className={`review-rail__verdict${reviewStale ? " review-rail__verdict--stale" : ""}`}>
-            <strong className={`verdict-pill verdict-pill--${sr.verdict.replace(/['\s]+/g, "-").toLowerCase()}`}>
+            <strong className={`verdict-pill ${verdictPillClass(sr.verdict)}`}>
               {sr.verdict}
             </strong>
             {actionStatus ? (

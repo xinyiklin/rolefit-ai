@@ -585,11 +585,16 @@ export function makeRewriteGrounder(scope: TailorScopeInput, honestContext: unkn
   }
   return (originalText: string): string => {
     const needle = norm(originalText);
-    if (needle && !ambiguous.has(needle)) {
-      const grounding = bulletGrounding.get(needle);
-      if (grounding) return grounding;
-    }
-    return `${originalText}\n${honest}`.toLowerCase();
+    // An ambiguous original matches REAL bullets in multiple entries — its text
+    // is genuine resume content, so it may stay in the grounding corpus.
+    if (needle && ambiguous.has(needle)) return `${originalText}\n${honest}`.toLowerCase();
+    const grounding = needle ? bulletGrounding.get(needle) : undefined;
+    if (grounding) return grounding;
+    // Fail closed: an original that matches no known scope bullet is
+    // model-authored text. Grounding against it would let a fabricated
+    // original/rewrite pair license itself, so ground against honest context
+    // only and let the term/numeric gates drop the unsupported rewrite.
+    return honest.toLowerCase();
   };
 }
 
@@ -617,7 +622,10 @@ export function makeRewriteNumericGrounder(scope: TailorScopeInput, honestContex
       }
     }
   }
-  return (originalText: string): string => bullets.get(normalize(originalText)) ?? `${originalText}\n${honest}`;
+  // Fail closed on an unmatched original (see makeRewriteGrounder): numbers in
+  // a rewrite whose original is not a real scope bullet must ground against
+  // honest context alone, never against the model's own text.
+  return (originalText: string): string => bullets.get(normalize(originalText)) ?? honest;
 }
 
 // Validate and clamp the strict-review object before it reaches the client.

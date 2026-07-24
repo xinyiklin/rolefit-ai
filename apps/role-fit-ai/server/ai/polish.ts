@@ -8,15 +8,16 @@
 // types live in sibling modules under server/ai/.
 
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { INLINE_MARK_TAG_PATTERN } from "@typeset/engine/lib/inlineMarksText.ts";
 import {
   FetchTimeoutError,
   RequestAbortedError,
   isRequestAborted,
-  readBody,
   requestAbortSignal,
   sendJson
 } from "../http.ts";
 import { UserSafeAiError, safeConfigErrorMessage } from "./errors.ts";
+import { readAiJsonBody } from "./json.ts";
 import {
   providerLabel,
   resolveAuditProviderRequest,
@@ -104,6 +105,25 @@ function trimText(value: unknown, max = 1200): string {
   return String(value ?? "").trim().slice(0, max);
 }
 
+// ResumeData fields may carry inline display/structure tokens. The Tailor model
+// needs <b>/<i>/<u> so it can preserve visible emphasis, but link destinations,
+// font/size overrides, alignment, and nolink suppression are editor structure,
+// not candidate evidence. Match the engine's single grammar source and preserve
+// only emphasis tags before prompt construction AND before every sanitizer /
+// grounding consumer sees the normalized scope.
+const INLINE_MARK_RE = new RegExp(INLINE_MARK_TAG_PATTERN, "gi");
+export function stripStructuralInlineMarks(value: unknown): string {
+  INLINE_MARK_RE.lastIndex = 0;
+  return String(value ?? "").replace(
+    INLINE_MARK_RE,
+    (tag) => /^<\/?(?:b|i|u)>$/i.test(tag) ? tag : ""
+  );
+}
+
+function trimScopeText(value: unknown, max = 1200): string {
+  return stripStructuralInlineMarks(value).trim().slice(0, max);
+}
+
 // changeSummary ("What changed") is free model prose, NOT derived from the
 // sanitized suggestions — so a model can claim a change ("added Kubernetes to
 // your Skills") that never survived sanitization, leaving the summary describing
@@ -141,7 +161,7 @@ export function groundChangeSummary(changeSummary: string[], jobText: unknown, t
 // walked defensively with `?.` and clamped by trimText. The RETURN is fully typed.
 function normalizeScopeSection(section: any): ScopeSection | null {
   const id = trimText(section?.id, 120);
-  const heading = trimText(section?.heading, 120);
+  const heading = trimScopeText(section?.heading, 120);
   if (!id || !heading) return null;
   const type = section?.type === "skills" ? "skills" : section?.type === "summary" ? "summary" : "standard";
   const entries = Array.isArray(section?.entries) ? section.entries : [];
@@ -155,16 +175,16 @@ function normalizeScopeSection(section: any): ScopeSection | null {
         if (!entryId) return null;
         return {
           id: entryId,
-          titleLeft: trimText(entry?.titleLeft),
-          titleRight: trimText(entry?.titleRight),
-          subtitleLeft: trimText(entry?.subtitleLeft),
-          subtitleRight: trimText(entry?.subtitleRight),
+          titleLeft: trimScopeText(entry?.titleLeft),
+          titleRight: trimScopeText(entry?.titleRight),
+          subtitleLeft: trimScopeText(entry?.subtitleLeft),
+          subtitleRight: trimScopeText(entry?.subtitleRight),
           bullets: Array.isArray(entry?.bullets)
             ? entry.bullets
                 .map((bullet: any) => {
                   const bulletId = trimText(bullet?.id, 120);
                   if (!bulletId) return null;
-                  return { id: bulletId, text: trimText(bullet?.text) };
+                  return { id: bulletId, text: trimScopeText(bullet?.text) };
                 })
                 .filter(Boolean)
                 .slice(0, 20)
@@ -178,7 +198,7 @@ function normalizeScopeSection(section: any): ScopeSection | null {
 
 // raw is untrusted request-body JSON (already `any`); walked defensively. The
 // RETURN is fully typed so every consumer of the scope is strict.
-function normalizeTailorScope(raw: any): NormalizedScope {
+export function normalizeTailorScope(raw: any): NormalizedScope {
   const sections: ScopeSection[] = (Array.isArray(raw?.sections) ? raw.sections : [])
     .map(normalizeScopeSection)
     .filter(Boolean)
@@ -199,7 +219,7 @@ function normalizeTailorScope(raw: any): NormalizedScope {
       omittedIdentity: true,
       omittedContact: true,
       omittedSections: Array.isArray(raw?.locked?.omittedSections)
-        ? raw.locked.omittedSections.map((item: any) => trimText(item, 120)).filter(Boolean).slice(0, 20)
+        ? raw.locked.omittedSections.map((item: any) => trimScopeText(item, 120)).filter(Boolean).slice(0, 20)
         : []
     },
     sections,
@@ -319,7 +339,7 @@ export async function handlePolish(req: IncomingMessage, res: ServerResponse): P
   let provider = "claude-cli";
   const request = requestAbortSignal(req, res);
   try {
-    const body = JSON.parse(await readBody(req, 1_000_000));
+    const body = await readAiJsonBody(req, 1_000_000);
     const tailorScope = normalizeTailorScope(body.tailorScope);
     // scopeText feeds the strict-review/context picture and includes read-only
     // context sections; the GATE below measures editable text only so a

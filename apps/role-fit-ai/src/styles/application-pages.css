@@ -47,6 +47,7 @@
   display: flex;
   align-items: center;
   gap: var(--s2);
+  flex-wrap: wrap;
 }
 
 .spin { animation: icon-spin 0.7s linear infinite; }
@@ -57,6 +58,44 @@
   align-items: center;
   gap: var(--s2);
   flex-wrap: wrap;
+}
+
+.workspace-toolbar--tracker {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
+  gap: var(--s4);
+  overflow: visible;
+}
+
+.workspace-toolbar--tracker .workspace-search {
+  width: 100%;
+  min-width: 0;
+}
+
+.workspace-toolbar__controls {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  width: 100%;
+  justify-self: end;
+}
+
+.workspace-toolbar__controls > .pipeline-filters {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.workspace-toolbar__controls > .pipeline-filters > .pipeline-filter,
+.workspace-toolbar__controls > .pipeline-filters > .pipeline-filter-menu-wrap {
+  flex: 1 1 auto;
+}
+
+.workspace-toolbar__controls > .pipeline-filters .pipeline-filter {
+  justify-content: center;
+}
+
+.workspace-toolbar__controls > .pipeline-filters .pipeline-filter-menu-wrap > .pipeline-filter {
+  width: 100%;
 }
 
 .workspace-search {
@@ -90,6 +129,82 @@
 .workspace-search:focus-within {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--accent-veil);
+}
+
+.pipeline-filter-menu-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.activity-filter-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 45;
+  display: grid;
+  gap: 1px;
+  min-width: 190px;
+  padding: var(--s1);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-md);
+  background: var(--card-elev);
+  box-shadow: var(--shadow-lift);
+  animation: row-menu-in 0.12s var(--ease) both;
+}
+
+.pipeline-filter-menu-wrap:last-child .activity-filter-menu {
+  right: 0;
+  left: auto;
+}
+
+.activity-filter-menu__item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto 13px;
+  align-items: center;
+  gap: var(--s2);
+  width: 100%;
+  min-height: 30px;
+  padding: 5px var(--s2);
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 0.76rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.activity-filter-menu__item:first-child {
+  grid-template-columns: minmax(0, 1fr) auto 13px;
+}
+
+.activity-filter-menu__item:hover {
+  background: var(--card-hover);
+}
+
+/* Keyboard arrow navigation needs a visible indicator — the hover tint alone
+   is near-invisible on the popover surface (DESIGN.md focus-ring rule). */
+.activity-filter-menu__item:focus-visible {
+  background: var(--card-hover);
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.activity-filter-menu__item[aria-checked="true"] {
+  color: var(--accent-deep);
+  font-weight: 600;
+}
+
+.activity-filter-menu__item > svg {
+  color: var(--accent);
+}
+
+.activity-filter-menu__count {
+  color: var(--ink-faint);
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  font-feature-settings: "tnum";
 }
 
 /* -------- Shared application atoms -------- */
@@ -403,7 +518,7 @@
 }
 
 /* -------- Tracker page layout -------- */
-/* Shared two-column grid used by Table and Board views:
+/* Shared two-column grid used by Table and Calendar views:
    main view surface + right-rail inspector. */
 
 .tracker-layout {
@@ -418,58 +533,85 @@
    Stretch the row so the rail matches the (taller) calendar grid; the rail then
    caps at that height and scrolls its own content. */
 .tracker-layout--calendar {
-  grid-template-columns: minmax(0, 1fr) minmax(260px, 330px);
   align-items: stretch;
 }
 
-/* -------- View switcher -------- */
-/* Quiet segmented group: hairline border, card-elev fill, raised active segment.
-   NOT accent-filled — the active segment uses card-elev + ink-strong text. */
+/* -------- View switch -------- */
 
-.view-toggle {
-  display: inline-flex;
-  align-items: stretch;
-  height: 28px;
+.view-switch {
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: center;
+  width: 158px;
+  min-height: 30px;
+  padding: 2px;
   border: 1px solid var(--hairline);
   border-radius: var(--r-md);
-  background: transparent;
-  overflow: hidden;
-}
-
-.view-toggle__btn {
-  display: inline-flex;
-  align-items: center;
-  padding: 0 var(--s3);
-  border: 0;
-  border-right: 1px solid var(--hairline);
-  border-radius: 0;
-  background: transparent;
+  background: var(--card-soft);
   color: var(--ink-soft);
   font-family: var(--font-ui);
-  font-size: 0.78rem;
+  font-size: 0.7rem;
   font-weight: 500;
   cursor: pointer;
-  transition: background 140ms var(--ease), color 140ms var(--ease);
+  white-space: nowrap;
+  overflow: hidden;
+  transition: border-color 160ms var(--ease), box-shadow 160ms var(--ease);
 }
 
-.view-toggle__btn:last-child {
-  border-right: 0;
-}
-
-.view-toggle__btn:hover:not(.is-active) {
-  background: var(--card-soft);
-  color: var(--ink-strong);
-}
-
-.view-toggle__btn.is-active {
+.view-switch::before {
+  position: absolute;
+  z-index: -1;
+  top: 2px;
+  bottom: 2px;
+  left: 2px;
+  width: calc(50% - 3px);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-sm);
   background: var(--card-elev);
+  box-shadow: var(--shadow-rest);
+  content: "";
+  transition: transform 180ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.view-switch:hover {
+  border-color: var(--hairline-strong);
+  box-shadow: 0 0 0 2px var(--hairline-soft);
+}
+
+.view-switch[aria-checked="true"]::before {
+  transform: translateX(calc(100% + 2px));
+}
+
+.view-switch > span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-width: 0;
+  color: var(--ink-faint);
+  transition: color 150ms var(--ease);
+}
+
+.view-switch > span > svg {
+  flex: none;
+  color: var(--ink-faint);
+  transition: color 150ms var(--ease);
+}
+
+.view-switch > .is-active > svg {
+  color: var(--accent);
+}
+
+.view-switch > .is-active {
   color: var(--ink-strong);
   font-weight: 600;
 }
 
-.view-toggle__btn:focus-visible {
+.view-switch:focus-visible {
   outline: 2px solid var(--accent);
-  outline-offset: -2px;
+  outline-offset: 2px;
 }
 
 /* -------- Applications table -------- */
@@ -618,7 +760,11 @@ button.table-sort svg {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .row-menu { animation: none; }
+  .row-menu,
+  .activity-filter-menu { animation: none; }
+
+  .view-switch::before,
+  .view-switch > span { transition: none; }
 }
 
 .row-menu__item {
@@ -674,11 +820,17 @@ button.table-sort svg {
   text-transform: uppercase;
 }
 
-.row-menu__item:hover,
+.row-menu__item:hover {
+  background: var(--card-hover);
+  color: var(--ink-strong);
+}
+
+/* Same visible-focus rule as .activity-filter-menu__item:focus-visible. */
 .row-menu__item:focus-visible {
   background: var(--card-hover);
   color: var(--ink-strong);
-  outline: none;
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
 }
 
 .row-menu__item:hover svg,
@@ -2133,10 +2285,19 @@ button.table-sort svg {
 }
 
 @media (max-width: 1080px) {
+  .workspace-toolbar--tracker,
   .tracker-layout,
   .tracker-layout--calendar,
   .application-modal__body {
     grid-template-columns: 1fr;
+  }
+
+  .workspace-toolbar__controls {
+    justify-self: stretch;
+  }
+
+  .workspace-toolbar__controls > .pipeline-filters {
+    min-width: 200px;
   }
 
   .application-match-card {
@@ -2202,6 +2363,14 @@ button.table-sort svg {
 }
 
 @media (max-width: 760px) {
+  .workspace-toolbar__controls {
+    flex-wrap: wrap;
+  }
+
+  .workspace-toolbar__controls > .pipeline-filters {
+    flex-basis: 100%;
+  }
+
   .workspace-page__head,
   .application-modal__head,
   .application-modal__foot {

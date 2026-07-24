@@ -23,7 +23,28 @@ export const BOARD_STATUSES: ApplicationStatus[] = [
   "withdrawn"
 ];
 
-export type ApplicationActivityFilter = "all" | "active" | "inactive";
+export type ApplicationActivityGroup = "active" | "inactive";
+
+export const ACTIVITY_STATUS_GROUPS: Record<
+  ApplicationActivityGroup,
+  readonly ApplicationStatus[]
+> = {
+  active: ["interested", "applied", "interviewing", "offer"],
+  inactive: ["rejected", "withdrawn"]
+};
+
+export type ApplicationActivityFilter =
+  | "all"
+  | ApplicationActivityGroup
+  | ApplicationStatus;
+
+export function activityGroupForFilter(
+  filter: ApplicationActivityFilter
+): ApplicationActivityGroup | null {
+  if (filter === "all") return null;
+  if (filter === "active" || filter === "inactive") return filter;
+  return ACTIVITY_STATUS_GROUPS.active.includes(filter) ? "active" : "inactive";
+}
 
 export function isInactiveApplication(app: Pick<Application, "status">): boolean {
   return app.status === "rejected" || app.status === "withdrawn";
@@ -34,7 +55,9 @@ export function matchesActivityFilter(
   filter: ApplicationActivityFilter
 ): boolean {
   if (filter === "all") return true;
-  return filter === "inactive" ? isInactiveApplication(app) : !isInactiveApplication(app);
+  if (filter === "inactive") return isInactiveApplication(app);
+  if (filter === "active") return !isInactiveApplication(app);
+  return app.status === filter;
 }
 
 export function activityCount(

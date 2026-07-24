@@ -13,7 +13,6 @@ import {
   createContext,
   useCallback,
   useContext,
-  useRef,
   useState,
   type ReactNode
 } from "react";
@@ -56,37 +55,47 @@ const DialogContext = createContext<DialogContextValue | null>(null);
 
 // -------- Provider --------
 
+type PendingDialog = {
+  state: NonNullable<DialogState>;
+  resolver: (value: boolean) => void;
+};
+
 export function DialogProvider({ children }: { children: ReactNode }) {
-  const [dialog, setDialog] = useState<DialogState>(null);
-  // The resolver is stored in a ref so it persists across renders without
-  // being part of the state that triggers re-renders.
-  const resolverRef = useRef<((value: boolean) => void) | null>(null);
+  // FIFO queue, one dialog visible at a time. A single resolver slot would let
+  // a second confirm()/alert() raised while one is open (e.g. the post-distill
+  // duplicate gate firing ~30s after click) replace the visible dialog and
+  // strand the first caller's promise forever — its awaiting workflow would
+  // silently never continue.
+  const [queue, setQueue] = useState<PendingDialog[]>([]);
 
   const confirm = useCallback((opts: ConfirmOptions): Promise<boolean> => {
     return new Promise<boolean>((resolve) => {
-      resolverRef.current = resolve;
-      setDialog({ kind: "confirm", opts });
+      setQueue((current) => [...current, { state: { kind: "confirm", opts }, resolver: resolve }]);
     });
   }, []);
 
   const alert = useCallback((opts: AlertOptions): Promise<void> => {
     return new Promise<void>((resolve) => {
       // Alert resolves void; we wrap a boolean resolver and discard the value.
-      resolverRef.current = () => resolve();
-      setDialog({ kind: "alert", opts });
+      setQueue((current) => [...current, { state: { kind: "alert", opts }, resolver: () => resolve() }]);
     });
   }, []);
 
+  const dialog = queue[0]?.state ?? null;
+
+  function settleCurrent(value: boolean) {
+    const head = queue[0];
+    if (!head) return;
+    head.resolver(value);
+    setQueue((current) => (current[0] === head ? current.slice(1) : current));
+  }
+
   function handleConfirm() {
-    resolverRef.current?.(true);
-    resolverRef.current = null;
-    setDialog(null);
+    settleCurrent(true);
   }
 
   function handleCancel() {
-    resolverRef.current?.(false);
-    resolverRef.current = null;
-    setDialog(null);
+    settleCurrent(false);
   }
 
   return (

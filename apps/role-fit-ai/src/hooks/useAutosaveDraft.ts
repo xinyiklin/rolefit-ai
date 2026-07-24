@@ -201,7 +201,12 @@ export function useAutosaveDraft({ editedResume, dirty, jobLabel, pipelineAiUsag
     timerRef.current = setTimeout(() => {
       timerRef.current = null;
       const resumeText = serializeResumeData(editedResume);
-      if (!resumeText.trim()) return;
+      // Nothing to persist (all content deleted): settle the indicator instead
+      // of leaving it on "pending" for a save that will never happen.
+      if (!resumeText.trim()) {
+        setState("idle");
+        return;
+      }
       const { pipelineAiUsage: usage, jobRawText: rawText, getJobKeyHash: getHash } = latestExtras.current;
       const saved = saveAutosaveDraft({
         resumeText,

@@ -170,7 +170,17 @@ async function serveStatic(req: IncomingMessage, res: ServerResponse, appRoot: s
       sendJson(res, 404, { error: "Not found." });
       return;
     }
-    const index = await readFile(join(appRoot, "dist", "index.html"));
+    // The fallback read must not escape: serveStatic is dispatched fire-and-
+    // forget, so an unguarded ENOENT here (missing/corrupt dist) would become
+    // an unhandled rejection that kills the whole server process.
+    let index: Buffer;
+    try {
+      index = await readFile(join(appRoot, "dist", "index.html"));
+    } catch {
+      res.writeHead(500, { "Content-Type": "text/plain" });
+      res.end("Application assets are missing. Rebuild the app and restart the server.");
+      return;
+    }
     res.writeHead(200, { "Content-Type": "text/html" });
     res.end(index);
   }

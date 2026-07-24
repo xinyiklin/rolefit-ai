@@ -161,12 +161,24 @@ export function ApplicationModal({ open, application, onClose, onSave, onDelete,
   const [saveError, setSaveError] = useState("");
   const panelRef = useRef<HTMLElement>(null);
   const companyInputRef = useRef<HTMLInputElement>(null);
+  // Last application id the form was seeded from — the vanish-guard for the
+  // reseed effect below.
+  const lastSeededId = useRef<string | null>(null);
 
   // Re-seed whenever the modal opens or targets a different application. Use
   // the stable id, not the whole application object, so async tracker refreshes
   // do not wipe unsaved form edits while the modal is open.
   useEffect(() => {
     if (!open) return;
+    // A record that vanishes mid-edit (deleted in another tab, then a 409
+    // refresh replaced the list) must NOT reseed the form to blank Add-mode
+    // defaults — that wipes the user's unsaved edits while the save-error copy
+    // promises they are still here. Keep the form and say what happened.
+    if (applicationId === null && lastSeededId.current !== null) {
+      setSaveError("This application was removed elsewhere. Saving now will re-create it.");
+      return;
+    }
+    lastSeededId.current = applicationId;
     setForm(formFromApplication(application));
     setTab("overview");
     setCopied("");

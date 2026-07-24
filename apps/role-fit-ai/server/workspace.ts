@@ -12,7 +12,7 @@ import { mkdir, readFile, readdir, rename, rm, writeFile } from "node:fs/promise
 import { extname, join } from "node:path";
 import { parseResumeFile } from "@typeset/engine/lib/resumeFile.ts";
 import { readBody, sendJson } from "./http.ts";
-import { assertWorkspaceAccessAllowed, captureWorkspaceAccess } from "./workspaceRestoreGate.ts";
+import { WorkspaceRestoreConflictError, assertWorkspaceAccessAllowed, captureWorkspaceAccess } from "./workspaceRestoreGate.ts";
 
 // A loaded base resume (or the "none found" sentinel). Optional fields carry the
 // file's text/metadata only when a resume was actually resolved.
@@ -71,6 +71,15 @@ export function withWorkspaceLock<T>(
   });
   workspaceQueue = run.then(() => undefined, () => undefined);
   return run;
+}
+
+// A queued route task rejected by the restore gate carries a designed 409 plus
+// reload guidance; forward it instead of the route's generic failure mapping
+// (which would report a malformed request or a broken server).
+function restoreConflictHandled(error: unknown, res: ServerResponse): boolean {
+  if (!(error instanceof WorkspaceRestoreConflictError)) return false;
+  sendJson(res, 409, { error: error.message });
+  return true;
 }
 
 let lastTrashStampMs = 0;
@@ -336,6 +345,7 @@ export async function handleWorkspace(
     });
     sendJson(res, 200, snapshot);
   } catch (error) {
+    if (restoreConflictHandled(error, res)) return;
     sendJson(res, 500, {
       error: error instanceof WorkspaceStorageError ? error.message : "Workspace check failed."
     });
@@ -366,6 +376,7 @@ export async function handleSelectBaseResume(
     }
     sendJson(res, 200, snapshot);
   } catch (error) {
+    if (restoreConflictHandled(error, res)) return;
     sendJson(res, error instanceof WorkspaceStorageError ? 500 : 400, {
       error: error instanceof WorkspaceStorageError
         ? error.message
@@ -391,6 +402,7 @@ export async function handleWorkspaceBaseResume(
         ...snapshot
       });
     } catch (error) {
+      if (restoreConflictHandled(error, res)) return;
       sendJson(res, 500, {
         error: error instanceof WorkspaceStorageError ? error.message : "Base resume removal failed."
       });
@@ -461,6 +473,7 @@ export async function handleWorkspaceBaseResume(
       ...snapshot
     });
   } catch (error) {
+    if (restoreConflictHandled(error, res)) return;
     sendJson(res, error instanceof WorkspaceStorageError ? 500 : 400, {
       error: error instanceof WorkspaceStorageError ? error.message : "Base resume save failed."
     });
@@ -514,6 +527,7 @@ export async function handleRestoreBaseResume(
       ...snapshot
     });
   } catch (error) {
+    if (restoreConflictHandled(error, res)) return;
     const msg = (error as NodeJS.ErrnoException)?.code === "ENOENT"
       ? "History entry not found."
       : error instanceof WorkspaceStorageError ? error.message : "Restore failed.";

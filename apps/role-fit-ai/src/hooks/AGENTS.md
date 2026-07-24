@@ -36,10 +36,12 @@ browser-side effects; components render them and App composes them.
 - Provider availability effects fetch shape-only state; they never request,
   cache, or infer API keys, account identity, executable paths, or raw CLI
   output.
-- Automatic extension imports must await the shared initial provider fetch;
-  transient `loading` is not a terminal provider failure. Provider readiness is
-  a preflight signal, not semantic request input, so background readiness polls
-  must not invalidate an already-running AI request.
+- Automatic extension imports must await both the shared initial provider fetch
+  and an authoritative applications snapshot; transient `loading` is not a
+  terminal provider failure, and duplicate gates must never inspect the
+  mount-time empty applications array. Provider readiness is a preflight
+  signal, not semantic request input, so background readiness polls must not
+  invalidate an already-running AI request.
 - Distill stale-input guards cover only the job source and Distill-stage AI
   settings. Resume bootstrap and Tailor-mode reconciliation are downstream
   auto-Tailor inputs; they must not cancel an extension Distill that is already

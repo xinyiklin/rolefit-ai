@@ -16,6 +16,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { readBody, sendJson } from "../http.ts";
 import { base64ToBuffer } from "../base64.ts";
 import { jobWorkspaceDir } from "../workspace.ts";
+import { WorkspaceRestoreConflictError } from "../workspaceRestoreGate.ts";
 import {
   APPLICATION_ID_RE,
   ApplicationsStorageError,
@@ -28,6 +29,16 @@ import {
 
 function storageErrorMessage(error: unknown, fallback: string): string {
   return error instanceof ApplicationsStorageError ? error.message : fallback;
+}
+
+// The applications lock rejects with the restore gate's error while a companion
+// restore is staging. Forward its designed 409 + reload guidance instead of the
+// generic storage fallbacks (which would tell the user their request was
+// malformed or the server broke).
+function restoreConflictHandled(error: unknown, res: ServerResponse): boolean {
+  if (!(error instanceof WorkspaceRestoreConflictError)) return false;
+  sendJson(res, 409, { error: error.message });
+  return true;
 }
 
 function applicationResumeDir(id: string, workspaceDir: string): string | null {
@@ -53,6 +64,7 @@ export async function handleListApplications(
       path: "workspace/applications.json"
     });
   } catch (error) {
+    if (restoreConflictHandled(error, res)) return;
     sendJson(res, 500, { error: storageErrorMessage(error, "Application list failed.") });
   }
 }
@@ -89,6 +101,7 @@ export async function handleSaveApplications(
     });
     sendJson(res, 200, { applications });
   } catch (error) {
+    if (restoreConflictHandled(error, res)) return;
     const status = error instanceof ApplicationsStorageError ? error.status : 400;
     sendJson(res, status, {
       error: storageErrorMessage(error, "Application save failed. Check the request and try again."),
@@ -132,6 +145,7 @@ export async function handleDeleteApplication(
     }
     sendJson(res, 200, { applications });
   } catch (error) {
+    if (restoreConflictHandled(error, res)) return;
     const status = error instanceof ApplicationsStorageError ? error.status : 400;
     sendJson(res, status, {
       error: storageErrorMessage(error, "Delete failed."),
@@ -155,7 +169,10 @@ export async function handleSaveApplicationResume(
   const dir = applicationResumeDir(id, workspaceDir);
   if (!dir) { sendJson(res, 400, { error: "Invalid application id." }); return; }
   try {
-    const body = JSON.parse(await readBody(req));
+    // Transport cap sized for the base64 envelope of the 8 MB decoded PDF cap
+    // below (4/3 inflation + JSON overhead) — with the default 8 MB readBody
+    // cap the decoded 413 branch could never be reached.
+    const body = JSON.parse(await readBody(req, 11_500_000));
     const pdfBase64 = typeof body.pdfBase64 === "string" ? body.pdfBase64 : "";
     const fileName = typeof body.fileName === "string" ? body.fileName.slice(0, 200) : "";
     if (!pdfBase64) { sendJson(res, 400, { error: "No resume artifacts to save." }); return; }
@@ -186,6 +203,11 @@ export async function handleSaveApplicationResume(
       resumeArtifacts: { hasPdf, fileName, savedAt: new Date().toISOString() }
     });
   } catch (error) {
+    if (restoreConflictHandled(error, res)) return;
+    if (error instanceof Error && error.message === "Request is too large.") {
+      sendJson(res, 413, { error: "The resume PDF is larger than the supported limit. No file was replaced." });
+      return;
+    }
     const safeValidationMessage = error instanceof Error && /^PDF (?:data was not valid base64|file is too large)\.$/.test(error.message)
       ? error.message
       : null;

@@ -15,11 +15,11 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import {
   FetchTimeoutError,
   isRequestAborted,
-  readBody,
   requestAbortSignal,
   sendJson
 } from "../http.ts";
 import { UserSafeAiError, safeConfigErrorMessage } from "./errors.ts";
+import { readAiJsonBody } from "./json.ts";
 import { providerLabel, resolveProviderRequest } from "./providers.ts";
 import { callConfiguredProvider } from "./clients.ts";
 import { clipForPrompt, fenceUntrusted, inputFirewallRule } from "./prompts.ts";
@@ -472,7 +472,7 @@ export async function handleDistill(req: IncomingMessage, res: ServerResponse): 
   let provider = "claude-cli";
   const request = requestAbortSignal(req, res);
   try {
-    const body = JSON.parse(await readBody(req, 2_000_000));
+    const body = await readAiJsonBody(req, 2_000_000);
     const jobText = String(body.text ?? "");
     if (jobText.trim().length < 40) {
       sendJson(res, 400, { error: "Provide the job posting text to distill (at least a short description)." });

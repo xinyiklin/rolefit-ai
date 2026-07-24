@@ -1,10 +1,12 @@
-import { useEffect, useMemo, useState } from "react";
-import { AlertCircle, ChevronLeft, ChevronRight, Copy, Eye, Link, Plus, RefreshCw, Search, Sparkles, SquareArrowOutUpRight, Trash2 } from "lucide-react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { AlertCircle, CalendarDays, Check, ChevronDown, ChevronLeft, ChevronRight, Copy, Eye, Link, Plus, RefreshCw, Search, Sparkles, SquareArrowOutUpRight, Table2, Trash2 } from "lucide-react";
 import type { Application, ApplicationStatus } from "../../hooks/useApplications";
 import type { DuplicateGroup } from "../../lib/jobIdentity";
 import {
+  ACTIVITY_STATUS_GROUPS,
   BOARD_STATUSES,
   STATUS_LABEL,
+  activityGroupForFilter,
   activityCount,
   displayCompany,
   displayRole,
@@ -12,7 +14,8 @@ import {
   matchesActivityFilter,
   nextAction,
   priorityFor,
-  type ApplicationActivityFilter
+  type ApplicationActivityFilter,
+  type ApplicationActivityGroup
 } from "../../lib/applicationDisplay";
 import { duplicateCandidateKey, groupDuplicateApplications } from "../../lib/jobIdentity";
 import { TrackerTableView } from "../tracker/TrackerTableView";
@@ -125,11 +128,183 @@ type TrackerTabProps = {
   onDismissDuplicateGroup: (memberIds: string[]) => void;
 };
 
-const VIEWS: TrackerView[] = ["table", "calendar"];
 const VIEW_LABELS: Record<TrackerView, string> = {
   table: "Table",
   calendar: "Calendar"
 };
+
+const ACTIVITY_GROUP_LABEL: Record<ApplicationActivityGroup, string> = {
+  active: "Active",
+  inactive: "Inactive"
+};
+
+type ActivityFilterMenuProps = {
+  applications: Application[];
+  group: ApplicationActivityGroup;
+  isOpen: boolean;
+  value: ApplicationActivityFilter;
+  onToggle: () => void;
+  onClose: () => void;
+  onSelect: (filter: ApplicationActivityFilter) => void;
+};
+
+function ActivityFilterMenu({
+  applications,
+  group,
+  isOpen,
+  value,
+  onToggle,
+  onClose,
+  onSelect
+}: ActivityFilterMenuProps) {
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const menuId = useId();
+  const label = ACTIVITY_GROUP_LABEL[group];
+  const isSelectedGroup = activityGroupForFilter(value) === group;
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const focusFrame = window.requestAnimationFrame(() => {
+      const selectedItem = menuRef.current?.querySelector<HTMLButtonElement>(
+        '[role="menuitemradio"][aria-checked="true"]'
+      );
+      const firstItem = menuRef.current?.querySelector<HTMLButtonElement>(
+        '[role="menuitemradio"]'
+      );
+      (selectedItem ?? firstItem)?.focus();
+    });
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!wrapperRef.current?.contains(event.target as Node)) onClose();
+    };
+    const handleFocusIn = (event: FocusEvent) => {
+      if (!wrapperRef.current?.contains(event.target as Node)) onClose();
+    };
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      onClose();
+      triggerRef.current?.focus();
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("focusin", handleFocusIn);
+    document.addEventListener("keydown", handleEscape);
+    return () => {
+      window.cancelAnimationFrame(focusFrame);
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("focusin", handleFocusIn);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, [isOpen, onClose]);
+
+  const handleMenuKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
+    const items = Array.from(
+      event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]')
+    );
+    if (!items.length) return;
+    event.preventDefault();
+    const currentIndex = items.indexOf(document.activeElement as HTMLButtonElement);
+    const nextIndex =
+      event.key === "Home"
+        ? 0
+        : event.key === "End"
+          ? items.length - 1
+          : event.key === "ArrowUp"
+            ? (currentIndex - 1 + items.length) % items.length
+            : (currentIndex + 1) % items.length;
+    items[nextIndex]?.focus();
+  };
+
+  const selectFilter = (filter: ApplicationActivityFilter) => {
+    onSelect(filter);
+    onClose();
+    triggerRef.current?.focus();
+  };
+
+  return (
+    <div className="pipeline-filter-menu-wrap" ref={wrapperRef}>
+      {/* Split segment: the label filters to the whole group instantly, the
+          caret is the only menu trigger for the per-status drill-down. This
+          keeps the primary click predictable instead of a segment that looks
+          like a filter but silently opens a popup. */}
+      <div className={`pipeline-filter pipeline-filter--split ${isSelectedGroup ? "is-active" : ""}`}>
+        <button
+          type="button"
+          className="pipeline-filter__main"
+          aria-pressed={isSelectedGroup}
+          onClick={() => {
+            onSelect(group);
+            onClose();
+          }}
+        >
+          {label}
+        </button>
+        <button
+          ref={triggerRef}
+          type="button"
+          className="pipeline-filter__disclosure"
+          aria-haspopup="menu"
+          aria-expanded={isOpen}
+          aria-controls={isOpen ? menuId : undefined}
+          aria-label={`${label} status options`}
+          onClick={onToggle}
+        >
+          <ChevronDown
+            className={`pipeline-filter__chevron ${isOpen ? "is-open" : ""}`}
+            size={13}
+            aria-hidden="true"
+          />
+        </button>
+      </div>
+      {isOpen ? (
+        <div
+          ref={menuRef}
+          id={menuId}
+          className="activity-filter-menu"
+          role="menu"
+          aria-label={`${label} application categories`}
+          onKeyDown={handleMenuKeyDown}
+        >
+          <button
+            type="button"
+            className="activity-filter-menu__item"
+            role="menuitemradio"
+            aria-checked={value === group}
+            onClick={() => selectFilter(group)}
+          >
+            <span>All {group}</span>
+            <span className="activity-filter-menu__count">
+              {activityCount(applications, group)}
+            </span>
+            {value === group ? <Check size={13} aria-hidden="true" /> : null}
+          </button>
+          {ACTIVITY_STATUS_GROUPS[group].map((status) => (
+            <button
+              type="button"
+              className="activity-filter-menu__item"
+              role="menuitemradio"
+              aria-checked={value === status}
+              key={status}
+              onClick={() => selectFilter(status)}
+            >
+              <span className={`stage-dot stage-dot--${status}`} aria-hidden="true" />
+              <span>{STATUS_LABEL[status]}</span>
+              <span className="activity-filter-menu__count">
+                {activityCount(applications, status)}
+              </span>
+              {value === status ? <Check size={13} aria-hidden="true" /> : null}
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
 
 export function TrackerTab({
   applications,
@@ -161,6 +336,8 @@ export function TrackerTab({
   const [sort, setSort] = useState<SortState>(DEFAULT_SORT);
   const [pageSize, setPageSize] = useState<number>(DEFAULT_PAGE_SIZE);
   const [page, setPage] = useState(1);
+  const [openActivityMenu, setOpenActivityMenu] =
+    useState<ApplicationActivityGroup | null>(null);
   // Right-click context menu: the target app + cursor anchor (viewport coords).
   const [rowMenu, setRowMenu] = useState<{ app: Application; x: number; y: number } | null>(null);
   const [isDuplicateModalOpen, setIsDuplicateModalOpen] = useState(false);
@@ -404,8 +581,8 @@ export function TrackerTab({
         </div>
       ) : null}
 
-      {/* Shared toolbar: search + lifecycle filter + view switcher */}
-      <div className="workspace-toolbar">
+      {/* Shared toolbar: search + lifecycle filters align to the view/rail grid. */}
+      <div className="workspace-toolbar workspace-toolbar--tracker">
         <label className="workspace-search">
           <Search size={15} aria-hidden="true" />
           <input
@@ -415,40 +592,52 @@ export function TrackerTab({
             aria-label="Search applications"
           />
         </label>
-        <div className="pipeline-filters" role="group" aria-label="Filter applications by status">
+        <div className="workspace-toolbar__controls">
+          <div className="pipeline-filters" role="group" aria-label="Filter applications by status">
+            <button
+              type="button"
+              className={`pipeline-filter ${statusFilter === "all" ? "is-active" : ""}`}
+              aria-pressed={statusFilter === "all"}
+              onClick={() => {
+                setOpenActivityMenu(null);
+                setStatusFilter("all");
+              }}
+            >
+              All
+            </button>
+            {(["active", "inactive"] as const).map((group) => (
+              <ActivityFilterMenu
+                applications={applications}
+                group={group}
+                isOpen={openActivityMenu === group}
+                key={group}
+                value={statusFilter}
+                onClose={() => setOpenActivityMenu(null)}
+                onSelect={setStatusFilter}
+                onToggle={() => {
+                  setOpenActivityMenu((current) => (current === group ? null : group));
+                }}
+              />
+            ))}
+          </div>
           <button
             type="button"
-            className={`pipeline-filter ${statusFilter === "all" ? "is-active" : ""}`}
-            aria-pressed={statusFilter === "all"}
-            onClick={() => setStatusFilter("all")}
+            className="view-switch"
+            role="switch"
+            aria-checked={trackerView === "calendar"}
+            aria-label="Calendar view"
+            title={`Switch to ${VIEW_LABELS[trackerView === "table" ? "calendar" : "table"]} view`}
+            onClick={() => setTrackerView(trackerView === "table" ? "calendar" : "table")}
           >
-            All <em>{applications.length}</em>
+            <span className={trackerView === "table" ? "is-active" : ""}>
+              <Table2 size={13} aria-hidden="true" />
+              Table
+            </span>
+            <span className={trackerView === "calendar" ? "is-active" : ""}>
+              <CalendarDays size={13} aria-hidden="true" />
+              Calendar
+            </span>
           </button>
-          {(["active", "inactive"] as const).map((filter) => (
-            <button
-              type="button"
-              key={filter}
-              className={`pipeline-filter ${statusFilter === filter ? "is-active" : ""}`}
-              aria-pressed={statusFilter === filter}
-              onClick={() => setStatusFilter(filter)}
-            >
-              {filter === "active" ? "Active" : "Inactive"} <em>{activityCount(applications, filter)}</em>
-            </button>
-          ))}
-        </div>
-        {/* View switcher: quiet segmented group, not accent-filled */}
-        <div className="view-toggle" role="group" aria-label="Switch view">
-          {VIEWS.map((view) => (
-            <button
-              type="button"
-              key={view}
-              className={`view-toggle__btn ${trackerView === view ? "is-active" : ""}`}
-              aria-pressed={trackerView === view}
-              onClick={() => setTrackerView(view)}
-            >
-              {VIEW_LABELS[view]}
-            </button>
-          ))}
         </div>
       </div>
 

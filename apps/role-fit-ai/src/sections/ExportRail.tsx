@@ -113,7 +113,7 @@ export function ExportMenu({
         className="secondary-button is-compact export-menu__trigger"
         type="button"
         onClick={() => setIsOpen((open) => !open)}
-        aria-haspopup="menu"
+        aria-haspopup="dialog"
         aria-expanded={isOpen}
         title="Export the resume as PDF, or save it as a re-loadable .resume file"
       >
@@ -138,7 +138,10 @@ export function ExportMenu({
       ) : null}
 
       {isOpen ? (
-        <div className="export-menu__popover" role="menu" aria-label="Export options">
+        <div className="export-menu__popover" role="dialog" aria-label="Export options">
+          {/* Dialog, not menu: the children are plain buttons without menuitem
+              roles or an arrow-key model, so menu semantics would announce a
+              menu with no items (NavMenu uses the same dialog pattern). */}
           <div className="export-menu__actions">
             {/* PDF — typeset by the built-in engine, fully client-side (D014). */}
             <button

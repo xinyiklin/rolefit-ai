@@ -93,6 +93,12 @@ const lifecycleApplications = [
 check("all includes every application status", lifecycleApplications.every((app) => matchesActivityFilter(app, "all")));
 check("active excludes rejected and withdrawn", activityCount(lifecycleApplications, "active") === 4);
 check("inactive contains rejected and withdrawn", activityCount(lifecycleApplications, "inactive") === 2);
+check("exact active category filters to one stage", activityCount(lifecycleApplications, "interviewing") === 1);
+check("exact inactive category filters to one stage", activityCount(lifecycleApplications, "withdrawn") === 1);
+check(
+  "exact category does not include neighboring stages",
+  lifecycleApplications.filter((app) => matchesActivityFilter(app, "applied")).every((app) => app.status === "applied")
+);
 
 check(
   "legacy server cap reason becomes concise user copy",

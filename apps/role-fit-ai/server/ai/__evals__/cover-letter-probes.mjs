@@ -72,15 +72,13 @@ const noJob = await runHandler("POST", JSON.stringify({ resumeText: "R".repeat(1
 assert.equal(noJob.status, 400, "a too-short job description is a 400");
 assert.match(noJob.payload.error, /Add the job description/, "the job gate message is surfaced");
 
-// Malformed JSON is caught and fails closed with safe JSON (no throw, no leak).
-// NOTE: it currently maps to a generic 500 (the JSON.parse sits inside the same
-// try as provider dispatch) rather than a 400 like handleImportJob. That is a
-// coarse status classification, NOT a security issue — the response is a stable,
-// user-safe error that echoes none of the request. Asserted as-is so a
-// regression toward leaking or throwing is caught.
+// Malformed JSON is caught at the request boundary and fails closed with safe
+// JSON (no throw, no leak). readAiJsonBody classifies it as a 400 request
+// error — matching handleImportJob — instead of the old provider-flavored 500
+// (no provider call ever ran, so blaming the provider misdirected the user).
 const malformed = await runHandler("POST", "{ not json ");
-assert.equal(malformed.status, 500, "malformed JSON fails closed with a 500");
-assert.match(malformed.payload.error, /Could not generate a cover letter/, "the fail-closed message is user-safe");
+assert.equal(malformed.status, 400, "malformed JSON fails closed with a 400");
+assert.match(malformed.payload.error, /Request body must be valid JSON/, "the fail-closed message is user-safe");
 assert.equal(malformed.payload.coverLetterText, undefined, "no partial letter is emitted on a malformed request");
 
 // --- grounded generator backstop (offline OpenAI dispatch) ------------------

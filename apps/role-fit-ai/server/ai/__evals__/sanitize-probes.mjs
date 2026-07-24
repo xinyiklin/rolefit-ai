@@ -25,7 +25,12 @@ import {
 } from "../sanitize.ts";
 import { findUngroundedJdTerm } from "../grounding.ts";
 import { buildPolishPrompts, buildStrictReviewPrompts, serializeJsonForPrompt } from "../prompts.ts";
-import { resolveReviewOutcome, reviewFailureFromReason } from "../polish.ts";
+import {
+  normalizeTailorScope,
+  resolveReviewOutcome,
+  reviewFailureFromReason,
+  stripStructuralInlineMarks
+} from "../polish.ts";
 import { UserSafeAiError } from "../errors.ts";
 
 const scope = {
@@ -853,12 +858,61 @@ const checks = [
     });
     return /context sections may support corpus-level skills or summary edits/i.test(userPrompt)
       && /must not attribute a context-only fact to a specific project or role/i.test(userPrompt);
+  })()],
+  ["tailor scope strips structural marks before prompt and grounding while preserving emphasis", (() => {
+    const normalized = normalizeTailorScope({
+      version: 1,
+      locked: {
+        omittedSections: ["<align=center>References</align>"]
+      },
+      sections: [{
+        id: "experience",
+        heading: "<align=center>Experience</align>",
+        type: "standard",
+        entries: [{
+          id: "role",
+          titleLeft: "<font=source-sans><b>Software Engineer</b></font>",
+          titleRight: "<link=https://example.test>Acme</link>",
+          subtitleLeft: "<size=11>Platform</size>",
+          subtitleRight: "<nolink>2024</nolink>",
+          bullets: [{
+            id: "bullet",
+            text: "<align=justify><b>Built</b> APIs with Node.js.</align>"
+          }]
+        }]
+      }],
+      contextSections: [{
+        id: "education",
+        heading: "Education",
+        type: "standard",
+        entries: [{
+          id: "degree",
+          titleLeft: "<link=https://school.test>State University</link>",
+          bullets: []
+        }]
+      }]
+    });
+    const { userPrompt } = buildPolishPrompts({
+      jobText: "A sufficiently detailed synthetic posting requiring Node.js API experience.",
+      tailorScope: normalized
+    });
+    const serialized = JSON.stringify(normalized);
+    return stripStructuralInlineMarks("<b>Keep</b><font=source-serif> structure</font>") === "<b>Keep</b> structure"
+      && normalized.sections[0].heading === "Experience"
+      && normalized.sections[0].entries[0].titleLeft === "<b>Software Engineer</b>"
+      && normalized.sections[0].entries[0].titleRight === "Acme"
+      && normalized.sections[0].entries[0].bullets[0].text === "<b>Built</b> APIs with Node.js."
+      && normalized.contextSections[0].entries[0].titleLeft === "State University"
+      && normalized.locked.omittedSections[0] === "References"
+      && !/<\/?(?:font|size|align|link|nolink)(?:=|>)/i.test(serialized)
+      && !/<\/?(?:font|size|align|link|nolink)(?:=|>)/i.test(userPrompt)
+      && userPrompt.includes("<b>Software Engineer</b>");
   })()]
 ];
 
 // Floor: silently deleting a check must shrink the gate loudly, not quietly.
 // Raise this number whenever you ADD a check above.
-assert(checks.length >= 91, `sanitize probe count dropped below the floor (91): found ${checks.length}`);
+assert(checks.length >= 92, `sanitize probe count dropped below the floor (92): found ${checks.length}`);
 
 let failures = 0;
 for (const [name, ok] of checks) {

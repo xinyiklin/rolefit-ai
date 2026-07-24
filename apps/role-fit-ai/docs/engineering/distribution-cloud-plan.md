@@ -232,6 +232,46 @@ No pull-request or unsigned-preview workflow receives release secrets. Forked or
 cannot trigger signing. Release creation is all-or-nothing: one failed platform
 job prevents publication.
 
+### Preview preflight and the 0.3.0 recovery lesson
+
+The first 0.3.0 publication attempt required two follow-up pull requests before
+the preview could be released. Both failures were useful fail-closed behavior,
+but both should have been caught before a tag was created:
+
+1. `rolefit-preview-v0.3.0-beta.8` built the native packages, then every
+   packaged-app smoke failed because the health endpoint correctly returned
+   `desktopCompatibilityVersion: 2` while
+   `desktop/__tests__/packaged-smoke.test.mjs` still asserted the literal value
+   `1`. The ordinary RoleFit check passed because it does not run the explicit
+   Electron process or matching-native packaged smoke. PR #85 replaced the
+   duplicated health versions with the built health-contract constants and
+   aligned the renderer smoke with the five-section sidebar and current preload
+   bridge.
+2. `rolefit-preview-v0.3.0-beta.9` passed source validation and all three native
+   platform jobs, but the atomic publisher refused to create a release because
+   `docs/releases/0.3.0-beta.9.md` did not exist. PR #86 added the curated notes
+   for beta.10, which then passed publication. Release notes are an exact
+   tag-specific input, not optional prose that can be added after tagging.
+
+Neither failed tag produced a GitHub Release or downloadable asset. Tags are
+immutable, so recovery advanced the preview number instead of moving or
+reusing beta.8 or beta.9.
+
+Before creating any preview tag, the maintainer must:
+
+1. Confirm the tag base version exactly matches
+   `apps/role-fit-ai/package.json`.
+2. Confirm the tagged commit is already on `origin/main`.
+3. Create and review
+   `apps/role-fit-ai/docs/releases/X.Y.Z-beta.N.md` for the exact intended tag.
+4. Run `npm run check --workspace apps/role-fit-ai` and
+   `npm run test:rolefit:desktop`; do not treat the first command as coverage
+   for the explicit Electron smoke.
+5. On a matching native host with Node 22-24, make the package and run
+   `test:desktop:packaged` against that fresh output.
+6. Run `npm run test:desktop:release --workspace apps/role-fit-ai`, review the
+   final tag/notes/version tuple, and only then create the immutable tag.
+
 The native jobs target GitHub environments named `rolefit-macos-signing` and
 `rolefit-windows-signing`; the final write-capable job targets
 `rolefit-release`. Maintainers must restrict all three to the `rolefit-v*` tag

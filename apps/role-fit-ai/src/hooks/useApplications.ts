@@ -297,6 +297,10 @@ class ApplicationConflictError extends Error {
 export function useApplications() {
   const [applications, setApplications] = useState<Application[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  // True only after this hook has received an authoritative applications
+  // snapshot from the server. Extension inbox polling uses this boundary so a
+  // one-shot import cannot run its duplicate gate against the mount-time [].
+  const [hasLoadedApplications, setHasLoadedApplications] = useState(false);
   const [error, setError] = useState("");
   const [storagePath, setStoragePath] = useState("");
   const [pendingWrites, setPendingWrites] = useState(0);
@@ -313,6 +317,11 @@ export function useApplications() {
   // represents the durable state we can safely return to.
   const confirmedApplications = useRef<Application[]>([]);
   const conflictMessage = useRef("");
+  // A non-conflict failure of a write that was already superseded by a newer
+  // pending write cannot setError directly (the newer request owns the error
+  // line) — carry the message so the newer request's settle still surfaces it
+  // instead of silently absorbing the dropped edit.
+  const supersededFailure = useRef("");
 
   useEffect(() => {
     let cancelled = false;
@@ -331,6 +340,7 @@ export function useApplications() {
         confirmedApplications.current = loaded;
         applicationsRef.current = loaded;
         setApplications(loaded);
+        setHasLoadedApplications(true);
         setStoragePath(typeof data.path === "string" ? data.path : "");
         conflictMessage.current = "";
         setError("");
@@ -384,23 +394,29 @@ export function useApplications() {
     try {
       const data = await write;
       confirmedApplications.current = data.applications;
+      setHasLoadedApplications(true);
       // Trust the server-sanitized list back
       if (requestId === persistVersion.current) {
         applicationsRef.current = data.applications;
         setApplications(data.applications);
-        setError(conflictMessage.current);
+        setError(conflictMessage.current || supersededFailure.current);
+        supersededFailure.current = "";
       }
       return true;
     } catch (err) {
       if (err instanceof ApplicationConflictError) {
         confirmedApplications.current = err.applications;
+        setHasLoadedApplications(true);
         conflictMessage.current = err.message;
         setError(err.message);
+      } else if (requestId !== persistVersion.current) {
+        supersededFailure.current = err instanceof Error ? err.message : "Save failed.";
       }
       if (requestId === persistVersion.current) {
         applicationsRef.current = confirmedApplications.current;
         setApplications(confirmedApplications.current);
         setError(conflictMessage.current || (err instanceof Error ? err.message : "Save failed."));
+        supersededFailure.current = "";
       }
       return false;
     } finally {
@@ -713,6 +729,7 @@ export function useApplications() {
       confirmedApplications.current = loaded;
       applicationsRef.current = loaded;
       setApplications(loaded);
+      setHasLoadedApplications(true);
       conflictMessage.current = "";
       setError("");
     } catch (err) {
@@ -723,6 +740,7 @@ export function useApplications() {
   return {
     applications,
     isLoading,
+    hasLoadedApplications,
     error,
     storagePath,
     pendingWrites,

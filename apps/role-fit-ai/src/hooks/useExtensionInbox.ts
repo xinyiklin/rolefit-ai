@@ -45,7 +45,8 @@ function clearExtensionImportParam(): void {
 }
 
 /**
- * Polls /api/extension/inbox on mount, on window focus, and on tab visibility.
+ * Polls /api/extension/inbox once enabled, then on window focus and tab
+ * visibility.
  * The server PREPARES an import's text in the BACKGROUND (resolving the raw
  * capture, no AI call), so the inbox reports `{status:"distilling"}` first; this
  * hook keeps polling (and calls `onDistilling` for a progress affordance) until
@@ -54,11 +55,13 @@ function clearExtensionImportParam(): void {
  * provider. The background prepare is independent of the popup, so closing it /
  * switching tabs never strands an import.
  *
- * Callback refs keep the latest closures without re-subscribing the listeners.
+ * Callback refs keep the latest closures without re-subscribing the listeners
+ * for callback identity changes.
  */
 export function useExtensionInbox(
   onImport: (item: ExtensionImport) => void | Promise<void>,
-  onDistilling?: () => void
+  onDistilling?: () => void,
+  enabled = true
 ): void {
   const onImportRef = useRef(onImport);
   onImportRef.current = onImport;
@@ -66,6 +69,11 @@ export function useExtensionInbox(
   onDistillingRef.current = onDistilling;
 
   useEffect(() => {
+    // A successful poll drains this one-shot import. Wait until local preflights
+    // that inspect durable state are ready; duplicate detection in particular
+    // must not run against useApplications' mount-time empty array.
+    if (!enabled) return;
+
     const claimToken = readExtensionImportClaimToken();
     let timer: ReturnType<typeof setTimeout> | null = null;
     let distilling = false;
@@ -215,5 +223,5 @@ export function useExtensionInbox(
       window.removeEventListener("focus", handleWake);
       document.removeEventListener("visibilitychange", handleVisibility);
     };
-  }, []);
+  }, [enabled]);
 }

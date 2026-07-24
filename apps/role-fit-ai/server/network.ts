@@ -48,7 +48,7 @@ function isPrivateIPv4(ip: string): boolean {
   if (a === 172 && b >= 16 && b <= 31) return true; // 172.16.0.0/12
   if (a === 192 && b === 168) return true; // 192.168.0.0/16
   if (a === 100 && b >= 64 && b <= 127) return true; // CGNAT 100.64.0.0/10
-  if (a === 192 && b === 0) return true; // IETF protocol assignments 192.0.0.0/24
+  if (a === 192 && b === 0 && parts[2] === 0) return true; // IETF protocol assignments 192.0.0.0/24
   if (a === 192 && b === 0 && parts[2] === 2) return true; // documentation 192.0.2.0/24
   if (a === 192 && b === 88 && parts[2] === 99) return true; // deprecated 6to4 relay anycast
   if (a === 198 && (b === 18 || b === 19)) return true; // benchmark 198.18.0.0/15

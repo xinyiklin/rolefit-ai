@@ -5,8 +5,9 @@
 // from polish.ts so answers follow the same anti-fabrication guarantees.
 
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { FetchTimeoutError, isRequestAborted, readBody, requestAbortSignal, sendJson } from "../http.ts";
+import { FetchTimeoutError, isRequestAborted, requestAbortSignal, sendJson } from "../http.ts";
 import { UserSafeAiError, safeConfigErrorMessage } from "./errors.ts";
+import { readAiJsonBody } from "./json.ts";
 import { resolveProviderRequest } from "./providers.ts";
 import { accomplishmentStyleRules, fenceUntrusted, honestTailoringRules, inputFirewallRule } from "./prompts.ts";
 import { callConfiguredProvider } from "./clients.ts";
@@ -312,7 +313,7 @@ export async function handleApplicationAnswers(req: IncomingMessage, res: Server
 
   const request = requestAbortSignal(req, res);
   try {
-    const body = JSON.parse(await readBody(req, 1_000_000));
+    const body = await readAiJsonBody(req, 1_000_000);
     const resumeText = String(body.resumeText ?? "").slice(0, 45_000);
     const jobText = String(body.jobText ?? "").slice(0, 35_000);
     const honestContext = String(body.honestContext ?? "").slice(0, 8_000);

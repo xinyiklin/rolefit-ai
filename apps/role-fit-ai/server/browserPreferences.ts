@@ -25,6 +25,7 @@ import {
 } from "../src/lib/workspaceBackupContract.ts";
 import { readBody, sendJson } from "./http.ts";
 import { ensureJobWorkspace, withWorkspaceLock } from "./workspace.ts";
+import { WorkspaceRestoreConflictError } from "./workspaceRestoreGate.ts";
 
 function isMissingFile(error: unknown): boolean {
   return Boolean(error && typeof error === "object" && "code" in error && error.code === "ENOENT");
@@ -129,10 +130,24 @@ async function writeMirrorAtomic(workspaceDir: string, preferences: PortableBrow
 }
 
 async function handleGet(res: ServerResponse, workspaceDir: string): Promise<void> {
-  const [read, marker] = await withWorkspaceLock(() => Promise.all([
-    readStoredBrowserPreferences(workspaceDir),
-    readStoredWorkspaceRestoreMarker(workspaceDir)
-  ]));
+  // The lock's restore gate throws while a companion restore is staging; this
+  // GET runs on every tab boot, and the route is dispatched fire-and-forget, so
+  // an uncaught gate rejection here would kill the whole server mid-restore.
+  let read: StoredBrowserPreferencesRead;
+  let marker: StoredWorkspaceRestoreMarkerRead;
+  try {
+    [read, marker] = await withWorkspaceLock(() => Promise.all([
+      readStoredBrowserPreferences(workspaceDir),
+      readStoredWorkspaceRestoreMarker(workspaceDir)
+    ]));
+  } catch (error) {
+    if (error instanceof WorkspaceRestoreConflictError) {
+      sendJson(res, 409, { error: error.message });
+      return;
+    }
+    sendJson(res, 500, { error: "The browser preferences could not be read." });
+    return;
+  }
   const restoreStamp = marker.status === "ok"
     ? marker.value.restoredAt
     : read.status === "ok" && read.value.source === "restore"
@@ -173,7 +188,11 @@ async function handlePost(req: IncomingMessage, res: ServerResponse, workspaceDi
       await ensureJobWorkspace(workspaceDir);
       await writeMirrorAtomic(workspaceDir, preferences, new Date());
     });
-  } catch {
+  } catch (error) {
+    if (error instanceof WorkspaceRestoreConflictError) {
+      sendJson(res, 409, { error: error.message });
+      return;
+    }
     sendJson(res, 500, { error: "The browser preferences could not be saved." });
     return;
   }
