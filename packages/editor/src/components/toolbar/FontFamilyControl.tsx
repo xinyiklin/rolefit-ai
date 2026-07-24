@@ -7,6 +7,7 @@ import { FONT_FAMILY_OPTIONS, type FontFamily } from "@typeset/engine/lib/docume
 type FontFamilyControlProps = {
   value: FontFamily | null;
   onChange: (value: FontFamily) => void;
+  onCommitFocus?: () => void;
   disabled?: boolean;
   ariaLabel: string;
   title?: string;
@@ -16,6 +17,7 @@ type FontFamilyControlProps = {
 export function FontFamilyControl({
   value,
   onChange,
+  onCommitFocus,
   disabled = false,
   ariaLabel,
   title,
@@ -27,7 +29,7 @@ export function FontFamilyControl({
   const menuRef = useRef<HTMLSpanElement | null>(null);
   const [open, setOpen] = useState(false);
   const [menuPos, setMenuPos] = useState<{ left: number; top: number; width: number; placement: "down" | "up" } | null>(null);
-  const selectedLabel = FONT_FAMILY_OPTIONS.find((option) => option.value === value)?.label ?? "Mixed";
+  const selectedLabel = FONT_FAMILY_OPTIONS.find((option) => option.value === value)?.label ?? "";
 
   useLayoutEffect(() => {
     if (!open) {
@@ -110,6 +112,7 @@ export function FontFamilyControl({
             <span
               ref={menuRef}
               id={menuId}
+              data-typeset-toolbar-portal
               className="font-family-control__menu"
               role="listbox"
               aria-label={ariaLabel}
@@ -147,7 +150,8 @@ export function FontFamilyControl({
                   className={value === option.value ? "is-selected" : ""}
                   onClick={() => {
                     onChange(option.value);
-                    closeAndRestoreFocus();
+                    setOpen(false);
+                    requestAnimationFrame(() => onCommitFocus?.());
                   }}
                 >
                   <span>{option.label}</span>

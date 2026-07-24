@@ -11,6 +11,25 @@
 export const INLINE_MARK_TAG_PATTERN =
   "<\\/?(?:b|i|u|nolink)>|<link=([^>\\s]+)>|<\\/link>|<font=(?:latin-modern|source-serif|source-sans)>|<\\/font>|<size=\\d+(?:\\.\\d+)?>|<\\/size>|<align=(?:left|center|right|justify)>|<\\/align>";
 
+export const INLINE_FONT_SIZE_MIN_PT = 1;
+export const INLINE_FONT_SIZE_MAX_PT = 200;
+
+export function inlineFontSizePt(value: number): number {
+  const finite = Number.isFinite(value) ? value : INLINE_FONT_SIZE_MIN_PT;
+  return Math.min(
+    INLINE_FONT_SIZE_MAX_PT,
+    Math.max(INLINE_FONT_SIZE_MIN_PT, Math.round(finite * 10) / 10)
+  );
+}
+
+export function isInlineFontSizePt(value: number): boolean {
+  return (
+    Number.isFinite(value) &&
+    value >= INLINE_FONT_SIZE_MIN_PT &&
+    value <= INLINE_FONT_SIZE_MAX_PT
+  );
+}
+
 const INLINE_TAG_RE = new RegExp(INLINE_MARK_TAG_PATTERN, "gi");
 
 // Boolean probe that leaves the shared global regex reset for matchAll users.
@@ -141,7 +160,9 @@ export function effectiveFieldSize(value: string, fallback: number): number | nu
     fallback,
     (tag) => {
       const opened = SIZE_OPEN_RE.exec(tag);
-      return opened ? Number(opened[1]) : null;
+      if (!opened) return null;
+      const size = Number(opened[1]);
+      return isInlineFontSizePt(size) ? size : null;
     },
     (tag) => /^<\/size>$/i.test(tag)
   );
@@ -153,7 +174,7 @@ export function setFieldSize(value: string, sizePt: number | "default"): string 
   const stripped = clearInlineOverride(value, "fontSize");
   if (sizePt === "default") return stripped;
   if (!stripped.trim()) return value;
-  return `<size=${sizePt}>${stripped}</size>`;
+  return `<size=${inlineFontSizePt(sizePt)}>${stripped}</size>`;
 }
 
 // Whole-field emphasis helpers used by the Styles menu's entry-field matrix.

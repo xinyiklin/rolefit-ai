@@ -4,9 +4,9 @@
 // rail.
 // "pipeline" and "calendar" are gone as top-level tabs: they merged into
 // "applications" as a Table / Calendar view switcher (TrackerTab).
-// "cover" and "questions" are gone as separate tabs: they merged into
-// "materials" (cover letter + application questions, step 2 of tab IA consolidation).
-export type OutputTab = "resume" | "materials" | "applications" | "analytics";
+// Cover letters are a first-class editable document again. Materials remains
+// focused on application questions and role-description drafts.
+export type OutputTab = "resume" | "cover" | "materials" | "applications" | "analytics";
 
 // Rail groups for the sidebar tab list.
 export type OutputTabGroup = "DRAFT" | "TRACK";
@@ -21,9 +21,10 @@ export type OutputTabDescriptor = {
 };
 
 // Canonical group membership for the sidebar rail.
-// DRAFT: Resume + Materials (cover letter + application questions); TRACK: tracker + analytics.
+// DRAFT: Resume + Cover letter + Materials; TRACK: tracker + analytics.
 export const TAB_GROUPS: Record<OutputTab, OutputTabGroup> = {
   resume:       "DRAFT",
+  cover:        "DRAFT",
   materials:    "DRAFT",
   applications: "TRACK",
   analytics:    "TRACK",

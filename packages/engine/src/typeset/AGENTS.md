@@ -17,9 +17,11 @@ contract. Follow the repository root guide first.
   mark segmentation, paragraph items, and underline geometry.
 - `linebreak.ts` owns deterministic paragraph breaking.
 - `blocks.ts` converts the resume schema and document style into vertical lines
-  and shared page geometry, and owns the US-Letter page constants
+  and shared page geometry; `coverLetterBlocks.ts` owns the simpler plain
+  paragraph stream. `blocks.ts` also owns the US-Letter page constants
   (`PAGE_WIDTH_BP`/`PAGE_HEIGHT_BP`) every renderer imports.
-- `layout.ts` owns pagination and produces `LayoutDocument`.
+- `layout.ts` owns shared pagination and produces `LayoutDocument` for resume
+  and cover-letter streams.
 - `render/dom.tsx` paints selectable DOM used by the editor and browser print.
 - `pdf/emit.ts` serializes `LayoutDocument` to PDF bytes, embedded fonts, vector
   rules, and link annotations.
@@ -43,6 +45,22 @@ it truthfully.
   Do not introduce screen-relative units into saved layout behavior.
 - Preserve literal interior and trailing whitespace according to the shared
   engine model. Do not fix one renderer independently.
+- Runs with different families or sizes may share a line, but they share one
+  engine baseline. The DOM painter may measure CSS face baselines at its
+  browser-only boundary; shared pagination must use run ink overflow so an
+  oversized inline glyph cannot collide with an adjacent line.
+- Normal prose uses optimal word/hyphen breaks. When a single token is wider
+  than the text column, the emergency path may split it only at deterministic
+  grapheme boundaries measured with the same font metrics; it must preserve
+  every character, link, underline, and page-width bound across DOM and PDF.
+  Inline family, size, and mark boundaries inside that token are not line-break
+  opportunities; the emergency path must continue filling through them. When
+  the next grapheme cannot fit the remaining width, move it intact to a new
+  line; overflow is permitted only when that grapheme exceeds an empty column.
+  An oversized token puts its whole paragraph on that path, so the path must
+  still break the surrounding ordinary words at spaces and hyphens: only a
+  token wider than the column may be split inside, and its inline style
+  boundaries never decide where.
 - Supported families are Latin Modern, Source Serif 4, and Source Sans 3. A new
   family requires bundled web and PDF faces, generated metrics, license text,
   and full editor/PDF parity verification.

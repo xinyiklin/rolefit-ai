@@ -8,7 +8,8 @@ Use the nested guides under `src/hooks/`, `src/components/`, and
 
 - Own the reusable React editing surface over `@typeset/engine`: document and
   style hooks, direct editing, selection/caret mapping, formatting controls,
-  popovers, structure chrome, and shared editor styles.
+  optional structure chrome, and shared editor styles. Hosts may select a
+  document layout kind and disable structure chrome for constrained prose.
 - Depend only on the engine and general UI dependencies. Never import an app or
   encode provider, tracker, job, workspace, autosave, file-lifecycle, or product
   navigation behavior.
@@ -22,6 +23,11 @@ Use the nested guides under `src/hooks/`, `src/components/`, and
   contract. Keep host composition, copy, and lifecycle in its app.
 - Extend the smallest existing primitive before adding a parallel toolbar,
   popover, control, option list, or style vocabulary.
+- `FormattingToolbar.documentStyleTools` is the explicit document-grammar seam:
+  leaving it undefined mounts the resume style menus; supplying it replaces
+  that complete menu group while preserving the common editing controls. Keep
+  document-specific menu composition in the host instead of adding mode flags
+  to the shared toolbar.
 - `src/styles/` owns shared editor/tooling base CSS. Keep host shell rules in the
   apps; document intentional host seams and preserve import-order expectations.
   One such seam: a host may set `data-toolbar-labels="text"` on the wrapper

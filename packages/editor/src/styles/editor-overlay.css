@@ -4,6 +4,38 @@
   position: relative;
 }
 
+.typeset-editor.has-typeset-caret .tsd-doc--editable {
+  caret-color: transparent;
+}
+
+.typeset-caret {
+  position: absolute;
+  z-index: 8;
+  width: 1px;
+  min-height: 1px;
+  background: #000;
+  pointer-events: none;
+  animation: typeset-caret-blink 1.05s steps(1, end) infinite;
+}
+
+@keyframes typeset-caret-blink {
+  0%,
+  54% {
+    opacity: 1;
+  }
+
+  55%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .typeset-caret {
+    animation: none;
+  }
+}
+
 /* The visible grab bar sits inside a larger transparent hit area that extends
    into the leading whitespace beside the entry or bullet. */
 .ts-grip {

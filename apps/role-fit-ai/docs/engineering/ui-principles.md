@@ -38,9 +38,11 @@ inputs pane was folded into the masthead by explicit user request,
   page is the sole editor, so what you see is exactly what exports — it is its
   own live preview, so there is no separate compile-preview; its margin
   controls own add/remove/reorder, section type, and per-section tailor scope;
-  the suggestion/recruiter-review rail docks beside it post-polish), Materials (cover letter
-  + application questions), Applications (table / calendar tracker
-  views), Analytics — plus the template/export rail below
+  the suggestion/recruiter-review rail docks beside it post-polish), Cover
+  letter (a separate plain-paragraph editor that revises the user's source
+  letter), Materials (application questions and role descriptions),
+  Applications (table / calendar tracker views), Analytics — plus the
+  template/export rail below
 
 Polish should feel like a review queue, not a hidden overwrite. By default,
 the user selects editable resume sections in the document; identity,
@@ -56,10 +58,12 @@ unless the task explicitly touches them.
 
 - `@typeset/editor` owns the direct editor, document/history/style hooks,
   formatting toolbar, popovers, and shared editor styles.
-- `@typeset/engine` owns the resume model, `.resume` codec, deterministic
-  layout, fonts, print painting, and PDF emission.
-- RoleFit owns the masthead, studio navigation, AI workflow, review rail,
-  tracker, and its narrow editor overlay for section scope and review targets.
+- `@typeset/engine` owns the resume model, constrained cover-letter adapter,
+  strict `.resume`/`.cover` codecs, deterministic layout, fonts, print painting,
+  and PDF emission.
+- RoleFit owns the masthead, studio navigation, AI workflow, review rails,
+  tracker, cover-letter file/source lifecycle, and its narrow resume-editor
+  overlay for section scope and review targets.
 - Adapt shared surfaces through values, callbacks, and deliberate slots. Do not
   fork package components or add product-mode boolean combinations.
 - A shared editor change must be checked in both RoleFit and standalone
@@ -199,9 +203,9 @@ Never show:
   57px tall across disclosure states and meets the studio/sidebar through one
   structural hairline; it never wraps or paints a false gap below itself. At
   720px and below, only the Resume tab's precise authoring surface is replaced
-  by the non-dismissible width notice. Masthead/navigation and Materials,
-  Applications, and Analytics remain usable, including when browser zoom makes
-  the effective viewport cross that threshold.
+  by the non-dismissible width notice. Masthead/navigation, the simpler Cover
+  letter page, Materials, Applications, and Analytics remain usable, including
+  when browser zoom makes the effective viewport cross that threshold.
 
 ## Visual QA
 

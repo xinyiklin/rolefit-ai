@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { DOC_STYLE_DEFAULTS } from "../../../../../packages/engine/src/lib/documentStyle.ts";
+import { serializeResumeFile } from "../../../../../packages/engine/src/lib/resumeFile.ts";
+import { buildStarterResume } from "../../../../../packages/engine/src/sampleResume.ts";
 import { prepareResumeUpload } from "../useWorkspaceResume.ts";
 
 let reads = 0;
@@ -38,6 +41,11 @@ const textCandidate = await prepareResumeUpload({ name: "resume.md", text: async
 assert.deepEqual(textCandidate, { kind: "text", text: "# Resume" }, "text input is prepared without mutation");
 
 const starter = readFileSync(new URL("../../../server/starter.resume", import.meta.url), "utf8");
+assert.deepEqual(
+  JSON.parse(starter),
+  JSON.parse(serializeResumeFile(buildStarterResume(), DOC_STYLE_DEFAULTS)),
+  "bundled starter matches the canonical starter content and reset formatting"
+);
 const structuredCandidate = await prepareResumeUpload({ name: "resume.resume", text: async () => starter });
 assert.equal(structuredCandidate.kind, "resume", "valid .resume input becomes a structured candidate");
 assert.ok(structuredCandidate.parsed.data.sections.length > 0, "structured candidate carries parsed resume data");

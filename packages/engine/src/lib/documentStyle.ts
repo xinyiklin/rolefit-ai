@@ -116,7 +116,9 @@ export const DOC_STYLE_DEFAULTS: DocStyle = {
   letterSpacingPt: 0,
   lineHeight: 1.18,
   entryIndentPt: 10.8,
-  entryEndIndentPt: 0,
+  // Jake's 0.97\textwidth entry table inside its 0.15in list leaves a 5.4 pt
+  // end inset at the default US-Letter text width.
+  entryEndIndentPt: 5.4,
   nameContactGapPt: nameContactGapToPt(0.04),
   contactGapPt: contactGapToPt(1.82),
   headerSectionGapPt: headerSectionGapToPt(1.19),

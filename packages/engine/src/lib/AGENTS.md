@@ -1,7 +1,7 @@
-# Resume Domain And File Contract Guide
+# Resume And Cover-Letter Domain And File Contract Guide
 
 Applies to `src/lib/`. Follow the repository root guide first. This file owns
-the reusable resume-domain and editable-file rules; product and visual behavior
+the reusable document-domain and editable-file rules; product and visual behavior
 remain in `PRODUCT.md` and `DESIGN.md`.
 
 ## Module Ownership
@@ -15,6 +15,8 @@ remain in `PRODUCT.md` and `DESIGN.md`.
   editor, and typesetting consumers.
 - `resumeFile.ts` owns portable `.resume` validation, serialization, versioning,
   size limits, and download naming.
+- `coverLetter.ts` owns the strict `.cover` paragraph/style contract and the
+  constrained adapter into the shared in-memory `ResumeData` editing shape.
 - `inlineMarksText.ts` owns non-JSX inline-mark parsing and transforms,
   including the single inline-tag grammar (`INLINE_MARK_TAG_PATTERN`) that
   other parsers instantiate.
@@ -52,8 +54,12 @@ grammar, margin table, or link-normalization path.
 
 ## Editable File Contract
 
-- `.resume` is the only editable open/save format. PDF is final output.
+- `.resume` is the resume open/save format and `.cover` is the cover-letter
+  open/save format. The two strict schemas do not masquerade as one another.
+  PDF is final output.
 - Current saves use `format: "typeset-resume"` and `schemaVersion: 1`.
+- Current cover-letter saves use `format: "typeset-cover-letter"` and
+  `schemaVersion: 1`, with ordered paragraphs and cover-letter print style only.
 - Version 1 is the first and only contract. Pre-release prototype shapes and
   other schema-version values are unsupported and must be rejected.
 - The file contains structured content plus every print-affecting style value.
@@ -74,8 +80,9 @@ grammar, margin table, or link-normalization path.
 
 For model, transform, or codec changes:
 
-1. Run `npm run eval:resume-file --workspace packages/engine` for editable-file contract changes, plus the
-   smallest probe for other pure functions.
+1. Run `npm run eval:resume-file --workspace packages/engine` for `.resume`
+   changes or `npm run eval:cover-letter-file --workspace packages/engine` for
+   `.cover` changes, plus the smallest probe for other pure functions.
 2. Verify a current v1 save/open round trip without session ids.
 3. Check unsupported schema-version rejection; no prototype-version migration
    path should exist.

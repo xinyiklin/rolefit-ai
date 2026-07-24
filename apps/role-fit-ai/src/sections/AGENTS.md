@@ -27,6 +27,13 @@ and `docs/engineering/ui-principles.md`.
 
 - `ResumeTab` composes shared `DocumentToolbar`, `FormattingToolbar`, and
   `TypesetEditor` with RoleFit host actions and `RoleFitEditorOverlay`.
+- `CoverLetterTab` composes the shared `DocumentToolbar`,
+  `FormattingToolbar`, and direct editor with the cover-letter layout and
+  structure editing disabled. It replaces only the toolbar's resume style-menu
+  slot with a RoleFit-owned line-height control plus the shared page control;
+  its file lifecycle and deterministic review rail remain RoleFit-owned. The
+  editor is always mounted: without an opened or restored source, it starts as
+  one empty editable paragraph.
 - Never fork shared editor markup or layout CSS for a host tweak. Add a narrow
   package seam and verify both apps.
 - Structure controls stay outside editable DOM and must not affect PDF layout.

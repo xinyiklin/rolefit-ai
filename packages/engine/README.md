@@ -1,14 +1,17 @@
 # @typeset/engine
 
-Private workspace package containing the canonical resume domain and
-deterministic typesetting engine shared by Typeset and RoleFit AI.
+Private workspace package containing the canonical resume domain, constrained
+cover-letter document adapter, and deterministic typesetting engine shared by
+Typeset and RoleFit AI.
 
 ## Owns
 
 - `src/lib/`: `ResumeData`, document style/typography, inline marks and links,
-  strict `.resume` schema v1 validation/serialization, and download helpers.
+  strict `.resume` and `.cover` schema v1 validation/serialization, and
+  download helpers.
 - `src/typeset/`: schema adapter, measurement, line breaking, blocks,
-  pagination, DOM/print rendering, and client-side PDF emission.
+  shared pagination, resume and plain-paragraph cover-letter composition,
+  DOM/print rendering, and client-side PDF emission.
 - `fonts/` and `scripts/`: bundled faces, licenses, generated metrics, and
   reproducible font tooling.
 
@@ -33,6 +36,7 @@ Run from the repository root:
 ```bash
 npm run check --workspace packages/engine
 npm run eval:resume-file --workspace packages/engine
+npm run eval:cover-letter-file --workspace packages/engine
 npm run eval:pdf-font-parity --workspace packages/engine
 npm run fonts:check --workspace packages/engine
 ```

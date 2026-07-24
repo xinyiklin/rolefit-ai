@@ -25,7 +25,10 @@ paints).
   disappear first, then their menu icons move into a compact anchored overlay;
   alignment joins at the next narrower threshold, and selection typography only
   at the narrow supported edge. Zoom remains visible before the font-family
-  control. Opening More never changes toolbar or editor geometry.
+  control. Opening More never changes toolbar or editor geometry. The optional
+  `documentStyleTools` slot replaces the complete default resume-style menu
+  group for another document grammar; it does not replace history, zoom,
+  selection typography, marks, alignment, links, or spell-check.
 - `toolbar/TopToolbar.tsx` composes the standalone Typeset document row with
   its file actions and `FormattingToolbar`.
 - `toolbar/styleOptions.ts` owns toolbar option lists and preset helpers
@@ -36,7 +39,9 @@ paints).
 - One popover component per toolbar menu: `SpacingStylePopover`,
   `ParagraphStylePopover`, `TextStylesPopover`, `PageStylePopover`, and
   `DocumentStructureControls` (Header + Add section). Do not re-fuse menus
-  behind mode props.
+  behind mode props. Document-specific menu compositions passed through
+  `documentStyleTools` remain in their host until another consumer demonstrates
+  a genuinely shared contract.
 - `toolbar/StyleRange.tsx`, `toolbar/FontFamilyControl.tsx`, `toolbar/FontSizeControl.tsx`,
   `toolbar/ToolbarButton.tsx`, and `toolbar/LinkControl.tsx` are the shared
   control primitives. FontFamilyControl owns the portaled family list used by
@@ -55,6 +60,10 @@ paints).
   toolbar.css.
 - Formatting buttons that act on the page selection prevent mousedown focus
   transfer so the selection survives the click.
+- Committing a font-family or font-size menu choice returns focus through the
+  host-provided editor callback to the saved page caret or range. Escape still
+  returns to the menu trigger, and merely editing a numeric draft does not make
+  toolbar controls reach into the editor DOM.
 - Toolbar rows and type use fixed values across responsive states. Use the
   `typeset-toolbar` container queries for progressive disclosure; do not shrink
   type, control widths, row padding/gaps, crop controls, or restore horizontal

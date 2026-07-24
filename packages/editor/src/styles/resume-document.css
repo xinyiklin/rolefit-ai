@@ -161,6 +161,36 @@
   cursor: text;
 }
 
+.tsd-doc--editable .tsd-line {
+  isolation: isolate;
+}
+
+/* Native selection paints one box per differently sized inline run. Replace
+   that fragmented background with one line-wide rectangle whose height is the
+   engine line box (therefore the largest text on the line). Text remains native
+   and selectable; only its background paint is delegated to the line. */
+.tsd-doc--editable .tsd-line--selected::before {
+  position: absolute;
+  z-index: 0;
+  top: 0;
+  left: var(--tsd-selection-left, 0);
+  width: var(--tsd-selection-width, 0);
+  height: 100%;
+  background: var(--accent-veil);
+  pointer-events: none;
+  content: "";
+}
+
+.tsd-doc--editable [data-tsdf] {
+  position: relative;
+  z-index: 1;
+}
+
+.tsd-doc--editable [data-tsdf]::selection {
+  color: inherit;
+  background: transparent;
+}
+
 .tsd-doc--editable a {
   cursor: text;
 }

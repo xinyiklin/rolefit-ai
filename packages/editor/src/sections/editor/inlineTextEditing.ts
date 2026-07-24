@@ -1,8 +1,8 @@
 // Pure editing math for the typeset editor (no DOM, no React): the mapping
 // between a field's VALUE (inline-marks string, ASCII ligatures, real
 // whitespace) and its DISPLAY form (what the engine paints: tags stripped,
-// --- → — / -- → – / ' → ’, horizontal whitespace collapsed, and literal
-// hard breaks preserved as "\n"). Every edit is expressed in display coordinates
+// --- → — / -- → – / ' → ’, authored horizontal whitespace preserved, and
+// literal hard breaks preserved as "\n"). Every edit is expressed in display coordinates
 // (where the caret lives) and applied to the value without losing marks,
 // ligature sources, or preserved outer whitespace.
 //
@@ -12,7 +12,11 @@
 
 import type { FieldSrc } from "@typeset/engine/typeset/types.ts";
 import type { DocumentFontFamily } from "@typeset/engine/typeset/fontRegistry.ts";
-import type { FieldAlignment } from "@typeset/engine/lib/inlineMarksText.ts";
+import {
+  inlineFontSizePt,
+  isInlineFontSizePt,
+  type FieldAlignment
+} from "@typeset/engine/lib/inlineMarksText.ts";
 import { automaticLinkHref, decodeLinkHref, encodeLinkHref } from "@typeset/engine/lib/links.ts";
 
 type DisplayChar = {
@@ -83,7 +87,7 @@ export function buildDisplayMap(value: string, opts?: { uppercase?: boolean; pre
       else if (tag[3]) fontStack.push(tag[3] as DocumentFontFamily);
       else if (tag[4]) {
         const size = Number(tag[4]);
-        if (Number.isFinite(size) && size >= 6 && size <= 48) sizeStack.push(size);
+        if (isInlineFontSizePt(size)) sizeStack.push(size);
       } else if (tag[2]) linkStack.push(decodeLinkHref(tag[2]));
       else if (tag[0].toLowerCase() === "</font>") fontStack.pop();
       else if (tag[0].toLowerCase() === "</size>") sizeStack.pop();
@@ -113,24 +117,26 @@ export function buildDisplayMap(value: string, opts?: { uppercase?: boolean; pre
     };
     const ch = value[i];
     if (ch === "\n" || ch === "\r") {
-      // The line breaker preserves every authored newline. Fold horizontal
-      // space immediately around it into the newline's raw source because TeX
-      // discards that glue at line edges, while serialization must retain it.
+      // The line breaker preserves every authored newline. Legacy collapsing
+      // callers fold horizontal space around it into the newline's raw source;
+      // word-processor callers keep those spaces as caret-bearing characters.
       let rawPrefix = "";
       let start = i;
-      if (display.endsWith(" ")) {
+      if (!preserveWhitespace && display.endsWith(" ")) {
         rawPrefix = chars[chars.length - 1].raw;
         start = valueStart[valueStart.length - 1];
         chars.pop();
         valueStart.pop();
         display = display.slice(0, -1);
-      } else if (!display.length && prefix) {
+      } else if (!preserveWhitespace && !display.length && prefix) {
         rawPrefix = prefix;
         start = 0;
         prefix = "";
       }
       let j = ch === "\r" && value[i + 1] === "\n" ? i + 2 : i + 1;
-      while (j < value.length && /[^\S\r\n]/.test(value[j])) j += 1;
+      if (!preserveWhitespace) {
+        while (j < value.length && /[^\S\r\n]/.test(value[j])) j += 1;
+      }
       display += "\n";
       chars.push({ raw: rawPrefix + value.slice(i, j), ...flags });
       valueStart.push(start);
@@ -142,7 +148,7 @@ export function buildDisplayMap(value: string, opts?: { uppercase?: boolean; pre
       let j = i;
       while (j < value.length && /[^\S\r\n]/.test(value[j])) j += 1;
       const raw = value.slice(i, j);
-      if (!display.length) {
+      if (!display.length && !preserveWhitespace) {
         // Leading whitespace: display drops it; the value keeps it (prefix).
         prefix += raw;
       } else if (preserveWhitespace) {
@@ -321,6 +327,80 @@ export function applyEdit(
   return withBoundary(serializeChars(map.prefix, chars, suffix, dStart + leading.length + inserted.length));
 }
 
+// A mark-balanced fragment for the selected display range. The custom
+// clipboard transport stores this value alongside text/plain so paste inside
+// either host can restore supported font, size, emphasis, link, and alignment
+// runs without trusting browser-generated editing markup.
+export function inlineFragmentForRange(
+  map: DisplayMap,
+  dStart: number,
+  dEnd: number
+): string {
+  return serializeChars("", map.chars.slice(dStart, dEnd), "", 0).value;
+}
+
+// Replace a display range with a mark-balanced fragment created above (or
+// sanitized from clipboard HTML). Unlike applyEdit, the fragment keeps its own
+// per-character formatting instead of inheriting one typing format.
+export function applyInlineFragment(
+  map: DisplayMap,
+  dStart: number,
+  dEnd: number,
+  fragmentValue: string,
+  singleLine = false
+): { value: string; caretValueIndex: number } {
+  const fragment = buildDisplayMap(fragmentValue, { preserveWhitespace: true });
+  const inserted = singleLine
+    ? fragment.chars.map((char) => ({
+        ...char,
+        raw: char.raw.replace(/\r?\n/g, " ")
+      }))
+    : fragment.chars;
+  const inherit = map.chars[dStart - 1] ?? map.chars[dStart] ?? {
+    bold: false,
+    italic: false,
+    underline: false,
+    fontFamily: null,
+    fontSizePt: null,
+    alignment: null,
+    linkHref: null,
+    linkSuppressed: false
+  };
+  const reviveSuffix =
+    inserted.length > 0 &&
+    dStart === map.chars.length &&
+    dEnd === map.chars.length &&
+    map.suffix.length > 0;
+  const leading: DisplayChar[] = reviveSuffix
+    ? [{
+        raw: map.suffix,
+        bold: inherit.bold,
+        italic: inherit.italic,
+        underline: inherit.underline,
+        fontFamily: inherit.fontFamily,
+        fontSizePt: inherit.fontSizePt,
+        alignment: inherit.alignment,
+        linkHref: null,
+        linkSuppressed: false
+      }]
+    : [];
+  const suffix = reviveSuffix ? "" : map.suffix;
+  const chars = [
+    ...map.chars.slice(0, dStart),
+    ...leading,
+    ...inserted,
+    ...map.chars.slice(dEnd)
+  ];
+  return withBoundary(
+    serializeChars(
+      map.prefix,
+      chars,
+      suffix,
+      dStart + leading.length + inserted.length
+    )
+  );
+}
+
 // Deleting text leaves the caret with the typography of the final removed
 // character. This mirrors a word processor: deleting the last styled glyph in
 // a run must not also delete the style that the next typed glyph should use.
@@ -367,7 +447,7 @@ export function setFontSize(
   dEnd: number,
   fontSizePt: number
 ): { value: string; caretValueIndex: number } {
-  const size = Math.min(48, Math.max(6, Math.round(fontSizePt * 10) / 10));
+  const size = inlineFontSizePt(fontSizePt);
   const chars = map.chars.map((char, index) =>
     index >= dStart && index < dEnd ? { ...char, fontSizePt: size } : char
   );

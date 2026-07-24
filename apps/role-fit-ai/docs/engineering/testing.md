@@ -109,11 +109,16 @@ Good server verification covers:
 - duplicate warnings before or after Distill must offer Continue/Stop; Stop
   prevents the current and every downstream AI request, while Continue is
   acknowledged for the same job target so the pipeline does not prompt twice
-- cover-letter and application-answer generation have no local fallback and
-  retain their own retryable task progress
+- cover-letter revision and application-answer generation have no local
+  fallback and retain their own retryable task progress. Cover-letter probes
+  must require a candidate source, neutralize source-letter fence injection,
+  and reject unsupported terms, numbers, and outcomes
 - resume import (`.txt` / `.md` / `.csv`, or paste) reaches the structured editor
   as a one-time conversion into `ResumeData`; a `.resume` file loads its
   `ResumeData` directly, and export offers PDF + `.resume`
+- cover-letter import accepts `.cover`, `.txt`, and `.md`; `.cover` round trips
+  ordered paragraphs and cover-specific print style without session ids, rejects
+  malformed/unknown data, and editor/PDF output uses the cover-letter layout
 - `job-search-workspace/` reads / writes stay inside the workspace; tracker and
   base-resume mutations are serialized/atomic, duplicate application ids are
   rejected, stale same-record tracker writes return `409` with the current
@@ -154,8 +159,8 @@ Good frontend verification covers:
 - changed controls are reachable by keyboard
 - loading / data refresh does not cause avoidable layout shift
 - API error states show user-safe messaging (no raw provider bodies)
-- a failed cover pass renders an explicit failure card with Retry while the
-  successful resume/review result remains usable
+- a failed cover-letter revision stays local to its page with safe retry copy;
+  the source remains restorable and the resume/review result remains usable
 - the owned typeset page stays the sole editor and live preview; the tracker may
   preview the saved application PDF, `ReviewRail` docks only after polish
   produces review output, and a
@@ -169,8 +174,8 @@ Good frontend verification covers:
   configured providers appear, configured-but-unready selections stay visible
   and disabled, and no API key appears in DOM, browser storage, or HTTP requests
 - at 720px and below, only precise Resume authoring is replaced by the width
-  notice; masthead/navigation and Materials, Applications, and Analytics remain
-  reachable, including under high browser zoom
+  notice; masthead/navigation, Cover letter, Materials, Applications, and
+  Analytics remain reachable, including under high browser zoom
 - job-import distiller changes prove the before/after shape without
   printing raw private text: the resulting job field should keep role
   intro / responsibilities / requirements while stripping empty bullets,

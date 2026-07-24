@@ -11,7 +11,10 @@
 import { fontFace, type DocumentFontFamily } from "./fontRegistry.ts";
 import type { FaceName } from "./metrics.gen.ts";
 import type { BoxItem, FontStyle, ForcedBreakItem, GlueItem, ParaItem, PenaltyItem } from "./types.ts";
-import { INLINE_MARK_TAG_PATTERN } from "../lib/inlineMarksText.ts";
+import {
+  INLINE_MARK_TAG_PATTERN,
+  isInlineFontSizePt
+} from "../lib/inlineMarksText.ts";
 import { automaticLinkHref, decodeLinkHref } from "../lib/links.ts";
 
 // Module-local instance of the shared grammar (match[1] is the <link=…>
@@ -172,7 +175,7 @@ export function segmentsFromInlineMarks(value: string): StyledSegment[] {
     else if (tag === "</font>") fontStack.pop();
     else if (tag.startsWith("<size=")) {
       const size = Number(tag.slice(6, -1));
-      if (Number.isFinite(size) && size >= 6 && size <= 48) sizeStack.push(size);
+      if (isInlineFontSizePt(size)) sizeStack.push(size);
     } else if (tag === "</size>") sizeStack.pop();
     else if (tag.startsWith("<link=")) linkStack.push(decodeLinkHref(match[1]));
     else if (tag === "</link>") linkStack.pop();
@@ -201,9 +204,9 @@ export function paragraphItems(
   // interword glue (the sole break opportunity, and the Nth rendered space).
   // The DOM painter then merges the literal spaces into the word run and adds a
   // single space for the glue gap, so N spaces survive with no other engine
-  // change. This mirrors buildDisplayMap's preserve rules exactly: leading-of-
-  // line spaces collapse (they map to the field prefix / a folded hard break),
-  // one space folds into a hard break, and every trailing space is kept.
+  // change. This mirrors buildDisplayMap's word-processor preserve mode:
+  // authored leading, interior, trailing, and hard-break-adjacent spaces all
+  // remain caret-bearing glyphs.
   let pending: { style: FontStyle; count: number } | null = null;
   let hasPrecedingBox = false; // a real word already sits on the current line
   const spaceBox = (n: number, style: FontStyle) => {
@@ -227,12 +230,10 @@ export function paragraphItems(
     for (const part of parts) {
       if (!part) continue;
       if (part === "\n" || part === "\r" || part === "\r\n") {
-        // A hard break plays the discardable role of the interword glue: keep
-        // all but the last pending space as literal glyphs (the last folds into
-        // the break, as buildDisplayMap folds it into the newline's raw). Spaces
-        // that only lead the line just ended collapse away.
+        // A hard break is structural, but authored spaces before it remain
+        // literal glyphs so the engine and editor caret map stay identical.
         if (pending) {
-          if (hasPrecedingBox) spaceBox(pending.count - 1, pending.style);
+          spaceBox(pending.count, pending.style);
           pending = null;
         }
         items.push({ kind: "forcedBreak" } satisfies ForcedBreakItem);
@@ -251,9 +252,11 @@ export function paragraphItems(
           // break-opportunity glue that renders the Nth space.
           spaceBox(pending.count - 1, pending.style);
           items.push(spaceGlue(pending.style));
+        } else {
+          // Authored line-leading spaces (including a Tab insertion represented
+          // as four spaces) are fixed glyphs, not discardable glue.
+          spaceBox(pending.count, pending.style);
         }
-        // Leading run (no preceding word): drop it — the value keeps it as the
-        // field prefix, and the breaker would discard leading glue anyway.
         pending = null;
       }
       pushWord(

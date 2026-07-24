@@ -124,12 +124,14 @@ owns:
   plus the native OpenAI and Anthropic APIs. The route supports independent
   `tailor` and `review` requests plus a backward-compatible/headless `both`
   request. The current UI implements Both as two sequential requests: Tailor
-  first (`stages: "tailor"`, with the optional cover pass), then Review
+  first (`stages: "tailor"`), then Review
   (`stages: "review"`) with only the sanitized suggestions from that same run.
   A headless `stages: "both"` request instead runs targeted suggestions first,
   then runs its strict audit and optional cover pass in parallel. No single
-  model response is forced to suggest edits, score, audit, and draft a letter
-  at the same time. Review-only skips the suggestion pass and audits the
+  model response is forced to suggest edits, score, audit, and revise a letter
+  at the same time. The optional cover leg remains only for older/headless
+  clients and runs only when they supply a candidate-authored source letter.
+  Review-only skips the suggestion pass and audits the
   current edited draft exactly as submitted; it must not regenerate or replay
   stale tailoring changes. The suggestion pass
   returns only structured `suggestedChanges` (no full-text rewrite and no fit
@@ -148,10 +150,10 @@ owns:
   proposed changes (`<proposed_changes>`, slim JSON) instead of a second full
   resume copy — the polished resume is derivable from them, and dropping the
   redundant copy cuts the audit prompt by up to ~28k chars. Review-only instead
-  receives the current edited draft as its audit target. The cover pass uses a
-  clipped copy of the tailored sections. The Tailor stage supplies the
-  primary provider for suggestion generation, cover letters, and application
-  answers. The Review stage can use its own provider/model (request `audit*`
+  receives the current edited draft as its audit target. The Tailor stage
+  supplies the primary provider for suggestion generation, cover-letter
+  revision, and application answers. The Review stage can use its own
+  provider/model (request `audit*`
   fields, resolved by `resolveAuditProviderRequest`); when audit fields are
   absent the server reuses the primary config. Only the non-rewriting audit
   can differ inside `/api/polish`, so a reviewer model can never alter the
@@ -168,8 +170,11 @@ owns:
   from a missing letter, and a cover failure must not discard successful
   tailor/review results. The client surfaces "reviewed by" when either the
   audit provider or audit model differs from the Tailor configuration.
-  `/api/cover-letter` and
-  `/api/application-answers` likewise echo the resolved `provider` / `model` /
+  `/api/cover-letter` requires `sourceCoverLetterText` plus the current resume
+  and job description. It revises the source rather than creating a new
+  template, preserves the source as grounding evidence, and returns an empty
+  result if deterministic checks find an unsupported term, number, or outcome.
+  It and `/api/application-answers` echo the resolved `provider` / `model` /
   `reasoningEffort`.
 - resume import into the structured editor: a `.txt` / `.md` / `.csv` (or pasted)
   resume is parsed once into `ResumeData`, the source of truth thereafter (no DOCX
@@ -465,11 +470,35 @@ The AI must:
   scope with the sanitized tailored result; in review-only it audits the
   current edited draft as-is
 
+### Career-writing guidance
+
+Prompt language follows stable public career-center guidance rather than trying
+to mimic a single sample:
+
+- MIT CAPD: a cover letter should be specific and genuine, use brief evidence
+  stories, avoid repeating the resume, stay under one page, and be read aloud
+  or reviewed for voice:
+  <https://capd.mit.edu/resources/career-toolkit-writing-a-cover-letter/>
+- CareerOneStop: tailor each letter, keep it concise (normally 200–400 words
+  and 3–4 paragraphs), and edit AI-assisted text so it remains the candidate's
+  unique voice:
+  <https://cloudfront.careeronestop.org/JobSearch/Resumes/cover-letters.aspx>
+- Harvard FAS and MIT CAPD resume guidance: keep claims specific, active,
+  direct, fact-based, and easy to scan; emphasize relevant impact rather than
+  copying a job description:
+  <https://careerservices.fas.harvard.edu/resources/hes-create-impactful-resumes-and-cover-letters/>
+  and <https://capd.mit.edu/resources/career-toolkit-crafting-an-effective-resume/>
+
+These are prompt-quality inputs, not permission to fabricate. The shared
+truthfulness, source-attribution, grounding, and sanitization rules remain
+authoritative.
+
 The only deterministic non-AI alternative is the job distiller
 (`src/lib/jobExtract.ts`). It is a successful path only when the user has AI
 Distill turned off. If a requested AI Distill call fails, the local brief may be
 retained for inspection but the selected stage remains failed. Tailor, Review,
-cover-letter, and application-answer failures have no local substitutes. No
+cover-letter revision, and application-answer failures have no local
+substitutes. No
 locally generated draft, score, review, or verdict stands in.
 
 ## Job Posting Import

@@ -321,7 +321,8 @@
 /* Resume tab: no page scroll — the editor canvas fills edge-to-edge from
    toolbar to export rail, like the Google Docs workspace. Deep desk tone so
    the white sheets (editor page, preview pages) read as paper on the desk. */
-.studio-body[data-tab="resume"] {
+.studio-body[data-tab="resume"],
+.studio-body[data-tab="cover"] {
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -329,7 +330,8 @@
   background: var(--paper-deep);
 }
 
-.studio-body[data-tab="resume"] > .studio-card--flush {
+.studio-body[data-tab="resume"] > .studio-card--flush,
+.studio-body[data-tab="cover"] > .studio-card--flush {
   flex: 1 1 0;
   display: flex;
   flex-direction: column;

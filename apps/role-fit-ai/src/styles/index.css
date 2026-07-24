@@ -12,6 +12,7 @@
 @import "@typeset/editor/styles/popovers.css";
 @import "./resume-document.css";
 @import "./resume-editor.css";
+@import "./cover-letter.css";
 @import "./review.css";
 @import "./questions.css";
 @import "./pipeline.css";

@@ -6,6 +6,10 @@ function fieldSpans(host: HTMLElement, key: string): HTMLElement[] {
   return Array.from(host.querySelectorAll<HTMLElement>(`[data-tsdf="${CSS.escape(key)}"]:not([data-tsdm])`));
 }
 
+function isEmptyEditableSpan(span: HTMLElement): boolean {
+  return span.hasAttribute("data-tsde");
+}
+
 // The field key of the painted span containing a DOM node (a selection
 // endpoint, a clicked element), with the span element itself.
 export function keyOfNode(node: Node | null): { key: string; el: HTMLElement } | null {
@@ -27,6 +31,10 @@ export function caretToDisplayIndex(
   for (const span of spans) {
     const textNode = span.firstChild;
     if (!textNode || textNode.nodeType !== Node.TEXT_NODE) continue;
+    if (isEmptyEditableSpan(span)) {
+      if (textNode === node || span === node) return 0;
+      continue;
+    }
     const text = textNode.textContent ?? "";
     const isTarget = textNode === node || span === node;
     const upTo = !isTarget
@@ -58,6 +66,10 @@ export function displayIndexToCaret(
   for (const span of spans) {
     const textNode = span.firstChild;
     if (!textNode || textNode.nodeType !== Node.TEXT_NODE) continue;
+    if (isEmptyEditableSpan(span)) {
+      if (target === 0) return { node: textNode, offset: 0 };
+      continue;
+    }
     const text = textNode.textContent ?? "";
     for (let index = 0; index < text.length; index += 1) {
       if (displayIndex >= target) return { node: textNode, offset: index };
@@ -98,6 +110,7 @@ export function lineEdgePosition(
   if (!spans.length) return null;
   if (edge === "start") return { node: spans[0].firstChild!, offset: 0 };
   const last = spans[spans.length - 1].firstChild as Text;
+  if (isEmptyEditableSpan(spans[spans.length - 1])) return { node: last, offset: 0 };
   const text = last.textContent ?? "";
   let end = text.length;
   while (end > 0 && /\s/.test(text[end - 1])) end -= 1;
@@ -176,6 +189,7 @@ export function contentSpansOf(line: HTMLElement): HTMLElement[] {
 
 export function spanEndPosition(span: HTMLElement): { node: Node; offset: number } {
   const textNode = span.firstChild as Text;
+  if (isEmptyEditableSpan(span)) return { node: textNode, offset: 0 };
   const text = textNode.textContent ?? "";
   let end = text.length;
   while (end > 0 && /\s/.test(text[end - 1])) end -= 1;

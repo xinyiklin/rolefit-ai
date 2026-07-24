@@ -4,8 +4,6 @@ import { CITIZENSHIP_OPTIONS, type CitizenshipStatus } from "../lib/candidateFac
 import { NavMenu } from "./NavMenu";
 
 type PolishMenuProps = {
-  includeCoverLetter: boolean;
-  setIncludeCoverLetter: (v: boolean) => void;
   polishStages: "tailor" | "review" | "both";
   setPolishStages: (v: "tailor" | "review" | "both") => void;
   honestContext: string;
@@ -34,8 +32,6 @@ const STAGE_OPTIONS: { value: "tailor" | "review" | "both"; label: string }[] = 
 // Navbar dropdown for the optional inputs that steer a polish run. The AiMenu,
 // separately, picks the model/provider.
 export function PolishMenu({
-  includeCoverLetter,
-  setIncludeCoverLetter,
   polishStages,
   setPolishStages,
   honestContext,
@@ -65,17 +61,6 @@ export function PolishMenu({
       open={open}
       onOpenChange={onOpenChange}
     >
-      <label className="check-row">
-        <input
-          checked={includeCoverLetter}
-          onChange={(event) => setIncludeCoverLetter(event.target.checked)}
-          type="checkbox"
-        />
-        <span>
-          <strong>Cover letter</strong>
-        </span>
-      </label>
-
       <div role="group" aria-labelledby="polish-stages-label" className="field">
         <span id="polish-stages-label">
           <strong>Polish stages</strong>

@@ -75,7 +75,7 @@ type UseJobIntakeArgs = {
   setJobDescription: (value: string) => void;
   setImportedJob: (value: ImportedJobSnapshot | null) => void;
   setResult: (value: PolishedResume | null) => void;
-  applyCoverLetter: (text: string) => void;
+  resetCoverWorkflow: () => void;
   setPipelineAiUsage: (updater: (prev: Record<string, StageAiUsage>) => Record<string, StageAiUsage>) => void;
   setJobRawText: (value: string) => void;
   setAutoTailorJob: (value: string | null) => void;
@@ -105,7 +105,7 @@ export function useJobIntake({
   setJobDescription,
   setImportedJob,
   setResult,
-  applyCoverLetter,
+  resetCoverWorkflow,
   setPipelineAiUsage,
   setJobRawText,
   setAutoTailorJob,
@@ -363,7 +363,7 @@ export function useJobIntake({
         manualReviewFields: extracted.manualReviewFields
       });
       setResult(null);
-      applyCoverLetter("");
+      resetCoverWorkflow();
       setPipelineAiUsage(freshDistillUsage(usage));
       setJobRawText(relevant.trim() !== rawText.trim() ? rawText : "");
       if (!duplicateAfter.proceed) {
@@ -484,7 +484,7 @@ export function useJobIntake({
         manualReviewFields: extracted.manualReviewFields
       });
       setResult(null);
-      applyCoverLetter("");
+      resetCoverWorkflow();
       setPipelineAiUsage(freshDistillUsage(usage));
       setJobRawText(relevant.trim() !== cleaned.trim() ? cleaned : "");
       if (!duplicateAfter.proceed) {
@@ -531,7 +531,7 @@ export function useJobIntake({
       manualReviewFields: localExtracted.manualReviewFields
     });
     setResult(null);
-    applyCoverLetter("");
+    resetCoverWorkflow();
     setPipelineAiUsage(freshDistillUsage({ source: "none", completedAt: new Date().toISOString() }));
     setJobRawText("");
     setDistillProgress({
@@ -628,7 +628,7 @@ export function useJobIntake({
         manualReviewFields: extracted.manualReviewFields
       });
       setResult(null);
-      applyCoverLetter("");
+      resetCoverWorkflow();
       setPipelineAiUsage(freshDistillUsage(usage));
       setJobRawText(relevant.trim() !== payload.text.trim() ? payload.text : "");
       if (!duplicateAfter.proceed) {
@@ -771,7 +771,7 @@ export function useJobIntake({
           manualReviewFields: extracted.manualReviewFields,
         });
         setResult(null);
-        applyCoverLetter("");
+        resetCoverWorkflow();
         setPipelineAiUsage(freshDistillUsage(usage));
         setJobRawText(relevant.trim() !== text.trim() ? text : "");
         if (!duplicateAfter.proceed) {

@@ -1,0 +1,158 @@
+.cover-letter-page {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.cover-letter-tab__toolbar {
+  position: relative;
+  top: auto;
+  z-index: 20;
+  flex: 0 0 auto;
+}
+
+.cover-letter-tab__toolbar .top-toolbar__primary-row {
+  background: var(--card-elev);
+}
+
+.cover-letter-tab__toolbar .top-toolbar__file-actions {
+  min-width: 0;
+}
+
+@container typeset-toolbar (max-width: 1040px) {
+  .cover-letter-tab__toolbar .top-toolbar__primary-row {
+    gap: var(--s2);
+  }
+}
+
+.cover-letter-workbench {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 280px;
+  flex: 1 1 0;
+  min-height: 0;
+  background: var(--paper-deep);
+}
+
+.cover-letter-workbench__editor {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  padding: var(--s5);
+  container-type: inline-size;
+  scrollbar-width: thin;
+  scrollbar-color: var(--hairline-strong) transparent;
+}
+
+.cover-letter-workbench__editor .typeset-editor {
+  min-height: 100%;
+}
+
+.cover-letter-workbench__editor .tsd-page {
+  box-shadow: var(--shadow-lift);
+}
+
+.cover-letter-review {
+  min-width: 0;
+  overflow: auto;
+  padding: var(--s5) var(--s4);
+  border-left: 1px solid var(--hairline);
+  background: var(--card);
+}
+
+.cover-letter-review__eyebrow {
+  margin: 0 0 var(--s1);
+  color: var(--accent-deep);
+  font: 600 0.68rem/1 var(--font-ui);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.cover-letter-review h2 {
+  margin: 0 0 var(--s4);
+  color: var(--ink-strong);
+  font: 600 1.05rem/1.3 var(--font-display);
+}
+
+.cover-letter-review ul {
+  display: grid;
+  gap: var(--s2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.cover-letter-review li {
+  position: relative;
+  display: grid;
+  gap: 2px;
+  padding-left: 16px;
+  color: var(--ink);
+  font-size: 0.76rem;
+}
+
+.cover-letter-review li::before {
+  position: absolute;
+  top: 0.42em;
+  left: 1px;
+  width: 7px;
+  height: 7px;
+  border: 1px solid var(--hairline-strong);
+  border-radius: 50%;
+  content: "";
+}
+
+.cover-letter-review li.is-ok::before {
+  border-color: var(--accent);
+  background: var(--accent);
+  box-shadow: inset 0 0 0 2px var(--card);
+}
+
+.cover-letter-review li span,
+.cover-letter-review__note,
+.cover-letter-review details p {
+  color: var(--ink-faint);
+  font-size: 0.7rem;
+  line-height: 1.45;
+}
+
+.cover-letter-review__note {
+  margin: var(--s4) 0;
+  padding-top: var(--s3);
+  border-top: 1px solid var(--hairline);
+}
+
+.cover-letter-review details {
+  padding-top: var(--s3);
+  border-top: 1px solid var(--hairline);
+}
+
+.cover-letter-review summary {
+  cursor: pointer;
+  color: var(--ink-strong);
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.cover-letter-review details a {
+  display: block;
+  margin-top: var(--s2);
+  color: var(--accent-deep);
+  font-size: 0.7rem;
+}
+
+.cover-letter-review__status {
+  margin: var(--s4) 0 0;
+  color: var(--ink-muted);
+  font-size: 0.7rem;
+  line-height: 1.45;
+}
+
+@media (max-width: 1120px) {
+  .cover-letter-workbench {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .cover-letter-review {
+    border-top: 1px solid var(--hairline);
+    border-left: 0;
+  }
+}

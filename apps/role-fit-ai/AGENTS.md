@@ -89,8 +89,8 @@ RoleFit owns:
 
 RoleFit consumes, but does not fork:
 
-- `@typeset/engine`: canonical resume model, `.resume` codec, layout, fonts,
-  DOM/print, and PDF;
+- `@typeset/engine`: canonical resume model, constrained cover-letter adapter,
+  strict `.resume`/`.cover` codecs, layout, fonts, DOM/print, and PDF;
 - `@typeset/editor`: document/history/style hooks, direct editor, toolbars,
   popovers, and shared editor styles.
 

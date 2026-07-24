@@ -1,12 +1,13 @@
 import { useRef, type KeyboardEvent, type ReactNode } from "react";
-import { BarChart3, ClipboardList, FileText, Mail } from "lucide-react";
+import { BarChart3, ClipboardList, FileQuestion, FileText, Mail } from "lucide-react";
 import type { OutputTab, OutputTabDescriptor, OutputTabGroup } from "./shared";
 import { TAB_GROUPS } from "./shared";
 
 // Sidebar rail entries lead with a fixed icon per tab id.
 const TAB_ICONS: Record<OutputTab, ReactNode> = {
   resume: <FileText size={15} aria-hidden="true" />,
-  materials: <Mail size={15} aria-hidden="true" />,
+  cover: <Mail size={15} aria-hidden="true" />,
+  materials: <FileQuestion size={15} aria-hidden="true" />,
   applications: <ClipboardList size={15} aria-hidden="true" />,
   analytics: <BarChart3 size={15} aria-hidden="true" />
 };

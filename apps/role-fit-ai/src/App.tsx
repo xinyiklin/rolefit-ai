@@ -33,6 +33,7 @@ import { useResumeAnalysis } from "./hooks/useResumeAnalysis";
 import { useResumeEditor } from "./hooks/useResumeEditor";
 import { useResumeExport } from "./hooks/useResumeExport";
 import { useCoverLetter } from "./hooks/useCoverLetter";
+import { useCoverLetterEditor } from "./hooks/useCoverLetterEditor";
 import { useDialog } from "./hooks/useDialog";
 import {
   useAutosaveDraft,
@@ -76,6 +77,7 @@ import { ExportMenu } from "./sections/ExportRail";
 import { ApplyDownloadDialog } from "./sections/ApplyDownloadDialog";
 import { ResumePrintLayer } from "@typeset/editor/sections/ResumePrintLayer.tsx";
 import { ResumeTab } from "./sections/tabs/ResumeTab";
+import { CoverLetterTab } from "./sections/tabs/CoverLetterTab";
 import { MaterialsTab } from "./sections/tabs/MaterialsTab";
 import type { TrackerView } from "./sections/tabs/TrackerTab";
 import type { OutputTab, OutputTabDescriptor } from "./sections/shared";
@@ -133,6 +135,7 @@ const LEGACY_DEFAULT_DOCUMENT_TITLE = "Resume draft";
 const DOCUMENT_TITLE_STORAGE_KEY = "rolefit:documentTitle";
 const OUTPUT_TABS: OutputTabDescriptor[] = [
   { id: "resume", label: "Resume" },
+  { id: "cover", label: "Cover letter" },
   { id: "materials", label: "Materials" },
   { id: "applications", label: "Applications" },
   { id: "analytics", label: "Analytics" }
@@ -173,6 +176,12 @@ function App() {
     confirm({
       title: "Replace resume?",
       message: "Replace the resume in the editor? Unsaved edits will be lost.",
+      confirmLabel: "Replace"
+    });
+  const confirmReplaceApplicationDraft = () =>
+    confirm({
+      title: "Replace application draft?",
+      message: "Replace the current resume and cover letter? Unsaved edits will be lost.",
       confirmLabel: "Replace"
     });
 
@@ -305,7 +314,6 @@ function App() {
   // the copy buttons, not a live link). Shared by every distill entry point
   // (link, paste, extension import, and their retries).
   const distillRequestFields = () => buildStageRequestFields(stages.distill);
-  const [includeCoverLetter, setIncludeCoverLetter] = useState(false);
   const [activeOutputTab, setActiveOutputTab] = useState<OutputTab>("resume");
   const [statusFilter, setStatusFilter] = useState<ApplicationActivityFilter>("all");
   const [trackerView, setTrackerView] = useState<TrackerView>("table");
@@ -351,6 +359,10 @@ function App() {
   } = useResumeEditor();
   const typesetEditorRef = useRef<TypesetEditorHandle>(null);
   const [inlineFormat, setInlineFormat] = useState<InlineFormatState>(EMPTY_INLINE_FORMAT);
+  const coverLetterEditor = useCoverLetterEditor();
+  const coverLetterEditorRef = useRef<TypesetEditorHandle>(null);
+  const [coverLetterInlineFormat, setCoverLetterInlineFormat] =
+    useState<InlineFormatState>(EMPTY_INLINE_FORMAT);
   const [linkEditorOpen, setLinkEditorOpen] = useState(false);
   const currentResumeText = serializedResume || result?.polishedText || "";
 
@@ -543,12 +555,13 @@ function App() {
   });
 
 
-  // On-demand cover letter (no full polish required). Generates from the CURRENT
-  // resume; the polish path also feeds this state (see runTailorStage) so the
-  // Materials view, Copy, and save-to-application all read one source.
+  // The cover-letter workflow revises the candidate's current letter against
+  // the current resume and job context. Its dedicated editor remains the
+  // single owner for direct edits, file lifecycle, restore, and application save.
   const {
     coverLetterText,
     applyCoverLetter,
+    resetCoverWorkflow,
     applyPolishCoverResult,
     coverStatus,
     isGeneratingCover,
@@ -556,6 +569,7 @@ function App() {
     coverProgress,
     dismissCoverProgress
   } = useCoverLetter({
+    currentCoverLetterText: coverLetterEditor.text,
     currentResumeText,
     jobText: jobDescription,
     honestContext: requestHonestContext,
@@ -564,6 +578,9 @@ function App() {
     providerReady: tailorProviderReady,
     providerMessage: tailorProviderMessage,
     resumeText,
+    onCaptureSource: coverLetterEditor.captureTailorSource,
+    onApplyTailored: coverLetterEditor.applyTailoredText,
+    onApplyExternal: coverLetterEditor.applyExternalText,
     onUsage: (usage) => setPipelineAiUsage((prev) => ({ ...prev, cover: usage }))
   });
 
@@ -709,10 +726,8 @@ function App() {
 
   // ----- Resume export (engine PDF / .resume save) -----
   const {
-    coverCopied,
     isRenderingPdf,
     resetStatuses: resetExportStatuses,
-    handleCopyCoverLetter,
     handleDownloadPdf,
     handleDownloadResume,
     resumeDownloadName,
@@ -756,7 +771,7 @@ function App() {
     setJobDescription,
     setImportedJob: setImportedJobAndDocumentTitle,
     setResult,
-    applyCoverLetter,
+    resetCoverWorkflow,
     setPipelineAiUsage,
     setJobRawText,
     setAutoTailorJob,
@@ -790,7 +805,7 @@ function App() {
     tailorModes,
     currentResumeText,
     jobDescription,
-    includeCoverLetter,
+    includeCoverLetter: false,
     requestHonestContext,
     customInstructions,
     polishStages,
@@ -859,7 +874,12 @@ function App() {
   // Apply clears `resumeEdited` (markResumeClean) since the work is then persisted
   // and a copy exported; editing again re-arms it.
   useBeforeUnloadGuard(
-    resumeEdited || isPolishing || distillProgress.status === "running" || pendingApplicationWrites > 0
+    resumeEdited
+      || coverLetterEditor.dirty
+      || isGeneratingCover
+      || isPolishing
+      || distillProgress.status === "running"
+      || pendingApplicationWrites > 0
   );
 
   // ----- Handlers -----
@@ -889,7 +909,7 @@ function App() {
     setResumeText,
     setFileName,
     setResult,
-    applyCoverLetter,
+    resetCoverWorkflow,
     setFileError,
     setFileStatus,
     setPolishStatus,
@@ -987,8 +1007,8 @@ function App() {
   });
 
   async function handleLoadApplication(app: Application) {
-    if (resumeEdited) {
-      if (!(await confirmReplaceEditor())) return;
+    if (resumeEdited || coverLetterEditor.dirty) {
+      if (!(await confirmReplaceApplicationDraft())) return;
       clearAutosaveDraft();
       setPendingAutosaveDraft(null);
     }
@@ -1010,6 +1030,7 @@ function App() {
     // its own record so the polish/apply duplicate gates don't nag that it
     // "already exists" — merging back into it is the point.
     duplicateGuard.ackApplication(app);
+    applyCoverLetter(app.coverLetterText || "");
     if (app.resumeData || app.polishedText) {
       const restoredResume = app.polishedText || (app.resumeData ? serializeResumeData(app.resumeData) : "");
       const restoredAnalysis = analyzeResumeText(restoredResume, app.jobDescription || "");
@@ -1017,8 +1038,7 @@ function App() {
       setFileName("");
       setFileStatus("Loaded the applied resume snapshot into the editor. Save it as base if you want it at startup.");
       // Single-owner cover letter: show the saved letter alongside its restored
-      // resume (Materials/Copy/save read this hook state, not result).
-      applyCoverLetter(app.coverLetterText || "");
+      // resume in the dedicated editor.
       setResult({
         ...restoredAnalysis,
         polishedText: restoredResume,
@@ -1040,7 +1060,6 @@ function App() {
     } else {
       setLinkStatus(`Loaded "${app.title}" job target from pipeline.`);
       setResult(null);
-      applyCoverLetter(""); // no resume restored → no orphan cover letter
       seedResumeEditor("");
     }
     setPolishStatus("");
@@ -1061,7 +1080,7 @@ function App() {
       if (!(await confirmReplaceEditor())) return;
     }
     seedResumeEditor(draft.resumeText, "");
-    applyCoverLetter(""); // resume swapped — clear any cover from a prior context
+    resetCoverWorkflow();
     // The autosave doesn't carry the job description/URL, so a saved
     // pipelineAiUsage/rawText only applies when the SAME job target is still
     // loaded — restoring onto an unrelated job would misattribute stale
@@ -1205,8 +1224,6 @@ function App() {
         }
         polishControl={
           <PolishMenu
-            includeCoverLetter={includeCoverLetter}
-            setIncludeCoverLetter={setIncludeCoverLetter}
             polishStages={polishStages}
             setPolishStages={setPolishStages}
             honestContext={honestContext}
@@ -1310,6 +1327,7 @@ function App() {
                   canRedo={canRedoResume}
                   formattingDisabled={!editedResume}
                   inlineFormatting={{
+                    onRequestEditorFocus: () => typesetEditorRef.current?.focusSelection(),
                     fontFamily: {
                       value: inlineFormat.fontFamily,
                       onChange: (fontFamily) => typesetEditorRef.current?.setFontFamily(fontFamily),
@@ -1415,6 +1433,23 @@ function App() {
             />
           ) : null}
 
+          {activeOutputTab === "cover" ? (
+            <CoverLetterTab
+              editor={coverLetterEditor}
+              editorRef={coverLetterEditorRef}
+              inlineFormat={coverLetterInlineFormat}
+              onInlineFormatStateChange={setCoverLetterInlineFormat}
+              onTailor={handleGenerateCoverLetter}
+              isTailoring={isGeneratingCover}
+              tailorStatus={coverStatus}
+              resumeReady={resumeReady}
+              jobReady={jobReady}
+              providerReady={tailorProviderReady}
+              providerMessage={tailorProviderMessage}
+              jobTarget={materialsJobTarget}
+            />
+          ) : null}
+
 
           {activeOutputTab === "applications" ? (
             <Suspense fallback={<p className="pipeline-note" role="status">Loading applications…</p>}>
@@ -1451,14 +1486,6 @@ function App() {
             aria-hidden={activeOutputTab !== "materials"}
           >
             <MaterialsTab
-              coverLetterText={coverLetterText}
-              onGenerateCoverLetter={handleGenerateCoverLetter}
-              isGeneratingCover={isGeneratingCover}
-              coverStatus={coverStatus}
-              includeCoverLetter={includeCoverLetter}
-              setIncludeCoverLetter={setIncludeCoverLetter}
-              coverCopied={coverCopied}
-              onCopy={handleCopyCoverLetter}
               answersResult={answersResult}
               answersStatus={answersStatus}
               isGeneratingAnswers={isGeneratingAnswers}

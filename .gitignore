@@ -10,7 +10,6 @@ dist
 .env.*
 !.env.example
 *.pem
-/CONTINUITY.md
 /CLAUDE.local.md
 .claude/
 .playwright-cli/

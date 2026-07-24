@@ -464,9 +464,9 @@ export function rootReducer(state: State, action: Action): State {
 // Owns the structured, editable resume model. `seedData` is the only load path:
 // startup snapshots and opened `.resume` files are validated before reaching
 // the reducer. Every inline edit is structured and undoable.
-export function useResumeEditor() {
+export function useResumeEditor(initialData: ResumeData | null = null) {
   const [state, dispatch] = useReducer(rootReducer, {
-    data: null,
+    data: initialData,
     dirty: false,
     past: [],
     future: [],

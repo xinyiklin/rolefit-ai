@@ -18,6 +18,9 @@ browser-side effects; components render them and App composes them.
   server/storage lifecycles.
 - `useResumeEditor` is a RoleFit adapter over the shared editor hook; keep
   reusable history/reducer behavior in `@typeset/editor`.
+- `useCoverLetterEditor` owns RoleFit's separate source-letter/file/export
+  lifecycle while delegating history, editing, layout, and PDF to the shared
+  packages. `useCoverLetter` owns only its grounded AI revision workflow.
 
 ## Rules
 

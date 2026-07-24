@@ -16,7 +16,7 @@ import { automaticLinkHref } from "../lib/links.ts";
 import { breakParagraph } from "./linebreak.ts";
 import { alignmentFromInlineMarks, hasInlineMarkTags } from "../lib/inlineMarksText.ts";
 import { pageMarginValuesFor } from "../lib/pageMargins.ts";
-import type { DocumentStyle } from "../lib/documentStyle.ts";
+import { DOC_STYLE_DEFAULTS, type DocumentStyle } from "../lib/documentStyle.ts";
 import type { TypesetSchema } from "./schema.ts";
 
 // US-Letter page in bp (1/72in): 8.5in × 11in. The one owner of the physical
@@ -42,6 +42,11 @@ export type VLine = {
   runs: GlyphRun[]; // x already includes the line's indent
   height: number; // ink height above baseline (page-top placement)
   depth: number; // ink depth below baseline
+  // Nominal body ink for this line's role. Pagination adds only the overflow
+  // beyond these values to the calibrated baseline junction, so a larger
+  // inline font cannot collide with the line above or below.
+  nominalHeight?: number;
+  nominalDepth?: number;
   dist: number; // baseline distance from previous line in the stream
   // Pagination policy: "keep" lines may not start a page-break separation from
   // their predecessor (entry head rows, a bullet after its head, rules).
@@ -77,8 +82,8 @@ export function pageGeometry(style: DocumentStyle) {
   });
   const textWidth = PAGE_WIDTH_BP - margins.left - margins.right;
   const sizes = fontSizesFor(num(style.baseFontSizePt, 10));
-  const entryIndent = num(style.entryIndentPt, 0.15 * 72);
-  const entryEndIndent = num(style.entryEndIndentPt, 0);
+  const entryIndent = num(style.entryIndentPt, DOC_STYLE_DEFAULTS.entryIndentPt);
+  const entryEndIndent = num(style.entryEndIndentPt, DOC_STYLE_DEFAULTS.entryEndIndentPt);
   return {
     marginTop: margins.top,
     marginRight: margins.right,
@@ -90,9 +95,8 @@ export function pageGeometry(style: DocumentStyle) {
     entryEndIndent,
     bulletIndent: entryIndent + 2.2 * sizes.normalsize,
     // Start indent moves only the left edge. End indent independently moves the
-    // right edge, so changing one never drags the other. At end indent 0 the row
-    // spans the full text column, so right-pinned dates sit flush with the
-    // section rule and the bullet column instead of a fixed inset short of them.
+    // right edge, so changing one never drags the other. The default end inset
+    // reproduces Jake's 0.97\textwidth entry table at normal page margins.
     headRowWidth: Math.max(1, textWidth - entryIndent - entryEndIndent),
     firstBaselineMin: margins.top + sizes.normalsize, // minimum first-line inset
     lastBaselineMax: PAGE_HEIGHT_BP - margins.bottom
@@ -145,6 +149,25 @@ function inkOfRuns(runs: GlyphRun[]): { height: number; depth: number } {
     const e = inkExtent(run.text, run.style);
     if (e.height > height) height = e.height;
     if (e.depth > depth) depth = e.depth;
+  }
+  return { height, depth };
+}
+
+function nominalInkOfRuns(
+  runs: GlyphRun[],
+  nominalSize: number,
+  fallback: { height: number; depth: number }
+): { height: number; depth: number } {
+  if (!runs.some((run) => run.text)) return fallback;
+  let height = 0;
+  let depth = 0;
+  for (const run of runs) {
+    const extent = inkExtent(run.text, {
+      ...run.style,
+      size: Math.min(run.style.size, nominalSize)
+    });
+    height = Math.max(height, extent.height);
+    depth = Math.max(depth, extent.depth);
   }
   return { height, depth };
 }
@@ -253,7 +276,7 @@ function headRow(
 }
 
 // Paragraph → VLines at an indent within a column width.
-function paragraphLines(
+export function paragraphLines(
   value: string,
   size: number,
   indent: number,
@@ -285,10 +308,13 @@ function paragraphLines(
       ink = inkExtent("Ag", style);
       runs = [{ text: "", style, x: indent, width: 0, src }];
     }
+    const nominalInk = nominalInkOfRuns(runs, size, ink);
     return {
       runs,
       height: ink.height,
       depth: ink.depth,
+      nominalHeight: nominalInk.height,
+      nominalDepth: nominalInk.depth,
       dist: i === 0 ? firstDist : baselineskip,
       keepWithPrev: i === 0 ? keepFirst : keepLinesTogether
     };
@@ -345,7 +371,16 @@ export function buildVerticalStream(schema: TypesetSchema, style: DocumentStyle)
     );
     const runs = alignRow(nameRuns, geo.textWidth, alignmentFromInlineMarks(schema.name) ?? headerAlign);
     const ink = inkOfRuns(runs);
-    push({ runs, height: ink.height, depth: ink.depth, dist: 0, keepWithPrev: false });
+    const nominalInk = nominalInkOfRuns(runs, nameSize, ink);
+    push({
+      runs,
+      height: ink.height,
+      depth: ink.depth,
+      nominalHeight: nominalInk.height,
+      nominalDepth: nominalInk.depth,
+      dist: 0,
+      keepWithPrev: false
+    });
   }
   if (schema.contact.length) {
     const size = sizes.small;
@@ -376,10 +411,13 @@ export function buildVerticalStream(schema: TypesetSchema, style: DocumentStyle)
     const contactAlignment = schema.contact.map(alignmentFromInlineMarks).find(Boolean) ?? headerAlign;
     const aligned = alignRow(runs, geo.textWidth, contactAlignment);
     const ink = inkOfRuns(aligned);
+    const nominalInk = nominalInkOfRuns(aligned, size, ink);
     push({
       runs: aligned,
       height: ink.height,
       depth: ink.depth,
+      nominalHeight: nominalInk.height,
+      nominalDepth: nominalInk.depth,
       dist: J.nameContact * stretch * fontScale + gap("nameContactGapPt"),
       keepWithPrev: true
     });
@@ -418,6 +456,7 @@ export function buildVerticalStream(schema: TypesetSchema, style: DocumentStyle)
       const runs = alignRow(headingRuns, geo.textWidth, alignmentFromInlineMarks(section.heading) ?? headingAlign);
       const fallbackHeadingStyle: FontStyle = { family, face: caseMode === "smallcaps" ? "caps" : "regular", size: sizes.large, tracking };
       const ink = headingText ? inkOfRuns(runs) : inkExtent("Ag", fallbackHeadingStyle);
+      const nominalInk = nominalInkOfRuns(runs, sizes.large, ink);
       // Header→first-heading depends only on headerSectionGap. The sectionGap
       // slider must not move the first heading.
       const beforeGap =
@@ -428,6 +467,8 @@ export function buildVerticalStream(schema: TypesetSchema, style: DocumentStyle)
         runs,
         height: ink.height,
         depth: ink.depth,
+        nominalHeight: nominalInk.height,
+        nominalDepth: nominalInk.depth,
         dist: beforeGap,
         keepWithPrev: false,
         // Section-rule geometry is calibrated to the owned page layout: the
@@ -522,10 +563,13 @@ export function buildVerticalStream(schema: TypesetSchema, style: DocumentStyle)
         ? alignRow(rawTitleRuns, geo.headRowWidth, titleAlignment, geo.entryIndent)
         : rawTitleRuns;
       const inkT = inkOfRuns(titleRuns);
+      const nominalTitleInk = nominalInkOfRuns(titleRuns, titleSize, inkT);
       push({
         runs: titleRuns,
         height: inkT.height,
         depth: inkT.depth,
+        nominalHeight: nominalTitleInk.height,
+        nominalDepth: nominalTitleInk.depth,
         dist: firstInSection
           ? J.headingEntry * stretch * fontScale + gap("sectionEntryGapPt")
           : J.entryEntry * stretch * fontScale + gap("entryGapPt"),
@@ -564,6 +608,7 @@ export function buildVerticalStream(schema: TypesetSchema, style: DocumentStyle)
           ? alignRow(rawSubRuns, geo.headRowWidth, subAlignment, geo.entryIndent)
           : rawSubRuns;
         const inkS = inkOfRuns(subRuns);
+        const nominalSubInk = nominalInkOfRuns(subRuns, subSize, inkS);
         // Row-strut mechanics (see LINESKIP above): use baseline spacing unless
         // a box extends beyond the strut, as underlined links can.
         const arstrutH = 0.7 * BSK.normalsize * stretch * fontScale;
@@ -582,6 +627,8 @@ export function buildVerticalStream(schema: TypesetSchema, style: DocumentStyle)
           runs: subRuns,
           height: inkS.height,
           depth: inkS.depth,
+          nominalHeight: nominalSubInk.height,
+          nominalDepth: nominalSubInk.depth,
           dist: Math.max(spaced, inkFloor),
           keepWithPrev: true
         });

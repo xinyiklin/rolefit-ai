@@ -2,11 +2,17 @@ import { Minus, Plus } from "lucide-react";
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
+import {
+  INLINE_FONT_SIZE_MAX_PT,
+  INLINE_FONT_SIZE_MIN_PT
+} from "@typeset/engine/lib/inlineMarksText.ts";
+
 const COMMON_SIZES = [6, 8, 9, 10, 11, 12, 14, 16, 18, 20, 24, 28, 32, 36, 48];
 
 type FontSizeControlProps = {
   value: number | null;
   onChange: (value: number) => void;
+  onCommitFocus?: () => void;
   disabled?: boolean;
   min?: number;
   max?: number;
@@ -22,9 +28,10 @@ function displaySize(value: number | null) {
 export function FontSizeControl({
   value,
   onChange,
+  onCommitFocus,
   disabled = false,
-  min = 6,
-  max = 48,
+  min = INLINE_FONT_SIZE_MIN_PT,
+  max = INLINE_FONT_SIZE_MAX_PT,
   ariaLabel,
   title,
   className = ""
@@ -32,6 +39,8 @@ export function FontSizeControl({
   const menuId = `font-sizes-${useId().replace(/:/g, "")}`;
   const rootRef = useRef<HTMLSpanElement | null>(null);
   const menuRef = useRef<HTMLSpanElement | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const skipNextBlurCommitRef = useRef(false);
   const [draft, setDraft] = useState(displaySize(value));
   const [open, setOpen] = useState(false);
   // The menu is portaled to the body with fixed positioning so an ancestor with
@@ -95,6 +104,13 @@ export function FontSizeControl({
     const parsed = Number(draft.trim());
     commitValue((Number.isFinite(parsed) ? parsed : value ?? min) + delta);
   };
+  const returnFocusAfterCommit = () => {
+    if (!onCommitFocus) return;
+    if (document.activeElement === inputRef.current) {
+      skipNextBlurCommitRef.current = true;
+    }
+    requestAnimationFrame(onCommitFocus);
+  };
   const availableSizes = COMMON_SIZES.filter((size) => size >= min && size <= max);
 
   return (
@@ -106,16 +122,19 @@ export function FontSizeControl({
         aria-label="Decrease font size by 1 point"
         title="Decrease font size by 1 pt"
         onMouseDown={(event) => event.preventDefault()}
-        onClick={() => step(-1)}
+        onClick={() => {
+          step(-1);
+          returnFocusAfterCommit();
+        }}
       >
         <Minus size={13} aria-hidden="true" />
       </button>
       <span className="font-size-control__value">
         <input
+          ref={inputRef}
           type="text"
           inputMode="decimal"
           value={draft}
-          placeholder={value === null ? "Mixed" : undefined}
           disabled={disabled}
           role="combobox"
           aria-label={ariaLabel}
@@ -129,13 +148,19 @@ export function FontSizeControl({
             setDraft(event.target.value);
             setOpen(true);
           }}
-          onBlur={commitDraft}
+          onBlur={() => {
+            if (skipNextBlurCommitRef.current) {
+              skipNextBlurCommitRef.current = false;
+              return;
+            }
+            commitDraft();
+          }}
           onKeyDown={(event) => {
             if (event.key === "Enter") {
               event.preventDefault();
               commitDraft();
               setOpen(false);
-              event.currentTarget.select();
+              returnFocusAfterCommit();
             } else if (event.key === "Escape") {
               event.preventDefault();
               setDraft(displaySize(value));
@@ -153,7 +178,10 @@ export function FontSizeControl({
         aria-label="Increase font size by 1 point"
         title="Increase font size by 1 pt"
         onMouseDown={(event) => event.preventDefault()}
-        onClick={() => step(1)}
+        onClick={() => {
+          step(1);
+          returnFocusAfterCommit();
+        }}
       >
         <Plus size={13} aria-hidden="true" />
       </button>
@@ -163,6 +191,7 @@ export function FontSizeControl({
             <span
               ref={menuRef}
               id={menuId}
+              data-typeset-toolbar-portal
               className="font-size-control__menu"
               role="listbox"
               aria-label="Common font sizes"
@@ -184,6 +213,7 @@ export function FontSizeControl({
                   onClick={() => {
                     commitValue(size);
                     setOpen(false);
+                    returnFocusAfterCommit();
                   }}
                 >
                   {size}

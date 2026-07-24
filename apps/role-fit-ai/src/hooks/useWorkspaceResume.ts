@@ -113,7 +113,7 @@ type UseWorkspaceResumeArgs = {
   setResumeText: (text: string) => void;
   setFileName: (name: string) => void;
   setResult: (updater: PolishedResume | null | ((prev: PolishedResume | null) => PolishedResume | null)) => void;
-  applyCoverLetter: (text: string) => void;
+  resetCoverWorkflow: () => void;
   setFileError: (value: string) => void;
   setFileStatus: (value: string) => void;
   setPolishStatus: (value: string) => void;
@@ -140,7 +140,7 @@ export function useWorkspaceResume({
   setResumeText,
   setFileName,
   setResult,
-  applyCoverLetter,
+  resetCoverWorkflow,
   setFileError,
   setFileStatus,
   setPolishStatus,
@@ -204,7 +204,7 @@ export function useWorkspaceResume({
     setFileName(baseResume.fileName ?? "base-resume");
     setBaseResumeName(baseResume.fileName ?? "");
     setResult(null);
-    applyCoverLetter("");
+    resetCoverWorkflow();
     setFileError("");
     setPolishStatus("");
     resetExportStatuses();
@@ -528,7 +528,7 @@ export function useWorkspaceResume({
     // exactly the action that resolves it.
     setPolishStatus("");
     setResult(null);
-    applyCoverLetter("");
+    resetCoverWorkflow();
 
     if (candidate.kind === "resume") {
       // The strict codec already validated and restored fresh session ids at

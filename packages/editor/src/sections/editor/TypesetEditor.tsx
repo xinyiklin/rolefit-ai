@@ -34,7 +34,13 @@ import {
 } from "@typeset/engine/lib/styleFieldFormatting.ts";
 import { stripInlineMarks } from "@typeset/engine/lib/inlineMarksText.ts";
 import type { DocStyleControls } from "../../hooks/useDocStyle";
-import type { AlignmentScope, BodyAlign, DocStyle, FontFamily } from "@typeset/engine/lib/documentStyle.ts";
+import {
+  nextZoomOption,
+  type AlignmentScope,
+  type BodyAlign,
+  type DocStyle,
+  type FontFamily
+} from "@typeset/engine/lib/documentStyle.ts";
 import { fontSizesFor, nameSizePt } from "@typeset/engine/lib/documentTypography.ts";
 import { fieldKey, parseFieldKey, type FieldSrc } from "@typeset/engine/typeset/types.ts";
 import { pageGeometry } from "@typeset/engine/typeset/blocks.ts";
@@ -49,6 +55,7 @@ import { useTypesetOverlayAnchors } from "./useTypesetOverlayAnchors.ts";
 import { useTypesetContextMenu } from "./useTypesetContextMenu.tsx";
 import { caretToDisplayIndex, displayIndexToCaret, keyOfNode } from "./domSelection.ts";
 import {
+  applyInlineFragment,
   applyEdit,
   buildDisplayMap,
   displayIndexForValueIndex,
@@ -74,10 +81,39 @@ import {
 } from "./inlineTextEditing.ts";
 import { commitField, historyCaretTarget, valueForField, withFieldValue } from "./resumeFieldAdapter.ts";
 import { useTypesetInputEvents, type QueuedIntent } from "./useTypesetInputEvents.ts";
+import {
+  clearSelectionHighlights,
+  paintSelectionHighlights
+} from "./selectionHighlight.ts";
+import {
+  caretOverlayGeometry,
+  type CaretAppearance,
+  type CaretOverlayGeometry
+} from "./caretOverlay.ts";
 
 // Editor zoom: the zoom select's 100% means the 816px logical page (96dpi);
 // engine units are bp (72dpi), hence the 4/3.
 const SCREEN_SCALE = 96 / 72;
+
+function editorToolbarOwnsFocus(): boolean {
+  const active = document.activeElement;
+  return Boolean(
+    active instanceof Element &&
+    active.closest(".top-toolbar, [data-typeset-toolbar-portal]")
+  );
+}
+
+function sameCaretGeometry(
+  left: CaretOverlayGeometry | null,
+  right: CaretOverlayGeometry | null
+): boolean {
+  if (!left || !right) return left === right;
+  return (
+    Math.abs(left.left - right.left) < 0.01 &&
+    Math.abs(left.top - right.top) < 0.01 &&
+    Math.abs(left.height - right.height) < 0.01
+  );
+}
 
 export type InlineFormatState = {
   canFormat: boolean;
@@ -99,6 +135,7 @@ export type InlineFormatState = {
 export type TypesetEditorHandle = {
   undo: () => void;
   redo: () => void;
+  focusSelection: () => void;
   toggleMark: (mark: "bold" | "italic" | "underline") => void;
   setFontFamily: (fontFamily: FontFamily) => void;
   setFontSize: (fontSizePt: number) => void;
@@ -137,6 +174,9 @@ type TypesetEditorProps = {
   // Transient field highlight (threaded to the engine painter) plus a
   // scroll-into-view after each repaint. Not document state.
   highlightFieldKey?: string | null;
+  documentKind?: "resume" | "cover-letter";
+  structureEditing?: boolean;
+  onPageCount?: (count: number) => void;
 };
 
 const EMPTY_FORMAT_STATE: InlineFormatState = {
@@ -230,7 +270,10 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
   onInlineFormatStateChange,
   onRequestLinkEditor,
   overlay,
-  highlightFieldKey = null
+  highlightFieldKey = null,
+  documentKind = "resume",
+  structureEditing = true,
+  onPageCount
 }, ref) {
   // Defer visual auto-linking: while a URL word is being typed (its trailing edge
   // is the caret), suppress ITS auto-link in the render only — { field key, the
@@ -376,10 +419,69 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
   const lastRangeRef = useRef<TypesetSelection | null>(null);
   const typingFormatRef = useRef<TypingFormat | null>(null);
   const typingTargetRef = useRef<string | null>(null);
+  // Focusing the page fires `focusin` BEFORE the saved range is re-applied, and
+  // the browser reports its own default caret (the document's first field) in
+  // that gap. Read as a real caret move, it would look like the caret left the
+  // field and discard the pending next-typing format a toolbar commit just set.
+  // Restores always re-apply the range in the same task, so the sync that
+  // follows sees the true caret.
+  const restoringSelectionRef = useRef(false);
   const [inlineFormatState, setInlineFormatState] = useState<InlineFormatState>(EMPTY_FORMAT_STATE);
+  const [caretOverlay, setCaretOverlay] = useState<CaretOverlayGeometry | null>(null);
+
+  const focusSelection = useCallback(() => {
+    const host = hostRef.current;
+    const selection = readSelection() ?? lastRangeRef.current;
+    if (!host || !selection) return;
+    const value = valueForField(dataRef.current, selection.src);
+    const map = mapFor(selection.src, value);
+    const start = displayIndexToCaret(host, selection.key, map.display, selection.dStart);
+    const end = displayIndexToCaret(host, selection.key, map.display, selection.dEnd);
+    if (!start || !end) return;
+    restoringSelectionRef.current = true;
+    try {
+      host.focus({ preventScroll: true });
+      const browserSelection = window.getSelection();
+      if (!browserSelection) return;
+      const range = document.createRange();
+      range.setStart(start.node, start.offset);
+      range.setEnd(end.node, end.offset);
+      browserSelection.removeAllRanges();
+      browserSelection.addRange(range);
+    } finally {
+      restoringSelectionRef.current = false;
+    }
+  }, [mapFor, readSelection]);
+
+  const syncCaretOverlay = useCallback(
+    (selection: TypesetSelection | null, appearance: CaretAppearance) => {
+      const host = hostRef.current;
+      const wrapper = wrapRef.current;
+      const ownsFocus = Boolean(
+        host?.contains(document.activeElement) || editorToolbarOwnsFocus()
+      );
+      const next =
+        host && wrapper && selection && selection.dStart === selection.dEnd && ownsFocus
+          ? caretOverlayGeometry(host, wrapper, selection, appearance, zoom)
+          : null;
+      setCaretOverlay((current) => sameCaretGeometry(current, next) ? current : next);
+    },
+    [zoom]
+  );
 
   useEffect(() => {
+    const host = hostRef.current;
     const sync = () => {
+      // Mid-restore the browser's caret is its own invention, not the user's.
+      // Ignore it entirely: focusSelection re-applies the saved range in the
+      // same task, and the selection change that follows syncs the real caret.
+      if (restoringSelectionRef.current) return;
+      // Toolbar inputs temporarily own focus while still targeting the last
+      // editor range. Preserve the painted range in that case; otherwise keep
+      // the line-wide highlight synchronized with the browser selection.
+      if (host && !editorToolbarOwnsFocus()) {
+        paintSelectionHighlights(host);
+      }
       const selection = readSelection();
       // Deferred auto-linking: suppress the render link of the URL word whose
       // trailing edge is the caret (it is being typed); it links once a space
@@ -412,8 +514,11 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
       // Editable toolbar controls (notably the custom font-size input) must
       // temporarily take focus without discarding the page range they target.
       // Outside the toolbar, a lost editor selection really does clear it.
-      else if (!selection && document.activeElement?.closest(".top-toolbar")) return;
-      else if (!selection) lastRangeRef.current = null;
+      else if (!selection && editorToolbarOwnsFocus()) return;
+      else if (!selection) {
+        lastRangeRef.current = null;
+        setCaretOverlay(null);
+      }
 
       const chars = selection
         ? hasRange
@@ -486,9 +591,11 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
               ? effectiveFamilies[0]
               : null),
         fontSizePt:
-          typingFormat?.fontSizePt ?? (effectiveSizes.length > 0 && effectiveSizes.every((size) => size === effectiveSizes[0])
-            ? Math.round((effectiveSizes[0] ?? 0) * 10) / 10
-            : fallbackSize),
+          typingFormat?.fontSizePt ?? (effectiveSizes.length === 0
+            ? fallbackSize
+            : effectiveSizes.every((size) => size === effectiveSizes[0])
+              ? Math.round((effectiveSizes[0] ?? 0) * 10) / 10
+              : null),
         alignment:
           effectiveAlignments.length === 0
             ? docStyle.style.bodyAlign
@@ -525,12 +632,46 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
           ? current
           : next
       );
+      syncCaretOverlay(selection, {
+        fontFamily: next.fontFamily ?? docStyle.style.fontFamily,
+        fontSizePt: next.fontSizePt ?? fallbackSize,
+        bold: next.bold,
+        italic: next.italic
+      });
     };
 
     document.addEventListener("selectionchange", sync);
+    document.addEventListener("focusin", sync);
     sync();
-    return () => document.removeEventListener("selectionchange", sync);
-  }, [docStyle.style, docVersion, nonce, readSelection]);
+    return () => {
+      document.removeEventListener("selectionchange", sync);
+      document.removeEventListener("focusin", sync);
+      if (host) clearSelectionHighlights(host);
+    };
+  }, [docStyle.style, docVersion, nonce, readSelection, syncCaretOverlay]);
+
+  useLayoutEffect(() => {
+    const selection =
+      readSelection() ??
+      (editorToolbarOwnsFocus() ? lastRangeRef.current : null);
+    syncCaretOverlay(selection, {
+      fontFamily: inlineFormatState.fontFamily ?? docStyle.style.fontFamily,
+      fontSizePt: inlineFormatState.fontSizePt ?? docStyle.style.baseFontSizePt,
+      bold: inlineFormatState.bold,
+      italic: inlineFormatState.italic
+    });
+  }, [
+    docStyle.style.baseFontSizePt,
+    docStyle.style.fontFamily,
+    docVersion,
+    inlineFormatState.bold,
+    inlineFormatState.fontFamily,
+    inlineFormatState.fontSizePt,
+    inlineFormatState.italic,
+    nonce,
+    readSelection,
+    syncCaretOverlay
+  ]);
 
   useEffect(() => {
     onInlineFormatStateChange?.(inlineFormatState);
@@ -587,6 +728,39 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
 
   // ---- edit primitives (each sets the pending caret, then dispatches) ----
 
+  const scheduleCaretAfterFieldCommit = useCallback(
+    (sel: TypesetSelection, value: string, caretValueIndex: number) => {
+      const key = sel.key;
+      if (sel.src.kind !== "skillsRow") {
+        pendingCaretRef.current = () => ({ key, valueIndex: caretValueIndex });
+        return;
+      }
+      // A skills row is persisted as label + skills but edited as one string.
+      // Map its canonical reconstruction through display space so colon/spacing
+      // normalization cannot make the caret jump after typing or rich paste.
+      const src = sel.src;
+      const typedMap = mapFor(src, value);
+      const caretDisplay = displayIndexForValueIndex(typedMap, caretValueIndex);
+      pendingCaretRef.current = (fresh) => {
+        const freshValue = valueForField(fresh, src);
+        const freshMap = mapFor(src, freshValue);
+        const target = Math.max(
+          0,
+          Math.min(
+            caretDisplay + (freshMap.display.length - typedMap.display.length),
+            freshMap.display.length
+          )
+        );
+        const valueIndex =
+          target < freshMap.display.length
+            ? freshMap.valueStart[target] ?? freshValue.length
+            : freshValue.length;
+        return { key, valueIndex };
+      };
+    },
+    [mapFor]
+  );
+
   const commitReplace = useCallback(
     (sel: TypesetSelection, dStart: number, dEnd: number, insert: string) => {
       const singleLine = sel.src.kind !== "bullet";
@@ -602,7 +776,6 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
       recordPreEditSelection(sel);
       markPending();
       commitField(actions, sel.src, value);
-      const key = sel.key;
       if (sel.src.kind === "skillsRow") {
         // Typing the colon crosses from the label into the skills: drop the seeded
         // label emphasis (see emphasisSeedForField) so the skills come out plain
@@ -612,29 +785,36 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
           typingFormatRef.current = null;
           typingTargetRef.current = null;
         }
-        // A skills row stores label + skills separately and reconstructs its
-        // editable text with one canonical space after the colon. A bold label
-        // can also move its </b> across that colon between the typed value and the
-        // reconstructed one. Map the caret through DISPLAY space so either
-        // normalization remains invisible to the user.
-        const src = sel.src;
-        const typedMap = mapFor(src, value);
-        const caretDisplay = displayIndexForValueIndex(typedMap, caretValueIndex);
-        pendingCaretRef.current = (fresh) => {
-          const freshValue = valueForField(fresh, src);
-          const freshMap = mapFor(src, freshValue);
-          const target = Math.max(
-            0,
-            Math.min(caretDisplay + (freshMap.display.length - typedMap.display.length), freshMap.display.length)
-          );
-          const valueIndex = target < freshMap.display.length ? freshMap.valueStart[target] ?? freshValue.length : freshValue.length;
-          return { key, valueIndex };
-        };
-      } else {
-        pendingCaretRef.current = () => ({ key, valueIndex: caretValueIndex });
       }
+      scheduleCaretAfterFieldCommit(sel, value, caretValueIndex);
     },
-    [actions, mapFor, markPending, recordPreEditSelection]
+    [actions, markPending, recordPreEditSelection, scheduleCaretAfterFieldCommit]
+  );
+
+  const commitPaste = useCallback(
+    (
+      sel: TypesetSelection,
+      dStart: number,
+      dEnd: number,
+      fragment: string
+    ) => {
+      const { value, caretValueIndex } = applyInlineFragment(
+        sel.map,
+        dStart,
+        dEnd,
+        fragment,
+        sel.src.kind !== "bullet"
+      );
+      recordPreEditSelection(sel);
+      markPending();
+      commitField(actions, sel.src, value);
+      if (sel.src.kind === "skillsRow" && fragment.includes(":")) {
+        typingFormatRef.current = null;
+        typingTargetRef.current = null;
+      }
+      scheduleCaretAfterFieldCommit(sel, value, caretValueIndex);
+    },
+    [actions, markPending, recordPreEditSelection, scheduleCaretAfterFieldCommit]
   );
 
   // The shared "re-highlight this display range after the repaint" closure
@@ -768,6 +948,7 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
     () => ({
       undo: () => commitHistory("undo"),
       redo: () => commitHistory("redo"),
+      focusSelection,
       toggleMark: (mark) => {
         const selection = readSelection() ?? lastRangeRef.current;
         if (!selection) return;
@@ -867,7 +1048,7 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
       // new section is scrolled into view rather than left off-screen.
       addSection: (type, position) => addSection(type, position)
     }),
-    [addSection, commitAlignment, commitClearFormatting, commitFontFamily, commitFontSize, commitHistory, commitLink, commitReplaceWithLink, commitToggleMark, docStyle.style, readSelection, resolveLinkTarget]
+    [addSection, commitAlignment, commitClearFormatting, commitFontFamily, commitFontSize, commitHistory, commitLink, commitReplaceWithLink, commitToggleMark, docStyle.style, focusSelection, readSelection, resolveLinkTarget]
   );
 
   const commitSplitBullet = useCallback(
@@ -1038,6 +1219,8 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
       }
       if (intent.kind === "insert") {
         commitReplace(sel, sel.dStart, sel.dEnd, intent.text);
+      } else if (intent.kind === "paste") {
+        commitPaste(sel, sel.dStart, sel.dEnd, intent.fragment);
       } else if (intent.kind === "deleteBack") {
         if (sel.dStart === sel.dEnd && sel.dStart === 0) commitMergeBullet(sel, "up");
         else if (sel.dStart === sel.dEnd) commitReplace(sel, sel.dStart - 1, sel.dStart, "");
@@ -1063,6 +1246,7 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
     commitEnter,
     commitHistory,
     commitMergeBullet,
+    commitPaste,
     commitReplace,
     commitToggleMark,
     docVersion,
@@ -1070,6 +1254,17 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
     nonce,
     readSelection
   ]);
+
+  const handleZoomShortcut = useCallback(
+    (command: -1 | 0 | 1) => {
+      const next =
+        command === 0
+          ? 1
+          : nextZoomOption(docStyle.style.zoom, command);
+      docStyle.set("zoom", next);
+    },
+    [docStyle.set, docStyle.style.zoom]
+  );
 
   useTypesetInputEvents({
     hostRef,
@@ -1079,11 +1274,13 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
     replayQueueRef,
     readSelection,
     commitReplace,
+    commitPaste,
     onEnter: commitEnter,
     commitMergeBullet,
     commitToggleMark,
     commitClearFormatting,
     commitHistory,
+    onZoomShortcut: handleZoomShortcut,
     setNonce
   });
   // Bring the highlighted field into view after every repaint that carries it
@@ -1121,11 +1318,11 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
 
   return (
     <div
-      className={`typeset-editor${drag ? " is-dragging" : ""}`}
+      className={`typeset-editor${drag ? " is-dragging" : ""}${caretOverlay ? " has-typeset-caret" : ""}`}
       ref={wrapRef}
       onMouseMove={onMouseMove}
       onMouseLeave={clearHover}
-      onContextMenu={openContextMenu}
+      onContextMenu={structureEditing ? openContextMenu : undefined}
     >
       <TypesetDomPages
         key={nonce}
@@ -1138,22 +1335,37 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
         hostRef={hostRef}
         onDoc={onDoc}
         highlightFieldKey={highlightFieldKey}
+        documentKind={documentKind}
+        onPageCount={onPageCount}
       />
-      <TypesetStructureOverlay
-        data={data}
-        anchor={overlayAnchor}
-        pageOrigins={pageOrigins}
-        zoom={zoom}
-        geometry={geo}
-        drag={drag}
-        canDrag={canDrag}
-        onBeginDrag={beginDrag}
-        onMoveByKeyboard={moveByKeyboard}
-      />
+      {caretOverlay ? (
+        <span
+          className="typeset-caret"
+          aria-hidden="true"
+          style={{
+            left: caretOverlay.left,
+            top: caretOverlay.top,
+            height: caretOverlay.height
+          }}
+        />
+      ) : null}
+      {structureEditing ? (
+        <TypesetStructureOverlay
+          data={data}
+          anchor={overlayAnchor}
+          pageOrigins={pageOrigins}
+          zoom={zoom}
+          geometry={geo}
+          drag={drag}
+          canDrag={canDrag}
+          onBeginDrag={beginDrag}
+          onMoveByKeyboard={moveByKeyboard}
+        />
+      ) : null}
       {overlay
         ? overlay({ data, anchors, anchor: overlayAnchor, pageOrigins, zoom, geometry: geo })
         : null}
-      {contextMenu ? (
+      {structureEditing && contextMenu ? (
         <TypesetContextMenu
           x={contextMenu.x}
           y={contextMenu.y}

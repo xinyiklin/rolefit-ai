@@ -15,7 +15,7 @@ import {
   Underline,
   Undo2
 } from "lucide-react";
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 
 import type { DocStyleControls } from "../../hooks/useDocStyle";
 import { type BodyAlign, type FontFamily } from "@typeset/engine/lib/documentStyle.ts";
@@ -40,6 +40,7 @@ export type InlineFormatCommand = {
 };
 
 export type InlineFormattingControls = {
+  onRequestEditorFocus?: () => void;
   fontFamily?: {
     value: FontFamily | null;
     onChange: (fontFamily: FontFamily) => void;
@@ -92,6 +93,11 @@ export type FormattingToolbarProps = {
   onStyleFieldSizeChange?: (field: StyleTextField, sizePt: number) => void;
   onResetStyleFormatting?: () => void;
   onFitZoom?: () => void;
+  // A host with a different document grammar may replace the resume-specific
+  // style menus while retaining the shared history/zoom/selection toolbar.
+  // `undefined` preserves the standard resume controls; any supplied node is
+  // the complete document-style tool set for that host.
+  documentStyleTools?: ReactNode;
 };
 
 function SelectionTypographyControls({
@@ -118,6 +124,7 @@ function SelectionTypographyControls({
         <FontFamilyControl
           value={inlineFormatting?.fontFamily?.value ?? docStyle.style.fontFamily}
           onChange={(value) => inlineFormatting?.fontFamily?.onChange(value)}
+          onCommitFocus={inlineFormatting?.onRequestEditorFocus}
           disabled={formattingDisabled || inlineFormatting?.fontFamily?.disabled !== false}
           ariaLabel="Font family for selected text"
           title={inlineFormatting?.fontFamily?.disabled === false ? "Apply font to selected text" : "Select text to change its font"}
@@ -128,6 +135,7 @@ function SelectionTypographyControls({
         <FontSizeControl
           value={inlineFormatting?.fontSize?.value ?? null}
           onChange={(value) => inlineFormatting?.fontSize?.onChange(value)}
+          onCommitFocus={inlineFormatting?.onRequestEditorFocus}
           disabled={formattingDisabled || inlineFormatting?.fontSize?.disabled !== false}
           ariaLabel="Font size for selected text in points"
           title={inlineFormatting?.fontSize?.disabled === false ? "Apply size to selected text" : "Select text to change its size"}
@@ -189,7 +197,8 @@ export function FormattingToolbar({
   styleSizeStates,
   onStyleFieldSizeChange,
   onResetStyleFormatting,
-  onFitZoom
+  onFitZoom,
+  documentStyleTools
 }: FormattingToolbarProps) {
   const hasInlineControls = Boolean(
     inlineFormatting?.bold || inlineFormatting?.italic || inlineFormatting?.underline || inlineFormatting?.link
@@ -407,25 +416,29 @@ export function FormattingToolbar({
         />
 
         <div className="top-toolbar__group top-toolbar__group--style" role="group" aria-label="Document style">
-          <SpacingStylePopover docStyle={docStyle} disabled={formattingDisabled} />
-          <ParagraphStylePopover
-            docStyle={docStyle}
-            disabled={formattingDisabled}
-            globalAlignments={globalAlignments}
-            onGlobalAlignmentChange={onGlobalAlignmentChange}
-          />
-          <TextStylesPopover
-            docStyle={docStyle}
-            disabled={formattingDisabled}
-            styleMarkStates={styleMarkStates}
-            onStyleFieldMarkChange={onStyleFieldMarkChange}
-            styleFontStates={styleFontStates}
-            onStyleFieldFontChange={onStyleFieldFontChange}
-            styleSizeStates={styleSizeStates}
-            onStyleFieldSizeChange={onStyleFieldSizeChange}
-            onResetStyleFormatting={onResetStyleFormatting}
-          />
-          <PageStylePopover docStyle={docStyle} disabled={formattingDisabled} />
+          {documentStyleTools !== undefined ? documentStyleTools : (
+            <>
+              <SpacingStylePopover docStyle={docStyle} disabled={formattingDisabled} />
+              <ParagraphStylePopover
+                docStyle={docStyle}
+                disabled={formattingDisabled}
+                globalAlignments={globalAlignments}
+                onGlobalAlignmentChange={onGlobalAlignmentChange}
+              />
+              <TextStylesPopover
+                docStyle={docStyle}
+                disabled={formattingDisabled}
+                styleMarkStates={styleMarkStates}
+                onStyleFieldMarkChange={onStyleFieldMarkChange}
+                styleFontStates={styleFontStates}
+                onStyleFieldFontChange={onStyleFieldFontChange}
+                styleSizeStates={styleSizeStates}
+                onStyleFieldSizeChange={onStyleFieldSizeChange}
+                onResetStyleFormatting={onResetStyleFormatting}
+              />
+              <PageStylePopover docStyle={docStyle} disabled={formattingDisabled} />
+            </>
+          )}
         </div>
       </div>
     </div>
