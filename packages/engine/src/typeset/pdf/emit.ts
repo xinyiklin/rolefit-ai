@@ -23,29 +23,19 @@ import {
 } from "pdf-lib";
 import fontkit from "@pdf-lib/fontkit";
 
-import { DOCUMENT_FONT_FAMILIES, type DocumentFontFamily } from "../fontRegistry.ts";
+import { sfntAssetFile, type DocumentFontFamily } from "../fontRegistry.ts";
 import type { FaceName } from "../metrics.gen.ts";
 import { PAGE_HEIGHT_BP as PAGE_H, PAGE_WIDTH_BP as PAGE_W } from "../blocks.ts";
 import type { LayoutDocument } from "../layout.ts";
-import { underlineRule } from "../measure.ts";
-
-// The committed webfonts are woff2 (CSS only); a woff2 byte stream is not a
-// valid PDF font program. The build ships a decompressed sfnt sibling per face
-// for embedding — Latin Modern as CFF/OTF, the Source families as TrueType.
-const SFNT_EXT: Record<DocumentFontFamily, "otf" | "ttf"> = {
-  "latin-modern": "otf",
-  "source-serif": "ttf",
-  "source-sans": "ttf"
-};
+import { underlineRule, underlineSpans } from "../measure.ts";
 
 const faceKey = (family: DocumentFontFamily, face: FaceName) => `${family}:${face}`;
 
 // Resolve a face's embeddable sfnt URL from the single source of truth in the
-// font registry (its woff2 assetPath) so filenames never drift.
+// font registry (its woff2 assetPath plus the family's outline flavour) so
+// filenames never drift.
 function sfntUrl(family: DocumentFontFamily, face: FaceName, base: string): string {
-  const woff2 = DOCUMENT_FONT_FAMILIES[family].faces[face].assetPath; // /fonts/<name>.woff2
-  const file = woff2.replace(/^\/fonts\//, "").replace(/\.woff2$/i, `.${SFNT_EXT[family]}`);
-  return `${base.replace(/\/+$/, "")}/${file}`;
+  return `${base.replace(/\/+$/, "")}/${sfntAssetFile(family, face)}`;
 }
 
 // Every (family, face) the document actually paints. A resume typically uses one
@@ -159,15 +149,8 @@ export async function emitPdf(
             font: await fontFor(run.style.family, run.style.face)
           });
         }
-        // A link OR an explicit underline mark draws the same engine-painted
-        // rule (TeX \underline geometry, shared with the DOM painter). Only a
-        // link also gets a clickable annotation over the run's box.
-        if (run.href || run.underline) {
-          const ul = underlineRule(run.text.trimEnd(), run.style);
-          page.drawRectangle({ x: run.x, y: y - ul.offset - ul.thickness, width: run.width, height: ul.thickness });
-        }
         if (run.href) {
-          const ul = underlineRule(run.text.trimEnd(), run.style);
+          const ul = underlineRule(run.style);
           annots.push(
             pdf.context.register(
               pdf.context.obj({
@@ -181,6 +164,18 @@ export async function emitPdf(
             )
           );
         }
+      }
+      // A link OR an explicit underline mark draws the same engine-painted rule
+      // as the DOM painter, grouped by the shared span owner so an underlined
+      // phrase gets one continuous rule instead of one per word.
+      for (const span of underlineSpans(line.runs)) {
+        const ul = underlineRule(span.style);
+        page.drawRectangle({
+          x: span.x,
+          y: y - ul.offset - ul.thickness,
+          width: span.width,
+          height: ul.thickness
+        });
       }
       if (line.rule) {
         page.drawRectangle({

@@ -134,6 +134,117 @@
   src: url("/fonts/SourceSans3-Caps.woff2") format("woff2");
 }
 
+/* Metric-compatible substitutes for Times New Roman, Arial, and Calibri. Their
+   display bold is their text bold — a single-design static has no larger optical
+   size — so both roles share one declaration here and one metrics record in
+   metrics.gen.ts. Their caps faces carry synthesised small capitals (see
+   scripts/generate_font_assets.py). */
+@font-face {
+  font-family: "Typeset Tinos Regular";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/Tinos-Regular.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Tinos Bold";
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/Tinos-Bold.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Tinos Italic";
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+  src: url("/fonts/Tinos-Italic.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Tinos Bold Italic";
+  font-weight: 700;
+  font-style: italic;
+  font-display: swap;
+  src: url("/fonts/Tinos-BoldItalic.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Tinos Caps";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/Tinos-Caps.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Arimo Regular";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/Arimo-Regular.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Arimo Bold";
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/Arimo-Bold.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Arimo Italic";
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+  src: url("/fonts/Arimo-Italic.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Arimo Bold Italic";
+  font-weight: 700;
+  font-style: italic;
+  font-display: swap;
+  src: url("/fonts/Arimo-BoldItalic.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Arimo Caps";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/Arimo-Caps.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Carlito Regular";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/Carlito-Regular.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Carlito Bold";
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/Carlito-Bold.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Carlito Italic";
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+  src: url("/fonts/Carlito-Italic.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Carlito Bold Italic";
+  font-weight: 700;
+  font-style: italic;
+  font-display: swap;
+  src: url("/fonts/Carlito-BoldItalic.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Carlito Caps";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/Carlito-Caps.woff2") format("woff2");
+}
+
 /* ==== Typeset-engine DOM pages (src/typeset/render/dom.tsx) ====
    Real text at engine coordinates. Screen pages get quiet paper chrome; print
    pages remain bare, physical-size sheets. */

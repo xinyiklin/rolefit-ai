@@ -223,9 +223,11 @@ documentation; update visitor-facing docs for changed behavior, commands, or
 availability, and update engineering docs for changed contracts. Include the
 compact, privacy-safe continuity receipt in the behavior-slice commit. When a
 product version changes, update its canonical version and user-facing version
-references, then verify the matching release/publish workflow, tag, and
-deployment path before reporting publication. Do not claim a release or deploy
-completed without its concrete workflow or live-environment receipt.
+references. During a requested push, merge, or deploy of that versioned change,
+trigger the matching release/publish workflow and required tag, wait for it to
+finish successfully, and retain its workflow or live-environment receipt. A
+versioned change is incomplete until that release/deploy completion is
+confirmed.
 
 ## Continuity
 

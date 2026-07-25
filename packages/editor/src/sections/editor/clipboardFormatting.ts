@@ -1,4 +1,5 @@
 import type { DocumentFontFamily } from "@typeset/engine/typeset/fontRegistry.ts";
+import { FONT_FAMILY_OPTIONS } from "@typeset/engine/lib/documentStyle.ts";
 import { encodeLinkHref, normalizeLinkDestination } from "@typeset/engine/lib/links.ts";
 import { inlineFontSizePt } from "@typeset/engine/lib/inlineMarksText.ts";
 
@@ -67,14 +68,30 @@ export function decodeInlineClipboard(payload: string): string | null {
   }
 }
 
+// Names beyond a family's own label that should resolve to it. Two kinds:
+// internal CSS families the painter emits (so copying inside the editor
+// round-trips), and the proprietary families a bundled font is metrically
+// compatible with — text pasted from a Word or Docs file set in Times New Roman
+// lands on the font that keeps its measurements instead of losing the family.
+const FAMILY_ALIASES: Partial<Record<DocumentFontFamily, readonly string[]>> = {
+  "latin-modern": ["lm roman"],
+  // Helvetica and Arial share advance widths, so Helvetica belongs on the
+  // Arial-metric font too.
+  arimo: ["helvetica"],
+  tinos: ["times"]
+};
+
+// Longest name first so a short alias cannot shadow a longer, more specific one.
+const FAMILY_NAMES: ReadonlyArray<readonly [string, DocumentFontFamily]> = FONT_FAMILY_OPTIONS.flatMap(
+  (option) => {
+    const names = [option.label, ...(option.metricsOf ? [option.metricsOf] : []), ...(FAMILY_ALIASES[option.value] ?? [])];
+    return names.map((name) => [name.toLowerCase(), option.value] as const);
+  }
+).sort((left, right) => right[0].length - left[0].length);
+
 function mappedFontFamily(value: string): DocumentFontFamily | null {
   const normalized = value.toLowerCase().replace(/["']/g, "");
-  if (normalized.includes("source sans")) return "source-sans";
-  if (normalized.includes("source serif")) return "source-serif";
-  if (normalized.includes("latin modern") || normalized.includes("lm roman")) {
-    return "latin-modern";
-  }
-  return null;
+  return FAMILY_NAMES.find(([name]) => normalized.includes(name))?.[1] ?? null;
 }
 
 function parsedFontSize(value: string): number | null {

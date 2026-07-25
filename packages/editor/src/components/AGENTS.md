@@ -26,6 +26,9 @@ paints).
   alignment joins at the next narrower threshold, and selection typography only
   at the narrow supported edge. Zoom remains visible before the font-family
   control. Opening More never changes toolbar or editor geometry. The optional
+  `documentStructureTools` slot lets an embedded host place Header/Section
+  controls immediately before the document-style group while standalone
+  Typeset keeps them in `DocumentToolbar`. The optional
   `documentStyleTools` slot replaces the complete default resume-style menu
   group for another document grammar; it does not replace history, zoom,
   selection typography, marks, alignment, links, or spell-check.

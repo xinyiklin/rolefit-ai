@@ -77,6 +77,7 @@ const EMPTY_INLINE_FORMAT: InlineFormatState = {
   linkHref: null,
   linkText: "",
   linkAutomatic: false,
+  linkTextEditable: true,
   canLink: false,
   canClearFormatting: false
 };
@@ -462,6 +463,7 @@ export default function App() {
             href: inlineFormat.linkHref,
             text: inlineFormat.linkText,
             automatic: inlineFormat.linkAutomatic,
+            textEditable: inlineFormat.linkTextEditable,
             onApply: ({ text, href }) => editorRef.current?.applyLink(text, href),
             onRemove: () => editorRef.current?.removeLink(),
             disabled: !inlineFormat.canLink,

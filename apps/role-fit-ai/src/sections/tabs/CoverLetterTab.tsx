@@ -44,6 +44,9 @@ export function CoverLetterTab({
 }: CoverLetterTabProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [pageCount, setPageCount] = useState(0);
+  // Held here, not in the toolbar, so the editor's right-click menu and link card
+  // can open the same link popover the toolbar button opens.
+  const [linkEditorOpen, setLinkEditorOpen] = useState(false);
   const hasLetter = true;
   const canTailor =
     editor.text.trim().length >= 80 && resumeReady && jobReady && providerReady && !isTailoring;
@@ -65,6 +68,8 @@ export function CoverLetterTab({
   return (
     <section className="studio-card studio-card--flush cover-letter-page">
       <CoverLetterToolbar
+        linkEditorOpen={linkEditorOpen}
+        onLinkEditorOpenChange={setLinkEditorOpen}
         editor={editor}
         editorRef={editorRef}
         inputRef={inputRef}
@@ -88,6 +93,7 @@ export function CoverLetterTab({
             docStyle={editor.docStyle}
             documentKind="cover-letter"
             structureEditing={false}
+            onRequestLinkEditor={() => setLinkEditorOpen(true)}
             onInlineFormatStateChange={onInlineFormatStateChange}
             onPageCount={setPageCount}
           />

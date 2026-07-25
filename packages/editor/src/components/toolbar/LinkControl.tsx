@@ -10,6 +10,10 @@ export type LinkControlProps = {
   // The current display text (selection or the existing link's text); pre-fills
   // the Text field so the visible text can differ from the URL.
   text: string;
+  // False when the selection spans several fields: the link applies in place to
+  // each of them, and one string cannot rewrite multi-paragraph text. Word
+  // greys the same field out for a multi-paragraph selection.
+  textEditable?: boolean;
   automatic: boolean;
   disabled: boolean;
   onApply: (payload: { text: string; href: string }) => void;
@@ -23,6 +27,7 @@ export type LinkControlProps = {
 export function LinkControl({
   href,
   text,
+  textEditable = true,
   automatic,
   disabled,
   onApply,
@@ -111,6 +116,9 @@ export function LinkControl({
               type="text"
               value={textDraft}
               placeholder="Text to display"
+              readOnly={!textEditable}
+              aria-readonly={!textEditable || undefined}
+              title={textEditable ? undefined : "Linking several paragraphs keeps their text"}
               onChange={(event) => setTextDraft(event.target.value)}
             />
           </label>

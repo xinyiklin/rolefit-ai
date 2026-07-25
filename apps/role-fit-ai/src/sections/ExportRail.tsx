@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from "react";
-import { Check, ChevronDown, Download, FileJson, X } from "lucide-react";
+import { useRef, useState } from "react";
+import { Check, Download, FileDown, X } from "lucide-react";
 import { useModalFocus } from "@typeset/editor/hooks/useModalFocus.ts";
+import { ToolbarButton } from "@typeset/editor/components/toolbar/ToolbarButton.tsx";
 
 // The owned engine's PDF is the only file-export format (D014). Kept as a named
 // union so EXPORT_META / the rename target stay self-documenting.
@@ -12,14 +13,6 @@ type ExportFormat = "pdf-engine";
 export const EXPORT_META: Record<ExportFormat, { ext: string; label: string }> = {
   "pdf-engine": { ext: "pdf", label: "PDF" }
 };
-
-// The `.resume` save isn't part of ExportFormat (PDF is the only file-export
-// format) — it's a plain client-side save button, so its rename-dialog metadata
-// lives locally here.
-const RESUME_EXT = "resume";
-const RESUME_LABEL = ".resume";
-
-type RenameTarget = ExportFormat | "resume";
 
 type ExportMenuProps = {
   // True once a resume is exportable: a structured editor model exists (loaded
@@ -35,7 +28,6 @@ type ExportMenuProps = {
   // The download handlers accept the user's chosen base name (extension
   // excluded); when omitted they fall back to the system name.
   onDownloadPdf: (fileBaseName?: string) => void | Promise<void>;
-  onDownloadResume: (fileBaseName?: string) => void;
 };
 
 export function ExportMenu({
@@ -45,14 +37,10 @@ export function ExportMenu({
   status,
   statusIsError = false,
   onDismissStatus,
-  onDownloadPdf,
-  onDownloadResume
+  onDownloadPdf
 }: ExportMenuProps) {
-  // Rename-at-save: which export was requested, plus the in-flight file name.
-  const [renameFormat, setRenameFormat] = useState<RenameTarget | null>(null);
+  const [renameFormat, setRenameFormat] = useState<ExportFormat | null>(null);
   const [renameValue, setRenameValue] = useState("");
-  const [isOpen, setIsOpen] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const renameCardRef = useRef<HTMLFormElement>(null);
   const renameInputRef = useRef<HTMLInputElement>(null);
@@ -66,10 +54,9 @@ export function ExportMenu({
   });
 
   // Open the rename dialog for a save action, pre-filled with the system name.
-  function requestExport(format: RenameTarget) {
+  function requestExport(format: ExportFormat) {
     setRenameValue(defaultFileBaseName);
     setRenameFormat(format);
-    setIsOpen(false);
   }
 
   function cancelRename() {
@@ -83,46 +70,26 @@ export function ExportMenu({
     // extension. An empty field falls back to the system name there.
     const base = renameValue.trim() || undefined;
     setRenameFormat(null);
-    if (format === "pdf-engine") onDownloadPdf(base);
-    else onDownloadResume(base);
+    onDownloadPdf(base);
   }
 
-  useEffect(() => {
-    if (!isOpen) return;
-    function onPointerDown(event: PointerEvent) {
-      if (!menuRef.current?.contains(event.target as Node)) setIsOpen(false);
-    }
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") setIsOpen(false);
-    }
-    document.addEventListener("pointerdown", onPointerDown);
-    document.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.removeEventListener("pointerdown", onPointerDown);
-      document.removeEventListener("keydown", onKeyDown);
-    };
-  }, [isOpen]);
-
-  const renameLabel = renameFormat === "resume" ? RESUME_LABEL : renameFormat ? EXPORT_META[renameFormat].label : "";
-  const renameExt = renameFormat === "resume" ? RESUME_EXT : renameFormat ? EXPORT_META[renameFormat].ext : "";
+  const renameLabel = renameFormat ? EXPORT_META[renameFormat].label : "";
+  const renameExt = renameFormat ? EXPORT_META[renameFormat].ext : "";
 
   return (
-    <div className="export-menu" ref={menuRef} aria-label="Export">
-      <button
+    <div className="export-menu" aria-label="Export PDF">
+      <ToolbarButton
         ref={triggerRef}
-        className="secondary-button is-compact export-menu__trigger"
-        type="button"
-        onClick={() => setIsOpen((open) => !open)}
-        aria-haspopup="dialog"
-        aria-expanded={isOpen}
-        title="Export the resume as PDF, or save it as a re-loadable .resume file"
-      >
-        <Download size={14} aria-hidden="true" />
-        <span>Export</span>
-        <ChevronDown size={13} aria-hidden="true" />
-      </button>
+        label={isRenderingPdf ? "Exporting…" : "PDF"}
+        tooltip="Export resume PDF"
+        icon={<FileDown size={16} />}
+        showLabel
+        disabled={!canExport || isRenderingPdf}
+        aria-busy={isRenderingPdf}
+        onClick={() => requestExport("pdf-engine")}
+      />
 
-      {status && !isOpen && !renameFormat ? (
+      {status && !renameFormat ? (
         <div
           className={`export-menu__feedback${statusIsError ? " export-menu__feedback--error" : ""}`}
           role={statusIsError ? "alert" : "status"}
@@ -134,51 +101,6 @@ export function ExportMenu({
               <X size={13} aria-hidden="true" />
             </button>
           ) : null}
-        </div>
-      ) : null}
-
-      {isOpen ? (
-        <div className="export-menu__popover" role="dialog" aria-label="Export options">
-          {/* Dialog, not menu: the children are plain buttons without menuitem
-              roles or an arrow-key model, so menu semantics would announce a
-              menu with no items (NavMenu uses the same dialog pattern). */}
-          <div className="export-menu__actions">
-            {/* PDF — typeset by the built-in engine, fully client-side (D014). */}
-            <button
-              className="ghost-button is-compact pdf-action pdf-action--canonical"
-              type="button"
-              disabled={!canExport || isRenderingPdf}
-              onClick={() => requestExport("pdf-engine")}
-              title={
-                isRenderingPdf
-                  ? "Typesetting PDF, please wait"
-                  : canExport
-                  ? "Download the resume as PDF (typeset in-app; searchable text, clickable links)"
-                  : "Load a resume to enable exports"
-              }
-            >
-              <Download size={14} aria-hidden="true" />
-              <span>{isRenderingPdf ? "Typesetting…" : "PDF"}</span>
-            </button>
-
-            {/* .resume — a lossless JSON save of the structured editor model,
-                re-loadable from the Resume menu's upload. */}
-            <button
-              className="ghost-button is-compact"
-              type="button"
-              disabled={!canExport}
-              onClick={() => requestExport("resume")}
-              title={
-                canExport
-                  ? "Download resume data (.resume), a re-loadable save"
-                  : "Load a resume to enable exports"
-              }
-            >
-              <FileJson size={14} aria-hidden="true" />
-              <span>{RESUME_LABEL}</span>
-            </button>
-          </div>
-
         </div>
       ) : null}
 

@@ -67,6 +67,16 @@ assert.ok(prepared >= 0 && confirmed > prepared, "workspace files validate befor
 assert.ok(recoveryCleared > confirmed, "workspace recovery clears only after validation and confirmation");
 assert.ok(identityCommitted > recoveryCleared, "workspace identity changes only inside the validated commit");
 
+const starterLoad = functionSlice("loadStarterTemplate", "saveBaseResume");
+const starterResponse = starterLoad.indexOf("if (!response.ok");
+const starterPrepared = starterLoad.indexOf("prepareResumeText(", starterResponse);
+const starterConfirmed = starterLoad.indexOf("await confirmReplaceEditor()", starterPrepared);
+const starterIdentity = starterLoad.indexOf("setFileName(", starterConfirmed);
+assert.ok(starterResponse >= 0 && starterPrepared > starterResponse, "starter validates only after a successful workspace response");
+assert.ok(starterConfirmed > starterPrepared, "starter validates before replacement confirmation");
+assert.ok(starterIdentity > starterConfirmed, "starter identity changes only after validation and confirmation");
+assert.match(starterLoad, /setBaseResumeName\(""\)/, "starter remains detached from the active saved base");
+
 const restore = functionSlice("restoreBaseResume", "saveCurrentAsBaseResume");
 const restoreResponse = restore.indexOf("if (!response.ok");
 const restoreCommit = restore.indexOf("await applyWorkspaceBaseResume", restoreResponse);

@@ -200,6 +200,12 @@ export async function readWorkspaceBaseResume(
 
   // No workspace file found — fall back to the bundled starter .resume so the
   // editor is never empty on a fresh install.
+  return readBundledStarterResume(locations);
+}
+
+async function readBundledStarterResume(
+  locations: WorkspaceLocations
+): Promise<BaseResumeResult> {
   try {
     const starterPath = join(locations.appRoot, "server/starter.resume");
     const starterText = await readFile(starterPath, "utf8");
@@ -322,6 +328,7 @@ async function workspaceSnapshot(locations: WorkspaceLocations, baseResume?: Bas
   return {
     path: locations.workspaceDir,
     baseResume: baseResume ?? await readWorkspaceBaseResume(undefined, locations),
+    starterResume: await readBundledStarterResume(locations),
     baseResumeOptions: await readBaseResumeOptions(locations),
     baseResumeHistory: await readBaseResumeHistory(locations),
     files: await readWorkspaceFiles(locations)

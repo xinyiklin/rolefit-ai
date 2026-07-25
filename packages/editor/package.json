@@ -11,10 +11,11 @@
   "scripts": {
     "eval:editor": "node --experimental-strip-types src/sections/editor/__evals__/typeset-editing.mjs",
     "eval:hooks": "node --experimental-strip-types src/hooks/__evals__/resume-editor-structure.mjs",
-    "eval": "npm run eval:editor && npm run eval:hooks",
+    "eval": "npm run eval:fonts && npm run eval:editor && npm run eval:hooks",
     "test": "npm run eval",
     "typecheck": "tsc --noEmit",
-    "check": "npm run typecheck && npm run eval"
+    "check": "npm run typecheck && npm run eval",
+    "eval:fonts": "node --experimental-strip-types src/styles/__evals__/font-assets.mjs"
   },
   "dependencies": {
     "@typeset/engine": "*",

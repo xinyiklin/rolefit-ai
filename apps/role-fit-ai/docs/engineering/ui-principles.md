@@ -26,23 +26,29 @@ marketing landing page, a SaaS dashboard, or a native desktop installer.
 
 ## Workflow Shape
 
-Preserve the navbar-inputs + full-width studio workflow (the former left
+Preserve the compact masthead + full-width studio workflow (the former left
 inputs pane was folded into the masthead by explicit user request,
-2026-06-09):
+2026-06-09; document file actions moved into their editor bars on 2026-07-25):
 
 - masthead (navbar): a standalone Sessions menu for concurrent job tabs first,
-  followed by Resume source (workspace
-  base-resume, upload, source text), Job target (link + description), the AI
-  provider, and polish Options — plus the primary Polish action and Apply
+  followed by Job target (link + description), the AI provider, and polish
+  Options, plus the global Apply action
 - studio (full width): the tabbed output views — Resume (the engine-painted
   page is the sole editor, so what you see is exactly what exports — it is its
   own live preview, so there is no separate compile-preview; its margin
   controls own add/remove/reorder, section type, and per-section tailor scope;
-  the suggestion/recruiter-review rail docks beside it post-polish), Cover
+  Starter/Open/Save/PDF/Polish share one document action bar, and the
+  suggestion/recruiter-review rail docks beside it post-polish), Cover
   letter (a separate plain-paragraph editor that revises the user's source
-  letter), Materials (application questions and role descriptions),
+  letter with the matching Starter/Open/Save/PDF/Tailor action bar), Materials
+  (application questions and role descriptions),
   Applications (table / calendar tracker views), Analytics — plus the
-  template/export rail below
+  document-specific review rails
+
+Resume and cover-letter Open/Save disclosures reuse the RoleFit-owned
+`DocumentActionMenu` shell while their lifecycle content remains separate.
+Resume Header and Section controls sit immediately before Spacing in the shared
+formatting row; at narrow widths the whole group moves into More in that order.
 
 Polish should feel like a review queue, not a hidden overwrite. By default,
 the user selects editable resume sections in the document; identity,

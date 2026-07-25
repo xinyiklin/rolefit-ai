@@ -10,10 +10,11 @@ import {
   serializeCoverLetterFile
 } from "../coverLetter.ts";
 import { toTypesetSchema } from "../../typeset/schema.ts";
-import { layoutCoverLetter } from "../../typeset/layout.ts";
-import { inkExtent, measure, paragraphItems } from "../../typeset/measure.ts";
+import { layoutCoverLetter, lineSeparators } from "../../typeset/layout.ts";
+import { inkExtent, measure, paragraphItems, underlineRule, underlineSpans } from "../../typeset/measure.ts";
 import { breakParagraph } from "../../typeset/linebreak.ts";
 import { coverLetterStyleToDocumentStyle } from "../coverLetter.ts";
+import { FONT_FAMILY_OPTIONS } from "../documentStyle.ts";
 
 const source = [
   "July 24, 2026",
@@ -90,6 +91,121 @@ for (let index = 1; index < mixedLines.length; index += 1) {
     "oversized inline runs expand the baseline junction instead of colliding"
   );
 }
+
+// Word-processor rule: a line's vertical placement depends on the fonts and
+// sizes on it, never on which glyphs were typed. Typing a taller ascender or a
+// deeper descender must not move the line or its neighbours.
+const baselinesFor = (paragraphs) =>
+  layoutCoverLetter(
+    toTypesetSchema(parseCoverLetterText(paragraphs.join("\n"))),
+    coverLetterStyleToDocumentStyle(COVER_LETTER_STYLE_DEFAULTS)
+  ).pages.flatMap((page, index) => page.lines.map((line) => [index, line.baseline]));
+
+for (const [label, variants] of Object.entries({
+  "an oversized inline run": [
+    ["aaaaa<size=48>aaaaaa</size> ccc", "tail"],
+    ["aaaaa<size=48>aaaaaa b ccc</size>", "tail"],
+    ["aaaaa<size=48>gpqjy Å( ccc</size>", "tail"]
+  ],
+  "ordinary body prose": [["ana ana ana", "one two"], ["ÅQg jbl Åpy", "two one"]],
+  "a blank paragraph": [["", "aaa"], ["", "Åjg"]]
+})) {
+  const [reference, ...rest] = variants.map(baselinesFor);
+  for (const variant of rest) {
+    assert.deepEqual(
+      variant,
+      reference,
+      `${label}: glyph choice must not change any baseline`
+    );
+  }
+}
+
+// The expansion still has to clear the real ink of the tallest and deepest
+// glyphs the run could hold, at every supported inline size.
+for (const size of [12, 36, 48, 120, 200]) {
+  const probeLines = layoutCoverLetter(
+    toTypesetSchema(
+      parseCoverLetterText(
+        ["Åjgpqy", `Åjgpqy<size=${size}>Å(jgpqy</size>Åjgpqy`, "Åjgpqy"].join("\n")
+      )
+    ),
+    coverLetterStyleToDocumentStyle(COVER_LETTER_STYLE_DEFAULTS)
+  ).pages.flatMap((page) => page.lines);
+  for (let index = 1; index < probeLines.length; index += 1) {
+    const previous = probeLines[index - 1];
+    const current = probeLines[index];
+    assert(
+      current.baseline - lineInk(current).height >=
+        previous.baseline + lineInk(previous).depth - 0.01,
+      `size ${size}: an oversized inline run must not collide with its neighbour`
+    );
+  }
+}
+
+// Engine runs are word boxes. Both renderers must group them through interior
+// spaces, or the PDF draws one rule per word while the editor (which paints
+// merged style spans) shows one continuous rule. The rule's depth comes from the
+// face, so it cannot step between two words of the same phrase either.
+const underlinedLine = layoutCoverLetter(
+  toTypesetSchema(parseCoverLetterText("See <u>ab pq words</u> then plain text.")),
+  coverLetterStyleToDocumentStyle(COVER_LETTER_STYLE_DEFAULTS)
+).pages[0].lines[0];
+const underlinedRuns = underlinedLine.runs.filter((run) => run.underline);
+assert.equal(underlinedRuns.length, 3, "the underlined phrase reaches layout as one run per word");
+const spans = underlineSpans(underlinedLine.runs);
+assert.equal(spans.length, 1, "an underlined phrase draws ONE rule, not one per word");
+assert.equal(spans[0].x, underlinedRuns[0].x);
+assert.equal(
+  spans[0].x + spans[0].width,
+  underlinedRuns[2].x + underlinedRuns[2].width,
+  "the rule spans the phrase's interior spaces"
+);
+assert.equal(
+  new Set(underlinedRuns.map((run) => underlineRule(run.style).offset.toFixed(4))).size,
+  1,
+  "rule depth depends on the face and size, never on the glyphs in the run"
+);
+assert(
+  underlineRule(spans[0].style).offset > inkExtent("gjpqy", spans[0].style).depth,
+  "the rule still clears the face's descender reach"
+);
+assert.equal(
+  underlineSpans(
+    layoutCoverLetter(
+      toTypesetSchema(parseCoverLetterText("plain <u>one</u> plain <u>two</u> plain")),
+      coverLetterStyleToDocumentStyle(COVER_LETTER_STYLE_DEFAULTS)
+    ).pages[0].lines[0].runs
+  ).length,
+  2,
+  "separate underlined words stay separate rules"
+);
+
+// Line separators: what a break stands for once the painted lines carry no
+// character for the glue the breaker consumed.
+const separatorsFor = (paragraphs) =>
+  lineSeparators(
+    layoutCoverLetter(
+      toTypesetSchema(parseCoverLetterText(paragraphs.join("\n"))),
+      coverLetterStyleToDocumentStyle(COVER_LETTER_STYLE_DEFAULTS)
+    ).pages
+  );
+assert.deepEqual(
+  separatorsFor([
+    "The quick brown fox jumps over the lazy dog and keeps running well past the right margin so it wraps."
+  ]),
+  [[" ", ""]],
+  "a soft wrap inside one paragraph stands for a space; the last line has no separator"
+);
+assert.deepEqual(
+  separatorsFor(["First paragraph.", "", "Second paragraph."]),
+  [["\n", ""]],
+  "crossing into another paragraph stands for a newline"
+);
+assert.deepEqual(
+  separatorsFor(["Held\nover two authored lines."]),
+  [[" ", ""]],
+  "an authored break inside one field reads as a space; the model keeps the real newline"
+);
 
 const unbrokenData = parseCoverLetterText("A".repeat(240));
 const unbrokenLayout = layoutCoverLetter(
@@ -240,4 +356,39 @@ for (const mutation of [
   );
 }
 
-console.log("cover-letter file v1 + layout probes: PASS");
+// ---- every supported family survives the file boundary and lays out ----
+//
+// A family id is a PERSISTED enum value. The codec validates it against
+// FONT_FAMILY_OPTIONS and the registry resolves its faces, but those are separate
+// derivations from lib/fontFamilies.ts: a family present in one and absent from
+// the other produces either a file that will not reopen or a layout that throws
+// on a missing face. Both directions are cheap to sweep, so sweep them.
+for (const { value: family } of FONT_FAMILY_OPTIONS) {
+  const style = { ...COVER_LETTER_STYLE_DEFAULTS, fontFamily: family };
+  const round = parseCoverLetterFile(serializeCoverLetterFile(data, style));
+  assert.equal(round.style.fontFamily, family, `.cover must round-trip fontFamily ${family}`);
+
+  const familyLayout = layoutCoverLetter(
+    toTypesetSchema(round.data),
+    coverLetterStyleToDocumentStyle(round.style)
+  );
+  assert(familyLayout.pages.length >= 1, `${family} must produce pages`);
+  const runs = familyLayout.pages[0].lines.flatMap((line) => line.runs);
+  assert(runs.length > 0, `${family} must produce runs`);
+  assert(
+    runs.every((run) => run.style.family === family),
+    `${family} must be the family of every run it lays out`
+  );
+  // Every face must measure: a caps or display face wired to a missing metrics
+  // record would only surface when a heading or name is painted.
+  for (const face of ["regular", "bold", "italic", "boldItalic", "boldDisplay", "caps"]) {
+    const width = measure("Handgloves 123", { family, face, size: 10, tracking: 0 });
+    assert(width > 0 && Number.isFinite(width), `${family}:${face} must measure`);
+    const rule = underlineRule({ family, face, size: 10, tracking: 0 });
+    assert(rule.thickness > 0 && rule.offset > 0, `${family}:${face} must have an underline rule`);
+  }
+}
+
+console.log(
+  `cover-letter file v1 + layout probes: PASS (incl. ${FONT_FAMILY_OPTIONS.length} families × 6 faces through the file boundary)`
+);

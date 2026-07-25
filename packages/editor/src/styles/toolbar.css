@@ -307,9 +307,15 @@
   opacity: 0.65;
 }
 
+/* Sized to its content, with the trigger's width only as a floor. The family
+   names and their metric-twin labels are text of unpredictable length, so a fixed
+   width silently truncated them — at the toolbar's width the name column
+   collapsed to nothing and a row read only "Times New Roman". */
 .font-family-control__menu {
   z-index: 120;
   display: grid;
+  width: max-content;
+  max-width: min(24rem, calc(100vw - 16px));
   gap: 2px;
   padding: 4px;
   color: var(--ink);
@@ -321,7 +327,10 @@
 
 .font-family-control__menu button {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 16px;
+  /* The name never collapses; the 1fr absorbs any slack so the metric-twin
+     labels line up on the right. */
+  grid-template-columns: minmax(max-content, 1fr) auto 16px;
+  gap: 8px;
   align-items: center;
   width: 100%;
   min-height: 30px;
@@ -334,6 +343,32 @@
   font: 520 0.75rem/1.2 var(--font-ui);
   text-align: left;
   cursor: pointer;
+}
+
+/* Each family previews in its own face (set inline from the font registry), so
+   the size is nudged up to stay readable next to the UI font. */
+.font-family-control__name {
+  overflow: hidden;
+  font-size: 0.8125rem;
+  font-weight: 400;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* The proprietary family this font matches the metrics of. Quiet: it is a
+   qualifier on the name, not a second choice. */
+.font-family-control__metrics {
+  color: var(--ink-soft);
+  font-size: 0.6875rem;
+  font-weight: 420;
+  white-space: nowrap;
+}
+
+.font-family-control__menu button:hover .font-family-control__metrics,
+.font-family-control__menu button:focus-visible .font-family-control__metrics,
+.font-family-control__menu button.is-selected .font-family-control__metrics {
+  color: inherit;
+  opacity: 0.75;
 }
 
 .font-family-control__menu button > svg {
@@ -762,6 +797,20 @@
    attribute, so it is unaffected. */
 [data-toolbar-labels="text"] .top-toolbar__document-structure .toolbar-button__icon {
   display: none;
+}
+
+/* Structure controls stay explicit in embedded document editors. The generic
+   1210px style-menu collapse above must not turn them into blank buttons after
+   this host hides their redundant icons. Below 1040px the complete style group
+   moves into More, so keeping these two short labels does not crowd the main
+   row. */
+[data-toolbar-labels="text"] .top-toolbar__document-structure .toolbar-button__label {
+  display: inline;
+}
+
+[data-toolbar-labels="text"] .top-toolbar__document-structure .toolbar-button--text {
+  width: auto;
+  padding-inline: 9px;
 }
 
 /* The 1190.01px lower edge interlocks exactly with the 1210px band above so

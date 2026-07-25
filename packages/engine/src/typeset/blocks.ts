@@ -11,7 +11,15 @@ import { documentFontFamily, type DocumentFontFamily } from "./fontRegistry.ts";
 import type { FieldSrc, FontStyle, GlyphRun, ParagraphAlign } from "./types.ts";
 import type { FaceName } from "./metrics.gen.ts";
 import { fontSizesFor, nameSizePt } from "../lib/documentTypography.ts";
-import { faceFor, inkExtent, measure, paragraphItems, segmentsFromInlineMarks, texLigatures } from "./measure.ts";
+import {
+  faceExtent,
+  faceFor,
+  inkExtent,
+  measure,
+  paragraphItems,
+  segmentsFromInlineMarks,
+  texLigatures
+} from "./measure.ts";
 import { automaticLinkHref } from "../lib/links.ts";
 import { breakParagraph } from "./linebreak.ts";
 import { alignmentFromInlineMarks, hasInlineMarkTags } from "../lib/inlineMarksText.ts";
@@ -40,13 +48,17 @@ const BSK = {
 // line. Page breaking recomputes the first line from the page's minimum inset.
 export type VLine = {
   runs: GlyphRun[]; // x already includes the line's indent
-  height: number; // ink height above baseline (page-top placement)
-  depth: number; // ink depth below baseline
-  // Nominal body ink for this line's role. Pagination adds only the overflow
-  // beyond these values to the calibrated baseline junction, so a larger
-  // inline font cannot collide with the line above or below.
-  nominalHeight?: number;
-  nominalDepth?: number;
+  // The row's own footprint at its role size: ink above/below the baseline with
+  // every run measured at no more than that size (page-top placement, page-bottom
+  // fit). Oversized inline runs contribute through the overflow fields instead.
+  height: number;
+  depth: number;
+  // Extra room this line needs beyond its calibrated junction because an inline
+  // run is LARGER than the row's role size. Derived from face boxes, never from
+  // the glyphs on the line, so typing a taller or deeper character inside an
+  // oversized run cannot change the spacing around it.
+  riseOverflow: number; // above the baseline
+  dropOverflow: number; // below the baseline
   dist: number; // baseline distance from previous line in the stream
   // Pagination policy: "keep" lines may not start a page-break separation from
   // their predecessor (entry head rows, a bullet after its head, rules).
@@ -153,9 +165,12 @@ function inkOfRuns(runs: GlyphRun[]): { height: number; depth: number } {
   return { height, depth };
 }
 
-function nominalInkOfRuns(
+// The row's footprint at its role size. Runs larger than the role size are
+// measured AT that size here and contribute their excess through
+// boxOverflowOfRuns, so one oversized word cannot silently restyle the row.
+function rowInkOfRuns(
   runs: GlyphRun[],
-  nominalSize: number,
+  roleSize: number,
   fallback: { height: number; depth: number }
 ): { height: number; depth: number } {
   if (!runs.some((run) => run.text)) return fallback;
@@ -164,12 +179,29 @@ function nominalInkOfRuns(
   for (const run of runs) {
     const extent = inkExtent(run.text, {
       ...run.style,
-      size: Math.min(run.style.size, nominalSize)
+      size: Math.min(run.style.size, roleSize)
     });
     height = Math.max(height, extent.height);
     depth = Math.max(depth, extent.depth);
   }
   return { height, depth };
+}
+
+// Room an oversized inline run needs beyond the row's role size, measured from
+// face boxes so it is the same for every glyph the run could hold. Zero whenever
+// every run fits the role size, which keeps ordinary rows on their calibrated
+// junctions exactly.
+function boxOverflowOfRuns(runs: GlyphRun[], roleSize: number): { rise: number; drop: number } {
+  let rise = 0;
+  let drop = 0;
+  for (const run of runs) {
+    if (run.style.size <= roleSize) continue;
+    const box = faceExtent(run.style);
+    const role = faceExtent({ ...run.style, size: roleSize });
+    rise = Math.max(rise, box.height - role.height);
+    drop = Math.max(drop, box.depth - role.depth);
+  }
+  return { rise, drop };
 }
 
 function styledRun(
@@ -299,22 +331,23 @@ export function paragraphLines(
   if (!lines.length) lines.push({ runs: [], width: 0 });
   return lines.map((line, i) => {
     let runs = line.runs.map((r) => ({ ...r, x: r.x + indent, src }));
-    let ink = inkOfRuns(runs);
+    const bodyStyle: FontStyle = { family, face: "regular", size, tracking };
     if (!runs.length) {
       // Preserve every authored blank line (including repeated/trailing hard
       // breaks), not only a wholly empty paragraph. The zero-width run gives the
       // editor a caret target while both DOM and PDF retain the same baseline.
-      const style: FontStyle = { family, face: "regular", size, tracking };
-      ink = inkExtent("Ag", style);
-      runs = [{ text: "", style, x: indent, width: 0, src }];
+      runs = [{ text: "", style: bodyStyle, x: indent, width: 0, src }];
     }
-    const nominalInk = nominalInkOfRuns(runs, size, ink);
+    // A textless row keeps a full body-height footprint so a blank line occupies
+    // the same space as a written one.
+    const rowInk = rowInkOfRuns(runs, size, inkExtent("Ag", bodyStyle));
+    const overflow = boxOverflowOfRuns(runs, size);
     return {
       runs,
-      height: ink.height,
-      depth: ink.depth,
-      nominalHeight: nominalInk.height,
-      nominalDepth: nominalInk.depth,
+      height: rowInk.height,
+      depth: rowInk.depth,
+      riseOverflow: overflow.rise,
+      dropOverflow: overflow.drop,
       dist: i === 0 ? firstDist : baselineskip,
       keepWithPrev: i === 0 ? keepFirst : keepLinesTogether
     };
@@ -370,14 +403,14 @@ export function buildVerticalStream(schema: TypesetSchema, style: DocumentStyle)
       "boldDisplay"
     );
     const runs = alignRow(nameRuns, geo.textWidth, alignmentFromInlineMarks(schema.name) ?? headerAlign);
-    const ink = inkOfRuns(runs);
-    const nominalInk = nominalInkOfRuns(runs, nameSize, ink);
+    const rowInk = rowInkOfRuns(runs, nameSize, inkOfRuns(runs));
+    const overflow = boxOverflowOfRuns(runs, nameSize);
     push({
       runs,
-      height: ink.height,
-      depth: ink.depth,
-      nominalHeight: nominalInk.height,
-      nominalDepth: nominalInk.depth,
+      height: rowInk.height,
+      depth: rowInk.depth,
+      riseOverflow: overflow.rise,
+      dropOverflow: overflow.drop,
       dist: 0,
       keepWithPrev: false
     });
@@ -410,14 +443,14 @@ export function buildVerticalStream(schema: TypesetSchema, style: DocumentStyle)
     });
     const contactAlignment = schema.contact.map(alignmentFromInlineMarks).find(Boolean) ?? headerAlign;
     const aligned = alignRow(runs, geo.textWidth, contactAlignment);
-    const ink = inkOfRuns(aligned);
-    const nominalInk = nominalInkOfRuns(aligned, size, ink);
+    const rowInk = rowInkOfRuns(aligned, size, inkOfRuns(aligned));
+    const overflow = boxOverflowOfRuns(aligned, size);
     push({
       runs: aligned,
-      height: ink.height,
-      depth: ink.depth,
-      nominalHeight: nominalInk.height,
-      nominalDepth: nominalInk.depth,
+      height: rowInk.height,
+      depth: rowInk.depth,
+      riseOverflow: overflow.rise,
+      dropOverflow: overflow.drop,
       dist: J.nameContact * stretch * fontScale + gap("nameContactGapPt"),
       keepWithPrev: true
     });
@@ -455,8 +488,12 @@ export function buildVerticalStream(schema: TypesetSchema, style: DocumentStyle)
       );
       const runs = alignRow(headingRuns, geo.textWidth, alignmentFromInlineMarks(section.heading) ?? headingAlign);
       const fallbackHeadingStyle: FontStyle = { family, face: caseMode === "smallcaps" ? "caps" : "regular", size: sizes.large, tracking };
-      const ink = headingText ? inkOfRuns(runs) : inkExtent("Ag", fallbackHeadingStyle);
-      const nominalInk = nominalInkOfRuns(runs, sizes.large, ink);
+      // A cleared heading paints one injected space. Its row keeps the full
+      // heading footprint so the section's spacing does not change when the
+      // text is emptied.
+      const blankHeadingInk = inkExtent("Ag", fallbackHeadingStyle);
+      const rowInk = headingText ? rowInkOfRuns(runs, sizes.large, blankHeadingInk) : blankHeadingInk;
+      const overflow = boxOverflowOfRuns(runs, sizes.large);
       // Header→first-heading depends only on headerSectionGap. The sectionGap
       // slider must not move the first heading.
       const beforeGap =
@@ -465,10 +502,10 @@ export function buildVerticalStream(schema: TypesetSchema, style: DocumentStyle)
           : J.contentHeading * stretch * fontScale + gap("sectionGapPt");
       push({
         runs,
-        height: ink.height,
-        depth: ink.depth,
-        nominalHeight: nominalInk.height,
-        nominalDepth: nominalInk.depth,
+        height: rowInk.height,
+        depth: rowInk.depth,
+        riseOverflow: overflow.rise,
+        dropOverflow: overflow.drop,
         dist: beforeGap,
         keepWithPrev: false,
         // Section-rule geometry is calibrated to the owned page layout: the
@@ -563,13 +600,14 @@ export function buildVerticalStream(schema: TypesetSchema, style: DocumentStyle)
         ? alignRow(rawTitleRuns, geo.headRowWidth, titleAlignment, geo.entryIndent)
         : rawTitleRuns;
       const inkT = inkOfRuns(titleRuns);
-      const nominalTitleInk = nominalInkOfRuns(titleRuns, titleSize, inkT);
+      const titleRowInk = rowInkOfRuns(titleRuns, titleSize, inkT);
+      const titleOverflow = boxOverflowOfRuns(titleRuns, titleSize);
       push({
         runs: titleRuns,
-        height: inkT.height,
-        depth: inkT.depth,
-        nominalHeight: nominalTitleInk.height,
-        nominalDepth: nominalTitleInk.depth,
+        height: titleRowInk.height,
+        depth: titleRowInk.depth,
+        riseOverflow: titleOverflow.rise,
+        dropOverflow: titleOverflow.drop,
         dist: firstInSection
           ? J.headingEntry * stretch * fontScale + gap("sectionEntryGapPt")
           : J.entryEntry * stretch * fontScale + gap("entryGapPt"),
@@ -608,7 +646,8 @@ export function buildVerticalStream(schema: TypesetSchema, style: DocumentStyle)
           ? alignRow(rawSubRuns, geo.headRowWidth, subAlignment, geo.entryIndent)
           : rawSubRuns;
         const inkS = inkOfRuns(subRuns);
-        const nominalSubInk = nominalInkOfRuns(subRuns, subSize, inkS);
+        const subRowInk = rowInkOfRuns(subRuns, subSize, inkS);
+        const subOverflow = boxOverflowOfRuns(subRuns, subSize);
         // Row-strut mechanics (see LINESKIP above): use baseline spacing unless
         // a box extends beyond the strut, as underlined links can.
         const arstrutH = 0.7 * BSK.normalsize * stretch * fontScale;
@@ -625,10 +664,10 @@ export function buildVerticalStream(schema: TypesetSchema, style: DocumentStyle)
         const inkFloor = titleInkDepth + inkS.height + MIN_TITLE_SUB_INK_GAP * fontScale;
         push({
           runs: subRuns,
-          height: inkS.height,
-          depth: inkS.depth,
-          nominalHeight: nominalSubInk.height,
-          nominalDepth: nominalSubInk.depth,
+          height: subRowInk.height,
+          depth: subRowInk.depth,
+          riseOverflow: subOverflow.rise,
+          dropOverflow: subOverflow.drop,
           dist: Math.max(spaced, inkFloor),
           keepWithPrev: true
         });

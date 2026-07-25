@@ -10,7 +10,15 @@
 
 import { fontFace, type DocumentFontFamily } from "./fontRegistry.ts";
 import type { FaceName } from "./metrics.gen.ts";
-import type { BoxItem, FontStyle, ForcedBreakItem, GlueItem, ParaItem, PenaltyItem } from "./types.ts";
+import type {
+  BoxItem,
+  FontStyle,
+  ForcedBreakItem,
+  GlueItem,
+  GlyphRun,
+  ParaItem,
+  PenaltyItem
+} from "./types.ts";
 import {
   INLINE_MARK_TAG_PATTERN,
   isInlineFontSizePt
@@ -101,13 +109,30 @@ export function spaceGlue(style: FontStyle): GlueItem {
 // Cost of breaking after an explicit hyphen.
 export const EXHYPHEN_PENALTY = 50;
 
-// Underline geometry: the rule hangs three rule-thicknesses below the content's
-// ink depth, so links with descenders get a lower rule. `offset` is the distance
-// from baseline to the rule's top edge in bp. The DOM editor and print layer use
-// this same calculation.
+// Underline geometry: the rule hangs three rule-thicknesses below the FACE's
+// descender reach, not below the typed glyphs. A per-text depth made the rule
+// jump between two links in one paragraph, and it disagreed between the DOM
+// painter (which measures a merged style span) and the PDF emitter (which
+// measures each engine run), so one underline could step mid-link on paper but
+// not on screen. `offset` is the distance from baseline to the rule's top edge
+// in bp. The DOM editor, print layer, and PDF share this calculation.
 const UNDERLINE_THICKNESS = 0.3985; // calibrated rule thickness in bp
-export function underlineRule(text: string, style: FontStyle): { offset: number; thickness: number } {
-  return { offset: inkExtent(text, style).depth + 3 * UNDERLINE_THICKNESS, thickness: UNDERLINE_THICKNESS };
+const UNDERLINE_DESCENDERS = "gjpqy";
+export function underlineRule(style: FontStyle): { offset: number; thickness: number } {
+  return {
+    offset: inkExtent(UNDERLINE_DESCENDERS, style).depth + 3 * UNDERLINE_THICKNESS,
+    thickness: UNDERLINE_THICKNESS
+  };
+}
+
+// The face's own vertical box in bp above and below the baseline. Unlike
+// inkExtent this ignores which glyphs a run holds, so a row's box depends only
+// on the fonts and sizes on it. Vertical placement uses this instead of typed
+// ink wherever a word processor would keep spacing stable: pressing a key must
+// never move the line because the new letter is taller or deeper than the old.
+export function faceExtent(style: FontStyle): { height: number; depth: number } {
+  const m = fontFace(style.family, style.face).metrics;
+  return { height: (m.ascent / 1000) * style.size, depth: (-m.descent / 1000) * style.size };
 }
 
 // Ink extents in bp above and below the baseline for strut-less rows.
@@ -122,6 +147,48 @@ export function inkExtent(text: string, style: FontStyle): { height: number; dep
     if (b[0] < minY) minY = b[0];
   }
   return { height: (maxY / 1000) * style.size, depth: (-minY / 1000) * style.size };
+}
+
+// One continuous underline rule on a line. Engine runs are WORD boxes, so a
+// renderer that draws a rule per run leaves every interior space bare — the PDF
+// used to break an underlined phrase into one rule per word while the editor,
+// which paints merged style spans, showed a single rule. Word processors draw
+// through interior spaces, so both renderers group runs here instead. A change of
+// face, size, or link target ends the span, because the rule's depth changes
+// with it.
+export type UnderlineSpan = { x: number; width: number; style: FontStyle };
+
+export function underlineSpans(runs: readonly GlyphRun[]): UnderlineSpan[] {
+  const spans: UnderlineSpan[] = [];
+  let open: { x: number; end: number; style: FontStyle; href?: string } | null = null;
+  const close = () => {
+    if (open && open.end > open.x) spans.push({ x: open.x, width: open.end - open.x, style: open.style });
+    open = null;
+  };
+  for (const run of runs) {
+    if (!run.href && !run.underline) {
+      close();
+      continue;
+    }
+    const gap = open ? run.x - open.end : 0;
+    const joinable =
+      open !== null &&
+      open.href === run.href &&
+      open.style.family === run.style.family &&
+      open.style.face === run.style.face &&
+      open.style.size === run.style.size &&
+      open.style.tracking === run.style.tracking &&
+      // Only a real interword gap joins. Anything wider is layout, not a space.
+      gap >= -0.05 &&
+      gap <= spaceWidth(run.style) * 1.75;
+    if (joinable && open) open.end = run.x + run.width;
+    else {
+      close();
+      open = { x: run.x, end: run.x + run.width, style: run.style, href: run.href };
+    }
+  }
+  close();
+  return spans;
 }
 
 // ---- Paragraph tokenization ----

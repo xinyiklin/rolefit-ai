@@ -119,8 +119,8 @@ interface. Its rarity identifies action and state rather than decoration.
 
 **Display Font:** System UI sans, with platform-native fallbacks
 **Body Font:** System UI sans, with platform-native fallbacks
-**Document Fonts:** Latin Modern, Source Serif 4, or Source Sans 3 inside the
-resume only
+**Document Fonts:** Latin Modern, Source Serif 4, Source Sans 3, Tinos, Arimo,
+or Carlito inside the resume only
 
 **Character:** Application chrome is compact, native, and immediately legible.
 The resume uses one of three restrained, bundled typesetting families, creating
@@ -142,7 +142,10 @@ product branding or allow an unmeasured local system font into the page.
 
 ### Document Type Controls
 
-- **Selected family:** Latin Modern, Source Serif 4, or Source Sans 3.
+- **Selected family:** Latin Modern, Source Serif 4, Source Sans 3, or one of
+  the metric-compatible trio Tinos, Arimo, and Carlito. Each menu row previews in
+  its own face, and the three compatible fonts show the proprietary family whose
+  metrics they match beside the name.
 - **Selected size:** A compact Docs-style minus / centered editable value / plus
   control without a separate disclosure icon. Clicking the value opens a narrow,
   centered common-preset menu; custom 6–48 pt values are stored to 0.1 pt, and

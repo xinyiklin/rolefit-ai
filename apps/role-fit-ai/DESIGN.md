@@ -135,9 +135,10 @@ shimmer, decorative motion, and nested card-in-card containers. Status is
 stated quietly (a small dot beside a word), never shouted (filled pills,
 banners, badges everywhere).
 
-Layout is structural and predictable: masthead menus (Sessions, Resume, Job,
-AI, Options) plus the Polish action on top, full-width tabbed studio below, and
-document-specific review/export rails. Breakpoints (1280/1180/1080/900/820/760
+Layout is structural and predictable: masthead menus (Sessions, Job, AI,
+Options) plus the global Apply action, full-width tabbed studio below, matched
+resume and cover-letter document action bars, and document-specific review
+rails. Breakpoints (1280/1180/1080/900/820/760
 px) collapse structure; they never fluidly rescale type. Desktop ~1440px is
 the primary canvas; content wraps rather than clips below it.
 
@@ -323,8 +324,8 @@ interactive control shares the same focus treatment: 2px Forest Ink outline,
   secondary, 28px ghost), 120–160ms transitions, 1px translateY on press.
 - **Primary:** Forest Ink fill, paper text, `--accent-deep` border, inset
   highlight plus a faint accent glow; hover deepens to `--accent-deep`. One
-  per view (Polish in the masthead; compact `.is-compact` variant in title
-  rows).
+  per document view (Polish in the resume action bar, Tailor in the matching
+  cover-letter position; compact `.is-compact` variant in title rows).
 - **Secondary:** raised sheet (`--card-elev`) with `--hairline-strong`
   border; hover tints toward the accent (`--accent-soft` fill,
   `--accent-deep` text).
@@ -432,7 +433,11 @@ sheets; Applications = view surface + inspector. The rail is a single sheet
 (`--card`, hairline, rest shadow);
 the main column sits directly on the desk. Below ~1080px the rail drops
 under the content. New pages reuse this skeleton rather than inventing a
-new arrangement.
+new arrangement. Resume and Cover letter share the same two-row editor chrome:
+the first row is the document action bar, and the second is the formatting
+toolbar. File menus reuse one anchored action-menu component; document-specific
+content stays with its owning workflow. Resume Header and Section controls sit
+immediately before Spacing in the formatting row.
 
 ### Register Grouping
 
@@ -475,7 +480,7 @@ The table reads as a logbook register, not a CRM grid.
   wrapper.
 - **Don't** use `border-left`/`border-right` thicker than 1px as a colored
   accent stripe, gradient text, or glassmorphism.
-- **Don't** reshape the masthead-inputs + tabbed-studio workflow; changes
+- **Don't** reshape the compact masthead + tabbed-studio workflow; changes
   refine it, never restructure it.
 - **Don't** introduce global toast/banner/loading frameworks, new fonts, new
   hues, or pure black/white.

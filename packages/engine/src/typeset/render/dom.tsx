@@ -22,7 +22,7 @@
 // shrunk lines keep exact engine geometry. Each line is a block element, so
 // copied text gets line breaks.
 
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import {
   DEFAULT_DOCUMENT_FONT_FAMILY,
@@ -35,8 +35,14 @@ import type { FaceName } from "../metrics.gen.ts";
 import { fieldKey, type FieldSrc, type GlyphRun } from "../types.ts";
 import { PAGE_HEIGHT_BP, PAGE_WIDTH_BP } from "../blocks.ts";
 import type { DocumentStyle } from "../../lib/documentStyle.ts";
-import { layoutCoverLetter, layoutResume, type LayoutDocument, type LayoutPage } from "../layout.ts";
-import { spaceWidth, underlineRule } from "../measure.ts";
+import {
+  layoutCoverLetter,
+  layoutResume,
+  lineSeparators,
+  type LayoutDocument,
+  type LayoutPage
+} from "../layout.ts";
+import { spaceWidth, underlineRule, underlineSpans } from "../measure.ts";
 import type { TypesetSchema } from "../schema.ts";
 
 function cssFontShorthand(family: DocumentFontFamily, face: FaceName, sizePx: number): string {
@@ -253,13 +259,16 @@ type RuleBox = (yAbs: number, thickness: number, lineTop: number) => { top: stri
 // length zero.
 export const EMPTY_EDITABLE_PLACEHOLDER = "\uFEFF";
 
+
 function PageLines({
   page,
+  separators,
   unit,
   ruleBox,
   highlightFieldKey
 }: {
   page: LayoutPage;
+  separators: readonly string[];
   unit: Unit;
   ruleBox: RuleBox;
   highlightFieldKey?: string | null;
@@ -314,53 +323,20 @@ function PageLines({
                 wordSpacing: seg.wordSpacing ? unit(seg.wordSpacing) : undefined,
                 color: "#000"
               };
-              if (seg.href || seg.underline) {
-                // Links and explicit underlines use an engine-painted rule with
-                // the same device-pixel snapping as section rules. It hangs
-                // below the ink instead of relying on browser text-decoration.
-                const ul = underlineRule(seg.text.trimEnd(), {
-                  family: seg.family,
-                  face: seg.face,
-                  size: seg.size,
-                  tracking: seg.tracking
-                });
+              if (seg.href) {
                 return (
-                  <Fragment key={si}>
-                    {seg.href ? (
-                      <a
-                        href={seg.href}
-                        target="_blank"
-                        rel="noreferrer"
-                        data-tsdf={key}
-                        data-tsde={seg.text ? undefined : "1"}
-                        className={highlighted ? "tsd-run--highlighted" : undefined}
-                        style={{ ...style, color: "#000", textDecoration: "none" }}
-                      >
-                        {seg.text || EMPTY_EDITABLE_PLACEHOLDER}
-                      </a>
-                    ) : (
-                      <span
-                        data-tsdf={key}
-                        data-tsde={seg.text ? undefined : "1"}
-                        data-tsdm={seg.marker ? "1" : undefined}
-                        className={highlighted ? "tsd-run--highlighted" : undefined}
-                        style={style}
-                      >
-                        {seg.text || EMPTY_EDITABLE_PLACEHOLDER}
-                      </span>
-                    )}
-                    <div
-                      aria-hidden="true"
-                      style={{
-                        position: "absolute",
-                        left: unit(seg.x),
-                        width: unit(seg.end - seg.x),
-                        ...ruleBox(line.baseline + ul.offset, ul.thickness, lineTop),
-                        background: "#000",
-                        pointerEvents: "none"
-                      }}
-                    />
-                  </Fragment>
+                  <a
+                    key={si}
+                    href={seg.href}
+                    target="_blank"
+                    rel="noreferrer"
+                    data-tsdf={key}
+                    data-tsde={seg.text ? undefined : "1"}
+                    className={highlighted ? "tsd-run--highlighted" : undefined}
+                    style={{ ...style, color: "#000", textDecoration: "none" }}
+                  >
+                    {seg.text || EMPTY_EDITABLE_PLACEHOLDER}
+                  </a>
                 );
               }
               return (
@@ -374,6 +350,32 @@ function PageLines({
                 >
                   {seg.text || EMPTY_EDITABLE_PLACEHOLDER}
                 </span>
+              );
+            })}
+            {separators[li] ? (
+              <span data-tsds="1" contentEditable={false} style={{ whiteSpace: "pre" }}>
+                {separators[li]}
+              </span>
+            ) : null}
+            {/* Links and explicit underlines use an engine-painted rule with the
+                same device-pixel snapping as section rules, grouped by the shared
+                span owner so it runs through interior spaces and never steps
+                mid-phrase. Browser text-decoration is not involved. */}
+            {underlineSpans(line.runs).map((span, ui) => {
+              const ul = underlineRule(span.style);
+              return (
+                <div
+                  key={`u${ui}`}
+                  aria-hidden="true"
+                  style={{
+                    position: "absolute",
+                    left: unit(span.x),
+                    width: unit(span.width),
+                    ...ruleBox(line.baseline + ul.offset, ul.thickness, lineTop),
+                    background: "#000",
+                    pointerEvents: "none"
+                  }}
+                />
               );
             })}
             {line.rule ? (
@@ -463,6 +465,8 @@ export function TypesetDomPages({
     onDoc?.(next);
   }, [loadedFamily, family, schema, docStyle, onPageCount, onDoc, documentKind]);
 
+  const separators = useMemo(() => (doc ? lineSeparators(doc.pages) : []), [doc]);
+
   const unit = useMemo<Unit>(
     () => (variant === "print" ? (bp) => `${+bp.toFixed(3)}pt` : (bp) => `${+(bp * zoom).toFixed(3)}px`),
     [variant, zoom]
@@ -525,7 +529,13 @@ export function TypesetDomPages({
           aria-label={`${documentKind === "cover-letter" ? "Cover letter" : "Resume"} page ${i + 1}`}
           style={{ position: "relative", overflow: "hidden", width: unit(PAGE_WIDTH_BP), height: unit(PAGE_HEIGHT_BP) }}
         >
-          <PageLines page={page} unit={unit} ruleBox={ruleBox} highlightFieldKey={highlightFieldKey} />
+          <PageLines
+            page={page}
+            separators={separators[i] ?? []}
+            unit={unit}
+            ruleBox={ruleBox}
+            highlightFieldKey={highlightFieldKey}
+          />
         </div>
       ))}
     </div>

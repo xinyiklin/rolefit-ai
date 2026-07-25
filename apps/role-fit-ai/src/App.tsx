@@ -1,4 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { FolderOpen, LayoutTemplate, Save, Sparkles, X } from "lucide-react";
 
 import {
   analyzeResumeText,
@@ -8,6 +9,8 @@ import {
 import { useDebouncedValue } from "./hooks/useDebouncedValue";
 import { useDocStyle } from "@typeset/editor/hooks/useDocStyle.ts";
 import { FormattingToolbar } from "@typeset/editor/components/toolbar/FormattingToolbar.tsx";
+import { DocumentStructureControls } from "@typeset/editor/components/toolbar/DocumentStructureControls.tsx";
+import { ToolbarButton } from "@typeset/editor/components/toolbar/ToolbarButton.tsx";
 import {
   type InlineFormatState,
   type TypesetEditorHandle
@@ -72,6 +75,8 @@ import { AiWorkflowProgress, TaskProgress } from "./sections/AiWorkflowProgress"
 import type { AiWorkflowStage } from "./lib/aiWorkflow";
 import { SessionsMenu } from "./sections/SessionsRail";
 import { ResumeMenu } from "./sections/ResumeMenu";
+import { DocumentActionMenu } from "./sections/document/DocumentActionMenu";
+import { ResumeSaveMenu } from "./sections/document/ResumeSaveMenu";
 import { StudioPane } from "./sections/StudioPane";
 import { ExportMenu } from "./sections/ExportRail";
 import { ApplyDownloadDialog } from "./sections/ApplyDownloadDialog";
@@ -126,6 +131,7 @@ const EMPTY_INLINE_FORMAT: InlineFormatState = {
   linkHref: null,
   linkText: "",
   linkAutomatic: false,
+  linkTextEditable: true,
   canLink: false,
   canClearFormatting: false
 };
@@ -895,7 +901,7 @@ function App() {
     isSavingBaseResume,
     isWorkspaceBootstrapping,
     loadWorkspace,
-    removeBaseResume,
+    loadStarterTemplate,
     restoreBaseResume,
     saveCurrentAsBaseResume,
     loadBaseResumeVersion,
@@ -1155,37 +1161,9 @@ function App() {
         onApply={handleApply}
         applyDisabled={!jobUrl.trim() && !jobDescription.trim()}
         applyHint="Add a job link or description (Job menu) before applying."
-        onPolish={handlePolish}
-        canPolish={canPolish}
-        isPolishing={isPolishing}
-        polishHint={polishGateHint}
-        polishStatus={polishStatus}
-        polishStatusIsError={polishStatusIsError}
-        onDismissPolishStatus={() => setPolishStatus("")}
         applyStatus={applyStatus}
         applyStatusIsError={applyStatusIsError}
         onDismissApplyStatus={() => setApplyStatus("")}
-        resumeControl={
-          <ResumeMenu
-            baseResumeName={baseResumeName}
-            baseResumeOptions={baseResumeOptions}
-            baseResumeHistory={baseResumeHistory}
-            workspaceStatus={workspaceStatus}
-            isSavingBaseResume={isSavingBaseResume}
-            isWorkspaceBootstrapping={isWorkspaceBootstrapping}
-            fileName={fileName}
-            fileError={fileError}
-            fileStatus={fileStatus}
-            resumeText={currentResumeText || resumeText}
-            resumeReady={resumeReady}
-            onSaveCurrentAsBase={saveCurrentAsBaseResume}
-            onLoadBaseResumeVersion={loadBaseResumeVersion}
-            onRemoveBaseResume={removeBaseResume}
-            onRestoreBaseResume={restoreBaseResume}
-            onLoadWorkspace={loadWorkspace}
-            onFileUpload={handleFileUpload}
-          />
-        }
         jobControl={
           <JobMenu
             jobDescription={jobDescription}
@@ -1362,6 +1340,7 @@ function App() {
                       href: inlineFormat.linkHref,
                       text: inlineFormat.linkText,
                       automatic: inlineFormat.linkAutomatic,
+                      textEditable: inlineFormat.linkTextEditable,
                       onApply: ({ text, href }) => typesetEditorRef.current?.applyLink(text, href),
                       onRemove: () => typesetEditorRef.current?.removeLink(),
                       disabled: !inlineFormat.canLink,
@@ -1405,6 +1384,20 @@ function App() {
                       : current);
                   }}
                   onFitZoom={fitResumePage}
+                  documentStructureTools={(
+                    <DocumentStructureControls
+                      name={editedResume?.name ?? ""}
+                      contact={editedResume?.contact ?? []}
+                      contactDivider={docStyle.style.contactDivider}
+                      disabled={!editedResume}
+                      onSetName={resumeEditorActions.setName}
+                      onUpdateContact={resumeEditorActions.updateContact}
+                      onAddContact={resumeEditorActions.addContact}
+                      onRemoveContact={resumeEditorActions.removeContact}
+                      onContactDividerChange={(value) => docStyle.set("contactDivider", value)}
+                      onAddSection={(type, position) => typesetEditorRef.current?.addSection(type, position)}
+                    />
+                  )}
                 />
               )}
               editorRef={typesetEditorRef}
@@ -1418,18 +1411,93 @@ function App() {
               onDismissAutosaveDraft={handleDismissAutosaveDraft}
               reviewStale={reviewStale}
               jobTarget={materialsJobTarget}
-              exportControl={
-                <ExportMenu
-                  canExport={canExportResume}
-                  defaultFileBaseName={resumeDownloadName("pdf").replace(/\.pdf$/i, "")}
-                  isRenderingPdf={isRenderingPdf}
-                  status={exportStatus}
-                  statusIsError={exportStatusIsError}
-                  onDismissStatus={() => setExportStatus("")}
-                  onDownloadPdf={handleDownloadPdf}
-                  onDownloadResume={handleDownloadResume}
-                />
-              }
+              documentActions={(
+                <>
+                  <ToolbarButton
+                    label="Starter"
+                    tooltip="Open the bundled resume starter"
+                    icon={<LayoutTemplate size={16} />}
+                    showLabel
+                    disabled={isWorkspaceBootstrapping || isSavingBaseResume}
+                    onClick={() => void loadStarterTemplate()}
+                  />
+                  <DocumentActionMenu
+                    label="Open"
+                    tooltip="Open a resume"
+                    icon={<FolderOpen size={16} />}
+                  >
+                    <ResumeMenu
+                      baseResumeName={baseResumeName}
+                      baseResumeOptions={baseResumeOptions}
+                      baseResumeHistory={baseResumeHistory}
+                      workspaceStatus={workspaceStatus}
+                      isSavingBaseResume={isSavingBaseResume}
+                      isWorkspaceBootstrapping={isWorkspaceBootstrapping}
+                      fileName={fileName}
+                      fileError={fileError}
+                      fileStatus={fileStatus}
+                      onLoadBaseResumeVersion={loadBaseResumeVersion}
+                      onRestoreBaseResume={restoreBaseResume}
+                      onFileUpload={handleFileUpload}
+                    />
+                  </DocumentActionMenu>
+                  <DocumentActionMenu
+                    label="Save"
+                    tooltip="Save the resume"
+                    icon={<Save size={16} />}
+                    disabled={!editedResume}
+                  >
+                    <ResumeSaveMenu
+                      activeBaseLabel={
+                        baseResumeOptions.find((option) => option.fileName === baseResumeName)?.label
+                          || baseResumeName
+                          || "current base"
+                      }
+                      activeBaseName={baseResumeName}
+                      baseResumeNames={baseResumeOptions.map((option) => option.fileName)}
+                      canSave={Boolean(editedResume)}
+                      isSaving={isSavingBaseResume}
+                      status={workspaceStatus}
+                      onSaveCurrent={() => saveCurrentAsBaseResume()}
+                      onSaveAsVariant={(name) => saveCurrentAsBaseResume(name)}
+                      onDownloadResume={() => handleDownloadResume()}
+                    />
+                  </DocumentActionMenu>
+                  <ExportMenu
+                    canExport={canExportResume}
+                    defaultFileBaseName={resumeDownloadName("pdf").replace(/\.pdf$/i, "")}
+                    isRenderingPdf={isRenderingPdf}
+                    status={exportStatus}
+                    statusIsError={exportStatusIsError}
+                    onDismissStatus={() => setExportStatus("")}
+                    onDownloadPdf={handleDownloadPdf}
+                  />
+                  <span className="document-primary-action">
+                    <ToolbarButton
+                      label={isPolishing ? "Working…" : "Polish"}
+                      tooltip={canPolish ? "Tailor and review this resume" : polishGateHint}
+                      icon={<Sparkles size={16} />}
+                      showLabel
+                      tone="primary"
+                      disabled={!canPolish || isPolishing}
+                      aria-busy={isPolishing}
+                      onClick={() => void handlePolish()}
+                    />
+                    {polishStatus ? (
+                      <span
+                        className={`document-action-feedback${polishStatusIsError ? " document-action-feedback--error" : ""}`}
+                        role={polishStatusIsError ? "alert" : "status"}
+                        aria-live={polishStatusIsError ? "assertive" : "polite"}
+                      >
+                        <span>{polishStatus}</span>
+                        <button type="button" onClick={() => setPolishStatus("")} aria-label="Dismiss Polish message">
+                          <X size={13} aria-hidden="true" />
+                        </button>
+                      </span>
+                    ) : null}
+                  </span>
+                </>
+              )}
             />
           ) : null}
 

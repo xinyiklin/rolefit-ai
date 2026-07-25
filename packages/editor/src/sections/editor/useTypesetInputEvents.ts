@@ -34,6 +34,31 @@ export type QueuedIntent =
   | { kind: "clearFormatting" }
   | { kind: "history"; direction: "undo" | "redo" };
 
+// The intent a beforeinput carries, independent of which selection it lands on.
+// Both deferral paths use it: the commit gate queues it for replay after the
+// repaint, and a selection crossing fields hands it to the host's batched edit.
+// Insert-shaped types collapse to one `insert` because every one of them
+// replaces the selection with text.
+function intentForInput(event: InputEvent, type: string): QueuedIntent | null {
+  if (type === "insertParagraph") return { kind: "splitBullet" };
+  if (type === "deleteContentBackward") return { kind: "deleteBack" };
+  if (type === "deleteContentForward") return { kind: "deleteFwd" };
+  if (type.startsWith("delete")) return { kind: "deleteSelection" };
+  if (type === "historyUndo") return { kind: "history", direction: "undo" };
+  if (type === "historyRedo") return { kind: "history", direction: "redo" };
+  if (type === "formatBold") return { kind: "toggleMark", mark: "bold" };
+  if (type === "formatItalic") return { kind: "toggleMark", mark: "italic" };
+  if (type === "formatUnderline") return { kind: "toggleMark", mark: "underline" };
+  if (["insertText", "insertReplacementText", "insertLineBreak", "insertFromPaste"].includes(type)) {
+    const text =
+      type === "insertLineBreak"
+        ? "\n"
+        : event.data ?? event.dataTransfer?.getData("text/plain") ?? "";
+    return text ? { kind: "insert", text } : null;
+  }
+  return null;
+}
+
 type TypesetInputEventsArgs = {
   hostRef: MutableRefObject<HTMLDivElement | null>;
   nonce: number;
@@ -48,6 +73,13 @@ type TypesetInputEventsArgs = {
   commitToggleMark: (selection: TypesetSelection, mark: "bold" | "italic" | "underline") => void;
   commitClearFormatting: (selection: TypesetSelection) => void;
   commitHistory: (direction: "undo" | "redo") => void;
+  // A selection crossing field boundaries (Select All, a drag across
+  // paragraphs) has no single mapped field. The host applies these as one
+  // batched edit and returns true when it consumed the intent.
+  commitCrossFieldIntent: (intent: QueuedIntent) => boolean;
+  // Plain text for a selection crossing fields, read from the model; null when
+  // the selection does not cross fields.
+  crossFieldPlainText: () => string | null;
   onZoomShortcut: (command: -1 | 0 | 1) => void;
   setNonce: Dispatch<SetStateAction<number>>;
 };
@@ -66,6 +98,8 @@ export function useTypesetInputEvents({
   commitToggleMark,
   commitClearFormatting,
   commitHistory,
+  commitCrossFieldIntent,
+  crossFieldPlainText,
   onZoomShortcut,
   setNonce
 }: TypesetInputEventsArgs) {
@@ -130,28 +164,8 @@ export function useTypesetInputEvents({
       event.preventDefault();
       goalXRef.current = null;
       if (commitPendingRef.current) {
-        const inserted =
-          type === "insertLineBreak"
-            ? "\n"
-            : event.data ?? event.dataTransfer?.getData("text/plain") ?? "";
-        if (["insertText", "insertReplacementText", "insertLineBreak", "insertFromPaste"].includes(type) && inserted) {
-          queueIntent({ kind: "insert", text: inserted });
-        } else if (type === "insertParagraph") {
-          queueIntent({ kind: "splitBullet" });
-        } else if (type === "deleteContentBackward") {
-          queueIntent({ kind: "deleteBack" });
-        } else if (type === "deleteContentForward") {
-          queueIntent({ kind: "deleteFwd" });
-        } else if (type.startsWith("delete")) {
-          queueIntent({ kind: "deleteSelection" });
-        } else if (type === "formatBold" || type === "formatItalic" || type === "formatUnderline") {
-          queueIntent({
-            kind: "toggleMark",
-            mark: type === "formatBold" ? "bold" : type === "formatItalic" ? "italic" : "underline"
-          });
-        } else if (type === "historyUndo" || type === "historyRedo") {
-          queueIntent({ kind: "history", direction: type === "historyUndo" ? "undo" : "redo" });
-        }
+        const queued = intentForInput(event, type);
+        if (queued) queueIntent(queued);
         return;
       }
 
@@ -159,7 +173,11 @@ export function useTypesetInputEvents({
       if (type === "historyRedo") return commitHistory("redo");
 
       const selection = readSelection();
-      if (!selection) return;
+      if (!selection) {
+        const intent = intentForInput(event, type);
+        if (intent) commitCrossFieldIntent(intent);
+        return;
+      }
 
       if (type === "insertParagraph") {
         onEnter(selection);
@@ -299,9 +317,8 @@ export function useTypesetInputEvents({
           return;
         }
         const selection = readSelection();
-        if (selection) {
-          commitToggleMark(selection, mark);
-        }
+        if (selection) commitToggleMark(selection, mark);
+        else commitCrossFieldIntent({ kind: "toggleMark", mark });
         return;
       }
       if (mod && !event.altKey && !event.shiftKey && event.key === "\\") {
@@ -399,7 +416,13 @@ export function useTypesetInputEvents({
         return;
       }
       const selection = readSelection();
-      if (!selection) return;
+      if (!selection) {
+        // Spanning several fields: drop the selection, then land the payload in
+        // the collapsed caret that leaves behind.
+        if (fragment) commitCrossFieldIntent({ kind: "paste", fragment });
+        else if (text) commitCrossFieldIntent({ kind: "insert", text });
+        return;
+      }
       if (fragment) commitPaste(selection, selection.dStart, selection.dEnd, fragment);
       else commitReplace(selection, selection.dStart, selection.dEnd, text);
     };
@@ -434,23 +457,37 @@ export function useTypesetInputEvents({
         writeSelectionToClipboard(event, selection);
         return;
       }
-      // A native multi-field selection can cross an empty editable run. Keep
-      // its formatting, but never leak the DOM-only caret placeholder.
+      // A selection crossing fields has no single mapped range. Its plain text
+      // comes from the MODEL, one covered slice per field joined by newlines, so
+      // a copy never depends on how the painter split lines into spans and never
+      // leaks the DOM-only caret placeholder.
       const nativeSelection = window.getSelection();
       if (!event.clipboardData || !nativeSelection?.rangeCount) return;
+      const plain = crossFieldPlainText();
+      if (plain === null) return;
       const wrapper = document.createElement("div");
       wrapper.append(nativeSelection.getRangeAt(0).cloneContents());
-      const emptySpans = wrapper.querySelectorAll<HTMLElement>("[data-tsde]");
-      if (!emptySpans.length) return;
-      emptySpans.forEach((span) => { span.textContent = ""; });
+      wrapper.querySelectorAll<HTMLElement>("[data-tsde]").forEach((span) => {
+        span.textContent = "";
+      });
       event.preventDefault();
-      event.clipboardData.setData("text/plain", wrapper.textContent ?? "");
+      event.clipboardData.setData("text/plain", plain);
       event.clipboardData.setData("text/html", wrapper.innerHTML);
     };
 
     const onCut = (event: ClipboardEvent) => {
       const selection = readSelection();
-      if (!selection || selection.dStart === selection.dEnd) return;
+      if (!selection || selection.dStart === selection.dEnd) {
+        // Spanning several fields: write the model's text, then delete the whole
+        // selection as one edit. Without this, cut was a silent no-op.
+        const plain = crossFieldPlainText();
+        if (plain === null || !event.clipboardData) return;
+        event.preventDefault();
+        event.clipboardData.setData("text/plain", plain);
+        if (commitPendingRef.current) queueIntent({ kind: "deleteSelection" });
+        else commitCrossFieldIntent({ kind: "deleteSelection" });
+        return;
+      }
       event.preventDefault();
       writeSelectionToClipboard(event, selection);
       if (commitPendingRef.current) {

@@ -21,6 +21,18 @@ import { toTypesetSchema } from "@typeset/engine/typeset/schema.ts";
 
 const STYLE_STORAGE_KEY = "rolefit:coverLetterStyle.v1";
 const TITLE_STORAGE_KEY = "rolefit:coverLetterTitle.v1";
+const COVER_LETTER_STARTER = `[Date]
+
+Dear [Hiring manager],
+
+[Name the role and explain, in your own words, why it interests you.]
+
+[Connect one or two verified experiences from your resume to the role. Focus on what you did and the outcome.]
+
+[Explain why this company or team is a fit, using details from the job posting.]
+
+Sincerely,
+[Your name]`;
 
 function loadStyle(): DocStyle {
   try {
@@ -195,10 +207,27 @@ export function useCoverLetterEditor() {
     const data = parseCoverLetterText("");
     editor.seedData(data);
     editor.markClean();
-    setPersistedFingerprint(null);
+    // A blank letter is the same document the page opens with, so New must not
+    // leave it permanently "unsaved" — that warned on close and prompted to
+    // replace an empty letter that had nothing to lose.
+    setPersistedFingerprint(
+      serializeCoverLetterFile(data, documentStyleToCoverLetterStyle(styleRef.current))
+    );
     setSourceBeforeTailor("");
     setDocumentTitle("Cover letter");
     setStatus("Blank cover letter ready.");
+  }, [editor.markClean, editor.seedData]);
+
+  const startStarter = useCallback(() => {
+    const data = parseCoverLetterText(COVER_LETTER_STARTER);
+    editor.seedData(data);
+    editor.markClean();
+    setPersistedFingerprint(
+      serializeCoverLetterFile(data, documentStyleToCoverLetterStyle(styleRef.current))
+    );
+    setSourceBeforeTailor("");
+    setDocumentTitle("Cover letter");
+    setStatus("Starter opened. Replace every bracketed prompt with your own facts before tailoring.");
   }, [editor.markClean, editor.seedData]);
 
   const openFile = useCallback(
@@ -258,6 +287,17 @@ export function useCoverLetterEditor() {
     setStatus(`Saved ${fileName}.`);
   }, [documentTitle, editor.editedResume, editor.markClean]);
 
+  const saveTextFile = useCallback(() => {
+    const source = text.trim();
+    if (!source) {
+      setStatus("Write or open a cover letter before saving a text copy.");
+      return;
+    }
+    const fileName = coverLetterFileName(documentTitle).replace(/\.cover$/i, ".txt");
+    downloadBlob(new Blob([`${source}\n`], { type: "text/plain;charset=utf-8" }), fileName);
+    setStatus(`Saved ${fileName}.`);
+  }, [documentTitle, text]);
+
   const downloadPdf = useCallback(async () => {
     if (!editor.editedResume) {
       setStatus("Open or start a cover letter before exporting.");
@@ -304,7 +344,9 @@ export function useCoverLetterEditor() {
     isRenderingPdf,
     openFile,
     startBlank,
+    startStarter,
     saveCoverFile,
+    saveTextFile,
     downloadPdf,
     loadSourceText,
     applyExternalText,

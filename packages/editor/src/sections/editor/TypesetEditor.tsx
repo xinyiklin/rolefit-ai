@@ -24,7 +24,7 @@ import {
 
 import type { ResumeData, ResumeSectionType } from "@typeset/engine/lib/resumeData.ts";
 import { automaticLinkHref } from "@typeset/engine/lib/links.ts";
-import type { ResumeEditorActions } from "../../hooks/useResumeEditor";
+import type { FieldEdit, ResumeEditorActions } from "../../hooks/useResumeEditor";
 import {
   STYLE_FIELD_MARK_DEFAULTS,
   styleFieldDefaultSizePt,
@@ -50,10 +50,17 @@ import { toTypesetSchema } from "@typeset/engine/typeset/schema.ts";
 import { anchorsFromDoc, type BlockAnchor, type TypesetAnchors } from "./typesetStructure.ts";
 import { TypesetStructureOverlay } from "./TypesetStructureOverlay.tsx";
 import { TypesetContextMenu } from "./TypesetContextMenu.tsx";
+import { TypesetLinkCard } from "./TypesetLinkCard.tsx";
+import { useTypesetLinkCard } from "./useTypesetLinkCard.ts";
 import { useTypesetStructure, type PendingCaret } from "./useTypesetStructure.ts";
 import { useTypesetOverlayAnchors } from "./useTypesetOverlayAnchors.ts";
 import { useTypesetContextMenu } from "./useTypesetContextMenu.tsx";
-import { caretToDisplayIndex, displayIndexToCaret, keyOfNode } from "./domSelection.ts";
+import {
+  caretToDisplayIndex,
+  displayIndexToCaret,
+  keyOfNode,
+  selectDisplayRange
+} from "./domSelection.ts";
 import {
   applyInlineFragment,
   applyEdit,
@@ -70,7 +77,7 @@ import {
   autoLinkWordAt,
   expandToLinkRun,
   trailingLinkWordAt,
-  suppressAutoLink,
+  suppressedAutoLinkValue,
   clearFormatting,
   hasClearableFormatting,
   toggleMark,
@@ -79,7 +86,14 @@ import {
   type TypingFormat,
   type TypesetSelection
 } from "./inlineTextEditing.ts";
-import { commitField, historyCaretTarget, valueForField, withFieldValue } from "./resumeFieldAdapter.ts";
+import { commitField, fieldEditFor, historyCaretTarget, valueForField, withFieldValue } from "./resumeFieldAdapter.ts";
+import {
+  formattableRanges,
+  markStateAcross,
+  readFieldRanges,
+  uniformAcross,
+  type FieldRange
+} from "./multiFieldSelection.ts";
 import { useTypesetInputEvents, type QueuedIntent } from "./useTypesetInputEvents.ts";
 import {
   clearSelectionHighlights,
@@ -115,6 +129,10 @@ function sameCaretGeometry(
   );
 }
 
+// Where a URL word's auto-link is being visually deferred while it is typed.
+// A range, never the field's text: see suppressedAutoLinkValue.
+type AutoLinkSuppression = { key: string; dStart: number; dEnd: number };
+
 export type InlineFormatState = {
   canFormat: boolean;
   bold: boolean;
@@ -128,6 +146,8 @@ export type InlineFormatState = {
   linkHref: string | null;
   linkText: string;
   linkAutomatic: boolean;
+  // A cross-field selection links in place, so its text is not rewritable here.
+  linkTextEditable: boolean;
   canLink: boolean;
   canClearFormatting: boolean;
 };
@@ -144,6 +164,21 @@ export type TypesetEditorHandle = {
   removeLink: () => void;
   clearFormatting: () => void;
   addSection: (type: ResumeSectionType, position: "top" | "bottom") => void;
+};
+
+// The command surface shared by the toolbar (through the imperative handle) and
+// the right-click menu. Both drive the SAME functions, so no command can behave
+// one way from a toolbar button and another from a menu item — the class of bug
+// that left the menu editing one field at a time after the toolbar had learned
+// to span them. The clipboard members are not on the public handle because no
+// host needs them; the menu is the only caller.
+export type TypesetEditorCommands = TypesetEditorHandle & {
+  // Model-derived text of the current selection: one covered slice per field,
+  // joined by newlines. The DOM's own `toString` loses paragraph breaks and can
+  // leak the empty-paragraph caret placeholder.
+  selectionText: () => string;
+  deleteSelection: () => void;
+  insertText: (text: string) => void;
 };
 
 // The geometry/anchor context a host overlay positions itself from — the same
@@ -192,9 +227,32 @@ const EMPTY_FORMAT_STATE: InlineFormatState = {
   linkHref: null,
   linkText: "",
   linkAutomatic: false,
+  linkTextEditable: true,
   canLink: false,
   canClearFormatting: false
 };
+
+// The toolbar re-renders from this state on every selection change, so publish a
+// new object only when something a control shows actually changed.
+function sameFormatState(a: InlineFormatState, b: InlineFormatState): boolean {
+  return (
+    a.canFormat === b.canFormat &&
+    a.bold === b.bold &&
+    a.italic === b.italic &&
+    a.underline === b.underline &&
+    a.fontFamily === b.fontFamily &&
+    a.fontSizePt === b.fontSizePt &&
+    a.alignment === b.alignment &&
+    a.alignmentScope === b.alignmentScope &&
+    a.entryField === b.entryField &&
+    a.linkHref === b.linkHref &&
+    a.linkText === b.linkText &&
+    a.linkAutomatic === b.linkAutomatic &&
+    a.linkTextEditable === b.linkTextEditable &&
+    a.canLink === b.canLink &&
+    a.canClearFormatting === b.canClearFormatting
+  );
+}
 
 function alignmentScopeForField(src: FieldSrc): AlignmentScope | null {
   if (src.kind === "name" || src.kind === "contact") return "header";
@@ -276,20 +334,50 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
   onPageCount
 }, ref) {
   // Defer visual auto-linking: while a URL word is being typed (its trailing edge
-  // is the caret), suppress ITS auto-link in the render only — { field key, the
-  // field value with that word wrapped in <nolink> }. The stored data is intact,
-  // so the display map used for caret math still sees the real value.
-  const [autoLinkSuppress, setAutoLinkSuppress] = useState<{ key: string; value: string } | null>(null);
-  const autoLinkSuppressRef = useRef<{ key: string; value: string } | null>(null);
+  // is the caret), suppress ITS auto-link in the render only. The stored data is
+  // intact, so the display map used for caret math still sees the real value.
+  //
+  // State is the field key plus the DISPLAY RANGE to suppress — never a copy of
+  // the field's text. A cached value is stale for the repaint that follows the
+  // next keystroke, and the caret restore then clamps to the end of that shorter
+  // text; see suppressedAutoLinkValue for the full failure it caused.
+  const [autoLinkSuppress, setAutoLinkSuppress] = useState<AutoLinkSuppression | null>(null);
+  const autoLinkSuppressRef = useRef<AutoLinkSuppression | null>(null);
   const renderData = useMemo(() => {
     if (!autoLinkSuppress) return data;
     const src = parseFieldKey(autoLinkSuppress.key);
-    return src ? withFieldValue(data, src, autoLinkSuppress.value) : data;
-  }, [data, autoLinkSuppress]);
+    if (!src) return data;
+    // Derived from the CURRENT value on every render, so the paint can never lag
+    // the data. buildDisplayMap is called directly rather than through mapFor,
+    // which is declared below this memo.
+    const value = valueForField(data, src);
+    const suppressed = suppressedAutoLinkValue(
+      buildDisplayMap(value, {
+        uppercase: src.kind === "heading" && docStyle.style.headingCase === "uppercase",
+        preserveWhitespace: true
+      }),
+      autoLinkSuppress
+    );
+    return suppressed === null ? data : withFieldValue(data, src, suppressed);
+  }, [autoLinkSuppress, data, docStyle.style.headingCase]);
   const schema = useMemo(() => toTypesetSchema(renderData), [renderData]);
   const zoom = docStyle.style.zoom * SCREEN_SCALE;
   const geo = useMemo(() => pageGeometry(docStyle.style), [docStyle.style]);
   const hostRef = useRef<HTMLDivElement | null>(null);
+  // The positioned wrapper every overlay is placed inside. Declared up here
+  // because the link card hook needs it; the structure overlay below shares it.
+  const wrapRef = useRef<HTMLDivElement | null>(null);
+  // The link card's target, resolved from the SELECTION (never from hover) by the
+  // selection-change effect below. Destructured because each member is a stable
+  // callback while the returned object is not: depending on the object would make
+  // the reposition effect re-run on every render.
+  const {
+    target: linkCardTarget,
+    sync: syncLinkCard,
+    hide: hideLinkCard,
+    dismiss: dismissLinkCard,
+    reposition: repositionLinkCardTo
+  } = useTypesetLinkCard({ hostRef, wrapRef });
   const dataRef = useRef(data);
   dataRef.current = data;
   // Read through refs so commitHistory's identity stays stable (see its note).
@@ -347,7 +435,6 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
 
   // ---- structure overlay: anchors, hover, and drag controls ----
 
-  const wrapRef = useRef<HTMLDivElement | null>(null);
   const anchors = useMemo(() => (layoutDoc ? anchorsFromDoc(layoutDoc) : null), [layoutDoc]);
   const { pageOrigins, hovered, activeAnchor, updateHover, clearHover } = useTypesetOverlayAnchors({
     wrapRef,
@@ -391,16 +478,50 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
     [dragRef, updateHover]
   );
 
+  const resolveFieldRange = useCallback(
+    (src: FieldSrc) => {
+      const value = valueForField(dataRef.current, src);
+      return { value, map: mapFor(src, value) };
+    },
+    [mapFor]
+  );
+
+  const readRanges = useCallback(
+    (maxFields?: number): FieldRange[] | null => {
+      const host = hostRef.current;
+      return host ? readFieldRanges(host, resolveFieldRange, maxFields) : null;
+    },
+    [resolveFieldRange]
+  );
+
   // Current selection in display coordinates; null when it isn't a clean
   // single-field selection (caret may roam anywhere, edits may not).
+  //
+  // Endpoint resolution alone is engine-dependent: Gecko puts a select-all
+  // range's boundaries on the editing HOST with child offsets, so neither
+  // endpoint names a field even when the selection covers exactly one. Falling
+  // back to the covered-field resolution keeps a one-field selection a
+  // single-field selection in every browser — otherwise commands that need one
+  // run of text (links) would be unavailable in one engine and not the other.
   const readSelection = useCallback((): TypesetSelection | null => {
     const host = hostRef.current;
     const sel = window.getSelection();
     if (!host || !sel || sel.rangeCount === 0) return null;
     const anchor = keyOfNode(sel.anchorNode);
     const focus = keyOfNode(sel.focusNode);
-    if (!anchor || !focus || anchor.key !== focus.key) return null;
-    if (!host.contains(anchor.el)) return null;
+    if (!anchor || !focus || anchor.key !== focus.key || !host.contains(anchor.el)) {
+      const ranges = readRanges(1);
+      if (!ranges || ranges.length !== 1) return null;
+      const [only] = ranges;
+      return {
+        src: only.src,
+        key: only.key,
+        map: only.map,
+        value: only.value,
+        dStart: only.dStart,
+        dEnd: only.dEnd
+      };
+    }
     const src = parseFieldKey(anchor.key);
     if (!src) return null;
     const value = valueForField(dataRef.current, src);
@@ -409,7 +530,7 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
     const f = caretToDisplayIndex(host, anchor.key, map.display, sel.focusNode!, sel.focusOffset);
     if (a === null || f === null) return null;
     return { src, key: anchor.key, map, value, dStart: Math.min(a, f), dEnd: Math.max(a, f) };
-  }, [mapFor]);
+  }, [mapFor, readRanges]);
 
   // The toolbar sits outside the contenteditable page. Preserve the last valid
   // single-field range so a toolbar click can apply formatting without asking
@@ -417,6 +538,7 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
   // overlay. Toolbar formatting buttons prevent mousedown focus transfer, which
   // keeps the selected text visible while the command commits.
   const lastRangeRef = useRef<TypesetSelection | null>(null);
+  const lastRangesRef = useRef<FieldRange[] | null>(null);
   const typingFormatRef = useRef<TypingFormat | null>(null);
   const typingTargetRef = useRef<string | null>(null);
   // Focusing the page fires `focusin` BEFORE the saved range is re-applied, and
@@ -491,12 +613,16 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
         selection && selection.dStart === selection.dEnd
           ? trailingLinkWordAt(selection.map, selection.dStart)
           : null;
-      const nextSuppress =
+      const nextSuppress: AutoLinkSuppression | null =
         selection && suppressWord
-          ? { key: selection.key, value: suppressAutoLink(selection.map, suppressWord.start, suppressWord.end) }
+          ? { key: selection.key, dStart: suppressWord.start, dEnd: suppressWord.end }
           : null;
       const prevSuppress = autoLinkSuppressRef.current;
-      if ((prevSuppress?.key ?? null) !== (nextSuppress?.key ?? null) || (prevSuppress?.value ?? null) !== (nextSuppress?.value ?? null)) {
+      if (
+        (prevSuppress?.key ?? null) !== (nextSuppress?.key ?? null) ||
+        (prevSuppress?.dStart ?? -1) !== (nextSuppress?.dStart ?? -1) ||
+        (prevSuppress?.dEnd ?? -1) !== (nextSuppress?.dEnd ?? -1)
+      ) {
         // Toggling the word's <a>/<span> relayouts and drops the DOM caret, so
         // restore it (by value index) after the repaint, like a commit does.
         if (selection) {
@@ -509,15 +635,72 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
         autoLinkSuppressRef.current = nextSuppress;
         setAutoLinkSuppress(nextSuppress);
       }
+      // The link card follows the selection. The field whose URL is still being
+      // typed is excluded: the stored value has no <nolink> yet, so the half-typed
+      // word would otherwise resolve as a link and pop the card up mid-word.
+      syncLinkCard(selection, nextSuppress?.key ?? null);
       const hasRange = Boolean(selection && selection.dEnd > selection.dStart);
-      if (selection) lastRangeRef.current = selection;
+      if (selection) {
+        lastRangeRef.current = selection;
+        lastRangesRef.current = null;
+      }
       // Editable toolbar controls (notably the custom font-size input) must
       // temporarily take focus without discarding the page range they target.
       // Outside the toolbar, a lost editor selection really does clear it.
       else if (!selection && editorToolbarOwnsFocus()) return;
       else if (!selection) {
+        // No single mapped field, but the selection may legitimately cover
+        // several — Select All, or a drag across paragraphs. Report the state of
+        // the whole covered range so the toolbar stays live instead of greying
+        // out on the largest selection a user can make.
+        const ranges = readRanges();
+        lastRangesRef.current = ranges;
         lastRangeRef.current = null;
         setCaretOverlay(null);
+        if (ranges) {
+          typingFormatRef.current = null;
+          typingTargetRef.current = null;
+          const covered = formattableRanges(ranges);
+          const scopes = new Set(ranges.map((range) => alignmentScopeForField(range.src)));
+          const crossFieldState: InlineFormatState = {
+            canFormat: true,
+            bold: markStateAcross(covered, "bold"),
+            italic: markStateAcross(covered, "italic"),
+            underline: markStateAcross(covered, "underline"),
+            fontFamily: uniformAcross(covered, (char) => char.fontFamily, () => docStyle.style.fontFamily),
+            fontSizePt: uniformAcross(
+              covered,
+              (char) => char.fontSizePt,
+              (range) => defaultFontSizeForField(range.src, docStyle.style)
+            ),
+            alignment: uniformAcross(
+              covered,
+              (char) => char.alignment,
+              (range) => defaultAlignmentForField(range.src, docStyle.style)
+            ),
+            alignmentScope: scopes.size === 1 ? [...scopes][0] : null,
+            entryField: null,
+            // A selection spanning paragraphs links every covered range in place
+            // (Word does the same). It has no single existing destination to
+            // report, and one string cannot rewrite multi-paragraph text.
+            linkHref: uniformAcross(covered, (char) => char.linkHref, () => null),
+            // Informational only, and a single-line input strips newlines, so the
+            // covered text reads as one run rather than words jammed together.
+            linkText: covered
+              .map((range) => range.map.display.slice(range.dStart, range.dEnd))
+              .join(" "),
+            linkAutomatic: false,
+            linkTextEditable: false,
+            canLink: covered.length > 0,
+            canClearFormatting: covered.some((range) =>
+              hasClearableFormatting(range.map, range.dStart, range.dEnd)
+            )
+          };
+          setInlineFormatState((current) =>
+            sameFormatState(current, crossFieldState) ? current : crossFieldState
+          );
+          return;
+        }
       }
 
       const chars = selection
@@ -609,29 +792,13 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
         // selection is within one, else the selected text, else empty (insert).
         linkText: detectedLinkText,
         linkAutomatic: Boolean(detectedHref && !linkRunIsExplicit),
+        linkTextEditable: true,
         // Enabled wherever a clean single-field caret exists — a range or link
         // edits in place, a bare caret inserts new linked text (Google-Docs-style).
         canLink: Boolean(selection),
         canClearFormatting: Boolean(selection && hasRange && hasClearableFormatting(selection.map, selection.dStart, selection.dEnd))
       };
-      setInlineFormatState((current) =>
-        current.canFormat === next.canFormat &&
-        current.bold === next.bold &&
-        current.italic === next.italic &&
-        current.underline === next.underline &&
-        current.fontFamily === next.fontFamily &&
-        current.fontSizePt === next.fontSizePt &&
-        current.alignment === next.alignment &&
-        current.alignmentScope === next.alignmentScope &&
-        current.entryField === next.entryField &&
-        current.linkHref === next.linkHref &&
-        current.linkText === next.linkText &&
-        current.linkAutomatic === next.linkAutomatic &&
-        current.canLink === next.canLink &&
-        current.canClearFormatting === next.canClearFormatting
-          ? current
-          : next
-      );
+      setInlineFormatState((current) => (sameFormatState(current, next) ? current : next));
       syncCaretOverlay(selection, {
         fontFamily: next.fontFamily ?? docStyle.style.fontFamily,
         fontSizePt: next.fontSizePt ?? fallbackSize,
@@ -648,7 +815,7 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
       document.removeEventListener("focusin", sync);
       if (host) clearSelectionHighlights(host);
     };
-  }, [docStyle.style, docVersion, nonce, readSelection, syncCaretOverlay]);
+  }, [docStyle.style, docVersion, nonce, readRanges, readSelection, syncCaretOverlay]);
 
   useLayoutEffect(() => {
     const selection =
@@ -836,17 +1003,271 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
     [mapFor]
   );
 
+  // ---- selections that cross fields ----
+  //
+  // Select All, or a drag from one paragraph into the next, covers several
+  // fields. Each still commits its own value, but the whole edit must land as
+  // ONE undo step and the selection must survive the repaint, so these go
+  // through the batched field-edit action instead of per-field commits.
+
+  const restoreRangesAfterRepaint = useCallback(
+    (ranges: FieldRange[]) => {
+      const first = ranges[0];
+      const last = ranges[ranges.length - 1];
+      pendingCaretRef.current = (fresh) => {
+        const startMap = mapFor(first.src, valueForField(fresh, first.src));
+        const endValue = valueForField(fresh, last.src);
+        const endMap = mapFor(last.src, endValue);
+        return {
+          key: first.key,
+          valueIndex: startMap.valueStart[first.dStart] ?? 0,
+          endKey: last.key,
+          valueEndIndex: endMap.valueStart[last.dEnd] ?? endValue.length
+        };
+      };
+    },
+    [mapFor]
+  );
+
+  // Small-caps headings render through a caps face with no bold/italic sibling,
+  // so a mark written there could never be painted.
+  const marksAllowedIn = useCallback(
+    (src: FieldSrc) => !(src.kind === "heading" && docStyle.style.headingCase === "smallcaps"),
+    [docStyle.style.headingCase]
+  );
+
+  const commitRangesFormatting = useCallback(
+    (ranges: FieldRange[], transform: (range: FieldRange) => string): boolean => {
+      const edits: FieldEdit[] = [];
+      for (const range of formattableRanges(ranges)) {
+        const value = transform(range);
+        if (value !== range.value) edits.push(fieldEditFor(range.src, value));
+      }
+      if (!edits.length) return false;
+      markPending();
+      actions.applyFieldEdits(edits);
+      restoreRangesAfterRepaint(ranges);
+      return true;
+    },
+    [actions, markPending, restoreRangesAfterRepaint]
+  );
+
+  // Delete (or replace) everything a cross-field selection covers.
+  //
+  // Prose paragraphs and bullet rows are list content: rows the selection
+  // emptied are removed, and when it began and ended in the same list the two
+  // remainders join into the first row — the word-processor result. A name,
+  // contact, heading, entry head, or skills slot is structure: it loses the
+  // covered text but the slot stays, because those are removed through the
+  // structure controls, not by typing. A summary section always keeps one
+  // paragraph so the document remains editable.
+  const commitRangesDelete = useCallback(
+    (ranges: FieldRange[], insert = "", fragment?: string): boolean => {
+      const listOf = (src: FieldSrc): string | null => {
+        if (src.kind !== "bullet") return null;
+        const section = dataRef.current.sections.find((item) => item.id === src.sectionId);
+        return section?.type === "summary" ? `summary:${src.sectionId}` : `bullets:${src.sectionId}:${src.entryId}`;
+      };
+      const remainderOf = (range: FieldRange, text: string) =>
+        applyEdit(range.map, range.dStart, range.dEnd, text);
+
+      const first = ranges[0];
+      const last = ranges[ranges.length - 1];
+      // A pasted fragment carries its own formatting, so it replaces the covered
+      // text in the same edit rather than after a second commit — one undo step,
+      // as a word processor gives for paste-over-selection.
+      const head =
+        fragment === undefined
+          ? remainderOf(first, insert)
+          : applyInlineFragment(
+              first.map,
+              first.dStart,
+              first.dEnd,
+              fragment,
+              first.src.kind !== "bullet"
+            );
+      const firstList = listOf(first.src);
+      const joinsTail =
+        ranges.length > 1 && firstList !== null && firstList === listOf(last.src);
+
+      // Each list keeps its FIRST covered row, so a fully selected list ends as
+      // one empty row instead of vanishing.
+      const survivorOfList = new Map<string, string>();
+      for (const range of ranges) {
+        const list = listOf(range.src);
+        if (list && !survivorOfList.has(list)) survivorOfList.set(list, range.key);
+      }
+
+      const edits: FieldEdit[] = [
+        fieldEditFor(first.src, joinsTail ? head.value + remainderOf(last, "").value : head.value)
+      ];
+      for (const range of ranges.slice(1)) {
+        const src = range.src;
+        const list = listOf(src);
+        const folded = range === last && joinsTail;
+        const remainder = folded ? "" : remainderOf(range, "").value;
+        if (
+          src.kind === "bullet" &&
+          list !== null &&
+          (folded || remainder === "") &&
+          survivorOfList.get(list) !== range.key
+        ) {
+          edits.push(
+            list.startsWith("summary:")
+              ? { kind: "removeEntry", sectionId: src.sectionId, entryId: src.entryId }
+              : {
+                  kind: "removeBullet",
+                  sectionId: src.sectionId,
+                  entryId: src.entryId,
+                  bulletId: src.bulletId
+                }
+          );
+        } else {
+          edits.push(fieldEditFor(src, remainder));
+        }
+      }
+
+      markPending();
+      actions.applyFieldEdits(edits);
+      typingFormatRef.current = null;
+      typingTargetRef.current = null;
+      const caretKey = first.key;
+      const caretSrc = first.src;
+      const caretValueIndex = head.caretValueIndex;
+      pendingCaretRef.current = (fresh) => ({
+        key: caretKey,
+        valueIndex: Math.min(caretValueIndex, valueForField(fresh, caretSrc).length)
+      });
+      return true;
+    },
+    [actions, markPending]
+  );
+
+  const applyMarkAcross = useCallback(
+    (ranges: FieldRange[], mark: "bold" | "italic" | "underline"): boolean => {
+      const markable = formattableRanges(ranges).filter((range) => marksAllowedIn(range.src));
+      if (!markable.length) return false;
+      const on = !markStateAcross(markable, mark);
+      return commitRangesFormatting(ranges, (range) =>
+        marksAllowedIn(range.src)
+          ? toggleMark(range.map, range.dStart, range.dEnd, mark, on).value
+          : range.value
+      );
+    },
+    [commitRangesFormatting, marksAllowedIn]
+  );
+
+  // The same intents the input hook builds, applied to a cross-field selection.
+  // Returns false when there is no such selection, so every caller can fall
+  // through to its single-field path unchanged.
+  const commitCrossFieldIntent = useCallback(
+    (intent: QueuedIntent): boolean => {
+      const ranges = readRanges();
+      if (!ranges) return false;
+      switch (intent.kind) {
+        case "insert":
+          return commitRangesDelete(ranges, intent.text);
+        case "deleteBack":
+        case "deleteFwd":
+        case "deleteSelection":
+          return commitRangesDelete(ranges);
+        case "paste":
+          return commitRangesDelete(ranges, "", intent.fragment);
+        case "splitBullet":
+          // Drop the selection first, then let the queue replay the split into the
+          // collapsed caret that leaves behind.
+          if (!commitRangesDelete(ranges)) return false;
+          replayQueueRef.current.push(intent);
+          return true;
+        case "toggleMark":
+          return applyMarkAcross(ranges, intent.mark);
+        case "clearFormatting":
+          return commitRangesFormatting(
+            ranges,
+            (range) => clearFormatting(range.map, range.dStart, range.dEnd).value
+          );
+        case "history":
+          return false;
+      }
+    },
+    [applyMarkAcross, commitRangesDelete, commitRangesFormatting, readRanges]
+  );
+
+  const crossFieldPlainText = useCallback((): string | null => {
+    const ranges = readRanges();
+    if (!ranges) return null;
+    return ranges
+      .map((range) => range.map.display.slice(range.dStart, range.dEnd))
+      .join("\n");
+  }, [readRanges]);
+
+  // Clipboard primitives for the right-click menu. Each tries the cross-field
+  // path first and falls back to the single-field one, exactly as the keyboard
+  // equivalents in useTypesetInputEvents do — the menu must not be a second,
+  // weaker implementation of Cut/Copy/Paste.
+  const selectionText = useCallback((): string => {
+    const cross = crossFieldPlainText();
+    if (cross !== null) return cross;
+    const selection = readSelection();
+    return selection ? selection.map.display.slice(selection.dStart, selection.dEnd) : "";
+  }, [crossFieldPlainText, readSelection]);
+
+  const deleteSelection = useCallback(() => {
+    if (commitCrossFieldIntent({ kind: "deleteSelection" })) return;
+    const selection = readSelection();
+    if (selection && selection.dEnd > selection.dStart) {
+      commitReplace(selection, selection.dStart, selection.dEnd, "");
+    }
+  }, [commitCrossFieldIntent, commitReplace, readSelection]);
+
+  const insertText = useCallback(
+    (text: string) => {
+      if (commitCrossFieldIntent({ kind: "insert", text })) return;
+      const selection = readSelection();
+      if (selection) commitReplace(selection, selection.dStart, selection.dEnd, text);
+    },
+    [commitCrossFieldIntent, commitReplace, readSelection]
+  );
+
   const commitToggleMark = useCallback(
     (sel: TypesetSelection, mark: "bold" | "italic" | "underline") => {
-      if (sel.dStart === sel.dEnd) return;
-      if (sel.src.kind === "heading" && docStyle.style.headingCase === "smallcaps") return;
+      if (sel.dStart === sel.dEnd || !marksAllowedIn(sel.src)) return;
       const { value } = toggleMark(sel.map, sel.dStart, sel.dEnd, mark);
       recordPreEditSelection(sel);
       markPending();
       commitField(actions, sel.src, value);
       restoreRangeAfterRepaint(sel, sel.dStart, sel.dEnd);
     },
-    [actions, docStyle.style.headingCase, markPending, recordPreEditSelection, restoreRangeAfterRepaint]
+    [actions, markPending, marksAllowedIn, recordPreEditSelection, restoreRangeAfterRepaint]
+  );
+
+  // Bold/italic/underline with a COLLAPSED caret arms the next-typing format
+  // instead of doing nothing, the way every word processor treats ⌘B before you
+  // start typing. Ranged selections still rewrite the marks in place. Every
+  // entry point — toolbar button, keyboard shortcut, and the browser's own
+  // formatBold/Italic/Underline beforeinput — routes through here so they cannot
+  // drift apart.
+  const applyMark = useCallback(
+    (sel: TypesetSelection, mark: "bold" | "italic" | "underline") => {
+      if (!marksAllowedIn(sel.src)) return;
+      if (sel.dEnd > sel.dStart) {
+        commitToggleMark(sel, mark);
+        return;
+      }
+      const char = sel.map.chars[Math.max(0, Math.min(sel.dStart - 1, sel.map.chars.length - 1))];
+      const base: TypingFormat = typingFormatRef.current ?? {
+        bold: char?.bold ?? false,
+        italic: char?.italic ?? false,
+        underline: char?.underline ?? false,
+        fontFamily: char?.fontFamily ?? docStyle.style.fontFamily,
+        fontSizePt: char?.fontSizePt ?? defaultFontSizeForField(sel.src, docStyle.style),
+        alignment: char?.alignment ?? defaultAlignmentForField(sel.src, docStyle.style)
+      };
+      typingFormatRef.current = { ...base, [mark]: !base[mark] };
+      typingTargetRef.current = typingTargetFor(sel);
+      setInlineFormatState((state) => ({ ...state, [mark]: !base[mark] }));
+    },
+    [commitToggleMark, docStyle.style, marksAllowedIn]
   );
 
   const commitFontFamily = useCallback(
@@ -943,35 +1364,46 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
     []
   );
 
-  useImperativeHandle(
-    ref,
+  // What a toolbar command should act on. A control that takes focus (the custom
+  // font-size input) loses the DOM selection, so fall back to the range the page
+  // last held — cross-field before single-field, or a stale single field would
+  // silently swallow an edit meant for the whole selection.
+  const commandTarget = useCallback(():
+    | { kind: "single"; selection: TypesetSelection }
+    | { kind: "cross"; ranges: FieldRange[] }
+    | null => {
+    const selection = readSelection();
+    if (selection) return { kind: "single", selection };
+    const ranges = readRanges() ?? lastRangesRef.current;
+    if (ranges) return { kind: "cross", ranges };
+    return lastRangeRef.current ? { kind: "single", selection: lastRangeRef.current } : null;
+  }, [readRanges, readSelection]);
+
+  const commands = useMemo<TypesetEditorCommands>(
     () => ({
+      selectionText,
+      deleteSelection,
+      insertText,
       undo: () => commitHistory("undo"),
       redo: () => commitHistory("redo"),
       focusSelection,
       toggleMark: (mark) => {
-        const selection = readSelection() ?? lastRangeRef.current;
-        if (!selection) return;
-        if (selection.src.kind === "heading" && docStyle.style.headingCase === "smallcaps") return;
-        if (selection.dEnd > selection.dStart) commitToggleMark(selection, mark);
-        else {
-          const char = selection.map.chars[Math.max(0, Math.min(selection.dStart - 1, selection.map.chars.length - 1))];
-          const base: TypingFormat = typingFormatRef.current ?? {
-            bold: char?.bold ?? false,
-            italic: char?.italic ?? false,
-            underline: char?.underline ?? false,
-            fontFamily: char?.fontFamily ?? docStyle.style.fontFamily,
-            fontSizePt: char?.fontSizePt ?? defaultFontSizeForField(selection.src, docStyle.style),
-            alignment: char?.alignment ?? defaultAlignmentForField(selection.src, docStyle.style)
-          };
-          typingFormatRef.current = { ...base, [mark]: !base[mark] };
-          typingTargetRef.current = typingTargetFor(selection);
-          setInlineFormatState((state) => ({ ...state, [mark]: !base[mark] }));
-        }
+        const target = commandTarget();
+        if (!target) return;
+        if (target.kind === "cross") applyMarkAcross(target.ranges, mark);
+        else applyMark(target.selection, mark);
       },
       setFontFamily: (fontFamily) => {
-        const selection = readSelection() ?? lastRangeRef.current;
-        if (!selection) return;
+        const target = commandTarget();
+        if (!target) return;
+        if (target.kind === "cross") {
+          commitRangesFormatting(
+            target.ranges,
+            (range) => setFontFamily(range.map, range.dStart, range.dEnd, fontFamily).value
+          );
+          return;
+        }
+        const selection = target.selection;
         if (selection.dEnd > selection.dStart) commitFontFamily(selection, fontFamily);
         else {
           const char = selection.map.chars[Math.max(0, Math.min(selection.dStart - 1, selection.map.chars.length - 1))];
@@ -988,8 +1420,16 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
         }
       },
       setFontSize: (fontSizePt) => {
-        const selection = readSelection() ?? lastRangeRef.current;
-        if (!selection) return;
+        const target = commandTarget();
+        if (!target) return;
+        if (target.kind === "cross") {
+          commitRangesFormatting(
+            target.ranges,
+            (range) => setFontSize(range.map, range.dStart, range.dEnd, fontSizePt).value
+          );
+          return;
+        }
+        const selection = target.selection;
         if (selection.dEnd > selection.dStart) commitFontSize(selection, fontSizePt);
         else {
           const char = selection.map.chars[Math.max(0, Math.min(selection.dStart - 1, selection.map.chars.length - 1))];
@@ -1006,12 +1446,27 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
         }
       },
       setAlignment: (alignment) => {
-        const selection = readSelection() ?? lastRangeRef.current;
-        if (selection) commitAlignment(selection, alignment);
+        const target = commandTarget();
+        if (!target) return;
+        // Alignment is a paragraph property, so it applies to every covered
+        // field rather than to the selected characters.
+        if (target.kind === "cross") {
+          commitRangesFormatting(target.ranges, (range) => setAlignment(range.map, alignment).value);
+        } else commitAlignment(target.selection, alignment);
       },
       applyLink: (text, href) => {
-        const selection = readSelection() ?? lastRangeRef.current;
-        if (!selection) return;
+        const target = commandTarget();
+        if (!target) return;
+        // Spanning several fields: link each covered range where it stands. The
+        // requested display text is ignored — it could only describe one field.
+        if (target.kind === "cross") {
+          commitRangesFormatting(
+            target.ranges,
+            (range) => setLink(range.map, range.dStart, range.dEnd, href).value
+          );
+          return;
+        }
+        const selection = target.selection;
         const singleLine = selection.src.kind !== "bullet";
         const display = (singleLine ? text.replace(/\s*\n+\s*/g, " ") : text).replace(/\r/g, "");
         // Target the selection, else the link run under a collapsed caret, else
@@ -1035,21 +1490,57 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
         }
       },
       removeLink: () => {
-        const selection = readSelection() ?? lastRangeRef.current;
-        if (!selection) return;
-        const target = resolveLinkTarget(selection);
-        if (target) commitLink(selection, target.dStart, target.dEnd, null);
+        const command = commandTarget();
+        if (!command) return;
+        if (command.kind === "cross") {
+          commitRangesFormatting(
+            command.ranges,
+            (range) => removeLink(range.map, range.dStart, range.dEnd).value
+          );
+          return;
+        }
+        const target = resolveLinkTarget(command.selection);
+        if (target) commitLink(command.selection, target.dStart, target.dEnd, null);
       },
       clearFormatting: () => {
-        const selection = readSelection() ?? lastRangeRef.current;
-        if (selection && selection.dEnd > selection.dStart) commitClearFormatting(selection);
+        const target = commandTarget();
+        if (!target) return;
+        if (target.kind === "cross") {
+          commitRangesFormatting(
+            target.ranges,
+            (range) => clearFormatting(range.map, range.dStart, range.dEnd).value
+          );
+        } else if (target.selection.dEnd > target.selection.dStart) {
+          commitClearFormatting(target.selection);
+        }
       },
       // Add a section from the toolbar and jump the caret to its heading, so the
       // new section is scrolled into view rather than left off-screen.
       addSection: (type, position) => addSection(type, position)
     }),
-    [addSection, commitAlignment, commitClearFormatting, commitFontFamily, commitFontSize, commitHistory, commitLink, commitReplaceWithLink, commitToggleMark, docStyle.style, focusSelection, readSelection, resolveLinkTarget]
+    [
+      addSection,
+      applyMark,
+      applyMarkAcross,
+      commandTarget,
+      commitAlignment,
+      commitClearFormatting,
+      commitFontFamily,
+      commitFontSize,
+      commitHistory,
+      commitLink,
+      commitRangesFormatting,
+      commitReplaceWithLink,
+      deleteSelection,
+      docStyle.style,
+      focusSelection,
+      insertText,
+      resolveLinkTarget,
+      selectionText
+    ]
   );
+
+  useImperativeHandle(ref, () => commands, [commands]);
 
   const commitSplitBullet = useCallback(
     (sel: TypesetSelection) => {
@@ -1093,10 +1584,21 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
   // below with the caret in it. Enter in an empty bullet/skills row is ignored so
   // it never piles up blank rows, and Enter elsewhere (titles, headings) is a
   // no-op — those are not lists.
+  //
+  // PROSE paragraphs (summary sections, which is how a cover letter is modelled)
+  // are not a list, so they follow the word processor instead: Enter always
+  // starts a new paragraph, including from an empty one. Swallowing it there left
+  // the author unable to open a blank line between blocks.
   const commitEnter = useCallback(
     (sel: TypesetSelection) => {
       if (sel.src.kind === "bullet") {
-        if (stripInlineMarks(valueForField(dataRef.current, sel.src)).trim()) commitSplitBullet(sel);
+        const src = sel.src;
+        const isProse =
+          dataRef.current.sections.find((section) => section.id === src.sectionId)?.type ===
+          "summary";
+        if (isProse || stripInlineMarks(valueForField(dataRef.current, src)).trim()) {
+          commitSplitBullet(sel);
+        }
         return;
       }
       if (sel.src.kind === "skillsRow") {
@@ -1188,8 +1690,15 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
             const range = document.createRange();
             range.setStart(pos.node, pos.offset);
             if (target.valueEndIndex !== undefined) {
-              const dEnd = displayIndexForValueIndex(map, Math.min(target.valueEndIndex, value.length));
-              const end = displayIndexToCaret(host, target.key, map.display, dEnd);
+              const endKey = target.endKey ?? target.key;
+              const endSrc = target.endKey ? parseFieldKey(target.endKey) : src;
+              const endValue = endSrc ? valueForField(dataRef.current, endSrc) : value;
+              const endMap = endSrc ? mapFor(endSrc, endValue) : map;
+              const dEnd = displayIndexForValueIndex(
+                endMap,
+                Math.min(target.valueEndIndex, endValue.length)
+              );
+              const end = displayIndexToCaret(host, endKey, endMap.display, dEnd);
               if (end) range.setEnd(end.node, end.offset);
               else range.collapse(true);
             } else {
@@ -1214,7 +1723,9 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
     if (intent) {
       const sel = readSelection();
       if (!sel) {
-        replayQueueRef.current = [];
+        // The queued intent may have been aimed at a selection crossing fields.
+        // Drop the queue only when nothing can apply it.
+        if (!commitCrossFieldIntent(intent)) replayQueueRef.current = [];
         return;
       }
       if (intent.kind === "insert") {
@@ -1234,7 +1745,7 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
       } else if (intent.kind === "splitBullet") {
         commitEnter(sel);
       } else if (intent.kind === "toggleMark") {
-        commitToggleMark(sel, intent.mark);
+        applyMark(sel, intent.mark);
       } else if (intent.kind === "clearFormatting") {
         if (sel.dStart !== sel.dEnd) commitClearFormatting(sel);
       } else {
@@ -1246,9 +1757,10 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
     commitEnter,
     commitHistory,
     commitMergeBullet,
+    applyMark,
+    commitCrossFieldIntent,
     commitPaste,
     commitReplace,
-    commitToggleMark,
     docVersion,
     mapFor,
     nonce,
@@ -1277,7 +1789,9 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
     commitPaste,
     onEnter: commitEnter,
     commitMergeBullet,
-    commitToggleMark,
+    commitToggleMark: applyMark,
+    commitCrossFieldIntent,
+    crossFieldPlainText,
     commitClearFormatting,
     commitHistory,
     onZoomShortcut: handleZoomShortcut,
@@ -1297,8 +1811,9 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
   const { contextMenu, menuItems, openContextMenu, closeContextMenu } = useTypesetContextMenu({
     data,
     hostRef,
-    mapFor,
-    readSelection,
+    structureEditing,
+    commands,
+    inlineFormat: inlineFormatState,
     addSectionRelative,
     removeSectionAt,
     addEntryRelative,
@@ -1306,15 +1821,46 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
     addBulletToEntry,
     addBulletRelative,
     removeBulletAt,
-    commitReplace,
-    commitToggleMark,
-    commitClearFormatting,
-    commitLink,
-    commitHistory,
     canUndo,
     canRedo,
     onRequestLinkEditor
   });
+
+  // The card follows the SELECTION (see useTypesetLinkCard): it is synced from the
+  // selection-change effect above, repositioned when the page moves under it, and
+  // suppressed while the right-click menu owns the screen.
+  useEffect(() => {
+    if (contextMenu) hideLinkCard();
+  }, [contextMenu, hideLinkCard]);
+
+  // Scroll and repaint move the painted text; re-measure rather than drop the card.
+  const repositionLinkCard = useCallback(() => {
+    repositionLinkCardTo((key) => {
+      const src = parseFieldKey(key);
+      if (!src) return null;
+      return mapFor(src, valueForField(dataRef.current, src)).display;
+    });
+  }, [mapFor, repositionLinkCardTo]);
+  // Only a repaint can move the link relative to the wrapper; scrolling cannot,
+  // because both the card and the text it annotates live inside the same
+  // scrolling box. So there is no scroll listener to get wrong.
+  useEffect(() => {
+    repositionLinkCard();
+  }, [docVersion, repositionLinkCard]);
+
+  // A card action runs the editor's ordinary link command over the card's own run,
+  // selecting it first so the command has something to act on and the change is
+  // visible where it happened.
+  const onCardLink = useCallback(
+    (run: () => void) => () => {
+      const card = linkCardTarget;
+      const host = hostRef.current;
+      if (!card || !host) return;
+      const display = mapFor(card.src, valueForField(dataRef.current, card.src)).display;
+      if (selectDisplayRange(host, card.key, display, card.dStart, card.dEnd)) run();
+    },
+    [linkCardTarget, mapFor]
+  );
 
   return (
     <div
@@ -1322,7 +1868,7 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
       ref={wrapRef}
       onMouseMove={onMouseMove}
       onMouseLeave={clearHover}
-      onContextMenu={structureEditing ? openContextMenu : undefined}
+      onContextMenu={openContextMenu}
     >
       <TypesetDomPages
         key={nonce}
@@ -1365,12 +1911,23 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
       {overlay
         ? overlay({ data, anchors, anchor: overlayAnchor, pageOrigins, zoom, geometry: geo })
         : null}
-      {structureEditing && contextMenu ? (
+      {contextMenu ? (
         <TypesetContextMenu
           x={contextMenu.x}
           y={contextMenu.y}
           items={menuItems}
           onClose={closeContextMenu}
+        />
+      ) : null}
+      {linkCardTarget ? (
+        <TypesetLinkCard
+          href={linkCardTarget.href}
+          anchorRect={linkCardTarget.anchorRect}
+          onOpen={() => window.open(linkCardTarget.href, "_blank", "noopener,noreferrer")}
+          onCopy={() => void navigator.clipboard?.writeText(linkCardTarget.href).catch(() => {})}
+          onEdit={onCardLink(() => onRequestLinkEditor?.())}
+          onRemove={onCardLink(() => commands.removeLink())}
+          onDismiss={dismissLinkCard}
         />
       ) : null}
     </div>

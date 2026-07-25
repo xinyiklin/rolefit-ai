@@ -59,10 +59,11 @@ behavior-slice commit; do not record personal resume/job content, credentials,
 or provider responses.
 
 When changing a product version, update the canonical package/app version and
-user-facing version references together. Before reporting a release or deploy,
-verify the matching tag and release/publish workflow, then retain the workflow
-or live-environment receipt. A pushed version change is not evidence that its
-release has deployed.
+user-facing version references together. During a requested push, merge, or
+deploy of that versioned change, trigger the matching required tag and
+release/publish workflow, wait for successful completion, and retain the
+workflow or live-environment receipt. A versioned change is incomplete until
+that release/deploy completion is confirmed.
 
 ## Minimum PR receipt
 

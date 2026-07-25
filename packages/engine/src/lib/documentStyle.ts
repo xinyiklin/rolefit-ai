@@ -5,10 +5,11 @@ import {
   type PageMargins
 } from "./pageMargins.ts";
 import type { FieldAlignment } from "./inlineMarksText.ts";
+import { coerceFontFamily, FONT_FAMILIES, type FontFamily } from "./fontFamilies.ts";
 
 export type { PageMargins } from "./pageMargins.ts";
 
-export type FontFamily = "latin-modern" | "source-serif" | "source-sans";
+export type { FontFamily } from "./fontFamilies.ts";
 export type HeadingCase = "smallcaps" | "uppercase" | "none";
 export type HeaderAlign = "left" | "center" | "right";
 // The document-level name for the one alignment union (see FieldAlignment).
@@ -73,11 +74,17 @@ const headerSectionGapToPt = (value: number) =>
 const normalGapToPt = (value: number) => value * 11 * TEX_PT_TO_DOCUMENT_PT;
 const smallGapToPt = (value: number) => value * 10 * TEX_PT_TO_DOCUMENT_PT;
 
-export const FONT_FAMILY_OPTIONS = [
-  { value: "latin-modern", label: "Latin Modern" },
-  { value: "source-serif", label: "Source Serif 4" },
-  { value: "source-sans", label: "Source Sans 3" }
-] as const satisfies readonly { value: FontFamily; label: string }[];
+// Menu/validation view of lib/fontFamilies.ts. Derived, not declared, so the
+// codec enum and the toolbar can never disagree about which families exist.
+export const FONT_FAMILY_OPTIONS: readonly {
+  value: FontFamily;
+  label: string;
+  metricsOf?: string;
+}[] = FONT_FAMILIES.map((family) => ({
+  value: family.id,
+  label: family.label,
+  ...("metricsOf" in family ? { metricsOf: family.metricsOf } : {})
+}));
 
 // One source of truth for UI constraints, local-state coercion, and strict file
 // validation. Point-gap bounds preserve the calibrated editor ranges.
@@ -329,10 +336,7 @@ export function coerceDocStyle(raw: unknown): DocStyle {
   return {
     zoom: clampStyleNumber("zoom", r.zoom, DOC_STYLE_DEFAULTS.zoom),
     spellCheck: typeof r.spellCheck === "boolean" ? r.spellCheck : DOC_STYLE_DEFAULTS.spellCheck,
-    fontFamily:
-      r.fontFamily === "source-serif" || r.fontFamily === "source-sans"
-        ? r.fontFamily
-        : DOC_STYLE_DEFAULTS.fontFamily,
+    fontFamily: coerceFontFamily(r.fontFamily, DOC_STYLE_DEFAULTS.fontFamily),
     baseFontSizePt: clampStyleNumber("baseFontSizePt", r.baseFontSizePt, DOC_STYLE_DEFAULTS.baseFontSizePt),
     letterSpacingPt: clampStyleNumber("letterSpacingPt", r.letterSpacingPt, DOC_STYLE_DEFAULTS.letterSpacingPt),
     lineHeight: clampStyleNumber("lineHeight", r.lineHeight, DOC_STYLE_DEFAULTS.lineHeight),

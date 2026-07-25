@@ -85,10 +85,12 @@ disappears into the task. Quiet competence, not salesmanship.
 1. Honesty is the product: never imply the AI can safely supply missing facts;
    ground proposals in provided evidence and surface gaps or placeholders for
    human review instead of hiding them.
-2. Preserve the navbar-inputs + full-width studio workflow: masthead menus
-   (Resume source, Job target, AI, Options) plus the Polish action on top;
-   tabbed outputs below (Resume with a post-polish review rail, Cover letter
-   with its plain editor and deterministic checklist, Materials, the
+2. Preserve the compact masthead + full-width studio workflow: masthead menus
+   (Sessions, Job target, AI, Options) plus the global Apply action; tabbed
+   outputs below (Resume with a consistent Starter/Open/Save/PDF/Polish
+   document action bar and a post-polish review rail, Cover letter with the
+   matching Starter/Open/Save/PDF/Tailor action bar, its plain editor and
+   deterministic checklist, Materials, the
    Applications tracker, Analytics) and the header Fit
    popover. The engine-painted page remains the sole editor, the review rail
    navigates back to exact fields, and the editor itself remains the live

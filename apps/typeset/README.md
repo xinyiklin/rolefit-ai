@@ -24,9 +24,10 @@ static assets, and your resume content never leaves your device.
 - **Deterministic layout** — the editor, browser print layer, and dedicated PDF
   emitter share the same structured input, bundled fonts, committed metrics,
   page geometry, and pagination.
-- **Print-aware typography** — choose Latin Modern, Source Serif 4, or Source
-  Sans 3; open common sizes from the centered editable value, enter a custom
-  6–48 pt value, or step it with adjacent 1 pt minus/plus controls.
+- **Print-aware typography** — choose Latin Modern, Source Serif 4, Source
+  Sans 3, or the metric-compatible Tinos (Times New Roman), Arimo (Arial), and
+  Carlito (Calibri); open common sizes from the centered editable value, enter a
+  custom 6–48 pt value, or step it with adjacent 1 pt minus/plus controls.
 - **Flexible page margins** — start from Narrow, Normal, or Wide, or enter
   independent top, right, bottom, and left margins from 0.25–1.5 inches.
 - **Focused spacing controls** — choose a common or custom line height
@@ -205,10 +206,17 @@ consumed by the client-side PDF emitter; both generators support non-destructive
 verification through `npm run fonts:check --workspace packages/engine`. Both
 anchor their paths to the package root, so they run from any working directory.
 After a font-pipeline change, regenerate both formats and run the font-parity
-eval. Source Serif 4 and Source Sans 3 use the SIL Open Font License stored in
-`fonts/SourceSerif4-OFL.txt` and `fonts/SourceSans3-OFL.txt`. Latin Modern's
-GUST Font License is stored in
+eval. Source Serif 4, Source Sans 3, Arimo, and Carlito use the SIL Open Font
+License stored in `fonts/SourceSerif4-OFL.txt`, `fonts/SourceSans3-OFL.txt`,
+`fonts/Arimo-OFL.txt`, and `fonts/Carlito-OFL.txt`. Tinos is Apache 2.0
+(`fonts/Tinos-LICENSE.txt`). Latin Modern's GUST Font License is stored in
 `fonts/LatinModern-GUST-FONT-LICENSE.txt`.
+
+Tinos, Arimo, and Carlito are redistributable fonts that keep the per-character
+advance widths of Times New Roman, Arial, and Calibri, so a document holds its
+line and page count when it is opened in a word processor that only has the
+original. The originals are not bundled and are not redistributable; the menu
+names each font by its real name and shows its metric twin alongside.
 
 ## Privacy model
 

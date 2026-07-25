@@ -62,6 +62,8 @@ export type InlineFormattingControls = {
   link?: {
     href: string | null;
     text: string;
+    // False when the selection spans several fields; see LinkControl.
+    textEditable?: boolean;
     automatic: boolean;
     onApply: (payload: { text: string; href: string }) => void;
     onRemove: () => void;
@@ -93,6 +95,9 @@ export type FormattingToolbarProps = {
   onStyleFieldSizeChange?: (field: StyleTextField, sizePt: number) => void;
   onResetStyleFormatting?: () => void;
   onFitZoom?: () => void;
+  // Embedded hosts may place document-structure controls with the style menus.
+  // The standalone TopToolbar keeps them in DocumentToolbar.
+  documentStructureTools?: ReactNode;
   // A host with a different document grammar may replace the resume-specific
   // style menus while retaining the shared history/zoom/selection toolbar.
   // `undefined` preserves the standard resume controls; any supplied node is
@@ -198,6 +203,7 @@ export function FormattingToolbar({
   onStyleFieldSizeChange,
   onResetStyleFormatting,
   onFitZoom,
+  documentStructureTools,
   documentStyleTools
 }: FormattingToolbarProps) {
   const hasInlineControls = Boolean(
@@ -320,6 +326,7 @@ export function FormattingToolbar({
               <LinkControl
                 href={inlineFormatting.link.href}
                 text={inlineFormatting.link.text}
+                textEditable={inlineFormatting.link.textEditable}
                 automatic={inlineFormatting.link.automatic}
                 onApply={inlineFormatting.link.onApply}
                 onRemove={inlineFormatting.link.onRemove}
@@ -416,6 +423,7 @@ export function FormattingToolbar({
         />
 
         <div className="top-toolbar__group top-toolbar__group--style" role="group" aria-label="Document style">
+          {documentStructureTools}
           {documentStyleTools !== undefined ? documentStyleTools : (
             <>
               <SpacingStylePopover docStyle={docStyle} disabled={formattingDisabled} />

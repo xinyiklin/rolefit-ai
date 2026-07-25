@@ -2,14 +2,18 @@
 // serialization. Kept separate from the JSX renderer so parsers and offline
 // reducer evals can run under Node's native TypeScript loader.
 
+import { FONT_FAMILY_ALTERNATION, type FontFamily } from "./fontFamilies.ts";
+
 // The single inline-mark tag grammar. Consumers that need their own regex
 // flags or statefulness build an instance from this source (measure.ts's
 // segment splitter); the one capture group is the <link=…> destination.
 // The editor's anchored multi-capture scanner in
 // sections/editor/inlineTextEditing.ts is a deliberate second automaton over
-// the same grammar — keep the two tag inventories in sync.
+// the same grammar — keep the two tag inventories in sync. Both take the font
+// alternation from lib/fontFamilies.ts so a new family cannot parse in one and
+// not the other.
 export const INLINE_MARK_TAG_PATTERN =
-  "<\\/?(?:b|i|u|nolink)>|<link=([^>\\s]+)>|<\\/link>|<font=(?:latin-modern|source-serif|source-sans)>|<\\/font>|<size=\\d+(?:\\.\\d+)?>|<\\/size>|<align=(?:left|center|right|justify)>|<\\/align>";
+  `<\\/?(?:b|i|u|nolink)>|<link=([^>\\s]+)>|<\\/link>|<font=(?:${FONT_FAMILY_ALTERNATION})>|<\\/font>|<size=\\d+(?:\\.\\d+)?>|<\\/size>|<align=(?:left|center|right|justify)>|<\\/align>`;
 
 export const INLINE_FONT_SIZE_MIN_PT = 1;
 export const INLINE_FONT_SIZE_MAX_PT = 200;
@@ -112,7 +116,7 @@ export type InlineOverrideKind = "fontFamily" | "fontSize";
 
 export function clearInlineOverride(text: string, kind: InlineOverrideKind): string {
   return kind === "fontFamily"
-    ? text.replace(/<font=(?:latin-modern|source-serif|source-sans)>|<\/font>/gi, "")
+    ? text.replace(new RegExp(`<font=(?:${FONT_FAMILY_ALTERNATION})>|<\\/font>`, "gi"), "")
     : text.replace(/<size=\d+(?:\.\d+)?>|<\/size>/gi, "");
 }
 
@@ -120,11 +124,11 @@ export function clearInlineOverride(text: string, kind: InlineOverrideKind): str
 // Kept parallel to the emphasis (FieldMark) and alignment truth helpers: it
 // reports the EFFECTIVE family (resolving to the document font when nothing
 // overrides), or null when the field mixes families.
-export type FieldFontFamily = "latin-modern" | "source-serif" | "source-sans";
+export type FieldFontFamily = FontFamily;
 // The resolved family shared by the whole field, or null when it is mixed.
 export type FieldFontState = FieldFontFamily | null;
 
-const FONT_OPEN_RE = /^<font=(latin-modern|source-serif|source-sans)>$/i;
+const FONT_OPEN_RE = new RegExp(`^<font=(${FONT_FAMILY_ALTERNATION})>$`, "i");
 const SIZE_OPEN_RE = /^<size=(\d+(?:\.\d+)?)>$/i;
 
 // The one font family covering every non-whitespace character of the field —

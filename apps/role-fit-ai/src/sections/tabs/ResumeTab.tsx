@@ -46,7 +46,7 @@ type ResumeTabProps = {
   onRequestLinkEditor: () => void;
   tailorModes: Record<string, TailorMode>;
   onSetTailorMode: (sectionId: string, mode: TailorMode) => void;
-  exportControl?: ReactNode;
+  documentActions?: ReactNode;
   onAddHonestContext?: (keyword: string) => void;
   // Autosave recovery: non-null when a draft from a previous session was found.
   pendingAutosaveDraft?: AutosavedDraft | null;
@@ -85,7 +85,7 @@ export function ResumeTab({
   onRequestLinkEditor,
   tailorModes,
   onSetTailorMode,
-  exportControl,
+  documentActions,
   onAddHonestContext,
   jobTarget,
   pendingAutosaveDraft,
@@ -155,20 +155,10 @@ export function ResumeTab({
                   ? { state: "saved", label: "Recovery draft saved" }
                   : { state: "saving", label: "Saving recovery draft" }
           }
-          documentStructure={{
-            name: editedResume?.name ?? "",
-            contact: editedResume?.contact ?? [],
-            disabled: !editedResume,
-            onSetName: actions.setName,
-            onUpdateContact: actions.updateContact,
-            onAddContact: actions.addContact,
-            onRemoveContact: actions.removeContact,
-            onAddSection: (type, position) => editorRef.current?.addSection(type, position)
-          }}
           docStyle={docStyle}
           actions={(
-            <div className="studio-card__tools">
-              {exportControl}
+            <div className="top-toolbar__file-actions" role="toolbar" aria-label="Resume actions">
+              {documentActions}
             </div>
           )}
         />

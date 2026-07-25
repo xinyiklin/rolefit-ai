@@ -3,6 +3,17 @@ import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { FONT_FAMILY_OPTIONS, type FontFamily } from "@typeset/engine/lib/documentStyle.ts";
+import { DOCUMENT_FONT_FAMILIES } from "@typeset/engine/typeset/fontRegistry.ts";
+
+// Each row previews its own face, the way a word processor's font menu does, so
+// the choice can be made by eye rather than by name. The regular face's CSS
+// family is the one the document text actually paints with.
+const previewFamily = (value: FontFamily) =>
+  `"${DOCUMENT_FONT_FAMILIES[value].faces.regular.cssFamily}"`;
+
+// Rough per-row height used only to decide whether the menu opens up or down.
+const ROW_HEIGHT = 30;
+const MENU_PADDING = 16;
 
 type FontFamilyControlProps = {
   value: FontFamily | null;
@@ -39,7 +50,7 @@ export function FontFamilyControl({
     const place = () => {
       const rect = rootRef.current?.getBoundingClientRect();
       if (!rect) return;
-      const menuHeight = 112;
+      const menuHeight = FONT_FAMILY_OPTIONS.length * ROW_HEIGHT + MENU_PADDING;
       const below = window.innerHeight - rect.bottom;
       const placement = below < menuHeight + 12 && rect.top > below ? "up" : "down";
       const width = Math.max(128, rect.width);
@@ -120,7 +131,9 @@ export function FontFamilyControl({
                 position: "fixed",
                 left: menuPos.left,
                 top: menuPos.top,
-                width: menuPos.width,
+                // A floor, not a size: the stylesheet lets the menu grow to fit
+                // the longest family name and metric-twin label.
+                minWidth: menuPos.width,
                 transform: menuPos.placement === "down" ? undefined : "translateY(-100%)"
               }}
               onKeyDown={(event) => {
@@ -147,6 +160,7 @@ export function FontFamilyControl({
                   type="button"
                   role="option"
                   aria-selected={value === option.value}
+                  aria-label={option.metricsOf ? `${option.label}, ${option.metricsOf} metrics` : option.label}
                   className={value === option.value ? "is-selected" : ""}
                   onClick={() => {
                     onChange(option.value);
@@ -154,7 +168,14 @@ export function FontFamilyControl({
                     requestAnimationFrame(() => onCommitFocus?.());
                   }}
                 >
-                  <span>{option.label}</span>
+                  <span className="font-family-control__name" style={{ fontFamily: previewFamily(option.value) }}>
+                    {option.label}
+                  </span>
+                  {/* Always rendered, so every row shares one grid and the
+                      names stay aligned whether or not a font has a twin. */}
+                  <span className="font-family-control__metrics" aria-hidden="true">
+                    {option.metricsOf ?? ""}
+                  </span>
                   <Check size={13} aria-hidden="true" />
                 </button>
               ))}

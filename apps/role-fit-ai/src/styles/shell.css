@@ -274,35 +274,8 @@
   text-transform: uppercase;
 }
 
-/* Primary Polish action in the masthead, sized to sit beside the nav menus.
-   Double-class selector outranks the base full-width .primary-button rule,
-   which loads later in the bundle (sources.css).
-   Enabled: accent-filled with a lift shadow so it reads as the primary action.
-   Disabled: flat neutral so it doesn't compete with enabled state. */
-.masthead__actions .masthead__polish.masthead__polish {
-  width: auto;
-  min-height: 30px;
-  margin: 0;
-  padding: 0 var(--s4);
-  font-size: 0.8rem;
-}
-
-/* Enabled Polish gets a stronger accent presence — primary action of the app. */
-.masthead__actions .masthead__polish.masthead__polish:not(:disabled):not([aria-disabled="true"]) {
-  background: var(--accent);
-  border-color: var(--accent-deep);
-  color: var(--on-accent);
-  box-shadow: var(--shadow-inset), 0 2px 8px var(--accent-glow);
-}
-
-.masthead__actions .masthead__polish.masthead__polish:not(:disabled):not([aria-disabled="true"]):hover {
-  background: var(--accent-deep);
-  box-shadow: var(--shadow-inset), 0 4px 14px var(--accent-glow);
-}
-
-/* Apply is the secondary partner to Polish — same box size so the pair reads as
-   a matched primary/secondary set, with secondary-button's neutral fill keeping
-   the accent reserved for Polish. Double class outranks .is-compact's sizing. */
+/* Apply stays global because it records the application, while document
+   actions such as Polish live with their editor. */
 .masthead__actions .masthead__apply.masthead__apply {
   min-height: 30px;
   padding: 0 var(--s4);

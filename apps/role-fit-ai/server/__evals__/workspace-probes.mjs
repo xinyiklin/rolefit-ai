@@ -44,6 +44,7 @@ try {
   process.chdir(isolatedRoot);
   const {
     WorkspaceStorageError,
+    handleWorkspace,
     handleWorkspaceBaseResume,
     handleSelectBaseResume,
     handleRestoreBaseResume,
@@ -67,6 +68,15 @@ try {
     starter,
     "starter reads from the explicit app root"
   );
+  {
+    const res = await invoke(handleWorkspace, "GET", {});
+    assert.equal(res.status, 200, "workspace snapshot succeeds");
+    assert.equal(
+      JSON.parse(res.body).starterResume.text,
+      starter,
+      "workspace snapshot exposes the bundled starter even when a saved base can be active"
+    );
+  }
 
   await writeFile(join(locations.workspaceDir, "base-resume.resume"), "{" + "x".repeat(100), "utf8");
   await assert.rejects(

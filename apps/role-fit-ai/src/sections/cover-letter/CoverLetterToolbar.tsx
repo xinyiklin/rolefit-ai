@@ -1,9 +1,10 @@
-import { useState, type RefObject } from "react";
+import type { RefObject } from "react";
 import {
-  Clipboard,
   FileDown,
   FilePlus2,
   FolderOpen,
+  FileText,
+  LayoutTemplate,
   RotateCcw,
   Save,
   Sparkles
@@ -19,6 +20,7 @@ import type {
 } from "@typeset/editor/sections/editor/TypesetEditor.tsx";
 import type { CoverLetterEditorState } from "../../hooks/useCoverLetterEditor";
 import { useDialog } from "../../hooks/useDialog";
+import { DocumentActionMenu } from "../document/DocumentActionMenu";
 import { LineHeightPopover } from "./LineHeightPopover";
 
 type CoverLetterToolbarProps = {
@@ -32,6 +34,10 @@ type CoverLetterToolbarProps = {
   isTailoring: boolean;
   targetLine: string;
   onTailor: () => void;
+  // Owned by CoverLetterTab so the editor's right-click menu and link card can
+  // open this popover too; a toolbar-private state left those commands dead.
+  linkEditorOpen: boolean;
+  onLinkEditorOpenChange: (open: boolean) => void;
 };
 
 export function CoverLetterToolbar({
@@ -44,10 +50,10 @@ export function CoverLetterToolbar({
   tailorHint,
   isTailoring,
   targetLine,
-  onTailor
+  onTailor,
+  linkEditorOpen,
+  onLinkEditorOpenChange
 }: CoverLetterToolbarProps) {
-  const [copied, setCopied] = useState(false);
-  const [linkEditorOpen, setLinkEditorOpen] = useState(false);
   const { confirm } = useDialog();
 
   async function confirmReplace(): Promise<boolean> {
@@ -59,23 +65,18 @@ export function CoverLetterToolbar({
     });
   }
 
-  async function chooseFile() {
-    if (await confirmReplace()) inputRef.current?.click();
+  async function chooseFile(): Promise<boolean> {
+    if (!(await confirmReplace())) return false;
+    inputRef.current?.click();
+    return true;
   }
 
   async function startBlank() {
     if (await confirmReplace()) editor.startBlank();
   }
 
-  async function copyLetter() {
-    if (!editor.text) return;
-    try {
-      await navigator.clipboard.writeText(editor.text);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 1600);
-    } catch {
-      editor.setStatus("Copy failed. Select the letter text and copy it manually.");
-    }
+  async function startStarter() {
+    if (await confirmReplace()) editor.startStarter();
   }
 
   return (
@@ -110,27 +111,98 @@ export function CoverLetterToolbar({
         actions={(
           <div className="top-toolbar__file-actions" role="toolbar" aria-label="Cover letter actions">
             <ToolbarButton
-              label="New"
-              tooltip="Start a blank cover letter"
-              icon={<FilePlus2 size={16} />}
+              label="Starter"
+              tooltip="Open the guided cover-letter starter"
+              icon={<LayoutTemplate size={16} />}
               showLabel
-              onClick={() => void startBlank()}
+              onClick={() => void startStarter()}
             />
-            <ToolbarButton
+            <DocumentActionMenu
               label="Open"
-              tooltip="Open a .cover, .txt, or .md file"
+              tooltip="Open a cover letter"
               icon={<FolderOpen size={16} />}
-              showLabel
-              onClick={() => void chooseFile()}
-            />
-            <ToolbarButton
-              label="Save .cover"
-              tooltip="Save an editable .cover file"
+            >
+              {({ close }) => (
+                <div className="document-action-panel cover-letter-open-menu">
+                  <div className="document-action-panel__head">
+                    <strong>Open cover letter</strong>
+                    <span>Editable .cover files preserve formatting; text and Markdown open as plain drafts.</span>
+                  </div>
+                  <button
+                    type="button"
+                    className="document-action-row"
+                    onClick={() => {
+                      void chooseFile().then((opened) => {
+                        if (opened) close();
+                      });
+                    }}
+                  >
+                    <FolderOpen size={15} aria-hidden="true" />
+                    <span>
+                      <strong>Choose a file</strong>
+                      <small>.cover, .txt, or .md</small>
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    className="document-action-row"
+                    onClick={() => {
+                      void startBlank().then(close);
+                    }}
+                  >
+                    <FilePlus2 size={15} aria-hidden="true" />
+                    <span>
+                      <strong>Blank document</strong>
+                      <small>Start without the guided prompts.</small>
+                    </span>
+                  </button>
+                </div>
+              )}
+            </DocumentActionMenu>
+            <DocumentActionMenu
+              label="Save"
+              tooltip="Save the cover letter"
               icon={<Save size={16} />}
-              showLabel
               disabled={!hasLetter}
-              onClick={editor.saveCoverFile}
-            />
+            >
+              {({ close }) => (
+                <div className="document-action-panel cover-letter-save-menu">
+                  <div className="document-action-panel__head">
+                    <strong>Save cover letter</strong>
+                    <span>Choose an editable document or a plain-text copy.</span>
+                  </div>
+                  <button
+                    type="button"
+                    className="document-action-row"
+                    onClick={() => {
+                      editor.saveCoverFile();
+                      close();
+                    }}
+                  >
+                    <Save size={15} aria-hidden="true" />
+                    <span>
+                      <strong>Editable .cover</strong>
+                      <small>Preserves content, formatting, and document style.</small>
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    className="document-action-row"
+                    disabled={!editor.text.trim()}
+                    onClick={() => {
+                      editor.saveTextFile();
+                      close();
+                    }}
+                  >
+                    <FileText size={15} aria-hidden="true" />
+                    <span>
+                      <strong>Plain-text .txt</strong>
+                      <small>Content only, for email or another editor.</small>
+                    </span>
+                  </button>
+                </div>
+              )}
+            </DocumentActionMenu>
             <ToolbarButton
               label={editor.isRenderingPdf ? "Exporting…" : "PDF"}
               tooltip="Export cover letter PDF"
@@ -149,14 +221,6 @@ export function CoverLetterToolbar({
                 onClick={editor.restoreTailorSource}
               />
             ) : null}
-            <ToolbarButton
-              label={copied ? "Copied" : "Copy"}
-              tooltip="Copy cover letter as plain text"
-              icon={<Clipboard size={16} />}
-              showLabel
-              disabled={!editor.text}
-              onClick={() => void copyLetter()}
-            />
             <ToolbarButton
               label={isTailoring ? "Tailoring…" : "Tailor"}
               tooltip={tailorHint || "Tailor the existing cover letter"}
@@ -210,11 +274,12 @@ export function CoverLetterToolbar({
             href: inlineFormat.linkHref,
             text: inlineFormat.linkText,
             automatic: inlineFormat.linkAutomatic,
+            textEditable: inlineFormat.linkTextEditable,
             onApply: ({ text, href }) => editorRef.current?.applyLink(text, href),
             onRemove: () => editorRef.current?.removeLink(),
             disabled: !inlineFormat.canLink,
             open: linkEditorOpen,
-            onOpenChange: setLinkEditorOpen
+            onOpenChange: onLinkEditorOpenChange
           },
           clearFormatting: {
             onClear: () => editorRef.current?.clearFormatting(),

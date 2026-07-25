@@ -3,16 +3,11 @@ import {
   AlertCircle,
   CheckCircle2,
   ChevronRight,
-  FileText,
   FolderOpen,
   History,
-  RefreshCw,
   RotateCcw,
-  Save,
-  Trash2,
   Upload
 } from "lucide-react";
-import { NavMenu } from "./NavMenu";
 
 type HistoryEntry = {
   key: string;
@@ -44,13 +39,8 @@ type ResumeMenuProps = {
   fileName: string;
   fileError: string;
   fileStatus: string;
-  resumeText: string;
-  resumeReady: boolean;
-  onSaveCurrentAsBase: () => void;
   onLoadBaseResumeVersion: (fileName: string) => void;
-  onRemoveBaseResume: () => void;
   onRestoreBaseResume: (key: string) => void;
-  onLoadWorkspace: (apply: boolean) => Promise<void>;
   onFileUpload: (event: ChangeEvent<HTMLInputElement>) => void;
 };
 
@@ -83,79 +73,28 @@ export function ResumeMenu({
   fileName,
   fileError,
   fileStatus,
-  resumeText,
-  resumeReady,
-  onSaveCurrentAsBase,
   onLoadBaseResumeVersion,
-  onRemoveBaseResume,
   onRestoreBaseResume,
-  onLoadWorkspace,
   onFileUpload
 }: ResumeMenuProps) {
   const activeBaseResume = baseResumeOptions.find((option) => option.fileName === baseResumeName);
   const baseResumeDisplayName = activeBaseResume?.label ?? baseResumeName;
-  const resumeStatus = isWorkspaceBootstrapping ? "checking" : resumeReady ? "ready" : "empty";
-  const resumeStatusClass = isWorkspaceBootstrapping ? "" : resumeReady ? "is-ready" : "is-empty";
 
   return (
-    <NavMenu
-      icon={<FileText size={13} aria-hidden={true} />}
-      ariaLabel="Resume source"
-      label={
-        <>
-          <span className="nav-menu__label">Resume</span>
-          <span className={`nav-menu__sub ${resumeStatusClass}`} aria-live="polite">
-            {resumeStatus}
-          </span>
-        </>
-      }
-    >
-      {/* Flat source header — no card wrapper */}
+    <div className="document-action-panel resume-open-menu">
       <div className="resume-source-head" aria-busy={isWorkspaceBootstrapping}>
         <FolderOpen size={14} aria-hidden="true" />
         <div className="resume-source-head__info">
-          <strong>{isWorkspaceBootstrapping ? "Checking workspace" : baseResumeDisplayName || "No base saved"}</strong>
+          <strong>{isWorkspaceBootstrapping ? "Checking workspace" : "Open resume"}</strong>
+          <small>{baseResumeDisplayName ? `Active base: ${baseResumeDisplayName}` : "No workspace base selected"}</small>
         </div>
       </div>
-      <div className="workspace-actions">
-        <button
-          className="secondary-button is-compact"
-          type="button"
-          disabled={resumeText.trim().length < 80 || isSavingBaseResume}
-          onClick={onSaveCurrentAsBase}
-          title="Save current resume as workspace base"
-        >
-          <Save size={12} aria-hidden="true" />
-          Save
-        </button>
-        <button
-          className="secondary-button is-compact"
-          type="button"
-          disabled={!baseResumeName}
-          onClick={() => onLoadWorkspace(true)}
-          title="Reload base from workspace"
-        >
-          <RefreshCw size={12} aria-hidden="true" />
-          Reload
-        </button>
-        <button
-          className="secondary-button is-compact"
-          type="button"
-          disabled={!baseResumeName || isSavingBaseResume}
-          onClick={onRemoveBaseResume}
-          title="Remove the saved base resume from the workspace"
-        >
-          <Trash2 size={12} aria-hidden="true" />
-          Remove
-        </button>
-      </div>
-      {workspaceStatus ? <p className="micro-status">{workspaceStatus}</p> : null}
 
       {/* Base versions section */}
-      {baseResumeOptions.length > 1 ? (
+      {baseResumeOptions.length > 0 ? (
         <div className="resume-section">
           <div className="resume-section__head">
-            <FileText size={11} aria-hidden="true" />
+            <FolderOpen size={11} aria-hidden="true" />
             <span>Base versions</span>
           </div>
           <ul className="resume-list">
@@ -170,11 +109,11 @@ export function ResumeMenu({
                   <button
                     className="ghost-button is-compact"
                     type="button"
-                    disabled={isActive || isSavingBaseResume}
+                    disabled={isSavingBaseResume}
                     onClick={() => onLoadBaseResumeVersion(option.fileName)}
                     title={`Load ${option.fileName}`}
                   >
-                    {isActive ? "Active" : "Load"}
+                    Open
                   </button>
                 </li>
               );
@@ -249,6 +188,7 @@ export function ResumeMenu({
           <span>{fileStatus}</span>
         </div>
       ) : null}
-    </NavMenu>
+      {workspaceStatus ? <p className="micro-status">{workspaceStatus}</p> : null}
+    </div>
   );
 }
