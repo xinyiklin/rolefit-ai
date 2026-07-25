@@ -5,6 +5,21 @@ bounded; app-only operational detail belongs in the affected app documentation.
 
 ## 2026-07-25
 
+- [TOOL] CORRECTS the standing note that `vertical-parity.mjs` was "already red
+  before this work". It is red on THIS BRANCH ONLY: `origin/main` is green on
+  the same eval (last three runs successful), and PR #87's CI reproduces the
+  failure as its single RoleFit failure. The eval predates main (`e6ce369`), so
+  the divergence was introduced by this branch's engine work and has been
+  carried forward, not inherited. Treat it as an open regression against main,
+  not as a known-bad baseline.
+- [TOOL] PR #87 (`codex/wip-editor-document-actions` -> `main`) is open with the
+  whole branch. Typeset CI passes; RoleFit CI fails only on that eval. The
+  Windows-only `workspace-backup-probes` `EPERM: symlink` PASSES on Linux CI, as
+  expected. NOT MERGED: the fix is a product decision — `entryEndIndentPt: 0`
+  for bullet/summary/skills columns matches Jake's TeX truth (recorded as all 20
+  lines within ±1.5bp) but reflows every existing resume, and the alternative is
+  re-recording the fixture to accept the current layout.
+
 - [USER+CODE] A TOO-LONG MENU no longer runs past the window and shifts the
   document. Reported as "not necessarily a bug"; it was one. Every popover's
   height cap was a viewport fraction assuming the panel starts just below the
