@@ -19,13 +19,19 @@ export type FontFamilyDefinition = Readonly<{
   metricsOf?: string;
 }>;
 
+// Menu order is recognition first: the three families a job posting or a style
+// guide asks for by name lead, each beside the original it is metrically
+// compatible with, and the house faces follow. Serif then sans within each
+// group, so a reader scanning for "a Times-like face" or "an Arial-like face"
+// meets it before the typographic defaults. Order is presentation only — the
+// ids below are the persisted values and never move with it.
 export const FONT_FAMILIES = [
-  { id: "latin-modern", label: "Latin Modern" },
+  { id: "tinos", label: "Tinos", metricsOf: "Times New Roman" },
+  { id: "carlito", label: "Carlito", metricsOf: "Calibri" },
+  { id: "arimo", label: "Arimo", metricsOf: "Arial" },
   { id: "source-serif", label: "Source Serif 4" },
   { id: "source-sans", label: "Source Sans 3" },
-  { id: "tinos", label: "Tinos", metricsOf: "Times New Roman" },
-  { id: "arimo", label: "Arimo", metricsOf: "Arial" },
-  { id: "carlito", label: "Carlito", metricsOf: "Calibri" }
+  { id: "latin-modern", label: "Latin Modern" }
 ] as const satisfies readonly FontFamilyDefinition[];
 
 export type FontFamily = (typeof FONT_FAMILIES)[number]["id"];

@@ -1,5 +1,19 @@
-import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import assertStrict from "node:assert/strict";
+import { existsSync, readFileSync } from "node:fs";
+
+// The reported total used to be a hand-maintained literal, so it silently drifted
+// from the real count every time a guard was added. Count the calls instead.
+let checkCount = 0;
+const assert = new Proxy(assertStrict, {
+  get(target, property) {
+    const value = Reflect.get(target, property);
+    if (typeof value !== "function") return value;
+    return (...args) => {
+      checkCount += 1;
+      return value.apply(target, args);
+    };
+  }
+});
 
 const readHook = (name) => readFileSync(new URL(`../${name}`, import.meta.url), "utf8");
 
@@ -12,14 +26,18 @@ const inbox = readHook("useExtensionInbox.ts");
 const intake = readHook("useJobIntake.ts");
 const jobMenu = readFileSync(new URL("../../sections/JobMenu.tsx", import.meta.url), "utf8");
 const applicationModal = readFileSync(new URL("../../sections/ApplicationModal.tsx", import.meta.url), "utf8");
-const menuSection = readFileSync(new URL("../../sections/MenuSection.tsx", import.meta.url), "utf8");
-const providerSection = readFileSync(new URL("../../sections/ProviderSection.tsx", import.meta.url), "utf8");
+const settingsStage = readFileSync(new URL("../../sections/SettingsStage.tsx", import.meta.url), "utf8");
 const reviewRail = readFileSync(new URL("../../sections/ReviewRail.tsx", import.meta.url), "utf8");
 const appIndex = readFileSync(new URL("../../../index.html", import.meta.url), "utf8");
 const styleTokens = readFileSync(new URL("../../styles/tokens.css", import.meta.url), "utf8");
 const aiSettings = readHook("useAiSettings.ts");
 const persistedSettings = readFileSync(new URL("../../lib/settings.ts", import.meta.url), "utf8");
 const app = readFileSync(new URL("../../App.tsx", import.meta.url), "utf8");
+const coverEditor = readHook("useCoverLetterEditor.ts");
+const coverToolbar = readFileSync(new URL("../../sections/cover-letter/CoverLetterToolbar.tsx", import.meta.url), "utf8");
+const settingsDialog = readFileSync(new URL("../../sections/SettingsDialog.tsx", import.meta.url), "utf8");
+const candidateFacts = readFileSync(new URL("../../lib/candidateFacts.ts", import.meta.url), "utf8");
+const aiStages = readFileSync(new URL("../../config/aiStages.ts", import.meta.url), "utf8");
 const intakeFingerprintStart = intake.indexOf("const distillInputFingerprint = workflowInputFingerprint({");
 const intakeFingerprint = intake.slice(
   intakeFingerprintStart,
@@ -133,6 +151,127 @@ assert.doesNotMatch(
 assert.match(polish, /polishRunLockRef/, "Polish has a synchronous double-run lock");
 assert.match(polish, /inputFingerprintRef\.current = inputFingerprint/, "Polish tracks live semantic inputs");
 
+// The resume Polish action asks which stages to run. Because `polishStages` is
+// part of the pipeline's input fingerprint, and the fingerprint effect aborts a
+// run that is in flight when it changes, the chooser MUST set the stage and let
+// that commit before starting the run. Starting it in the same tick as the
+// setState aborts the run it just started, which is silent and hard to spot.
+assert.match(
+  polishFingerprint,
+  /polishStages/,
+  "the polish fingerprint still guards the selected stages"
+);
+assert.match(
+  app,
+  /runPolishOnStagesCommitRef\.current = true;\s*setPolishStages\(nextStages\);/,
+  "the Polish chooser records the intent to run, then commits the stage selection"
+);
+assert.match(
+  app,
+  /if \(!runPolishOnStagesCommitRef\.current\) return;\s*runPolishOnStagesCommitRef\.current = false;\s*void handlePolish\(\);/,
+  "the deferred Polish run fires from the committed polishStages, never in the same tick"
+);
+assert.ok(
+  app.indexOf("} = usePolishPipeline({") < app.indexOf("runPolishOnStagesCommitRef.current = false"),
+  "the deferred-run effect is registered after usePolishPipeline's fingerprint effect, so that effect sees no run in flight"
+);
+// Settings owns the DEFAULT stage selection and the Polish action owns the
+// per-run pick; both write the one persisted `polishStages` value. The retired
+// masthead Options menu must not come back as a third control.
+assert.match(
+  settingsDialog,
+  /onPolishStagesChange/,
+  "Settings exposes the default Polish stage selection"
+);
+assert.ok(
+  !existsSync(new URL("../../sections/PolishMenu.tsx", import.meta.url)) &&
+    !existsSync(new URL("../../sections/AiMenu.tsx", import.meta.url)),
+  "the masthead Options and AI menus stay retired — Settings is the one home for provider and guidance setup"
+);
+
+// Every configurable stage is declared once, in config/aiStages.ts. The failure
+// this prevents is silent: a stage added to the Settings UI but left pointing at
+// another stage's provider still works, so nothing surfaces the mistake. Both
+// cover and answers shipped in exactly that state.
+assert.match(aiStages, /export const AI_STAGES/, "the stage list is declared in config/aiStages.ts");
+for (const stage of ["distill", "tailor", "review", "cover", "answers"]) {
+  assert.match(aiStages, new RegExp(`id: "${stage}"`), `aiStages declares the ${stage} stage`);
+}
+assert.match(
+  app,
+  /aiRequest: stages\.cover,/,
+  "the cover-letter flow runs on its own stage config, not Tailor's"
+);
+assert.match(
+  app,
+  /aiRequest: stages\.answers,/,
+  "the application-answers flow runs on its own stage config, not Tailor's"
+);
+assert.doesNotMatch(
+  persistedSettings,
+  /const STAGE_FIELD_GROUPS: Array<\[keyof PersistedSettings, keyof PersistedSettings, keyof PersistedSettings\]> = \[\s*\[/,
+  "persisted stage key groups are derived from the stage list, not hand-listed"
+);
+// The cover/answers stages inherit Tailor's config when they have none of their
+// own. That inheritance MUST live in the seeder: workspaceBackupContract only
+// accepts a restored settings bag that round-trips through normalizeSettings
+// unchanged, so adding a key there rejects every backup written before that key
+// existed — which is exactly what happened when this was tried in settings.ts.
+// Seeding is a pure module so it has a test seam without React; the behavior
+// itself is covered by src/lib/__evals__/stage-settings-eval.mjs.
+assert.match(
+  aiSettings,
+  /import \{ seedStages, stageFieldsToPersist \} from "\.\.\/lib\/stageSettings";/,
+  "the settings hook delegates stage seeding to the pure stageSettings module"
+);
+assert.doesNotMatch(
+  persistedSettings,
+  /bag\[keys\.provider\] = bag\[TAILOR_KEYS\.provider\]/,
+  "normalizeSettings never adds a stage key — it would break workspace-backup restore"
+);
+
+// Anti-fabrication: every candidate fact is opt-in. A default that asserted a
+// citizenship, a work-authorization status, or a DEGREE would put an unverified
+// claim into the grounding allowlist for a user who never declared it.
+assert.match(
+  candidateFacts,
+  /if \(facts\.citizenshipStatus !== "unspecified"\)/,
+  "work-authorization facts are gated on a declared citizenship"
+);
+assert.match(
+  candidateFacts,
+  /const educationLine = EDUCATION_CONTEXT\[facts\.educationLevel\];\s*if \(educationLine\) \{/,
+  "education facts are gated positively on a known level, so a corrupted level emits nothing"
+);
+assert.match(
+  candidateFacts,
+  /unspecified: "",/g,
+  "an unspecified fact contributes no prompt line"
+);
+assert.doesNotMatch(
+  candidateFacts,
+  /if \(facts\.citizenshipStatus === "unspecified"\) return ""/,
+  "citizenship no longer short-circuits the whole block — education is an independent opt-in"
+);
+
+// Per-stage guidance: Tailor and Review are separate requests, so a shared
+// commonBody carrying one customInstructions would send Review the Tailor text.
+assert.doesNotMatch(
+  polish,
+  /includeCoverLetter,\s*honestContext: requestHonestContext,\s*customInstructions\s*\};/,
+  "customInstructions is resolved per stage, not shared through commonBody"
+);
+assert.match(
+  polish,
+  /stages: "tailor", customInstructions: customInstructionsFor\("tailor"\)/,
+  "the Tailor request carries the Tailor stage's resolved guidance"
+);
+assert.match(
+  polish,
+  /customInstructions: customInstructionsFor\("review"\),/,
+  "the Review request carries the Review stage's resolved guidance"
+);
+
 const responseGuard = inbox.indexOf("if (!res.ok)");
 const deliveryBranch = inbox.indexOf("if (data === null", responseGuard);
 assert.ok(responseGuard >= 0 && deliveryBranch > responseGuard, "inbox rejects non-ok polls before delivery parsing");
@@ -202,40 +341,39 @@ assert.doesNotMatch(
   "input and provider changes cannot erase completed application-answer drafts"
 );
 
+// The stage row keeps provider/model/effort ALWAYS visible. The one disclosure it
+// has is scoped to the optional instruction override — the original rule was
+// "stage settings are not behind an accordion", and that still holds.
 assert.match(
-  menuSection,
-  /<section className="menu-section" aria-labelledby=\{headingId\}>[\s\S]*<h3 id=\{headingId\}[\s\S]*<div className="menu-section__body">\{children\}<\/div>[\s\S]*<\/section>/,
-  "AI stage settings use an always-rendered semantic section with a labelled heading"
+  settingsStage,
+  /<section className="settings-stage" aria-labelledby=\{headingId\}>[\s\S]*<h3 id=\{headingId\}/,
+  "each AI stage is an always-rendered semantic section with a labelled heading"
 );
 assert.doesNotMatch(
-  menuSection,
-  /<button|aria-expanded|ChevronDown|\bonToggle\b|\bopen\s*[?:=]/,
-  "the shared AI stage section exposes no disclosure trigger or collapsible state"
+  settingsStage.slice(0, settingsStage.indexOf("settings-stage__extra")),
+  /aria-expanded|\bonToggle\b/,
+  "nothing above the instruction override is collapsible — provider, model, and effort stay visible"
 );
 assert.match(
-  providerSection,
-  /<MenuSection title=\{title\} headerControl=\{copyControl\}>/,
-  "each provider stage renders through the static section contract"
-);
-assert.doesNotMatch(
-  providerSection,
-  /\b(?:open|onToggle|summary)\s*=/,
-  "provider stages cannot restore accordion props"
+  settingsStage,
+  /aria-expanded=\{instructionsOpen\}/,
+  "the only disclosure is the per-stage instruction override, and it reports its state"
 );
 assert.match(
-  providerSection,
+  settingsStage,
+  /\{!instructionsOpen && hasInstructions \? \(/,
+  "a set-but-collapsed override still shows a preview — guidance being sent is never invisible"
+);
+assert.match(
+  settingsStage,
   /\{!selectedConnection\?\.ready \? \([\s\S]*selectedConnection \? selectedConnection\.guidance : availabilityMessage[\s\S]*Check providers/,
   "provider descriptions stay hidden for ready providers while unavailable providers retain recovery guidance"
 );
+// Every declared stage gets a settings row, and none is filtered out.
 assert.match(
-  app,
-  /const STAGE_SECTIONS:[\s\S]*\{ id: "distill", title: "Distill" \}[\s\S]*\{ id: "tailor", title: "Tailor" \}[\s\S]*\{ id: "review", title: "Review" \}/,
-  "the AI menu retains all three pipeline-stage settings"
-);
-assert.match(
-  app,
-  /<AiMenu>[\s\S]*\{STAGE_SECTIONS\.map\([\s\S]*<ProviderSection[\s\S]*<\/AiMenu>/,
-  "the AI menu renders every stage section without an open-stage filter"
+  settingsDialog,
+  /\{AI_STAGES\.map\(\(stage\) => \([\s\S]*<SettingsStage/,
+  "Settings renders one stage row per declared stage, with no open-stage filter"
 );
 assert.doesNotMatch(
   aiSettings,
@@ -266,4 +404,47 @@ assert.match(
 assert.doesNotMatch(appIndex, /fonts\.googleapis\.com|fonts\.gstatic\.com/, "the local-first app does not fetch external web fonts");
 assert.match(styleTokens, /@font-face[\s\S]*SourceSans3-Regular\.woff2[\s\S]*SourceSerif4-Regular\.woff2/, "app chrome uses bundled local font assets");
 
-console.log("Client workflow guards eval: 65/65 checks passed");
+// Replacing the cover letter ALWAYS confirms first, whatever replaces it. The
+// Open menu's saved list bypassed this and discarded unsaved edits silently,
+// while Blank, Starter, and the file picker all asked.
+assert.match(
+  coverToolbar,
+  /async function openSaved\(fileName: string\) \{\s*if \(await confirmReplace\(\)\)/,
+  "opening a saved letter confirms before discarding unsaved edits"
+);
+assert.match(
+  coverToolbar,
+  /async function restoreSaved\(key: string\) \{\s*if \(await confirmReplace\(\)\)/,
+  "restoring a letter version confirms before discarding unsaved edits"
+);
+assert.doesNotMatch(
+  coverToolbar,
+  /onOpen: \(\) => void editor\.(openWorkspace|restoreWorkspace)CoverLetter\(/,
+  "no saved-list row calls the workspace loader directly, bypassing the confirm"
+);
+
+// A document that did not come from the workspace clears the active pointer, so
+// Save cannot offer to overwrite an unrelated saved letter with it.
+for (const starter of ["startBlank", "startStarter"]) {
+  const body = coverEditor.slice(coverEditor.indexOf(`const ${starter} = useCallback`));
+  assert.match(
+    body.slice(0, body.indexOf("}, [")),
+    /setActiveCoverFileName\(""\)/,
+    `${starter} clears the active workspace file`
+  );
+}
+assert.match(
+  coverEditor,
+  /setActiveCoverFileName\(""\);[\s\S]{0,200}?setDocumentTitle\(fileBase \|\| "Cover letter"\)/,
+  "opening an uploaded .cover clears the active workspace file"
+);
+
+// `variant` is slugged by the server; `fileName` is not. Sending the active file
+// name as a variant mangled it into cover-letter-cover-letter-<x>-cover.cover.
+assert.match(
+  coverEditor,
+  /fileName: target\?\.fileName \?\? \(target\?\.variant \? undefined : activeCoverFileName \|\| undefined\)/,
+  "the active workspace file is sent as fileName, never re-slugged as a variant"
+);
+
+console.log(`Client workflow guards eval: ${checkCount}/${checkCount} checks passed`);

@@ -189,11 +189,18 @@ const separatorsFor = (paragraphs) =>
       coverLetterStyleToDocumentStyle(COVER_LETTER_STYLE_DEFAULTS)
     ).pages
   );
+// Asserted by shape rather than as a fixed pair, because how many lines a
+// sentence takes is a property of the default family's advance widths: this
+// fixture wrapped once in Source Serif and fits on one line in Carlito.
+const softWrapped = separatorsFor([
+  "The quick brown fox jumps over the lazy dog and keeps running well past the right margin so it wraps, " +
+    "and then keeps going for a second line so the break exists whatever face the default style names."
+]);
+assert.equal(softWrapped.length, 1, "one paragraph paints one page");
+assert(softWrapped[0].length > 1, "the fixture is long enough to wrap in the default family");
 assert.deepEqual(
-  separatorsFor([
-    "The quick brown fox jumps over the lazy dog and keeps running well past the right margin so it wraps."
-  ]),
-  [[" ", ""]],
+  softWrapped[0],
+  [...softWrapped[0].slice(0, -1).map(() => " "), ""],
   "a soft wrap inside one paragraph stands for a space; the last line has no separator"
 );
 assert.deepEqual(

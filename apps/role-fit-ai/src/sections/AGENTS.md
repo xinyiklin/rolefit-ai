@@ -8,9 +8,15 @@ and `docs/engineering/ui-principles.md`.
 - Reuse shared Typeset editor/toolbar/popover components for document behavior.
   RoleFit sections compose host navigation, job/AI controls, tracker, materials,
   review, and the RoleFit-only editor overlay.
-- Reuse `NavMenu`, `MenuSection`, provider controls, dialog primitives, and
+- Reuse `NavMenu`, `SettingsStage`, `DocumentActionMenu`, dialog primitives, and
   `AiWorkflowProgress` for repeated host interactions. Do not introduce a
-  second modal shell, provider picker, stage card, or status vocabulary.
+  second modal shell, provider picker, stage row, or status vocabulary.
+- Settings is a dialog of frameless, hairline-separated rows. Do not nest a
+  bordered card inside another bordered card: the Drafting Desk rejects
+  card-in-card, and the first cut of the AI stage rows cost 317px each in a
+  625px panel. Disclose optional per-item detail instead of stacking always-open
+  textareas, and keep a set-but-collapsed value previewed so nothing that is
+  actually being sent is invisible.
 - Provider selectors show only explicitly configured providers. Keep an
   unavailable configured selection visible but disabled with reconnect/setup
   guidance; never render an API-key field or silently choose a paid provider.

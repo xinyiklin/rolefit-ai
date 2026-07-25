@@ -90,6 +90,7 @@ import { commitField, fieldEditFor, historyCaretTarget, valueForField, withField
 import {
   formattableRanges,
   markStateAcross,
+  orderedFieldKeys,
   readFieldRanges,
   uniformAcross,
   type FieldRange
@@ -125,7 +126,12 @@ function sameCaretGeometry(
   return (
     Math.abs(left.left - right.left) < 0.01 &&
     Math.abs(left.top - right.top) < 0.01 &&
-    Math.abs(left.height - right.height) < 0.01
+    Math.abs(left.height - right.height) < 0.01 &&
+    Math.abs(left.baselineOffset - right.baselineOffset) < 0.01 &&
+    // Slope must be compared too: an upright and an italic face of one family
+    // usually share vertical metrics, so arming italic moves nothing in the
+    // box and the caret would keep the previous geometry — and its slope.
+    left.slantDeg === right.slantDeg
   );
 }
 
@@ -152,10 +158,21 @@ export type InlineFormatState = {
   canClearFormatting: boolean;
 };
 
+// A caret in the document model, not in the DOM: a field key plus an index into
+// that field's stored value. Survives a repaint, an unmount, and a host that
+// keeps the document while swapping the editor out.
+export type TypesetCaret = { key: string; valueIndex: number };
+
 export type TypesetEditorHandle = {
   undo: () => void;
   redo: () => void;
   focusSelection: () => void;
+  // Put the caret at the very start of the document and take focus, at the next
+  // paint. For the moment a document is OPENED (blank, starter, file, workspace
+  // copy) — the point at which a word processor puts you in the document. It
+  // yields to a text field outside the editor that already has focus, so an
+  // async load can never interrupt someone typing elsewhere.
+  focusDocumentStart: () => void;
   toggleMark: (mark: "bold" | "italic" | "underline") => void;
   setFontFamily: (fontFamily: FontFamily) => void;
   setFontSize: (fontSizePt: number) => void;
@@ -212,6 +229,15 @@ type TypesetEditorProps = {
   documentKind?: "resume" | "cover-letter";
   structureEditing?: boolean;
   onPageCount?: (count: number) => void;
+  // Where the caret was when this editor last unmounted, so a host that swaps
+  // the editor out (RoleFit's studio tabs) can return the user to the line they
+  // were editing instead of the top of the document. Applied once, after the
+  // first paint. Focus follows it: a stored caret means the user had been
+  // editing here.
+  initialCaret?: TypesetCaret | null;
+  // Reports the caret at unmount so the host can hold it for the next mount.
+  // Null when the user never placed one — nothing to come back to.
+  onCaretExit?: (caret: TypesetCaret | null) => void;
 };
 
 const EMPTY_FORMAT_STATE: InlineFormatState = {
@@ -331,7 +357,9 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
   highlightFieldKey = null,
   documentKind = "resume",
   structureEditing = true,
-  onPageCount
+  onPageCount,
+  initialCaret = null,
+  onCaretExit
 }, ref) {
   // Defer visual auto-linking: while a URL word is being typed (its trailing edge
   // is the caret), suppress ITS auto-link in the render only. The stored data is
@@ -394,6 +422,21 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
   uppercaseRef.current = headingUppercase;
 
   const [nonce, setNonce] = useState(0);
+
+  // Caret placement across a document open or an editor remount. Both are
+  // consumed by the post-paint restore effect below, because a caret can only
+  // be placed once the field it names has been painted.
+  //
+  // Mounting with no stored caret IS an open from the user's side: they have
+  // just arrived at a page whose entire purpose is the document. The cover
+  // letter reaches its first mount that way — its blank letter is initial state
+  // rather than a load — so nothing else would ever ask for a caret there.
+  const pendingDocumentStartRef = useRef(initialCaret === null);
+  const pendingInitialCaretRef = useRef<TypesetCaret | null>(initialCaret);
+  // The last caret the user actually had here, reported to the host at unmount.
+  const lastCaretRef = useRef<TypesetCaret | null>(null);
+  const onCaretExitRef = useRef(onCaretExit);
+  onCaretExitRef.current = onCaretExit;
 
   const [docVersion, setDocVersion] = useState(0);
   const [layoutDoc, setLayoutDoc] = useState<LayoutDocument | null>(null);
@@ -551,6 +594,20 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
   const [inlineFormatState, setInlineFormatState] = useState<InlineFormatState>(EMPTY_FORMAT_STATE);
   const [caretOverlay, setCaretOverlay] = useState<CaretOverlayGeometry | null>(null);
 
+  // A host calls this the moment it OPENS a document, which is one tick before
+  // the new data has been painted — placing the caret now would place it in the
+  // outgoing document. So it only records the request and forces a paint; the
+  // restore effect consumes it against the document that actually lands.
+  const focusDocumentStart = useCallback(() => {
+    pendingDocumentStartRef.current = true;
+    pendingInitialCaretRef.current = null;
+    setNonce((current) => current + 1);
+  }, []);
+
+  // Hand the caret back to the host as this editor goes away, so the next mount
+  // can resume where the user stopped. Empty deps: unmount only.
+  useEffect(() => () => onCaretExitRef.current?.(lastCaretRef.current), []);
+
   const focusSelection = useCallback(() => {
     const host = hostRef.current;
     const selection = readSelection() ?? lastRangeRef.current;
@@ -643,6 +700,12 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
       if (selection) {
         lastRangeRef.current = selection;
         lastRangesRef.current = null;
+        // Kept in VALUE indexes, not display indexes: this outlives the painted
+        // DOM it was read from, and a remount re-paints from the value.
+        lastCaretRef.current = {
+          key: selection.key,
+          valueIndex: selection.map.valueStart[selection.dStart] ?? selection.value.length
+        };
       }
       // Editable toolbar controls (notably the custom font-size input) must
       // temporarily take focus without discarding the page range they target.
@@ -1387,6 +1450,7 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
       undo: () => commitHistory("undo"),
       redo: () => commitHistory("redo"),
       focusSelection,
+      focusDocumentStart,
       toggleMark: (mark) => {
         const target = commandTarget();
         if (!target) return;
@@ -1533,6 +1597,7 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
       commitReplaceWithLink,
       deleteSelection,
       docStyle.style,
+      focusDocumentStart,
       focusSelection,
       insertText,
       resolveLinkTarget,
@@ -1669,13 +1734,78 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
 
   // ---- caret restore + gate settle (after the repaint an edit triggered) ----
 
+  // Place a model caret in the painted document. Returns false when the field it
+  // names is no longer painted — a stored caret whose document has since been
+  // replaced resolves to nothing rather than to an arbitrary position.
+  const placeCaret = useCallback(
+    (host: HTMLElement, target: TypesetCaret, takeFocus: boolean): boolean => {
+      const src = parseFieldKey(target.key);
+      if (!src) return false;
+      const value = valueForField(dataRef.current, src);
+      const map = mapFor(src, value);
+      const d = displayIndexForValueIndex(map, Math.min(target.valueIndex, value.length));
+      const pos = displayIndexToCaret(host, target.key, map.display, d);
+      if (!pos) return false;
+      if (takeFocus) host.focus({ preventScroll: true });
+      const sel = window.getSelection();
+      if (sel) {
+        const range = document.createRange();
+        range.setStart(pos.node, pos.offset);
+        range.collapse(true);
+        sel.removeAllRanges();
+        sel.addRange(range);
+      }
+      // Only chase the caret into view when we are also taking focus. Yielding
+      // to a text field elsewhere and THEN scrolling the document under the
+      // user would be the same interruption in a quieter form.
+      if (takeFocus) (pos.node.parentElement ?? undefined)?.scrollIntoView({ block: "nearest" });
+      return true;
+    },
+    [mapFor]
+  );
+
+  // Opening a document must not interrupt someone typing somewhere else: a
+  // workspace load resolves whenever the server answers, which can land while
+  // the user is filling in the job description. Buttons and the page background
+  // are fair game — the user just asked for this document.
+  const focusIsInAnotherTextField = useCallback((host: HTMLElement): boolean => {
+    const active = document.activeElement as HTMLElement | null;
+    if (!active || active === document.body || host.contains(active)) return false;
+    return active.isContentEditable || /^(?:input|textarea|select)$/i.test(active.tagName);
+  }, []);
+
   useLayoutEffect(() => {
     const host = hostRef.current;
     if (!host) return;
+    // 0) A freshly opened document starts at its first painted field, and a
+    // remounted one resumes where the host says the caret was. Both are one-shot
+    // and both lose to the caret an in-flight edit is restoring, which is the
+    // user's own live position. Placement never returns early: step 2 below
+    // reopens the commit gate, and skipping it would strand queued input.
+    const placeDocumentStart = () => {
+      const key = orderedFieldKeys(host)[0];
+      return Boolean(key) && placeCaret(host, { key, valueIndex: 0 }, !focusIsInAnotherTextField(host));
+    };
+    let placed = false;
+    if (pendingDocumentStartRef.current && !pendingCaretRef.current) {
+      placed = placeDocumentStart();
+      // Spent once the document has fields to aim at, even if placement failed:
+      // an unconsumed request would sit here and fire on some later repaint the
+      // user never connected to opening anything.
+      if (placed || orderedFieldKeys(host).length > 0) pendingDocumentStartRef.current = false;
+    }
+    const initial = pendingInitialCaretRef.current;
+    if (!placed && initial && !pendingCaretRef.current) {
+      pendingInitialCaretRef.current = null;
+      // A stored caret means the user had been editing here, so focus follows it.
+      // If its field is gone — the document was replaced while this editor was
+      // away — fall back to the start rather than leaving the page caretless.
+      placed = placeCaret(host, initial, !focusIsInAnotherTextField(host)) || placeDocumentStart();
+    }
     // 1) Restore the caret the last commit asked for.
     const pending = pendingCaretRef.current;
     pendingCaretRef.current = null;
-    if (pending) {
+    if (pending && !placed) {
       const target = pending(dataRef.current);
       const src = target ? parseFieldKey(target.key) : null;
       if (target && src) {
@@ -1753,6 +1883,8 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
       }
     }
   }, [
+    focusIsInAnotherTextField,
+    placeCaret,
     commitClearFormatting,
     commitEnter,
     commitHistory,
@@ -1891,7 +2023,10 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
           style={{
             left: caretOverlay.left,
             top: caretOverlay.top,
-            height: caretOverlay.height
+            height: caretOverlay.height,
+            // Italic text is entered on a slope, so the caret leans with it.
+            transform: caretOverlay.slantDeg ? `skewX(${caretOverlay.slantDeg}deg)` : undefined,
+            transformOrigin: `0 ${caretOverlay.baselineOffset}px`
           }}
         />
       ) : null}

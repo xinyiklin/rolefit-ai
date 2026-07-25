@@ -19,6 +19,10 @@ type StudioPaneProps = {
   children: ReactNode;
   footer?: ReactNode;
   overlay?: ReactNode;
+  // Pinned to the bottom of the rail, below the tab groups. Not a tab: it opens
+  // the Settings dialog rather than swapping the studio body, so it stays out of
+  // the tablist and its roving-tabindex keyboard model.
+  sidebarFooter?: ReactNode;
 };
 
 export function StudioPane({
@@ -27,7 +31,8 @@ export function StudioPane({
   outputTabs,
   children,
   footer,
-  overlay
+  overlay,
+  sidebarFooter
 }: StudioPaneProps) {
   // APG tabs keyboard model: roving tabindex + arrow/Home/End move selection and
   // follow focus to the newly active tab.
@@ -98,6 +103,7 @@ export function StudioPane({
           </div>
         ))}
       </nav>
+      {sidebarFooter ? <div className="studio-sidebar__footer">{sidebarFooter}</div> : null}
       </div>
 
       <section className="studio-main" aria-label="Selected output">

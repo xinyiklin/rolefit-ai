@@ -11,6 +11,7 @@ import { DocumentToolbar } from "@typeset/editor/components/toolbar/DocumentTool
 import {
   TypesetEditor,
   type InlineFormatState,
+  type TypesetCaret,
   type TypesetEditorHandle,
   type TypesetEditorOverlayContext
 } from "@typeset/editor/sections/editor/TypesetEditor.tsx";
@@ -18,6 +19,7 @@ import type { JobConstraint } from "../../lib/jobConstraints";
 import type { AutosavedDraft } from "../../hooks/useAutosaveDraft";
 import type { DraftAutosaveState } from "../../hooks/useAutosaveDraft";
 import { fieldKeyForReviewTarget } from "../../lib/reviewTarget.ts";
+import { useRestoredScroll } from "../../hooks/useRestoredScroll";
 import { RoleFitEditorOverlay } from "../editor/RoleFitEditorOverlay.tsx";
 import { ReviewRail } from "../ReviewRail";
 import { ViewportGate } from "../ViewportGate";
@@ -42,6 +44,11 @@ type ResumeTabProps = {
   docStyle: DocStyleControls;
   formattingToolbar: ReactNode;
   editorRef: RefObject<TypesetEditorHandle | null>;
+  // Held by the host across the tab switch that unmounts this editor.
+  initialCaret: TypesetCaret | null;
+  onCaretExit: (caret: TypesetCaret | null) => void;
+  initialScrollTop: number;
+  onScrollExit: (top: number) => void;
   onInlineFormatStateChange: (state: InlineFormatState) => void;
   onRequestLinkEditor: () => void;
   tailorModes: Record<string, TailorMode>;
@@ -81,6 +88,10 @@ export function ResumeTab({
   docStyle,
   formattingToolbar,
   editorRef,
+  initialCaret,
+  onCaretExit,
+  initialScrollTop,
+  onScrollExit,
   onInlineFormatStateChange,
   onRequestLinkEditor,
   tailorModes,
@@ -93,6 +104,7 @@ export function ResumeTab({
   onDismissAutosaveDraft,
   reviewStale
 }: ResumeTabProps) {
+  const scrollerRef = useRestoredScroll(initialScrollTop, onScrollExit);
   // Intercept Ctrl/Cmd +/-/0 to control editor zoom instead of browser zoom.
   // Deliberately unconditional (no focus/modal gating) — matches the deleted
   // hook's original scope, including its incidental double-fire with
@@ -140,7 +152,7 @@ export function ResumeTab({
       <header
         className="top-toolbar resume-tab__toolbar"
         aria-label="Resume editor toolbar"
-        data-toolbar-labels="text"
+        data-toolbar-labels="icon"
       >
         <DocumentToolbar
           documentTitle={documentTitle}
@@ -198,6 +210,7 @@ export function ResumeTab({
 
         <div
           className="resume-workbench__editor"
+          ref={scrollerRef}
           onDragStart={(e) => {
             if (!(e.target as HTMLElement).closest?.(".resume-doc")) e.preventDefault();
           }}
@@ -211,6 +224,8 @@ export function ResumeTab({
                 canUndo={canUndo}
                 canRedo={canRedo}
                 docStyle={docStyle}
+                initialCaret={initialCaret}
+                onCaretExit={onCaretExit}
                 onInlineFormatStateChange={onInlineFormatStateChange}
                 onRequestLinkEditor={onRequestLinkEditor}
                 overlay={renderOverlay}

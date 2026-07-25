@@ -1,5 +1,5 @@
 import type { FontFamily } from "@typeset/engine/lib/documentStyle.ts";
-import { documentFontFamily } from "@typeset/engine/typeset/fontRegistry.ts";
+import { documentFontFamily, fontFace } from "@typeset/engine/typeset/fontRegistry.ts";
 import { faceFor } from "@typeset/engine/typeset/measure.ts";
 import { browserFaceBox } from "@typeset/engine/typeset/render/dom.tsx";
 
@@ -17,6 +17,13 @@ export type CaretOverlayGeometry = {
   left: number;
   top: number;
   height: number;
+  // Distance from the caret's top edge down to the text baseline, and the
+  // active face's slope in CSS `skewX()` degrees (0 upright, negative leaning
+  // right). A slanted caret is sheared about `baselineOffset` because that is
+  // where the glyph outlines are sheared and where the browser reports the
+  // insertion point, so `left` stays true whatever the slope.
+  baselineOffset: number;
+  slantDeg: number;
 };
 
 function caretClientX(node: Node, offset: number): number | null {
@@ -84,14 +91,18 @@ export function caretOverlayGeometry(
   );
   if (!Number.isFinite(baseline)) return null;
   const family = documentFontFamily(appearance.fontFamily);
-  const box = browserFaceBox(family, faceFor(appearance.bold, appearance.italic));
+  const face = faceFor(appearance.bold, appearance.italic);
+  const box = browserFaceBox(family, face);
   const sizePx = appearance.fontSizePt * zoom;
   const lineRect = line.getBoundingClientRect();
   const wrapperRect = wrapper.getBoundingClientRect();
+  const ascentPx = box.ascent * sizePx;
 
   return {
     left: clientX - wrapperRect.left,
-    top: lineRect.top - wrapperRect.top + baseline - box.ascent * sizePx,
-    height: Math.max(1, (box.ascent + box.descent) * sizePx)
+    top: lineRect.top - wrapperRect.top + baseline - ascentPx,
+    height: Math.max(1, (box.ascent + box.descent) * sizePx),
+    baselineOffset: ascentPx,
+    slantDeg: fontFace(family, face).italicAngleDeg
   };
 }

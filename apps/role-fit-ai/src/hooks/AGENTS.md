@@ -21,6 +21,12 @@ browser-side effects; components render them and App composes them.
 - `useCoverLetterEditor` owns RoleFit's separate source-letter/file/export
   lifecycle while delegating history, editing, layout, and PDF to the shared
   packages. `useCoverLetter` owns only its grounded AI revision workflow.
+- Every user-initiated load in that hook goes through its own `openDocument`
+  rather than the shared `seedData`, so no open path can forget to fire
+  `onOpenDocument` (the host's "put the caret in the new letter"). Applying a
+  TAILORED result deliberately calls `seedData` directly: it is not an open.
+  The resume side gets the same guarantee by wrapping `seed`/`seedData` in App
+  before they reach `useWorkspaceResume`.
 
 ## Rules
 

@@ -10,9 +10,9 @@
   flex: 0 0 auto;
 }
 
-.cover-letter-tab__toolbar .top-toolbar__primary-row {
-  background: var(--card-elev);
-}
+/* The document action bar uses the shared --card fill from .top-toolbar. It was
+   overridden to --card-elev here, which made the Cover letter header read a
+   shade lighter than the Resume header on the same desk. */
 
 .cover-letter-tab__toolbar .top-toolbar__file-actions {
   min-width: 0;

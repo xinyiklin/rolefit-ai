@@ -1,5 +1,6 @@
-import type { RefObject } from "react";
+import { useState, type RefObject } from "react";
 import {
+  Download,
   FileDown,
   FilePlus2,
   FolderOpen,
@@ -10,6 +11,7 @@ import {
   Sparkles
 } from "lucide-react";
 
+import { coverLetterFileName } from "@typeset/engine/lib/coverLetter.ts";
 import { DocumentToolbar } from "@typeset/editor/components/toolbar/DocumentToolbar.tsx";
 import { FormattingToolbar } from "@typeset/editor/components/toolbar/FormattingToolbar.tsx";
 import { PageStylePopover } from "@typeset/editor/components/toolbar/PageStylePopover.tsx";
@@ -20,7 +22,10 @@ import type {
 } from "@typeset/editor/sections/editor/TypesetEditor.tsx";
 import type { CoverLetterEditorState } from "../../hooks/useCoverLetterEditor";
 import { useDialog } from "../../hooks/useDialog";
-import { DocumentActionMenu } from "../document/DocumentActionMenu";
+import { formatHistoryDate } from "../../lib/historyDate";
+import { ExportMenu } from "../ExportRail";
+import { DocumentOpenMenu } from "../document/DocumentOpenMenu";
+import { DocumentSaveMenu } from "../document/DocumentSaveMenu";
 import { LineHeightPopover } from "./LineHeightPopover";
 
 type CoverLetterToolbarProps = {
@@ -40,6 +45,25 @@ type CoverLetterToolbarProps = {
   onLinkEditorOpenChange: (open: boolean) => void;
 };
 
+// Client-side preview of the file name the server will slug this variant into.
+// The server re-derives it; this only shows the user what they will get.
+function coverLetterVariantFileName(label: string): string {
+  const slug = label
+    .normalize("NFKD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 40);
+  return slug ? "cover-letter-" + slug + ".cover" : "";
+}
+
+// Strip the .cover extension the file-name helper adds, so the rename prompt
+// pre-fills a bare base name the way the resume export does.
+function coverPdfBaseName(documentTitle: string): string {
+  return coverLetterFileName(documentTitle).replace(/\.cover$/i, "");
+}
+
 export function CoverLetterToolbar({
   editor,
   editorRef,
@@ -55,6 +79,8 @@ export function CoverLetterToolbar({
   onLinkEditorOpenChange
 }: CoverLetterToolbarProps) {
   const { confirm } = useDialog();
+  // The PDF rename prompt is opened from the Save menu's PDF row.
+  const [pdfPromptOpen, setPdfPromptOpen] = useState(false);
 
   async function confirmReplace(): Promise<boolean> {
     if (!editor.dirty) return true;
@@ -79,11 +105,22 @@ export function CoverLetterToolbar({
     if (await confirmReplace()) editor.startStarter();
   }
 
+  // Opening a saved letter replaces the document just as much as Blank or a file
+  // upload does, so it asks first. Without this the Open menu's saved list threw
+  // away unsaved edits silently — the resume's equivalents both confirm.
+  async function openSaved(fileName: string) {
+    if (await confirmReplace()) await editor.openWorkspaceCoverLetter(fileName);
+  }
+
+  async function restoreSaved(key: string) {
+    if (await confirmReplace()) await editor.restoreWorkspaceCoverLetter(key);
+  }
+
   return (
     <header
       className="top-toolbar cover-letter-tab__toolbar"
       aria-label="Cover letter editor toolbar"
-      data-toolbar-labels="text"
+      data-toolbar-labels="icon"
     >
       <input
         ref={inputRef}
@@ -97,11 +134,13 @@ export function CoverLetterToolbar({
         }}
       />
 
+      {/* documentContext carries only the job target. The old "Plain
+          correspondence document" fallback restated what the page already is. */}
       <DocumentToolbar
         documentTitle={editor.documentTitle}
         onDocumentTitleChange={editor.setDocumentTitle}
         untitledDocumentTitle="Untitled cover letter"
-        documentContext={targetLine || "Plain correspondence document"}
+        documentContext={targetLine}
         saveStatus={
           editor.dirty
             ? { state: "unsaved", label: "Unsaved cover letter" }
@@ -110,107 +149,124 @@ export function CoverLetterToolbar({
         docStyle={editor.docStyle}
         actions={(
           <div className="top-toolbar__file-actions" role="toolbar" aria-label="Cover letter actions">
-            <ToolbarButton
-              label="Starter"
-              tooltip="Open the guided cover-letter starter"
-              icon={<LayoutTemplate size={16} />}
-              showLabel
-              onClick={() => void startStarter()}
-            />
-            <DocumentActionMenu
-              label="Open"
+            {/* Starter moved in here: starting from the guided template and
+                opening an existing letter are the same decision. */}
+            <DocumentOpenMenu
               tooltip="Open a cover letter"
               icon={<FolderOpen size={16} />}
-            >
-              {({ close }) => (
-                <div className="document-action-panel cover-letter-open-menu">
-                  <div className="document-action-panel__head">
-                    <strong>Open cover letter</strong>
-                    <span>Editable .cover files preserve formatting; text and Markdown open as plain drafts.</span>
-                  </div>
-                  <button
-                    type="button"
-                    className="document-action-row"
-                    onClick={() => {
-                      void chooseFile().then((opened) => {
-                        if (opened) close();
-                      });
-                    }}
-                  >
-                    <FolderOpen size={15} aria-hidden="true" />
-                    <span>
-                      <strong>Choose a file</strong>
-                      <small>.cover, .txt, or .md</small>
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    className="document-action-row"
-                    onClick={() => {
-                      void startBlank().then(close);
-                    }}
-                  >
-                    <FilePlus2 size={15} aria-hidden="true" />
-                    <span>
-                      <strong>Blank document</strong>
-                      <small>Start without the guided prompts.</small>
-                    </span>
-                  </button>
-                </div>
-              )}
-            </DocumentActionMenu>
-            <DocumentActionMenu
-              label="Save"
+              title="Open cover letter"
+              description="Editable .cover files preserve formatting; text and Markdown open as plain drafts."
+              actions={[
+                {
+                  key: "starter",
+                  icon: <LayoutTemplate size={15} aria-hidden="true" />,
+                  title: "Guided starter",
+                  description: "Bundled letter with prompts to fill in.",
+                  onSelect: startStarter
+                },
+                {
+                  key: "blank",
+                  icon: <FilePlus2 size={15} aria-hidden="true" />,
+                  title: "Blank document",
+                  onSelect: startBlank
+                },
+                {
+                  key: "file",
+                  icon: <FolderOpen size={15} aria-hidden="true" />,
+                  title: "Choose a file",
+                  description: ".cover, .txt, or .md",
+                  onSelect: chooseFile
+                }
+              ]}
+              saved={{
+                label: "Saved in workspace",
+                emptyNote: "No saved letters yet — Save writes one to your workspace.",
+                groups: [
+                  {
+                    key: "letters",
+                    label: "Letters",
+                    icon: <FolderOpen size={11} aria-hidden="true" />,
+                    entries: editor.coverLetterOptions.map((option) => ({
+                      key: option.fileName,
+                      title: option.label,
+                      meta: option.fileName,
+                      active: option.fileName === editor.activeCoverFileName,
+                      onOpen: () => void openSaved(option.fileName)
+                    }))
+                  },
+                  ...editor.coverLetterHistory.map((group) => ({
+                    key: `history-${group.variant}`,
+                    label: `${group.label} — earlier versions`,
+                    collapsible: true,
+                    defaultOpen: editor.coverLetterHistory.length === 1,
+                    entries: group.entries.map((entry) => ({
+                      key: entry.key,
+                      title: formatHistoryDate(entry.date),
+                      meta: "COVER",
+                      openLabel: "Restore",
+                      onOpen: () => void restoreSaved(entry.key)
+                    }))
+                  }))
+                ]
+              }}
+            />
+            <DocumentSaveMenu
               tooltip="Save the cover letter"
               icon={<Save size={16} />}
               disabled={!hasLetter}
-            >
-              {({ close }) => (
-                <div className="document-action-panel cover-letter-save-menu">
-                  <div className="document-action-panel__head">
-                    <strong>Save cover letter</strong>
-                    <span>Choose an editable document or a plain-text copy.</span>
-                  </div>
-                  <button
-                    type="button"
-                    className="document-action-row"
-                    onClick={() => {
-                      editor.saveCoverFile();
-                      close();
-                    }}
-                  >
-                    <Save size={15} aria-hidden="true" />
-                    <span>
-                      <strong>Editable .cover</strong>
-                      <small>Preserves content, formatting, and document style.</small>
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    className="document-action-row"
-                    disabled={!editor.text.trim()}
-                    onClick={() => {
-                      editor.saveTextFile();
-                      close();
-                    }}
-                  >
-                    <FileText size={15} aria-hidden="true" />
-                    <span>
-                      <strong>Plain-text .txt</strong>
-                      <small>Content only, for email or another editor.</small>
-                    </span>
-                  </button>
-                </div>
-              )}
-            </DocumentActionMenu>
-            <ToolbarButton
-              label={editor.isRenderingPdf ? "Exporting…" : "PDF"}
-              tooltip="Export cover letter PDF"
-              icon={<FileDown size={16} />}
-              showLabel
-              disabled={!hasLetter || editor.isRenderingPdf}
-              aria-busy={editor.isRenderingPdf}
-              onClick={() => void editor.downloadPdf()}
+              title="Save cover letter"
+              description="Keep a workspace letter or take a file away."
+              primary={{
+                title: editor.activeCoverFileName
+                  ? `Update ${editor.activeCoverLabel || "this letter"}`
+                  : "Save as default letter",
+                description: editor.activeCoverFileName
+                  ? "The version it replaces goes to history."
+                  : "Opens automatically next time.",
+                onSelect: () => editor.saveToWorkspace()
+              }}
+              variant={{
+                fieldId: "cover-letter-variant-name",
+                fieldLabel: "New letter variant",
+                placeholder: "e.g. Backend SDE",
+                fileNameFor: coverLetterVariantFileName,
+                existingNames: editor.coverLetterOptions.map((option) => option.fileName),
+                onSave: (fileName) => editor.saveToWorkspace({ fileName })
+              }}
+              actions={[
+                {
+                  key: "cover",
+                  icon: <Download size={15} aria-hidden="true" />,
+                  title: "Download .cover",
+                  onSelect: editor.saveCoverFile
+                },
+                {
+                  key: "txt",
+                  icon: <FileText size={15} aria-hidden="true" />,
+                  title: "Download .txt",
+                  description: "Content only, no formatting.",
+                  disabled: !editor.text.trim(),
+                  onSelect: editor.saveTextFile
+                },
+                {
+                  key: "pdf",
+                  icon: <FileDown size={15} aria-hidden="true" />,
+                  title: editor.isRenderingPdf ? "Exporting PDF…" : "Download PDF",
+                  disabled: !hasLetter || editor.isRenderingPdf,
+                  // Same rename prompt as the resume — a PDF is the file you send,
+                  // so its name is worth confirming for both documents.
+                  onSelect: () => setPdfPromptOpen(true)
+                }
+              ]}
+            />
+            {/* Same rename dialog the resume uses; its trigger is the Save menu's
+                PDF row. Status stays in the review rail, which already shows
+                editor.status. */}
+            <ExportMenu
+              defaultFileBaseName={coverPdfBaseName(editor.documentTitle)}
+              promptOpen={pdfPromptOpen}
+              onPromptOpenChange={setPdfPromptOpen}
+              onDownloadPdf={(base) => void editor.downloadPdf(base)}
             />
             {editor.canRestoreTailorSource ? (
               <ToolbarButton
@@ -221,8 +277,12 @@ export function CoverLetterToolbar({
                 onClick={editor.restoreTailorSource}
               />
             ) : null}
+            {/* Named Polish to match the resume action bar. The underlying
+                operation is still tailoring this letter — the props, the hook,
+                and Restore source keep that name. The letter has no AI review
+                stage, so unlike the resume this stays a single direct action. */}
             <ToolbarButton
-              label={isTailoring ? "Tailoring…" : "Tailor"}
+              label={isTailoring ? "Working…" : "Polish"}
               tooltip={tailorHint || "Tailor the existing cover letter"}
               icon={<Sparkles size={16} />}
               showLabel

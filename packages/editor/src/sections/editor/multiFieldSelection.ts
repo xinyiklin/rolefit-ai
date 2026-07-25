@@ -25,7 +25,12 @@ export type FieldRange = {
 
 // Field keys in document order, deduplicated. A field can paint several spans
 // (one per wrapped line); the first occurrence fixes its position.
-function orderedFieldKeys(host: HTMLElement): string[] {
+//
+// Exported because the painted order IS document order for every host: the
+// caret's "start of the document" reads `[0]` from here rather than asking the
+// model, which would need one answer for a resume's name field and another for
+// a cover letter's first paragraph.
+export function orderedFieldKeys(host: HTMLElement): string[] {
   const keys: string[] = [];
   const seen = new Set<string>();
   for (const span of host.querySelectorAll<HTMLElement>("[data-tsdf]:not([data-tsdm])")) {

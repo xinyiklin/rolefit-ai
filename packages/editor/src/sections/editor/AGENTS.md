@@ -28,7 +28,32 @@ typesetting guide when a change affects painted output or layout provenance.
 - `caretOverlay.ts` maps a collapsed logical selection onto the engine line's
   exposed baseline and the browser-measured active font face. The resulting
   caret remains visible while editor toolbar controls own focus and reflects
-  next-typing family, emphasis, and size without entering document state.
+  next-typing family, emphasis, and size without entering document state. It
+  also carries the active face's `italicAngleDeg`, so an italic caret leans with
+  the text it will insert, sheared about the baseline it reports. Geometry
+  equality must compare the slope and baseline too: a family's upright and
+  italic faces usually share vertical metrics, so arming italic moves nothing in
+  the box and an equality check over position alone would keep the upright
+  caret.
+- Caret placement a HOST asks for has two entry points, both consumed by the
+  post-paint restore effect because a caret can only be placed once its field is
+  painted. `focusDocumentStart()` is for the moment a document is OPENED: it
+  records the request and forces a paint rather than placing immediately,
+  because the host calls it one tick before the new data is painted. The
+  `initialCaret`/`onCaretExit` pair carries a `TypesetCaret` across an unmount,
+  for a host that swaps the editor out (RoleFit's studio tabs) — the caret is
+  stored in VALUE indexes so it survives the repaint. Neither may return early
+  from that effect: it also reopens the commit gate.
+- The editor is NEVER caretless once it has painted. Mounting with no stored
+  caret starts at the document start, and a stored caret whose field no longer
+  exists falls back there too. Without that first rule the cover letter had no
+  caret at all on its first visit: its blank letter is the hook's initial state
+  rather than a load, so no open path ever ran for it.
+- Opening a document must never take focus from a text field outside the editor.
+  A workspace load lands whenever the server answers, which can be mid-sentence
+  in the job description. Buttons and the page background are fair game; an
+  input, textarea, select, or foreign contenteditable is not, and the caret is
+  still placed so the next Tab into the document lands there.
 - `domSelection.ts` translates between DOM caret positions and display indexes,
   and owns the caret/line DOM geometry helpers (line lookup, caret placement,
   click-to-caret) plus `keyOfNode`. A field's spans are split by inline style

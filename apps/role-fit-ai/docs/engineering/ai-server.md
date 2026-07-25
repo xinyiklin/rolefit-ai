@@ -340,6 +340,16 @@ modules under `server/ai/` so no single file carries the whole pipeline:
 - `eligibilityLexicon.ts` — work-authorization and credential stems used only
   to ground facts extracted by the job distiller. Eligibility judgment belongs
   to AI Review; this module does not gate, score, or select a verdict.
+- Candidate facts reach the model only through `honestContext`. The client's
+  `buildCandidateFactsContext` (`src/lib/candidateFacts.ts`) prepends declared
+  citizenship, work authorization, sponsorship, education level, and field of
+  study to the user's honest context, and that combined string is what the
+  grounding allowlist is built from. Every field is therefore opt-in by
+  construction: an unset value contributes no line, so an undeclared
+  citizenship, clearance eligibility, or DEGREE can never become groundable
+  wording. Citizenship gates the work-authorization lines; education level gates
+  the field of study. Any new fact added there widens the allowlist and needs the
+  grounding/sanitizer probes re-run.
 - `grounding.ts` — deterministic JD-term grounding helpers used by the
   sanitizers. The proposed-text gate compares normalized JD terms against the
   submitted resume scope and honest context; unsupported JD-only terms produce
@@ -375,11 +385,23 @@ modules under `server/ai/` so no single file carries the whole pipeline:
 ## AI Provider Layer
 
 The provider is chosen per request from the companion-managed configured
-registry. The frontend AI menu has separate Distill, Tailor, and Review stage
-configs and shows only providers the user explicitly added: `/api/distill` receives the
-Distill config, `/api/polish` receives the Tailor config as `provider` /
-`model` / `reasoningEffort`, and the strict-review pass receives the
-Review config as `audit*` fields. Browser requests contain provider, model, and
+registry. Settings > AI stages holds a separate config per stage and shows only
+providers the user explicitly added: `/api/distill` receives the Distill config,
+`/api/polish` receives the Tailor config as `provider` / `model` /
+`reasoningEffort`, the strict-review pass receives the Review config as `audit*`
+fields, `/api/cover-letter` receives the Cover config, and
+`/api/application-answers` receives the Answers config. Cover and Answers ran on
+the Tailor config before they became separately configurable; an install that
+predates the split migrates them from Tailor on load, so its behavior does not
+change across the upgrade.
+
+`customInstructions` is resolved PER STAGE in the browser before the request is
+sent: a stage with its own non-blank override sends that text, otherwise it sends
+the shared instructions. Tailor and Review are separate requests, so one polish
+run may carry different guidance for each. The server contract is unchanged — one
+`customInstructions` string per request.
+
+Browser requests contain provider, model, and
 reasoning settings but no API credentials. If a request omits provider fields
 (standalone/headless API use), the server defaults to the **Claude Code CLI**
 (`claude-cli`) — an account-backed CLI path rather than a separately configured

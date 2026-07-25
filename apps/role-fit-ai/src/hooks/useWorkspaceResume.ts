@@ -270,7 +270,10 @@ export function useWorkspaceResume({
         setWorkspaceStatus("");
       } else {
         saveLastBaseResumeName("");
-        setWorkspaceStatus("Local workspace ready. Save a base resume to use it automatically on startup.");
+        // No ambient instruction here: it rendered as a permanent two-line
+        // sentence at the bottom of the Save menu, restating what that menu's
+        // own "Save as default base" row already says at the point of action.
+        setWorkspaceStatus("");
         if (applyBaseResume && workspace.baseResume?.text) {
           // The bundled starter is a `.resume` envelope (kind "resume"); parse
           // it structurally, exactly like a saved base resume. Falling through to

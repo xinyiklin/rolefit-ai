@@ -1,7 +1,6 @@
-import { useRef, useState } from "react";
-import { Check, Download, FileDown, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Check, Download, X } from "lucide-react";
 import { useModalFocus } from "@typeset/editor/hooks/useModalFocus.ts";
-import { ToolbarButton } from "@typeset/editor/components/toolbar/ToolbarButton.tsx";
 
 // The owned engine's PDF is the only file-export format (D014). Kept as a named
 // union so EXPORT_META / the rename target stay self-documenting.
@@ -15,13 +14,15 @@ export const EXPORT_META: Record<ExportFormat, { ext: string; label: string }> =
 };
 
 type ExportMenuProps = {
-  // True once a resume is exportable: a structured editor model exists (loaded
-  // base / upload) or a polish produced text. Exports do not require an AI run.
-  canExport: boolean;
   // System-proposed file name (extension excluded) — pre-fills the rename
-  // dialog. e.g. "Xinyi_Lin_Stripe_Resume".
+  // dialog. e.g. "Xinyi_Lin_Stripe_Resume". The Save menu's PDF row owns the
+  // exportable/rendering gating, so neither flag is needed here.
   defaultFileBaseName: string;
-  isRenderingPdf: boolean;
+  // Controlled request from the Save menu's PDF row. The trigger used to live
+  // here as its own toolbar button; PDF is a save, so it moved into Save and this
+  // component kept only the dialog, its focus trap, and the status feedback.
+  promptOpen: boolean;
+  onPromptOpenChange: (open: boolean) => void;
   status?: string;
   statusIsError?: boolean;
   onDismissStatus?: () => void;
@@ -31,36 +32,33 @@ type ExportMenuProps = {
 };
 
 export function ExportMenu({
-  canExport,
   defaultFileBaseName,
-  isRenderingPdf,
+  promptOpen,
+  onPromptOpenChange,
   status,
   statusIsError = false,
   onDismissStatus,
   onDownloadPdf
 }: ExportMenuProps) {
-  const [renameFormat, setRenameFormat] = useState<ExportFormat | null>(null);
+  const renameFormat: ExportFormat | null = promptOpen ? "pdf-engine" : null;
   const [renameValue, setRenameValue] = useState("");
-  const triggerRef = useRef<HTMLButtonElement>(null);
+  // Seed the field each time the prompt opens; the dialog itself is unmounted
+  // while closed, so this cannot fight a value the user is typing.
+  useEffect(() => {
+    if (promptOpen) setRenameValue(defaultFileBaseName);
+  }, [promptOpen, defaultFileBaseName]);
   const renameCardRef = useRef<HTMLFormElement>(null);
   const renameInputRef = useRef<HTMLInputElement>(null);
   const handleRenameKeyDown = useModalFocus({
     active: renameFormat !== null,
     containerRef: renameCardRef,
     initialFocusRef: renameInputRef,
-    returnFocusRef: triggerRef,
     onClose: cancelRename,
     selectInitialText: true
   });
 
-  // Open the rename dialog for a save action, pre-filled with the system name.
-  function requestExport(format: ExportFormat) {
-    setRenameValue(defaultFileBaseName);
-    setRenameFormat(format);
-  }
-
   function cancelRename() {
-    setRenameFormat(null);
+    onPromptOpenChange(false);
   }
 
   function confirmRename() {
@@ -69,26 +67,19 @@ export function ExportMenu({
     // Pass the raw value through; the export hook sanitizes and re-attaches the
     // extension. An empty field falls back to the system name there.
     const base = renameValue.trim() || undefined;
-    setRenameFormat(null);
+    onPromptOpenChange(false);
     onDownloadPdf(base);
   }
 
   const renameLabel = renameFormat ? EXPORT_META[renameFormat].label : "";
   const renameExt = renameFormat ? EXPORT_META[renameFormat].ext : "";
 
+  // Nothing to show: with the trigger moved into the Save menu, an idle export
+  // is an empty wrapper that still consumes a flex gap in the action bar.
+  if (!renameFormat && !status) return null;
+
   return (
     <div className="export-menu" aria-label="Export PDF">
-      <ToolbarButton
-        ref={triggerRef}
-        label={isRenderingPdf ? "Exporting…" : "PDF"}
-        tooltip="Export resume PDF"
-        icon={<FileDown size={16} />}
-        showLabel
-        disabled={!canExport || isRenderingPdf}
-        aria-busy={isRenderingPdf}
-        onClick={() => requestExport("pdf-engine")}
-      />
-
       {status && !renameFormat ? (
         <div
           className={`export-menu__feedback${statusIsError ? " export-menu__feedback--error" : ""}`}

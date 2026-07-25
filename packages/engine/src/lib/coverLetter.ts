@@ -24,7 +24,13 @@ export type CoverLetterStyle = {
 };
 
 export const COVER_LETTER_STYLE_DEFAULTS: CoverLetterStyle = {
-  fontFamily: "source-serif",
+  // A cover letter is business correspondence, and the face business
+  // correspondence is written in is Calibri — the word processor default most
+  // applications are drafted in, and one of the handful career offices name.
+  // Carlito carries its metrics, so a letter keeps its line and page count if
+  // the reader ever opens it in Word. The resume default stays Latin Modern:
+  // that document is a typographic artifact, this one is a letter.
+  fontFamily: "carlito",
   fontSizePt: 11,
   lineHeight: 1.25,
   paragraphGapPt: 10,

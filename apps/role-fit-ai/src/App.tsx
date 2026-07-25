@@ -1,5 +1,19 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { FolderOpen, LayoutTemplate, Save, Sparkles, X } from "lucide-react";
+import {
+  Check,
+  Download,
+  FileDown,
+  FolderOpen,
+  LayoutTemplate,
+  Layers,
+  Save,
+  ScanSearch,
+  Settings,
+  Sparkles,
+  Upload,
+  X,
+  type LucideIcon
+} from "lucide-react";
 
 import {
   analyzeResumeText,
@@ -10,9 +24,9 @@ import { useDebouncedValue } from "./hooks/useDebouncedValue";
 import { useDocStyle } from "@typeset/editor/hooks/useDocStyle.ts";
 import { FormattingToolbar } from "@typeset/editor/components/toolbar/FormattingToolbar.tsx";
 import { DocumentStructureControls } from "@typeset/editor/components/toolbar/DocumentStructureControls.tsx";
-import { ToolbarButton } from "@typeset/editor/components/toolbar/ToolbarButton.tsx";
 import {
   type InlineFormatState,
+  type TypesetCaret,
   type TypesetEditorHandle
 } from "@typeset/editor/sections/editor/TypesetEditor.tsx";
 import { DOC_PAGE_WIDTH_PX, DOC_STYLE_BOUNDS } from "@typeset/engine/lib/documentStyle.ts";
@@ -58,6 +72,7 @@ import { useDraggableDock } from "./hooks/useDraggableDock";
 import { buildCandidateFactsContext, mergeHonestContext } from "./lib/candidateFacts";
 import { extractJobPosting, type ExtractedJobTracking } from "./lib/jobExtract";
 import { serializeResumeData } from "./lib/resumeText";
+import type { ResumeData } from "@typeset/engine/lib/resumeData.ts";
 import { defaultTailorModes, type TailorMode } from "./lib/tailorScope";
 import type { StageAiUsage } from "./lib/aiUsage";
 import { useDuplicateGuard } from "./hooks/useDuplicateGuard";
@@ -66,18 +81,16 @@ import { usePolishPipeline } from "./hooks/usePolishPipeline";
 import { useWorkspaceResume } from "./hooks/useWorkspaceResume";
 import { useApplyFlow } from "./hooks/useApplyFlow";
 
-import { AiMenu } from "./sections/AiMenu";
-import { ProviderSection } from "./sections/ProviderSection";
 import { Masthead } from "./sections/Masthead";
 import { JobMenu } from "./sections/JobMenu";
-import { PolishMenu } from "./sections/PolishMenu";
 import { AiWorkflowProgress, TaskProgress } from "./sections/AiWorkflowProgress";
 import type { AiWorkflowStage } from "./lib/aiWorkflow";
 import { SessionsMenu } from "./sections/SessionsRail";
-import { ResumeMenu } from "./sections/ResumeMenu";
+import { DocumentOpenMenu } from "./sections/document/DocumentOpenMenu";
 import { DocumentActionMenu } from "./sections/document/DocumentActionMenu";
-import { ResumeSaveMenu } from "./sections/document/ResumeSaveMenu";
+import { DocumentSaveMenu } from "./sections/document/DocumentSaveMenu";
 import { StudioPane } from "./sections/StudioPane";
+import { SettingsDialog, type SettingsSection } from "./sections/SettingsDialog";
 import { ExportMenu } from "./sections/ExportRail";
 import { ApplyDownloadDialog } from "./sections/ApplyDownloadDialog";
 import { ResumePrintLayer } from "@typeset/editor/sections/ResumePrintLayer.tsx";
@@ -87,6 +100,7 @@ import { MaterialsTab } from "./sections/tabs/MaterialsTab";
 import type { TrackerView } from "./sections/tabs/TrackerTab";
 import type { OutputTab, OutputTabDescriptor } from "./sections/shared";
 import { providerLabel } from "./config/aiOptions";
+import { formatHistoryDate } from "./lib/historyDate";
 import type { ApplicationActivityFilter } from "./lib/applicationDisplay";
 
 const PreviewOverlay = lazy(() => import("./sections/PreviewOverlay"));
@@ -111,11 +125,45 @@ function ApplicationModalLoading() {
   );
 }
 
-// The AI menu's three provider sections, in pipeline order.
-const STAGE_SECTIONS: { id: StageId; title: string }[] = [
-  { id: "distill", title: "Distill" },
-  { id: "tailor", title: "Tailor" },
-  { id: "review", title: "Review" }
+// Slug a typed variant label into the base-resume file name it will be saved as.
+function resumeVariantFileName(label: string): string {
+  const slug = label
+    .normalize("NFKD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 60);
+  return slug ? "base-resume-" + slug + ".resume" : "";
+}
+
+// What the resume Polish action asks before it spends an AI run. This is the only
+// place the three stage selections are named for the user; the value is the
+// persisted `polishStages` setting, so picking one here also sets the default.
+const POLISH_STAGE_ACTIONS: {
+  value: "tailor" | "review" | "both";
+  title: string;
+  description: string;
+  Icon: LucideIcon;
+}[] = [
+  {
+    value: "both",
+    title: "Tailor and review",
+    description: "Rewrite against the job, then audit the proposal as a recruiter would.",
+    Icon: Layers
+  },
+  {
+    value: "tailor",
+    title: "Tailor only",
+    description: "Rewrite the Tailor sections against the job. No review pass.",
+    Icon: Sparkles
+  },
+  {
+    value: "review",
+    title: "Review only",
+    description: "Audit the current draft as it stands. Nothing is rewritten.",
+    Icon: ScanSearch
+  }
 ];
 
 const EMPTY_INLINE_FORMAT: InlineFormatState = {
@@ -264,8 +312,16 @@ function App() {
     setLegallyAuthorizedToWork,
     requiresSponsorship,
     setRequiresSponsorship,
+    educationLevel,
+    setEducationLevel,
+    major,
+    setMajor,
     customInstructions,
-    setCustomInstructions
+    setCustomInstructions,
+    stageCustomInstructions,
+    setStageCustomInstruction,
+    customInstructionsFor,
+    resetSettings
   } = ai;
   const availableProviderById = useMemo(
     () => new Map(providerAvailability.providers.map((provider) => [provider.id, provider])),
@@ -290,9 +346,13 @@ function App() {
   const distillProviderReady = providerReady(stages.distill.provider);
   const tailorProviderReady = providerReady(stages.tailor.provider);
   const reviewProviderReady = providerReady(stages.review.provider);
+  const coverProviderReady = providerReady(stages.cover.provider);
+  const answersProviderReady = providerReady(stages.answers.provider);
   const distillProviderMessage = providerRecoveryMessage(stages.distill.provider);
   const tailorProviderMessage = providerRecoveryMessage(stages.tailor.provider);
   const reviewProviderMessage = providerRecoveryMessage(stages.review.provider);
+  const coverProviderMessage = providerRecoveryMessage(stages.cover.provider);
+  const answersProviderMessage = providerRecoveryMessage(stages.answers.provider);
   const ensureDistillProvider = useCallback(
     () => providerAvailability.ensureProvider(stages.distill.provider),
     [providerAvailability.ensureProvider, stages.distill.provider]
@@ -314,7 +374,13 @@ function App() {
       : polishStages !== "tailor" && !reviewProviderReady
         ? reviewProviderMessage
         : "";
-  const candidateFactsContext = buildCandidateFactsContext({ citizenshipStatus, legallyAuthorizedToWork, requiresSponsorship });
+  const candidateFactsContext = buildCandidateFactsContext({
+    citizenshipStatus,
+    legallyAuthorizedToWork,
+    requiresSponsorship,
+    educationLevel,
+    major
+  });
   const requestHonestContext = mergeHonestContext(honestContext, candidateFactsContext);
   // Distill runs on its own concrete provider config (synced to other stages via
   // the copy buttons, not a live link). Shared by every distill entry point
@@ -329,12 +395,18 @@ function App() {
   const [isApplicationModalOpen, setIsApplicationModalOpen] = useState(false);
   // null → the modal is in "add" mode; an id → it edits that application.
   const [modalApplicationId, setModalApplicationId] = useState<string | null>(null);
-  // Controlled open state for the Options (PolishMenu) popover — lets the
-  // "Add evidence" handler open it programmatically without a new popover system.
-  const [polishMenuOpen, setPolishMenuOpen] = useState(false);
-  // Ref for the honest-context textarea inside the Options menu — focused after
-  // the menu is opened by handleAddHonestContext so the user can type immediately.
+  // The Settings dialog's open state AND its active section in one value: null is
+  // closed, a section id is open on that section. "Add evidence" opens it directly
+  // on Guidance, so the section cannot be private to the dialog.
+  const [settingsSection, setSettingsSection] = useState<SettingsSection | null>(null);
+  // Ref for the honest-context textarea inside Settings — focused after the dialog
+  // is opened by handleAddHonestContext so the user can type immediately.
   const honestContextTextareaRef = useRef<HTMLTextAreaElement>(null);
+  // Hidden file input the resume Open menu's "Choose a file" row clicks.
+  const resumeFileInputRef = useRef<HTMLInputElement>(null);
+  // The PDF rename prompt is opened from the Save menu's PDF row; ExportMenu
+  // still owns the dialog itself.
+  const [pdfPromptOpen, setPdfPromptOpen] = useState(false);
 
   // Autosave draft recovery: on mount, check whether a draft was saved that
   // the user may want to restore. Null = no draft; non-null = prompt visible.
@@ -358,15 +430,53 @@ function App() {
     canUndo: canUndoResume,
     canRedo: canRedoResume,
     serializedResume,
-    seed: seedResumeEditor,
-    seedData: seedResumeData,
+    seed: seedResumeEditorDocument,
+    seedData: seedResumeDataDocument,
     markClean: markResumeClean,
     actions: resumeEditorActions
   } = useResumeEditor();
   const typesetEditorRef = useRef<TypesetEditorHandle>(null);
   const [inlineFormat, setInlineFormat] = useState<InlineFormatState>(EMPTY_INLINE_FORMAT);
-  const coverLetterEditor = useCoverLetterEditor();
+  // The caret each editor was left at, held across the tab switch that unmounts
+  // it. Refs, not state: nothing renders from them, and they are read once by
+  // the editor that mounts next.
+  const resumeCaretRef = useRef<TypesetCaret | null>(null);
+  const coverLetterCaretRef = useRef<TypesetCaret | null>(null);
+  // Same idea for the page the user was looking at. Opening a document resets
+  // both: a new document has no earlier position.
+  const resumeScrollTopRef = useRef(0);
+  const coverLetterScrollTopRef = useRef(0);
+
+  // Opening a document — from the workspace, a file, a starter, or the pipeline
+  // — puts the user in it at the first line. Wrapping the two seed paths is why
+  // no open site has to remember to do this: `seedData`/`seed` are the editor
+  // hook's only load paths.
+  const seedResumeData = useCallback(
+    (data: ResumeData | null) => {
+      seedResumeDataDocument(data);
+      resumeCaretRef.current = null;
+      resumeScrollTopRef.current = 0;
+      typesetEditorRef.current?.focusDocumentStart();
+    },
+    [seedResumeDataDocument]
+  );
+  const seedResumeEditor = useCallback(
+    (text: string, sourceText?: string) => {
+      seedResumeEditorDocument(text, sourceText);
+      resumeCaretRef.current = null;
+      resumeScrollTopRef.current = 0;
+      typesetEditorRef.current?.focusDocumentStart();
+    },
+    [seedResumeEditorDocument]
+  );
   const coverLetterEditorRef = useRef<TypesetEditorHandle>(null);
+  const coverLetterEditor = useCoverLetterEditor({
+    onOpenDocument: useCallback(() => {
+      coverLetterCaretRef.current = null;
+      coverLetterScrollTopRef.current = 0;
+      coverLetterEditorRef.current?.focusDocumentStart();
+    }, [])
+  });
   const [coverLetterInlineFormat, setCoverLetterInlineFormat] =
     useState<InlineFormatState>(EMPTY_INLINE_FORMAT);
   const [linkEditorOpen, setLinkEditorOpen] = useState(false);
@@ -552,10 +662,10 @@ function App() {
     jobDescription,
     jobUrl,
     honestContext: requestHonestContext,
-    customInstructions,
-    aiRequest: stages.tailor,
-    providerReady: tailorProviderReady,
-    providerMessage: tailorProviderMessage,
+    customInstructions: customInstructionsFor("answers"),
+    aiRequest: stages.answers,
+    providerReady: answersProviderReady,
+    providerMessage: answersProviderMessage,
     upsertApplication,
     findForTarget
   });
@@ -579,10 +689,10 @@ function App() {
     currentResumeText,
     jobText: jobDescription,
     honestContext: requestHonestContext,
-    customInstructions,
-    aiRequest: stages.tailor,
-    providerReady: tailorProviderReady,
-    providerMessage: tailorProviderMessage,
+    customInstructions: customInstructionsFor("cover"),
+    aiRequest: stages.cover,
+    providerReady: coverProviderReady,
+    providerMessage: coverProviderMessage,
     resumeText,
     onCaptureSource: coverLetterEditor.captureTailorSource,
     onApplyTailored: coverLetterEditor.applyTailoredText,
@@ -673,15 +783,19 @@ function App() {
   // we tailor against, while `jobUrl` is optional metadata saved with the
   // application for pipeline tracking only — it is never sent to the model.
   const resumeReady = (currentResumeText || resumeText).trim().length > 80;
-  const canPolish = useMemo(() => {
+  // Everything except provider readiness. Every stage selection needs these —
+  // buildPolishContext requires an editable Tailor scope even for Review only —
+  // so this gates the Polish trigger, and each stage row in its menu adds its own
+  // provider check.
+  const polishInputsReady = useMemo(() => {
     return Boolean(
       editedResume &&
         resumeReady &&
         Object.values(tailorModes).some((mode) => mode === "tailor") &&
-        jobDescription.trim().length > 40 &&
-        selectedPolishProvidersReady
+        jobDescription.trim().length > 40
     );
-  }, [editedResume, jobDescription, resumeReady, selectedPolishProvidersReady, tailorModes]);
+  }, [editedResume, jobDescription, resumeReady, tailorModes]);
+  const canPolish = polishInputsReady && selectedPolishProvidersReady;
 
   // The edited resume is debounced before the diff recompute so typing in the
   // editor stays smooth (the editor preview itself updates live).
@@ -729,6 +843,19 @@ function App() {
     : !selectedPolishProvidersReady
     ? polishProviderMessage
     : "Add more resume text in the Resume menu (a few lines at least).";
+  // Per-stage readiness for the Polish chooser: a stage the user can pick must
+  // have its own provider, and a blocked row says which one and why.
+  const polishStageReady: Record<"tailor" | "review" | "both", boolean> = {
+    tailor: tailorProviderReady,
+    review: reviewProviderReady,
+    both: tailorProviderReady && reviewProviderReady
+  };
+  const polishStageBlocker = (stage: "tailor" | "review" | "both") =>
+    stage !== "review" && !tailorProviderReady
+      ? tailorProviderMessage
+      : stage !== "tailor" && !reviewProviderReady
+        ? reviewProviderMessage
+        : "";
 
   // ----- Resume export (engine PDF / .resume save) -----
   const {
@@ -813,7 +940,7 @@ function App() {
     jobDescription,
     includeCoverLetter: false,
     requestHonestContext,
-    customInstructions,
+    customInstructionsFor,
     polishStages,
     tailor: stages.tailor,
     review: stages.review,
@@ -828,6 +955,34 @@ function App() {
     setExportStatus,
     confirmDuplicateBeforePolish: duplicateGuard.confirmDuplicateBeforePolish
   });
+
+  // Polish asks which stages to run, then runs them. `polishStages` stays the one
+  // owner of that choice (it is a persisted AI setting, and the progress card,
+  // retryStage, and the presence phase all read it), so the chooser SETS it and
+  // the run starts on the next render rather than taking an override argument.
+  //
+  // The two-step is required, not stylistic: `polishStages` is part of the
+  // pipeline's input fingerprint, and the fingerprint effect aborts any run that
+  // is already in flight when it changes. Starting the run in the same tick as
+  // the setState would abort the run we just started; letting the setState commit
+  // first means that effect sees nothing in flight and returns early.
+  const runPolishOnStagesCommitRef = useRef(false);
+  function startPolish(nextStages: "tailor" | "review" | "both") {
+    if (nextStages === polishStages) {
+      void handlePolish();
+      return;
+    }
+    runPolishOnStagesCommitRef.current = true;
+    setPolishStages(nextStages);
+  }
+  useEffect(() => {
+    if (!runPolishOnStagesCommitRef.current) return;
+    runPolishOnStagesCommitRef.current = false;
+    void handlePolish();
+    // handlePolish is re-created every render; this must fire only on a committed
+    // stage change, so it is deliberately keyed on polishStages alone.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [polishStages]);
 
   const aiWorkflowStages: AiWorkflowStage[] = [];
   if (distillProgressVisible) {
@@ -892,7 +1047,7 @@ function App() {
 
   // The workspace / base-resume cluster (state + handlers) lives in
   // useWorkspaceResume; App passes in the editor/export/dialog dependencies it
-  // needs and reads back the workspace state + the handlers ResumeMenu wires up.
+  // needs and reads back the workspace state + the handlers the Open menu wires up.
   const {
     baseResumeName,
     baseResumeOptions,
@@ -930,6 +1085,13 @@ function App() {
     docStyle
   });
 
+  // The friendly name of the base resume currently loaded. Both the Open menu's
+  // description and the Save menu's "update this base" row name it, so it is
+  // derived once here rather than recomputed at each call site.
+  const activeBaseResumeLabel =
+    baseResumeOptions.find((option) => option.fileName === baseResumeName)?.label
+    || baseResumeName;
+
   // Auto-tailor: when an extension import requested it (toggle on), jump straight to
   // polish as soon as a resume is ready. Scoped to the imported job's text — if the
   // user swapped in a different JD (another import, a paste, or a hand edit) before a
@@ -949,19 +1111,34 @@ function App() {
 
   // Called from the ReviewRail "Add evidence" button on gaps/missing-skills rows.
   // Appends a template line to honestContext (unless the keyword is already there),
-  // then opens the Options menu so the user can fill it in and re-run Polish.
+  // then opens Settings on Guidance so the user can fill it in and re-run Polish.
   function handleAddHonestContext(keyword: string) {
     const alreadyPresent = honestContext.toLowerCase().includes(keyword.toLowerCase());
     if (!alreadyPresent) {
       const template = `${keyword}: [describe your exact experience: what you did, where, and when]`;
       setHonestContext(honestContext ? `${honestContext}\n${template}` : template);
     }
-    setPolishMenuOpen(true);
-    // Give the menu one frame to render before trying to focus the textarea.
+    setSettingsSection("guidance");
+    // Give the dialog one frame to render before trying to focus the textarea.
+    // This deliberately beats the dialog's own initial focus on the close button.
     window.requestAnimationFrame(() => {
       honestContextTextareaRef.current?.focus();
     });
     setPolishStatus(`Added an evidence prompt for "${keyword}". Fill it in, then Polish again.`);
+  }
+
+  // Settings' reset is destructive to preferences (providers, guidance, and the
+  // declared candidate facts), so it confirms first. Documents and tracked
+  // applications live in the workspace and are not touched.
+  async function handleResetSettings() {
+    const confirmed = await confirm({
+      title: "Reset all settings?",
+      message:
+        "This clears your AI providers and models, honest context, custom instructions, and the facts in About you. Resumes, cover letters, and tracked applications are not affected.",
+      confirmLabel: "Reset settings",
+      tone: "danger"
+    });
+    if (confirmed) resetSettings();
   }
 
   // Reads the memoized distillation above (apply/export callers run at click time,
@@ -1179,46 +1356,6 @@ function App() {
             distillProviderMessage={distillProviderMessage}
           />
         }
-        aiControl={
-          <AiMenu>
-            {/* Pipeline order: Distill → Tailor → Review. All three stage
-                settings stay visible; Copy settings performs a one-shot sync. */}
-            {STAGE_SECTIONS.map(({ id, title }) => (
-              <ProviderSection
-                key={id}
-                stage={id}
-                title={title}
-                config={stages[id]}
-                providers={providerAvailability.providers}
-                availabilityStatus={providerAvailability.status}
-                availabilityMessage={providerAvailability.message}
-                onRefreshProviders={providerAvailability.refresh}
-                onChange={(patch) => updateStage(id, patch)}
-                onProviderChange={(provider) => changeStageProvider(id, provider)}
-                onCopyFrom={(from) => copyStage(from, id)}
-              />
-            ))}
-          </AiMenu>
-        }
-        polishControl={
-          <PolishMenu
-            polishStages={polishStages}
-            setPolishStages={setPolishStages}
-            honestContext={honestContext}
-            setHonestContext={setHonestContext}
-            citizenshipStatus={citizenshipStatus}
-            setCitizenshipStatus={setCitizenshipStatus}
-            legallyAuthorizedToWork={legallyAuthorizedToWork}
-            setLegallyAuthorizedToWork={setLegallyAuthorizedToWork}
-            requiresSponsorship={requiresSponsorship}
-            setRequiresSponsorship={setRequiresSponsorship}
-            customInstructions={customInstructions}
-            setCustomInstructions={setCustomInstructions}
-            open={polishMenuOpen}
-            onOpenChange={setPolishMenuOpen}
-            honestContextRef={honestContextTextareaRef}
-          />
-        }
         sessionsControl={
           <SessionsMenu self={{ jobLabel: _autosaveJobLabel, phase: _myPhase }} others={otherSessions} />
         }
@@ -1259,6 +1396,21 @@ function App() {
           activeOutputTab={activeOutputTab}
           setActiveOutputTab={setActiveOutputTab}
           outputTabs={OUTPUT_TABS}
+          sidebarFooter={
+            <button
+              type="button"
+              className="studio-settings-trigger"
+              aria-haspopup="dialog"
+              aria-expanded={settingsSection !== null}
+              onClick={() => setSettingsSection((current) => (current === null ? "stages" : null))}
+              title="Settings"
+            >
+              <span className="studio-settings-trigger__icon" aria-hidden="true">
+                <Settings size={15} />
+              </span>
+              <span className="studio-settings-trigger__label">Settings</span>
+            </button>
+          }
           overlay={
             resumePreview ? (
               <Suspense fallback={null}>
@@ -1401,6 +1553,14 @@ function App() {
                 />
               )}
               editorRef={typesetEditorRef}
+              initialCaret={resumeCaretRef.current}
+              onCaretExit={(caret) => {
+                resumeCaretRef.current = caret;
+              }}
+              initialScrollTop={resumeScrollTopRef.current}
+              onScrollExit={(top) => {
+                resumeScrollTopRef.current = top;
+              }}
               onInlineFormatStateChange={setInlineFormat}
               onRequestLinkEditor={() => setLinkEditorOpen(true)}
               tailorModes={tailorModes}
@@ -1413,76 +1573,182 @@ function App() {
               jobTarget={materialsJobTarget}
               documentActions={(
                 <>
-                  <ToolbarButton
-                    label="Starter"
-                    tooltip="Open the bundled resume starter"
-                    icon={<LayoutTemplate size={16} />}
-                    showLabel
-                    disabled={isWorkspaceBootstrapping || isSavingBaseResume}
-                    onClick={() => void loadStarterTemplate()}
+                  {/* The resume file picker is a hidden input the menu's "Choose a
+                      file" row clicks, matching the cover letter — the menu is the
+                      same component for both. */}
+                  <input
+                    ref={resumeFileInputRef}
+                    className="sr-only"
+                    type="file"
+                    accept=".txt,.md,.csv,.resume"
+                    onChange={handleFileUpload}
                   />
-                  <DocumentActionMenu
-                    label="Open"
+                  <DocumentOpenMenu
                     tooltip="Open a resume"
                     icon={<FolderOpen size={16} />}
-                  >
-                    <ResumeMenu
-                      baseResumeName={baseResumeName}
-                      baseResumeOptions={baseResumeOptions}
-                      baseResumeHistory={baseResumeHistory}
-                      workspaceStatus={workspaceStatus}
-                      isSavingBaseResume={isSavingBaseResume}
-                      isWorkspaceBootstrapping={isWorkspaceBootstrapping}
-                      fileName={fileName}
-                      fileError={fileError}
-                      fileStatus={fileStatus}
-                      onLoadBaseResumeVersion={loadBaseResumeVersion}
-                      onRestoreBaseResume={restoreBaseResume}
-                      onFileUpload={handleFileUpload}
-                    />
-                  </DocumentActionMenu>
-                  <DocumentActionMenu
-                    label="Save"
+                    disabled={isWorkspaceBootstrapping}
+                    title={isWorkspaceBootstrapping ? "Checking workspace…" : "Open resume"}
+                    description={
+                      activeBaseResumeLabel
+                        ? `Active base: ${activeBaseResumeLabel}`
+                        : "No workspace base selected yet."
+                    }
+                    actions={[
+                      {
+                        key: "starter",
+                        icon: <LayoutTemplate size={15} aria-hidden="true" />,
+                        title: "Bundled starter",
+                        description: "An example resume to edit over.",
+                        disabled: isSavingBaseResume,
+                        onSelect: () => void loadStarterTemplate()
+                      },
+                      {
+                        key: "file",
+                        icon: <Upload size={15} aria-hidden="true" />,
+                        title: "Choose a file",
+                        description: ".resume, .txt, .md, or .csv",
+                        onSelect: () => resumeFileInputRef.current?.click()
+                      }
+                    ]}
+                    saved={{
+                      label: "Saved in workspace",
+                      emptyNote: "No saved resumes yet — Save writes a base resume to your workspace.",
+                      groups: [
+                        {
+                          key: "bases",
+                          label: "Base versions",
+                          icon: <FolderOpen size={11} aria-hidden="true" />,
+                          entries: baseResumeOptions.map((option) => ({
+                            key: option.fileName,
+                            title: option.label,
+                            meta: option.fileName,
+                            active: option.fileName === baseResumeName,
+                            onOpen: () => loadBaseResumeVersion(option.fileName)
+                          }))
+                        },
+                        ...baseResumeHistory.map((group) => ({
+                          key: `history-${group.variant}`,
+                          label: `${group.label} — earlier versions`,
+                          collapsible: true,
+                          defaultOpen:
+                            baseResumeName.replace(/\.[a-z]+$/i, "") === group.variant
+                            && baseResumeHistory.length === 1,
+                          entries: group.entries.map((entry) => ({
+                            key: entry.key,
+                            title: formatHistoryDate(entry.date),
+                            meta: entry.kind.toUpperCase(),
+                            openLabel: "Restore",
+                            onOpen: () => restoreBaseResume(entry.key)
+                          }))
+                        }))
+                      ]
+                    }}
+                    footer={
+                      <>
+                        {fileError ? (
+                          <p className="document-open-note document-open-note--warn" role="status">{fileError}</p>
+                        ) : null}
+                        {fileStatus ? (
+                          <p className="document-open-note" role="status">{fileStatus}</p>
+                        ) : null}
+                        {workspaceStatus ? (
+                          <p className="document-open-note" role="status">{workspaceStatus}</p>
+                        ) : null}
+                      </>
+                    }
+                  />
+                  <DocumentSaveMenu
                     tooltip="Save the resume"
                     icon={<Save size={16} />}
                     disabled={!editedResume}
-                  >
-                    <ResumeSaveMenu
-                      activeBaseLabel={
-                        baseResumeOptions.find((option) => option.fileName === baseResumeName)?.label
-                          || baseResumeName
-                          || "current base"
+                    title="Save resume"
+                    description="Keep a workspace base or take a file away."
+                    primary={{
+                      title: baseResumeName ? `Update ${activeBaseResumeLabel}` : "Save as default base",
+                      description: baseResumeName
+                        ? "The version it replaces goes to history."
+                        : "Opens automatically next time.",
+                      disabled: !editedResume || isSavingBaseResume,
+                      onSelect: () => saveCurrentAsBaseResume()
+                    }}
+                    variant={{
+                      fieldId: "resume-variant-name",
+                      fieldLabel: "New base variant",
+                      placeholder: "e.g. Full stack",
+                      fileNameFor: resumeVariantFileName,
+                      existingNames: baseResumeOptions.map((option) => option.fileName),
+                      disabled: !editedResume || isSavingBaseResume,
+                      onSave: (fileName) => saveCurrentAsBaseResume(fileName)
+                    }}
+                    actions={[
+                      {
+                        key: "resume",
+                        icon: <Download size={15} aria-hidden="true" />,
+                        title: "Download .resume",
+                        disabled: !editedResume,
+                        onSelect: () => void handleDownloadResume()
+                      },
+                      {
+                        key: "pdf",
+                        icon: <FileDown size={15} aria-hidden="true" />,
+                        title: isRenderingPdf ? "Exporting PDF…" : "Download PDF",
+                        disabled: !canExportResume || isRenderingPdf,
+                        onSelect: () => setPdfPromptOpen(true)
                       }
-                      activeBaseName={baseResumeName}
-                      baseResumeNames={baseResumeOptions.map((option) => option.fileName)}
-                      canSave={Boolean(editedResume)}
-                      isSaving={isSavingBaseResume}
-                      status={workspaceStatus}
-                      onSaveCurrent={() => saveCurrentAsBaseResume()}
-                      onSaveAsVariant={(name) => saveCurrentAsBaseResume(name)}
-                      onDownloadResume={() => handleDownloadResume()}
-                    />
-                  </DocumentActionMenu>
+                    ]}
+                    status={workspaceStatus}
+                  />
+                  {/* Keeps the rename dialog and the export status beside the action
+                      bar; its trigger is the Save menu's PDF row. */}
                   <ExportMenu
-                    canExport={canExportResume}
                     defaultFileBaseName={resumeDownloadName("pdf").replace(/\.pdf$/i, "")}
-                    isRenderingPdf={isRenderingPdf}
+                    promptOpen={pdfPromptOpen}
+                    onPromptOpenChange={setPdfPromptOpen}
                     status={exportStatus}
                     statusIsError={exportStatusIsError}
                     onDismissStatus={() => setExportStatus("")}
                     onDownloadPdf={handleDownloadPdf}
                   />
                   <span className="document-primary-action">
-                    <ToolbarButton
+                    <DocumentActionMenu
                       label={isPolishing ? "Working…" : "Polish"}
-                      tooltip={canPolish ? "Tailor and review this resume" : polishGateHint}
+                      ariaLabel="Polish stages"
+                      tooltip={polishInputsReady ? "Choose which AI stages to run" : polishGateHint}
                       icon={<Sparkles size={16} />}
-                      showLabel
                       tone="primary"
-                      disabled={!canPolish || isPolishing}
-                      aria-busy={isPolishing}
-                      onClick={() => void handlePolish()}
-                    />
+                      disabled={!polishInputsReady || isPolishing}
+                    >
+                      {({ close }) => (
+                        <div className="document-action-panel polish-stage-menu">
+                          <div className="document-action-panel__head">
+                            <strong>Polish this resume</strong>
+                            <span>Choose which AI stages to run. Your choice becomes the default.</span>
+                          </div>
+                          {POLISH_STAGE_ACTIONS.map(({ value, title, description, Icon }) => (
+                            <button
+                              key={value}
+                              type="button"
+                              className="document-action-row"
+                              disabled={!polishStageReady[value]}
+                              aria-current={polishStages === value || undefined}
+                              onClick={() => {
+                                startPolish(value);
+                                close();
+                              }}
+                            >
+                              <Icon size={15} aria-hidden="true" />
+                              <span>
+                                <strong>{title}</strong>
+                                <small>{polishStageReady[value] ? description : polishStageBlocker(value)}</small>
+                              </span>
+                              {polishStages === value ? (
+                                <Check className="polish-stage-menu__current" size={14} aria-hidden="true" />
+                              ) : null}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </DocumentActionMenu>
                     {polishStatus ? (
                       <span
                         className={`document-action-feedback${polishStatusIsError ? " document-action-feedback--error" : ""}`}
@@ -1505,6 +1771,14 @@ function App() {
             <CoverLetterTab
               editor={coverLetterEditor}
               editorRef={coverLetterEditorRef}
+              initialCaret={coverLetterCaretRef.current}
+              onCaretExit={(caret) => {
+                coverLetterCaretRef.current = caret;
+              }}
+              initialScrollTop={coverLetterScrollTopRef.current}
+              onScrollExit={(top) => {
+                coverLetterScrollTopRef.current = top;
+              }}
               inlineFormat={coverLetterInlineFormat}
               onInlineFormatStateChange={setCoverLetterInlineFormat}
               onTailor={handleGenerateCoverLetter}
@@ -1575,6 +1849,42 @@ function App() {
           ) : null}
         </StudioPane>
       </div>
+
+      {settingsSection !== null ? (
+        <SettingsDialog
+          section={settingsSection}
+          onSectionChange={setSettingsSection}
+          onClose={() => setSettingsSection(null)}
+          stages={stages}
+          onStageChange={updateStage}
+          onStageProviderChange={changeStageProvider}
+          onCopyStage={copyStage}
+          providers={providerAvailability.providers}
+          availabilityStatus={providerAvailability.status}
+          availabilityMessage={providerAvailability.message}
+          onRefreshProviders={providerAvailability.refresh}
+          polishStages={polishStages}
+          onPolishStagesChange={setPolishStages}
+          citizenshipStatus={citizenshipStatus}
+          onCitizenshipChange={setCitizenshipStatus}
+          legallyAuthorizedToWork={legallyAuthorizedToWork}
+          onLegallyAuthorizedChange={setLegallyAuthorizedToWork}
+          requiresSponsorship={requiresSponsorship}
+          onRequiresSponsorshipChange={setRequiresSponsorship}
+          educationLevel={educationLevel}
+          onEducationLevelChange={setEducationLevel}
+          major={major}
+          onMajorChange={setMajor}
+          honestContext={honestContext}
+          onHonestContextChange={setHonestContext}
+          honestContextRef={honestContextTextareaRef}
+          customInstructions={customInstructions}
+          onCustomInstructionsChange={setCustomInstructions}
+          stageCustomInstructions={stageCustomInstructions}
+          onStageCustomInstructionChange={setStageCustomInstruction}
+          onReset={handleResetSettings}
+        />
+      ) : null}
 
       {isApplicationModalOpen ? (
         <Suspense fallback={<ApplicationModalLoading />}>

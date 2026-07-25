@@ -2,6 +2,7 @@ import {
   useCallback,
   useEffect,
   useId,
+  useLayoutEffect,
   useRef,
   useState,
   type MouseEventHandler,
@@ -19,6 +20,12 @@ const FOCUSABLE_SELECTOR = [
 ].join(",");
 
 export type PopoverAlign = "start" | "center" | "end";
+
+// Breathing room below an open panel, and the floor it is never squeezed past —
+// every popover trigger lives in the top chrome, so the space below one is only
+// this tight on a window too short to use, and a scrolling stub beats a sliver.
+const VIEWPORT_GUTTER = 12;
+const MIN_SURFACE_HEIGHT = 160;
 
 export type PopoverTriggerProps = {
   ref: RefCallback<HTMLButtonElement>;
@@ -113,6 +120,32 @@ export function Popover({
 
   useEffect(() => {
     wasOpenRef.current = isOpen;
+  }, [isOpen]);
+
+  // Bound the surface to the room actually under its trigger. The per-popover
+  // max-heights are viewport fractions (`calc(100vh - 116px)` and friends) that
+  // assume the panel starts just below the toolbar; a trigger further down the
+  // chrome puts the panel's END past the window. That is not just clipping —
+  // an absolutely positioned descendant extends its scroll container's
+  // scrollable area, so an over-long panel silently made the studio body
+  // scrollable and shifted the document under it (measured at a 520px-tall
+  // window: `.studio-body` scrollHeight 463 -> 498).
+  //
+  // Published as a custom property rather than an inline `max-height` so each
+  // surface can decide what to do with it: panels whose own body scrolls apply
+  // it to that body instead, which keeps one scrollbar rather than two.
+  useLayoutEffect(() => {
+    if (!isOpen) return;
+    const apply = () => {
+      const surface = surfaceRef.current;
+      const anchor = triggerRef.current;
+      if (!surface || !anchor) return;
+      const below = window.innerHeight - anchor.getBoundingClientRect().bottom - VIEWPORT_GUTTER;
+      surface.style.setProperty("--popover-space", `${Math.max(MIN_SURFACE_HEIGHT, below)}px`);
+    };
+    apply();
+    window.addEventListener("resize", apply);
+    return () => window.removeEventListener("resize", apply);
   }, [isOpen]);
 
   useEffect(() => {

@@ -13,6 +13,7 @@ import { extname, join } from "node:path";
 import { parseResumeFile } from "@typeset/engine/lib/resumeFile.ts";
 import { readBody, sendJson } from "./http.ts";
 import { WorkspaceRestoreConflictError, assertWorkspaceAccessAllowed, captureWorkspaceAccess } from "./workspaceRestoreGate.ts";
+import { readCoverLetterWorkspace } from "./coverLetterWorkspace.ts";
 
 // A loaded base resume (or the "none found" sentinel). Optional fields carry the
 // file's text/metadata only when a resume was actually resolved.
@@ -52,7 +53,7 @@ export class WorkspaceStorageError extends Error {
   }
 }
 
-function isMissingFile(error: unknown): boolean {
+export function isMissingFile(error: unknown): boolean {
   return Boolean(error && typeof error === "object" && "code" in error && error.code === "ENOENT");
 }
 
@@ -76,14 +77,14 @@ export function withWorkspaceLock<T>(
 // A queued route task rejected by the restore gate carries a designed 409 plus
 // reload guidance; forward it instead of the route's generic failure mapping
 // (which would report a malformed request or a broken server).
-function restoreConflictHandled(error: unknown, res: ServerResponse): boolean {
+export function restoreConflictHandled(error: unknown, res: ServerResponse): boolean {
   if (!(error instanceof WorkspaceRestoreConflictError)) return false;
   sendJson(res, 409, { error: error.message });
   return true;
 }
 
 let lastTrashStampMs = 0;
-function nextTrashStamp(): string {
+export function nextTrashStamp(): string {
   const now = Math.max(Date.now(), lastTrashStampMs + 1);
   lastTrashStampMs = now;
   return new Date(now).toISOString().replace(/[:.]/g, "-");
@@ -105,7 +106,7 @@ export function validateBaseResumeText(fileName: string, data: Buffer): string {
   return text;
 }
 
-async function atomicWriteWorkspaceFile(filePath: string, data: string | Buffer): Promise<void> {
+export async function atomicWriteWorkspaceFile(filePath: string, data: string | Buffer): Promise<void> {
   const temporaryPath = `${filePath}.${process.pid}.${Date.now()}.tmp`;
   try {
     await writeFile(temporaryPath, data, { mode: 0o600 });
@@ -119,7 +120,7 @@ export async function ensureJobWorkspace(workspaceDir = jobWorkspaceDir): Promis
   await mkdir(workspaceDir, { recursive: true });
 }
 
-async function readWorkspaceFiles(locations: WorkspaceLocations): Promise<string[]> {
+export async function readWorkspaceFiles(locations: WorkspaceLocations): Promise<string[]> {
   try {
     const entries = await readdir(locations.workspaceDir, { withFileTypes: true });
     return entries
@@ -325,8 +326,12 @@ async function readBaseResumeHistory(locations: WorkspaceLocations, perVariant =
 }
 
 async function workspaceSnapshot(locations: WorkspaceLocations, baseResume?: BaseResumeResult) {
+  // Cover-letter state rides along so one GET /api/workspace seeds both editors
+  // and every mutation returns a snapshot that is current for both.
+  const coverLetter = await readCoverLetterWorkspace(locations);
   return {
     path: locations.workspaceDir,
+    ...coverLetter,
     baseResume: baseResume ?? await readWorkspaceBaseResume(undefined, locations),
     starterResume: await readBundledStarterResume(locations),
     baseResumeOptions: await readBaseResumeOptions(locations),

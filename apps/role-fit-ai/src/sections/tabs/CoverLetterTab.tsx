@@ -3,15 +3,22 @@ import { useRef, useState, type RefObject } from "react";
 import {
   TypesetEditor,
   type InlineFormatState,
+  type TypesetCaret,
   type TypesetEditorHandle
 } from "@typeset/editor/sections/editor/TypesetEditor.tsx";
 import type { CoverLetterEditorState } from "../../hooks/useCoverLetterEditor";
+import { useRestoredScroll } from "../../hooks/useRestoredScroll";
 import { CoverLetterReview } from "../cover-letter/CoverLetterReview";
 import { CoverLetterToolbar } from "../cover-letter/CoverLetterToolbar";
 
 type CoverLetterTabProps = {
   editor: CoverLetterEditorState;
   editorRef: RefObject<TypesetEditorHandle | null>;
+  // Held by the host across the tab switch that unmounts this editor.
+  initialCaret: TypesetCaret | null;
+  onCaretExit: (caret: TypesetCaret | null) => void;
+  initialScrollTop: number;
+  onScrollExit: (top: number) => void;
   inlineFormat: InlineFormatState;
   onInlineFormatStateChange: (state: InlineFormatState) => void;
   onTailor: () => void;
@@ -31,6 +38,10 @@ function wordCount(text: string): number {
 export function CoverLetterTab({
   editor,
   editorRef,
+  initialCaret,
+  onCaretExit,
+  initialScrollTop,
+  onScrollExit,
   inlineFormat,
   onInlineFormatStateChange,
   onTailor,
@@ -43,6 +54,7 @@ export function CoverLetterTab({
   jobTarget
 }: CoverLetterTabProps) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const scrollerRef = useRestoredScroll(initialScrollTop, onScrollExit);
   const [pageCount, setPageCount] = useState(0);
   // Held here, not in the toolbar, so the editor's right-click menu and link card
   // can open the same link popover the toolbar button opens.
@@ -83,7 +95,7 @@ export function CoverLetterTab({
       />
 
       <div className="cover-letter-workbench">
-        <div className="cover-letter-workbench__editor">
+        <div className="cover-letter-workbench__editor" ref={scrollerRef}>
           <TypesetEditor
             ref={editorRef}
             data={editor.data}
@@ -93,6 +105,8 @@ export function CoverLetterTab({
             docStyle={editor.docStyle}
             documentKind="cover-letter"
             structureEditing={false}
+            initialCaret={initialCaret}
+            onCaretExit={onCaretExit}
             onRequestLinkEditor={() => setLinkEditorOpen(true)}
             onInlineFormatStateChange={onInlineFormatStateChange}
             onPageCount={setPageCount}

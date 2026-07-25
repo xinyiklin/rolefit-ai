@@ -19,5 +19,8 @@
 @import "./application-pages.css";
 @import "./export-rail.css";
 @import "./preview-overlay.css";
+/* After studio.css (it extends .studio-sidebar) and after export-rail.css, whose
+   .rename-dialog shell it mirrors and shares a stacking level with. */
+@import "./settings.css";
 @import "./responsive.css";
 @import "./pipeline-review.css";

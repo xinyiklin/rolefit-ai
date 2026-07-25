@@ -119,8 +119,8 @@ interface. Its rarity identifies action and state rather than decoration.
 
 **Display Font:** System UI sans, with platform-native fallbacks
 **Body Font:** System UI sans, with platform-native fallbacks
-**Document Fonts:** Latin Modern, Source Serif 4, Source Sans 3, Tinos, Arimo,
-or Carlito inside the resume only
+**Document Fonts:** Tinos, Carlito, Arimo, Source Serif 4, Source Sans 3, or
+Latin Modern inside the resume only
 
 **Character:** Application chrome is compact, native, and immediately legible.
 The resume uses one of three restrained, bundled typesetting families, creating
@@ -142,10 +142,11 @@ product branding or allow an unmeasured local system font into the page.
 
 ### Document Type Controls
 
-- **Selected family:** Latin Modern, Source Serif 4, Source Sans 3, or one of
-  the metric-compatible trio Tinos, Arimo, and Carlito. Each menu row previews in
-  its own face, and the three compatible fonts show the proprietary family whose
-  metrics they match beside the name.
+- **Selected family:** the metric-compatible trio Tinos, Carlito, and Arimo
+  first, then Source Serif 4, Source Sans 3, and Latin Modern. Recognition leads:
+  the families a posting or a style guide names are at the top. Each menu row
+  previews in its own face, and the three compatible fonts show the proprietary
+  family whose metrics they match beside the name.
 - **Selected size:** A compact Docs-style minus / centered editable value / plus
   control without a separate disclosure icon. Clicking the value opens a narrow,
   centered common-preset menu; custom 6–48 pt values are stored to 0.1 pt, and
@@ -246,13 +247,20 @@ cluster is hidden, the document remains editable, and the initial view auto-fits
 the page within the scrollable workspace.
 Zoom is a conventional editable percent combobox before the selected font,
 accepting custom values from 50–200% as well as Fit page and common presets.
-At tablet widths formatting-menu labels compact first; menu icons then move
-into an anchored More overlay, followed by alignment at the next narrower
-threshold. The overlay floats above the page without changing toolbar or canvas
-geometry. Open, Save, and Export labels remain visible until that later stage.
-Selected-text family, a minus / editable preset-custom size / plus control, and
-selected-paragraph alignment stay directly available at wider widths. With a
-caret, these controls report and change the next-typing style. There is no global
+The formatting row never scrolls and is never cropped. Disclosure is a measured
+ladder: formatting-menu labels compact first, then those menu icons move into an
+anchored More overlay, then selected-text typography, then paragraph alignment,
+and finally clear-formatting and spell check — leaving history, zoom, and the
+four emphasis commands. Every stage's threshold is the measured intrinsic width
+of the set still inline above it, so no width leaves a control half-visible. The
+overlay floats above the page without changing toolbar or canvas geometry. Open,
+Save, and Export labels remain visible until the middle of that ladder.
+Selected-text family and a minus / editable preset-custom size / plus control
+stay directly available at wider widths. With a caret, these controls report and
+change the next-typing style.
+Selected-paragraph alignment is one trigger with a labelled menu rather than four
+buttons: it shows the active alignment, costs a quarter of the width, and so
+survives much further down the ladder. There is no global
 font-default menu; selecting all text is the explicit document-wide font
 operation. A standard link control beside inline emphasis edits selected text;
 email and web destinations are detected automatically, while explicit edit and

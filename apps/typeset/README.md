@@ -24,10 +24,11 @@ static assets, and your resume content never leaves your device.
 - **Deterministic layout** — the editor, browser print layer, and dedicated PDF
   emitter share the same structured input, bundled fonts, committed metrics,
   page geometry, and pagination.
-- **Print-aware typography** — choose Latin Modern, Source Serif 4, Source
-  Sans 3, or the metric-compatible Tinos (Times New Roman), Arimo (Arial), and
-  Carlito (Calibri); open common sizes from the centered editable value, enter a
-  custom 6–48 pt value, or step it with adjacent 1 pt minus/plus controls.
+- **Print-aware typography** — choose the metric-compatible Tinos (Times New
+  Roman), Carlito (Calibri), and Arimo (Arial), or Source Serif 4, Source
+  Sans 3, and Latin Modern; open common sizes from the centered editable value,
+  enter a custom 6–48 pt value, or step it with adjacent 1 pt minus/plus
+  controls.
 - **Flexible page margins** — start from Narrow, Normal, or Wide, or enter
   independent top, right, bottom, and left margins from 0.25–1.5 inches.
 - **Focused spacing controls** — choose a common or custom line height

@@ -84,10 +84,16 @@ it truthfully.
   directory's face registry all derive from it. Never re-declare the set: a
   missed copy validates a file whose tags then fail to parse, or offers a family
   the codec rejects.
-- Supported families are Latin Modern, Source Serif 4, Source Sans 3, and the
-  metric-compatible trio Tinos (Times New Roman), Arimo (Arial), and Carlito
-  (Calibri). A new family requires bundled web and PDF faces, generated metrics,
-  license text, and full editor/PDF parity verification.
+- Supported families are the metric-compatible trio Tinos (Times New Roman),
+  Carlito (Calibri), and Arimo (Arial), then Source Serif 4, Source Sans 3, and
+  Latin Modern — that is menu order, which is presentation only; ids are the
+  persisted values. A new family requires bundled web and PDF faces, generated
+  metrics, license text, and full editor/PDF parity verification.
+- Each italic face declares `italicAngleDeg`, the slope its outlines are drawn
+  at, taken from the shipped asset's `post.italicAngle` and checked against that
+  table on disk by `font-assets.mjs`. It is the one font fact written by hand:
+  the generated metrics do not carry it and the browser cannot report it. Upright
+  faces are 0. The editor's caret overlay is the consumer.
 - Metric compatibility is the contract for the trio: their per-character advances
   equal the proprietary original's, so a document keeps its line and page count
   elsewhere. Do not "improve" their metrics — a nicer number breaks the only

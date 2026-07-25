@@ -135,8 +135,9 @@ shimmer, decorative motion, and nested card-in-card containers. Status is
 stated quietly (a small dot beside a word), never shouted (filled pills,
 banners, badges everywhere).
 
-Layout is structural and predictable: masthead menus (Sessions, Job, AI,
-Options) plus the global Apply action, full-width tabbed studio below, matched
+Layout is structural and predictable: masthead menus (Sessions, Job) plus the
+global Apply action, full-width tabbed studio below, Settings pinned at the foot
+of the tab rail, matched
 resume and cover-letter document action bars, and document-specific review
 rails. Breakpoints (1280/1180/1080/900/820/760
 px) collapse structure; they never fluidly rescale type. Desktop ~1440px is
@@ -437,7 +438,11 @@ new arrangement. Resume and Cover letter share the same two-row editor chrome:
 the first row is the document action bar, and the second is the formatting
 toolbar. File menus reuse one anchored action-menu component; document-specific
 content stays with its owning workflow. Resume Header and Section controls sit
-immediately before Spacing in the formatting row.
+immediately before Spacing in the formatting row. Every menu in that row is
+icon-only at every width — the row shares its container with the action bar and
+has no width for labels — and paragraph alignment is one trigger with a menu
+rather than four buttons. Nothing in the row scrolls or crops; see
+`docs/engineering/ui-principles.md` for the measured disclosure ladder.
 
 ### Register Grouping
 

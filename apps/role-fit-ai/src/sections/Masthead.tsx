@@ -13,8 +13,6 @@ type MastheadProps = {
   applyStatusIsError?: boolean;
   onDismissApplyStatus?: () => void;
   jobControl?: ReactNode;
-  aiControl?: ReactNode;
-  polishControl?: ReactNode;
   sessionsControl?: ReactNode;
 };
 
@@ -26,8 +24,6 @@ export function Masthead({
   applyStatusIsError = false,
   onDismissApplyStatus,
   jobControl,
-  aiControl,
-  polishControl,
   sessionsControl
 }: MastheadProps) {
   return (
@@ -42,12 +38,10 @@ export function Masthead({
         <div className="menu-group" role="group" aria-label="Sessions">
           {sessionsControl}
         </div>
+        {/* Provider and guidance setup moved to the Settings dialog, opened from
+            the bottom of the studio sidebar. */}
         <div className="menu-group" role="group" aria-label="Inputs">
           {jobControl}
-        </div>
-        <div className="menu-group" role="group" aria-label="Polish setup">
-          {aiControl}
-          {polishControl}
         </div>
       </div>
       <div className="masthead__actions">

@@ -23,7 +23,7 @@
 import { useEffect, useRef, useState } from "react";
 import { analyzeResumeText, normalizePolishedResume, type PolishedResume } from "../resumeEngine";
 import { describeProviderModel } from "../config/aiOptions";
-import { buildAuditRequestFields, buildStageRequestFields, type StageConfig } from "../lib/aiRequest";
+import { buildAuditRequestFields, buildStageRequestFields, type StageConfig, type StageId } from "../lib/aiRequest";
 import { ApiError, classifyFailure } from "../lib/failures";
 import { buildTailorScope, defaultTailorModes, tailorScopeToText, type TailorMode } from "../lib/tailorScope";
 import type { StageAiUsage } from "../lib/aiUsage";
@@ -76,7 +76,8 @@ type UsePolishPipelineArgs = {
   jobDescription: string;
   includeCoverLetter: boolean;
   requestHonestContext: string;
-  customInstructions: string;
+  // Resolves one stage's guidance: its own override, else the shared text.
+  customInstructionsFor: (stage: StageId) => string;
   polishStages: "tailor" | "review" | "both";
   tailor: StageConfig;
   review: StageConfig;
@@ -99,7 +100,7 @@ export function usePolishPipeline({
   jobDescription,
   includeCoverLetter,
   requestHonestContext,
-  customInstructions,
+  customInstructionsFor,
   polishStages,
   tailor,
   review,
@@ -138,7 +139,8 @@ export function usePolishPipeline({
     jobDescription,
     includeCoverLetter,
     requestHonestContext,
-    customInstructions,
+    tailorInstructions: customInstructionsFor("tailor"),
+    reviewInstructions: customInstructionsFor("review"),
     polishStages,
     tailor: buildStageRequestFields(tailor),
     review: buildAuditRequestFields(review)
@@ -227,15 +229,16 @@ export function usePolishPipeline({
       return null;
     }
 
-    // Common request body shared by both stages.
+    // Common request body shared by both stages. `customInstructions` is NOT
+    // here: Tailor and Review are separate requests and each may carry its own
+    // guidance override, so each stage runner adds its own resolved value.
     const commonBody = {
       ...buildStageRequestFields(tailor),
       ...buildAuditRequestFields(review),
       tailorScope,
       jobText: jobDescription,
       includeCoverLetter,
-      honestContext: requestHonestContext,
-      customInstructions
+      honestContext: requestHonestContext
     };
 
     // Retry provenance: bind a Review attempt to the exact document scope and
@@ -245,7 +248,7 @@ export function usePolishPipeline({
       tailorScope,
       jobText: jobDescription,
       honestContext: requestHonestContext,
-      customInstructions
+      customInstructions: customInstructionsFor("review")
     });
 
     return { scopedResumeText, commonBody, reviewFingerprint, inputFingerprint: inputFingerprintRef.current };
@@ -301,7 +304,7 @@ export function usePolishPipeline({
       const response = await fetch("/api/polish", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...commonBody, stages: "tailor" }),
+        body: JSON.stringify({ ...commonBody, stages: "tailor", customInstructions: customInstructionsFor("tailor") }),
         signal
       });
       const data = await readAiResponse(response, "tailor");
@@ -424,7 +427,12 @@ export function usePolishPipeline({
       const response = await fetch("/api/polish", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...commonBody, stages: "review", suggestedChanges: snapshot.suggestions }),
+        body: JSON.stringify({
+          ...commonBody,
+          stages: "review",
+          customInstructions: customInstructionsFor("review"),
+          suggestedChanges: snapshot.suggestions
+        }),
         signal
       });
       const data = await readAiResponse(response, "review");

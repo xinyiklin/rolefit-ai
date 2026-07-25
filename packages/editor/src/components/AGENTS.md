@@ -25,7 +25,22 @@ paints).
   disappear first, then their menu icons move into a compact anchored overlay;
   alignment joins at the next narrower threshold, and selection typography only
   at the narrow supported edge. Zoom remains visible before the font-family
-  control. Opening More never changes toolbar or editor geometry. The optional
+  control. Opening More never changes toolbar or editor geometry. A popover
+  opened from INSIDE the More panel anchors below the whole panel, not to the
+  fixed slot under the toolbar the narrow-viewport rules use — that slot is
+  where the open panel sits, so a popover took it and painted over the row of
+  buttons the user had just opened. Its trigger goes `position: static` so the
+  surface resolves against the panel and clears every wrapped row.
+- `Popover` measures the room between its trigger and the window bottom on open
+  and publishes it as `--popover-space` on the surface. Every panel is bounded
+  by it, because a viewport-fraction cap (`calc(100vh - 116px)`) assumes the
+  panel starts just under the toolbar and a trigger further down puts its END
+  past the window. That is not merely clipping: an absolutely positioned
+  descendant extends its scroll container's scrollable area, so an over-long
+  panel makes the host scrollable and shifts the document under it. A panel with
+  its own scrolling body applies the value to that body and subtracts
+  `--popover-frame` (the surface's border), so there is never a scrollbar inside
+  a scrollbar. The optional
   `documentStructureTools` slot lets an embedded host place Header/Section
   controls immediately before the document-style group while standalone
   Typeset keeps them in `DocumentToolbar`. The optional

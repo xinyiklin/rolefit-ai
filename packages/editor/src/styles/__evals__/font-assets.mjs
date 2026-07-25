@@ -15,6 +15,12 @@
 //   2. every declared family is one the registry names (no orphan rules)
 //   3. each rule's src, weight, and style agree with the registry face
 //   4. every woff2 asset and every PDF sfnt sibling exists on disk
+//   5. each face's declared italicAngleDeg is the shipped asset's own slope
+//
+// (5) exists because that angle is the one font fact the registry writes by
+// hand — the generated metrics do not carry it and the browser cannot report
+// it — and it is read straight out of the sfnt sibling's `post` table here, so
+// a hand-typed value can never drift from the outlines it claims to describe.
 //
 // Run: node --experimental-strip-types src/styles/__evals__/font-assets.mjs
 
@@ -33,6 +39,24 @@ const FONTS_DIR = dirname(
 
 const failures = [];
 const fail = (message) => failures.push(message);
+
+// `post.italicAngle` of an sfnt: degrees counter-clockwise from vertical, as a
+// 16.16 fixed-point number 4 bytes into the table. Read directly rather than
+// through a font library so this eval stays dependency-free like its siblings.
+function sfntItalicAngle(file) {
+  const buf = readFileSync(file);
+  const tables = buf.readUInt16BE(4);
+  for (let i = 0; i < tables; i += 1) {
+    const record = 12 + i * 16;
+    if (buf.toString("ascii", record, record + 4) !== "post") continue;
+    return buf.readInt32BE(buf.readUInt32BE(record + 8) + 4) / 65536;
+  }
+  return null;
+}
+
+// The registry rounds each angle to three decimals; anything looser would let a
+// genuinely different slope pass.
+const ANGLE_TOLERANCE_DEG = 0.001;
 
 // --- parse the @font-face rules -------------------------------------------
 const css = readFileSync(STYLESHEET, "utf8");
@@ -86,7 +110,19 @@ for (const [familyId, definition] of Object.entries(DOCUMENT_FONT_FAMILIES)) {
     const woff2 = resolve(FONTS_DIR, face.assetPath.replace(/^\/fonts\//, ""));
     if (!existsSync(woff2)) fail(`${where}: missing webfont ${woff2}`);
     const sfnt = resolve(FONTS_DIR, sfntAssetFile(familyId, faceName));
-    if (!existsSync(sfnt)) fail(`${where}: missing PDF sibling ${sfnt} — Export PDF would fail`);
+    if (!existsSync(sfnt)) {
+      fail(`${where}: missing PDF sibling ${sfnt} — Export PDF would fail`);
+    } else {
+      const angle = sfntItalicAngle(sfnt);
+      if (angle === null) {
+        fail(`${where}: ${sfnt} has no post table, so its slope cannot be checked`);
+      } else if (Math.abs(angle - face.italicAngleDeg) > ANGLE_TOLERANCE_DEG) {
+        fail(
+          `${where}: the registry declares italicAngleDeg ${face.italicAngleDeg} but the face is drawn at ${angle}` +
+            " — the caret would lean at an angle the text does not"
+        );
+      }
+    }
   }
 }
 
@@ -110,5 +146,5 @@ if (failures.length) {
   process.exit(1);
 }
 console.log(
-  "PASS: every engine face is declared once, loads its own asset at the right weight/style, and ships both a webfont and a PDF sibling."
+  "PASS: every engine face is declared once, loads its own asset at the right weight/style, ships both a webfont and a PDF sibling, and declares the slope its outlines are drawn at."
 );

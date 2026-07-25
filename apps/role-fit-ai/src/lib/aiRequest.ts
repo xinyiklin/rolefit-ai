@@ -1,9 +1,10 @@
 import type { AiProviderValue } from "../config/aiOptions";
+import type { AiStageId } from "../config/aiStages";
 
-// The three AI pipeline stages, each with its own concrete provider config
-// (no "same as Tailor" live link — the AI menu's "Copy from" control does a
-// one-shot copy between stages instead).
-export type StageId = "distill" | "tailor" | "review";
+// Every configurable AI stage has its own concrete provider config (no "same as
+// Tailor" live link — Settings' "Copy settings" control does a one-shot copy
+// between stages instead). The stage list itself lives in config/aiStages.ts.
+export type StageId = AiStageId;
 
 export type StageConfig = {
   provider: AiProviderValue;

@@ -30,11 +30,19 @@ Use the nested guides under `src/hooks/`, `src/components/`, and
   to the shared toolbar.
 - `src/styles/` owns shared editor/tooling base CSS. Keep host shell rules in the
   apps; document intentional host seams and preserve import-order expectations.
-  One such seam: a host may set `data-toolbar-labels="text"` on the wrapper
-  around the toolbar to opt into label-first disclosure (see the
-  `[data-toolbar-labels="text"]` rules co-located with the default disclosure
-  bands in `src/styles/toolbar.css`); a host that never sets the attribute is
-  unaffected.
+  One such seam: a host may set `data-toolbar-labels="icon"` on the wrapper
+  around the toolbar to render the document-style menus, and any host
+  document-structure controls mounted with them, as icons at every width (see the
+  `[data-toolbar-labels="icon"]` rules beside the disclosure ladder in
+  `src/styles/toolbar.css`); a host that never sets the attribute keeps the
+  default labels-until-1210px behavior.
+- The formatting row never scrolls and must never be allowed to overflow — a
+  RoleFit ancestor clips horizontally, so an overflowing row silently drops its
+  trailing control. The disclosure ladder in `src/styles/toolbar.css` therefore
+  carries measured thresholds: each stage's threshold is the intrinsic width of
+  the control set still inline above it. Re-measure the whole ladder in a browser
+  after adding a control to this row or widening an existing one; do not add a
+  threshold by estimate.
 - Components remain controlled and declarative. Hooks own cohesive serializable
   state transitions; DOM selection and geometry remain in the editor adapter.
 - Extract by stable responsibility or test seam, not to chase a line-count

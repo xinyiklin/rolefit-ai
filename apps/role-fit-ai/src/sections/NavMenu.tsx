@@ -42,20 +42,25 @@ export function NavMenu({ icon, label, ariaLabel, className, children, open: con
     return () => window.cancelAnimationFrame(frame);
   }, [open]);
 
-  // Masthead menu popovers anchor from their group's LEFT edge (see shell.css),
-  // and those groups sit toward the right of the bar, so a wide panel could run
-  // past the window's right edge. Nudge any overflowing panel back on screen with
-  // a negative margin (transform is reserved for the entrance animation; a
-  // left-anchored panel makes the margin math intuitive: -x moves it x px left).
+  // Panels anchor to their trigger's RIGHT edge (see shell.css), so a narrow
+  // window pushes one off the LEFT — the mirror of the old overflow case. The
+  // nudge must be `margin-right`: an absolutely positioned box offset by `right`
+  // has an auto `left`, which simply absorbs a `margin-left` and moves nothing.
+  // Negative margin-right moves the panel right; positive moves it left.
+  // (Transform is reserved for the entrance animation.)
   useLayoutEffect(() => {
     if (!open) return;
     const clamp = () => {
       const popover = popoverRef.current;
       if (!popover) return;
-      popover.style.marginLeft = "";
+      popover.style.marginRight = "";
       const rect = popover.getBoundingClientRect();
-      const overflow = rect.left + popover.offsetWidth - (window.innerWidth - 8);
-      if (overflow > 0) popover.style.marginLeft = `${-overflow}px`;
+      const pastRight = rect.right - (window.innerWidth - 8);
+      const pastLeft = 8 - rect.left;
+      // Right first: a panel wider than the window would otherwise be pushed
+      // right by the left correction and clipped at the edge the user reads to.
+      if (pastRight > 0) popover.style.marginRight = `${pastRight}px`;
+      else if (pastLeft > 0) popover.style.marginRight = `${-pastLeft}px`;
     };
     clamp();
     window.addEventListener("resize", clamp);

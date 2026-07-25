@@ -462,24 +462,19 @@
   animation: nav-menu-in 150ms var(--ease) both;
 }
 
-/* Masthead menu popovers open from their GROUP's left edge: each menu-group is the
-   positioning context (its nav-menu children go static), so Resume/Job both align
-   under Resume, and AI Provider/Options both align under AI Provider. A JS viewport
-   clamp in NavMenu nudges a panel back on screen if this would run it past the edge.
-   Studio menus (Format/Style) are outside .masthead, so they keep the default
-   right-aligned, per-trigger anchoring. */
+/* Masthead menu popovers anchor to their OWN trigger's right edge, like every
+   other menu in the app. They used to share their group's LEFT edge, which
+   existed only to align the paired Resume/Job and AI provider/Options menus
+   under one another; both pairs are gone, and the surviving menus sit at the
+   right of the bar, where a left-anchored 380px panel ran past the window and
+   was left pressed against it by the viewport clamp. Right-anchoring opens each
+   panel inboard, under the control that owns it. */
 .masthead .menu-group { position: relative; }
-.masthead .menu-group .nav-menu { position: static; }
-.masthead .nav-menu__popover {
-  left: 0;
-  right: auto;
-  transform-origin: top left;
-}
 
-/* Taller panels for the two content-heavy masthead menus (Job posting; Options'
-   honest-context / custom-instructions) so more shows before the panel scrolls. */
-.job-menu .nav-menu__popover,
-.options-menu .nav-menu__popover {
+/* Taller panel for the one content-heavy masthead menu that remains (Job
+   posting) so more shows before the panel scrolls. Provider and guidance setup
+   moved to the Settings dialog (settings.css). */
+.job-menu .nav-menu__popover {
   max-height: min(88vh, 780px);
 }
 

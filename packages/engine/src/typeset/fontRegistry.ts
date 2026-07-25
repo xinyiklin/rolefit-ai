@@ -23,6 +23,11 @@ export type DocumentFontFaceDefinition = Readonly<{
   cssFamily: string;
   weight: 400 | 700;
   italic: boolean;
+  // The face's own slope, in the `post` table's convention: degrees
+  // counter-clockwise from vertical, so an upright face is 0 and a face leaning
+  // right is negative. That is also exactly CSS `skewX()` in the DOM's y-down
+  // space, so a consumer that shears about the baseline can pass it through.
+  italicAngleDeg: number;
   metrics: FaceMetrics;
 }>;
 
@@ -45,12 +50,16 @@ export type DocumentFontFamilyDefinition = Readonly<{
 // face — pointing a face at another face's metrics is a silent bug (text paints
 // at widths the engine never measured) that repetition invites and derivation
 // makes impossible.
-type FaceAsset = Readonly<{
-  file: string;
-  cssFamily: string;
-  weight: 400 | 700;
-  italic?: true;
-}>;
+//
+// `italicAngleDeg` is the one font fact written by hand, because it is not in
+// the generated metrics and the browser cannot report it. Each value is the
+// shipped asset's own `post.italicAngle`, and `font-assets.mjs` reads that table
+// off disk and fails on any drift. The union makes the pair inseparable: an
+// italic face must declare its angle, an upright face must not.
+type FaceAsset = Readonly<
+  | { file: string; cssFamily: string; weight: 400 | 700; italic?: never; italicAngleDeg?: never }
+  | { file: string; cssFamily: string; weight: 400 | 700; italic: true; italicAngleDeg: number }
+>;
 
 function familyDefinition(
   id: DocumentFontFamily,
@@ -67,6 +76,7 @@ function familyDefinition(
       cssFamily: asset.cssFamily,
       weight: asset.weight,
       italic: asset.italic === true,
+      italicAngleDeg: asset.italic === true ? asset.italicAngleDeg : 0,
       metrics: FONT_METRICS[id][face]
     };
   }
@@ -99,12 +109,19 @@ export const DOCUMENT_FONT_FAMILIES: Readonly<
   "latin-modern": familyDefinition("latin-modern", "Latin Modern", "Typeset Latin Modern", "otf", {
     regular: { file: "LMRoman10-Regular", cssFamily: "Typeset LM Roman 10 Regular", weight: 400 },
     bold: { file: "LMRoman10-Bold", cssFamily: "Typeset LM Roman 10 Bold", weight: 700 },
-    italic: { file: "LMRoman10-Italic", cssFamily: "Typeset LM Roman 10 Italic", weight: 400, italic: true },
+    italic: {
+      file: "LMRoman10-Italic",
+      cssFamily: "Typeset LM Roman 10 Italic",
+      weight: 400,
+      italic: true,
+      italicAngleDeg: -14.036
+    },
     boldItalic: {
       file: "LMRoman10-BoldItalic",
       cssFamily: "Typeset LM Roman 10 Bold Italic",
       weight: 700,
-      italic: true
+      italic: true,
+      italicAngleDeg: -14.036
     },
     boldDisplay: { file: "LMRoman12-Bold", cssFamily: "Typeset LM Roman 12 Bold Display", weight: 700 },
     caps: { file: "LMRomanCaps10-Regular", cssFamily: "Typeset LM Roman Caps 10", weight: 400 }
@@ -116,13 +133,15 @@ export const DOCUMENT_FONT_FAMILIES: Readonly<
       file: "SourceSerif4-Italic",
       cssFamily: "Typeset Source Serif 4 Italic",
       weight: 400,
-      italic: true
+      italic: true,
+      italicAngleDeg: -12
     },
     boldItalic: {
       file: "SourceSerif4-BoldItalic",
       cssFamily: "Typeset Source Serif 4 Bold Italic",
       weight: 700,
-      italic: true
+      italic: true,
+      italicAngleDeg: -12
     },
     boldDisplay: {
       file: "SourceSerif4-BoldDisplay",
@@ -138,13 +157,15 @@ export const DOCUMENT_FONT_FAMILIES: Readonly<
       file: "SourceSans3-Italic",
       cssFamily: "Typeset Source Sans 3 Italic",
       weight: 400,
-      italic: true
+      italic: true,
+      italicAngleDeg: -11
     },
     boldItalic: {
       file: "SourceSans3-BoldItalic",
       cssFamily: "Typeset Source Sans 3 Bold Italic",
       weight: 700,
-      italic: true
+      italic: true,
+      italicAngleDeg: -11
     },
     boldDisplay: {
       file: "SourceSans3-BoldDisplay",
@@ -156,12 +177,19 @@ export const DOCUMENT_FONT_FAMILIES: Readonly<
   tinos: familyDefinition("tinos", "Tinos", "Typeset Tinos", "ttf", {
     regular: { file: "Tinos-Regular", cssFamily: "Typeset Tinos Regular", weight: 400 },
     bold: TINOS_BOLD,
-    italic: { file: "Tinos-Italic", cssFamily: "Typeset Tinos Italic", weight: 400, italic: true },
+    italic: {
+      file: "Tinos-Italic",
+      cssFamily: "Typeset Tinos Italic",
+      weight: 400,
+      italic: true,
+      italicAngleDeg: -16.333
+    },
     boldItalic: {
       file: "Tinos-BoldItalic",
       cssFamily: "Typeset Tinos Bold Italic",
       weight: 700,
-      italic: true
+      italic: true,
+      italicAngleDeg: -16.333
     },
     boldDisplay: TINOS_BOLD,
     caps: { file: "Tinos-Caps", cssFamily: "Typeset Tinos Caps", weight: 400 }
@@ -169,12 +197,19 @@ export const DOCUMENT_FONT_FAMILIES: Readonly<
   arimo: familyDefinition("arimo", "Arimo", "Typeset Arimo", "ttf", {
     regular: { file: "Arimo-Regular", cssFamily: "Typeset Arimo Regular", weight: 400 },
     bold: ARIMO_BOLD,
-    italic: { file: "Arimo-Italic", cssFamily: "Typeset Arimo Italic", weight: 400, italic: true },
+    italic: {
+      file: "Arimo-Italic",
+      cssFamily: "Typeset Arimo Italic",
+      weight: 400,
+      italic: true,
+      italicAngleDeg: -12
+    },
     boldItalic: {
       file: "Arimo-BoldItalic",
       cssFamily: "Typeset Arimo Bold Italic",
       weight: 700,
-      italic: true
+      italic: true,
+      italicAngleDeg: -12
     },
     boldDisplay: ARIMO_BOLD,
     caps: { file: "Arimo-Caps", cssFamily: "Typeset Arimo Caps", weight: 400 }
@@ -182,12 +217,19 @@ export const DOCUMENT_FONT_FAMILIES: Readonly<
   carlito: familyDefinition("carlito", "Carlito", "Typeset Carlito", "ttf", {
     regular: { file: "Carlito-Regular", cssFamily: "Typeset Carlito Regular", weight: 400 },
     bold: CARLITO_BOLD,
-    italic: { file: "Carlito-Italic", cssFamily: "Typeset Carlito Italic", weight: 400, italic: true },
+    italic: {
+      file: "Carlito-Italic",
+      cssFamily: "Typeset Carlito Italic",
+      weight: 400,
+      italic: true,
+      italicAngleDeg: -7
+    },
     boldItalic: {
       file: "Carlito-BoldItalic",
       cssFamily: "Typeset Carlito Bold Italic",
       weight: 700,
-      italic: true
+      italic: true,
+      italicAngleDeg: -7
     },
     boldDisplay: CARLITO_BOLD,
     caps: { file: "Carlito-Caps", cssFamily: "Typeset Carlito Caps", weight: 400 }
