@@ -12,19 +12,26 @@ bounded; app-only operational detail belongs in the affected app documentation.
   the divergence was introduced by this branch's engine work and has been
   carried forward, not inherited. Treat it as an open regression against main,
   not as a known-bad baseline.
-- [CODE] RESOLVED, and it was a bug rather than the product decision it looked
-  like. `entryEndIndentPt` reproduces Jake's `tabular*{0.97\textwidth}` entry
-  head, which at 0.5in margins starts at 46.8bp and ends 5.4bp short of the
-  576bp text edge — the fixture's own x0 column confirms the 46.8. That table is
-  the ONLY place Jake insets the right edge: bullets, summary paragraphs, and
-  skills rows are plain `itemize` with a left margin and no right margin.
-  `blocks.ts` subtracted the head-row inset from all three body columns too,
-  narrowing every one by 5.4bp and wrapping a long bullet a word early. The
-  three body sites now use the full text width; `headRowWidth` keeps the inset.
-  Body columns are 5.4bp WIDER than before, so a long bullet can pull a word up
-  a line — the correction, not a regression. `vertical-parity` passes (20 lines
-  within ±1.5bp) and the RoleFit suite is 47/48, the remaining failure being the
-  Windows-only `EPERM: symlink` probe that passes on Linux CI.
+- [USER] `entryEndIndentPt` is the ENTRY's right edge and applies to every row of
+  the entry — head rows, bullets, summary paragraphs, skills rows. Deliberately
+  NOT Jake, who insets only the head row's `tabular*{0.97\textwidth}` and leaves
+  bullets on a plain `itemize` with no right margin. Jake is the style reference,
+  not a specification to match exactly.
+- [CODE] That application is unchanged from `main` and was never the problem. The
+  real difference is the DEFAULT: `main` ships `entryEndIndentPt: 0`, and this
+  branch raised it to 5.4 with the Jake-derived starter defaults. A non-zero
+  inset narrows every body column by 5.4bp, which wraps one long bullet a word
+  earlier than the frozen Tectonic fixture — compiled when the value was
+  effectively 0. An earlier cut of this fix moved the inset off the body columns
+  to chase the fixture; that was reverted as soon as the preference above was
+  stated. Superseded: the note that the body columns were over-applying it.
+- [TOOL] `vertical-parity.mjs` therefore sets `entryEndIndentPt: 0` inside its
+  own `legacyStyle()`, beside the other legacy-era mappings. The fixture holds
+  per-line `{p, y, x0}` and the probe is named for the VERTICAL model; zeroing a
+  horizontal width policy the fixture predates keeps it measuring junctions
+  rather than line breaking. A vertical regression still fails it. Green again:
+  20 lines within ±1.5bp, RoleFit suite 47/48 with only the Windows-only
+  `EPERM: symlink` probe red.
 - [TOOL] PR #87 (`codex/wip-editor-document-actions` -> `main`) carries the whole
   branch. Its first CI run reproduced the parity failure as RoleFit's single
   red — Typeset green, and the Windows-only backup probe green on Linux, both as
