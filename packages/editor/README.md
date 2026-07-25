@@ -1,7 +1,7 @@
 # @typeset/editor
 
-Private React workspace package containing the direct resume editor and shared
-document chrome used by Typeset and RoleFit AI. It depends on
+Private React workspace package containing the direct structured-document
+editor and shared document chrome used by Typeset and RoleFit AI. It depends on
 `@typeset/engine` and has no app-specific provider, tracker, file-lifecycle, or
 navigation behavior.
 
@@ -10,7 +10,8 @@ navigation behavior.
 - `src/hooks/`: document/history reducer state, document/view-style controls,
   and the host-agnostic stacked-modal focus contract.
 - `src/sections/editor/`: contenteditable interception, structured commits,
-  selection/caret mapping, context commands, and structure overlays.
+  selection/caret mapping, context commands, optional structure overlays, and
+  the narrow resume/cover-letter layout seam.
 - `src/components/`: modal/popover primitives and the shared document and
   formatting toolbar family.
 - `src/styles/`: shared editor/tooling tokens, toolbar/popover/modal styles,
@@ -18,7 +19,10 @@ navigation behavior.
 
 Host apps compose the package through values, callbacks, and narrow slots:
 Typeset supplies file lifecycle and product identity; RoleFit supplies its own
-document actions and the section-scope/review overlay.
+document actions and the section-scope/review overlay. A prose-document host may
+replace `FormattingToolbar`'s default resume style menus through
+`documentStyleTools` while retaining the shared history, zoom, selection
+formatting, alignment, link, and spell-check controls.
 
 ## Checks
 

@@ -143,6 +143,12 @@ export function useResumeEditor() {
             : { coalesce: !viaSuggestion }
         );
       },
+      // A selection crossing fields (Select All, a drag across paragraphs) is a
+      // free-form edit like any other typing.
+      applyFieldEdits: (...args: Parameters<typeof shared.applyFieldEdits>) => {
+        markManual();
+        shared.applyFieldEdits(...args);
+      },
       splitBullet: (...args: Parameters<typeof shared.splitBullet>) => { markManual(); shared.splitBullet(...args); },
       mergeBulletUp: (...args: Parameters<typeof shared.mergeBulletUp>) => { markManual(); shared.mergeBulletUp(...args); },
       splitSummaryParagraph: (...args: Parameters<typeof shared.splitSummaryParagraph>) => {

@@ -12,8 +12,11 @@ sanitizer code is executable product behavior and anti-fabrication-critical.
 - `prompts.ts` owns fenced input construction and truthfulness/output rules.
 - `sanitize.ts` validates suggestions and Review output; it does not invent or
   recalculate a replacement judgment.
-- `polish.ts` orchestrates Tailor, Review, and optional cover work.
+- `polish.ts` orchestrates Tailor and Review; its optional cover leg is retained
+  only for compatibility with older clients.
 - `distill.ts`, `coverLetter.ts`, and `applicationAnswers.ts` own their routes.
+  Cover-letter tailoring requires the candidate's source letter and revises it;
+  it does not generate a new letter from resume/job inputs alone.
 - `grounding.ts` and `eligibilityLexicon.ts` provide deterministic evidence
   checks, never a local fit-scoring system.
 - `json.ts` and `errors.ts` own response parsing and user-safe failure mapping.

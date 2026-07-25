@@ -1,0 +1,549 @@
+/* Settings dialog — the single home for RoleFit preferences, opened from the
+   bottom of the studio sidebar. It reuses the shared .field / .textarea /
+   .check-row / .segmented-control vocabulary; the shell, the section nav, and
+   the AI stage rows are the only new pieces.
+
+   No runtime diagnostics live here (server address, workspace path, provider
+   counts). Those describe the machine the companion runs, not a browser
+   preference, and belong in RoleFit Companion.
+
+   The shell mirrors .rename-dialog (fixed overlay + blurred backdrop + card) but
+   needs a much larger card with its own two-column body, so it is a sibling
+   pattern rather than a modifier on a 420px confirm card. */
+
+.settings-dialog {
+  position: fixed;
+  inset: 0;
+  /* Above .nav-menu__popover (40) and level with .rename-dialog (50): a confirm
+     raised FROM Settings (Reset) must paint above it, and useDialog portals that
+     card after this one in the body, so equal z-index resolves correctly. */
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  padding: var(--s4);
+  animation: settings-dialog-fade 0.16s var(--ease) both;
+}
+
+@keyframes settings-dialog-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.settings-dialog__backdrop {
+  position: absolute;
+  inset: 0;
+  background: oklch(0.2 0.01 160 / 0.45);
+  -webkit-backdrop-filter: blur(3px);
+  backdrop-filter: blur(3px);
+}
+
+.settings-dialog__card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: min(860px, 100%);
+  /* Bounded so the panel scrolls internally rather than the page: the AI stages
+     section is intentionally long. */
+  height: min(680px, calc(100vh - var(--s6)));
+  overflow: hidden;
+  background: var(--card);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-xl);
+  box-shadow: var(--shadow-lift);
+}
+
+.settings-dialog__head {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: var(--s3);
+  padding: var(--s3) var(--s4);
+  border-bottom: 1px solid var(--hairline);
+}
+
+/* Absorbs the slack so the close button pins right. */
+.settings-dialog__autosave {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--ink-soft);
+  font-size: 0.7rem;
+  text-align: right;
+}
+
+.settings-dialog__head h2 {
+  margin: 0;
+  color: var(--ink-strong);
+  font-family: var(--font-serif);
+  font-size: 1.08rem;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+}
+
+.settings-dialog__close {
+  display: inline-grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  color: var(--ink-soft);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--r-md);
+  cursor: pointer;
+  transition: color 140ms var(--ease), background 140ms var(--ease), border-color 140ms var(--ease);
+}
+
+.settings-dialog__close:hover {
+  color: var(--ink-strong);
+  background: var(--card-hover);
+  border-color: var(--hairline-soft);
+}
+
+.settings-dialog__close:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.settings-dialog__body {
+  display: grid;
+  grid-template-columns: 168px minmax(0, 1fr);
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* -------- Section nav -------- */
+
+.settings-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: var(--s3) var(--s2);
+  overflow-y: auto;
+  border-right: 1px solid var(--hairline);
+  background: var(--card-soft);
+}
+
+.settings-nav__item {
+  min-height: 32px;
+  padding: 0 var(--s2);
+  color: var(--ink-soft);
+  background: transparent;
+  border: 0;
+  border-radius: var(--r-md);
+  font-family: var(--font-ui);
+  font-size: 0.82rem;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  transition: color 140ms var(--ease), background 140ms var(--ease);
+}
+
+.settings-nav__item:hover {
+  color: var(--ink);
+  background: var(--card-hover);
+}
+
+.settings-nav__item.is-active {
+  color: var(--accent-deep);
+  background: var(--accent-soft);
+  font-weight: 600;
+}
+
+.settings-nav__item:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* -------- Panel -------- */
+
+.settings-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+  min-width: 0;
+  min-height: 0;
+  padding: var(--s4);
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--hairline-strong) transparent;
+}
+
+.settings-panel__intro {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 0.76rem;
+  line-height: 1.45;
+}
+
+.settings-hint {
+  color: var(--ink-soft);
+  font-size: 0.72rem;
+  line-height: 1.4;
+}
+
+/* Default Polish stages: a labelled row, not a framed card. */
+.settings-default-stages {
+  display: grid;
+  gap: 6px;
+  padding-bottom: var(--s3);
+  border-bottom: 1px solid var(--hairline);
+}
+
+.settings-default-stages__label {
+  display: grid;
+  gap: 1px;
+}
+
+.settings-default-stages__label strong {
+  color: var(--ink-strong);
+  font-size: 0.78rem;
+  font-weight: 620;
+}
+
+.settings-default-stages__label small {
+  color: var(--ink-soft);
+  font-size: 0.7rem;
+  line-height: 1.35;
+}
+
+/* -------- AI stage rows -------- */
+
+/* Hairline-separated rows, NOT cards. These were bordered cards nested inside
+   another bordered card — the Drafting Desk rejects card-in-card, and five of
+   them measured 317px each inside a 625px panel. Frameless rows plus a disclosed
+   instruction override bring a stage to roughly a third of that. */
+.settings-stages {
+  display: grid;
+}
+
+.settings-stage {
+  display: grid;
+  gap: var(--s2);
+  padding: var(--s3) 0;
+}
+
+.settings-stage + .settings-stage {
+  border-top: 1px solid var(--hairline-soft);
+}
+
+.settings-stage__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--s3);
+}
+
+.settings-stage__naming {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+
+.settings-stage__naming h3 {
+  margin: 0;
+  color: var(--ink-strong);
+  font-family: var(--font-ui);
+  font-size: 0.8rem;
+  font-weight: 620;
+  letter-spacing: -0.002em;
+}
+
+.settings-stage__naming p {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 0.71rem;
+  line-height: 1.35;
+}
+
+/* Quiet until used: this is a rarely-touched convenience, so it must not compete
+   with the stage name. */
+.settings-stage__copy {
+  flex: 0 0 auto;
+  width: auto;
+  min-height: 26px;
+  padding: 0 var(--s1) 0 6px;
+  color: var(--ink-soft);
+  background: transparent;
+  border-color: transparent;
+  font-size: 0.7rem;
+}
+
+.settings-stage__copy:hover {
+  color: var(--ink);
+  background: var(--card-elev);
+  border-color: var(--hairline);
+}
+
+.settings-stage__controls {
+  display: grid;
+  /* Model gets more room than Provider — model ids run longer than provider
+     names (e.g. Antigravity's "Gemini 3.5 Flash (Medium)"). minmax(0,…) lets the
+     selects shrink instead of overflowing the columns. */
+  grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+  gap: var(--s2);
+}
+
+.settings-stage__controls--3 {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr) minmax(0, 0.7fr);
+}
+
+.settings-stage__controls .field {
+  gap: 3px;
+  margin-top: 0;
+  min-width: 0;
+}
+
+.settings-stage__controls .field > span {
+  font-size: 0.66rem;
+  letter-spacing: 0.01em;
+}
+
+.settings-stage__controls select {
+  min-height: 28px;
+  font-size: 0.78rem;
+}
+
+.settings-stage__blocked {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s2);
+  padding: 6px var(--s2);
+  border-radius: var(--r-md);
+  background: var(--warm-veil);
+}
+
+.settings-stage__blocked p {
+  margin: 0;
+  min-width: 0;
+  color: var(--ink-muted);
+  font-size: 0.7rem;
+  line-height: 1.35;
+}
+
+.settings-stage__blocked .ghost-button {
+  flex: 0 0 auto;
+}
+
+.settings-stage__extra {
+  display: grid;
+  gap: 6px;
+  justify-items: start;
+}
+
+.settings-stage__disclose {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 0;
+  color: var(--ink-soft);
+  background: transparent;
+  border: 0;
+  font-family: var(--font-ui);
+  font-size: 0.7rem;
+  font-weight: 560;
+  cursor: pointer;
+}
+
+.settings-stage__disclose:hover {
+  color: var(--accent-deep);
+}
+
+.settings-stage__disclose:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--r-sm);
+}
+
+.settings-stage__disclose > svg {
+  transition: rotate 140ms var(--ease);
+}
+
+.settings-stage__disclose.is-open > svg {
+  rotate: 180deg;
+}
+
+/* Collapsed but set: the guidance is actually being sent, so it stays readable. */
+.settings-stage__preview {
+  margin: 0;
+  width: 100%;
+  padding: 5px var(--s2);
+  border-left: 2px solid var(--accent-veil);
+  color: var(--ink-muted);
+  font-size: 0.7rem;
+  line-height: 1.4;
+  /* Two lines then ellipsis — a preview, not the field. */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.settings-stage__extra .field {
+  width: 100%;
+  margin-top: 0;
+}
+
+/* -------- Reset (foot of the section rail) -------- */
+
+/* Reset is an action, not a section, so it is pinned below the section list
+   rather than given a nav entry of its own — the same shape as Settings sitting
+   at the foot of the studio rail that opens this dialog. A full-width dialog
+   footer was tried first and read as a detached bar under the content. */
+.settings-nav__foot {
+  margin-top: auto;
+  padding-top: var(--s2);
+  border-top: 1px solid var(--hairline-soft);
+}
+
+/* Destructive, so it stays quiet until deliberately sought. */
+.settings-reset {
+  width: 100%;
+  justify-content: flex-start;
+  color: var(--ink-soft);
+  border-color: transparent;
+  font-size: 0.74rem;
+}
+
+.settings-reset:hover:not(:disabled) {
+  color: var(--danger);
+  border-color: var(--danger-line);
+}
+
+/* -------- Sidebar trigger -------- */
+
+.studio-sidebar__footer {
+  flex: 0 0 auto;
+  margin-top: auto;
+  padding: var(--s3);
+  border-top: 1px solid var(--hairline-soft);
+}
+
+/* Styled as a rail entry so it reads as part of the sidebar, but it is a dialog
+   trigger, not a tab — it stays outside the tablist. */
+.studio-settings-trigger {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  width: 100%;
+  min-height: 34px;
+  padding: 0 var(--s2);
+  color: var(--ink-soft);
+  background: transparent;
+  border: 0;
+  border-radius: var(--r-md);
+  font-family: var(--font-ui);
+  font-size: 0.82rem;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  transition: color 160ms var(--ease), background 160ms var(--ease);
+}
+
+.studio-settings-trigger__icon {
+  display: inline-flex;
+  flex: none;
+  color: var(--ink-faint);
+  transition: color 160ms var(--ease);
+}
+
+.studio-settings-trigger__label {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.studio-settings-trigger:hover,
+.studio-settings-trigger[aria-expanded="true"] {
+  color: var(--ink);
+  background: var(--card-hover);
+}
+
+.studio-settings-trigger:hover .studio-settings-trigger__icon,
+.studio-settings-trigger[aria-expanded="true"] .studio-settings-trigger__icon {
+  color: var(--ink-soft);
+}
+
+.studio-settings-trigger:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* Matches the rail's own icon-strip breakpoint in responsive.css (1080px) and
+   its 36px square tab geometry — retune the two together. */
+@media (max-width: 1080px) {
+  .studio-sidebar__footer {
+    padding: var(--s2);
+  }
+
+  .studio-settings-trigger {
+    justify-content: center;
+    width: 36px;
+    min-width: 36px;
+    min-height: 36px;
+    margin-inline: auto;
+    padding: 0;
+  }
+
+  .studio-settings-trigger__label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+
+@media (max-width: 720px) {
+  .settings-dialog__body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .settings-nav {
+    flex-direction: row;
+    align-items: center;
+    overflow-x: auto;
+    border-right: 0;
+    border-bottom: 1px solid var(--hairline);
+  }
+
+  .settings-nav__item {
+    flex: 0 0 auto;
+  }
+
+  /* The rail is a row here, so the pin flips from bottom to trailing edge and
+     its rule from horizontal to vertical. */
+  .settings-nav__foot {
+    flex: 0 0 auto;
+    margin-top: 0;
+    margin-left: auto;
+    padding-top: 0;
+    padding-left: var(--s2);
+    border-top: 0;
+    border-left: 1px solid var(--hairline-soft);
+  }
+
+  .settings-reset {
+    width: auto;
+    white-space: nowrap;
+  }
+
+  /* Two short strings competing for a narrow header; the dialog is the same
+     either way, so the note is the one that goes. */
+  .settings-dialog__autosave {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .settings-dialog {
+    animation-duration: 0.01ms;
+  }
+}

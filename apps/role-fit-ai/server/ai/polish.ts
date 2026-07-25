@@ -33,7 +33,7 @@ import {
 } from "./prompts.ts";
 import { callConfiguredProvider } from "./clients.ts";
 import { findUngroundedClaimTerm, findUngroundedOutcomeClaim, proseHasUngroundedTerm } from "./grounding.ts";
-import { generateGroundedCoverLetter } from "./coverLetter.ts";
+import { reviseGroundedCoverLetter } from "./coverLetter.ts";
 import {
   hasUngroundedNumericClaim,
   makeRewriteGrounder,
@@ -348,6 +348,7 @@ export async function handlePolish(req: IncomingMessage, res: ServerResponse): P
     const editableText = scopeToText(tailorScope, [], true);
     const jobText = String(body.jobText ?? "").slice(0, 35_000);
     const includeCoverLetter = body.includeCoverLetter === true;
+    const sourceCoverLetterText = String(body.sourceCoverLetterText ?? "").slice(0, 35_000);
     const strictReview = body.strictReview === true;
     // `stages` lets the client run the tailor pass and the strict-review pass
     // independently. Back-compat: callers that only send `strictReview`
@@ -506,19 +507,21 @@ export async function handlePolish(req: IncomingMessage, res: ServerResponse): P
         })();
     // No cover letter in review-only mode: the cover pass tailors prose off the
     // polished resume, which is purely a tailor-pass artifact. Shares the
-    // grounded generator with the standalone /api/cover-letter path; grounding
+    // grounded reviser with the standalone /api/cover-letter path; grounding
     // against polishedText matches the prior `${polishedText}\n${honestContext}`
     // corpus (the grounding backstop now lives in one place).
-    const coverRequested = runTailor && includeCoverLetter;
+    const coverRequested =
+      runTailor && includeCoverLetter && sourceCoverLetterText.trim().length >= 80;
     const coverPromise = !coverRequested
       ? Promise.resolve(null)
-      : generateGroundedCoverLetter({
+      : reviseGroundedCoverLetter({
           provider,
           model,
           reasoningEffort,
           apiKey,
           jobText,
           resumeText: polishedText,
+          sourceCoverLetterText,
           honestContext,
           customInstructions,
           signal: request.signal

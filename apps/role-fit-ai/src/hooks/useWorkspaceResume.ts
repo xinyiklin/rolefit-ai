@@ -59,6 +59,7 @@ export type BaseResumeHistoryGroup = {
 export type JobWorkspace = {
   path: string;
   baseResume: WorkspaceBaseResume;
+  starterResume?: WorkspaceBaseResume;
   baseResumeOptions?: BaseResumeOption[];
   baseResumeHistory?: BaseResumeHistoryGroup[];
   files: string[];
@@ -113,7 +114,7 @@ type UseWorkspaceResumeArgs = {
   setResumeText: (text: string) => void;
   setFileName: (name: string) => void;
   setResult: (updater: PolishedResume | null | ((prev: PolishedResume | null) => PolishedResume | null)) => void;
-  applyCoverLetter: (text: string) => void;
+  resetCoverWorkflow: () => void;
   setFileError: (value: string) => void;
   setFileStatus: (value: string) => void;
   setPolishStatus: (value: string) => void;
@@ -140,7 +141,7 @@ export function useWorkspaceResume({
   setResumeText,
   setFileName,
   setResult,
-  applyCoverLetter,
+  resetCoverWorkflow,
   setFileError,
   setFileStatus,
   setPolishStatus,
@@ -204,7 +205,7 @@ export function useWorkspaceResume({
     setFileName(baseResume.fileName ?? "base-resume");
     setBaseResumeName(baseResume.fileName ?? "");
     setResult(null);
-    applyCoverLetter("");
+    resetCoverWorkflow();
     setFileError("");
     setPolishStatus("");
     resetExportStatuses();
@@ -269,7 +270,10 @@ export function useWorkspaceResume({
         setWorkspaceStatus("");
       } else {
         saveLastBaseResumeName("");
-        setWorkspaceStatus("Local workspace ready. Save a base resume to use it automatically on startup.");
+        // No ambient instruction here: it rendered as a permanent two-line
+        // sentence at the bottom of the Save menu, restating what that menu's
+        // own "Save as default base" row already says at the point of action.
+        setWorkspaceStatus("");
         if (applyBaseResume && workspace.baseResume?.text) {
           // The bundled starter is a `.resume` envelope (kind "resume"); parse
           // it structurally, exactly like a saved base resume. Falling through to
@@ -296,6 +300,54 @@ export function useWorkspaceResume({
       setWorkspaceStatus(error instanceof Error ? error.message : "Local workspace could not be checked.");
     } finally {
       setIsWorkspaceBootstrapping(false);
+    }
+  }
+
+  async function loadStarterTemplate() {
+    try {
+      const response = await fetch("/api/workspace");
+      const workspace = (await response.json()) as JobWorkspace & { error?: string };
+      if (!response.ok) throw new Error(workspace.error ?? "Starter template could not be loaded.");
+      if (!workspace.starterResume?.text) {
+        throw new Error("The bundled starter template is unavailable.");
+      }
+
+      const candidate = prepareResumeText(
+        workspace.starterResume.text,
+        workspace.starterResume.kind === "resume"
+      );
+      if (resumeEdited && !(await confirmReplaceEditor())) return;
+
+      if (resumeEdited) {
+        clearAutosaveDraft();
+        setPendingAutosaveDraft(null);
+      }
+      saveLastBaseResumeName("");
+      setBaseResumeName("");
+      setFileName(workspace.starterResume.fileName ?? "starter.resume");
+      setResult(null);
+      resetCoverWorkflow();
+      setFileError("");
+      setPolishStatus("");
+      resetExportStatuses();
+      setExportStatus("");
+
+      if (candidate.kind === "resume") {
+        setResumeText(serializeResumeData(candidate.parsed.data));
+        seedResumeData(candidate.parsed.data);
+        docStyle.replaceDocumentStyle(candidate.parsed.documentStyle);
+      } else {
+        setResumeText(candidate.text);
+        seedResumeEditor(candidate.text, "");
+      }
+      updateWorkspaceState(workspace);
+      // The starter is intentionally detached from any saved base. Saving it
+      // next creates the default base or a named variant instead of silently
+      // overwriting whichever base happened to be active before this action.
+      setBaseResumeName("");
+      setFileStatus("Starter template opened. Replace its sample content with your own experience.");
+    } catch (error) {
+      setFileError(error instanceof Error ? error.message : "Starter template could not be loaded.");
     }
   }
 
@@ -426,8 +478,8 @@ export function useWorkspaceResume({
     }
   }
 
-  async function saveCurrentAsBaseResume() {
-    let targetName = baseResumeName || fileName || "base-resume.txt";
+  async function saveCurrentAsBaseResume(targetFileName?: string) {
+    let targetName = targetFileName || baseResumeName || fileName || "base-resume.txt";
     // A `.resume`-named base saves the lossless structured JSON. If we only have
     // plain text (no structured model yet — e.g. a text-only polish result),
     // retarget to `.txt` so we never write non-JSON into a `.resume` file, which
@@ -528,7 +580,7 @@ export function useWorkspaceResume({
     // exactly the action that resolves it.
     setPolishStatus("");
     setResult(null);
-    applyCoverLetter("");
+    resetCoverWorkflow();
 
     if (candidate.kind === "resume") {
       // The strict codec already validated and restored fresh session ids at
@@ -556,6 +608,7 @@ export function useWorkspaceResume({
     isSavingBaseResume,
     isWorkspaceBootstrapping,
     loadWorkspace,
+    loadStarterTemplate,
     removeBaseResume,
     restoreBaseResume,
     saveCurrentAsBaseResume,

@@ -22,6 +22,16 @@ const TEX_PT = 72 / 72.27;
 const gap = (value) => value * 11 * TEX_PT;
 const legacyStyle = (style) => ({
   ...DOC_STYLE_DEFAULTS,
+  // The frozen baseline predates the end-inset policy. Jake insets only the
+  // entry HEAD row (its `tabular*{0.97\textwidth}`); Typeset treats the inset as
+  // the whole entry's right edge, so bullets, summary paragraphs, and skills
+  // rows carry it too. That is a deliberate product difference, and it is
+  // horizontal — it narrows body columns by 5.4bp and can wrap a long bullet a
+  // word earlier than Tectonic did. Zeroing it here keeps this probe measuring
+  // what it is named for: the VERTICAL model, junction by junction, against
+  // line breaks the fixture can still be matched to. A vertical regression
+  // still fails; a width-policy change no longer masquerades as one.
+  entryEndIndentPt: 0,
   lineHeight: style.lineHeight,
   nameContactGapPt: (1 + (style.nameContactGap - 0.04) * 10) * TEX_PT,
   contactGapPt: style.contactGap * 10 * TEX_PT,

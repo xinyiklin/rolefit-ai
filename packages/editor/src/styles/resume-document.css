@@ -134,9 +134,131 @@
   src: url("/fonts/SourceSans3-Caps.woff2") format("woff2");
 }
 
+/* Metric-compatible substitutes for Times New Roman, Arial, and Calibri. Their
+   display bold is their text bold — a single-design static has no larger optical
+   size — so both roles share one declaration here and one metrics record in
+   metrics.gen.ts. Their caps faces carry synthesised small capitals (see
+   scripts/generate_font_assets.py). */
+@font-face {
+  font-family: "Typeset Tinos Regular";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/Tinos-Regular.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Tinos Bold";
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/Tinos-Bold.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Tinos Italic";
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+  src: url("/fonts/Tinos-Italic.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Tinos Bold Italic";
+  font-weight: 700;
+  font-style: italic;
+  font-display: swap;
+  src: url("/fonts/Tinos-BoldItalic.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Tinos Caps";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/Tinos-Caps.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Arimo Regular";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/Arimo-Regular.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Arimo Bold";
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/Arimo-Bold.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Arimo Italic";
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+  src: url("/fonts/Arimo-Italic.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Arimo Bold Italic";
+  font-weight: 700;
+  font-style: italic;
+  font-display: swap;
+  src: url("/fonts/Arimo-BoldItalic.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Arimo Caps";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/Arimo-Caps.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Carlito Regular";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/Carlito-Regular.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Carlito Bold";
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/Carlito-Bold.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Carlito Italic";
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+  src: url("/fonts/Carlito-Italic.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Carlito Bold Italic";
+  font-weight: 700;
+  font-style: italic;
+  font-display: swap;
+  src: url("/fonts/Carlito-BoldItalic.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Carlito Caps";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/Carlito-Caps.woff2") format("woff2");
+}
+
 /* ==== Typeset-engine DOM pages (src/typeset/render/dom.tsx) ====
    Real text at engine coordinates. Screen pages get quiet paper chrome; print
    pages remain bare, physical-size sheets. */
+
+/* The document opts out of the app-wide `optimizeLegibility`. Every glyph here
+   sits at a coordinate the engine measured from the font's own metrics, so the
+   rasterizer must scale outlines linearly rather than grid-fit them: hinting
+   rounds a glyph's advance and its cap height to whole pixels independently,
+   which is what makes a small-caps heading's letters look like they sit at
+   different heights at 16px. This is a paint hint only — it changes no
+   geometry, and the PDF is emitted from the same layout either way. */
+.tsd-doc {
+  text-rendering: geometricPrecision;
+}
 .tsd-doc--screen .tsd-page {
   margin: 0 auto var(--s4);
   background: #ffffff;
@@ -159,6 +281,36 @@
 
 .tsd-doc--editable .tsd-page {
   cursor: text;
+}
+
+.tsd-doc--editable .tsd-line {
+  isolation: isolate;
+}
+
+/* Native selection paints one box per differently sized inline run. Replace
+   that fragmented background with one line-wide rectangle whose height is the
+   engine line box (therefore the largest text on the line). Text remains native
+   and selectable; only its background paint is delegated to the line. */
+.tsd-doc--editable .tsd-line--selected::before {
+  position: absolute;
+  z-index: 0;
+  top: 0;
+  left: var(--tsd-selection-left, 0);
+  width: var(--tsd-selection-width, 0);
+  height: 100%;
+  background: var(--accent-veil);
+  pointer-events: none;
+  content: "";
+}
+
+.tsd-doc--editable [data-tsdf] {
+  position: relative;
+  z-index: 1;
+}
+
+.tsd-doc--editable [data-tsdf]::selection {
+  color: inherit;
+  background: transparent;
 }
 
 .tsd-doc--editable a {

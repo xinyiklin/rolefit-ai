@@ -6,6 +6,10 @@ function fieldSpans(host: HTMLElement, key: string): HTMLElement[] {
   return Array.from(host.querySelectorAll<HTMLElement>(`[data-tsdf="${CSS.escape(key)}"]:not([data-tsdm])`));
 }
 
+function isEmptyEditableSpan(span: HTMLElement): boolean {
+  return span.hasAttribute("data-tsde");
+}
+
 // The field key of the painted span containing a DOM node (a selection
 // endpoint, a clicked element), with the span element itself.
 export function keyOfNode(node: Node | null): { key: string; el: HTMLElement } | null {
@@ -13,6 +17,19 @@ export function keyOfNode(node: Node | null): { key: string; el: HTMLElement } |
   const target = el?.closest<HTMLElement>("[data-tsdf]");
   const key = target?.getAttribute("data-tsdf");
   return key && target ? { key, el: target } : null;
+}
+
+// A field's spans are split by BOTH inline style boundaries and line breaks. At
+// a line break the engine consumes the interword glue (or the authored newline)
+// into the break itself, so that display character has no DOM character on
+// either side of it. Walking spans naively desynchronizes there — the mapping
+// then fails outright, or resolves to the end of the previous line — which makes
+// every wrapped continuation line uneditable. Skip exactly one break character
+// when the walk crosses into a new line.
+const BREAK_CHARS = new Set([" ", "\n"]);
+
+function lineElementOf(span: HTMLElement): HTMLElement | null {
+  return span.closest<HTMLElement>(".tsd-line");
 }
 
 export function caretToDisplayIndex(
@@ -24,9 +41,21 @@ export function caretToDisplayIndex(
 ): number | null {
   const spans = fieldSpans(host, key);
   let displayIndex = 0;
+  let previousLine: HTMLElement | null = null;
   for (const span of spans) {
     const textNode = span.firstChild;
     if (!textNode || textNode.nodeType !== Node.TEXT_NODE) continue;
+    // Crossing is resolved for EVERY span, blank lines included: a blank line
+    // stands for an authored break that consumed its own display character, and
+    // skipping it here would desynchronize everything after it.
+    const line = lineElementOf(span);
+    const crossed = previousLine !== null && line !== previousLine;
+    previousLine = line;
+    if (crossed && BREAK_CHARS.has(display[displayIndex])) displayIndex += 1;
+    if (isEmptyEditableSpan(span)) {
+      if (textNode === node || span === node) return displayIndex;
+      continue;
+    }
     const text = textNode.textContent ?? "";
     const isTarget = textNode === node || span === node;
     const upTo = !isTarget
@@ -55,9 +84,23 @@ export function displayIndexToCaret(
   const spans = fieldSpans(host, key);
   let displayIndex = 0;
   let last: { node: Node; offset: number } | null = null;
+  let previousLine: HTMLElement | null = null;
   for (const span of spans) {
     const textNode = span.firstChild;
     if (!textNode || textNode.nodeType !== Node.TEXT_NODE) continue;
+    const line = lineElementOf(span);
+    const crossed = previousLine !== null && line !== previousLine;
+    previousLine = line;
+    if (crossed && BREAK_CHARS.has(display[displayIndex])) {
+      // A caret AT the break belongs to the end of the line that was broken;
+      // past it, the caret opens the next line.
+      if (target <= displayIndex) return last;
+      displayIndex += 1;
+    }
+    if (isEmptyEditableSpan(span)) {
+      if (target <= displayIndex) return { node: textNode, offset: 0 };
+      continue;
+    }
     const text = textNode.textContent ?? "";
     for (let index = 0; index < text.length; index += 1) {
       if (displayIndex >= target) return { node: textNode, offset: index };
@@ -93,15 +136,19 @@ export function lineEdgePosition(
     (element): element is HTMLElement =>
       element instanceof HTMLElement &&
       !element.hasAttribute("data-tsdm") &&
+      // The line-separator span holds no field text; a caret there maps nowhere.
+      !element.hasAttribute("data-tsds") &&
       element.firstChild?.nodeType === Node.TEXT_NODE
   );
   if (!spans.length) return null;
   if (edge === "start") return { node: spans[0].firstChild!, offset: 0 };
   const last = spans[spans.length - 1].firstChild as Text;
+  if (isEmptyEditableSpan(spans[spans.length - 1])) return { node: last, offset: 0 };
   const text = last.textContent ?? "";
-  let end = text.length;
-  while (end > 0 && /\s/.test(text[end - 1])) end -= 1;
-  return { node: last, offset: end };
+  // The last editable span has no copy-only field separator after it. Any
+  // whitespace at its edge is authored content, so End and blank-area clicks
+  // must land after it rather than snapping to the last visible glyph.
+  return { node: last, offset: text.length };
 }
 
 export function setCaret(position: { node: Node; offset: number }, extend: boolean): void {
@@ -117,6 +164,63 @@ export function setCaret(position: { node: Node; offset: number }, extend: boole
     selection.addRange(range);
   }
   (position.node.parentElement ?? undefined)?.scrollIntoView({ block: "nearest" });
+}
+
+// A DOM Range over a field's display range [dStart, dEnd). Both endpoints go
+// through displayIndexToCaret, so it lands correctly even when the run is split
+// across wrapped lines or inline style boundaries. Null when either endpoint
+// cannot be resolved, so a caller can decline rather than act on a partial range.
+function displayRange(
+  host: HTMLElement,
+  key: string,
+  display: string,
+  dStart: number,
+  dEnd: number
+): Range | null {
+  const start = displayIndexToCaret(host, key, display, dStart);
+  const end = displayIndexToCaret(host, key, display, dEnd);
+  if (!start || !end) return null;
+  const range = document.createRange();
+  range.setStart(start.node, start.offset);
+  range.setEnd(end.node, end.offset);
+  return range;
+}
+
+// Select a field's display range in the live DOM.
+export function selectDisplayRange(
+  host: HTMLElement,
+  key: string,
+  display: string,
+  dStart: number,
+  dEnd: number
+): boolean {
+  const range = displayRange(host, key, display, dStart, dEnd);
+  const selection = window.getSelection();
+  if (!range || !selection) return false;
+  selection.removeAllRanges();
+  selection.addRange(range);
+  return true;
+}
+
+// Viewport rect of a field's display range, WITHOUT touching the selection —
+// used to anchor an overlay to painted text the user has not selected. A range
+// that wraps across lines reports the union of its line rects, so the caller
+// should treat this as "where that text is", not as one line box.
+export function displayRangeRect(
+  host: HTMLElement,
+  key: string,
+  display: string,
+  dStart: number,
+  dEnd: number
+): { left: number; top: number; right: number; bottom: number } | null {
+  const range = displayRange(host, key, display, dStart, dEnd);
+  if (!range) return null;
+  // Prefer the FIRST line's rect: an overlay anchored to the union of a wrapped
+  // link's rects would float in the middle of the paragraph.
+  const rects = Array.from(range.getClientRects()).filter((rect) => rect.width > 0 || rect.height > 0);
+  const rect = rects[0] ?? range.getBoundingClientRect();
+  if (!rect || (rect.width === 0 && rect.height === 0)) return null;
+  return { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom };
 }
 
 export function caretClientX(): number | null {
@@ -176,6 +280,7 @@ export function contentSpansOf(line: HTMLElement): HTMLElement[] {
 
 export function spanEndPosition(span: HTMLElement): { node: Node; offset: number } {
   const textNode = span.firstChild as Text;
+  if (isEmptyEditableSpan(span)) return { node: textNode, offset: 0 };
   const text = textNode.textContent ?? "";
   let end = text.length;
   while (end > 0 && /\s/.test(text[end - 1])) end -= 1;

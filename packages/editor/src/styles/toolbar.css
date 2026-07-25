@@ -209,8 +209,12 @@
   gap: 3px;
 }
 
+/* Overflow-only duplicates of controls that also sit in the row. Each pair is
+   revealed by its own stage in the disclosure ladder at the end of this file. */
 .top-toolbar__group--typography-overflow,
 .top-toolbar__divider--overflow-typography,
+.top-toolbar__group--emphasis-extra-overflow,
+.top-toolbar__divider--overflow-emphasis,
 .top-toolbar__group--body-align-overflow,
 .top-toolbar__divider--overflow-alignment {
   display: none;
@@ -249,11 +253,14 @@
   white-space: nowrap;
 }
 
+/* Narrow enough that the longest bundled family name still reads with its
+   ellipsis, and 16px cheaper than before in a row with no width to spare. The
+   open menu is sized to its own content, so this is not the name column's cap. */
 .font-family-control {
   position: relative;
   display: inline-flex;
   min-width: 0;
-  width: 128px;
+  width: 112px;
 }
 
 .font-family-control__trigger {
@@ -307,9 +314,15 @@
   opacity: 0.65;
 }
 
+/* Sized to its content, with the trigger's width only as a floor. The family
+   names and their metric-twin labels are text of unpredictable length, so a fixed
+   width silently truncated them — at the toolbar's width the name column
+   collapsed to nothing and a row read only "Times New Roman". */
 .font-family-control__menu {
   z-index: 120;
   display: grid;
+  width: max-content;
+  max-width: min(24rem, calc(100vw - 16px));
   gap: 2px;
   padding: 4px;
   color: var(--ink);
@@ -321,7 +334,10 @@
 
 .font-family-control__menu button {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 16px;
+  /* The name never collapses; the 1fr absorbs any slack so the metric-twin
+     labels line up on the right. */
+  grid-template-columns: minmax(max-content, 1fr) auto 16px;
+  gap: 8px;
   align-items: center;
   width: 100%;
   min-height: 30px;
@@ -334,6 +350,32 @@
   font: 520 0.75rem/1.2 var(--font-ui);
   text-align: left;
   cursor: pointer;
+}
+
+/* Each family previews in its own face (set inline from the font registry), so
+   the size is nudged up to stay readable next to the UI font. */
+.font-family-control__name {
+  overflow: hidden;
+  font-size: 0.8125rem;
+  font-weight: 400;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* The proprietary family this font matches the metrics of. Quiet: it is a
+   qualifier on the name, not a second choice. */
+.font-family-control__metrics {
+  color: var(--ink-soft);
+  font-size: 0.6875rem;
+  font-weight: 420;
+  white-space: nowrap;
+}
+
+.font-family-control__menu button:hover .font-family-control__metrics,
+.font-family-control__menu button:focus-visible .font-family-control__metrics,
+.font-family-control__menu button.is-selected .font-family-control__metrics {
+  color: inherit;
+  opacity: 0.75;
 }
 
 .font-family-control__menu button > svg {
@@ -606,6 +648,15 @@
   padding: 0;
 }
 
+/* A label-less button that still carries a disclosure chevron (the alignment
+   menu) needs room for two glyphs; the square icon box squashes them. */
+.toolbar-button--icon:has(.toolbar-button__trailing) {
+  width: auto;
+  min-width: var(--toolbar-control-height, 32px);
+  gap: 1px;
+  padding: 0 4px 0 6px;
+}
+
 .toolbar-button--text {
   padding-inline: 9px;
 }
@@ -741,6 +792,61 @@
   }
 }
 
+/* ---------------------------------------------------------------------------
+   Primary row: identity, document title, save status, and host file actions.
+   These bands are independent of the formatting ladder below.
+   --------------------------------------------------------------------------- */
+
+@container typeset-toolbar (max-width: 1100px) {
+  .top-toolbar__document-context {
+    max-width: 24ch;
+  }
+}
+
+@container typeset-toolbar (max-width: 1040px) {
+  .top-toolbar__document-context {
+    display: none;
+  }
+}
+
+@container typeset-toolbar (max-width: 900px) {
+  .top-toolbar__file-actions .toolbar-button__label,
+  .top-toolbar__file-actions .toolbar-button__trailing {
+    display: none;
+  }
+
+  .top-toolbar__file-actions .toolbar-button--text {
+    width: var(--toolbar-control-height);
+    padding: 0;
+  }
+}
+
+@container typeset-toolbar (max-width: 720px) {
+  .top-toolbar__product-name,
+  .top-toolbar__identity-divider {
+    display: none;
+  }
+}
+
+@container typeset-toolbar (max-width: 620px) {
+  .top-toolbar__save-status {
+    max-width: 90px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .top-toolbar__file-actions .toolbar-button--text {
+    padding-inline: 6px;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Document-style menu labels.
+
+   Typeset keeps the Spacing / Paragraph / Styles / Page labels while the row
+   has room for them and drops to icons below 1210px.
+   --------------------------------------------------------------------------- */
+
 @container typeset-toolbar (max-width: 1210px) {
   .top-toolbar__group--style .toolbar-button__label,
   .top-toolbar__group--style .toolbar-button__trailing {
@@ -753,46 +859,46 @@
   }
 }
 
-/* Label-first disclosure seam: a host may set `data-toolbar-labels="text"` on
-   the wrapper around the toolbar to opt into label-first disclosure instead
-   of the default icon-first collapse above. A host that has no standalone
-   file-action cluster in this row can afford to keep style-menu labels
-   readable longer, and can afford to keep document-structure labels/icons
-   legible further down before the icon-only fallback. Typeset never sets the
-   attribute, so it is unaffected. */
-[data-toolbar-labels="text"] .top-toolbar__document-structure .toolbar-button__icon {
+/* Icon-only seam: a host may set `data-toolbar-labels="icon"` on the wrapper
+   around the toolbar to render the document-style menus — and any host
+   document-structure controls mounted with them — as icons at every width,
+   instead of the label-until-1210px behavior above. RoleFit sets it: its
+   formatting row shares a container with a full document action bar, so these
+   menus cannot afford label width at any supported size, and their tooltips
+   plus aria-labels carry the name. Typeset never sets the attribute. */
+[data-toolbar-labels="icon"] .top-toolbar__group--style .toolbar-button__label,
+[data-toolbar-labels="icon"] .top-toolbar__group--style .toolbar-button__trailing {
   display: none;
 }
 
-/* The 1190.01px lower edge interlocks exactly with the 1210px band above so
-   the two disclosure states hand off without a gap; retune them together. */
-@container typeset-toolbar (min-width: 1190.01px) and (max-width: 1210px) {
-  [data-toolbar-labels="text"] .top-toolbar__group--style {
-    gap: 0;
-  }
-
-  [data-toolbar-labels="text"] .top-toolbar__group--style .toolbar-button__label,
-  [data-toolbar-labels="text"] .top-toolbar__group--style .toolbar-button__trailing {
-    display: inline;
-  }
-
-  [data-toolbar-labels="text"] .top-toolbar__group--style .toolbar-button--text {
-    width: auto;
-    padding-inline: 6px;
-  }
+[data-toolbar-labels="icon"] .top-toolbar__group--style .toolbar-button--text {
+  width: var(--toolbar-control-height);
+  padding: 0;
 }
 
-@container typeset-toolbar (max-width: 1100px) {
-  .top-toolbar__document-context {
-    max-width: 24ch;
-  }
-}
+/* ---------------------------------------------------------------------------
+   Formatting-row disclosure ladder.
 
-@container typeset-toolbar (max-width: 1040px) {
-  .top-toolbar__document-context {
-    display: none;
-  }
+   The row never scrolls, and it must never be allowed to overflow either: a
+   RoleFit ancestor sets `overflow-x: hidden`, so an overflowing formatting row
+   loses its trailing control silently rather than becoming reachable. Each
+   stage below therefore has to leave a residual set that fits its own band.
 
+   The thresholds are measured, not guessed. Each one is the intrinsic width of
+   the set that is still inline above it, plus the row's 24px padding and a few
+   pixels of margin, rounded to a round number. Re-measure and retune the whole
+   ladder after adding a control or widening an existing one; the widest stage
+   is the one that breaks first.
+
+   Stage 1 (<=  920px)  document-style menus and host structure controls move
+                        into the anchored More overlay.
+   Stage 2 (<=  740px)  selection typography (font family + size) moves in.
+   Stage 3 (<=  520px)  paragraph alignment moves in.
+   Stage 4 (<=  460px)  clear formatting and spell check move in, leaving
+                        history, zoom, and the four emphasis commands.
+   --------------------------------------------------------------------------- */
+
+@container typeset-toolbar (max-width: 920px) {
   .top-toolbar__secondary-row--formatting {
     align-items: center;
     gap: 7px;
@@ -800,6 +906,8 @@
     overflow: visible;
   }
 
+  /* The row's own children stop being the layout children here: `main-tools`
+     becomes the flex line and `overflow-tools` becomes an anchored panel. */
   .top-toolbar__main-tools {
     display: flex;
     flex: 1 1 auto;
@@ -840,56 +948,7 @@
   }
 }
 
-@container typeset-toolbar (max-width: 900px) {
-  .top-toolbar__file-actions .toolbar-button__label,
-  .top-toolbar__file-actions .toolbar-button__trailing,
-  .top-toolbar__document-structure .toolbar-button__label,
-  .top-toolbar__document-structure .toolbar-button__trailing {
-    display: none;
-  }
-
-  .top-toolbar__file-actions .toolbar-button--text,
-  .top-toolbar__document-structure .toolbar-button--text {
-    width: var(--toolbar-control-height);
-    padding: 0;
-  }
-
-  .top-toolbar__group--body-align-primary,
-  .top-toolbar__divider--direct-alignment {
-    display: none;
-  }
-
-  .top-toolbar__secondary-row--formatting.is-more-open .top-toolbar__group--body-align-overflow {
-    display: flex;
-  }
-
-  .top-toolbar__secondary-row--formatting.is-more-open .top-toolbar__divider--overflow-alignment {
-    display: block;
-  }
-}
-
-/* Label-first disclosure seam (continued from the 1210px band above): a host
-   opted in via `data-toolbar-labels="text"` keeps its document-structure
-   label/trailing readable through this narrower edge instead of collapsing to
-   icon-only alongside file actions. */
-@container typeset-toolbar (max-width: 900px) {
-  [data-toolbar-labels="text"] .top-toolbar__document-structure .toolbar-button__label,
-  [data-toolbar-labels="text"] .top-toolbar__document-structure .toolbar-button__trailing {
-    display: inline;
-  }
-
-  [data-toolbar-labels="text"] .top-toolbar__document-structure .toolbar-button--text {
-    width: auto;
-    padding-inline: 9px;
-  }
-}
-
-@container typeset-toolbar (max-width: 720px) {
-  .top-toolbar__product-name,
-  .top-toolbar__identity-divider {
-    display: none;
-  }
-
+@container typeset-toolbar (max-width: 740px) {
   .top-toolbar__group--typography-primary,
   .top-toolbar__divider--direct-typography {
     display: none;
@@ -904,15 +963,44 @@
   }
 }
 
-@container typeset-toolbar (max-width: 620px) {
-  .top-toolbar__save-status {
-    max-width: 90px;
-    overflow: hidden;
-    text-overflow: ellipsis;
+@container typeset-toolbar (max-width: 520px) {
+  .top-toolbar__group--body-align-primary,
+  .top-toolbar__divider--direct-alignment {
+    display: none;
   }
 
-  .top-toolbar__file-actions .toolbar-button--text {
-    padding-inline: 6px;
+  .top-toolbar__secondary-row--formatting.is-more-open .top-toolbar__group--body-align-overflow {
+    display: flex;
+  }
+
+  .top-toolbar__secondary-row--formatting.is-more-open .top-toolbar__divider--overflow-alignment {
+    display: block;
+  }
+}
+
+@container typeset-toolbar (max-width: 460px) {
+  /* The tooltip wrapper is the laid-out box, so hiding the button alone would
+     leave its gap behind. */
+  .top-toolbar__main-tools .toolbar-tooltip:has(> .top-toolbar__emphasis-extra--primary) {
+    display: none;
+  }
+
+  .top-toolbar__secondary-row--formatting.is-more-open .top-toolbar__group--emphasis-extra-overflow {
+    display: flex;
+  }
+
+  .top-toolbar__secondary-row--formatting.is-more-open .top-toolbar__divider--overflow-emphasis {
+    display: block;
+  }
+
+  /* The last band also spends the group spacing: this is what takes the row's
+     own fit down to roughly a 355px container. */
+  .top-toolbar__main-tools {
+    gap: 4px;
+  }
+
+  .top-toolbar__main-tools .top-toolbar__divider {
+    margin: 0;
   }
 }
 

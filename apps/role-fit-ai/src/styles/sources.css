@@ -185,173 +185,403 @@ select,
 
 .workspace-actions { display: flex; flex-wrap: wrap; gap: var(--s1); margin-top: var(--s2); }
 
-/* -------- Resume menu — flat source head -------- */
+/* -------- Document action menus -------- */
 
-.resume-source-head {
-  display: flex;
-  align-items: flex-start;
+.document-action-menu > .popover__surface {
+  width: min(360px, calc(100vw - 24px));
+  /* `--popover-space` is the room Popover measured under the trigger; the 72vh
+     guess stays as the fallback. This surface is its own scroller. */
+  max-height: min(620px, var(--popover-space, 72vh));
+  overflow: auto;
+}
+
+.document-action-panel {
+  display: grid;
   gap: var(--s2);
+  padding: var(--s3);
+  background: var(--card-elev);
 }
 
-.resume-source-head > svg {
-  flex-shrink: 0;
-  margin-top: 3px;
-  color: var(--accent);
+.document-action-panel__head {
+  display: grid;
+  gap: 2px;
+  padding: 2px var(--s1) var(--s2);
+  border-bottom: 1px solid var(--hairline-soft);
 }
 
-.resume-source-head__info strong {
-  display: block;
+.document-action-panel__head strong {
   color: var(--ink-strong);
-  font-size: 0.88rem;
-  font-weight: 600;
-  line-height: 1.25;
+  font-size: 0.82rem;
+  font-weight: 680;
 }
 
-.resume-source-head__info small {
-  display: block;
-  margin-top: 2px;
+.document-action-panel__head span,
+.document-action-row small,
+.document-action-form__hint {
   color: var(--ink-soft);
-  font-size: 0.72rem;
-  font-family: var(--font-mono);
-  line-height: 1.3;
+  font-size: 0.7rem;
+  line-height: 1.35;
 }
 
-/* -------- Resume menu — section dividers -------- */
-
-.resume-section {
-  border-top: 1px solid var(--hairline-soft);
-  padding-top: var(--s2);
-  margin-top: var(--s2);
+.document-action-row {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: var(--s2);
+  align-items: start;
+  width: 100%;
+  padding: 9px var(--s2);
+  border: 1px solid transparent;
+  border-radius: var(--r-md);
+  background: transparent;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
 }
 
-.resume-section__head {
-  display: flex;
-  align-items: center;
-  gap: var(--s1);
-  margin-bottom: var(--s1);
+.document-action-row:hover:not(:disabled) {
+  border-color: var(--hairline);
+  background: var(--card-hover);
+}
+
+.document-action-row:focus-visible,
+.document-action-form input:focus-visible,
+.document-action-form__submit:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.document-action-row:disabled {
   color: var(--ink-faint);
-  font-size: 0.68rem;
-  font-weight: 700;
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
+.document-action-row > svg {
+  margin-top: 2px;
+  color: var(--accent-deep);
+}
+
+.document-action-row > span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.document-action-row strong {
+  color: var(--ink-strong);
+  font-size: 0.76rem;
+  font-weight: 630;
+}
+
+/* Polish stage chooser: the same action rows plus a trailing check marking the
+   remembered default. The third column is reserved on every row so the two
+   unchecked titles do not shift when the default moves. */
+.polish-stage-menu .document-action-row {
+  grid-template-columns: 18px minmax(0, 1fr) 16px;
+}
+
+/* Specific enough to beat `.document-action-row > svg`, which top-aligns the
+   leading icon against a two-line title. */
+.polish-stage-menu .document-action-row > .polish-stage-menu__current {
+  align-self: center;
+  justify-self: center;
+  margin-top: 0;
+  color: var(--accent-deep);
+}
+
+/* -------- Open menu (shared by resume and cover letter) -------- */
+
+/* The saved-documents list sits under the start actions, divided from them by a
+   rule: everything above starts a NEW document, everything below reopens one
+   already in the workspace. */
+.document-open-saved {
+  display: grid;
+  gap: 4px;
+  margin-top: 2px;
+  padding-top: var(--s2);
+  border-top: 1px solid var(--hairline-soft);
+}
+
+.document-open-saved__head {
+  padding: 0 var(--s2);
+  color: var(--ink-muted);
+  font-size: 0.66rem;
+  font-weight: 640;
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
 
-/* -------- Resume menu — flat item list (shared by base versions + history) -------- */
-
-.resume-list {
-  list-style: none;
+.document-open-saved__empty {
   margin: 0;
-  padding: 0;
-  display: grid;
-  gap: 1px;
+  padding: 2px var(--s2) 4px;
+  color: var(--ink-soft);
+  font-size: 0.7rem;
+  line-height: 1.4;
 }
 
-.resume-list__item {
+.document-open-group__label {
   display: flex;
   align-items: center;
-  gap: var(--s2);
-  min-height: 32px;
-  padding: 2px 0;
-  font-size: 0.78rem;
-}
-
-.resume-list__name {
-  flex: 1 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  color: var(--ink);
-  font-weight: 500;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
-.resume-list__name small {
-  display: block;
-  margin-top: 1px;
-  color: var(--ink-faint);
+  gap: 5px;
+  margin: var(--s1) 0 2px;
+  padding: 0 var(--s2);
+  color: var(--ink-soft);
   font-size: 0.68rem;
-  font-family: var(--font-mono);
-  line-height: 1.15;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-weight: 400;
+  font-weight: 600;
 }
 
-.resume-list__item.is-active .resume-list__name {
-  color: var(--accent-deep);
+.document-open-group__label > svg {
+  color: var(--ink-faint);
 }
 
-.resume-list__item.is-active .resume-list__name small {
-  color: var(--accent-deep);
-  opacity: 0.65;
-}
-
-/* -------- Resume menu — recent versions grouped by variant (expandable) -------- */
-
-.resume-history {
-  display: grid;
-  gap: 1px;
-}
-
-.resume-history__summary {
+/* A collapsible history group. The marker is suppressed in favour of the
+   rotating chevron so the row matches the rest of the menu. */
+.document-open-group > summary {
   display: flex;
   align-items: center;
-  gap: var(--s1);
-  min-height: 32px;
-  padding: 2px 4px;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 0.78rem;
+  gap: 5px;
+  padding: 5px var(--s2);
+  border-radius: var(--r-md);
+  color: var(--ink-soft);
+  font-size: 0.68rem;
   font-weight: 600;
-  color: var(--ink);
-  /* Strip the native disclosure triangle — the chevron below replaces it. */
+  cursor: pointer;
   list-style: none;
-  user-select: none;
 }
 
-.resume-history__summary::-webkit-details-marker {
+.document-open-group > summary::-webkit-details-marker {
   display: none;
 }
 
-.resume-history__summary:hover {
-  background: var(--accent-veil);
+.document-open-group > summary:hover {
+  color: var(--ink);
+  background: var(--card-hover);
 }
 
-.resume-history__chevron {
+.document-open-group > summary > svg {
   flex: 0 0 auto;
   color: var(--ink-faint);
-  transition: transform 0.15s var(--ease);
+  transition: rotate 140ms var(--ease);
 }
 
-.resume-history__group[open] > .resume-history__summary .resume-history__chevron {
-  transform: rotate(90deg);
+.document-open-group[open] > summary > svg {
+  rotate: 90deg;
 }
 
-.resume-history__label {
+.document-open-group > summary > span {
   flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
-  white-space: nowrap;
   text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.resume-history__count {
+.document-open-group > summary > em {
   flex: 0 0 auto;
-  min-width: 18px;
-  padding: 0 6px;
-  border-radius: 999px;
-  background: var(--hairline-soft);
   color: var(--ink-faint);
-  font-size: 0.66rem;
-  font-weight: 700;
-  text-align: center;
-  line-height: 1.5;
+  font-family: var(--font-mono);
+  font-size: 0.64rem;
+  font-style: normal;
 }
 
-/* Indent a group's entries under its summary so the hierarchy reads clearly. */
-.resume-history__group .resume-list {
-  padding-left: calc(12px + var(--s1));
+/* Entries of a collapsed group indent under their summary. */
+.document-open-group[open] > .document-open-list {
+  padding-left: 17px;
+}
+
+.document-open-list {
+  display: grid;
+  gap: 1px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.document-open-list > li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s2);
+  min-height: 30px;
+  padding: 2px var(--s2);
+  border-radius: var(--r-md);
+}
+
+.document-open-list > li:hover {
+  background: var(--card-hover);
+}
+
+.document-open-list__name {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+  color: var(--ink);
+  font-size: 0.74rem;
+}
+
+.document-open-list__name small {
+  color: var(--ink-faint);
+  font-size: 0.64rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.document-open-list > li.is-active .document-open-list__name {
+  color: var(--accent-deep);
+  font-weight: 600;
+}
+
+/* Quiet state, not a button: the active document has nothing to open. */
+.document-open-list__current {
+  flex: 0 0 auto;
+  color: var(--ink-soft);
+  font-size: 0.66rem;
+}
+
+.document-open-note {
+  margin: 0;
+  padding: 2px var(--s2);
+  color: var(--ink-soft);
+  font-size: 0.68rem;
+  line-height: 1.4;
+}
+
+.document-open-note--warn {
+  color: var(--warm);
+}
+
+.document-action-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px;
+  padding: var(--s2);
+  border: 1px solid var(--hairline-soft);
+  border-radius: var(--r-md);
+  background: var(--card-soft);
+}
+
+.document-action-form label {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.document-action-form label > span {
+  color: var(--ink-muted);
+  font-size: 0.66rem;
+  font-weight: 620;
+}
+
+.document-action-form input {
+  width: 100%;
+  min-width: 0;
+  height: 30px;
+  box-sizing: border-box;
+  padding: 0 var(--s2);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-sm);
+  background: var(--card-elev);
+  color: var(--ink);
+  font: 500 0.74rem/1 var(--font-ui);
+  outline: none;
+}
+
+.document-action-form__submit {
+  align-self: end;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 30px;
+  padding: 0 var(--s2);
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--r-sm);
+  background: var(--card-elev);
+  color: var(--ink-strong);
+  font: 620 0.7rem/1 var(--font-ui);
+  cursor: pointer;
+}
+
+.document-action-form__submit:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-deep);
+}
+
+.document-action-form__submit:disabled {
+  color: var(--ink-faint);
+  cursor: not-allowed;
+}
+
+.document-action-form__hint {
+  grid-column: 1 / -1;
+}
+
+.document-action-panel__status {
+  margin: 0;
+  padding: var(--s2);
+  border-top: 1px solid var(--hairline-soft);
+  color: var(--ink-muted);
+  font-size: 0.7rem;
+  line-height: 1.4;
+}
+
+.document-primary-action {
+  position: relative;
+  display: inline-flex;
+}
+
+.document-action-feedback {
+  position: absolute;
+  top: calc(100% + var(--s2));
+  right: 0;
+  z-index: 82;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s2);
+  width: min(360px, calc(100vw - var(--s5) * 2));
+  padding: var(--s2) var(--s3);
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--r-lg);
+  background: var(--card);
+  box-shadow: var(--shadow-lift);
+  color: var(--ink);
+  font-size: 0.76rem;
+  line-height: 1.4;
+}
+
+.document-action-feedback--error {
+  border-color: var(--danger-line);
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.document-action-feedback > span {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.document-action-feedback > button {
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: currentColor;
+  cursor: pointer;
+}
+
+.document-action-feedback > button:hover {
+  background: var(--card-hover);
+}
+
+.document-action-feedback > button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
 }
 
 /* -------- Notices -------- */
@@ -604,156 +834,3 @@ select,
   color: var(--ink-muted);
 }
 
-/* Permanently visible per-stage sections (Distill / Tailor / Review) in the AI
-   menu. Adjacent stages are divided by a hairline, with no nested disclosure. */
-.menu-section + .menu-section {
-  border-top: 1px solid var(--hairline-soft);
-}
-
-/* Static stage heading with the one-shot Copy settings control aligned right. */
-.menu-section__header {
-  display: flex;
-  align-items: center;
-  gap: var(--s2);
-  padding: var(--s3) 0;
-}
-
-.menu-section__header .menu-subhead__title {
-  margin: 0;
-}
-
-.menu-section__header > .stage-copy {
-  margin-left: auto;
-}
-
-.menu-section__body {
-  padding-bottom: var(--s3);
-}
-
-/* One compact copy control per stage avoids presenting both source stages as
-   equally prominent actions in every always-visible header. */
-.stage-copy {
-  display: flex;
-  align-items: center;
-  gap: var(--s2);
-}
-
-.stage-copy__label {
-  flex: none;
-  font-size: 0.68rem;
-  color: var(--ink-faint);
-}
-
-.stage-copy__select {
-  width: 82px;
-  height: 27px;
-  padding: 0 22px 0 8px;
-  border: 1px solid var(--hairline);
-  border-radius: var(--r-md);
-  background: var(--card);
-  font: inherit;
-  font-size: 0.68rem;
-  color: var(--ink-muted);
-  cursor: pointer;
-}
-
-.stage-copy__select:hover {
-  border-color: var(--hairline-strong);
-  background: var(--paper-deep);
-  color: var(--ink);
-}
-
-.stage-copy__select:focus-visible {
-  outline: 2px solid var(--accent-glow);
-  outline-offset: 1px;
-}
-
-/* Bordered card holding one stage's provider fields, set off from the section
-   header above it. Provider / Model / effort share the top row. */
-.provider-card {
-  display: grid;
-  gap: var(--s3);
-  padding: var(--s3);
-  border: 1px solid var(--hairline-soft);
-  border-radius: var(--r-lg);
-  background: transparent;
-}
-
-.provider-card__row {
-  display: grid;
-  gap: var(--s3);
-  /* Model gets a bit more room than Provider — model ids run longer than provider
-     names (e.g. Antigravity's "Gemini 3.5 Flash (Medium)"). minmax(0,…) lets the
-     selects shrink instead of overflowing the columns. */
-  grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
-}
-
-/* Effort holds short values (Low / Medium / … / Extra high) so it gets a narrower
-   column than Provider + Model — but enough room for the longer labels to show. */
-.provider-card__row--3 {
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 0.8fr);
-}
-
-.provider-card .field {
-  margin-top: 0;
-  min-width: 0;
-}
-
-.provider-card__auth-note {
-  margin: 0;
-  color: var(--ink-soft);
-  font-size: 0.7rem;
-  line-height: 1.45;
-}
-
-.provider-card__availability {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--s2);
-}
-
-.provider-card__availability.is-blocked .provider-card__auth-note {
-  color: var(--warm);
-}
-
-.provider-card__availability .ghost-button {
-  flex: 0 0 auto;
-}
-
-/* Keep the three selects on one baseline even when a label wraps to two lines
-   (the narrow "Reasoning effort" column): the label row flexes, the control
-   pins to the bottom of the equal-height cells. */
-.provider-card__row .field {
-  grid-template-rows: 1fr auto;
-}
-
-/* Harden the selects/inputs so a long option label (e.g. "Gemini 3.5 Flash
-   (High)") truncates with an ellipsis inside its grid cell instead of blowing the
-   column out or overflowing the panel. */
-.provider-card .field select,
-.provider-card .field .text-input,
-.provider-card .field .input-with-icon {
-  min-width: 0;
-  max-width: 100%;
-}
-
-.provider-card .field select {
-  /* Drop the native dropdown arrow so the value gets the full cell width (e.g.
-     "Medium" fits the narrow Effort column instead of truncating to "Mediu…").
-     Clicking still opens the native dropdown. Tighter padding reclaims the space
-     the arrow used to occupy. */
-  appearance: none;
-  -webkit-appearance: none;
-  padding: 0 3px;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
-/* AI menu is a wider panel so each stage's Provider / Model / effort row fits on
-   one line; sections are divided by the .menu-section hairline. */
-.ai-menu .nav-menu__popover {
-  width: min(380px, 94vw);
-  max-height: min(86vh, 720px);
-}

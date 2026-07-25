@@ -10,13 +10,22 @@ import {
   nearestLineByPoint,
   placeInLine,
   positionFromPoint,
-  setCaret,
-  spanEndPosition
+  setCaret
 } from "./domSelection.ts";
-import type { TypesetSelection } from "./inlineTextEditing.ts";
+import {
+  inlineFragmentForRange,
+  type TypesetSelection
+} from "./inlineTextEditing.ts";
+import {
+  decodeInlineClipboard,
+  encodeInlineClipboard,
+  inlineFragmentFromHtml,
+  TYPESET_INLINE_CLIPBOARD_MIME
+} from "./clipboardFormatting.ts";
 
 export type QueuedIntent =
   | { kind: "insert"; text: string }
+  | { kind: "paste"; fragment: string }
   | { kind: "deleteBack" }
   | { kind: "deleteFwd" }
   | { kind: "deleteSelection" }
@@ -24,6 +33,31 @@ export type QueuedIntent =
   | { kind: "toggleMark"; mark: "bold" | "italic" | "underline" }
   | { kind: "clearFormatting" }
   | { kind: "history"; direction: "undo" | "redo" };
+
+// The intent a beforeinput carries, independent of which selection it lands on.
+// Both deferral paths use it: the commit gate queues it for replay after the
+// repaint, and a selection crossing fields hands it to the host's batched edit.
+// Insert-shaped types collapse to one `insert` because every one of them
+// replaces the selection with text.
+function intentForInput(event: InputEvent, type: string): QueuedIntent | null {
+  if (type === "insertParagraph") return { kind: "splitBullet" };
+  if (type === "deleteContentBackward") return { kind: "deleteBack" };
+  if (type === "deleteContentForward") return { kind: "deleteFwd" };
+  if (type.startsWith("delete")) return { kind: "deleteSelection" };
+  if (type === "historyUndo") return { kind: "history", direction: "undo" };
+  if (type === "historyRedo") return { kind: "history", direction: "redo" };
+  if (type === "formatBold") return { kind: "toggleMark", mark: "bold" };
+  if (type === "formatItalic") return { kind: "toggleMark", mark: "italic" };
+  if (type === "formatUnderline") return { kind: "toggleMark", mark: "underline" };
+  if (["insertText", "insertReplacementText", "insertLineBreak", "insertFromPaste"].includes(type)) {
+    const text =
+      type === "insertLineBreak"
+        ? "\n"
+        : event.data ?? event.dataTransfer?.getData("text/plain") ?? "";
+    return text ? { kind: "insert", text } : null;
+  }
+  return null;
+}
 
 type TypesetInputEventsArgs = {
   hostRef: MutableRefObject<HTMLDivElement | null>;
@@ -33,11 +67,20 @@ type TypesetInputEventsArgs = {
   replayQueueRef: MutableRefObject<QueuedIntent[]>;
   readSelection: () => TypesetSelection | null;
   commitReplace: (selection: TypesetSelection, start: number, end: number, text: string) => void;
+  commitPaste: (selection: TypesetSelection, start: number, end: number, fragment: string) => void;
   onEnter: (selection: TypesetSelection) => void;
   commitMergeBullet: (selection: TypesetSelection, direction: "up" | "down") => boolean;
   commitToggleMark: (selection: TypesetSelection, mark: "bold" | "italic" | "underline") => void;
   commitClearFormatting: (selection: TypesetSelection) => void;
   commitHistory: (direction: "undo" | "redo") => void;
+  // A selection crossing field boundaries (Select All, a drag across
+  // paragraphs) has no single mapped field. The host applies these as one
+  // batched edit and returns true when it consumed the intent.
+  commitCrossFieldIntent: (intent: QueuedIntent) => boolean;
+  // Plain text for a selection crossing fields, read from the model; null when
+  // the selection does not cross fields.
+  crossFieldPlainText: () => string | null;
+  onZoomShortcut: (command: -1 | 0 | 1) => void;
   setNonce: Dispatch<SetStateAction<number>>;
 };
 
@@ -49,11 +92,15 @@ export function useTypesetInputEvents({
   replayQueueRef,
   readSelection,
   commitReplace,
+  commitPaste,
   onEnter,
   commitMergeBullet,
   commitToggleMark,
   commitClearFormatting,
   commitHistory,
+  commitCrossFieldIntent,
+  crossFieldPlainText,
+  onZoomShortcut,
   setNonce
 }: TypesetInputEventsArgs) {
   const goalXRef = useRef<number | null>(null);
@@ -64,22 +111,6 @@ export function useTypesetInputEvents({
     const host = hostRef.current;
     if (!host) return;
 
-    // Fields the user fills in, in document order — one stop per field (first
-    // painted span wins). Section headings are structural labels, so they stay
-    // out of the Tab cycle; name, contacts, entry header fields, bullets/summary
-    // paragraphs, and skill rows are all in it.
-    const tabStopFields = (): HTMLElement[] => {
-      const seen = new Set<string>();
-      const stops: HTMLElement[] = [];
-      for (const span of host.querySelectorAll<HTMLElement>("[data-tsdf]:not([data-tsdm])")) {
-        if (span.firstChild?.nodeType !== Node.TEXT_NODE) continue;
-        const key = span.getAttribute("data-tsdf");
-        if (!key || seen.has(key) || key.startsWith("heading|")) continue;
-        seen.add(key);
-        stops.push(span);
-      }
-      return stops;
-    };
     const moveVertical = (direction: -1 | 1, extend: boolean): boolean => {
       const selection = window.getSelection();
       const current = lineOf(selection?.focusNode ?? null);
@@ -133,28 +164,8 @@ export function useTypesetInputEvents({
       event.preventDefault();
       goalXRef.current = null;
       if (commitPendingRef.current) {
-        const inserted =
-          type === "insertLineBreak"
-            ? "\n"
-            : event.data ?? event.dataTransfer?.getData("text/plain") ?? "";
-        if (["insertText", "insertReplacementText", "insertLineBreak", "insertFromPaste"].includes(type) && inserted) {
-          queueIntent({ kind: "insert", text: inserted });
-        } else if (type === "insertParagraph") {
-          queueIntent({ kind: "splitBullet" });
-        } else if (type === "deleteContentBackward") {
-          queueIntent({ kind: "deleteBack" });
-        } else if (type === "deleteContentForward") {
-          queueIntent({ kind: "deleteFwd" });
-        } else if (type.startsWith("delete")) {
-          queueIntent({ kind: "deleteSelection" });
-        } else if (type === "formatBold" || type === "formatItalic" || type === "formatUnderline") {
-          queueIntent({
-            kind: "toggleMark",
-            mark: type === "formatBold" ? "bold" : type === "formatItalic" ? "italic" : "underline"
-          });
-        } else if (type === "historyUndo" || type === "historyRedo") {
-          queueIntent({ kind: "history", direction: type === "historyUndo" ? "undo" : "redo" });
-        }
+        const queued = intentForInput(event, type);
+        if (queued) queueIntent(queued);
         return;
       }
 
@@ -162,7 +173,11 @@ export function useTypesetInputEvents({
       if (type === "historyRedo") return commitHistory("redo");
 
       const selection = readSelection();
-      if (!selection) return;
+      if (!selection) {
+        const intent = intentForInput(event, type);
+        if (intent) commitCrossFieldIntent(intent);
+        return;
+      }
 
       if (type === "insertParagraph") {
         onEnter(selection);
@@ -251,6 +266,24 @@ export function useTypesetInputEvents({
 
     const onKeyDown = (event: KeyboardEvent) => {
       const mod = event.metaKey || event.ctrlKey;
+      if (mod && !event.altKey) {
+        const command =
+          event.code === "Digit0" || event.code === "Numpad0" || event.key === "0"
+            ? 0
+            : event.code === "Minus" || event.code === "NumpadSubtract" || event.key === "-"
+              ? -1
+              : event.code === "Equal" ||
+                  event.code === "NumpadAdd" ||
+                  event.key === "+" ||
+                  event.key === "="
+                ? 1
+                : null;
+        if (command !== null) {
+          event.preventDefault();
+          onZoomShortcut(command);
+          return;
+        }
+      }
       const vertical = event.key === "ArrowUp" ? -1 : event.key === "ArrowDown" ? 1 : 0;
       if (vertical !== 0 && !event.altKey) {
         event.preventDefault();
@@ -284,9 +317,8 @@ export function useTypesetInputEvents({
           return;
         }
         const selection = readSelection();
-        if (selection) {
-          commitToggleMark(selection, mark);
-        }
+        if (selection) commitToggleMark(selection, mark);
+        else commitCrossFieldIntent({ kind: "toggleMark", mark });
         return;
       }
       if (mod && !event.altKey && !event.shiftKey && event.key === "\\") {
@@ -314,60 +346,14 @@ export function useTypesetInputEvents({
         else commitHistory("redo");
         return;
       }
-      if (event.key === "Tab") {
+      if (event.key === "Tab" && !event.shiftKey) {
         const selection = readSelection();
-        // Tab moves between the fields the user fills in (see tabStopFields):
-        // name, contacts, entry header fields, bullets/summary paragraphs, and
-        // skill rows. With no clean field selection, or at either boundary of the
-        // cycle, Tab is left to the browser so focus can still leave the editor.
         if (!selection) return;
-        const stops = tabStopFields();
-        const step = event.shiftKey ? -1 : 1;
-        const index = stops.findIndex((element) => element.getAttribute("data-tsdf") === selection.key);
-        let target: HTMLElement | undefined;
-        if (index >= 0) {
-          target = stops[index + step];
-        } else {
-          // The caret sits in a non-stop field (a section heading): move to the
-          // nearest stop in the travel direction by document order.
-          const focus = window.getSelection()?.focusNode ?? null;
-          const ref = (focus instanceof HTMLElement ? focus : focus?.parentElement)?.closest<HTMLElement>(
-            "[data-tsdf]:not([data-tsdm])"
-          );
-          if (ref) {
-            target =
-              step > 0
-                ? stops.find((el) => (ref.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0)
-                : [...stops]
-                    .reverse()
-                    .find((el) => (ref.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_PRECEDING) !== 0);
-          }
-        }
-        if (!target) return;
         event.preventDefault();
         goalXRef.current = null;
-        // Select the whole target field so it's obvious where Tab landed, spanning
-        // the field's first painted span to its last when it wraps or carries
-        // inline formatting across several spans.
-        const key = target.getAttribute("data-tsdf");
-        const spans = key
-          ? Array.from(host.querySelectorAll<HTMLElement>("[data-tsdf]:not([data-tsdm])")).filter(
-              (el) => el.getAttribute("data-tsdf") === key && el.firstChild?.nodeType === Node.TEXT_NODE
-            )
-          : [target];
-        const first = spans[0] ?? target;
-        const last = spans[spans.length - 1] ?? target;
-        if (!first.firstChild) return;
-        const selectionApi = window.getSelection();
-        if (selectionApi) {
-          const range = document.createRange();
-          range.setStart(first.firstChild, 0);
-          const end = spanEndPosition(last);
-          range.setEnd(end.node, end.offset);
-          selectionApi.removeAllRanges();
-          selectionApi.addRange(range);
-          target.scrollIntoView({ block: "nearest" });
-        }
+        const indentation = "    ";
+        if (commitPendingRef.current) queueIntent({ kind: "insert", text: indentation });
+        else commitReplace(selection, selection.dStart, selection.dEnd, indentation);
         return;
       }
       if (event.key === "Escape") (document.activeElement as HTMLElement | null)?.blur();
@@ -415,31 +401,99 @@ export function useTypesetInputEvents({
 
     const onPaste = (event: ClipboardEvent) => {
       event.preventDefault();
-      const text = event.clipboardData?.getData("text/plain") ?? "";
-      if (commitPendingRef.current) {
-        if (text) queueIntent({ kind: "insert", text });
-        return;
-      }
-      const selection = readSelection();
-      if (!selection) return;
-      commitReplace(selection, selection.dStart, selection.dEnd, text);
-    };
-    const onCut = (event: ClipboardEvent) => {
-      event.preventDefault();
-      if (commitPendingRef.current) {
-        const selectedText = window.getSelection()?.toString() ?? "";
-        if (selectedText) {
-          event.clipboardData?.setData("text/plain", selectedText);
-          queueIntent({ kind: "deleteSelection" });
-        }
-        return;
-      }
-      const selection = readSelection();
-      if (!selection || selection.dStart === selection.dEnd) return;
-      event.clipboardData?.setData(
-        "text/plain",
-        selection.map.display.slice(selection.dStart, selection.dEnd)
+      const clipboard = event.clipboardData;
+      const ownFragment = decodeInlineClipboard(
+        clipboard?.getData(TYPESET_INLINE_CLIPBOARD_MIME) ?? ""
       );
+      const htmlFragment = ownFragment
+        ? null
+        : inlineFragmentFromHtml(clipboard?.getData("text/html") ?? "");
+      const fragment = ownFragment ?? htmlFragment;
+      const text = clipboard?.getData("text/plain") ?? "";
+      if (commitPendingRef.current) {
+        if (fragment) queueIntent({ kind: "paste", fragment });
+        else if (text) queueIntent({ kind: "insert", text });
+        return;
+      }
+      const selection = readSelection();
+      if (!selection) {
+        // Spanning several fields: drop the selection, then land the payload in
+        // the collapsed caret that leaves behind.
+        if (fragment) commitCrossFieldIntent({ kind: "paste", fragment });
+        else if (text) commitCrossFieldIntent({ kind: "insert", text });
+        return;
+      }
+      if (fragment) commitPaste(selection, selection.dStart, selection.dEnd, fragment);
+      else commitReplace(selection, selection.dStart, selection.dEnd, text);
+    };
+
+    const writeSelectionToClipboard = (
+      event: ClipboardEvent,
+      selection: TypesetSelection
+    ) => {
+      const clipboard = event.clipboardData;
+      if (!clipboard || selection.dStart === selection.dEnd) return false;
+      const plain = selection.map.display.slice(selection.dStart, selection.dEnd);
+      const fragment = inlineFragmentForRange(
+        selection.map,
+        selection.dStart,
+        selection.dEnd
+      );
+      clipboard.setData("text/plain", plain);
+      clipboard.setData(TYPESET_INLINE_CLIPBOARD_MIME, encodeInlineClipboard(fragment));
+      const nativeSelection = window.getSelection();
+      if (nativeSelection?.rangeCount) {
+        const wrapper = document.createElement("div");
+        wrapper.append(nativeSelection.getRangeAt(0).cloneContents());
+        clipboard.setData("text/html", wrapper.innerHTML);
+      }
+      return true;
+    };
+
+    const onCopy = (event: ClipboardEvent) => {
+      const selection = readSelection();
+      if (selection && selection.dStart !== selection.dEnd) {
+        event.preventDefault();
+        writeSelectionToClipboard(event, selection);
+        return;
+      }
+      // A selection crossing fields has no single mapped range. Its plain text
+      // comes from the MODEL, one covered slice per field joined by newlines, so
+      // a copy never depends on how the painter split lines into spans and never
+      // leaks the DOM-only caret placeholder.
+      const nativeSelection = window.getSelection();
+      if (!event.clipboardData || !nativeSelection?.rangeCount) return;
+      const plain = crossFieldPlainText();
+      if (plain === null) return;
+      const wrapper = document.createElement("div");
+      wrapper.append(nativeSelection.getRangeAt(0).cloneContents());
+      wrapper.querySelectorAll<HTMLElement>("[data-tsde]").forEach((span) => {
+        span.textContent = "";
+      });
+      event.preventDefault();
+      event.clipboardData.setData("text/plain", plain);
+      event.clipboardData.setData("text/html", wrapper.innerHTML);
+    };
+
+    const onCut = (event: ClipboardEvent) => {
+      const selection = readSelection();
+      if (!selection || selection.dStart === selection.dEnd) {
+        // Spanning several fields: write the model's text, then delete the whole
+        // selection as one edit. Without this, cut was a silent no-op.
+        const plain = crossFieldPlainText();
+        if (plain === null || !event.clipboardData) return;
+        event.preventDefault();
+        event.clipboardData.setData("text/plain", plain);
+        if (commitPendingRef.current) queueIntent({ kind: "deleteSelection" });
+        else commitCrossFieldIntent({ kind: "deleteSelection" });
+        return;
+      }
+      event.preventDefault();
+      writeSelectionToClipboard(event, selection);
+      if (commitPendingRef.current) {
+        queueIntent({ kind: "deleteSelection" });
+        return;
+      }
       commitReplace(selection, selection.dStart, selection.dEnd, "");
     };
     const blockDrag = (event: Event) => event.preventDefault();
@@ -463,6 +517,7 @@ export function useTypesetInputEvents({
     host.addEventListener("keydown", onKeyDown);
     host.addEventListener("mousedown", onMouseDown);
     host.addEventListener("paste", onPaste);
+    host.addEventListener("copy", onCopy);
     host.addEventListener("cut", onCut);
     host.addEventListener("dragstart", blockDrag);
     host.addEventListener("drop", blockDrag);
@@ -473,6 +528,7 @@ export function useTypesetInputEvents({
       host.removeEventListener("keydown", onKeyDown);
       host.removeEventListener("mousedown", onMouseDown);
       host.removeEventListener("paste", onPaste);
+      host.removeEventListener("copy", onCopy);
       host.removeEventListener("cut", onCut);
       host.removeEventListener("dragstart", blockDrag);
       host.removeEventListener("drop", blockDrag);
@@ -484,12 +540,14 @@ export function useTypesetInputEvents({
     commitHistory,
     commitMergeBullet,
     commitPendingRef,
+    commitPaste,
     commitReplace,
     onEnter,
     commitToggleMark,
     docVersion,
     hostRef,
     nonce,
+    onZoomShortcut,
     readSelection,
     replayQueueRef,
     setNonce

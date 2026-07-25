@@ -12,9 +12,24 @@
   flex: 0 0 auto;
 }
 
+:root {
+  /* The surface's own border, which `--popover-space` includes (border-box) and
+     a panel bounded by the same value must subtract — otherwise the panel is
+     two pixels too tall for the box holding it and the surface grows a second
+     scrollbar beside the panel's own. */
+  --popover-frame: 2px;
+}
+
 .popover__surface {
   position: absolute;
   top: calc(100% + 8px);
+  /* Room between the trigger and the window bottom, measured by Popover on open.
+     Every surface is bounded by it so none can run past the viewport — where it
+     would both clip and extend its scroll container's scrollable area, shifting
+     the document. Surfaces with their own scrolling body pass it inward
+     instead of scrolling here, so there is never a scrollbar inside a
+     scrollbar. */
+  max-height: var(--popover-space, none);
   z-index: 80;
   color: var(--ink);
   background: var(--card-elev);
@@ -22,7 +37,10 @@
   border-radius: var(--r-lg);
   box-shadow: 0 12px 32px oklch(0.2 0.01 160 / 0.14), 0 2px 6px oklch(0.2 0.01 160 / 0.08);
   outline: none;
-  overflow: hidden;
+  /* Y scrolls only for a surface that has no scrolling body of its own and is
+     taller than the space measured above; X stays clipped to the rounded
+     corners, which is what this used to be for. */
+  overflow: hidden auto;
   animation: toolbar-popover-in 130ms var(--ease) both;
 }
 
@@ -47,6 +65,53 @@
 .link-control__panel {
   width: min(320px, calc(100vw - 24px));
   padding: 14px;
+}
+
+/* Selected-paragraph alignment: a labelled vertical menu rather than the
+   Paragraph popover's compact icon row, because this is the primary alignment
+   control and the four choices need naming, not just glyphs. */
+.alignment-menu {
+  display: grid;
+  gap: 2px;
+  width: max-content;
+  min-width: 132px;
+  padding: 4px;
+  background: var(--card-elev);
+}
+
+.alignment-menu__option {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+  min-height: 30px;
+  padding: 5px 8px;
+  color: var(--ink);
+  background: transparent;
+  border: 0;
+  border-radius: var(--r-sm);
+  outline: none;
+  font: 520 0.76rem/1.2 var(--font-ui);
+  text-align: left;
+  cursor: pointer;
+}
+
+.alignment-menu__option > svg {
+  justify-self: center;
+  color: var(--ink-muted);
+}
+
+.alignment-menu__option:hover,
+.alignment-menu__option:focus-visible,
+.alignment-menu__option.is-selected {
+  color: var(--accent-deep);
+  background: var(--accent-veil);
+}
+
+.alignment-menu__option:hover > svg,
+.alignment-menu__option:focus-visible > svg,
+.alignment-menu__option.is-selected > svg {
+  color: inherit;
 }
 
 /* Header + Add-section popovers (relocated from the page footer to the toolbar). */
@@ -348,7 +413,12 @@
 .style-popover {
   display: flex;
   flex-direction: column;
-  max-height: min(650px, calc(100vh - 116px));
+  /* The measured space wins over the viewport-fraction guess when it is
+     tighter; the guess remains the fallback for a surface rendered before the
+     measurement lands. `.style-popover__body` is the scroller, so bounding the
+     panel here rather than the surface keeps the footer pinned and the section
+     list scrolling under it. */
+  max-height: min(650px, calc(var(--popover-space, calc(100vh - 116px)) - var(--popover-frame)));
   background: var(--card-elev);
 }
 
@@ -942,7 +1012,7 @@
   .style-popover--page,
   .style-popover--spacing,
   .style-popover--text {
-    max-height: calc(100vh - 116px);
+    max-height: calc(var(--popover-space, calc(100vh - 116px)) - var(--popover-frame));
   }
 }
 
@@ -991,6 +1061,38 @@
   .style-popover__range input[type="range"] {
     min-height: 40px;
   }
+}
+
+/* A popover opened from inside the More panel anchors to its trigger THERE.
+   The narrow-viewport rules above pin the style popovers to a fixed slot under
+   the toolbar (top: 102px), which is the space the open More panel itself
+   occupies — so a popover opened from the panel painted over the row of buttons
+   the user had just opened. Anchored placement puts it below the panel instead.
+
+   The trigger goes `position: static` so the surface resolves against the PANEL
+   rather than the button: anchoring to the button would still clip the panel's
+   own padding, and once the panel wraps to a second row a first-row trigger's
+   popover would cover the row beneath it. Against the panel, `100%` is the
+   whole panel's bottom edge however many rows it has.
+
+   Right-aligned regardless of the popover's own variant: the panel is pinned
+   12px from the window edge and these surfaces are at most `100vw - 24px` wide,
+   so a right-aligned one cannot reach either edge, while a left- or
+   centre-anchored one opened from a trigger near the panel's right edge can.
+   Specificity, not order, is what carries this over the media queries. */
+.top-toolbar__secondary-row--formatting.is-more-open .top-toolbar__overflow-tools .popover {
+  position: static;
+}
+
+.top-toolbar__secondary-row--formatting.is-more-open
+  .top-toolbar__overflow-tools
+  .popover
+  > .popover__surface {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  left: auto;
+  translate: none;
 }
 
 @media (prefers-reduced-motion: reduce) {

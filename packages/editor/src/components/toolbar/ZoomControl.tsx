@@ -180,6 +180,7 @@ export function ZoomControl({ docStyle, onFitZoom }: ZoomControlProps) {
             <div
               ref={menuRef}
               id={menuId}
+              data-typeset-toolbar-portal
               className="zoom-control__menu"
               role="listbox"
               aria-label="Page zoom options"

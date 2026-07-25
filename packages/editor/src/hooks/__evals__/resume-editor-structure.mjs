@@ -143,6 +143,68 @@ const structural = rootReducer(typeRun, {
 assert.equal(structural.past.length, 2, "a structural edit is its own undo step");
 assert.equal(structural.coalesceKey, null, "a structural edit closes the typing group");
 
+// ----- batched multi-field edits (a selection crossing fields) -----
+// A Select All delete rewrites one row, drops the rest, and must be a SINGLE
+// undo step: one Ctrl+Z has to bring the whole document back.
+const crossFieldBase = {
+  name: "Candidate",
+  contact: ["a@b.com"],
+  sections: [
+    {
+      id: "cover",
+      heading: "",
+      type: "summary",
+      items: [
+        { id: "p1", titleLeft: "", titleRight: "", subtitleLeft: "", subtitleRight: "", bullets: [{ id: "p1b", text: "First <b>paragraph</b>" }] },
+        { id: "p2", titleLeft: "", titleRight: "", subtitleLeft: "", subtitleRight: "", bullets: [{ id: "p2b", text: "Second" }] },
+        { id: "p3", titleLeft: "", titleRight: "", subtitleLeft: "", subtitleRight: "", bullets: [{ id: "p3b", text: "Third" }] }
+      ]
+    }
+  ]
+};
+const crossFieldPristine = structuredClone(crossFieldBase);
+const crossFieldSeeded = rootReducer(
+  { data: null, dirty: false, past: [], future: [], coalesceKey: null, coalesceAt: 0 },
+  { type: "seed", data: crossFieldBase }
+);
+const selectAllDeleted = rootReducer(crossFieldSeeded, {
+  type: "batch",
+  steps: [
+    { type: "updateBullet", sectionId: "cover", entryId: "p1", bulletId: "p1b", value: "", coalesce: false },
+    { type: "removeEntry", sectionId: "cover", entryId: "p2" },
+    { type: "removeEntry", sectionId: "cover", entryId: "p3" }
+  ]
+});
+assert.equal(selectAllDeleted.data.sections[0].items.length, 1, "a fully selected list collapses to one row");
+assert.equal(selectAllDeleted.data.sections[0].items[0].bullets[0].text, "", "the surviving row is empty");
+assert.equal(selectAllDeleted.past.length, 1, "the whole multi-field edit is one undo step");
+const selectAllUndone = rootReducer(selectAllDeleted, { type: "undo" });
+assert.deepEqual(
+  selectAllUndone.data.sections[0].items.map((item) => item.bullets[0].text),
+  ["First <b>paragraph</b>", "Second", "Third"],
+  "one undo restores every field the batch touched"
+);
+const boldedAcross = rootReducer(crossFieldSeeded, {
+  type: "batch",
+  steps: [
+    { type: "updateBullet", sectionId: "cover", entryId: "p1", bulletId: "p1b", value: "<b>First paragraph</b>", coalesce: false },
+    { type: "updateBullet", sectionId: "cover", entryId: "p2", bulletId: "p2b", value: "<b>Second</b>", coalesce: false },
+    { type: "updateBullet", sectionId: "cover", entryId: "p3", bulletId: "p3b", value: "<b>Third</b>", coalesce: false }
+  ]
+});
+assert.equal(boldedAcross.past.length, 1, "formatting several fields is one undo step");
+assert.equal(
+  rootReducer(boldedAcross, { type: "undo" }).data.sections[0].items[1].bullets[0].text,
+  "Second",
+  "one undo reverts formatting in every field"
+);
+assert.equal(
+  rootReducer(crossFieldSeeded, { type: "batch", steps: [] }),
+  crossFieldSeeded,
+  "an empty batch is not an edit"
+);
+assert.deepEqual(crossFieldBase, crossFieldPristine, "batched edits never mutate their input state");
+
 const suggestionApply = rootReducer(typeRun, {
   type: "updateBullet",
   sectionId: "sec-1",
@@ -437,4 +499,4 @@ assert.equal(
 );
 assert.deepEqual(alignmentBase, alignmentPristine, "alignment clearing never mutates its input state");
 
-console.log("resume editor structure eval: 84/84 checks passed");
+console.log("resume editor structure eval: 92/92 checks passed");

@@ -13,15 +13,6 @@ type AnswerDraft = { question: string; answer: string; needsInput: boolean; save
 type RoleDraft = { role: string; description: string; needsInput: boolean; save: boolean };
 
 export type MaterialsTabProps = {
-  // The current cover letter (from polish OR on-demand generation) — one source.
-  coverLetterText: string;
-  onGenerateCoverLetter: () => void;
-  isGeneratingCover: boolean;
-  coverStatus: string;
-  includeCoverLetter: boolean;
-  setIncludeCoverLetter: (v: boolean) => void;
-  coverCopied: boolean;
-  onCopy: () => void | Promise<void>;
   answersResult: ApplicationAnswersResult;
   answersStatus: string;
   isGeneratingAnswers: boolean;
@@ -36,14 +27,6 @@ export type MaterialsTabProps = {
 };
 
 export function MaterialsTab({
-  coverLetterText,
-  onGenerateCoverLetter,
-  isGeneratingCover,
-  coverStatus,
-  includeCoverLetter,
-  setIncludeCoverLetter,
-  coverCopied,
-  onCopy,
   answersResult,
   answersStatus,
   isGeneratingAnswers,
@@ -120,7 +103,6 @@ export function MaterialsTab({
   }
 
   // ---- Derived ----
-  const hasCoverDraft = Boolean(coverLetterText);
   const canGenerate = resumeReady && jobReady && aiProviderReady;
   const gateHint = canGenerate
     ? ""
@@ -135,14 +117,6 @@ export function MaterialsTab({
   const hasAnswerDrafts = drafts.length > 0 || roleDrafts.length > 0;
   const selectedToSave =
     drafts.filter((d) => d.save).length + roleDrafts.filter((r) => r.save).length;
-
-  // Cover letter plan-row badge (separate from the generation status message).
-  function coverLetterBadge() {
-    if (hasCoverDraft) return "drafted";
-    if (includeCoverLetter) return "pending";
-    return null;
-  }
-  const coverBadge = coverLetterBadge();
 
   // Target meta line
   const targetLine =
@@ -168,7 +142,7 @@ export function MaterialsTab({
       <div className="materials-layout">
         {/* ---- Left column: Drafts ---- */}
         <div className="materials-drafts">
-          {hasAnswerDrafts || hasCoverDraft ? (
+          {hasAnswerDrafts ? (
             <>
               {hasAnswerDrafts ? (
                 <div className="drafts-head">
@@ -185,35 +159,6 @@ export function MaterialsTab({
                       : "Select to save"}
                   </button>
                 </div>
-              ) : null}
-
-              {/* Cover letter sheet — first when present */}
-              {hasCoverDraft ? (
-                <article className="draft-sheet draft-sheet--letter">
-                  <div className="draft-sheet__head">
-                    <div className="draft-sheet__meta">
-                      <span className="draft-sheet__kind">Cover letter</span>
-                    </div>
-                    <div className="draft-sheet__actions">
-                      <button
-                        className="ghost-button is-compact"
-                        type="button"
-                        onClick={onCopy}
-                        aria-label="Copy cover letter"
-                      >
-                        <Clipboard size={12} aria-hidden="true" />
-                        <span>{coverCopied ? "Copied" : "Copy"}</span>
-                      </button>
-                    </div>
-                  </div>
-                  <hr className="draft-sheet__rule" />
-                  <textarea
-                    className="draft-sheet__textarea draft-sheet__textarea--letter"
-                    readOnly
-                    aria-label="Copy-ready cover letter"
-                    value={coverLetterText}
-                  />
-                </article>
               ) : null}
 
               {/* Answer draft sheets */}
@@ -331,8 +276,7 @@ export function MaterialsTab({
             <div className="materials-empty">
               <strong>Nothing drafted yet.</strong>
               <p>
-                Pick items in the plan, then generate. The cover letter can be generated on its
-                own here, or drafted alongside your next Polish.
+                Pick application questions or role descriptions in the plan, then generate.
               </p>
             </div>
           )}
@@ -343,46 +287,6 @@ export function MaterialsTab({
           <p className="materials-plan__eyebrow">Plan</p>
 
           <div className="plan-list" role="group" aria-label="Items to draft">
-            {/* Cover letter row + on-demand generate (no full polish required) */}
-            <label className="plan-row">
-              <input
-                type="checkbox"
-                checked={includeCoverLetter}
-                onChange={(e) => setIncludeCoverLetter(e.target.checked)}
-              />
-              <span className="plan-row__label">Cover letter</span>
-              {coverBadge === "drafted" ? (
-                <span className="plan-row__status plan-row__status--drafted">Drafted</span>
-              ) : coverBadge === "pending" ? (
-                <span className="plan-row__status plan-row__status--pending">With next polish</span>
-              ) : null}
-            </label>
-            <div className="plan-cover-actions">
-              <button
-                className="secondary-button is-compact"
-                type="button"
-                onClick={onGenerateCoverLetter}
-                disabled={!canGenerate || isGeneratingCover}
-                title={!canGenerate ? gateHint : undefined}
-              >
-                <Sparkles size={12} aria-hidden="true" />
-                <span>
-                  {isGeneratingCover ? (
-                    <>Drafting<span className="loading-dots" aria-hidden="true" /></>
-                  ) : hasCoverDraft ? (
-                    "Regenerate cover letter"
-                  ) : (
-                    "Generate cover letter"
-                  )}
-                </span>
-              </button>
-            </div>
-            {coverStatus ? (
-              <p className="plan-row__hint plan-cover-status" aria-live="polite">
-                {coverStatus}
-              </p>
-            ) : null}
-
             {/* Standard questions */}
             {DEFAULT_QUESTIONS.map((q, i) => (
               <label className="plan-row" key={q}>

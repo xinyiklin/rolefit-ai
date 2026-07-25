@@ -21,6 +21,7 @@ const saved = JSON.parse(serialized);
 
 assert.equal(RESUME_FILE_SCHEMA_VERSION, 1);
 assert.equal(saved.schemaVersion, 1);
+assert.equal(saved.style.entryEndIndentPt, 5.4);
 assert.equal(Object.hasOwn(saved.style, "boldTitles"), false);
 assert.match(saved.document.sections[0].items[0].titleLeft, /^<b>/);
 

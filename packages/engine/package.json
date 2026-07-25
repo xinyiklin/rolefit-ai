@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Deterministic resume typesetting engine, document model, and strict .resume codec shared by every Typeset consumer.",
+  "description": "Deterministic document typesetting engine with strict resume and cover-letter codecs shared by every Typeset consumer.",
   "exports": {
     "./fonts/*": "./fonts/*",
     "./*": "./src/*"
@@ -14,8 +14,9 @@
   ],
   "scripts": {
     "eval:resume-file": "node --experimental-strip-types src/lib/__evals__/resume-file-v1.mjs",
+    "eval:cover-letter-file": "node --experimental-strip-types src/lib/__evals__/cover-letter-file-v1.mjs",
     "eval:pdf-font-parity": "node --experimental-strip-types src/typeset/__evals__/pdf-font-parity.mjs",
-    "eval": "npm run eval:resume-file && npm run eval:pdf-font-parity",
+    "eval": "npm run eval:resume-file && npm run eval:cover-letter-file && npm run eval:pdf-font-parity",
     "test": "npm run eval",
     "typecheck": "tsc --noEmit",
     "check": "npm run typecheck && npm run eval",

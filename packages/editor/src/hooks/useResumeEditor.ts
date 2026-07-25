@@ -131,7 +131,12 @@ type Action =
   | { type: "splitBullet"; sectionId: string; entryId: string; bulletId: string; before: string; after: string }
   | { type: "mergeBulletUp"; sectionId: string; entryId: string; bulletId: string; joined: string }
   | { type: "splitSummaryParagraph"; sectionId: string; entryId: string; bulletId: string; before: string; after: string }
-  | { type: "mergeSummaryParagraphUp"; sectionId: string; entryId: string; joined: string };
+  | { type: "mergeSummaryParagraphUp"; sectionId: string; entryId: string; joined: string }
+  // One edit that spans several fields — a selection crossing paragraphs, or a
+  // Select All. The steps run in order against the same document and land as a
+  // SINGLE undo step, so one Ctrl+Z restores the whole document rather than
+  // walking back field by field.
+  | { type: "batch"; steps: Action[] };
 
 // ----- immutable array helpers -----
 
@@ -177,6 +182,11 @@ function mapEntry(section: ResumeSectionData, entryId: string, fn: (entry: Resum
 // (`__evals__/resume-editor-structure.mjs`), not for host consumption.
 export function reduceResumeData(data: ResumeData, action: Action): ResumeData {
   switch (action.type) {
+    // Each step sees the document the previous step produced, so a caller can
+    // rewrite text and then collapse the structure it emptied.
+    case "batch":
+      return action.steps.reduce(reduceResumeData, data);
+
     case "setName":
       return { ...data, name: action.name };
 
@@ -406,6 +416,70 @@ export function reduceResumeData(data: ResumeData, action: Action): ResumeData {
   }
 }
 
+// The write vocabulary a multi-field edit needs: one rewritten value per field
+// it covered, plus removal of the rows and paragraphs it emptied. It mirrors
+// FieldSrc so the editor's field adapter owns the only translation.
+// Writing one field's value. Every field kind has exactly one of these, so a
+// caller that maps a field to its write is total.
+export type FieldValueEdit =
+  | { kind: "name"; value: string }
+  | { kind: "contact"; index: number; value: string }
+  | { kind: "heading"; sectionId: string; value: string }
+  | { kind: "entry"; sectionId: string; entryId: string; field: EntryTextField; value: string }
+  | { kind: "bullet"; sectionId: string; entryId: string; bulletId: string; value: string }
+  | { kind: "skillsRow"; sectionId: string; entryId: string; label: string; skills: string };
+
+export type FieldEdit =
+  | FieldValueEdit
+  | { kind: "removeBullet"; sectionId: string; entryId: string; bulletId: string }
+  | { kind: "removeEntry"; sectionId: string; entryId: string };
+
+function actionForFieldEdit(edit: FieldEdit): Action {
+  switch (edit.kind) {
+    case "name":
+      return { type: "setName", name: edit.value };
+    case "contact":
+      return { type: "updateContact", index: edit.index, value: edit.value };
+    case "heading":
+      return { type: "setHeading", sectionId: edit.sectionId, heading: edit.value };
+    case "entry":
+      return {
+        type: "updateEntry",
+        sectionId: edit.sectionId,
+        entryId: edit.entryId,
+        field: edit.field,
+        value: edit.value,
+        coalesce: false
+      };
+    case "bullet":
+      return {
+        type: "updateBullet",
+        sectionId: edit.sectionId,
+        entryId: edit.entryId,
+        bulletId: edit.bulletId,
+        value: edit.value,
+        coalesce: false
+      };
+    case "skillsRow":
+      return {
+        type: "updateSkillsRow",
+        sectionId: edit.sectionId,
+        entryId: edit.entryId,
+        label: edit.label,
+        skills: edit.skills
+      };
+    case "removeBullet":
+      return {
+        type: "removeBullet",
+        sectionId: edit.sectionId,
+        entryId: edit.entryId,
+        bulletId: edit.bulletId
+      };
+    case "removeEntry":
+      return { type: "removeEntry", sectionId: edit.sectionId, entryId: edit.entryId };
+  }
+}
+
 // Exported for the package's co-located structural eval
 // (`__evals__/resume-editor-structure.mjs`), not for host consumption.
 export function rootReducer(state: State, action: Action): State {
@@ -464,9 +538,9 @@ export function rootReducer(state: State, action: Action): State {
 // Owns the structured, editable resume model. `seedData` is the only load path:
 // startup snapshots and opened `.resume` files are validated before reaching
 // the reducer. Every inline edit is structured and undoable.
-export function useResumeEditor() {
+export function useResumeEditor(initialData: ResumeData | null = null) {
   const [state, dispatch] = useReducer(rootReducer, {
-    data: null,
+    data: initialData,
     dirty: false,
     past: [],
     future: [],
@@ -542,6 +616,13 @@ export function useResumeEditor() {
         dispatch({ type: "splitSummaryParagraph", sectionId, entryId, bulletId, before, after }),
       mergeSummaryParagraphUp: (sectionId: string, entryId: string, joined: string) =>
         dispatch({ type: "mergeSummaryParagraphUp", sectionId, entryId, joined }),
+      // One undoable edit spanning several fields. The caller supplies the
+      // rewritten text for every field its selection covered, plus the rows and
+      // paragraphs the edit emptied, in the order they must apply.
+      applyFieldEdits: (edits: readonly FieldEdit[]) => {
+        const steps = edits.map(actionForFieldEdit);
+        if (steps.length) dispatch({ type: "batch", steps });
+      },
       undo: () => dispatch({ type: "undo" }),
       redo: () => dispatch({ type: "redo" })
     }),

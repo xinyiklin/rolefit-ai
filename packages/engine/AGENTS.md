@@ -1,13 +1,14 @@
 # Typeset Engine Package Guide
 
 Applies to `packages/engine/`. Read `README.md` and the root architecture guide.
-Use `src/lib/AGENTS.md` for resume-domain/file work and
+Use `src/lib/AGENTS.md` for resume/cover-letter domain and file work and
 `src/typeset/AGENTS.md` for layout, fonts, rendering, and PDF work.
 
 ## Package Boundary
 
-- Own one canonical `ResumeData`, document-style contract, `.resume` codec,
-  font registry/assets, measurement model, layout, DOM/print painter, and PDF
+- Own one canonical `ResumeData`, the constrained cover-letter paragraph
+  adapter, document-style contract, `.resume` and `.cover` codecs, font
+  registry/assets, measurement model, layout, DOM/print painter, and PDF
   emitter for every consumer.
 - Keep domain and layout logic deterministic and React-free. The intentional
   exception is `src/typeset/render/dom.tsx`; Node consumers must be able to
@@ -39,6 +40,7 @@ Run from the repository root:
 ```bash
 npm run check --workspace packages/engine
 npm run eval:resume-file --workspace packages/engine
+npm run eval:cover-letter-file --workspace packages/engine
 npm run eval:pdf-font-parity --workspace packages/engine
 ```
 

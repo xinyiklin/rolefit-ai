@@ -29,12 +29,16 @@ never a hosted copy of the workbench.
 
 ## Product Purpose
 
-RoleFit AI turns a base resume plus a pasted job description into an honest,
-tailored resume: AI proposals constrained by server-side grounding and
-anti-fabrication checks, a recruiter-style review with fit scoring and gap
-analysis, application-question drafts, one owned typeset editor that is both the
-WYSIWYG preview and the PDF export, a re-loadable `.resume` save file, and a
-lightweight application pipeline tracker. A versioned `.rolefit-backup` file
+RoleFit AI turns a base resume, a candidate-authored cover letter, and a pasted
+job description into honest, tailored application materials. Resume proposals
+remain constrained by server-side grounding and anti-fabrication checks, with a
+recruiter-style review for fit scoring and gap analysis. The cover-letter
+workflow revises the user's own writing in a dedicated plain-paragraph editor,
+preserves a restorable source, and never creates a letter from the job and
+resume alone. Both editors share deterministic typesetting and PDF export;
+`.resume` and `.cover` are their separate reloadable formats. The product also
+includes application-question drafts and a lightweight application pipeline
+tracker. A versioned `.rolefit-backup` file
 ports the saved local workspace and allowlisted RoleFit preferences between
 devices without creating an account or synchronization service. An original resume (text) is converted
 once into the structured model, which is the source of truth thereafter (and can
@@ -81,10 +85,14 @@ disappears into the task. Quiet competence, not salesmanship.
 1. Honesty is the product: never imply the AI can safely supply missing facts;
    ground proposals in provided evidence and surface gaps or placeholders for
    human review instead of hiding them.
-2. Preserve the navbar-inputs + full-width studio workflow: masthead menus
-   (Resume source, Job target, AI, Options) plus the Polish action on top;
-   tabbed outputs below (Resume with a post-polish review rail, Materials with
-   the plan rail, the Applications tracker, Analytics) and the header Fit
+2. Preserve the compact masthead + full-width studio workflow: masthead menus
+   (Sessions, Job target) plus the global Apply action, the Settings dialog at
+   the foot of the studio rail; tabbed
+   outputs below (Resume with a consistent Open/Save/Polish
+   document action bar and a post-polish review rail, Cover letter with the
+   matching Open/Save/Polish action bar, its plain editor and
+   deterministic checklist, Materials, the
+   Applications tracker, Analytics) and the header Fit
    popover. The engine-painted page remains the sole editor, the review rail
    navigates back to exact fields, and the editor itself remains the live
    preview. Saved-application PDF preview is a tracker detail, not a second live
@@ -123,4 +131,4 @@ Keyboard access for all changed controls (APG tabs nav, focus-visible rings,
 24px minimum icon hit targets). aria-live for async preview/export status.
 Desktop is primary; content wraps rather than clips at narrow widths. At 720px
 and below, precise Resume authoring yields to a focused width notice, but
-navigation, Materials, Applications, and Analytics remain available.
+navigation, Cover letter, Materials, Applications, and Analytics remain available.

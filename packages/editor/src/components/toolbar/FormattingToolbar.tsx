@@ -3,8 +3,15 @@
 // it under Typeset's identity/file row; other hosts (role-fit-ai) mount it
 // directly under their own masthead. Class names stay in the top-toolbar__*
 // family — the selectors in toolbar.css are flat, so the row styles the same
-// wherever it is mounted. Responsive disclosure is staged: menu controls move
-// first, alignment second, and selection typography only at the narrow edge.
+// wherever it is mounted.
+//
+// Responsive disclosure is staged, widest band first: the document-style menus
+// move into the anchored More overlay, then selection typography, then
+// alignment, then the two secondary emphasis commands (clear formatting and
+// spell check). Every stage moves a control into the overlay or hides a control
+// that has a duplicate mounted there — the row never scrolls and is never
+// clipped, so each stage's residual set must still fit its band. See the
+// disclosure ladder in toolbar.css, which carries the measured thresholds.
 import {
   Bold,
   EllipsisVertical,
@@ -15,13 +22,14 @@ import {
   Underline,
   Undo2
 } from "lucide-react";
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 
 import type { DocStyleControls } from "../../hooks/useDocStyle";
 import { type BodyAlign, type FontFamily } from "@typeset/engine/lib/documentStyle.ts";
 import type { AlignmentScope } from "@typeset/engine/lib/documentStyle.ts";
 import type { FieldFontFamily, StyleFieldFontStates, StyleFieldMarkStates, StyleFieldSizeStates, StyleTextField } from "@typeset/engine/lib/styleFieldFormatting.ts";
 import type { FieldMark } from "@typeset/engine/lib/inlineMarksText.ts";
+import { AlignmentControl } from "./AlignmentControl";
 import { PageStylePopover } from "./PageStylePopover";
 import { ParagraphStylePopover } from "./ParagraphStylePopover";
 import { SpacingStylePopover } from "./SpacingStylePopover";
@@ -31,7 +39,6 @@ import { ZoomControl } from "./ZoomControl";
 import { FontSizeControl } from "./FontSizeControl";
 import { FontFamilyControl } from "./FontFamilyControl";
 import { LinkControl } from "./LinkControl";
-import { ALIGNMENT_OPTIONS } from "./styleOptions";
 
 export type InlineFormatCommand = {
   onToggle: () => void;
@@ -40,6 +47,7 @@ export type InlineFormatCommand = {
 };
 
 export type InlineFormattingControls = {
+  onRequestEditorFocus?: () => void;
   fontFamily?: {
     value: FontFamily | null;
     onChange: (fontFamily: FontFamily) => void;
@@ -61,6 +69,8 @@ export type InlineFormattingControls = {
   link?: {
     href: string | null;
     text: string;
+    // False when the selection spans several fields; see LinkControl.
+    textEditable?: boolean;
     automatic: boolean;
     onApply: (payload: { text: string; href: string }) => void;
     onRemove: () => void;
@@ -92,6 +102,14 @@ export type FormattingToolbarProps = {
   onStyleFieldSizeChange?: (field: StyleTextField, sizePt: number) => void;
   onResetStyleFormatting?: () => void;
   onFitZoom?: () => void;
+  // Embedded hosts may place document-structure controls with the style menus.
+  // The standalone TopToolbar keeps them in DocumentToolbar.
+  documentStructureTools?: ReactNode;
+  // A host with a different document grammar may replace the resume-specific
+  // style menus while retaining the shared history/zoom/selection toolbar.
+  // `undefined` preserves the standard resume controls; any supplied node is
+  // the complete document-style tool set for that host.
+  documentStyleTools?: ReactNode;
 };
 
 function SelectionTypographyControls({
@@ -118,6 +136,7 @@ function SelectionTypographyControls({
         <FontFamilyControl
           value={inlineFormatting?.fontFamily?.value ?? docStyle.style.fontFamily}
           onChange={(value) => inlineFormatting?.fontFamily?.onChange(value)}
+          onCommitFocus={inlineFormatting?.onRequestEditorFocus}
           disabled={formattingDisabled || inlineFormatting?.fontFamily?.disabled !== false}
           ariaLabel="Font family for selected text"
           title={inlineFormatting?.fontFamily?.disabled === false ? "Apply font to selected text" : "Select text to change its font"}
@@ -128,6 +147,7 @@ function SelectionTypographyControls({
         <FontSizeControl
           value={inlineFormatting?.fontSize?.value ?? null}
           onChange={(value) => inlineFormatting?.fontSize?.onChange(value)}
+          onCommitFocus={inlineFormatting?.onRequestEditorFocus}
           disabled={formattingDisabled || inlineFormatting?.fontSize?.disabled !== false}
           ariaLabel="Font size for selected text in points"
           title={inlineFormatting?.fontSize?.disabled === false ? "Apply size to selected text" : "Select text to change its size"}
@@ -153,22 +173,61 @@ function SelectionAlignmentControls({
       className={`top-toolbar__group top-toolbar__group--body-align top-toolbar__group--body-align-${
         overflow ? "overflow" : "primary"
       }`}
-      role="group"
-      aria-label="Selected paragraph alignment"
     >
-      {ALIGNMENT_OPTIONS.map(({ value, label, Icon }) => (
-        <ToolbarButton
-          key={value}
-          label={`Align selected paragraph ${label.toLowerCase()}`}
-          tooltip={`Align selected paragraph ${label.toLowerCase()}`}
-          icon={<Icon size={16} />}
-          pressed={(inlineFormatting?.alignment?.value ?? docStyle.style.bodyAlign) === value}
-          onClick={() => inlineFormatting?.alignment?.onChange(value)}
-          onMouseDown={(event) => event.preventDefault()}
-          disabled={formattingDisabled || inlineFormatting?.alignment?.disabled !== false}
-        />
-      ))}
+      <AlignmentControl
+        value={inlineFormatting?.alignment?.value ?? docStyle.style.bodyAlign}
+        onChange={(alignment) => inlineFormatting?.alignment?.onChange(alignment)}
+        disabled={formattingDisabled || inlineFormatting?.alignment?.disabled !== false}
+      />
     </div>
+  );
+}
+
+// Clear formatting and spell check are the last controls the row gives up: both
+// stay reachable in the More overlay, so the narrowest band hides these mounts
+// rather than dropping the commands. Kept beside the emphasis buttons at wide
+// widths so the group reads as one cluster.
+//
+// CLEAR_FORMATTING_SHORTCUT is an expression, not a JSX string literal: a JSX
+// attribute value does not process escapes, so `"Ctrl/⌘\\"` printed two
+// backslashes in the tooltip.
+const CLEAR_FORMATTING_SHORTCUT = "Ctrl/⌘\\";
+
+function EmphasisExtraControls({
+  inlineFormatting,
+  formattingDisabled,
+  docStyle,
+  overflow = false
+}: {
+  inlineFormatting?: InlineFormattingControls;
+  formattingDisabled: boolean;
+  docStyle: DocStyleControls;
+  overflow?: boolean;
+}) {
+  return (
+    <>
+      {inlineFormatting?.clearFormatting ? (
+        <ToolbarButton
+          className={`top-toolbar__emphasis-extra top-toolbar__emphasis-extra--${overflow ? "overflow" : "primary"}`}
+          label="Clear formatting"
+          tooltip="Clear formatting"
+          shortcut={CLEAR_FORMATTING_SHORTCUT}
+          icon={<RemoveFormatting size={16} />}
+          onClick={inlineFormatting.clearFormatting.onClear}
+          onMouseDown={(event) => event.preventDefault()}
+          disabled={formattingDisabled || Boolean(inlineFormatting.clearFormatting.disabled)}
+        />
+      ) : null}
+      <ToolbarButton
+        className={`top-toolbar__emphasis-extra top-toolbar__emphasis-extra--${overflow ? "overflow" : "primary"}`}
+        label="Spell check"
+        tooltip={docStyle.style.spellCheck ? "Turn spell check off" : "Turn spell check on"}
+        icon={<SpellCheck size={16} />}
+        pressed={docStyle.style.spellCheck}
+        onClick={() => docStyle.set("spellCheck", !docStyle.style.spellCheck)}
+        onMouseDown={(event) => event.preventDefault()}
+      />
+    </>
   );
 }
 
@@ -189,7 +248,9 @@ export function FormattingToolbar({
   styleSizeStates,
   onStyleFieldSizeChange,
   onResetStyleFormatting,
-  onFitZoom
+  onFitZoom,
+  documentStructureTools,
+  documentStyleTools
 }: FormattingToolbarProps) {
   const hasInlineControls = Boolean(
     inlineFormatting?.bold || inlineFormatting?.italic || inlineFormatting?.underline || inlineFormatting?.link
@@ -311,6 +372,7 @@ export function FormattingToolbar({
               <LinkControl
                 href={inlineFormatting.link.href}
                 text={inlineFormatting.link.text}
+                textEditable={inlineFormatting.link.textEditable}
                 automatic={inlineFormatting.link.automatic}
                 onApply={inlineFormatting.link.onApply}
                 onRemove={inlineFormatting.link.onRemove}
@@ -319,24 +381,10 @@ export function FormattingToolbar({
                 onOpenChange={inlineFormatting.link.onOpenChange}
               />
             ) : null}
-            {inlineFormatting?.clearFormatting ? (
-              <ToolbarButton
-                label="Clear formatting"
-                tooltip="Clear formatting"
-                shortcut="Ctrl/⌘\\"
-                icon={<RemoveFormatting size={16} />}
-                onClick={inlineFormatting.clearFormatting.onClear}
-                onMouseDown={(event) => event.preventDefault()}
-                disabled={formattingDisabled || Boolean(inlineFormatting.clearFormatting.disabled)}
-              />
-            ) : null}
-            <ToolbarButton
-              label="Spell check"
-              tooltip={docStyle.style.spellCheck ? "Turn spell check off" : "Turn spell check on"}
-              icon={<SpellCheck size={16} />}
-              pressed={docStyle.style.spellCheck}
-              onClick={() => docStyle.set("spellCheck", !docStyle.style.spellCheck)}
-              onMouseDown={(event) => event.preventDefault()}
+            <EmphasisExtraControls
+              inlineFormatting={inlineFormatting}
+              formattingDisabled={formattingDisabled}
+              docStyle={docStyle}
             />
           </div>
         ) : null}
@@ -393,6 +441,27 @@ export function FormattingToolbar({
           aria-orientation="vertical"
         />
 
+        {hasInlineControls ? (
+          <div
+            className="top-toolbar__group top-toolbar__group--emphasis-extra-overflow"
+            role="group"
+            aria-label="Formatting and proofing"
+          >
+            <EmphasisExtraControls
+              inlineFormatting={inlineFormatting}
+              formattingDisabled={formattingDisabled}
+              docStyle={docStyle}
+              overflow
+            />
+          </div>
+        ) : null}
+
+        <span
+          className="top-toolbar__divider top-toolbar__divider--overflow-emphasis"
+          role="separator"
+          aria-orientation="vertical"
+        />
+
         <SelectionAlignmentControls
           inlineFormatting={inlineFormatting}
           formattingDisabled={formattingDisabled}
@@ -407,25 +476,30 @@ export function FormattingToolbar({
         />
 
         <div className="top-toolbar__group top-toolbar__group--style" role="group" aria-label="Document style">
-          <SpacingStylePopover docStyle={docStyle} disabled={formattingDisabled} />
-          <ParagraphStylePopover
-            docStyle={docStyle}
-            disabled={formattingDisabled}
-            globalAlignments={globalAlignments}
-            onGlobalAlignmentChange={onGlobalAlignmentChange}
-          />
-          <TextStylesPopover
-            docStyle={docStyle}
-            disabled={formattingDisabled}
-            styleMarkStates={styleMarkStates}
-            onStyleFieldMarkChange={onStyleFieldMarkChange}
-            styleFontStates={styleFontStates}
-            onStyleFieldFontChange={onStyleFieldFontChange}
-            styleSizeStates={styleSizeStates}
-            onStyleFieldSizeChange={onStyleFieldSizeChange}
-            onResetStyleFormatting={onResetStyleFormatting}
-          />
-          <PageStylePopover docStyle={docStyle} disabled={formattingDisabled} />
+          {documentStructureTools}
+          {documentStyleTools !== undefined ? documentStyleTools : (
+            <>
+              <SpacingStylePopover docStyle={docStyle} disabled={formattingDisabled} />
+              <ParagraphStylePopover
+                docStyle={docStyle}
+                disabled={formattingDisabled}
+                globalAlignments={globalAlignments}
+                onGlobalAlignmentChange={onGlobalAlignmentChange}
+              />
+              <TextStylesPopover
+                docStyle={docStyle}
+                disabled={formattingDisabled}
+                styleMarkStates={styleMarkStates}
+                onStyleFieldMarkChange={onStyleFieldMarkChange}
+                styleFontStates={styleFontStates}
+                onStyleFieldFontChange={onStyleFieldFontChange}
+                styleSizeStates={styleSizeStates}
+                onStyleFieldSizeChange={onStyleFieldSizeChange}
+                onResetStyleFormatting={onResetStyleFormatting}
+              />
+              <PageStylePopover docStyle={docStyle} disabled={formattingDisabled} />
+            </>
+          )}
         </div>
       </div>
     </div>

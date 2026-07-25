@@ -55,11 +55,12 @@ The dependency direction is:
                                   -> apps/role-fit-ai
 ```
 
-- `packages/engine/` owns deterministic, reusable resume-domain behavior:
-  `ResumeData`, document style, the strict `.resume` codec, bundled fonts,
-  measurement, layout, DOM/print painting, and PDF emission. Most of the
-  package is React-free; `typeset/render/dom.tsx` is the intentional rendering
-  boundary. Node server imports must stay on React-free engine subpaths.
+- `packages/engine/` owns deterministic, reusable document behavior:
+  `ResumeData`, the constrained cover-letter paragraph adapter, document style,
+  the strict `.resume` and `.cover` codecs, bundled fonts, measurement, layout,
+  DOM/print painting, and PDF emission. Most of the package is React-free;
+  `typeset/render/dom.tsx` is the intentional rendering boundary. Node server
+  imports must stay on React-free engine subpaths.
 - `packages/editor/` owns the reusable React editing surface: document/history
   hooks, the contenteditable adapter, formatting toolbar/popovers, editor
   chrome, and shared editor styles. It depends on the engine, never on an app.
@@ -117,11 +118,14 @@ Before moving app code into a package, verify:
 
 ## Shared Product And Data Invariants
 
-- `ResumeData` is the canonical editable model in both apps.
-- `.resume` uses `format: "typeset-resume"` and `schemaVersion: 1`; it is the
-  only portable editable format. PDF is final output.
+- `ResumeData` is the canonical resume model in both apps and the shared
+  editor's in-memory document shape. RoleFit cover letters adapt an ordered
+  paragraph document into that shape without exposing resume sections.
+- `.resume` uses `format: "typeset-resume"` and `schemaVersion: 1`; `.cover`
+  uses `format: "typeset-cover-letter"` and `schemaVersion: 1`. Each is the
+  strict portable editable format for its own document kind. PDF is final output.
 - Session ids never cross the file boundary. View-only preferences such as zoom
-  and spell-check never enter `.resume` files.
+  and spell-check never enter `.resume` or `.cover` files.
 - Editor, browser print, and dedicated PDF output derive from the same document,
   style, fonts, metrics, and layout contract.
 - Treat resume and job-search content as personal data. Typeset never sends
@@ -213,6 +217,17 @@ agree, checks are reported honestly, and residual risks are explicit.
 - Run git commands from the repository root; stage exact paths and keep
   behavior slices reviewable.
 - Treat `AGENTS.md` and `CLAUDE.md` as normal tracked files when requested.
+
+Before a requested push, review the affected README and product/engineering
+documentation; update visitor-facing docs for changed behavior, commands, or
+availability, and update engineering docs for changed contracts. Include the
+compact, privacy-safe continuity receipt in the behavior-slice commit. When a
+product version changes, update its canonical version and user-facing version
+references. During a requested push, merge, or deploy of that versioned change,
+trigger the matching release/publish workflow and required tag, wait for it to
+finish successfully, and retain its workflow or live-environment receipt. A
+versioned change is incomplete until that release/deploy completion is
+confirmed.
 
 ## Continuity
 

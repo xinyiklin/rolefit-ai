@@ -366,7 +366,7 @@ apps/role-fit-ai/
   src/
     hooks/useAvailableProviders.ts  fetch/reconcile lifecycle
     config/aiOptions.ts             complete supported catalog/models
-    sections/ProviderSection.tsx    filtered provider/model UI, no key field
+    sections/SettingsStage.tsx      filtered provider/model UI, no key field
 ```
 
 Do not add desktop behavior to `@typeset/engine` or `@typeset/editor`. Avoid a

@@ -25,6 +25,11 @@ import {
   handleSaveApplications
 } from "./applications/routes.ts";
 import { handleBrowserPreferences } from "./browserPreferences.ts";
+import {
+  handleRestoreCoverLetter,
+  handleSelectCoverLetter,
+  handleWorkspaceCoverLetter
+} from "./coverLetterWorkspace.ts";
 import { handlePresence, handleWorkspaceActivity } from "./presence.ts";
 import {
   cleanExtensionClaimToken,
@@ -440,6 +445,21 @@ export async function startRoleFitServer(options: RoleFitServerOptions): Promise
 
     if (pathname === "/api/workspace/base-resume/restore") {
       void handleRestoreBaseResume(req, res, workspaceLocations);
+      return;
+    }
+
+    if (pathname === "/api/workspace/cover-letter") {
+      void handleWorkspaceCoverLetter(req, res, workspaceLocations);
+      return;
+    }
+
+    if (pathname === "/api/workspace/cover-letter/select") {
+      void handleSelectCoverLetter(req, res, workspaceLocations);
+      return;
+    }
+
+    if (pathname === "/api/workspace/cover-letter/restore") {
+      void handleRestoreCoverLetter(req, res, workspaceLocations);
       return;
     }
 

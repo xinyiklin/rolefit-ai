@@ -1,8 +1,8 @@
 // Pure editing math for the typeset editor (no DOM, no React): the mapping
 // between a field's VALUE (inline-marks string, ASCII ligatures, real
 // whitespace) and its DISPLAY form (what the engine paints: tags stripped,
-// --- → — / -- → – / ' → ’, horizontal whitespace collapsed, and literal
-// hard breaks preserved as "\n"). Every edit is expressed in display coordinates
+// --- → — / -- → – / ' → ’, authored horizontal whitespace preserved, and
+// literal hard breaks preserved as "\n"). Every edit is expressed in display coordinates
 // (where the caret lives) and applied to the value without losing marks,
 // ligature sources, or preserved outer whitespace.
 //
@@ -12,7 +12,12 @@
 
 import type { FieldSrc } from "@typeset/engine/typeset/types.ts";
 import type { DocumentFontFamily } from "@typeset/engine/typeset/fontRegistry.ts";
-import type { FieldAlignment } from "@typeset/engine/lib/inlineMarksText.ts";
+import { FONT_FAMILY_ALTERNATION } from "@typeset/engine/lib/fontFamilies.ts";
+import {
+  inlineFontSizePt,
+  isInlineFontSizePt,
+  type FieldAlignment
+} from "@typeset/engine/lib/inlineMarksText.ts";
 import { automaticLinkHref, decodeLinkHref, encodeLinkHref } from "@typeset/engine/lib/links.ts";
 
 type DisplayChar = {
@@ -53,7 +58,16 @@ export type TypesetSelection = {
   dEnd: number;
 };
 
-const TAG_RE = /^<\/?(b|i|u|nolink)>|^<link=([^>\s]+)>|^<\/link>|^<font=(latin-modern|source-serif|source-sans)>|^<\/font>|^<size=(\d+(?:\.\d+)?)>|^<\/size>|^<align=(left|center|right|justify)>|^<\/align>/i;
+// The anchored counterpart of INLINE_MARK_TAG_PATTERN: same grammar, but with
+// capture groups this walker needs and ^-anchored so it can step the value one
+// tag at a time. The font alternation comes from the shared family list, so a
+// new family parses in both automata or in neither — it used to be spelled out
+// here as well, which meant a family could serialize into a value that the
+// editor's own display map then failed to recognise.
+const TAG_RE = new RegExp(
+  `^<\\/?(b|i|u|nolink)>|^<link=([^>\\s]+)>|^<\\/link>|^<font=(${FONT_FAMILY_ALTERNATION})>|^<\\/font>|^<size=(\\d+(?:\\.\\d+)?)>|^<\\/size>|^<align=(left|center|right|justify)>|^<\\/align>`,
+  "i"
+);
 
 // ---- value → display ----
 
@@ -83,7 +97,7 @@ export function buildDisplayMap(value: string, opts?: { uppercase?: boolean; pre
       else if (tag[3]) fontStack.push(tag[3] as DocumentFontFamily);
       else if (tag[4]) {
         const size = Number(tag[4]);
-        if (Number.isFinite(size) && size >= 6 && size <= 48) sizeStack.push(size);
+        if (isInlineFontSizePt(size)) sizeStack.push(size);
       } else if (tag[2]) linkStack.push(decodeLinkHref(tag[2]));
       else if (tag[0].toLowerCase() === "</font>") fontStack.pop();
       else if (tag[0].toLowerCase() === "</size>") sizeStack.pop();
@@ -113,24 +127,26 @@ export function buildDisplayMap(value: string, opts?: { uppercase?: boolean; pre
     };
     const ch = value[i];
     if (ch === "\n" || ch === "\r") {
-      // The line breaker preserves every authored newline. Fold horizontal
-      // space immediately around it into the newline's raw source because TeX
-      // discards that glue at line edges, while serialization must retain it.
+      // The line breaker preserves every authored newline. Legacy collapsing
+      // callers fold horizontal space around it into the newline's raw source;
+      // word-processor callers keep those spaces as caret-bearing characters.
       let rawPrefix = "";
       let start = i;
-      if (display.endsWith(" ")) {
+      if (!preserveWhitespace && display.endsWith(" ")) {
         rawPrefix = chars[chars.length - 1].raw;
         start = valueStart[valueStart.length - 1];
         chars.pop();
         valueStart.pop();
         display = display.slice(0, -1);
-      } else if (!display.length && prefix) {
+      } else if (!preserveWhitespace && !display.length && prefix) {
         rawPrefix = prefix;
         start = 0;
         prefix = "";
       }
       let j = ch === "\r" && value[i + 1] === "\n" ? i + 2 : i + 1;
-      while (j < value.length && /[^\S\r\n]/.test(value[j])) j += 1;
+      if (!preserveWhitespace) {
+        while (j < value.length && /[^\S\r\n]/.test(value[j])) j += 1;
+      }
       display += "\n";
       chars.push({ raw: rawPrefix + value.slice(i, j), ...flags });
       valueStart.push(start);
@@ -142,7 +158,7 @@ export function buildDisplayMap(value: string, opts?: { uppercase?: boolean; pre
       let j = i;
       while (j < value.length && /[^\S\r\n]/.test(value[j])) j += 1;
       const raw = value.slice(i, j);
-      if (!display.length) {
+      if (!display.length && !preserveWhitespace) {
         // Leading whitespace: display drops it; the value keeps it (prefix).
         prefix += raw;
       } else if (preserveWhitespace) {
@@ -285,6 +301,19 @@ export function applyEdit(
     linkHref: null,
     linkSuppressed: false
   };
+  // Character formatting is inherited from the LEFT, the way typing works. Link
+  // state is not: a word processor does not extend a hyperlink when you type at
+  // its edge. So the link is inherited only when the insertion point is strictly
+  // INSIDE one run — the characters on both sides of the edit agree.
+  //
+  // Inheriting from the left alone meant typing right after a link swallowed the
+  // rest of the sentence into it, and a <nolink> suppression leaked into
+  // everything typed after a de-linked URL, permanently killing auto-linking
+  // from that point on.
+  const after = map.chars[dEnd] ?? null;
+  const inside = Boolean(after && map.chars[dStart - 1]);
+  const linkHref = inside && inherit.linkHref === after!.linkHref ? inherit.linkHref : null;
+  const linkSuppressed = Boolean(inside && inherit.linkSuppressed && after!.linkSuppressed);
   const inserted: DisplayChar[] = Array.from(insert).map((ch) => ({
     raw: ch,
     bold: inherit.bold,
@@ -293,8 +322,8 @@ export function applyEdit(
     fontFamily: inherit.fontFamily,
     fontSizePt: inherit.fontSizePt,
     alignment: inherit.alignment,
-    linkHref: inherit.linkHref,
-    linkSuppressed: inherit.linkSuppressed,
+    linkHref,
+    linkSuppressed,
     ...typingFormat
   }));
   // buildDisplayMap trims one trailing display space into `suffix`, so inserting
@@ -321,6 +350,80 @@ export function applyEdit(
   return withBoundary(serializeChars(map.prefix, chars, suffix, dStart + leading.length + inserted.length));
 }
 
+// A mark-balanced fragment for the selected display range. The custom
+// clipboard transport stores this value alongside text/plain so paste inside
+// either host can restore supported font, size, emphasis, link, and alignment
+// runs without trusting browser-generated editing markup.
+export function inlineFragmentForRange(
+  map: DisplayMap,
+  dStart: number,
+  dEnd: number
+): string {
+  return serializeChars("", map.chars.slice(dStart, dEnd), "", 0).value;
+}
+
+// Replace a display range with a mark-balanced fragment created above (or
+// sanitized from clipboard HTML). Unlike applyEdit, the fragment keeps its own
+// per-character formatting instead of inheriting one typing format.
+export function applyInlineFragment(
+  map: DisplayMap,
+  dStart: number,
+  dEnd: number,
+  fragmentValue: string,
+  singleLine = false
+): { value: string; caretValueIndex: number } {
+  const fragment = buildDisplayMap(fragmentValue, { preserveWhitespace: true });
+  const inserted = singleLine
+    ? fragment.chars.map((char) => ({
+        ...char,
+        raw: char.raw.replace(/\r?\n/g, " ")
+      }))
+    : fragment.chars;
+  const inherit = map.chars[dStart - 1] ?? map.chars[dStart] ?? {
+    bold: false,
+    italic: false,
+    underline: false,
+    fontFamily: null,
+    fontSizePt: null,
+    alignment: null,
+    linkHref: null,
+    linkSuppressed: false
+  };
+  const reviveSuffix =
+    inserted.length > 0 &&
+    dStart === map.chars.length &&
+    dEnd === map.chars.length &&
+    map.suffix.length > 0;
+  const leading: DisplayChar[] = reviveSuffix
+    ? [{
+        raw: map.suffix,
+        bold: inherit.bold,
+        italic: inherit.italic,
+        underline: inherit.underline,
+        fontFamily: inherit.fontFamily,
+        fontSizePt: inherit.fontSizePt,
+        alignment: inherit.alignment,
+        linkHref: null,
+        linkSuppressed: false
+      }]
+    : [];
+  const suffix = reviveSuffix ? "" : map.suffix;
+  const chars = [
+    ...map.chars.slice(0, dStart),
+    ...leading,
+    ...inserted,
+    ...map.chars.slice(dEnd)
+  ];
+  return withBoundary(
+    serializeChars(
+      map.prefix,
+      chars,
+      suffix,
+      dStart + leading.length + inserted.length
+    )
+  );
+}
+
 // Deleting text leaves the caret with the typography of the final removed
 // character. This mirrors a word processor: deleting the last styled glyph in
 // a run must not also delete the style that the next typed glyph should use.
@@ -342,10 +445,19 @@ export function typingFormatForDeletedRange(
   };
 }
 
-export function toggleMark(map: DisplayMap, dStart: number, dEnd: number, mark: "bold" | "italic" | "underline"): { value: string; caretValueIndex: number } {
+// `on` forces the resulting state. A selection that crosses fields decides the
+// direction once for the whole selection, so partially-marked fields cannot
+// each flip a different way.
+export function toggleMark(
+  map: DisplayMap,
+  dStart: number,
+  dEnd: number,
+  mark: "bold" | "italic" | "underline",
+  on?: boolean
+): { value: string; caretValueIndex: number } {
   const range = map.chars.slice(dStart, dEnd);
-  const allSet = range.length > 0 && range.every((c) => c[mark]);
-  const chars = map.chars.map((c, i) => (i >= dStart && i < dEnd ? { ...c, [mark]: !allSet } : c));
+  const next = on ?? !(range.length > 0 && range.every((c) => c[mark]));
+  const chars = map.chars.map((c, i) => (i >= dStart && i < dEnd ? { ...c, [mark]: next } : c));
   return withBoundary(serializeChars(map.prefix, chars, map.suffix, dEnd));
 }
 
@@ -367,7 +479,7 @@ export function setFontSize(
   dEnd: number,
   fontSizePt: number
 ): { value: string; caretValueIndex: number } {
-  const size = Math.min(48, Math.max(6, Math.round(fontSizePt * 10) / 10));
+  const size = inlineFontSizePt(fontSizePt);
   const chars = map.chars.map((char, index) =>
     index >= dStart && index < dEnd ? { ...char, fontSizePt: size } : char
   );
@@ -496,10 +608,19 @@ export function expandToLinkRun(
   for (let i = dStart; i < dEnd && !href; i += 1) href = chars[i]?.linkHref ?? null;
   if (!href) href = (dStart < chars.length ? chars[dStart]?.linkHref : null) ?? (dStart > 0 ? chars[dStart - 1]?.linkHref : null) ?? null;
   if (href) {
-    let start = dStart;
-    let end = Math.max(dEnd, dStart);
+    // Anchor on a character that actually carries this href, then expand across
+    // its CONTIGUOUS run only. Expanding from the selection's own bounds let a
+    // selection touching two different links return a range labelled with the
+    // first link's href but reaching into the second, so Remove and Apply
+    // rewrote the neighbouring link's text. A selection spanning two links now
+    // resolves to the first of them rather than to a span of both.
+    let anchor = dStart;
+    while (anchor < chars.length && chars[anchor]?.linkHref !== href) anchor += 1;
+    if (anchor >= chars.length) anchor = dStart - 1;
+    if (anchor < 0 || chars[anchor]?.linkHref !== href) return null;
+    let start = anchor;
+    let end = anchor + 1;
     while (start > 0 && chars[start - 1]?.linkHref === href) start -= 1;
-    while (start < chars.length && chars[start]?.linkHref !== href) start += 1;
     while (end < chars.length && chars[end]?.linkHref === href) end += 1;
     return start < end ? { start, end, href } : null;
   }
@@ -522,7 +643,12 @@ export function trailingLinkWordAt(map: DisplayMap, index: number): { start: num
   let start = index;
   while (start > 0 && !isDisplayBoundary(map.display, start - 1)) start -= 1;
   if (start >= index) return null;
-  if (map.chars.slice(start, index).some((c) => c.linkSuppressed)) return null;
+  const word = map.chars.slice(start, index);
+  if (word.some((c) => c.linkSuppressed)) return null;
+  // Only an AUTOMATIC link is deferred. A word carrying an explicit <link=…> is
+  // already a hyperlink the user asked for, and suppressing it made a real link
+  // visibly lose its anchor for as long as the caret rested at its end.
+  if (word.some((c) => c.linkHref !== null)) return null;
   return automaticLinkHref(map.display.slice(start, index)) ? { start, end: index } : null;
 }
 
@@ -533,6 +659,28 @@ export function suppressAutoLink(map: DisplayMap, dStart: number, dEnd: number):
     index >= dStart && index < dEnd ? { ...char, linkSuppressed: true } : char
   );
   return serializeChars(map.prefix, chars, map.suffix, dEnd).value;
+}
+
+// The render-only value for a remembered suppression, derived from the field's
+// CURRENT map. Null when the range no longer covers anything, so the caller
+// paints the stored value untouched.
+//
+// The caller must remember a RANGE and call this every render — never cache the
+// returned value. A cached value is stale for the repaint that follows the very
+// next keystroke: the paint would still hold the pre-edit text, one character
+// short, while the caret restore targets an index in the NEW value. The restore
+// then walks off the end of the painted text and clamps to it, so every
+// keystroke inside a URL left the caret one position back — which moved it off
+// the word's trailing edge and let the link fire while it was still being typed.
+// Deriving from the current map makes that impossible by construction.
+export function suppressedAutoLinkValue(
+  map: DisplayMap,
+  range: { dStart: number; dEnd: number }
+): string | null {
+  const dEnd = Math.min(range.dEnd, map.chars.length);
+  const dStart = Math.max(0, Math.min(range.dStart, dEnd));
+  if (dEnd <= dStart) return null;
+  return suppressAutoLink(map, dStart, dEnd);
 }
 
 // Strip character formatting (bold/italic/underline, font family, and size)

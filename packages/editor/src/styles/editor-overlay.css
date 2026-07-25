@@ -4,6 +4,38 @@
   position: relative;
 }
 
+.typeset-editor.has-typeset-caret .tsd-doc--editable {
+  caret-color: transparent;
+}
+
+.typeset-caret {
+  position: absolute;
+  z-index: 8;
+  width: 1px;
+  min-height: 1px;
+  background: #000;
+  pointer-events: none;
+  animation: typeset-caret-blink 1.05s steps(1, end) infinite;
+}
+
+@keyframes typeset-caret-blink {
+  0%,
+  54% {
+    opacity: 1;
+  }
+
+  55%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .typeset-caret {
+    animation: none;
+  }
+}
+
 /* The visible grab bar sits inside a larger transparent hit area that extends
    into the leading whitespace beside the entry or bullet. */
 .ts-grip {
@@ -201,4 +233,80 @@
   .ts-context-menu__item {
     min-height: 40px;
   }
+}
+
+/* ==== Hyperlink hover card (sections/editor/TypesetLinkCard.tsx) ====
+   Shown when the pointer rests on a painted link: the destination, plus open /
+   copy / edit / remove. One quiet row, not a panel — the link is the subject and
+   the card is a label on it. Sits above the context menu's stacking level so a
+   card left over from a hover cannot cover a menu. */
+.ts-link-card {
+  /* Absolute inside `.typeset-editor`, so it scrolls with the page it annotates
+     and needs no scroll listener to stay on its link. */
+  position: absolute;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  max-width: min(30rem, 100%);
+  padding: 4px 6px 4px var(--s2);
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--r-md);
+  background: var(--card-elev);
+  box-shadow: var(--shadow-lift);
+  font-family: var(--font-ui);
+}
+
+.ts-link-card__href {
+  overflow: hidden;
+  color: var(--accent-deep);
+  font-size: 0.75rem;
+  white-space: nowrap;
+  text-decoration: none;
+  text-overflow: ellipsis;
+}
+
+.ts-link-card__href:hover {
+  text-decoration: underline;
+}
+
+/* An automatically detected URL has no stored link to edit, so say so. */
+.ts-link-card__badge {
+  flex: none;
+  padding: 1px 5px;
+  border-radius: 999px;
+  background: var(--accent-veil);
+  color: var(--accent-deep);
+  font-size: 0.625rem;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.ts-link-card__actions {
+  display: flex;
+  flex: none;
+  gap: 1px;
+  padding-left: var(--s1);
+  border-left: 1px solid var(--hairline);
+}
+
+.ts-link-card__actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+.ts-link-card__actions button:hover,
+.ts-link-card__actions button:focus-visible {
+  background: var(--accent-veil);
+  color: var(--accent-deep);
+  outline: none;
 }

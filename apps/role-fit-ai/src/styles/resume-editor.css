@@ -20,10 +20,11 @@
   flex-wrap: nowrap;
 }
 
-/* RoleFit's export menu keeps its text label without the leading icon. The
-   label-first toolbar disclosure at this container width now lives in
-   packages/editor/src/styles/toolbar.css, scoped by the host seam attribute
-   [data-toolbar-labels="text"] set on this tab's toolbar header. */
+/* RoleFit's PDF export menu keeps its text label without the leading icon, so
+   the action bar's disclosure chevron is its only glyph. This is a document
+   action, not a formatting menu: the icon-only seam that this tab's toolbar
+   header opts into via [data-toolbar-labels="icon"] applies to the formatting
+   row's style menus, and lives in packages/editor/src/styles/toolbar.css. */
 .resume-tab__toolbar .export-menu__trigger > svg:first-child {
   display: none;
 }

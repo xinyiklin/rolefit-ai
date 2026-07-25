@@ -15,10 +15,10 @@
         "type": "standard",
         "items": [
           {
-            "titleLeft": "University Name",
-            "titleRight": "City, State",
-            "subtitleLeft": "B.S. in Computer Science",
-            "subtitleRight": "Aug. 2022 -- May 2026",
+            "titleLeft": "<b>University Name</b>",
+            "titleRight": "Aug. 2022 – May 2026",
+            "subtitleLeft": "<i>B.S. in Computer Science</i>",
+            "subtitleRight": "<i>City, State</i>",
             "bullets": []
           }
         ]
@@ -28,10 +28,10 @@
         "type": "standard",
         "items": [
           {
-            "titleLeft": "Company Name",
-            "titleRight": "City, State",
-            "subtitleLeft": "Software Engineering Intern",
-            "subtitleRight": "Jun. 2025 -- Aug. 2025",
+            "titleLeft": "<b>Company Name</b>",
+            "titleRight": "Jun. 2025 – Aug. 2025",
+            "subtitleLeft": "<i>Software Engineering Intern</i>",
+            "subtitleRight": "<i>City, State</i>",
             "bullets": [
               {
                 "text": "Accomplishment with a metric — what you built, shipped, or improved and by how much."
@@ -42,10 +42,10 @@
             ]
           },
           {
-            "titleLeft": "Another Company",
-            "titleRight": "Remote",
-            "subtitleLeft": "Role Title",
-            "subtitleRight": "Jan. 2025 -- May 2025",
+            "titleLeft": "<b>Another Company</b>",
+            "titleRight": "Jan. 2025 – May 2025",
+            "subtitleLeft": "<i>Role Title</i>",
+            "subtitleRight": "<i>Remote</i>",
             "bullets": [
               {
                 "text": "What you owned and what the outcome was."
@@ -90,21 +90,21 @@
         "type": "skills",
         "items": [
           {
-            "titleLeft": "Languages",
+            "titleLeft": "<b>Languages</b>",
             "titleRight": "",
             "subtitleLeft": "Python, TypeScript, JavaScript, SQL, Java",
             "subtitleRight": "",
             "bullets": []
           },
           {
-            "titleLeft": "Frameworks",
+            "titleLeft": "<b>Frameworks</b>",
             "titleRight": "",
             "subtitleLeft": "React, Node.js, Express, FastAPI",
             "subtitleRight": "",
             "bullets": []
           },
           {
-            "titleLeft": "Tools",
+            "titleLeft": "<b>Tools</b>",
             "titleRight": "",
             "subtitleLeft": "Git, Docker, AWS, PostgreSQL, Redis",
             "subtitleRight": "",
@@ -120,7 +120,7 @@
     "letterSpacingPt": 0,
     "lineHeight": 1.18,
     "entryIndentPt": 10.8,
-    "entryEndIndentPt": 0,
+    "entryEndIndentPt": 5.4,
     "nameContactGapPt": 0.9962640099626402,
     "contactGapPt": 18.13200498132005,
     "headerSectionGapPt": 9.315068493150685,

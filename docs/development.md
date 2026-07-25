@@ -42,6 +42,7 @@ npm run check --workspace apps/typeset
 npm run check --workspace apps/role-fit-ai
 
 npm run eval:resume-file --workspace packages/engine
+npm run eval:cover-letter-file --workspace packages/engine
 npm run eval:pdf-font-parity --workspace packages/engine
 npm run fonts:check --workspace packages/engine
 npm run eval:editor --workspace packages/editor
@@ -74,6 +75,7 @@ signed-distribution check.
 | Scope | Focused checks | Broader gate |
 | --- | --- | --- |
 | Engine domain / `.resume` | engine typecheck, `eval:resume-file` | engine check + affected app checks |
+| Engine `.cover` / cover layout | engine typecheck, `eval:cover-letter-file` | engine check + RoleFit build + rendered editor/PDF |
 | Engine layout / font / PDF | `eval:pdf-font-parity`, font check when relevant | engine check + both app builds + rendered output |
 | Shared editor | editor typecheck, `eval:editor` | editor check + both app builds + browser QA when material |
 | Typeset shell | Typeset build/check | browser/file/PDF QA proportional to change |

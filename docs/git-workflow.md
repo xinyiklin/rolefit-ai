@@ -49,6 +49,22 @@ updates belong together when splitting them would leave the branch broken.
 - Never force-push, amend, rebase, switch branches, or rewrite history without
   explicit authorization.
 
+## Documentation, continuity, and releases
+
+Before a requested push, review the affected README and product/engineering
+documentation. Update the visitor-facing README when behavior, commands, or
+availability changes, and update engineering documentation when a contract
+changes. Include the compact, privacy-safe `CONTINUITY.md` receipt in the
+behavior-slice commit; do not record personal resume/job content, credentials,
+or provider responses.
+
+When changing a product version, update the canonical package/app version and
+user-facing version references together. During a requested push, merge, or
+deploy of that versioned change, trigger the matching required tag and
+release/publish workflow, wait for successful completion, and retain the
+workflow or live-environment receipt. A versioned change is incomplete until
+that release/deploy completion is confirmed.
+
 ## Minimum PR receipt
 
 Report:

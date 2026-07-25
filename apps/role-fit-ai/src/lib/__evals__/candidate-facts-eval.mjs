@@ -119,4 +119,88 @@ assert.equal(
   "an entirely empty facts object: citizenshipStatus (undefined) !== the literal 'unspecified' string, so the early-return gate is NOT hit — the citizenship line drops (undefined, filtered) but both negative boolean lines still render. Lock this: only the literal string 'unspecified' gates the block, not any other falsy/absent value."
 );
 
+// ── Education: an independent opt-in, positively gated ──────────────────────
+// A degree is one of the easiest things for a resume model to invent, so the
+// education block emits ONLY for a level that maps to a known line. That is
+// stricter than the citizenship gate above (which only checks the literal
+// "unspecified"), and it means an absent, undefined, or corrupted level cannot
+// let a bare field of study through as an implied credential.
+assert.equal(
+  buildCandidateFactsContext({ ...base, educationLevel: "unspecified", major: "Mechanical Engineering" }),
+  "",
+  "an unspecified education level emits nothing, even with a field of study set"
+);
+assert.equal(
+  buildCandidateFactsContext({ ...base, educationLevel: "bogus-level", major: "Mechanical Engineering" }),
+  "",
+  "an out-of-union education level emits nothing — no bare field of study, no implied credential"
+);
+assert.equal(
+  buildCandidateFactsContext({ ...base, major: "Mechanical Engineering" }),
+  "",
+  "a field of study with NO level at all emits nothing"
+);
+assert.equal(
+  buildCandidateFactsContext({ ...base, educationLevel: "bachelor" }),
+  "Candidate facts:\n- Education: highest completed level is a bachelor's degree.",
+  "a declared level alone renders without a field of study, and without any citizenship line"
+);
+assert.equal(
+  buildCandidateFactsContext({ ...base, educationLevel: "bachelor", major: "  Mechanical Engineering  " }),
+  "Candidate facts:\n" +
+    "- Education: highest completed level is a bachelor's degree.\n" +
+    "- Field of study: Mechanical Engineering.",
+  "a declared level plus a field of study renders both lines, with the major trimmed"
+);
+assert.equal(
+  buildCandidateFactsContext({ ...base, educationLevel: "bachelor", major: "   " }),
+  "Candidate facts:\n- Education: highest completed level is a bachelor's degree.",
+  "a whitespace-only field of study contributes no line"
+);
+for (const [level, expected] of [
+  ["high-school", "highest completed level is a high school diploma or GED."],
+  ["associate", "highest completed level is an associate degree."],
+  ["bachelor", "highest completed level is a bachelor's degree."],
+  ["master", "highest completed level is a master's degree."],
+  ["doctorate", "highest completed level is a doctorate (PhD)."],
+  ["professional", "highest completed level is a professional degree (for example JD or MD)."]
+]) {
+  assert.equal(
+    buildCandidateFactsContext({ ...base, educationLevel: level, major: "" }),
+    `Candidate facts:\n- Education: ${expected}`,
+    `the ${level} line matches the exact grounding text verbatim`
+  );
+}
+// The major is capped because it reaches a prompt.
+assert.equal(
+  buildCandidateFactsContext({ ...base, educationLevel: "bachelor", major: "x".repeat(200) }),
+  `Candidate facts:\n- Education: highest completed level is a bachelor's degree.\n- Field of study: ${"x".repeat(120)}.`,
+  "an over-long field of study is truncated to MAJOR_MAX_LENGTH"
+);
+
+// ── The two blocks are independent opt-ins ──────────────────────────────────
+// Citizenship no longer short-circuits the whole function: declaring one block
+// must neither require nor suppress the other.
+assert.equal(
+  buildCandidateFactsContext({
+    citizenshipStatus: "us-citizen",
+    legallyAuthorizedToWork: true,
+    requiresSponsorship: false,
+    educationLevel: "master",
+    major: "Statistics"
+  }),
+  "Candidate facts:\n" +
+    "- Citizenship: U.S. citizen; eligible for security clearances and positions requiring U.S. citizenship.\n" +
+    "- Work authorization: legally authorized to work in the United States.\n" +
+    "- Visa sponsorship: does not require employer visa sponsorship now or in the future.\n" +
+    "- Education: highest completed level is a master's degree.\n" +
+    "- Field of study: Statistics.",
+  "both blocks declared: citizenship trio first, then education pair, in one Candidate facts list"
+);
+assert.match(
+  buildCandidateFactsContext({ ...base, educationLevel: "doctorate" }),
+  /^Candidate facts:\n- Education:/,
+  "education renders with NO citizenship declared — it is not gated behind citizenship"
+);
+
 console.log("candidate-facts probes passed");

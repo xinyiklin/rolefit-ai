@@ -34,6 +34,7 @@ export type DocumentToolbarProps = {
   productName?: string;
   documentTitle: string;
   documentContext?: string;
+  untitledDocumentTitle?: string;
   onDocumentTitleChange?: (title: string) => void;
   saveStatus?: ToolbarSaveStatus;
   documentStructure?: DocumentStructureToolbarControls;
@@ -78,6 +79,7 @@ export function DocumentToolbar({
   productName,
   documentTitle,
   documentContext,
+  untitledDocumentTitle = UNTITLED_DOCUMENT_TITLE,
   onDocumentTitleChange,
   saveStatus,
   documentStructure,
@@ -105,7 +107,7 @@ export function DocumentToolbar({
                 spellCheck="false"
                 onChange={(event) => onDocumentTitleChange(event.target.value)}
                 onBlur={(event) => {
-                  if (!event.currentTarget.value.trim()) onDocumentTitleChange(UNTITLED_DOCUMENT_TITLE);
+                  if (!event.currentTarget.value.trim()) onDocumentTitleChange(untitledDocumentTitle);
                 }}
                 onKeyDown={(event) => {
                   if (event.key === "Enter") event.currentTarget.blur();

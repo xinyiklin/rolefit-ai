@@ -10,7 +10,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { DOC_STYLE_DEFAULTS } from "@typeset/engine/lib/documentStyle.ts";
-import { DOCUMENT_FONT_FAMILIES } from "@typeset/engine/typeset/fontRegistry.ts";
+import { DOCUMENT_FONT_FAMILIES, sfntAssetFile } from "@typeset/engine/typeset/fontRegistry.ts";
 import { layoutResume } from "@typeset/engine/typeset/layout.ts";
 import { emitPdf } from "@typeset/engine/typeset/pdf/emit.ts";
 import { PDFDict, PDFDocument, PDFName, PDFRawStream } from "pdf-lib";
@@ -75,13 +75,16 @@ const typesetSchema = (schema) => ({
   }))
 });
 
-// Node-side bytes from the engine package's exact sfnt siblings.
+// Node-side bytes from the engine package's exact sfnt siblings. The woff2 -> sfnt
+// filename is resolved by the registry's own `sfntAssetFile`, not re-derived here:
+// this eval is the last place that would notice a family whose PDF sibling is a
+// different outline flavour than assumed.
 const fonts = new Map();
 for (const [family, config] of Object.entries(DOCUMENT_FONT_FAMILIES)) {
-  const extension = family === "latin-modern" ? "otf" : "ttf";
-  for (const [face, info] of Object.entries(config.faces)) {
-    const file = info.assetPath.replace(/^\/fonts\//, "").replace(/\.woff2$/i, `.${extension}`);
-    const path = fileURLToPath(import.meta.resolve(`@typeset/engine/fonts/${file}`));
+  for (const face of Object.keys(config.faces)) {
+    const path = fileURLToPath(
+      import.meta.resolve(`@typeset/engine/fonts/${sfntAssetFile(family, face)}`)
+    );
     fonts.set(`${family}:${face}`, new Uint8Array(readFileSync(path)));
   }
 }
@@ -189,8 +192,61 @@ if (expectedLinks === 0) {
   failures += 1;
 }
 
+// ---- every family embeds and extracts ----
+//
+// The checks above run the fixture in its own family (Latin Modern, CFF). Font
+// EMBEDDING is per-font-program work: @pdf-lib/fontkit subsets and rewrites each
+// face's tables, and it has failed on specific programs before (the CFF subsetter
+// emitted output viewers rejected). A family whose faces cannot be embedded would
+// pass every layout and shaping check and then break only at Export PDF, so each
+// one is emitted and re-extracted here.
+const familyFailures = [];
+for (const family of Object.keys(DOCUMENT_FONT_FAMILIES)) {
+  const familyLayout = layoutResume(typesetSchema(truth.schema), {
+    ...legacyStyle(truth.docStyle),
+    fontFamily: family
+  });
+  const familyBytes = await emitPdf(familyLayout, fonts, { title: `roundtrip ${family}` });
+  if (!familyBytes?.length) {
+    familyFailures.push(`${family}: emitPdf produced no bytes`);
+    continue;
+  }
+  const warnings = [];
+  const restore = console.log;
+  console.log = (...args) => {
+    const message = args.join(" ");
+    if (/Unable to detect correct font file|FormatError|Failed to load font/i.test(message)) warnings.push(message);
+    else restore(...args);
+  };
+  let extracted = 0;
+  try {
+    const familyDoc = await pdfjs.getDocument({
+      data: familyBytes.slice(),
+      useWorkerFetch: false,
+      isEvalSupported: false
+    }).promise;
+    for (let p = 1; p <= familyDoc.numPages; p += 1) {
+      const content = await (await familyDoc.getPage(p)).getTextContent();
+      extracted += content.items.filter((item) => item.str.trim()).length;
+    }
+  } finally {
+    console.log = restore;
+  }
+  if (warnings.length) familyFailures.push(`${family}: pdf.js rejected an embedded program — ${warnings[0]}`);
+  // The fixture is a full resume, so an empty text layer means the glyphs went in
+  // as unextractable shapes rather than searchable text.
+  if (extracted < 20) familyFailures.push(`${family}: only ${extracted} extractable text items`);
+}
+if (familyFailures.length) {
+  for (const message of familyFailures) console.error(`FAMILY ${message}`);
+  failures += familyFailures.length;
+}
+
 if (failures) {
   console.error(`pdf-roundtrip: ${failures} failures (${checked} runs checked)`);
   process.exit(1);
 }
-console.log(`pdf-roundtrip: ${checked} runs at exact positions, ${annots} link annotations, text layer searchable`);
+console.log(
+  `pdf-roundtrip: ${checked} runs at exact positions, ${annots} link annotations, text layer searchable; ` +
+    `all ${Object.keys(DOCUMENT_FONT_FAMILIES).length} families embed and re-extract`
+);

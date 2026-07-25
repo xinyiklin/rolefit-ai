@@ -26,21 +26,51 @@ marketing landing page, a SaaS dashboard, or a native desktop installer.
 
 ## Workflow Shape
 
-Preserve the navbar-inputs + full-width studio workflow (the former left
+Preserve the compact masthead + full-width studio workflow (the former left
 inputs pane was folded into the masthead by explicit user request,
-2026-06-09):
+2026-06-09; document file actions moved into their editor bars on 2026-07-25):
 
 - masthead (navbar): a standalone Sessions menu for concurrent job tabs first,
-  followed by Resume source (workspace
-  base-resume, upload, source text), Job target (link + description), the AI
-  provider, and polish Options — plus the primary Polish action and Apply
+  followed by Job target (link + description), plus the global Apply action.
+  Provider and guidance setup live in the Settings dialog at the foot of the
+  studio rail, not here
 - studio (full width): the tabbed output views — Resume (the engine-painted
   page is the sole editor, so what you see is exactly what exports — it is its
   own live preview, so there is no separate compile-preview; its margin
   controls own add/remove/reorder, section type, and per-section tailor scope;
-  the suggestion/recruiter-review rail docks beside it post-polish), Materials (cover letter
-  + application questions), Applications (table / calendar tracker
-  views), Analytics — plus the template/export rail below
+  Open/Save/Polish share one document action bar, and the
+  suggestion/recruiter-review rail docks beside it post-polish), Cover
+  letter (a separate plain-paragraph editor that revises the user's source
+  letter with the matching Open/Save/Polish action bar), Materials
+  (application questions and role descriptions),
+  Applications (table / calendar tracker views), Analytics — plus the
+  document-specific review rails
+
+Resume and cover letter share ONE Open menu (`DocumentOpenMenu`): the same
+component renders each page's start actions (bundled starter, blank, choose a
+file) above the documents already saved in the workspace. Starting a document and
+reopening a saved one are the same decision, so they are not split across a
+separate Starter button. Save is likewise ONE component (`DocumentSaveMenu`):
+update the active workspace copy, save a named variant beside it, then the
+downloads. PDF is a download, so it lives there too rather than as its own
+toolbar button — both bars are Open/Save/Polish — and it opens the same rename
+prompt for both documents.
+
+A menu row carries a description only when its title is not enough. "Download
+.resume" and "Download PDF" need none; "Download .txt" does, because it has to be
+told apart from .cover. Ambient instructions do not belong at the bottom of a menu
+at all: the resume Save menu carried a permanent "save a base resume to use it
+automatically" sentence that its own primary row already said at the point of
+action, costing 48px on every open.
+
+Both documents persist the same way: `base-resume*.resume` and
+`cover-letter*.cover` sit side by side in the workspace, each with named
+variants and `.trash/` version history, and each save archives the version it
+replaces. `server/coverLetterWorkspace.ts` is a sibling of `server/workspace.ts`,
+sharing its storage primitives (lock, atomic write, trash stamping) without
+inheriting the base resume's multi-extension import paths.
+Resume Header and Section controls sit immediately before Spacing in the shared
+formatting row; at narrow widths the whole group moves into More in that order.
 
 Polish should feel like a review queue, not a hidden overwrite. By default,
 the user selects editable resume sections in the document; identity,
@@ -56,10 +86,12 @@ unless the task explicitly touches them.
 
 - `@typeset/editor` owns the direct editor, document/history/style hooks,
   formatting toolbar, popovers, and shared editor styles.
-- `@typeset/engine` owns the resume model, `.resume` codec, deterministic
-  layout, fonts, print painting, and PDF emission.
-- RoleFit owns the masthead, studio navigation, AI workflow, review rail,
-  tracker, and its narrow editor overlay for section scope and review targets.
+- `@typeset/engine` owns the resume model, constrained cover-letter adapter,
+  strict `.resume`/`.cover` codecs, deterministic layout, fonts, print painting,
+  and PDF emission.
+- RoleFit owns the masthead, studio navigation, AI workflow, review rails,
+  tracker, cover-letter file/source lifecycle, and its narrow resume-editor
+  overlay for section scope and review targets.
 - Adapt shared surfaces through values, callbacks, and deliberate slots. Do not
   fork package components or add product-mode boolean combinations.
 - A shared editor change must be checked in both RoleFit and standalone
@@ -139,12 +171,41 @@ Never show:
 - First-class provider choices: subscription CLIs (Claude Code, Codex,
   Antigravity CLI) plus the native OpenAI and Claude APIs. Do not expose an
   adapter until its current request contract and a live smoke are verified.
-- The AI menu is split into Distill, Tailor, and Review sections. Each
-  section owns a concrete provider/model/effort config; **Copy from** is a
-  one-shot sync between stages, not a live link.
-- Keep all three sections expanded together. There is no section toggle,
+- Every preference lives in ONE place: the Settings dialog, opened from the foot
+  of the studio tab rail. Its three sections are AI stages, About you, and
+  Guidance, with Reset pinned below them at the foot of the section rail. The
+  masthead keeps only Sessions, Job target, and Apply. Do not add a second
+  control for a setting Settings already owns.
+- A settings section must earn its nav entry. Reset was briefly a section of its
+  own and rendered a near-empty panel holding one button. It belongs at the foot
+  of the section rail — an action, not a section, reachable from whichever
+  section is open, and the same shape as Settings sitting at the foot of the
+  studio rail that opens the dialog. A full-width dialog footer was tried in
+  between and read as a detached bar. Settings has no Save button; it saves as
+  you make changes, and the header says so.
+- Settings holds PREFERENCES, not runtime diagnostics. The local server address,
+  workspace path, and provider counts describe the machine the companion runs;
+  they belong in RoleFit Companion, not in a browser settings panel. Per-stage
+  readiness is not listed separately either — a blocked stage says so in its own
+  row, beside the control that fixes it.
+- Settings > AI stages carries one section per configurable stage (Job distill,
+  Resume tailor, Resume review, Cover letter tailor, Application questions). Each
+  owns a concrete provider/model/effort config plus an optional instruction
+  override; **Copy settings** is a one-shot sync between stages, not a live link.
+  The stage list is declared once in `src/config/aiStages.ts` — a stage added to
+  the UI without being declared there silently runs on another stage's provider,
+  which is how the cover-letter and Q&A flows sat on Tailor's config unnoticed.
+- Keep every stage section expanded together. There is no section toggle,
   collapsed summary, or persisted open/collapse preference; the user can scan
-  and edit all three stage configurations without changing view state.
+  and edit all stage configurations without changing view state.
+- Candidate facts (citizenship, work authorization, sponsorship, education level,
+  field of study) are strictly opt-in. An unset field emits no prompt line, so
+  the model is never told a fact the user did not declare. Citizenship gates the
+  work-authorization lines and education level gates the field of study; neither
+  block gates the other.
+- `polishStages` has exactly two entry points and one stored value: the resume
+  Polish action asks per run, and Settings > AI stages holds the default. A
+  per-run pick updates that default.
 - Distill, Tailor, and Review share one ordered workflow indicator. It shows
   every selected stage and its real `Step n of total` position; a failed or
   user-stopped stage leaves later stages visible as not run and never advances
@@ -160,13 +221,34 @@ Never show:
   three stage configurations survive reloads. CLI providers show connection
   guidance and no API-key field. Native OpenAI/Claude API credentials are added
   only through the local provider companion; the browser never collects,
-  stores, renders, or submits them. The AI menu shows only explicitly added
+  stores, renders, or submits them. Settings shows only explicitly added
   providers and makes an added-but-unready provider visibly unavailable.
   Antigravity may be request-eligible as **Ready to verify** while its auth
   state remains unknown; never describe that state as signed in.
 
 ## Interaction
 
+- A document page always has a caret. Opening a document puts it at the first
+  line — a resume or letter arriving from the workspace, a file, a starter, or a
+  blank page is something the user is about to type into — and so does arriving
+  at the page for the first time. Returning to the Resume or Cover letter tab
+  RESUMES the caret it was left at instead of re-homing it — the studio tabs
+  unmount the editor, so the host holds that caret and hands it back. Do not
+  re-home a returning caret: it discards the user's place, and in the resume it
+  lands in the name field, where a stray keystroke edits the most conspicuous
+  line in the document. A tailored AI result does not take focus; the user is
+  reading a review when it lands.
+- The document scroller returns to the offset it was left at, for the same
+  reason and through the same host-held pair (`useRestoredScroll`). Opening a
+  document resets it — a new document has no earlier position.
+- A menu is bounded by the room under its trigger, never by a guess at where the
+  chrome ends. A panel that runs past the window both clips and extends the
+  scroll area of whatever contains it, which shifts the document behind it; the
+  panel scrolls inside itself instead.
+- Masthead menu panels anchor to their own trigger's right edge so they open
+  inboard, under the control that owns them. The bar's controls sit at the right
+  of the window, so a left-anchored panel runs off it and ends up pressed
+  against the edge by the viewport clamp.
 - Keep keyboard access for changed controls.
 - Prefer existing select / segmented / toggle patterns over hand-rolled
   inline alternatives.
@@ -184,11 +266,17 @@ Never show:
   a 52px icon rail with accessible tab names; it does not become another top
   navigation row.
 - Editor header and formatting rows keep fixed type and a 48px resting height.
-  Remove formatting-menu labels first, move their icons into the anchored More
-  overlay, then move alignment at the next narrower threshold. Header labels
-  for Header, Section, and Export remain visible throughout RoleFit's supported
-  range. The overlay never consumes editor space; do not shrink type or add a
-  horizontally cropped toolbar.
+  RoleFit's formatting row shares its container with a full document action bar,
+  so its style menus (Header, Section, Spacing, Paragraph, Styles, Page) are
+  icon-only at every width, named by tooltip and accessible label. Export keeps
+  its text label because it is a document action, not a formatting menu.
+- The formatting row's disclosure is a measured ladder: style menus move into the
+  anchored More overlay first, then selected-text typography, then alignment,
+  then clear-formatting and spell check. Each threshold is the intrinsic width of
+  the set still inline above it, so the row is never cropped and never scrolls.
+  Re-measure the ladder in a browser when a control is added to that row. The
+  overlay never consumes editor space; do not shrink type, add a horizontally
+  cropped toolbar, or make an overflowing toolbar scroll.
 - The Resume tab's editable document title is the default PDF and `.resume`
   name. A successful job import/distill sets the shared header/export base to
   `Name_Company_Resume`, with `Name_Resume`, `Company_Resume`, and `Resume`
@@ -199,9 +287,9 @@ Never show:
   57px tall across disclosure states and meets the studio/sidebar through one
   structural hairline; it never wraps or paints a false gap below itself. At
   720px and below, only the Resume tab's precise authoring surface is replaced
-  by the non-dismissible width notice. Masthead/navigation and Materials,
-  Applications, and Analytics remain usable, including when browser zoom makes
-  the effective viewport cross that threshold.
+  by the non-dismissible width notice. Masthead/navigation, the simpler Cover
+  letter page, Materials, Applications, and Analytics remain usable, including
+  when browser zoom makes the effective viewport cross that threshold.
 
 ## Visual QA
 

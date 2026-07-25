@@ -1,9 +1,11 @@
 # RoleFit AI
 
-A **companion-launched, browser-primary, local-first** resume tailoring
+A **companion-launched, browser-primary, local-first** application-materials
+tailoring
 workbench backed by a loopback Node server. Import a job posting (paste it, or pull it straight from
-the link), tailor your base resume from your workspace, score the draft against
-the job description, and export to PDF or save a re-loadable `.resume` file —
+the link), tailor your base resume, revise your own cover letter against the
+same job evidence, score the resume draft against the job description, and
+export either document to PDF or its reloadable editable format —
 without storing your personal data in a hosted app. The installed Electron
 companion starts the local service, manages the five supported local
 providers, portable workspace backups, browser-extension pairing, and the local
@@ -43,15 +45,36 @@ saves the structured resume data so you can reload it later or move it between t
 ## Highlights
 
 - **Resume input** — ingest a `.txt`, `.md`, or `.csv` resume (or paste text) into the typeset editor as a one-time conversion into the structured model, or load a previously saved `.resume` file directly; paste extracted PDF text when the original is only available as PDF.
+- **Candidate-authored cover letters** — open a `.cover`, `.txt`, or `.md`
+  letter in its own plain-paragraph editor, then ask RoleFit to revise that
+  writing for the current job using only the letter, resume, job description,
+  and optional honest context as evidence. The pre-tailoring source remains
+  restorable. A new letter starts in Carlito at 11 pt with 1 inch margins —
+  Calibri's metrics, the shape business correspondence is usually written in —
+  and any bundled family is a menu away.
 - **Job-link import** — paste a posting URL and pull the description in one click: Workday-aware through CXS JSON, Ashby-aware through its public posting API (including Handshake's branded wrapper), with Greenhouse-wrapper resolution and a generic HTML→text fallback for other boards. The posting is distilled before polishing — **AI-first** via the configured provider, with server-side grounding/sanitization checks and a deterministic parser that can preserve a local brief for inspection when AI fails. A failed AI Distill remains failed and cannot auto-launch Tailor or Review. The compact brief keeps role context, responsibilities, requirements, preferred qualifications, and technical/domain signals while dropping ATS/navigation/marketing/legal furniture. The link itself is kept only for pipeline tracking and is **never sent to the model**.
 - **Paired browser extension (Chrome/Firefox)** — the unpacked extension can check whether a posting is already tracked and import it into a fresh RoleFit tab. On first use it sends a bounded local access request; approve that exact browser origin once in the companion. The extension does not estimate fit locally; score and verdict come from AI Review in the app. See [Browser extension](#browser-extension).
-- **Explicit five-provider setup** — the companion can add **Claude Code CLI**, **Codex CLI**, **Antigravity CLI**, **OpenAI API**, and **Claude API**. CLI paths use their provider-owned account sessions and API paths use a locally encrypted key. The browser AI menu shows only providers the user explicitly added, keeps configured-but-unready providers visible with reconnect guidance, and never silently switches a stage to a paid provider.
+- **Explicit five-provider setup** — the companion can add **Claude Code CLI**, **Codex CLI**, **Antigravity CLI**, **OpenAI API**, and **Claude API**. CLI paths use their provider-owned account sessions and API paths use a locally encrypted key. Settings > AI stages shows only providers the user explicitly added, keeps configured-but-unready providers visible with reconnect guidance, and never silently switches a stage to a paid provider.
 - **AI-owned fit review** — the selected Review model judges the complete requirement set and returns the coverage table, base/tailored scores, verdict, explanation, gaps, and recommendation. RoleFit validates the response contract but does not recalculate or replace that judgment locally.
 - **Strict recruiter review mode** — audit the current edited draft as-is, or audit the sanitized proposal produced moments earlier in **Both**, for a verdict (STRONG FIT / REASONABLE FIT / STRETCH / DON'T APPLY), AI fit scores, gap severity, targeted bullet rewrites, interview risk flags, ready / edits-pending / missing-evidence status, and a cover-letter angle.
 - **One typeset editing surface** — direct text editing, inline emphasis, undo/redo, keyboard caret movement, structural add/remove/reorder controls, per-section Tailor/Include/Off scope, and review-field highlighting all operate on the exported page layout.
+- **Word-processor editing behavior** — Tab inserts preserved indentation,
+  same-editor copy/paste keeps supported inline font and formatting runs, mixed
+  families and sizes share a typographic baseline, and Ctrl/Cmd +/-/0 controls
+  page zoom in both document layouts.
 - **Ordered AI workflow** — Distill, Tailor, and Review share one reusable progress surface with exact step counts, specific failure reasons, Retry/Stop behavior, and later stages marked not run after a failure.
 - **WYSIWYG editor + PDF export** — the editor *is* the preview: it and the exported PDF use the same shared Typeset layout engine, so visible line breaks and page flow match the export exactly. No external toolchain to install — typesetting and PDF generation run in the browser.
 - **`.resume` save/load** — download the structured resume data as a `.resume` file (lossless JSON, formatting preserved) and reload it later, or keep it as a portable backup of your work.
+- **`.cover` save/load** — download ordered cover-letter paragraphs plus their
+  small print-style contract as a strict `.cover` file. `.resume` remains
+  resume-only; `.rolefit-backup` remains the separate whole-workspace format.
+- **Named variants for both documents** — resumes and cover letters both live in
+  your workspace as `base-resume*.resume` and `cover-letter*.cover`, each with
+  named variants (a Backend SDE letter beside a Growth one) and version history.
+  Every save archives the version it replaces, so nothing is overwritten
+  destructively. Both editors use the same Open and Save menus: Open lists the
+  starter, a blank, a file picker, and everything already saved; Save updates the
+  active copy, adds a variant, or takes a `.resume`/`.cover`/`.txt`/PDF away.
 - **Portable workspace backup + restore** — the companion's Workspace section saves one versioned `.rolefit-backup` containing validated base resumes, resume history, tracker records, saved application PDFs, and mirrored allowlisted RoleFit preferences. Restore validates every checksum and domain file in a staging workspace before replacing the active saved workspace, then keeps the previous workspace as a local safety copy. The JSON backup is not encrypted and never contains provider keys, CLI sessions, arbitrary workspace files, or unsaved recovery drafts.
 - **On-disk pipeline tracker** — a sortable, paginated applications table (right-click any row for quick actions: open details, change stage, in-app PDF preview of the saved resume, or delete) alongside a calendar view of submissions and upcoming follow-ups. Tracks status / source / company / role / follow-up date / notes / resume snapshot per application, and survives browser wipes.
 - **Local-first personal workflow** — the browser app, server, paired extension bridge, and workspace files run on your own device. Source development uses the gitignored `job-search-workspace/`; an installed companion uses `app.getPath("userData")/workspace/`. Origin-scoped browser storage may contain recovery resume/job drafts plus user settings and context, but never API keys. The Electron companion encrypts supported API keys with the operating system through `safeStorage` and stores only encrypted bytes locally beneath its own `userData`; keys never enter browser storage, browser requests, status payloads, or logs. A companion-owned server receives decrypted keys only in memory through a private parent/child channel. AI-backed import, polish, cover-letter, and application-answer features still send the relevant job/resume text directly from the local server to the provider you choose; resume/job payloads do not cross Electron IPC.
@@ -132,16 +155,20 @@ npm run test:rolefit:desktop:packaged
 ## AI setup
 
 Add providers in the Electron companion, then choose among those configured
-providers and their models in the browser's top-bar AI menu. Its Distill,
-Tailor, and Review sections stay expanded together; there is no per-section
-collapse control:
+providers and their models in **Settings > AI stages**, opened from the foot of
+the studio tab rail. Every stage section stays expanded together; there is no
+per-section collapse control:
 
 - **Distill** — job-link, paste, and import distillation into a compact job brief.
-- **Tailor** — evidence-grounded resume suggestions, cover letter, and application-answer drafting.
+- **Tailor** — evidence-grounded resume suggestions, revision of the user's
+  existing cover letter, and application-answer drafting.
 - **Review** — strict recruiter-style audit of the current edited draft.
+- **Cover letter tailor** — revision of your own written letter, run from the
+  Cover letter page's own Polish action.
+- **Application questions** — drafts for an application's free-text questions.
 
-Each stage has its own provider/model/effort settings; use **Copy from** in the
-menu to sync one stage from another. The browser never renders or submits an
+Each stage has its own provider/model/effort settings and an optional instruction
+override; use **Copy settings** to sync one stage from another. The browser never renders or submits an
 API-key field. The companion accepts OpenAI and Claude keys as write-only
 values, encrypts them through Electron `safeStorage`, and never reveals a saved
 key. Removing an API provider deletes its encrypted RoleFit credential;
@@ -292,8 +319,9 @@ setting.
 
 Browser recovery is separate from the on-disk workspace. The active localhost
 origin may store a serialized recovery resume, optional raw job text, AI usage,
-stage settings, honest context, custom instructions, and work-authorization
-preferences in browser storage. It never stores API keys. Changing the local
+per-stage settings, honest context, shared and per-stage custom instructions, and
+the facts declared in Settings > About you (citizenship, work authorization,
+sponsorship, education level, field of study) in browser storage. It never stores API keys. Changing the local
 port creates a different browser origin. RoleFit mirrors the allowlisted
 preferences into the workspace's `browser-preferences.json`, and a fresh origin
 with no saved RoleFit preferences adopts that mirror on load, so settings
@@ -365,12 +393,12 @@ src/
   lib/                           # downloads, job extraction/distilling, AI text adapters + review-target mapping
   sections/                      # masthead, nav menus, tabs, workflow progress, saved-PDF preview, review rail
   sections/editor/               # RoleFit-only AI-scope + review-target overlay
-  sections/tabs/                 # Resume / Materials / Applications / Analytics
+  sections/tabs/                 # Resume / Cover letter / Materials / Applications / Analytics
   resume/                        # RoleFit analysis/types/keywords/rewrite/diff (no fit scoring)
   resumeEngine.ts                # compatibility barrel over focused RoleFit resume helpers
   typeset/__evals__/             # RoleFit integration + migration parity checks for the shared engine
   styles/                        # per-surface CSS + shared tokens
-../../packages/engine/           # canonical resume model, strict `.resume` codec, layout, DOM/print, PDF, fonts
+../../packages/engine/           # document adapters/codecs (`.resume`, `.cover`), layout, DOM/print, PDF, fonts
 ../../packages/editor/           # shared direct editor, history/style hooks, formatting toolbar, editor CSS
 extension/                       # Chrome/Firefox MV3 popup (import + duplicate/applied status)
 desktop/                         # required product launcher, provider manager, vault + trust boundary

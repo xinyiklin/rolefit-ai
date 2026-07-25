@@ -4,6 +4,7 @@
 
 import type { ResumeData } from "@typeset/engine/lib/resumeData.ts";
 import { fieldKey, type FieldSrc } from "@typeset/engine/typeset/types.ts";
+import type { FieldValueEdit } from "../../hooks/useResumeEditor";
 import { buildDisplayMap, splitValueAt } from "./inlineTextEditing.ts";
 
 type ResumeFieldActions = {
@@ -143,36 +144,59 @@ export function historyCaretTarget(
   return null;
 }
 
-export function commitField(actions: ResumeFieldActions, src: FieldSrc, value: string): void {
+// A skills row's editable value joins two backing columns, so a write splits it
+// on the label separator. Splitting DISPLAY characters keeps each column's
+// inline tags balanced; raw string slicing can strand a closing tag.
+function skillsRowColumns(value: string): { label: string; skills: string } {
+  const map = buildDisplayMap(value, { preserveWhitespace: true });
+  const colon = map.display.indexOf(":");
+  if (colon <= 0 || colon > 40) return { label: "", skills: value.trimStart() };
+  const serializedSkills = splitValueAt(map, colon + 1).after;
+  return {
+    label: splitValueAt(map, colon).before.trimStart(),
+    skills: serializedSkills.startsWith(" ") ? serializedSkills.slice(1) : serializedSkills
+  };
+}
+
+// The write for one field, as data. `commitField` dispatches it immediately;
+// a selection spanning several fields collects these into one batched edit.
+export function fieldEditFor(src: FieldSrc, value: string): FieldValueEdit {
   switch (src.kind) {
     case "name":
-      actions.setName(value);
-      return;
+      return { kind: "name", value };
     case "contact":
-      actions.updateContact(src.index, value);
-      return;
+      return { kind: "contact", index: src.index, value };
     case "heading":
-      actions.setHeading(src.sectionId, value);
-      return;
+      return { kind: "heading", sectionId: src.sectionId, value };
     case "entry":
-      actions.updateEntry(src.sectionId, src.entryId, src.field, value);
-      return;
+      return { kind: "entry", sectionId: src.sectionId, entryId: src.entryId, field: src.field, value };
     case "bullet":
-      actions.updateBullet(src.sectionId, src.entryId, src.bulletId, value);
-      return;
-    case "skillsRow": {
-      const map = buildDisplayMap(value, { preserveWhitespace: true });
-      const colon = map.display.indexOf(":");
-      if (colon > 0 && colon <= 40) {
-        // Split display characters so each stored field receives balanced inline
-        // tags. Raw string slicing can strand a closing format tag on one side.
-        const label = splitValueAt(map, colon).before.trimStart();
-        const serializedSkills = splitValueAt(map, colon + 1).after;
-        const skills = serializedSkills.startsWith(" ") ? serializedSkills.slice(1) : serializedSkills;
-        actions.updateSkillsRow(src.sectionId, src.entryId, label, skills);
-      } else {
-        actions.updateSkillsRow(src.sectionId, src.entryId, "", value.trimStart());
-      }
-    }
+      return {
+        kind: "bullet",
+        sectionId: src.sectionId,
+        entryId: src.entryId,
+        bulletId: src.bulletId,
+        value
+      };
+    case "skillsRow":
+      return { kind: "skillsRow", sectionId: src.sectionId, entryId: src.entryId, ...skillsRowColumns(value) };
+  }
+}
+
+export function commitField(actions: ResumeFieldActions, src: FieldSrc, value: string): void {
+  const edit = fieldEditFor(src, value);
+  switch (edit.kind) {
+    case "name":
+      return actions.setName(edit.value);
+    case "contact":
+      return actions.updateContact(edit.index, edit.value);
+    case "heading":
+      return actions.setHeading(edit.sectionId, edit.value);
+    case "entry":
+      return actions.updateEntry(edit.sectionId, edit.entryId, edit.field, edit.value);
+    case "bullet":
+      return actions.updateBullet(edit.sectionId, edit.entryId, edit.bulletId, edit.value);
+    case "skillsRow":
+      return actions.updateSkillsRow(edit.sectionId, edit.entryId, edit.label, edit.skills);
   }
 }

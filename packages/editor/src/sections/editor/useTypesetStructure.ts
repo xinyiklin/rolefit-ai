@@ -5,9 +5,17 @@ import type { ResumeData, ResumeSectionType } from "@typeset/engine/lib/resumeDa
 import { fieldKey } from "@typeset/engine/typeset/types.ts";
 import { extentOf, slotsFor, type BlockAnchor, type DragState, type Extent, type TypesetAnchors } from "./typesetStructure.ts";
 
+// `endKey` extends the restored range into ANOTHER field, which a selection
+// spanning several paragraphs needs after its edit repaints. Without it the end
+// index is resolved inside `key`.
 export type PendingCaret = (
   data: ResumeData
-) => { key: string; valueIndex: number; valueEndIndex?: number } | null;
+) => {
+  key: string;
+  valueIndex: number;
+  valueEndIndex?: number;
+  endKey?: string;
+} | null;
 
 // The dragged block's own box on the first page it occupies, for the lift
 // highlight (multi-page blocks just highlight from their top; the drop line is

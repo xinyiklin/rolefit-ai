@@ -20,15 +20,7 @@ import {
 
 import { SECTION_TYPE_OPTIONS, type ResumeData, type ResumeSectionType } from "@typeset/engine/lib/resumeData.ts";
 import { parseFieldKey, type FieldSrc } from "@typeset/engine/typeset/types.ts";
-import {
-  autoLinkWordAt,
-  expandToLinkRun,
-  explicitLinkRunAt,
-  hasClearableFormatting,
-  type DisplayMap,
-  type TypesetSelection
-} from "./inlineTextEditing.ts";
-import { valueForField } from "./resumeFieldAdapter.ts";
+import type { InlineFormatState, TypesetEditorCommands } from "./TypesetEditor.tsx";
 import type { ContextMenuItem } from "./TypesetContextMenu.tsx";
 
 const IS_MAC =
@@ -37,18 +29,33 @@ const MOD = IS_MAC ? "⌘" : "Ctrl+";
 const REDO_SHORTCUT = IS_MAC ? "⇧⌘Z" : "Ctrl+Y";
 
 type Position = "above" | "below";
+
+// Captured when the menu opens, for deciding what to SHOW. The commands act on
+// the live selection instead of on a copy of it: the menu's buttons suppress
+// their own mousedown and any pointerdown elsewhere closes the menu, so nothing
+// can move the selection in between, and re-reading it keeps a menu item and the
+// equivalent toolbar button acting on exactly the same thing.
 type ContextMenuState = {
   x: number;
   y: number;
-  selection: TypesetSelection | null;
+  // The field the pointer was over, which drives the structural commands. It is
+  // deliberately independent of the selection: right-clicking a bullet offers to
+  // delete THAT bullet, the way a word processor targets what you pointed at.
+  structuralSrc: FieldSrc | null;
   selectedText: string;
 };
 
 type ContextMenuControllerArgs = {
   data: ResumeData;
   hostRef: RefObject<HTMLDivElement | null>;
-  mapFor: (source: FieldSrc, value: string) => DisplayMap;
-  readSelection: () => TypesetSelection | null;
+  // Structural commands belong to the resume grammar. A cover letter is plain
+  // correspondence — paragraphs, no sections or bullets — so it shows the menu
+  // without them rather than showing no menu at all.
+  structureEditing: boolean;
+  commands: TypesetEditorCommands;
+  // The same state the toolbar renders from, so an item is enabled exactly when
+  // its toolbar twin is.
+  inlineFormat: InlineFormatState;
   addSectionRelative: (sectionId: string, position: Position, type: ResumeSectionType) => void;
   removeSectionAt: (sectionId: string) => void;
   addEntryRelative: (sectionId: string, entryId: string, position: Position) => void;
@@ -56,11 +63,6 @@ type ContextMenuControllerArgs = {
   addBulletToEntry: (sectionId: string, entryId: string) => void;
   addBulletRelative: (sectionId: string, entryId: string, bulletId: string, position: Position) => void;
   removeBulletAt: (sectionId: string, entryId: string, bulletId: string) => void;
-  commitReplace: (selection: TypesetSelection, start: number, end: number, text: string) => void;
-  commitToggleMark: (selection: TypesetSelection, mark: "bold" | "italic" | "underline") => void;
-  commitClearFormatting: (selection: TypesetSelection) => void;
-  commitLink: (selection: TypesetSelection, start: number, end: number, href: string | null) => void;
-  commitHistory: (direction: "undo" | "redo") => void;
   canUndo: boolean;
   canRedo: boolean;
   onRequestLinkEditor?: () => void;
@@ -69,8 +71,9 @@ type ContextMenuControllerArgs = {
 export function useTypesetContextMenu({
   data,
   hostRef,
-  mapFor,
-  readSelection,
+  structureEditing,
+  commands,
+  inlineFormat,
   addSectionRelative,
   removeSectionAt,
   addEntryRelative,
@@ -78,11 +81,6 @@ export function useTypesetContextMenu({
   addBulletToEntry,
   addBulletRelative,
   removeBulletAt,
-  commitReplace,
-  commitToggleMark,
-  commitClearFormatting,
-  commitLink,
-  commitHistory,
   canUndo,
   canRedo,
   onRequestLinkEditor
@@ -98,31 +96,21 @@ export function useTypesetContextMenu({
       event.preventDefault();
 
       const target = event.target as HTMLElement;
-      const onField = target.closest<HTMLElement>("[data-tsdf]:not([data-tsdm])");
-      let selection = readSelection();
-
-      // A right-click in a line's blank area targets the line without moving
-      // the actual caret. This makes structural commands available across the
-      // full row while preserving the user's current selection.
-      if (!onField) {
-        const line = target.closest<HTMLElement>(".tsd-line");
-        const field = line?.querySelector<HTMLElement>("[data-tsdf]:not([data-tsdm])");
-        const key = field?.getAttribute("data-tsdf");
-        const source = key ? parseFieldKey(key) : null;
-        if (source && key) {
-          const value = valueForField(data, source);
-          selection = { src: source, key, map: mapFor(source, value), value, dStart: 0, dEnd: 0 };
-        }
-      }
+      // A right-click in a line's blank area still targets that line, so the
+      // structural commands cover the full row and not just its glyphs.
+      const field =
+        target.closest<HTMLElement>("[data-tsdf]:not([data-tsdm])") ??
+        target.closest<HTMLElement>(".tsd-line")?.querySelector<HTMLElement>("[data-tsdf]:not([data-tsdm])");
+      const key = field?.getAttribute("data-tsdf");
 
       setContextMenu({
         x: event.clientX,
         y: event.clientY,
-        selection,
-        selectedText: window.getSelection()?.toString() ?? ""
+        structuralSrc: key ? parseFieldKey(key) : null,
+        selectedText: commands.selectionText()
       });
     },
-    [data, hostRef, mapFor, readSelection]
+    [commands, hostRef]
   );
 
   // Resolves true only when the text actually reached the clipboard, so Cut
@@ -136,20 +124,11 @@ export function useTypesetContextMenu({
     );
   }, []);
 
-  const menuLink = useMemo(() => {
-    const selection = contextMenu?.selection;
-    if (!selection) return null;
-    const run = selection.dEnd > selection.dStart
-      ? expandToLinkRun(selection.map, selection.dStart, selection.dEnd)
-      : explicitLinkRunAt(selection.map, selection.dStart) ?? autoLinkWordAt(selection.map, selection.dStart);
-    return run ? { href: run.href, start: run.start, end: run.end } : null;
-  }, [contextMenu]);
-
   const menuItems = useMemo<Array<ContextMenuItem | "divider">>(() => {
     if (!contextMenu) return [];
-    const { selection, selectedText } = contextMenu;
-    const hasRange = Boolean(selection && selection.dStart !== selection.dEnd);
-    const canPaste = Boolean(selection && typeof navigator !== "undefined" && navigator.clipboard?.readText);
+    const { structuralSrc, selectedText } = contextMenu;
+    const hasRange = Boolean(selectedText);
+    const canPaste = typeof navigator !== "undefined" && Boolean(navigator.clipboard?.readText);
 
     const insertItem = (
       id: string,
@@ -175,7 +154,7 @@ export function useTypesetContextMenu({
       onSelect
     });
 
-    const source = selection?.src;
+    const source = structureEditing ? structuralSrc : null;
     const structural: Array<ContextMenuItem | "divider"> = [];
     if (source?.kind === "heading") {
       const submenu = (position: Position): ContextMenuItem[] =>
@@ -243,6 +222,7 @@ export function useTypesetContextMenu({
       }
     }
 
+    const href = inlineFormat.linkHref;
     return [
       ...structural,
       {
@@ -252,9 +232,8 @@ export function useTypesetContextMenu({
         icon: <Scissors size={14} />,
         disabled: !hasRange,
         onSelect: () => {
-          if (!selection) return;
           void writeClipboard(selectedText).then((copied) => {
-            if (copied) commitReplace(selection, selection.dStart, selection.dEnd, "");
+            if (copied) commands.deleteSelection();
           });
         }
       },
@@ -263,7 +242,7 @@ export function useTypesetContextMenu({
         label: "Copy",
         shortcut: `${MOD}C`,
         icon: <Copy size={14} />,
-        disabled: !selectedText,
+        disabled: !hasRange,
         onSelect: () => void writeClipboard(selectedText)
       },
       {
@@ -273,10 +252,12 @@ export function useTypesetContextMenu({
         icon: <ClipboardPaste size={14} />,
         disabled: !canPaste,
         onSelect: () => {
-          if (!selection) return;
-          void navigator.clipboard?.readText().then((text) => {
-            if (text) commitReplace(selection, selection.dStart, selection.dEnd, text);
-          }).catch(() => {});
+          void navigator.clipboard
+            ?.readText()
+            .then((text) => {
+              if (text) commands.insertText(text);
+            })
+            .catch(() => {});
         }
       },
       "divider",
@@ -285,35 +266,35 @@ export function useTypesetContextMenu({
         label: "Bold",
         shortcut: `${MOD}B`,
         icon: <Bold size={14} />,
-        disabled: !hasRange,
-        onSelect: () => selection && commitToggleMark(selection, "bold")
+        disabled: !inlineFormat.canFormat,
+        onSelect: () => commands.toggleMark("bold")
       },
       {
         id: "italic",
         label: "Italic",
         shortcut: `${MOD}I`,
         icon: <Italic size={14} />,
-        disabled: !hasRange,
-        onSelect: () => selection && commitToggleMark(selection, "italic")
+        disabled: !inlineFormat.canFormat,
+        onSelect: () => commands.toggleMark("italic")
       },
       {
         id: "underline",
         label: "Underline",
         shortcut: `${MOD}U`,
         icon: <Underline size={14} />,
-        disabled: !hasRange,
-        onSelect: () => selection && commitToggleMark(selection, "underline")
+        disabled: !inlineFormat.canFormat,
+        onSelect: () => commands.toggleMark("underline")
       },
       {
         id: "clear-formatting",
         label: "Clear formatting",
         shortcut: `${MOD}\\`,
         icon: <RemoveFormatting size={14} />,
-        disabled: !(hasRange && selection && hasClearableFormatting(selection.map, selection.dStart, selection.dEnd)),
-        onSelect: () => selection && commitClearFormatting(selection)
+        disabled: !inlineFormat.canClearFormatting,
+        onSelect: () => commands.clearFormatting()
       },
       "divider",
-      ...(menuLink
+      ...(href
         ? ([
             {
               id: "edit-link",
@@ -326,23 +307,25 @@ export function useTypesetContextMenu({
               id: "open-link",
               label: "Open link",
               icon: <ExternalLink size={14} />,
-              onSelect: () => window.open(menuLink.href, "_blank", "noopener,noreferrer")
+              onSelect: () => window.open(href, "_blank", "noopener,noreferrer")
             },
             {
               id: "copy-link",
               label: "Copy link",
               icon: <Copy size={14} />,
-              onSelect: () => void writeClipboard(menuLink.href)
+              onSelect: () => void writeClipboard(href)
             },
             {
+              // Works for a detected bare URL too: removing an automatic link
+              // marks the run <nolink>, so the text stays and stops linking.
               id: "remove-link",
               label: "Remove link",
               icon: <Unlink size={14} />,
-              onSelect: () => selection && commitLink(selection, menuLink.start, menuLink.end, null)
+              onSelect: () => commands.removeLink()
             },
             "divider"
           ] as Array<ContextMenuItem | "divider">)
-        : hasRange
+        : inlineFormat.canLink
           ? ([
               {
                 id: "add-link",
@@ -360,7 +343,7 @@ export function useTypesetContextMenu({
         shortcut: `${MOD}Z`,
         icon: <Undo2 size={14} />,
         disabled: !canUndo,
-        onSelect: () => commitHistory("undo")
+        onSelect: () => commands.undo()
       },
       {
         id: "redo",
@@ -368,7 +351,7 @@ export function useTypesetContextMenu({
         shortcut: REDO_SHORTCUT,
         icon: <Redo2 size={14} />,
         disabled: !canRedo,
-        onSelect: () => commitHistory("redo")
+        onSelect: () => commands.redo()
       }
     ];
   }, [
@@ -378,18 +361,15 @@ export function useTypesetContextMenu({
     addSectionRelative,
     canRedo,
     canUndo,
-    commitClearFormatting,
-    commitHistory,
-    commitLink,
-    commitReplace,
-    commitToggleMark,
+    commands,
     contextMenu,
     data,
-    menuLink,
+    inlineFormat,
     onRequestLinkEditor,
     removeBulletAt,
     removeEntryAt,
     removeSectionAt,
+    structureEditing,
     writeClipboard
   ]);
 

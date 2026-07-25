@@ -29,7 +29,11 @@ from typing import Iterable, Mapping, Optional, Sequence
 
 import brotli
 import fontTools
+from fontTools.misc.transform import Transform
 from fontTools.pens.boundsPen import BoundsPen
+from fontTools.pens.recordingPen import DecomposingRecordingPen
+from fontTools.pens.transformPen import TransformPen
+from fontTools.pens.ttGlyphPen import TTGlyphPen
 from fontTools.ttLib import TTFont
 from fontTools.varLib.instancer import instantiateVariableFont
 
@@ -37,7 +41,14 @@ from fontTools.varLib.instancer import instantiateVariableFont
 REQUIRED_FONTTOOLS_VERSION = "4.60.2"
 REQUIRED_BROTLI_VERSION = "1.2.0"
 
-FAMILY_ORDER = ("latin-modern", "source-serif", "source-sans")
+FAMILY_ORDER = (
+    "latin-modern",
+    "source-serif",
+    "source-sans",
+    "tinos",
+    "arimo",
+    "carlito",
+)
 FACE_ORDER = ("regular", "bold", "italic", "boldItalic", "boldDisplay", "caps")
 LIGATURES = ("ffi", "ffl", "ff", "fi", "fl")
 
@@ -68,6 +79,9 @@ GOOGLE_SANS_COMMIT = "4591e3457ab8be6d70167aa6818922b91e78ab2d"
 # immutable commit — the newest revision of the file, whose bytes match the
 # digest below.
 GOOGLE_SERIF_LICENSE_COMMIT = "01aa15d05749e35be9167f3f44e6a243f00cd2fc"
+GOOGLE_TINOS_COMMIT = "90d7886db9000c893b9559828bf028aaed5f9c10"
+GOOGLE_ARIMO_COMMIT = "903d46673260c1f4c7f7ef67f5190fb03eab5042"
+GOOGLE_CARLITO_COMMIT = "3dd78844021e948ceb633d1dcee3f7885561b5d9"
 
 SOURCES: Mapping[str, SourceSpec] = {
     "source-serif-roman": SourceSpec(
@@ -138,6 +152,83 @@ SOURCES: Mapping[str, SourceSpec] = {
         "LatinModern-GUST-FONT-LICENSE.txt",
         "https://mirrors.ctan.org/fonts/lm/doc/fonts/lm/GUST-FONT-LICENSE.TXT",
         "49ea6cb9257bbee0a3979c48a774cd221550ac1c20c95549efe45fc99cc18050",
+    ),
+    # Metric-compatible substitutes for the three families resumes are most often
+    # asked for. Each keeps the per-character advance widths of the proprietary
+    # original, so a document holds its line and page count when it is opened in
+    # a word processor that only has the original. The originals themselves are
+    # not redistributable; these are.
+    #
+    # Tinos is pinned at its Apache release rather than the newer OFL one
+    # (google/fonts ba95515, 2026-04-27) because that revision ships no license
+    # file in the font's directory. Font bytes and license text must be pinned
+    # together, so this pin is the last commit where they coexist.
+    "tinos-regular": SourceSpec(
+        "Tinos-Regular.ttf",
+        f"https://raw.githubusercontent.com/google/fonts/{GOOGLE_TINOS_COMMIT}/apache/tinos/Tinos-Regular.ttf",
+        "1061395ac6775f3cea27dc9ef3d7a3b9cc34c2b4a2d97aa649411294d5165990",
+    ),
+    "tinos-bold": SourceSpec(
+        "Tinos-Bold.ttf",
+        f"https://raw.githubusercontent.com/google/fonts/{GOOGLE_TINOS_COMMIT}/apache/tinos/Tinos-Bold.ttf",
+        "6a0afe87068ba5ddeb6a9bb7b9d0dc41666966c044767df69de3efb7e33f5af8",
+    ),
+    "tinos-italic": SourceSpec(
+        "Tinos-Italic.ttf",
+        f"https://raw.githubusercontent.com/google/fonts/{GOOGLE_TINOS_COMMIT}/apache/tinos/Tinos-Italic.ttf",
+        "751c979043c9641dad389ab9c680c2c9ffb0a0c7352153f48b9ebd958e8963d8",
+    ),
+    "tinos-bold-italic": SourceSpec(
+        "Tinos-BoldItalic.ttf",
+        f"https://raw.githubusercontent.com/google/fonts/{GOOGLE_TINOS_COMMIT}/apache/tinos/Tinos-BoldItalic.ttf",
+        "52c4d87a988eb1f1c25e1fcb97970d456a2fb252e0fa2116e2b4bb33e7824bda",
+    ),
+    "tinos-license": SourceSpec(
+        "Tinos-LICENSE.txt",
+        f"https://raw.githubusercontent.com/google/fonts/{GOOGLE_TINOS_COMMIT}/apache/tinos/LICENSE.txt",
+        "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+    ),
+    "arimo-roman": SourceSpec(
+        "Arimo.ttf",
+        f"https://raw.githubusercontent.com/google/fonts/{GOOGLE_ARIMO_COMMIT}/"
+        "ofl/arimo/Arimo%5Bwght%5D.ttf",
+        "e43898b143ec826ac8cb4034816458a7047fbe0836558de2a1f8c6223ae3e0ca",
+    ),
+    "arimo-italic": SourceSpec(
+        "Arimo-Italic.ttf",
+        f"https://raw.githubusercontent.com/google/fonts/{GOOGLE_ARIMO_COMMIT}/"
+        "ofl/arimo/Arimo-Italic%5Bwght%5D.ttf",
+        "a80fc54fd0233c1dfe298577c4d00f5ae81d5bb83510975e473c47e699b7f4ed",
+    ),
+    "arimo-license": SourceSpec(
+        "Arimo-OFL.txt",
+        f"https://raw.githubusercontent.com/google/fonts/{GOOGLE_ARIMO_COMMIT}/ofl/arimo/OFL.txt",
+        "11cce536cd2f3864d767003af5dcd739e2e15818cf2279b6175edeadd3960992",
+    ),
+    "carlito-regular": SourceSpec(
+        "Carlito-Regular.ttf",
+        f"https://raw.githubusercontent.com/google/fonts/{GOOGLE_CARLITO_COMMIT}/ofl/carlito/Carlito-Regular.ttf",
+        "f6418f708baede9789daef5d458c0f53d2a888af9820e8062934e504fedc6595",
+    ),
+    "carlito-bold": SourceSpec(
+        "Carlito-Bold.ttf",
+        f"https://raw.githubusercontent.com/google/fonts/{GOOGLE_CARLITO_COMMIT}/ofl/carlito/Carlito-Bold.ttf",
+        "bb5d20f79b82599ec72983597437373a80f2d2085fa91fc144fd74e876a594db",
+    ),
+    "carlito-italic": SourceSpec(
+        "Carlito-Italic.ttf",
+        f"https://raw.githubusercontent.com/google/fonts/{GOOGLE_CARLITO_COMMIT}/ofl/carlito/Carlito-Italic.ttf",
+        "0b019225e58d702bfedcbd35c21696769f8ee115cb6343f84c2f240312450d1c",
+    ),
+    "carlito-bold-italic": SourceSpec(
+        "Carlito-BoldItalic.ttf",
+        f"https://raw.githubusercontent.com/google/fonts/{GOOGLE_CARLITO_COMMIT}/ofl/carlito/Carlito-BoldItalic.ttf",
+        "b32928186c119599e03ca6a1ffc680fdcb7fac95772f4b95d989cf6cd3861517",
+    ),
+    "carlito-license": SourceSpec(
+        "Carlito-OFL.txt",
+        f"https://raw.githubusercontent.com/google/fonts/{GOOGLE_CARLITO_COMMIT}/ofl/carlito/OFL.txt",
+        "58402f82a7c332a700294988fe7554fbb0a63a8d27ccc1ee3bbc640311990a00",
     ),
 }
 
@@ -294,12 +385,97 @@ FONT_JOBS: Sequence[FontJob] = (
         axes={"wght": 400},
         caps=True,
     ),
+    # The metric-compatible families. Every face is renamed: each one is either
+    # instanced from a variable source or has a rewritten cmap, so none of them
+    # is the upstream font any more and a PDF should not claim otherwise.
+    FontJob(
+        "tinos", "regular", "tinos-regular", "Tinos-Regular.woff2",
+        internal_family="Typeset Tinos Regular",
+    ),
+    FontJob(
+        "tinos", "bold", "tinos-bold", "Tinos-Bold.woff2",
+        internal_family="Typeset Tinos Bold", subfamily="Bold", weight=700,
+    ),
+    FontJob(
+        "tinos", "italic", "tinos-italic", "Tinos-Italic.woff2",
+        internal_family="Typeset Tinos Italic", subfamily="Italic", italic=True,
+    ),
+    FontJob(
+        "tinos", "boldItalic", "tinos-bold-italic", "Tinos-BoldItalic.woff2",
+        internal_family="Typeset Tinos Bold Italic", subfamily="Bold Italic",
+        weight=700, italic=True,
+    ),
+    FontJob(
+        "tinos", "caps", "tinos-regular", "Tinos-Caps.woff2",
+        internal_family="Typeset Tinos Caps", caps=True,
+    ),
+    FontJob(
+        "arimo", "regular", "arimo-roman", "Arimo-Regular.woff2",
+        internal_family="Typeset Arimo Regular", axes={"wght": 400},
+    ),
+    FontJob(
+        "arimo", "bold", "arimo-roman", "Arimo-Bold.woff2",
+        internal_family="Typeset Arimo Bold", subfamily="Bold", weight=700,
+        axes={"wght": 700},
+    ),
+    FontJob(
+        "arimo", "italic", "arimo-italic", "Arimo-Italic.woff2",
+        internal_family="Typeset Arimo Italic", subfamily="Italic", italic=True,
+        axes={"wght": 400},
+    ),
+    FontJob(
+        "arimo", "boldItalic", "arimo-italic", "Arimo-BoldItalic.woff2",
+        internal_family="Typeset Arimo Bold Italic", subfamily="Bold Italic",
+        weight=700, italic=True, axes={"wght": 700},
+    ),
+    FontJob(
+        "arimo", "caps", "arimo-roman", "Arimo-Caps.woff2",
+        internal_family="Typeset Arimo Caps", axes={"wght": 400}, caps=True,
+    ),
+    FontJob(
+        "carlito", "regular", "carlito-regular", "Carlito-Regular.woff2",
+        internal_family="Typeset Carlito Regular",
+    ),
+    FontJob(
+        "carlito", "bold", "carlito-bold", "Carlito-Bold.woff2",
+        internal_family="Typeset Carlito Bold", subfamily="Bold", weight=700,
+    ),
+    FontJob(
+        "carlito", "italic", "carlito-italic", "Carlito-Italic.woff2",
+        internal_family="Typeset Carlito Italic", subfamily="Italic", italic=True,
+    ),
+    FontJob(
+        "carlito", "boldItalic", "carlito-bold-italic", "Carlito-BoldItalic.woff2",
+        internal_family="Typeset Carlito Bold Italic", subfamily="Bold Italic",
+        weight=700, italic=True,
+    ),
+    FontJob(
+        "carlito", "caps", "carlito-regular", "Carlito-Caps.woff2",
+        internal_family="Typeset Carlito Caps", caps=True,
+    ),
 )
+
+# Faces that are the SAME shipped file as another face of their family.
+#
+# `boldDisplay` exists because Source ships an optical-size axis: the resume name
+# is set from an `opsz: 24` instance so it is not a scaled-up text weight. The
+# metric-compatible families are single-design statics with no optical axis, so
+# their display bold IS their text bold. Aliasing points both faces at one asset
+# and one metrics record instead of shipping identical bytes twice under two
+# names, which would also let the two copies drift apart.
+FACE_ALIASES: Mapping[str, Mapping[str, str]] = {
+    "tinos": {"boldDisplay": "bold"},
+    "arimo": {"boldDisplay": "bold"},
+    "carlito": {"boldDisplay": "bold"},
+}
 
 LICENSE_OUTPUTS = {
     "source-serif-license": "SourceSerif4-OFL.txt",
     "source-sans-license": "SourceSans3-OFL.txt",
     "lm-license": "LatinModern-GUST-FONT-LICENSE.txt",
+    "tinos-license": "Tinos-LICENSE.txt",
+    "arimo-license": "Arimo-OFL.txt",
+    "carlito-license": "Carlito-OFL.txt",
 }
 
 
@@ -372,6 +548,13 @@ def lookup_subtables(font: TTFont, table_tag: str, feature_tag: str) -> Iterable
 
 
 def remap_small_caps(font: TTFont) -> None:
+    """Point lowercase codepoints at the font's own small-cap glyphs.
+
+    A caps face is built by rewriting the cmap rather than by asking a renderer
+    for `font-variant: small-caps`: the engine measures whatever the cmap
+    resolves to, so the substitution has to be baked into the shipped face for
+    the browser, the PDF embedder, and the committed metrics to agree.
+    """
     substitutions: dict[str, str] = {}
     for lookup_type, subtable in lookup_subtables(font, "GSUB", "smcp"):
         if lookup_type == 1:
@@ -390,6 +573,102 @@ def remap_small_caps(font: TTFont) -> None:
                 replacements += 1
     if replacements < 26:
         raise SystemExit(f"Small-caps remap replaced only {replacements} cmap entries")
+
+
+# Synthesised small caps, for families that ship no usable `smcp` lookup.
+#
+# The construction is a UNIFORM scale of the capitals, which is not an
+# approximation of some other design: Latin Modern's own caps face — a genuine
+# TeX caps design, and the engine's default family — measures 0.7513 height and
+# 0.7522 advance against its capitals, i.e. it IS uniformly scaled capitals.
+#
+# The ratio is the median real small-cap height of the three bundled families
+# (Latin Modern 0.753, Source Sans 0.790, Source Serif 0.845), raised when a
+# face's own x-height would otherwise reach past it — small caps have to read as
+# taller than lowercase. Arial-metric Arimo needs that: its x-height is 0.768 of
+# its cap height (Latin Modern's is 0.631), so the flat ratio alone would put its
+# small caps BELOW its own x-height and they would look like broken capitals.
+SMALL_CAPS_CAP_RATIO = 0.80
+SMALL_CAPS_X_CLEARANCE = 1.06
+SMALL_CAPS_MAX_RATIO = 0.88
+SYNTHETIC_SMALL_CAP_SUFFIX = ".tssc"
+
+
+def small_caps_scale(font: TTFont) -> float:
+    os2 = font["OS/2"]
+    cap_height = int(getattr(os2, "sCapHeight", 0) or 0)
+    x_height = int(getattr(os2, "sxHeight", 0) or 0)
+    if cap_height <= 0 or x_height <= 0:
+        raise SystemExit("Small-caps synthesis needs OS/2 sCapHeight and sxHeight")
+    return max(
+        SMALL_CAPS_CAP_RATIO,
+        min(SMALL_CAPS_MAX_RATIO, x_height * SMALL_CAPS_X_CLEARANCE / cap_height),
+    )
+
+
+def synthesize_small_caps(font: TTFont) -> None:
+    """Build a caps face by scaling the capitals into new glyphs.
+
+    Composites (the accented capitals) are decomposed before scaling, because a
+    scaled component offset does not compose the same outline. The scaled glyphs
+    carry no hinting instructions: the source instructions were written for the
+    unscaled outline and would distort it at small sizes.
+    """
+    if "glyf" not in font:
+        raise SystemExit("Small-caps synthesis is implemented for glyf outlines only")
+    scale = small_caps_scale(font)
+    glyph_set = font.getGlyphSet()
+    glyf = font["glyf"]
+    hmtx = font["hmtx"]
+    transform = Transform().scale(scale)
+
+    # Lowercase codepoint -> the glyph of its uppercase counterpart, taken from
+    # the font's own cmap so the repertoire follows the font rather than a list.
+    cmap = font.getBestCmap()
+    uppercase_of: dict[int, str] = {}
+    for codepoint in cmap:
+        character = chr(codepoint)
+        upper = character.upper()
+        if len(upper) != 1 or upper == character:
+            continue
+        upper_glyph = cmap.get(ord(upper))
+        if upper_glyph is not None:
+            uppercase_of[codepoint] = upper_glyph
+    if len(uppercase_of) < 26:
+        raise SystemExit(f"Small-caps synthesis found only {len(uppercase_of)} cased pairs")
+
+    synthesized: dict[str, str] = {}
+    for upper_glyph in sorted(set(uppercase_of.values())):
+        name = f"{upper_glyph}{SYNTHETIC_SMALL_CAP_SUFFIX}"
+        recorder = DecomposingRecordingPen(glyph_set)
+        glyph_set[upper_glyph].draw(recorder)
+        pen = TTGlyphPen(None)
+        recorder.replay(TransformPen(pen, transform))
+        glyf[name] = pen.glyph()
+        advance, left_side_bearing = hmtx[upper_glyph]
+        hmtx[name] = (metric_round(advance * scale), metric_round(left_side_bearing * scale))
+        synthesized[upper_glyph] = name
+
+    replacements = 0
+    for table in font["cmap"].tables:
+        if not table.isUnicode():
+            continue
+        for codepoint in tuple(table.cmap):
+            upper_glyph = uppercase_of.get(codepoint)
+            if upper_glyph is None:
+                continue
+            table.cmap[codepoint] = synthesized[upper_glyph]
+            replacements += 1
+    if replacements < 26:
+        raise SystemExit(f"Small-caps synthesis remapped only {replacements} cmap entries")
+
+
+def build_caps_face(font: TTFont) -> None:
+    """Use the font's real small caps when it has them, otherwise synthesise."""
+    if feature_lookup_indices(font, "GSUB", "smcp"):
+        remap_small_caps(font)
+    else:
+        synthesize_small_caps(font)
 
 
 def strip_unmodeled_ligatures(font: TTFont) -> int:
@@ -570,7 +849,7 @@ def build_font(job: FontJob, sources: Mapping[str, Path], output: Path) -> None:
     if "fvar" in font:
         raise SystemExit(f"Variable axes remain after instancing {job.output}")
     if job.caps:
-        remap_small_caps(font)
+        build_caps_face(font)
     strip_unmodeled_ligatures(font)
     strip_unmodeled_gsub_features(font)
     strip_unmodeled_kerning(font)
@@ -759,6 +1038,8 @@ def extract_metrics(path: Path) -> dict[str, object]:
 
 def metrics_source(metrics: Mapping[str, Mapping[str, object]]) -> str:
     payload = json.dumps(metrics, ensure_ascii=False, separators=(",", ":"))
+    face_union = " | ".join(f'"{face}"' for face in FACE_ORDER)
+    family_union = " | ".join(f'"{family}"' for family in FAMILY_ORDER)
     return f"""// GENERATED by scripts/generate_font_assets.py — do not edit by hand.
 // Metrics are extracted from the exact static WOFF2 files under fonts/.
 // Every value is normalized to 1000 units/em for deterministic browser layout.
@@ -774,8 +1055,8 @@ export type FaceMetrics = {{
   bbox: Record<string, [number, number]>;
 }};
 
-export type FaceName = "regular" | "bold" | "italic" | "boldItalic" | "boldDisplay" | "caps";
-export type MetricFamilyId = "latin-modern" | "source-serif" | "source-sans";
+export type FaceName = {face_union};
+export type MetricFamilyId = {family_union};
 
 export const FONT_METRICS: Record<MetricFamilyId, Record<FaceName, FaceMetrics>> = {payload};
 
@@ -794,6 +1075,18 @@ def generate(source_dir: Path, output_root: Path, offline: bool) -> Sequence[Pat
         build_font(job, sources, output)
         metrics[job.family][job.face] = extract_metrics(output)
         generated.append(output)
+
+    for family, aliases in FACE_ALIASES.items():
+        for face, source_face in aliases.items():
+            metrics[family][face] = metrics[family][source_face]
+
+    # Emit faces in FACE_ORDER so the payload does not depend on FONT_JOBS order
+    # or on where an alias was filled in.
+    for family, faces in metrics.items():
+        missing = [face for face in FACE_ORDER if face not in faces]
+        if missing:
+            raise SystemExit(f"Family {family} is missing faces: {', '.join(missing)}")
+        metrics[family] = {face: faces[face] for face in FACE_ORDER}
 
     for source_key, filename in LICENSE_OUTPUTS.items():
         output = output_root / "fonts" / filename

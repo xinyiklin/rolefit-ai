@@ -9,10 +9,11 @@
 // Baseline math: CSS positions boxes by their TOP edge; where the baseline
 // falls inside a line box depends on the font-box metrics the BROWSER uses
 // (which may differ from static hhea tables across engines). So we measure
-// each face's fontBoundingBox once at runtime via canvas TextMetrics and set
-//   line-height = ascent + descent  (zero half-leading)
-//   top         = baseline − ascent
-// which pins the drawn baseline to the engine's, per browser, exactly.
+// each face's actual CSS line-box baseline once at runtime. A line starts at
+//   min(engine baseline − run CSS ascent)
+// and its fixed-width inline runs use native `vertical-align: baseline`.
+// That gives every family/size one shared browser baseline while retaining the
+// engine's exact x positions.
 //
 // Text integrity: engine runs are word-level boxes (spaces are glue, not
 // text). We regroup them into one span per style-run WITH real space
@@ -21,7 +22,7 @@
 // shrunk lines keep exact engine geometry. Each line is a block element, so
 // copied text gets line breaks.
 
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import {
   DEFAULT_DOCUMENT_FONT_FAMILY,
@@ -34,8 +35,14 @@ import type { FaceName } from "../metrics.gen.ts";
 import { fieldKey, type FieldSrc, type GlyphRun } from "../types.ts";
 import { PAGE_HEIGHT_BP, PAGE_WIDTH_BP } from "../blocks.ts";
 import type { DocumentStyle } from "../../lib/documentStyle.ts";
-import { layoutResume, type LayoutDocument, type LayoutPage } from "../layout.ts";
-import { spaceWidth, underlineRule } from "../measure.ts";
+import {
+  layoutCoverLetter,
+  layoutResume,
+  lineSeparators,
+  type LayoutDocument,
+  type LayoutPage
+} from "../layout.ts";
+import { spaceWidth, underlineRule, underlineSpans } from "../measure.ts";
 import type { TypesetSchema } from "../schema.ts";
 
 function cssFontShorthand(family: DocumentFontFamily, face: FaceName, sizePx: number): string {
@@ -58,14 +65,29 @@ async function ensureTypesetFonts(family: DocumentFontFamily = DEFAULT_DOCUMENT_
 
 async function ensureAllTypesetFonts(): Promise<void> {
   await Promise.all((Object.keys(DOCUMENT_FONT_FAMILIES) as DocumentFontFamily[]).map(ensureTypesetFonts));
+  // Prime browser-only line-box metrics after every face is loaded and before
+  // React paints pages, keeping the render path read-only and cache-backed.
+  for (const family of Object.keys(DOCUMENT_FONT_FAMILIES) as DocumentFontFamily[]) {
+    for (const face of Object.keys(DOCUMENT_FONT_FAMILIES[family].faces) as FaceName[]) {
+      browserFaceBox(family, face);
+    }
+  }
 }
 
-type FaceBox = { ascent: number; descent: number }; // em ratios
+export type BrowserFaceBox = { ascent: number; descent: number }; // em ratios
 
-const faceBoxCache = new Map<string, FaceBox>();
+const faceBoxCache = new Map<string, BrowserFaceBox>();
 
-// The browser's own font-box metrics per face (em ratios), measured once.
-function faceBox(family: DocumentFontFamily, face: FaceName): FaceBox {
+// The browser's CSS line-box metrics per face (em ratios), measured once.
+// Canvas fontBoundingBox* values describe glyph/font bounds, not necessarily
+// the baseline CSS uses inside a blockified, absolutely positioned span. That
+// difference becomes visible when multiple sizes or families share one line.
+// A zero-height inline marker sits exactly on the probe line's CSS baseline,
+// giving the painter the offset used by the actual rendering path.
+export function browserFaceBox(
+  family: DocumentFontFamily,
+  face: FaceName
+): BrowserFaceBox {
   const cacheKey = `${family}:${face}`;
   const cached = faceBoxCache.get(cacheKey);
   if (cached) return cached;
@@ -77,6 +99,50 @@ function faceBox(family: DocumentFontFamily, face: FaceName): FaceBox {
     const measured = ctx.measureText("Mg");
     if (measured.fontBoundingBoxAscent) ascent = measured.fontBoundingBoxAscent / 100;
     if (measured.fontBoundingBoxDescent) descent = measured.fontBoundingBoxDescent / 100;
+  }
+  const font = fontFace(family, face);
+  const probe = document.createElement("span");
+  const marker = document.createElement("span");
+  Object.assign(probe.style, {
+    position: "absolute",
+    left: "-10000px",
+    top: "0",
+    display: "block",
+    visibility: "hidden",
+    padding: "0",
+    margin: "0",
+    border: "0",
+    whiteSpace: "pre",
+    fontFamily: `"${font.cssFamily}"`,
+    fontWeight: String(font.weight),
+    fontStyle: font.italic ? "italic" : "normal",
+    fontSize: "100px",
+    lineHeight: `${(ascent + descent) * 100}px`
+  });
+  Object.assign(marker.style, {
+    display: "inline-block",
+    width: "0",
+    height: "0",
+    padding: "0",
+    margin: "0",
+    border: "0",
+    verticalAlign: "baseline"
+  });
+  probe.append(document.createTextNode("Mg"), marker);
+  document.body.append(probe);
+  const probeRect = probe.getBoundingClientRect();
+  const markerRect = marker.getBoundingClientRect();
+  const cssAscent = (markerRect.top - probeRect.top) / 100;
+  const cssDescent = (probeRect.bottom - markerRect.top) / 100;
+  probe.remove();
+  if (
+    Number.isFinite(cssAscent) &&
+    Number.isFinite(cssDescent) &&
+    cssAscent > 0 &&
+    cssDescent >= 0
+  ) {
+    ascent = cssAscent;
+    descent = cssDescent;
   }
   const box = { ascent, descent };
   faceBoxCache.set(cacheKey, box);
@@ -167,12 +233,11 @@ function groupRuns(runs: GlyphRun[]): Segment[] {
   // Copy/selection fidelity: `white-space: pre` renders trailing whitespace
   // inside a span's own box without moving any glyph, so appending it never
   // shifts layout. A trailing space where a glue gap separates two segments
-  // (style boundaries, the bullet marker) keeps copied words apart; the last
-  // segment gets a trailing newline so copied lines break like the page.
+  // (style boundaries, the bullet marker) keeps copied words apart. The line's
+  // block element supplies the copied newline.
   for (let i = 0; i < segs.length - 1; i += 1) {
     if (segs[i + 1].x - segs[i].end > 0.3) segs[i].text += " ";
   }
-  if (segs.length) segs[segs.length - 1].text += "\n";
   return segs;
 }
 
@@ -188,14 +253,22 @@ type Unit = (bp: number) => string;
 // rule's ABSOLUTE page position: snapping must happen in page space (the line
 // div's own top is fractional), then convert back to a line-relative offset.
 type RuleBox = (yAbs: number, thickness: number, lineTop: number) => { top: string; height: string };
+// React omits an empty string child, leaving no text node for contenteditable
+// to place a caret in. This browser-only, zero-width placeholder keeps an empty
+// engine run editable; data-tsde lets the selection adapter treat it as model
+// length zero.
+export const EMPTY_EDITABLE_PLACEHOLDER = "\uFEFF";
+
 
 function PageLines({
   page,
+  separators,
   unit,
   ruleBox,
   highlightFieldKey
 }: {
   page: LayoutPage;
+  separators: readonly string[];
   unit: Unit;
   ruleBox: RuleBox;
   highlightFieldKey?: string | null;
@@ -204,29 +277,42 @@ function PageLines({
     <>
       {page.lines.map((line, li) => {
         const segs = groupRuns(line.runs);
-        // The line div is a REAL block box (true top/height): selection then
-        // yields a newline per line on copy. Spans position within it.
+        // The line div is a REAL block box (true top/height): selection yields
+        // a newline per line on copy. Fixed-width inline segments share the
+        // browser's native baseline while margins preserve every engine x.
         const lineTop = segs.length
-          ? Math.min(...segs.map((s) => line.baseline - faceBox(s.family, s.face).ascent * s.size))
+          ? Math.min(...segs.map((s) => line.baseline - browserFaceBox(s.family, s.face).ascent * s.size))
           : line.baseline - 10;
         const lineBottom = segs.length
-          ? Math.max(...segs.map((s) => line.baseline + faceBox(s.family, s.face).descent * s.size))
+          ? Math.max(...segs.map((s) => line.baseline + browserFaceBox(s.family, s.face).descent * s.size))
           : line.baseline;
         return (
           <div
             key={li}
             className="tsd-line"
-            style={{ position: "absolute", left: 0, right: 0, top: unit(lineTop), height: unit(lineBottom - lineTop) }}
+            style={{
+              position: "absolute",
+              left: 0,
+              right: 0,
+              top: unit(lineTop),
+              height: unit(lineBottom - lineTop),
+              fontSize: 0,
+              lineHeight: 0,
+              whiteSpace: "pre",
+              "--tsd-line-baseline": unit(line.baseline - lineTop)
+            } as React.CSSProperties}
           >
             {segs.map((seg, si) => {
-              const box = faceBox(seg.family, seg.face);
+              const box = browserFaceBox(seg.family, seg.face);
               const font = fontFace(seg.family, seg.face);
               const key = seg.src ? fieldKey(seg.src) : undefined;
               const highlighted = Boolean(key && key === highlightFieldKey && !seg.marker);
+              const previousEnd = si > 0 ? segs[si - 1].end : 0;
               const style: React.CSSProperties = {
-                position: "absolute",
-                left: unit(seg.x),
-                top: unit(line.baseline - box.ascent * seg.size - lineTop),
+                display: "inline-block",
+                verticalAlign: "baseline",
+                marginLeft: unit(seg.x - previousEnd),
+                width: unit(seg.end - seg.x),
                 fontFamily: `"${font.cssFamily}"`,
                 fontWeight: font.weight,
                 fontStyle: font.italic ? "italic" : "normal",
@@ -237,63 +323,59 @@ function PageLines({
                 wordSpacing: seg.wordSpacing ? unit(seg.wordSpacing) : undefined,
                 color: "#000"
               };
-              if (seg.href || seg.underline) {
-                // Links and explicit underlines use an engine-painted rule with
-                // the same device-pixel snapping as section rules. It hangs
-                // below the ink instead of relying on browser text-decoration.
-                const ul = underlineRule(seg.text.trimEnd(), {
-                  family: seg.family,
-                  face: seg.face,
-                  size: seg.size,
-                  tracking: seg.tracking
-                });
+              if (seg.href) {
                 return (
-                  <Fragment key={si}>
-                    {seg.href ? (
-                      <a
-                        href={seg.href}
-                        target="_blank"
-                        rel="noreferrer"
-                        data-tsdf={key}
-                        className={highlighted ? "tsd-run--highlighted" : undefined}
-                        style={{ ...style, color: "#000", textDecoration: "none" }}
-                      >
-                        {seg.text}
-                      </a>
-                    ) : (
-                      <span
-                        data-tsdf={key}
-                        data-tsdm={seg.marker ? "1" : undefined}
-                        className={highlighted ? "tsd-run--highlighted" : undefined}
-                        style={style}
-                      >
-                        {seg.text}
-                      </span>
-                    )}
-                    <div
-                      aria-hidden="true"
-                      style={{
-                        position: "absolute",
-                        left: unit(seg.x),
-                        width: unit(seg.end - seg.x),
-                        ...ruleBox(line.baseline + ul.offset, ul.thickness, lineTop),
-                        background: "#000",
-                        pointerEvents: "none"
-                      }}
-                    />
-                  </Fragment>
+                  <a
+                    key={si}
+                    href={seg.href}
+                    target="_blank"
+                    rel="noreferrer"
+                    data-tsdf={key}
+                    data-tsde={seg.text ? undefined : "1"}
+                    className={highlighted ? "tsd-run--highlighted" : undefined}
+                    style={{ ...style, color: "#000", textDecoration: "none" }}
+                  >
+                    {seg.text || EMPTY_EDITABLE_PLACEHOLDER}
+                  </a>
                 );
               }
               return (
                 <span
                   key={si}
                   data-tsdf={key}
+                  data-tsde={seg.text ? undefined : "1"}
                   data-tsdm={seg.marker ? "1" : undefined}
                   className={highlighted ? "tsd-run--highlighted" : undefined}
                   style={style}
                 >
-                  {seg.text}
+                  {seg.text || EMPTY_EDITABLE_PLACEHOLDER}
                 </span>
+              );
+            })}
+            {separators[li] ? (
+              <span data-tsds="1" contentEditable={false} style={{ whiteSpace: "pre" }}>
+                {separators[li]}
+              </span>
+            ) : null}
+            {/* Links and explicit underlines use an engine-painted rule with the
+                same device-pixel snapping as section rules, grouped by the shared
+                span owner so it runs through interior spaces and never steps
+                mid-phrase. Browser text-decoration is not involved. */}
+            {underlineSpans(line.runs).map((span, ui) => {
+              const ul = underlineRule(span.style);
+              return (
+                <div
+                  key={`u${ui}`}
+                  aria-hidden="true"
+                  style={{
+                    position: "absolute",
+                    left: unit(span.x),
+                    width: unit(span.width),
+                    ...ruleBox(line.baseline + ul.offset, ul.thickness, lineTop),
+                    background: "#000",
+                    pointerEvents: "none"
+                  }}
+                />
               );
             })}
             {line.rule ? (
@@ -330,7 +412,8 @@ export function TypesetDomPages({
   spellCheck = false,
   hostRef,
   onDoc,
-  highlightFieldKey
+  highlightFieldKey,
+  documentKind = "resume"
 }: {
   schema: TypesetSchema;
   docStyle: DocumentStyle;
@@ -347,6 +430,7 @@ export function TypesetDomPages({
   // Transient render flag: paint this field's runs with tsd-run--highlighted
   // (the host styles the class). Not document state; never affects layout.
   highlightFieldKey?: string | null;
+  documentKind?: "resume" | "cover-letter";
 }) {
   const family = documentFontFamily(docStyle.fontFamily);
   const [loadedFamily, setLoadedFamily] = useState<DocumentFontFamily | null>(null);
@@ -372,11 +456,16 @@ export function TypesetDomPages({
 
   useEffect(() => {
     if (loadedFamily !== family) return;
-    const next = layoutResume(schema, docStyle);
+    const next =
+      documentKind === "cover-letter"
+        ? layoutCoverLetter(schema, docStyle)
+        : layoutResume(schema, docStyle);
     setDoc(next);
     onPageCount?.(next.pages.length);
     onDoc?.(next);
-  }, [loadedFamily, family, schema, docStyle, onPageCount, onDoc]);
+  }, [loadedFamily, family, schema, docStyle, onPageCount, onDoc, documentKind]);
+
+  const separators = useMemo(() => (doc ? lineSeparators(doc.pages) : []), [doc]);
 
   const unit = useMemo<Unit>(
     () => (variant === "print" ? (bp) => `${+bp.toFixed(3)}pt` : (bp) => `${+(bp * zoom).toFixed(3)}px`),
@@ -429,7 +518,7 @@ export function TypesetDomPages({
       spellCheck={editable ? spellCheck : undefined}
       role={editable ? "textbox" : undefined}
       aria-multiline={editable || undefined}
-      aria-label={editable ? "Resume editor" : undefined}
+      aria-label={editable ? (documentKind === "cover-letter" ? "Cover letter editor" : "Resume editor") : undefined}
     >
       {doc.pages.map((page, i) => (
         <div
@@ -437,10 +526,16 @@ export function TypesetDomPages({
           className="tsd-page"
           data-tsd-page={i}
           role="document"
-          aria-label={`Resume page ${i + 1}`}
+          aria-label={`${documentKind === "cover-letter" ? "Cover letter" : "Resume"} page ${i + 1}`}
           style={{ position: "relative", overflow: "hidden", width: unit(PAGE_WIDTH_BP), height: unit(PAGE_HEIGHT_BP) }}
         >
-          <PageLines page={page} unit={unit} ruleBox={ruleBox} highlightFieldKey={highlightFieldKey} />
+          <PageLines
+            page={page}
+            separators={separators[i] ?? []}
+            unit={unit}
+            ruleBox={ruleBox}
+            highlightFieldKey={highlightFieldKey}
+          />
         </div>
       ))}
     </div>

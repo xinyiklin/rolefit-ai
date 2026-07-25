@@ -321,7 +321,8 @@
 /* Resume tab: no page scroll — the editor canvas fills edge-to-edge from
    toolbar to export rail, like the Google Docs workspace. Deep desk tone so
    the white sheets (editor page, preview pages) read as paper on the desk. */
-.studio-body[data-tab="resume"] {
+.studio-body[data-tab="resume"],
+.studio-body[data-tab="cover"] {
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -329,7 +330,8 @@
   background: var(--paper-deep);
 }
 
-.studio-body[data-tab="resume"] > .studio-card--flush {
+.studio-body[data-tab="resume"] > .studio-card--flush,
+.studio-body[data-tab="cover"] > .studio-card--flush {
   flex: 1 1 0;
   display: flex;
   flex-direction: column;
@@ -356,6 +358,11 @@
   border: 0;
   background: transparent;
   box-shadow: none;
+  /* A flush card paints no border, fill, or shadow, so the inherited radius can
+     only ever clip its own content. It did: the Cover letter page adds
+     `overflow: hidden`, which rounded the top corners of its square editor
+     header while the Resume page (no clipping ancestor) stayed flat. */
+  border-radius: 0;
 }
 
 .studio-card__head {

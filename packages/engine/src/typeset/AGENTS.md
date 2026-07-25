@@ -17,9 +17,11 @@ contract. Follow the repository root guide first.
   mark segmentation, paragraph items, and underline geometry.
 - `linebreak.ts` owns deterministic paragraph breaking.
 - `blocks.ts` converts the resume schema and document style into vertical lines
-  and shared page geometry, and owns the US-Letter page constants
+  and shared page geometry; `coverLetterBlocks.ts` owns the simpler plain
+  paragraph stream. `blocks.ts` also owns the US-Letter page constants
   (`PAGE_WIDTH_BP`/`PAGE_HEIGHT_BP`) every renderer imports.
-- `layout.ts` owns pagination and produces `LayoutDocument`.
+- `layout.ts` owns shared pagination and produces `LayoutDocument` for resume
+  and cover-letter streams.
 - `render/dom.tsx` paints selectable DOM used by the editor and browser print.
 - `pdf/emit.ts` serializes `LayoutDocument` to PDF bytes, embedded fonts, vector
   rules, and link annotations.
@@ -43,9 +45,76 @@ it truthfully.
   Do not introduce screen-relative units into saved layout behavior.
 - Preserve literal interior and trailing whitespace according to the shared
   engine model. Do not fix one renderer independently.
-- Supported families are Latin Modern, Source Serif 4, and Source Sans 3. A new
-  family requires bundled web and PDF faces, generated metrics, license text,
-  and full editor/PDF parity verification.
+- Runs with different families or sizes may share a line, but they share one
+  engine baseline. The DOM painter may measure CSS face baselines at its
+  browser-only boundary.
+- Vertical placement is a function of the fonts and sizes on a line, never of the
+  glyphs typed into it. A line carries its role-size ink footprint plus a
+  rise/drop overflow derived from `faceExtent`, and pagination adds only that
+  overflow to a calibrated junction. Typing a taller ascender or a deeper
+  descender must not move any baseline, while an oversized inline run must still
+  clear its neighbours' real ink. `inkExtent` remains for calibrated TeX row
+  mechanics (the entry title/subtitle strut) — do not reintroduce it into
+  spacing, page-top placement, page fit, or rule geometry.
+- Line separation is layout, not text: a break consumes the interword glue and
+  each painted line is its own box. Every renderer must emit `lineSeparators`'
+  character at a line's end, or the browser's word iterator runs the last word of
+  a line into the first word of the next and text derived from the paint loses
+  the gap. Mark it so caret and selection helpers can exclude it — it belongs to
+  no field.
+- Underline and link rules come from `underlineSpans` plus `underlineRule`, so
+  every renderer draws one rule per contiguous underlined phrase at one
+  face-derived depth. Never derive a rule from the text a renderer happens to
+  hold: the DOM painter groups merged style spans and the PDF emitter walks
+  single runs, so a text-dependent rule silently disagrees between them.
+- Normal prose uses optimal word/hyphen breaks. When a single token is wider
+  than the text column, the emergency path may split it only at deterministic
+  grapheme boundaries measured with the same font metrics; it must preserve
+  every character, link, underline, and page-width bound across DOM and PDF.
+  Inline family, size, and mark boundaries inside that token are not line-break
+  opportunities; the emergency path must continue filling through them. When
+  the next grapheme cannot fit the remaining width, move it intact to a new
+  line; overflow is permitted only when that grapheme exceeds an empty column.
+  An oversized token puts its whole paragraph on that path, so the path must
+  still break the surrounding ordinary words at spaces and hyphens: only a
+  token wider than the column may be split inside, and its inline style
+  boundaries never decide where.
+- `lib/fontFamilies.ts` is the ONE list of family ids. The persisted style enum,
+  the inline `<font=…>` tag grammar in both automata, the toolbar menu, and this
+  directory's face registry all derive from it. Never re-declare the set: a
+  missed copy validates a file whose tags then fail to parse, or offers a family
+  the codec rejects.
+- Supported families are the metric-compatible trio Tinos (Times New Roman),
+  Carlito (Calibri), and Arimo (Arial), then Source Serif 4, Source Sans 3, and
+  Latin Modern — that is menu order, which is presentation only; ids are the
+  persisted values. A new family requires bundled web and PDF faces, generated
+  metrics, license text, and full editor/PDF parity verification.
+- Each italic face declares `italicAngleDeg`, the slope its outlines are drawn
+  at, taken from the shipped asset's `post.italicAngle` and checked against that
+  table on disk by `font-assets.mjs`. It is the one font fact written by hand:
+  the generated metrics do not carry it and the browser cannot report it. Upright
+  faces are 0. The editor's caret overlay is the consumer.
+- Metric compatibility is the contract for the trio: their per-character advances
+  equal the proprietary original's, so a document keeps its line and page count
+  elsewhere. Do not "improve" their metrics — a nicer number breaks the only
+  reason to ship them.
+- Those three are drawn on a 2048-unit em, so `metrics.gen.ts`'s integer 1000ths
+  cannot represent every advance exactly. The residue is per glyph and bounded:
+  `pdf-font-parity` allows `0.005bp/glyph` at 10bp for them and holds every
+  1000-unit family to bit-exact parity, so a real shaping divergence still fails.
+  Do not rescale their outlines to 1000/em to close the gap — that trades an
+  invisible engine-vs-render difference for a visible break in metric
+  compatibility.
+- A face may alias another face's asset when the family genuinely has one design
+  for both roles (`boldDisplay` on the static families). Keep the alias in both
+  the generator's `FACE_ALIASES` and the registry so the shipped bytes, the
+  metrics record, and the CSS declaration stay one thing.
+- A caps face is built by rewriting the shipped font's cmap, never by asking a
+  renderer for `font-variant: small-caps`: the engine measures what the cmap
+  resolves to, so the substitution has to be in the asset for the browser, the
+  PDF embedder, and the metrics to agree. Families without a usable `smcp`
+  lookup get uniformly scaled capitals — the construction Latin Modern's own
+  caps design uses.
 - PDF font loading receives a deployment-aware asset base from each host. Do
   not restore a domain-root `/fonts/` default inside the engine.
 

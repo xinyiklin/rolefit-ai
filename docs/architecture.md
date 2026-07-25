@@ -9,7 +9,7 @@ repository lockfile and TypeScript base are the integration boundary.
 
 ```text
 packages/engine
-  resume domain + file contract + deterministic layout + renderers
+  document domain + strict file contracts + deterministic layout + renderers
           |
           v
 packages/editor
@@ -35,9 +35,10 @@ never import each other.
 | --- | --- | --- |
 | `ResumeData`, constructors, inline marks, links | `packages/engine/src/lib/` | Canonical domain; no app copies. |
 | `.resume` validation and serialization | `packages/engine/src/lib/resumeFile.ts` | Strict `typeset-resume`, schema v1. |
+| Cover-letter paragraph adapter and `.cover` codec | `packages/engine/src/lib/coverLetter.ts` | Strict `typeset-cover-letter`, schema v1; hydrated into the shared in-memory editing shape. |
 | Document style and typography values | `packages/engine/src/lib/` | Persisted print state; view-only state excluded from files. |
 | Font assets and generated metrics | `packages/engine/fonts/`, `packages/engine/scripts/` | Consumers mirror fonts and pass their deployment-aware asset base to PDF loading. |
-| Measurement, line breaking, pagination | `packages/engine/src/typeset/` | One deterministic path for every renderer. |
+| Measurement, line breaking, pagination | `packages/engine/src/typeset/` | Shared deterministic core with distinct resume and plain-paragraph composition streams. |
 | DOM/print and PDF backends | `packages/engine/src/typeset/render/`, `pdf/` | Backend painting differs; layout truth does not. |
 | Document history/style hooks | `packages/editor/src/hooks/` | Shared state, no host lifecycle or storage assumptions. |
 | Direct editing and selection/caret mapping | `packages/editor/src/sections/editor/` | DOM adapter over structured data. |
@@ -125,7 +126,8 @@ and verify both apps.
   both apps.
 - Each app owns its surrounding shell and host-specific overrides. App CSS must
   not duplicate shared editor layout or measurement behavior.
-- The resume page is engine output, not an app-specific visual approximation.
+- Resume and cover-letter pages are engine output, not app-specific visual
+  approximations.
 - Package CSS import order is part of the public integration contract; document
   and verify intentional overrides.
 
@@ -144,6 +146,7 @@ loading the mirrored sfnt files; the engine must not assume domain-root
 | Change | Minimum affected consumers |
 | --- | --- |
 | Engine domain or `.resume` contract | Engine check + both apps' file integrations. |
+| `.cover` contract or cover-letter layout | Engine check + RoleFit integration and rendered editor/PDF evidence. |
 | Layout, fonts, measurement, PDF | Engine parity + both app builds; render editor/PDF when visual output changes. |
 | Shared editor hook or component | Editor check + Typeset and RoleFit builds; browser-check affected hosts. |
 | Typeset shell only | Typeset app check. |
@@ -155,7 +158,7 @@ loading the mirrored sfnt files; the engine must not assume domain-root
 
 - app-to-app imports;
 - package imports from an app;
-- parallel resume models, style contracts, option lists, or mark grammars;
+- parallel document models, style contracts, option lists, or mark grammars;
 - renderer-specific measurement/layout fixes;
 - shared components with provider/tracker/file-lifecycle knowledge;
 - broad barrel exports that hide dependency direction;

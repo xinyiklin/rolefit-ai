@@ -77,6 +77,7 @@ const EMPTY_INLINE_FORMAT: InlineFormatState = {
   linkHref: null,
   linkText: "",
   linkAutomatic: false,
+  linkTextEditable: true,
   canLink: false,
   canClearFormatting: false
 };
@@ -140,7 +141,7 @@ export default function App() {
     initializedRef.current = true;
 
     let initialData = buildStarterResume();
-    let initialDocumentStyle: DocumentStyle | null = null;
+    let initialDocumentStyle: DocumentStyle = toDocumentStyle(DOC_STYLE_DEFAULTS);
     let initialTitle = UNTITLED_RESUME_TITLE;
 
     try {
@@ -161,7 +162,7 @@ export default function App() {
     }
 
     editor.seedData(initialData);
-    docStyle.replaceDocumentStyle(initialDocumentStyle ?? toDocumentStyle(docStyle.style));
+    docStyle.replaceDocumentStyle(initialDocumentStyle);
     setDocumentTitle(initialTitle);
   }, [editor.seedData]);
 
@@ -427,6 +428,7 @@ export default function App() {
         canRedo={editor.canRedo}
         formattingDisabled={!resume}
         inlineFormatting={{
+          onRequestEditorFocus: () => editorRef.current?.focusSelection(),
           fontFamily: {
             value: inlineFormat.fontFamily,
             onChange: (fontFamily) => editorRef.current?.setFontFamily(fontFamily),
@@ -461,6 +463,7 @@ export default function App() {
             href: inlineFormat.linkHref,
             text: inlineFormat.linkText,
             automatic: inlineFormat.linkAutomatic,
+            textEditable: inlineFormat.linkTextEditable,
             onApply: ({ text, href }) => editorRef.current?.applyLink(text, href),
             onRemove: () => editorRef.current?.removeLink(),
             disabled: !inlineFormat.canLink,

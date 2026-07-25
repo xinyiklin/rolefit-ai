@@ -135,9 +135,11 @@ shimmer, decorative motion, and nested card-in-card containers. Status is
 stated quietly (a small dot beside a word), never shouted (filled pills,
 banners, badges everywhere).
 
-Layout is structural and predictable: masthead menus (Sessions, Resume, Job,
-AI, Options) plus the Polish action on top, full-width tabbed studio below, export
-rail at the bottom of the resume tab. Breakpoints (1280/1180/1080/900/820/760
+Layout is structural and predictable: masthead menus (Sessions, Job) plus the
+global Apply action, full-width tabbed studio below, Settings pinned at the foot
+of the tab rail, matched
+resume and cover-letter document action bars, and document-specific review
+rails. Breakpoints (1280/1180/1080/900/820/760
 px) collapse structure; they never fluidly rescale type. Desktop ~1440px is
 the primary canvas; content wraps rather than clips below it.
 
@@ -171,11 +173,17 @@ of rendering a broken primary action.
 
 ### Shared editor boundary
 
-The resume page, document/formatting toolbar family, popovers, font controls,
-and direct-edit behavior come from `@typeset/editor` over `@typeset/engine`.
-RoleFit frames that shared surface with Drafting Desk host chrome and injects
-only its section-scope/review overlay. Do not fork shared markup or layout CSS
-for a RoleFit-only tweak; add a narrow host seam and verify both products.
+The resume and cover-letter pages, document/formatting primitives, fonts,
+direct-edit behavior, measurement, pagination, and PDF path come from
+`@typeset/editor` over `@typeset/engine`. RoleFit frames those surfaces with
+Drafting Desk host chrome. The resume injects its section-scope/review overlay;
+the cover letter selects the plain-paragraph layout and disables structural
+controls. It uses the same two-row document/formatting toolbar, replacing only
+the resume style-menu group with a focused line-height control and the shared
+page-margin control. Shared zoom, selection typography, emphasis, alignment,
+links, and spell-check remain in place. Its file actions and deterministic
+review rail remain RoleFit-owned. Do not fork shared editing or layout code for
+a RoleFit-only tweak; add a narrow host seam and verify affected consumers.
 
 `packages/editor/src/styles/` owns shared editor/tooling behavior. RoleFit's
 `src/styles/` owns the masthead, studio, tracker, materials, review, workflow,
@@ -317,8 +325,8 @@ interactive control shares the same focus treatment: 2px Forest Ink outline,
   secondary, 28px ghost), 120–160ms transitions, 1px translateY on press.
 - **Primary:** Forest Ink fill, paper text, `--accent-deep` border, inset
   highlight plus a faint accent glow; hover deepens to `--accent-deep`. One
-  per view (Polish in the masthead; compact `.is-compact` variant in title
-  rows).
+  per document view (Polish in the resume action bar, Tailor in the matching
+  cover-letter position; compact `.is-compact` variant in title rows).
 - **Secondary:** raised sheet (`--card-elev`) with `--hairline-strong`
   border; hover tints toward the accent (`--accent-soft` fill,
   `--accent-deep` text).
@@ -385,8 +393,9 @@ interactive control shares the same focus treatment: 2px Forest Ink outline,
   ink-strong label. Below 1080px it collapses in place to a 52px icon rail; it
   never changes axis into a top navbar. APG tabs keyboard model is mandatory.
 - **Narrow authoring:** at 720px and below, only the Resume tab's precise editor
-  becomes the width notice. The masthead, tab rail, Materials, Applications,
-  and Analytics remain part of the working product, including under high zoom.
+  becomes the width notice. The simpler Cover letter page, masthead, tab rail,
+  Materials, Applications, and Analytics remain part of the working product,
+  including under high zoom.
 
 ### Ledger Rows (signature)
 
@@ -418,13 +427,22 @@ Calendar mode reuses the same query and lifecycle filter state.
 ### Page Anatomy: Sheets Center, Rail Right
 
 Working pages share one skeleton: content as paper sheets in the main
-column, one control surface docked right. Resume = one engine-painted editing
-sheet with quiet margin controls + review
-rail; Materials = draft sheets + plan rail; Applications = view surface +
-inspector. The rail is a single sheet (`--card`, hairline, rest shadow);
+column, one control surface docked right. Resume = one engine-painted structured
+editing sheet + review rail; Cover letter = one engine-painted plain
+correspondence sheet + a compact deterministic review rail; Materials = draft
+sheets; Applications = view surface + inspector. The rail is a single sheet
+(`--card`, hairline, rest shadow);
 the main column sits directly on the desk. Below ~1080px the rail drops
 under the content. New pages reuse this skeleton rather than inventing a
-new arrangement.
+new arrangement. Resume and Cover letter share the same two-row editor chrome:
+the first row is the document action bar, and the second is the formatting
+toolbar. File menus reuse one anchored action-menu component; document-specific
+content stays with its owning workflow. Resume Header and Section controls sit
+immediately before Spacing in the formatting row. Every menu in that row is
+icon-only at every width — the row shares its container with the action bar and
+has no width for labels — and paragraph alignment is one trigger with a menu
+rather than four buttons. Nothing in the row scrolls or crops; see
+`docs/engineering/ui-principles.md` for the measured disclosure ladder.
 
 ### Register Grouping
 
@@ -467,7 +485,7 @@ The table reads as a logbook register, not a CRM grid.
   wrapper.
 - **Don't** use `border-left`/`border-right` thicker than 1px as a colored
   accent stripe, gradient text, or glassmorphism.
-- **Don't** reshape the masthead-inputs + tabbed-studio workflow; changes
+- **Don't** reshape the compact masthead + tabbed-studio workflow; changes
   refine it, never restructure it.
 - **Don't** introduce global toast/banner/loading frameworks, new fonts, new
   hues, or pure black/white.
