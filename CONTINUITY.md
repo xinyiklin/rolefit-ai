@@ -12,13 +12,23 @@ bounded; app-only operational detail belongs in the affected app documentation.
   the divergence was introduced by this branch's engine work and has been
   carried forward, not inherited. Treat it as an open regression against main,
   not as a known-bad baseline.
-- [TOOL] PR #87 (`codex/wip-editor-document-actions` -> `main`) is open with the
-  whole branch. Typeset CI passes; RoleFit CI fails only on that eval. The
-  Windows-only `workspace-backup-probes` `EPERM: symlink` PASSES on Linux CI, as
-  expected. NOT MERGED: the fix is a product decision — `entryEndIndentPt: 0`
-  for bullet/summary/skills columns matches Jake's TeX truth (recorded as all 20
-  lines within ±1.5bp) but reflows every existing resume, and the alternative is
-  re-recording the fixture to accept the current layout.
+- [CODE] RESOLVED, and it was a bug rather than the product decision it looked
+  like. `entryEndIndentPt` reproduces Jake's `tabular*{0.97\textwidth}` entry
+  head, which at 0.5in margins starts at 46.8bp and ends 5.4bp short of the
+  576bp text edge — the fixture's own x0 column confirms the 46.8. That table is
+  the ONLY place Jake insets the right edge: bullets, summary paragraphs, and
+  skills rows are plain `itemize` with a left margin and no right margin.
+  `blocks.ts` subtracted the head-row inset from all three body columns too,
+  narrowing every one by 5.4bp and wrapping a long bullet a word early. The
+  three body sites now use the full text width; `headRowWidth` keeps the inset.
+  Body columns are 5.4bp WIDER than before, so a long bullet can pull a word up
+  a line — the correction, not a regression. `vertical-parity` passes (20 lines
+  within ±1.5bp) and the RoleFit suite is 47/48, the remaining failure being the
+  Windows-only `EPERM: symlink` probe that passes on Linux CI.
+- [TOOL] PR #87 (`codex/wip-editor-document-actions` -> `main`) carries the whole
+  branch. Its first CI run reproduced the parity failure as RoleFit's single
+  red — Typeset green, and the Windows-only backup probe green on Linux, both as
+  predicted.
 
 - [USER+CODE] A TOO-LONG MENU no longer runs past the window and shifts the
   document. Reported as "not necessarily a bug"; it was one. Every popover's

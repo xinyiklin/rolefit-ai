@@ -109,6 +109,15 @@ export function pageGeometry(style: DocumentStyle) {
     // Start indent moves only the left edge. End indent independently moves the
     // right edge, so changing one never drags the other. The default end inset
     // reproduces Jake's 0.97\textwidth entry table at normal page margins.
+    //
+    // It belongs to THIS ROW TYPE ONLY. The inset exists because the entry head
+    // is a `tabular*{0.97\textwidth}` inside the 0.15in list: at 0.5in margins
+    // that table starts at 46.8bp and ends 5.4bp short of the 576bp text edge.
+    // Bullets, summary paragraphs, and skills rows are plain `itemize` with a
+    // left margin and no right margin, so they run to the full text width.
+    // Subtracting the head-row inset from them narrowed every body column by
+    // 5.4bp and wrapped long bullets a word early against the TeX baseline —
+    // the divergence `vertical-parity.mjs` was reporting.
     headRowWidth: Math.max(1, textWidth - entryIndent - entryEndIndent),
     firstBaselineMin: margins.top + sizes.normalsize, // minimum first-line inset
     lastBaselineMax: PAGE_HEIGHT_BP - margins.bottom
@@ -544,7 +553,7 @@ export function buildVerticalStream(schema: TypesetSchema, style: DocumentStyle)
           text,
           size,
           geo.entryIndent,
-          geo.textWidth - geo.entryIndent - geo.entryEndIndent,
+          geo.textWidth - geo.entryIndent,
           alignmentFromInlineMarks(label) ?? alignmentFromInlineMarks(skills) ?? bodyAlign,
           bsk.small,
           dist,
@@ -567,7 +576,7 @@ export function buildVerticalStream(schema: TypesetSchema, style: DocumentStyle)
           summaryText,
           sizes.small,
           geo.entryIndent,
-          geo.textWidth - geo.entryIndent - geo.entryEndIndent,
+          geo.textWidth - geo.entryIndent,
           alignmentFromInlineMarks(summaryText) ?? bodyAlign,
           bsk.small,
           dist,
@@ -682,7 +691,7 @@ export function buildVerticalStream(schema: TypesetSchema, style: DocumentStyle)
           bullet,
           sizes.small,
           geo.bulletIndent,
-          geo.textWidth - geo.bulletIndent - geo.entryEndIndent,
+          geo.textWidth - geo.bulletIndent,
           alignmentFromInlineMarks(bullet) ?? bodyAlign,
           bsk.small,
           dist,
