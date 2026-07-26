@@ -3,6 +3,35 @@
 Cross-workspace decisions and handoff state. Keep entries factual, dated, and
 bounded; app-only operational detail belongs in the affected app documentation.
 
+## 2026-07-26
+
+- [USER] The next desktop release should reflect a larger product step than the
+  previously suggested 0.4.0, refresh the public landing page, and remove stale
+  README and engineering-document references before publication.
+- [CODE] RoleFit's source version is 0.5.0. The jump from 0.3.0 reflects the
+  complete candidate-owned cover-letter document workflow, named resume and
+  cover-letter variants and history, expanded shared-editor behavior,
+  independent configuration for five AI stages, and the rebuilt application
+  tracker. It remains below 1.0 while installers are unsigned and auto-update
+  is out of scope.
+- [CODE] The public landing page now presents RoleFit as an
+  application-materials workbench, gives the cover-letter editor its own
+  product surface, and uses fresh fictitious-data captures of the current
+  companion, resume, cover-letter, tracker, menu, calendar, and application
+  detail interfaces.
+- [CODE] The versioned examples in the app README, desktop guide, development
+  guide, and distribution plan now use 0.5.0. Historical 0.3.0 release notes
+  and the documented 0.3.0 recovery lesson remain unchanged.
+- [CODE] Portable backup schema version 1 still excludes standalone saved
+  `cover-letter*.cover` variants and their history. The app README, backup
+  contract, and 0.5.0 preview note now state that boundary and direct users to
+  save `.cover` copies separately.
+- [TOOL] Publication target is the curated unsigned preview
+  `rolefit-preview-v0.5.0-beta.11`; the release is complete only after its
+  native macOS and Windows jobs, installed lifecycle checks, checksum gate,
+  GitHub prerelease publication, Pages deployment, and live download
+  resolution all succeed.
+
 ## 2026-07-25
 
 - [TOOL] CORRECTS the standing note that `vertical-parity.mjs` was "already red

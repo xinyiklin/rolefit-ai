@@ -5,15 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta
       name="description"
-      content="RoleFit AI is a local-first workbench for tailoring a resume to one job, reviewing every claim, exporting the final page, and tracking the application."
+      content="RoleFit AI is a local-first workbench for tailoring a resume and cover letter to one job, reviewing every claim, exporting the final pages, and tracking the application."
     />
     <meta name="theme-color" content="#f2f3ee" />
     <meta name="referrer" content="strict-origin-when-cross-origin" />
     <meta property="og:type" content="website" />
-    <meta property="og:title" content="RoleFit AI · Tailor the resume. Check every claim." />
+    <meta property="og:title" content="RoleFit AI · Tailor the application. Check every claim." />
     <meta
       property="og:description"
-      content="A local-first resume tailoring, review, export, and application tracking workbench."
+      content="A local-first resume and cover-letter drafting, review, export, and application tracking workbench."
     />
     <meta property="og:url" content="https://rolefit.xinyiklin.com/" />
     <meta
@@ -22,7 +22,7 @@
     />
     <meta
       property="og:image:alt"
-      content="RoleFit AI resume editor and application tracker"
+      content="RoleFit AI cover-letter editor with resume and application workspace navigation"
     />
     <meta name="twitter:card" content="summary_large_image" />
     <meta
@@ -64,13 +64,13 @@
       <section class="hero section-shell" aria-labelledby="hero-title">
         <div class="hero__copy">
           <p class="status-line" id="release-channel-label"><span aria-hidden="true"></span>Desktop app · macOS + Windows</p>
-          <h1 id="hero-title">Tailor the resume.<br /><em>Check every claim.</em></h1>
+          <h1 id="hero-title">Tailor the application.<br /><em>Check every claim.</em></h1>
           <p class="hero__lede">
-            RoleFit AI turns one job description into a grounded resume draft,
-            a strict fit review, and a tracked application. You edit the actual
-            export page. Your workspace stays on this machine. The desktop
-            companion keeps provider access, browser pairing, and portable
-            backups together.
+            RoleFit AI keeps one job, its grounded resume, your cover letter,
+            a strict fit review, and the application record together. You edit
+            the actual export pages. Your workspace stays on this machine. The
+            desktop companion keeps provider access, browser pairing, and
+            portable backups together.
           </p>
           <div class="hero__actions">
             <button class="button button--primary" type="button" data-scroll-to="download">
@@ -87,8 +87,8 @@
           <img
             src="/assets/desktop-app.png"
             alt="RoleFit AI desktop companion overview with providers, workspace backup, browser extension, settings, and a browser launch control"
-            width="1936"
-            height="1376"
+            width="900"
+            height="620"
           />
         </figure>
       </section>
@@ -96,7 +96,7 @@
       <section class="proof-strip section-shell" aria-label="RoleFit product facts">
         <div><span>workspace</span><strong>Device-local</strong></div>
         <div><span>providers</span><strong>3 CLIs + 2 APIs</strong></div>
-        <div><span>document</span><strong>Editor = export</strong></div>
+        <div><span>documents</span><strong><code>.resume</code> + <code>.cover</code></strong></div>
         <div><span>workspace backup</span><strong><code>.rolefit-backup</code></strong></div>
       </section>
 
@@ -107,15 +107,37 @@
             <h2 id="product-title">One application, kept in one place.</h2>
           </div>
           <p>
-            Draft against the role, inspect the evidence, export the same page
-            you edited, then keep the follow-up attached to the application.
+            Draft both documents against the role, inspect the evidence, export
+            the pages you edited, then keep the follow-up attached to the application.
           </p>
         </header>
 
-        <div class="surface-grid">
+        <article class="cover-feature" data-reveal>
+          <div class="cover-feature__copy">
+            <span>01 · write + tailor</span>
+            <h3>Your letter stays yours.</h3>
+            <p>
+              Start from your own words, revise them against the current job and
+              resume evidence, then inspect every paragraph in the final page.
+              Save named <code>.cover</code> variants without mixing them into
+              the resume format.
+            </p>
+          </div>
+          <figure class="app-frame">
+            <img
+              src="/assets/cover-letter.png"
+              alt="Cover-letter editor with the final page, formatting controls, and a human review rail"
+              width="1440"
+              height="900"
+              loading="lazy"
+            />
+          </figure>
+        </article>
+
+        <div class="surface-grid" data-reveal>
           <article class="surface-card surface-card--editor">
             <div class="surface-card__copy">
-              <span>01 · draft + review</span>
+              <span>02 · tailor + review</span>
               <h3>Edit the final page, not a detached preview.</h3>
               <p>
                 Tailoring suggestions stay tied to source evidence. Review findings
@@ -135,7 +157,7 @@
 
           <article class="surface-card surface-card--tracker">
             <div class="surface-card__copy">
-              <span>02 · track + follow up</span>
+              <span>03 · track + follow up</span>
               <h3>Keep the application record after the PDF leaves.</h3>
               <p>
                 Store stage, fit verdict, dates, next action, notes, and saved
@@ -155,10 +177,10 @@
         </div>
 
         <div class="job-loop" role="group" aria-label="RoleFit application workflow">
-          <div><span>input</span><strong>Job description</strong><small>Paste or import the role.</small></div>
-          <div><span>draft</span><strong>Grounded edits</strong><small>Keep claims tied to evidence.</small></div>
-          <div><span>verify</span><strong>Fit review</strong><small>See gaps and unsupported risk.</small></div>
-          <div><span>record</span><strong>Application</strong><small>Export, save, and follow up.</small></div>
+          <div><span>target</span><strong>Job description</strong><small>Paste or import the role.</small></div>
+          <div><span>resume</span><strong>Grounded edits</strong><small>Keep claims tied to evidence.</small></div>
+          <div><span>letter</span><strong>Your own voice</strong><small>Revise, review, and export.</small></div>
+          <div><span>apply</span><strong>Application</strong><small>Save the record and follow up.</small></div>
         </div>
       </section>
 
@@ -180,7 +202,7 @@
               <span>stays local</span>
               <h3>Workspace and credentials</h3>
               <ul>
-                <li>Resumes, applications, notes, and exported artifacts</li>
+                <li>Resumes, cover letters, applications, notes, and exported artifacts</li>
                 <li>Provider registry and operating-system-encrypted API keys</li>
                 <li>Validated portable backups, restored only with your approval</li>
               </ul>

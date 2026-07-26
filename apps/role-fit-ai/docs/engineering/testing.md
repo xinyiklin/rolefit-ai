@@ -128,8 +128,9 @@ Good server verification covers:
 - portable workspace backup includes only app-managed resumes/history, tracker
   data, saved PDFs, and mirrored allowlisted RoleFit preferences; validates
   decoded sizes and SHA-256 digests; rejects duplicate/traversing paths and
-  malformed domain files; and completes backup -> restore -> backup without
-  byte drift. Every restore failure must leave the active workspace unchanged,
+  malformed domain files; excludes standalone saved cover-letter variants and
+  their history; and completes backup -> restore -> backup without byte drift.
+  Every restore failure must leave the active workspace unchanged,
   a successful restore retains the previous saved workspace as a sibling
   safety copy and stages `source: "restore"` preferences, restore refuses with
   409 while live tab presence is reported, and a corrupt preference mirror

@@ -416,7 +416,10 @@ section[id] {
 .desktop-shot img {
   width: 100%;
   height: auto;
-  filter: drop-shadow(0 24px 30px rgb(23 32 28 / 0.18));
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--radius-shell);
+  background: var(--card);
+  box-shadow: 0 24px 42px -30px rgb(23 32 28 / 0.4);
 }
 
 .app-frame img {
@@ -501,6 +504,51 @@ section[id] {
 /* ── Product section (surface cards + job loop) ──────────────────────────── */
 .product {
   padding-bottom: 116px;
+}
+
+.cover-feature {
+  display: grid;
+  grid-template-columns: minmax(230px, 0.62fr) minmax(0, 1.38fr);
+  gap: 30px;
+  align-items: center;
+  margin-top: 42px;
+  padding: 30px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-shell);
+  background: var(--card);
+  box-shadow: var(--shadow-panel);
+}
+
+.cover-feature__copy > span {
+  display: block;
+  color: var(--ink-faint);
+  font-family: var(--mono);
+  font-size: 0.65rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.cover-feature__copy h3 {
+  max-width: 12ch;
+  margin: 12px 0 0;
+  color: var(--ink-strong);
+  font-family: var(--serif);
+  font-size: clamp(1.85rem, 3vw, 2.65rem);
+  font-weight: 400;
+  letter-spacing: -0.02em;
+  line-height: 1.08;
+}
+
+.cover-feature__copy p {
+  margin: 17px 0 0;
+  color: var(--ink-muted);
+  font-size: 0.9rem;
+  line-height: 1.68;
+}
+
+.cover-feature .app-frame {
+  border-radius: 8px;
+  box-shadow: none;
 }
 
 .surface-grid {
@@ -945,6 +993,13 @@ p.download-row__format {
       box-shadow 150ms ease;
   }
 
+  .cover-feature {
+    transition:
+      transform 150ms ease,
+      border-color 150ms ease,
+      box-shadow 150ms ease;
+  }
+
   .boundary-grid article {
     transition:
       transform 150ms ease,
@@ -953,6 +1008,12 @@ p.download-row__format {
   }
 
   .surface-card:hover {
+    transform: translateY(-3px);
+    border-color: var(--hairline-strong);
+    box-shadow: var(--shadow-lift);
+  }
+
+  .cover-feature:hover {
     transform: translateY(-3px);
     border-color: var(--hairline-strong);
     box-shadow: var(--shadow-lift);
@@ -1028,6 +1089,14 @@ p.download-row__format {
     grid-column: 1 / -1;
   }
 
+  .cover-feature {
+    grid-template-columns: 1fr;
+  }
+
+  .cover-feature__copy h3 {
+    max-width: 20ch;
+  }
+
   .surface-card--tracker .app-frame img {
     width: 100%;
   }
@@ -1096,6 +1165,11 @@ p.download-row__format {
 
   .surface-card__copy {
     padding: 21px 20px 19px;
+  }
+
+  .cover-feature {
+    gap: 22px;
+    padding: 21px 20px 20px;
   }
 
   .job-loop {
