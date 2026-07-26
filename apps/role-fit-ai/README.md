@@ -15,11 +15,16 @@ storage remain owned by the local server.
 
 [Product site and companion downloads](https://rolefit.xinyiklin.com/)
 
-Current desktop source version: **0.3.0**.
+Current desktop source version: **0.5.0**.
 
 > Built for an entry-level SDE job hunt: tight workflow loop, blunt recruiter-style audit before applying, and a local pipeline tracker so you never lose track of a role.
 
 ![RoleFit AI resume workspace](docs/screenshot.png)
+
+The dedicated **cover-letter editor** keeps the candidate's own writing,
+job evidence, review guidance, named variants, and final export page together:
+
+![RoleFit AI cover-letter workspace](docs/cover-letter.png)
 
 The on-disk **application tracker** — a sortable, paginated table with right-click quick actions, plus a calendar of submissions and follow-ups:
 
@@ -38,9 +43,10 @@ _Screenshots use fictitious demo workspace data and reflect the current browser 
 
 The engine-painted page is the editor and source of truth: type directly in the
 export layout, use its margin controls to add, remove, reorder, or scope
-sections, and send review cards back to the exact field. The editor is its own
-preview — it and the PDF export use the same layout engine, and a `.resume` file
-saves the structured resume data so you can reload it later or move it between tabs.
+sections, and send review cards back to the exact field. Each editor is its own
+preview. Resume and cover-letter pages share the deterministic layout engine
+with their PDF exports, while strict `.resume` and `.cover` files preserve the
+editable documents.
 
 ## Highlights
 
@@ -67,7 +73,7 @@ saves the structured resume data so you can reload it later or move it between t
 - **`.resume` save/load** — download the structured resume data as a `.resume` file (lossless JSON, formatting preserved) and reload it later, or keep it as a portable backup of your work.
 - **`.cover` save/load** — download ordered cover-letter paragraphs plus their
   small print-style contract as a strict `.cover` file. `.resume` remains
-  resume-only; `.rolefit-backup` remains the separate whole-workspace format.
+  resume-only; `.rolefit-backup` is the separate allowlisted saved-workspace format.
 - **Named variants for both documents** — resumes and cover letters both live in
   your workspace as `base-resume*.resume` and `cover-letter*.cover`, each with
   named variants (a Backend SDE letter beside a Growth one) and version history.
@@ -75,7 +81,7 @@ saves the structured resume data so you can reload it later or move it between t
   destructively. Both editors use the same Open and Save menus: Open lists the
   starter, a blank, a file picker, and everything already saved; Save updates the
   active copy, adds a variant, or takes a `.resume`/`.cover`/`.txt`/PDF away.
-- **Portable workspace backup + restore** — the companion's Workspace section saves one versioned `.rolefit-backup` containing validated base resumes, resume history, tracker records, saved application PDFs, and mirrored allowlisted RoleFit preferences. Restore validates every checksum and domain file in a staging workspace before replacing the active saved workspace, then keeps the previous workspace as a local safety copy. The JSON backup is not encrypted and never contains provider keys, CLI sessions, arbitrary workspace files, or unsaved recovery drafts.
+- **Portable workspace backup + restore** — the companion's Workspace section saves one versioned `.rolefit-backup` containing validated base resumes, resume history, tracker records, saved application PDFs, and mirrored allowlisted RoleFit preferences. Restore validates every checksum and domain file in a staging workspace before replacing the active saved workspace, then keeps the previous workspace as a local safety copy. The JSON backup is not encrypted and never contains standalone cover-letter variants, provider keys, CLI sessions, arbitrary workspace files, or unsaved recovery drafts.
 - **On-disk pipeline tracker** — a sortable, paginated applications table (right-click any row for quick actions: open details, change stage, in-app PDF preview of the saved resume, or delete) alongside a calendar view of submissions and upcoming follow-ups. Tracks status / source / company / role / follow-up date / notes / resume snapshot per application, and survives browser wipes.
 - **Local-first personal workflow** — the browser app, server, paired extension bridge, and workspace files run on your own device. Source development uses the gitignored `job-search-workspace/`; an installed companion uses `app.getPath("userData")/workspace/`. Origin-scoped browser storage may contain recovery resume/job drafts plus user settings and context, but never API keys. The Electron companion encrypts supported API keys with the operating system through `safeStorage` and stores only encrypted bytes locally beneath its own `userData`; keys never enter browser storage, browser requests, status payloads, or logs. A companion-owned server receives decrypted keys only in memory through a private parent/child channel. AI-backed import, polish, cover-letter, and application-answer features still send the relevant job/resume text directly from the local server to the provider you choose; resume/job payloads do not cross Electron IPC.
 
@@ -328,13 +334,15 @@ with no saved RoleFit preferences adopts that mirror on load, so settings
 survive a port change; unsaved recovery drafts remain origin-scoped and do not
 move.
 
-For a portable resume-only backup, download a `.resume` file. For the saved
-RoleFit workspace, open the companion's **Workspace** section and choose **Back
-up workspace**. The resulting `.rolefit-backup` is unencrypted JSON containing
-app-managed base resumes, resume history, tracker data, saved application
-PDFs, and the mirrored allowlisted RoleFit preferences. It excludes arbitrary
-files in the workspace, unsaved recovery drafts, provider configuration/API
-keys, CLI sessions, and companion port settings. Close RoleFit browser tabs
+For a portable editable-document copy, download a `.resume` or `.cover` file.
+For the saved RoleFit workspace, open the companion's **Workspace** section and
+choose **Back up workspace**. The resulting `.rolefit-backup` is unencrypted
+JSON containing app-managed base resumes, resume history, tracker data, saved
+application PDFs, and the mirrored allowlisted RoleFit preferences. It excludes
+arbitrary files in the workspace, saved standalone cover-letter variants,
+unsaved recovery drafts, provider configuration/API keys, CLI sessions, and
+companion port settings. Save a `.cover` copy separately when moving a letter
+between devices. Close RoleFit browser tabs
 before choosing **Restore backup** — the server refuses to restore while live
 tabs are detected. RoleFit validates the complete backup in a staging
 directory, moves the current saved workspace to a timestamped sibling safety
@@ -357,9 +365,11 @@ RoleFit starts:
 The workspace contains:
 
 - `base-resume.resume` (or `.txt`, `.md`, `.csv`) — auto-loaded on startup
+- `base-resume-<name>.resume` — named resume variants
+- `cover-letter.cover` and `cover-letter-<name>.cover` — saved cover-letter variants
 - `applications.json` — the pipeline tracker's on-disk store
 - `applications/<id>/resume.pdf` — saved tailored PDFs attached to tracker rows
-- `.trash/` — recoverable base-resume history
+- `.trash/` — recoverable resume and cover-letter history
 - `browser-preferences.json` — mirrored allowlisted RoleFit preferences
 - Anything else you drop in there (left out of portable backups)
 
@@ -384,7 +394,8 @@ server/
   jobImport.ts                  # /api/import-job: ATS resolvers (Workday/Ashby/Greenhouse/LinkedIn → text)
   network.ts                    # job-link fetch + SSRF guards
   starter.resume                # bundled starter resume seeded when the workspace has no base resume
-  workspace.ts                  # base-resume workspace storage + .trash version history
+  workspace.ts                  # base-resume workspace storage + shared workspace snapshot
+  coverLetterWorkspace.ts       # cover-letter variants + .trash version history
 src/
   App.tsx                        # state + handlers + composition
   config/aiOptions.ts            # provider/model/reasoning options

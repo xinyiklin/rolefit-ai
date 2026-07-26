@@ -81,6 +81,9 @@ Only files owned and validated by RoleFit enter the bundle:
 
 Generated cover letters, application answers, job targets, and tailored resume
 snapshots already stored on tracker records travel inside `applications.json`.
+Candidate-authored `cover-letter*.cover` files and their `.trash` history are
+standalone editable documents and are not part of schema version 1. Download
+the `.cover` files separately when moving them between devices.
 
 ## Excluded data
 
@@ -91,6 +94,7 @@ The portable contract never includes:
 - `.env`, companion settings, local-site port, or Electron IPC state;
 - per-tab presence/session identifiers or autosave recovery drafts;
 - document/view preferences owned by shared Typeset storage;
+- saved standalone cover-letter variants and their local history;
 - arbitrary files, symlinks, temporary files, or previous restore safety copies.
 
 On another device, the user adds providers again.
