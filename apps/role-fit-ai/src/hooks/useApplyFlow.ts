@@ -1,7 +1,7 @@
 /**
  * useApplyFlow — the Apply flow, extracted from App.tsx: the download-prompt
  * state, commitApply, handleApply, handleApplyDownloadPick, handleApplyOnly,
- * and saveAppliedResumeArtifacts.
+ * and saveAppliedDocumentArtifacts.
  *
  * State ownership: applyMergeTargetRef/applyDownloadPrompt are OWNED here —
  * every mutator of them is one of these functions. App only reads
@@ -25,10 +25,8 @@ import type { StageAiUsage } from "../lib/aiUsage";
 import type { ResumeData } from "@typeset/engine/lib/resumeData.ts";
 import type { PolishedResume } from "../resumeEngine";
 import type { FitComparison, OutputTab } from "../sections/shared";
-
-export function normalizeResumeSnapshot(text: string) {
-  return text.replace(/\s+/g, " ").trim();
-}
+import { normalizeDocumentSnapshot } from "../lib/applicationDocuments";
+import type { DocumentUpload } from "../lib/applicationDocumentRequests";
 
 type UseApplyFlowArgs = {
   jobUrl: string;
@@ -45,14 +43,23 @@ type UseApplyFlowArgs = {
   applications: Application[];
   findForTarget: (url: string, desc: string) => Application | undefined;
   upsertApplication: (app: Application) => Promise<boolean>;
-  patchApplication: (id: string, patch: Partial<Application>) => void;
+  saveApplicationDocument: (
+    id: string,
+    kind: "resume" | "cover",
+    upload: DocumentUpload
+  ) => Promise<{ ok: boolean; error?: string }>;
+  // Remembers which application this session is now working against, so the
+  // per-document "Update application" actions save into it instead of creating
+  // a second record.
+  linkApplication: (id: string | null) => void;
   currentJobTracking: () => ExtractedJobTracking;
   resolveApplyDuplicate: () => Promise<ApplyDuplicateResolution>;
   canExportResume: boolean;
   handleDownloadPdf: (overrideBase?: string) => void | Promise<void>;
-  getResumeArtifacts: () => Promise<{ pdfBase64: string | null; fileName: string } | null>;
-  clearAutosaveDraft: () => void;
-  markResumeClean: () => void;
+  getResumeArtifacts: () => Promise<DocumentUpload | null>;
+  getCoverLetterArtifacts: () => Promise<DocumentUpload | null>;
+  onResumeSaved: () => void;
+  onCoverLetterSaved: () => void;
   setApplyStatus: (value: string) => void;
   setActiveOutputTab: (tab: OutputTab) => void;
   setExpandedApplicationId: (id: string | null) => void;
@@ -73,14 +80,16 @@ export function useApplyFlow({
   applications,
   findForTarget,
   upsertApplication,
-  patchApplication,
+  saveApplicationDocument,
+  linkApplication,
   currentJobTracking,
   resolveApplyDuplicate,
   canExportResume,
   handleDownloadPdf,
   getResumeArtifacts,
-  clearAutosaveDraft,
-  markResumeClean,
+  getCoverLetterArtifacts,
+  onResumeSaved,
+  onCoverLetterSaved,
   setApplyStatus,
   setActiveOutputTab,
   setExpandedApplicationId
@@ -97,31 +106,24 @@ export function useApplyFlow({
   const [applySaveError, setApplySaveError] = useState("");
   const applyCommitInFlightRef = useRef(false);
 
-  // Render the current resume to PDF and persist it under the applied
-  // application, then attach the returned metadata. Best-effort: Apply has
-  // already succeeded, so a failed render is swallowed (the application is
-  // still saved even without a resume snapshot attached).
-  async function saveAppliedResumeArtifacts(id: string, label: string) {
-    try {
-      const artifacts = await getResumeArtifacts();
-      if (!artifacts) return;
-      const res = await fetch(`/api/applications/${encodeURIComponent(id)}/resume`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          pdfBase64: artifacts.pdfBase64 ?? undefined,
-          fileName: artifacts.fileName
-        })
-      });
-      const data = await res.json();
-      if (!res.ok || !data.resumeArtifacts) return;
-      patchApplication(id, { resumeArtifacts: data.resumeArtifacts });
-      setApplyStatus(
-        `Applied "${label}". Saved resume ${data.resumeArtifacts.hasPdf ? "PDF" : "without a PDF because typesetting failed"}.`
-      );
-    } catch {
-      // Best-effort: the application is already saved.
+  // Persist both editable document sources under the applied application. Each
+  // server mutation commits the strict source and tracker metadata together.
+  async function saveAppliedDocumentArtifacts(id: string, label: string) {
+    const resume = await getResumeArtifacts().catch(() => null);
+    const cover = await getCoverLetterArtifacts().catch(() => null);
+    const storedResume = resume
+      ? await saveApplicationDocument(id, "resume", resume)
+      : { ok: false, error: "No editable resume source is available." };
+    const storedCover = cover
+      ? await saveApplicationDocument(id, "cover", cover)
+      : null;
+    if (!storedResume.ok) {
+      setApplyStatus(`Applied "${label}", but the resume file was not saved. ${storedResume.error ?? "Retry from the Resume Save menu."}`);
+      return { resumeSaved: false, coverSaved: Boolean(storedCover?.ok) };
     }
+    const savedCover = storedCover?.ok ? " and cover letter" : "";
+    setApplyStatus(`Applied "${label}". Saved resume${savedCover}.`);
+    return { resumeSaved: true, coverSaved: Boolean(storedCover?.ok) };
   }
 
   // The actual apply: save the application, snapshot artifacts, update UI.
@@ -137,7 +139,7 @@ export function useApplyFlow({
     const acceptedStructuredSuggestions =
       hasStructuredSuggestions &&
       Boolean(result?.polishedText) &&
-      normalizeResumeSnapshot(currentResumeText) !== normalizeResumeSnapshot(result?.polishedText ?? "");
+      normalizeDocumentSnapshot(currentResumeText) !== normalizeDocumentSnapshot(result?.polishedText ?? "");
     const usedBase = !result?.polishedText || (hasStructuredSuggestions && !acceptedStructuredSuggestions);
     const sentResume = currentResumeText || resumeText || result?.polishedText || "";
     // A duplicate scan in handleApply may have already identified which record
@@ -216,15 +218,22 @@ export function useApplyFlow({
       return false;
     }
     applyMergeTargetRef.current = null;
-    // Edits are now tracked in the application record and an artifact is saved to
-    // disk — clear the recovery draft AND mark the editor clean so the before-unload
-    // guard stops warning. A later edit re-flips `dirty` and re-arms the guard.
-    clearAutosaveDraft();
-    markResumeClean();
+    // From here the session has one application of record: later resume or
+    // cover-letter saves update THIS row rather than creating a duplicate.
+    linkApplication(existing?.id ?? app.id);
+    // The application record now exists; the strict source save below decides
+    // whether the editor can safely stop advertising recovery.
     setApplyStatus(`Applied. Saved "${existing?.title || app.title}" to Applications (${usedBase ? "original" : "tailored"} resume).`);
     setActiveOutputTab("applications");
     setExpandedApplicationId(existing?.id ?? app.id);
-    void saveAppliedResumeArtifacts(existing?.id ?? app.id, existing?.title || app.title);
+    const savedDocuments = await saveAppliedDocumentArtifacts(
+      existing?.id ?? app.id,
+      existing?.title || app.title
+    );
+    // Tracker text is not a reloadable document. Preserve recovery until the
+    // corresponding strict editable source has also been committed.
+    if (savedDocuments.resumeSaved) onResumeSaved();
+    if (savedDocuments.coverSaved) onCoverLetterSaved();
     applyCommitInFlightRef.current = false;
     setIsApplying(false);
     return true;

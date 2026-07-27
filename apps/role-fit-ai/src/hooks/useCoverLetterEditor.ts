@@ -28,6 +28,8 @@ export type CoverLetterHistoryGroup = {
 import type { DocStyle, DocumentStyle } from "@typeset/engine/lib/documentStyle.ts";
 import type { ResumeData } from "@typeset/engine/lib/resumeData.ts";
 import { toTypesetSchema } from "@typeset/engine/typeset/schema.ts";
+import { clearCoverLetterAutosaveDraft } from "./useCoverLetterAutosaveDraft";
+import type { DocumentUpload } from "../lib/applicationDocumentRequests";
 import {
   coverLetterStartupIsCurrent,
   loadLastCoverLetterName,
@@ -74,6 +76,7 @@ function loadTitle(): string {
   }
 }
 
+// Blob → bare base64 (no data: prefix), matching the resume export's encoder.
 function pdfFailureMessage(error: unknown): string {
   const detail = error instanceof Error ? error.message : "";
   if (/font|Unknown font format/i.test(detail)) {
@@ -84,7 +87,7 @@ function pdfFailureMessage(error: unknown): string {
 
 type UseCoverLetterEditorOptions = {
   // Fired when a letter is OPENED — a file, a starter, a blank page, a saved
-  // variant, or the pre-tailoring source. The host puts the caret in the
+  // variant, a recovery draft, or an application source. The host puts the caret in the
   // document. Deliberately NOT fired for a tailored result: that arrives while
   // the user is reading the review, and taking focus there would interrupt them.
   onOpenDocument?: () => void;
@@ -110,7 +113,6 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
   const [documentTitle, setDocumentTitle] = useState(loadTitle);
   const [status, setStatus] = useState("");
   const [isRenderingPdf, setIsRenderingPdf] = useState(false);
-  const [sourceBeforeTailor, setSourceBeforeTailor] = useState("");
   // Workspace-resident cover letters. Cover letters gained the same named
   // variants and version history base resumes have. They live under the
   // cover-letters folder; `activeCoverFileName` is the one Save writes over.
@@ -209,7 +211,6 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
       setPersistedFingerprint(
         serializeCoverLetterFile(data, documentStyleToCoverLetterStyle(styleRef.current))
       );
-      setSourceBeforeTailor(coverLetterPlainText(data));
       setActiveCoverFileName("");
       saveLastCoverLetterName("");
       if (title?.trim()) setDocumentTitle(title.trim());
@@ -227,7 +228,6 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
         setPersistedFingerprint(
           serializeCoverLetterFile(data, documentStyleToCoverLetterStyle(styleRef.current))
         );
-        setSourceBeforeTailor("");
         setActiveCoverFileName("");
         saveLastCoverLetterName("");
         setStatus("");
@@ -239,17 +239,12 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
       setPersistedFingerprint(
         serializeCoverLetterFile(data, documentStyleToCoverLetterStyle(styleRef.current))
       );
-      setSourceBeforeTailor(coverLetterPlainText(data));
       setActiveCoverFileName("");
       saveLastCoverLetterName("");
       setStatus("Cover letter restored.");
     },
     [editor.markClean, openDocument]
   );
-
-  const captureTailorSource = useCallback(() => {
-    setSourceBeforeTailor(text);
-  }, [text]);
 
   const applyTailoredText = useCallback(
     (tailored: string) => {
@@ -264,16 +259,63 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
     [editor.editedResume, editor.seedData]
   );
 
-  const restoreTailorSource = useCallback(() => {
-    if (!sourceBeforeTailor) return;
-    const parsed = parseCoverLetterText(sourceBeforeTailor);
-    openDocument(
-      editor.editedResume
-        ? { ...parsed, name: editor.editedResume.name, contact: editor.editedResume.contact }
-        : parsed
-    );
-    setStatus("Restored the pre-tailoring cover letter.");
-  }, [editor.editedResume, openDocument, sourceBeforeTailor]);
+  // Adopt a recovered autosave draft. Like the resume's restore it seeds CLEAN:
+  // the payload is already the durable copy, so the next real edit is what
+  // re-arms autosave and the close guard.
+  const openRecoveryDraft = useCallback(
+    (payload: string, title: string) => {
+      try {
+        const parsed = parseCoverLetterFile(payload);
+        openDocument(parsed.data);
+        editor.markClean();
+        setStyle((current) => ({
+          ...coverLetterStyleToDocumentStyle(parsed.style),
+          zoom: current.zoom,
+          spellCheck: current.spellCheck
+        }));
+        setPersistedFingerprint(serializeCoverLetterFile(parsed.data, parsed.style));
+        // A draft is not the workspace copy, so Save must not offer to overwrite
+        // whichever saved letter happened to be open before.
+        setActiveCoverFileName("");
+        saveLastCoverLetterName("");
+        if (title.trim()) setDocumentTitle(title.trim());
+        setStatus("Restored the unsaved cover letter.");
+        return true;
+      } catch {
+        setStatus("That recovered cover-letter draft could not be read.");
+        return false;
+      }
+    },
+    [editor.markClean, openDocument]
+  );
+
+  // Open the strict source owned by a tracked application. It is not a
+  // workspace variant, so later Save must ask for a destination rather than
+  // overwriting whichever variant happened to be active beforehand.
+  const openApplicationSource = useCallback(
+    (payload: string, title: string) => {
+      try {
+        const parsed = parseCoverLetterFile(payload);
+        openDocument(parsed.data);
+        editor.markClean();
+        setStyle((current) => ({
+          ...coverLetterStyleToDocumentStyle(parsed.style),
+          zoom: current.zoom,
+          spellCheck: current.spellCheck
+        }));
+        setPersistedFingerprint(serializeCoverLetterFile(parsed.data, parsed.style));
+        setActiveCoverFileName("");
+        saveLastCoverLetterName("");
+        if (title.trim()) setDocumentTitle(title.trim());
+        setStatus("Loaded the saved application cover letter.");
+        return true;
+      } catch {
+        setStatus("The saved application cover letter could not be read.");
+        return false;
+      }
+    },
+    [editor.markClean, openDocument]
+  );
 
   const startBlank = useCallback(() => {
     const data = parseCoverLetterText("");
@@ -285,7 +327,6 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
     setPersistedFingerprint(
       serializeCoverLetterFile(data, documentStyleToCoverLetterStyle(styleRef.current))
     );
-    setSourceBeforeTailor("");
     setActiveCoverFileName("");
     saveLastCoverLetterName("");
     setDocumentTitle("Cover letter");
@@ -299,7 +340,6 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
     setPersistedFingerprint(
       serializeCoverLetterFile(data, documentStyleToCoverLetterStyle(styleRef.current))
     );
-    setSourceBeforeTailor("");
     setActiveCoverFileName("");
     saveLastCoverLetterName("");
     setDocumentTitle("Cover letter");
@@ -327,8 +367,6 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
             spellCheck: current.spellCheck
           }));
           setPersistedFingerprint(serializeCoverLetterFile(parsed.data, parsed.style));
-          const restored = coverLetterPlainText(parsed.data);
-          setSourceBeforeTailor(restored);
           // An uploaded file is not the workspace copy, so Save must not offer to
           // overwrite whichever saved letter happened to be open before.
           setActiveCoverFileName("");
@@ -365,7 +403,6 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
         spellCheck: current.spellCheck
       }));
       setPersistedFingerprint(serializeCoverLetterFile(parsed.data, parsed.style));
-      setSourceBeforeTailor(coverLetterPlainText(parsed.data));
       setActiveCoverFileName(fileName);
       saveLastCoverLetterName(fileName);
       setDocumentTitle(label === "Default" ? "Cover letter" : label);
@@ -433,6 +470,9 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
         }
         editor.markClean();
         setPersistedFingerprint(payload);
+        // The letter is durable in the workspace now, so the recovery draft has
+        // nothing left to protect. The next edit re-arms it.
+        clearCoverLetterAutosaveDraft();
         setStatus(`Saved ${data.label ?? "cover letter"} to your workspace.`);
       } catch (error) {
         setStatus(error instanceof Error ? error.message : "Cover letter save failed.");
@@ -558,6 +598,7 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
     downloadBlob(new Blob([payload], { type: "application/json" }), fileName);
     editor.markClean();
     setPersistedFingerprint(payload);
+    clearCoverLetterAutosaveDraft();
     setStatus(`Saved ${fileName}.`);
   }, [documentTitle, editor.editedResume, editor.markClean]);
 
@@ -572,6 +613,19 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
     setStatus(`Saved ${fileName}.`);
   }, [documentTitle, text]);
 
+  // One renderer for both the download and the copy saved to an application, so
+  // the letter the tracker keeps is byte-for-byte the letter the user exports.
+  const renderPdfBytes = useCallback(async (data: ResumeData) => {
+    const [{ layoutCoverLetter }, { emitPdf, fetchFontBytes }] = await Promise.all([
+      import("@typeset/engine/typeset/layout.ts"),
+      import("@typeset/engine/typeset/pdf/emit.ts")
+    ]);
+    const document = layoutCoverLetter(toTypesetSchema(data), styleRef.current);
+    const publicBase = import.meta.env.BASE_URL.replace(/\/$/, "");
+    const fonts = await fetchFontBytes(document, `${publicBase}/fonts`);
+    return emitPdf(document, fonts, { title: documentTitle.trim() || "Cover letter" });
+  }, [documentTitle]);
+
   // `overrideBase` is the name the rename prompt collected, matching the resume
   // export. Omitted, it falls back to the document title as before.
   const downloadPdf = useCallback(async (overrideBase?: string) => {
@@ -582,19 +636,7 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
     setIsRenderingPdf(true);
     setStatus("Typesetting cover-letter PDF…");
     try {
-      const [{ layoutCoverLetter }, { emitPdf, fetchFontBytes }] = await Promise.all([
-        import("@typeset/engine/typeset/layout.ts"),
-        import("@typeset/engine/typeset/pdf/emit.ts")
-      ]);
-      const document = layoutCoverLetter(
-        toTypesetSchema(editor.editedResume),
-        styleRef.current
-      );
-      const publicBase = import.meta.env.BASE_URL.replace(/\/$/, "");
-      const fonts = await fetchFontBytes(document, `${publicBase}/fonts`);
-      const bytes = await emitPdf(document, fonts, {
-        title: documentTitle.trim() || "Cover letter"
-      });
+      const bytes = await renderPdfBytes(editor.editedResume);
       const fileName = coverLetterFileName(overrideBase?.trim() || documentTitle)
         .replace(/\.cover$/i, ".pdf");
       downloadBlob(new Blob([bytes as BlobPart], { type: "application/pdf" }), fileName);
@@ -604,7 +646,26 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
     } finally {
       setIsRenderingPdf(false);
     }
+  }, [documentTitle, editor.editedResume, renderPdfBytes]);
+
+  // The letter's equivalent of the resume export's getResumeArtifacts: the
+  // editable `.cover` source an application keeps. PDF preview/download is
+  // rendered from this source on demand.
+  const getArtifacts = useCallback(async (): Promise<DocumentUpload | null> => {
+    const data = editor.editedResume;
+    if (!data || !coverLetterPlainText(data).trim()) return null;
+    return {
+      sourceText: serializeCoverLetterFile(data, documentStyleToCoverLetterStyle(styleRef.current)),
+      fileName: coverLetterFileName(documentTitle)
+    };
   }, [documentTitle, editor.editedResume]);
+
+  const markApplicationSaved = useCallback(() => {
+    if (!currentFingerprint) return;
+    editor.markClean();
+    setPersistedFingerprint(currentFingerprint);
+    clearCoverLetterAutosaveDraft();
+  }, [currentFingerprint, editor.markClean]);
 
   return {
     data: editor.editedResume ?? initialData,
@@ -637,10 +698,14 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
     restoreWorkspaceCoverLetter,
     loadSourceText,
     applyExternalText,
-    captureTailorSource,
     applyTailoredText,
-    restoreTailorSource,
-    canRestoreTailorSource: Boolean(sourceBeforeTailor && sourceBeforeTailor !== text)
+    openRecoveryDraft,
+    openApplicationSource,
+    getArtifacts,
+    markApplicationSaved,
+    // The serialized `.cover` payload behind `dirty`, reused as the recovery
+    // draft so one definition of "the current document" feeds both.
+    draftPayload: currentFingerprint
   };
 }
 

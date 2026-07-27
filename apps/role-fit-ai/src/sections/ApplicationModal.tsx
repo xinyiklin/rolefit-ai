@@ -4,10 +4,7 @@ import {
   BriefcaseBusiness,
   CheckCircle2,
   ClipboardCheck,
-  Copy,
-  Download,
   ExternalLink,
-  Eye,
   FileText,
   MessageSquareText,
   Plus,
@@ -29,6 +26,9 @@ import {
   type ApplicationStatus,
   type SalaryPeriod
 } from "../hooks/useApplications";
+import type { ApplicationDocumentKind } from "../lib/applicationDocumentRequests";
+import type { DocumentUpload } from "../lib/applicationDocumentRequests";
+import { ApplicationDocumentsTab } from "./application/ApplicationDocumentsTab";
 import { STATUS_LABEL, fitTone, formatSalary } from "../lib/applicationDisplay";
 import { VERDICT_LABEL, verdictFromScore } from "../lib/fitVerdict";
 import { displayVerdictReason } from "../lib/verdictReason";
@@ -41,10 +41,24 @@ type ApplicationModalProps = {
   onClose: () => void;
   onSave: (application: Application) => Promise<boolean>;
   onDelete?: (id: string, title: string) => void;
-  // Load this application's job target + resume snapshot into the Polish editor.
+  // Load this application's job target + saved resume into the Polish editor.
   onLoad?: (application: Application) => void;
-  // Open the saved resume PDF in the in-app react-pdf viewer.
-  onPreviewResume?: (application: Application) => void;
+  // Open a saved application document in the in-app PDF viewer.
+  onPreviewDocument?: (application: Application, kind: ApplicationDocumentKind) => void;
+  // Render/download a source-only saved document as PDF on demand.
+  onDownloadDocument?: (application: Application, kind: ApplicationDocumentKind) => void;
+  onSaveDocument: (
+    id: string,
+    kind: ApplicationDocumentKind,
+    upload: DocumentUpload,
+    sourceOrigin?: "editor" | "upload"
+  ) => Promise<{ ok: boolean; error?: string }>;
+  onRemoveDocument: (
+    id: string,
+    kind: ApplicationDocumentKind
+  ) => Promise<{ ok: boolean; error?: string }>;
+  onSaveAttachment: (id: string, file: File) => Promise<{ ok: boolean; error?: string }>;
+  onRemoveAttachment: (id: string, fileName: string) => Promise<{ ok: boolean; error?: string }>;
 };
 
 type ModalTab = "overview" | "interview" | "documents" | "questions";
@@ -150,13 +164,24 @@ function formFromApplication(application: Application | null): FormState {
   };
 }
 
-export function ApplicationModal({ open, application, onClose, onSave, onDelete, onLoad, onPreviewResume }: ApplicationModalProps) {
+export function ApplicationModal({
+  open,
+  application,
+  onClose,
+  onSave,
+  onDelete,
+  onLoad,
+  onPreviewDocument,
+  onDownloadDocument,
+  onSaveDocument,
+  onRemoveDocument,
+  onSaveAttachment,
+  onRemoveAttachment
+}: ApplicationModalProps) {
   const isEdit = Boolean(application);
   const applicationId = application?.id ?? null;
   const [tab, setTab] = useState<ModalTab>("overview");
   const [form, setForm] = useState<FormState>(() => formFromApplication(application));
-  const [copied, setCopied] = useState("");
-  const [copyFailed, setCopyFailed] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
   const panelRef = useRef<HTMLElement>(null);
@@ -181,7 +206,6 @@ export function ApplicationModal({ open, application, onClose, onSave, onDelete,
     lastSeededId.current = applicationId;
     setForm(formFromApplication(application));
     setTab("overview");
-    setCopied("");
     setSaveError("");
     setIsSaving(false);
   }, [open, applicationId]);
@@ -240,22 +264,6 @@ export function ApplicationModal({ open, application, onClose, onSave, onDelete,
 
   function removeAnswer(index: number) {
     setForm((current) => ({ ...current, answers: current.answers.filter((_, i) => i !== index) }));
-  }
-
-  async function copyText(value: string, key: string) {
-    if (!value) return;
-    try {
-      await navigator.clipboard.writeText(value);
-      setCopied(key);
-      setCopyFailed("");
-      window.setTimeout(() => setCopied(""), 1600);
-    } catch {
-      // Surface the failure instead of silently clearing — the text stays on
-      // screen so the user can copy it manually.
-      setCopied("");
-      setCopyFailed(key);
-      window.setTimeout(() => setCopyFailed((k) => (k === key ? "" : k)), 2500);
-    }
   }
 
   function buildApplication(statusOverride: ApplicationStatus): Application {
@@ -338,7 +346,6 @@ export function ApplicationModal({ open, application, onClose, onSave, onDelete,
   const review = application?.review;
   const gaps = application?.missingRequiredSkills ?? [];
   const headerName = [form.company.trim(), form.role.trim()].filter(Boolean).join(" · ") || "New application";
-  const artifacts = application?.resumeArtifacts;
   const downloadBase = (form.company.trim() || form.role.trim() || "Resume").replace(/[^A-Za-z0-9_-]+/g, "_");
   const compPreview = formatSalary({
     salaryMin: numberField(form.salaryMin),
@@ -630,57 +637,16 @@ export function ApplicationModal({ open, application, onClose, onSave, onDelete,
           ) : null}
 
           {tab === "documents" ? (
-            <section className="application-form application-form--wide">
-              <div className="application-doc-card">
-                <div className="application-doc-card__head">
-                  <h4><FileText size={14} aria-hidden="true" /> Resume used</h4>
-                  {application?.resumeUsed ? (
-                    <span className={`application-stage application-stage--${application.resumeUsed === "tailored" ? "interviewing" : "applied"}`}>
-                      {application.resumeUsed === "tailored" ? "Tailored draft" : "Base resume"}
-                    </span>
-                  ) : null}
-                </div>
-                {artifacts?.hasPdf ? (
-                  <>
-                    <p className="application-muted">
-                      Saved {artifacts.savedAt ? new Date(artifacts.savedAt).toLocaleDateString() : ""}.
-                    </p>
-                    <div className="application-doc-card__actions">
-                      {onPreviewResume ? (
-                        <button type="button" className="secondary-button is-compact" onClick={() => onPreviewResume(application as Application)}>
-                          <Eye size={14} aria-hidden="true" /> Preview
-                        </button>
-                      ) : null}
-                      <a className="primary-button is-compact" href={`/api/applications/${encodeURIComponent((application as Application).id)}/resume.pdf`} download={`${downloadBase}_Resume.pdf`}>
-                        <Download size={14} aria-hidden="true" /> PDF
-                      </a>
-                    </div>
-                  </>
-                ) : (
-                  <p className="application-muted">
-                    {isEdit
-                      ? "No resume snapshot saved for this role yet. Open it in Polish, then use Apply to save the PDF that went out."
-                      : "Save the application first, then apply a polished resume to attach its PDF here."}
-                  </p>
-                )}
-              </div>
-
-              <div className="application-doc-card">
-                <div className="application-doc-card__head">
-                  <h4><FileText size={14} aria-hidden="true" /> Cover letter</h4>
-                  {application?.coverLetterText ? (
-                    <button type="button" className="ghost-button is-compact" onClick={() => copyText(application.coverLetterText ?? "", "cover")}>
-                      <Copy size={13} aria-hidden="true" /> {copied === "cover" ? "Copied" : copyFailed === "cover" ? "Copy failed" : "Copy"}
-                    </button>
-                  ) : null}
-                </div>
-                {application?.coverLetterText ? (
-                  <pre className="application-doc-card__text">{application.coverLetterText}</pre>
-                ) : (
-                  <p className="application-muted">No saved cover letter. Generate one in Polish and use Apply to keep it here.</p>
-                )}
-              </div>
-            </section>
+            <ApplicationDocumentsTab
+              application={application}
+              downloadBase={downloadBase}
+              onSaveDocument={onSaveDocument}
+              onRemoveDocument={onRemoveDocument}
+              onPreviewDocument={onPreviewDocument}
+              onDownloadDocument={onDownloadDocument}
+              onSaveAttachment={onSaveAttachment}
+              onRemoveAttachment={onRemoveAttachment}
+            />
           ) : null}
 
           {tab === "questions" ? (

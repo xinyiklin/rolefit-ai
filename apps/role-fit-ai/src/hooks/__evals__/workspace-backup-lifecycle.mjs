@@ -149,10 +149,22 @@ assert.deepEqual(
 
 // --- autosaveDraftRegistry (the shared draft-clearing seam) ----------------
 
-assert.equal(keyForTab("tab-1"), "rolefit:draftAutosave:tab-1", "keyForTab namespaces by tab id");
-assert.equal(tabIdFromKey("rolefit:draftAutosave:tab-1"), "tab-1", "tabIdFromKey recovers the owning tab id");
-assert.equal(tabIdFromKey("rolefit:draftAutosave"), "", "the bare legacy key is recognized with the empty-string tab id");
-assert.equal(tabIdFromKey("rolefit:settings"), null, "an unrelated key is not mistaken for an autosave key");
+assert.equal(keyForTab("resume", "tab-1"), "rolefit:draftAutosave:tab-1", "keyForTab namespaces by tab id");
+assert.equal(
+  keyForTab("cover", "tab-1"),
+  "rolefit:coverDraftAutosave:tab-1",
+  "each editor's draft has its own key, so one document's draft cannot overwrite the other's"
+);
+assert.equal(tabIdFromKey("resume", "rolefit:draftAutosave:tab-1"), "tab-1", "tabIdFromKey recovers the owning tab id");
+assert.equal(tabIdFromKey("cover", "rolefit:coverDraftAutosave:tab-1"), "tab-1", "the cover key resolves its owning tab too");
+assert.equal(tabIdFromKey("resume", "rolefit:draftAutosave"), "", "the bare legacy key is recognized with the empty-string tab id");
+assert.equal(tabIdFromKey("cover", "rolefit:draftAutosave"), null, "the legacy bare key belongs to the resume only");
+assert.equal(
+  tabIdFromKey("resume", "rolefit:coverDraftAutosave:tab-1"),
+  null,
+  "resume recovery never claims a cover-letter draft"
+);
+assert.equal(tabIdFromKey("resume", "rolefit:settings"), null, "an unrelated key is not mistaken for an autosave key");
 
 // clearAllAutosaveDrafts needs a localStorage — polyfill a minimal in-memory one
 // (Node has none) rather than mocking the whole browser to exercise the one
@@ -169,6 +181,7 @@ globalThis.localStorage = new FakeStorage();
 localStorage.setItem("rolefit:draftAutosave:tab-a", "{}");
 localStorage.setItem("rolefit:draftAutosave:tab-b", "{}");
 localStorage.setItem("rolefit:draftAutosave", "{}"); // legacy orphan
+localStorage.setItem("rolefit:coverDraftAutosave:tab-a", "{}");
 localStorage.setItem("rolefit:settings", "{}"); // unrelated key, must survive
 localStorage.setItem("rolefit:adoptedRestoreStamp", RESTORE_STAMP); // unrelated key, must survive
 
@@ -177,6 +190,11 @@ clearAllAutosaveDrafts();
 assert.equal(localStorage.getItem("rolefit:draftAutosave:tab-a"), null, "clearAllAutosaveDrafts clears this tab's draft");
 assert.equal(localStorage.getItem("rolefit:draftAutosave:tab-b"), null, "clearAllAutosaveDrafts clears a sibling tab's draft too");
 assert.equal(localStorage.getItem("rolefit:draftAutosave"), null, "clearAllAutosaveDrafts clears the legacy orphan key");
+assert.equal(
+  localStorage.getItem("rolefit:coverDraftAutosave:tab-a"),
+  null,
+  "a restore supersedes the cover-letter draft as well as the resume draft"
+);
 assert.equal(localStorage.getItem("rolefit:settings"), "{}", "clearAllAutosaveDrafts never touches unrelated settings storage");
 assert.equal(localStorage.getItem("rolefit:adoptedRestoreStamp"), RESTORE_STAMP, "clearAllAutosaveDrafts never touches the adopted-restore-stamp marker");
 delete globalThis.localStorage;

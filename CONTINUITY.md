@@ -5,6 +5,77 @@ bounded; app-only operational detail belongs in the affected app documentation.
 
 ## 2026-07-27
 
+- [USER+CODE] Apply still creates the application and snapshots both documents,
+  but the resume and the cover letter are no longer frozen at that moment. Each
+  carries its own saved/unsaved state and an explicit "Update application" row
+  in its own Save menu, so a letter tailored after applying is saved to the
+  same record instead of being copied by hand. The strict source bytes and only
+  that document's tracker fields commit atomically against the current
+  application revision, so concurrent edits fail with a refreshable conflict
+  instead of rewriting the other document, status, notes, job details, or fit.
+  Tracker revisions advance monotonically even for same-millisecond edits, and
+  file mutations wait for this tab's pending tracker writes before choosing
+  their base revision.
+  Nothing saves on an effect: regenerating or editing never rewrites what the
+  application holds. Saved-state comparison includes the complete serialized
+  source, so style-only edits remain unsaved; missing source remains retryable,
+  and Apply preserves each recovery draft until that document's source is
+  durable. The session
+  remembers the applied/restored record (dropped once the desk points at
+  another posting) so repeated updates cannot create a second row. An empty
+  editor cannot erase a stored document.
+
+- [USER+CODE] A tracked application now keeps both documents in the same form.
+  Apply and each explicit document update store only the editable source
+  (`resume.resume` / `cover.cover`); PDF preview/download is rendered from that
+  source on demand. An explicit PDF upload replaces the corresponding source
+  and remains stored as `resume.pdf` / `cover.pdf`. Both forms use one route
+  vocabulary, `/api/applications/:id/documents/:kind[.format]`, replacing the
+  resume-only pair; existing saved PDFs keep working. The Documents tab is one
+  component rendering both kinds with identical Preview/PDF/source, Upload,
+  and confirmed Remove actions, and users can attach extra PDFs —
+  extension allowlist + magic-byte check, 8 MB each, 10 per application, stored
+  under `applications/<id>/attachments/` and served only as downloads with a
+  narrow content type, `nosniff`, and a no-load CSP. Attachment bytes and
+  metadata commit atomically against the current application revision, not at
+  modal Save.
+  Review fixes folded in: attachment names are case-folded and derived
+  idempotently (a non-idempotent name orphaned bytes the record could no longer
+  reach), the tracker metadata count is authoritative for the attachment cap
+  even when managed bytes are missing, and an upload 404s for an untracked id.
+  Each document slot stores exactly one representation and clears the
+  superseded source/PDF, deleting an application moves its files to
+  `applications/.trash/`, and both file routes send the same download headers.
+  File downloads also require matching tracker metadata, so orphan bytes are
+  not reachable through the loopback API. Exact source fingerprints take
+  precedence over lossy tracker text for saved-state comparison, and duplicate
+  detection recognizes every absorbed source URL instead of only the primary
+  posting URL.
+  Workspace backup schema v2 carries each
+  tracked application's active managed document paths and PDF attachments,
+  validates strict sources during backup and staged restore, requires tracker
+  metadata and bundled bytes to match exactly, and excludes orphan application
+  directories. Schema v1 remains restore-compatible.
+
+- [USER+CODE] The two editors now behave alike. The cover letter's "Restore
+  source" button and the pre-tailoring source state behind it are gone; instead
+  the letter keeps its own per-tab recovery draft (serialized `.cover`, so a
+  restore brings back style as well as text) with the resume's Recovery
+  draft saved / Saving / failed vocabulary and its own restore bar, replacing
+  the bare "Unsaved cover letter" warning. Tab scoping, live-sibling
+  protection, orphan migration, and expiry moved to one owner
+  (`lib/autosaveDraftStorage.ts`) that both drafts share under separate storage
+  keys; a workspace restore still clears every draft of both kinds. The letter's
+  draft is cleared only where the letter itself becomes durable (workspace
+  save, `.cover` download, or a successful application-document save). Apply
+  settles the resume and cover-letter recovery state independently, so a failed
+  source save cannot clear the other document's protection. Document titles now
+  share one rule,
+  `Name_Company_Resume` / `Name_Company_Cover_Letter`, applied only to titles the
+  app itself produced. Residual risk: an AI reseed clears editor history, so a
+  letter that was tailored without ever being edited or saved is recoverable
+  only from workspace variants/history — the same footing as the resume.
+
 - [CODE+TOOL] Content and print-style Undo/Redo now share one coordinator per
   document rather than module-global state. A divergent edit invalidates Redo
   across both reducers, loading a document invalidates the prior document's

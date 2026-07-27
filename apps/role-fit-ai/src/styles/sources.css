@@ -526,6 +526,12 @@ select,
   line-height: 1.4;
 }
 
+/* A failed application save is the one status in this panel the user must act
+   on, so it carries its own colour plus the alert role in the markup. */
+.document-action-panel__status--error {
+  color: var(--danger);
+}
+
 .document-primary-action {
   position: relative;
   display: inline-flex;

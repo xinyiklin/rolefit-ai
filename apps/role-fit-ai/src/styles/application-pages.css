@@ -2205,20 +2205,80 @@ button.table-sort svg {
   flex-wrap: wrap;
 }
 
-.application-doc-card__text {
-  max-height: 260px;
+.application-doc-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0;
+}
+
+.application-doc-grid .application-doc-card,
+.application-doc-grid .application-doc-card + .application-doc-card {
+  display: flex;
+  min-width: 0;
+  min-height: 132px;
   margin: 0;
-  padding: var(--s3);
-  overflow: auto;
+  padding: var(--s2) var(--s4) var(--s2) 0;
+  flex-direction: column;
   border: 0;
-  border-left: 2px solid var(--hairline-strong);
   border-radius: 0;
   background: transparent;
-  color: var(--ink);
-  font-family: inherit;
-  font-size: 0.78rem;
-  line-height: 1.55;
-  white-space: pre-wrap;
+}
+
+.application-doc-grid .application-doc-card + .application-doc-card {
+  padding-right: 0;
+  padding-left: var(--s4);
+  border-left: 1px solid var(--hairline);
+}
+
+.application-doc-grid .application-doc-card__head {
+  align-items: flex-start;
+}
+
+.application-doc-grid + .application-doc-card {
+  margin-top: var(--s2);
+  padding-top: var(--s3);
+  border-top: 1px solid var(--hairline);
+}
+
+.application-doc-card__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s2);
+  margin-top: auto;
+}
+
+.application-doc-card__footer > span {
+  color: var(--ink-soft);
+  font-size: 0.72rem;
+}
+
+.application-doc-card__footer .application-doc-card__actions { gap: 5px; }
+
+@media (max-width: 680px) {
+  .application-doc-grid { grid-template-columns: 1fr; }
+
+  .application-doc-grid .application-doc-card,
+  .application-doc-grid .application-doc-card + .application-doc-card {
+    min-height: 0;
+    padding: var(--s2) 0 var(--s3);
+    border-left: 0;
+  }
+
+  .application-doc-grid .application-doc-card + .application-doc-card {
+    padding-top: var(--s3);
+    border-top: 1px solid var(--hairline);
+  }
+}
+
+.application-attachment__remove {
+  margin-left: calc(var(--s2) * -0.625);
+}
+
+.application-doc-card__actions .application-attachment__remove:hover:not(:disabled) {
+  color: var(--danger);
+  border-color: var(--danger);
+  background: var(--danger-soft);
 }
 
 /* Review-duplicates modal — reuses .application-modal__* shell; body stacks

@@ -6,9 +6,13 @@ import {
   type TypesetCaret,
   type TypesetEditorHandle
 } from "@typeset/editor/sections/editor/TypesetEditor.tsx";
+import type { ApplicationDocumentSync } from "../../hooks/useApplicationDocumentSync";
+import type { DraftAutosaveState } from "../../hooks/useAutosaveDraft";
+import type { CoverLetterAutosavedDraft } from "../../hooks/useCoverLetterAutosaveDraft";
 import type { CoverLetterEditorState } from "../../hooks/useCoverLetterEditor";
 import { useRestoredScroll } from "../../hooks/useRestoredScroll";
 import { CoverLetterReview } from "../cover-letter/CoverLetterReview";
+import { DraftRestoreBar } from "../DraftRestoreBar";
 import { CoverLetterToolbar } from "../cover-letter/CoverLetterToolbar";
 
 type CoverLetterTabProps = {
@@ -22,6 +26,12 @@ type CoverLetterTabProps = {
   inlineFormat: InlineFormatState;
   onInlineFormatStateChange: (state: InlineFormatState) => void;
   onTailor: () => void;
+  applicationSync: ApplicationDocumentSync;
+  draftAutosaveState: DraftAutosaveState;
+  // Autosave recovery: non-null when a draft from a previous session was found.
+  pendingAutosaveDraft: CoverLetterAutosavedDraft | null;
+  onRestoreAutosaveDraft: (draft: CoverLetterAutosavedDraft) => void;
+  onDismissAutosaveDraft: () => void;
   isTailoring: boolean;
   tailorStatus: string;
   resumeReady: boolean;
@@ -45,6 +55,11 @@ export function CoverLetterTab({
   inlineFormat,
   onInlineFormatStateChange,
   onTailor,
+  applicationSync,
+  draftAutosaveState,
+  pendingAutosaveDraft,
+  onRestoreAutosaveDraft,
+  onDismissAutosaveDraft,
   isTailoring,
   tailorStatus,
   resumeReady,
@@ -92,9 +107,21 @@ export function CoverLetterTab({
         isTailoring={isTailoring}
         targetLine={targetLine}
         onTailor={onTailor}
+        applicationSync={applicationSync}
+        draftAutosaveState={draftAutosaveState}
       />
 
       <div className="cover-letter-workbench">
+        {pendingAutosaveDraft ? (
+          <DraftRestoreBar
+            label="Unsaved cover letter found"
+            jobLabel={pendingAutosaveDraft.jobLabel}
+            savedAt={pendingAutosaveDraft.savedAt}
+            onRestore={() => onRestoreAutosaveDraft(pendingAutosaveDraft)}
+            onDismiss={onDismissAutosaveDraft}
+          />
+        ) : null}
+
         <div className="cover-letter-workbench__editor" ref={scrollerRef}>
           <TypesetEditor
             ref={editorRef}

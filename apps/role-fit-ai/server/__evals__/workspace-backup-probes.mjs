@@ -28,6 +28,10 @@ import {
   parseStoredWorkspaceRestoreMarker,
   parseWorkspaceBackupEnvelope
 } from "../../src/lib/workspaceBackupContract.ts";
+import {
+  COVER_LETTER_STYLE_DEFAULTS,
+  serializeCoverLetterFile
+} from "@typeset/engine/lib/coverLetter.ts";
 
 const appRoot = dirname(dirname(dirname(fileURLToPath(import.meta.url))));
 const starterText = await readFile(join(appRoot, "server", "starter.resume"), "utf8");
@@ -65,7 +69,7 @@ async function snapshot(directory) {
 
 try {
   await mkdir(join(sourceDir, ".trash"), { recursive: true });
-  await mkdir(join(sourceDir, "applications", "application-1"), { recursive: true });
+  await mkdir(join(sourceDir, "applications", "application-1", "attachments"), { recursive: true });
 
   const portableResume = JSON.parse(starterText);
   portableResume.document.name = "Portable Candidate";
@@ -78,27 +82,89 @@ try {
   );
   await writeFile(
     join(sourceDir, "applications.json"),
-    JSON.stringify({ savedAt: fixedDate.toISOString(), applications: [] }, null, 2),
+    JSON.stringify({
+      savedAt: fixedDate.toISOString(),
+      applications: [{
+        id: "application-1",
+        title: "Portable role",
+        jobUrl: "",
+        status: "applied",
+        createdAt: fixedDate.toISOString(),
+        updatedAt: fixedDate.toISOString(),
+        resumeArtifacts: {
+          hasPdf: false,
+          hasSource: true,
+          fileName: "Portable_Resume.resume",
+          savedAt: fixedDate.toISOString()
+        },
+        coverLetterArtifacts: {
+          hasPdf: false,
+          hasSource: true,
+          fileName: "Portable_Cover_Letter.cover",
+          savedAt: fixedDate.toISOString()
+        },
+        attachments: [{
+          fileName: "writing sample.pdf",
+          label: "Writing sample",
+          size: 21,
+          contentType: "application/pdf",
+          savedAt: fixedDate.toISOString()
+        }]
+      }]
+    }, null, 2),
     "utf8"
   );
-  await writeFile(join(sourceDir, "applications", "application-1", "resume.pdf"), "%PDF-1.7\nportable", "utf8");
+  await writeFile(join(sourceDir, "applications", "application-1", "resume.resume"), portableResumeText, "utf8");
+  const portableCoverText = serializeCoverLetterFile({
+    name: "Portable Candidate",
+    contact: ["portable@example.test"],
+    sections: [{
+      id: "section-cover",
+      heading: "Cover Letter",
+      type: "summary",
+      items: [{
+        id: "entry-cover",
+        titleLeft: "Dear Hiring Team,",
+        titleRight: "",
+        subtitleLeft: "",
+        subtitleRight: "",
+        bullets: []
+      }]
+    }]
+  }, COVER_LETTER_STYLE_DEFAULTS);
+  await writeFile(join(sourceDir, "applications", "application-1", "cover.cover"), portableCoverText, "utf8");
+  await writeFile(
+    join(sourceDir, "applications", "application-1", "attachments", "writing sample.pdf"),
+    "%PDF-1.7\nattachment",
+    "utf8"
+  );
   await writeFile(join(sourceDir, "notes-private.txt"), "not app-managed", "utf8");
-  await symlink(join(sourceDir, "base-resume.resume"), join(sourceDir, "base-resume-linked.resume"));
+  try {
+    await symlink(join(sourceDir, "base-resume.resume"), join(sourceDir, "base-resume-linked.resume"));
+  } catch (error) {
+    // Windows requires Developer Mode or an elevated token for symlinks. The
+    // rest of the backup contract remains testable when that capability is
+    // unavailable; non-symlink files still exercise the managed-path allowlist.
+    if (!error || error.code !== "EPERM") throw error;
+  }
 
   const backup = await createWorkspaceBackup(sourceDir, fixedDate);
   assert.equal(backup.format, "rolefit-workspace-backup");
-  assert.equal(backup.schemaVersion, 1);
+  assert.equal(backup.schemaVersion, 2);
   assert.deepEqual(
     backup.files.map((file) => file.path),
     [
       "applications.json",
-      "applications/application-1/resume.pdf",
+      "applications/application-1/attachments/writing sample.pdf",
+      "applications/application-1/cover.cover",
+      "applications/application-1/resume.resume",
       "resumes/.trash/2026-07-19T12-00-00-000Z__default.resume",
       "resumes/default.resume"
     ],
     "export contains every app-managed file and excludes arbitrary files and symlinks"
   );
-  assert.equal(backup.files.find((file) => file.path.endsWith("resume.pdf"))?.encoding, "base64");
+  assert.equal(backup.files.find((file) => file.path.endsWith("resume.resume"))?.encoding, "utf8");
+  assert.equal(backup.files.find((file) => file.path.endsWith("cover.cover"))?.encoding, "utf8");
   assert.equal(backup.files.find((file) => file.path === "applications.json")?.encoding, "utf8");
 
   const withBrowser = parseWorkspaceBackupEnvelope({
@@ -131,10 +197,15 @@ try {
   await writeFile(join(targetDir, "keep-me.txt"), "previous unknown workspace file", "utf8");
 
   const result = await restoreWorkspaceBackup(targetDir, withBrowser, fixedDate);
-  assert.equal(result.restoredFiles, 4);
+  assert.equal(result.restoredFiles, 6);
   assert.equal(result.previousWorkspaceKept, true);
   assert.equal(JSON.parse(await readFile(join(targetDir, "resumes", "default.resume"), "utf8")).document.name, "Portable Candidate");
-  assert.equal(await readFile(join(targetDir, "applications", "application-1", "resume.pdf"), "utf8"), "%PDF-1.7\nportable");
+  assert.equal(await readFile(join(targetDir, "applications", "application-1", "resume.resume"), "utf8"), portableResumeText);
+  assert.equal(await readFile(join(targetDir, "applications", "application-1", "cover.cover"), "utf8"), portableCoverText);
+  assert.equal(
+    await readFile(join(targetDir, "applications", "application-1", "attachments", "writing sample.pdf"), "utf8"),
+    "%PDF-1.7\nattachment"
+  );
   const siblings = await readdir(isolatedRoot);
   const safetyCopy = siblings.find((name) => name.startsWith("target-workspace.restore-backup-"));
   assert.ok(safetyCopy, "restore retains the complete previous workspace as a sibling safety copy");
@@ -228,6 +299,34 @@ try {
   );
   assert.deepEqual(await snapshot(targetDir), beforeFailedRestore, "checksum failure leaves active workspace unchanged");
 
+  const missingManagedFile = {
+    ...withBrowser,
+    files: withBrowser.files.filter(
+      (file) => file.path !== "applications/application-1/attachments/writing sample.pdf"
+    )
+  };
+  await assert.rejects(
+    () => restoreWorkspaceBackup(targetDir, missingManagedFile, fixedDate),
+    (error) => error instanceof WorkspaceBackupError && /tracker and saved document files do not match/.test(error.message),
+    "schema v2 rejects tracker metadata whose saved file is absent"
+  );
+  const attachmentFile = withBrowser.files.find(
+    (file) => file.path === "applications/application-1/attachments/writing sample.pdf"
+  );
+  assert.ok(attachmentFile);
+  await assert.rejects(
+    () => restoreWorkspaceBackup(targetDir, {
+      ...withBrowser,
+      files: [
+        ...withBrowser.files,
+        { ...attachmentFile, path: "applications/orphan/attachments/writing sample.pdf" }
+      ]
+    }, fixedDate),
+    (error) => error instanceof WorkspaceBackupError && /tracker and saved document files do not match/.test(error.message),
+    "schema v2 rejects saved files for an untracked application"
+  );
+  assert.deepEqual(await snapshot(targetDir), beforeFailedRestore, "application-file mismatch leaves active workspace unchanged");
+
   const invalidTracker = replaceEntry(
     withBrowser,
     "applications.json",
@@ -248,13 +347,41 @@ try {
   );
   assert.deepEqual(await snapshot(targetDir), beforeFailedRestore, "resume validation failure leaves active workspace unchanged");
 
-  const invalidPdf = replaceEntry(withBrowser, "applications/application-1/resume.pdf", "not a pdf");
+  const invalidPdf = replaceEntry(
+    withBrowser,
+    "applications/application-1/attachments/writing sample.pdf",
+    "not a pdf"
+  );
   await assert.rejects(
     () => restoreWorkspaceBackup(targetDir, invalidPdf, fixedDate),
     (error) => error instanceof WorkspaceBackupError && /invalid saved application PDF/.test(error.message),
     "invalid PDF data is rejected"
   );
   assert.deepEqual(await snapshot(targetDir), beforeFailedRestore, "PDF validation failure leaves active workspace unchanged");
+
+  const invalidApplicationResume = replaceEntry(
+    withBrowser,
+    "applications/application-1/resume.resume",
+    "{\"format\":\"wrong\"}"
+  );
+  await assert.rejects(
+    () => restoreWorkspaceBackup(targetDir, invalidApplicationResume, fixedDate),
+    (error) => error instanceof WorkspaceBackupError && /invalid saved application .resume file/.test(error.message),
+    "invalid strict application resume source is rejected"
+  );
+  assert.deepEqual(
+    await snapshot(targetDir),
+    beforeFailedRestore,
+    "application resume validation failure leaves active workspace unchanged"
+  );
+
+  const invalidCover = replaceEntry(withBrowser, "applications/application-1/cover.cover", "{\"format\":\"wrong\"}");
+  await assert.rejects(
+    () => restoreWorkspaceBackup(targetDir, invalidCover, fixedDate),
+    (error) => error instanceof WorkspaceBackupError && /invalid saved application .cover file/.test(error.message),
+    "invalid strict cover-letter source is rejected"
+  );
+  assert.deepEqual(await snapshot(targetDir), beforeFailedRestore, "cover-letter validation failure leaves active workspace unchanged");
 
   await assert.rejects(
     () => restoreWorkspaceBackup(targetDir, { ...withBrowser, files: [...withBrowser.files, withBrowser.files[0]] }, fixedDate),

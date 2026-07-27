@@ -91,7 +91,7 @@ writable operating-system userData
     resumes/                    named `.resume` variants and `.trash/` history
     cover-letters/              named `.cover` variants and `.trash/` history
     applications.json           tracker store
-    applications/<id>/          saved application PDFs
+    applications/<id>/          saved `.resume` / `.cover` sources or uploaded PDFs
     browser-preferences.json    allowlisted origin-portable preferences
 ```
 

@@ -5,12 +5,11 @@ import type { ResumeData } from "@typeset/engine/lib/resumeData.ts";
 import { serializeResumeFile } from "@typeset/engine/lib/resumeFile.ts";
 import { toTypesetSchema } from "@typeset/engine/typeset/schema.ts";
 import { downloadBlob } from "@typeset/engine/lib/download.ts";
-import type { PolishedResume } from "../resumeEngine";
 import { buildResumeFileName, extractApplicantName, sanitizeFileBase } from "../lib/downloads";
 import { inferCompanyFromUrl } from "../lib/jobTarget";
+import type { DocumentUpload } from "../lib/applicationDocumentRequests";
 
 type UseResumeExportArgs = {
-  result: PolishedResume | null;
   // The current cover letter — single owner, from polish OR on-demand
   // generation (App's useCoverLetter state). The Copy button reads this.
   coverLetterText?: string;
@@ -55,7 +54,6 @@ function pdfExportFailureMessage(error: unknown): string {
 // Owns the resume export surface: engine PDF render/preview and the `.resume`
 // save, plus the per-action status/flag state those buttons read.
 export function useResumeExport({
-  result,
   coverLetterText,
   editedResume,
   currentResumeText,
@@ -164,20 +162,20 @@ export function useResumeExport({
     setExportStatus(`Saved ${fileName}.`);
   }
 
-  // Render the CURRENT resume to artifacts for pipeline tracking: the
-  // engine-typeset PDF as base64. Returns null when there is nothing to
-  // render or the PDF emit fails, so a failed render never blocks tracking.
-  async function getResumeArtifacts(): Promise<{ pdfBase64: string | null; fileName: string } | null> {
-    if (!result && !editedResume) return null;
-    let pdfBase64: string | null = null;
-    try {
-      const bytes = await renderEnginePdfBytes();
-      pdfBase64 = await blobToBase64(new Blob([bytes as BlobPart]));
-    } catch {
-      return null;
-    }
-    return { pdfBase64, fileName: resumeDownloadName("pdf") };
+  // Serialize the CURRENT resume to the editable `.resume` source an
+  // application keeps. PDF preview/download is rendered from this source on
+  // demand, avoiding a duplicate PDF in local storage.
+  async function getResumeArtifacts(): Promise<DocumentUpload | null> {
+    if (!applicationSourceText) return null;
+    return {
+      sourceText: applicationSourceText,
+      fileName: resumeDownloadName("resume")
+    };
   }
+
+  const applicationSourceText = editedResume
+    ? serializeResumeFile(editedResume, docStyle)
+    : "";
 
   return {
     coverCopied,
@@ -187,20 +185,7 @@ export function useResumeExport({
     resumeDownloadName,
     handleDownloadPdf,
     handleDownloadResume,
-    getResumeArtifacts
+    getResumeArtifacts,
+    applicationSourceText
   };
-}
-
-// Blob → bare base64 (no data: prefix), for posting the compiled PDF to the
-// application-resume save endpoint.
-function blobToBase64(blob: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      const value = typeof reader.result === "string" ? reader.result : "";
-      resolve(value.includes(",") ? value.slice(value.indexOf(",") + 1) : "");
-    };
-    reader.onerror = () => reject(reader.error ?? new Error("Could not encode PDF."));
-    reader.readAsDataURL(blob);
-  });
 }

@@ -18,7 +18,6 @@ type UseCoverLetterArgs = {
   providerReady: boolean;
   providerMessage: string;
   resumeText: string;
-  onCaptureSource: () => void;
   onApplyTailored: (text: string) => void;
   onApplyExternal: (text: string) => void;
   onUsage?: (usage: StageAiUsage) => void;
@@ -46,7 +45,6 @@ export function useCoverLetter({
   providerReady,
   providerMessage,
   resumeText,
-  onCaptureSource,
   onApplyTailored,
   onApplyExternal,
   onUsage
@@ -154,7 +152,6 @@ export function useCoverLetter({
       return;
     }
 
-    onCaptureSource();
     const controller = new AbortController();
     requestAbortRef.current = controller;
     const generation = requestGenerationRef.current;

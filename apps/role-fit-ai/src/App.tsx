@@ -60,11 +60,18 @@ import {
   clearAutosaveDraft,
   type AutosavedDraft
 } from "./hooks/useAutosaveDraft";
+import {
+  useCoverLetterAutosaveDraft,
+  recoverCoverLetterAutosaveDraft,
+  clearCoverLetterAutosaveDraft,
+  type CoverLetterAutosavedDraft
+} from "./hooks/useCoverLetterAutosaveDraft";
 import { useTabPresence } from "./hooks/useTabPresence";
 import { type PresencePhase } from "./lib/tabPresence";
 import {
-  buildResumeDocumentTitle,
-  completeAutoResumeDocumentTitle,
+  buildDocumentTitle,
+  completeAutoDocumentTitle,
+  type DocumentTitleKind,
   resolveResumeApplicantName,
   sanitizeFileBase
 } from "./lib/downloads";
@@ -74,6 +81,7 @@ import { buildCandidateFactsContext, mergeHonestContext } from "./lib/candidateF
 import { extractJobPosting, type ExtractedJobTracking } from "./lib/jobExtract";
 import { serializeResumeData } from "./lib/resumeText";
 import type { ResumeData } from "@typeset/engine/lib/resumeData.ts";
+import { parseResumeFile } from "@typeset/engine/lib/resumeFile.ts";
 import { defaultTailorModes, type TailorMode } from "./lib/tailorScope";
 import type { StageAiUsage } from "./lib/aiUsage";
 import { useDuplicateGuard } from "./hooks/useDuplicateGuard";
@@ -81,6 +89,13 @@ import { useJobIntake, type ImportedJobSnapshot } from "./hooks/useJobIntake";
 import { usePolishPipeline } from "./hooks/usePolishPipeline";
 import { useWorkspaceResume } from "./hooks/useWorkspaceResume";
 import { useApplyFlow } from "./hooks/useApplyFlow";
+import { useApplicationDocumentSync } from "./hooks/useApplicationDocumentSync";
+import { useApplicationFiles } from "./hooks/useApplicationFiles";
+import {
+  applicationDocumentUrl,
+  type ApplicationDocumentKind
+} from "./lib/applicationDocumentRequests";
+import { applicationDocumentPdfBlob } from "./lib/applicationDocumentPdf";
 
 import { Masthead } from "./sections/Masthead";
 import { JobMenu } from "./sections/JobMenu";
@@ -191,6 +206,10 @@ const EMPTY_INLINE_FORMAT: InlineFormatState = {
 
 const DEFAULT_DOCUMENT_TITLE = "Resume";
 const LEGACY_DEFAULT_DOCUMENT_TITLE = "Resume draft";
+// The untouched titles the cover-letter editor sets itself (blank, starter, the
+// workspace default). Only these — never a title the user typed — are upgraded
+// to the shared Name_Company_Cover_Letter form.
+const COVER_LETTER_TITLE_PLACEHOLDERS = ["Cover letter", "Untitled cover letter"] as const;
 const DOCUMENT_TITLE_STORAGE_KEY = "rolefit:documentTitle";
 const OUTPUT_TABS: OutputTabDescriptor[] = [
   { id: "resume", label: "Resume" },
@@ -208,9 +227,12 @@ function definedTracking(tracking: ExtractedJobTracking) {
   ) as ExtractedJobTracking;
 }
 
-function documentTitleForJob(tracking: ExtractedJobTracking, applicantName: string): string {
-  const company = (tracking.company || "").trim();
-  return buildResumeDocumentTitle(applicantName, company);
+function documentTitleForJob(
+  kind: DocumentTitleKind,
+  tracking: ExtractedJobTracking,
+  applicantName: string
+): string {
+  return buildDocumentTitle(kind, applicantName, (tracking.company || "").trim());
 }
 
 function browserTabTitle(tracking: ExtractedJobTracking): string {
@@ -223,7 +245,7 @@ function browserTabTitle(tracking: ExtractedJobTracking): string {
 
 function App() {
   // ----- Dialog system -----
-  const { confirm } = useDialog();
+  const { alert, confirm } = useDialog();
 
   // Draggable progress dock (Tailor/Review/Distill/Cover/Answers task cards) —
   // lets the user drag the fixed-position stack out of the way of whatever
@@ -235,6 +257,13 @@ function App() {
     confirm({
       title: "Replace resume?",
       message: "Replace the resume in the editor? Unsaved edits will be lost.",
+      confirmLabel: "Replace"
+    });
+  // Same wording the cover-letter toolbar uses for its own replace prompts.
+  const confirmReplaceCoverLetter = () =>
+    confirm({
+      title: "Replace cover letter?",
+      message: "Replace the current cover letter? Unsaved edits will be lost.",
       confirmLabel: "Replace"
     });
   const confirmReplaceApplicationDraft = () =>
@@ -401,6 +430,13 @@ function App() {
   const [isApplicationModalOpen, setIsApplicationModalOpen] = useState(false);
   // null → the modal is in "add" mode; an id → it edits that application.
   const [modalApplicationId, setModalApplicationId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const url = resumePreview?.url;
+    return () => {
+      if (url?.startsWith("blob:")) URL.revokeObjectURL(url);
+    };
+  }, [resumePreview?.url]);
   // The Settings dialog's open state AND its active section in one value: null is
   // closed, a section id is open on that section. "Add evidence" opens it directly
   // on Guidance, so the section cannot be private to the dialog.
@@ -417,6 +453,8 @@ function App() {
   // Autosave draft recovery: on mount, check whether a draft was saved that
   // the user may want to restore. Null = no draft; non-null = prompt visible.
   const [pendingAutosaveDraft, setPendingAutosaveDraft] = useState<AutosavedDraft | null>(null);
+  // The cover letter's own recovery draft — the two editors recover the same way.
+  const [pendingCoverDraft, setPendingCoverDraft] = useState<CoverLetterAutosavedDraft | null>(null);
   // Track whether the JD has changed since the last polish result. When true,
   // show a quiet "review is stale" notice in the ReviewRail.
   const [reviewStale, setReviewStale] = useState(false);
@@ -485,6 +523,9 @@ function App() {
       coverLetterEditorRef.current?.focusDocumentStart();
     }, [])
   });
+  // Aliased next to the editor so every naming path below can use it; the
+  // setter itself is a plain useState setter and stable.
+  const setCoverLetterTitle = coverLetterEditor.setDocumentTitle;
   const [coverLetterInlineFormat, setCoverLetterInlineFormat] =
     useState<InlineFormatState>(EMPTY_INLINE_FORMAT);
   const [linkEditorOpen, setLinkEditorOpen] = useState(false);
@@ -502,8 +543,11 @@ function App() {
     setImportedJob(snapshot);
     if (!snapshot) return;
     const applicantName = resolveResumeApplicantName(editedResume?.name, currentResumeText || resumeText);
-    setDocumentTitle(documentTitleForJob(snapshot.tracking, applicantName));
-  }, [currentResumeText, editedResume?.name, resumeText]);
+    setDocumentTitle(documentTitleForJob("resume", snapshot.tracking, applicantName));
+    // Retitle the letter for the new role too. Leaving it behind would keep the
+    // previous company in the letter's name and in every file exported from it.
+    setCoverLetterTitle(documentTitleForJob("coverLetter", snapshot.tracking, applicantName));
+  }, [currentResumeText, editedResume?.name, resumeText, setCoverLetterTitle]);
   // Per-section tailoring choice. Off is the implicit default (absent key); the
   // map stores only "tailor"/"include" so the three states are mutually exclusive
   // by construction.
@@ -526,6 +570,10 @@ function App() {
     markResumeClean();
     docStyle.markClean();
   }, [docStyle.markClean, markResumeClean]);
+  const markResumeApplicationSaved = useCallback(() => {
+    clearAutosaveDraft();
+    markResumeDocumentClean();
+  }, [markResumeDocumentClean]);
   const globalAlignments = useMemo(
     () => editedResume ? globalAlignmentState(editedResume, docStyle.style) : null,
     [docStyle.style, editedResume]
@@ -600,9 +648,21 @@ function App() {
     const company = (jobTracking.company ?? "").trim();
     if (!applicantName || !company) return;
     setDocumentTitle((current) =>
-      completeAutoResumeDocumentTitle(current, applicantName, company, DEFAULT_DOCUMENT_TITLE)
+      completeAutoDocumentTitle("resume", current, applicantName, company, [DEFAULT_DOCUMENT_TITLE])
     );
   }, [editedResume?.name, jobTracking.company, resumeText]);
+
+  // The letter follows the same naming rule (Name_Company_Cover_Letter), so a
+  // resume and its letter for one role read as one application. Partial identity
+  // is enough here — the letter has no second automatic naming path to complete.
+  useEffect(() => {
+    const applicantName = resolveResumeApplicantName(editedResume?.name, resumeText);
+    const company = (jobTracking.company ?? "").trim();
+    if (!applicantName && !company) return;
+    setCoverLetterTitle((current) =>
+      completeAutoDocumentTitle("coverLetter", current, applicantName, company, COVER_LETTER_TITLE_PLACEHOLDERS)
+    );
+  }, [editedResume?.name, jobTracking.company, resumeText, setCoverLetterTitle]);
 
   // Derive a short job-label for the autosave + cross-tab presence context (role
   // + company only — never the full JD body). Uses the shared `jobTracking` so
@@ -626,6 +686,16 @@ function App() {
     getJobKeyHash: () => duplicateGuard.currentJobKeyHash()
   });
 
+  // The letter's equivalent: its unsaved edits are kept in their own recoverable
+  // draft rather than only warning that the document is unsaved.
+  const coverDraftAutosaveState = useCoverLetterAutosaveDraft({
+    payload: coverLetterEditor.draftPayload,
+    documentTitle: coverLetterEditor.documentTitle,
+    dirty: coverLetterEditor.dirty,
+    hasContent: Boolean(coverLetterEditor.text.trim()),
+    jobLabel: _autosaveJobLabel
+  });
+
   const {
     applications,
     isLoading: isApplicationsLoading,
@@ -634,11 +704,11 @@ function App() {
     pendingWrites: pendingApplicationWrites,
     upsert: upsertApplication,
     saveApplication,
-    patchApplication,
     updateStatus: updateApplicationStatus,
     updateNotes: updateApplicationNotes,
     updateField: updateApplicationField,
     remove: removeApplication,
+    getApplication,
     storagePath: applicationsPath,
     findForTarget,
     findDuplicatesForTarget,
@@ -646,6 +716,11 @@ function App() {
     dismissDuplicateGroup,
     refresh: refreshApplications
   } = useApplications();
+
+  const applicationFiles = useApplicationFiles({
+    getApplication,
+    refreshApplications
+  });
 
   // Duplicate-warning ladder for the current job target (advisory note, the
   // pre-polish blocking gate, and the Apply merge-target resolution) — the
@@ -707,7 +782,6 @@ function App() {
     providerReady: coverProviderReady,
     providerMessage: coverProviderMessage,
     resumeText,
-    onCaptureSource: coverLetterEditor.captureTailorSource,
     onApplyTailored: coverLetterEditor.applyTailoredText,
     onApplyExternal: coverLetterEditor.applyExternalText,
     onUsage: (usage) => setPipelineAiUsage((prev) => ({ ...prev, cover: usage }))
@@ -721,6 +795,8 @@ function App() {
     // The draft prompt is shown in ResumeTab; the user clicks to restore or dismiss.
     const draft = recoverAutosaveDraft();
     if (draft) setPendingAutosaveDraft(draft);
+    const coverDraft = recoverCoverLetterAutosaveDraft();
+    if (coverDraft) setPendingCoverDraft(coverDraft);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -730,6 +806,10 @@ function App() {
   useEffect(() => {
     if (resumeEdited) setPendingAutosaveDraft(null);
   }, [resumeEdited]);
+
+  useEffect(() => {
+    if (coverLetterEditor.dirty) setPendingCoverDraft(null);
+  }, [coverLetterEditor.dirty]);
 
   const resumeSectionIdsKey = editedResume?.sections.map((section) => section.id).join("|") ?? "";
   useEffect(() => {
@@ -877,9 +957,9 @@ function App() {
     handleDownloadPdf,
     handleDownloadResume,
     resumeDownloadName,
-    getResumeArtifacts
+    getResumeArtifacts,
+    applicationSourceText: currentResumeSource
   } = useResumeExport({
-    result,
     editedResume,
     currentResumeText,
     documentTitle,
@@ -1159,6 +1239,29 @@ function App() {
     return jobTracking;
   }
 
+  // Per-document application saves. Apply snapshots both documents; afterwards
+  // the resume and the cover letter each keep their own saved/unsaved state and
+  // their own explicit "Update application" action in their Save menus.
+  const {
+    linkApplication,
+    resume: resumeApplicationSync,
+    coverLetter: coverLetterApplicationSync
+  } = useApplicationDocumentSync({
+    applications,
+    findForTarget,
+    jobUrl,
+    jobDescription,
+    currentResumeText,
+    currentResumeSource,
+    coverLetterText: coverLetterEditor.text,
+    currentCoverLetterSource: coverLetterEditor.draftPayload ?? "",
+    saveApplicationDocument: applicationFiles.saveDocument,
+    getResumeArtifacts,
+    getCoverLetterArtifacts: coverLetterEditor.getArtifacts,
+    onResumeSaved: markResumeApplicationSaved,
+    onCoverLetterSaved: coverLetterEditor.markApplicationSaved
+  });
+
   // The Apply flow (download-prompt state + commitApply/handleApply/
   // handleApplyDownloadPick/handleApplyOnly/saveAppliedResumeArtifacts) lives in
   // useApplyFlow; App passes in the job/resume/result/export/duplicate-guard
@@ -1188,14 +1291,16 @@ function App() {
     applications,
     findForTarget,
     upsertApplication,
-    patchApplication,
+    saveApplicationDocument: applicationFiles.saveDocument,
+    linkApplication,
     currentJobTracking,
     resolveApplyDuplicate: duplicateGuard.resolveApplyDuplicate,
     canExportResume,
     handleDownloadPdf,
     getResumeArtifacts,
-    clearAutosaveDraft,
-    markResumeClean: markResumeDocumentClean,
+    getCoverLetterArtifacts: coverLetterEditor.getArtifacts,
+    onResumeSaved: markResumeApplicationSaved,
+    onCoverLetterSaved: coverLetterEditor.markApplicationSaved,
     setApplyStatus,
     setActiveOutputTab,
     setExpandedApplicationId
@@ -1204,18 +1309,62 @@ function App() {
   async function handleLoadApplication(app: Application) {
     if (resumeDocumentDirty || coverLetterEditor.dirty) {
       if (!(await confirmReplaceApplicationDraft())) return;
-      clearAutosaveDraft();
-      setPendingAutosaveDraft(null);
     }
+
+    // Strict application sources are authoritative for editor content and
+    // style. Validate both before replacing either current editor.
+    let savedResumeSource: ReturnType<typeof parseResumeFile> | null = null;
+    let savedCoverSource = "";
+    try {
+      if (app.resumeArtifacts?.hasSource) {
+        const response = await fetch(applicationDocumentUrl(app.id, "resume", "source"));
+        if (!response.ok) throw new Error("The saved resume source could not be read.");
+        savedResumeSource = parseResumeFile(await response.arrayBuffer());
+      }
+      if (app.coverLetterArtifacts?.hasSource) {
+        const response = await fetch(applicationDocumentUrl(app.id, "cover", "source"));
+        if (!response.ok) throw new Error("The saved cover letter source could not be read.");
+        savedCoverSource = await response.text();
+      }
+    } catch (error) {
+      await alert({
+        title: "Open failed",
+        message: error instanceof Error ? error.message : "The saved application documents could not be read."
+      });
+      return;
+    }
+
+    const restoredResumeData = savedResumeSource?.data ?? app.resumeData;
+    const restoredResume = restoredResumeData
+      ? serializeResumeData(restoredResumeData)
+      : app.polishedText || "";
+    const applicantName = resolveResumeApplicantName(
+      restoredResumeData?.name,
+      restoredResume || currentResumeText || resumeText
+    );
+    const restoredTracking = { role: app.role, title: app.title, company: app.company };
+    const resumeTitle = documentTitleForJob("resume", restoredTracking, applicantName);
+    const coverTitle = documentTitleForJob("coverLetter", restoredTracking, applicantName);
+    if (savedCoverSource && !coverLetterEditor.openApplicationSource(savedCoverSource, coverTitle)) {
+      await alert({
+        title: "Open failed",
+        message: "The saved cover letter source could not be read."
+      });
+      return;
+    }
+
+    // Opening a tracked application supersedes any recovery prompt from the
+    // previous desk state, even when that state happened to be clean.
+    clearAutosaveDraft();
+    clearCoverLetterAutosaveDraft();
+    setPendingAutosaveDraft(null);
+    setPendingCoverDraft(null);
     // Description and link are separate fields: restore each from its own slot.
     setJobDescription(app.jobDescription || "");
     setJobUrl(app.jobUrl || "");
     setImportedJob(null);
-    const applicantName = resolveResumeApplicantName(
-      app.resumeData?.name,
-      app.polishedText || currentResumeText || resumeText
-    );
-    setDocumentTitle(documentTitleForJob({ role: app.role, title: app.title, company: app.company }, applicantName));
+    setDocumentTitle(resumeTitle);
+    if (!savedCoverSource) setCoverLetterTitle(coverTitle);
     // Restore a consistent AI-usage/raw-text pair regardless of which branch
     // below runs — a tracker-restore must not carry over the PREVIOUS working
     // job's provider attribution or raw text.
@@ -1225,13 +1374,15 @@ function App() {
     // its own record so the polish/apply duplicate gates don't nag that it
     // "already exists" — merging back into it is the point.
     duplicateGuard.ackApplication(app);
-    applyCoverLetter(app.coverLetterText || "");
-    if (app.resumeData || app.polishedText) {
-      const restoredResume = app.polishedText || (app.resumeData ? serializeResumeData(app.resumeData) : "");
+    // Work continues against THIS record: later document saves update it rather
+    // than creating a second row for the same posting.
+    linkApplication(app.id);
+    if (!savedCoverSource) applyCoverLetter(app.coverLetterText || "");
+    if (restoredResumeData || restoredResume) {
       const restoredAnalysis = analyzeResumeText(restoredResume, app.jobDescription || "");
       setResumeText(restoredResume);
       setFileName("");
-      setFileStatus("Loaded the applied resume snapshot into the editor. Save it as base if you want it at startup.");
+      setFileStatus("Loaded the saved resume into the editor. Save it as base if you want it at startup.");
       // Single-owner cover letter: show the saved letter alongside its restored
       // resume in the dedicated editor.
       setResult({
@@ -1246,12 +1397,15 @@ function App() {
             : undefined,
         missingRequiredSkills: missingRequiredSkillsFromApplication(app)
       });
-      if (app.resumeData) {
-        seedResumeData(app.resumeData);
+      if (restoredResumeData) {
+        seedResumeData(restoredResumeData);
+        if (savedResumeSource) {
+          docStyle.replaceDocumentStyle(savedResumeSource.documentStyle);
+        }
       } else {
         seedResumeEditor(restoredResume, "");
       }
-      setLinkStatus(`Loaded "${app.title}" and its saved resume snapshot from pipeline.`);
+      setLinkStatus(`Loaded "${app.title}" and its saved resume from pipeline.`);
     } else {
       setLinkStatus(`Loaded "${app.title}" job target from pipeline.`);
       setResult(null);
@@ -1298,6 +1452,21 @@ function App() {
     setPendingAutosaveDraft(null);
   }
 
+  // Same contract as the resume restore above, including keeping the stored copy
+  // until the letter is safe elsewhere: openRecoveryDraft seeds CLEAN, so a
+  // crash immediately after restoring still has something to recover.
+  async function handleRestoreCoverDraft(draft: CoverLetterAutosavedDraft) {
+    if (coverLetterEditor.dirty && !(await confirmReplaceCoverLetter())) return;
+    if (coverLetterEditor.openRecoveryDraft(draft.coverPayload, draft.documentTitle)) {
+      setPendingCoverDraft(null);
+    }
+  }
+
+  function handleDismissCoverDraft() {
+    clearCoverLetterAutosaveDraft();
+    setPendingCoverDraft(null);
+  }
+
   async function handleDeleteApplication(id: string, title: string) {
     if (
       !(await confirm({
@@ -1319,16 +1488,50 @@ function App() {
     setIsApplicationModalOpen(true);
   }
 
-  // In-app PDF preview of the resume that was saved with an application (renders
-  // the saved artifact via react-pdf — distinct from the editor compile preview).
-  function handlePreviewApplicationResume(application: Application) {
+  // Source-only `.resume`/`.cover` documents are rendered on demand so the
+  // workspace does not need duplicate PDF bytes. Stored PDFs are fetched first
+  // as well, so a missing file surfaces through the same recoverable dialog.
+  async function handlePreviewApplicationDocument(
+    application: Application,
+    kind: ApplicationDocumentKind = "resume"
+  ) {
     const base = sanitizeFileBase(
       application.company || application.role || application.title || "resume"
     );
-    setResumePreview({
-      url: `/api/applications/${encodeURIComponent(application.id)}/resume.pdf`,
-      name: `${base}_Resume.pdf`
-    });
+    try {
+      setResumePreview({
+        url: URL.createObjectURL(
+          await applicationDocumentPdfBlob(application, kind, import.meta.env.BASE_URL)
+        ),
+        name: `${base}_${kind === "resume" ? "Resume" : "Cover_Letter"}.pdf`
+      });
+    } catch (error) {
+      await alert({
+        title: "Preview failed",
+        message: error instanceof Error ? error.message : "The saved document could not be previewed."
+      });
+    }
+  }
+
+  async function handleDownloadApplicationDocument(
+    application: Application,
+    kind: ApplicationDocumentKind
+  ) {
+    const base = sanitizeFileBase(
+      application.company || application.role || application.title || "resume"
+    );
+    try {
+      const [{ downloadBlob }, blob] = await Promise.all([
+        import("@typeset/engine/lib/download.ts"),
+        applicationDocumentPdfBlob(application, kind, import.meta.env.BASE_URL)
+      ]);
+      downloadBlob(blob, `${base}_${kind === "resume" ? "Resume" : "Cover_Letter"}.pdf`);
+    } catch (error) {
+      await alert({
+        title: "Download failed",
+        message: error instanceof Error ? error.message : "The saved document could not be downloaded."
+      });
+    }
   }
 
   function handleAddApplication() {
@@ -1694,6 +1897,7 @@ function App() {
                       disabled: !editedResume || isSavingBaseResume,
                       onSave: (fileName) => saveCurrentAsBaseResume(fileName)
                     }}
+                    applicationSync={resumeApplicationSync}
                     actions={[
                       {
                         key: "resume",
@@ -1796,6 +2000,11 @@ function App() {
               inlineFormat={coverLetterInlineFormat}
               onInlineFormatStateChange={setCoverLetterInlineFormat}
               onTailor={handleGenerateCoverLetter}
+              applicationSync={coverLetterApplicationSync}
+              draftAutosaveState={coverDraftAutosaveState}
+              pendingAutosaveDraft={pendingCoverDraft}
+              onRestoreAutosaveDraft={handleRestoreCoverDraft}
+              onDismissAutosaveDraft={handleDismissCoverDraft}
               isTailoring={isGeneratingCover}
               tailorStatus={coverStatus}
               resumeReady={resumeReady}
@@ -1826,7 +2035,7 @@ function App() {
                 onUpdateNotes={updateApplicationNotes}
                 onLoad={handleLoadApplication}
                 onOpenApplication={handleOpenApplicationDetail}
-                onPreviewResume={handlePreviewApplicationResume}
+                onPreviewResume={(app) => handlePreviewApplicationDocument(app, "resume")}
                 onDelete={handleDeleteApplication}
                 onAddApplication={handleAddApplication}
                 onRefresh={refreshApplications}
@@ -1912,7 +2121,12 @@ function App() {
               setIsApplicationModalOpen(false);
               handleLoadApplication(app);
             }}
-            onPreviewResume={handlePreviewApplicationResume}
+            onPreviewDocument={handlePreviewApplicationDocument}
+            onDownloadDocument={handleDownloadApplicationDocument}
+            onSaveDocument={applicationFiles.saveDocument}
+            onRemoveDocument={applicationFiles.removeDocument}
+            onSaveAttachment={applicationFiles.saveAttachment}
+            onRemoveAttachment={applicationFiles.removeAttachment}
           />
         </Suspense>
       ) : null}

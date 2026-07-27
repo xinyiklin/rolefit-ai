@@ -55,9 +55,23 @@ function GroupCard({
     if (!canonical) return;
     const label = `${displayCompany(canonical)} · ${displayRole(canonical)}`;
     const removedCount = group.applications.length - 1;
+    const removedEntriesHaveFiles = group.applications.some((candidate) =>
+      candidate.id !== canonicalId &&
+      Boolean(
+        candidate.resumeArtifacts ||
+        candidate.coverLetterArtifacts ||
+        candidate.attachments?.length
+      )
+    );
     const proceed = await confirm({
       title: "Merge duplicate applications?",
-      message: `Merge ${label} entries: this removes ${removedCount} ${removedCount === 1 ? "entry" : "entries"} and keeps the selected one.`,
+      message:
+        `Merge ${label} entries: this removes ${removedCount} ${
+          removedCount === 1 ? "entry" : "entries"
+        } and keeps the selected one.` +
+        (removedEntriesHaveFiles
+          ? " Documents on removed entries are moved to workspace trash and are not combined with the selected entry."
+          : ""),
       confirmLabel: "Merge",
       tone: "danger"
     });

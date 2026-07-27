@@ -119,7 +119,7 @@ type TrackerTabProps = {
   onPreviewResume: (app: Application) => void;
   onDelete: (id: string, title: string) => void;
   onAddApplication: () => void;
-  onRefresh: () => Promise<void>;
+  onRefresh: () => Promise<boolean>;
   // Merge action for duplicate clusters, threaded from useApplications via
   // App.tsx. The clusters themselves are computed HERE (this component only
   // mounts while the Applications tab is open), not in the hook — the O(n²)

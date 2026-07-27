@@ -18,12 +18,15 @@ import {
 } from "./workspace.ts";
 import { handleImportJob } from "./jobImport.ts";
 import {
-  handleApplicationResumeFile,
+  handleApplicationAttachmentFile,
+  handleApplicationDocumentFile,
   handleDeleteApplication,
   handleListApplications,
-  handleSaveApplicationResume,
-  handleSaveApplications
+  handleSaveApplicationDocument,
+  handleSaveApplications,
+  handleUploadApplicationAttachment
 } from "./applications/routes.ts";
+import { isApplicationDocumentKind } from "./applications/documents.ts";
 import { handleBrowserPreferences } from "./browserPreferences.ts";
 import {
   handleRestoreCoverLetter,
@@ -494,25 +497,50 @@ export async function startRoleFitServer(options: RoleFitServerOptions): Promise
       return;
     }
 
-    const resumeFileMatch = pathname.match(/^\/api\/applications\/([^/]+)\/resume\.pdf$/);
-    if (resumeFileMatch) {
-      const id = decodeRouteSegment(resumeFileMatch[1]);
-      if (id === null) {
-        sendJson(res, 400, { error: "Invalid application id." });
+    // One vocabulary for both document kinds: /documents/<kind> replaces the
+    // stored source/PDF snapshot and /documents/<kind>.<format> streams one back.
+    const documentFileMatch = pathname.match(/^\/api\/applications\/([^/]+)\/documents\/([a-z]+)\.([a-z]+)$/);
+    if (documentFileMatch) {
+      const id = decodeRouteSegment(documentFileMatch[1]);
+      if (id === null || !isApplicationDocumentKind(documentFileMatch[2])) {
+        sendJson(res, 400, { error: "Invalid application document." });
         return;
       }
-      void handleApplicationResumeFile(req, res, id, workspaceDir);
+      void handleApplicationDocumentFile(req, res, id, documentFileMatch[2], documentFileMatch[3], workspaceDir);
       return;
     }
 
-    const resumeSaveMatch = pathname.match(/^\/api\/applications\/([^/]+)\/resume$/);
-    if (resumeSaveMatch) {
-      const id = decodeRouteSegment(resumeSaveMatch[1]);
+    const documentSaveMatch = pathname.match(/^\/api\/applications\/([^/]+)\/documents\/([a-z]+)$/);
+    if (documentSaveMatch) {
+      const id = decodeRouteSegment(documentSaveMatch[1]);
+      if (id === null || !isApplicationDocumentKind(documentSaveMatch[2])) {
+        sendJson(res, 400, { error: "Invalid application document." });
+        return;
+      }
+      void handleSaveApplicationDocument(req, res, id, documentSaveMatch[2], workspaceDir);
+      return;
+    }
+
+    const attachmentFileMatch = pathname.match(/^\/api\/applications\/([^/]+)\/attachments\/([^/]+)$/);
+    if (attachmentFileMatch) {
+      const id = decodeRouteSegment(attachmentFileMatch[1]);
+      const fileName = decodeRouteSegment(attachmentFileMatch[2]);
+      if (id === null || fileName === null) {
+        sendJson(res, 400, { error: "Invalid attachment." });
+        return;
+      }
+      void handleApplicationAttachmentFile(req, res, id, fileName, workspaceDir);
+      return;
+    }
+
+    const attachmentUploadMatch = pathname.match(/^\/api\/applications\/([^/]+)\/attachments$/);
+    if (attachmentUploadMatch) {
+      const id = decodeRouteSegment(attachmentUploadMatch[1]);
       if (id === null) {
         sendJson(res, 400, { error: "Invalid application id." });
         return;
       }
-      void handleSaveApplicationResume(req, res, id, workspaceDir);
+      void handleUploadApplicationAttachment(req, res, id, workspaceDir);
       return;
     }
 

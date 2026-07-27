@@ -6,6 +6,7 @@ import {
   MAX_WORKSPACE_BACKUP_FILE_BYTES,
   MAX_WORKSPACE_BACKUP_BYTES,
   MAX_WORKSPACE_BACKUP_FILES,
+  LEGACY_WORKSPACE_BACKUP_SCHEMA_VERSION,
   WORKSPACE_BACKUP_FORMAT,
   WORKSPACE_BACKUP_SCHEMA_VERSION,
   isManagedWorkspaceBackupPath,
@@ -27,10 +28,19 @@ import {
   writeWorkspaceRestoreMarker
 } from "./browserPreferences.ts";
 import { countActiveTabs } from "./presence.ts";
+import { parseCoverLetterFile } from "@typeset/engine/lib/coverLetter.ts";
+import { parseResumeFile } from "@typeset/engine/lib/resumeFile.ts";
+import { safeAttachmentFileName } from "./applications/documents.ts";
 
 const RESUME_FILE_RE = /^[A-Za-z0-9][A-Za-z0-9_-]*\.(?:resume|txt|md|csv)$/;
 const HISTORY_FILE_RE = /^[A-Za-z0-9T+-]+Z?__[A-Za-z0-9][A-Za-z0-9_-]*\.(?:resume|txt|md|csv)$/;
 const APPLICATION_ID_RE = /^[A-Za-z0-9_-]{1,80}$/;
+const APPLICATION_DOCUMENT_NAMES = new Set([
+  "resume.pdf",
+  "resume.resume",
+  "cover.pdf",
+  "cover.cover"
+]);
 
 export class WorkspaceBackupError extends Error {
   status: number;
@@ -71,8 +81,35 @@ async function safeEntries(directory: string): Promise<Dirent[]> {
   }
 }
 
+function expectedApplicationPaths(
+  applications: Awaited<ReturnType<typeof readApplications>>
+): Set<string> {
+  const paths = new Set<string>();
+  for (const application of applications) {
+    if (application.resumeArtifacts?.hasPdf) {
+      paths.add(`applications/${application.id}/resume.pdf`);
+    }
+    if (application.resumeArtifacts?.hasSource) {
+      paths.add(`applications/${application.id}/resume.resume`);
+    }
+    if (application.coverLetterArtifacts?.hasPdf) {
+      paths.add(`applications/${application.id}/cover.pdf`);
+    }
+    if (application.coverLetterArtifacts?.hasSource) {
+      paths.add(`applications/${application.id}/cover.cover`);
+    }
+    for (const attachment of application.attachments ?? []) {
+      paths.add(`applications/${application.id}/attachments/${attachment.fileName}`);
+    }
+  }
+  return paths;
+}
+
 async function managedWorkspacePaths(workspaceDir: string): Promise<string[]> {
   const paths: string[] = [];
+  const applications = await readApplications(workspaceDir);
+  const trackedApplicationIds = new Set(applications.map((application) => application.id));
+  const expectedPaths = expectedApplicationPaths(applications);
   for (const entry of await safeEntries(workspaceDir)) {
     if (!entry.isFile()) continue;
     if (entry.name === "applications.json") {
@@ -86,10 +123,36 @@ async function managedWorkspacePaths(workspaceDir: string): Promise<string[]> {
     if (entry.isFile() && HISTORY_FILE_RE.test(entry.name)) paths.push(`resumes/.trash/${entry.name}`);
   }
   for (const application of await safeEntries(join(workspaceDir, "applications"))) {
-    if (!application.isDirectory() || !APPLICATION_ID_RE.test(application.name)) continue;
-    const pdf = (await safeEntries(join(workspaceDir, "applications", application.name)))
-      .find((entry) => entry.name === "resume.pdf" && entry.isFile());
-    if (pdf) paths.push(`applications/${application.name}/resume.pdf`);
+    if (
+      !application.isDirectory() ||
+      !APPLICATION_ID_RE.test(application.name) ||
+      !trackedApplicationIds.has(application.name)
+    ) {
+      continue;
+    }
+    for (const document of await safeEntries(join(workspaceDir, "applications", application.name))) {
+      const path = `applications/${application.name}/${document.name}`;
+      if (document.isFile() && APPLICATION_DOCUMENT_NAMES.has(document.name) && expectedPaths.has(path)) {
+        paths.push(path);
+      }
+    }
+    for (const attachment of await safeEntries(
+      join(workspaceDir, "applications", application.name, "attachments")
+    )) {
+      const safe = attachment.isFile() ? safeAttachmentFileName(attachment.name) : null;
+      const path = `applications/${application.name}/attachments/${attachment.name}`;
+      if (safe && safe.fileName === attachment.name && expectedPaths.has(path)) {
+        paths.push(path);
+      }
+    }
+  }
+  const present = new Set(paths);
+  const missing = [...expectedPaths].find((path) => !present.has(path));
+  if (missing) {
+    throw new WorkspaceBackupError(
+      `The application tracker references a missing saved file (${missing}). Repair or remove it before backing up.`,
+      500
+    );
   }
   return paths.sort((a, b) => a.localeCompare(b));
 }
@@ -122,6 +185,24 @@ async function readManagedFile(
     await readApplications(workspaceDir);
   } else if (path.endsWith(".pdf")) {
     validatePdf(data);
+  } else if (path.endsWith(".cover")) {
+    try {
+      parseCoverLetterFile(data);
+    } catch {
+      throw new WorkspaceBackupError(
+        "A saved application .cover file is invalid. Repair or remove it before backing up.",
+        500
+      );
+    }
+  } else if (path.startsWith("applications/") && path.endsWith(".resume")) {
+    try {
+      parseResumeFile(data);
+    } catch {
+      throw new WorkspaceBackupError(
+        "A saved application .resume file is invalid. Repair or remove it before backing up.",
+        500
+      );
+    }
   } else {
     validateBaseResumeText(basename(path), data);
   }
@@ -195,11 +276,27 @@ async function writeStagedBackup(stageDir: string, envelope: WorkspaceBackupEnve
 
   // Re-run domain validators against the complete staged tree. Nothing in the
   // active workspace has changed at this point.
+  let stagedApplications: Awaited<ReturnType<typeof readApplications>> = [];
   if (envelope.files.some((file) => file.path === "applications.json")) {
     try {
-      await readApplications(stageDir);
+      stagedApplications = await readApplications(stageDir);
     } catch {
       throw new WorkspaceBackupError("The backup's application tracker data is invalid.");
+    }
+  }
+  if (envelope.schemaVersion !== LEGACY_WORKSPACE_BACKUP_SCHEMA_VERSION) {
+    const expectedPaths = expectedApplicationPaths(stagedApplications);
+    const bundledPaths = new Set(
+      envelope.files
+        .map((file) => file.path)
+        .filter((path) => path.startsWith("applications/"))
+    );
+    const missing = [...expectedPaths].find((path) => !bundledPaths.has(path));
+    const extra = [...bundledPaths].find((path) => !expectedPaths.has(path));
+    if (missing || extra) {
+      throw new WorkspaceBackupError(
+        "The backup's application tracker and saved document files do not match."
+      );
     }
   }
   for (const file of envelope.files) {
@@ -209,6 +306,18 @@ async function writeStagedBackup(stageDir: string, envelope: WorkspaceBackupEnve
         validatePdf(data);
       } catch {
         throw new WorkspaceBackupError("The backup contains an invalid saved application PDF.");
+      }
+    } else if (file.path.endsWith(".cover")) {
+      try {
+        parseCoverLetterFile(data);
+      } catch {
+        throw new WorkspaceBackupError("The backup contains an invalid saved application .cover file.");
+      }
+    } else if (file.path.startsWith("applications/") && file.path.endsWith(".resume")) {
+      try {
+        parseResumeFile(data);
+      } catch {
+        throw new WorkspaceBackupError("The backup contains an invalid saved application .resume file.");
       }
     } else if (file.path !== "applications.json") {
       try {
