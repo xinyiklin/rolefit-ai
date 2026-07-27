@@ -2221,6 +2221,73 @@ button.table-sort svg {
   white-space: pre-wrap;
 }
 
+/* The saved letter is reference material, not the point of the tab, so it opens
+   on demand instead of pushing the attachments below the fold. */
+.application-doc-card__reader > summary {
+  cursor: pointer;
+  color: var(--ink-soft);
+  font-size: 0.78rem;
+}
+
+.application-doc-card__reader > summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.application-attachments {
+  display: grid;
+  gap: var(--s1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.application-attachments__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  align-items: center;
+  gap: var(--s2);
+  padding: var(--s1) 0;
+  border-bottom: 1px solid var(--hairline-soft);
+  font-size: 0.8rem;
+}
+
+.application-attachments__row:last-child {
+  border-bottom: 0;
+}
+
+.application-attachments__name {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s1);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.application-attachments__meta {
+  color: var(--ink-soft);
+  font-size: 0.74rem;
+  white-space: nowrap;
+}
+
+/* A failed upload or removal is the one thing in this tab the user must act on:
+   its own colour plus the alert role in the markup. */
+.application-error {
+  margin: 0;
+  color: var(--danger);
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+
+@media (max-width: 640px) {
+  .application-attachments__row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    row-gap: var(--s1);
+  }
+}
+
 /* Review-duplicates modal — reuses .application-modal__* shell; body stacks
    one full-width card per duplicate group instead of the form+aside grid. */
 .duplicate-review-modal .application-modal__body,

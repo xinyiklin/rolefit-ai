@@ -1,7 +1,8 @@
 import { useState, type FormEvent, type ReactNode } from "react";
-import { SaveAll } from "lucide-react";
+import { BriefcaseBusiness, SaveAll } from "lucide-react";
 
 import { DocumentActionMenu } from "./DocumentActionMenu";
+import type { ApplicationDocumentSync } from "../../hooks/useApplicationDocumentSync";
 
 /** A download or export row: the same shape as an Open-menu action. */
 export type DocumentSaveAction = {
@@ -41,6 +42,12 @@ export type DocumentSaveMenuProps = {
   };
   /** Downloads and exports — a file the workspace does not keep. */
   actions: DocumentSaveAction[];
+  /**
+   * Explicit save of THIS document into the tracked application. Only the
+   * document that owns this menu is written, and only when the user picks the
+   * row — regenerating or editing never rewrites what the application holds.
+   */
+  applicationSync?: ApplicationDocumentSync;
   status?: string;
 };
 
@@ -58,6 +65,7 @@ export function DocumentSaveMenu({
   primary,
   variant,
   actions,
+  applicationSync,
   status
 }: DocumentSaveMenuProps) {
   const [variantLabel, setVariantLabel] = useState("");
@@ -87,6 +95,37 @@ export function DocumentSaveMenu({
               <small>{primary.description}</small>
             </span>
           </button>
+
+          {applicationSync ? (
+            <button
+              type="button"
+              className="document-action-row"
+              data-sync-state={applicationSync.state}
+              disabled={applicationSync.disabled}
+              aria-busy={applicationSync.isSaving || undefined}
+              // Deliberately does NOT close: the row and the status line below
+              // are where the result of the save is reported.
+              onClick={() => void applicationSync.save()}
+            >
+              <BriefcaseBusiness size={15} aria-hidden="true" />
+              <span>
+                <strong>{applicationSync.title}</strong>
+                <small>{applicationSync.description}</small>
+              </span>
+            </button>
+          ) : null}
+
+          {applicationSync?.status ? (
+            <p
+              className={`document-action-panel__status${
+                applicationSync.statusIsError ? " document-action-panel__status--error" : ""
+              }`}
+              role={applicationSync.statusIsError ? "alert" : "status"}
+              aria-live={applicationSync.statusIsError ? "assertive" : "polite"}
+            >
+              {applicationSync.status}
+            </p>
+          ) : null}
 
           <form
             className="document-action-form"

@@ -97,10 +97,15 @@ assert.match(applications, /finally \{[\s\S]*setPendingWrites/, "tracker writes 
 const awaitedSave = applyFlow.indexOf("saved = await upsertApplication(app)");
 const failedSave = applyFlow.indexOf("if (!saved)", awaitedSave);
 const recoveryClear = applyFlow.indexOf("clearAutosaveDraft()", awaitedSave);
-const artifactSave = applyFlow.indexOf("saveAppliedResumeArtifacts", recoveryClear);
+const artifactSave = applyFlow.indexOf("saveAppliedDocumentArtifacts(", recoveryClear);
 assert.ok(awaitedSave >= 0 && failedSave > awaitedSave, "Apply awaits tracker persistence");
 assert.ok(recoveryClear > failedSave, "Apply only clears recovery data after confirmed persistence");
-assert.ok(artifactSave > recoveryClear, "resume artifacts start only after the application is confirmed");
+assert.ok(artifactSave > recoveryClear, "document artifacts start only after the application is confirmed");
+assert.match(
+  applyFlow,
+  /uploadApplicationDocument\(id, "resume", resume\)[\s\S]{0,200}?uploadApplicationDocument\(id, "cover", cover\)/,
+  "Apply saves the cover letter's files exactly as it saves the resume's"
+);
 
 for (const [name, source] of [["answers", answers], ["cover", cover], ["polish", polish]]) {
   assert.match(source, /workflowRequestIsCurrent/, `${name} generation checks use the shared current-request guard`);
@@ -446,5 +451,112 @@ assert.match(
   /fileName: target\?\.fileName \?\? \(target\?\.variant \? undefined : activeCoverFileName \|\| undefined\)/,
   "the active workspace file is sent as fileName, never re-slugged as a variant"
 );
+
+// Per-document application saves. The behavior of the patches themselves is
+// covered by lib/__evals__/application-documents-eval.mjs; these guard the
+// wiring that keeps the saves explicit and pointed at one existing record.
+const documentSync = readHook("useApplicationDocumentSync.ts");
+assert.match(
+  applications,
+  /const patchApplication = useCallback\(\s*\(id: string, patch: Partial<Application>\): Promise<boolean>/,
+  "a partial application update reports whether it was persisted"
+);
+assert.match(
+  applications,
+  /if \(idx < 0\) return Promise\.resolve\(false\)/,
+  "patching a vanished application resolves false instead of silently succeeding"
+);
+assert.match(
+  documentSync,
+  /const saved = await patchApplication\(application\.id, patch\)/,
+  "a document save awaits the tracker write before reporting success"
+);
+assert.match(
+  documentSync,
+  /if \(!application\) return;/,
+  "a document save without an application is a no-op — Apply creates the record"
+);
+assert.doesNotMatch(
+  documentSync,
+  /useEffect\([\s\S]{0,400}?\bsave\(/,
+  "no effect saves a document: regeneration and editing never rewrite the application"
+);
+assert.match(
+  documentSync,
+  /if \(applicationMatchesJobTarget\(linked, jobUrl, jobDescription\)\) return;\s*setLinkedId\(null\)/,
+  "the remembered application is dropped once the desk points at another posting"
+);
+assert.match(
+  applyFlow,
+  /applyMergeTargetRef\.current = null;[\s\S]{0,200}?linkApplication\(existing\?\.id \?\? app\.id\)/,
+  "a confirmed Apply links the session to that one application"
+);
+assert.match(
+  app,
+  /duplicateGuard\.ackApplication\(app\);[\s\S]{0,400}?linkApplication\(app\.id\)/,
+  "restoring a tracked application links later document saves to it"
+);
+assert.match(
+  app,
+  /coverLetterText: coverLetterEditor\.text,\s*patchApplication,/,
+  "the letter's saved/unsaved state is measured against the live editor content"
+);
+
+// Editor parity: the cover letter recovers unsaved work the way the resume
+// does, instead of only warning that it is unsaved, and neither editor keeps a
+// private restore path the other lacks.
+const coverDraft = readHook("useCoverLetterAutosaveDraft.ts");
+const draftStorage = readFileSync(new URL("../../lib/autosaveDraftStorage.ts", import.meta.url), "utf8");
+const coverTab = readFileSync(new URL("../../sections/tabs/CoverLetterTab.tsx", import.meta.url), "utf8");
+assert.doesNotMatch(
+  coverToolbar,
+  /Unsaved cover letter"/,
+  "the letter reports recovery state, not a bare unsaved warning"
+);
+assert.match(
+  coverToolbar,
+  /draftAutosaveState === "saved"\s*\?\s*\{ state: "saved", label: "Recovery draft saved" \}/,
+  "the letter uses the resume's recovery vocabulary"
+);
+assert.doesNotMatch(coverToolbar, /Restore source/, "the AI restore-source button is gone from the letter toolbar");
+assert.doesNotMatch(
+  coverEditor,
+  /sourceBeforeTailor|captureTailorSource|restoreTailorSource/,
+  "the pre-tailoring source state left with the button it served"
+);
+assert.doesNotMatch(cover, /onCaptureSource/, "the cover workflow no longer captures a pre-tailoring source");
+assert.match(
+  coverDraft,
+  /saveTabDraft\("cover"/,
+  "the letter's draft is written under its own kind, never the resume's key"
+);
+assert.match(
+  coverEditor,
+  /editor\.markClean\(\);\s*setPersistedFingerprint\(payload\);[\s\S]{0,200}?clearCoverLetterAutosaveDraft\(\)/,
+  "the recovery draft is cleared only once the letter itself is durable"
+);
+assert.match(
+  coverEditor,
+  /const openRecoveryDraft[\s\S]{0,400}?editor\.markClean\(\)/,
+  "restoring a letter draft seeds clean, like the resume restore"
+);
+assert.match(coverTab, /DraftRestoreBar/, "the letter offers the same restore bar the resume does");
+assert.match(
+  draftStorage,
+  /if \(ownerId !== "" && live\.has\(ownerId\)\) continue;/,
+  "one shared recovery rule protects a live sibling tab's draft for both editors"
+);
+assert.match(
+  app,
+  /completeAutoDocumentTitle\("coverLetter", current, applicantName, company, COVER_LETTER_TITLE_PLACEHOLDERS\)/,
+  "the letter is named on the same Name_Company_<kind> rule as the resume"
+);
+for (const kind of ["resume", "coverLetter"]) {
+  assert.equal(
+    app.match(new RegExp(`documentTitleForJob\\("${kind}"`, "g"))?.length,
+    2,
+    `both a job import and a tracker restore retitle the ${kind} for the new role`
+  );
+}
 
 console.log(`Client workflow guards eval: ${checkCount}/${checkCount} checks passed`);

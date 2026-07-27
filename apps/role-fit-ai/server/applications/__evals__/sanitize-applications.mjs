@@ -37,6 +37,14 @@ try {
       rawJobDescription: "  Raw JD text here.  ",
       duplicateDismissedIds: ["other-app", "other-app", "app_valid-123", "../bad"],
       resumeArtifacts: { hasPdf: "false", hasTex: "false", fileName: "phantom.pdf" },
+      coverLetterArtifacts: { hasPdf: true, hasSource: true, fileName: "letter.pdf", savedAt: "2026-07-27T00:00:00.000Z" },
+      attachments: [
+        { fileName: "../escape.pdf", label: "Escape", size: 10, savedAt: "2026-07-27T00:00:00.000Z" },
+        { fileName: "transcript.pdf", label: "  Transcript  ", size: 2048, savedAt: "2026-07-27T00:00:00.000Z" },
+        { fileName: "transcript.pdf", label: "Duplicate", size: 99 },
+        { fileName: "payload.exe", label: "Nope", size: 10 },
+        { fileName: "notes.txt", size: -5 }
+      ],
       aiUsage: {
         distill: {
           source: "ai",
@@ -104,6 +112,35 @@ try {
   // rawJobDescription roundtrips (trimmed via slice, not .trim()).
   if (valid?.rawJobDescription !== "  Raw JD text here.  ") failures.push("rawJobDescription did not persist");
   if (valid?.resumeArtifacts !== undefined) failures.push("string artifact booleans created a phantom saved file");
+
+  // The cover letter's artifacts carry the same shape as the resume's, so the
+  // tracker can never describe one document more richly than the other.
+  if (valid?.coverLetterArtifacts?.hasPdf !== true || valid?.coverLetterArtifacts?.hasSource !== true) {
+    failures.push("cover-letter artifacts did not roundtrip");
+  }
+
+  // Attachment metadata only survives when its name would survive the upload
+  // route's own validation: traversal is neutralized to the base name,
+  // duplicates collapse, an unsupported extension is dropped, and the content
+  // type is re-derived rather than trusted from the client.
+  const attachments = valid?.attachments ?? [];
+  const names = attachments.map((entry) => entry.fileName);
+  if (names.length !== 3) failures.push(`unexpected attachment count: ${JSON.stringify(names)}`);
+  if (!names.includes("escape.pdf")) failures.push("a traversing attachment name was not neutralized to its base name");
+  if (names.filter((name) => name === "transcript.pdf").length !== 1) failures.push("duplicate attachment names did not collapse");
+  if (names.includes("payload.exe")) failures.push("an unsupported attachment extension survived");
+  if (attachments.find((entry) => entry.fileName === "transcript.pdf")?.label !== "Transcript") {
+    failures.push("attachment labels are not trimmed");
+  }
+  if (attachments.find((entry) => entry.fileName === "transcript.pdf")?.contentType !== "application/pdf") {
+    failures.push("attachment content types are not re-derived from the stored name");
+  }
+  if (attachments.find((entry) => entry.fileName === "notes.txt")?.size !== 0) {
+    failures.push("a negative attachment size was not clamped");
+  }
+  if (attachments.find((entry) => entry.fileName === "notes.txt")?.label !== "notes.txt") {
+    failures.push("a missing attachment label does not fall back to the file name");
+  }
   if (
     !Array.isArray(valid?.duplicateDismissedIds) ||
     valid.duplicateDismissedIds.length !== 1 ||

@@ -1,22 +1,15 @@
 import { useEffect, useRef, useState } from "react";
 import type { ResumeData } from "@typeset/engine/lib/resumeData.ts";
 import { serializeResumeData } from "../lib/resumeText";
-import { getTabId, liveTabIds } from "../lib/tabPresence";
 import type { StageAiUsage } from "../lib/aiUsage";
-import { keyForTab, tabIdFromKey } from "../lib/autosaveDraftRegistry.ts";
+import { clearTabDraft, recoverTabDraft, saveTabDraft } from "../lib/autosaveDraftStorage.ts";
 
-// Each tab namespaces its draft under its own tab-id key (see
-// lib/autosaveDraftRegistry.ts) so concurrent tabs (independent tailoring
-// sessions) never clobber one another's live draft. The bare prefix on its own
-// is the LEGACY single-slot key from before per-tab isolation — still honored as
-// a recoverable orphan so an in-flight draft survives the upgrade.
+// The RESUME recovery draft. Tab scoping, live-sibling protection, orphan
+// migration, and expiry live in lib/autosaveDraftStorage.ts, which the cover
+// letter's draft shares; only the payload below is resume-specific.
 // Stores the user's serialized resume text, timestamp, light job-target label,
 // and optional recovery-only raw job text / AI-usage snapshot. API keys and
 // provider credentials are never stored here.
-
-// A recovered draft from a CLOSED tab is offered for at most this long. Older
-// orphans are garbage-collected rather than resurfaced.
-const RECOVERY_TTL_MS = 24 * 60 * 60 * 1000;
 
 export type AutosavedDraft = {
   // Serialized resume text (plain text, same format as export/scoring).
@@ -61,97 +54,15 @@ function parseDraft(raw: string | null): AutosavedDraft | null {
   }
 }
 
-// Write THIS tab's draft. Called inside a debounce, so all serialization happens
-// off the hot render path.
-function saveAutosaveDraft(draft: AutosavedDraft): boolean {
-  try {
-    localStorage.setItem(keyForTab(getTabId()), JSON.stringify(draft));
-    return true;
-  } catch {
-    // localStorage may be full or blocked. The hook exposes this failure beside
-    // the document title without logging private resume content.
-    return false;
-  }
-}
-
-// Clear THIS tab's draft (call on Apply / base-resume Save so a recovered draft
-// doesn't reappear after the edits are safely persisted elsewhere).
+// Clear THIS tab's resume draft (call on Apply / base-resume Save so a
+// recovered draft doesn't reappear after the edits are safely persisted
+// elsewhere).
 export function clearAutosaveDraft(): void {
-  try {
-    localStorage.removeItem(keyForTab(getTabId()));
-  } catch {
-    // No-op.
-  }
+  clearTabDraft("resume");
 }
 
-// Mount recovery. Resolves the single draft (if any) to offer the user across
-// all three loss modes, then garbage-collects dead-tab orphans:
-//
-//   - Reload (same tab): this tab's own key still holds its draft.
-//   - Close + reopen / crash: a DIFFERENT, now-dead tab's draft is the most
-//     recent orphan. We migrate it into this tab's own key (so the existing
-//     restore/dismiss path, which clears this tab's key, cleans it up) and
-//     return it.
-//   - A LIVE sibling tab's active draft is never offered or deleted — liveness
-//     comes from the presence registry's heartbeats.
 export function recoverAutosaveDraft(): AutosavedDraft | null {
-  try {
-    const myId = getTabId();
-    const myKey = keyForTab(myId);
-    const own = parseDraft(localStorage.getItem(myKey));
-
-    const now = Date.now();
-    const live = liveTabIds(now);
-
-    // Scan every autosave key, classifying each as own / live-sibling / orphan.
-    const orphanKeys: string[] = [];
-    let best: { key: string; draft: AutosavedDraft } | null = null;
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (!key) continue;
-      const ownerId = tabIdFromKey(key);
-      if (ownerId === null || key === myKey) continue;
-      // A live sibling owns this draft — leave it strictly alone.
-      if (ownerId !== "" && live.has(ownerId)) continue;
-
-      const draft = parseDraft(localStorage.getItem(key));
-      const ageMs = draft ? now - new Date(draft.savedAt).getTime() : Infinity;
-      if (!draft || !(ageMs < RECOVERY_TTL_MS)) {
-        orphanKeys.push(key); // invalid or expired → reclaim
-        continue;
-      }
-      if (!best || new Date(draft.savedAt).getTime() > new Date(best.draft.savedAt).getTime()) {
-        best = { key, draft };
-      }
-    }
-
-    // GC expired / invalid orphans regardless of which branch we return from.
-    for (const key of orphanKeys) {
-      try { localStorage.removeItem(key); } catch { /* ignore */ }
-    }
-
-    // Reload recovery wins: keep good sibling orphans in place for a future fresh
-    // tab rather than claiming them on top of our own draft.
-    if (own) return own;
-
-    if (best) {
-      // Migrate the orphan into our own key so restore/dismiss (which clears our
-      // key) cleans it up, and a reload of THIS tab re-offers it. (best.key is
-      // always a different tab's key — the scan loop skips our own.)
-      try {
-        localStorage.setItem(myKey, JSON.stringify(best.draft));
-        localStorage.removeItem(best.key);
-      } catch {
-        // If the migrate write fails we still return the draft from memory; the
-        // orphan stays put and may be offered again later. Acceptable.
-      }
-      return best.draft;
-    }
-
-    return null;
-  } catch {
-    return null;
-  }
+  return recoverTabDraft("resume", parseDraft);
 }
 
 type UseAutosaveDraftArgs = {
@@ -208,7 +119,7 @@ export function useAutosaveDraft({ editedResume, dirty, jobLabel, pipelineAiUsag
         return;
       }
       const { pipelineAiUsage: usage, jobRawText: rawText, getJobKeyHash: getHash } = latestExtras.current;
-      const saved = saveAutosaveDraft({
+      const saved = saveTabDraft("resume", {
         resumeText,
         savedAt: new Date().toISOString(),
         jobLabel,

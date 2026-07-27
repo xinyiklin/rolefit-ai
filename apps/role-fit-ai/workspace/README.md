@@ -10,8 +10,11 @@ Local, ignored storage for the RoleFit AI app.
   current bytes before replacing a variant.
 - The application workflow writes `applications.json` here when a tracked or
   applied entry is saved.
-- Sent resume artifacts are stored per application under
-  `applications/<application-id>/resume.pdf`.
+- Sent documents are stored per application under
+  `applications/<application-id>/`: `resume.pdf` + `resume.resume` and
+  `cover.pdf` + `cover.cover`. Extra files the user attaches (transcripts,
+  portfolios) live in that record's `attachments/` folder. Deleting an
+  application moves its whole folder to `applications/.trash/`.
 - Keep other local artifacts here too, including notes, job-specific drafts,
   and eval outputs.
 - Do not store personal resumes or job-search artifacts in the repo root unless

@@ -20,7 +20,11 @@ for provider, prompt, sanitizer, and review work.
 - `workspace.ts` owns resume variants/history plus the serialized atomic
   storage primitives shared with `coverLetterWorkspace.ts`. Keep strict
   cover-letter storage separate from resume import and starter fallbacks.
-- `applications/` owns tracker persistence and routes.
+- `applications/` owns tracker persistence and routes. `documents.ts` owns the
+  per-application file rules: both document kinds store a PDF plus their
+  editable source under one route vocabulary, user attachments are validated by
+  extension allowlist + magic bytes and capped per application, and every byte
+  served back is a download (narrow content type, `nosniff`, no inline render).
 - `extension/` owns extension-origin routes and inbox handoff.
 - The provider-connections boundary owns the validated in-memory companion
   snapshot, managed API-credential resolution, and the shape-only same-origin

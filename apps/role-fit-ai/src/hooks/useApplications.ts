@@ -72,15 +72,31 @@ export type SalaryPeriod = "yr" | "mo" | "hr";
 
 export const JOB_TYPES = ["Full-time", "Part-time", "Contract", "Internship", "Temporary"] as const;
 
-// Metadata for the resume that actually went out, snapshotted to a gitignored
-// file at <workspace>/applications/<id>/resume.pdf when the role is applied.
-// The bytes live on disk; this record only remembers what exists so the
-// detail modal can offer re-downloads.
-export type ResumeArtifacts = {
+// Metadata for one document that actually went out, snapshotted to gitignored
+// files at <workspace>/applications/<id>/<kind>.pdf and .<kind> when the role is
+// applied or the document is later updated. The bytes live on disk; this record
+// only remembers what exists so the detail modal can offer re-downloads.
+// `hasSource` is the editable `.resume`/`.cover` beside the PDF.
+export type DocumentArtifacts = {
   hasPdf: boolean;
+  hasSource?: boolean;
   fileName?: string;
   templateId?: string;
   savedAt?: string;
+};
+
+/** @deprecated Use DocumentArtifacts — kept as the historical resume-only name. */
+export type ResumeArtifacts = DocumentArtifacts;
+
+// An extra file the user attached to this application (transcript, portfolio,
+// writing sample). Stored under <workspace>/applications/<id>/attachments/;
+// the server owns name validation and this record mirrors what it wrote.
+export type ApplicationAttachment = {
+  fileName: string;
+  label: string;
+  size: number;
+  contentType: string;
+  savedAt: string;
 };
 
 export type Application = {
@@ -148,8 +164,11 @@ export type Application = {
   // Which resume actually went out — the AI-tailored draft or the original/base
   // (the AI may judge the base already a strong fit). Captured at Apply time.
   resumeUsed?: "tailored" | "base";
-  // Metadata for the PDF snapshot saved to the workspace at Apply time.
-  resumeArtifacts?: ResumeArtifacts;
+  // Metadata for the snapshots saved to the workspace at Apply time and by a
+  // later explicit document update. Both kinds carry the same shape.
+  resumeArtifacts?: DocumentArtifacts;
+  coverLetterArtifacts?: DocumentArtifacts;
+  attachments?: ApplicationAttachment[];
   // Application-question answers the user saved from the Application Questions tab.
   applicationAnswers?: ApplicationAnswer[];
   // Stable tracker ids the user reviewed and explicitly kept separate from this
@@ -487,21 +506,23 @@ export function useApplications() {
     [persist]
   );
 
-  // Merge a partial patch into one application by id (used to attach the saved
-  // resume-artifact metadata after Apply renders the PDF). No-ops if the
-  // id is gone. The persistVersion guard in `persist` makes the later artifact
-  // write win over the in-flight pre-artifact Apply write.
+  // Merge a partial patch into one application by id (the saved resume-artifact
+  // metadata after Apply renders the PDF, and the explicit per-document
+  // "Update application" saves). Only the named fields change, so updating one
+  // document cannot touch the other. Resolves false if the id is gone or the
+  // write failed. The persistVersion guard in `persist` makes the later
+  // artifact write win over the in-flight pre-artifact Apply write.
   const patchApplication = useCallback(
-    (id: string, patch: Partial<Application>) => {
+    (id: string, patch: Partial<Application>): Promise<boolean> => {
       const current = applicationsRef.current;
       const idx = current.findIndex((a) => a.id === id);
-      if (idx < 0) return;
+      if (idx < 0) return Promise.resolve(false);
       const next = current.map((a, i) =>
         i === idx ? { ...a, ...patch, id: a.id, updatedAt: new Date().toISOString() } : a
       );
       applicationsRef.current = next;
       setApplications(next);
-      void persist(next, [{ id, operation: "upsert", baseUpdatedAt: current[idx].updatedAt }]);
+      return persist(next, [{ id, operation: "upsert", baseUpdatedAt: current[idx].updatedAt }]);
     },
     [persist]
   );

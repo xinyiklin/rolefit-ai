@@ -25,6 +25,7 @@
 }
 
 .cover-letter-workbench {
+  position: relative; /* positioning context for the floated draft-restore bar */
   display: grid;
   grid-template-columns: minmax(0, 1fr) 280px;
   flex: 1 1 0;

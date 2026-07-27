@@ -6,6 +6,12 @@ import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { dedupeSourceUrls } from "../../src/lib/jobIdentity.ts";
 import { assertWorkspaceAccessAllowed, captureWorkspaceAccess } from "../workspaceRestoreGate.ts";
+import {
+  MAX_ATTACHMENTS_PER_APPLICATION,
+  MAX_DOCUMENT_BYTES,
+  attachmentContentType,
+  safeAttachmentFileName
+} from "./documents.ts";
 
 // Narrowing form of filter(Boolean): drops null/undefined AND narrows the element
 // type. Behaviour-identical to filter(Boolean) for these truthy-object arrays.
@@ -200,19 +206,53 @@ function sanitizeContacts(raw: unknown) {
   return contacts.length ? contacts : undefined;
 }
 
-function sanitizeResumeArtifacts(raw: unknown) {
+// What one document kind has on disk. Both the resume and the cover letter use
+// this shape, so the tracker cannot describe one of them more richly than the
+// other. `hasSource` is the editable `.resume`/`.cover` beside the PDF.
+function sanitizeDocumentArtifacts(raw: unknown) {
   if (!raw || typeof raw !== "object") return undefined;
   const r = raw as Record<string, unknown>;
   const hasTex = r.hasTex === true;
   const hasPdf = r.hasPdf === true;
-  if (!hasTex && !hasPdf) return undefined;
+  const hasSource = r.hasSource === true;
+  if (!hasTex && !hasPdf && !hasSource) return undefined;
   return {
     hasTex,
     hasPdf,
+    hasSource,
     fileName: sanitizeString(r.fileName, 200),
     templateId: sanitizeString(r.templateId, 80),
     savedAt: typeof r.savedAt === "string" ? r.savedAt : new Date().toISOString()
   };
+}
+
+// Extra files the user attached to this application. The metadata is only a
+// record of what the server already wrote: a name that does not survive the
+// same validation the upload route applies is dropped rather than stored.
+function sanitizeAttachments(raw: unknown) {
+  if (!Array.isArray(raw)) return undefined;
+  const seen = new Set<string>();
+  const attachments = raw.slice(0, MAX_ATTACHMENTS_PER_APPLICATION).flatMap((entry) => {
+    if (!entry || typeof entry !== "object") return [];
+    const value = entry as Record<string, unknown>;
+    const safe = typeof value.fileName === "string" ? safeAttachmentFileName(value.fileName) : null;
+    if (!safe || seen.has(safe.fileName)) return [];
+    seen.add(safe.fileName);
+    const size = typeof value.size === "number" && Number.isFinite(value.size) && value.size >= 0
+      ? Math.min(Math.floor(value.size), MAX_DOCUMENT_BYTES)
+      : 0;
+    return [{
+      fileName: safe.fileName,
+      // Trimmed: the label is display text for a file row, unlike the free-text
+      // fields above where sanitizeString deliberately preserves the user's
+      // spacing.
+      label: sanitizeString(value.label, 120).trim() || safe.fileName,
+      size,
+      contentType: attachmentContentType(safe.fileName),
+      savedAt: typeof value.savedAt === "string" ? value.savedAt : new Date().toISOString()
+    }];
+  });
+  return attachments.length ? attachments : undefined;
 }
 
 function sanitizeResumeSectionType(value: unknown, heading: unknown): "standard" | "skills" | "summary" {
@@ -507,7 +547,9 @@ function sanitizeApplication(raw: unknown) {
     salaryPeriod: inList(SALARY_PERIODS, r.salaryPeriod) ? r.salaryPeriod : undefined,
     interviewTips: typeof r.interviewTips === "string" ? r.interviewTips.slice(0, 8_000) : "",
     contacts: sanitizeContacts(r.contacts),
-    resumeArtifacts: sanitizeResumeArtifacts(r.resumeArtifacts),
+    resumeArtifacts: sanitizeDocumentArtifacts(r.resumeArtifacts),
+    coverLetterArtifacts: sanitizeDocumentArtifacts(r.coverLetterArtifacts),
+    attachments: sanitizeAttachments(r.attachments),
     notes: typeof r.notes === "string" ? r.notes.slice(0, 8_000) : "",
     fitScore: sanitizeScore(r.fitScore),
     baseFitScore: sanitizeScore(r.baseFitScore),

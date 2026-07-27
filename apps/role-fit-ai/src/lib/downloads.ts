@@ -35,37 +35,51 @@ function slugForFile(value: string): string {
     .slice(0, 60);
 }
 
-// Shared document identity: Name_Company_Resume, degrading to Name_Resume,
-// Company_Resume, then Resume. The editable header and both download formats
-// use this same base so the title never disagrees with the exported file.
-export function buildResumeDocumentTitle(name: string, company: string): string {
+// Both editors name a document the same way, so a resume and its letter for the
+// same role read as one application: Name_Company_<kind>, degrading to
+// Name_<kind>, Company_<kind>, then the bare kind. The editable header and every
+// download format share this base, so the title never disagrees with the file.
+const DOCUMENT_TITLE_SUFFIX = { resume: "Resume", coverLetter: "Cover_Letter" } as const;
+
+export type DocumentTitleKind = keyof typeof DOCUMENT_TITLE_SUFFIX;
+
+export function buildDocumentTitle(kind: DocumentTitleKind, name: string, company: string): string {
   const parts = [slugForFile(name), slugForFile(company)].filter(Boolean);
-  parts.push("Resume");
+  parts.push(DOCUMENT_TITLE_SUFFIX[kind]);
   return parts.join("_");
+}
+
+export function buildResumeDocumentTitle(name: string, company: string): string {
+  return buildDocumentTitle("resume", name, company);
+}
+
+export function buildCoverLetterDocumentTitle(name: string, company: string): string {
+  return buildDocumentTitle("coverLetter", name, company);
 }
 
 export function buildResumeFileName(name: string, company: string, ext: string): string {
   return `${buildResumeDocumentTitle(name, company)}.${ext}`;
 }
 
-// Job intake and workspace resume loading are independent async paths. When
-// the company arrives first, the initial automatic title is Company_Resume.
-// Complete that title once the applicant name arrives, but preserve anything
-// the user has edited to a non-automatic value.
-export function completeAutoResumeDocumentTitle(
+// Job intake and document loading are independent async paths, so a title is
+// often built from partial identity first (Company_Resume) and completed when
+// the applicant name arrives. Rewrite only a title the app itself produced —
+// anything the user typed is preserved. `placeholders` are the kind's own
+// untouched defaults ("Resume", "Cover letter").
+export function completeAutoDocumentTitle(
+  kind: DocumentTitleKind,
   currentTitle: string,
   name: string,
   company: string,
-  placeholderTitle: string
+  placeholders: readonly string[]
 ): string {
-  if (!name.trim() || !company.trim()) return currentTitle;
   const automaticTitles = new Set([
-    placeholderTitle,
-    "Resume",
-    buildResumeDocumentTitle(name, ""),
-    buildResumeDocumentTitle("", company)
+    ...placeholders,
+    buildDocumentTitle(kind, "", ""),
+    buildDocumentTitle(kind, name, ""),
+    buildDocumentTitle(kind, "", company)
   ]);
-  return automaticTitles.has(currentTitle) ? buildResumeDocumentTitle(name, company) : currentTitle;
+  return automaticTitles.has(currentTitle) ? buildDocumentTitle(kind, name, company) : currentTitle;
 }
 
 // Sanitize a user-typed file name into a safe base (extension excluded): the

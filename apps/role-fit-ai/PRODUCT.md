@@ -33,12 +33,23 @@ RoleFit AI turns a base resume, a candidate-authored cover letter, and a pasted
 job description into honest, tailored application materials. Resume proposals
 remain constrained by server-side grounding and anti-fabrication checks, with a
 recruiter-style review for fit scoring and gap analysis. The cover-letter
-workflow revises the user's own writing in a dedicated plain-paragraph editor,
-preserves a restorable source, and never creates a letter from the job and
-resume alone. Both editors share deterministic typesetting and PDF export;
+workflow revises the user's own writing in a dedicated plain-paragraph editor
+and never creates a letter from the job and resume alone. Both editors share
+deterministic typesetting and PDF export, and the same recovery and naming
+behavior: unsaved edits go to a per-tab recovery draft either page can restore,
+and a document is named `Name_Company_Resume` / `Name_Company_Cover_Letter` so
+one role's materials read as one application.
 `.resume` and `.cover` are their separate reloadable formats. The product also
 includes application-question drafts and a lightweight application pipeline
-tracker. A versioned `.rolefit-backup` file
+tracker. Apply creates the tracked application and stores both documents as they
+stand; because a letter is often finished after applying, the resume and the
+cover letter then keep independent saved/unsaved states and an explicit
+"Update application" action in their own Save menus that rewrites only that
+document. Regenerating or editing a document never rewrites a stored one. An
+application keeps both documents in the same form — the PDF that went out plus
+its editable `.resume`/`.cover` — and its Documents tab previews, re-downloads,
+and accepts extra files the posting asked for.
+A versioned `.rolefit-backup` file
 ports the saved local workspace and allowlisted RoleFit preferences between
 devices without creating an account or synchronization service. An original resume (text) is converted
 once into the structured model, which is the source of truth thereafter (and can

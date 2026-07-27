@@ -164,19 +164,26 @@ export function useResumeExport({
     setExportStatus(`Saved ${fileName}.`);
   }
 
-  // Render the CURRENT resume to artifacts for pipeline tracking: the
-  // engine-typeset PDF as base64. Returns null when there is nothing to
-  // render or the PDF emit fails, so a failed render never blocks tracking.
-  async function getResumeArtifacts(): Promise<{ pdfBase64: string | null; fileName: string } | null> {
+  // Render the CURRENT resume to the artifacts an application keeps: the
+  // engine-typeset PDF as base64 plus the editable `.resume` source, so the
+  // saved copy can be reopened with its print style intact. Returns null when
+  // there is nothing to render; a failed PDF emit still returns the source, so
+  // an export problem never costs the saved document. The cover letter's
+  // getArtifacts mirrors this exactly.
+  async function getResumeArtifacts(): Promise<
+    { pdfBase64: string | null; sourceText: string | null; fileName: string } | null
+  > {
     if (!result && !editedResume) return null;
     let pdfBase64: string | null = null;
     try {
       const bytes = await renderEnginePdfBytes();
       pdfBase64 = await blobToBase64(new Blob([bytes as BlobPart]));
     } catch {
-      return null;
+      // Fall through: the source alone is still worth saving.
     }
-    return { pdfBase64, fileName: resumeDownloadName("pdf") };
+    const sourceText = editedResume ? serializeResumeFile(editedResume, docStyle) : null;
+    if (!pdfBase64 && !sourceText) return null;
+    return { pdfBase64, sourceText, fileName: resumeDownloadName("pdf") };
   }
 
   return {

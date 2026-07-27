@@ -54,8 +54,10 @@ editable documents.
 - **Candidate-authored cover letters** — open a `.cover`, `.txt`, or `.md`
   letter in its own plain-paragraph editor, then ask RoleFit to revise that
   writing for the current job using only the letter, resume, job description,
-  and optional honest context as evidence. The pre-tailoring source remains
-  restorable. A new letter starts in Carlito at 11 pt with 1 inch margins —
+  and optional honest context as evidence. Unsaved edits are kept in a
+  recoverable draft and the letter is named like the resume
+  (`Name_Company_Cover_Letter`), so both editors behave the same way.
+  A new letter starts in Carlito at 11 pt with 1 inch margins —
   Calibri's metrics, the shape business correspondence is usually written in —
   and any bundled family is a menu away.
 - **Job-link import** — paste a posting URL and pull the description in one click: Workday-aware through CXS JSON, Ashby-aware through its public posting API (including Handshake's branded wrapper), with Greenhouse-wrapper resolution and a generic HTML→text fallback for other boards. The posting is distilled before polishing — **AI-first** via the configured provider, with server-side grounding/sanitization checks and a deterministic parser that can preserve a local brief for inspection when AI fails. A failed AI Distill remains failed and cannot auto-launch Tailor or Review. The compact brief keeps role context, responsibilities, requirements, preferred qualifications, and technical/domain signals while dropping ATS/navigation/marketing/legal furniture. The link itself is kept only for pipeline tracking and is **never sent to the model**.
@@ -391,7 +393,9 @@ The workspace contains:
 - `cover-letters/<variant>.cover` — named cover-letter variants
 - `resumes/.trash/` and `cover-letters/.trash/` — per-document version history
 - `applications.json` — the pipeline tracker's on-disk store
-- `applications/<id>/resume.pdf` — saved tailored PDFs attached to tracker rows
+- `applications/<id>/` — per-application files: `resume.pdf` + `resume.resume`
+  and `cover.pdf` + `cover.cover` (what went out, and its editable source),
+  plus `attachments/` for anything else the posting asked for
 - `browser-preferences.json` — mirrored allowlisted RoleFit preferences
 - Anything else you drop in there (left out of portable backups)
 

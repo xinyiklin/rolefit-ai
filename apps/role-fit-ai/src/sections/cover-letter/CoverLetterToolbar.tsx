@@ -6,7 +6,6 @@ import {
   FolderOpen,
   FileText,
   LayoutTemplate,
-  RotateCcw,
   Save,
   Sparkles
 } from "lucide-react";
@@ -22,6 +21,8 @@ import type {
   InlineFormatState,
   TypesetEditorHandle
 } from "@typeset/editor/sections/editor/TypesetEditor.tsx";
+import type { ApplicationDocumentSync } from "../../hooks/useApplicationDocumentSync";
+import type { DraftAutosaveState } from "../../hooks/useAutosaveDraft";
 import type { CoverLetterEditorState } from "../../hooks/useCoverLetterEditor";
 import { useDialog } from "../../hooks/useDialog";
 import { formatHistoryDate } from "../../lib/historyDate";
@@ -40,6 +41,12 @@ type CoverLetterToolbarProps = {
   isTailoring: boolean;
   targetLine: string;
   onTailor: () => void;
+  // Recovery-draft state for this letter, shown beside the title exactly as the
+  // resume shows its own.
+  draftAutosaveState: DraftAutosaveState;
+  // Explicit save of THIS letter into the tracked application; the resume keeps
+  // its own independent state in its own Save menu.
+  applicationSync: ApplicationDocumentSync;
   // Owned by CoverLetterTab so the editor's right-click menu and link card can
   // open this popover too; a toolbar-private state left those commands dead.
   linkEditorOpen: boolean;
@@ -76,6 +83,8 @@ export function CoverLetterToolbar({
   isTailoring,
   targetLine,
   onTailor,
+  draftAutosaveState,
+  applicationSync,
   linkEditorOpen,
   onLinkEditorOpenChange
 }: CoverLetterToolbarProps) {
@@ -136,16 +145,23 @@ export function CoverLetterToolbar({
       />
 
       {/* documentContext carries only the job target. The old "Plain
-          correspondence document" fallback restated what the page already is. */}
+          correspondence document" fallback restated what the page already is.
+          saveStatus uses the resume's recovery vocabulary: unsaved edits are
+          being kept in a recoverable draft, which is more useful than warning
+          that they are unsaved. */}
       <DocumentToolbar
         documentTitle={editor.documentTitle}
         onDocumentTitleChange={editor.setDocumentTitle}
         untitledDocumentTitle="Untitled cover letter"
         documentContext={targetLine}
         saveStatus={
-          editor.dirty
-            ? { state: "unsaved", label: "Unsaved cover letter" }
-            : undefined
+          !editor.dirty
+            ? undefined
+            : draftAutosaveState === "error"
+              ? { state: "error", label: "Recovery save failed" }
+              : draftAutosaveState === "saved"
+                ? { state: "saved", label: "Recovery draft saved" }
+                : { state: "saving", label: "Saving recovery draft" }
         }
         docStyle={editor.docStyle}
         actions={(
@@ -238,6 +254,7 @@ export function CoverLetterToolbar({
                 existingNames: editor.coverLetterOptions.map((option) => option.fileName),
                 onSave: (fileName) => editor.saveToWorkspace({ fileName })
               }}
+              applicationSync={applicationSync}
               actions={[
                 {
                   key: "cover",
@@ -273,19 +290,10 @@ export function CoverLetterToolbar({
               onPromptOpenChange={setPdfPromptOpen}
               onDownloadPdf={(base) => void editor.downloadPdf(base)}
             />
-            {editor.canRestoreTailorSource ? (
-              <ToolbarButton
-                label="Restore source"
-                tooltip="Restore the letter from before AI tailoring"
-                icon={<RotateCcw size={16} />}
-                showLabel
-                onClick={editor.restoreTailorSource}
-              />
-            ) : null}
             {/* Named Polish to match the resume action bar. The underlying
-                operation is still tailoring this letter — the props, the hook,
-                and Restore source keep that name. The letter has no AI review
-                stage, so unlike the resume this stays a single direct action. */}
+                operation is still tailoring this letter — the props and the hook
+                keep that name. The letter has no AI review stage, so unlike the
+                resume this stays a single direct action. */}
             <ToolbarButton
               label={isTailoring ? "Working…" : "Polish"}
               tooltip={tailorHint || "Tailor the existing cover letter"}

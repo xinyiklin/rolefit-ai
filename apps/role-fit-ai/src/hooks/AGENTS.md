@@ -16,11 +16,25 @@ browser-side effects; components render them and App composes them.
   configured/readiness state and must not silently select a paid replacement.
 - `useWorkspaceResume`, `useApplyFlow`, and `useApplications` own their local
   server/storage lifecycles.
+- `useApplicationDocumentSync` owns the session's application link and the two
+  explicit per-document saves that follow Apply. Saving is always user
+  initiated; no effect may write a document into an application. Each save
+  patches only its own document's fields (`src/lib/applicationDocuments.ts`
+  owns that field split), so updating one never rewrites the other or any
+  tracker metadata.
 - `useResumeEditor` is a RoleFit adapter over the shared editor hook; keep
   reusable history/reducer behavior in `@typeset/editor`.
-- `useCoverLetterEditor` owns RoleFit's separate source-letter/file/export
-  lifecycle while delegating history, editing, layout, and PDF to the shared
-  packages. `useCoverLetter` owns only its grounded AI revision workflow.
+- `useCoverLetterEditor` owns RoleFit's separate letter/file/export lifecycle
+  while delegating history, editing, layout, and PDF to the shared packages.
+  `useCoverLetter` owns only its grounded AI revision workflow.
+- Both editors recover unsaved work the same way: `useAutosaveDraft` and
+  `useCoverLetterAutosaveDraft` each own one document's debounced draft, over
+  the shared per-tab rules in `lib/autosaveDraftStorage.ts` (tab scoping, live
+  siblings, orphan migration, expiry). A draft is cleared only where its own
+  document becomes durable, and a restore seeds CLEAN so a crash right after it
+  still has something to recover. The letter has no separate pre-tailoring
+  restore: the AI reseed clears editor history, so its recovery lives in the
+  draft and the workspace variants/history, as it does for the resume.
 - Every user-initiated load in that hook goes through its own `openDocument`
   rather than the shared `seedData`, so no open path can forget to fire
   `onOpenDocument` (the host's "put the caret in the new letter"). Applying a

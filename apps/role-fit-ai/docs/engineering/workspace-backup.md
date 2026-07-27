@@ -85,6 +85,13 @@ Candidate-authored `cover-letters/*.cover` files and their local `.trash` histor
 standalone editable documents and are not part of schema version 1. Download
 the `.cover` files separately when moving them between devices.
 
+Schema version 1 also predates the rest of the per-application file set. A
+backup carries `applications/<id>/resume.pdf` only — the saved
+`resume.resume`, `cover.pdf`, `cover.cover`, and `attachments/` files stay on
+the origin device. Download them from the application's Documents tab before
+moving devices; widening the bundle is a schema change and needs its own
+version bump.
+
 ## Excluded data
 
 The portable contract never includes:

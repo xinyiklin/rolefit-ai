@@ -20,6 +20,7 @@ import type { AutosavedDraft } from "../../hooks/useAutosaveDraft";
 import type { DraftAutosaveState } from "../../hooks/useAutosaveDraft";
 import { fieldKeyForReviewTarget } from "../../lib/reviewTarget.ts";
 import { useRestoredScroll } from "../../hooks/useRestoredScroll";
+import { DraftRestoreBar } from "../DraftRestoreBar";
 import { RoleFitEditorOverlay } from "../editor/RoleFitEditorOverlay.tsx";
 import { ReviewRail } from "../ReviewRail";
 import { ViewportGate } from "../ViewportGate";
@@ -182,34 +183,14 @@ export function ResumeTab({
       </header>
 
       <div className={`resume-workbench${hasReview ? " has-rail" : ""}`}>
-        {/* Floated as an overlay so appearing/dismissing never reflows the
-            editor (it sits over the desk margin above the page). */}
         {pendingAutosaveDraft && onRestoreAutosaveDraft && onDismissAutosaveDraft ? (
-          <div className="draft-restore-bar" role="alert">
-            <span className="draft-restore-bar__text">
-              Unsaved draft found
-              {pendingAutosaveDraft.jobLabel ? ` · ${pendingAutosaveDraft.jobLabel}` : ""}
-              {" "}
-              <span className="draft-restore-bar__time">
-                {new Date(pendingAutosaveDraft.savedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-              </span>
-            </span>
-            <button
-              type="button"
-              className="ghost-button is-compact draft-restore-bar__action"
-              onClick={() => onRestoreAutosaveDraft(pendingAutosaveDraft)}
-            >
-              Restore
-            </button>
-            <button
-              type="button"
-              className="ghost-button is-compact draft-restore-bar__dismiss"
-              aria-label="Dismiss"
-              onClick={onDismissAutosaveDraft}
-            >
-              ×
-            </button>
-          </div>
+          <DraftRestoreBar
+            label="Unsaved draft found"
+            jobLabel={pendingAutosaveDraft.jobLabel}
+            savedAt={pendingAutosaveDraft.savedAt}
+            onRestore={() => onRestoreAutosaveDraft(pendingAutosaveDraft)}
+            onDismiss={onDismissAutosaveDraft}
+          />
         ) : null}
 
         <div
