@@ -514,9 +514,7 @@ function matchSignatures(a: Signature, b: Signature): MatchResult | null {
     if (!companiesConflict) return { level: "same-posting", confidence: "exact", evidence: [`Same requisition ID ${a.reqId}`] };
   }
 
-  const similarity = jdSimilarity(a.fingerprint, b.fingerprint);
-  const similarityPct = Math.round(similarity * 100);
-  const sequenceOverlap = setContainment(a.shingles, b.shingles);
+  // Everything here is O(1): set SIZES and string comparisons, no iteration.
   const lengthRatio = setSizeRatio(a.fingerprint, b.fingerprint);
   const descriptionsComparable =
     a.fingerprint.size >= COMPARABLE_FINGERPRINT_MIN_TOKENS &&
@@ -524,6 +522,21 @@ function matchSignatures(a: Signature, b: Signature): MatchResult | null {
   const aHasExplicitId = Boolean(a.atsKeys.size || a.reqId);
   const bHasExplicitId = Boolean(b.atsKeys.size || b.reqId);
   const compatibleLocation = locationsCompatible(a.location, b.location);
+
+  // The two set intersections below are the expensive part of this function —
+  // up to ~1,500 fingerprint plus ~2,000 shingle lookups per pair — and MOST
+  // PAIRS NEVER CONSUME THEM. A pair with an explicit id on only one side is
+  // rejected outright further down, and every tier that does read them is
+  // gated first on company/role/location agreement. Computing them eagerly
+  // therefore paid the full cost for the dominant pair class on an ATS-heavy
+  // tracker. Memoized so a tier that reads one twice still pays once.
+  let similarityMemo = -1;
+  const similarityOf = (): number =>
+    similarityMemo >= 0 ? similarityMemo : (similarityMemo = jdSimilarity(a.fingerprint, b.fingerprint));
+  let sequenceMemo = -1;
+  const sequenceOverlapOf = (): number =>
+    sequenceMemo >= 0 ? sequenceMemo : (sequenceMemo = setContainment(a.shingles, b.shingles));
+  const similarityPctOf = (): number => Math.round(similarityOf() * 100);
 
   // Tier 3: different explicit ids normally identify separate postings. Keep
   // one narrow review-only escape hatch for likely data-entry errors: both
@@ -540,14 +553,17 @@ function matchSignatures(a: Signature, b: Signature): MatchResult | null {
       compatibleLocation &&
       a.fingerprint.size >= CONFLICTING_ID_REVIEW_MIN_TOKENS &&
       b.fingerprint.size >= CONFLICTING_ID_REVIEW_MIN_TOKENS &&
-      similarity >= CONFLICTING_ID_REVIEW_MIN_SIMILARITY &&
-      sequenceOverlap >= CONFLICTING_ID_REVIEW_MIN_SEQUENCE_OVERLAP &&
-      lengthRatio >= CONFLICTING_ID_REVIEW_MIN_LENGTH_RATIO
+      // O(1) size ratio before the intersections; && is short-circuit and every
+      // operand is a pure comparison, so the order is free to favour the cheap
+      // test without changing the result.
+      lengthRatio >= CONFLICTING_ID_REVIEW_MIN_LENGTH_RATIO &&
+      similarityOf() >= CONFLICTING_ID_REVIEW_MIN_SIMILARITY &&
+      sequenceOverlapOf() >= CONFLICTING_ID_REVIEW_MIN_SEQUENCE_OVERLAP
     ) {
       return {
         level: "same-company-role",
         confidence: "possible",
-        evidence: ["Posting IDs differ", "Same company and title", `${similarityPct}% description overlap`]
+        evidence: ["Posting IDs differ", "Same company and title", `${similarityPctOf()}% description overlap`]
       };
     }
     // Ordinary conflicting-id cases stay separate even when a normalized URL
@@ -575,36 +591,36 @@ function matchSignatures(a: Signature, b: Signature): MatchResult | null {
       descriptionsComparable &&
       sameRole &&
       compatibleLocation &&
-      similarity >= 0.88 &&
-      sequenceOverlap >= 0.8 &&
-      lengthRatio >= 0.75
+      lengthRatio >= 0.75 &&
+      similarityOf() >= 0.88 &&
+      sequenceOverlapOf() >= 0.8
     ) {
-      return { level: "repost", confidence: "high", evidence: ["Same company and title", `${similarityPct}% description overlap`] };
+      return { level: "repost", confidence: "high", evidence: ["Same company and title", `${similarityPctOf()}% description overlap`] };
     }
     if (
       descriptionsComparable &&
       !sameRole &&
       compatibleLocation &&
-      similarity >= 0.94 &&
-      sequenceOverlap >= 0.88 &&
-      lengthRatio >= 0.82
+      lengthRatio >= 0.82 &&
+      similarityOf() >= 0.94 &&
+      sequenceOverlapOf() >= 0.88
     ) {
-      return { level: "repost", confidence: "high", evidence: ["Same company", `${similarityPct}% description overlap (retitled posting)`] };
+      return { level: "repost", confidence: "high", evidence: ["Same company", `${similarityPctOf()}% description overlap (retitled posting)`] };
     }
     if (
       descriptionsComparable &&
       sameRole &&
       compatibleLocation &&
-      similarity >= POSSIBLE_REPOST_MIN_SIMILARITY &&
-      sequenceOverlap >= POSSIBLE_REPOST_MIN_SEQUENCE_OVERLAP &&
-      lengthRatio >= POSSIBLE_REPOST_MIN_LENGTH_RATIO
+      lengthRatio >= POSSIBLE_REPOST_MIN_LENGTH_RATIO &&
+      similarityOf() >= POSSIBLE_REPOST_MIN_SIMILARITY &&
+      sequenceOverlapOf() >= POSSIBLE_REPOST_MIN_SEQUENCE_OVERLAP
     ) {
       // Same title, compatible location, and strongly similar substantial
       // descriptions could indicate a refresh. Flag, never auto-merge.
       return {
         level: "same-company-role",
         confidence: "possible",
-        evidence: ["Same company and title", `${similarityPct}% description overlap`]
+        evidence: ["Same company and title", `${similarityPctOf()}% description overlap`]
       };
     }
     // Same metadata with weak/incomplete description evidence (or contradicting
@@ -619,13 +635,13 @@ function matchSignatures(a: Signature, b: Signature): MatchResult | null {
     (!a.company || !b.company) &&
     (!a.role || !b.role || a.role === b.role) &&
     compatibleLocation &&
-    similarity >= 0.95 &&
-    sequenceOverlap >= 0.9 &&
-    lengthRatio >= 0.85 &&
     a.fingerprint.size >= 60 &&
-    b.fingerprint.size >= 60
+    b.fingerprint.size >= 60 &&
+    lengthRatio >= 0.85 &&
+    similarityOf() >= 0.95 &&
+    sequenceOverlapOf() >= 0.9
   ) {
-    return { level: "repost", confidence: "high", evidence: [`${similarityPct}% identical description`] };
+    return { level: "repost", confidence: "high", evidence: [`${similarityPctOf()}% identical description`] };
   }
 
   return null;

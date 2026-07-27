@@ -26,6 +26,18 @@ via the runner's `LIVE` denylist: they drive a real provider, cost tokens, and
 need a configured key. Run those by hand (see below). Any new network/model
 eval must be added to `LIVE` so it stays out of `npm test`.
 
+`src/lib/__evals__/job-identity-golden.mjs` is a CHARACTERIZATION test, not a
+correctness one. It pins the duplicate matcher's verdict for every pair of a
+fixed corpus to whatever it is today, so a refactor claiming "same results,
+less work" is reviewable. The matcher drives silent tracker merges and the
+merge path deletes rows, and its failure mode is silent — a dropped tier does
+not throw. When a matcher change is INTENTIONAL, regenerate the golden block
+with
+`ROLEFIT_GOLDEN_UPDATE=1 node apps/role-fit-ai/src/lib/__evals__/job-identity-golden.mjs`
+and review every changed line as a behavior change. Its coverage assertions
+fail if the corpus stops exercising a tier, so a body edit cannot leave the
+golden green but meaningless.
+
 `src/lib/__evals__/duplicate-scan-eval.mjs` also logs a benchmark of the
 tracker-wide duplicate scan. It asserts cache and correctness behavior only —
 never wall-clock, so a shared CI machine cannot make it flaky — and defaults to
