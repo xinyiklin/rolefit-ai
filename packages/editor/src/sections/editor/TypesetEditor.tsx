@@ -32,8 +32,12 @@ import {
   type EntryTextField,
   type StyleTextField
 } from "@typeset/engine/lib/styleFieldFormatting.ts";
-import { stripInlineMarks } from "@typeset/engine/lib/inlineMarksText.ts";
+import {
+  paragraphSpacingFromInlineMarks,
+  stripInlineMarks
+} from "@typeset/engine/lib/inlineMarksText.ts";
 import type { DocStyleControls } from "../../hooks/useDocStyle";
+import { historySourceFor } from "../../hooks/historyClock.ts";
 import {
   nextZoomOption,
   type AlignmentScope,
@@ -44,6 +48,7 @@ import {
 import { fontSizesFor, nameSizePt } from "@typeset/engine/lib/documentTypography.ts";
 import { fieldKey, parseFieldKey, type FieldSrc } from "@typeset/engine/typeset/types.ts";
 import { pageGeometry } from "@typeset/engine/typeset/blocks.ts";
+import { spaceWidth } from "@typeset/engine/typeset/measure.ts";
 import type { LayoutDocument } from "@typeset/engine/typeset/layout.ts";
 import { TypesetDomPages } from "@typeset/engine/typeset/render/dom.tsx";
 import { toTypesetSchema } from "@typeset/engine/typeset/schema.ts";
@@ -58,18 +63,29 @@ import { useTypesetContextMenu } from "./useTypesetContextMenu.tsx";
 import {
   caretToDisplayIndex,
   displayIndexToCaret,
-  keyOfNode,
-  selectDisplayRange
+  fieldCaretOf,
+  selectDisplayRange,
+  selectedVisualLineRanges,
+  type DisplayRange
 } from "./domSelection.ts";
 import {
   applyInlineFragment,
   applyEdit,
   buildDisplayMap,
   displayIndexForValueIndex,
+  valueIndexForDisplayIndex,
+  indentDeletionRange,
+  indentStep,
+  paragraphIndentOf,
+  setParagraphIndent,
+  TAB_STOP_PT,
   splitValueAt,
   setFontFamily,
   setFontSize,
   setAlignment,
+  setLineHeightRanges,
+  setParagraphSpaceBefore,
+  setParagraphSpaceAfter,
   setLink,
   removeLink,
   replaceWithLink,
@@ -148,6 +164,10 @@ export type InlineFormatState = {
   fontSizePt: number | null;
   alignment: BodyAlign | null;
   alignmentScope: AlignmentScope | null;
+  canFormatParagraph: boolean;
+  paragraphLineHeight: number | null;
+  paragraphSpaceBeforePt: number | null;
+  paragraphSpaceAfterPt: number | null;
   entryField: EntryTextField | null;
   linkHref: string | null;
   linkText: string;
@@ -177,6 +197,10 @@ export type TypesetEditorHandle = {
   setFontFamily: (fontFamily: FontFamily) => void;
   setFontSize: (fontSizePt: number) => void;
   setAlignment: (alignment: BodyAlign) => void;
+  setParagraphLineHeight: (lineHeight: number) => void;
+  setParagraphSpaceBefore: (spaceBeforePt: number) => void;
+  setParagraphSpaceAfter: (spaceAfterPt: number) => void;
+  setCustomSpacing: (lineHeight: number, spaceBeforePt: number, spaceAfterPt: number) => void;
   applyLink: (text: string, href: string) => void;
   removeLink: () => void;
   clearFormatting: () => void;
@@ -215,6 +239,8 @@ type TypesetEditorProps = {
   actions: ResumeEditorActions;
   canUndo: boolean;
   canRedo: boolean;
+  contentUndoSequence?: number | null;
+  contentRedoSequence?: number | null;
   docStyle: DocStyleControls;
   onInlineFormatStateChange?: (state: InlineFormatState) => void;
   // Opens the toolbar link editor (used by the right-click "Add/Edit link"
@@ -249,6 +275,10 @@ const EMPTY_FORMAT_STATE: InlineFormatState = {
   fontSizePt: null,
   alignment: null,
   alignmentScope: null,
+  canFormatParagraph: false,
+  paragraphLineHeight: null,
+  paragraphSpaceBeforePt: null,
+  paragraphSpaceAfterPt: null,
   entryField: null,
   linkHref: null,
   linkText: "",
@@ -270,6 +300,10 @@ function sameFormatState(a: InlineFormatState, b: InlineFormatState): boolean {
     a.fontSizePt === b.fontSizePt &&
     a.alignment === b.alignment &&
     a.alignmentScope === b.alignmentScope &&
+    a.canFormatParagraph === b.canFormatParagraph &&
+    a.paragraphLineHeight === b.paragraphLineHeight &&
+    a.paragraphSpaceBeforePt === b.paragraphSpaceBeforePt &&
+    a.paragraphSpaceAfterPt === b.paragraphSpaceAfterPt &&
     a.entryField === b.entryField &&
     a.linkHref === b.linkHref &&
     a.linkText === b.linkText &&
@@ -289,6 +323,10 @@ function alignmentScopeForField(src: FieldSrc): AlignmentScope | null {
 
 function entryFieldForField(src: FieldSrc): EntryTextField | null {
   return src.kind === "entry" ? src.field : null;
+}
+
+function paragraphSpacingAllowedIn(src: FieldSrc): boolean {
+  return src.kind === "bullet";
 }
 
 // Resolve through the shared role-size truth: the name via the document's
@@ -350,6 +388,8 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
   actions,
   canUndo,
   canRedo,
+  contentUndoSequence = null,
+  contentRedoSequence = null,
   docStyle,
   onInlineFormatStateChange,
   onRequestLinkEditor,
@@ -409,10 +449,16 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
   const dataRef = useRef(data);
   dataRef.current = data;
   // Read through refs so commitHistory's identity stays stable (see its note).
-  const canUndoRef = useRef(canUndo);
-  canUndoRef.current = canUndo;
-  const canRedoRef = useRef(canRedo);
-  canRedoRef.current = canRedo;
+  const canUndoRef = useRef(canUndo || docStyle.canUndo);
+  canUndoRef.current = canUndo || docStyle.canUndo;
+  const canRedoRef = useRef(canRedo || docStyle.canRedo);
+  canRedoRef.current = canRedo || docStyle.canRedo;
+  const contentUndoSequenceRef = useRef(contentUndoSequence);
+  contentUndoSequenceRef.current = contentUndoSequence;
+  const contentRedoSequenceRef = useRef(contentRedoSequence);
+  contentRedoSequenceRef.current = contentRedoSequence;
+  const styleHistoryRef = useRef(docStyle);
+  styleHistoryRef.current = docStyle;
   // Pre-edit selection per history snapshot, so undo re-highlights ONLY when the
   // edit was made over a real selection. Keyed by the exact ResumeData object the
   // reducer pushes to `past`; a WeakMap so superseded snapshots are collected.
@@ -549,10 +595,10 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
   const readSelection = useCallback((): TypesetSelection | null => {
     const host = hostRef.current;
     const sel = window.getSelection();
-    if (!host || !sel || sel.rangeCount === 0) return null;
-    const anchor = keyOfNode(sel.anchorNode);
-    const focus = keyOfNode(sel.focusNode);
-    if (!anchor || !focus || anchor.key !== focus.key || !host.contains(anchor.el)) {
+    if (!host || !sel || sel.rangeCount === 0 || !sel.anchorNode || !sel.focusNode) return null;
+    const anchor = fieldCaretOf(host, sel.anchorNode, sel.anchorOffset);
+    const focus = fieldCaretOf(host, sel.focusNode, sel.focusOffset);
+    if (!anchor || !focus || anchor.key !== focus.key) {
       const ranges = readRanges(1);
       if (!ranges || ranges.length !== 1) return null;
       const [only] = ranges;
@@ -569,11 +615,29 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
     if (!src) return null;
     const value = valueForField(dataRef.current, src);
     const map = mapFor(src, value);
-    const a = caretToDisplayIndex(host, anchor.key, map.display, sel.anchorNode!, sel.anchorOffset);
-    const f = caretToDisplayIndex(host, anchor.key, map.display, sel.focusNode!, sel.focusOffset);
+    const a = caretToDisplayIndex(host, anchor.key, map.display, anchor.node, anchor.offset);
+    const f = caretToDisplayIndex(host, anchor.key, map.display, focus.node, focus.offset);
     if (a === null || f === null) return null;
     return { src, key: anchor.key, map, value, dStart: Math.min(a, f), dEnd: Math.max(a, f) };
   }, [mapFor, readRanges]);
+
+  const lineRangesFor = useCallback(
+    (range: Pick<FieldRange, "key" | "map" | "dStart" | "dEnd">): DisplayRange[] => {
+      const host = hostRef.current;
+      if (!host) return [{ dStart: range.dStart, dEnd: range.dEnd }];
+      const selected = selectedVisualLineRanges(
+        host,
+        range.key,
+        range.map.display,
+        range.dStart,
+        range.dEnd
+      );
+      return selected.length
+        ? selected
+        : [{ dStart: range.dStart, dEnd: range.dEnd }];
+    },
+    []
+  );
 
   // The toolbar sits outside the contenteditable page. Preserve the last valid
   // single-field range so a toolbar click can apply formatting without asking
@@ -724,6 +788,16 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
           typingFormatRef.current = null;
           typingTargetRef.current = null;
           const covered = formattableRanges(ranges);
+          const paragraphRanges = covered.filter((range) => paragraphSpacingAllowedIn(range.src));
+          const canFormatParagraph =
+            paragraphRanges.length > 0 && paragraphRanges.length === covered.length;
+          const lineHeightRanges = paragraphRanges.flatMap((range) =>
+            lineRangesFor(range).map(({ dStart, dEnd }) => ({
+              ...range,
+              dStart,
+              dEnd
+            }))
+          );
           const scopes = new Set(ranges.map((range) => alignmentScopeForField(range.src)));
           const crossFieldState: InlineFormatState = {
             canFormat: true,
@@ -742,6 +816,16 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
               (range) => defaultAlignmentForField(range.src, docStyle.style)
             ),
             alignmentScope: scopes.size === 1 ? [...scopes][0] : null,
+            canFormatParagraph,
+            paragraphLineHeight: canFormatParagraph
+              ? uniformAcross(lineHeightRanges, (char) => char.lineHeight, () => docStyle.style.lineHeight)
+              : null,
+            paragraphSpaceBeforePt: canFormatParagraph
+              ? uniformAcross(paragraphRanges, (char) => char.spaceBeforePt, () => 0)
+              : null,
+            paragraphSpaceAfterPt: canFormatParagraph
+              ? uniformAcross(paragraphRanges, (char) => char.spaceAfterPt, () => 0)
+              : null,
             entryField: null,
             // A selection spanning paragraphs links every covered range in place
             // (Word does the same). It has no single existing destination to
@@ -773,6 +857,16 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
             ? [selection.map.chars[Math.max(0, Math.min(selection.dStart - 1, selection.map.chars.length - 1))]]
             : []
         : [];
+      const lineHeightChars =
+        selection && paragraphSpacingAllowedIn(selection.src)
+          ? lineRangesFor(selection).flatMap((range) =>
+              selection.map.chars.slice(range.dStart, range.dEnd)
+            )
+          : [];
+      const emptyParagraphSpacing =
+        selection && selection.map.chars.length === 0
+          ? paragraphSpacingFromInlineMarks(selection.value)
+          : null;
       if (
         selection &&
         !hasRange &&
@@ -849,6 +943,35 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
               ? effectiveAlignments[0]
               : null,
         alignmentScope: selection ? alignmentScopeForField(selection.src) : null,
+        canFormatParagraph: Boolean(selection && paragraphSpacingAllowedIn(selection.src)),
+        paragraphLineHeight:
+          selection && paragraphSpacingAllowedIn(selection.src)
+            ? lineHeightChars.length === 0
+              ? emptyParagraphSpacing?.lineHeight ?? docStyle.style.lineHeight
+              : lineHeightChars.every(
+                    (char) =>
+                      (char.lineHeight ?? docStyle.style.lineHeight) ===
+                      (lineHeightChars[0].lineHeight ?? docStyle.style.lineHeight)
+                  )
+                ? lineHeightChars[0].lineHeight ?? docStyle.style.lineHeight
+                : null
+            : null,
+        paragraphSpaceBeforePt:
+          selection && paragraphSpacingAllowedIn(selection.src)
+            ? chars.length === 0
+              ? emptyParagraphSpacing?.spaceBeforePt ?? 0
+              : chars.every((char) => (char.spaceBeforePt ?? 0) === (chars[0].spaceBeforePt ?? 0))
+                ? chars[0].spaceBeforePt ?? 0
+                : null
+            : null,
+        paragraphSpaceAfterPt:
+          selection && paragraphSpacingAllowedIn(selection.src)
+            ? chars.length === 0
+              ? emptyParagraphSpacing?.spaceAfterPt ?? 0
+              : chars.every((char) => (char.spaceAfterPt ?? 0) === (chars[0].spaceAfterPt ?? 0))
+                ? chars[0].spaceAfterPt ?? 0
+                : null
+            : null,
         entryField: selection ? entryFieldForField(selection.src) : null,
         linkHref: detectedHref,
         // The display text the link editor pre-fills: the WHOLE link when the
@@ -878,7 +1001,7 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
       document.removeEventListener("focusin", sync);
       if (host) clearSelectionHighlights(host);
     };
-  }, [docStyle.style, docVersion, nonce, readRanges, readSelection, syncCaretOverlay]);
+  }, [docStyle.style, docVersion, lineRangesFor, nonce, readRanges, readSelection, syncCaretOverlay]);
 
   useLayoutEffect(() => {
     const selection =
@@ -934,6 +1057,16 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
   const commitHistory = useCallback(
     (direction: "undo" | "redo") => {
       if (direction === "undo" ? !canUndoRef.current : !canRedoRef.current) return;
+      const styleHistory = styleHistoryRef.current;
+      const contentSequence =
+        direction === "undo" ? contentUndoSequenceRef.current : contentRedoSequenceRef.current;
+      const styleSequence =
+        direction === "undo" ? styleHistory.undoSequence : styleHistory.redoSequence;
+      if (historySourceFor(direction, contentSequence, styleSequence) === "style") {
+        if (direction === "undo") styleHistory.undo();
+        else styleHistory.redo();
+        return;
+      }
       const before = dataRef.current;
       pendingCaretRef.current = (after) => {
         if (direction === "undo") {
@@ -1058,12 +1191,76 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
         const nextMap = mapFor(src, freshValue);
         return {
           key,
-          valueIndex: nextMap.valueStart[dStart] ?? 0,
-          valueEndIndex: nextMap.valueStart[dEnd] ?? freshValue.length
+          valueIndex: valueIndexForDisplayIndex(nextMap, freshValue, dStart),
+          valueEndIndex: valueIndexForDisplayIndex(nextMap, freshValue, dEnd)
         };
       };
     },
     [mapFor]
+  );
+
+  // Measure spaces in the caret's font so prose Tab approximates a half-inch stop.
+  const indentWidthAt = useCallback(
+    (range: Pick<FieldRange, "src" | "map" | "dStart">): number => {
+      const chars = range.map.chars;
+      const char = chars[Math.max(0, Math.min(range.dStart, chars.length - 1))];
+      const advance = spaceWidth({
+        family: char?.fontFamily ?? docStyle.style.fontFamily,
+        face: "regular",
+        size: char?.fontSizePt ?? defaultFontSizeForField(range.src, docStyle.style),
+        tracking: 0
+      });
+      return advance > 0 ? Math.max(2, Math.round(TAB_STOP_PT / advance)) : 8;
+    },
+    [docStyle.style]
+  );
+
+  const commitParagraphOutdent = useCallback(
+    (sel: TypesetSelection): boolean => {
+      if (sel.dStart !== sel.dEnd || sel.dStart !== 0) return false;
+      // Backspace removes authored first-line spacing before block indentation.
+      const current = paragraphIndentOf(sel.map);
+      if (current <= 0) return false;
+      const { value } = setParagraphIndent(sel.map, Math.max(0, current - TAB_STOP_PT));
+      recordPreEditSelection(sel);
+      markPending();
+      commitField(actions, sel.src, value);
+      restoreRangeAfterRepaint(sel, 0, 0);
+      return true;
+    },
+    [actions, markPending, recordPreEditSelection, restoreRangeAfterRepaint]
+  );
+
+  // At the first glyph Tab changes paragraph indentation; later selections receive spaces.
+  const commitIndent = useCallback(
+    (sel: TypesetSelection, direction: "in" | "out") => {
+      const unit = " ".repeat(indentWidthAt(sel));
+      // Authored indentation is one non-addressable unit before the first glyph.
+      const leading = /^ */.exec(sel.map.display)?.[0].length ?? 0;
+      if (sel.dStart > leading) {
+        commitReplace(sel, sel.dStart, sel.dEnd, unit);
+        return;
+      }
+      const step = indentStep(sel.map, sel.dStart, sel.dEnd, unit, direction);
+      if (!step || step.value === sel.value) return;
+      const { value, shift } = step;
+      recordPreEditSelection(sel);
+      markPending();
+      commitField(actions, sel.src, value);
+      restoreRangeAfterRepaint(
+        sel,
+        Math.max(0, sel.dStart + shift),
+        Math.max(0, sel.dEnd + shift)
+      );
+    },
+    [
+      actions,
+      commitReplace,
+      indentWidthAt,
+      markPending,
+      recordPreEditSelection,
+      restoreRangeAfterRepaint
+    ]
   );
 
   // ---- selections that cross fields ----
@@ -1083,9 +1280,13 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
         const endMap = mapFor(last.src, endValue);
         return {
           key: first.key,
-          valueIndex: startMap.valueStart[first.dStart] ?? 0,
+          valueIndex: valueIndexForDisplayIndex(
+            startMap,
+            valueForField(fresh, first.src),
+            first.dStart
+          ),
           endKey: last.key,
-          valueEndIndex: endMap.valueStart[last.dEnd] ?? endValue.length
+          valueEndIndex: valueIndexForDisplayIndex(endMap, endValue, last.dEnd)
         };
       };
     },
@@ -1249,11 +1450,32 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
             ranges,
             (range) => clearFormatting(range.map, range.dStart, range.dEnd).value
           );
+        case "indent":
+        case "outdent":
+          // Cross-paragraph Tab changes every covered paragraph instead of replacing them.
+          return commitRangesFormatting(
+            ranges,
+            (range) =>
+              indentStep(
+                range.map,
+                range.dStart,
+                range.dEnd,
+                " ".repeat(indentWidthAt(range)),
+                intent.kind === "indent" ? "in" : "out"
+              )?.value ?? range.value
+          );
         case "history":
+          // History is a document-level command, not a per-field edit.
           return false;
       }
     },
-    [applyMarkAcross, commitRangesDelete, commitRangesFormatting, readRanges]
+    [
+      applyMarkAcross,
+      commitRangesDelete,
+      commitRangesFormatting,
+      indentWidthAt,
+      readRanges
+    ]
   );
 
   const crossFieldPlainText = useCallback((): string | null => {
@@ -1367,8 +1589,29 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
       const key = sel.key;
       pendingCaretRef.current = () => ({
         key,
-        valueIndex: nextMap.valueStart[sel.dStart] ?? 0,
-        valueEndIndex: nextMap.valueStart[sel.dEnd] ?? value.length
+        valueIndex: valueIndexForDisplayIndex(nextMap, value, sel.dStart),
+        valueEndIndex: valueIndexForDisplayIndex(nextMap, value, sel.dEnd)
+      });
+    },
+    [actions, mapFor, markPending, recordPreEditSelection]
+  );
+
+  const commitParagraphFormatting = useCallback(
+    (
+      sel: TypesetSelection,
+      transform: (map: DisplayMap) => { value: string; caretValueIndex: number }
+    ) => {
+      if (!paragraphSpacingAllowedIn(sel.src)) return;
+      const { value } = transform(sel.map);
+      const nextMap = mapFor(sel.src, value);
+      recordPreEditSelection(sel);
+      markPending();
+      commitField(actions, sel.src, value);
+      const key = sel.key;
+      pendingCaretRef.current = () => ({
+        key,
+        valueIndex: valueIndexForDisplayIndex(nextMap, value, sel.dStart),
+        valueEndIndex: valueIndexForDisplayIndex(nextMap, value, sel.dEnd)
       });
     },
     [actions, mapFor, markPending, recordPreEditSelection]
@@ -1518,6 +1761,86 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
           commitRangesFormatting(target.ranges, (range) => setAlignment(range.map, alignment).value);
         } else commitAlignment(target.selection, alignment);
       },
+      setParagraphLineHeight: (lineHeight) => {
+        const target = commandTarget();
+        if (!target) return;
+        if (target.kind === "cross") {
+          commitRangesFormatting(target.ranges, (range) =>
+            paragraphSpacingAllowedIn(range.src)
+              ? setLineHeightRanges(range.map, lineRangesFor(range), lineHeight).value
+              : range.value
+          );
+        } else {
+          commitParagraphFormatting(
+            target.selection,
+            (map) => setLineHeightRanges(map, lineRangesFor(target.selection), lineHeight)
+          );
+        }
+      },
+      setParagraphSpaceBefore: (spaceBeforePt) => {
+        const target = commandTarget();
+        if (!target) return;
+        if (target.kind === "cross") {
+          commitRangesFormatting(target.ranges, (range) =>
+            paragraphSpacingAllowedIn(range.src)
+              ? setParagraphSpaceBefore(range.map, spaceBeforePt).value
+              : range.value
+          );
+        } else {
+          commitParagraphFormatting(
+            target.selection,
+            (map) => setParagraphSpaceBefore(map, spaceBeforePt)
+          );
+        }
+      },
+      setParagraphSpaceAfter: (spaceAfterPt) => {
+        const target = commandTarget();
+        if (!target) return;
+        if (target.kind === "cross") {
+          commitRangesFormatting(target.ranges, (range) =>
+            paragraphSpacingAllowedIn(range.src)
+              ? setParagraphSpaceAfter(range.map, spaceAfterPt).value
+              : range.value
+          );
+        } else {
+          commitParagraphFormatting(
+            target.selection,
+            (map) => setParagraphSpaceAfter(map, spaceAfterPt)
+          );
+        }
+      },
+      setCustomSpacing: (lineHeight, spaceBeforePt, spaceAfterPt) => {
+        const target = commandTarget();
+        if (!target) return;
+        const transform = (range: FieldRange) => {
+          if (!paragraphSpacingAllowedIn(range.src)) return range.value;
+          let value = setLineHeightRanges(
+            range.map,
+            lineRangesFor(range),
+            lineHeight
+          ).value;
+          let map = mapFor(range.src, value);
+          value = setParagraphSpaceBefore(map, spaceBeforePt).value;
+          map = mapFor(range.src, value);
+          return setParagraphSpaceAfter(map, spaceAfterPt).value;
+        };
+        if (target.kind === "cross") {
+          commitRangesFormatting(target.ranges, transform);
+        } else {
+          const selection = target.selection;
+          commitParagraphFormatting(selection, () => ({
+            value: transform({
+              src: selection.src,
+              key: selection.key,
+              map: selection.map,
+              value: selection.value,
+              dStart: selection.dStart,
+              dEnd: selection.dEnd
+            }),
+            caretValueIndex: selection.value.length
+          }));
+        }
+      },
       applyLink: (text, href) => {
         const target = commandTarget();
         if (!target) return;
@@ -1593,6 +1916,7 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
       commitFontSize,
       commitHistory,
       commitLink,
+      commitParagraphFormatting,
       commitRangesFormatting,
       commitReplaceWithLink,
       deleteSelection,
@@ -1600,6 +1924,8 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
       focusDocumentStart,
       focusSelection,
       insertText,
+      lineRangesFor,
+      mapFor,
       resolveLinkTarget,
       selectionText
     ]
@@ -1644,16 +1970,7 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
     [actions, mapFor, markPending, recordPreEditSelection]
   );
 
-  // Enter: grow the list the caret sits in. A non-empty bullet splits (at the end
-  // this appends a fresh bullet); a non-empty skills row spawns a sibling row
-  // below with the caret in it. Enter in an empty bullet/skills row is ignored so
-  // it never piles up blank rows, and Enter elsewhere (titles, headings) is a
-  // no-op — those are not lists.
-  //
-  // PROSE paragraphs (summary sections, which is how a cover letter is modelled)
-  // are not a list, so they follow the word processor instead: Enter always
-  // starts a new paragraph, including from an empty one. Swallowing it there left
-  // the author unable to open a blank line between blocks.
+  // Enter grows non-empty list rows, while prose always permits a new paragraph.
   const commitEnter = useCallback(
     (sel: TypesetSelection) => {
       if (sel.src.kind === "bullet") {
@@ -1862,14 +2179,31 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
         commitReplace(sel, sel.dStart, sel.dEnd, intent.text);
       } else if (intent.kind === "paste") {
         commitPaste(sel, sel.dStart, sel.dEnd, intent.fragment);
-      } else if (intent.kind === "deleteBack") {
-        if (sel.dStart === sel.dEnd && sel.dStart === 0) commitMergeBullet(sel, "up");
-        else if (sel.dStart === sel.dEnd) commitReplace(sel, sel.dStart - 1, sel.dStart, "");
-        else commitReplace(sel, sel.dStart, sel.dEnd, "");
-      } else if (intent.kind === "deleteFwd") {
-        if (sel.dStart === sel.dEnd && sel.dEnd === sel.map.chars.length) commitMergeBullet(sel, "down");
-        else if (sel.dStart === sel.dEnd) commitReplace(sel, sel.dStart, sel.dStart + 1, "");
-        else commitReplace(sel, sel.dStart, sel.dEnd, "");
+      } else if (intent.kind === "deleteBack" || intent.kind === "deleteFwd") {
+        // Held Backspace/Delete replays through here, so it has to step over
+        // authored indentation exactly as the live keystroke does.
+        const backward = intent.kind === "deleteBack";
+        const collapsed = sel.dStart === sel.dEnd;
+        const indent = collapsed
+          ? indentDeletionRange(
+              sel.map.display,
+              sel.dStart,
+              backward ? "backward" : "forward",
+              indentWidthAt(sel)
+            )
+          : null;
+        if (indent) commitReplace(sel, indent.start, indent.end, "");
+        else if (collapsed && backward && sel.dStart === 0) {
+          if (!commitParagraphOutdent(sel)) commitMergeBullet(sel, "up");
+        }
+        else if (collapsed && !backward && sel.dEnd === sel.map.chars.length) {
+          commitMergeBullet(sel, "down");
+        } else if (collapsed) {
+          if (backward) commitReplace(sel, sel.dStart - 1, sel.dStart, "");
+          else commitReplace(sel, sel.dStart, sel.dStart + 1, "");
+        } else commitReplace(sel, sel.dStart, sel.dEnd, "");
+      } else if (intent.kind === "indent" || intent.kind === "outdent") {
+        commitIndent(sel, intent.kind === "indent" ? "in" : "out");
       } else if (intent.kind === "deleteSelection") {
         if (sel.dStart !== sel.dEnd) commitReplace(sel, sel.dStart, sel.dEnd, "");
       } else if (intent.kind === "splitBullet") {
@@ -1891,6 +2225,8 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
     commitMergeBullet,
     applyMark,
     commitCrossFieldIntent,
+    commitIndent,
+    commitParagraphOutdent,
     commitPaste,
     commitReplace,
     docVersion,
@@ -1912,12 +2248,16 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
 
   useTypesetInputEvents({
     hostRef,
+    structuredTabScope: documentKind === "resume" ? "document" : "header",
     nonce,
     docVersion,
     commitPendingRef,
     replayQueueRef,
     readSelection,
     commitReplace,
+    commitIndent,
+    commitParagraphOutdent,
+    indentWidthAt,
     commitPaste,
     onEnter: commitEnter,
     commitMergeBullet,

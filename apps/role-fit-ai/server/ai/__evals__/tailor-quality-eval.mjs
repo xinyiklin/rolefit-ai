@@ -5,16 +5,16 @@
 //
 // Privacy: prints ONLY shape-level metrics (counts, scores, target ids,
 // flagged tokens). Full route responses are written to the gitignored
-// job-search-workspace/tailor-eval/ for manual inspection. Never prints resume
+// workspace/tailor-eval/ for manual inspection. Never prints resume
 // or JD text.
 //
 // Usage:
 //   node server/ai/__evals__/tailor-quality-eval.mjs <jd-file> [runs] [resume-file]
 //     jd-file     - .json with a `tailoringText` field (job-import capture) or a
 //                   plain .txt job description. Samples live in
-//                   job-search-workspace/tailor-eval/samples/.
+//                   workspace/tailor-eval/samples/.
 //     runs        - concurrent identical runs (default 3)
-//     resume-file - base resume (default job-search-workspace/base-resume-fullstack.resume);
+//     resume-file - base resume (default workspace/resumes/fullstack.resume);
 //                   a .resume envelope is serialized to plain text, any other
 //                   file is read as-is.
 //   EVAL_PROVIDER / EVAL_MODEL override the provider (default claude-cli/opus).
@@ -45,8 +45,8 @@ const RUNS = Number(process.argv[3] || 3);
 const jdPath = isAbsolute(jdArg) ? jdArg : join(ROOT, jdArg);
 const resumePath = process.argv[4]
   ? (isAbsolute(process.argv[4]) ? process.argv[4] : join(ROOT, process.argv[4]))
-  : join(ROOT, "job-search-workspace/base-resume-fullstack.resume");
-const OUT_DIR = join(ROOT, "job-search-workspace/tailor-eval");
+  : join(ROOT, "workspace/resumes/fullstack.resume");
+const OUT_DIR = join(ROOT, "workspace/tailor-eval");
 mkdirSync(OUT_DIR, { recursive: true });
 
 const jdRaw = readFileSync(jdPath, "utf8");

@@ -102,6 +102,8 @@ export function CoverLetterTab({
             actions={editor.actions}
             canUndo={editor.canUndo}
             canRedo={editor.canRedo}
+            contentUndoSequence={editor.undoSequence}
+            contentRedoSequence={editor.redoSequence}
             docStyle={editor.docStyle}
             documentKind="cover-letter"
             structureEditing={false}

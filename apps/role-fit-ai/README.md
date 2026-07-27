@@ -64,26 +64,34 @@ editable documents.
 - **AI-owned fit review** — the selected Review model judges the complete requirement set and returns the coverage table, base/tailored scores, verdict, explanation, gaps, and recommendation. RoleFit validates the response contract but does not recalculate or replace that judgment locally.
 - **Strict recruiter review mode** — audit the current edited draft as-is, or audit the sanitized proposal produced moments earlier in **Both**, for a verdict (STRONG FIT / REASONABLE FIT / STRETCH / DON'T APPLY), AI fit scores, gap severity, targeted bullet rewrites, interview risk flags, ready / edits-pending / missing-evidence status, and a cover-letter angle.
 - **One typeset editing surface** — direct text editing, inline emphasis, undo/redo, keyboard caret movement, structural add/remove/reorder controls, per-section Tailor/Include/Off scope, and review-field highlighting all operate on the exported page layout.
-- **Word-processor editing behavior** — Tab inserts preserved indentation,
-  same-editor copy/paste keeps supported inline font and formatting runs, mixed
-  families and sizes share a typographic baseline, and Ctrl/Cmd +/-/0 controls
-  page zoom in both document layouts.
+- **Word-processor editing behavior** — Resume Tab/Shift+Tab moves between
+  complete header and section fields (including wrapped fields); the cover
+  letter uses that navigation in its optional header, and its body paragraphs
+  indent by a half inch on Tab — first the opening line, then the whole
+  paragraph, or the whole paragraph at once when it is all selected — and
+  Shift+Tab takes those indents back. Same-editor copy/paste keeps supported inline font and
+  formatting runs, mixed families and sizes share a typographic baseline, and
+  Ctrl/Cmd +/-/0 controls page zoom in both document layouts.
 - **Ordered AI workflow** — Distill, Tailor, and Review share one reusable progress surface with exact step counts, specific failure reasons, Retry/Stop behavior, and later stages marked not run after a failure.
 - **WYSIWYG editor + PDF export** — the editor *is* the preview: it and the exported PDF use the same shared Typeset layout engine, so visible line breaks and page flow match the export exactly. No external toolchain to install — typesetting and PDF generation run in the browser.
 - **`.resume` save/load** — download the structured resume data as a `.resume` file (lossless JSON, formatting preserved) and reload it later, or keep it as a portable backup of your work.
 - **`.cover` save/load** — download ordered cover-letter paragraphs plus their
-  small print-style contract as a strict `.cover` file. `.resume` remains
+  optional name/contact header and print-style contract as a strict `.cover`
+  file. `.resume` remains
   resume-only; `.rolefit-backup` is the separate allowlisted saved-workspace format.
 - **Named variants for both documents** — resumes and cover letters both live in
-  your workspace as `base-resume*.resume` and `cover-letter*.cover`, each with
+  `workspace/resumes/<variant>.resume` and
+  `workspace/cover-letters/<variant>.cover`, each with
   named variants (a Backend SDE letter beside a Growth one) and version history.
   Every save archives the version it replaces, so nothing is overwritten
   destructively. Both editors use the same Open and Save menus: Open lists the
   starter, a blank, a file picker, and everything already saved; Save updates the
   active copy, adds a variant, or takes a `.resume`/`.cover`/`.txt`/PDF away.
+  Each editor automatically reopens its last active saved variant on that
+  browser origin, falling back to Default when no remembered variant remains.
 - **Portable workspace backup + restore** — the companion's Workspace section saves one versioned `.rolefit-backup` containing validated base resumes, resume history, tracker records, saved application PDFs, and mirrored allowlisted RoleFit preferences. Restore validates every checksum and domain file in a staging workspace before replacing the active saved workspace, then keeps the previous workspace as a local safety copy. The JSON backup is not encrypted and never contains standalone cover-letter variants, provider keys, CLI sessions, arbitrary workspace files, or unsaved recovery drafts.
 - **On-disk pipeline tracker** — a sortable, paginated applications table (right-click any row for quick actions: open details, change stage, in-app PDF preview of the saved resume, or delete) alongside a calendar view of submissions and upcoming follow-ups. Tracks status / source / company / role / follow-up date / notes / resume snapshot per application, and survives browser wipes.
-- **Local-first personal workflow** — the browser app, server, paired extension bridge, and workspace files run on your own device. Source development uses the gitignored `job-search-workspace/`; an installed companion uses `app.getPath("userData")/workspace/`. Origin-scoped browser storage may contain recovery resume/job drafts plus user settings and context, but never API keys. The Electron companion encrypts supported API keys with the operating system through `safeStorage` and stores only encrypted bytes locally beneath its own `userData`; keys never enter browser storage, browser requests, status payloads, or logs. A companion-owned server receives decrypted keys only in memory through a private parent/child channel. AI-backed import, polish, cover-letter, and application-answer features still send the relevant job/resume text directly from the local server to the provider you choose; resume/job payloads do not cross Electron IPC.
+- **Local-first personal workflow** — the browser app, server, paired extension bridge, and workspace files run on your own device. Source development uses the gitignored `workspace/`; an installed companion uses `app.getPath("userData")/workspace/`. Origin-scoped browser storage may contain recovery resume/job drafts plus user settings and context, but never API keys. The Electron companion encrypts supported API keys with the operating system through `safeStorage` and stores only encrypted bytes locally beneath its own `userData`; keys never enter browser storage, browser requests, status payloads, or logs. A companion-owned server receives decrypted keys only in memory through a private parent/child channel. AI-backed import, polish, cover-letter, and application-answer features still send the relevant job/resume text directly from the local server to the provider you choose; resume/job payloads do not cross Electron IPC.
 
 ## Stack
 
@@ -134,6 +142,16 @@ the browser origin, so browser-local draft and preference storage is separate
 on the new port. Packaged workspace files and provider configuration stay in
 the same operating-system `userData` directory.
 The browser extension remains fixed to the canonical port `5181` in this phase.
+
+If a compatible standalone RoleFit server already uses the selected port, the
+companion asks whether to **Connect to it** (the default), **Take over the
+port** with one graceful `SIGTERM` on macOS/Linux, or **Use another port**.
+Alternate-port selection scans nearby ports and persists the first available
+choice. A server that does not stop within five seconds is never force-killed.
+Windows offers the non-takeover choices because it cannot provide the same
+graceful signal. If the listener does not identify itself as compatible
+RoleFit, the companion offers only another port or Quit and never signals that
+process.
 
 Distribution scaffolding can build native macOS arm64/x64 DMG and ZIP artifacts
 and a Windows x64 Squirrel installer. Stable public releases fail closed unless
@@ -315,7 +333,7 @@ The installed companion uses Electron's platform `userData` directory:
 - macOS: `~/Library/Application Support/RoleFit Local Companion/`
 - Windows: `%APPDATA%\RoleFit Local Companion\`
 
-Under that directory, `workspace/` contains resumes, tracker data, and saved
+Under that directory, `workspace/` contains document variants, tracker data, and saved
 application artifacts; `provider-vault/providers.json` contains only provider
 configuration plus operating-system-encrypted API-key bytes; and
 `desktop-settings/settings.json` contains the local-site port. There is no
@@ -360,16 +378,15 @@ The local server creates one private workspace. Its default path depends on how
 RoleFit starts:
 
 - Installed companion: the platform `userData` path above plus `workspace/`
-- Source development: `apps/role-fit-ai/job-search-workspace/`
+- Source development: `apps/role-fit-ai/workspace/`
 
 The workspace contains:
 
-- `base-resume.resume` (or `.txt`, `.md`, `.csv`) — auto-loaded on startup
-- `base-resume-<name>.resume` — named resume variants
-- `cover-letter.cover` and `cover-letter-<name>.cover` — saved cover-letter variants
+- `resumes/<variant>.resume` — named resume variants; `default.resume` is first
+- `cover-letters/<variant>.cover` — named cover-letter variants
+- `resumes/.trash/` and `cover-letters/.trash/` — per-document version history
 - `applications.json` — the pipeline tracker's on-disk store
 - `applications/<id>/resume.pdf` — saved tailored PDFs attached to tracker rows
-- `.trash/` — recoverable resume and cover-letter history
 - `browser-preferences.json` — mirrored allowlisted RoleFit preferences
 - Anything else you drop in there (left out of portable backups)
 
@@ -394,8 +411,8 @@ server/
   jobImport.ts                  # /api/import-job: ATS resolvers (Workday/Ashby/Greenhouse/LinkedIn → text)
   network.ts                    # job-link fetch + SSRF guards
   starter.resume                # bundled starter resume seeded when the workspace has no base resume
-  workspace.ts                  # base-resume workspace storage + shared workspace snapshot
-  coverLetterWorkspace.ts       # cover-letter variants + .trash version history
+  workspace.ts                  # resume variants, migration, and shared workspace snapshot
+  coverLetterWorkspace.ts       # cover-letter variants + isolated version history
 src/
   App.tsx                        # state + handlers + composition
   config/aiOptions.ts            # provider/model/reasoning options
@@ -416,7 +433,7 @@ desktop/                         # required product launcher, provider manager, 
 landing/                         # isolated public product/download page
 dist-electron/                   # generated companion CommonJS output; gitignored
 docs/engineering/                # RoleFit contributor notes (server/AI, UI, testing)
-job-search-workspace/            # source-development workspace; gitignored except README
+workspace/                       # source-development data; gitignored except README
 ```
 
 ## Monorepo and scripts

@@ -45,6 +45,9 @@ Use the nested guides under `src/hooks/`, `src/components/`, and
   threshold by estimate.
 - Components remain controlled and declarative. Hooks own cohesive serializable
   state transitions; DOM selection and geometry remain in the editor adapter.
+- Vertical caret movement must resolve against the intended painted line,
+  including placeholder-backed and whitespace-only lines; do not trust a
+  browser point-to-caret result that lands on an adjacent line.
 - Extract by stable responsibility or test seam, not to chase a line-count
   target. Do not add pass-through wrappers or catch-all configurable controls.
 

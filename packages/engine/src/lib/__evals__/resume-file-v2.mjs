@@ -1,5 +1,5 @@
 // Strict editable-file contract guard.
-// Run: node --experimental-strip-types src/lib/__evals__/resume-file-v1.mjs
+// Run: node --experimental-strip-types src/lib/__evals__/resume-file-v2.mjs
 
 import assert from "node:assert/strict";
 
@@ -19,9 +19,11 @@ const starter = buildStarterResume();
 const serialized = serializeResumeFile(starter, DOC_STYLE_DEFAULTS);
 const saved = JSON.parse(serialized);
 
-assert.equal(RESUME_FILE_SCHEMA_VERSION, 1);
-assert.equal(saved.schemaVersion, 1);
+assert.equal(RESUME_FILE_SCHEMA_VERSION, 2);
+assert.equal(saved.schemaVersion, 2);
 assert.equal(saved.style.entryEndIndentPt, 5.4);
+assert.equal(Object.hasOwn(saved.style, "pageMargins"), false, "preset identity is UI state, not file data");
+assert.equal(saved.style.pageMarginTopPt, 36);
 assert.equal(Object.hasOwn(saved.style, "boldTitles"), false);
 assert.match(saved.document.sections[0].items[0].titleLeft, /^<b>/);
 
@@ -50,9 +52,25 @@ function expectError(input, code) {
   );
 }
 
-for (const schemaVersion of [0, 2, 3, 99]) {
+for (const schemaVersion of [0, 3, 99]) {
   expectError({ ...saved, schemaVersion }, "unsupported-version");
 }
+
+const legacyV1 = structuredClone(saved);
+legacyV1.schemaVersion = 1;
+legacyV1.style.pageMargins = "normal";
+const migratedLegacy = parseResumeFile(JSON.stringify(legacyV1));
+assert.equal(migratedLegacy.documentStyle.pageMarginTopPt, 36);
+assert.equal(
+  Object.hasOwn(JSON.parse(serializeResumeFile(migratedLegacy.data, {
+    ...migratedLegacy.documentStyle,
+    pageMargins: "narrow",
+    zoom: DOC_STYLE_DEFAULTS.zoom,
+    spellCheck: DOC_STYLE_DEFAULTS.spellCheck
+  })).style, "pageMargins"),
+  false,
+  "v1 preset state is dropped when the file is saved as v2"
+);
 
 expectError({ ...saved, prototypeField: true }, "invalid-format");
 
@@ -117,7 +135,6 @@ expectError(mutated((file) => { file.style.bodyAlign = "top"; }), "invalid-style
 expectError(mutated((file) => { file.style.headerAlign = "justify"; }), "invalid-style");
 expectError(mutated((file) => { file.style.headingAlign = "justify"; }), "invalid-style");
 expectError(mutated((file) => { file.style.nameSize = "medium"; }), "invalid-style");
-expectError(mutated((file) => { file.style.pageMargins = "tight"; }), "invalid-style");
 expectError(mutated((file) => { file.style.sectionRule = "yes"; }), "invalid-style");
 expectError(mutated((file) => { file.style.contactDivider = ""; }), "invalid-style");
 expectError(mutated((file) => { file.style.contactDivider = "———"; }), "invalid-style");
@@ -180,5 +197,5 @@ assert.equal(resumeFileName(""), "Untitled resume.resume");
 assert.equal(resumeFileName("<b></b>. ."), "Untitled resume.resume", "a name that sanitizes to nothing falls back");
 
 console.log(
-  "resume file v1: round-trip, strict rejection, style-bound, binary-input, and filename checks passed"
+  "resume file v2: v1 migration, round-trip, strict rejection, style-bound, binary-input, and filename checks passed"
 );

@@ -10,6 +10,12 @@ import {
   buildDisplayMap,
   expandToLinkRun,
   inlineFragmentForRange,
+  replaceWithLink,
+  setAlignment,
+  setLineHeightRanges,
+  setParagraphLineHeight,
+  setParagraphSpaceAfter,
+  setParagraphSpaceBefore,
   setFontSize,
   suppressedAutoLinkValue,
   trailingLinkWordAt,
@@ -128,6 +134,127 @@ assert.equal(boundedSizeMap.chars[0].fontSizePt, 1);
 assert.equal(boundedSizeMap.chars[1].fontSizePt, 200);
 assert.equal(boundedSizeMap.chars[2].fontSizePt, null);
 
+const visualLinesMap = buildDisplayMap("First visual line Second visual line", {
+  preserveWhitespace: true
+});
+const firstLineOnly = setLineHeightRanges(
+  visualLinesMap,
+  [{ dStart: 0, dEnd: 18 }],
+  1.5
+);
+const firstLineOnlyMap = buildDisplayMap(firstLineOnly.value, { preserveWhitespace: true });
+assert(firstLineOnlyMap.chars.slice(0, 18).every((char) => char.lineHeight === 1.5));
+assert(firstLineOnlyMap.chars.slice(18).every((char) => char.lineHeight === null));
+
+// A visual-line override must not flatten an existing paragraph-wide value.
+// This mirrors selecting one wrapped middle line after setting the paragraph.
+const inheritedLineHeight = setParagraphLineHeight(visualLinesMap, 1.2);
+const middleLineOverride = setLineHeightRanges(
+  buildDisplayMap(inheritedLineHeight.value, { preserveWhitespace: true }),
+  [{ dStart: 6, dEnd: 17 }],
+  2
+);
+const middleLineOverrideMap = buildDisplayMap(middleLineOverride.value, {
+  preserveWhitespace: true
+});
+assert(middleLineOverrideMap.chars.slice(0, 6).every((char) => char.lineHeight === 1.2));
+assert(middleLineOverrideMap.chars.slice(6, 17).every((char) => char.lineHeight === 2));
+assert(middleLineOverrideMap.chars.slice(17).every((char) => char.lineHeight === 1.2));
+
+// A hard break belongs to the line before it. Formatting that range must leave
+// the following authored line alone, including its independent line height.
+const hardBreakMap = buildDisplayMap("First line\nSecond line", {
+  preserveWhitespace: true
+});
+const hardBreakBase = setParagraphLineHeight(hardBreakMap, 1.2);
+const hardBreakOverride = setLineHeightRanges(
+  buildDisplayMap(hardBreakBase.value, { preserveWhitespace: true }),
+  [{ dStart: 0, dEnd: 11 }],
+  1.5
+);
+const hardBreakOverrideMap = buildDisplayMap(hardBreakOverride.value, {
+  preserveWhitespace: true
+});
+assert(hardBreakOverrideMap.chars.slice(0, 11).every((char) => char.lineHeight === 1.5));
+assert(hardBreakOverrideMap.chars.slice(11).every((char) => char.lineHeight === 1.2));
+
+const paragraphMap = buildDisplayMap("Paragraph text", { preserveWhitespace: true });
+const spacedParagraph = setParagraphSpaceAfter(
+  buildDisplayMap(
+    setParagraphSpaceBefore(
+      buildDisplayMap(setParagraphLineHeight(paragraphMap, 1.5).value, { preserveWhitespace: true }),
+      8
+    ).value,
+    { preserveWhitespace: true }
+  ),
+  12
+);
+const spacedParagraphMap = buildDisplayMap(spacedParagraph.value, { preserveWhitespace: true });
+assert.equal(spacedParagraphMap.chars[0].lineHeight, 1.5);
+assert.equal(spacedParagraphMap.chars[0].spaceBeforePt, 8);
+assert.equal(spacedParagraphMap.chars[0].spaceAfterPt, 12);
+const editedParagraph = applyEdit(spacedParagraphMap, 9, 9, "new ");
+const editedParagraphMap = buildDisplayMap(editedParagraph.value, { preserveWhitespace: true });
+assert.equal(editedParagraphMap.chars[9].lineHeight, 1.5);
+assert.equal(editedParagraphMap.chars[9].spaceBeforePt, 8);
+assert.equal(editedParagraphMap.chars[9].spaceAfterPt, 12);
+
+const emptyParagraph = setParagraphSpaceAfter(
+  buildDisplayMap(
+    setParagraphSpaceBefore(
+      buildDisplayMap(
+        setParagraphLineHeight(buildDisplayMap("", { preserveWhitespace: true }), 1.5).value,
+        { preserveWhitespace: true }
+      ),
+      8
+    ).value,
+    { preserveWhitespace: true }
+  ),
+  12
+);
+assert.match(emptyParagraph.value, /<line-height=1\.5>/);
+assert.match(emptyParagraph.value, /<space-before=8>/);
+assert.match(emptyParagraph.value, /<space-after=12>/);
+const typedEmptyParagraph = applyEdit(
+  buildDisplayMap(emptyParagraph.value, { preserveWhitespace: true }),
+  0,
+  0,
+  "Text"
+);
+const typedEmptyParagraphMap = buildDisplayMap(typedEmptyParagraph.value, {
+  preserveWhitespace: true
+});
+assert(typedEmptyParagraphMap.chars.every((char) => char.lineHeight === 1.5));
+assert(typedEmptyParagraphMap.chars.every((char) => char.spaceBeforePt === 8));
+assert(typedEmptyParagraphMap.chars.every((char) => char.spaceAfterPt === 12));
+const linkedEmptyParagraphMap = buildDisplayMap(
+  replaceWithLink(
+    buildDisplayMap(emptyParagraph.value, { preserveWhitespace: true }),
+    0,
+    0,
+    "Portfolio",
+    "https://example.com"
+  ).value,
+  { preserveWhitespace: true }
+);
+assert(linkedEmptyParagraphMap.chars.every((char) => char.lineHeight === 1.5));
+assert(linkedEmptyParagraphMap.chars.every((char) => char.spaceBeforePt === 8));
+assert(linkedEmptyParagraphMap.chars.every((char) => char.spaceAfterPt === 12));
+const centeredEmptyParagraph = setAlignment(
+  buildDisplayMap(emptyParagraph.value, { preserveWhitespace: true }),
+  "center"
+);
+const centeredTypedMap = buildDisplayMap(
+  applyEdit(
+    buildDisplayMap(centeredEmptyParagraph.value, { preserveWhitespace: true }),
+    0,
+    0,
+    "Centered"
+  ).value,
+  { preserveWhitespace: true }
+);
+assert(centeredTypedMap.chars.every((char) => char.alignment === "center"));
+
 const style = { family: "latin-modern", face: "regular", size: 10, tracking: 0 };
 const bulletSrc = { kind: "bullet", sectionId: "work", entryId: "job", bulletId: "bullet" };
 const anchors = anchorsFromDoc({
@@ -166,7 +293,8 @@ globalThis.HTMLElement ??= class HTMLElement {};
 const {
   caretToDisplayIndex,
   displayIndexToCaret,
-  lineEdgePosition
+  lineEdgePosition,
+  placeInLine
 } = await import("../domSelection.ts");
 
 const paintedHost = (lines) => {
@@ -212,6 +340,38 @@ assert.deepEqual(
   { node: trailing.nodes[0], offset: 6 },
   "End and a click after the last field land after authored trailing spaces"
 );
+
+// A measured fallback keeps overlay-time point resolution away from offset zero.
+const originalDocument = globalThis.document;
+let measuredEnd = 0;
+globalThis.document = {
+  caretRangeFromPoint: () => null,
+  createRange: () => ({
+    setStart: () => {},
+    setEnd: (_node, offset) => {
+      measuredEnd = offset;
+    },
+    getClientRects: () => [{ right: 100 + measuredEnd * 10 }]
+  })
+};
+const measuredTextNode = { nodeType: 3, textContent: "abcde" };
+const measuredLine = Object.assign(new HTMLElement(), {
+  querySelectorAll: () => [measuredSpan]
+});
+const measuredSpan = Object.assign(new HTMLElement(), {
+  firstChild: measuredTextNode,
+  hasAttribute: () => false,
+  getBoundingClientRect: () => ({ left: 100, right: 150 }),
+  closest: (selector) => selector === ".tsd-line" ? measuredLine : null
+});
+measuredTextNode.parentElement = measuredSpan;
+assert.deepEqual(
+  placeInLine(measuredLine, 126),
+  { node: measuredTextNode, offset: 3 },
+  "failed browser caret lookup falls back to the nearest measured character"
+);
+if (originalDocument === undefined) delete globalThis.document;
+else globalThis.document = originalDocument;
 
 // "abc def" wrapped at the space: the break ate it, so neither line holds it.
 const wrapped = paintedHost([[{ key: KEY, text: "abc" }], [{ key: KEY, text: "def" }]]);
@@ -442,6 +602,435 @@ for (const isALink of ["example.com", "sub.example.co.uk", "example.io/resume.pd
   }
 }
 
+// Authored prose indentation behaves as one measured tab stop.
+{
+  const { indentDeletionRange } = await import("../inlineTextEditing.ts");
+  const W = 8;
+
+  // Backspace removes the authored stop without consuming a preceding typed space.
+  assert.deepEqual(
+    indentDeletionRange(`word ${" ".repeat(W)}text`, 5 + W, "backward", W),
+    { start: 5, end: 5 + W },
+    "Backspace removes the tab stop, leaving the space that preceded it"
+  );
+
+  // Backspace immediately after a Tab removes the whole tab stop.
+  assert.deepEqual(
+    indentDeletionRange(`${" ".repeat(W)}text`, W, "backward", W),
+    { start: 0, end: W },
+    "Backspace after Tab deletes the indentation, not one space"
+  );
+  // Forward delete from the start of an indented line removes it too.
+  assert.deepEqual(
+    indentDeletionRange(`${" ".repeat(W)}text`, 0, "forward", W),
+    { start: 0, end: W },
+    "Delete at the start of an indented line removes the whole indentation"
+  );
+  // Two Tabs are two stops: one Backspace takes back one of them.
+  assert.deepEqual(
+    indentDeletionRange(`${" ".repeat(W * 2)}text`, W * 2, "backward", W),
+    { start: W, end: W * 2 },
+    "one Backspace steps back exactly one tab stop"
+  );
+  // A ragged run still gives up exactly one stop, from the caret backwards.
+  assert.deepEqual(
+    indentDeletionRange(`${" ".repeat(W + 2)}text`, W + 2, "backward", W),
+    { start: 2, end: W + 2 },
+    "one stop comes off a ragged run, never the remainder first"
+  );
+  // Ordinary typed spaces stay ordinary: a run shorter than a stop is not a Tab.
+  for (const count of [0, 1, 2, W - 1]) {
+    assert.equal(
+      indentDeletionRange(`${" ".repeat(count)}x`, count, "backward", W),
+      null,
+      `${count} spaces must delete one character at a time`
+    );
+  }
+  // The caret at the very start of a field has nothing behind it — that keystroke
+  // belongs to the paragraph-merge path.
+  assert.equal(indentDeletionRange(`${" ".repeat(W)}text`, 0, "backward", W), null);
+  // Deleting forward mid-word is untouched.
+  assert.equal(indentDeletionRange("word here", 4, "forward", W), null);
+
+}
+
+// Paragraph indentation moves the whole block and survives value round trips.
+{
+  const { paragraphIndentOf, setParagraphIndent } = await import("../inlineTextEditing.ts");
+  const plain = dm("A paragraph.");
+  assert.equal(paragraphIndentOf(plain), 0, "a fresh paragraph has no indent");
+
+  const indented = setParagraphIndent(plain, 36).value;
+  assert.equal(indented, "<indent=36>A paragraph.</indent>");
+  const indentedMap = dm(indented);
+  assert.equal(indentedMap.display, "A paragraph.", "the tag never reaches the painted text");
+  assert.equal(paragraphIndentOf(indentedMap), 36);
+
+  // A second stop stacks on the first.
+  const twice = dm(setParagraphIndent(indentedMap, 72).value);
+  assert.equal(paragraphIndentOf(twice), 72);
+
+  // Zero removes the wrapper so equivalent unindented values serialize identically.
+  assert.equal(setParagraphIndent(twice, 0).value, "A paragraph.");
+
+  // Block indentation preserves the first-line rung encoded in text.
+  const bothRungs = dm(setParagraphIndent(dm("        A paragraph."), 36).value);
+  assert.equal(bothRungs.display, "        A paragraph.");
+  assert.equal(paragraphIndentOf(bothRungs), 36);
+
+  // Editing must not split the paragraph-wide indent wrapper.
+  const typed = applyEdit(bothRungs, 10, 10, "Z").value;
+  assert.equal(
+    (typed.match(/<indent=/g) ?? []).length,
+    1,
+    "typing inside an indented paragraph must not split its wrapper"
+  );
+  assert.equal(paragraphIndentOf(dm(typed)), 36);
+
+  // Bounded like every other paragraph value, and zero is the floor coming down.
+  assert.equal(paragraphIndentOf(dm(setParagraphIndent(plain, -20).value)), 0);
+  assert.equal(paragraphIndentOf(dm(setParagraphIndent(plain, 9999).value)), 216);
+}
+
+// The shared indent ladder reverses each Tab rung with Shift+Tab.
+{
+  const { TAB_STOP_PT, indentStep, paragraphIndentOf } = await import("../inlineTextEditing.ts");
+  const UNIT = " ".repeat(8);
+  const TEXT = "A paragraph that wraps.";
+  const press = (map, dStart, dEnd, direction) => {
+    const step = indentStep(map, dStart, dEnd, UNIT, direction);
+    return step ? dm(step.value) : null;
+  };
+  const caretPress = (map, direction) => press(map, 0, 0, direction);
+
+  // A caret climbs: first line, then block, then block again.
+  const rung1 = caretPress(dm(TEXT), "in");
+  assert.equal(rung1.display, `${UNIT}${TEXT}`, "a caret indents the first line first");
+  assert.equal(paragraphIndentOf(rung1), 0);
+  const rung2 = caretPress(rung1, "in");
+  assert.equal(rung2.display, `${UNIT}${TEXT}`, "the second press moves the block, not the text");
+  assert.equal(paragraphIndentOf(rung2), TAB_STOP_PT);
+  assert.equal(paragraphIndentOf(caretPress(rung2, "in")), TAB_STOP_PT * 2);
+
+  // Selecting the WHOLE paragraph indents the whole paragraph immediately —
+  // every line moves, and no first-line spaces are written.
+  const whole = press(dm(TEXT), 0, TEXT.length, "in");
+  assert.equal(whole.display, TEXT, "a full-paragraph selection writes no leading spaces");
+  assert.equal(paragraphIndentOf(whole), TAB_STOP_PT, "it moves the block instead");
+
+  // A partial selection reaching the first character still takes rung one.
+  const partial = press(dm(TEXT), 0, 5, "in");
+  assert.equal(partial.display, `${UNIT}${TEXT}`);
+  assert.equal(paragraphIndentOf(partial), 0);
+
+  // A selection starting at the first GLYPH of an already-indented paragraph
+  // counts as covering it: the indentation is not part of the text.
+  const fromFirstGlyph = press(rung1, UNIT.length, UNIT.length + TEXT.length, "in");
+  assert.equal(paragraphIndentOf(fromFirstGlyph), TAB_STOP_PT);
+
+  // Shift+Tab unwinds in the reverse order: block first, then the first line.
+  const down1 = caretPress(rung2, "out");
+  assert.equal(paragraphIndentOf(down1), 0, "the block indent comes off first");
+  assert.equal(down1.display, `${UNIT}${TEXT}`, "and the first line keeps its spaces");
+  const down2 = caretPress(down1, "out");
+  assert.equal(down2.display, TEXT, "then the first line's indent comes off");
+  assert.equal(paragraphIndentOf(down2), 0);
+  assert.equal(caretPress(down2, "out"), null, "a flush paragraph has nothing left to give");
+
+  // Shift+Tab on a fully selected paragraph pulls its block indent back too.
+  assert.equal(paragraphIndentOf(press(whole, 0, TEXT.length, "out")), 0);
+
+  // Only the text-backed first-line rung shifts selection offsets.
+  assert.equal(indentStep(dm(TEXT), 0, 0, UNIT, "in").shift, UNIT.length);
+  assert.equal(indentStep(dm(TEXT), 0, TEXT.length, UNIT, "in").shift, 0);
+  assert.equal(indentStep(rung1, 0, 0, UNIT, "out").shift, -UNIT.length);
+}
+
+// Selection shading covers engine-owned line leading, not paragraph gaps.
+{
+  const { selectionBandBottomOffset } = await import("../selectionHighlight.ts");
+  // A 12pt ink box that owns 20pt of line spacing.
+  const line = { top: 100, bottom: 112, leading: 20 };
+  const nextLine = (top) => ({ top, selected: true, samePage: true });
+
+  assert.equal(
+    selectionBandBottomOffset(line, nextLine(120)),
+    8,
+    "the band covers the line's own spacing, not just its ink"
+  );
+  assert.equal(
+    selectionBandBottomOffset(line, null),
+    8,
+    "the last line of a paragraph gets the same band as every other line"
+  );
+  assert.equal(
+    selectionBandBottomOffset(line, { top: 120, selected: false, samePage: true }),
+    8,
+    "an unselected neighbour does not shrink it: the spacing is this line's own"
+  );
+  // A distant next block must not extend this line's selection band.
+  assert.equal(selectionBandBottomOffset(line, nextLine(160)), 8);
+
+  // Overlapping selected lines tile instead of double-painting translucent bands.
+  assert.equal(
+    selectionBandBottomOffset(line, nextLine(108)),
+    -4,
+    "a band stops where the next selected line starts, even going backwards"
+  );
+  assert.equal(
+    selectionBandBottomOffset(line, { top: 108, selected: false, samePage: true }),
+    8,
+    "but only against a line that is actually painting a band"
+  );
+  assert.equal(
+    selectionBandBottomOffset(line, { top: 900, selected: true, samePage: false }),
+    8,
+    "a selection never bridges a page break"
+  );
+
+  // Structural rows without leading shade only their ink box.
+  const structural = { top: 100, bottom: 112, leading: null };
+  assert.equal(selectionBandBottomOffset(structural, nextLine(130)), 0);
+  assert.equal(selectionBandBottomOffset(structural, nextLine(106)), -6, "and still tiles");
+}
+
+// A caret past the final display character restores at the value's end.
+{
+  const { valueIndexForDisplayIndex } = await import("../inlineTextEditing.ts");
+  const value = "<b>abc</b>";
+  const map = dm(value);
+  assert.equal(map.display, "abc");
+
+  assert.equal(valueIndexForDisplayIndex(map, value, 0), map.valueStart[0]);
+  assert.equal(valueIndexForDisplayIndex(map, value, 2), map.valueStart[2]);
+  // The end of the field: past every character, so the end of the value.
+  assert.equal(
+    valueIndexForDisplayIndex(map, value, 3),
+    value.length,
+    "a caret at the field end resolves to the end of the value, never to 0"
+  );
+  // Out of range in either direction clamps rather than wrapping.
+  assert.equal(valueIndexForDisplayIndex(map, value, 99), value.length);
+  assert.equal(valueIndexForDisplayIndex(map, value, -5), map.valueStart[0]);
+  // Both restored endpoints agree, preserving a collapsed caret.
+  assert.equal(
+    valueIndexForDisplayIndex(map, value, 3),
+    valueIndexForDisplayIndex(map, value, 3)
+  );
+  const empty = dm("");
+  assert.equal(valueIndexForDisplayIndex(empty, "", 0), 0);
+}
+
+// Separator-hosted carets resolve to the preceding field's painted end.
+{
+  const { fieldCaretOf } = await import("../domSelection.ts");
+  const KEY = "bullet|letter|p1|b1";
+  const build = (runs) => {
+    const children = [];
+    const line = Object.assign(new HTMLElement(), {
+      className: "tsd-line",
+      childNodes: children,
+      querySelectorAll: () => children.filter((child) => child.getAttribute?.("data-tsdf")),
+      closest: (selector) => (selector === ".tsd-line" ? line : null)
+    });
+    for (const run of runs) {
+      const textNode = { nodeType: 3, textContent: run.text };
+      const span = Object.assign(new HTMLElement(), {
+        firstChild: textNode,
+        hasAttribute: (name) => name === "data-tsde" && Boolean(run.empty),
+        getAttribute: (name) => (name === "data-tsdf" ? (run.separator ? null : KEY) : null),
+        closest: (selector) =>
+          selector === ".tsd-line" ? line : selector.includes("data-tsdf") && !run.separator ? span : null
+      });
+      textNode.parentElement = span;
+      children.push(span);
+    }
+    return { line, spans: children, host: { contains: () => true } };
+  };
+
+  // "abc" then the separator the painter appends at every line end.
+  const painted = build([{ text: "abc" }, { text: " ", separator: true }]);
+  const [textSpan, separator] = painted.spans;
+
+  assert.deepEqual(
+    fieldCaretOf(painted.host, separator.firstChild, 0),
+    { key: KEY, node: textSpan.firstChild, offset: 3 },
+    "a caret in the line separator belongs to the end of the text before it"
+  );
+  assert.deepEqual(
+    fieldCaretOf(painted.host, painted.line, painted.spans.length),
+    { key: KEY, node: textSpan.firstChild, offset: 3 },
+    "so does a caret at the end of the line container"
+  );
+  assert.deepEqual(
+    fieldCaretOf(painted.host, painted.line, 0),
+    { key: KEY, node: textSpan.firstChild, offset: 0 },
+    "and a caret before every span belongs to the line's start"
+  );
+  // An endpoint that DOES name a field is returned untouched.
+  assert.deepEqual(
+    fieldCaretOf(painted.host, textSpan.firstChild, 2),
+    { key: KEY, node: textSpan.firstChild, offset: 2 },
+    "an endpoint inside field text is left exactly where it is"
+  );
+  // Authored trailing spaces are content: the caret belongs AFTER them.
+  const trailing = build([{ text: "abc   " }, { text: " ", separator: true }]);
+  assert.equal(fieldCaretOf(trailing.host, trailing.spans[1].firstChild, 0).offset, 6);
+  // A blank line's placeholder span carries no text position but still a field.
+  const blank = build([{ text: "\u200b", empty: true }, { text: "\n", separator: true }]);
+  assert.deepEqual(fieldCaretOf(blank.host, blank.spans[1].firstChild, 0), {
+    key: KEY,
+    node: blank.spans[0].firstChild,
+    offset: 0
+  });
+}
+
+// Fieldless drag endpoints resolve against the covered field's painted spans.
+{
+  const { readFieldRanges } = await import("../multiFieldSelection.ts");
+  const originalDocument = globalThis.document;
+  const originalWindow = globalThis.window;
+
+  // Numeric document order lets the fake range answer comparePoint deterministically.
+  let order = 0;
+  const step = () => (order += 100);
+  const positionOf = (node, offset) =>
+    node.nodeType === 3
+      ? node.start + offset
+      : offset === 0
+        ? node.start + 1
+        : node.end - 1;
+
+  const orderedHost = (lines) => {
+    const spans = [];
+    const lineElements = [];
+    for (const runs of lines) {
+      const lineElement = Object.assign(new HTMLElement(), {
+        className: "tsd-line",
+        start: step(),
+        children: [],
+        childNodes: [],
+        closest: (selector) => (selector === ".tsd-line" ? lineElement : null)
+      });
+      for (const run of runs) {
+        const spanStart = step();
+        const textNode = { nodeType: 3, textContent: run.text, start: step() };
+        textNode.end = textNode.start + run.text.length;
+        const span = Object.assign(new HTMLElement(), {
+          start: spanStart,
+          firstChild: textNode,
+          childNodes: [textNode],
+          hasAttribute: () => false,
+          getAttribute: (name) => (name === "data-tsdf" ? run.key : null),
+          closest: (selector) =>
+            selector === ".tsd-line" ? lineElement : selector.includes("data-tsdf") ? span : null
+        });
+        span.end = step();
+        textNode.parentElement = span;
+        lineElement.children.push(span);
+        lineElement.childNodes.push(span);
+        spans.push(span);
+      }
+      lineElement.end = step();
+      lineElements.push(lineElement);
+    }
+    return {
+      lines: lineElements,
+      host: {
+        contains: () => true,
+        querySelectorAll: (selector) => {
+          const match = /data-tsdf="([^"]+)"/.exec(selector);
+          return spans.filter((span) => !match || span.getAttribute("data-tsdf") === match[1]);
+        },
+        querySelector: (selector) => {
+          const match = /data-tsdf="([^"]+)"/.exec(selector);
+          return spans.find((span) => !match || span.getAttribute("data-tsdf") === match[1]) ?? null;
+        }
+      }
+    };
+  };
+
+  const selectBetween = (startContainer, startOffset, endContainer, endOffset) => {
+    const live = {
+      startContainer,
+      startOffset,
+      endContainer,
+      endOffset,
+      setStart(node, offset) {
+        this.startContainer = node;
+        this.startOffset = offset;
+      },
+      setEnd(node, offset) {
+        this.endContainer = node;
+        this.endOffset = offset;
+      },
+      collapse() {
+        this.endContainer = this.startContainer;
+        this.endOffset = this.startOffset;
+      },
+      comparePoint(node, offset) {
+        const point = positionOf(this.startContainer, this.startOffset);
+        const other = positionOf(node, offset);
+        return other < point ? -1 : other > point ? 1 : 0;
+      },
+      intersectsNode: () => true
+    };
+    globalThis.document = { createRange: () => ({ ...live }) };
+    globalThis.window = {
+      getSelection: () => ({
+        rangeCount: 1,
+        isCollapsed: false,
+        getRangeAt: () => ({ ...live })
+      })
+    };
+  };
+
+  const KEY_A = "bullet|letter|p1|b1";
+  const wrappedField = orderedHost([
+    [{ key: KEY_A, text: "abc" }],
+    [{ key: KEY_A, text: "def" }]
+  ]);
+  const resolve = () => {
+    const value = "abc def";
+    return { map: buildDisplayMap(value, { preserveWhitespace: true }), value };
+  };
+
+  // Selecting the FIRST painted line, both endpoints on the line container.
+  selectBetween(wrappedField.lines[0], 0, wrappedField.lines[0], 1);
+  const firstLine = readFieldRanges(wrappedField.host, resolve);
+  assert.equal(firstLine?.length, 1, "one field is covered");
+  assert.deepEqual(
+    { dStart: firstLine[0].dStart, dEnd: firstLine[0].dEnd },
+    { dStart: 0, dEnd: 3 },
+    "selecting the first line covers that line, not the whole paragraph"
+  );
+
+  // Selecting the SECOND painted line. This is the one that used to resolve to
+  // no field at all (toolbar disabled) and, once resolved, to the whole field.
+  selectBetween(wrappedField.lines[1], 0, wrappedField.lines[1], 1);
+  const secondLine = readFieldRanges(wrappedField.host, resolve);
+  assert.equal(secondLine?.length, 1, "a continuation line still resolves its field");
+  assert.deepEqual(
+    { dStart: secondLine[0].dStart, dEnd: secondLine[0].dEnd },
+    { dStart: 4, dEnd: 7 },
+    "selecting a continuation line covers that line only"
+  );
+
+  // A select-all style range over the whole host still covers everything.
+  selectBetween(wrappedField.lines[0], 0, wrappedField.lines[1], 1);
+  const everything = readFieldRanges(wrappedField.host, resolve);
+  assert.deepEqual(
+    { dStart: everything[0].dStart, dEnd: everything[0].dEnd },
+    { dStart: 0, dEnd: 7 },
+    "a range across every line still covers the whole field"
+  );
+
+  if (originalDocument === undefined) delete globalThis.document;
+  else globalThis.document = originalDocument;
+  if (originalWindow === undefined) delete globalThis.window;
+  else globalThis.window = originalWindow;
+}
+
 console.log(
-  `typeset editing: whitespace, rich clipboard, bounded typography, drag hit-area, ${FONT_FAMILY_OPTIONS.length}-family tag round-trip, and hyperlink-editing checks passed`
+  `typeset editing: whitespace, rich clipboard, bounded typography, indentation stops, drag hit-area, selection-boundary resolution, ${FONT_FAMILY_OPTIONS.length}-family tag round-trip, and hyperlink-editing checks passed`
 );

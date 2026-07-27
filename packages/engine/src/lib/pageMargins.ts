@@ -1,14 +1,15 @@
-export type PageMargins = "narrow" | "normal" | "wide" | "custom";
+// Presets are editor shortcuts only. Portable files and layout persist/consume
+// the four physical point values, never this UI selection.
+export type PageMargins = "narrow" | "normal" | "custom";
 
 export const PAGE_MARGIN_PRESETS_PT = {
-  narrow: 0.4 * 72,
-  normal: 0.5 * 72,
-  wide: 0.75 * 72
+  narrow: 0.5 * 72,
+  normal: 1 * 72
 } as const;
 
 export const PAGE_MARGIN_BOUNDS_PT = {
   min: 0.25 * 72,
-  max: 1.5 * 72,
+  max: 3 * 72,
   step: 0.05 * 72
 } as const;
 
@@ -20,7 +21,7 @@ export type PageMarginValues = {
 };
 
 export function presetPageMarginPt(value: unknown): number {
-  return value === "narrow" || value === "wide"
+  return value === "narrow"
     ? PAGE_MARGIN_PRESETS_PT[value]
     : PAGE_MARGIN_PRESETS_PT.normal;
 }
@@ -43,4 +44,15 @@ export function pageMarginValuesFor(
     bottom: boundedMargin(custom.bottom, uniform),
     left: boundedMargin(custom.left, uniform)
   };
+}
+
+export function pageMarginsForValues(values: PageMarginValues): PageMargins {
+  const matches = (value: number) =>
+    values.top === value
+    && values.right === value
+    && values.bottom === value
+    && values.left === value;
+  if (matches(PAGE_MARGIN_PRESETS_PT.narrow)) return "narrow";
+  if (matches(PAGE_MARGIN_PRESETS_PT.normal)) return "normal";
+  return "custom";
 }

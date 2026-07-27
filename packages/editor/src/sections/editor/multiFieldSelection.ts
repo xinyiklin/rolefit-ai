@@ -42,34 +42,70 @@ export function orderedFieldKeys(host: HTMLElement): string[] {
   return keys;
 }
 
-// The field a range boundary falls on when the boundary itself names none. The
-// point is compared against each field's first painted span, so a boundary on the
-// host covers everything while a boundary on one line covers only up to it.
+function paintedSpansOf(host: HTMLElement, key: string): HTMLElement[] {
+  return Array.from(
+    host.querySelectorAll<HTMLElement>(`[data-tsdf="${CSS.escape(key)}"]:not([data-tsdm])`)
+  ).filter((span) => span.firstChild?.nodeType === Node.TEXT_NODE);
+}
+
+function collapsedPoint(range: Range, edge: "start" | "end"): Range {
+  const point = document.createRange();
+  if (edge === "start") point.setStart(range.startContainer, range.startOffset);
+  else point.setStart(range.endContainer, range.endOffset);
+  point.collapse(true);
+  return point;
+}
+
+// Resolve fieldless endpoints against the painted span on the boundary's side.
 function boundaryFieldIndex(
   host: HTMLElement,
   keys: readonly string[],
   range: Range,
   edge: "start" | "end"
 ): number {
-  const point = document.createRange();
-  if (edge === "start") point.setStart(range.startContainer, range.startOffset);
-  else point.setStart(range.endContainer, range.endOffset);
-  point.collapse(true);
+  const point = collapsedPoint(range, edge);
   let resolved = -1;
   for (let index = 0; index < keys.length; index += 1) {
-    const span = host.querySelector<HTMLElement>(
-      `[data-tsdf="${CSS.escape(keys[index])}"]:not([data-tsdm])`
-    );
-    if (!span) continue;
+    const spans = paintedSpansOf(host, keys[index]);
+    if (!spans.length) continue;
     if (edge === "end") {
       // The last field that begins at or before the point.
-      if (point.comparePoint(span, 0) <= 0) resolved = index;
-    } else if (resolved < 0 && point.comparePoint(span, span.childNodes.length) >= 0) {
+      if (point.comparePoint(spans[0], 0) <= 0) resolved = index;
+    } else if (resolved < 0) {
       // The first field that still has content at or after the point.
-      resolved = index;
+      const last = spans[spans.length - 1];
+      if (point.comparePoint(last, last.childNodes.length) >= 0) resolved = index;
     }
   }
   return resolved;
+}
+
+// Fieldless endpoints use painted-span offsets instead of expanding to the whole field.
+function boundaryDisplayIndex(
+  host: HTMLElement,
+  key: string,
+  display: string,
+  range: Range,
+  edge: "start" | "end"
+): number | null {
+  const spans = paintedSpansOf(host, key);
+  if (!spans.length) return null;
+  const point = collapsedPoint(range, edge);
+  if (edge === "end") {
+    let chosen: HTMLElement | null = null;
+    for (const span of spans) {
+      if (point.comparePoint(span, 0) <= 0) chosen = span;
+    }
+    if (!chosen) return null;
+    const text = chosen.firstChild as Text;
+    return caretToDisplayIndex(host, key, display, text, (text.textContent ?? "").length);
+  }
+  for (const span of spans) {
+    if (point.comparePoint(span, span.childNodes.length) >= 0) {
+      return caretToDisplayIndex(host, key, display, span.firstChild!, 0);
+    }
+  }
+  return null;
 }
 
 // Every field the current selection covers, in document order, with the display
@@ -134,14 +170,22 @@ export function readFieldRanges(
     const length = map.chars.length;
     // Only the boundary fields can be partially covered, and only when the
     // boundary actually sits inside one of them.
+    const isFirst = key === keys[startIndex];
+    const isLast = key === keys[endIndex];
     const rawStart =
       key === startKey
         ? caretToDisplayIndex(host, key, map.display, range.startContainer, range.startOffset) ?? 0
-        : 0;
+        : isFirst
+          // Null means the point sits past this field entirely; it is then a
+          // field the selection only grazes, and the trim below drops it.
+          ? boundaryDisplayIndex(host, key, map.display, range, "start") ?? length
+          : 0;
     const rawEnd =
       key === endKey
         ? caretToDisplayIndex(host, key, map.display, range.endContainer, range.endOffset) ?? length
-        : length;
+        : isLast
+          ? boundaryDisplayIndex(host, key, map.display, range, "end") ?? 0
+          : length;
     const dStart = Math.max(0, Math.min(rawStart, length));
     const dEnd = Math.max(dStart, Math.min(rawEnd, length));
     ranges.push({ src, key, map, value, dStart, dEnd });

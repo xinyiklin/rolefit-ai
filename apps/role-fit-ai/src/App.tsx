@@ -22,6 +22,7 @@ import {
 
 import { useDebouncedValue } from "./hooks/useDebouncedValue";
 import { useDocStyle } from "@typeset/editor/hooks/useDocStyle.ts";
+import { createHistoryClock } from "@typeset/editor/hooks/historyClock.ts";
 import { FormattingToolbar } from "@typeset/editor/components/toolbar/FormattingToolbar.tsx";
 import { DocumentStructureControls } from "@typeset/editor/components/toolbar/DocumentStructureControls.tsx";
 import {
@@ -134,7 +135,7 @@ function resumeVariantFileName(label: string): string {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 60);
-  return slug ? "base-resume-" + slug + ".resume" : "";
+  return slug ? slug + ".resume" : "";
 }
 
 // What the resume Polish action asks before it spends an AI run. This is the only
@@ -175,6 +176,10 @@ const EMPTY_INLINE_FORMAT: InlineFormatState = {
   fontSizePt: null,
   alignment: null,
   alignmentScope: null,
+  canFormatParagraph: false,
+  paragraphLineHeight: null,
+  paragraphSpaceBeforePt: null,
+  paragraphSpaceAfterPt: null,
   entryField: null,
   linkHref: null,
   linkText: "",
@@ -297,6 +302,7 @@ function App() {
   // same names the handlers + JSX already use.
   const providerAvailability = useAvailableProviders();
   const ai = useAiSettings();
+  const resumeHistoryClock = useMemo(createHistoryClock, []);
   const {
     stages,
     updateStage,
@@ -429,12 +435,14 @@ function App() {
     manualEdited: resumeManuallyEdited,
     canUndo: canUndoResume,
     canRedo: canRedoResume,
+    undoSequence: resumeUndoSequence,
+    redoSequence: resumeRedoSequence,
     serializedResume,
     seed: seedResumeEditorDocument,
     seedData: seedResumeDataDocument,
     markClean: markResumeClean,
     actions: resumeEditorActions
-  } = useResumeEditor();
+  } = useResumeEditor(resumeHistoryClock);
   const typesetEditorRef = useRef<TypesetEditorHandle>(null);
   const [inlineFormat, setInlineFormat] = useState<InlineFormatState>(EMPTY_INLINE_FORMAT);
   // The caret each editor was left at, held across the tab switch that unmounts
@@ -512,7 +520,12 @@ function App() {
   }, []);
   // Shared Typeset formatting state. Print-affecting values travel with the
   // strict .resume file; zoom and spellcheck remain local view preferences.
-  const docStyle = useDocStyle();
+  const docStyle = useDocStyle(resumeHistoryClock);
+  const resumeDocumentDirty = resumeEdited || docStyle.dirty;
+  const markResumeDocumentClean = useCallback(() => {
+    markResumeClean();
+    docStyle.markClean();
+  }, [docStyle.markClean, markResumeClean]);
   const globalAlignments = useMemo(
     () => editedResume ? globalAlignmentState(editedResume, docStyle.style) : null,
     [docStyle.style, editedResume]
@@ -1025,17 +1038,16 @@ function App() {
         : polishStages === "tailor"
           ? "tailoring"
           : "tailoring+reviewing"
-      : resumeEdited
-        ? "editing"
-        : "idle";
+        : resumeDocumentDirty
+          ? "editing"
+          : "idle";
   const otherSessions = useTabPresence({ jobLabel: _autosaveJobLabel, phase: _myPhase });
 
   // Warn before close/reload when there are unsaved edits OR a distill/tailor/
   // review is mid-flight (losing an in-progress run is as costly as losing edits).
-  // Apply clears `resumeEdited` (markResumeClean) since the work is then persisted
-  // and a copy exported; editing again re-arms it.
+  // Apply marks content and document style clean after persisting both.
   useBeforeUnloadGuard(
-    resumeEdited
+    resumeDocumentDirty
       || coverLetterEditor.dirty
       || isGeneratingCover
       || isPolishing
@@ -1064,7 +1076,7 @@ function App() {
   } = useWorkspaceResume({
     confirm,
     confirmReplaceEditor,
-    resumeEdited,
+    resumeEdited: resumeDocumentDirty,
     seedResumeEditor,
     fileName,
     setResumeText,
@@ -1183,14 +1195,14 @@ function App() {
     handleDownloadPdf,
     getResumeArtifacts,
     clearAutosaveDraft,
-    markResumeClean,
+    markResumeClean: markResumeDocumentClean,
     setApplyStatus,
     setActiveOutputTab,
     setExpandedApplicationId
   });
 
   async function handleLoadApplication(app: Application) {
-    if (resumeEdited || coverLetterEditor.dirty) {
+    if (resumeDocumentDirty || coverLetterEditor.dirty) {
       if (!(await confirmReplaceApplicationDraft())) return;
       clearAutosaveDraft();
       setPendingAutosaveDraft(null);
@@ -1435,7 +1447,9 @@ function App() {
               actions={resumeEditorActions}
               canUndo={canUndoResume}
               canRedo={canRedoResume}
-              dirty={resumeEdited}
+              contentUndoSequence={resumeUndoSequence}
+              contentRedoSequence={resumeRedoSequence}
+              dirty={resumeDocumentDirty}
               draftAutosaveState={draftAutosaveState}
               isWorkspaceBootstrapping={isWorkspaceBootstrapping}
               resultSourceLabel={resultSourceLabel}
@@ -1453,8 +1467,8 @@ function App() {
                     if (typesetEditorRef.current) typesetEditorRef.current.redo();
                     else resumeEditorActions.redo();
                   }}
-                  canUndo={canUndoResume}
-                  canRedo={canRedoResume}
+                  canUndo={canUndoResume || docStyle.canUndo}
+                  canRedo={canRedoResume || docStyle.canRedo}
                   formattingDisabled={!editedResume}
                   inlineFormatting={{
                     onRequestEditorFocus: () => typesetEditorRef.current?.focusSelection(),
@@ -1590,15 +1604,15 @@ function App() {
                     title={isWorkspaceBootstrapping ? "Checking workspace…" : "Open resume"}
                     description={
                       activeBaseResumeLabel
-                        ? `Active base: ${activeBaseResumeLabel}`
-                        : "No workspace base selected yet."
+                        ? `Current variant: ${activeBaseResumeLabel}`
+                        : "No workspace variant open."
                     }
                     actions={[
                       {
                         key: "starter",
                         icon: <LayoutTemplate size={15} aria-hidden="true" />,
                         title: "Bundled starter",
-                        description: "An example resume to edit over.",
+                        description: "An example resume to edit.",
                         disabled: isSavingBaseResume,
                         onSelect: () => void loadStarterTemplate()
                       },
@@ -1612,11 +1626,11 @@ function App() {
                     ]}
                     saved={{
                       label: "Saved in workspace",
-                      emptyNote: "No saved resumes yet — Save writes a base resume to your workspace.",
+                      emptyNote: "No saved resume variants yet.",
                       groups: [
                         {
                           key: "bases",
-                          label: "Base versions",
+                          label: "Variants",
                           icon: <FolderOpen size={11} aria-hidden="true" />,
                           entries: baseResumeOptions.map((option) => ({
                             key: option.fileName,
@@ -1628,7 +1642,7 @@ function App() {
                         },
                         ...baseResumeHistory.map((group) => ({
                           key: `history-${group.variant}`,
-                          label: `${group.label} — earlier versions`,
+                          label: `${group.label} earlier versions`,
                           collapsible: true,
                           defaultOpen:
                             baseResumeName.replace(/\.[a-z]+$/i, "") === group.variant

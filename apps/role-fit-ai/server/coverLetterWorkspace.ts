@@ -1,17 +1,5 @@
-// Cover-letter workspace subsystem: discovers, loads, saves, trashes, and
-// restores `cover-letter*.cover` files under the runtime workspace.
-//
-// Deliberately a sibling of workspace.ts rather than a generalization of it.
-// Cover letters share the STORAGE PRIMITIVES (the serialization lock, atomic
-// write, trash stamping, workspace listing) — those are imported, not copied —
-// but they do not share the base resume's four-extension candidate list, its
-// plain-text/CSV import paths, or its bundled-starter fallback. Parameterizing
-// that battle-tested path for a simpler document would have complicated it for
-// no gain on either side.
-//
-// A cover letter is only ever a strict `.cover` file here. Plain-text drafts stay
-// browser downloads: the workspace holds documents the editor can reopen with
-// formatting intact.
+// Keep strict `.cover` storage separate from resume import/starter fallbacks;
+// only the serialized atomic storage primitives are shared.
 
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { mkdir, readFile, readdir, rename } from "node:fs/promises";
@@ -22,6 +10,7 @@ import { readBody, sendJson } from "./http.ts";
 import {
   WorkspaceStorageError,
   atomicWriteWorkspaceFile,
+  coverLetterWorkspaceDir,
   ensureJobWorkspace,
   isMissingFile,
   nextTrashStamp,
@@ -31,8 +20,8 @@ import {
   type WorkspaceLocations
 } from "./workspace.ts";
 
-const DEFAULT_COVER_LETTER_FILE = "cover-letter.cover";
-const coverLetterVariantPattern = /^cover-letter(?:-[A-Za-z0-9][A-Za-z0-9_-]*)?\.cover$/;
+const DEFAULT_COVER_LETTER_FILE = "default.cover";
+const coverLetterVariantPattern = /^[A-Za-z0-9][A-Za-z0-9_-]*\.cover$/;
 // A cover letter is one page of prose; the resume's 200KB cap is generous here.
 const MAX_COVER_LETTER_BYTES = 200_000;
 
@@ -44,6 +33,7 @@ const friendlyWords = new Map([
   ["ai", "AI"],
   ["api", "API"],
   ["ats", "ATS"],
+  ["fde", "FDE"],
   ["llm", "LLM"],
   ["sde", "SDE"],
   ["swe", "SWE"],
@@ -53,9 +43,8 @@ const friendlyWords = new Map([
 
 export function coverLetterLabel(fileName: string): string {
   const stem = fileName.replace(/\.cover$/i, "");
-  if (stem === "cover-letter") return "Default";
+  if (stem === "default") return "Default";
   return stem
-    .replace(/^cover-letter-/, "")
     .split(/[-_]+/)
     .filter(Boolean)
     .map((part) => friendlyWords.get(part.toLowerCase()) ?? part.charAt(0).toUpperCase() + part.slice(1))
@@ -82,7 +71,7 @@ export function coverLetterFileNameForVariant(variant: unknown): string {
     .replace(/^-+|-+$/g, "")
     .slice(0, 40);
   if (!slug) return DEFAULT_COVER_LETTER_FILE;
-  return `cover-letter-${slug}.cover`;
+  return `${slug}.cover`;
 }
 
 // Validate the complete bytes before anything is exposed or installed: a
@@ -104,7 +93,10 @@ export function validateCoverLetterText(data: Buffer | string): string {
 export async function readCoverLetterOptions(
   locations: WorkspaceLocations
 ): Promise<CoverLetterOption[]> {
-  const files = await readWorkspaceFiles(locations);
+  const files = await readdir(coverLetterWorkspaceDir(locations)).catch((error) => {
+    if (isMissingFile(error)) return [] as string[];
+    throw error;
+  });
   return files
     .filter((name) => coverLetterVariantPattern.test(name))
     .map((fileName) => ({ fileName, label: coverLetterLabel(fileName) }))
@@ -122,7 +114,7 @@ async function readCoverLetterHistory(
   locations: WorkspaceLocations,
   perVariant = 3
 ): Promise<CoverLetterHistoryGroup[]> {
-  const trashDir = join(locations.workspaceDir, ".trash");
+  const trashDir = join(coverLetterWorkspaceDir(locations), ".trash");
   let entries: string[];
   try {
     entries = await readdir(trashDir);
@@ -131,7 +123,7 @@ async function readCoverLetterHistory(
     throw new WorkspaceStorageError();
   }
   // Matches: 2026-07-25T16-30-45-123Z__cover-letter[-variant].cover
-  const pattern = /^(.+?)__(cover-letter(?:-[A-Za-z0-9][A-Za-z0-9_-]*)?)\.cover$/;
+  const pattern = /^(.+?)__([A-Za-z0-9][A-Za-z0-9_-]*)\.cover$/;
   const matched = entries
     .map((name) => {
       const match = name.match(pattern);
@@ -158,17 +150,17 @@ async function readCoverLetterHistory(
   }
 
   return [...groups.values()].sort((a, b) => {
-    if (a.variant === "cover-letter") return -1;
-    if (b.variant === "cover-letter") return 1;
+    if (a.variant === "default") return -1;
+    if (b.variant === "default") return 1;
     return a.label.localeCompare(b.label);
   });
 }
 
 async function trashCoverLetterFile(name: string, locations: WorkspaceLocations): Promise<void> {
-  const trashDir = join(locations.workspaceDir, ".trash");
+  const trashDir = join(coverLetterWorkspaceDir(locations), ".trash");
   await mkdir(trashDir, { recursive: true });
   try {
-    await rename(join(locations.workspaceDir, name), join(trashDir, `${nextTrashStamp()}__${name}`));
+    await rename(join(coverLetterWorkspaceDir(locations), name), join(trashDir, `${nextTrashStamp()}__${name}`));
   } catch (error) {
     if ((error as NodeJS.ErrnoException)?.code !== "ENOENT") throw error;
   }
@@ -219,7 +211,7 @@ export async function handleWorkspaceCoverLetter(
       await ensureJobWorkspace(locations.workspaceDir);
       // Archive before overwriting so every save is recoverable from history.
       await trashCoverLetterFile(targetName, locations);
-      await atomicWriteWorkspaceFile(join(locations.workspaceDir, targetName), rawText);
+      await atomicWriteWorkspaceFile(join(coverLetterWorkspaceDir(locations), targetName), rawText);
       return coverLetterSnapshot(locations);
     });
 
@@ -256,7 +248,7 @@ export async function handleSelectCoverLetter(
     const result = await withWorkspaceLock(async () => {
       await ensureJobWorkspace(locations.workspaceDir);
       try {
-        const data = await readFile(join(locations.workspaceDir, fileName));
+        const data = await readFile(join(coverLetterWorkspaceDir(locations), fileName));
         return { text: validateCoverLetterText(data), ...(await coverLetterSnapshot(locations)) };
       } catch (error) {
         if (isMissingFile(error)) return null;
@@ -295,7 +287,7 @@ export async function handleRestoreCoverLetter(
       sendJson(res, 400, { error: "Invalid history key." });
       return;
     }
-    const keyMatch = key.match(/^.+?__(cover-letter(?:-[A-Za-z0-9][A-Za-z0-9_-]*)?\.cover)$/);
+    const keyMatch = key.match(/^.+?__([A-Za-z0-9][A-Za-z0-9_-]*\.cover)$/);
     if (!keyMatch) {
       sendJson(res, 400, { error: "Invalid history key." });
       return;
@@ -305,10 +297,10 @@ export async function handleRestoreCoverLetter(
     const result = await withWorkspaceLock(async () => {
       await ensureJobWorkspace(locations.workspaceDir);
       // Validate the archived bytes before displacing the current good version.
-      const data = await readFile(join(locations.workspaceDir, ".trash", key));
+      const data = await readFile(join(coverLetterWorkspaceDir(locations), ".trash", key));
       const text = validateCoverLetterText(data);
       await trashCoverLetterFile(targetName, locations);
-      await atomicWriteWorkspaceFile(join(locations.workspaceDir, targetName), data);
+      await atomicWriteWorkspaceFile(join(coverLetterWorkspaceDir(locations), targetName), data);
       return { text, ...(await coverLetterSnapshot(locations)) };
     });
 

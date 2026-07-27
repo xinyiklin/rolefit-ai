@@ -39,8 +39,7 @@ const legacyStyle = (style) => ({
   headerAlign: style.headerAlign,
   bodyAlign: style.bodyAlign,
   headingAlign: style.headingAlign,
-  nameSize: style.nameSize,
-  pageMargins: style.pageMargins
+  nameSize: style.nameSize
 });
 const entriesFor = (section, sectionIndex) => section.type === "skills"
   ? section.items.flatMap((item, itemIndex) => item.bullets.map((row, rowIndex) => {

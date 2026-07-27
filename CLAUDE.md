@@ -29,13 +29,22 @@ guides: explicitly read the nearest app/package `AGENTS.md` before scoped work.
 
 ## Visual And Output QA
 
-- Typeset: run `npm run dev:typeset`, then inspect
-  `http://localhost:5186` at representative desktop/tablet/compact widths.
-- RoleFit: run `npm run dev:rolefit`, then inspect
-  `http://localhost:5181` when the change carries real layout or interaction
-  risk; follow its scoped flag-first visual-QA rule.
-- For `.resume` work, open/save a real file and verify round-trip plus malformed
-  input errors.
+Browser QA is flag-first for both apps: skip by default, name the risk when a
+change carries real layout, editor, or theming consequences, and let the user
+decide. Output checks below are not optional this way — they are the only
+evidence that rendering still agrees.
+
+- When authorized, prefer the in-app browser pane (`mcp__Claude_Browser__*`):
+  `preview_start` with launch config `rolefit` or `rolefit-landing`, or run
+  `npm run dev:typeset` and navigate to `http://localhost:5186` for Typeset.
+  Use `read_page` / `read_console_messages` for structure and errors, and
+  `computer` screenshots for page-layout surfaces where pixels are the point.
+- The QA pane is paint-gated: `IntersectionObserver`, `ResizeObserver`, rAF,
+  and transitions do not fire while it is occluded — this bites the landing
+  page's scroll reveals. Force frames with a real scroll or screenshot gesture,
+  or force the end state and inspect the wiring.
+- For `.resume`/`.cover` work, open/save a real file and verify round-trip plus
+  malformed input errors.
 - For PDF work, render the emitted PDF and compare it with the editor; build
   success alone is not visual parity.
 

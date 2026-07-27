@@ -13,8 +13,8 @@
     "fonts"
   ],
   "scripts": {
-    "eval:resume-file": "node --experimental-strip-types src/lib/__evals__/resume-file-v1.mjs",
-    "eval:cover-letter-file": "node --experimental-strip-types src/lib/__evals__/cover-letter-file-v1.mjs",
+    "eval:resume-file": "node --experimental-strip-types src/lib/__evals__/resume-file-v2.mjs",
+    "eval:cover-letter-file": "node --experimental-strip-types src/lib/__evals__/cover-letter-file-v2.mjs",
     "eval:pdf-font-parity": "node --experimental-strip-types src/typeset/__evals__/pdf-font-parity.mjs",
     "eval": "npm run eval:resume-file && npm run eval:cover-letter-file && npm run eval:pdf-font-parity",
     "test": "npm run eval",

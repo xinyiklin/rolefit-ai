@@ -87,7 +87,12 @@ read-only application resources
 writable operating-system userData
   provider-vault/providers.json safeStorage ciphertext plus configured ids
   desktop-settings/settings.json versioned non-secret local site port
-  workspace/                    resume, job, tracker, and generated artifacts
+  workspace/
+    resumes/                    named `.resume` variants and `.trash/` history
+    cover-letters/              named `.cover` variants and `.trash/` history
+    applications.json           tracker store
+    applications/<id>/          saved application PDFs
+    browser-preferences.json    allowlisted origin-portable preferences
 ```
 
 The packaged server entry is a production bundle. It must not load Vite,
@@ -101,7 +106,7 @@ Electron main resolves:
 - packaged app root: `app.getAppPath()` (read-only resources);
 - development server entry: `server.ts`;
 - packaged server entry: the built production server bundle;
-- development default workspace: `job-search-workspace/`;
+- development default workspace: `workspace/`;
 - packaged default workspace: `app.getPath("userData")/workspace/`.
 
 An absolute `ROLEFIT_WORKSPACE_DIR` remains an explicit test/development

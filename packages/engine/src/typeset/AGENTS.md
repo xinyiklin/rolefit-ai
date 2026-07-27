@@ -42,9 +42,24 @@ it truthfully.
 - Preserve provenance ids needed for caret/selection mapping without writing
   session ids into portable files.
 - Store print geometry in physical points and line height as a unitless value.
-  Do not introduce screen-relative units into saved layout behavior.
+  Carry line-height metadata through tokenization and line breaking so each
+  visual line resolves its own outgoing leading. Apply that delta at the next
+  junction so a line-height override changes space below, never above, the
+  targeted line. Before/after spacing remains a paragraph property resolved
+  before composing vertical streams. A paragraph's LEFT indent is a third such
+  property: it shifts every one of the paragraph's lines and narrows its measure
+  by the same amount, which is what leading spaces cannot do — a wrapped line has
+  no authored start to put them at. Shifting without narrowing would push text
+  past the right margin in both the editor and the PDF. Each line also carries
+  the leading it OWNS (`VLine.leading` → `PlacedLine.leading` → the painter's
+  `--tsd-line-leading`): a renderer that needs the line BOX rather than the ink
+  box cannot derive it from geometry, because the gap to the next line is that
+  leading only inside a paragraph. Do not
+  introduce screen-relative units into saved layout behavior.
 - Preserve literal interior and trailing whitespace according to the shared
-  engine model. Do not fix one renderer independently.
+  engine model. Summary and cover-letter prose also preserves authored leading
+  whitespace as indentation; ordinary marked resume bullets may trim accidental
+  space after their marker. Do not fix one renderer independently.
 - Runs with different families or sizes may share a line, but they share one
   engine baseline. The DOM painter may measure CSS face baselines at its
   browser-only boundary.

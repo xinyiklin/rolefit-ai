@@ -21,7 +21,7 @@ The file extension is `.rolefit-backup`. Its JSON envelope is strict:
   "files": [],
   "browser": {
     "settings": {},
-    "lastBaseResume": "base-resume.resume"
+    "lastBaseResume": "default.resume"
   }
 }
 ```
@@ -73,15 +73,15 @@ app always starts.
 
 Only files owned and validated by RoleFit enter the bundle:
 
-- root `base-resume.resume` variants and legacy default TXT/MD/CSV bases;
-- recognized base-resume history under `.trash/`;
+- resume variants under `resumes/`;
+- recognized resume history under `resumes/.trash/`;
 - validated `applications.json` tracker data;
 - valid saved `applications/<id>/resume.pdf` artifacts;
 - the mirrored allowlisted RoleFit preferences described above.
 
 Generated cover letters, application answers, job targets, and tailored resume
 snapshots already stored on tracker records travel inside `applications.json`.
-Candidate-authored `cover-letter*.cover` files and their `.trash` history are
+Candidate-authored `cover-letters/*.cover` files and their local `.trash` history are
 standalone editable documents and are not part of schema version 1. Download
 the `.cover` files separately when moving them between devices.
 

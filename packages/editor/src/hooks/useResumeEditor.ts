@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useReducer } from "react";
+import { useCallback, useMemo, useReducer, useRef } from "react";
 
 import {
   newBullet,
@@ -25,6 +25,7 @@ import {
   type EntryTextField,
   type StyleTextField
 } from "@typeset/engine/lib/styleFieldFormatting.ts";
+import { createHistoryClock, type HistoryClock } from "./historyClock.ts";
 
 // New rows match the section's shape: skill row, summary paragraph, or entry.
 function newEntryForSection(section: ResumeSectionData): ResumeEntry {
@@ -44,8 +45,8 @@ function newEntryForSection(section: ResumeSectionData): ResumeEntry {
 type State = {
   data: ResumeData | null;
   dirty: boolean;
-  past: ResumeData[];
-  future: ResumeData[];
+  past: { data: ResumeData; sequence: number; branch: number; generation: number }[];
+  future: { data: ResumeData; sequence: number; branch: number; generation: number }[];
   coalesceKey: string | null;
   coalesceAt: number;
 };
@@ -482,37 +483,80 @@ function actionForFieldEdit(edit: FieldEdit): Action {
 
 // Exported for the package's co-located structural eval
 // (`__evals__/resume-editor-structure.mjs`), not for host consumption.
-export function rootReducer(state: State, action: Action): State {
-  if (action.type === "seed")
-    return { data: action.data, dirty: false, past: [], future: [], coalesceKey: null, coalesceAt: 0 };
+export function rootReducer(
+  state: State,
+  action: Action,
+  historyClock: HistoryClock
+): State {
+  if (action.type === "seed") {
+    historyClock.reset();
+    return {
+      data: action.data,
+      dirty: false,
+      past: [],
+      future: [],
+      coalesceKey: null,
+      coalesceAt: 0
+    };
+  }
   // Mark the model as saved without reseeding. Undo history remains useful, but
   // the next edit starts a new coalescing group.
   if (action.type === "markClean")
     return state.dirty ? { ...state, dirty: false, coalesceKey: null } : state;
   if (!state.data) return state;
   if (action.type === "undo") {
-    if (!state.past.length) return state;
-    const data = state.past[state.past.length - 1];
+    let index = state.past.length - 1;
+    while (
+      index >= 0 &&
+      !historyClock.isCurrentGeneration(state.past[index]?.generation ?? -1)
+    ) {
+      index -= 1;
+    }
+    const entry = state.past[index];
+    if (!entry) return state;
+    const branch = historyClock.noteUndo(entry.sequence);
     return {
       ...state,
-      data,
+      data: entry.data,
       dirty: true,
-      past: state.past.slice(0, -1),
-      future: [state.data, ...state.future].slice(0, HISTORY_CAP),
+      past: state.past.filter((_, pastIndex) => pastIndex !== index),
+      future: [
+        {
+          data: state.data,
+          sequence: entry.sequence,
+          branch,
+          generation: historyClock.currentGeneration()
+        },
+        ...state.future
+      ].slice(0, HISTORY_CAP),
       // Restored snapshots are their own boundary: don't let post-undo typing
       // merge into the group that was just traversed.
       coalesceKey: null
     };
   }
   if (action.type === "redo") {
-    if (!state.future.length) return state;
-    const [data, ...future] = state.future;
+    const index = state.future.findIndex((entry) =>
+      historyClock.isCurrentRedoBranch(entry.branch) &&
+      historyClock.isCurrentGeneration(entry.generation)
+    );
+    if (index < 0) return state;
+    const entry = state.future[index];
+    if (!entry) return state;
+    historyClock.noteRedo(entry.sequence);
     return {
       ...state,
-      data,
+      data: entry.data,
       dirty: true,
-      past: [...state.past, state.data].slice(-HISTORY_CAP),
-      future,
+      past: [
+        ...state.past,
+        {
+          data: state.data,
+          sequence: entry.sequence,
+          branch: historyClock.currentBranch(),
+          generation: historyClock.currentGeneration()
+        }
+      ].slice(-HISTORY_CAP),
+      future: state.future.filter((_, futureIndex) => futureIndex !== index),
       coalesceKey: null
     };
   }
@@ -524,22 +568,46 @@ export function rootReducer(state: State, action: Action): State {
   // fresh group and pushes a snapshot.
   const key = coalesceKeyFor(action);
   const now = Date.now();
-  const coalesce = key !== null && key === state.coalesceKey && now - state.coalesceAt < COALESCE_MS;
+  // A shared clock prevents content edits from coalescing across a style edit.
+  const sequence = historyClock.nextSequence();
+  const branch = historyClock.currentBranch();
+  const generation = historyClock.currentGeneration();
+  const previous = state.past[state.past.length - 1];
+  const coalesce =
+    key !== null &&
+    key === state.coalesceKey &&
+    now - state.coalesceAt < COALESCE_MS &&
+    previous?.generation === generation &&
+    previous?.sequence === sequence - 1;
   return {
     data,
     dirty: true,
-    past: coalesce ? state.past : [...state.past, state.data].slice(-HISTORY_CAP),
+    past: coalesce
+      ? [...state.past.slice(0, -1), { ...previous, sequence, branch, generation }]
+      : [
+          ...state.past,
+          { data: state.data, sequence, branch, generation }
+        ].slice(-HISTORY_CAP),
     future: [],
     coalesceKey: key,
     coalesceAt: now
   };
 }
 
-// Owns the structured, editable resume model. `seedData` is the only load path:
-// startup snapshots and opened `.resume` files are validated before reaching
-// the reducer. Every inline edit is structured and undoable.
-export function useResumeEditor(initialData: ResumeData | null = null) {
-  const [state, dispatch] = useReducer(rootReducer, {
+// `seedData` is the only load path; callers validate documents before this reducer.
+export function useResumeEditor(
+  initialData: ResumeData | null = null,
+  historyClock?: HistoryClock
+) {
+  const localHistoryClockRef = useRef<HistoryClock | null>(null);
+  if (!localHistoryClockRef.current) localHistoryClockRef.current = createHistoryClock();
+  const documentHistoryClock = historyClock ?? localHistoryClockRef.current;
+  const reducer = useMemo(
+    () => (state: State, action: Action) =>
+      rootReducer(state, action, documentHistoryClock),
+    [documentHistoryClock]
+  );
+  const [state, dispatch] = useReducer(reducer, {
     data: initialData,
     dirty: false,
     past: [],
@@ -552,9 +620,7 @@ export function useResumeEditor(initialData: ResumeData | null = null) {
     dispatch({ type: "seed", data });
   }, []);
 
-  // Clear the dirty flag after the work is safely persisted (Apply/export) so the
-  // before-unload guard stops warning — see the reducer note. Editor content is
-  // untouched, so editing again re-arms the guard.
+  // Persistence clears only the dirty flag; the next edit re-arms it.
   const markClean = useCallback(() => {
     dispatch({ type: "markClean" });
   }, []);
@@ -629,14 +695,29 @@ export function useResumeEditor(initialData: ResumeData | null = null) {
     []
   );
 
+  let undoIndex = state.past.length - 1;
+  while (
+    undoIndex >= 0 &&
+    !documentHistoryClock.isCurrentGeneration(state.past[undoIndex]?.generation ?? -1)
+  ) {
+    undoIndex -= 1;
+  }
+  const undoEntry = state.past[undoIndex];
+  const redoEntry = state.future.find((entry) =>
+    documentHistoryClock.isCurrentRedoBranch(entry.branch) &&
+    documentHistoryClock.isCurrentGeneration(entry.generation)
+  );
+
   return {
     editedResume: state.data,
     dirty: state.dirty,
     // Drives the editor's undo/redo gate: a no-op undo/redo must not run the
     // commit pipeline, whose safety-timer nonce bump repaints (a visible flicker
     // when there is nothing to restore).
-    canUndo: state.past.length > 0,
-    canRedo: state.future.length > 0,
+    canUndo: undoEntry !== undefined,
+    canRedo: redoEntry !== undefined,
+    undoSequence: (undoEntry?.sequence ?? null) as number | null,
+    redoSequence: (redoEntry?.sequence ?? null) as number | null,
     seedData,
     markClean,
     actions

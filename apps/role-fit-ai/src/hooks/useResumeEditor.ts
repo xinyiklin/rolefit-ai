@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import type { HistoryClock } from "@typeset/editor/hooks/historyClock.ts";
 import { useResumeEditor as useTypesetResumeEditor } from "@typeset/editor/hooks/useResumeEditor.ts";
 import type { EntryTextField } from "@typeset/engine/lib/styleFieldFormatting.ts";
 import { parseResumeData, serializeResumeData } from "../lib/resumeText.ts";
@@ -9,8 +10,8 @@ import { parseResumeData, serializeResumeData } from "../lib/resumeText.ts";
 // concepts the standalone editor does not have: plain-text AI seeding and the
 // provenance bit that distinguishes a user's free-form edit from accepting a
 // reviewed suggestion.
-export function useResumeEditor() {
-  const editor = useTypesetResumeEditor();
+export function useResumeEditor(historyClock?: HistoryClock) {
+  const editor = useTypesetResumeEditor(null, historyClock);
   const [manualEdited, setManualEdited] = useState(false);
 
   // A wrapped mutator below fires BEFORE the shared reducer has actually

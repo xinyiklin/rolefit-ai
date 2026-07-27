@@ -13,7 +13,7 @@ import { FONT_FAMILY_ALTERNATION, type FontFamily } from "./fontFamilies.ts";
 // alternation from lib/fontFamilies.ts so a new family cannot parse in one and
 // not the other.
 export const INLINE_MARK_TAG_PATTERN =
-  `<\\/?(?:b|i|u|nolink)>|<link=([^>\\s]+)>|<\\/link>|<font=(?:${FONT_FAMILY_ALTERNATION})>|<\\/font>|<size=\\d+(?:\\.\\d+)?>|<\\/size>|<align=(?:left|center|right|justify)>|<\\/align>`;
+  `<\\/?(?:b|i|u|nolink)>|<link=([^>\\s]+)>|<\\/link>|<font=(?:${FONT_FAMILY_ALTERNATION})>|<\\/font>|<size=\\d+(?:\\.\\d+)?>|<\\/size>|<align=(?:left|center|right|justify)>|<\\/align>|<line-height=\\d+(?:\\.\\d+)?>|<\\/line-height>|<space-before=\\d+(?:\\.\\d+)?>|<\\/space-before>|<space-after=\\d+(?:\\.\\d+)?>|<\\/space-after>|<indent=\\d+(?:\\.\\d+)?>|<\\/indent>`;
 
 export const INLINE_FONT_SIZE_MIN_PT = 1;
 export const INLINE_FONT_SIZE_MAX_PT = 200;
@@ -45,6 +45,60 @@ export function hasInlineMarkTags(text: string): boolean {
 }
 
 export type FieldAlignment = "left" | "center" | "right" | "justify";
+
+export const PARAGRAPH_LINE_HEIGHT_MIN = 1;
+export const PARAGRAPH_LINE_HEIGHT_MAX = 2;
+export const PARAGRAPH_SPACE_MAX_PT = 72;
+// A paragraph's LEFT indent, in points. Bounded well short of the text column so
+// an indented paragraph always keeps a usable measure to break lines in.
+export const PARAGRAPH_INDENT_MAX_PT = 216;
+
+const boundedParagraphValue = (value: number, min: number, max: number) =>
+  Math.min(max, Math.max(min, Math.round(value * 10) / 10));
+
+export function paragraphLineHeight(value: number): number {
+  return boundedParagraphValue(value, PARAGRAPH_LINE_HEIGHT_MIN, PARAGRAPH_LINE_HEIGHT_MAX);
+}
+
+export function paragraphSpacePt(value: number): number {
+  return boundedParagraphValue(value, 0, PARAGRAPH_SPACE_MAX_PT);
+}
+
+export function paragraphIndentPt(value: number): number {
+  return boundedParagraphValue(value, 0, PARAGRAPH_INDENT_MAX_PT);
+}
+
+// Block indentation moves every wrapped line and narrows the paragraph measure.
+export function paragraphIndentFromInlineMarks(text: string): number {
+  const match = /<indent=(\d+(?:\.\d+)?)>/i.exec(text);
+  return match ? paragraphIndentPt(Number(match[1])) : 0;
+}
+
+export type ParagraphSpacing = {
+  lineHeight: number | null;
+  spaceBeforePt: number | null;
+  spaceAfterPt: number | null;
+};
+
+export function paragraphSpacingFromInlineMarks(text: string): ParagraphSpacing {
+  const read = (name: string) => {
+    const match = new RegExp(`<${name}=(\\d+(?:\\.\\d+)?)>`, "i").exec(text);
+    return match ? Number(match[1]) : null;
+  };
+  const lineHeight = read("line-height");
+  const spaceBeforePt = read("space-before");
+  const spaceAfterPt = read("space-after");
+  return {
+    lineHeight:
+      lineHeight === null
+        ? null
+        : boundedParagraphValue(lineHeight, PARAGRAPH_LINE_HEIGHT_MIN, PARAGRAPH_LINE_HEIGHT_MAX),
+    spaceBeforePt:
+      spaceBeforePt === null ? null : boundedParagraphValue(spaceBeforePt, 0, PARAGRAPH_SPACE_MAX_PT),
+    spaceAfterPt:
+      spaceAfterPt === null ? null : boundedParagraphValue(spaceAfterPt, 0, PARAGRAPH_SPACE_MAX_PT)
+  };
+}
 
 export function alignmentFromInlineMarks(text: string): FieldAlignment | null {
   const match = /<align=(left|center|right|justify)>/i.exec(text);

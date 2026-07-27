@@ -152,7 +152,9 @@ product branding or allow an unmeasured local system font into the page.
   centered common-preset menu; custom 6–48 pt values are stored to 0.1 pt, and
   minus/plus step by exactly 1 pt.
 - **Tracking:** Physical pt, including restrained negative and positive values.
-- **Line height:** Unitless, so leading scales predictably with the text.
+- **Line height:** Unitless and resume-wide, located with the structural gap
+  controls in Spacing. Presets and custom values affect the editable page,
+  print layer, and PDF together.
 
 ### Document Measurement Policy
 
@@ -266,17 +268,23 @@ operation. A standard link control beside inline emphasis edits selected text;
 email and web destinations are detected automatically, while explicit edit and
 remove actions remain available. A spell-check toggle sits with the inline
 formatting group; its underlines are editor-only view state and never reach
-print or PDF output. Line height and physical page gaps live in Spacing.
+print or PDF output. Resume-wide line height and physical document gaps live
+together in Spacing.
 Global alignment reflects the effective fields in its scope and clears
 conflicting local overrides when applied; any later local divergence clears
 that global active state. Entry start and end indents live independently in
 Paragraph, while structural formatting values live in Styles.
 
 The Page popover stays compact at 288px on desktop (Paragraph/Styles are
-324px and Spacing 316px). Page margins offer Narrow, Normal, and Wide presets
-plus independent custom top, right, bottom, and left values from 0.25–1.5
-inches. Custom values persist in physical points so screen layout and PDF
-output agree.
+324px and Spacing 316px). Page margins offer Narrow and Normal shortcuts plus
+independent Custom top, right, bottom, and left values from 0.25–3 inches.
+All four values remain visible for every preset; editing one changes the UI
+state to Custom. Only physical point values persist, so screen layout and PDF
+output agree without storing presentation-only preset names.
+
+Print-affecting document-style changes share chronological Undo/Redo with
+content edits. Zoom, spell-check, and preset labels remain view/UI preferences
+and do not enter document history.
 
 ### Resume Canvas
 

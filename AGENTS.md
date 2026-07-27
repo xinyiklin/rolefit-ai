@@ -25,26 +25,19 @@ update the owning guide and documentation in the same change.
 
 ## Documentation And Guidance Map
 
-- `README.md` — workspace entry point and common commands.
-- `docs/README.md` — documentation index.
-- `docs/architecture.md` — workspace boundaries, dependency direction, and
-  shared-versus-host ownership.
-- `docs/development.md` — commands, ports, generated assets, and verification
-  matrix.
-- `docs/git-workflow.md` — repository-wide branch, commit, PR, and staging
-  conventions.
-- `apps/role-fit-ai/{README,PRODUCT,DESIGN}.md` and
-  `apps/role-fit-ai/docs/engineering/` — RoleFit behavior and engineering
-  contracts.
-- `apps/typeset/AGENTS.md` and `{README,PRODUCT,DESIGN}.md` — standalone
-  Typeset shell, behavior, and visual contract.
-- `packages/engine/AGENTS.md` — engine package boundary and public contract;
-  its nested guides own resume domain/files and deterministic layout/PDF.
-- `packages/editor/AGENTS.md` — editor package boundary, shared styles, and
-  host seams; its nested guides own hooks, chrome, and direct editing.
+- `README.md` / `docs/README.md` — workspace entry point and doc index.
+- `docs/` — `architecture.md` (boundaries, dependency direction,
+  shared-versus-host ownership), `development.md` (commands, ports, generated
+  assets, verification matrix), `git-workflow.md` (branch, commit, PR, staging).
+- `apps/role-fit-ai/{README,PRODUCT,DESIGN}.md` + `docs/engineering/` — RoleFit
+  behavior and engineering contracts.
+- `apps/typeset/AGENTS.md` + `{README,PRODUCT,DESIGN}.md` — Typeset shell,
+  behavior, visual contract.
+- `packages/{engine,editor}/AGENTS.md` — package boundaries and public
+  contracts; their nested guides own resume domain/files and deterministic
+  layout/PDF, and hooks/chrome/direct editing respectively.
 - `CONTINUITY.md` — monorepo decisions and handoff state. RoleFit's scoped
-  ledger may hold app-only operational detail; do not duplicate the same fact
-  in both ledgers.
+  ledger may hold app-only operational detail; never duplicate a fact in both.
 
 ## Workspace Ownership
 
@@ -55,23 +48,22 @@ The dependency direction is:
                                   -> apps/role-fit-ai
 ```
 
-- `packages/engine/` owns deterministic, reusable document behavior:
-  `ResumeData`, the constrained cover-letter paragraph adapter, document style,
-  the strict `.resume` and `.cover` codecs, bundled fonts, measurement, layout,
-  DOM/print painting, and PDF emission. Most of the package is React-free;
-  `typeset/render/dom.tsx` is the intentional rendering boundary. Node server
-  imports must stay on React-free engine subpaths.
-- `packages/editor/` owns the reusable React editing surface: document/history
-  hooks, the contenteditable adapter, formatting toolbar/popovers, editor
-  chrome, and shared editor styles. It depends on the engine, never on an app.
-- `apps/typeset/` owns only the standalone product shell: file lifecycle,
-  browser autosave, Typeset identity, static deployment, and composition of the
-  shared packages.
-- `apps/role-fit-ai/` owns RoleFit orchestration: job intake, AI workflow,
+- `packages/engine/` — deterministic document behavior: `ResumeData`, the
+  constrained cover-letter paragraph adapter, document style, the strict
+  `.resume`/`.cover` codecs, bundled fonts, measurement, layout, DOM/print
+  painting, PDF emission. Mostly React-free; `typeset/render/dom.tsx` is the
+  intentional rendering boundary, and **Node server imports must stay on
+  React-free engine subpaths**.
+- `packages/editor/` — the reusable React editing surface: document/history
+  hooks, contenteditable adapter, formatting toolbar/popovers, editor chrome,
+  shared editor styles. Depends on the engine, never on an app.
+- `apps/typeset/` — only the standalone product shell: file lifecycle, browser
+  autosave, Typeset identity, static deployment, package composition.
+- `apps/role-fit-ai/` — RoleFit orchestration: job intake, AI workflow,
   provider settings, tracker/workspace persistence, browser extension, host
-  navigation, review rail, and the RoleFit-only editor overlay.
-- The root owns the lockfile, shared TypeScript configuration, cross-workspace
-  scripts, repository docs, CI, and app-specific deploy workflows.
+  navigation, review rail, the RoleFit-only editor overlay.
+- Root — lockfile, shared TS config, cross-workspace scripts, repo docs, CI,
+  app-specific deploy workflows.
 
 Apps never import from each other. Packages never import from apps. A package
 must not absorb an app-specific workflow merely because two components look
@@ -89,40 +81,40 @@ similar.
   side effects, volatile provider/platform behavior, or a focused test surface.
   Avoid pass-through wrappers, speculative utilities, broad barrels, and
   components that grow unrelated modes and boolean props.
-- Keep domain logic independent of React and the DOM where practical. React
-  components adapt deterministic helpers to state and events; hooks own
+- Comment why, not what: a constraint, a bug it prevents, or a contract the
+  code cannot show — one or two lines. Durable rationale belongs in the scoped
+  `AGENTS.md`; a paragraph-long comment is filed in the wrong place.
+- Keep domain logic independent of React and the DOM where practical.
+  Components adapt deterministic helpers to state and events; hooks own
   cohesive state/effect lifecycles; app shells compose them.
 - Keep side effects at explicit boundaries: browser/file lifecycle in app
   shells or focused hooks, editor DOM work in the editor adapter, PDF/download
-  work at export boundaries, and server I/O in RoleFit server modules.
-- Keep state close to its owner. Prefer derived state over synchronized copies;
-  keep reducer transitions serializable and atomic; pass values and callbacks
-  into reusable controls rather than giving them hidden storage access.
-- Use shared primitives and tokens for repeated interaction and visual
-  contracts. Shared component changes must preserve every host's accessibility,
-  error handling, responsive behavior, and styling seams.
+  work at export boundaries, server I/O in RoleFit server modules.
+- Keep state close to its owner: derive rather than synchronize, keep reducer
+  transitions serializable and atomic, and pass values and callbacks into
+  reusable controls instead of giving them hidden storage access.
+- Shared component changes must preserve every host's accessibility, error
+  handling, responsive behavior, and styling seams. Never weaken validation,
+  privacy, deterministic layout, or truthful AI behavior to ease reuse.
 - Treat files near 300 lines, unrelated effects in one hook/component, or
   repeated edits across distant modules as prompts to inspect cohesion. A large
-  cohesive controller may remain intact when extraction would only thread many
-  refs without isolating behavior; document that decision in its scoped guide.
-- Do not weaken validation, privacy, deterministic layout, or truthful AI
-  behavior to make an abstraction easier to reuse.
+  cohesive controller may stay intact when extraction would only thread refs
+  without isolating behavior; record that decision in its scoped guide.
 
-Before moving app code into a package, verify:
-
-1. At least two consumers need the same behavior, not merely similar markup.
-2. The API can be expressed without importing host state or product language.
-3. The dependency direction stays acyclic.
-4. Styling and accessibility contracts remain host-safe.
-5. Focused package tests and both affected integrations can verify the move.
+Before moving app code into a package, verify all five: two real consumers need
+the same behavior (not merely similar markup); the API needs no host state or
+product language; the dependency direction stays acyclic; styling and
+accessibility stay host-safe; and focused package tests plus both integrations
+can verify the move.
 
 ## Shared Product And Data Invariants
 
 - `ResumeData` is the canonical resume model in both apps and the shared
   editor's in-memory document shape. RoleFit cover letters adapt an ordered
   paragraph document into that shape without exposing resume sections.
-- `.resume` uses `format: "typeset-resume"` and `schemaVersion: 1`; `.cover`
-  uses `format: "typeset-cover-letter"` and `schemaVersion: 1`. Each is the
+- `.resume` uses `format: "typeset-resume"` and `schemaVersion: 2`; `.cover`
+  uses `format: "typeset-cover-letter"` and `schemaVersion: 2`. Version 1 of
+  either format remains readable and is upgraded on save. Each is the
   strict portable editable format for its own document kind. PDF is final output.
 - Session ids never cross the file boundary. View-only preferences such as zoom
   and spell-check never enter `.resume` or `.cover` files.
@@ -138,31 +130,21 @@ Before moving app code into a package, verify:
 ## Commands
 
 Run commands from the repository root. There is intentionally no ambiguous
-root `dev`, `build`, or `preview` command.
+root `dev`, `build`, or `preview` command — name the app:
 
 ```bash
 npm install
-npm run dev:typeset
-npm run dev:rolefit
-npm run build:typeset
-npm run build:rolefit
-npm run check
-npm test
-```
-
-Use workspace commands for focused work:
-
-```bash
-npm run check --workspace packages/engine
-npm run check --workspace packages/editor
-npm run check --workspace apps/typeset
-npm run check --workspace apps/role-fit-ai
+npm run dev:rolefit          # also dev:typeset
+npm run build:rolefit        # also build:typeset
+npm run check                # full gate; npm test for offline evals
+npm run check --workspace packages/engine   # or editor / apps/*
 ```
 
 See `docs/development.md` for the verification matrix and focused evals.
-Typeset uses port 5186 (HMR 24686); RoleFit uses port 5181. A bound canonical
-port normally means that app is already running; reuse it rather than selecting
-another port.
+
+Ports: RoleFit `5181`, landing `5182`, Typeset `5186` (HMR `24686`); the
+workspace reserves `5181-5183` and `5186`. A bound canonical port means that
+app is already running — reuse it rather than selecting another.
 
 ## Working Method
 
@@ -190,8 +172,10 @@ While working:
   consumer check in proportion to blast radius.
 - A package change is not verified by one app build. Check the package and each
   app whose integration contract changed.
-- UI changes require browser evidence when layout, interaction, or responsive
-  behavior materially changes; otherwise state why visual QA was not needed.
+- Browser QA is flag-first: skip it by default, and when a change carries real
+  layout, interaction, responsive, or theming risk, name the risk and let the
+  user decide rather than starting a dev server unasked. State why visual QA
+  was not needed. Rendered-output checks below are not optional this way.
 - PDF changes require rendered-output comparison; file changes require valid
   round trips plus malformed-input rejection.
 - AI/prompt/sanitizer changes require the relevant offline adversarial probes.
@@ -217,17 +201,20 @@ agree, checks are reported honestly, and residual risks are explicit.
 - Run git commands from the repository root; stage exact paths and keep
   behavior slices reviewable.
 - Treat `AGENTS.md` and `CLAUDE.md` as normal tracked files when requested.
+  Unlike the sibling repositories in this workspace, `CONTINUITY.md` is
+  **tracked** here, so it is a legitimate staging candidate; `.claude/` is not.
+- Never bypass hooks (`--no-verify`, `--no-gpg-sign`); fix the cause instead.
 
 Before a requested push, review the affected README and product/engineering
-documentation; update visitor-facing docs for changed behavior, commands, or
-availability, and update engineering docs for changed contracts. Include the
-compact, privacy-safe continuity receipt in the behavior-slice commit. When a
-product version changes, update its canonical version and user-facing version
-references. During a requested push, merge, or deploy of that versioned change,
-trigger the matching release/publish workflow and required tag, wait for it to
-finish successfully, and retain its workflow or live-environment receipt. A
-versioned change is incomplete until that release/deploy completion is
-confirmed.
+docs: update visitor-facing docs for changed behavior, commands, or
+availability, and engineering docs for changed contracts. Include the compact,
+privacy-safe continuity receipt in the behavior-slice commit.
+
+A version bump carries extra obligations: update the canonical version and
+every user-facing reference, then — during the requested push, merge, or deploy
+— trigger the matching release/publish workflow and required tag, wait for it
+to finish successfully, and retain the workflow or live-environment receipt.
+**A versioned change is incomplete until that completion is confirmed.**
 
 ## Continuity
 

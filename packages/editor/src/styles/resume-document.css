@@ -294,10 +294,14 @@
 .tsd-doc--editable .tsd-line--selected::before {
   position: absolute;
   z-index: 0;
+  /* A line's band never reaches ABOVE its own ink box: the gap above belongs to
+     the line above, which fills it downward. */
   top: 0;
   left: var(--tsd-selection-left, 0);
   width: var(--tsd-selection-width, 0);
-  height: 100%;
+  /* The offset is signed: consecutive ink boxes overlap under tight line
+     spacing, and a translucent veil painted twice reads as a dark stripe. */
+  height: calc(100% + var(--tsd-selection-bottom, 0px));
   background: var(--accent-veil);
   pointer-events: none;
   content: "";
@@ -308,7 +312,14 @@
   z-index: 1;
 }
 
-.tsd-doc--editable [data-tsdf]::selection {
+/* The engine line band IS the selection paint, so the browser's own must be off
+   for EVERYTHING the painter emits — not only field spans. A contact divider,
+   like any run the engine owns but no field does (it belongs to no value and
+   the caret cannot enter it), carries no data-tsdf, so a rule scoped to those
+   left the native veil painting under each "|" on top of our band: two
+   translucent layers, one darker box per divider. */
+.tsd-doc--editable ::selection,
+.tsd-doc--editable::selection {
   color: inherit;
   background: transparent;
 }

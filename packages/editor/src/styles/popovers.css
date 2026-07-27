@@ -114,6 +114,57 @@
   color: inherit;
 }
 
+/* Selection-scoped line and paragraph spacing. The compact vertical command
+   list mirrors familiar word-processor menus and leaves the edited lines
+   visible under the toolbar instead of presenting document-wide segments. */
+.line-spacing-menu {
+  display: grid;
+  width: min(232px, calc(100vw - 24px));
+  padding: 6px 0;
+  background: var(--card-elev);
+}
+
+.line-spacing-menu__options,
+.line-spacing-menu__section {
+  display: grid;
+  gap: 2px;
+  padding: 4px 6px;
+}
+
+.line-spacing-menu__section {
+  border-top: 1px solid var(--hairline);
+}
+
+.line-spacing-menu__option {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+  min-height: 34px;
+  padding: 6px 10px;
+  color: var(--ink);
+  background: transparent;
+  border: 0;
+  border-radius: var(--r-sm);
+  outline: none;
+  font: 520 0.79rem/1.25 var(--font-ui);
+  text-align: left;
+  cursor: pointer;
+}
+
+.line-spacing-menu__option:hover,
+.line-spacing-menu__option:focus-visible {
+  color: var(--accent-deep);
+  background: var(--accent-veil);
+}
+
+.line-spacing-menu__check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent-deep);
+}
+
 /* Header + Add-section popovers (relocated from the page footer to the toolbar). */
 .structure-popover {
   display: grid;

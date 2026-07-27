@@ -12,6 +12,7 @@ import { FileUp, Info, TriangleAlert, X } from "lucide-react";
 import { Modal } from "@typeset/editor/components/Modal.tsx";
 import { TopToolbar, type ToolbarSaveStatus } from "@typeset/editor/components/toolbar/TopToolbar.tsx";
 import { useDocStyle } from "@typeset/editor/hooks/useDocStyle.ts";
+import { createHistoryClock } from "@typeset/editor/hooks/historyClock.ts";
 import {
   DOC_PAGE_WIDTH_PX,
   DOC_STYLE_DEFAULTS,
@@ -73,6 +74,10 @@ const EMPTY_INLINE_FORMAT: InlineFormatState = {
   fontSizePt: null,
   alignment: null,
   alignmentScope: null,
+  canFormatParagraph: false,
+  paragraphLineHeight: null,
+  paragraphSpaceBeforePt: null,
+  paragraphSpaceAfterPt: null,
   entryField: null,
   linkHref: null,
   linkText: "",
@@ -95,8 +100,9 @@ function hasDraggedFiles(event: DragEvent<HTMLElement>) {
 }
 
 export default function App() {
-  const editor = useResumeEditor();
-  const docStyle = useDocStyle();
+  const historyClock = useMemo(createHistoryClock, []);
+  const editor = useResumeEditor(null, historyClock);
+  const docStyle = useDocStyle(historyClock);
   const editorRef = useRef<TypesetEditorHandle>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const workspaceRef = useRef<HTMLElement>(null);
@@ -177,6 +183,7 @@ export default function App() {
         window.localStorage.setItem(AUTOSAVE_KEY, serializeResumeFile(resume, docStyle.style));
         window.localStorage.setItem(DOCUMENT_TITLE_KEY, documentTitle.trim() || UNTITLED_RESUME_TITLE);
         editor.markClean();
+        docStyle.markClean();
         setSaveStatus("saved");
       } catch {
         setSaveStatus({ state: "error", label: "Local save unavailable" });
@@ -184,7 +191,7 @@ export default function App() {
     }, AUTOSAVE_DELAY_MS);
 
     return () => window.clearTimeout(timer);
-  }, [documentStyleSignature, documentTitle, editor.markClean, resume]);
+  }, [docStyle.markClean, documentStyleSignature, documentTitle, editor.markClean, resume]);
 
   useEffect(() => {
     document.title = `${documentTitle.trim() || UNTITLED_RESUME_TITLE} — Typeset`;
@@ -193,12 +200,12 @@ export default function App() {
   useEffect(() => {
     const onBeforeUnload = (event: BeforeUnloadEvent) => {
       const state = typeof saveStatus === "string" ? saveStatus : saveStatus.state;
-      if (!editor.dirty && state !== "error") return;
+      if (!editor.dirty && !docStyle.dirty && state !== "error") return;
       event.preventDefault();
     };
     window.addEventListener("beforeunload", onBeforeUnload);
     return () => window.removeEventListener("beforeunload", onBeforeUnload);
-  }, [editor.dirty, saveStatus]);
+  }, [docStyle.dirty, editor.dirty, saveStatus]);
 
   const applyReplacement = useCallback(
     (replacement: Replacement) => {
@@ -424,8 +431,8 @@ export default function App() {
         isExporting={isExporting}
         onUndo={undo}
         onRedo={redo}
-        canUndo={editor.canUndo}
-        canRedo={editor.canRedo}
+        canUndo={editor.canUndo || docStyle.canUndo}
+        canRedo={editor.canRedo || docStyle.canRedo}
         formattingDisabled={!resume}
         inlineFormatting={{
           onRequestEditorFocus: () => editorRef.current?.focusSelection(),
@@ -553,6 +560,8 @@ export default function App() {
               actions={editor.actions}
               canUndo={editor.canUndo}
               canRedo={editor.canRedo}
+              contentUndoSequence={editor.undoSequence}
+              contentRedoSequence={editor.redoSequence}
               docStyle={docStyle}
               onInlineFormatStateChange={setInlineFormat}
               onRequestLinkEditor={() => setLinkEditorOpen(true)}

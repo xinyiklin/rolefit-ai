@@ -157,7 +157,7 @@ export async function handleDeleteApplication(
 }
 
 // Persist a tailored resume's compiled PDF for one application under
-// job-search-workspace/applications/<id>/ (gitignored). The returned
+// workspace/applications/<id>/ (gitignored). The returned
 // resumeArtifacts mirrors the shape the application sanitizer stores.
 export async function handleSaveApplicationResume(
   req: IncomingMessage,

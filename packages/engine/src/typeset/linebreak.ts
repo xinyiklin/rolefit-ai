@@ -213,6 +213,7 @@ function setLine(
       last.style.face === box.style.face &&
       last.style.size === box.style.size &&
       last.style.tracking === box.style.tracking &&
+      last.lineHeight === box.lineHeight &&
       last.href === box.href &&
       last.underline === box.underline &&
       last.x + last.width === x
@@ -220,7 +221,15 @@ function setLine(
       last.text += box.text;
       last.width += box.width;
     } else {
-      runs.push({ text: box.text, style: box.style, x, width: box.width, href: box.href, underline: box.underline });
+      runs.push({
+        text: box.text,
+        style: box.style,
+        x,
+        width: box.width,
+        lineHeight: box.lineHeight,
+        href: box.href,
+        underline: box.underline
+      });
     }
     x += box.width;
     setWidth += box.width;

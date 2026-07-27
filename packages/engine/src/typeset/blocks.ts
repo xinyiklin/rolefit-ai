@@ -22,8 +22,13 @@ import {
 } from "./measure.ts";
 import { automaticLinkHref } from "../lib/links.ts";
 import { breakParagraph } from "./linebreak.ts";
-import { alignmentFromInlineMarks, hasInlineMarkTags } from "../lib/inlineMarksText.ts";
-import { pageMarginValuesFor } from "../lib/pageMargins.ts";
+import {
+  alignmentFromInlineMarks,
+  hasInlineMarkTags,
+  paragraphIndentFromInlineMarks,
+  paragraphSpacingFromInlineMarks,
+  stripInlineMarks
+} from "../lib/inlineMarksText.ts";
 import { DOC_STYLE_DEFAULTS, type DocumentStyle } from "../lib/documentStyle.ts";
 import type { TypesetSchema } from "./schema.ts";
 
@@ -60,6 +65,10 @@ export type VLine = {
   riseOverflow: number; // above the baseline
   dropOverflow: number; // below the baseline
   dist: number; // baseline distance from previous line in the stream
+  // Paragraph rows expose owned leading so selections exclude unrelated block gaps.
+  leading?: number;
+  // Inline line-height adjusts the following junction without moving this baseline.
+  afterDist?: number;
   // Pagination policy: "keep" lines may not start a page-break separation from
   // their predecessor (entry head rows, a bullet after its head, rules).
   keepWithPrev: boolean;
@@ -86,12 +95,12 @@ const GAP_PT = {
 
 // ---- Geometry (bp) ----
 export function pageGeometry(style: DocumentStyle) {
-  const margins = pageMarginValuesFor(style.pageMargins, {
+  const margins = {
     top: style.pageMarginTopPt,
     right: style.pageMarginRightPt,
     bottom: style.pageMarginBottomPt,
     left: style.pageMarginLeftPt
-  });
+  };
   const textWidth = PAGE_WIDTH_BP - margins.left - margins.right;
   const sizes = fontSizesFor(num(style.baseFontSizePt, 10));
   const entryIndent = num(style.entryIndentPt, DOC_STYLE_DEFAULTS.entryIndentPt);
@@ -332,12 +341,30 @@ export function paragraphLines(
   // paragraphs (summaries) may break mid-paragraph, so an over-tall
   // paragraph can never silently overflow a page.
   keepLinesTogether = true,
-  src?: FieldSrc
+  src?: FieldSrc,
+  // Empty fields carry outgoing spacing explicitly because they have no glyph run.
+  emptyLineHeight?: number
 ): VLine[] {
   const lines = breakParagraph(paragraphItems(value, size, family, tracking), column, align);
   // Defensive fallback: the breaker normally returns one runless line for an
   // empty item stream. Keep one caret-bearing row even if that contract changes.
   if (!lines.length) lines.push({ runs: [], width: 0 });
+  const defaultLineHeight = baselineskip / size;
+  const leadingFor = (line: (typeof lines)[number]) => {
+    if (!line.runs.length && emptyLineHeight !== undefined) {
+      return size * emptyLineHeight;
+    }
+    const override = line.runs.reduce<number | null>(
+      (current, run) =>
+        run.lineHeight === undefined
+          ? current
+          : current === null
+            ? run.lineHeight
+            : Math.max(current, run.lineHeight),
+      null
+    );
+    return size * (override ?? defaultLineHeight);
+  };
   return lines.map((line, i) => {
     let runs = line.runs.map((r) => ({ ...r, x: r.x + indent, src }));
     const bodyStyle: FontStyle = { family, face: "regular", size, tracking };
@@ -358,12 +385,107 @@ export function paragraphLines(
       riseOverflow: overflow.rise,
       dropOverflow: overflow.drop,
       dist: i === 0 ? firstDist : baselineskip,
+      leading: leadingFor(line),
+      afterDist: leadingFor(line) - baselineskip,
       keepWithPrev: i === 0 ? keepFirst : keepLinesTogether
     };
   });
 }
 
-// Build the full vertical stream for a resume schema at a doc style.
+function alignRuns(runs: GlyphRun[], width: number, mode: string, origin = 0): GlyphRun[] {
+  if (!runs.length) return runs;
+  const w = runs[runs.length - 1].x + runs[runs.length - 1].width - runs[0].x;
+  const dx = mode === "center"
+    ? origin + (width - w) / 2 - runs[0].x
+    : mode === "right"
+      ? origin + width - w - runs[0].x
+      : origin - runs[0].x;
+  return runs.map((run) => ({ ...run, x: run.x + dx }));
+}
+
+/** The one shared name/contact stream used by resume and cover-letter pages. */
+export function buildHeaderVerticalStream(schema: TypesetSchema, style: DocumentStyle): VLine[] {
+  const geo = pageGeometry(style);
+  const family = documentFontFamily(style.fontFamily);
+  const baseFontSize = num(style.baseFontSizePt, 10);
+  const sizes = fontSizesFor(baseFontSize);
+  const fontScale = baseFontSize / 10;
+  const tracking = num(style.letterSpacingPt, 0);
+  const stretch = num(style.lineHeight, 1.18) / 1.2;
+  const gap = (key: keyof typeof GAP_PT) => num(style[key], GAP_PT[key]);
+  const headerAlign = style.headerAlign === "left" || style.headerAlign === "right" ? style.headerAlign : "center";
+  const nameSize = nameSizePt(sizes, style.nameSize);
+  const out: VLine[] = [];
+
+  if (schema.name) {
+    const nameRuns = styledFieldRuns(
+      schema.name, nameSize, true, false, 0, family, tracking, { kind: "name" }, "boldDisplay"
+    );
+    const runs = alignRuns(nameRuns, geo.textWidth, alignmentFromInlineMarks(schema.name) ?? headerAlign);
+    const rowInk = rowInkOfRuns(runs, nameSize, inkOfRuns(runs));
+    const overflow = boxOverflowOfRuns(runs, nameSize);
+    out.push({
+      runs,
+      height: rowInk.height,
+      depth: rowInk.depth,
+      riseOverflow: overflow.rise,
+      dropOverflow: overflow.drop,
+      dist: 0,
+      keepWithPrev: false
+    });
+  }
+  if (schema.contact.length) {
+    const size = sizes.small;
+    const divider = (style.contactDivider || "|").slice(0, 2);
+    const dividerBox = gap("contactGapPt");
+    const rows: GlyphRun[][] = [];
+    let runs: GlyphRun[] = [];
+    let x = 0;
+    schema.contact.forEach((piece, index) => {
+      const pieceRunsAtOrigin = styledFieldRuns(
+        piece, size, false, false, 0, family, tracking, { kind: "contact", index }
+      );
+      const pieceWidth = pieceRunsAtOrigin.length
+        ? pieceRunsAtOrigin[pieceRunsAtOrigin.length - 1].x
+          + pieceRunsAtOrigin[pieceRunsAtOrigin.length - 1].width
+        : 0;
+      if (runs.length && x + dividerBox + pieceWidth > geo.textWidth) {
+        rows.push(runs);
+        runs = [];
+        x = 0;
+      }
+      if (runs.length) {
+        const dividerRun = styledRun(divider, size, false, false, 0, family, tracking);
+        dividerRun.x = x + (dividerBox - dividerRun.width) / 2;
+        runs.push(dividerRun);
+        x += dividerBox;
+      }
+      const pieceRuns = pieceRunsAtOrigin.map((run) => ({ ...run, x: run.x + x }));
+      runs.push(...pieceRuns.map((run) => linkified(run, piece)));
+      if (pieceRuns.length) x = pieceRuns[pieceRuns.length - 1].x + pieceRuns[pieceRuns.length - 1].width;
+    });
+    if (runs.length) rows.push(runs);
+    const contactAlignment = schema.contact.map(alignmentFromInlineMarks).find(Boolean) ?? headerAlign;
+    rows.forEach((row, rowIndex) => {
+      const aligned = alignRuns(row, geo.textWidth, contactAlignment);
+      const rowInk = rowInkOfRuns(aligned, size, inkOfRuns(aligned));
+      const overflow = boxOverflowOfRuns(aligned, size);
+      out.push({
+        runs: aligned,
+        height: rowInk.height,
+        depth: rowInk.depth,
+        riseOverflow: overflow.rise,
+        dropOverflow: overflow.drop,
+        dist: rowIndex === 0
+          ? schema.name ? J.nameContact * stretch * fontScale + gap("nameContactGapPt") : 0
+          : size * style.lineHeight,
+        keepWithPrev: Boolean(schema.name || rowIndex > 0)
+      });
+    });
+  }
+  return out;
+}
+
 export function buildVerticalStream(schema: TypesetSchema, style: DocumentStyle): VLine[] {
   const geo = pageGeometry(style);
   const family = documentFontFamily(style.fontFamily);
@@ -379,91 +501,10 @@ export function buildVerticalStream(schema: TypesetSchema, style: DocumentStyle)
   };
   const gap = (key: keyof typeof GAP_PT) => num(style[key], GAP_PT[key]);
   const bodyAlign = (["justify", "center", "right"].includes(style.bodyAlign ?? "") ? style.bodyAlign : "left") as ParagraphAlign;
-  const headerAlign = style.headerAlign === "left" || style.headerAlign === "right" ? style.headerAlign : "center";
   const headingAlign = style.headingAlign === "center" || style.headingAlign === "right" ? style.headingAlign : "left";
-  const nameSize = nameSizePt(sizes, style.nameSize);
 
-  const out: VLine[] = [];
+  const out: VLine[] = buildHeaderVerticalStream(schema, style);
   const push = (line: VLine) => out.push(line);
-  const alignRow = (runs: GlyphRun[], width: number, mode: string, origin = 0): GlyphRun[] => {
-    if (!runs.length) return runs;
-    const w = runs[runs.length - 1].x + runs[runs.length - 1].width - runs[0].x;
-    const dx = mode === "center"
-      ? origin + (width - w) / 2 - runs[0].x
-      : mode === "right"
-        ? origin + width - w - runs[0].x
-        : origin - runs[0].x;
-    return runs.map((r) => ({ ...r, x: r.x + dx }));
-  };
-
-  // ---- Header: name + contact line ----
-  if (schema.name) {
-    // The dedicated bold display face is about 2% narrower than a scaled body
-    // face, which matters for accurate centering at larger name sizes.
-    const nameRuns = styledFieldRuns(
-      schema.name,
-      nameSize,
-      true,
-      false,
-      0,
-      family,
-      tracking,
-      { kind: "name" },
-      "boldDisplay"
-    );
-    const runs = alignRow(nameRuns, geo.textWidth, alignmentFromInlineMarks(schema.name) ?? headerAlign);
-    const rowInk = rowInkOfRuns(runs, nameSize, inkOfRuns(runs));
-    const overflow = boxOverflowOfRuns(runs, nameSize);
-    push({
-      runs,
-      height: rowInk.height,
-      depth: rowInk.depth,
-      riseOverflow: overflow.rise,
-      dropOverflow: overflow.drop,
-      dist: 0,
-      keepWithPrev: false
-    });
-  }
-  if (schema.contact.length) {
-    const size = sizes.small;
-    const divider = (style.contactDivider || "|").slice(0, 2);
-    const dividerBox = gap("contactGapPt"); // fixed-width, centered divider slot
-    const runs: GlyphRun[] = [];
-    let x = 0;
-    schema.contact.forEach((piece, i) => {
-      if (i > 0) {
-        const d = styledRun(divider, size, false, false, 0, family, tracking);
-        d.x = x + (dividerBox - d.width) / 2;
-        runs.push(d);
-        x += dividerBox;
-      }
-      const pieceRuns = styledFieldRuns(
-        piece,
-        size,
-        false,
-        false,
-        x,
-        family,
-        tracking,
-        { kind: "contact", index: i }
-      );
-      runs.push(...pieceRuns.map((run) => linkified(run, piece)));
-      if (pieceRuns.length) x = pieceRuns[pieceRuns.length - 1].x + pieceRuns[pieceRuns.length - 1].width;
-    });
-    const contactAlignment = schema.contact.map(alignmentFromInlineMarks).find(Boolean) ?? headerAlign;
-    const aligned = alignRow(runs, geo.textWidth, contactAlignment);
-    const rowInk = rowInkOfRuns(aligned, size, inkOfRuns(aligned));
-    const overflow = boxOverflowOfRuns(aligned, size);
-    push({
-      runs: aligned,
-      height: rowInk.height,
-      depth: rowInk.depth,
-      riseOverflow: overflow.rise,
-      dropOverflow: overflow.drop,
-      dist: J.nameContact * stretch * fontScale + gap("nameContactGapPt"),
-      keepWithPrev: true
-    });
-  }
 
   // ---- Sections ----
   let prevKind: "header" | "content" = "header";
@@ -495,7 +536,7 @@ export function buildVerticalStream(schema: TypesetSchema, style: DocumentStyle)
         { kind: "heading", sectionId: section.id },
         caseMode === "smallcaps" ? "caps" : undefined
       );
-      const runs = alignRow(headingRuns, geo.textWidth, alignmentFromInlineMarks(section.heading) ?? headingAlign);
+      const runs = alignRuns(headingRuns, geo.textWidth, alignmentFromInlineMarks(section.heading) ?? headingAlign);
       const fallbackHeadingStyle: FontStyle = { family, face: caseMode === "smallcaps" ? "caps" : "regular", size: sizes.large, tracking };
       // A cleared heading paints one injected space. Its row keeps the full
       // heading footprint so the section's spacing does not change when the
@@ -529,6 +570,7 @@ export function buildVerticalStream(schema: TypesetSchema, style: DocumentStyle)
     const isSkills = section.type === "skills";
     const isSummary = section.type === "summary";
     let firstInSection = true;
+    let previousParagraphSpaceAfterPt = 0;
 
     for (const item of items) {
       const f = item;
@@ -568,24 +610,37 @@ export function buildVerticalStream(schema: TypesetSchema, style: DocumentStyle)
         continue;
       }
       if (isSummary) {
-        const dist = firstInSection
-          ? J.headingSkills * stretch * fontScale + gap("sectionEntryGapPt")
-          : J.bulletBullet * stretch * fontScale + gap("bulletGapPt");
         const summaryText = f.subtitleLeft || f.titleLeft || item.bullets?.[0] || "";
+        const paragraphSpacing = paragraphSpacingFromInlineMarks(summaryText);
+        // Left indent: every line of the paragraph starts further in and its
+        // measure narrows to match (see paragraphIndentFromInlineMarks).
+        const summaryIndent = paragraphIndentFromInlineMarks(summaryText);
+        const dist = (firstInSection
+          ? J.headingSkills * stretch * fontScale + gap("sectionEntryGapPt")
+          : J.bulletBullet * stretch * fontScale + gap("bulletGapPt"))
+          + previousParagraphSpaceAfterPt
+          + (paragraphSpacing.spaceBeforePt ?? 0);
         paragraphLines(
           summaryText,
           sizes.small,
-          geo.entryIndent,
-          geo.textWidth - geo.entryIndent - geo.entryEndIndent,
+          geo.entryIndent + summaryIndent,
+          Math.max(
+            sizes.small,
+            geo.textWidth - geo.entryIndent - summaryIndent - geo.entryEndIndent
+          ),
           alignmentFromInlineMarks(summaryText) ?? bodyAlign,
-          bsk.small,
+          sizes.small * style.lineHeight,
           dist,
           firstInSection,
           family,
           tracking,
           false, // summaries may break mid-paragraph (see paragraphLines)
-          bulletSrc(0)
+          bulletSrc(0),
+          stripInlineMarks(summaryText).trim().length === 0
+            ? paragraphSpacing.lineHeight ?? undefined
+            : undefined
         ).forEach(push);
+        previousParagraphSpaceAfterPt = paragraphSpacing.spaceAfterPt ?? 0;
         firstInSection = false;
         continue;
       }
@@ -606,7 +661,7 @@ export function buildVerticalStream(schema: TypesetSchema, style: DocumentStyle)
       const rawTitleRuns = headRow(titleLeft, f.titleRight, titleSize, false, geo, family, tracking, entrySrc("titleRight"));
       const titleAlignment = alignmentFromInlineMarks(f.titleLeft) ?? alignmentFromInlineMarks(f.titleRight);
       const titleRuns = titleAlignment && titleAlignment !== "justify"
-        ? alignRow(rawTitleRuns, geo.headRowWidth, titleAlignment, geo.entryIndent)
+        ? alignRuns(rawTitleRuns, geo.headRowWidth, titleAlignment, geo.entryIndent)
         : rawTitleRuns;
       const inkT = inkOfRuns(titleRuns);
       const titleRowInk = rowInkOfRuns(titleRuns, titleSize, inkT);
@@ -652,7 +707,7 @@ export function buildVerticalStream(schema: TypesetSchema, style: DocumentStyle)
         );
         const subAlignment = alignmentFromInlineMarks(f.subtitleLeft) ?? alignmentFromInlineMarks(f.subtitleRight);
         const subRuns = subAlignment && subAlignment !== "justify"
-          ? alignRow(rawSubRuns, geo.headRowWidth, subAlignment, geo.entryIndent)
+          ? alignRuns(rawSubRuns, geo.headRowWidth, subAlignment, geo.entryIndent)
           : rawSubRuns;
         const inkS = inkOfRuns(subRuns);
         const subRowInk = rowInkOfRuns(subRuns, subSize, inkS);
@@ -682,24 +737,34 @@ export function buildVerticalStream(schema: TypesetSchema, style: DocumentStyle)
         });
       }
 
+      let previousBulletSpaceAfterPt = 0;
       item.bullets.forEach((bullet, bi) => {
-        const dist =
+        const paragraphSpacing = paragraphSpacingFromInlineMarks(bullet);
+        const bulletIndentPt = paragraphIndentFromInlineMarks(bullet);
+        const dist = (
           bi === 0
             ? J.headBullet * stretch * fontScale + gap("headBulletGapPt")
-            : J.bulletBullet * stretch * fontScale + gap("bulletGapPt");
+            : J.bulletBullet * stretch * fontScale + gap("bulletGapPt")
+        ) + previousBulletSpaceAfterPt + (paragraphSpacing.spaceBeforePt ?? 0);
         const lines = paragraphLines(
           bullet,
           sizes.small,
-          geo.bulletIndent,
-          geo.textWidth - geo.bulletIndent - geo.entryEndIndent,
+          geo.bulletIndent + bulletIndentPt,
+          Math.max(
+            sizes.small,
+            geo.textWidth - geo.bulletIndent - bulletIndentPt - geo.entryEndIndent
+          ),
           alignmentFromInlineMarks(bullet) ?? bodyAlign,
-          bsk.small,
+          sizes.small * style.lineHeight,
           dist,
           true, // bullets keep with their entry head / previous bullet start
           family,
           tracking,
           true,
-          bulletSrc(bi)
+          bulletSrc(bi),
+          stripInlineMarks(bullet).trim().length === 0
+            ? paragraphSpacing.lineHeight ?? undefined
+            : undefined
         );
         // First line carries the bullet marker (tiny math bullet at 25.53bp).
         // It shares the bullet's provenance so clicking it edits the bullet.
@@ -710,7 +775,7 @@ export function buildVerticalStream(schema: TypesetSchema, style: DocumentStyle)
               sizes.tiny,
               false,
               false,
-              geo.entryIndent + 14.73 * fontScale,
+              geo.entryIndent + bulletIndentPt + 14.73 * fontScale,
               family,
               tracking,
               bulletSrc(bi)
@@ -722,6 +787,7 @@ export function buildVerticalStream(schema: TypesetSchema, style: DocumentStyle)
         // Allow page breaks BETWEEN bullets (not before the first).
         if (bi > 0 && lines.length) lines[0].keepWithPrev = false;
         lines.forEach(push);
+        previousBulletSpaceAfterPt = paragraphSpacing.spaceAfterPt ?? 0;
       });
     }
     prevKind = "content";

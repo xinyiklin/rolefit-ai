@@ -44,5 +44,5 @@ CONTINUITY.md
 # tracked exception (it ships with the app, not a user's resume).
 *.resume
 !server/starter.resume
-job-search-workspace/*
-!job-search-workspace/README.md
+workspace/*
+!workspace/README.md

@@ -54,7 +54,8 @@ paints).
   Domain-level option lists live with their model instead:
   `SECTION_TYPE_OPTIONS` in `lib/resumeData.ts`, `FONT_FAMILY_OPTIONS` and
   `DOC_ZOOM_OPTIONS`/`nextZoomOption` in `lib/documentStyle.ts`.
-- One popover component per toolbar menu: `SpacingStylePopover`,
+- One popover component per toolbar menu: `LineSpacingPopover`,
+  `SpacingStylePopover`,
   `ParagraphStylePopover`, `TextStylesPopover`, `PageStylePopover`, and
   `DocumentStructureControls` (Header + Add section). Do not re-fuse menus
   behind mode props. Document-specific menu compositions passed through
@@ -75,9 +76,17 @@ paints).
 - Style popovers are headerless; sections use `.style-popover__section-title`.
   Popover/toolbar CSS lives in `styles/toolbar.css` (chrome) and
   `styles/popovers.css` (surfaces); popovers.css must stay imported after
-  toolbar.css.
+  toolbar.css. Shared modal users also require `styles/modal.css` in hosts that
+  curate editor style imports instead of consuming `styles/index.css`.
 - Formatting buttons that act on the page selection prevent mousedown focus
   transfer so the selection survives the click.
+- `LineSpacingPopover` is selection-scoped: presets apply line height to the
+  touched cover-letter visual lines, adding room below each line only, while
+  before/after values remain paragraph-level.
+  Custom values open the shared modal and commit through one host callback so
+  the change forms one history step. `SpacingStylePopover` owns resume-global
+  line height plus document-level structural gaps. Preset and numeric values
+  stay expanded together.
 - Committing a font-family or font-size menu choice returns focus through the
   host-provided editor callback to the saved page caret or range. Escape still
   returns to the menu trigger, and merely editing a numeric draft does not make

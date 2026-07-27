@@ -18,6 +18,9 @@ import type { TypesetSchema } from "./schema.ts";
 export type PlacedLine = {
   runs: GlyphRun[]; // x absolute on the page (margin included)
   baseline: number; // y from the page top, bp
+  // The line spacing this line owns (see VLine.leading), for renderers that
+  // need the line BOX rather than the ink box.
+  leading?: number;
   rule?: { x: number; width: number; y: number; thickness: number };
 };
 
@@ -33,7 +36,7 @@ export type LayoutDocument = {
 // from face boxes, so editing the characters inside a line never changes where
 // the next line sits — the word-processor rule the calibrated distances assume.
 function junctionDistance(previous: VLine, current: VLine): number {
-  return current.dist + previous.dropOverflow + current.riseOverflow;
+  return current.dist + (previous.afterDist ?? 0) + previous.dropOverflow + current.riseOverflow;
 }
 
 export function layoutVerticalStream(
@@ -89,6 +92,7 @@ export function layoutVerticalStream(
       target.lines.push({
         runs: line.runs.map((r) => ({ ...r, x: r.x + geo.marginLeft })),
         baseline: b,
+        leading: line.leading,
         rule: line.rule
           ? { x: line.rule.x + geo.marginLeft, width: line.rule.width, y: b + line.rule.yOffset, thickness: line.rule.thickness }
           : undefined

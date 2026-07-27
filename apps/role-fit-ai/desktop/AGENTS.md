@@ -14,9 +14,14 @@ Applies to `apps/role-fit-ai/desktop/` and `tsconfig.desktop.json`.
   composition, the compact local window, system-browser launch, and clean
   shutdown of processes it created. Its `BrowserWindow` loads only the static
   companion page, never the RoleFit app.
-- `server-process.cts` starts or compatibly reuses the existing loopback RoleFit
-  server. It never implements product APIs and never terminates a listener it
-  did not create.
+- `server-process.cts` starts the loopback RoleFit server or returns a typed
+  compatible/foreign listener conflict for main to resolve. It never
+  implements product APIs. Main may ask a health-compatible external RoleFit
+  listener to stop with one graceful `SIGTERM` on macOS/Linux after resolving
+  its exact listening PID, revalidating compatibility, and resolving the same
+  PID again; it never force-kills that listener or signals an unidentified
+  service. Windows offers reuse or another port because Node cannot deliver an
+  equivalent graceful signal to an arbitrary process.
 - `companion.html` owns the local-file CSP; `security.cts` owns permissions,
   navigation, external-window, and webview policy.
 - `ipc-contract.cts` owns the fixed serializable companion methods;
@@ -98,9 +103,12 @@ Applies to `apps/role-fit-ai/desktop/` and `tsconfig.desktop.json`.
   camera, microphone, or geolocation access.
 - Keep the RoleFit server bind numeric-loopback-only. Port `5181` is the saved
   default; the companion may use a validated user-selected port or a locked
-  `ROLEFIT_DESKTOP_PORT` override. Reuse an existing listener only after its versioned
-  mode/workspace health contract matches, and never grant reused HTTP content
-  privileged Electron IPC.
+  `ROLEFIT_DESKTOP_PORT` override. A compatible listener must produce an
+  explicit startup choice: reuse it, gracefully take it over on macOS/Linux, or
+  scan for and persist another available port. An unidentified listener may
+  only offer another port or Quit. Reuse an existing listener only after its
+  versioned mode/workspace health contract matches, and never grant reused HTTP
+  content privileged Electron IPC.
 - An owned utility server starts with an empty authoritative companion snapshot
   before listening, skips app-local `.env` loading, and inherits no managed API
   credentials. Standalone/headless `.env` behavior belongs only to a server

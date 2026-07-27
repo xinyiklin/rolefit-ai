@@ -87,13 +87,13 @@ function MarginInput({
 export function PageStylePopover({ docStyle, disabled = false }: PageStylePopoverProps) {
   const marginsId = `page-style-${useId()}-margins`;
   const chooseMargins = (value: PageMargins) => {
-    if (value !== "custom" || docStyle.style.pageMargins === "custom") {
-      docStyle.set("pageMargins", value);
+    if (value === "custom") {
+      docStyle.set("pageMargins", "custom");
       return;
     }
-    const current = pageMarginValuesFor(docStyle.style.pageMargins);
+    const current = pageMarginValuesFor(value);
     docStyle.applyStyle({
-      pageMargins: "custom",
+      pageMargins: value,
       pageMarginTopPt: current.top,
       pageMarginRightPt: current.right,
       pageMarginBottomPt: current.bottom,
@@ -128,7 +128,6 @@ export function PageStylePopover({ docStyle, disabled = false }: PageStylePopove
                 {([
                   ["narrow", "Narrow"],
                   ["normal", "Normal"],
-                  ["wide", "Wide"],
                   ["custom", "Custom"]
                 ] as const).map(([value, label]) => (
                   <button
@@ -143,18 +142,18 @@ export function PageStylePopover({ docStyle, disabled = false }: PageStylePopove
                 ))}
               </div>
 
-              {docStyle.style.pageMargins === "custom" ? (
-                <div className="style-popover__margin-grid">
-                  {MARGIN_FIELDS.map(({ field, label }) => (
-                    <MarginInput
-                      key={field}
-                      label={label}
-                      valuePt={docStyle.style[field]}
-                      onChange={(valuePt) => docStyle.set(field, valuePt)}
-                    />
-                  ))}
-                </div>
-              ) : null}
+              <div className="style-popover__margin-grid">
+                {MARGIN_FIELDS.map(({ field, label }) => (
+                  <MarginInput
+                    key={field}
+                    label={label}
+                    valuePt={docStyle.style[field]}
+                    onChange={(valuePt) =>
+                      docStyle.applyStyle({ pageMargins: "custom", [field]: valuePt })
+                    }
+                  />
+                ))}
+              </div>
             </section>
           </div>
         </div>

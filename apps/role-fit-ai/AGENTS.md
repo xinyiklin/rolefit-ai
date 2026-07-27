@@ -62,7 +62,8 @@ own a second resume model, editor, layout engine, or PDF implementation.
   unauthenticated local tool to the LAN and is never acceptable on an untrusted
   or public network.
 - Keep personal artifacts inside the host-supplied runtime workspace. Source
-  development uses ignored `job-search-workspace/`; never commit its contents
+  development uses ignored `workspace/`, with resume variants in `resumes/`
+  and cover-letter variants in `cover-letters/`; never commit its contents
   except the instructional README. Packaged runs use
   `app.getPath("userData")/workspace/` outside the application bundle.
 

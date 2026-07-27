@@ -17,7 +17,7 @@ import {
 } from "./documentStyle.ts";
 
 export const RESUME_FILE_MAGIC = "typeset-resume" as const;
-export const RESUME_FILE_SCHEMA_VERSION = 1 as const;
+export const RESUME_FILE_SCHEMA_VERSION = 2 as const;
 export const MAX_RESUME_FILE_BYTES = 2 * 1024 * 1024;
 
 type PortableResumeBullet = { text: string };
@@ -42,7 +42,7 @@ export type PortableResumeDocument = {
   sections: PortableResumeSection[];
 };
 
-export type ResumeFileV1 = {
+export type ResumeFileV2 = {
   format: typeof RESUME_FILE_MAGIC;
   schemaVersion: typeof RESUME_FILE_SCHEMA_VERSION;
   document: PortableResumeDocument;
@@ -102,12 +102,12 @@ const STYLE_KEYS = [
   "bodyAlign",
   "headingAlign",
   "nameSize",
-  "pageMargins",
   "pageMarginTopPt",
   "pageMarginRightPt",
   "pageMarginBottomPt",
   "pageMarginLeftPt"
 ] as const satisfies readonly (keyof DocumentStyle)[];
+const LEGACY_STYLE_KEYS = [...STYLE_KEYS.slice(0, -4), "pageMargins", ...STYLE_KEYS.slice(-4)] as const;
 
 function isRecord(value: unknown): value is JsonRecord {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -222,8 +222,11 @@ function requireStyleNumber<K extends keyof typeof DOC_STYLE_BOUNDS>(
   return requireNumber(style[key], `style.${key}`, min, max);
 }
 
-function readDocumentStyle(style: JsonRecord): DocumentStyle {
+function readDocumentStyle(style: JsonRecord, legacy = false): DocumentStyle {
   const fontFamilies = FONT_FAMILY_OPTIONS.map((option) => option.value);
+  if (legacy) {
+    requireEnum(style.pageMargins, ["narrow", "normal", "wide", "custom"] as const, "style.pageMargins");
+  }
   return {
     fontFamily: requireEnum(style.fontFamily, fontFamilies, "style.fontFamily"),
     baseFontSizePt: requireStyleNumber(style, "baseFontSizePt"),
@@ -252,7 +255,6 @@ function readDocumentStyle(style: JsonRecord): DocumentStyle {
     bodyAlign: requireEnum(style.bodyAlign, ["left", "justify", "center", "right"] as const, "style.bodyAlign"),
     headingAlign: requireEnum(style.headingAlign, ["left", "center", "right"] as const, "style.headingAlign"),
     nameSize: requireEnum(style.nameSize, ["large", "xlarge", "huge"] as const, "style.nameSize"),
-    pageMargins: requireEnum(style.pageMargins, ["narrow", "normal", "wide", "custom"] as const, "style.pageMargins"),
     pageMarginTopPt: requireStyleNumber(style, "pageMarginTopPt"),
     pageMarginRightPt: requireStyleNumber(style, "pageMarginRightPt"),
     pageMarginBottomPt: requireStyleNumber(style, "pageMarginBottomPt"),
@@ -260,10 +262,10 @@ function readDocumentStyle(style: JsonRecord): DocumentStyle {
   };
 }
 
-function validateStyle(value: unknown): DocumentStyle {
+function validateStyle(value: unknown, legacy = false): DocumentStyle {
   const style = requireRecord(value, "style");
-  requireExactKeys(style, STYLE_KEYS, "style");
-  return readDocumentStyle(style);
+  requireExactKeys(style, legacy ? LEGACY_STYLE_KEYS : STYLE_KEYS, "style");
+  return readDocumentStyle(style, legacy);
 }
 
 function toPortableDocument(data: ResumeData): PortableResumeDocument {
@@ -340,8 +342,8 @@ function parseJson(text: string): unknown {
   }
 }
 
-export function createResumeFile(data: ResumeData, style: DocStyle): ResumeFileV1 {
-  const file: ResumeFileV1 = {
+export function createResumeFile(data: ResumeData, style: DocStyle): ResumeFileV2 {
+  const file: ResumeFileV2 = {
     format: RESUME_FILE_MAGIC,
     schemaVersion: RESUME_FILE_SCHEMA_VERSION,
     document: toPortableDocument(data),
@@ -368,7 +370,7 @@ export function parseResumeFile(input: string | ArrayBuffer | Uint8Array): Parse
   if (file.format !== RESUME_FILE_MAGIC) {
     throw new ResumeFileError("invalid-format", "This is not a Typeset .resume file.");
   }
-  if (file.schemaVersion !== RESUME_FILE_SCHEMA_VERSION) {
+  if (file.schemaVersion !== 1 && file.schemaVersion !== RESUME_FILE_SCHEMA_VERSION) {
     throw new ResumeFileError(
       "unsupported-version",
       `This resume uses unsupported schema version ${JSON.stringify(file.schemaVersion)}.`
@@ -376,7 +378,7 @@ export function parseResumeFile(input: string | ArrayBuffer | Uint8Array): Parse
   }
   requireExactKeys(file, ["format", "schemaVersion", "document", "style"], "file");
   const document = validateDocument(file.document);
-  const documentStyle = validateStyle(file.style);
+  const documentStyle = validateStyle(file.style, file.schemaVersion === 1);
   return { data: rehydrateDocument(document), documentStyle };
 }
 

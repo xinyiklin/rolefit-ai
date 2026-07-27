@@ -29,10 +29,11 @@ static assets, and your resume content never leaves your device.
   Sans 3, and Latin Modern; open common sizes from the centered editable value,
   enter a custom 6–48 pt value, or step it with adjacent 1 pt minus/plus
   controls.
-- **Flexible page margins** — start from Narrow, Normal, or Wide, or enter
-  independent top, right, bottom, and left margins from 0.25–1.5 inches.
-- **Focused spacing controls** — choose a common or custom line height
-  independently from Compact, Balanced, Spacious, and custom page-gap presets.
+- **Flexible page margins** — switch between Narrow and Normal, or enter
+  independent custom top, right, bottom, and left margins from 0.25–3 inches.
+- **Focused spacing controls** — set line and paragraph spacing for the selected
+  paragraphs, independently from Compact, Balanced, Spacious, and custom
+  document-gap presets.
 - **Portable source files** — `.resume` preserves editable content and every
   print-affecting style setting.
 - **Real undo and redo** — text and structural edits share bounded history with
@@ -48,15 +49,15 @@ static assets, and your resume content never leaves your device.
 versioned JSON document with:
 
 - `format: "typeset-resume"`
-- `schemaVersion: 1`
+- `schemaVersion: 2`
 - structured resume content
 - print-affecting typography, alignment, margin, and spacing settings
 
 Disposable editor ids are regenerated when a file opens, and zoom and the
 spell-check toggle are kept as local viewing preferences rather than written
 into the document. Imports are validated field by field and limited to 2 MB. Other source-document formats are
-not accepted. Version 1 is the first and only schema; pre-release prototype
-formats are intentionally unsupported.
+not accepted. Version 1 files remain readable and are upgraded to version 2 on
+the next save; pre-release prototype formats are intentionally unsupported.
 
 Use **Save** to download a reopenable `.resume` file. Use **Export PDF** to
 download a finished `.pdf`: the owned typeset engine renders the pages and the app
@@ -91,8 +92,11 @@ independent persisted entry start and end indents. Styles owns heading case and
 rule treatment plus per-role font, size, and emphasis for headings, entry
 columns, skill labels, and contact text. Those field controls reflect manual
 inline changes and can reapply or remove formatting across every matching
-field. The dedicated Spacing menu keeps unitless line height separate from
-physical point-based page gaps.
+field. The Spacing menu owns resume-wide unitless line height together with
+document-level structural gaps. Its preset and physical values remain visible
+together, so a preset is inspectable and any adjusted value becomes Custom.
+Cover-letter hosts may instead use the shared selection-scoped line-spacing
+control for their paragraph grammar.
 
 Saved page-spacing controls also use physical points. `em` is useful when a gap
 should grow automatically with nearby text, but it makes a print-layout control

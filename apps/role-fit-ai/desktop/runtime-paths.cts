@@ -34,7 +34,7 @@ export function resolveDesktopRuntimePaths(
     ? requireAbsolutePath("ROLEFIT_WORKSPACE_DIR", options.workspaceOverride)
     : options.packaged
       ? join(userDataDirectory, "workspace")
-      : join(appRoot, "job-search-workspace");
+      : join(appRoot, "workspace");
 
   return Object.freeze({
     appRoot,

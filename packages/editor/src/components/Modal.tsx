@@ -10,10 +10,12 @@ import { useModalFocus } from "../hooks/useModalFocus.ts";
 export function Modal({
   title,
   onClose,
+  showClose = true,
   children
 }: {
   title: ReactNode;
   onClose: () => void;
+  showClose?: boolean;
   children: ReactNode;
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
@@ -40,9 +42,11 @@ export function Modal({
       >
         <header className="modal__head">
           <h2 id={titleId}>{title}</h2>
-          <button type="button" className="modal__close" onClick={onClose} aria-label="Close">
-            <X size={16} aria-hidden="true" />
-          </button>
+          {showClose ? (
+            <button type="button" className="modal__close" onClick={onClose} aria-label="Close">
+              <X size={16} aria-hidden="true" />
+            </button>
+          ) : null}
         </header>
         {children}
       </div>

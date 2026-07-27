@@ -63,7 +63,12 @@ port after explicit confirmation and restart. Browser-local state is scoped by
 origin, so a different port has separate draft/preferences storage. Workspace
 and provider data keep their operating-system-local locations, and extension
 imports remain on canonical port `5181` until multi-port extension support has
-its own trust contract.
+its own trust contract. If a compatible standalone RoleFit server already owns
+the selected port, startup explicitly offers to connect, gracefully take over
+on macOS/Linux, or persist another available port. Connect is the default.
+RoleFit never stops an unidentified listener, never force-kills a compatible
+listener, and does not offer process termination on Windows where an equivalent
+graceful signal is unavailable.
 
 ## Brand Personality
 

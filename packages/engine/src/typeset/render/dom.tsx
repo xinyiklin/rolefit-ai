@@ -299,7 +299,11 @@ function PageLines({
               fontSize: 0,
               lineHeight: 0,
               whiteSpace: "pre",
-              "--tsd-line-baseline": unit(line.baseline - lineTop)
+              "--tsd-line-baseline": unit(line.baseline - lineTop),
+              // Selection bands use owned leading because the div measures only ink.
+              ...(line.leading === undefined
+                ? {}
+                : { "--tsd-line-leading": unit(line.leading) })
             } as React.CSSProperties}
           >
             {segs.map((seg, si) => {

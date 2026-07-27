@@ -52,7 +52,7 @@ assert.deepEqual(parsePortableBrowserPreferences(emptyPortable), emptyPortable, 
 
 const knownSettingPortable = {
   settings: { aiProvider: "openai", selectedModel: "gpt-5.6-terra", polishStages: "both", citizenshipStatus: "us-citizen" },
-  lastBaseResume: "base-resume-sde.resume"
+  lastBaseResume: "fullstack.resume"
 };
 assert.deepEqual(
   parsePortableBrowserPreferences(knownSettingPortable),
@@ -219,9 +219,17 @@ for (const [name, badFile] of [
 
 // ── isManagedWorkspaceBackupPath sanity (used throughout the above) ─────────
 assert.equal(isManagedWorkspaceBackupPath("applications.json"), true, "the tracker file is managed");
+assert.equal(isManagedWorkspaceBackupPath("resumes/default.resume"), true, "the default resume is managed");
+assert.equal(isManagedWorkspaceBackupPath("resumes/fullstack.resume"), true, "a named resume is managed");
+assert.equal(
+  isManagedWorkspaceBackupPath("resumes/.trash/2026-07-18T12-00-00-000Z__fullstack.resume"),
+  true,
+  "resume history is managed"
+);
 assert.equal(isManagedWorkspaceBackupPath("base-resume.resume"), true, "a root base resume is managed");
 assert.equal(isManagedWorkspaceBackupPath("base-resume-fullstack.resume"), true, "a named root base resume is managed");
 assert.equal(isManagedWorkspaceBackupPath("applications/acme-swe/resume.pdf"), true, "an application PDF is managed");
+assert.equal(isManagedWorkspaceBackupPath("cover-letters/default.cover"), false, "editable cover letters stay outside portable backups");
 assert.equal(isManagedWorkspaceBackupPath("secrets.env"), false, "an arbitrary file is not managed");
 assert.equal(isManagedWorkspaceBackupPath("../applications.json"), false, "a traversal path is never managed");
 

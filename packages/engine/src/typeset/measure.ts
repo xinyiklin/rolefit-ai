@@ -21,7 +21,8 @@ import type {
 } from "./types.ts";
 import {
   INLINE_MARK_TAG_PATTERN,
-  isInlineFontSizePt
+  isInlineFontSizePt,
+  paragraphLineHeight
 } from "../lib/inlineMarksText.ts";
 import { automaticLinkHref, decodeLinkHref } from "../lib/links.ts";
 
@@ -200,6 +201,7 @@ type StyledSegment = {
   underline: boolean;
   fontFamily: DocumentFontFamily | null;
   fontSizePt: number | null;
+  lineHeight: number | null;
   href: string | null;
   linkSuppressed: boolean;
 };
@@ -212,6 +214,7 @@ export function segmentsFromInlineMarks(value: string): StyledSegment[] {
   let underline = 0;
   const fontStack: DocumentFontFamily[] = [];
   const sizeStack: number[] = [];
+  const lineHeightStack: number[] = [];
   const linkStack: Array<string | null> = [];
   let suppressed = 0;
   let cursor = 0;
@@ -224,6 +227,7 @@ export function segmentsFromInlineMarks(value: string): StyledSegment[] {
         underline: underline > 0,
         fontFamily: fontStack[fontStack.length - 1] ?? null,
         fontSizePt: sizeStack[sizeStack.length - 1] ?? null,
+        lineHeight: lineHeightStack[lineHeightStack.length - 1] ?? null,
         href: linkStack[linkStack.length - 1] ?? null,
         linkSuppressed: suppressed > 0
       });
@@ -244,6 +248,9 @@ export function segmentsFromInlineMarks(value: string): StyledSegment[] {
       const size = Number(tag.slice(6, -1));
       if (isInlineFontSizePt(size)) sizeStack.push(size);
     } else if (tag === "</size>") sizeStack.pop();
+    else if (tag.startsWith("<line-height=")) {
+      lineHeightStack.push(paragraphLineHeight(Number(tag.slice(13, -1))));
+    } else if (tag === "</line-height>") lineHeightStack.pop();
     else if (tag.startsWith("<link=")) linkStack.push(decodeLinkHref(match[1]));
     else if (tag === "</link>") linkStack.pop();
     else if (tag === "<nolink>") suppressed += 1;
@@ -274,15 +281,22 @@ export function paragraphItems(
   // change. This mirrors buildDisplayMap's word-processor preserve mode:
   // authored leading, interior, trailing, and hard-break-adjacent spaces all
   // remain caret-bearing glyphs.
-  let pending: { style: FontStyle; count: number } | null = null;
+  let pending: { style: FontStyle; count: number; lineHeight: number | null } | null = null;
   let hasPrecedingBox = false; // a real word already sits on the current line
-  const spaceBox = (n: number, style: FontStyle) => {
+  const spaceBox = (n: number, style: FontStyle, lineHeight: number | null) => {
     if (n <= 0) return;
     const text = " ".repeat(n);
     // Match pushWord's default box shape (href undefined, underline false) so the
     // space glyphs merge into the adjacent word run in setLine/groupRuns instead
     // of splintering into their own spans.
-    items.push({ kind: "box", text, style, width: measure(text, style), underline: false } satisfies BoxItem);
+    items.push({
+      kind: "box",
+      text,
+      style,
+      width: measure(text, style),
+      lineHeight: lineHeight ?? undefined,
+      underline: false
+    } satisfies BoxItem);
   };
 
   for (const seg of segments) {
@@ -300,7 +314,7 @@ export function paragraphItems(
         // A hard break is structural, but authored spaces before it remain
         // literal glyphs so the engine and editor caret map stay identical.
         if (pending) {
-          spaceBox(pending.count, pending.style);
+          spaceBox(pending.count, pending.style, pending.lineHeight);
           pending = null;
         }
         items.push({ kind: "forcedBreak" } satisfies ForcedBreakItem);
@@ -310,19 +324,19 @@ export function paragraphItems(
       if (/^\s+$/.test(part)) {
         // Accumulate consecutive whitespace, even across a tag boundary.
         if (pending) pending.count += part.length;
-        else pending = { style, count: part.length };
+        else pending = { style, count: part.length, lineHeight: seg.lineHeight };
         continue;
       }
       if (pending) {
         if (hasPrecedingBox) {
           // Interior run: N−1 literal spaces after the previous word, then one
           // break-opportunity glue that renders the Nth space.
-          spaceBox(pending.count - 1, pending.style);
+          spaceBox(pending.count - 1, pending.style, pending.lineHeight);
           items.push(spaceGlue(pending.style));
         } else {
           // Authored line-leading spaces (including a Tab insertion represented
           // as four spaces) are fixed glyphs, not discardable glue.
-          spaceBox(pending.count, pending.style);
+          spaceBox(pending.count, pending.style, pending.lineHeight);
         }
         pending = null;
       }
@@ -331,14 +345,15 @@ export function paragraphItems(
         part,
         style,
         seg.linkSuppressed ? undefined : seg.href ?? automaticLinkHref(part) ?? undefined,
-        seg.underline
+        seg.underline,
+        seg.lineHeight
       );
       hasPrecedingBox = true;
     }
   }
   // Trailing spaces at the paragraph's end are kept in full so the caret can sit
   // after them (buildDisplayMap keeps them too when preserving whitespace).
-  if (pending && hasPrecedingBox) spaceBox(pending.count, pending.style);
+  if (pending && hasPrecedingBox) spaceBox(pending.count, pending.style, pending.lineHeight);
   return items;
 }
 
@@ -347,12 +362,27 @@ export function paragraphItems(
 // CONTRACT: box/run text is stored in display form (– — ’), matching its
 // measured width. Renderers draw it verbatim and never re-transform it;
 // texLigatures is idempotent, so measure() re-applying it is safe.
-function pushWord(items: ParaItem[], word: string, style: FontStyle, href?: string, underline = false) {
+function pushWord(
+  items: ParaItem[],
+  word: string,
+  style: FontStyle,
+  href?: string,
+  underline = false,
+  lineHeight: number | null = null
+) {
   const display = texLigatures(word);
   const pieces = display.split(/(?<=-)(?=[^-])/); // split AFTER each hyphen run
   for (let i = 0; i < pieces.length; i += 1) {
     if (i > 0) items.push({ kind: "penalty", penalty: EXHYPHEN_PENALTY } satisfies PenaltyItem);
     const text = pieces[i];
-    items.push({ kind: "box", text, style, width: measure(text, style), href, underline } satisfies BoxItem);
+    items.push({
+      kind: "box",
+      text,
+      style,
+      width: measure(text, style),
+      lineHeight: lineHeight ?? undefined,
+      href,
+      underline
+    } satisfies BoxItem);
   }
 }

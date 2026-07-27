@@ -28,9 +28,8 @@ import {
 } from "./browserPreferences.ts";
 import { countActiveTabs } from "./presence.ts";
 
-const ROOT_BASE_RESUME_RE = /^base-resume(?:-[A-Za-z0-9][A-Za-z0-9_-]*)?\.resume$/;
-const LEGACY_BASE_RESUME_RE = /^base-resume\.(?:txt|md|csv)$/;
-const HISTORY_FILE_RE = /^[A-Za-z0-9T-]+Z__base-resume(?:-[A-Za-z0-9][A-Za-z0-9_-]*)?\.(?:resume|txt|md|csv)$/;
+const RESUME_FILE_RE = /^[A-Za-z0-9][A-Za-z0-9_-]*\.(?:resume|txt|md|csv)$/;
+const HISTORY_FILE_RE = /^[A-Za-z0-9T+-]+Z?__[A-Za-z0-9][A-Za-z0-9_-]*\.(?:resume|txt|md|csv)$/;
 const APPLICATION_ID_RE = /^[A-Za-z0-9_-]{1,80}$/;
 
 export class WorkspaceBackupError extends Error {
@@ -76,12 +75,15 @@ async function managedWorkspacePaths(workspaceDir: string): Promise<string[]> {
   const paths: string[] = [];
   for (const entry of await safeEntries(workspaceDir)) {
     if (!entry.isFile()) continue;
-    if (entry.name === "applications.json" || ROOT_BASE_RESUME_RE.test(entry.name) || LEGACY_BASE_RESUME_RE.test(entry.name)) {
+    if (entry.name === "applications.json") {
       paths.push(entry.name);
     }
   }
-  for (const entry of await safeEntries(join(workspaceDir, ".trash"))) {
-    if (entry.isFile() && HISTORY_FILE_RE.test(entry.name)) paths.push(`.trash/${entry.name}`);
+  for (const entry of await safeEntries(join(workspaceDir, "resumes"))) {
+    if (entry.isFile() && RESUME_FILE_RE.test(entry.name)) paths.push(`resumes/${entry.name}`);
+  }
+  for (const entry of await safeEntries(join(workspaceDir, "resumes", ".trash"))) {
+    if (entry.isFile() && HISTORY_FILE_RE.test(entry.name)) paths.push(`resumes/.trash/${entry.name}`);
   }
   for (const application of await safeEntries(join(workspaceDir, "applications"))) {
     if (!application.isDirectory() || !APPLICATION_ID_RE.test(application.name)) continue;

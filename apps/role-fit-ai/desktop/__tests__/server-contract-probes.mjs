@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import {
@@ -9,7 +10,8 @@ import {
   isCompatibleRoleFitHealth
 } from "../../dist-electron/server/health-contract.js";
 import {
-  buildDesktopServerEnvironment
+  buildDesktopServerEnvironment,
+  probeCompatibleDesktopServer
 } from "../../dist-electron/desktop/server-process.cjs";
 import {
   buildCliProcessEnvironment
@@ -20,6 +22,11 @@ import {
 import {
   readBoundedResponseText
 } from "../../dist-electron/desktop/bounded-response.cjs";
+import {
+  findLoopbackListenerPid,
+  parseLsofListenerPid,
+  parseNetstatListenerPid
+} from "../../dist-electron/desktop/listener-process.cjs";
 
 assert.equal(
   await readBoundedResponseText(new Response("safe"), 4),
@@ -35,6 +42,60 @@ await assert.rejects(
   () => readBoundedResponseText(new Response("safe", { headers: { "Content-Length": "999" } }), 8),
   /response is too large/,
   "bounded response rejects an oversized declared length before reading"
+);
+
+assert.equal(parseLsofListenerPid("4217\n"), 4_217);
+assert.equal(parseLsofListenerPid("4217\n4217\n"), 4_217);
+assert.equal(
+  parseLsofListenerPid("4217\n9182\n"),
+  null,
+  "an ambiguous POSIX listener lookup cannot authorize takeover"
+);
+
+const netstatOutput = [
+  "  Proto  Local Address          Foreign Address        State           PID",
+  "  TCP    127.0.0.1:5181        0.0.0.0:0              LISTENING       7312",
+  "  TCP    127.0.0.1:5181        127.0.0.1:60122        ESTABLISHED     7312",
+  "  TCP    127.0.0.1:5191        0.0.0.0:0              LISTENING       8122"
+].join("\r\n");
+assert.equal(parseNetstatListenerPid(netstatOutput, 5_181), 7_312);
+assert.equal(parseNetstatListenerPid(netstatOutput, 5_191), 8_122);
+
+const lookupCalls = [];
+assert.equal(
+  await findLoopbackListenerPid(5_181, {
+    platform: "darwin",
+    runCommand: async (executable, args) => {
+      lookupCalls.push([executable, args]);
+      return "4217\n";
+    }
+  }),
+  4_217
+);
+assert.deepEqual(lookupCalls, [[
+  "/usr/sbin/lsof",
+  ["-nP", "-iTCP@127.0.0.1:5181", "-sTCP:LISTEN", "-t"]
+]]);
+assert.equal(
+  await findLoopbackListenerPid(5_181, {
+    platform: "win32",
+    runCommand: async (executable, args) => {
+      assert.equal(executable, "C:\\Windows\\System32\\netstat.exe");
+      assert.deepEqual(args, ["-ano", "-p", "tcp"]);
+      return netstatOutput;
+    }
+  }),
+  7_312
+);
+assert.equal(
+  await findLoopbackListenerPid(5_181, {
+    platform: "linux",
+    runCommand: async () => {
+      throw new Error("lookup unavailable");
+    }
+  }),
+  null,
+  "a missing platform lookup tool fails closed"
 );
 
 const workspaceA = "/tmp/rolefit-contract-a";
@@ -60,11 +121,44 @@ assert.equal(
   false
 );
 assert.equal(
-  isCompatibleRoleFitHealth({ ...payload, desktopCompatibilityVersion: 3 }, expected),
+  isCompatibleRoleFitHealth({
+    ...payload,
+    desktopCompatibilityVersion: ROLEFIT_DESKTOP_COMPATIBILITY_VERSION + 1
+  }, expected),
   false
 );
 assert.equal(isCompatibleRoleFitHealth({ service: "role-fit-ai" }, expected), false);
 assert.notEqual(computeWorkspaceFingerprint(workspaceA), computeWorkspaceFingerprint(workspaceB));
+
+const healthServer = createServer((_request, response) => {
+  response.writeHead(200, { "Content-Type": "application/json" });
+  response.end(JSON.stringify(payload));
+});
+await new Promise((resolveListen, rejectListen) => {
+  healthServer.once("error", rejectListen);
+  healthServer.listen(0, "127.0.0.1", resolveListen);
+});
+const healthAddress = healthServer.address();
+assert.equal(typeof healthAddress, "object");
+assert.notEqual(healthAddress, null);
+try {
+  const identity = {
+    host: "127.0.0.1",
+    mode: "production",
+    port: healthAddress.port,
+    workspaceDir: workspaceA
+  };
+  assert.equal(await probeCompatibleDesktopServer(identity), true);
+  assert.equal(
+    await probeCompatibleDesktopServer({ ...identity, workspaceDir: workspaceB }),
+    false,
+    "takeover identity rejects a listener bound to a different workspace"
+  );
+} finally {
+  await new Promise((resolveClose, rejectClose) => {
+    healthServer.close((error) => error ? rejectClose(error) : resolveClose());
+  });
+}
 
 const environment = buildDesktopServerEnvironment(
   {
@@ -140,6 +234,7 @@ assert.equal(
 assert.equal(ownedServerEnvironment.AWS_SECRET_ACCESS_KEY, undefined);
 
 const mainSource = await readFile(new URL("../main.cts", import.meta.url), "utf8");
+const listenerSource = await readFile(new URL("../listener-process.cts", import.meta.url), "utf8");
 const serverSource = await readFile(new URL("../../server.ts", import.meta.url), "utf8");
 const runtimeSource = await readFile(new URL("../../server/runtime.ts", import.meta.url), "utf8");
 assert.doesNotMatch(
@@ -167,6 +262,16 @@ assert.match(
   /sourceEnvironment: desktopServerSourceEnvironment/,
   "the owned server receives its own allowlisted environment source"
 );
+assert.match(
+  mainSource,
+  /process\.kill\(listenerPid, "SIGTERM"\)/,
+  "a recognized POSIX RoleFit listener receives only a graceful takeover signal"
+);
+assert.doesNotMatch(
+  listenerSource,
+  /SIGKILL|taskkill|\/F/,
+  "listener takeover never escalates to a forced process kill"
+);
 
 const sourceAppRoot = resolve("/tmp/rolefit-source");
 const packagedAppRoot = resolve("/tmp/RoleFit.app/Contents/Resources/app.asar");
@@ -182,7 +287,7 @@ assert.deepEqual(sourcePaths, {
   appRoot: sourceAppRoot,
   serverEntry: join(sourceAppRoot, "server.ts"),
   serverCwd: sourceAppRoot,
-  workspaceDir: join(sourceAppRoot, "job-search-workspace")
+  workspaceDir: join(sourceAppRoot, "workspace")
 });
 
 const packagedPaths = resolveDesktopRuntimePaths({

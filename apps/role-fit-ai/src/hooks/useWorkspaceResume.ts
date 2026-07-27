@@ -202,7 +202,7 @@ export function useWorkspaceResume({
     }
 
     saveLastBaseResumeName(baseResume.fileName ?? "");
-    setFileName(baseResume.fileName ?? "base-resume");
+    setFileName(baseResume.fileName ?? "default");
     setBaseResumeName(baseResume.fileName ?? "");
     setResult(null);
     resetCoverWorkflow();
@@ -409,7 +409,11 @@ export function useWorkspaceResume({
     setIsSavingBaseResume(true);
     setWorkspaceStatus("Removing the base resume from the local workspace…");
     try {
-      const response = await fetch("/api/workspace/base-resume", { method: "DELETE" });
+      const response = await fetch("/api/workspace/base-resume", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fileName: baseResumeName })
+      });
       const workspace = (await response.json()) as Partial<JobWorkspace> & { error?: string };
       if (!response.ok) throw new Error(workspace.error ?? "Base resume removal failed.");
       updateWorkspaceState({
@@ -422,6 +426,7 @@ export function useWorkspaceResume({
       // Detach the file from the editor so the resume text is editable again,
       // but keep the current text so the user doesn't lose their draft.
       saveLastBaseResumeName("");
+      setBaseResumeName("");
       setFileName("");
       setFileStatus("");
       setWorkspaceStatus("Removed the base resume (backup saved in .trash). Save again to set a new one.");
@@ -479,7 +484,7 @@ export function useWorkspaceResume({
   }
 
   async function saveCurrentAsBaseResume(targetFileName?: string) {
-    let targetName = targetFileName || baseResumeName || fileName || "base-resume.txt";
+    let targetName = targetFileName || baseResumeName || fileName || "default.txt";
     // A `.resume`-named base saves the lossless structured JSON. If we only have
     // plain text (no structured model yet — e.g. a text-only polish result),
     // retarget to `.txt` so we never write non-JSON into a `.resume` file, which
