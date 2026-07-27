@@ -97,9 +97,9 @@ Good server verification covers:
   alongside title/company/location, including negated, benefits-only, and
   qualification-only wording that must not false-ground tracking metadata
 - tailor-quality changes can grade live consistency on the real resume:
-  `node apps/role-fit-ai/server/ai/__evals__/tailor-quality-eval.mjs apps/role-fit-ai/job-search-workspace/tailor-eval/samples/<jd>.json 3`
+  `node apps/role-fit-ai/server/ai/__evals__/tailor-quality-eval.mjs apps/role-fit-ai/workspace/tailor-eval/samples/<jd>.json 3`
   (metrics-only output; full responses land in gitignored
-  `job-search-workspace/tailor-eval/`); a matched JD should produce
+  `workspace/tailor-eval/`); a matched JD should produce
   evidence-backed suggestions with a small honest lift, a bad-fit JD a
   stable DON'T APPLY
 - when an AI Distill/Tailor/Review call fails, the shared workflow identifies
@@ -117,9 +117,10 @@ Good server verification covers:
   as a one-time conversion into `ResumeData`; a `.resume` file loads its
   `ResumeData` directly, and export offers PDF + `.resume`
 - cover-letter import accepts `.cover`, `.txt`, and `.md`; `.cover` round trips
-  ordered paragraphs and cover-specific print style without session ids, rejects
-  malformed/unknown data, and editor/PDF output uses the cover-letter layout
-- `job-search-workspace/` reads / writes stay inside the workspace; tracker and
+  its optional shared header, ordered paragraphs, and cover-specific print style
+  without session ids, reads v1 paragraph-only files, rejects malformed/unknown
+  data, and editor/PDF output uses the cover-letter layout
+- `workspace/` reads / writes stay inside the workspace; tracker and
   base-resume mutations are serialized/atomic, duplicate application ids are
   rejected, stale same-record tracker writes return `409` with the current
   snapshot, legacy rows without `updatedAt` receive a stable first-edit
@@ -250,8 +251,10 @@ The browser remains the product host, so companion verification must prove that
 Electron renders only its compact local setup page, never the Drafting Desk,
 and does not own workspace/tracker files. Focused companion probes should cover:
 
-- numeric-loopback-only server start, bounded compatible-listener reuse, owned
-  process shutdown, and rejection of mode/workspace/arbitrary-listener mismatch;
+- numeric-loopback-only server start, explicit compatible/foreign outcomes,
+  Connect-default compatible reuse, graceful-only POSIX takeover, listener-PID
+  parsing for `lsof`/`netstat`, alternate-port persistence, owned process
+  shutdown, and rejection of mode/workspace/arbitrary-listener mismatch;
 - a strict local-file CSP, denied renderer permissions, absent Node globals,
   blocked renderer `window.open`, and main-owned external targets reachable
   only through fixed typed IPC methods;

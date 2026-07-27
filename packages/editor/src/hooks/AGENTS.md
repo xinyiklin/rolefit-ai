@@ -18,6 +18,9 @@ style state; app lifecycle and persistence policy remain in the apps.
 
 - Keep reducer transitions explicit, deterministic, serializable, and atomic.
   One visible edit or structural action produces one history step.
+- Content and print-style reducers share one `createHistoryClock()` per
+  document. Never couple separate editors through module-global history state;
+  a new transaction after Undo invalidates Redo in both reducers.
 - Prefer derived state over synchronized copies. Use refs only for transient
   controller values that should not trigger presentation.
 - Hooks do not own app files, autosave destinations, provider settings, tracker

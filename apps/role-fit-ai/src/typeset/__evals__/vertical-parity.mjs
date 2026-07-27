@@ -50,7 +50,12 @@ const legacyStyle = (style) => ({
   bodyAlign: style.bodyAlign,
   headingAlign: style.headingAlign,
   nameSize: style.nameSize,
-  pageMargins: style.pageMargins
+  // The TeX fixture used 0.5-inch margins. Keep that physical baseline
+  // explicit now that page-margin shortcuts are UI-only conveniences.
+  pageMarginTopPt: 36,
+  pageMarginRightPt: 36,
+  pageMarginBottomPt: 36,
+  pageMarginLeftPt: 36
 });
 const entriesFor = (section, sectionIndex) => section.type === "skills"
   ? section.items.flatMap((item, itemIndex) => item.bullets.map((row, rowIndex) => {

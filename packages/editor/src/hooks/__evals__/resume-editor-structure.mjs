@@ -5,6 +5,9 @@
 import assert from "node:assert/strict";
 
 import { reduceResumeData, rootReducer } from "../useResumeEditor.ts";
+import { documentStyleIsDirty, styleReducer } from "../useDocStyle.ts";
+import { createHistoryClock, historySourceFor } from "../historyClock.ts";
+import { DOC_STYLE_DEFAULTS } from "@typeset/engine/lib/documentStyle.ts";
 import { fieldMarkState, setFieldMark } from "@typeset/engine/lib/inlineMarksText.ts";
 
 const base = {
@@ -111,28 +114,266 @@ const historyBase = {
   ]
 };
 
-const seeded = rootReducer(
-  { data: null, dirty: false, past: [], future: [], coalesceKey: null, coalesceAt: 0 },
+const historyClock = createHistoryClock();
+const reduceRoot = (state, action) => rootReducer(state, action, historyClock);
+const reduceStyle = (state, action) => styleReducer(state, action, historyClock);
+const seeded = reduceRoot(
+  {
+    data: null,
+    dirty: false,
+    past: [],
+    future: [],
+    coalesceKey: null,
+    coalesceAt: 0
+  },
   { type: "seed", data: historyBase }
 );
 assert.equal(seeded.past.length, 0, "a fresh seed starts with empty history");
 
 const typeRun = ["H", "He", "Hel"].reduce(
-  (state, value) => rootReducer(state, { type: "updateBullet", sectionId: "sec-1", entryId: "entry-1", bulletId: "b-1", value }),
+  (state, value) => reduceRoot(state, { type: "updateBullet", sectionId: "sec-1", entryId: "entry-1", bulletId: "b-1", value }),
   seeded
 );
 assert.equal(typeRun.past.length, 1, "a run of same-field keystrokes is a single undo step");
 assert.equal(typeRun.data.sections[0].items[0].bullets[0].text, "Hel", "the run applies every keystroke");
 
-const undone = rootReducer(typeRun, { type: "undo" });
+const undone = reduceRoot(typeRun, { type: "undo" });
 assert.equal(undone.data.sections[0].items[0].bullets[0].text, "", "one undo reverts the whole typing run");
-const redone = rootReducer(undone, { type: "redo" });
+const redone = reduceRoot(undone, { type: "redo" });
 assert.equal(redone.data.sections[0].items[0].bullets[0].text, "Hel", "redo reapplies the coalesced run");
 
-const otherField = rootReducer(typeRun, { type: "updateBullet", sectionId: "sec-1", entryId: "entry-1", bulletId: "b-2", value: "xy" });
+const styleSeeded = {
+  style: { ...DOC_STYLE_DEFAULTS },
+  past: [],
+  future: [],
+  coalesceKey: null,
+  coalesceAt: 0
+};
+const styleChanged = reduceStyle(styleSeeded, { type: "set", key: "lineHeight", value: 1.5 });
+assert.equal(styleChanged.past.length, 1, "a physical document-style change enters history");
+assert.equal(
+  documentStyleIsDirty(styleChanged.style, DOC_STYLE_DEFAULTS),
+  true,
+  "a physical style edit makes the document dirty"
+);
+const styleUndone = reduceStyle(styleChanged, { type: "undo" });
+assert.equal(styleUndone.style.lineHeight, DOC_STYLE_DEFAULTS.lineHeight, "style undo restores line spacing");
+assert.equal(
+  documentStyleIsDirty(styleUndone.style, DOC_STYLE_DEFAULTS),
+  false,
+  "undoing back to the saved style clears document-style dirty state"
+);
+const zoomChanged = reduceStyle(styleSeeded, { type: "set", key: "zoom", value: 0.8 });
+assert.equal(zoomChanged.past.length, 0, "view-only zoom stays outside document history");
+assert.equal(
+  documentStyleIsDirty(zoomChanged.style, DOC_STYLE_DEFAULTS),
+  false,
+  "view-only preferences never make the portable document dirty"
+);
+assert.equal(
+  historySourceFor("undo", typeRun.past.at(-1).sequence, styleChanged.past.at(-1).sequence),
+  "style",
+  "combined undo chooses the most recent content or style transaction"
+);
+assert.equal(
+  historySourceFor("redo", 1, 2),
+  "content",
+  "combined redo replays transactions in their original order"
+);
+
+let interleavedContent = reduceRoot(seeded, {
+  type: "updateBullet",
+  sectionId: "sec-1",
+  entryId: "entry-1",
+  bulletId: "b-1",
+  value: "A"
+});
+const interleavedStyle = reduceStyle(styleSeeded, {
+  type: "set",
+  key: "lineHeight",
+  value: 1.35
+});
+interleavedContent = reduceRoot(interleavedContent, {
+  type: "updateBullet",
+  sectionId: "sec-1",
+  entryId: "entry-1",
+  bulletId: "b-1",
+  value: "AB"
+});
+assert.equal(
+  interleavedContent.past.length,
+  2,
+  "a style transaction prevents content edits on either side from coalescing"
+);
+assert.equal(
+  historySourceFor(
+    "undo",
+    interleavedContent.past.at(-1).sequence,
+    interleavedStyle.past.at(-1).sequence
+  ),
+  "content",
+  "combined undo chooses a content edit made after an intervening style edit"
+);
+
+let interleavedStyleRun = reduceStyle(styleSeeded, {
+  type: "set",
+  key: "lineHeight",
+  value: 1.25
+});
+const interleavedContentRun = reduceRoot(seeded, {
+  type: "updateBullet",
+  sectionId: "sec-1",
+  entryId: "entry-1",
+  bulletId: "b-1",
+  value: "C"
+});
+interleavedStyleRun = reduceStyle(interleavedStyleRun, {
+  type: "set",
+  key: "lineHeight",
+  value: 1.5
+});
+assert.equal(
+  interleavedStyleRun.past.length,
+  2,
+  "a content transaction prevents style edits on either side from coalescing"
+);
+assert.equal(
+  historySourceFor(
+    "undo",
+    interleavedContentRun.past.at(-1).sequence,
+    interleavedStyleRun.past.at(-1).sequence
+  ),
+  "style",
+  "combined undo chooses a style edit made after an intervening content edit"
+);
+
+const branchClock = createHistoryClock();
+const reduceBranchRoot = (state, action) => rootReducer(state, action, branchClock);
+const reduceBranchStyle = (state, action) => styleReducer(state, action, branchClock);
+const branchSeeded = reduceBranchRoot(
+  {
+    data: null,
+    dirty: false,
+    past: [],
+    future: [],
+    coalesceKey: null,
+    coalesceAt: 0
+  },
+  { type: "seed", data: historyBase }
+);
+let branchContent = reduceBranchRoot(branchSeeded, {
+  type: "updateBullet",
+  sectionId: "sec-1",
+  entryId: "entry-1",
+  bulletId: "b-1",
+  value: "branch one"
+});
+let branchStyle = reduceBranchStyle({
+  style: { ...DOC_STYLE_DEFAULTS },
+  past: [],
+  future: [],
+  coalesceKey: null,
+  coalesceAt: 0
+}, { type: "set", key: "lineHeight", value: 1.35 });
+branchStyle = reduceBranchStyle(branchStyle, { type: "undo" });
+branchContent = reduceBranchRoot(branchContent, {
+  type: "updateBullet",
+  sectionId: "sec-1",
+  entryId: "entry-1",
+  bulletId: "b-2",
+  value: "new branch"
+});
+assert.strictEqual(
+  reduceBranchStyle(branchStyle, { type: "redo" }),
+  branchStyle,
+  "a new content edit invalidates style redo from the abandoned branch"
+);
+
+const loadClock = createHistoryClock();
+const reduceLoadRoot = (state, action) => rootReducer(state, action, loadClock);
+const reduceLoadStyle = (state, action) => styleReducer(state, action, loadClock);
+let loadContent = reduceLoadRoot(
+  {
+    data: null,
+    dirty: false,
+    past: [],
+    future: [],
+    coalesceKey: null,
+    coalesceAt: 0
+  },
+  { type: "seed", data: historyBase }
+);
+const oldDocumentStyle = reduceLoadStyle({
+  style: { ...DOC_STYLE_DEFAULTS },
+  past: [],
+  future: [],
+  coalesceKey: null,
+  coalesceAt: 0
+}, { type: "set", key: "lineHeight", value: 1.4 });
+loadContent = reduceLoadRoot(loadContent, { type: "seed", data: historyBase });
+assert.strictEqual(
+  reduceLoadStyle(oldDocumentStyle, { type: "undo" }),
+  oldDocumentStyle,
+  "loading a document invalidates style history from the previous document"
+);
+
+const firstClock = createHistoryClock();
+const secondClock = createHistoryClock();
+const reduceFirstRoot = (state, action) => rootReducer(state, action, firstClock);
+const reduceSecondRoot = (state, action) => rootReducer(state, action, secondClock);
+const firstSeeded = reduceFirstRoot(
+  {
+    data: null,
+    dirty: false,
+    past: [],
+    future: [],
+    coalesceKey: null,
+    coalesceAt: 0
+  },
+  { type: "seed", data: historyBase }
+);
+const secondSeeded = reduceSecondRoot(
+  {
+    data: null,
+    dirty: false,
+    past: [],
+    future: [],
+    coalesceKey: null,
+    coalesceAt: 0
+  },
+  { type: "seed", data: historyBase }
+);
+const firstTyped = reduceFirstRoot(firstSeeded, {
+  type: "updateBullet",
+  sectionId: "sec-1",
+  entryId: "entry-1",
+  bulletId: "b-1",
+  value: "first"
+});
+reduceSecondRoot(secondSeeded, {
+  type: "updateBullet",
+  sectionId: "sec-1",
+  entryId: "entry-1",
+  bulletId: "b-1",
+  value: "other document"
+});
+const firstTypedAgain = reduceFirstRoot(firstTyped, {
+  type: "updateBullet",
+  sectionId: "sec-1",
+  entryId: "entry-1",
+  bulletId: "b-1",
+  value: "first document"
+});
+assert.equal(
+  firstTypedAgain.past.length,
+  1,
+  "editing another document cannot split this document's typing group"
+);
+
+const otherField = reduceRoot(typeRun, { type: "updateBullet", sectionId: "sec-1", entryId: "entry-1", bulletId: "b-2", value: "xy" });
 assert.equal(otherField.past.length, 2, "switching to a different field starts a new undo step");
 
-const structural = rootReducer(typeRun, {
+const structural = reduceRoot(typeRun, {
   type: "splitBullet",
   sectionId: "sec-1",
   entryId: "entry-1",
@@ -163,11 +404,18 @@ const crossFieldBase = {
   ]
 };
 const crossFieldPristine = structuredClone(crossFieldBase);
-const crossFieldSeeded = rootReducer(
-  { data: null, dirty: false, past: [], future: [], coalesceKey: null, coalesceAt: 0 },
+const crossFieldSeeded = reduceRoot(
+  {
+    data: null,
+    dirty: false,
+    past: [],
+    future: [],
+    coalesceKey: null,
+    coalesceAt: 0
+  },
   { type: "seed", data: crossFieldBase }
 );
-const selectAllDeleted = rootReducer(crossFieldSeeded, {
+const selectAllDeleted = reduceRoot(crossFieldSeeded, {
   type: "batch",
   steps: [
     { type: "updateBullet", sectionId: "cover", entryId: "p1", bulletId: "p1b", value: "", coalesce: false },
@@ -178,13 +426,13 @@ const selectAllDeleted = rootReducer(crossFieldSeeded, {
 assert.equal(selectAllDeleted.data.sections[0].items.length, 1, "a fully selected list collapses to one row");
 assert.equal(selectAllDeleted.data.sections[0].items[0].bullets[0].text, "", "the surviving row is empty");
 assert.equal(selectAllDeleted.past.length, 1, "the whole multi-field edit is one undo step");
-const selectAllUndone = rootReducer(selectAllDeleted, { type: "undo" });
+const selectAllUndone = reduceRoot(selectAllDeleted, { type: "undo" });
 assert.deepEqual(
   selectAllUndone.data.sections[0].items.map((item) => item.bullets[0].text),
   ["First <b>paragraph</b>", "Second", "Third"],
   "one undo restores every field the batch touched"
 );
-const boldedAcross = rootReducer(crossFieldSeeded, {
+const boldedAcross = reduceRoot(crossFieldSeeded, {
   type: "batch",
   steps: [
     { type: "updateBullet", sectionId: "cover", entryId: "p1", bulletId: "p1b", value: "<b>First paragraph</b>", coalesce: false },
@@ -194,18 +442,18 @@ const boldedAcross = rootReducer(crossFieldSeeded, {
 });
 assert.equal(boldedAcross.past.length, 1, "formatting several fields is one undo step");
 assert.equal(
-  rootReducer(boldedAcross, { type: "undo" }).data.sections[0].items[1].bullets[0].text,
+  reduceRoot(boldedAcross, { type: "undo" }).data.sections[0].items[1].bullets[0].text,
   "Second",
   "one undo reverts formatting in every field"
 );
 assert.equal(
-  rootReducer(crossFieldSeeded, { type: "batch", steps: [] }),
+  reduceRoot(crossFieldSeeded, { type: "batch", steps: [] }),
   crossFieldSeeded,
   "an empty batch is not an edit"
 );
 assert.deepEqual(crossFieldBase, crossFieldPristine, "batched edits never mutate their input state");
 
-const suggestionApply = rootReducer(typeRun, {
+const suggestionApply = reduceRoot(typeRun, {
   type: "updateBullet",
   sectionId: "sec-1",
   entryId: "entry-1",
@@ -499,4 +747,4 @@ assert.equal(
 );
 assert.deepEqual(alignmentBase, alignmentPristine, "alignment clearing never mutates its input state");
 
-console.log("resume editor structure eval: 92/92 checks passed");
+console.log("resume editor structure eval: all checks passed");

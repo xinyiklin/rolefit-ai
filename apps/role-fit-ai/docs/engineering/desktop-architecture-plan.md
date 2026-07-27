@@ -102,6 +102,21 @@ companion through the normal quit path so the owned server shuts down cleanly.
 Malformed or unreadable saved settings fail back to `5181` with a bounded
 warning rather than selecting a random port.
 
+Startup treats a bound port as an explicit recoverable state rather than a
+silent reuse or terminal error. A versioned health-compatible listener offers
+**Connect to it**, **Take over the port**, and **Use another port**; Connect is
+the default. Takeover resolves the exact listener PID through `lsof -t` on
+macOS/Linux, revalidates the compatible health identity, resolves the same PID
+again, sends one `SIGTERM`, and waits up to five seconds. It never escalates to
+`SIGKILL`; failure returns to the alternate-port/reuse choice. The closed
+occupant lookup helper uses `lsof -t` on macOS/Linux and parses `netstat -ano`
+on Windows; Windows does not offer takeover because Node cannot deliver an
+equivalent graceful signal to an arbitrary process. An
+unidentified or health-incompatible listener receives no signal and offers
+only another port or Quit. Alternate selection reuses the settings availability
+check, scans a bounded nearby range, and persists the first free port before
+retrying startup, so the next launch does not ask again.
+
 `ROLEFIT_DESKTOP_PORT` is a per-launch operator/test override. When present it
 wins over the saved value and locks the renderer setting; it is not persisted.
 Standalone development continues to use `PORT`, while the companion-owned

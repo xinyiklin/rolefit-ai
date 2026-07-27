@@ -19,7 +19,11 @@ remain in `PRODUCT.md` and `DESIGN.md`.
   constrained adapter into the shared in-memory `ResumeData` editing shape.
 - `inlineMarksText.ts` owns non-JSX inline-mark parsing and transforms,
   including the single inline-tag grammar (`INLINE_MARK_TAG_PATTERN`) that
-  other parsers instantiate.
+  other parsers instantiate. Paragraph properties live in that grammar beside
+  the character ones: `line-height`, `space-before`, `space-after`, and
+  `indent` (a left indent in points). Adding a tag here means adding it to the
+  editor's anchored scanner too, and to its display-map char shape, or a value
+  the engine understands will serialize back out as literal text.
 - `styleFieldFormatting.ts` owns reusable bulk/effective formatting across
   headings, entry columns, skill labels, and contact fields, not toolbar state
   or presentation.
@@ -57,12 +61,16 @@ grammar, margin table, or link-normalization path.
 - `.resume` is the resume open/save format and `.cover` is the cover-letter
   open/save format. The two strict schemas do not masquerade as one another.
   PDF is final output.
-- Current saves use `format: "typeset-resume"` and `schemaVersion: 1`.
+- Current saves use `format: "typeset-resume"` and `schemaVersion: 2`.
+  Version 1 files remain readable and migrate to version 2 on the next save.
 - Current cover-letter saves use `format: "typeset-cover-letter"` and
-  `schemaVersion: 1`, with ordered paragraphs and cover-letter print style only.
-- Version 1 is the first and only contract. Pre-release prototype shapes and
-  other schema-version values are unsupported and must be rejected.
+  `schemaVersion: 2`, with an optional name/contact header, ordered paragraphs,
+  and cover-letter print style. Version 1 paragraph-only files remain readable
+  and migrate to version 2 on the next save.
+- Unsupported versions and pre-release prototype shapes must be rejected.
 - The file contains structured content plus every print-affecting style value.
+  Page margins persist only as physical point values; Narrow, Normal, and
+  Custom are editor conveniences rather than file-format state.
 - Session ids never cross the boundary; regenerate them on open. Zoom and the
   spell-check view preference never cross the boundary.
 - Preserve the 2 MB input cap unless a measured need changes it with matching
@@ -83,7 +91,8 @@ For model, transform, or codec changes:
 1. Run `npm run eval:resume-file --workspace packages/engine` for `.resume`
    changes or `npm run eval:cover-letter-file --workspace packages/engine` for
    `.cover` changes, plus the smallest probe for other pure functions.
-2. Verify a current v1 save/open round trip without session ids.
+2. Verify a current v2 save/open round trip without session ids and the v1
+   migration path.
 3. Check unsupported schema-version rejection; no prototype-version migration
    path should exist.
 4. Check malformed, unknown-field, invalid-bound, and

@@ -22,9 +22,27 @@ typesetting guide when a change affects painted output or layout provenance.
   document state.
 - `selectionHighlight.ts` owns the visual selection overlay. It coalesces the
   browser range fragments per engine line and paints one highlight using that
-  line's full height (determined by its largest inline run), bounded
-  horizontally by that line's painted text so a highlight never reaches into the
-  page margins.
+  line's full height (determined by its largest inline run) plus the vertical
+  gap below it. Exactly ONE line owns each gap and it is the line above, filling
+  downward — the engine's own between-only rule for leading and paragraph
+  spacing. When the line below claimed it as well, every paragraph gap was
+  painted twice and a short closing line left a floating band hanging above the
+  next paragraph, which read as that paragraph owning the spacing before it. The
+  band covers each line's LINE BOX: its ink plus the line spacing that line owns,
+  which the engine publishes per line as `--tsd-line-leading` because only the
+  engine knows it. The DOM box is the ink box, and the gap to the next line is
+  the leading only INSIDE a paragraph — at a block boundary it also carries the
+  paragraph gap, which belongs to neither side. Measuring from that gap left the
+  last line of every paragraph short (it has no next line of its own to measure
+  to) and, where it did measure, painted the paragraph gap as a tall empty slab
+  at the previous block's width. Lines with no leading of their own (entry
+  heads, headings, a contact row) fall back to their ink box. The offset is SIGNED and bands TILE: a line's box is its ink box,
+  tight line spacing makes consecutive ink boxes overlap, and a translucent veil
+  painted twice is a dark stripe across the text — so a band gives height back
+  just as readily as it grows, always stopping where the next selected line
+  begins. It stays bounded horizontally by that
+  line's painted text so a highlight never reaches into the page margins, and it
+  never bridges a page break.
 - `caretOverlay.ts` maps a collapsed logical selection onto the engine line's
   exposed baseline and the browser-measured active font face. The resulting
   caret remains visible while editor toolbar controls own focus and reflects
@@ -54,6 +72,28 @@ typesetting guide when a change affects painted output or layout provenance.
   in the job description. Buttons and the page background are fair game; an
   input, textarea, select, or foreign contenteditable is not, and the caret is
   still placed so the next Tab into the document lands there.
+- Both endpoints of a restored range convert through
+  `valueIndexForDisplayIndex`. `valueStart` holds one entry per real character,
+  so a display index PAST the last one — a caret at the field's end — indexes
+  nothing; the restore paths each defaulted the start to 0 and the end to the
+  value's length, which brought a caret at the end of a paragraph back as the
+  WHOLE paragraph selected. The edit itself was correctly scoped; only the
+  selection that returned was wrong, which is why it looked like a second bug.
+- A selection endpoint that names no field must still resolve to one. A browser
+  parks the caret at the END of a line inside the painter's zero-width separator
+  or on the line container, so `readSelection` resolves such an endpoint through
+  `fieldCaretOf` to the end of the last content span at or before it. Without
+  that, a caret at the end of a paragraph mapped to NO field, every command fell
+  back to the last remembered range, and choosing a line spacing there applied
+  it to the whole paragraph and left the whole paragraph selected afterwards.
+- Authored indentation is ONE unit, not a run of spaces. The painter merges it
+  into the first word's run, so `placeInLine` and the forgiving drag anchors
+  resolve past it: the first position a pointer can reach on a line is its first
+  real glyph, and a drag can never select part of a tab. That glyph — not the
+  space at index 0 — is therefore the paragraph's first CHARACTER when Tab asks
+  whether the selection includes it. Only a LEADING run counts; interior spaces
+  are ordinary text, and a continuation line never starts with one because the
+  breaker consumed its glue.
 - `domSelection.ts` translates between DOM caret positions and display indexes,
   and owns the caret/line DOM geometry helpers (line lookup, caret placement,
   click-to-caret) plus `keyOfNode`. A field's spans are split by inline style
@@ -68,7 +108,15 @@ typesetting guide when a change affects painted output or layout provenance.
 - `multiFieldSelection.ts` resolves a selection that crosses field boundaries
   into the ordered fields it covers, and answers the mark/family/size questions
   that span them. DOM-reading and pure: it never dispatches, so the controller
-  keeps ownership of structural consequences.
+  keeps ownership of structural consequences. A selection endpoint frequently
+  names NO field — a select-all anchors on the editing host, a triple-click ends
+  on a line container, and selecting one whole line usually ends on the
+  line-separator span — so both the covering field AND the display offset inside
+  it are resolved against that field's own painted spans. Neither may fall back
+  to the whole field: line spacing then applied to every line of the paragraph.
+  Neither may test a wrapped field by its FIRST span either: every point past
+  line one resolved to no field at all, and the toolbar greyed out on an
+  ordinary selection.
 - `useTypesetInputEvents.ts` intercepts browser input and keyboard intents.
 - `useTypesetStructure.ts` owns add/remove/reorder commands and drag state.
 - `useTypesetOverlayAnchors.ts` owns overlay geometry: page origins inside the
@@ -90,6 +138,38 @@ typesetting guide when a change affects painted output or layout provenance.
 - Keep display indexes and serialized-value indexes explicit. Inline tags are
   value-space metadata and must remain balanced across insert, delete, split,
   merge, copy, paste, undo, and redo.
+- Line height and paragraph before/after spacing use the shared inline grammar.
+  A caret or partial range expands to its painted visual line(s); selecting a
+  whole paragraph targets the complete field. Each line-height override changes
+  only the following junction, so it adds space below and never above the
+  selected line. Before/after spacing remains a paragraph property. Keep these wrappers balanced through the same editing
+  paths as font, emphasis, alignment, and link marks.
+- Dragging from or to the first/last glyph uses forgiving line-edge hit areas.
+  The forgiving snap owns only the initial drag anchor; the moving endpoint
+  remains character-precise so short partial selections do not collapse or
+  become full-line selections. A nearby line/separator pixel must still resolve
+  the nearest field edge. Preserve native character selection away from those
+  edges. When browser point-to-caret lookup fails, measure the span's substring
+  advances rather than falling back to offset zero.
+- Wherever a pointer press places the caret BY HAND, it must also start the
+  synthetic drag (`beginPointerDrag`, already armed). Preventing the default
+  removes the browser's own drag, so a press in the margins, before the first
+  glyph, after the last, in the gap between two fields on a row, or on a bullet
+  marker selected nothing at all however far the pointer then travelled — the
+  user had to land inside the text to select from the start or end of a line.
+  Only a press that lands ON field text stays unarmed, because the browser's
+  character-precise selection is better until the pointer actually moves.
+- Forgiving drag anchors are the outer edges of a FIELD on that line, not of
+  every painted span. The painter splits a field at each inline style change,
+  and snapping to those interior boundaries pulled the anchor off the character
+  the user pressed on. The last field on a line keeps its authored trailing
+  whitespace, exactly as `lineEdgePosition` does.
+- Pointer move and release are watched on the DOCUMENT while a drag is live, and
+  that drag resolves lines with `nearestLineByPoint(..., "anywhere")`. The
+  pointer legitimately leaves the sheet — into the margin, past the last page,
+  over the toolbar or the app chrome — while the user is still extending, and a
+  host-only listener (or the click path's conservative horizontal/vertical
+  reach) froze the selection wherever the pointer last crossed the text.
 - A wrapped continuation line is ordinary editable text. The caret must read and
   restore across a line break: the glue a break consumed exists in the display
   string but in neither line's DOM text, so a mapping that ignores it reports no
@@ -100,9 +180,58 @@ typesetting guide when a change affects painted output or layout provenance.
   character, and stepping over it desynchronizes everything after it.
 - Preserve authored interior and trailing whitespace. Deleting the final styled
   character must retain that character's typing format for the next insertion.
-- Tab inserts four authored spaces inside a clean field. Shift+Tab remains
-  available to leave the contenteditable surface. Ctrl/Cmd +/- steps document
-  zoom and Ctrl/Cmd 0 resets it to 100%.
+  Summary/cover paragraphs also preserve leading whitespace so indentation
+  survives repaint and PDF export; ordinary marked resume bullets may still
+  trim accidental space after their marker.
+- In a resume, Tab and Shift+Tab move forward/backward through logical content
+  fields, skip structural section headings, and select the complete destination
+  field even when it wraps or contains several inline runs. At either document
+  boundary — and for a selection crossing fields, which names no starting stop —
+  leave the key to the browser. Cover-letter headers use the same navigation
+  over name/contact fields only. Ctrl/Cmd +/- steps document zoom and Ctrl/Cmd 0
+  resets it to 100%.
+- In a prose paragraph (a cover-letter body), Tab indents and Shift+Tab
+  outdents; neither moves focus. A stray Shift+Tab that threw focus out of the page
+  mid-sentence read as the editor losing the document, and Escape is the
+  keyboard way out. Which of the two things Tab means follows the word
+  processor: a caret indents AT the caret unless it sits at the paragraph's first
+  character (the first glyph after any indentation); a selection reaching that
+  same character indents the paragraph — one stop at its start,
+  however many of its lines the selection covers, partially or whole, because
+  the paragraph is the unit being indented; any other selection is replaced by
+  the indentation, which is what a selection deliberately starting mid-paragraph
+  asks for. A selection crossing paragraphs indents each of them at its start
+  through the host's batched edit, and is never the replacing case — that would
+  trade several paragraphs for one indent.
+- Indenting a paragraph climbs a two-rung ladder, and Shift+Tab climbs back
+  down it. Rung one is a FIRST-LINE indent: spaces at the paragraph's start,
+  which move only the line they sit on. Rung two is the engine's `indent`
+  paragraph property — every line moves and the measure narrows, while those
+  leading spaces ride along and keep the first line one stop further in. Spaces
+  alone cannot reach rung two: a wrapped line has no authored start to put them
+  at. Which rung a Tab takes is settled by what is SELECTED: a whole paragraph
+  asks for the whole paragraph to move, so it goes straight to the block; a
+  caret or a partial selection takes the first line first. Coming down is the
+  reverse order in every case — block before first line — so Shift+Tab always
+  undoes the Tab before it. The whole rule is one pure function, `indentStep`;
+  the commit path and its eval both go through it rather than each spelling the
+  branching out.
+- Backspace at the paragraph start gives one stop of that block indent back,
+  before the merge and delete paths run. Shift+Tab reverses the same ladder;
+  Backspace also makes an indent removable without leaving the typing flow.
+- One tab stop is a MEASUREMENT, not a constant: `TAB_STOP_PT` (a half inch, as
+  in Word and Docs) divided by the engine's space advance for the caret's own
+  family and size. The model has no tab character, so the indent is real spaces,
+  and a fixed count of them is a different visual size in every font — four
+  spaces is 0.11in in Source Sans against 0.19in in Latin Modern, both far short
+  of a real tab. `TypesetEditor` owns that measurement (`indentWidthAt`); the
+  input hook asks for it rather than assuming a width.
+- Authored indentation behaves as ONE tab stop everywhere it is met. A plain
+  Backspace/Delete against a run of at least one stop removes a whole stop —
+  including on the queued-replay path, which is what a held key uses. A ragged
+  run first snaps back into alignment; runs shorter than a stop stay ordinary
+  typed spaces; and word/line deletes keep their own larger intent. The
+  arithmetic is pure and lives in `inlineTextEditing.ts`.
 - Copy writes plain text, safe HTML, and the private versioned inline fragment;
   paste prefers that fragment, then sanitized HTML, then plain text. Supported
   family, size, emphasis, underline, link, and alignment runs must survive a
@@ -202,7 +331,15 @@ typesetting guide when a change affects painted output or layout provenance.
   instead of doing nothing. Toolbar buttons, keyboard shortcuts, and the
   browser's `formatBold`/`formatItalic`/`formatUnderline` intents all route
   through one commit so they cannot diverge.
-- One selection rectangle per engine line, bounded by that line's painted text.
+- One selection rectangle per engine line, bounded by that line's painted text,
+  covering its own line box — ink plus the spacing that line owns — never
+  reaching up into the line above's, and never overlapping the next selected
+  line's band. The browser's own selection
+  paint is off for the WHOLE editable document, not just field spans: a contact
+  divider is a run the engine owns and no field does, so it carries no
+  `data-tsdf`, and a rule scoped to field spans left the native veil painting
+  under each divider on top of the band — two translucent layers, one darker box
+  per "|".
   A browser stretches the client rect of a fragment in the middle of a
   multi-line selection out to its containing block, and a line block spans the
   whole sheet, so an unbounded rectangle paints the page margins. A selected
@@ -224,7 +361,10 @@ typesetting guide when a change affects painted output or layout provenance.
    whitespace, clipboard, deletion-format, selection, or drag-hit-area changes.
 2. Run `npm run check --workspace packages/editor` after component, hook, or
    action-contract changes, then build both apps when the public contract moved.
-3. Check direct typing, Tab indentation, trailing spaces, mixed-size/family
+3. Check direct typing, Tab/Shift+Tab indentation and its one-keystroke delete,
+   selection drags begun in the margins and at the first/last glyph (forward,
+   reverse, across fields and pages, released outside the window), trailing
+   spaces, mixed-size/family
    baselines, rich copy/paste, zoom shortcuts, delete-and-retype formatting,
    range formatting, undo/redo, right-click commands, drag, and keyboard
    reorder in a real browser for material editor work.

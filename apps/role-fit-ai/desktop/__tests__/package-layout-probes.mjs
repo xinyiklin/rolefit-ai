@@ -50,7 +50,7 @@ const allowedRoots = new Set([
 for (const file of files) {
   assert(allowedRoots.has(file.split("/", 1)[0]), `unexpected staged root: ${file}`);
   assert(!/(^|\/)\.env(?:\.|$)/.test(file), `secret file staged: ${file}`);
-  assert(!/(^|\/)(?:job-search-workspace|provider-vault|workspace)(?:\/|$)/.test(file), `local data staged: ${file}`);
+  assert(!/(^|\/)(?:workspace|provider-vault)(?:\/|$)/.test(file), `local data staged: ${file}`);
   assert(!/(^|\/)__tests__(?:\/|$)/.test(file), `test staged: ${file}`);
   assert(!/\.map$/i.test(file), `source map staged: ${file}`);
   if (file.endsWith(".resume")) {

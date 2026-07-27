@@ -22,8 +22,8 @@ export const ROLEFIT_WORKSPACE_STAT_FILE_MAX_BYTES = 10_000_000 as const;
 // these mirrors against the shared contract source. They classify names only —
 // file contents never cross this boundary.
 export const ROLEFIT_WORKSPACE_BASE_RESUME_RE =
-  /^base-resume(?:-[A-Za-z0-9][A-Za-z0-9_-]*)?\.resume$/;
-export const ROLEFIT_WORKSPACE_LEGACY_BASE_RESUME_RE = /^base-resume\.(?:txt|md|csv)$/;
+  /^[A-Za-z0-9][A-Za-z0-9_-]*\.resume$/;
+export const ROLEFIT_WORKSPACE_LEGACY_BASE_RESUME_RE = /^[A-Za-z0-9][A-Za-z0-9_-]*\.(?:txt|md|csv)$/;
 
 // Const enums inline into the compiled sandboxed preload, so this file remains
 // the one source of truth without emitting a forbidden neighboring require.
@@ -181,8 +181,8 @@ export type RoleFitConnectionServerState =
 /**
  * Live loopback truth for the Connection tab: the active port, the canonical
  * browser URL, whether the responding server is companion-owned, a reused
- * standalone listener, still starting, or not answering health probes, and
- * the beaconed browser-tab count (null when unknown).
+ * standalone listener, still starting, or not answering health probes, and the
+ * beaconed browser-tab count (null when unknown).
  */
 export type RoleFitConnectionStatus = Readonly<{
   port: number;

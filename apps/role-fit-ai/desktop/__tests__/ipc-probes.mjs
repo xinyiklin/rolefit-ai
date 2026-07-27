@@ -147,7 +147,8 @@ const sharedFileLimit = workspaceContractSource
 assert.equal(Number(sharedFileLimit?.replaceAll("_", "")), ROLEFIT_WORKSPACE_STAT_FILE_MAX_BYTES);
 assert.ok(workspaceContractSource.includes(ROLEFIT_WORKSPACE_BASE_RESUME_RE.source));
 assert.ok(workspaceContractSource.includes(ROLEFIT_WORKSPACE_LEGACY_BASE_RESUME_RE.source));
-assert.equal(ROLEFIT_WORKSPACE_BASE_RESUME_RE.test("base-resume-swe_2.resume"), true);
+assert.equal(ROLEFIT_WORKSPACE_BASE_RESUME_RE.test("default.resume"), true);
+assert.equal(ROLEFIT_WORKSPACE_BASE_RESUME_RE.test("fullstack.resume"), true);
 assert.equal(ROLEFIT_WORKSPACE_BASE_RESUME_RE.test("base-resume.txt"), false);
 assert.equal(ROLEFIT_WORKSPACE_LEGACY_BASE_RESUME_RE.test("base-resume.txt"), true);
 assert.equal(isRoleFitConnectionServerState("owned"), true);
@@ -251,8 +252,8 @@ let siteSettingsFailure = null;
 let saveShouldLeak = false;
 let terminalShouldLeak = false;
 let workspaceOverviewResult = {
-  workspacePath: "/private/rolefit/workspaces/job-search-workspace",
-  workspaceDisplayPath: "~/workspaces/job-search-workspace",
+  workspacePath: "/private/rolefit/workspaces/workspace",
+  workspaceDisplayPath: "~/workspaces/workspace",
   activeBrowserTabs: 0,
   serverReady: true,
   workspaceTransferReady: true,
@@ -460,8 +461,8 @@ assert.equal(browserOpenCount, 1);
 
 const handledWorkspaceOverview = await installedHandlers.get(channels.workspaceOverview)(requestEvent());
 assert.deepEqual(handledWorkspaceOverview, {
-  workspacePath: "/private/rolefit/workspaces/job-search-workspace",
-  workspaceDisplayPath: "~/workspaces/job-search-workspace",
+  workspacePath: "/private/rolefit/workspaces/workspace",
+  workspaceDisplayPath: "~/workspaces/workspace",
   activeBrowserTabs: 0,
   serverReady: true,
   workspaceTransferReady: true,
@@ -484,7 +485,7 @@ await assert.rejects(
   installedHandlers.get(channels.workspaceOverview)(requestEvent()),
   /workspace overview is unavailable/
 );
-workspaceOverviewResult = { ...workspaceOverviewResult, workspacePath: "/private/rolefit/workspaces/job-search-workspace", applicationCount: 1.5 };
+workspaceOverviewResult = { ...workspaceOverviewResult, workspacePath: "/private/rolefit/workspaces/workspace", applicationCount: 1.5 };
 await assert.rejects(
   installedHandlers.get(channels.workspaceOverview)(requestEvent()),
   /workspace overview is unavailable/
@@ -495,8 +496,8 @@ await assert.rejects(
   /workspace overview is unavailable/
 );
 workspaceOverviewResult = {
-  workspacePath: "/private/rolefit/workspaces/job-search-workspace",
-  workspaceDisplayPath: "~/workspaces/job-search-workspace",
+  workspacePath: "/private/rolefit/workspaces/workspace",
+  workspaceDisplayPath: "~/workspaces/workspace",
   activeBrowserTabs: 2,
   serverReady: true,
   workspaceTransferReady: true,
@@ -1037,8 +1038,8 @@ vm.runInNewContext(preload, {
           }
           if (channel === channels.workspaceOverview) {
             return Promise.resolve({
-              workspacePath: "/private/rolefit/workspaces/job-search-workspace",
-              workspaceDisplayPath: "~/workspaces/job-search-workspace",
+              workspacePath: "/private/rolefit/workspaces/workspace",
+              workspaceDisplayPath: "~/workspaces/workspace",
               activeBrowserTabs: 0,
               serverReady: true,
               workspaceTransferReady: true,

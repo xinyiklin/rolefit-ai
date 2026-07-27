@@ -59,7 +59,7 @@ async function snapshot(directory) {
   const names = (await readdir(directory, { withFileTypes: true }))
     .map((entry) => `${entry.isDirectory() ? "d" : "f"}:${entry.name}`)
     .sort();
-  const base = await readFile(join(directory, "base-resume.resume"), "utf8");
+  const base = await readFile(join(directory, "resumes", "default.resume"), "utf8");
   return { names, base };
 }
 
@@ -91,10 +91,10 @@ try {
   assert.deepEqual(
     backup.files.map((file) => file.path),
     [
-      ".trash/2026-07-19T12-00-00-000Z__base-resume.resume",
       "applications.json",
       "applications/application-1/resume.pdf",
-      "base-resume.resume"
+      "resumes/.trash/2026-07-19T12-00-00-000Z__default.resume",
+      "resumes/default.resume"
     ],
     "export contains every app-managed file and excludes arbitrary files and symlinks"
   );
@@ -133,7 +133,7 @@ try {
   const result = await restoreWorkspaceBackup(targetDir, withBrowser, fixedDate);
   assert.equal(result.restoredFiles, 4);
   assert.equal(result.previousWorkspaceKept, true);
-  assert.equal(JSON.parse(await readFile(join(targetDir, "base-resume.resume"), "utf8")).document.name, "Portable Candidate");
+  assert.equal(JSON.parse(await readFile(join(targetDir, "resumes", "default.resume"), "utf8")).document.name, "Portable Candidate");
   assert.equal(await readFile(join(targetDir, "applications", "application-1", "resume.pdf"), "utf8"), "%PDF-1.7\nportable");
   const siblings = await readdir(isolatedRoot);
   const safetyCopy = siblings.find((name) => name.startsWith("target-workspace.restore-backup-"));
@@ -240,7 +240,7 @@ try {
   );
   assert.deepEqual(await snapshot(targetDir), beforeFailedRestore, "tracker validation failure leaves active workspace unchanged");
 
-  const invalidResume = replaceEntry(withBrowser, "base-resume.resume", "{" + "x".repeat(100));
+  const invalidResume = replaceEntry(withBrowser, "resumes/default.resume", "{" + "x".repeat(100));
   await assert.rejects(
     () => restoreWorkspaceBackup(targetDir, invalidResume, fixedDate),
     (error) => error instanceof WorkspaceBackupError && /base-resume file/.test(error.message),

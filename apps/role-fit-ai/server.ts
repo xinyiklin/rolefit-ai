@@ -48,7 +48,7 @@ if (companionOwned) {
 }
 const workspaceDir = process.env.ROLEFIT_WORKSPACE_DIR
   ? resolve(appRoot, process.env.ROLEFIT_WORKSPACE_DIR)
-  : join(appRoot, "job-search-workspace");
+  : join(appRoot, "workspace");
 
 function isWorkspaceRequest(value: unknown): value is Readonly<{
   type: "rolefit-workspace-request";

@@ -14,6 +14,7 @@ const locations = {
   appRoot: repoAppRoot,
   workspaceDir: join(isolatedRoot, "explicit-workspace")
 };
+const resumeDir = join(locations.workspaceDir, "resumes");
 
 class FakeResponse {
   status = 0;
@@ -59,7 +60,7 @@ try {
   await mkdir(locations.workspaceDir, { recursive: true });
 
   assert.equal(
-    (await readWorkspaceBaseResume("base-resume.resume", locations)).exists,
+    (await readWorkspaceBaseResume("default.resume", locations)).exists,
     false,
     "missing explicit version does not become starter"
   );
@@ -78,14 +79,14 @@ try {
     );
   }
 
-  await writeFile(join(locations.workspaceDir, "base-resume.resume"), "{" + "x".repeat(100), "utf8");
+  await writeFile(join(resumeDir, "default.resume"), "{" + "x".repeat(100), "utf8");
   await assert.rejects(
     () => readWorkspaceBaseResume(undefined, locations),
     (error) => error instanceof WorkspaceStorageError,
     "corrupt saved .resume fails closed instead of falling through to starter"
   );
 
-  await writeFile(join(locations.workspaceDir, "base-resume.resume"), starter, "utf8");
+  await writeFile(join(resumeDir, "default.resume"), starter, "utf8");
   assert.equal((await readWorkspaceBaseResume(undefined, locations)).exists, true, "valid strict .resume loads");
 
   const first = JSON.parse(starter);
@@ -95,16 +96,16 @@ try {
   const firstRes = new FakeResponse();
   const secondRes = new FakeResponse();
   await Promise.all([
-    handleWorkspaceBaseResume(request("POST", { fileName: "base-resume.resume", text: JSON.stringify(first) }), firstRes, locations),
-    handleWorkspaceBaseResume(request("POST", { fileName: "base-resume.resume", text: JSON.stringify(second) }), secondRes, locations)
+    handleWorkspaceBaseResume(request("POST", { fileName: "default.resume", text: JSON.stringify(first) }), firstRes, locations),
+    handleWorkspaceBaseResume(request("POST", { fileName: "default.resume", text: JSON.stringify(second) }), secondRes, locations)
   ]);
   assert.equal(firstRes.status, 200);
   assert.equal(secondRes.status, 200);
-  const final = JSON.parse(await readFile(join(locations.workspaceDir, "base-resume.resume"), "utf8"));
+  const final = JSON.parse(await readFile(join(resumeDir, "default.resume"), "utf8"));
   assert.equal(final.document.name, "Second Concurrent Save", "serialized saves preserve invocation order");
-  const history = await readdir(join(locations.workspaceDir, ".trash"));
+  const history = await readdir(join(resumeDir, ".trash"));
   assert.equal(history.length, 2, "both superseded versions remain recoverable with collision-free names");
-  assert.equal((await readdir(locations.workspaceDir)).some((name) => name.endsWith(".tmp")), false, "atomic writes leave no temporary file");
+  assert.equal((await readdir(resumeDir)).some((name) => name.endsWith(".tmp")), false, "atomic writes leave no temporary file");
 
   // --- assertBaseResumeFileName: the base-resume name guard ---
   // Exercised through readWorkspaceBaseResume's explicit-version path, which is
@@ -115,8 +116,8 @@ try {
   for (const badName of [
     "../evil.resume",
     "/etc/passwd.resume",
-    "base-resume-../x.resume",
-    "base-resume.txt"
+    "variant-../x.resume",
+    "default.txt"
   ]) {
     await assert.rejects(
       () => readWorkspaceBaseResume(badName, locations),
@@ -125,7 +126,7 @@ try {
     );
   }
   assert.equal(
-    (await readWorkspaceBaseResume("base-resume-fullstack.resume", locations)).exists,
+    (await readWorkspaceBaseResume("fullstack.resume", locations)).exists,
     false,
     "a well-formed but absent variant name is a clean miss, never a throw"
   );
@@ -137,32 +138,84 @@ try {
     await handleSelectBaseResume(rawRequest("POST", "not json"), res, locations);
     assert.equal(res.status, 400, "select rejects a malformed JSON body");
   }
-  for (const badName of ["../evil.resume", "base-resume-../x.resume", "", "base-resume.txt"]) {
+  for (const badName of ["../evil.resume", "variant-../x.resume", "", "default.txt"]) {
     const res = await invoke(handleSelectBaseResume, "POST", { fileName: badName });
     assert.equal(res.status, 400, `select rejects an unsafe fileName: ${JSON.stringify(badName)}`);
     assert.match(JSON.parse(res.body).error, /valid base resume/);
   }
   assert.equal(
-    (await invoke(handleSelectBaseResume, "POST", { fileName: "base-resume-fullstack.resume" })).status,
+    (await invoke(handleSelectBaseResume, "POST", { fileName: "fullstack.resume" })).status,
     404,
     "select of a valid-but-absent version is a 404, not a starter fallback"
   );
   {
-    // base-resume.resume exists here (written by the persistence block above).
-    const res = await invoke(handleSelectBaseResume, "POST", { fileName: "base-resume.resume" });
+    // default.resume exists here (written by the persistence block above).
+    const res = await invoke(handleSelectBaseResume, "POST", { fileName: "default.resume" });
     assert.equal(res.status, 200, "select of an existing version succeeds");
     assert.equal(JSON.parse(res.body).baseResume.exists, true, "the selected version is returned as present");
+  }
+
+  await writeFile(join(resumeDir, "fullstack.resume"), starter, "utf8");
+  await writeFile(join(resumeDir, "general-sde.resume"), starter, "utf8");
+  {
+    const res = await invoke(handleWorkspaceBaseResume, "DELETE", {
+      fileName: "fullstack.resume"
+    });
+    assert.equal(res.status, 200, "named variant removal succeeds");
+    const body = JSON.parse(res.body);
+    assert.equal(body.removed, true, "named variant removal reports success");
+    assert.equal(
+      (await readdir(resumeDir)).includes("fullstack.resume"),
+      false,
+      "the exact named variant is removed from the active directory"
+    );
+    assert.equal(
+      (await readdir(resumeDir)).includes("general-sde.resume"),
+      true,
+      "another named variant remains active"
+    );
+    assert(
+      body.baseResumeOptions.some((option) => option.fileName === "general-sde.resume"),
+      "the response is a current workspace snapshot"
+    );
+    assert(
+      (await readdir(join(resumeDir, ".trash"))).some((name) => name.endsWith("__fullstack.resume")),
+      "the removed named variant remains recoverable in .trash"
+    );
+  }
+  for (const fileName of ["../evil.resume", "", "default.txt"]) {
+    const res = await invoke(handleWorkspaceBaseResume, "DELETE", { fileName });
+    assert.equal(
+      res.status,
+      fileName === "default.txt" ? 404 : 400,
+      `delete handles a missing or unsafe fileName truthfully: ${JSON.stringify(fileName)}`
+    );
+  }
+  assert.equal(
+    (await invoke(handleWorkspaceBaseResume, "DELETE", { fileName: "fullstack.resume" })).status,
+    404,
+    "removing an already absent named variant is a 404, not a false success"
+  );
+  await writeFile(join(resumeDir, "default.txt"), "Legacy plain-text resume ".repeat(5), "utf8");
+  {
+    const res = await invoke(handleWorkspaceBaseResume, "DELETE", { fileName: "default.txt" });
+    assert.equal(res.status, 200, "the active legacy default format can still be removed");
+    assert.equal(
+      (await readdir(resumeDir)).some((name) => /^default\.(resume|txt|md|csv)$/.test(name)),
+      false,
+      "removing a default format clears every competing default representation"
+    );
   }
 
   // --- Oversize save is rejected with 413 before anything is written ---
   {
     const res = await invoke(handleWorkspaceBaseResume, "POST", {
-      fileName: "base-resume.txt",
+      fileName: "default.txt",
       text: "x".repeat(200_001)
     });
     assert.equal(res.status, 413, "an over-cap base-resume save is rejected with 413");
     assert.equal(
-      (await readdir(locations.workspaceDir)).includes("base-resume.txt"),
+      (await readdir(resumeDir)).includes("default.txt"),
       false,
       "the rejected oversize save wrote nothing"
     );
@@ -176,7 +229,7 @@ try {
     assert.equal(res.status, 400, "restore rejects a malformed JSON body");
   }
   const beforeDir = (await readdir(locations.workspaceDir)).sort();
-  const beforeTrash = (await readdir(join(locations.workspaceDir, ".trash"))).sort();
+  const beforeTrash = (await readdir(join(resumeDir, ".trash"))).sort();
   for (const badKey of ["../evil", "foo/bar", "", "not-a-matching-key", "2026__unrelated.resume"]) {
     assert.equal(
       (await invoke(handleRestoreBaseResume, "POST", { key: badKey })).status,
@@ -190,19 +243,19 @@ try {
     "a rejected restore leaves the workspace directory unchanged"
   );
   assert.deepEqual(
-    (await readdir(join(locations.workspaceDir, ".trash"))).sort(),
+    (await readdir(join(resumeDir, ".trash"))).sort(),
     beforeTrash,
     "a rejected restore leaves .trash unchanged"
   );
 
-  const restoreKey = "2026-07-21T09-08-07-000Z__base-resume.resume";
-  await writeFile(join(locations.workspaceDir, ".trash", restoreKey), starter, "utf8");
+  const restoreKey = "2026-07-21T09-08-07-000Z__default.resume";
+  await writeFile(join(resumeDir, ".trash", restoreKey), starter, "utf8");
   {
     const res = await invoke(handleRestoreBaseResume, "POST", { key: restoreKey });
     assert.equal(res.status, 200, "a valid history key restores");
     assert.equal(JSON.parse(res.body).restored, true, "the restore reports success");
     assert.equal(
-      await readFile(join(locations.workspaceDir, "base-resume.resume"), "utf8"),
+      await readFile(join(resumeDir, "default.resume"), "utf8"),
       starter,
       "the restored base resume carries the archived bytes"
     );

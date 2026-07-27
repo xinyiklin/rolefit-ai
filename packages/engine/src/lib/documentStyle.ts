@@ -1,6 +1,7 @@
 import {
   PAGE_MARGIN_BOUNDS_PT,
   PAGE_MARGIN_PRESETS_PT,
+  pageMarginsForValues,
   pageMarginValuesFor,
   type PageMargins
 } from "./pageMargins.ts";
@@ -44,7 +45,6 @@ export type DocumentStyle = {
   bodyAlign: BodyAlign;
   headingAlign: HeaderAlign;
   nameSize: NameSize;
-  pageMargins: PageMargins;
   pageMarginTopPt: number;
   pageMarginRightPt: number;
   pageMarginBottomPt: number;
@@ -53,6 +53,9 @@ export type DocumentStyle = {
 
 // User-adjustable typography and page layout for the browser typesetting engine.
 export type DocStyle = DocumentStyle & {
+  // Derived editor state only. Portable files persist the four physical margin
+  // values, so renaming or removing a preset cannot change document meaning.
+  pageMargins: PageMargins;
   // Page zoom, Google-Docs style: 1 (= "100%") is the comfortable default page
   // (75% of the pane); width and font scale by the same factor.
   zoom: number;
@@ -143,11 +146,11 @@ export const DOC_STYLE_DEFAULTS: DocStyle = {
   bodyAlign: "left",
   headingAlign: "left",
   nameSize: "huge",
-  pageMargins: "normal",
-  pageMarginTopPt: PAGE_MARGIN_PRESETS_PT.normal,
-  pageMarginRightPt: PAGE_MARGIN_PRESETS_PT.normal,
-  pageMarginBottomPt: PAGE_MARGIN_PRESETS_PT.normal,
-  pageMarginLeftPt: PAGE_MARGIN_PRESETS_PT.normal
+  pageMargins: "narrow",
+  pageMarginTopPt: PAGE_MARGIN_PRESETS_PT.narrow,
+  pageMarginRightPt: PAGE_MARGIN_PRESETS_PT.narrow,
+  pageMarginBottomPt: PAGE_MARGIN_PRESETS_PT.narrow,
+  pageMarginLeftPt: PAGE_MARGIN_PRESETS_PT.narrow
 };
 
 export function toDocumentStyle(style: DocStyle): DocumentStyle {
@@ -175,7 +178,6 @@ export function toDocumentStyle(style: DocStyle): DocumentStyle {
     bodyAlign: style.bodyAlign,
     headingAlign: style.headingAlign,
     nameSize: style.nameSize,
-    pageMargins: style.pageMargins,
     pageMarginTopPt: style.pageMarginTopPt,
     pageMarginRightPt: style.pageMarginRightPt,
     pageMarginBottomPt: style.pageMarginBottomPt,
@@ -211,6 +213,7 @@ export const TEXT_STYLE_DEFAULTS: DocStyleFields = {
 };
 
 export type DocSpacingKey =
+  | "lineHeight"
   | "nameContactGapPt"
   | "contactGapPt"
   | "headerSectionGapPt"
@@ -223,6 +226,7 @@ export type DocSpacingKey =
   | "bulletGapPt";
 
 export const DOC_SPACING_KEYS: DocSpacingKey[] = [
+  "lineHeight",
   "nameContactGapPt",
   "contactGapPt",
   "headerSectionGapPt",
@@ -241,6 +245,7 @@ export const DOC_SPACING_PRESETS = {
   compact: {
     label: "Compact",
     values: {
+      lineHeight: 1.08,
       nameContactGapPt: nameContactGapToPt(0.02),
       contactGapPt: contactGapToPt(1.6),
       headerSectionGapPt: headerSectionGapToPt(0.82),
@@ -256,6 +261,7 @@ export const DOC_SPACING_PRESETS = {
   balanced: {
     label: "Balanced",
     values: {
+      lineHeight: DOC_STYLE_DEFAULTS.lineHeight,
       nameContactGapPt: DOC_STYLE_DEFAULTS.nameContactGapPt,
       contactGapPt: DOC_STYLE_DEFAULTS.contactGapPt,
       headerSectionGapPt: DOC_STYLE_DEFAULTS.headerSectionGapPt,
@@ -271,6 +277,7 @@ export const DOC_SPACING_PRESETS = {
   spacious: {
     label: "Spacious",
     values: {
+      lineHeight: 1.3,
       nameContactGapPt: 1.4,
       contactGapPt: 20,
       headerSectionGapPt: 11,
@@ -328,11 +335,17 @@ const coerceDivider = (value: unknown): string => {
 
 export function coerceDocStyle(raw: unknown): DocStyle {
   const r = (raw ?? {}) as Record<string, unknown>;
-  const pageMargins: PageMargins =
-    r.pageMargins === "narrow" || r.pageMargins === "wide" || r.pageMargins === "custom"
+  const legacyPageMargins: PageMargins =
+    r.pageMargins === "narrow" || r.pageMargins === "custom"
       ? r.pageMargins
-      : DOC_STYLE_DEFAULTS.pageMargins;
-  const fallbackMargins = pageMarginValuesFor(pageMargins);
+      : "normal";
+  const fallbackMargins = pageMarginValuesFor(legacyPageMargins);
+  const physicalMargins = {
+    top: clampStyleNumber("pageMarginTopPt", r.pageMarginTopPt, fallbackMargins.top),
+    right: clampStyleNumber("pageMarginRightPt", r.pageMarginRightPt, fallbackMargins.right),
+    bottom: clampStyleNumber("pageMarginBottomPt", r.pageMarginBottomPt, fallbackMargins.bottom),
+    left: clampStyleNumber("pageMarginLeftPt", r.pageMarginLeftPt, fallbackMargins.left)
+  };
   return {
     zoom: clampStyleNumber("zoom", r.zoom, DOC_STYLE_DEFAULTS.zoom),
     spellCheck: typeof r.spellCheck === "boolean" ? r.spellCheck : DOC_STYLE_DEFAULTS.spellCheck,
@@ -383,16 +396,15 @@ export function coerceDocStyle(raw: unknown): DocStyle {
     headingAlign:
       r.headingAlign === "center" || r.headingAlign === "right" ? r.headingAlign : DOC_STYLE_DEFAULTS.headingAlign,
     nameSize: r.nameSize === "large" || r.nameSize === "xlarge" ? r.nameSize : DOC_STYLE_DEFAULTS.nameSize,
-    pageMargins,
-    pageMarginTopPt: clampStyleNumber("pageMarginTopPt", r.pageMarginTopPt, fallbackMargins.top),
-    pageMarginRightPt: clampStyleNumber("pageMarginRightPt", r.pageMarginRightPt, fallbackMargins.right),
-    pageMarginBottomPt: clampStyleNumber("pageMarginBottomPt", r.pageMarginBottomPt, fallbackMargins.bottom),
-    pageMarginLeftPt: clampStyleNumber("pageMarginLeftPt", r.pageMarginLeftPt, fallbackMargins.left)
+    pageMargins: pageMarginsForValues(physicalMargins),
+    pageMarginTopPt: physicalMargins.top,
+    pageMarginRightPt: physicalMargins.right,
+    pageMarginBottomPt: physicalMargins.bottom,
+    pageMarginLeftPt: physicalMargins.left
   };
 }
 
-// The ten point-gap fields that make up a spacing preset. Line height is an
-// independent text-flow control and is deliberately not bundled into presets.
+// Line height plus the ten point-gap fields that make up a spacing preset.
 export function pickDocSpacing(style: DocStyle): DocSpacingPreset {
   const preset = {} as DocSpacingPreset;
   for (const key of DOC_SPACING_KEYS) preset[key] = style[key];

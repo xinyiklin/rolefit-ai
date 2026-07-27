@@ -1,14 +1,8 @@
-// Base-resume workspace subsystem: discovers, loads, saves, trashes, and restores
-// the root-level structured (.resume) / plain-text base resumes under
-// job-search-workspace/. Split out of server.ts; the four /api/workspace* route
-// handlers plus the file readers/writers they share live here. JSON I/O and HTTP
-// helpers are imported directly, matching the server/ai/* module style.
-//
-// Browser-mode callers retain the process.cwd() defaults, while embedded runtimes
-// can pass explicit read-only app and writable workspace locations.
+// Resume imports and starter fallback stay separate from strict cover-letter
+// storage; embedded runtimes pass explicit app and workspace roots.
 
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { mkdir, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
+import { access, mkdir, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
 import { extname, join } from "node:path";
 import { parseResumeFile } from "@typeset/engine/lib/resumeFile.ts";
 import { readBody, sendJson } from "./http.ts";
@@ -32,18 +26,18 @@ export type WorkspaceLocations = {
 };
 
 const defaultAppRoot = process.cwd();
-export const jobWorkspaceDir = join(defaultAppRoot, "job-search-workspace");
+export const jobWorkspaceDir = join(defaultAppRoot, "workspace");
 const defaultWorkspaceLocations: WorkspaceLocations = {
   appRoot: defaultAppRoot,
   workspaceDir: jobWorkspaceDir
 };
 const baseResumeCandidates = [
-  "base-resume.resume",
-  "base-resume.txt",
-  "base-resume.md",
-  "base-resume.csv"
+  "default.resume",
+  "default.txt",
+  "default.md",
+  "default.csv"
 ];
-const baseResumeVariantPattern = /^base-resume(?:-[A-Za-z0-9][A-Za-z0-9_-]*)?\.resume$/;
+const baseResumeVariantPattern = /^[A-Za-z0-9][A-Za-z0-9_-]*\.resume$/;
 const MAX_BASE_RESUME_BYTES = 200_000;
 
 export class WorkspaceStorageError extends Error {
@@ -117,8 +111,84 @@ export async function atomicWriteWorkspaceFile(filePath: string, data: string | 
 }
 
 export async function ensureJobWorkspace(workspaceDir = jobWorkspaceDir): Promise<void> {
-  await mkdir(workspaceDir, { recursive: true });
+  await Promise.all([
+    mkdir(workspaceDir, { recursive: true }),
+    mkdir(join(workspaceDir, "resumes"), { recursive: true }),
+    mkdir(join(workspaceDir, "cover-letters"), { recursive: true })
+  ]);
+  await migrateLegacyDocumentLayout(workspaceDir);
 }
+
+async function moveWhenTargetIsFree(source: string, target: string): Promise<void> {
+  try {
+    await access(target);
+    return;
+  } catch (error) {
+    if (!isMissingFile(error)) throw error;
+  }
+  try {
+    await rename(source, target);
+  } catch (error) {
+    if (!isMissingFile(error)) throw error;
+  }
+}
+
+// Migrate only recognized legacy document names and never overwrite destinations.
+async function migrateLegacyDocumentLayout(workspaceDir: string): Promise<void> {
+  const resumeDir = join(workspaceDir, "resumes");
+  const coverDir = join(workspaceDir, "cover-letters");
+  const entries = await readdir(workspaceDir).catch((error) => {
+    if (isMissingFile(error)) return [] as string[];
+    throw error;
+  });
+  for (const name of entries) {
+    const resume = name.match(/^base-resume(?:-([A-Za-z0-9][A-Za-z0-9_-]*))?\.(resume|txt|md|csv)$/);
+    if (resume) {
+      await moveWhenTargetIsFree(
+        join(workspaceDir, name),
+        join(resumeDir, `${resume[1] || "default"}.${resume[2]}`)
+      );
+      continue;
+    }
+    const cover = name.match(/^cover-letter(?:-([A-Za-z0-9][A-Za-z0-9_-]*))?\.cover$/);
+    if (cover) {
+      await moveWhenTargetIsFree(
+        join(workspaceDir, name),
+        join(coverDir, `${cover[1] || "default"}.cover`)
+      );
+    }
+  }
+
+  const legacyTrash = join(workspaceDir, ".trash");
+  const history = await readdir(legacyTrash).catch((error) => {
+    if (isMissingFile(error)) return [] as string[];
+    throw error;
+  });
+  for (const key of history) {
+    const resume = key.match(/^(.+?)__base-resume(?:-([A-Za-z0-9][A-Za-z0-9_-]*))?\.(resume|txt|md|csv)$/);
+    const cover = key.match(/^(.+?)__cover-letter(?:-([A-Za-z0-9][A-Za-z0-9_-]*))?\.cover$/);
+    if (resume) {
+      const targetDir = join(resumeDir, ".trash");
+      await mkdir(targetDir, { recursive: true });
+      await moveWhenTargetIsFree(
+        join(legacyTrash, key),
+        join(targetDir, `${resume[1]}__${resume[2] || "default"}.${resume[3]}`)
+      );
+    } else if (cover) {
+      const targetDir = join(coverDir, ".trash");
+      await mkdir(targetDir, { recursive: true });
+      await moveWhenTargetIsFree(
+        join(legacyTrash, key),
+        join(targetDir, `${cover[1]}__${cover[2] || "default"}.cover`)
+      );
+    }
+  }
+}
+
+export const resumeWorkspaceDir = (locations: WorkspaceLocations): string =>
+  join(locations.workspaceDir, "resumes");
+export const coverLetterWorkspaceDir = (locations: WorkspaceLocations): string =>
+  join(locations.workspaceDir, "cover-letters");
 
 export async function readWorkspaceFiles(locations: WorkspaceLocations): Promise<string[]> {
   try {
@@ -142,13 +212,21 @@ function assertBaseResumeFileName(fileName: unknown): string {
   return name;
 }
 
+function assertRemovableBaseResumeFileName(fileName: unknown): string {
+  const name = String(fileName ?? "").trim();
+  return baseResumeCandidates.includes(name)
+    ? name
+    : assertBaseResumeFileName(name);
+}
+
 function baseResumeLabel(fileName: string): string {
   const base = fileName.replace(/\.(resume|txt|md|csv)$/i, "");
-  if (base === "base-resume") return "Default";
+  if (base === "default") return "Default";
   const friendlyWords = new Map([
     ["ai", "AI"],
     ["api", "API"],
     ["ats", "ATS"],
+    ["fde", "FDE"],
     ["llm", "LLM"],
     ["sde", "SDE"],
     ["swe", "SWE"],
@@ -156,7 +234,6 @@ function baseResumeLabel(fileName: string): string {
     ["ux", "UX"]
   ]);
   return base
-    .replace(/^base-resume-/, "")
     .split(/[-_]+/)
     .filter(Boolean)
     .map((part) => friendlyWords.get(part.toLowerCase()) ?? part.charAt(0).toUpperCase() + part.slice(1))
@@ -176,7 +253,7 @@ export async function readWorkspaceBaseResume(
 
   const uniqueCandidates = [...new Set(candidates)];
   for (const fileName of uniqueCandidates) {
-    const filePath = join(locations.workspaceDir, fileName);
+    const filePath = join(resumeWorkspaceDir(locations), fileName);
     try {
       const data = await readFile(filePath);
       // Never truncate a structured file: validate the complete bytes before
@@ -217,7 +294,10 @@ async function readBundledStarterResume(
 }
 
 async function readBaseResumeOptions(locations: WorkspaceLocations): Promise<{ fileName: string; label: string; kind: string }[]> {
-  const files = await readWorkspaceFiles(locations);
+  const files = await readdir(resumeWorkspaceDir(locations)).catch((error) => {
+    if (isMissingFile(error)) return [] as string[];
+    throw error;
+  });
   return files
     .filter((name) => baseResumeVariantPattern.test(name))
     .map((fileName) => ({
@@ -226,8 +306,8 @@ async function readBaseResumeOptions(locations: WorkspaceLocations): Promise<{ f
       kind: "resume"
     }))
     .sort((a, b) => {
-      if (a.fileName === "base-resume.resume") return -1;
-      if (b.fileName === "base-resume.resume") return 1;
+      if (a.fileName === "default.resume") return -1;
+      if (b.fileName === "default.resume") return 1;
       return a.label.localeCompare(b.label);
     });
 }
@@ -235,15 +315,15 @@ async function readBaseResumeOptions(locations: WorkspaceLocations): Promise<{ f
 // Clear the app-managed default base resume, but never hard-delete: move every
 // known default format into the active workspace's .trash/ directory with a
 // timestamp so a removed or replaced base resume is always recoverable. Named
-// variants such as base-resume-fullstack.resume stay in place.
+// variants such as fullstack.resume stay in place.
 async function clearBaseResumeFiles(locations: WorkspaceLocations): Promise<void> {
-  const trashDir = join(locations.workspaceDir, ".trash");
+  const trashDir = join(resumeWorkspaceDir(locations), ".trash");
   await mkdir(trashDir, { recursive: true });
   const stamp = nextTrashStamp();
   await Promise.all(
     baseResumeCandidates.map(async (name) => {
       try {
-        await rename(join(locations.workspaceDir, name), join(trashDir, `${stamp}__${name}`));
+        await rename(join(resumeWorkspaceDir(locations), name), join(trashDir, `${stamp}__${name}`));
       } catch (error) {
         if ((error as NodeJS.ErrnoException)?.code !== "ENOENT") throw error;
       }
@@ -253,11 +333,11 @@ async function clearBaseResumeFiles(locations: WorkspaceLocations): Promise<void
 
 // Back up a single base-resume file (including named variants) to .trash/.
 async function trashBaseFile(name: string, locations: WorkspaceLocations): Promise<void> {
-  const trashDir = join(locations.workspaceDir, ".trash");
+  const trashDir = join(resumeWorkspaceDir(locations), ".trash");
   await mkdir(trashDir, { recursive: true });
   const stamp = nextTrashStamp();
   try {
-    await rename(join(locations.workspaceDir, name), join(trashDir, `${stamp}__${name}`));
+    await rename(join(resumeWorkspaceDir(locations), name), join(trashDir, `${stamp}__${name}`));
   } catch (error) {
     if ((error as NodeJS.ErrnoException)?.code !== "ENOENT") throw error;
   }
@@ -274,10 +354,10 @@ type HistoryGroup = { variant: string; label: string; entries: HistoryEntry[] };
 // `perVariant` most recent entries (default 3); older backups stay in .trash and
 // remain restorable by hand — this is a display cap, not a destructive prune.
 // The variant identity is the file stem (extension-agnostic) so a Default whose
-// history spans base-resume.resume and base-resume.txt consolidates into one group.
-// Matches both default (base-resume.resume) and named variants (base-resume-fullstack.resume).
+// history spans default.resume and default.txt consolidates into one group.
+// Matches both default.resume and named variants such as fullstack.resume.
 async function readBaseResumeHistory(locations: WorkspaceLocations, perVariant = 3): Promise<HistoryGroup[]> {
-  const trashDir = join(locations.workspaceDir, ".trash");
+  const trashDir = join(resumeWorkspaceDir(locations), ".trash");
   let entries: string[];
   try {
     entries = await readdir(trashDir);
@@ -286,12 +366,12 @@ async function readBaseResumeHistory(locations: WorkspaceLocations, perVariant =
     throw new WorkspaceStorageError();
   }
   // Matches: 2026-06-10T16-30-45-123Z__base-resume[-variant].(resume|txt|md|csv)
-  const baseResumePattern = /^(.+?)__(base-resume(?:-[A-Za-z0-9][A-Za-z0-9_-]*)?)\.(resume|txt|md|csv)$/;
+  const baseResumePattern = /^(.+?)__([A-Za-z0-9][A-Za-z0-9_-]*)\.(resume|txt|md|csv)$/;
   const matched = (entries
     .map((name): HistoryMatch | null => {
       const m = name.match(baseResumePattern);
       if (!m) return null;
-      const stem = m[2]; // e.g. "base-resume" or "base-resume-frontend"
+      const stem = m[2]; // e.g. "default" or "frontend"
       const originalName = `${stem}.${m[3]}`;
       // Reconstruct a rough ISO date for display; the raw stamp is authoritative.
       const date = new Date(m[1].replace(/T(\d{2})-(\d{2})-(\d{2})-(\d{3})Z/, "T$1:$2:$3.$4Z"));
@@ -319,8 +399,8 @@ async function readBaseResumeHistory(locations: WorkspaceLocations, perVariant =
 
   // Default variant first, then alphabetical by label — mirrors readBaseResumeOptions.
   return [...groups.values()].sort((a, b) => {
-    if (a.variant === "base-resume") return -1;
-    if (b.variant === "base-resume") return 1;
+    if (a.variant === "default") return -1;
+    if (b.variant === "default") return 1;
     return a.label.localeCompare(b.label);
   });
 }
@@ -404,19 +484,34 @@ export async function handleWorkspaceBaseResume(
 ): Promise<void> {
   if (req.method === "DELETE") {
     try {
+      const body = JSON.parse(await readBody(req, 1_000));
+      const fileName = assertRemovableBaseResumeFileName(body.fileName);
       const snapshot = await withWorkspaceLock(async () => {
         await ensureJobWorkspace(locations.workspaceDir);
-        await clearBaseResumeFiles(locations);
-        return workspaceSnapshot(locations, { exists: false });
+        try {
+          await access(join(resumeWorkspaceDir(locations), fileName));
+        } catch (error) {
+          if (isMissingFile(error)) return null;
+          throw error;
+        }
+        if (baseResumeCandidates.includes(fileName)) await clearBaseResumeFiles(locations);
+        else await trashBaseFile(fileName, locations);
+        return workspaceSnapshot(locations);
       });
+      if (!snapshot) {
+        sendJson(res, 404, { error: "Base resume not found." });
+        return;
+      }
       sendJson(res, 200, {
         removed: true,
         ...snapshot
       });
     } catch (error) {
       if (restoreConflictHandled(error, res)) return;
-      sendJson(res, 500, {
-        error: error instanceof WorkspaceStorageError ? error.message : "Base resume removal failed."
+      sendJson(res, error instanceof WorkspaceStorageError ? 500 : 400, {
+        error: error instanceof WorkspaceStorageError
+          ? error.message
+          : error instanceof Error ? error.message : "Base resume removal failed."
       });
     }
     return;
@@ -451,11 +546,11 @@ export async function handleWorkspaceBaseResume(
       return;
     }
 
-    // Preserve active workspace .resume variants in place. Arbitrary uploaded
-    // .resume names still normalize to the default base-resume.resume.
-    let targetName = "base-resume.txt";
+    // Preserve managed workspace .resume variant names. Uploaded .resume names
+    // that fail the guard normalize to default.resume.
+    let targetName = "default.txt";
     if (isResume) {
-      targetName = baseResumeVariantPattern.test(fileName) ? assertBaseResumeFileName(fileName) : "base-resume.resume";
+      targetName = baseResumeVariantPattern.test(fileName) ? assertBaseResumeFileName(fileName) : "default.resume";
       try {
         parseResumeFile(text);
       } catch {
@@ -465,13 +560,13 @@ export async function handleWorkspaceBaseResume(
     }
     const snapshot = await withWorkspaceLock(async () => {
       await ensureJobWorkspace(locations.workspaceDir);
-      if (targetName === "base-resume.resume" || !isResume) {
+      if (targetName === "default.resume" || !isResume) {
         await clearBaseResumeFiles(locations);
       } else {
         // Named variant: back it up before overwriting so it appears in version history.
         await trashBaseFile(targetName, locations);
       }
-      await atomicWriteWorkspaceFile(join(locations.workspaceDir, targetName), text);
+      await atomicWriteWorkspaceFile(join(resumeWorkspaceDir(locations), targetName), text);
       return workspaceSnapshot(locations, {
         exists: true,
         fileName: targetName,
@@ -508,17 +603,17 @@ export async function handleRestoreBaseResume(
       sendJson(res, 400, { error: "Invalid history key." });
       return;
     }
-    const trashDir = join(locations.workspaceDir, ".trash");
+    const trashDir = join(resumeWorkspaceDir(locations), ".trash");
     const sourcePath = join(trashDir, key);
 
     // Extract the original filename from the key (after the stamp prefix).
-    const keyMatch = key.match(/^.+?__(base-resume(?:-[A-Za-z0-9][A-Za-z0-9_-]*)?\.(?:resume|txt|md|csv))$/);
+    const keyMatch = key.match(/^.+?__([A-Za-z0-9][A-Za-z0-9_-]*\.(?:resume|txt|md|csv))$/);
     if (!keyMatch) {
       sendJson(res, 400, { error: "Invalid history key." });
       return;
     }
     const targetName = keyMatch[1];
-    const isNamedVariant = baseResumeVariantPattern.test(targetName) && targetName !== "base-resume.resume";
+    const isNamedVariant = baseResumeVariantPattern.test(targetName) && targetName !== "default.resume";
 
     const snapshot = await withWorkspaceLock(async () => {
       await ensureJobWorkspace(locations.workspaceDir);
@@ -530,7 +625,7 @@ export async function handleRestoreBaseResume(
       } else {
         await clearBaseResumeFiles(locations);
       }
-      await atomicWriteWorkspaceFile(join(locations.workspaceDir, targetName), data);
+      await atomicWriteWorkspaceFile(join(resumeWorkspaceDir(locations), targetName), data);
       return workspaceSnapshot(locations, await readWorkspaceBaseResume(targetName, locations));
     });
 

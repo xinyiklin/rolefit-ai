@@ -278,9 +278,10 @@ owns:
   verdict come only from AI Review in the app; its output still requires human
   review.
 - workspace file storage under the host-supplied `workspaceDir` (auto-load,
-  upload, save, reload; source development defaults to `job-search-workspace/`,
+  upload, save, reload; source development defaults to `workspace/`,
   while packaged runs use `app.getPath("userData")/workspace/`).
-  `server/workspace.ts` also owns the base-resume version history in `.trash/`.
+  Resume and cover-letter histories live beside their variants under
+  `resumes/.trash/` and `cover-letters/.trash/`.
 
 Deterministic keyword and mechanical resume analysis live in focused client
 helpers under `src/resume/` and `src/resumeEngine.ts`. They may describe text or
@@ -604,9 +605,10 @@ In the response:
   into that model; PDF-only sources must be pasted as extracted text. There is no
   DOCX or LaTeX import/export.
 - `.resume` is the portable save format for resume data: the strict shared
-  Typeset v1 envelope
-  (`{ format: "typeset-resume", schemaVersion: 1, document, style }`) written and
-  read entirely client-side (like PDF export — no server route). The
+  Typeset v2 envelope
+  (`{ format: "typeset-resume", schemaVersion: 2, document, style }`) written and
+  read entirely client-side (like PDF export — no server route). Version 1
+  remains readable and is upgraded on the next save. The
   `@typeset/engine` codec owns exact-key validation, strips session ids at the
   file boundary, restores fresh ids on load, and includes persistent document
   style while excluding view-only zoom and spell-check preferences.
@@ -623,7 +625,7 @@ In the response:
   layout and font-parity suites.
 - Keep the host-supplied runtime workspace the canonical location for personal
   resumes, application trackers, exported drafts, and job-specific files.
-  Source development uses `job-search-workspace/`, which is gitignored except
+  Source development uses `workspace/`, which is gitignored except
   for its `README.md`; packaged runs use `app.getPath("userData")/workspace/`.
 - Serialize tracker/base-resume mutations and publish them atomically so
   concurrent local requests cannot expose a partial file. Tracker writes name
@@ -633,11 +635,11 @@ In the response:
   application JSON, and malformed strict `.resume` data fail closed with a
   user-safe error; never silently replace them with an empty store or guessed
   document.
-- On startup, the server discovers root-level base resumes named
-  `base-resume.resume` or `base-resume-*.resume`, loading `base-resume.resume`
-  first when present, then named variants; when none exist it seeds the bundled
-  `server/starter.resume`. Legacy `.txt`, `.md`, and `.csv` base resumes remain
-  readable as fallback plain text for old local workspaces.
+- On startup, the server discovers `resumes/<variant>.resume`, loading
+  `resumes/default.resume` first when present, then named variants. It migrates
+  recognized legacy root-level documents without overwriting a destination,
+  and falls back to the bundled `server/starter.resume` when no base exists.
+  Legacy `.txt`, `.md`, and `.csv` base resumes remain readable as plain text.
 
 ## Deployment And Infrastructure
 

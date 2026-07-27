@@ -45,7 +45,10 @@ export function toTypesetSchema(data: ResumeData): TypesetSchema {
         titleRight: section.type === "summary" ? "" : item.titleRight.trimStart(),
         subtitleLeft: section.type === "summary" ? "" : item.subtitleLeft.trimStart(),
         subtitleRight: section.type === "summary" ? "" : item.subtitleRight.trimStart(),
-        bullets: item.bullets.map((bullet) => bullet.text.trimStart()),
+        // Prose preserves authored indentation; ordinary resume bullets trim marker space.
+        bullets: item.bullets.map((bullet) =>
+          section.type === "summary" ? bullet.text : bullet.text.trimStart()
+        ),
         bulletIds: item.bullets.map((bullet) => bullet.id)
       }))
     }))

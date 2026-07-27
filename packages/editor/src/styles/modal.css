@@ -92,6 +92,109 @@
   padding: var(--s4);
 }
 
+.custom-spacing-modal {
+  display: contents;
+}
+
+.custom-spacing-modal__body {
+  display: grid;
+  gap: 24px;
+  padding-top: 20px;
+}
+
+.custom-spacing-modal__field {
+  position: relative;
+  display: block;
+}
+
+.custom-spacing-modal__field > span {
+  position: absolute;
+  z-index: 1;
+  top: -0.52em;
+  left: 10px;
+  padding: 0 5px;
+  color: var(--ink-soft);
+  background: var(--card-elev);
+  font: 570 0.73rem/1 var(--font-ui);
+}
+
+.custom-spacing-modal__field > input {
+  width: 100%;
+  height: 50px;
+  padding: 11px 14px 7px;
+  color: var(--ink-strong);
+  background: var(--card-elev);
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--r-md);
+  outline: none;
+  font: 560 1rem/1 var(--font-data);
+}
+
+.custom-spacing-modal__field > input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-veil);
+}
+
+.custom-spacing-modal__field:focus-within > span {
+  color: var(--accent-deep);
+}
+
+.custom-spacing-modal__paragraph {
+  display: grid;
+  gap: 14px;
+  padding: 0;
+  border: 0;
+}
+
+.custom-spacing-modal__paragraph > legend {
+  margin-bottom: 14px;
+  color: var(--ink-strong);
+  font: 650 0.83rem/1.2 var(--font-ui);
+}
+
+.custom-spacing-modal__pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.custom-spacing-modal__foot {
+  padding-top: 12px;
+}
+
+.custom-spacing-modal__cancel,
+.custom-spacing-modal__apply {
+  min-width: 76px;
+  min-height: 36px;
+  padding: 0 16px;
+  border-radius: 999px;
+  font: 650 0.78rem/1 var(--font-ui);
+}
+
+.custom-spacing-modal__cancel {
+  color: var(--accent-deep);
+}
+
+.custom-spacing-modal__cancel:hover,
+.custom-spacing-modal__cancel:focus-visible {
+  background: var(--accent-veil);
+}
+
+.custom-spacing-modal__apply {
+  color: var(--card-elev);
+  background: var(--accent-deep);
+}
+
+.custom-spacing-modal__apply:hover {
+  background: var(--accent);
+}
+
+.custom-spacing-modal__cancel:focus-visible,
+.custom-spacing-modal__apply:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 @media (pointer: coarse) {
   .modal__close {
     width: 40px;

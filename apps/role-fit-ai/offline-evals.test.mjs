@@ -34,7 +34,7 @@ const repoRoot = dirname(fileURLToPath(import.meta.url));
 const LIVE = new Set(["fabrication-eval.mjs", "tailor-quality-eval.mjs"]);
 
 // Directories never worth walking when hunting for `__evals__` dirs.
-const SKIP_DIRS = new Set(["node_modules", ".git", "dist", ".trash", "job-search-workspace"]);
+const SKIP_DIRS = new Set(["node_modules", ".git", "dist", ".trash", "workspace"]);
 
 // Every .mjs in an __evals__ dir is a standalone eval (there are no shared-helper
 // .mjs files), so match on extension rather than a name convention — the evals

@@ -46,5 +46,11 @@ root and RoleFit app guides first.
 - `npm run build:landing --workspace apps/role-fit-ai` must typecheck the
   landing, run the release-catalog probes, build only `dist-landing/`, and pass
   the output-boundary guard.
-- Release parsing belongs in a pure module with offline probes. Material UI
-  changes require real-browser desktop and narrow-width evidence.
+- Release parsing belongs in a pure module with offline probes.
+- **Deliberate exception to the flag-first browser-QA default:** this is the
+  public product page, so material UI changes require real-browser desktop and
+  narrow-width evidence rather than a flagged risk. Note that the QA pane is
+  paint-gated — `IntersectionObserver`, rAF, and transitions do not fire while
+  it is occluded, so scroll reveals read as permanently hidden. Force frames
+  with a real scroll or screenshot gesture, or force `.reveal-ready` and the
+  end state and inspect the wiring.

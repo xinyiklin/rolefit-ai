@@ -7,8 +7,13 @@ import { basename, dirname, isAbsolute, join, resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 import { setTimeout as delay } from "node:timers/promises";
 import {
+  connectToCompatibleDesktopServer,
+  probeCompatibleDesktopServer,
   startOrReuseDesktopServer,
+  type DesktopServerConflict,
   type DesktopServerHandle,
+  type DesktopServerIdentity,
+  type DesktopServerOptions,
   type RoleFitServerOwnership
 } from "./server-process.cjs";
 import {
@@ -52,10 +57,12 @@ import { readBoundedResponseText } from "./bounded-response.cjs";
 import { materializeRoleFitExtension } from "./extension-bundle.cjs";
 import { resolveDesktopRuntimePaths } from "./runtime-paths.cjs";
 import {
+  DesktopSitePortUnavailableError,
   createDesktopSettingsManager,
   probeLocalSitePortAvailability,
   type DesktopSettingsManager
 } from "./desktop-settings.cjs";
+import { findLoopbackListenerPid } from "./listener-process.cjs";
 
 // Preserve the existing runtime name because Electron derives the userData
 // directory from it. Packaging and window chrome use the public name RoleFit AI.
@@ -65,6 +72,8 @@ const DEFAULT_HOST = "127.0.0.1" as const;
 const PROVIDER_SNAPSHOT_REFRESH_INTERVAL_MS = 5_000;
 const WORKSPACE_ACTIVITY_TIMEOUT_MS = 1_500;
 const WORKSPACE_SMALL_RESPONSE_MAX_BYTES = 4_096;
+const ALTERNATE_PORT_SCAN_LIMIT = 512;
+const LISTENER_SHUTDOWN_TIMEOUT_MS = 5_000;
 
 type DesktopMode = "development" | "production";
 
@@ -299,7 +308,8 @@ const EMPTY_WORKSPACE_STATS: WorkspaceStats = Object.freeze({
 async function readWorkspaceStats(workspaceDir: string): Promise<WorkspaceStats> {
   try {
     const rootEntries = await safeWorkspaceDirents(workspaceDir);
-    const hasBaseResume = rootEntries.some((entry) => entry.isFile() &&
+    const resumeEntries = await safeWorkspaceDirents(join(workspaceDir, "resumes"));
+    const hasBaseResume = resumeEntries.some((entry) => entry.isFile() &&
       (ROLEFIT_WORKSPACE_BASE_RESUME_RE.test(entry.name) ||
         ROLEFIT_WORKSPACE_LEGACY_BASE_RESUME_RE.test(entry.name)));
     const applicationCount = rootEntries.some((entry) => entry.isFile() && entry.name === "applications.json")
@@ -1279,6 +1289,181 @@ function failStartup(error: unknown): void {
   void shutdownAndExit(1);
 }
 
+function alternatePortCandidate(port: number, offset: number): number {
+  const firstUnprivilegedPort = 1_024;
+  const availablePortCount = 65_535 - firstUnprivilegedPort + 1;
+  const normalizedStart = Math.max(port, firstUnprivilegedPort);
+  return firstUnprivilegedPort +
+    ((normalizedStart - firstUnprivilegedPort + offset) % availablePortCount);
+}
+
+async function persistNextAvailablePort(blockedPort: number): Promise<number> {
+  if (!desktopSettingsManager || !localSiteSettings) {
+    throw new Error("Local site settings are unavailable.");
+  }
+  if (localSiteSettings.locked) {
+    throw new Error(
+      "ROLEFIT_DESKTOP_PORT locks this port. Remove the override before choosing another port."
+    );
+  }
+  for (let offset = 1; offset <= ALTERNATE_PORT_SCAN_LIMIT; offset += 1) {
+    const candidate = alternatePortCandidate(blockedPort, offset);
+    try {
+      localSiteSettings = await desktopSettingsManager.saveLocalSitePort(candidate);
+      return candidate;
+    } catch (error) {
+      if (error instanceof DesktopSitePortUnavailableError) continue;
+      throw error;
+    }
+  }
+  throw new Error("RoleFit could not find an available local port nearby.");
+}
+
+async function waitForPortToFree(port: number): Promise<boolean> {
+  const deadline = Date.now() + LISTENER_SHUTDOWN_TIMEOUT_MS;
+  while (Date.now() < deadline) {
+    if (await probeLocalSitePortAvailability(port)) return true;
+    await delay(100);
+  }
+  return probeLocalSitePortAvailability(port);
+}
+
+async function gracefullyStopCompatibleListener(
+  options: DesktopServerIdentity
+): Promise<boolean> {
+  if (process.platform !== "darwin" && process.platform !== "linux") return false;
+  const listenerPid = await findLoopbackListenerPid(options.port);
+  if (!listenerPid || listenerPid === process.pid) return false;
+  // Revalidate RoleFit between PID resolutions so a replacement listener
+  // cannot inherit the user's takeover authorization.
+  if (!(await probeCompatibleDesktopServer(options))) return false;
+  if (await findLoopbackListenerPid(options.port) !== listenerPid) return false;
+  try {
+    process.kill(listenerPid, "SIGTERM");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ESRCH") {
+      return waitForPortToFree(options.port);
+    }
+    return false;
+  }
+  return waitForPortToFree(options.port);
+}
+
+async function chooseAfterTakeoverFailure(
+  conflict: DesktopServerConflict
+): Promise<"alternate" | "connect" | "quit"> {
+  const canChangePort = localSiteSettings?.locked === false;
+  const buttons = canChangePort
+    ? ["Use another port", "Connect to it", "Quit"]
+    : ["Connect to it", "Quit"];
+  const response = await dialog.showMessageBox({
+    type: "warning",
+    title: "RoleFit could not take over the port",
+    message: `RoleFit is still running on port ${conflict.port}.`,
+    detail: canChangePort
+      ? "The other server did not stop within five seconds. RoleFit did not force it to quit."
+      : "The other server did not stop within five seconds. RoleFit did not force it to quit, and ROLEFIT_DESKTOP_PORT prevents choosing another port.",
+    buttons,
+    defaultId: 0,
+    cancelId: buttons.length - 1,
+    noLink: true
+  });
+  if (canChangePort && response.response === 0) return "alternate";
+  if (response.response === (canChangePort ? 1 : 0)) return "connect";
+  return "quit";
+}
+
+async function resolveDesktopServer(
+  baseOptions: Omit<DesktopServerOptions, "port">
+): Promise<DesktopServerHandle | null> {
+  if (!localSiteSettings) throw new Error("Local site settings are unavailable.");
+  let port = localSiteSettings.localSitePort;
+  while (true) {
+    const options: DesktopServerOptions = { ...baseOptions, port };
+    const outcome = await startOrReuseDesktopServer(options);
+    if (outcome.status === "ready") return outcome.server;
+    if (process.env.ROLEFIT_DESKTOP_SMOKE === "companion") {
+      if (outcome.kind === "compatible-rolefit") {
+        return connectToCompatibleDesktopServer(outcome);
+      }
+      throw new Error(
+        `Port ${port} is already in use by a service that is not a compatible RoleFit server.`
+      );
+    }
+
+    if (outcome.kind === "foreign-service") {
+      const canChangePort = localSiteSettings.locked === false;
+      const buttons = canChangePort ? ["Use another port", "Quit"] : ["Quit"];
+      const response = await dialog.showMessageBox({
+        type: "warning",
+        title: "Local site port is in use",
+        message: `Port ${port} is in use by another application.`,
+        detail: canChangePort
+          ? ""
+          : "ROLEFIT_DESKTOP_PORT locks this port. Remove the override or stop the other application before reopening RoleFit.",
+        buttons,
+        defaultId: 0,
+        cancelId: buttons.length - 1,
+        noLink: true
+      });
+      if (!canChangePort || response.response !== 0) return null;
+      port = await persistNextAvailablePort(port);
+      continue;
+    }
+
+    const canChangePort = localSiteSettings.locked === false;
+    const canTakeOver = process.platform === "darwin" || process.platform === "linux";
+    const actions: Array<"connect" | "takeover" | "alternate"> = ["connect"];
+    if (canTakeOver) actions.push("takeover");
+    if (canChangePort) actions.push("alternate");
+    const response = await dialog.showMessageBox({
+      type: "warning",
+      title: "RoleFit is already running",
+      message: `RoleFit is already running on port ${port}.`,
+      detail: canTakeOver
+        ? "A RoleFit server started outside the companion is using this port. Extension pairing and workspace transfer need a server the companion started."
+        : "A RoleFit server started outside the companion is using this port. Connect to it or use another port; Windows cannot gracefully signal an arbitrary listener.",
+      buttons: actions.map((action) => ({
+        connect: "Connect to it",
+        takeover: "Take over the port",
+        alternate: "Use another port"
+      })[action]),
+      defaultId: 0,
+      cancelId: 0,
+      noLink: true
+    });
+    const action = actions[response.response] ?? "connect";
+    if (action === "connect") {
+      const recheck = await startOrReuseDesktopServer(options);
+      if (recheck.status === "ready") return recheck.server;
+      if (recheck.kind === "compatible-rolefit") {
+        return connectToCompatibleDesktopServer(recheck);
+      }
+      continue;
+    }
+    if (action === "alternate") {
+      port = await persistNextAvailablePort(port);
+      continue;
+    }
+
+    const recheck = await startOrReuseDesktopServer(options);
+    if (recheck.status === "ready") return recheck.server;
+    if (recheck.kind === "foreign-service") continue;
+    if (await gracefullyStopCompatibleListener(options)) continue;
+    const fallback = await chooseAfterTakeoverFailure(recheck);
+    if (fallback === "quit") return null;
+    if (fallback === "connect") {
+      const connectRecheck = await startOrReuseDesktopServer(options);
+      if (connectRecheck.status === "ready") return connectRecheck.server;
+      if (connectRecheck.kind === "compatible-rolefit") {
+        return connectToCompatibleDesktopServer(connectRecheck);
+      }
+      continue;
+    }
+    port = await persistNextAvailablePort(port);
+  }
+}
+
 async function startDesktop(): Promise<void> {
   const paths = resolveDesktopRuntimePaths({
     packaged: app.isPackaged,
@@ -1320,13 +1505,12 @@ async function startDesktop(): Promise<void> {
     extensionPairingSettings.origins.length > 0
       ? extensionPairingSettings.origins.join(",")
       : undefined;
-  const port = localSiteSettings.localSitePort;
   const extensionDirectory = await materializeRoleFitExtension({
     sourceDirectory: join(paths.appRoot, "extension"),
     userDataDirectory: app.getPath("userData")
   });
 
-  desktopServer = await startOrReuseDesktopServer({
+  desktopServer = await resolveDesktopServer({
     appRoot: paths.appRoot,
     serverEntry: paths.serverEntry,
     serverCwd: paths.serverCwd,
@@ -1334,7 +1518,6 @@ async function startDesktop(): Promise<void> {
     sourceEnvironment: desktopServerSourceEnvironment,
     mode,
     host: DEFAULT_HOST,
-    port,
     onUnexpectedExit: () => {
       if (!shuttingDown) failStartup(new Error("The RoleFit local server stopped unexpectedly."));
     },
@@ -1346,6 +1529,10 @@ async function startDesktop(): Promise<void> {
         stdio: "inherit"
       })
   });
+  if (!desktopServer) {
+    await shutdownAndExit(0);
+    return;
+  }
 
   const smokePidFile = process.env.ROLEFIT_DESKTOP_SMOKE_SERVER_PID_FILE;
   if (smokePidFile && desktopServer.pid !== undefined) {

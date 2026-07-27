@@ -7,7 +7,8 @@ Typeset and RoleFit AI.
 ## Owns
 
 - `src/lib/`: `ResumeData`, document style/typography, inline marks and links,
-  strict `.resume` and `.cover` schema v1 validation/serialization, and
+  strict `.resume` and `.cover` schema v2 validation/serialization with v1
+  read compatibility, and
   download helpers.
 - `src/typeset/`: schema adapter, measurement, line breaking, blocks,
   shared pagination, resume and plain-paragraph cover-letter composition,

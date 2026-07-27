@@ -31,6 +31,8 @@ type ResumeTabProps = {
   actions: ResumeEditorActions;
   canUndo: boolean;
   canRedo: boolean;
+  contentUndoSequence: number | null;
+  contentRedoSequence: number | null;
   dirty: boolean;
   draftAutosaveState: DraftAutosaveState;
   // True only for the first workspace check. Manual Reload actions do not
@@ -78,6 +80,8 @@ export function ResumeTab({
   actions,
   canUndo,
   canRedo,
+  contentUndoSequence,
+  contentRedoSequence,
   dirty,
   draftAutosaveState,
   isWorkspaceBootstrapping,
@@ -223,6 +227,8 @@ export function ResumeTab({
                 actions={actions}
                 canUndo={canUndo}
                 canRedo={canRedo}
+                contentUndoSequence={contentUndoSequence}
+                contentRedoSequence={contentRedoSequence}
                 docStyle={docStyle}
                 initialCaret={initialCaret}
                 onCaretExit={onCaretExit}

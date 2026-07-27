@@ -13,7 +13,9 @@ import {
 
 import { coverLetterFileName } from "@typeset/engine/lib/coverLetter.ts";
 import { DocumentToolbar } from "@typeset/editor/components/toolbar/DocumentToolbar.tsx";
+import { DocumentStructureControls } from "@typeset/editor/components/toolbar/DocumentStructureControls.tsx";
 import { FormattingToolbar } from "@typeset/editor/components/toolbar/FormattingToolbar.tsx";
+import { LineSpacingPopover } from "@typeset/editor/components/toolbar/LineSpacingPopover.tsx";
 import { PageStylePopover } from "@typeset/editor/components/toolbar/PageStylePopover.tsx";
 import { ToolbarButton } from "@typeset/editor/components/toolbar/ToolbarButton.tsx";
 import type {
@@ -26,7 +28,6 @@ import { formatHistoryDate } from "../../lib/historyDate";
 import { ExportMenu } from "../ExportRail";
 import { DocumentOpenMenu } from "../document/DocumentOpenMenu";
 import { DocumentSaveMenu } from "../document/DocumentSaveMenu";
-import { LineHeightPopover } from "./LineHeightPopover";
 
 type CoverLetterToolbarProps = {
   editor: CoverLetterEditorState;
@@ -55,7 +56,7 @@ function coverLetterVariantFileName(label: string): string {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 40);
-  return slug ? "cover-letter-" + slug + ".cover" : "";
+  return slug ? slug + ".cover" : "";
 }
 
 // Strip the .cover extension the file-name helper adds, so the rename prompt
@@ -155,13 +156,17 @@ export function CoverLetterToolbar({
               tooltip="Open a cover letter"
               icon={<FolderOpen size={16} />}
               title="Open cover letter"
-              description="Editable .cover files preserve formatting; text and Markdown open as plain drafts."
+              description={
+                editor.activeCoverLabel
+                  ? `Current variant: ${editor.activeCoverLabel}`
+                  : "No workspace variant open."
+              }
               actions={[
                 {
                   key: "starter",
                   icon: <LayoutTemplate size={15} aria-hidden="true" />,
-                  title: "Guided starter",
-                  description: "Bundled letter with prompts to fill in.",
+                  title: "Bundled starter",
+                  description: "A prompted cover letter to edit.",
                   onSelect: startStarter
                 },
                 {
@@ -180,11 +185,11 @@ export function CoverLetterToolbar({
               ]}
               saved={{
                 label: "Saved in workspace",
-                emptyNote: "No saved letters yet — Save writes one to your workspace.",
+                emptyNote: "No saved cover-letter variants yet.",
                 groups: [
                   {
                     key: "letters",
-                    label: "Letters",
+                    label: "Variants",
                     icon: <FolderOpen size={11} aria-hidden="true" />,
                     entries: editor.coverLetterOptions.map((option) => ({
                       key: option.fileName,
@@ -196,7 +201,7 @@ export function CoverLetterToolbar({
                   },
                   ...editor.coverLetterHistory.map((group) => ({
                     key: `history-${group.variant}`,
-                    label: `${group.label} — earlier versions`,
+                    label: `${group.label} earlier versions`,
                     collapsible: true,
                     defaultOpen: editor.coverLetterHistory.length === 1,
                     entries: group.entries.map((entry) => ({
@@ -347,9 +352,37 @@ export function CoverLetterToolbar({
           }
         }}
         docStyle={editor.docStyle}
+        documentStructureTools={(
+          <DocumentStructureControls
+            name={editor.data.name}
+            contact={editor.data.contact}
+            contactDivider={editor.docStyle.style.contactDivider}
+            disabled={!hasLetter}
+            onSetName={editor.actions.setName}
+            onUpdateContact={editor.actions.updateContact}
+            onAddContact={editor.actions.addContact}
+            onRemoveContact={editor.actions.removeContact}
+            onContactDividerChange={(value) => editor.docStyle.set("contactDivider", value)}
+            showSections={false}
+          />
+        )}
         documentStyleTools={(
           <>
-            <LineHeightPopover docStyle={editor.docStyle} disabled={!hasLetter} />
+            <LineSpacingPopover
+              controls={{
+                lineHeight: inlineFormat.paragraphLineHeight,
+                spaceBeforePt: inlineFormat.paragraphSpaceBeforePt,
+                spaceAfterPt: inlineFormat.paragraphSpaceAfterPt,
+                onLineHeightChange: (value) => editorRef.current?.setParagraphLineHeight(value),
+                onSpaceBeforeChange: (value) => editorRef.current?.setParagraphSpaceBefore(value),
+                onSpaceAfterChange: (value) => editorRef.current?.setParagraphSpaceAfter(value),
+                onCustomChange: ({ lineHeight, spaceBeforePt, spaceAfterPt }) =>
+                  editorRef.current?.setCustomSpacing(lineHeight, spaceBeforePt, spaceAfterPt),
+                onRequestEditorFocus: () => editorRef.current?.focusSelection(),
+                disabled: !inlineFormat.canFormatParagraph
+              }}
+              disabled={!hasLetter}
+            />
             <PageStylePopover docStyle={editor.docStyle} disabled={!hasLetter} />
           </>
         )}

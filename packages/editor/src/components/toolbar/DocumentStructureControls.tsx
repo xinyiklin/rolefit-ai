@@ -17,7 +17,8 @@ export type DocumentStructureControlsProps = {
   onAddContact: () => void;
   onRemoveContact: (index: number) => void;
   onContactDividerChange: (value: string) => void;
-  onAddSection: (type: ResumeSectionType, position: "top" | "bottom") => void;
+  onAddSection?: (type: ResumeSectionType, position: "top" | "bottom") => void;
+  showSections?: boolean;
 };
 
 // The document header (name + contacts) and "add section" controls live here, in
@@ -32,7 +33,8 @@ export function DocumentStructureControls({
   onAddContact,
   onRemoveContact,
   onContactDividerChange,
-  onAddSection
+  onAddSection,
+  showSections = true
 }: DocumentStructureControlsProps) {
   const [confirming, setConfirming] = useState<number | null>(null);
   const [position, setPosition] = useState<"top" | "bottom">("bottom");
@@ -59,7 +61,7 @@ export function DocumentStructureControls({
             {...triggerProps}
             className={open ? "is-active" : ""}
             label="Header"
-            tooltip="Edit the resume header — name and contact items"
+            tooltip="Edit the document header: name and contact items"
             icon={<UserRound size={16} />}
             showLabel
             disabled={disabled}
@@ -162,7 +164,10 @@ export function DocumentStructureControls({
                     maxLength={2}
                     value={contactDivider}
                     disabled={disabled}
-                    onChange={(event) => onContactDividerChange(event.target.value.slice(0, 2))}
+                    onChange={(event) => {
+                      const divider = event.target.value.slice(0, 2);
+                      if (divider) onContactDividerChange(divider);
+                    }}
                     aria-label="Custom contact separator, one or two characters"
                   />
                 </label>
@@ -172,7 +177,7 @@ export function DocumentStructureControls({
         )}
       </Popover>
 
-      <Popover
+      {showSections && onAddSection ? <Popover
         ariaLabel="Add section"
         align="start"
         className="structure-control"
@@ -222,7 +227,7 @@ export function DocumentStructureControls({
             ))}
           </div>
         )}
-      </Popover>
+      </Popover> : null}
     </div>
   );
 }

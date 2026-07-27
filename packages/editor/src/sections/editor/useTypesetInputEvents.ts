@@ -4,15 +4,17 @@ import {
   caretClientX,
   caretToDisplayIndex,
   contentSpansOf,
+  fieldEdgeAnchors,
   lineDivs,
   lineEdgePosition,
   lineOf,
   nearestLineByPoint,
   placeInLine,
-  positionFromPoint,
-  setCaret
+  setCaret,
+  spanEndPosition
 } from "./domSelection.ts";
 import {
+  indentDeletionRange,
   inlineFragmentForRange,
   type TypesetSelection
 } from "./inlineTextEditing.ts";
@@ -29,16 +31,14 @@ export type QueuedIntent =
   | { kind: "deleteBack" }
   | { kind: "deleteFwd" }
   | { kind: "deleteSelection" }
+  | { kind: "indent" }
+  | { kind: "outdent" }
   | { kind: "splitBullet" }
   | { kind: "toggleMark"; mark: "bold" | "italic" | "underline" }
   | { kind: "clearFormatting" }
   | { kind: "history"; direction: "undo" | "redo" };
 
-// The intent a beforeinput carries, independent of which selection it lands on.
-// Both deferral paths use it: the commit gate queues it for replay after the
-// repaint, and a selection crossing fields hands it to the host's batched edit.
-// Insert-shaped types collapse to one `insert` because every one of them
-// replaces the selection with text.
+// Normalize beforeinput so deferred and cross-field paths replay the same intent.
 function intentForInput(event: InputEvent, type: string): QueuedIntent | null {
   if (type === "insertParagraph") return { kind: "splitBullet" };
   if (type === "deleteContentBackward") return { kind: "deleteBack" };
@@ -61,12 +61,19 @@ function intentForInput(event: InputEvent, type: string): QueuedIntent | null {
 
 type TypesetInputEventsArgs = {
   hostRef: MutableRefObject<HTMLDivElement | null>;
+  structuredTabScope: "document" | "header";
   nonce: number;
   docVersion: number;
   commitPendingRef: MutableRefObject<boolean>;
   replayQueueRef: MutableRefObject<QueuedIntent[]>;
   readSelection: () => TypesetSelection | null;
   commitReplace: (selection: TypesetSelection, start: number, end: number, text: string) => void;
+  // The host measures tab width and owns the document-dependent indent ladder.
+  commitIndent: (selection: TypesetSelection, direction: "in" | "out") => void;
+  // Return false when no block indent exists so normal deletion can proceed.
+  commitParagraphOutdent: (selection: TypesetSelection) => boolean;
+  // Measured width lets deletion remove exactly the spaces one Tab authored.
+  indentWidthAt: (selection: TypesetSelection) => number;
   commitPaste: (selection: TypesetSelection, start: number, end: number, fragment: string) => void;
   onEnter: (selection: TypesetSelection) => void;
   commitMergeBullet: (selection: TypesetSelection, direction: "up" | "down") => boolean;
@@ -86,12 +93,16 @@ type TypesetInputEventsArgs = {
 
 export function useTypesetInputEvents({
   hostRef,
+  structuredTabScope,
   nonce,
   docVersion,
   commitPendingRef,
   replayQueueRef,
   readSelection,
   commitReplace,
+  commitIndent,
+  commitParagraphOutdent,
+  indentWidthAt,
   commitPaste,
   onEnter,
   commitMergeBullet,
@@ -124,10 +135,8 @@ export function useTypesetInputEvents({
       goalXRef.current = x;
       const rect = target.getBoundingClientRect();
       const clampedX = Math.min(Math.max(x, rect.left + 1), rect.right - 1);
-      let position = positionFromPoint(clampedX, rect.top + rect.height / 2);
-      if (!position || position.node.nodeType !== Node.TEXT_NODE || lineOf(position.node) !== target) {
-        position = lineEdgePosition(target, x <= rect.left + 2 ? "start" : "end");
-      }
+      // Reuse line-aware pointer placement to keep blank lines on their own row.
+      const position = placeInLine(target, clampedX);
       if (!position) return false;
       setCaret(position, extend);
       return true;
@@ -155,6 +164,28 @@ export function useTypesetInputEvents({
       } else {
         queue.push(intent);
       }
+    };
+    // Keyboard stops follow model fields, skipping structural headings and painted fragments.
+    const isHeaderField = (key: string): boolean =>
+      key === "name" || key.startsWith("contact|");
+    const tabStopFields = (): HTMLElement[] => {
+      const seen = new Set<string>();
+      const stops: HTMLElement[] = [];
+      for (const span of host.querySelectorAll<HTMLElement>("[data-tsdf]:not([data-tsdm])")) {
+        if (span.firstChild?.nodeType !== Node.TEXT_NODE) continue;
+        const key = span.getAttribute("data-tsdf");
+        if (
+          !key ||
+          seen.has(key) ||
+          key.startsWith("heading|") ||
+          (structuredTabScope === "header" && !isHeaderField(key))
+        ) {
+          continue;
+        }
+        seen.add(key);
+        stops.push(span);
+      }
+      return stops;
     };
 
     const onBeforeInput = (event: InputEvent) => {
@@ -221,13 +252,31 @@ export function useTypesetInputEvents({
       if (type.startsWith("delete")) {
         const backward = type.endsWith("Backward");
         if (selection.dStart === selection.dEnd) {
-          if (backward && selection.dStart === 0 && commitMergeBullet(selection, "up")) return;
+          if (backward && selection.dStart === 0) {
+            // A paragraph indent is the one thing Tab adds that no other
+            // keystroke removes, so it comes off before the paragraph merges.
+            if (commitParagraphOutdent(selection)) return;
+            if (commitMergeBullet(selection, "up")) return;
+          }
           if (
             !backward &&
             selection.dStart === selection.map.chars.length &&
             commitMergeBullet(selection, "down")
           ) {
             return;
+          }
+          // Only plain character deletion collapses authored indentation as one stop.
+          if (type === "deleteContentBackward" || type === "deleteContentForward") {
+            const indent = indentDeletionRange(
+              selection.map.display,
+              selection.dStart,
+              backward ? "backward" : "forward",
+              indentWidthAt(selection)
+            );
+            if (indent) {
+              commitReplace(selection, indent.start, indent.end, "");
+              return;
+            }
           }
           const ranges = event.getTargetRanges?.() ?? [];
           let start = backward ? selection.dStart - 1 : selection.dStart;
@@ -346,22 +395,127 @@ export function useTypesetInputEvents({
         else commitHistory("redo");
         return;
       }
-      if (event.key === "Tab" && !event.shiftKey) {
+      if (event.key === "Tab") {
         const selection = readSelection();
+        // A resume is entirely structured; a cover letter is structured only in
+        // its optional header, and prose everywhere else.
+        const prose =
+          structuredTabScope === "header" && !(selection && isHeaderField(selection.key));
+        if (prose) {
+          // Prose Tab stays in the document; the host decides text versus block indentation.
+          event.preventDefault();
+          goalXRef.current = null;
+          const intent: QueuedIntent = event.shiftKey ? { kind: "outdent" } : { kind: "indent" };
+          if (commitPendingRef.current) queueIntent(intent);
+          else if (selection) commitIndent(selection, event.shiftKey ? "out" : "in");
+          else commitCrossFieldIntent(intent);
+          return;
+        }
+        // Unmapped structured selections leave Tab available for browser focus traversal.
         if (!selection) return;
+        const stops = tabStopFields();
+        const step = event.shiftKey ? -1 : 1;
+        const index = stops.findIndex(
+          (element) => element.getAttribute("data-tsdf") === selection.key
+        );
+        let target: HTMLElement | undefined;
+        if (index >= 0) {
+          target = stops[index + step];
+        } else {
+          // A caret in a structural heading moves to the nearest real field in
+          // the requested direction.
+          const focus = window.getSelection()?.focusNode ?? null;
+          const ref = (
+            focus instanceof HTMLElement ? focus : focus?.parentElement
+          )?.closest<HTMLElement>("[data-tsdf]:not([data-tsdm])");
+          if (ref) {
+            target =
+              step > 0
+                ? stops.find(
+                    (element) =>
+                      (ref.compareDocumentPosition(element) &
+                        Node.DOCUMENT_POSITION_FOLLOWING) !==
+                      0
+                  )
+                : [...stops]
+                    .reverse()
+                    .find(
+                      (element) =>
+                        (ref.compareDocumentPosition(element) &
+                          Node.DOCUMENT_POSITION_PRECEDING) !==
+                        0
+                    );
+          }
+        }
+        if (!target) return;
         event.preventDefault();
         goalXRef.current = null;
-        const indentation = "    ";
-        if (commitPendingRef.current) queueIntent({ kind: "insert", text: indentation });
-        else commitReplace(selection, selection.dStart, selection.dEnd, indentation);
+        const key = target.getAttribute("data-tsdf");
+        const spans = key
+          ? Array.from(
+              host.querySelectorAll<HTMLElement>("[data-tsdf]:not([data-tsdm])")
+            ).filter(
+              (element) =>
+                element.getAttribute("data-tsdf") === key &&
+                element.firstChild?.nodeType === Node.TEXT_NODE
+            )
+          : [target];
+        const first = spans[0] ?? target;
+        const last = spans[spans.length - 1] ?? target;
+        if (!first.firstChild) return;
+        const selectionApi = window.getSelection();
+        if (selectionApi) {
+          const range = document.createRange();
+          range.setStart(first.firstChild, 0);
+          const end = spanEndPosition(last);
+          range.setEnd(end.node, end.offset);
+          selectionApi.removeAllRanges();
+          selectionApi.addRange(range);
+          target.scrollIntoView({ block: "nearest" });
+        }
         return;
       }
       if (event.key === "Escape") (document.activeElement as HTMLElement | null)?.blur();
       goalXRef.current = null;
     };
 
+    const EDGE_SNAP_PX = 14;
+    let dragEdgeStart: {
+      x: number;
+      y: number;
+      position: { node: Node; offset: number };
+      armed: boolean;
+    } | null = null;
+
+    const edgeDragAnchor = (
+      line: HTMLElement,
+      clientX: number,
+      key?: string
+    ): { node: Node; offset: number } | null => {
+      let closest:
+        | { distance: number; position: { node: Node; offset: number } }
+        | null = null;
+      for (const anchor of fieldEdgeAnchors(line, key)) {
+        const distance = Math.abs(clientX - anchor.x);
+        if (!closest || distance < closest.distance) {
+          closest = { distance, position: anchor.position };
+        }
+      }
+      return closest && closest.distance <= EDGE_SNAP_PX ? closest.position : null;
+    };
+
+    // Prevented mousedown events arm synthetic drag immediately.
+    const beginPointerDrag = (
+      event: MouseEvent,
+      position: { node: Node; offset: number },
+      armed: boolean
+    ) => {
+      dragEdgeStart = { x: event.clientX, y: event.clientY, position, armed };
+    };
+
     const onMouseDown = (event: MouseEvent) => {
       goalXRef.current = null;
+      dragEdgeStart = null;
       const target = event.target as HTMLElement;
       if (event.button === 2) {
         // Right-click on a line's blank area (between/after fields): the browser
@@ -384,19 +538,63 @@ export function useTypesetInputEvents({
         if (content) {
           event.preventDefault();
           host.focus({ preventScroll: true });
-          setCaret({ node: content.firstChild!, offset: 0 }, event.shiftKey);
+          const position = { node: content.firstChild!, offset: 0 };
+          setCaret(position, event.shiftKey);
+          beginPointerDrag(event, position, true);
         }
         return;
       }
-      if (target.closest("[data-tsdf]")) return;
+      const directField = target.closest<HTMLElement>("[data-tsdf]:not([data-tsdm])");
+      if (directField) {
+        // Edge drags snap only after movement so nearby clicks remain native.
+        const line = directField.closest<HTMLElement>(".tsd-line");
+        const key = directField.getAttribute("data-tsdf");
+        const position = line && key ? edgeDragAnchor(line, event.clientX, key) : null;
+        if (position) beginPointerDrag(event, position, false);
+        return;
+      }
+      // Off-text starts require synthetic drag because manual caret placement prevents native drag.
       const line =
         target.closest<HTMLElement>(".tsd-line") ?? nearestLineByPoint(host, event.clientX, event.clientY);
       if (!line) return;
-      const position = placeInLine(line, event.clientX);
+      const position = edgeDragAnchor(line, event.clientX) ?? placeInLine(line, event.clientX);
       if (!position) return;
       event.preventDefault();
       host.focus({ preventScroll: true });
       setCaret(position, event.shiftKey);
+      beginPointerDrag(event, position, true);
+    };
+
+    const onMouseMove = (event: MouseEvent) => {
+      if (!dragEdgeStart) return;
+      if ((event.buttons & 1) === 0) {
+        dragEdgeStart = null;
+        return;
+      }
+      if (!dragEdgeStart.armed) {
+        if (Math.hypot(event.clientX - dragEdgeStart.x, event.clientY - dragEdgeStart.y) < 3) return;
+        host.focus({ preventScroll: true });
+        setCaret(dragEdgeStart.position, false);
+        dragEdgeStart.armed = true;
+      }
+      const target = event.target;
+      const overLine =
+        target instanceof Element ? target.closest<HTMLElement>(".tsd-line") : null;
+      // The pointer is allowed to leave the sheet entirely while the button is
+      // down; the drag keeps resolving against the vertically nearest line.
+      const line =
+        overLine && host.contains(overLine)
+          ? overLine
+          : nearestLineByPoint(host, event.clientX, event.clientY, "anywhere");
+      if (!line) return;
+      const position = placeInLine(line, event.clientX);
+      if (!position) return;
+      event.preventDefault();
+      setCaret(position, true);
+    };
+
+    const onMouseUp = () => {
+      dragEdgeStart = null;
     };
 
     const onPaste = (event: ClipboardEvent) => {
@@ -457,10 +655,7 @@ export function useTypesetInputEvents({
         writeSelectionToClipboard(event, selection);
         return;
       }
-      // A selection crossing fields has no single mapped range. Its plain text
-      // comes from the MODEL, one covered slice per field joined by newlines, so
-      // a copy never depends on how the painter split lines into spans and never
-      // leaks the DOM-only caret placeholder.
+      // Cross-field copy uses model slices, avoiding painter spans and caret placeholders.
       const nativeSelection = window.getSelection();
       if (!event.clipboardData || !nativeSelection?.rangeCount) return;
       const plain = crossFieldPlainText();
@@ -513,9 +708,13 @@ export function useTypesetInputEvents({
       }
     };
 
+    // Document-level listeners finish drags that leave the page surface.
+    const ownerDocument = host.ownerDocument ?? document;
     host.addEventListener("beforeinput", onBeforeInput);
     host.addEventListener("keydown", onKeyDown);
     host.addEventListener("mousedown", onMouseDown);
+    ownerDocument.addEventListener("mousemove", onMouseMove);
+    ownerDocument.addEventListener("mouseup", onMouseUp);
     host.addEventListener("paste", onPaste);
     host.addEventListener("copy", onCopy);
     host.addEventListener("cut", onCut);
@@ -527,6 +726,8 @@ export function useTypesetInputEvents({
       host.removeEventListener("beforeinput", onBeforeInput);
       host.removeEventListener("keydown", onKeyDown);
       host.removeEventListener("mousedown", onMouseDown);
+      ownerDocument.removeEventListener("mousemove", onMouseMove);
+      ownerDocument.removeEventListener("mouseup", onMouseUp);
       host.removeEventListener("paste", onPaste);
       host.removeEventListener("copy", onCopy);
       host.removeEventListener("cut", onCut);
@@ -540,8 +741,11 @@ export function useTypesetInputEvents({
     commitHistory,
     commitMergeBullet,
     commitPendingRef,
+    commitIndent,
+    commitParagraphOutdent,
     commitPaste,
     commitReplace,
+    indentWidthAt,
     onEnter,
     commitToggleMark,
     docVersion,
@@ -550,6 +754,7 @@ export function useTypesetInputEvents({
     onZoomShortcut,
     readSelection,
     replayQueueRef,
-    setNonce
+    setNonce,
+    structuredTabScope
   ]);
 }

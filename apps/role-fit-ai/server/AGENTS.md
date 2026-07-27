@@ -17,7 +17,9 @@ for provider, prompt, sanitizer, and review work.
 - `http.ts` owns body/JSON/fetch utilities and request limits.
 - `network.ts` owns SSRF-safe public-page fetching and redirect validation.
 - `jobImport.ts` owns ATS/public job-text resolution.
-- `workspace.ts` owns ignored base-resume storage and history.
+- `workspace.ts` owns resume variants/history plus the serialized atomic
+  storage primitives shared with `coverLetterWorkspace.ts`. Keep strict
+  cover-letter storage separate from resume import and starter fallbacks.
 - `applications/` owns tracker persistence and routes.
 - `extension/` owns extension-origin routes and inbox handoff.
 - The provider-connections boundary owns the validated in-memory companion

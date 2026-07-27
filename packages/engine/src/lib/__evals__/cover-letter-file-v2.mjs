@@ -13,8 +13,51 @@ import { toTypesetSchema } from "../../typeset/schema.ts";
 import { layoutCoverLetter, lineSeparators } from "../../typeset/layout.ts";
 import { inkExtent, measure, paragraphItems, underlineRule, underlineSpans } from "../../typeset/measure.ts";
 import { breakParagraph } from "../../typeset/linebreak.ts";
-import { coverLetterStyleToDocumentStyle } from "../coverLetter.ts";
+import {
+  coverLetterStyleToDocumentStyle,
+  documentStyleToCoverLetterStyle
+} from "../coverLetter.ts";
 import { FONT_FAMILY_OPTIONS } from "../documentStyle.ts";
+import { pageMarginValuesFor, pageMarginsForValues } from "../pageMargins.ts";
+
+assert.deepEqual(pageMarginValuesFor("narrow"), { top: 36, right: 36, bottom: 36, left: 36 });
+assert.deepEqual(pageMarginValuesFor("normal"), { top: 72, right: 72, bottom: 72, left: 72 });
+assert.equal(pageMarginsForValues({ top: 36, right: 36, bottom: 36, left: 36 }), "narrow");
+assert.equal(pageMarginsForValues({ top: 72, right: 72, bottom: 72, left: 72 }), "normal");
+assert.equal(pageMarginsForValues({ top: 54, right: 72, bottom: 54, left: 72 }), "custom");
+assert.equal(coverLetterStyleToDocumentStyle(COVER_LETTER_STYLE_DEFAULTS).pageMargins, "custom");
+assert.deepEqual(
+  {
+    lineHeight: COVER_LETTER_STYLE_DEFAULTS.lineHeight,
+    paragraphGapPt: COVER_LETTER_STYLE_DEFAULTS.paragraphGapPt,
+    margins: [
+      COVER_LETTER_STYLE_DEFAULTS.marginTopPt,
+      COVER_LETTER_STYLE_DEFAULTS.marginRightPt,
+      COVER_LETTER_STYLE_DEFAULTS.marginBottomPt,
+      COVER_LETTER_STYLE_DEFAULTS.marginLeftPt
+    ]
+  },
+  { lineHeight: 2, paragraphGapPt: 0, margins: [54, 54, 54, 54] },
+  "new cover letters default to double spacing and 0.75-inch physical margins"
+);
+assert.deepEqual(
+  documentStyleToCoverLetterStyle({
+    ...coverLetterStyleToDocumentStyle(COVER_LETTER_STYLE_DEFAULTS),
+    pageMargins: "narrow",
+    pageMarginTopPt: 36,
+    pageMarginRightPt: 36,
+    pageMarginBottomPt: 36,
+    pageMarginLeftPt: 36
+  }),
+  {
+    ...COVER_LETTER_STYLE_DEFAULTS,
+    marginTopPt: 36,
+    marginRightPt: 36,
+    marginBottomPt: 36,
+    marginLeftPt: 36
+  },
+  "cover-letter saves persist physical margins rather than preset identity"
+);
 
 const source = [
   "July 24, 2026",
@@ -27,15 +70,71 @@ const source = [
 const data = parseCoverLetterText(source);
 assert.equal(coverLetterPlainText(data), source);
 
+const indentedParagraphData = structuredClone(data);
+indentedParagraphData.sections[0].items[0].bullets[0].text = "    Indented paragraph.";
+const indentedParagraphSchema = toTypesetSchema(indentedParagraphData);
+assert.equal(
+  indentedParagraphSchema.sections[0].items[0].bullets[0],
+  "    Indented paragraph.",
+  "summary and cover-letter paragraphs preserve authored leading indentation"
+);
+const ordinaryBulletData = structuredClone(indentedParagraphData);
+ordinaryBulletData.sections[0].type = "standard";
+assert.equal(
+  toTypesetSchema(ordinaryBulletData).sections[0].items[0].bullets[0],
+  "Indented paragraph.",
+  "ordinary resume bullets still trim accidental space after their marker"
+);
+
 const serialized = serializeCoverLetterFile(data, COVER_LETTER_STYLE_DEFAULTS);
 const raw = JSON.parse(serialized);
 assert.equal(raw.format, COVER_LETTER_FILE_MAGIC);
-assert.equal(raw.schemaVersion, 1);
+assert.equal(raw.schemaVersion, 2);
+assert.equal(raw.document.header, null);
 assert.equal(JSON.stringify(raw).includes('"id"'), false, "session ids never cross the .cover boundary");
 
 const parsed = parseCoverLetterFile(serialized);
 assert.equal(coverLetterPlainText(parsed.data), source);
 assert.deepEqual(parsed.style, COVER_LETTER_STYLE_DEFAULTS);
+
+const withHeader = {
+  ...data,
+  name: "Candidate Name",
+  contact: ["candidate@example.com", "Portfolio"]
+};
+const headerRoundTrip = parseCoverLetterFile(
+  serializeCoverLetterFile(withHeader, { ...COVER_LETTER_STYLE_DEFAULTS, contactDivider: "•" })
+);
+assert.equal(headerRoundTrip.data.name, "Candidate Name");
+assert.deepEqual(headerRoundTrip.data.contact, ["candidate@example.com", "Portfolio"]);
+assert.equal(headerRoundTrip.style.contactDivider, "•");
+const headerLayout = layoutCoverLetter(
+  toTypesetSchema(headerRoundTrip.data),
+  coverLetterStyleToDocumentStyle(headerRoundTrip.style)
+);
+assert(headerLayout.pages[0].lines.some((line) => line.runs.some((run) => run.src?.kind === "name")));
+assert(headerLayout.pages[0].lines.some((line) => line.runs.some((run) => run.src?.kind === "contact")));
+assert(
+  headerLayout.pages[0].lines.every((line) =>
+    line.runs.every((run) =>
+      run.x + run.width <=
+        headerLayout.geometry.marginLeft + headerLayout.geometry.textWidth + 0.01
+    )
+  ),
+  "header contact items stay inside the text column"
+);
+
+const legacy = {
+  format: COVER_LETTER_FILE_MAGIC,
+  schemaVersion: 1,
+  document: { paragraphs: ["Legacy letter."] },
+  style: Object.fromEntries(
+    Object.entries(COVER_LETTER_STYLE_DEFAULTS).filter(([key]) => key !== "contactDivider")
+  )
+};
+const migratedLegacy = parseCoverLetterFile(JSON.stringify(legacy));
+assert.equal(migratedLegacy.data.name, "");
+assert.equal(migratedLegacy.style.contactDivider, "|");
 
 const layout = layoutCoverLetter(
   toTypesetSchema(parsed.data),
@@ -44,13 +143,68 @@ const layout = layoutCoverLetter(
 assert.equal(layout.pages.length, 1);
 assert(layout.pages[0].lines.length >= 5, "cover-letter paragraphs reach the shared layout engine");
 
+const compactCoverStyle = { ...COVER_LETTER_STYLE_DEFAULTS, lineHeight: 1.15 };
 const doubleSpaced = parseCoverLetterFile(
-  serializeCoverLetterFile(data, {
-    ...COVER_LETTER_STYLE_DEFAULTS,
-    lineHeight: 2
-  })
+  serializeCoverLetterFile(
+    parseCoverLetterText(
+      "<line-height=2>This selected paragraph is intentionally long enough to wrap onto a second line so its physical baseline spacing can be measured directly by the deterministic layout engine without relying on the following paragraph gap.</line-height>\n\nNormal paragraph."
+    ),
+    compactCoverStyle
+  )
 );
-assert.equal(doubleSpaced.style.lineHeight, 2);
+assert.equal(doubleSpaced.style.lineHeight, compactCoverStyle.lineHeight);
+const doubleSpacedLayout = layoutCoverLetter(
+  toTypesetSchema(doubleSpaced.data),
+  coverLetterStyleToDocumentStyle(doubleSpaced.style)
+);
+assert(
+  doubleSpacedLayout.pages[0].lines[1].baseline - doubleSpacedLayout.pages[0].lines[0].baseline
+    > compactCoverStyle.fontSizePt * compactCoverStyle.lineHeight,
+  "whole-paragraph line spacing affects every wrapped line without changing the document default"
+);
+
+const selectedLineData = parseCoverLetterText(
+  "<line-height=2>Selected line</line-height>\nDefault middle line\nDefault final line"
+);
+const selectedLineLayout = layoutCoverLetter(
+  toTypesetSchema(selectedLineData),
+  coverLetterStyleToDocumentStyle(compactCoverStyle)
+);
+const selectedLineBaselines = selectedLineLayout.pages[0].lines.map((line) => line.baseline);
+assert(
+  selectedLineBaselines[1] - selectedLineBaselines[0]
+    > selectedLineBaselines[2] - selectedLineBaselines[1],
+  "a visual-line override adds space below the selected line"
+);
+
+const selectedMiddleLineData = parseCoverLetterText(
+  "Default first line\n<line-height=2>Selected middle line</line-height>\nDefault final line"
+);
+const selectedMiddleLineLayout = layoutCoverLetter(
+  toTypesetSchema(selectedMiddleLineData),
+  coverLetterStyleToDocumentStyle(compactCoverStyle)
+);
+const selectedMiddleBaselines = selectedMiddleLineLayout.pages[0].lines.map((line) => line.baseline);
+assert(
+  selectedMiddleBaselines[1] - selectedMiddleBaselines[0]
+    < selectedMiddleBaselines[2] - selectedMiddleBaselines[1],
+  "a selected middle line keeps the gap above unchanged and adds its spacing only below"
+);
+
+const emptyLineGap = (lineHeight) => {
+  const emptyLineLayout = layoutCoverLetter(
+    toTypesetSchema(
+      parseCoverLetterText(`<line-height=${lineHeight}></line-height>\n\nFollowing paragraph`)
+    ),
+    coverLetterStyleToDocumentStyle(compactCoverStyle)
+  );
+  const baselines = emptyLineLayout.pages[0].lines.map((line) => line.baseline);
+  return baselines[1] - baselines[0];
+};
+assert(
+  emptyLineGap(2) > emptyLineGap(1),
+  "line spacing on an empty paragraph adds space below its blank line"
+);
 
 const mixedData = parseCoverLetterText(
   [
@@ -92,9 +246,7 @@ for (let index = 1; index < mixedLines.length; index += 1) {
   );
 }
 
-// Word-processor rule: a line's vertical placement depends on the fonts and
-// sizes on it, never on which glyphs were typed. Typing a taller ascender or a
-// deeper descender must not move the line or its neighbours.
+// Glyph choice must not move baselines when family and size stay constant.
 const baselinesFor = (paragraphs) =>
   layoutCoverLetter(
     toTypesetSchema(parseCoverLetterText(paragraphs.join("\n"))),
@@ -120,8 +272,7 @@ for (const [label, variants] of Object.entries({
   }
 }
 
-// The expansion still has to clear the real ink of the tallest and deepest
-// glyphs the run could hold, at every supported inline size.
+// Overflow expansion still clears representative tall and deep glyphs.
 for (const size of [12, 36, 48, 120, 200]) {
   const probeLines = layoutCoverLetter(
     toTypesetSchema(
@@ -142,10 +293,7 @@ for (const size of [12, 36, 48, 120, 200]) {
   }
 }
 
-// Engine runs are word boxes. Both renderers must group them through interior
-// spaces, or the PDF draws one rule per word while the editor (which paints
-// merged style spans) shows one continuous rule. The rule's depth comes from the
-// face, so it cannot step between two words of the same phrase either.
+// Underline spans merge word boxes so editor and PDF paint one continuous rule.
 const underlinedLine = layoutCoverLetter(
   toTypesetSchema(parseCoverLetterText("See <u>ab pq words</u> then plain text.")),
   coverLetterStyleToDocumentStyle(COVER_LETTER_STYLE_DEFAULTS)
@@ -189,9 +337,7 @@ const separatorsFor = (paragraphs) =>
       coverLetterStyleToDocumentStyle(COVER_LETTER_STYLE_DEFAULTS)
     ).pages
   );
-// Asserted by shape rather than as a fixed pair, because how many lines a
-// sentence takes is a property of the default family's advance widths: this
-// fixture wrapped once in Source Serif and fits on one line in Carlito.
+// Assert separator shape because wrap count varies with the default family's advances.
 const softWrapped = separatorsFor([
   "The quick brown fox jumps over the lazy dog and keeps running well past the right margin so it wraps, " +
     "and then keeps going for a second line so the break exists whatever face the default style names."
@@ -313,10 +459,7 @@ for (const count of [1, 2, 3]) {
   );
 }
 
-// An oversized token puts the WHOLE paragraph on the emergency path. Ordinary
-// words that follow must still break at spaces: a word carrying an inline size
-// boundary arrives as several boxes, and splitting it there would chop a word
-// that fits a column of its own.
+// Emergency layout must still keep later multi-box words intact when they fit.
 const followingWordText = "BBBBBDDDD";
 const followingWordLines = breakParagraph(
   paragraphItems(
@@ -352,8 +495,8 @@ assert.equal(
 
 for (const mutation of [
   { ...raw, format: "typeset-resume" },
-  { ...raw, schemaVersion: 2 },
-  { ...raw, document: { paragraphs: [] } },
+  { ...raw, schemaVersion: 3 },
+  { ...raw, document: { header: null, paragraphs: [] } },
   { ...raw, style: { ...raw.style, fontSizePt: 40 } },
   { ...raw, extra: true }
 ]) {
@@ -363,13 +506,24 @@ for (const mutation of [
   );
 }
 
-// ---- every supported family survives the file boundary and lays out ----
-//
-// A family id is a PERSISTED enum value. The codec validates it against
-// FONT_FAMILY_OPTIONS and the registry resolves its faces, but those are separate
-// derivations from lib/fontFamilies.ts: a family present in one and absent from
-// the other produces either a file that will not reopen or a layout that throws
-// on a missing face. Both directions are cheap to sweep, so sweep them.
+for (const invalidData of [
+  { ...withHeader, contact: Array.from({ length: 21 }, (_, index) => `item-${index}`) },
+  { ...withHeader, name: "x".repeat(1_001) },
+  { ...withHeader, contact: ["x".repeat(1_001)] }
+]) {
+  assert.throws(
+    () => serializeCoverLetterFile(invalidData, COVER_LETTER_STYLE_DEFAULTS),
+    (error) => error instanceof CoverLetterFileError && error.code === "invalid-document",
+    "the serializer rejects header data its parser would reject"
+  );
+}
+assert.throws(
+  () => serializeCoverLetterFile(withHeader, { ...COVER_LETTER_STYLE_DEFAULTS, contactDivider: "" }),
+  (error) => error instanceof CoverLetterFileError && error.code === "invalid-style",
+  "a persisted contact divider must contain one or two characters"
+);
+
+// Sweep every persisted family through both codec and layout registries.
 for (const { value: family } of FONT_FAMILY_OPTIONS) {
   const style = { ...COVER_LETTER_STYLE_DEFAULTS, fontFamily: family };
   const round = parseCoverLetterFile(serializeCoverLetterFile(data, style));
@@ -397,5 +551,5 @@ for (const { value: family } of FONT_FAMILY_OPTIONS) {
 }
 
 console.log(
-  `cover-letter file v1 + layout probes: PASS (incl. ${FONT_FAMILY_OPTIONS.length} families × 6 faces through the file boundary)`
+  `cover-letter file v2 + v1 migration + layout probes: PASS (incl. ${FONT_FAMILY_OPTIONS.length} families × 6 faces through the file boundary)`
 );

@@ -28,6 +28,13 @@ export type CoverLetterHistoryGroup = {
 import type { DocStyle, DocumentStyle } from "@typeset/engine/lib/documentStyle.ts";
 import type { ResumeData } from "@typeset/engine/lib/resumeData.ts";
 import { toTypesetSchema } from "@typeset/engine/typeset/schema.ts";
+import {
+  coverLetterStartupIsCurrent,
+  loadLastCoverLetterName,
+  migrateStoredCoverLetterStyle,
+  resolveCoverLetterStartup,
+  saveLastCoverLetterName
+} from "../lib/coverLetterPrefs.ts";
 
 const STYLE_STORAGE_KEY = "rolefit:coverLetterStyle.v1";
 const TITLE_STORAGE_KEY = "rolefit:coverLetterTitle.v1";
@@ -48,7 +55,9 @@ function loadStyle(): DocStyle {
   try {
     const raw = window.localStorage.getItem(STYLE_STORAGE_KEY);
     if (raw) {
-      const parsed = parseCoverLetterStyle(JSON.parse(raw) as unknown);
+      const parsed = migrateStoredCoverLetterStyle(
+        parseCoverLetterStyle(JSON.parse(raw) as unknown)
+      );
       return coverLetterStyleToDocumentStyle(parsed);
     }
   } catch {
@@ -87,10 +96,12 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
   const editor = useTypesetResumeEditor(initialData);
   const onOpenDocumentRef = useRef(options.onOpenDocument);
   onOpenDocumentRef.current = options.onOpenDocument;
+  const cancelStartupOpenRef = useRef(false);
   // Every user-initiated load goes through here instead of `editor.seedData`,
   // so no open path can forget to move the caret into the new document.
   const openDocument = useCallback(
-    (data: ResumeData) => {
+    (data: ResumeData, automatic = false) => {
+      if (!automatic) cancelStartupOpenRef.current = true;
       editor.seedData(data);
       onOpenDocumentRef.current?.();
     },
@@ -101,8 +112,8 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
   const [isRenderingPdf, setIsRenderingPdf] = useState(false);
   const [sourceBeforeTailor, setSourceBeforeTailor] = useState("");
   // Workspace-resident cover letters. Cover letters gained the same named
-  // variants and version history base resumes have, stored as `cover-letter*.cover`
-  // beside them; `activeCoverFileName` is the one Save writes over.
+  // variants and version history base resumes have. They live under the
+  // cover-letters folder; `activeCoverFileName` is the one Save writes over.
   const [coverLetterOptions, setCoverLetterOptions] = useState<CoverLetterOption[]>([]);
   const [coverLetterHistory, setCoverLetterHistory] = useState<CoverLetterHistoryGroup[]>([]);
   const [activeCoverFileName, setActiveCoverFileName] = useState("");
@@ -128,6 +139,9 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
   );
   const dirty =
     currentFingerprint !== null && currentFingerprint !== persistedFingerprint;
+  const startupFingerprint = `${documentTitle}\u0000${currentFingerprint ?? ""}`;
+  const startupFingerprintRef = useRef(startupFingerprint);
+  startupFingerprintRef.current = startupFingerprint;
 
   useEffect(() => {
     try {
@@ -167,16 +181,24 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
   const docStyle = useMemo<DocStyleControls>(
     () => ({
       style,
+      dirty,
       set,
       applyStyle,
       replaceDocumentStyle,
+      markClean: () => undefined,
       saveCustomPreset: () => undefined,
       customPreset: null,
+      canUndo: false,
+      canRedo: false,
+      undoSequence: null,
+      redoSequence: null,
+      undo: () => undefined,
+      redo: () => undefined,
       isStyleDefault:
         JSON.stringify(documentStyleToCoverLetterStyle(style)) ===
         JSON.stringify(COVER_LETTER_STYLE_DEFAULTS)
     }),
-    [applyStyle, replaceDocumentStyle, set, style]
+    [applyStyle, dirty, replaceDocumentStyle, set, style]
   );
 
   const loadSourceText = useCallback(
@@ -188,6 +210,8 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
         serializeCoverLetterFile(data, documentStyleToCoverLetterStyle(styleRef.current))
       );
       setSourceBeforeTailor(coverLetterPlainText(data));
+      setActiveCoverFileName("");
+      saveLastCoverLetterName("");
       if (title?.trim()) setDocumentTitle(title.trim());
       setStatus("Cover letter loaded. Tailor it when the job description is ready.");
     },
@@ -205,6 +229,7 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
         );
         setSourceBeforeTailor("");
         setActiveCoverFileName("");
+        saveLastCoverLetterName("");
         setStatus("");
         return;
       }
@@ -215,6 +240,8 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
         serializeCoverLetterFile(data, documentStyleToCoverLetterStyle(styleRef.current))
       );
       setSourceBeforeTailor(coverLetterPlainText(data));
+      setActiveCoverFileName("");
+      saveLastCoverLetterName("");
       setStatus("Cover letter restored.");
     },
     [editor.markClean, openDocument]
@@ -226,18 +253,27 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
 
   const applyTailoredText = useCallback(
     (tailored: string) => {
-      const data = parseCoverLetterText(tailored);
+      cancelStartupOpenRef.current = true;
+      const parsed = parseCoverLetterText(tailored);
+      const data = editor.editedResume
+        ? { ...parsed, name: editor.editedResume.name, contact: editor.editedResume.contact }
+        : parsed;
       editor.seedData(data);
       setStatus("Tailored draft loaded. Review it in your own voice before sending.");
     },
-    [editor.seedData]
+    [editor.editedResume, editor.seedData]
   );
 
   const restoreTailorSource = useCallback(() => {
     if (!sourceBeforeTailor) return;
-    openDocument(parseCoverLetterText(sourceBeforeTailor));
+    const parsed = parseCoverLetterText(sourceBeforeTailor);
+    openDocument(
+      editor.editedResume
+        ? { ...parsed, name: editor.editedResume.name, contact: editor.editedResume.contact }
+        : parsed
+    );
     setStatus("Restored the pre-tailoring cover letter.");
-  }, [openDocument, sourceBeforeTailor]);
+  }, [editor.editedResume, openDocument, sourceBeforeTailor]);
 
   const startBlank = useCallback(() => {
     const data = parseCoverLetterText("");
@@ -251,6 +287,7 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
     );
     setSourceBeforeTailor("");
     setActiveCoverFileName("");
+    saveLastCoverLetterName("");
     setDocumentTitle("Cover letter");
     setStatus("Blank cover letter ready.");
   }, [editor.markClean, openDocument]);
@@ -264,6 +301,7 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
     );
     setSourceBeforeTailor("");
     setActiveCoverFileName("");
+    saveLastCoverLetterName("");
     setDocumentTitle("Cover letter");
     setStatus("Starter opened. Replace every bracketed prompt with your own facts before tailoring.");
   }, [editor.markClean, openDocument]);
@@ -294,6 +332,7 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
           // An uploaded file is not the workspace copy, so Save must not offer to
           // overwrite whichever saved letter happened to be open before.
           setActiveCoverFileName("");
+          saveLastCoverLetterName("");
           setDocumentTitle(fileBase || "Cover letter");
           setStatus(`Opened ${file.name}.`);
           return;
@@ -316,9 +355,9 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
   // sequence openFile uses for an uploaded .cover — a workspace load and a file
   // open must leave the editor in identical states, including "not dirty".
   const adoptCoverPayload = useCallback(
-    (payload: string, fileName: string, label: string) => {
+    (payload: string, fileName: string, label: string, automatic = false) => {
       const parsed = parseCoverLetterFile(payload);
-      openDocument(parsed.data);
+      openDocument(parsed.data, automatic);
       editor.markClean();
       setStyle((current) => ({
         ...coverLetterStyleToDocumentStyle(parsed.style),
@@ -328,6 +367,7 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
       setPersistedFingerprint(serializeCoverLetterFile(parsed.data, parsed.style));
       setSourceBeforeTailor(coverLetterPlainText(parsed.data));
       setActiveCoverFileName(fileName);
+      saveLastCoverLetterName(fileName);
       setDocumentTitle(label === "Default" ? "Cover letter" : label);
     },
     [editor.markClean, openDocument]
@@ -343,15 +383,13 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
       };
       setCoverLetterOptions(snapshot.coverLetterOptions ?? []);
       setCoverLetterHistory(snapshot.coverLetterHistory ?? []);
+      return snapshot;
     } catch {
       // The list is an affordance, not the document — a failed refresh must not
       // interrupt editing. The next mutation reports its own error.
+      return null;
     }
   }, []);
-
-  useEffect(() => {
-    void refreshCoverWorkspace();
-  }, [refreshCoverWorkspace]);
 
   // Write the current letter into the workspace, either over the active file or
   // as a new named variant. The server archives whatever it replaces.
@@ -389,7 +427,10 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
         if (!response.ok) throw new Error(data.error ?? "Cover letter save failed.");
         setCoverLetterOptions(data.coverLetterOptions ?? []);
         setCoverLetterHistory(data.coverLetterHistory ?? []);
-        if (data.fileName) setActiveCoverFileName(data.fileName);
+        if (data.fileName) {
+          setActiveCoverFileName(data.fileName);
+          saveLastCoverLetterName(data.fileName);
+        }
         editor.markClean();
         setPersistedFingerprint(payload);
         setStatus(`Saved ${data.label ?? "cover letter"} to your workspace.`);
@@ -401,7 +442,11 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
   );
 
   const openWorkspaceCoverLetter = useCallback(
-    async (fileName: string) => {
+    async (
+      fileName: string,
+      automatic = false,
+      shouldCancel?: () => boolean
+    ) => {
       try {
         const response = await fetch("/api/workspace/cover-letter/select", {
           method: "POST",
@@ -413,16 +458,68 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
           coverLetterOptions?: CoverLetterOption[]; coverLetterHistory?: CoverLetterHistoryGroup[];
         };
         if (!response.ok || !data.text) throw new Error(data.error ?? "Cover letter version not found.");
-        adoptCoverPayload(data.text, data.fileName ?? fileName, data.label ?? "Cover letter");
+        if (
+          automatic &&
+          (cancelStartupOpenRef.current || shouldCancel?.())
+        ) {
+          return;
+        }
+        adoptCoverPayload(
+          data.text,
+          data.fileName ?? fileName,
+          data.label ?? "Cover letter",
+          automatic
+        );
         setCoverLetterOptions(data.coverLetterOptions ?? []);
         setCoverLetterHistory(data.coverLetterHistory ?? []);
-        setStatus(`Opened ${data.label ?? fileName}.`);
+        setStatus(automatic ? "" : `Opened ${data.label ?? fileName}.`);
       } catch (error) {
         setStatus(error instanceof Error ? error.message : "Cover letter load failed.");
       }
     },
     [adoptCoverPayload]
   );
+
+  useEffect(() => {
+    let cancelled = false;
+    const initialFingerprint = startupFingerprintRef.current;
+    void (async () => {
+      const snapshot = await refreshCoverWorkspace();
+      if (
+        !coverLetterStartupIsCurrent(
+          initialFingerprint,
+          startupFingerprintRef.current,
+          cancelled || cancelStartupOpenRef.current
+        )
+        || !snapshot
+      ) return;
+
+      const available = snapshot.coverLetterOptions ?? [];
+      const startup = resolveCoverLetterStartup(
+        available.map((option) => option.fileName),
+        loadLastCoverLetterName()
+      );
+      if (startup.stale) saveLastCoverLetterName("");
+
+      // A startup response may adopt a saved letter only while the editor still
+      // matches the exact document, style, and title state it began with.
+      if (startup.fileName) {
+        await openWorkspaceCoverLetter(
+          startup.fileName,
+          true,
+          () =>
+            !coverLetterStartupIsCurrent(
+              initialFingerprint,
+              startupFingerprintRef.current,
+              cancelled
+            )
+        );
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [openWorkspaceCoverLetter, refreshCoverWorkspace]);
 
   const restoreWorkspaceCoverLetter = useCallback(
     async (key: string) => {
@@ -437,7 +534,7 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
           coverLetterOptions?: CoverLetterOption[]; coverLetterHistory?: CoverLetterHistoryGroup[];
         };
         if (!response.ok || !data.text) throw new Error(data.error ?? "Cover letter restore failed.");
-        adoptCoverPayload(data.text, data.fileName ?? "cover-letter.cover", data.label ?? "Cover letter");
+        adoptCoverPayload(data.text, data.fileName ?? "default.cover", data.label ?? "Cover letter");
         setCoverLetterOptions(data.coverLetterOptions ?? []);
         setCoverLetterHistory(data.coverLetterHistory ?? []);
         setStatus(`Restored ${data.label ?? "cover letter"} from history.`);
@@ -514,6 +611,8 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
     actions: editor.actions,
     canUndo: editor.canUndo,
     canRedo: editor.canRedo,
+    undoSequence: editor.undoSequence,
+    redoSequence: editor.redoSequence,
     dirty,
     text,
     documentTitle,

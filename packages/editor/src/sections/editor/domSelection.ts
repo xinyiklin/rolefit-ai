@@ -19,6 +19,46 @@ export function keyOfNode(node: Node | null): { key: string; el: HTMLElement } |
   return key && target ? { key, el: target } : null;
 }
 
+// Fieldless line-end carets resolve to the preceding painted content span.
+export function fieldCaretOf(
+  host: HTMLElement,
+  node: Node,
+  offset: number
+): { key: string; node: Node; offset: number } | null {
+  const named = keyOfNode(node);
+  if (named && host.contains(named.el)) return { key: named.key, node, offset };
+  const element = node instanceof HTMLElement ? node : node.parentElement;
+  const line = element?.closest<HTMLElement>(".tsd-line");
+  if (!line || !host.contains(line)) return null;
+  const spans = contentSpansOf(line);
+  if (!spans.length) return null;
+  const children = Array.from(line.childNodes);
+  // A non-field child with a nonzero offset places the caret after that child.
+  const boundary =
+    node === line
+      ? offset
+      : (() => {
+          const index = children.indexOf(element as ChildNode);
+          return index < 0 ? children.length : index + (offset > 0 ? 1 : 0);
+        })();
+  let chosen: HTMLElement | null = null;
+  for (const span of spans) {
+    if (children.indexOf(span) < boundary) chosen = span;
+    else break;
+  }
+  const target = chosen ?? spans[0];
+  const key = target.getAttribute("data-tsdf");
+  const text = target.firstChild;
+  if (!key || !text) return null;
+  // Authored trailing spaces remain content at a chosen span's end.
+  const at = chosen
+    ? isEmptyEditableSpan(target)
+      ? 0
+      : (text.textContent ?? "").length
+    : 0;
+  return { key, node: text, offset: at };
+}
+
 // A field's spans are split by BOTH inline style boundaries and line breaks. At
 // a line break the engine consumes the interword glue (or the authored newline)
 // into the break itself, so that display character has no DOM character on
@@ -256,25 +296,128 @@ export function positionFromPoint(x: number, y: number): { node: Node; offset: n
   return range ? { node: range.startContainer, offset: range.startOffset } : null;
 }
 
-export function nearestLineByPoint(host: HTMLElement, clientX: number, clientY: number): HTMLElement | null {
+// Clicks stay near the sheet; active drags keep tracking beyond its bounds.
+export function nearestLineByPoint(
+  host: HTMLElement,
+  clientX: number,
+  clientY: number,
+  reach: "sheet" | "anywhere" = "sheet"
+): HTMLElement | null {
   let best: HTMLElement | null = null;
-  let distance = Infinity;
+  let bestVertical = Infinity;
+  let bestHorizontal = Infinity;
   for (const line of lineDivs(host)) {
     const rect = line.getBoundingClientRect();
-    if (clientX < rect.left - 4 || clientX > rect.right + 4) continue;
-    const nextDistance =
+    const horizontal =
+      clientX < rect.left ? rect.left - clientX : clientX > rect.right ? clientX - rect.right : 0;
+    if (reach === "sheet" && horizontal > 4) continue;
+    const vertical =
       clientY < rect.top ? rect.top - clientY : clientY > rect.bottom ? clientY - rect.bottom : 0;
-    if (nextDistance < distance) {
-      distance = nextDistance;
+    if (vertical < bestVertical || (vertical === bestVertical && horizontal < bestHorizontal)) {
+      bestVertical = vertical;
+      bestHorizontal = horizontal;
       best = line;
     }
   }
-  return distance <= 200 ? best : null;
+  if (reach === "anywhere") return best;
+  return bestVertical <= 200 ? best : null;
 }
 
 export function contentSpansOf(line: HTMLElement): HTMLElement[] {
   return Array.from(line.querySelectorAll<HTMLElement>("[data-tsdf]:not([data-tsdm])")).filter(
     (element) => element.firstChild?.nodeType === Node.TEXT_NODE
+  );
+}
+
+// Drag anchors use field edges, never invisible inline-style boundaries.
+// The final edge retains authored trailing whitespace.
+export function fieldEdgeAnchors(
+  line: HTMLElement,
+  key?: string
+): { x: number; position: { node: Node; offset: number } }[] {
+  const spans = contentSpansOf(line);
+  const anchors: { x: number; position: { node: Node; offset: number } }[] = [];
+  let index = 0;
+  while (index < spans.length) {
+    const spanKey = spans[index].getAttribute("data-tsdf");
+    let end = index;
+    while (end + 1 < spans.length && spans[end + 1].getAttribute("data-tsdf") === spanKey) end += 1;
+    if (!key || spanKey === key) {
+      const first = spans[index];
+      const last = spans[end];
+      anchors.push({
+        x: first.getBoundingClientRect().left,
+        position: { node: first.firstChild!, offset: indentEndOffset(first) }
+      });
+      const lastText = last.firstChild as Text;
+      anchors.push({
+        x: last.getBoundingClientRect().right,
+        position:
+          end === spans.length - 1 && !isEmptyEditableSpan(last)
+            ? { node: lastText, offset: (lastText.textContent ?? "").length }
+            : spanEndPosition(last)
+      });
+    }
+    index = end + 1;
+  }
+  return anchors;
+}
+
+export type DisplayRange = { dStart: number; dEnd: number };
+
+// Wrapped fields contribute one display range per painted line.
+export function visualLineRanges(
+  host: HTMLElement,
+  key: string,
+  display: string
+): DisplayRange[] {
+  const ranges: DisplayRange[] = [];
+  for (const line of lineDivs(host)) {
+    const spans = contentSpansOf(line).filter(
+      (span) => span.getAttribute("data-tsdf") === key
+    );
+    if (!spans.length) continue;
+    const first = spans[0];
+    const last = spans[spans.length - 1];
+    const start = caretToDisplayIndex(host, key, display, first.firstChild!, 0);
+    const lastText = last.firstChild?.textContent ?? "";
+    let end = caretToDisplayIndex(
+      host,
+      key,
+      display,
+      last.firstChild!,
+      isEmptyEditableSpan(last) ? 0 : lastText.length
+    );
+    if (start === null || end === null) continue;
+    // Keep the breaker's consumed separator with the preceding visual line.
+    if (end < display.length && BREAK_CHARS.has(display[end])) end += 1;
+    ranges.push({ dStart: start, dEnd: Math.max(start, end) });
+  }
+  return ranges;
+}
+
+// A complete-field selection remains the explicit paragraph-wide formatting gesture.
+export function selectedVisualLineRanges(
+  host: HTMLElement,
+  key: string,
+  display: string,
+  dStart: number,
+  dEnd: number
+): DisplayRange[] {
+  if (dStart === 0 && dEnd >= display.length) {
+    return [{ dStart: 0, dEnd: display.length }];
+  }
+  const lines = visualLineRanges(host, key, display);
+  if (dStart === dEnd) {
+    const atCaret = lines.find(
+      (range, index) =>
+        dStart >= range.dStart &&
+        (dStart < range.dEnd || index === lines.length - 1 && dStart === range.dEnd)
+    );
+    return atCaret ? [atCaret] : [];
+  }
+  return lines.filter(
+    (range) => dEnd > range.dStart && dStart < range.dEnd
   );
 }
 
@@ -287,11 +430,67 @@ export function spanEndPosition(span: HTMLElement): { node: Node; offset: number
   return { node: textNode, offset: end };
 }
 
+// Measured substring advances recover a precise caret when browser APIs return null.
+function positionInSpanByX(
+  span: HTMLElement,
+  clientX: number
+): { node: Node; offset: number } {
+  const textNode = span.firstChild as Text;
+  if (isEmptyEditableSpan(span)) return { node: textNode, offset: 0 };
+  const text = textNode.textContent ?? "";
+  const spanRect = span.getBoundingClientRect();
+  if (clientX <= spanRect.left) return { node: textNode, offset: 0 };
+  if (clientX >= spanRect.right) return { node: textNode, offset: text.length };
+
+  const range = document.createRange();
+  const xAt = (offset: number): number => {
+    if (offset === 0) return spanRect.left;
+    range.setStart(textNode, 0);
+    range.setEnd(textNode, offset);
+    const rects = range.getClientRects();
+    return rects.length ? rects[rects.length - 1].right : spanRect.left;
+  };
+
+  let low = 0;
+  let high = text.length;
+  while (low < high) {
+    const middle = Math.floor((low + high) / 2);
+    if (xAt(middle) < clientX) low = middle + 1;
+    else high = middle;
+  }
+  const after = low;
+  const before = Math.max(0, after - 1);
+  const offset =
+    Math.abs(clientX - xAt(before)) <= Math.abs(xAt(after) - clientX)
+      ? before
+      : after;
+  return { node: textNode, offset };
+}
+
+// Treat first-line indentation as one non-addressable unit before the first glyph.
+export function indentEndOffset(span: HTMLElement): number {
+  const text = span.firstChild?.textContent ?? "";
+  const match = /^ +/.exec(text);
+  return match ? Math.min(match[0].length, text.length) : 0;
+}
+
+const pastIndent = (
+  span: HTMLElement,
+  position: { node: Node; offset: number },
+  isFirstSpan: boolean
+): { node: Node; offset: number } => {
+  if (!isFirstSpan) return position;
+  const indent = indentEndOffset(span);
+  return position.offset < indent ? { node: position.node, offset: indent } : position;
+};
+
 export function placeInLine(line: HTMLElement, clientX: number): { node: Node; offset: number } | null {
   const spans = contentSpansOf(line);
   if (!spans.length) return lineEdgePosition(line, "start");
   const firstRect = spans[0].getBoundingClientRect();
-  if (clientX <= firstRect.left) return { node: spans[0].firstChild!, offset: 0 };
+  if (clientX <= firstRect.left) {
+    return { node: spans[0].firstChild!, offset: indentEndOffset(spans[0]) };
+  }
   let prev: HTMLElement | null = null;
   for (const span of spans) {
     const rect = span.getBoundingClientRect();
@@ -303,14 +502,15 @@ export function placeInLine(line: HTMLElement, clientX: number): { node: Node; o
         const midpoint = (prev.getBoundingClientRect().right + rect.left) / 2;
         if (clientX < midpoint) return spanEndPosition(prev);
       }
-      return { node: span.firstChild!, offset: 0 };
+      return { node: span.firstChild!, offset: span === spans[0] ? indentEndOffset(span) : 0 };
     }
     if (clientX <= rect.right) {
+      const isFirstSpan = span === spans[0];
       const position = positionFromPoint(clientX, rect.top + rect.height / 2);
       if (position && position.node.nodeType === Node.TEXT_NODE && lineOf(position.node) === line) {
-        return position;
+        return pastIndent(span, position, isFirstSpan && position.node === span.firstChild);
       }
-      return { node: span.firstChild!, offset: 0 };
+      return pastIndent(span, positionInSpanByX(span, clientX), isFirstSpan);
     }
     prev = span;
   }

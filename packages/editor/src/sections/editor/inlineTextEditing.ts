@@ -14,8 +14,14 @@ import type { FieldSrc } from "@typeset/engine/typeset/types.ts";
 import type { DocumentFontFamily } from "@typeset/engine/typeset/fontRegistry.ts";
 import { FONT_FAMILY_ALTERNATION } from "@typeset/engine/lib/fontFamilies.ts";
 import {
+  alignmentFromInlineMarks,
   inlineFontSizePt,
   isInlineFontSizePt,
+  paragraphIndentFromInlineMarks,
+  paragraphIndentPt,
+  paragraphLineHeight,
+  paragraphSpacingFromInlineMarks,
+  paragraphSpacePt,
   type FieldAlignment
 } from "@typeset/engine/lib/inlineMarksText.ts";
 import { automaticLinkHref, decodeLinkHref, encodeLinkHref } from "@typeset/engine/lib/links.ts";
@@ -30,6 +36,11 @@ type DisplayChar = {
   fontFamily: DocumentFontFamily | null;
   fontSizePt: number | null;
   alignment: FieldAlignment | null;
+  lineHeight: number | null;
+  spaceBeforePt: number | null;
+  spaceAfterPt: number | null;
+  // Block indentation moves every wrapped line and narrows its measure.
+  indentPt: number | null;
   linkHref: string | null;
   linkSuppressed: boolean;
 };
@@ -40,6 +51,9 @@ export type TypingFormat = Pick<
 >;
 
 export type DisplayMap = {
+  // Original inline-mark value. Empty fields have no display chars, so the
+  // source is the only place their paragraph-level wrappers can survive.
+  source: string;
   display: string;
   chars: DisplayChar[];
   // Value index where chars[i].raw starts (tags occupy value space too).
@@ -65,7 +79,7 @@ export type TypesetSelection = {
 // here as well, which meant a family could serialize into a value that the
 // editor's own display map then failed to recognise.
 const TAG_RE = new RegExp(
-  `^<\\/?(b|i|u|nolink)>|^<link=([^>\\s]+)>|^<\\/link>|^<font=(${FONT_FAMILY_ALTERNATION})>|^<\\/font>|^<size=(\\d+(?:\\.\\d+)?)>|^<\\/size>|^<align=(left|center|right|justify)>|^<\\/align>`,
+  `^<\\/?(b|i|u|nolink)>|^<link=([^>\\s]+)>|^<\\/link>|^<font=(${FONT_FAMILY_ALTERNATION})>|^<\\/font>|^<size=(\\d+(?:\\.\\d+)?)>|^<\\/size>|^<align=(left|center|right|justify)>|^<\\/align>|^<line-height=(\\d+(?:\\.\\d+)?)>|^<\\/line-height>|^<space-before=(\\d+(?:\\.\\d+)?)>|^<\\/space-before>|^<space-after=(\\d+(?:\\.\\d+)?)>|^<\\/space-after>|^<indent=(\\d+(?:\\.\\d+)?)>|^<\\/indent>`,
   "i"
 );
 
@@ -87,13 +101,21 @@ export function buildDisplayMap(value: string, opts?: { uppercase?: boolean; pre
   const fontStack: DocumentFontFamily[] = [];
   const sizeStack: number[] = [];
   const alignmentStack: FieldAlignment[] = [];
+  const lineHeightStack: number[] = [];
+  const spaceBeforeStack: number[] = [];
+  const spaceAfterStack: number[] = [];
+  const indentStack: number[] = [];
   const linkStack: Array<string | null> = [];
   let linkSuppressed = 0;
   let i = 0;
   while (i < value.length) {
     const tag = TAG_RE.exec(value.slice(i));
     if (tag) {
-      if (tag[5]) alignmentStack.push(tag[5].toLowerCase() as FieldAlignment);
+      if (tag[9]) indentStack.push(paragraphIndentPt(Number(tag[9])));
+      else if (tag[8]) spaceAfterStack.push(paragraphSpacePt(Number(tag[8])));
+      else if (tag[7]) spaceBeforeStack.push(paragraphSpacePt(Number(tag[7])));
+      else if (tag[6]) lineHeightStack.push(paragraphLineHeight(Number(tag[6])));
+      else if (tag[5]) alignmentStack.push(tag[5].toLowerCase() as FieldAlignment);
       else if (tag[3]) fontStack.push(tag[3] as DocumentFontFamily);
       else if (tag[4]) {
         const size = Number(tag[4]);
@@ -102,6 +124,10 @@ export function buildDisplayMap(value: string, opts?: { uppercase?: boolean; pre
       else if (tag[0].toLowerCase() === "</font>") fontStack.pop();
       else if (tag[0].toLowerCase() === "</size>") sizeStack.pop();
       else if (tag[0].toLowerCase() === "</align>") alignmentStack.pop();
+      else if (tag[0].toLowerCase() === "</line-height>") lineHeightStack.pop();
+      else if (tag[0].toLowerCase() === "</space-before>") spaceBeforeStack.pop();
+      else if (tag[0].toLowerCase() === "</space-after>") spaceAfterStack.pop();
+      else if (tag[0].toLowerCase() === "</indent>") indentStack.pop();
       else if (tag[0].toLowerCase() === "</link>") linkStack.pop();
       else {
         const name = tag[1].toLowerCase();
@@ -122,6 +148,10 @@ export function buildDisplayMap(value: string, opts?: { uppercase?: boolean; pre
       fontFamily: fontStack[fontStack.length - 1] ?? null,
       fontSizePt: sizeStack[sizeStack.length - 1] ?? null,
       alignment: alignmentStack[alignmentStack.length - 1] ?? null,
+      lineHeight: lineHeightStack[lineHeightStack.length - 1] ?? null,
+      spaceBeforePt: spaceBeforeStack[spaceBeforeStack.length - 1] ?? null,
+      spaceAfterPt: spaceAfterStack[spaceAfterStack.length - 1] ?? null,
+      indentPt: indentStack[indentStack.length - 1] ?? null,
       linkHref: linkStack[linkStack.length - 1] ?? null,
       linkSuppressed: linkSuppressed > 0
     };
@@ -211,7 +241,7 @@ export function buildDisplayMap(value: string, opts?: { uppercase?: boolean; pre
     valueStart.pop();
     display = display.slice(0, -1);
   }
-  return { display, chars, valueStart, prefix, suffix };
+  return { source: value, display, chars, valueStart, prefix, suffix };
 }
 
 // ---- display chars → value (canonical <b><i><u> nesting; flags-driven) ----
@@ -219,13 +249,17 @@ export function buildDisplayMap(value: string, opts?: { uppercase?: boolean; pre
 function serializeChars(prefix: string, chars: DisplayChar[], suffix: string, boundary: number): { value: string; boundaryIndex: number } {
   let value = prefix;
   let boundaryIndex = -1;
-  let open: Pick<DisplayChar, "bold" | "italic" | "underline" | "fontFamily" | "fontSizePt" | "alignment" | "linkHref" | "linkSuppressed"> = {
+  let open: Pick<DisplayChar, "bold" | "italic" | "underline" | "fontFamily" | "fontSizePt" | "alignment" | "lineHeight" | "spaceBeforePt" | "spaceAfterPt" | "indentPt" | "linkHref" | "linkSuppressed"> = {
     bold: false,
     italic: false,
     underline: false,
     fontFamily: null,
     fontSizePt: null,
     alignment: null,
+    lineHeight: null,
+    spaceBeforePt: null,
+    spaceAfterPt: null,
+    indentPt: null,
     linkHref: null,
     linkSuppressed: false
   };
@@ -238,7 +272,24 @@ function serializeChars(prefix: string, chars: DisplayChar[], suffix: string, bo
     if (open.linkHref) value += "</link>";
     if (open.linkSuppressed) value += "</nolink>";
     if (open.alignment) value += "</align>";
-    open = { bold: false, italic: false, underline: false, fontFamily: null, fontSizePt: null, alignment: null, linkHref: null, linkSuppressed: false };
+    if (open.lineHeight) value += "</line-height>";
+    if (open.spaceBeforePt !== null) value += "</space-before>";
+    if (open.spaceAfterPt !== null) value += "</space-after>";
+    if (open.indentPt !== null) value += "</indent>";
+    open = {
+      bold: false,
+      italic: false,
+      underline: false,
+      fontFamily: null,
+      fontSizePt: null,
+      alignment: null,
+      lineHeight: null,
+      spaceBeforePt: null,
+      spaceAfterPt: null,
+      indentPt: null,
+      linkHref: null,
+      linkSuppressed: false
+    };
   };
   chars.forEach((c, idx) => {
     if (idx === boundary) boundaryIndex = value.length;
@@ -249,10 +300,18 @@ function serializeChars(prefix: string, chars: DisplayChar[], suffix: string, bo
       c.fontFamily !== open.fontFamily ||
       c.fontSizePt !== open.fontSizePt ||
       c.alignment !== open.alignment ||
+      c.lineHeight !== open.lineHeight ||
+      c.spaceBeforePt !== open.spaceBeforePt ||
+      c.spaceAfterPt !== open.spaceAfterPt ||
+      c.indentPt !== open.indentPt ||
       c.linkHref !== open.linkHref ||
       c.linkSuppressed !== open.linkSuppressed
     ) {
       closeAll();
+      if (c.indentPt !== null) value += `<indent=${c.indentPt}>`;
+      if (c.spaceAfterPt !== null) value += `<space-after=${c.spaceAfterPt}>`;
+      if (c.spaceBeforePt !== null) value += `<space-before=${c.spaceBeforePt}>`;
+      if (c.lineHeight) value += `<line-height=${c.lineHeight}>`;
       if (c.alignment) value += `<align=${c.alignment}>`;
       if (c.linkSuppressed) value += "<nolink>";
       if (c.linkHref) value += `<link=${encodeLinkHref(c.linkHref)}>`;
@@ -268,6 +327,10 @@ function serializeChars(prefix: string, chars: DisplayChar[], suffix: string, bo
         fontFamily: c.fontFamily,
         fontSizePt: c.fontSizePt,
         alignment: c.alignment,
+        lineHeight: c.lineHeight,
+        spaceBeforePt: c.spaceBeforePt,
+        spaceAfterPt: c.spaceAfterPt,
+        indentPt: c.indentPt,
         linkHref: c.linkHref,
         linkSuppressed: c.linkSuppressed
       };
@@ -281,6 +344,25 @@ function serializeChars(prefix: string, chars: DisplayChar[], suffix: string, bo
   return { value, boundaryIndex };
 }
 
+function emptyFieldFormat(map: DisplayMap): DisplayChar {
+  const spacing = paragraphSpacingFromInlineMarks(map.source);
+  return {
+    raw: "",
+    bold: false,
+    italic: false,
+    underline: false,
+    fontFamily: null,
+    fontSizePt: null,
+    alignment: alignmentFromInlineMarks(map.source),
+    lineHeight: spacing.lineHeight,
+    spaceBeforePt: spacing.spaceBeforePt,
+    spaceAfterPt: spacing.spaceAfterPt,
+    indentPt: paragraphIndentFromInlineMarks(map.source) || null,
+    linkHref: null,
+    linkSuppressed: false
+  };
+}
+
 // Replace display range [dStart, dEnd) with plain text; returns the new value
 // and the caret's VALUE index (convert back to display with a fresh map, so
 // newly-formed ligatures — e.g. typing the second "-" of "--" — land right).
@@ -291,16 +373,7 @@ export function applyEdit(
   insert: string,
   typingFormat?: Partial<TypingFormat>
 ): { value: string; caretValueIndex: number } {
-  const inherit = map.chars[dStart - 1] ?? map.chars[dStart] ?? {
-    bold: false,
-    italic: false,
-    underline: false,
-    fontFamily: null,
-    fontSizePt: null,
-    alignment: null,
-    linkHref: null,
-    linkSuppressed: false
-  };
+  const inherit = map.chars[dStart - 1] ?? map.chars[dStart] ?? emptyFieldFormat(map);
   // Character formatting is inherited from the LEFT, the way typing works. Link
   // state is not: a word processor does not extend a hyperlink when you type at
   // its edge. So the link is inherited only when the insertion point is strictly
@@ -322,6 +395,10 @@ export function applyEdit(
     fontFamily: inherit.fontFamily,
     fontSizePt: inherit.fontSizePt,
     alignment: inherit.alignment,
+    lineHeight: inherit.lineHeight,
+    spaceBeforePt: inherit.spaceBeforePt,
+    spaceAfterPt: inherit.spaceAfterPt,
+    indentPt: inherit.indentPt,
     linkHref,
     linkSuppressed,
     ...typingFormat
@@ -341,6 +418,10 @@ export function applyEdit(
         fontFamily: inherit.fontFamily,
         fontSizePt: inherit.fontSizePt,
         alignment: inherit.alignment,
+        lineHeight: inherit.lineHeight,
+        spaceBeforePt: inherit.spaceBeforePt,
+        spaceAfterPt: inherit.spaceAfterPt,
+        indentPt: inherit.indentPt,
         linkHref: null,
         linkSuppressed: false
       }]
@@ -373,22 +454,23 @@ export function applyInlineFragment(
   singleLine = false
 ): { value: string; caretValueIndex: number } {
   const fragment = buildDisplayMap(fragmentValue, { preserveWhitespace: true });
-  const inserted = singleLine
+  const fragmentChars = singleLine
     ? fragment.chars.map((char) => ({
         ...char,
         raw: char.raw.replace(/\r?\n/g, " ")
       }))
     : fragment.chars;
-  const inherit = map.chars[dStart - 1] ?? map.chars[dStart] ?? {
-    bold: false,
-    italic: false,
-    underline: false,
-    fontFamily: null,
-    fontSizePt: null,
-    alignment: null,
-    linkHref: null,
-    linkSuppressed: false
-  };
+  const inherit = map.chars[dStart - 1] ?? map.chars[dStart] ?? emptyFieldFormat(map);
+  const inserted = map.chars.length === 0
+    ? fragmentChars.map((char) => ({
+        ...char,
+        alignment: inherit.alignment ?? char.alignment,
+        lineHeight: inherit.lineHeight ?? char.lineHeight,
+        spaceBeforePt: inherit.spaceBeforePt ?? char.spaceBeforePt,
+        spaceAfterPt: inherit.spaceAfterPt ?? char.spaceAfterPt,
+        indentPt: inherit.indentPt ?? char.indentPt
+      }))
+    : fragmentChars;
   const reviveSuffix =
     inserted.length > 0 &&
     dStart === map.chars.length &&
@@ -403,6 +485,10 @@ export function applyInlineFragment(
         fontFamily: inherit.fontFamily,
         fontSizePt: inherit.fontSizePt,
         alignment: inherit.alignment,
+        lineHeight: inherit.lineHeight,
+        spaceBeforePt: inherit.spaceBeforePt,
+        spaceAfterPt: inherit.spaceAfterPt,
+        indentPt: inherit.indentPt,
         linkHref: null,
         linkSuppressed: false
       }]
@@ -422,6 +508,33 @@ export function applyInlineFragment(
       dStart + leading.length + inserted.length
     )
   );
+}
+
+// Authored indentation uses measured spaces that still behave as one tab stop.
+function spaceRunBefore(display: string, index: number): number {
+  let run = 0;
+  while (index - run > 0 && display[index - run - 1] === " ") run += 1;
+  return run;
+}
+
+function spaceRunAfter(display: string, index: number): number {
+  let run = 0;
+  while (index + run < display.length && display[index + run] === " ") run += 1;
+  return run;
+}
+
+// Remove exactly one authored stop; shorter runs remain ordinary typed spaces.
+export function indentDeletionRange(
+  display: string,
+  caret: number,
+  direction: "backward" | "forward",
+  width: number
+): { start: number; end: number } | null {
+  if (width < 1) return null;
+  if (direction === "backward") {
+    return spaceRunBefore(display, caret) < width ? null : { start: caret - width, end: caret };
+  }
+  return spaceRunAfter(display, caret) < width ? null : { start: caret, end: caret + width };
 }
 
 // Deleting text leaves the caret with the typography of the final removed
@@ -490,7 +603,134 @@ export function setAlignment(
   map: DisplayMap,
   alignment: FieldAlignment
 ): { value: string; caretValueIndex: number } {
+  if (map.chars.length === 0) return setEmptyParagraphProperty(map, "align", alignment);
   const chars = map.chars.map((char) => ({ ...char, alignment }));
+  return withBoundary(serializeChars(map.prefix, chars, map.suffix, chars.length));
+}
+
+export function setParagraphLineHeight(
+  map: DisplayMap,
+  lineHeight: number
+): { value: string; caretValueIndex: number } {
+  return setLineHeightRanges(
+    map,
+    [{ dStart: 0, dEnd: map.chars.length }],
+    lineHeight
+  );
+}
+
+type EmptyParagraphProperty =
+  | "align"
+  | "line-height"
+  | "space-before"
+  | "space-after"
+  | "indent";
+
+// A textless paragraph has no DisplayChar to carry block metadata. Keep those
+// properties as canonical wrappers around its remaining empty-field marks.
+function setEmptyParagraphProperty(
+  map: DisplayMap,
+  property: EmptyParagraphProperty,
+  value: number | FieldAlignment | null
+): { value: string; caretValueIndex: number } {
+  const pattern = new RegExp(
+    `<${property}=(?:\\d+(?:\\.\\d+)?|left|center|right|justify)>|<\\/${property}>`,
+    "gi"
+  );
+  const inner = map.source.replace(pattern, "");
+  const next = value === null
+    ? inner
+    : `<${property}=${value}>${inner}</${property}>`;
+  return { value: next, caretValueIndex: next.length };
+}
+
+export function setLineHeightRanges(
+  map: DisplayMap,
+  ranges: ReadonlyArray<{ dStart: number; dEnd: number }>,
+  lineHeight: number
+): { value: string; caretValueIndex: number } {
+  const value = paragraphLineHeight(lineHeight);
+  if (
+    map.chars.length === 0 &&
+    ranges.some((range) => range.dStart === 0 && range.dEnd === 0)
+  ) {
+    return setEmptyParagraphProperty(map, "line-height", value);
+  }
+  const chars = map.chars.map((char, index) =>
+    ranges.some((range) => index >= range.dStart && index < range.dEnd)
+      ? { ...char, lineHeight: value }
+      : char
+  );
+  return withBoundary(serializeChars(map.prefix, chars, map.suffix, chars.length));
+}
+
+export function setParagraphSpaceBefore(
+  map: DisplayMap,
+  spaceBeforePt: number
+): { value: string; caretValueIndex: number } {
+  const value = paragraphSpacePt(spaceBeforePt);
+  if (map.chars.length === 0) return setEmptyParagraphProperty(map, "space-before", value);
+  const chars = map.chars.map((char) => ({ ...char, spaceBeforePt: value }));
+  return withBoundary(serializeChars(map.prefix, chars, map.suffix, chars.length));
+}
+
+// The host measures a half-inch first-line stop; block indentation stores its point value.
+export const TAB_STOP_PT = 36;
+
+// Tab climbs first-line then block indentation; Shift+Tab reverses that order.
+// Whole-paragraph selections move directly at the block level.
+export function indentStep(
+  map: DisplayMap,
+  dStart: number,
+  dEnd: number,
+  unit: string,
+  direction: "in" | "out"
+): { value: string; shift: number } | null {
+  const display = map.display;
+  const leading = /^ */.exec(display)?.[0].length ?? 0;
+  const block = map.chars[0]?.indentPt ?? 0;
+  if (direction === "out") {
+    if (block > 0) {
+      return { value: setParagraphIndent(map, Math.max(0, block - TAB_STOP_PT)).value, shift: 0 };
+    }
+    if (leading === 0) return null;
+    const removed = Math.min(unit.length, leading);
+    return { value: applyEdit(map, 0, removed, "").value, shift: -removed };
+  }
+  const wholeParagraph = dEnd > dStart && dStart <= leading && dEnd >= display.length;
+  return wholeParagraph || leading >= unit.length
+    ? { value: setParagraphIndent(map, block + TAB_STOP_PT).value, shift: 0 }
+    : { value: applyEdit(map, 0, 0, unit).value, shift: unit.length };
+}
+
+// Zero removes the whole-field wrapper so unindented values serialize canonically.
+export function setParagraphIndent(
+  map: DisplayMap,
+  indentPt: number
+): { value: string; caretValueIndex: number } {
+  const value = paragraphIndentPt(indentPt);
+  if (map.chars.length === 0) {
+    return setEmptyParagraphProperty(map, "indent", value > 0 ? value : null);
+  }
+  const chars = map.chars.map((char) => ({ ...char, indentPt: value > 0 ? value : null }));
+  return withBoundary(serializeChars(map.prefix, chars, map.suffix, chars.length));
+}
+
+// The indent every character of the field agrees on, which for a whole-field
+// wrapper is simply the paragraph's own.
+export function paragraphIndentOf(map: DisplayMap): number {
+  return map.chars[0]?.indentPt ?? paragraphIndentPt(
+    Number(/<indent=(\d+(?:\.\d+)?)>/i.exec(map.source)?.[1] ?? 0)
+  );
+}
+
+export function setParagraphSpaceAfter(
+  map: DisplayMap,
+  spaceAfterPt: number
+): { value: string; caretValueIndex: number } {
+  const value = paragraphSpacePt(spaceAfterPt);
+  if (map.chars.length === 0) return setEmptyParagraphProperty(map, "space-after", value);
+  const chars = map.chars.map((char) => ({ ...char, spaceAfterPt: value }));
   return withBoundary(serializeChars(map.prefix, chars, map.suffix, chars.length));
 }
 
@@ -527,14 +767,7 @@ export function replaceWithLink(
   text: string,
   href: string
 ): { value: string; caretValueIndex: number } {
-  const inherit = map.chars[dStart - 1] ?? map.chars[dStart] ?? {
-    bold: false,
-    italic: false,
-    underline: false,
-    fontFamily: null,
-    fontSizePt: null,
-    alignment: null
-  };
+  const inherit = map.chars[dStart - 1] ?? map.chars[dStart] ?? emptyFieldFormat(map);
   const inserted: DisplayChar[] = Array.from(text).map((ch) => ({
     raw: ch,
     bold: inherit.bold,
@@ -543,6 +776,10 @@ export function replaceWithLink(
     fontFamily: inherit.fontFamily,
     fontSizePt: inherit.fontSizePt,
     alignment: inherit.alignment,
+    lineHeight: inherit.lineHeight,
+    spaceBeforePt: inherit.spaceBeforePt,
+    spaceAfterPt: inherit.spaceAfterPt,
+    indentPt: inherit.indentPt,
     linkHref: href,
     linkSuppressed: false
   }));
@@ -723,6 +960,16 @@ export function splitValueAt(map: DisplayMap, d: number): { before: string; afte
 }
 
 // Value boundary → display boundary (smallest display index at/after it).
+// A display index past the final character maps to the value's end, never zero.
+export function valueIndexForDisplayIndex(
+  map: DisplayMap,
+  value: string,
+  index: number
+): number {
+  const clamped = Math.max(0, Math.min(index, map.display.length));
+  return clamped < map.display.length ? map.valueStart[clamped] ?? value.length : value.length;
+}
+
 export function displayIndexForValueIndex(map: DisplayMap, valueIndex: number): number {
   for (let i = 0; i < map.valueStart.length; i += 1) {
     if (map.valueStart[i] >= valueIndex) return i;

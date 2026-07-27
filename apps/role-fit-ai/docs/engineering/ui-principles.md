@@ -63,14 +63,50 @@ at all: the resume Save menu carried a permanent "save a base resume to use it
 automatically" sentence that its own primary row already said at the point of
 action, costing 48px on every open.
 
-Both documents persist the same way: `base-resume*.resume` and
-`cover-letter*.cover` sit side by side in the workspace, each with named
-variants and `.trash/` version history, and each save archives the version it
-replaces. `server/coverLetterWorkspace.ts` is a sibling of `server/workspace.ts`,
+Both documents persist the same way: `resumes/<variant>.resume` and
+`cover-letters/<variant>.cover` use separate workspace folders, each with named
+variants and local `.trash/` history, and each save archives the version it
+replaces. The filename stem is the variant identity; the extension is the
+document kind. `server/coverLetterWorkspace.ts` is a sibling of `server/workspace.ts`,
 sharing its storage primitives (lock, atomic write, trash stamping) without
 inheriting the base resume's multi-extension import paths.
-Resume Header and Section controls sit immediately before Spacing in the shared
-formatting row; at narrow widths the whole group moves into More in that order.
+Each editor remembers its last active saved variant in origin-scoped browser
+storage and reopens it on startup; a missing or cleared preference falls back
+to the server's first option (Default when present). Detached starters, blank
+documents, and uploaded files clear the cover-letter preference.
+Base cover letters use modern block formatting: first lines remain flush left
+and paragraph separation provides the visual break. Authored indentation is
+available, but is not imposed on every base paragraph.
+Header controls sit with the document tools in both toolbars; the resume also
+includes Section. At narrow widths the group moves into More in its established
+order.
+The shared Page menu uses the simple labels Narrow, Normal, and Custom. Narrow
+applies 0.5 inches on all sides and Normal applies 1 inch; only the resulting
+physical values persist in editable files. Custom supports 0.25 through
+3 inches per side, and all four inch values stay visible under every preset.
+The resume keeps global line height inside Spacing, alongside inspectable
+Compact, Balanced, Spacious, and Custom structural values.
+Cover-letter line spacing is a vertical, selection-scoped menu: Single, 1.15, 1.5, Double,
+paragraph space before/after, and Custom spacing. The menu is compact and uses
+a line-list icon; Custom spacing opens a focused modal with Cancel and Apply.
+Line height adds space below each targeted visual line, never above it; selecting
+the complete paragraph targets all its lines. Before/after spacing remains
+paragraph-local, and every action must preserve the active editor selection.
+The custom selection paint includes the vertical line/paragraph gap owned by
+each selected line, remains text-width horizontally, and stops at page breaks.
+In resumes, Tab and Shift+Tab traverse logical header and section fields,
+skipping structural headings and selecting a wrapped destination as one field.
+The optional cover-letter header uses the same navigation over name/contact
+fields only. In cover-letter body paragraphs, Tab indents and Shift+Tab
+outdents along a measured half-inch ladder; neither moves focus. That indentation
+must remain visible after repaint and in PDF output. Edge-assisted dragging
+snaps only its initial anchor; either drag direction retains character-precise
+partial selection on paragraph starts, wrapped-line starts, and final glyphs.
+Up/Down navigation must enter and leave authored blank lines in either
+direction, including consecutive blank lines; blank-line hit testing stays
+bound to the intended painted line rather than an adjacent text line.
+Resume print-style changes participate in the same chronological Undo/Redo
+stream as content. Zoom, spell-check, and preset labels do not.
 
 Polish should feel like a review queue, not a hidden overwrite. By default,
 the user selects editable resume sections in the document; identity,

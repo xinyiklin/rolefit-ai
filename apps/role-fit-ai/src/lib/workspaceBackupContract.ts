@@ -42,6 +42,10 @@ export type WorkspaceBackupEnvelope = {
 const ROOT_BASE_RESUME_RE = /^base-resume(?:-[A-Za-z0-9][A-Za-z0-9_-]*)?\.resume$/;
 const LEGACY_BASE_RESUME_RE = /^base-resume\.(?:txt|md|csv)$/;
 const HISTORY_BASE_RESUME_RE = /^\.trash\/[A-Za-z0-9T-]+Z__base-resume(?:-[A-Za-z0-9][A-Za-z0-9_-]*)?\.(?:resume|txt|md|csv)$/;
+const RESUME_RE = /^resumes\/[A-Za-z0-9][A-Za-z0-9_-]*\.(?:resume|txt|md|csv)$/;
+const RESUME_HISTORY_RE = /^resumes\/\.trash\/[A-Za-z0-9T+-]+Z?__[A-Za-z0-9][A-Za-z0-9_-]*\.(?:resume|txt|md|csv)$/;
+const BASE_RESUME_FILE_NAME_RE = /^[A-Za-z0-9][A-Za-z0-9_-]*\.resume$/;
+const LEGACY_RESUME_FILE_NAME_RE = /^[A-Za-z0-9][A-Za-z0-9_-]*\.(?:txt|md|csv)$/;
 const APPLICATION_PDF_RE = /^applications\/[A-Za-z0-9_-]{1,80}\/resume\.pdf$/;
 const SHA256_RE = /^[a-f0-9]{64}$/;
 
@@ -60,6 +64,8 @@ export function isManagedWorkspaceBackupPath(path: string): boolean {
     || ROOT_BASE_RESUME_RE.test(path)
     || LEGACY_BASE_RESUME_RE.test(path)
     || HISTORY_BASE_RESUME_RE.test(path)
+    || RESUME_RE.test(path)
+    || RESUME_HISTORY_RE.test(path)
     || APPLICATION_PDF_RE.test(path);
 }
 
@@ -153,7 +159,11 @@ export function parsePortableBrowserPreferences(value: unknown): PortableBrowser
   }
   const lastBaseResume = typeof value.lastBaseResume === "string" ? value.lastBaseResume.trim() : "";
   if (lastBaseResume.length > 200 ||
-      (lastBaseResume && !ROOT_BASE_RESUME_RE.test(lastBaseResume) && !LEGACY_BASE_RESUME_RE.test(lastBaseResume))) {
+      (lastBaseResume
+        && !BASE_RESUME_FILE_NAME_RE.test(lastBaseResume)
+        && !LEGACY_RESUME_FILE_NAME_RE.test(lastBaseResume)
+        && !ROOT_BASE_RESUME_RE.test(lastBaseResume)
+        && !LEGACY_BASE_RESUME_RE.test(lastBaseResume))) {
     throw new Error("The backup's selected base resume is invalid.");
   }
   return { settings, lastBaseResume };

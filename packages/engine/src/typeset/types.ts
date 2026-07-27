@@ -75,6 +75,9 @@ export type GlyphRun = {
   style: FontStyle;
   x: number;
   width: number;
+  // Optional selection-authored leading for the visual line containing this
+  // run. It affects vertical layout only; glyph measurement remains unchanged.
+  lineHeight?: number;
   // Linkified runs (contact items and URL-like metadata) use the shared engine
   // underline and carry this destination into the interactive renderer.
   href?: string;
@@ -107,6 +110,7 @@ export type BoxItem = {
   text: string;
   style: FontStyle;
   width: number;
+  lineHeight?: number;
   href?: string;
   underline?: boolean;
 };

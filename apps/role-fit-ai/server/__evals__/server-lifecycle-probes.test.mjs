@@ -149,8 +149,8 @@ try {
   assert.equal(workspace.status, 200);
   const workspaceBody = JSON.parse(workspace.body);
   assert.equal(workspaceBody.path, workspaceDir);
-  assert.equal(workspaceBody.baseResume.fileName, "base-resume.resume");
-  await assert.rejects(readFile(join(appRoot, "job-search-workspace", "base-resume.resume")));
+  assert.equal(workspaceBody.baseResume.fileName, "default.resume");
+  await assert.rejects(readFile(join(appRoot, "workspace", "resumes", "default.resume")));
 
   const missingApi = await get(runtime.port, "/api/not-a-route");
   assert.equal(missingApi.status, 404);

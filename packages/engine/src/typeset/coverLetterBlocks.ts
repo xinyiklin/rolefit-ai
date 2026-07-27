@@ -1,7 +1,17 @@
 import type { DocumentStyle } from "../lib/documentStyle.ts";
-import { alignmentFromInlineMarks } from "../lib/inlineMarksText.ts";
+import {
+  alignmentFromInlineMarks,
+  paragraphIndentFromInlineMarks,
+  paragraphSpacingFromInlineMarks,
+  stripInlineMarks
+} from "../lib/inlineMarksText.ts";
 import { documentFontFamily } from "./fontRegistry.ts";
-import { pageGeometry, paragraphLines, type VLine } from "./blocks.ts";
+import {
+  buildHeaderVerticalStream,
+  pageGeometry,
+  paragraphLines,
+  type VLine
+} from "./blocks.ts";
 import type { ParagraphAlign } from "./types.ts";
 import type { TypesetSchema } from "./schema.ts";
 
@@ -18,26 +28,35 @@ export function buildCoverLetterVerticalStream(
   const family = documentFontFamily(style.fontFamily);
   const size = style.baseFontSizePt;
   const tracking = style.letterSpacingPt;
-  const leading = size * style.lineHeight;
   const paragraphGap = style.bulletGapPt;
   const bodyAlign = (
     ["justify", "center", "right"].includes(style.bodyAlign) ? style.bodyAlign : "left"
   ) as ParagraphAlign;
-  const out: VLine[] = [];
+  const header = buildHeaderVerticalStream(schema, style);
+  const out: VLine[] = [...header];
   const section = schema.sections[0];
   const items = section?.items ?? [];
+  let previousSpaceAfterPt = 0;
 
   items.forEach((item, index) => {
     const value = item.bullets[0] ?? "";
+    const paragraphSpacing = paragraphSpacingFromInlineMarks(value);
+    const leading = size * style.lineHeight;
+    const spaceBeforePt = paragraphSpacing.spaceBeforePt ?? 0;
+    const spaceAfterPt = paragraphSpacing.spaceAfterPt ?? 0;
     const bulletId = item.bulletIds[0] ?? `${item.id}-paragraph`;
+    // Block indentation moves every wrapped line and narrows its measure.
+    const indent = paragraphIndentFromInlineMarks(value);
     const lines = paragraphLines(
       value,
       size,
-      0,
-      geo.textWidth,
+      indent,
+      Math.max(size, geo.textWidth - indent),
       alignmentFromInlineMarks(value) ?? bodyAlign,
       leading,
-      index === 0 ? 0 : leading + paragraphGap,
+      index === 0
+        ? header.length ? leading + style.headerSectionGapPt + spaceBeforePt : spaceBeforePt
+        : leading + paragraphGap + previousSpaceAfterPt + spaceBeforePt,
       false,
       family,
       tracking,
@@ -47,10 +66,14 @@ export function buildCoverLetterVerticalStream(
         sectionId: section?.id ?? "cover-letter",
         entryId: item.id,
         bulletId
-      }
+      },
+      stripInlineMarks(value).trim().length === 0
+        ? paragraphSpacing.lineHeight ?? undefined
+        : undefined
     );
     if (index > 0 && lines.length) lines[0].keepWithPrev = false;
     out.push(...lines);
+    previousSpaceAfterPt = spaceAfterPt;
   });
 
   return out;

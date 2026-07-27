@@ -3,8 +3,123 @@
 Cross-workspace decisions and handoff state. Keep entries factual, dated, and
 bounded; app-only operational detail belongs in the affected app documentation.
 
+## 2026-07-27
+
+- [CODE+TOOL] Content and print-style Undo/Redo now share one coordinator per
+  document rather than module-global state. A divergent edit invalidates Redo
+  across both reducers, loading a document invalidates the prior document's
+  history, and editing a second document cannot split the first one's typing
+  group. Focused reducer probes, both app builds, and a live Typeset
+  style-Undo/content-edit check passed.
+- [CODE+TOOL] Desktop port takeover now resolves the listener PID, revalidates
+  its exact RoleFit health identity, resolves the same PID again, and only then
+  sends one graceful `SIGTERM`. The desktop contract probe exercises matching
+  and mismatched workspace identities, and the Electron ownership/reuse smoke
+  passed.
+
 ## 2026-07-26
 
+- [USER+CODE] Cover letters now mirror resume startup selection: the browser
+  stores only the active saved `.cover` filename, reopens it through the
+  validated workspace select route, clears stale/detached identity, and falls
+  back to the server's first option (Default when present). A startup response
+  cannot replace a blank, starter, upload, external letter, or other document
+  the user opened while it was in flight.
+- [USER+CODE] Base cover-letter variants remain flush-left block letters rather
+  than receiving first-line indents. Current university career-center guidance
+  favors concise one-page, resume-matched professional formatting; paragraph
+  separation supplies the visual boundary while indentation stays optional.
+- [USER+CODE] In prose paragraphs, Tab indents and Shift+Tab outdents rather
+  than navigating focus; neither moves focus out of the page
+  (Escape does). This supersedes the earlier "Shift+Tab is the cover-letter
+  focus escape" decision. One tab stop is measured, not fixed: a half inch
+  converted through the engine's space advance for the caret's own font and
+  size, so it matches a word processor in every family instead of the ~0.11-0.19
+  inch four spaces gave. A caret indents at the caret; a selection indents the
+  lines it covers and survives, including across paragraphs. A plain
+  Backspace/Delete against authored indentation removes exactly one whole stop
+  and never a remainder, so a space typed before the Tab survives it, live and
+  on the held-key replay path; shorter space runs and word/line deletes are
+  unchanged. Structured resume Tab navigation is unchanged and still leaves the
+  key to the browser at a document boundary or for a selection crossing fields.
+- [USER+CODE] A selected line's band covers its LINE BOX: its ink plus the line
+  spacing that line owns, which the engine now publishes per line
+  (`VLine.leading` → `PlacedLine.leading` → `--tsd-line-leading`). Measuring the
+  band from the DOM gap to the next line instead left the last line of every
+  paragraph short and painted the paragraph gap as a tall empty slab at the
+  previous block's width (most visible under the contact row); the gap between
+  two blocks belongs to neither and stays unpainted. Bands tile rather than
+  stack: the offset is signed, so where tight line spacing overlaps two ink
+  boxes the band gives height back instead of painting the translucent veil
+  twice as a dark stripe over the text.
+  Supersedes the earlier "selection paint includes each selected line's owned
+  leading/paragraph gap": the line below claimed the same gap, so every
+  paragraph gap was painted twice and a short closing line left a floating band
+  above the next paragraph, which read as that paragraph owning the previous
+  one's spacing.
+- [USER+CODE] An endpoint that names no field now resolves to one on BOTH paths,
+  because the painter's line separator and line container carry no field key and
+  that is exactly where a browser parks a line-end caret or ends a whole-line
+  drag. `readSelection` (collapsed carets) resolves through `fieldCaretOf` to
+  the end of the last content span at or before the point; `readFieldRanges`
+  (ranges) resolves both the covering field and the display offset inside it
+  against that field's own painted spans. Before this, a caret at a paragraph's
+  end mapped to no field and every command fell back to the last remembered
+  range — choosing a line spacing there applied it to the whole paragraph and
+  left the whole paragraph highlighted — while a range defaulted to the whole
+  field, and a wrapped field tested by its FIRST span resolved to nothing at all,
+  greying out the line-spacing menu on ordinary selections. Paragraph space
+  before/after remains a paragraph property by design.
+- [USER+CODE] Restored ranges convert both endpoints through
+  `valueIndexForDisplayIndex`. `valueStart` covers real characters only, so a
+  caret at a field's END indexed nothing and the restore paths defaulted its
+  start to 0 and its end to the value length — bringing a caret at the end of a
+  paragraph back as the whole paragraph SELECTED, even once the edit itself was
+  correctly scoped to one line.
+- [USER+CODE] The browser's native selection paint is suppressed for the whole
+  editable document rather than only field spans, so engine-owned runs that
+  belong to no field — the contact divider — stop painting a second darker veil
+  of their own.
+- [USER+CODE] Pointer selection begun off the text now works: any press that
+  places the caret by hand (margins, before the first glyph, after the last, the
+  gap between two fields on a row, a bullet marker) also starts the synthetic
+  drag, which previously did not exist there because the prevented default had
+  already removed the browser's own. Drag anchors snap to a field's outer edges
+  instead of every inline-style span boundary, and move/release are tracked on
+  the document with unrestricted line resolution so a drag survives leaving the
+  sheet, the window, or the page. Focused evals cover the indentation
+  arithmetic, the edge anchors, and the drag-versus-click line reach.
+- [USER+CODE] The local data root is now `workspace/` in source development and
+  packaged runs. Editable bases live in `resumes/<variant>.resume` and
+  `cover-letters/<variant>.cover`; each folder owns its `.trash/` history. The
+  server migrates recognized root-level prefixed files without overwriting a
+  destination, while tracker, applications, preferences, and unrelated files
+  remain at the workspace root.
+- [USER+CODE] Cover-letter schema v2 adds an optional name/contact header and
+  contact separator. Resume and cover-letter pages use the same header layout
+  and editor control; v1 paragraph-only `.cover` files remain readable and are
+  upgraded on save. AI tailoring replaces paragraphs without clearing the
+  candidate-authored header.
+- [USER+CODE] Resume and cover-letter Open menus now share “Current variant,”
+  “Bundled starter,” “Variants,” empty-state, and history wording. Variant
+  filenames no longer repeat their document kind because their containing
+  folder and `.resume`/`.cover` extension already establish it.
+- [USER+CODE] Shared page margins use the simple Narrow, Normal, and Custom UI:
+  Narrow applies 0.5 inches all around, Normal applies 1 inch, and Custom
+  remains per-side from 0.25 through 3 inches. Editable files persist only the
+  resulting physical values, never the UI preset identity.
+- [USER+CODE] Line height is visual-line scoped rather than document-global:
+  a caret or partial selection expands to the painted line(s), while selecting
+  the complete paragraph applies the value throughout it. The compact shared
+  menu offers Single, 1.15, 1.5, Double, paragraph space before/after, and a
+  focused Custom spacing modal. Paragraph before/after values remain
+  paragraph properties.
+- [USER+CODE] Up/Down caret movement uses the shared line-aware placement path,
+  so placeholder-backed, whitespace-only, and consecutive blank lines remain
+  reachable without browser hit testing escaping to an adjacent text line.
+- [CODE] Current `.resume` saves use schema version 2 so physical page margins
+  no longer carry a UI preset field. Version 1 files remain readable and
+  migrate on the next save.
 - [USER] The next desktop release should reflect a larger product step than the
   previously suggested 0.4.0, refresh the public landing page, and remove stale
   README and engineering-document references before publication.
@@ -585,9 +700,10 @@ bounded; app-only operational detail belongs in the affected app documentation.
   shared history, zoom, selection formatting, alignment, link, and spell-check
   controls remain unchanged for both document types.
 - [USER] Direct editing uses word-processor behavior across both document
-  layouts: Tab inserts four preserved spaces (Shift+Tab remains a focus escape),
-  copy/paste retains supported inline formatting, mixed font-family selections
-  leave the family control blank, and Ctrl/Cmd +/-/0 controls document zoom.
+  layouts: prose Tab/Shift+Tab indent and outdent by one tab stop (superseding
+  the earlier focus-escape Shift+Tab), copy/paste retains supported inline
+  formatting, mixed font-family selections leave the family control blank, and
+  Ctrl/Cmd +/-/0 controls document zoom.
 - [USER] Mixed font-family and font-size selections leave both toolbar controls
   blank. Custom typed inline sizes clamp to 1–200 pt without changing the
   curated preset dropdown. Selection highlighting spans the full engine-line
@@ -801,3 +917,24 @@ bounded; app-only operational detail belongs in the affected app documentation.
   concise, specific, active, evidence-based application writing that preserves
   the candidate's own voice. The durable links and resulting prompt policy are
   recorded in `apps/role-fit-ai/docs/engineering/ai-server.md`.
+- [USER] 2026-07-26: Resume line height is a global setting inside Spacing.
+  Spacing presets and Page margin presets keep their numeric controls expanded
+  so the active physical values remain inspectable. Cover-letter inline line
+  height adds room below targeted visual lines only.
+- [CODE] 2026-07-26: Resume print-style changes and content edits share one
+  chronological Undo/Redo order through monotonic history transactions. Zoom,
+  spell-check, and the page-preset label remain outside document history.
+- [USER] 2026-07-26: Resume Tab/Shift+Tab traverses logical header and section
+  fields instead of authoring spaces. A destination is selected as one field
+  across wrapping and inline runs; structural headings are skipped. The cover
+  letter applies that cycle only to optional name/contact header fields; body
+  Tab indents and Shift+Tab outdents along the measured half-inch ladder.
+- [CODE] 2026-07-26: Selection paint includes each selected line's owned
+  leading/paragraph gap without crossing page boundaries. Cover-letter
+  line-height transforms remain visual-line scoped and affect only the outgoing
+  junction; focused evals cover inherited paragraph height and hard breaks.
+- [USER+CODE+TOOL] 2026-07-26: Cover/summary paragraph leading indentation now
+  survives the shared schema, editor repaint, and PDF path. Forgiving selection
+  edges anchor from adjacent line whitespace but never snap the moving endpoint;
+  measured caret fallback preserves partial forward/reverse selection at first,
+  wrapped, and final glyphs. Browser typing/Tab/Undo QA passed.

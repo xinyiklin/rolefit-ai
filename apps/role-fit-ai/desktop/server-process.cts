@@ -30,6 +30,17 @@ export type DesktopServerHandle = {
   terminateNow(): void;
 };
 
+export type DesktopServerConflict = Readonly<{
+  status: "conflict";
+  kind: "compatible-rolefit" | "foreign-service";
+  origin: string;
+  port: number;
+}>;
+
+export type DesktopServerStartOutcome =
+  | Readonly<{ status: "ready"; server: DesktopServerHandle }>
+  | DesktopServerConflict;
+
 export type DesktopServerOptions = {
   appRoot: string;
   serverEntry: string;
@@ -48,6 +59,11 @@ export type DesktopServerOptions = {
     env: NodeJS.ProcessEnv;
   }): DesktopUtilityProcess;
 };
+
+export type DesktopServerIdentity = Pick<
+  DesktopServerOptions,
+  "host" | "mode" | "port" | "workspaceDir"
+>;
 
 type HealthState = "compatible" | "incompatible" | "unreachable";
 type HealthMatcher = (value: unknown) => boolean;
@@ -194,6 +210,32 @@ async function canBind(host: string, port: number): Promise<boolean> {
   });
 }
 
+async function desktopHealthMatcher(
+  options: DesktopServerIdentity
+): Promise<HealthMatcher> {
+  const {
+    ROLEFIT_DESKTOP_COMPATIBILITY_VERSION,
+    ROLEFIT_HEALTH_API_VERSION,
+    computeWorkspaceFingerprint,
+    isCompatibleRoleFitHealth
+  } = await import("../server/health-contract.js");
+  const expectedHealth: RoleFitHealthExpectation = {
+    apiVersion: ROLEFIT_HEALTH_API_VERSION,
+    desktopCompatibilityVersion: ROLEFIT_DESKTOP_COMPATIBILITY_VERSION,
+    mode: options.mode,
+    workspaceFingerprint: computeWorkspaceFingerprint(options.workspaceDir)
+  };
+  return (value) => isCompatibleRoleFitHealth(value, expectedHealth);
+}
+
+export async function probeCompatibleDesktopServer(
+  options: DesktopServerIdentity
+): Promise<boolean> {
+  validatePort(options.port);
+  const origin = `http://${options.host}:${options.port}`;
+  return await probeHealth(origin, await desktopHealthMatcher(options)) === "compatible";
+}
+
 async function waitForOwnedServer(
   utility: DesktopUtilityProcess,
   origin: string,
@@ -269,34 +311,36 @@ function reusedServer(origin: string): DesktopServerHandle {
   };
 }
 
+function conflict(
+  kind: DesktopServerConflict["kind"],
+  origin: string,
+  port: number
+): DesktopServerConflict {
+  return Object.freeze({ status: "conflict", kind, origin, port });
+}
+
+export function connectToCompatibleDesktopServer(
+  value: DesktopServerConflict
+): DesktopServerHandle {
+  if (value.kind !== "compatible-rolefit") {
+    throw new Error("Only a compatible RoleFit listener can be reused.");
+  }
+  return reusedServer(value.origin);
+}
+
 export async function startOrReuseDesktopServer(
   options: DesktopServerOptions
-): Promise<DesktopServerHandle> {
+): Promise<DesktopServerStartOutcome> {
   validatePort(options.port);
   const origin = `http://${options.host}:${options.port}`;
-  const {
-    ROLEFIT_DESKTOP_COMPATIBILITY_VERSION,
-    ROLEFIT_HEALTH_API_VERSION,
-    computeWorkspaceFingerprint,
-    isCompatibleRoleFitHealth
-  } = await import("../server/health-contract.js");
-  const expectedHealth: RoleFitHealthExpectation = {
-    apiVersion: ROLEFIT_HEALTH_API_VERSION,
-    desktopCompatibilityVersion: ROLEFIT_DESKTOP_COMPATIBILITY_VERSION,
-    mode: options.mode,
-    workspaceFingerprint: computeWorkspaceFingerprint(options.workspaceDir)
-  };
-  const matchesHealth: HealthMatcher = (value) =>
-    isCompatibleRoleFitHealth(value, expectedHealth);
+  const matchesHealth = await desktopHealthMatcher(options);
 
   const initialHealth = await probeHealth(origin, matchesHealth);
   if (initialHealth === "compatible") {
-    return reusedServer(origin);
+    return conflict("compatible-rolefit", origin, options.port);
   }
   if (initialHealth === "incompatible" || !(await canBind(options.host, options.port))) {
-    throw new Error(
-      `Port ${options.port} is already in use by a service that is not a compatible RoleFit server.`
-    );
+    return conflict("foreign-service", origin, options.port);
   }
 
   const serverProcess = options.forkServer({
@@ -334,7 +378,16 @@ export async function startOrReuseDesktopServer(
   } catch (error) {
     closing = true;
     await stopOwnedProcess(serverProcess, options.shutdownTimeoutMs ?? 5_000);
-    if (await probeHealth(origin, matchesHealth) === "compatible") return reusedServer(origin);
+    const healthAfterStartupFailure = await probeHealth(origin, matchesHealth);
+    if (healthAfterStartupFailure === "compatible") {
+      return conflict("compatible-rolefit", origin, options.port);
+    }
+    if (
+      healthAfterStartupFailure === "incompatible" ||
+      !(await canBind(options.host, options.port))
+    ) {
+      return conflict("foreign-service", origin, options.port);
+    }
     throw error;
   }
 
@@ -393,42 +446,45 @@ export async function startOrReuseDesktopServer(
     pendingWorkspaceRequests.clear();
   };
   return {
-    origin,
-    ownership: "owned",
-    pid: serverProcess.pid,
-    backupWorkspace: async () => {
-      const result = await requestWorkspace("backup");
-      if (!result || typeof result !== "object" || Array.isArray(result)) throw new Error("The local server returned an unexpected backup format.");
-      const record = result as Record<string, unknown>;
-      if (typeof record.body !== "string" || typeof record.fileName !== "string") throw new Error("The local server returned an unexpected backup format.");
-      return { body: record.body, fileName: record.fileName };
-    },
-    restoreWorkspace: async (body) => {
-      const result = await requestWorkspace("restore", body);
-      if (!result || typeof result !== "object" || Array.isArray(result)) throw new Error("The local server returned an unexpected restore response.");
-      const record = result as Record<string, unknown>;
-      if (!Number.isSafeInteger(record.restoredFiles) || (record.restoredFiles as number) < 0 ||
-          typeof record.previousWorkspaceKept !== "boolean") throw new Error("The local server returned an unexpected restore response.");
-      return {
-        restoredFiles: record.restoredFiles as number,
-        previousWorkspaceKept: record.previousWorkspaceKept
-      };
-    },
-    updateProviderSnapshot: (snapshot) => {
-      if (closing || lifecycleExitCode !== null) return false;
-      serverProcess.postMessage(snapshot);
-      return true;
-    },
-    close: () => {
-      closing = true;
-      rejectPendingWorkspaceRequests();
-      closePromise ??= stopOwnedProcess(serverProcess, options.shutdownTimeoutMs ?? 5_000);
-      return closePromise;
-    },
-    terminateNow: () => {
-      closing = true;
-      rejectPendingWorkspaceRequests();
-      if (serverProcess.pid !== undefined) serverProcess.kill();
+    status: "ready",
+    server: {
+      origin,
+      ownership: "owned",
+      pid: serverProcess.pid,
+      backupWorkspace: async () => {
+        const result = await requestWorkspace("backup");
+        if (!result || typeof result !== "object" || Array.isArray(result)) throw new Error("The local server returned an unexpected backup format.");
+        const record = result as Record<string, unknown>;
+        if (typeof record.body !== "string" || typeof record.fileName !== "string") throw new Error("The local server returned an unexpected backup format.");
+        return { body: record.body, fileName: record.fileName };
+      },
+      restoreWorkspace: async (body) => {
+        const result = await requestWorkspace("restore", body);
+        if (!result || typeof result !== "object" || Array.isArray(result)) throw new Error("The local server returned an unexpected restore response.");
+        const record = result as Record<string, unknown>;
+        if (!Number.isSafeInteger(record.restoredFiles) || (record.restoredFiles as number) < 0 ||
+            typeof record.previousWorkspaceKept !== "boolean") throw new Error("The local server returned an unexpected restore response.");
+        return {
+          restoredFiles: record.restoredFiles as number,
+          previousWorkspaceKept: record.previousWorkspaceKept
+        };
+      },
+      updateProviderSnapshot: (snapshot) => {
+        if (closing || lifecycleExitCode !== null) return false;
+        serverProcess.postMessage(snapshot);
+        return true;
+      },
+      close: () => {
+        closing = true;
+        rejectPendingWorkspaceRequests();
+        closePromise ??= stopOwnedProcess(serverProcess, options.shutdownTimeoutMs ?? 5_000);
+        return closePromise;
+      },
+      terminateNow: () => {
+        closing = true;
+        rejectPendingWorkspaceRequests();
+        if (serverProcess.pid !== undefined) serverProcess.kill();
+      }
     }
   };
 }
