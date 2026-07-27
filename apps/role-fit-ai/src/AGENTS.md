@@ -10,6 +10,11 @@ owns the RoleFit React host and its integration with shared Typeset packages.
 - `hooks/` owns cohesive RoleFit state/effect lifecycles. Read its guide.
 - `lib/` owns deterministic RoleFit helpers: job extraction/identity, AI request
   adapters, failure classification, workflow state, downloads, and evidence.
+  `duplicateScan.ts` is the one deliberate exception to "deterministic": it
+  holds the tracker's duplicate-scan cache. That state cannot live in
+  `jobIdentity.ts`, which the Node server imports and which is documented as
+  dependency-free and side-effect-free, so the client-only caching layer sits
+  beside it instead. Nothing under `server/` may import it.
 - `resume/` owns deterministic mechanical resume analysis and suggestion/diff
   types. It never calculates fit score or verdict; AI Review owns those.
 - `sections/` owns UI composition. Read its guide before component work.

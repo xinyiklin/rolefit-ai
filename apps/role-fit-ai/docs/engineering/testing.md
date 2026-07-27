@@ -26,6 +26,13 @@ via the runner's `LIVE` denylist: they drive a real provider, cost tokens, and
 need a configured key. Run those by hand (see below). Any new network/model
 eval must be added to `LIVE` so it stays out of `npm test`.
 
+`src/lib/__evals__/duplicate-scan-eval.mjs` also logs a benchmark of the
+tracker-wide duplicate scan. It asserts cache and correctness behavior only —
+never wall-clock, so a shared CI machine cannot make it flaky — and defaults to
+small sizes. For the full 50/100/300/500 sweep when changing the matcher or the
+scan cache, run it standalone with
+`ROLEFIT_DUPLICATE_BENCH=full node apps/role-fit-ai/src/lib/__evals__/duplicate-scan-eval.mjs`.
+
 Listener/companion-process integration tests are also explicit rather than
 auto-discovered.
 `server/__evals__/server-lifecycle-probes.test.mjs` intentionally uses the

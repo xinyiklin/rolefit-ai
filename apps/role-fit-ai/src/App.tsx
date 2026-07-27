@@ -123,12 +123,32 @@ const PreviewOverlay = lazy(() => import("./sections/PreviewOverlay"));
 const ApplicationModal = lazy(() =>
   import("./sections/ApplicationModal").then((module) => ({ default: module.ApplicationModal }))
 );
-const TrackerTab = lazy(() =>
-  import("./sections/tabs/TrackerTab").then((module) => ({ default: module.TrackerTab }))
-);
+
+// Named importers so the rail can warm a split chunk before the tab is
+// selected. The specifier stays a literal in each function — the bundler
+// resolves these statically, and calling one twice reuses the same promise.
+const importTrackerTab = () => import("./sections/tabs/TrackerTab");
+const importAnalyticsTab = () => import("./sections/tabs/AnalyticsTab");
+
+const TrackerTab = lazy(() => importTrackerTab().then((module) => ({ default: module.TrackerTab })));
 const AnalyticsTab = lazy(() =>
-  import("./sections/tabs/AnalyticsTab").then((module) => ({ default: module.AnalyticsTab }))
+  importAnalyticsTab().then((module) => ({ default: module.AnalyticsTab }))
 );
+
+// Applications and Analytics are the only code-split tabs, so they are the only
+// ones whose first visit pays a chunk fetch. Warming them on hover/focus (and
+// once at idle, which also covers touch and keyboard-only navigation) removes
+// that cost without moving them back into the main bundle.
+const TAB_PREFETCH: Partial<Record<OutputTab, () => Promise<unknown>>> = {
+  applications: importTrackerTab,
+  analytics: importAnalyticsTab
+};
+
+function prefetchOutputTab(tab: OutputTab): void {
+  // A rejected prefetch is not actionable: React.lazy re-imports on render and
+  // surfaces the real failure through the error boundary there.
+  void TAB_PREFETCH[tab]?.().catch(() => undefined);
+}
 
 function ApplicationModalLoading() {
   return (
@@ -437,6 +457,27 @@ function App() {
       if (url?.startsWith("blob:")) URL.revokeObjectURL(url);
     };
   }, [resumePreview?.url]);
+
+  // Warm the code-split tab chunks once the boot work has quieted down, so a
+  // first visit to Applications or Analytics does not start with a fetch. Idle
+  // only: never in competition with the initial render or the workspace load.
+  useEffect(() => {
+    if (typeof window.requestIdleCallback !== "function") {
+      const timer = window.setTimeout(() => {
+        prefetchOutputTab("applications");
+        prefetchOutputTab("analytics");
+      }, 2_000);
+      return () => window.clearTimeout(timer);
+    }
+    const handle = window.requestIdleCallback(
+      () => {
+        prefetchOutputTab("applications");
+        prefetchOutputTab("analytics");
+      },
+      { timeout: 5_000 }
+    );
+    return () => window.cancelIdleCallback(handle);
+  }, []);
   // The Settings dialog's open state AND its active section in one value: null is
   // closed, a section id is open on that section. "Add evidence" opens it directly
   // on Guidance, so the section cannot be private to the dialog.
@@ -1611,6 +1652,7 @@ function App() {
           activeOutputTab={activeOutputTab}
           setActiveOutputTab={setActiveOutputTab}
           outputTabs={OUTPUT_TABS}
+          onPrefetchOutputTab={prefetchOutputTab}
           sidebarFooter={
             <button
               type="button"
