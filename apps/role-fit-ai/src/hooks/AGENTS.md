@@ -9,6 +9,13 @@ browser-side effects; components render them and App composes them.
   auto-polish intent.
 - `usePolishPipeline` owns Tailor/Review orchestration, abort/retry, and progress.
 - `useDuplicateGuard` owns duplicate acknowledgments and pipeline/apply gates.
+- `useDuplicateScan` owns the Applications tab's tracker-wide duplicate
+  clusters: it schedules the O(n²) scan after first paint, cancels a pending
+  scan on unmount or a changed scan identity, and rehydrates the cached
+  id-based result against the live applications array. It deliberately depends
+  on the scan identity rather than the array, so per-keystroke notes edits
+  cannot starve a pending scan. Clusters are never cached as records — the
+  merge modal reads current status, dates, artifacts, and attachments.
 - `useAiSettings` owns per-stage provider/model/effort preferences, never API
   credentials.
 - `useAvailableProviders` owns the one same-origin provider-registry fetch and

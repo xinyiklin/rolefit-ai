@@ -1,7 +1,6 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { AlertCircle, CalendarDays, Check, ChevronDown, ChevronLeft, ChevronRight, Copy, Eye, Link, Plus, RefreshCw, Search, Sparkles, SquareArrowOutUpRight, Table2, Trash2 } from "lucide-react";
 import type { Application, ApplicationStatus } from "../../hooks/useApplications";
-import type { DuplicateGroup } from "../../lib/jobIdentity";
 import {
   ACTIVITY_STATUS_GROUPS,
   BOARD_STATUSES,
@@ -17,7 +16,7 @@ import {
   type ApplicationActivityFilter,
   type ApplicationActivityGroup
 } from "../../lib/applicationDisplay";
-import { duplicateCandidateKey, groupDuplicateApplications } from "../../lib/jobIdentity";
+import { useDuplicateScan } from "../../hooks/useDuplicateScan";
 import { TrackerTableView } from "../tracker/TrackerTableView";
 import { TrackerCalendarView } from "../tracker/TrackerCalendarView";
 import { TrackerInspector } from "../tracker/TrackerInspector";
@@ -342,39 +341,15 @@ export function TrackerTab({
   const [rowMenu, setRowMenu] = useState<{ app: Application; x: number; y: number } | null>(null);
   const [isDuplicateModalOpen, setIsDuplicateModalOpen] = useState(false);
 
-  // Identity of only the dedup-RELEVANT fields (plus status/dates the merge
-  // modal ranks and displays), so free-text edits — notes typed per keystroke
-  // in the inspector — don't retrigger the O(n²) duplicate scan below.
-  const duplicateScanKey = useMemo(
-    () =>
-      applications
-        .map(
-          (a) =>
-            `${duplicateCandidateKey(a)}|${a.status}|${
-              a.appliedAt ?? ""
-            }|${a.createdAt}`
-        )
-        .join("\n"),
-    [applications]
-  );
-
-  // Tracker-wide duplicate clusters. Computed here — not in useApplications —
-  // so the O(n²) fingerprint pass runs only while this tab is mounted, and only
-  // when a dedup-relevant field actually changed (see duplicateScanKey).
-  const duplicateGroups: DuplicateGroup<Application>[] = useMemo(
-    () => groupDuplicateApplications(applications),
-    // duplicateScanKey stands in for `applications`: a key change implies a new
-    // applications array, so the callback never closes over a stale list.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [duplicateScanKey]
-  );
-
-  // Every application id that belongs to any duplicate cluster, for the table's
-  // quiet inline badge.
-  const duplicateIds = useMemo(
-    () => new Set(duplicateGroups.flatMap((g) => g.applications.map((a) => a.id))),
-    [duplicateGroups]
-  );
+  // Tracker-wide duplicate clusters, scanned after first paint and cached
+  // across visits to this tab. `duplicateIds` drives the table's quiet inline
+  // badge. See hooks/useDuplicateScan.ts for why neither lives in a render-time
+  // memo any more.
+  const {
+    groups: duplicateGroups,
+    duplicateIds,
+    isScanning: isScanningDuplicates
+  } = useDuplicateScan(applications);
 
   // Filtered + sorted list used by the Table view (Calendar filters internally).
   const sorted = useMemo(() => {
@@ -553,6 +528,13 @@ export function TrackerTab({
           >
             <RefreshCw size={14} className={isRefreshing ? "spin" : ""} aria-hidden="true" />
           </button>
+          {/* The scan runs after first paint, so this slot reports the pass
+              rather than delaying the table behind it. */}
+          {isScanningDuplicates ? (
+            <span className="workspace-page__saving" role="status" aria-live="polite">
+              Checking duplicates…
+            </span>
+          ) : null}
           {duplicateGroups.length > 0 ? (
             <button
               type="button"

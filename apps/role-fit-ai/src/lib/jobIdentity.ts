@@ -391,8 +391,12 @@ function jdTokens(text: string | undefined | null): string[] {
 // the same company (different duties/stack) score low. Bare numbers are
 // excluded — dates and salary figures churn between reposts of the same job.
 export function jdFingerprint(text: string | undefined | null): Set<string> {
+  return fingerprintOf(jdTokens(text));
+}
+
+function fingerprintOf(tokens: readonly string[]): Set<string> {
   const set = new Set<string>();
-  for (const token of jdTokens(text)) {
+  for (const token of tokens) {
     set.add(token);
     if (set.size >= FINGERPRINT_MAX_TOKENS) break;
   }
@@ -403,8 +407,7 @@ export function jdFingerprint(text: string | undefined | null): Set<string> {
 // keyword inventory from looking like the same posting. Reordered sections
 // still retain their within-sentence shingles, while unrelated prose that uses
 // the same vocabulary does not.
-function jdShingles(text: string | undefined | null): Set<string> {
-  const tokens = jdTokens(text);
+function shinglesOf(tokens: readonly string[]): Set<string> {
   const shingles = new Set<string>();
   for (let index = 0; index + 2 < tokens.length; index += 1) {
     shingles.add(`${tokens[index]}\u0001${tokens[index + 1]}\u0001${tokens[index + 2]}`);
@@ -447,7 +450,8 @@ function candidateText(app: SignatureInput): string {
   return raw.trim() ? raw : distilled;
 }
 
-const CONFIDENCE_RANK: Record<DuplicateConfidence, number> = { exact: 0, high: 1, possible: 2 };
+/** Strongest first. Exported so callers rank edges by the same order. */
+export const CONFIDENCE_RANK: Record<DuplicateConfidence, number> = { exact: 0, high: 1, possible: 2 };
 
 // Precompute a record's comparison signature once. Works for both a stored
 // application (jobUrl + sourceUrls + jobDescription/rawJobDescription) and an
@@ -467,6 +471,10 @@ function buildSignature(rec: SignatureInput): Signature {
     normUrls.add(normalizeJobUrl(url.trim()));
   }
   const text = typeof rec?.jobText === "string" ? rec.jobText : candidateText(rec ?? {});
+  // One tokenization pass feeds both sets. Calling jdFingerprint/jdShingles here
+  // instead lowercased, sliced, split, and filtered the same description twice —
+  // doubling signature cost on the tracker-wide scan for no benefit.
+  const tokens = jdTokens(text);
   return {
     atsKeys,
     normUrls,
@@ -474,8 +482,8 @@ function buildSignature(rec: SignatureInput): Signature {
     company: normalizeCompanyName(rec?.company),
     role: normalizeRoleTitle(rec?.role || roleFromTitle(rec?.title)),
     location: rec?.location,
-    fingerprint: jdFingerprint(text),
-    shingles: jdShingles(text)
+    fingerprint: fingerprintOf(tokens),
+    shingles: shinglesOf(tokens)
   };
 }
 

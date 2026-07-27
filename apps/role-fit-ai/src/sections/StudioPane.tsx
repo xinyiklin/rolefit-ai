@@ -23,6 +23,10 @@ type StudioPaneProps = {
   // the Settings dialog rather than swapping the studio body, so it stays out of
   // the tablist and its roving-tabindex keyboard model.
   sidebarFooter?: ReactNode;
+  // Optional intent signal fired when a tab is hovered or focused but not yet
+  // selected. The host decides what (if anything) that warms; the rail only
+  // reports the intent.
+  onPrefetchOutputTab?: (tab: OutputTab) => void;
 };
 
 export function StudioPane({
@@ -32,7 +36,8 @@ export function StudioPane({
   children,
   footer,
   overlay,
-  sidebarFooter
+  sidebarFooter,
+  onPrefetchOutputTab
 }: StudioPaneProps) {
   // APG tabs keyboard model: roving tabindex + arrow/Home/End move selection and
   // follow focus to the newly active tab.
@@ -86,7 +91,9 @@ export function StudioPane({
                   id={`tab-${tab.id}`}
                   key={tab.id}
                   onClick={() => setActiveOutputTab(tab.id)}
+                  onFocus={() => onPrefetchOutputTab?.(tab.id)}
                   onKeyDown={(event) => onTabKeyDown(event, posIndex)}
+                  onPointerEnter={() => onPrefetchOutputTab?.(tab.id)}
                   role="tab"
                   tabIndex={activeOutputTab === tab.id ? 0 : -1}
                   title={tab.label}
