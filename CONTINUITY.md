@@ -23,6 +23,12 @@ bounded; app-only operational detail belongs in the affected app documentation.
   (caching records would have made the merge modal's "documents move to trash"
   warning read stale `resumeArtifacts`/`attachments` — a latent bug that already
   existed inside a single mount, since those fields were never in the scan key);
+  rehydration re-splits survivors into CONNECTED COMPONENTS, because losing one
+  member can disconnect the rest (A~B~C minus B leaves A and C with no evidence
+  linking them) and the first cut would have presented that pair as duplicates
+  and offered a merge that deletes a row — found by code review, unreachable
+  through the hook today since a deletion changes the scan key, but the function
+  is exported and the failure mode is a wrong merge;
   the scan identity no longer includes `status`/`appliedAt`/`createdAt`, which
   the matcher never reads and which made moving a row to Interviewing rerun the
   whole scan; and the computation is scheduled OUTSIDE `startTransition`, which

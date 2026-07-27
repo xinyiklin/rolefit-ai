@@ -199,6 +199,75 @@ for (const [name, patch] of [
   check("empty scan rehydrates to nothing", rehydrateDuplicateGroups(null, trio).length, 0);
 }
 
+// ── Losing a member must not leave unrelated records grouped ─────────────────
+// A~B~C joined transitively; remove B and A/C have NO evidence linking them.
+// Presenting them as duplicates would offer a merge that deletes a row.
+{
+  const chain = {
+    key: "chain",
+    groups: [
+      {
+        memberIds: ["A", "B", "C"],
+        edges: [
+          { a: "A", b: "B", level: "repost", confidence: "high", evidence: ["A~B"] },
+          { a: "B", b: "C", level: "repost", confidence: "exact", evidence: ["B~C"] }
+        ],
+        confidence: "exact"
+      }
+    ]
+  };
+  const broken = rehydrateDuplicateGroups(chain, [{ id: "A" }, { id: "C" }]);
+  check("a broken chain yields no evidence-free cluster", broken.length, 0);
+
+  // Removing an END of the chain leaves a genuinely connected pair.
+  const kept = rehydrateDuplicateGroups(chain, [{ id: "B" }, { id: "C" }]);
+  check("a still-connected pair survives", kept.length, 1);
+  check("survivor keeps only its own edge", kept[0].edges.map((e) => e.evidence[0]), ["B~C"]);
+  check("survivor confidence comes from its own edge", kept[0].confidence, "exact");
+
+  // The strongest edge belonged to the removed part, so confidence must drop
+  // rather than inherit the original cluster's rank.
+  const weakened = rehydrateDuplicateGroups(chain, [{ id: "A" }, { id: "B" }]);
+  check("confidence is re-ranked from surviving edges", weakened[0].confidence, "high");
+
+  // One removal can split a cluster into two independent real pairs.
+  const forked = {
+    key: "fork",
+    groups: [
+      {
+        memberIds: ["A", "B", "C", "D", "E"],
+        edges: [
+          { a: "A", b: "B", level: "repost", confidence: "high", evidence: ["A~B"] },
+          { a: "B", b: "C", level: "repost", confidence: "high", evidence: ["B~C"] },
+          { a: "C", b: "D", level: "repost", confidence: "high", evidence: ["C~D"] },
+          { a: "D", b: "E", level: "repost", confidence: "high", evidence: ["D~E"] }
+        ],
+        confidence: "high"
+      }
+    ]
+  };
+  const split = rehydrateDuplicateGroups(forked, [{ id: "A" }, { id: "B" }, { id: "D" }, { id: "E" }]);
+  check("a split cluster yields both real pairs", split.length, 2);
+  check(
+    "each pair keeps its own members",
+    split.map((g) => g.applications.map((a) => a.id).join("")).sort(),
+    ["AB", "DE"]
+  );
+}
+
+// ── A record without an id never enters the cache ────────────────────────────
+{
+  resetDuplicateScanCache();
+  const idless = [{ ...PAIR[0], id: undefined }, PAIR[1]];
+  const scan = computeDuplicateScan(idless, duplicateScanIdentity(idless));
+  check("a cluster needing an id-less member is dropped", scan.groups.length, 0);
+  check(
+    "no undefined ever reaches memberIds",
+    scan.groups.every((g) => g.memberIds.every((id) => typeof id === "string")),
+    true
+  );
+}
+
 // ── The per-record key memo hashes only what changed ─────────────────────────
 {
   const list = [app({ id: "d1" }), app({ id: "d2" }), app({ id: "d3" })];

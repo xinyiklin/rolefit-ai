@@ -450,7 +450,8 @@ function candidateText(app: SignatureInput): string {
   return raw.trim() ? raw : distilled;
 }
 
-const CONFIDENCE_RANK: Record<DuplicateConfidence, number> = { exact: 0, high: 1, possible: 2 };
+/** Strongest first. Exported so callers rank edges by the same order. */
+export const CONFIDENCE_RANK: Record<DuplicateConfidence, number> = { exact: 0, high: 1, possible: 2 };
 
 // Precompute a record's comparison signature once. Works for both a stored
 // application (jobUrl + sourceUrls + jobDescription/rawJobDescription) and an
