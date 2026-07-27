@@ -5,6 +5,37 @@ bounded; app-only operational detail belongs in the affected app documentation.
 
 ## 2026-07-27
 
+- [USER+CODE] The duplicate matcher no longer pays for content comparison it
+  will not use. `matchSignatures` computed `jdSimilarity` and `setContainment`
+  for EVERY pair at the top of the function, but a pair with an explicit id on
+  only one side is rejected without ever reading them, and every tier that does
+  read them is gated first on company/role/location agreement. Those two set
+  intersections — up to ~1,500 fingerprint plus ~2,000 shingle lookups per pair
+  — are now memoized accessors evaluated on first use, and each tier's
+  short-circuit `&&` chain puts the O(1) size ratio ahead of them. No threshold,
+  tier, or evidence string changed. Full scan at 500 synthetic ATS-heavy
+  records: 757ms -> 71.3ms (10.6x); at 300, 278ms -> 47.7ms. The gain grows with
+  n because the cheap-reject class dominates as the tracker grows.
+  This landed only because the characterization harness went in FIRST:
+  `job-identity-golden.mjs` pins the verdict for all 351 pairs of a 27-record
+  corpus covering every tier, both directions of the requisition-id company
+  guard, the one-sided-id rejection, incompatible locations, sub-floor
+  descriptions, a dismissed pair, and a three-board transitive chain. It is a
+  CHARACTERIZATION test — it encodes no opinion about whether those verdicts are
+  right, only that they did not move — and it was negative-tested by loosening
+  one threshold, which turned it red and named the exact pair. Its coverage
+  assertions fail if the corpus stops exercising a tier, so a body edit cannot
+  leave it green but meaningless. Regenerate deliberately with
+  `ROLEFIT_GOLDEN_UPDATE=1` and review each changed line as behavior.
+  Building the corpus corrected three of my own assumptions, all verified
+  against the code rather than guessed: `ref` is NOT a stripped tracking
+  parameter (only `ref_src`), `REQ_ID_RE` needs a keyword phrase so a bare
+  `req-88214` extracts nothing, and the conflicting-id review needs 0.96
+  similarity where a 66/70-token prefix gives 0.94.
+  STILL NOT DONE: the bucket index (Phase 5) and incremental per-record edges
+  (Phase 6). Both remain unjustified — the scan is now ~71ms at 500 records,
+  cached across visits and off the paint path.
+
 - [USER+CODE] REPORTED: the Applications tab sometimes takes longer to open than
   the other studio tabs. Three cumulative causes, confirmed by reading the load
   path: its chunk is code-split while Resume/Cover/Materials are not; the boot
