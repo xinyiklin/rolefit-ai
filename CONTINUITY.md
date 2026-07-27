@@ -5,94 +5,39 @@ bounded; app-only operational detail belongs in the affected app documentation.
 
 ## 2026-07-27
 
-- [USER+CODE] The duplicate matcher no longer pays for content comparison it
-  will not use. `matchSignatures` computed `jdSimilarity` and `setContainment`
-  for EVERY pair at the top of the function, but a pair with an explicit id on
-  only one side is rejected without ever reading them, and every tier that does
-  read them is gated first on company/role/location agreement. Those two set
-  intersections — up to ~1,500 fingerprint plus ~2,000 shingle lookups per pair
-  — are now memoized accessors evaluated on first use, and each tier's
-  short-circuit `&&` chain puts the O(1) size ratio ahead of them. No threshold,
-  tier, or evidence string changed. Full scan at 500 synthetic ATS-heavy
-  records: 757ms -> 71.3ms (10.6x); at 300, 278ms -> 47.7ms. The gain grows with
-  n because the cheap-reject class dominates as the tracker grows.
-  This landed only because the characterization harness went in FIRST:
-  `job-identity-golden.mjs` pins the verdict for all 351 pairs of a 27-record
-  corpus covering every tier, both directions of the requisition-id company
-  guard, the one-sided-id rejection, incompatible locations, sub-floor
-  descriptions, a dismissed pair, and a three-board transitive chain. It is a
-  CHARACTERIZATION test — it encodes no opinion about whether those verdicts are
-  right, only that they did not move — and it was negative-tested by loosening
-  one threshold, which turned it red and named the exact pair. Its coverage
-  assertions fail if the corpus stops exercising a tier, so a body edit cannot
-  leave it green but meaningless. Regenerate deliberately with
-  `ROLEFIT_GOLDEN_UPDATE=1` and review each changed line as behavior.
-  Building the corpus corrected three of my own assumptions, all verified
-  against the code rather than guessed: `ref` is NOT a stripped tracking
-  parameter (only `ref_src`), `REQ_ID_RE` needs a keyword phrase so a bare
-  `req-88214` extracts nothing, and the conflicting-id review needs 0.96
-  similarity where a 66/70-token prefix gives 0.94.
-  STILL NOT DONE: the bucket index (Phase 5) and incremental per-record edges
-  (Phase 6). Both remain unjustified — the scan is now ~71ms at 500 records,
-  cached across visits and off the paint path.
+- [USER+CODE] Cover letters now default to double line spacing with 8 pt after
+  each paragraph, 0.5 inch top/bottom margins, and 0.75 inch side margins.
+  Exact snapshots of both prior shipped defaults migrate to the new default;
+  the locally applied 1.15/8 pt and double/0 pt defaults also migrate, while
+  customized stored styles remain untouched. The starter and ignored base
+  variants add another 8 pt space before `[Date]`.
 
-- [USER+CODE] REPORTED: the Applications tab sometimes takes longer to open than
-  the other studio tabs. Three cumulative causes, confirmed by reading the load
-  path: its chunk is code-split while Resume/Cover/Materials are not; the boot
-  `GET /api/applications` returns complete records and shares the applications
-  lock with writes; and the tracker-wide O(n²) duplicate scan ran synchronously
-  during render on EVERY visit, because the tab unmounts and takes its memo with
-  it. The scan is the repeat-visit cost — measured offline at 38.5ms for 100
-  synthetic applications (4,950 pairs) in Node, and it grows quadratically.
-  Fixed by deferring and caching it, not by weakening matching: `duplicateScan.ts`
-  (client-only, since `jobIdentity.ts` is server-imported and must stay
-  side-effect-free) holds a one-entry cache that outlives the tab, and
-  `useDuplicateScan` runs the scan after first paint with cancellation and a
-  key guard. Revisit cost is now a map lookup.
-  Three correctness points came out of the review and are load-bearing:
-  clusters are cached as member IDS and rehydrated against the live array
-  (caching records would have made the merge modal's "documents move to trash"
-  warning read stale `resumeArtifacts`/`attachments` — a latent bug that already
-  existed inside a single mount, since those fields were never in the scan key);
-  rehydration re-splits survivors into CONNECTED COMPONENTS, because losing one
-  member can disconnect the rest (A~B~C minus B leaves A and C with no evidence
-  linking them) and the first cut would have presented that pair as duplicates
-  and offered a merge that deletes a row — found by code review, unreachable
-  through the hook today since a deletion changes the scan key, but the function
-  is exported and the failure mode is a wrong merge;
-  the scan identity no longer includes `status`/`appliedAt`/`createdAt`, which
-  the matcher never reads and which made moving a row to Interviewing rerun the
-  whole scan; and the computation is scheduled OUTSIDE `startTransition`, which
-  only lowers the priority of the resulting render and would not have deferred
-  the work at all. Per-record key hashing is memoized in a `WeakMap` on record
-  identity, so a notes keystroke rehashes one description instead of every
-  stored description. `buildSignature` now tokenizes each description once
-  instead of twice (`jdFingerprint` and `jdShingles` each re-ran `jdTokens`).
-  Code-split tab chunks are warmed on rail hover/focus and once at idle.
-  Verified: RoleFit typecheck, production build, and the full offline suite
-  (52/52 — `vertical-parity.mjs` and `workspace-backup-probes.mjs` both green on
-  this machine, superseding the earlier recorded reds). New
-  `duplicate-scan-eval.mjs` covers cache reuse, the narrowed invalidation set on
-  both sides, id rehydration against live records, stale-member and edge
-  pruning, and the `WeakMap` memo; it also logs a scan benchmark
-  (`ROLEFIT_DUPLICATE_BENCH=full` for the 50/100/300/500 sweep) with no timing
-  assertions, so a shared CI machine cannot make it flaky. NOT DONE and
-  deliberately deferred: reordering `matchSignatures` so cheap company/role/
-  location/length gates run before the set intersections (needs a differential
-  test proving identical groups), a worker for very large trackers, and a
-  summary list endpoint. That deferral is now evidence-based rather than a
-  guess — a local measurement pass showed the scan is not the bottleneck at
-  realistic tracker sizes once Phase 1's cache and deferral are in place.
-  The structural finding worth acting on FIRST if this returns: `matchSignatures`
-  computes `jdSimilarity`/`setContainment` at the top of the function, but a pair
-  with an explicit id on only ONE side is rejected without ever consuming them,
-  and the remaining tiers need them only for both-id pairs agreeing on
-  company/role or for no-id pairs. Making those values lazy removes most of the
-  content math outright on an ATS-heavy tracker. Watch per-record PAYLOAD before
-  scan cost: each tracked application can carry a full `resumeData` snapshot, so
-  the list response grows with the tracker far faster than the scan does. Browser QA NOT run — flagged to the user as the
-  residual risk, since the deferred scan changes when duplicate badges and the
-  Review-duplicates button appear.
+- [USER+CODE+TOOL] Duplicate scanning remains a full O(n²) pair loop, but PR #92
+  schedules its cold run after the first Applications table paint and caches one
+  id/edge result across tab visits; rehydration always uses live records and
+  re-splits disconnected survivors. PR #93 made description intersections lazy
+  behind cheap metadata/size gates without changing any verdict, threshold,
+  tier, evidence string, or grouping. The 27-record characterization corpus
+  still pins all 351 pairs.
+  The reported 71.3 ms at 500 records is an ATS-heavy Node benchmark, not a
+  worst-case browser bound. The scan still runs synchronously on the browser
+  main thread after scheduling. The pre-#93 browser fixture measured a 155.6 ms
+  cold scan, 7.2 ms key construction, an effectively free revisit, and about
+  30 ms to read/serialize/parse its 2.75 MB list payload; a post-#93 browser
+  trace and mixed/content-heavy fixtures remain unmeasured.
+  Cache identity now uses the matcher's exact raw-text fallback and effective
+  role selection, observes only the first 15,000 description characters,
+  canonicalizes dismissed-id membership, and uses a length-prefixed two-hash
+  composite. It remains a conservative cache version: raw URL/metadata changes
+  may safely over-invalidate. The per-object `WeakMap` avoids rehashing only
+  while references survive; full server responses currently replace them.
+  **DEFERRED / NOT ACTIVE BACKLOG:** bucket candidate indexing and incremental
+  edge maintenance. The tracker is capped at 500 records, and neither
+  architecture is justified by measured user impact. Reconsider only if
+  mixed/content-heavy browser traces show recurring visible scan stalls after
+  sparse mutation payloads and note-write coalescing are addressed. If the
+  remaining issue is responsiveness rather than total CPU, evaluate a worker or
+  cooperative chunking before behavior-pruning buckets.
 
 - [USER+CODE] Apply still creates the application and snapshots both documents,
   but the resume and the cover letter are no longer frozen at that moment. Each
