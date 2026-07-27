@@ -6,6 +6,7 @@ import type { ResumeData } from "@typeset/engine/lib/resumeData.ts";
 import { dedupeSourceUrls, normalizeJobUrl, findDuplicateApplications } from "../lib/jobIdentity";
 import type { DuplicateTarget } from "../lib/jobIdentity";
 import type { ApplicationAiUsage } from "../lib/aiUsage";
+import { applicationMatchesJobTarget } from "../lib/applicationDocuments";
 
 export type { ApplicationAiUsage, StageAiUsage } from "../lib/aiUsage";
 
@@ -73,13 +74,17 @@ export type SalaryPeriod = "yr" | "mo" | "hr";
 export const JOB_TYPES = ["Full-time", "Part-time", "Contract", "Internship", "Temporary"] as const;
 
 // Metadata for one document that actually went out, snapshotted to gitignored
-// files at <workspace>/applications/<id>/<kind>.pdf and .<kind> when the role is
-// applied or the document is later updated. The bytes live on disk; this record
-// only remembers what exists so the detail modal can offer re-downloads.
-// `hasSource` is the editable `.resume`/`.cover` beside the PDF.
+// files under <workspace>/applications/<id>/ when the role is applied or the
+// document is later updated. The active representation is strict source or an
+// explicitly uploaded PDF; this record only remembers what exists so the
+// detail modal can offer preview/download actions.
 export type DocumentArtifacts = {
   hasPdf: boolean;
   hasSource?: boolean;
+  // Deterministic marker for the complete strict source, including document
+  // style and inline formatting. Missing on legacy rows, which intentionally
+  // makes the editor offer an Update action to establish the current version.
+  sourceFingerprint?: string;
   fileName?: string;
   templateId?: string;
   savedAt?: string;
@@ -189,6 +194,14 @@ function newApplicationId(): string {
     return crypto.randomUUID();
   }
   return `app_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function nextApplicationRevision(previous?: string): string {
+  const now = Date.now();
+  const previousTime = previous ? Date.parse(previous) : Number.NaN;
+  return new Date(
+    Number.isFinite(previousTime) ? Math.max(now, previousTime + 1) : now
+  ).toISOString();
 }
 
 function cleanDraftString(value: unknown, max = 200) {
@@ -448,6 +461,7 @@ export function useApplications() {
       const current = applicationsRef.current;
       const now = new Date().toISOString();
       const idx = current.findIndex((a) => a.id === incoming.id || sameApplicationTarget(a, incoming));
+      const revision = idx >= 0 ? nextApplicationRevision(current[idx].updatedAt) : now;
       const merged: Application = idx >= 0
         ? {
             ...current[idx],
@@ -461,10 +475,10 @@ export function useApplications() {
             jobDescription: incoming.jobDescription || current[idx].jobDescription,
             rawJobDescription: incoming.rawJobDescription || current[idx].rawJobDescription,
             sourceUrls: mergeSourceUrls(current[idx], incoming, now),
-            updatedAt: now,
+            updatedAt: revision,
             createdAt: current[idx].createdAt
           }
-        : { ...incoming, createdAt: now, updatedAt: now };
+        : { ...incoming, createdAt: now, updatedAt: revision };
 
       const next = idx >= 0
         ? current.map((a, i) => (i === idx ? merged : a))
@@ -490,10 +504,11 @@ export function useApplications() {
       const current = applicationsRef.current;
       const now = new Date().toISOString();
       const idx = current.findIndex((a) => a.id === incoming.id);
+      const revision = idx >= 0 ? nextApplicationRevision(current[idx].updatedAt) : now;
       const merged: Application =
         idx >= 0
-          ? { ...current[idx], ...incoming, id: current[idx].id, createdAt: current[idx].createdAt, updatedAt: now }
-          : { ...incoming, createdAt: incoming.createdAt || now, updatedAt: now };
+          ? { ...current[idx], ...incoming, id: current[idx].id, createdAt: current[idx].createdAt, updatedAt: revision }
+          : { ...incoming, createdAt: incoming.createdAt || now, updatedAt: revision };
       const next = idx >= 0 ? current.map((a, i) => (i === idx ? merged : a)) : [merged, ...current];
       applicationsRef.current = next;
       setApplications(next);
@@ -506,33 +521,12 @@ export function useApplications() {
     [persist]
   );
 
-  // Merge a partial patch into one application by id (the saved resume-artifact
-  // metadata after Apply renders the PDF, and the explicit per-document
-  // "Update application" saves). Only the named fields change, so updating one
-  // document cannot touch the other. Resolves false if the id is gone or the
-  // write failed. The persistVersion guard in `persist` makes the later
-  // artifact write win over the in-flight pre-artifact Apply write.
-  const patchApplication = useCallback(
-    (id: string, patch: Partial<Application>): Promise<boolean> => {
-      const current = applicationsRef.current;
-      const idx = current.findIndex((a) => a.id === id);
-      if (idx < 0) return Promise.resolve(false);
-      const next = current.map((a, i) =>
-        i === idx ? { ...a, ...patch, id: a.id, updatedAt: new Date().toISOString() } : a
-      );
-      applicationsRef.current = next;
-      setApplications(next);
-      return persist(next, [{ id, operation: "upsert", baseUpdatedAt: current[idx].updatedAt }]);
-    },
-    [persist]
-  );
-
   const updateStatus = useCallback(
     (id: string, status: ApplicationStatus) => {
       const current = applicationsRef.current;
       const existing = current.find((a) => a.id === id);
       if (!existing) return;
-      const now = new Date().toISOString();
+      const now = nextApplicationRevision(existing.updatedAt);
       const next = current.map((a) =>
         a.id === id
           ? {
@@ -556,7 +550,7 @@ export function useApplications() {
       const existing = current.find((a) => a.id === id);
       if (!existing) return;
       const next = current.map((a) =>
-        a.id === id ? { ...a, notes, updatedAt: new Date().toISOString() } : a
+        a.id === id ? { ...a, notes, updatedAt: nextApplicationRevision(existing.updatedAt) } : a
       );
       applicationsRef.current = next;
       setApplications(next);
@@ -571,7 +565,7 @@ export function useApplications() {
       const existing = current.find((a) => a.id === id);
       if (!existing) return;
       const next = current.map((a) =>
-        a.id === id ? { ...a, [field]: value, updatedAt: new Date().toISOString() } : a
+        a.id === id ? { ...a, [field]: value, updatedAt: nextApplicationRevision(existing.updatedAt) } : a
       );
       applicationsRef.current = next;
       setApplications(next);
@@ -603,18 +597,16 @@ export function useApplications() {
   // update in place rather than creating duplicate rows. EXACT-tier only — see
   // sameApplicationTarget.
   const findForTarget = useCallback(
-    (targetUrl: string, targetDescription: string) => {
-      const trimmedUrl = targetUrl.trim();
-      const trimmedDescription = targetDescription.trim();
-      if (!trimmedUrl) {
-        return applications.find(
-          (a) => !a.jobUrl.trim() && trimmedDescription && (a.jobDescription ?? "").trim() === trimmedDescription
-        );
-      }
-      const normTarget = normalizeJobUrl(trimmedUrl);
-      return applications.find((a) => a.jobUrl.trim() && normalizeJobUrl(a.jobUrl.trim()) === normTarget);
-    },
+    (targetUrl: string, targetDescription: string) =>
+      applications.find((application) =>
+        applicationMatchesJobTarget(application, targetUrl, targetDescription)
+      ),
     [applications]
+  );
+
+  const getApplication = useCallback(
+    (id: string) => applicationsRef.current.find((application) => application.id === id),
+    []
   );
 
   // Layered duplicate scan (same-posting/repost/same-company-role, tiered
@@ -673,7 +665,7 @@ export function useApplications() {
         aiUsage: canonical.aiUsage ?? others.find((m) => m.aiUsage)?.aiUsage,
         duplicateDismissedIds: inheritedDismissals.length ? inheritedDismissals : undefined,
         createdAt: earliestCreatedAt,
-        updatedAt: now
+        updatedAt: nextApplicationRevision(canonical.updatedAt)
       };
 
       const next = current
@@ -705,7 +697,6 @@ export function useApplications() {
       if (members.length < 2) return;
 
       const memberIdSet = new Set(members.map((application) => application.id));
-      const now = new Date().toISOString();
       const mutations: ApplicationMutation[] = [];
       const next = current.map((application) => {
         if (!memberIdSet.has(application.id)) return application;
@@ -721,7 +712,7 @@ export function useApplications() {
         return {
           ...application,
           duplicateDismissedIds: [...dismissed],
-          updatedAt: now
+          updatedAt: nextApplicationRevision(application.updatedAt)
         };
       });
 
@@ -745,7 +736,7 @@ export function useApplications() {
       // A new mutation began after the queue wait. Its persist response (or
       // rollback) owns state; this GET may have observed the pre-mutation disk
       // snapshot and must not overwrite it.
-      if (refreshVersion !== persistVersion.current) return;
+      if (refreshVersion !== persistVersion.current) return false;
       const loaded = Array.isArray(data.applications) ? data.applications : [];
       confirmedApplications.current = loaded;
       applicationsRef.current = loaded;
@@ -753,8 +744,10 @@ export function useApplications() {
       setHasLoadedApplications(true);
       conflictMessage.current = "";
       setError("");
+      return true;
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load applications.");
+      return false;
     }
   }, []);
 
@@ -767,11 +760,11 @@ export function useApplications() {
     pendingWrites,
     upsert,
     saveApplication,
-    patchApplication,
     updateStatus,
     updateNotes,
     updateField,
     remove,
+    getApplication,
     findForTarget,
     findDuplicatesForTarget,
     mergeApplications,

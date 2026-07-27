@@ -21,10 +21,12 @@ for provider, prompt, sanitizer, and review work.
   storage primitives shared with `coverLetterWorkspace.ts`. Keep strict
   cover-letter storage separate from resume import and starter fallbacks.
 - `applications/` owns tracker persistence and routes. `documents.ts` owns the
-  per-application file rules: both document kinds store a PDF plus their
-  editable source under one route vocabulary, user attachments are validated by
-  extension allowlist + magic bytes and capped per application, and every byte
-  served back is a download (narrow content type, `nosniff`, no inline render).
+  per-application file rules: each document slot stores either strict editable
+  source or an explicitly uploaded PDF under one route vocabulary. Additional
+  uploads are PDF-only, validated by extension + magic bytes, and capped per
+  application. File bytes and tracker metadata commit under the same
+  application revision, and every byte served back is a download (narrow
+  content type, `nosniff`, no inline render).
 - `extension/` owns extension-origin routes and inbox handoff.
 - The provider-connections boundary owns the validated in-memory companion
   snapshot, managed API-credential resolution, and the shape-only same-origin

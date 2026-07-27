@@ -91,8 +91,8 @@ editable documents.
   active copy, adds a variant, or takes a `.resume`/`.cover`/`.txt`/PDF away.
   Each editor automatically reopens its last active saved variant on that
   browser origin, falling back to Default when no remembered variant remains.
-- **Portable workspace backup + restore** — the companion's Workspace section saves one versioned `.rolefit-backup` containing validated base resumes, resume history, tracker records, saved application PDFs, and mirrored allowlisted RoleFit preferences. Restore validates every checksum and domain file in a staging workspace before replacing the active saved workspace, then keeps the previous workspace as a local safety copy. The JSON backup is not encrypted and never contains standalone cover-letter variants, provider keys, CLI sessions, arbitrary workspace files, or unsaved recovery drafts.
-- **On-disk pipeline tracker** — a sortable, paginated applications table (right-click any row for quick actions: open details, change stage, in-app PDF preview of the saved resume, or delete) alongside a calendar view of submissions and upcoming follow-ups. Tracks status / source / company / role / follow-up date / notes / resume snapshot per application, and survives browser wipes.
+- **Portable workspace backup + restore** — the companion's Workspace section saves one versioned `.rolefit-backup` containing validated base resumes, resume history, tracker records, each application's saved `.resume`, `.cover`, or PDF document, PDF attachments, and mirrored allowlisted RoleFit preferences. Restore validates every checksum and domain file in a staging workspace before replacing the active saved workspace, then keeps the previous workspace as a local safety copy. The JSON backup is not encrypted and never contains standalone cover-letter variants, provider keys, CLI sessions, arbitrary workspace files, or unsaved recovery drafts.
+- **On-disk pipeline tracker** — a sortable, paginated applications table (right-click any row for quick actions: open details, change stage, preview the saved resume as a PDF, or delete) alongside a calendar view of submissions and upcoming follow-ups. Tracks status / source / company / role / follow-up date / notes plus saved resume, cover letter, and additional PDF documents per application, and survives browser wipes.
 - **Local-first personal workflow** — the browser app, server, paired extension bridge, and workspace files run on your own device. Source development uses the gitignored `workspace/`; an installed companion uses `app.getPath("userData")/workspace/`. Origin-scoped browser storage may contain recovery resume/job drafts plus user settings and context, but never API keys. The Electron companion encrypts supported API keys with the operating system through `safeStorage` and stores only encrypted bytes locally beneath its own `userData`; keys never enter browser storage, browser requests, status payloads, or logs. A companion-owned server receives decrypted keys only in memory through a private parent/child channel. AI-backed import, polish, cover-letter, and application-answer features still send the relevant job/resume text directly from the local server to the provider you choose; resume/job payloads do not cross Electron IPC.
 
 ## Stack
@@ -363,11 +363,12 @@ For a portable editable-document copy, download a `.resume` or `.cover` file.
 For the saved RoleFit workspace, open the companion's **Workspace** section and
 choose **Back up workspace**. The resulting `.rolefit-backup` is unencrypted
 JSON containing app-managed base resumes, resume history, tracker data, saved
-application PDFs, and the mirrored allowlisted RoleFit preferences. It excludes
+application `.resume`, `.cover`, and PDF documents, PDF application
+attachments, and the mirrored allowlisted RoleFit preferences. It excludes
 arbitrary files in the workspace, saved standalone cover-letter variants,
 unsaved recovery drafts, provider configuration/API keys, CLI sessions, and
-companion port settings. Save a `.cover` copy separately when moving a letter
-between devices. Close RoleFit browser tabs
+companion port settings. Save a standalone `.cover` variant separately when
+moving that editor variant between devices. Close RoleFit browser tabs
 before choosing **Restore backup** — the server refuses to restore while live
 tabs are detected. RoleFit validates the complete backup in a staging
 directory, moves the current saved workspace to a timestamped sibling safety
@@ -393,9 +394,10 @@ The workspace contains:
 - `cover-letters/<variant>.cover` — named cover-letter variants
 - `resumes/.trash/` and `cover-letters/.trash/` — per-document version history
 - `applications.json` — the pipeline tracker's on-disk store
-- `applications/<id>/` — per-application files: `resume.pdf` + `resume.resume`
-  and `cover.pdf` + `cover.cover` (what went out, and its editable source),
-  plus `attachments/` for anything else the posting asked for
+- `applications/<id>/` — per-application files: each Resume/Cover letter slot
+  contains either editable `resume.resume` / `cover.cover` source saved from
+  RoleFit or an explicitly uploaded `resume.pdf` / `cover.pdf`; additional PDF
+  uploads live under `attachments/`
 - `browser-preferences.json` — mirrored allowlisted RoleFit preferences
 - Anything else you drop in there (left out of portable backups)
 

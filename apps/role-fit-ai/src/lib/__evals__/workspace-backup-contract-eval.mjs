@@ -11,6 +11,7 @@ import assert from "node:assert/strict";
 import {
   BROWSER_PREFERENCES_FORMAT,
   BROWSER_PREFERENCES_SCHEMA_VERSION,
+  LEGACY_WORKSPACE_BACKUP_SCHEMA_VERSION,
   WORKSPACE_BACKUP_FORMAT,
   WORKSPACE_BACKUP_SCHEMA_VERSION,
   WORKSPACE_RESTORE_MARKER_FORMAT,
@@ -156,6 +157,42 @@ assert.deepEqual(
   "an application PDF (base64-encoded, per workspaceBackupEncodingForPath) is a managed path alongside applications.json"
 );
 
+for (const path of [
+  "applications/acme-swe/resume.resume",
+  "applications/acme-swe/cover.pdf",
+  "applications/acme-swe/cover.cover",
+  "applications/acme-swe/attachments/writing sample.pdf",
+  "applications/acme-swe/attachments/dots..inside.pdf",
+  "applications/acme-swe/attachments/_private.pdf",
+  "applications/acme-swe/attachments/-draft.pdf",
+  `applications/acme-swe/attachments/${"x".repeat(80)}.pdf`
+]) {
+  const encoding = path.endsWith(".pdf") ? "base64" : "utf8";
+  const file = backupFile({ path, encoding, byteLength: 3, data: encoding === "base64" ? "AAA=" : "doc" });
+  assert.equal(
+    parseWorkspaceBackupEnvelope({ ...validEnvelope, files: [backupFile(), file] }).files[1].path,
+    path,
+    `${path} is a managed application document`
+  );
+}
+
+const legacyEnvelope = {
+  ...validEnvelope,
+  schemaVersion: LEGACY_WORKSPACE_BACKUP_SCHEMA_VERSION
+};
+assert.equal(
+  parseWorkspaceBackupEnvelope({ ...legacyEnvelope, files: [pdfFile] }).schemaVersion,
+  LEGACY_WORKSPACE_BACKUP_SCHEMA_VERSION,
+  "schema version 1 remains readable for its original resume-PDF contract"
+);
+assert.throws(
+  () => parseWorkspaceBackupEnvelope({
+    ...legacyEnvelope,
+    files: [backupFile({ path: "applications/acme-swe/cover.cover" })]
+  }),
+  "schema version 1 does not silently acquire version 2 document paths"
+);
+
 const withBrowser = {
   ...validEnvelope,
   browser: { settings: { aiProvider: "openai" }, lastBaseResume: "" }
@@ -168,7 +205,7 @@ for (const [name, bad] of [
   ["missing files", { format: validEnvelope.format, schemaVersion: validEnvelope.schemaVersion, createdAt: RESTORED_AT }],
   ["an unknown extra top-level key", { ...validEnvelope, extra: true }],
   ["wrong format string", { ...validEnvelope, format: "wrong-format" }],
-  ["wrong schemaVersion", { ...validEnvelope, schemaVersion: 2 }],
+  ["wrong schemaVersion", { ...validEnvelope, schemaVersion: 3 }],
   ["non-string createdAt", { ...validEnvelope, createdAt: 123 }],
   ["unparseable createdAt", { ...validEnvelope, createdAt: "not-a-date" }],
   ["files not an array", { ...validEnvelope, files: {} }],
@@ -187,6 +224,8 @@ for (const [name, badFile] of [
   ["a path with a backslash", backupFile({ path: "applications\\acme\\resume.pdf" })],
   ["a path with a leading slash", backupFile({ path: "/applications.json" })],
   ["a path with a .. segment", backupFile({ path: "../applications.json" })],
+  ["a non-PDF application attachment", backupFile({ path: "applications/acme-swe/attachments/sample.txt" })],
+  ["a mismatched application source name", backupFile({ path: "applications/acme-swe/resume.cover" })],
   ["a duplicate path across two files", "DUPLICATE"],
   ["an encoding that mismatches the path's contract (pdf declared utf8)", { path: "applications/acme-swe/resume.pdf", encoding: "utf8", byteLength: 2, sha256: "a".repeat(64), data: "{}" }],
   ["an encoding value outside utf8/base64", backupFile({ encoding: "binary" })],
@@ -229,6 +268,11 @@ assert.equal(
 assert.equal(isManagedWorkspaceBackupPath("base-resume.resume"), true, "a root base resume is managed");
 assert.equal(isManagedWorkspaceBackupPath("base-resume-fullstack.resume"), true, "a named root base resume is managed");
 assert.equal(isManagedWorkspaceBackupPath("applications/acme-swe/resume.pdf"), true, "an application PDF is managed");
+assert.equal(
+  isManagedWorkspaceBackupPath("applications/acme-swe/attachments/sample.pdf"),
+  true,
+  "a validated PDF attachment is managed in the current schema"
+);
 assert.equal(isManagedWorkspaceBackupPath("cover-letters/default.cover"), false, "editable cover letters stay outside portable backups");
 assert.equal(isManagedWorkspaceBackupPath("secrets.env"), false, "an arbitrary file is not managed");
 assert.equal(isManagedWorkspaceBackupPath("../applications.json"), false, "a traversal path is never managed");

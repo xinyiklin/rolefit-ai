@@ -43,7 +43,7 @@ try {
         { fileName: "transcript.pdf", label: "  Transcript  ", size: 2048, savedAt: "2026-07-27T00:00:00.000Z" },
         { fileName: "transcript.pdf", label: "Duplicate", size: 99 },
         { fileName: "payload.exe", label: "Nope", size: 10 },
-        { fileName: "notes.txt", size: -5 }
+        { fileName: "supplemental.pdf", size: -5 }
       ],
       aiUsage: {
         distill: {
@@ -135,10 +135,10 @@ try {
   if (attachments.find((entry) => entry.fileName === "transcript.pdf")?.contentType !== "application/pdf") {
     failures.push("attachment content types are not re-derived from the stored name");
   }
-  if (attachments.find((entry) => entry.fileName === "notes.txt")?.size !== 0) {
+  if (attachments.find((entry) => entry.fileName === "supplemental.pdf")?.size !== 0) {
     failures.push("a negative attachment size was not clamped");
   }
-  if (attachments.find((entry) => entry.fileName === "notes.txt")?.label !== "notes.txt") {
+  if (attachments.find((entry) => entry.fileName === "supplemental.pdf")?.label !== "supplemental.pdf") {
     failures.push("a missing attachment label does not fall back to the file name");
   }
   if (
@@ -228,6 +228,16 @@ try {
       error.currentApplications?.[1]?.updatedAt === "revision-b";
   }
   if (!conflictRejected) failures.push("a stale same-record mutation did not return the current 409 snapshot");
+
+  let reusedRevisionRejected = false;
+  try {
+    reconcileApplicationMutations(serverSnapshot, serverSnapshot, [
+      { id: "record-b", operation: "upsert", baseUpdatedAt: "revision-b" }
+    ]);
+  } catch (error) {
+    reusedRevisionRejected = error instanceof ApplicationsStorageError && error.status === 400;
+  }
+  if (!reusedRevisionRejected) failures.push("an upsert reused its optimistic-concurrency revision");
 
   let collisionRejected = false;
   try {

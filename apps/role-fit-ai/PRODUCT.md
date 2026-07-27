@@ -46,9 +46,10 @@ stand; because a letter is often finished after applying, the resume and the
 cover letter then keep independent saved/unsaved states and an explicit
 "Update application" action in their own Save menus that rewrites only that
 document. Regenerating or editing a document never rewrites a stored one. An
-application keeps both documents in the same form — the PDF that went out plus
-its editable `.resume`/`.cover` — and its Documents tab previews, re-downloads,
-and accepts extra files the posting asked for.
+application keeps one space-efficient representation of each document:
+editable `.resume`/`.cover` source for documents saved from RoleFit, or the PDF
+when the user explicitly uploads one. Its Documents tab previews or downloads
+either form and accepts additional PDF files the posting asked for.
 A versioned `.rolefit-backup` file
 ports the saved local workspace and allowlisted RoleFit preferences between
 devices without creating an account or synchronization service. An original resume (text) is converted

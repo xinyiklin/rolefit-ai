@@ -1,14 +1,14 @@
 // Files an application keeps on disk, under
 // <workspace>/applications/<id>/ (gitignored):
 //
-//   resume.pdf / resume.resume   the resume that went out, plus its editable source
-//   cover.pdf  / cover.cover     the same pair for the cover letter
-//   attachments/<name>           anything else the posting asked for
+//   resume.resume OR resume.pdf  the active resume representation
+//   cover.cover OR cover.pdf     the active cover-letter representation
+//   attachments/<name>.pdf       additional PDFs the posting asked for
 //
 // Both document kinds are stored identically, so neither page is the one with
 // the better file support. The record in applications.json only remembers WHAT
 // exists (see sanitizeDocumentArtifacts / sanitizeAttachments); the bytes live
-// here.
+// here. Mutating routes commit both under one application revision.
 //
 // Everything a browser can request back is served as an attachment download
 // with a narrow content type and `nosniff`: these are user-supplied bytes on
@@ -38,19 +38,12 @@ export function isApplicationDocumentKind(value: string): value is ApplicationDo
 export const MAX_DOCUMENT_BYTES = 8_000_000;
 export const MAX_ATTACHMENTS_PER_APPLICATION = 10;
 
-// Extension allowlist for user attachments. Anything not listed is refused
-// rather than stored under a name the app cannot describe or serve safely.
+// Additional application documents are intentionally PDF-only. Resume and
+// cover-letter editable sources have their own named slots and strict codecs;
+// arbitrary extra formats would widen both the portable-backup contract and
+// the same-origin download surface without a product use case.
 const ATTACHMENT_TYPES: Record<string, { contentType: string; magic?: readonly string[] }> = {
-  pdf: { contentType: "application/pdf", magic: ["%PDF-"] },
-  docx: { contentType: "application/octet-stream", magic: ["PK\u0003\u0004"] },
-  png: { contentType: "image/png", magic: ["\u0089PNG"] },
-  jpg: { contentType: "image/jpeg", magic: ["\u00ff\u00d8\u00ff"] },
-  jpeg: { contentType: "image/jpeg", magic: ["\u00ff\u00d8\u00ff"] },
-  txt: { contentType: "text/plain; charset=utf-8" },
-  md: { contentType: "text/plain; charset=utf-8" },
-  csv: { contentType: "text/plain; charset=utf-8" },
-  resume: { contentType: "application/octet-stream" },
-  cover: { contentType: "application/octet-stream" }
+  pdf: { contentType: "application/pdf", magic: ["%PDF-"] }
 };
 
 export const ATTACHMENT_EXTENSIONS = Object.keys(ATTACHMENT_TYPES);

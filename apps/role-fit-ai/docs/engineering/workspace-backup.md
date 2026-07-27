@@ -76,21 +76,25 @@ Only files owned and validated by RoleFit enter the bundle:
 - resume variants under `resumes/`;
 - recognized resume history under `resumes/.trash/`;
 - validated `applications.json` tracker data;
-- valid saved `applications/<id>/resume.pdf` artifacts;
+- current-schema application document sources or PDFs and PDF attachments under
+  tracked `applications/<id>/` directories;
 - the mirrored allowlisted RoleFit preferences described above.
 
 Generated cover letters, application answers, job targets, and tailored resume
 snapshots already stored on tracker records travel inside `applications.json`.
-Candidate-authored `cover-letters/*.cover` files and their local `.trash` history are
-standalone editable documents and are not part of schema version 1. Download
-the `.cover` files separately when moving them between devices.
+Candidate-authored `cover-letters/*.cover` files and their local `.trash`
+history remain standalone editable documents outside the portable workspace
+contract. Download those `.cover` variants separately when moving devices.
 
-Schema version 1 also predates the rest of the per-application file set. A
-backup carries `applications/<id>/resume.pdf` only — the saved
-`resume.resume`, `cover.pdf`, `cover.cover`, and `attachments/` files stay on
-the origin device. Download them from the application's Documents tab before
-moving devices; widening the bundle is a schema change and needs its own
-version bump.
+Schema version 1 is retained only for backward-compatible restore and carries
+`applications/<id>/resume.pdf` as its sole per-application file. Schema version
+2 is the current writer: it carries the tracked application's one active
+Resume/Cover letter representation (`resume.resume` or `resume.pdf`,
+`cover.cover` or `cover.pdf`) plus validated PDF files under `attachments/`.
+Application paths whose ids are absent from `applications.json` are excluded.
+Creation and schema-v2 restore also require an exact match between tracker
+artifact/attachment metadata and bundled bytes, so a portable restore cannot
+claim a document exists when its file is missing or install an untracked file.
 
 ## Excluded data
 

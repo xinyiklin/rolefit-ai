@@ -1,91 +1,132 @@
-// The Documents tab of the application detail modal: what actually went out for
-// this role. The resume and the cover letter are rendered by one component with
-// one set of actions, so neither can quietly acquire better file support than
-// the other, and anything else the posting asked for lives beneath them.
+import { useRef, useState, type ChangeEvent, type RefObject } from "react";
+import { Download, Eye, FileText, Trash2, Upload } from "lucide-react";
+import { parseCoverLetterFile } from "@typeset/engine/lib/coverLetter.ts";
+import { parseResumeFile } from "@typeset/engine/lib/resumeFile.ts";
 
-import { useRef, useState } from "react";
-import { Copy, Download, Eye, FileText, FileUp, Loader2, Paperclip, Trash2 } from "lucide-react";
-
-import type { Application, ApplicationAttachment, DocumentArtifacts } from "../../hooks/useApplications";
+import {
+  type Application,
+  type DocumentArtifacts
+} from "../../hooks/useApplications";
+import { useDialog } from "../../hooks/useDialog";
 import {
   ATTACHMENT_ACCEPT,
   applicationAttachmentUrl,
   applicationDocumentUrl,
-  deleteApplicationAttachment,
-  uploadApplicationAttachment,
-  type ApplicationDocumentKind
+  type ApplicationDocumentKind,
+  type DocumentUpload
 } from "../../lib/applicationDocumentRequests";
 
 type ApplicationDocumentsTabProps = {
   application: Application | null;
-  /** False in add mode: there is no record to hang files on yet. */
-  isEdit: boolean;
   downloadBase: string;
+  onSaveDocument: (
+    id: string,
+    kind: ApplicationDocumentKind,
+    upload: DocumentUpload,
+    sourceOrigin?: "editor" | "upload"
+  ) => Promise<{ ok: boolean; error?: string }>;
+  onRemoveDocument: (
+    id: string,
+    kind: ApplicationDocumentKind
+  ) => Promise<{ ok: boolean; error?: string }>;
   onPreviewDocument?: (application: Application, kind: ApplicationDocumentKind) => void;
-  // Persisted immediately: the bytes are already on disk, so the record that
-  // remembers them must not wait for the modal's Save.
-  onAttachmentsChange?: (id: string, attachments: ApplicationAttachment[]) => Promise<boolean>;
+  onDownloadDocument?: (application: Application, kind: ApplicationDocumentKind) => void;
+  onSaveAttachment: (id: string, file: File) => Promise<{ ok: boolean; error?: string }>;
+  onRemoveAttachment: (id: string, fileName: string) => Promise<{ ok: boolean; error?: string }>;
 };
 
-const DOCUMENT_LABEL: Record<ApplicationDocumentKind, { title: string; sourceLabel: string; noun: string }> = {
-  resume: { title: "Resume", sourceLabel: ".resume", noun: "resume" },
-  cover: { title: "Cover letter", sourceLabel: ".cover", noun: "cover letter" }
-};
+type UploadKind = ApplicationDocumentKind | "attachment";
 
-function formatSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const value = typeof reader.result === "string" ? reader.result : "";
+      resolve(value.includes(",") ? value.slice(value.indexOf(",") + 1) : "");
+    };
+    reader.onerror = () => reject(reader.error ?? new Error("Could not read the PDF."));
+    reader.readAsDataURL(file);
+  });
 }
 
-function savedLine(artifacts: DocumentArtifacts | undefined): string {
-  if (!artifacts?.savedAt) return "";
-  const saved = new Date(artifacts.savedAt);
-  return Number.isFinite(saved.getTime()) ? `Saved ${saved.toLocaleDateString()}` : "";
+function savedLabel(artifacts: DocumentArtifacts, fallback: string): string {
+  if (!artifacts.savedAt) return fallback;
+  const date = new Date(artifacts.savedAt);
+  return Number.isFinite(date.getTime()) ? `Saved ${date.toLocaleDateString()}` : fallback;
 }
 
-// One document row. `badge` and `children` are the only parts that differ
-// between the two kinds — the actions are deliberately identical.
-function DocumentCard({
+function DocumentPane({
   application,
   kind,
   artifacts,
-  badge,
-  emptyNote,
+  hasDocument,
+  busy,
+  uploadRef,
   downloadBase,
+  onUpload,
+  onRemove,
   onPreviewDocument,
-  children
+  onDownloadDocument
 }: {
   application: Application | null;
   kind: ApplicationDocumentKind;
   artifacts?: DocumentArtifacts;
-  badge?: React.ReactNode;
-  emptyNote: string;
+  hasDocument: boolean;
+  busy: boolean;
+  uploadRef: RefObject<HTMLInputElement | null>;
   downloadBase: string;
+  onUpload: (kind: UploadKind, event: ChangeEvent<HTMLInputElement>) => void;
+  onRemove: (kind: ApplicationDocumentKind) => void;
   onPreviewDocument?: (application: Application, kind: ApplicationDocumentKind) => void;
-  children?: React.ReactNode;
+  onDownloadDocument?: (application: Application, kind: ApplicationDocumentKind) => void;
 }) {
-  const meta = DOCUMENT_LABEL[kind];
-  const hasFiles = Boolean(artifacts?.hasPdf || artifacts?.hasSource);
-  const saved = savedLine(artifacts);
-  const fileBase = `${downloadBase}_${kind === "resume" ? "Resume" : "Cover_Letter"}`;
+  const isResume = kind === "resume";
+  const title = isResume ? "Resume" : "Cover letter";
+  const sourceExtension = isResume ? ".resume" : ".cover";
+  const pdfName = `${downloadBase}_${isResume ? "Resume" : "Cover_Letter"}.pdf`;
 
   return (
-    <article className="application-doc-card" aria-label={meta.title}>
+    <article className="application-doc-card" aria-label={title}>
       <div className="application-doc-card__head">
-        <h4><FileText size={14} aria-hidden="true" /> {meta.title}</h4>
-        {badge}
+        <h4><FileText size={14} aria-hidden="true" /> {title}</h4>
+        <div className="application-doc-card__actions">
+          <input
+            ref={uploadRef}
+            type="file"
+            accept={`${sourceExtension},.pdf,application/pdf`}
+            hidden
+            onChange={(event) => onUpload(kind, event)}
+          />
+          <button
+            type="button"
+            className="ghost-button is-icon"
+            aria-label={`Upload ${title.toLowerCase()}`}
+            title="Upload"
+            onClick={() => uploadRef.current?.click()}
+            disabled={!application || busy}
+          >
+            <Upload size={13} aria-hidden="true" />
+          </button>
+          {hasDocument ? (
+            <button
+              type="button"
+              className="ghost-button is-icon"
+              aria-label={`Remove ${title.toLowerCase()}`}
+              title="Remove"
+              onClick={() => onRemove(kind)}
+              disabled={busy}
+            >
+              <Trash2 size={13} aria-hidden="true" />
+            </button>
+          ) : null}
+        </div>
       </div>
 
-      {application && hasFiles ? (
-        <>
-          <p className="application-muted">
-            {[saved, artifacts?.hasPdf ? "PDF" : null, artifacts?.hasSource ? meta.sourceLabel : null]
-              .filter(Boolean)
-              .join(" · ")}
-          </p>
+      {application && artifacts && (artifacts.hasPdf || artifacts.hasSource) ? (
+        <div className="application-doc-card__footer">
+          <span>{savedLabel(artifacts, `${title} saved.`)}</span>
           <div className="application-doc-card__actions">
-            {artifacts?.hasPdf && onPreviewDocument ? (
+            {onPreviewDocument ? (
               <button
                 type="button"
                 className="secondary-button is-compact"
@@ -94,239 +135,251 @@ function DocumentCard({
                 <Eye size={14} aria-hidden="true" /> Preview
               </button>
             ) : null}
-            {artifacts?.hasPdf ? (
-              <a
-                className="secondary-button is-compact"
-                href={applicationDocumentUrl(application.id, kind, "pdf")}
-                download={`${fileBase}.pdf`}
-              >
-                <Download size={14} aria-hidden="true" /> PDF
-              </a>
-            ) : null}
-            {artifacts?.hasSource ? (
+            {artifacts.hasSource ? (
               <a
                 className="secondary-button is-compact"
                 href={applicationDocumentUrl(application.id, kind, "source")}
-                download={`${fileBase}${meta.sourceLabel}`}
+                download={`${downloadBase}${sourceExtension}`}
               >
-                <Download size={14} aria-hidden="true" /> {meta.sourceLabel}
+                <Download size={14} aria-hidden="true" /> {sourceExtension}
               </a>
             ) : null}
+            {artifacts.hasPdf ? (
+              <a
+                className="primary-button is-compact"
+                href={applicationDocumentUrl(application.id, kind, "pdf")}
+                download={pdfName}
+              >
+                <Download size={14} aria-hidden="true" /> PDF
+              </a>
+            ) : artifacts.hasSource && onDownloadDocument ? (
+              <button
+                type="button"
+                className="primary-button is-compact"
+                onClick={() => onDownloadDocument(application, kind)}
+              >
+                <Download size={14} aria-hidden="true" /> PDF
+              </button>
+            ) : null}
           </div>
-        </>
+        </div>
       ) : (
-        <p className="application-muted">{emptyNote}</p>
+        <p className="application-muted">{hasDocument ? `${title} saved.` : `No ${title.toLowerCase()} saved.`}</p>
       )}
-
-      {children}
     </article>
   );
 }
 
 export function ApplicationDocumentsTab({
   application,
-  isEdit,
   downloadBase,
+  onSaveDocument,
+  onRemoveDocument,
   onPreviewDocument,
-  onAttachmentsChange
+  onDownloadDocument,
+  onSaveAttachment,
+  onRemoveAttachment
 }: ApplicationDocumentsTabProps) {
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const resumeUploadRef = useRef<HTMLInputElement>(null);
+  const coverUploadRef = useRef<HTMLInputElement>(null);
+  const attachmentUploadRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  const [status, setStatus] = useState("");
-  const [copyState, setCopyState] = useState<"" | "copied" | "failed">("");
-  const attachments = application?.attachments ?? [];
+  const { alert, confirm } = useDialog();
+  const resumeArtifacts = application?.resumeArtifacts;
+  const coverArtifacts = application?.coverLetterArtifacts;
+  const hasResume = Boolean(application?.resumeData || resumeArtifacts?.hasPdf || resumeArtifacts?.hasSource);
+  const hasCover = Boolean(application?.coverLetterText || coverArtifacts?.hasPdf || coverArtifacts?.hasSource);
 
-  async function copyLetter(value: string) {
-    try {
-      await navigator.clipboard.writeText(value);
-      setCopyState("copied");
-      window.setTimeout(() => setCopyState(""), 1600);
-    } catch {
-      // Surface the failure instead of silently clearing — the text stays on
-      // screen so the user can copy it manually.
-      setCopyState("failed");
-      window.setTimeout(() => setCopyState(""), 2500);
-    }
-  }
-
-  async function addFiles(files: FileList | null) {
-    if (!application || !onAttachmentsChange || !files?.length) return;
-    setBusy(true);
-    setError("");
-    setStatus("");
-    // Sequential: each upload is checked against the per-application cap on the
-    // server, and a parallel burst would race that check.
-    let next = [...attachments];
-    let addedCount = 0;
-    for (const file of Array.from(files)) {
-      const result = await uploadApplicationAttachment(application.id, file);
-      if (!result.ok) {
-        setError(result.error);
-        break;
-      }
-      next = [...next.filter((entry) => entry.fileName !== result.attachment.fileName), result.attachment];
-      addedCount += 1;
-    }
-    if (addedCount) {
-      const saved = await onAttachmentsChange(application.id, next);
-      setStatus(
-        saved
-          ? `Added ${addedCount} file${addedCount === 1 ? "" : "s"}.`
-          : "The files were stored, but the application record could not be updated."
-      );
-    }
-    setBusy(false);
-  }
-
-  async function removeFile(attachment: ApplicationAttachment) {
-    if (!application || !onAttachmentsChange) return;
-    setBusy(true);
-    setError("");
-    setStatus("");
-    const result = await deleteApplicationAttachment(application.id, attachment.fileName);
-    if (!result.ok) {
-      setError(result.error ?? "Removing that file failed.");
-      setBusy(false);
+  async function upload(kind: UploadKind, event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file || busy) return;
+    if (!application) {
+      await alert({ title: "Save application first", message: "Save the application before uploading a document." });
       return;
     }
-    const saved = await onAttachmentsChange(
-      application.id,
-      attachments.filter((entry) => entry.fileName !== attachment.fileName)
-    );
-    setStatus(saved ? `Removed ${attachment.label}.` : "The file was removed, but the record could not be updated.");
-    setBusy(false);
+
+    const extension = file.name.toLowerCase().match(/\.(resume|cover|pdf)$/)?.[1] ?? "";
+    const valid = kind === "resume"
+      ? extension === "resume" || extension === "pdf"
+      : kind === "cover"
+        ? extension === "cover" || extension === "pdf"
+        : extension === "pdf";
+    if (!valid) {
+      const message = kind === "resume"
+        ? "Upload a .resume or .pdf file."
+        : kind === "cover"
+          ? "Upload a .cover or .pdf file."
+          : "Upload a PDF file.";
+      await alert({ title: "Unsupported file", message });
+      return;
+    }
+
+    setBusy(true);
+    try {
+      if (extension === "resume") {
+        const sourceText = await file.text();
+        parseResumeFile(sourceText);
+        const result = await onSaveDocument(application.id, "resume", {
+          pdfBase64: null,
+          sourceText,
+          fileName: file.name
+        }, "upload");
+        if (!result.ok) throw new Error(result.error ?? "Could not store the resume file.");
+      } else if (extension === "cover") {
+        const sourceText = await file.text();
+        parseCoverLetterFile(sourceText);
+        const result = await onSaveDocument(application.id, "cover", {
+          pdfBase64: null,
+          sourceText,
+          fileName: file.name
+        }, "upload");
+        if (!result.ok) throw new Error(result.error ?? "Could not store the cover letter file.");
+      } else if (kind === "attachment") {
+        const result = await onSaveAttachment(application.id, file);
+        if (!result.ok) throw new Error(result.error);
+      } else {
+        const result = await onSaveDocument(application.id, kind, {
+          pdfBase64: await fileToBase64(file),
+          sourceText: null,
+          fileName: file.name
+        }, "upload");
+        if (!result.ok) throw new Error(result.error ?? "Could not store the PDF.");
+      }
+    } catch (error) {
+      await alert({
+        title: "Upload failed",
+        message: error instanceof Error ? error.message : "Could not upload that file."
+      });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function removeDocument(kind: ApplicationDocumentKind) {
+    if (!application || busy) return;
+    const label = kind === "resume" ? "resume" : "cover letter";
+    if (!(await confirm({
+      title: `Remove ${label}?`,
+      message: `This removes the saved ${label} from this application.`,
+      confirmLabel: "Remove",
+      tone: "danger"
+    }))) return;
+
+    setBusy(true);
+    try {
+      const result = await onRemoveDocument(application.id, kind);
+      if (!result.ok) throw new Error(result.error);
+    } catch (error) {
+      await alert({
+        title: "Remove failed",
+        message: error instanceof Error ? error.message : `Could not remove the ${label}.`
+      });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function removeAttachment(fileName: string) {
+    if (!application || busy) return;
+    if (!(await confirm({
+      title: "Remove document?",
+      message: "This removes the uploaded document from this application.",
+      confirmLabel: "Remove",
+      tone: "danger"
+    }))) return;
+
+    setBusy(true);
+    try {
+      const result = await onRemoveAttachment(application.id, fileName);
+      if (!result.ok) throw new Error(result.error);
+    } catch (error) {
+      await alert({
+        title: "Remove failed",
+        message: error instanceof Error ? error.message : "Could not remove that document."
+      });
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
     <section className="application-form application-form--wide">
-      <DocumentCard
-        application={application}
-        kind="resume"
-        artifacts={application?.resumeArtifacts}
-        downloadBase={downloadBase}
-        onPreviewDocument={onPreviewDocument}
-        badge={
-          application?.resumeUsed ? (
-            <span
-              className={`application-stage application-stage--${application.resumeUsed === "tailored" ? "interviewing" : "applied"}`}
-            >
-              {application.resumeUsed === "tailored" ? "Tailored draft" : "Base resume"}
-            </span>
-          ) : undefined
-        }
-        emptyNote={
-          isEdit
-            ? "No resume saved for this role yet. Open it in Polish, then Apply — or use Update application in the resume's Save menu."
-            : "Save the application first, then apply a polished resume to keep its files here."
-        }
-      />
-
-      <DocumentCard
-        application={application}
-        kind="cover"
-        artifacts={application?.coverLetterArtifacts}
-        downloadBase={downloadBase}
-        onPreviewDocument={onPreviewDocument}
-        badge={
-          application?.coverLetterText ? (
-            <button
-              type="button"
-              className="ghost-button is-compact"
-              onClick={() => void copyLetter(application.coverLetterText ?? "")}
-            >
-              <Copy size={13} aria-hidden="true" />
-              {copyState === "copied" ? "Copied" : copyState === "failed" ? "Copy failed" : "Copy text"}
-            </button>
-          ) : undefined
-        }
-        emptyNote={
-          application?.coverLetterText
-            ? "The letter's text is saved below. Use Update application in the Cover letter Save menu to keep its PDF and .cover file too."
-            : isEdit
-              ? "No cover letter saved for this role yet. Write one in the Cover letter tab, then Apply or use Update application."
-              : "Save the application first, then apply a cover letter to keep its files here."
-        }
-      >
-        {application?.coverLetterText ? (
-          <details className="application-doc-card__reader">
-            <summary>Read the saved letter</summary>
-            <pre className="application-doc-card__text">{application.coverLetterText}</pre>
-          </details>
-        ) : null}
-      </DocumentCard>
-
-      <article className="application-doc-card" aria-label="Attachments">
-        <div className="application-doc-card__head">
-          <h4><Paperclip size={14} aria-hidden="true" /> Attachments</h4>
-          {application && onAttachmentsChange ? (
-            <button
-              type="button"
-              className="ghost-button is-compact"
-              disabled={busy}
-              onClick={() => fileInputRef.current?.click()}
-            >
-              {busy ? <Loader2 size={13} aria-hidden="true" /> : <FileUp size={13} aria-hidden="true" />}
-              {busy ? "Working…" : "Add file"}
-            </button>
-          ) : null}
-        </div>
-
-        <input
-          ref={fileInputRef}
-          className="sr-only"
-          type="file"
-          multiple
-          accept={ATTACHMENT_ACCEPT}
-          onChange={(event) => {
-            void addFiles(event.target.files);
-            event.currentTarget.value = "";
-          }}
+      <div className="application-doc-grid">
+        <DocumentPane
+          application={application}
+          kind="resume"
+          artifacts={resumeArtifacts}
+          hasDocument={hasResume}
+          busy={busy}
+          uploadRef={resumeUploadRef}
+          downloadBase={downloadBase}
+          onUpload={upload}
+          onRemove={removeDocument}
+          onPreviewDocument={onPreviewDocument}
+          onDownloadDocument={onDownloadDocument}
         />
+        <DocumentPane
+          application={application}
+          kind="cover"
+          artifacts={coverArtifacts}
+          hasDocument={hasCover}
+          busy={busy}
+          uploadRef={coverUploadRef}
+          downloadBase={downloadBase}
+          onUpload={upload}
+          onRemove={removeDocument}
+          onPreviewDocument={onPreviewDocument}
+          onDownloadDocument={onDownloadDocument}
+        />
+      </div>
 
-        {attachments.length ? (
-          <ul className="application-attachments">
-            {attachments.map((attachment) => (
-              <li key={attachment.fileName} className="application-attachments__row">
-                <span className="application-attachments__name">
-                  <FileText size={13} aria-hidden="true" />
-                  {attachment.label}
-                </span>
-                <span className="application-attachments__meta">
-                  {formatSize(attachment.size)}
-                  {attachment.savedAt ? ` · ${new Date(attachment.savedAt).toLocaleDateString()}` : ""}
-                </span>
+      <article className="application-doc-card" aria-label="Additional documents">
+        <div className="application-doc-card__head">
+          <h4><FileText size={14} aria-hidden="true" /> Additional documents</h4>
+          <input
+            ref={attachmentUploadRef}
+            type="file"
+            accept={ATTACHMENT_ACCEPT}
+            hidden
+            onChange={(event) => void upload("attachment", event)}
+          />
+          <button
+            type="button"
+            className="ghost-button is-compact"
+            onClick={() => attachmentUploadRef.current?.click()}
+            disabled={!application || busy}
+          >
+            <Upload size={13} aria-hidden="true" /> Upload
+          </button>
+        </div>
+        {application?.attachments?.length ? (
+          <div className="application-doc-card__actions">
+            {application.attachments.map((attachment) => (
+              <span key={attachment.fileName} className="application-doc-card__actions">
                 <a
-                  className="ghost-button is-compact"
-                  href={applicationAttachmentUrl((application as Application).id, attachment.fileName)}
+                  className="secondary-button is-compact"
+                  href={applicationAttachmentUrl(application.id, attachment.fileName)}
                   download={attachment.label}
                 >
-                  <Download size={13} aria-hidden="true" /> Download
+                  <Download size={14} aria-hidden="true" /> {attachment.label}
                 </a>
-                {onAttachmentsChange ? (
-                  <button
-                    type="button"
-                    className="ghost-button is-icon"
-                    aria-label={`Remove ${attachment.label}`}
-                    disabled={busy}
-                    onClick={() => void removeFile(attachment)}
-                  >
-                    <Trash2 size={14} aria-hidden="true" />
-                  </button>
-                ) : null}
-              </li>
+                <button
+                  type="button"
+                  className="ghost-button is-icon application-attachment__remove"
+                  aria-label={`Remove ${attachment.label}`}
+                  title="Remove"
+                  onClick={() => void removeAttachment(attachment.fileName)}
+                  disabled={busy}
+                >
+                  <Trash2 size={13} aria-hidden="true" />
+                </button>
+              </span>
             ))}
-          </ul>
+          </div>
         ) : (
-          <p className="application-muted">
-            {application
-              ? "Transcripts, portfolios, writing samples — anything else this posting asked for."
-              : "Save the application first to attach files."}
-          </p>
+          <p className="application-muted">No additional documents saved.</p>
         )}
-
-        {error ? <p className="application-error" role="alert">{error}</p> : null}
-        {status && !error ? <p className="application-muted" role="status">{status}</p> : null}
       </article>
     </section>
   );

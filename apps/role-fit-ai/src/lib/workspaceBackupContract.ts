@@ -1,7 +1,8 @@
 import { normalizeSettings } from "./settings.ts";
 
 export const WORKSPACE_BACKUP_FORMAT = "rolefit-workspace-backup" as const;
-export const WORKSPACE_BACKUP_SCHEMA_VERSION = 1 as const;
+export const LEGACY_WORKSPACE_BACKUP_SCHEMA_VERSION = 1 as const;
+export const WORKSPACE_BACKUP_SCHEMA_VERSION = 2 as const;
 export const WORKSPACE_BACKUP_EXTENSION = ".rolefit-backup";
 
 export const BROWSER_PREFERENCES_FORMAT = "rolefit-browser-preferences" as const;
@@ -33,7 +34,9 @@ export type PortableBrowserPreferences = {
 
 export type WorkspaceBackupEnvelope = {
   format: typeof WORKSPACE_BACKUP_FORMAT;
-  schemaVersion: typeof WORKSPACE_BACKUP_SCHEMA_VERSION;
+  schemaVersion:
+    | typeof LEGACY_WORKSPACE_BACKUP_SCHEMA_VERSION
+    | typeof WORKSPACE_BACKUP_SCHEMA_VERSION;
   createdAt: string;
   files: WorkspaceBackupFile[];
   browser?: PortableBrowserPreferences;
@@ -46,7 +49,12 @@ const RESUME_RE = /^resumes\/[A-Za-z0-9][A-Za-z0-9_-]*\.(?:resume|txt|md|csv)$/;
 const RESUME_HISTORY_RE = /^resumes\/\.trash\/[A-Za-z0-9T+-]+Z?__[A-Za-z0-9][A-Za-z0-9_-]*\.(?:resume|txt|md|csv)$/;
 const BASE_RESUME_FILE_NAME_RE = /^[A-Za-z0-9][A-Za-z0-9_-]*\.resume$/;
 const LEGACY_RESUME_FILE_NAME_RE = /^[A-Za-z0-9][A-Za-z0-9_-]*\.(?:txt|md|csv)$/;
-const APPLICATION_PDF_RE = /^applications\/[A-Za-z0-9_-]{1,80}\/resume\.pdf$/;
+const LEGACY_APPLICATION_DOCUMENT_RE =
+  /^applications\/[A-Za-z0-9_-]{1,80}\/resume\.pdf$/;
+const APPLICATION_DOCUMENT_RE =
+  /^applications\/[A-Za-z0-9_-]{1,80}\/(?:resume\.(?:pdf|resume)|cover\.(?:pdf|cover))$/;
+const APPLICATION_ATTACHMENT_RE =
+  /^applications\/[A-Za-z0-9_-]{1,80}\/attachments\/[a-z0-9_-][a-z0-9._ -]{0,79}\.pdf$/;
 const SHA256_RE = /^[a-f0-9]{64}$/;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -59,14 +67,20 @@ function hasExactKeys(value: Record<string, unknown>, required: string[], option
     && Object.keys(value).every((key) => allowed.has(key));
 }
 
-export function isManagedWorkspaceBackupPath(path: string): boolean {
-  return path === "applications.json"
+export function isManagedWorkspaceBackupPath(
+  path: string,
+  schemaVersion: WorkspaceBackupEnvelope["schemaVersion"] = WORKSPACE_BACKUP_SCHEMA_VERSION
+): boolean {
+  const shared = path === "applications.json"
     || ROOT_BASE_RESUME_RE.test(path)
     || LEGACY_BASE_RESUME_RE.test(path)
     || HISTORY_BASE_RESUME_RE.test(path)
     || RESUME_RE.test(path)
-    || RESUME_HISTORY_RE.test(path)
-    || APPLICATION_PDF_RE.test(path);
+    || RESUME_HISTORY_RE.test(path);
+  if (shared) return true;
+  return schemaVersion === LEGACY_WORKSPACE_BACKUP_SCHEMA_VERSION
+    ? LEGACY_APPLICATION_DOCUMENT_RE.test(path)
+    : APPLICATION_DOCUMENT_RE.test(path) || APPLICATION_ATTACHMENT_RE.test(path);
 }
 
 export function workspaceBackupEncodingForPath(path: string): "utf8" | "base64" {
@@ -173,9 +187,14 @@ export function parseWorkspaceBackupEnvelope(value: unknown): WorkspaceBackupEnv
   if (!isRecord(value) || !hasExactKeys(value, ["format", "schemaVersion", "createdAt", "files"], ["browser"])) {
     throw new Error("This is not a valid RoleFit workspace backup.");
   }
-  if (value.format !== WORKSPACE_BACKUP_FORMAT || value.schemaVersion !== WORKSPACE_BACKUP_SCHEMA_VERSION) {
+  if (
+    value.format !== WORKSPACE_BACKUP_FORMAT ||
+    (value.schemaVersion !== LEGACY_WORKSPACE_BACKUP_SCHEMA_VERSION &&
+      value.schemaVersion !== WORKSPACE_BACKUP_SCHEMA_VERSION)
+  ) {
     throw new Error("This RoleFit workspace backup uses an unsupported format version.");
   }
+  const schemaVersion = value.schemaVersion;
   if (typeof value.createdAt !== "string" || !Number.isFinite(Date.parse(value.createdAt))) {
     throw new Error("The backup creation date is invalid.");
   }
@@ -190,7 +209,12 @@ export function parseWorkspaceBackupEnvelope(value: unknown): WorkspaceBackupEnv
       throw new Error("The backup contains an invalid file record.");
     }
     const path = typeof candidate.path === "string" ? candidate.path : "";
-    if (!isManagedWorkspaceBackupPath(path) || path.includes("\\") || path.startsWith("/") || path.includes("..")) {
+    if (
+      !isManagedWorkspaceBackupPath(path, schemaVersion) ||
+      path.includes("\\") ||
+      path.startsWith("/") ||
+      path.split("/").includes("..")
+    ) {
       throw new Error("The backup contains an unsupported file path.");
     }
     if (seen.has(path)) throw new Error("The backup contains a duplicate file path.");
@@ -225,7 +249,7 @@ export function parseWorkspaceBackupEnvelope(value: unknown): WorkspaceBackupEnv
 
   return {
     format: WORKSPACE_BACKUP_FORMAT,
-    schemaVersion: WORKSPACE_BACKUP_SCHEMA_VERSION,
+    schemaVersion,
     createdAt: value.createdAt,
     files,
     ...(value.browser === undefined ? {} : { browser: parsePortableBrowserPreferences(value.browser) })

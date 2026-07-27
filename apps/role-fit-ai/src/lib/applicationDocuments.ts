@@ -1,15 +1,14 @@
-// Which document versions a tracked application currently holds, and the
-// smallest patch that replaces exactly one of them.
+// Which document versions a tracked application currently holds.
 //
 // Apply snapshots both documents at once. Afterwards the resume and the cover
 // letter each keep their own saved/unsaved state, because the common workflow
-// is to apply first and finish the letter later. Every patch here names ONLY
-// its own document's fields so updating one can never rewrite the other.
+// is to apply first and finish the letter later. File bytes and tracker fields
+// are committed together by the application-document server boundary.
 
 import type { Application } from "../hooks/useApplications";
-import type { ResumeData } from "@typeset/engine/lib/resumeData.ts";
 // Extension-qualified so the offline evals can import this module directly.
 import { normalizeJobUrl } from "./jobIdentity.ts";
+import { documentSourceFingerprint } from "./documentSourceFingerprint.ts";
 
 export type ApplicationDocumentKind = "resume" | "coverLetter";
 
@@ -20,10 +19,6 @@ export type ApplicationDocumentSyncState =
   | "saved"
   // The editor content differs from the stored version (edited or regenerated).
   | "unsaved";
-
-/** Field ownership, exported so the evals can assert the two sets stay disjoint. */
-export const RESUME_DOCUMENT_FIELDS = ["resumeData", "polishedText"] as const;
-export const COVER_LETTER_DOCUMENT_FIELDS = ["coverLetterText"] as const;
 
 // Whitespace-insensitive comparison: the editor round-trips a document through
 // its structured model, so re-serialization can shift line breaks and padding
@@ -44,30 +39,29 @@ export function savedDocumentText(
 export function applicationDocumentSyncState(
   application: Application | null | undefined,
   kind: ApplicationDocumentKind,
-  currentText: string
+  currentText: string,
+  currentSourceText: string
 ): ApplicationDocumentSyncState {
   if (!application) return "no-application";
-  return normalizeDocumentSnapshot(savedDocumentText(application, kind)) ===
+  const artifacts = kind === "resume"
+    ? application.resumeArtifacts
+    : application.coverLetterArtifacts;
+  // The strict source is the lossless document contract. Prefer its complete
+  // fingerprint over the flattened tracker text, which is retained only for
+  // search/legacy compatibility and may be clipped or serialized differently.
+  if (currentSourceText && artifacts?.hasSource && artifacts.sourceFingerprint) {
+    return artifacts.sourceFingerprint === documentSourceFingerprint(currentSourceText)
+      ? "saved"
+      : "unsaved";
+  }
+  if (
+    normalizeDocumentSnapshot(savedDocumentText(application, kind)) !==
     normalizeDocumentSnapshot(currentText)
-    ? "saved"
-    : "unsaved";
-}
-
-// `resumeData` is omitted rather than set to undefined: the patch is merged by
-// object spread, so an explicit undefined would erase a stored editor snapshot
-// the caller never meant to touch.
-export function resumeApplicationPatch(
-  currentText: string,
-  resumeData: ResumeData | null
-): Partial<Application> {
-  return {
-    polishedText: currentText,
-    ...(resumeData ? { resumeData } : {})
-  };
-}
-
-export function coverLetterApplicationPatch(currentText: string): Partial<Application> {
-  return { coverLetterText: currentText };
+  ) {
+    return "unsaved";
+  }
+  if (!currentText.trim()) return "saved";
+  return "unsaved";
 }
 
 // Does this application still describe the job target currently loaded? Used to

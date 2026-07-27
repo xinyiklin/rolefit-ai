@@ -127,7 +127,8 @@ Good server verification covers:
   revision, and corrupt application JSON or malformed strict `.resume` data
   fails closed without destructive reseeding
 - portable workspace backup includes only app-managed resumes/history, tracker
-  data, saved PDFs, and mirrored allowlisted RoleFit preferences; validates
+  data, saved application `.resume` / `.cover` sources and PDF-only
+  replacements, and mirrored allowlisted RoleFit preferences; validates
   decoded sizes and SHA-256 digests; rejects duplicate/traversing paths and
   malformed domain files; excludes standalone saved cover-letter variants and
   their history; and completes backup -> restore -> backup without byte drift.
@@ -164,7 +165,7 @@ Good frontend verification covers:
 - a failed cover-letter revision stays local to its page with safe retry copy;
   the source remains restorable and the resume/review result remains usable
 - the owned typeset page stays the sole editor and live preview; the tracker may
-  preview the saved application PDF, `ReviewRail` docks only after polish
+  render or open a saved application document as PDF, `ReviewRail` docks only after polish
   produces review output, and a
   hovered/focused review card highlights and scrolls to its exact editor field
 - production builds keep `TrackerTab`, `AnalyticsTab`, and

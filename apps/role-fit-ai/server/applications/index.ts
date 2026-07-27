@@ -208,18 +208,24 @@ function sanitizeContacts(raw: unknown) {
 
 // What one document kind has on disk. Both the resume and the cover letter use
 // this shape, so the tracker cannot describe one of them more richly than the
-// other. `hasSource` is the editable `.resume`/`.cover` beside the PDF.
+// other. New writes store strict source or an explicit PDF; both flags remain
+// readable for compatibility with legacy rows.
 function sanitizeDocumentArtifacts(raw: unknown) {
   if (!raw || typeof raw !== "object") return undefined;
   const r = raw as Record<string, unknown>;
   const hasTex = r.hasTex === true;
   const hasPdf = r.hasPdf === true;
   const hasSource = r.hasSource === true;
+  const sourceFingerprint =
+    hasSource && typeof r.sourceFingerprint === "string" && /^[a-z0-9]+-[a-z0-9]+-[a-z0-9]+$/.test(r.sourceFingerprint)
+      ? r.sourceFingerprint.slice(0, 80)
+      : undefined;
   if (!hasTex && !hasPdf && !hasSource) return undefined;
   return {
     hasTex,
     hasPdf,
     hasSource,
+    sourceFingerprint,
     fileName: sanitizeString(r.fileName, 200),
     templateId: sanitizeString(r.templateId, 80),
     savedAt: typeof r.savedAt === "string" ? r.savedAt : new Date().toISOString()
@@ -632,6 +638,16 @@ export function reconcileApplicationMutations(
     }
     if (mutation.operation === "delete" && requested) {
       throw new ApplicationsStorageError("A delete mutation must omit its application record.", 400);
+    }
+    if (
+      mutation.operation === "upsert" &&
+      current &&
+      requested?.updatedAt === current.updatedAt
+    ) {
+      throw new ApplicationsStorageError(
+        "A changed application must advance its updatedAt revision. No tracker changes were saved.",
+        400
+      );
     }
 
     const revisionMatches = current

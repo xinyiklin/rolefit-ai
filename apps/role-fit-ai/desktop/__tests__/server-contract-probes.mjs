@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
-import { join, resolve } from "node:path";
+import { join, resolve, win32 } from "node:path";
 import {
   ROLEFIT_DESKTOP_COMPATIBILITY_VERSION,
   ROLEFIT_HEALTH_API_VERSION,
@@ -63,6 +63,12 @@ assert.equal(parseNetstatListenerPid(netstatOutput, 5_181), 7_312);
 assert.equal(parseNetstatListenerPid(netstatOutput, 5_191), 8_122);
 
 const lookupCalls = [];
+const configuredSystemRoot = process.env.SYSTEMROOT;
+const expectedSystemRoot = configuredSystemRoot &&
+    win32.isAbsolute(configuredSystemRoot) &&
+    !configuredSystemRoot.includes("\0")
+  ? configuredSystemRoot
+  : "C:\\Windows";
 assert.equal(
   await findLoopbackListenerPid(5_181, {
     platform: "darwin",
@@ -81,7 +87,7 @@ assert.equal(
   await findLoopbackListenerPid(5_181, {
     platform: "win32",
     runCommand: async (executable, args) => {
-      assert.equal(executable, "C:\\Windows\\System32\\netstat.exe");
+      assert.equal(executable, win32.join(expectedSystemRoot, "System32", "netstat.exe"));
       assert.deepEqual(args, ["-ano", "-p", "tcp"]);
       return netstatOutput;
     }

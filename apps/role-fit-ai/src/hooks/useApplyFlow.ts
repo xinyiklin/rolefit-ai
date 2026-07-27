@@ -26,7 +26,7 @@ import type { ResumeData } from "@typeset/engine/lib/resumeData.ts";
 import type { PolishedResume } from "../resumeEngine";
 import type { FitComparison, OutputTab } from "../sections/shared";
 import { normalizeDocumentSnapshot } from "../lib/applicationDocuments";
-import { uploadApplicationDocument, type DocumentUpload } from "../lib/applicationDocumentRequests";
+import type { DocumentUpload } from "../lib/applicationDocumentRequests";
 
 type UseApplyFlowArgs = {
   jobUrl: string;
@@ -43,7 +43,11 @@ type UseApplyFlowArgs = {
   applications: Application[];
   findForTarget: (url: string, desc: string) => Application | undefined;
   upsertApplication: (app: Application) => Promise<boolean>;
-  patchApplication: (id: string, patch: Partial<Application>) => Promise<boolean>;
+  saveApplicationDocument: (
+    id: string,
+    kind: "resume" | "cover",
+    upload: DocumentUpload
+  ) => Promise<{ ok: boolean; error?: string }>;
   // Remembers which application this session is now working against, so the
   // per-document "Update application" actions save into it instead of creating
   // a second record.
@@ -54,8 +58,8 @@ type UseApplyFlowArgs = {
   handleDownloadPdf: (overrideBase?: string) => void | Promise<void>;
   getResumeArtifacts: () => Promise<DocumentUpload | null>;
   getCoverLetterArtifacts: () => Promise<DocumentUpload | null>;
-  clearAutosaveDraft: () => void;
-  markResumeClean: () => void;
+  onResumeSaved: () => void;
+  onCoverLetterSaved: () => void;
   setApplyStatus: (value: string) => void;
   setActiveOutputTab: (tab: OutputTab) => void;
   setExpandedApplicationId: (id: string | null) => void;
@@ -76,7 +80,7 @@ export function useApplyFlow({
   applications,
   findForTarget,
   upsertApplication,
-  patchApplication,
+  saveApplicationDocument,
   linkApplication,
   currentJobTracking,
   resolveApplyDuplicate,
@@ -84,8 +88,8 @@ export function useApplyFlow({
   handleDownloadPdf,
   getResumeArtifacts,
   getCoverLetterArtifacts,
-  clearAutosaveDraft,
-  markResumeClean,
+  onResumeSaved,
+  onCoverLetterSaved,
   setApplyStatus,
   setActiveOutputTab,
   setExpandedApplicationId
@@ -102,31 +106,24 @@ export function useApplyFlow({
   const [applySaveError, setApplySaveError] = useState("");
   const applyCommitInFlightRef = useRef(false);
 
-  // Render both documents (PDF + editable source) and persist them under the
-  // applied application, then attach the returned metadata. The cover letter is
-  // stored exactly like the resume, so the tracker never holds one of them in a
-  // weaker form. Best-effort: Apply has already succeeded, so a failed render is
-  // swallowed (the application is still saved even without file snapshots).
+  // Persist both editable document sources under the applied application. Each
+  // server mutation commits the strict source and tracker metadata together.
   async function saveAppliedDocumentArtifacts(id: string, label: string) {
-    try {
-      const [resume, cover] = await Promise.all([
-        getResumeArtifacts().catch(() => null),
-        getCoverLetterArtifacts().catch(() => null)
-      ]);
-      const [storedResume, storedCover] = await Promise.all([
-        resume ? uploadApplicationDocument(id, "resume", resume).catch(() => null) : null,
-        cover ? uploadApplicationDocument(id, "cover", cover).catch(() => null) : null
-      ]);
-      if (storedResume) void patchApplication(id, { resumeArtifacts: storedResume });
-      if (storedCover) void patchApplication(id, { coverLetterArtifacts: storedCover });
-      if (!storedResume) return;
-      const savedCover = storedCover ? " and cover letter" : "";
-      setApplyStatus(
-        `Applied "${label}". Saved resume ${storedResume.hasPdf ? "PDF" : "without a PDF because typesetting failed"}${savedCover}.`
-      );
-    } catch {
-      // Best-effort: the application is already saved.
+    const resume = await getResumeArtifacts().catch(() => null);
+    const cover = await getCoverLetterArtifacts().catch(() => null);
+    const storedResume = resume
+      ? await saveApplicationDocument(id, "resume", resume)
+      : { ok: false, error: "No editable resume source is available." };
+    const storedCover = cover
+      ? await saveApplicationDocument(id, "cover", cover)
+      : null;
+    if (!storedResume.ok) {
+      setApplyStatus(`Applied "${label}", but the resume file was not saved. ${storedResume.error ?? "Retry from the Resume Save menu."}`);
+      return { resumeSaved: false, coverSaved: Boolean(storedCover?.ok) };
     }
+    const savedCover = storedCover?.ok ? " and cover letter" : "";
+    setApplyStatus(`Applied "${label}". Saved resume${savedCover}.`);
+    return { resumeSaved: true, coverSaved: Boolean(storedCover?.ok) };
   }
 
   // The actual apply: save the application, snapshot artifacts, update UI.
@@ -224,15 +221,19 @@ export function useApplyFlow({
     // From here the session has one application of record: later resume or
     // cover-letter saves update THIS row rather than creating a duplicate.
     linkApplication(existing?.id ?? app.id);
-    // Edits are now tracked in the application record and an artifact is saved to
-    // disk — clear the recovery draft AND mark the editor clean so the before-unload
-    // guard stops warning. A later edit re-flips `dirty` and re-arms the guard.
-    clearAutosaveDraft();
-    markResumeClean();
+    // The application record now exists; the strict source save below decides
+    // whether the editor can safely stop advertising recovery.
     setApplyStatus(`Applied. Saved "${existing?.title || app.title}" to Applications (${usedBase ? "original" : "tailored"} resume).`);
     setActiveOutputTab("applications");
     setExpandedApplicationId(existing?.id ?? app.id);
-    void saveAppliedDocumentArtifacts(existing?.id ?? app.id, existing?.title || app.title);
+    const savedDocuments = await saveAppliedDocumentArtifacts(
+      existing?.id ?? app.id,
+      existing?.title || app.title
+    );
+    // Tracker text is not a reloadable document. Preserve recovery until the
+    // corresponding strict editable source has also been committed.
+    if (savedDocuments.resumeSaved) onResumeSaved();
+    if (savedDocuments.coverSaved) onCoverLetterSaved();
     applyCommitInFlightRef.current = false;
     setIsApplying(false);
     return true;

@@ -497,8 +497,8 @@ export async function startRoleFitServer(options: RoleFitServerOptions): Promise
       return;
     }
 
-    // One vocabulary for both document kinds: /documents/<kind> saves the pair
-    // (PDF + editable source) and /documents/<kind>.<format> streams one back.
+    // One vocabulary for both document kinds: /documents/<kind> replaces the
+    // stored source/PDF snapshot and /documents/<kind>.<format> streams one back.
     const documentFileMatch = pathname.match(/^\/api\/applications\/([^/]+)\/documents\/([a-z]+)\.([a-z]+)$/);
     if (documentFileMatch) {
       const id = decodeRouteSegment(documentFileMatch[1]);

@@ -10,7 +10,7 @@
  * State ownership: the remembered application link, the per-document busy /
  * status / just-saved state are OWNED here. The applications store, the job
  * target, and the two editors' current content arrive as args and are never
- * mutated except through `patchApplication`.
+ * mutated except through the atomic application-file mutation boundary.
  *
  * Saving is ALWAYS user-initiated. Nothing here runs on an effect: regenerating
  * or editing a document must never silently rewrite what the application holds.
@@ -18,19 +18,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { Application } from "./useApplications";
-import type { ResumeData } from "@typeset/engine/lib/resumeData.ts";
 import {
   applicationDocumentSyncState,
   applicationMatchesJobTarget,
-  coverLetterApplicationPatch,
-  resumeApplicationPatch,
   type ApplicationDocumentKind,
   type ApplicationDocumentSyncState
 } from "../lib/applicationDocuments";
-import {
-  uploadApplicationDocument,
-  type DocumentUpload
-} from "../lib/applicationDocumentRequests";
+import type { DocumentUpload } from "../lib/applicationDocumentRequests";
 
 // How long a completed save keeps saying so before the row settles back into
 // its steady "Saved to application" state.
@@ -56,13 +50,20 @@ type UseApplicationDocumentSyncArgs = {
   jobUrl: string;
   jobDescription: string;
   currentResumeText: string;
-  editedResume: ResumeData | null;
+  currentResumeSource: string;
   coverLetterText: string;
-  patchApplication: (id: string, patch: Partial<Application>) => Promise<boolean>;
-  // Each editor renders its own PDF + editable source for the copy the
-  // application keeps. Both kinds are stored the same way.
+  currentCoverLetterSource: string;
+  saveApplicationDocument: (
+    id: string,
+    kind: "resume" | "cover",
+    upload: DocumentUpload
+  ) => Promise<{ ok: boolean; error?: string }>;
+  // Each editor serializes its editable source for the copy the application
+  // keeps. Both kinds are stored the same way.
   getResumeArtifacts: () => Promise<DocumentUpload | null>;
   getCoverLetterArtifacts: () => Promise<DocumentUpload | null>;
+  onResumeSaved: () => void;
+  onCoverLetterSaved: () => void;
 };
 
 type DocumentFeedback = { status: string; statusIsError: boolean; savedAt: number };
@@ -75,17 +76,22 @@ export function useApplicationDocumentSync({
   jobUrl,
   jobDescription,
   currentResumeText,
-  editedResume,
+  currentResumeSource,
   coverLetterText,
-  patchApplication,
+  currentCoverLetterSource,
+  saveApplicationDocument,
   getResumeArtifacts,
-  getCoverLetterArtifacts
+  getCoverLetterArtifacts,
+  onResumeSaved,
+  onCoverLetterSaved
 }: UseApplicationDocumentSyncArgs) {
   // The application this session applied to (or restored from the tracker). It
   // takes precedence over the job-target lookup because Apply may have merged
   // into a record whose own primary URL is a different posting of the same role.
   const [linkedId, setLinkedId] = useState<string | null>(null);
-  const [savingKind, setSavingKind] = useState<ApplicationDocumentKind | null>(null);
+  const [savingKinds, setSavingKinds] = useState<Set<ApplicationDocumentKind>>(
+    () => new Set()
+  );
   const [resumeFeedback, setResumeFeedback] = useState<DocumentFeedback>(NO_FEEDBACK);
   const [coverFeedback, setCoverFeedback] = useState<DocumentFeedback>(NO_FEEDBACK);
   const saveInFlight = useRef<Set<ApplicationDocumentKind>>(new Set());
@@ -124,8 +130,18 @@ export function useApplicationDocumentSync({
     return () => window.clearTimeout(timer);
   }, [resumeFeedback.savedAt, coverFeedback.savedAt]);
 
-  const resumeState = applicationDocumentSyncState(application, "resume", currentResumeText);
-  const coverState = applicationDocumentSyncState(application, "coverLetter", coverLetterText);
+  const resumeState = applicationDocumentSyncState(
+    application,
+    "resume",
+    currentResumeText,
+    currentResumeSource
+  );
+  const coverState = applicationDocumentSyncState(
+    application,
+    "coverLetter",
+    coverLetterText,
+    currentCoverLetterSource
+  );
 
   const save = useCallback(
     async (kind: ApplicationDocumentKind) => {
@@ -135,73 +151,59 @@ export function useApplicationDocumentSync({
       if (!(kind === "resume" ? currentResumeText : coverLetterText).trim()) return;
       const setFeedback = kind === "resume" ? setResumeFeedback : setCoverFeedback;
       saveInFlight.current.add(kind);
-      setSavingKind(kind);
+      setSavingKinds((current) => new Set(current).add(kind));
       setFeedback(NO_FEEDBACK);
       try {
-        const patch =
-          kind === "resume"
-            ? resumeApplicationPatch(currentResumeText, editedResume)
-            : coverLetterApplicationPatch(coverLetterText);
-        const saved = await patchApplication(application.id, patch);
-        if (!saved) {
+        const artifacts = kind === "resume" ? await getResumeArtifacts() : await getCoverLetterArtifacts();
+        if (!artifacts) {
           setFeedback({
             status:
               kind === "resume"
-                ? "Resume update failed. The saved application is unchanged."
-                : "Cover letter update failed. The saved application is unchanged.",
+                ? "Resume update failed. No editable resume source is available."
+                : "Cover letter update failed. No editable cover letter source is available.",
             statusIsError: true,
             savedAt: 0
           });
           return;
         }
-        // Keep the stored files in step with the text that was just saved —
-        // otherwise the tracker would offer a download of the older document.
-        // Best-effort: the record is already persisted, so a render or upload
-        // failure is reported without failing the save.
         const noun = kind === "resume" ? "Resume" : "Cover letter";
-        let filesSaved = false;
-        // A save writes the PDF and the editable source as one snapshot, so a
-        // failed typeset is reported rather than leaving the user believing the
-        // stored PDF still matches.
-        let storedPdf = false;
-        try {
-          const artifacts = kind === "resume" ? await getResumeArtifacts() : await getCoverLetterArtifacts();
-          const stored = artifacts
-            ? await uploadApplicationDocument(application.id, kind === "resume" ? "resume" : "cover", artifacts)
-            : null;
-          if (stored) {
-            filesSaved = true;
-            storedPdf = stored.hasPdf;
-            await patchApplication(
-              application.id,
-              kind === "resume" ? { resumeArtifacts: stored } : { coverLetterArtifacts: stored }
-            );
-          }
-        } catch {
-          // Falls through to the "saved files" message below.
+        const result = await saveApplicationDocument(
+          application.id,
+          kind === "resume" ? "resume" : "cover",
+          artifacts
+        );
+        if (!result.ok) {
+          setFeedback({
+            status: result.error ?? `${noun} update failed. The saved application is unchanged.`,
+            statusIsError: true,
+            savedAt: 0
+          });
+          return;
         }
+        (kind === "resume" ? onResumeSaved : onCoverLetterSaved)();
         setFeedback({
-          status: !filesSaved
-            ? `${noun} updated. The saved PDF and file copy could not be refreshed.`
-            : storedPdf
-              ? `${noun} updated.`
-              : `${noun} updated, but its PDF could not be typeset — only the editable file was saved.`,
+          status: `${noun} updated.`,
           statusIsError: false,
           savedAt: Date.now()
         });
       } finally {
         saveInFlight.current.delete(kind);
-        setSavingKind((current) => (current === kind ? null : current));
+        setSavingKinds((current) => {
+          const next = new Set(current);
+          next.delete(kind);
+          return next;
+        });
       }
     },
     [
       application,
       coverLetterText,
       currentResumeText,
-      editedResume,
       getCoverLetterArtifacts,
       getResumeArtifacts,
-      patchApplication
+      onCoverLetterSaved,
+      onResumeSaved,
+      saveApplicationDocument
     ]
   );
 
@@ -217,11 +219,11 @@ export function useApplicationDocumentSync({
         state: resumeState,
         hasContent: Boolean(currentResumeText.trim()),
         feedback: resumeFeedback,
-        isSaving: savingKind === "resume",
+        isSaving: savingKinds.has("resume"),
         targetLabel,
         save: saveResume
       }),
-    [resumeFeedback, resumeState, saveResume, savingKind, targetLabel]
+    [currentResumeText, resumeFeedback, resumeState, saveResume, savingKinds, targetLabel]
   );
 
   const coverLetter = useMemo(
@@ -231,11 +233,11 @@ export function useApplicationDocumentSync({
         state: coverState,
         hasContent: Boolean(coverLetterText.trim()),
         feedback: coverFeedback,
-        isSaving: savingKind === "coverLetter",
+        isSaving: savingKinds.has("coverLetter"),
         targetLabel,
         save: saveCoverLetter
       }),
-    [coverFeedback, coverState, saveCoverLetter, savingKind, targetLabel]
+    [coverFeedback, coverLetterText, coverState, saveCoverLetter, savingKinds, targetLabel]
   );
 
   return { application, linkApplication, resume, coverLetter };

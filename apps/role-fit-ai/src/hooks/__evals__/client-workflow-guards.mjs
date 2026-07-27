@@ -96,14 +96,27 @@ assert.match(applications, /finally \{[\s\S]*setPendingWrites/, "tracker writes 
 
 const awaitedSave = applyFlow.indexOf("saved = await upsertApplication(app)");
 const failedSave = applyFlow.indexOf("if (!saved)", awaitedSave);
-const recoveryClear = applyFlow.indexOf("clearAutosaveDraft()", awaitedSave);
-const artifactSave = applyFlow.indexOf("saveAppliedDocumentArtifacts(", recoveryClear);
+const artifactSave = applyFlow.indexOf(
+  "const savedDocuments = await saveAppliedDocumentArtifacts(",
+  failedSave
+);
+const resumeRecoveryClear = applyFlow.indexOf(
+  "if (savedDocuments.resumeSaved) onResumeSaved();",
+  artifactSave
+);
+const coverRecoveryClear = applyFlow.indexOf(
+  "if (savedDocuments.coverSaved) onCoverLetterSaved();",
+  artifactSave
+);
 assert.ok(awaitedSave >= 0 && failedSave > awaitedSave, "Apply awaits tracker persistence");
-assert.ok(recoveryClear > failedSave, "Apply only clears recovery data after confirmed persistence");
-assert.ok(artifactSave > recoveryClear, "document artifacts start only after the application is confirmed");
+assert.ok(artifactSave > failedSave, "document artifacts start only after the application is confirmed");
+assert.ok(
+  resumeRecoveryClear > artifactSave && coverRecoveryClear > resumeRecoveryClear,
+  "Apply settles each document's recovery state only after its own editable source persists"
+);
 assert.match(
   applyFlow,
-  /uploadApplicationDocument\(id, "resume", resume\)[\s\S]{0,200}?uploadApplicationDocument\(id, "cover", cover\)/,
+  /saveApplicationDocument\(id, "resume", resume\)[\s\S]{0,400}?saveApplicationDocument\(id, "cover", cover\)/,
   "Apply saves the cover letter's files exactly as it saves the resume's"
 );
 
@@ -452,24 +465,65 @@ assert.match(
   "the active workspace file is sent as fileName, never re-slugged as a variant"
 );
 
-// Per-document application saves. The behavior of the patches themselves is
-// covered by lib/__evals__/application-documents-eval.mjs; these guard the
-// wiring that keeps the saves explicit and pointed at one existing record.
+// Per-document application saves. These guard the wiring that keeps saves
+// explicit, revisioned, and pointed at one existing record.
 const documentSync = readHook("useApplicationDocumentSync.ts");
+const applicationFiles = readHook("useApplicationFiles.ts");
+const applicationsHook = readHook("useApplications.ts");
 assert.match(
-  applications,
-  /const patchApplication = useCallback\(\s*\(id: string, patch: Partial<Application>\): Promise<boolean>/,
-  "a partial application update reports whether it was persisted"
+  applicationFiles,
+  /application\.updatedAt,[\s\S]{0,100}?sourceOrigin/,
+  "a document mutation carries the current application revision"
 );
 assert.match(
-  applications,
-  /if \(idx < 0\) return Promise\.resolve\(false\)/,
-  "patching a vanished application resolves false instead of silently succeeding"
+  applicationFiles,
+  /await refreshApplications\(\)/,
+  "the current tab adopts the server's atomic file-and-metadata transaction"
+);
+assert.match(
+  applicationFiles,
+  /mutationQueue\.current\.then\(mutation, mutation\)/,
+  "same-tab file actions serialize so each receives the prior confirmed revision"
+);
+assert.match(
+  applicationFiles,
+  /await refreshApplications\(\)[\s\S]{0,300}?getApplication\(id\)/,
+  "a file mutation waits for pending tracker writes before choosing its base revision"
+);
+assert.match(
+  applicationsHook,
+  /Math\.max\(now, previousTime \+ 1\)/,
+  "tracker mutations advance revisions even when edits share a millisecond or the clock moves backwards"
 );
 assert.match(
   documentSync,
-  /const saved = await patchApplication\(application\.id, patch\)/,
-  "a document save awaits the tracker write before reporting success"
+  /const result = await saveApplicationDocument\(/,
+  "a document save awaits the atomic server mutation before reporting success"
+);
+assert.match(
+  documentSync,
+  /setSavingKinds\(\(current\) => new Set\(current\)\.add\(kind\)\)/,
+  "simultaneous Resume and Cover letter saves each retain their own busy state"
+);
+assert.match(
+  documentSync,
+  /\[currentResumeText, resumeFeedback, resumeState, saveResume, savingKinds, targetLabel\]/,
+  "the resume application action reacts when content emptiness changes without a sync-state change"
+);
+assert.match(
+  documentSync,
+  /\[coverFeedback, coverLetterText, coverState, saveCoverLetter, savingKinds, targetLabel\]/,
+  "the cover-letter application action reacts when content emptiness changes without a sync-state change"
+);
+assert.match(
+  documentSync,
+  /\(kind === "resume" \? onResumeSaved : onCoverLetterSaved\)\(\)/,
+  "a successful per-document application save settles only that document's recovery state"
+);
+assert.match(
+  coverEditor,
+  /const markApplicationSaved[\s\S]{0,300}?clearCoverLetterAutosaveDraft\(\)/,
+  "a durable application cover letter clears its recovery draft"
 );
 assert.match(
   documentSync,
@@ -498,8 +552,18 @@ assert.match(
 );
 assert.match(
   app,
-  /coverLetterText: coverLetterEditor\.text,\s*patchApplication,/,
-  "the letter's saved/unsaved state is measured against the live editor content"
+  /applicationDocumentUrl\(app\.id, "resume", "source"\)[\s\S]{0,300}?parseResumeFile/,
+  "Open in Polish restores the strict saved resume source rather than flattened tracker text"
+);
+assert.match(
+  app,
+  /applicationDocumentUrl\(app\.id, "cover", "source"\)[\s\S]{0,1200}?openApplicationSource/,
+  "Open in Polish restores the strict saved cover-letter source and its style"
+);
+assert.match(
+  app,
+  /currentCoverLetterSource: coverLetterEditor\.draftPayload \?\? "",\s*saveApplicationDocument:/,
+  "the letter's saved state includes the full serialized editable source"
 );
 
 // Editor parity: the cover letter recovers unsaved work the way the resume

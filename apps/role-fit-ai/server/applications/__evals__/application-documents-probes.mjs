@@ -1,21 +1,13 @@
 // Application document + attachment route probes in an isolated temporary
-// workspace. Supersedes the resume-only resume-pdf-probes: the routes now store
-// both document kinds identically (PDF + editable source) and also accept
-// arbitrary user attachments, which is the part that must fail closed.
+// workspace. Supersedes the resume-only resume-pdf-probes: each document route
+// stores one strict source or explicit PDF, and additional uploads are PDF-only.
 //
 // Locked here: method gates, id/traversal safety before any filesystem write,
 // magic-byte validation, the per-application attachment cap, name validation on
 // both write and read, and the download headers that keep a user-supplied file
 // from ever rendering as a document on the app's own origin.
-//
-// NOTE (reported, not encoded as an expectation): the route's own 8 MB decoded
-// cap and base64ToBuffer's 10 MB cap are both SHADOWED by readBody's request-body
-// byte cap — any base64 payload large enough to decode past 8 MB is itself over
-// that cap and is rejected first, surfacing as the generic catch rather than the
-// intended 413. Oversize still fails closed with nothing written, which is what
-// these probes lock.
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, readdir, rm, stat } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Readable } from "node:stream";
@@ -24,10 +16,15 @@ import {
   handleApplicationAttachmentFile,
   handleApplicationDocumentFile,
   handleSaveApplicationDocument,
+  handleSaveApplications,
   handleUploadApplicationAttachment
 } from "../routes.ts";
 import { MAX_ATTACHMENTS_PER_APPLICATION, safeAttachmentFileName } from "../documents.ts";
-import { writeApplications } from "../index.ts";
+import { readApplications, writeApplications } from "../index.ts";
+import {
+  COVER_LETTER_STYLE_DEFAULTS,
+  serializeCoverLetterFile
+} from "@typeset/engine/lib/coverLetter.ts";
 
 const isolatedRoot = await mkdtemp(join(tmpdir(), "rolefit-app-documents-"));
 const workspaceDir = join(isolatedRoot, "workspace");
@@ -64,7 +61,14 @@ function jsonRequest(method, payload) {
 
 async function saveDocument(id, kind, payload, method = "POST") {
   const res = new FakeResponse();
-  await handleSaveApplicationDocument(jsonRequest(method, payload), res, id, kind, workspaceDir);
+  const current = (await readApplications(workspaceDir)).find((application) => application.id === id);
+  await handleSaveApplicationDocument(
+    jsonRequest(method, { ...payload, ...(current ? { baseUpdatedAt: current.updatedAt } : {}) }),
+    res,
+    id,
+    kind,
+    workspaceDir
+  );
   return res;
 }
 
@@ -76,13 +80,30 @@ async function readDocument(id, kind, format, method = "GET") {
 
 async function uploadAttachment(id, payload, method = "POST") {
   const res = new FakeResponse();
-  await handleUploadApplicationAttachment(jsonRequest(method, payload), res, id, workspaceDir);
+  const current = (await readApplications(workspaceDir)).find((application) => application.id === id);
+  await handleUploadApplicationAttachment(
+    jsonRequest(method, { ...payload, ...(current ? { baseUpdatedAt: current.updatedAt } : {}) }),
+    res,
+    id,
+    workspaceDir
+  );
   return res;
 }
 
 async function attachmentFile(id, fileName, method = "GET") {
   const res = new FakeResponse();
-  await handleApplicationAttachmentFile({ method }, res, id, fileName, workspaceDir);
+  if (method === "DELETE") {
+    const current = (await readApplications(workspaceDir)).find((application) => application.id === id);
+    await handleApplicationAttachmentFile(
+      jsonRequest(method, current ? { baseUpdatedAt: current.updatedAt } : {}),
+      res,
+      id,
+      fileName,
+      workspaceDir
+    );
+  } else {
+    await handleApplicationAttachmentFile({ method }, res, id, fileName, workspaceDir);
+  }
   return res;
 }
 
@@ -99,6 +120,24 @@ const pdfBytes = Buffer.from("%PDF-1.7\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF", 
 const pngBytes = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(16, 1)]);
 const b64 = (buffer) => buffer.toString("base64");
 const dirOf = (id) => join(workspaceDir, "applications", id);
+const resumeSource = await readFile(new URL("../../starter.resume", import.meta.url), "utf8");
+const coverSource = serializeCoverLetterFile({
+  name: "Xinyi Lin",
+  contact: ["xinyi@example.test"],
+  sections: [{
+    id: "cover",
+    heading: "",
+    type: "summary",
+    items: [{
+      id: "body",
+      titleLeft: "",
+      titleRight: "",
+      subtitleLeft: "",
+      subtitleRight: "",
+      bullets: [{ id: "paragraph", text: "Dear Hiring Team,\n\nThank you for considering my application." }]
+    }]
+  }]
+}, COVER_LETTER_STYLE_DEFAULTS);
 
 // Attachment uploads require the record to exist, so the probes seed
 // applications.json through the same writer the routes use.
@@ -135,6 +174,18 @@ try {
   assert.equal(await exists(join(isolatedRoot, "evil")), false, "traversal never wrote a sibling of the workspace");
   assert.equal(await exists(join(isolatedRoot, "etc")), false, "traversal never escaped above the workspace");
 
+  await writeTrackedApplications([
+    "app-good",
+    "app-oversize",
+    "app-123",
+    "app-source-only",
+    "app-pair",
+    "app-remove",
+    "app-delete",
+    "app-cap",
+    "app-traversal"
+  ]);
+
   // --- Document body validation ---
   assert.equal((await saveDocument("app-good", "resume", {})).status, 400, "a save with no document is rejected");
   assert.match((await saveDocument("app-good", "cover", {})).json.error, /No document to save/);
@@ -150,6 +201,21 @@ try {
     /not valid base64/,
     "malformed base64 is a safe 400"
   );
+  assert.equal(
+    (await saveDocument("app-good", "resume", { sourceText: "{}" })).status,
+    400,
+    "a malformed strict resume source is rejected"
+  );
+  assert.equal(
+    (await saveDocument("app-good", "cover", { sourceText: "{}" })).status,
+    400,
+    "a malformed strict cover-letter source is rejected"
+  );
+  assert.equal(
+    (await saveDocument("app-not-tracked", "resume", { sourceText: resumeSource })).status,
+    404,
+    "a document save cannot create an orphan application directory"
+  );
   {
     const oversize = Buffer.concat([Buffer.from("%PDF-", "utf8"), Buffer.alloc(7_000_000, 0x20)]);
     const res = await saveDocument("app-oversize", "resume", { pdfBase64: b64(oversize) });
@@ -157,27 +223,34 @@ try {
     assert.equal(await exists(join(dirOf("app-oversize"), "resume.pdf")), false, "an over-cap upload writes no file");
   }
 
-  // --- Both kinds store and stream identically ---
+  // --- Both kinds store and stream identically, one representation at a time ---
   for (const [kind, extension] of [["resume", "resume"], ["cover", "cover"]]) {
-    const source = `{"format":"typeset-${kind}","schemaVersion":2}`;
-    const res = await saveDocument("app-123", kind, {
-      pdfBase64: b64(pdfBytes),
+    const source = kind === "resume" ? resumeSource : coverSource;
+    const sourceSave = await saveDocument("app-123", kind, {
       sourceText: source,
-      fileName: `Xinyi_Lin_Acme_${kind}.pdf`
+      fileName: `Xinyi_Lin_Acme_${kind}.${extension}`
     });
-    assert.equal(res.status, 200, `a valid ${kind} save succeeds`);
-    assert.equal(res.json.artifacts.hasPdf, true, `the ${kind} save reports a stored PDF`);
-    assert.equal(res.json.artifacts.hasSource, true, `the ${kind} save reports a stored source file`);
-
-    assert.ok(
-      (await readFile(join(dirOf("app-123"), `${kind}.pdf`))).equals(pdfBytes),
-      `the persisted ${kind} PDF matches the upload`
-    );
+    assert.equal(sourceSave.status, 200, `a valid ${kind} source save succeeds`);
+    assert.equal(sourceSave.json.artifacts.hasPdf, false, `the ${kind} source save stores no duplicate PDF`);
+    assert.equal(sourceSave.json.artifacts.hasSource, true, `the ${kind} save reports a stored source file`);
     assert.equal(
       await readFile(join(dirOf("app-123"), `${kind}.${extension}`), "utf8"),
       source,
       `the persisted .${extension} source matches the upload`
     );
+
+    const sourceRes = await readDocument("app-123", kind, extension);
+    assert.equal(sourceRes.status, 200, `the stored .${extension} streams back`);
+    assert.equal(sourceRes.buffer.toString("utf8"), source, `the streamed .${extension} round-trips`);
+
+    const pdfSave = await saveDocument("app-123", kind, {
+      pdfBase64: b64(pdfBytes),
+      fileName: `Xinyi_Lin_Acme_${kind}.pdf`
+    });
+    assert.equal(pdfSave.status, 200, `an uploaded ${kind} PDF replaces the source`);
+    assert.equal(pdfSave.json.artifacts.hasPdf, true, `the ${kind} save reports a stored PDF`);
+    assert.equal(pdfSave.json.artifacts.hasSource, false, `a PDF-only save removes the prior source`);
+    assert.equal((await readDocument("app-123", kind, extension)).status, 404, "the superseded source is gone");
 
     const pdfRes = await readDocument("app-123", kind, "pdf");
     assert.equal(pdfRes.status, 200, `the stored ${kind} PDF streams back`);
@@ -185,10 +258,6 @@ try {
     assert.equal(pdfRes.headers["X-Content-Type-Options"], "nosniff", `the ${kind} PDF is served with nosniff`);
     assert.match(pdfRes.headers["Content-Disposition"], /^attachment;/, `the ${kind} PDF is served as a download`);
     assert.ok(pdfRes.buffer.equals(pdfBytes), `the streamed ${kind} PDF round-trips`);
-
-    const sourceRes = await readDocument("app-123", kind, extension);
-    assert.equal(sourceRes.status, 200, `the stored .${extension} streams back`);
-    assert.equal(sourceRes.buffer.toString("utf8"), source, `the streamed .${extension} round-trips`);
 
     // A kind may only serve its OWN source format.
     const wrongFormat = kind === "resume" ? "cover" : "resume";
@@ -198,20 +267,35 @@ try {
       `${kind} refuses the other kind's source format`
     );
     assert.equal((await readDocument("app-123", kind, "exe")).status, 404, "an unknown format is refused");
+
+    const restoredSource = await saveDocument("app-123", kind, {
+      sourceText: source,
+      fileName: `Xinyi_Lin_Acme_${kind}.${extension}`
+    });
+    assert.equal(restoredSource.status, 200, "saving editable source again removes the uploaded PDF");
+    assert.equal((await readDocument("app-123", kind, "pdf")).status, 404, "source-only storage leaves no PDF");
   }
 
-  // A source-only save (the PDF render failed) still keeps the editable file,
-  // and clears a PDF from an earlier save so the record and the disk agree
-  // rather than the record claiming a current PDF that no longer matches.
+  assert.equal(
+    (await saveDocument("app-good", "resume", {
+      pdfBase64: b64(pdfBytes),
+      sourceText: resumeSource
+    })).status,
+    400,
+    "the route refuses duplicate source and PDF storage for one document"
+  );
+
+  // A source-only save keeps the editable file and replaces an earlier PDF so
+  // the tracker and disk never retain two representations of one document.
   {
-    const res = await saveDocument("app-source-only", "cover", { sourceText: "{}", fileName: "letter.pdf" });
+    const res = await saveDocument("app-source-only", "cover", { sourceText: coverSource, fileName: "letter.cover" });
     assert.equal(res.status, 200, "a source-only save succeeds");
     assert.equal(res.json.artifacts.hasPdf, false, "a source-only save reports no PDF");
     assert.equal(res.json.artifacts.hasSource, true, "a source-only save reports the stored source");
 
-    await saveDocument("app-pair", "resume", { pdfBase64: b64(pdfBytes), sourceText: "{}" });
+    await saveDocument("app-pair", "resume", { pdfBase64: b64(pdfBytes) });
     assert.equal(await exists(join(dirOf("app-pair"), "resume.pdf")), true, "the first save stored a PDF");
-    const second = await saveDocument("app-pair", "resume", { sourceText: "{\"v\":2}" });
+    const second = await saveDocument("app-pair", "resume", { sourceText: resumeSource });
     assert.equal(second.json.artifacts.hasPdf, false, "a later source-only save reports no PDF");
     assert.equal(
       await exists(join(dirOf("app-pair"), "resume.pdf")),
@@ -220,7 +304,36 @@ try {
     );
   }
 
+  // Removing a document clears whichever representation currently owns its
+  // slot. The operation is idempotent so a retry cannot strand bytes.
+  {
+    await saveDocument("app-remove", "cover", { pdfBase64: b64(pdfBytes), fileName: "letter.pdf" });
+    const removedPdf = await saveDocument("app-remove", "cover", {}, "DELETE");
+    assert.equal(removedPdf.status, 200, "uploaded PDF removal succeeds");
+    assert.equal(await exists(join(dirOf("app-remove"), "cover.pdf")), false, "document removal deletes the PDF");
+
+    await saveDocument("app-remove", "cover", { sourceText: coverSource, fileName: "letter.cover" });
+    const removedSource = await saveDocument("app-remove", "cover", {}, "DELETE");
+    assert.equal(removedSource.status, 200, "editable source removal succeeds");
+    assert.equal(await exists(join(dirOf("app-remove"), "cover.cover")), false, "document removal deletes the source");
+    assert.equal((await saveDocument("app-remove", "cover", {}, "DELETE")).status, 200, "document removal is idempotent");
+  }
+
   assert.equal((await readDocument("app-absent", "resume", "pdf")).status, 404, "a missing document is a clean 404");
+  await mkdir(join(dirOf("app-good"), "attachments"), { recursive: true });
+  await writeFile(join(dirOf("app-good"), "resume.pdf"), pdfBytes);
+  await writeFile(join(dirOf("app-good"), "attachments", "orphan.pdf"), pdfBytes);
+  assert.equal(
+    (await readDocument("app-good", "resume", "pdf")).status,
+    404,
+    "untracked document bytes cannot be downloaded"
+  );
+  assert.equal(
+    (await attachmentFile("app-good", "orphan.pdf")).status,
+    404,
+    "untracked attachment bytes cannot be downloaded"
+  );
+  await rm(dirOf("app-good"), { recursive: true, force: true });
 
   // --- Attachments ---
   // The upload targets a real record: a well-formed id for a row that does not
@@ -234,11 +347,8 @@ try {
       "a refused upload creates no directory"
     );
   }
-  // Every id used below is a tracked record.
-  await writeTrackedApplications(["app-123", "app-cap", "app-traversal"]);
-
   // An unsupported (or nameless) extension is refused outright.
-  for (const badName of ["notes.exe", "shell.sh", "archive.zip", "..", "", ".pdf", "   .pdf"]) {
+  for (const badName of ["notes.exe", "image.png", "letter.cover", "shell.sh", "archive.zip", "..", "", ".pdf", "   .pdf"]) {
     const res = await uploadAttachment("app-123", { fileName: badName, dataBase64: b64(pdfBytes) });
     assert.equal(res.status, 400, `an unsupported attachment name is refused: ${JSON.stringify(badName)}`);
   }
@@ -290,6 +400,16 @@ try {
 
     // A name that does not survive validation can never address a stored file.
     assert.equal((await attachmentFile("app-123", "../../applications.json")).status, 404, "traversal on read is a 404");
+    assert.equal(
+      (await attachmentFile("app-123", `folder/${stored.fileName}`)).status,
+      404,
+      "a path-bearing alias cannot address a canonical stored name"
+    );
+    assert.equal(
+      (await attachmentFile("app-123", stored.fileName.toUpperCase())).status,
+      404,
+      "a non-canonical case alias cannot address a stored name"
+    );
     assert.equal((await attachmentFile("app-123", "absent.pdf")).status, 404, "a missing attachment is a clean 404");
   }
 
@@ -305,12 +425,13 @@ try {
     );
   }
 
-  // The per-application cap is enforced on disk, not in the client.
+  // The per-application cap is enforced from authoritative tracker metadata,
+  // not from the client or a possibly incomplete directory listing.
   {
     for (let i = 0; i < MAX_ATTACHMENTS_PER_APPLICATION; i += 1) {
-      await uploadAttachment("app-cap", { fileName: `file-${i}.txt`, dataBase64: b64(Buffer.from(`note ${i}`)) });
+      await uploadAttachment("app-cap", { fileName: `file-${i}.pdf`, dataBase64: b64(pdfBytes) });
     }
-    const res = await uploadAttachment("app-cap", { fileName: "one-too-many.txt", dataBase64: b64(Buffer.from("x")) });
+    const res = await uploadAttachment("app-cap", { fileName: "one-too-many.pdf", dataBase64: b64(pdfBytes) });
     assert.equal(res.status, 409, "the attachment cap is enforced");
     assert.match(res.json.error, /Remove one first/);
     assert.equal(
@@ -318,24 +439,70 @@ try {
       MAX_ATTACHMENTS_PER_APPLICATION,
       "the refused upload wrote no file"
     );
+
+    // A missing tracked file must not look like a free slot. If the route
+    // counted disk entries, this upload would be written as attachment 11 and
+    // then dropped by the tracker sanitizer, leaving unreachable bytes behind.
+    await rm(join(dirOf("app-cap"), "attachments", "file-0.pdf"));
+    const missingTrackedFile = await uploadAttachment("app-cap", {
+      fileName: "missing-slot.pdf",
+      dataBase64: b64(pdfBytes)
+    });
+    assert.equal(missingTrackedFile.status, 409, "a missing tracked file does not bypass the attachment cap");
+    assert.equal(
+      await exists(join(dirOf("app-cap"), "attachments", "missing-slot.pdf")),
+      false,
+      "a cap rejection with incomplete disk state writes no orphan file"
+    );
   }
 
   // Delete removes the file and stays a 200 when it is already gone.
   {
-    const del = await attachmentFile("app-cap", "file-0.txt", "DELETE");
+    const del = await attachmentFile("app-cap", "file-0.pdf", "DELETE");
     assert.equal(del.status, 200, "deleting an attachment succeeds");
     assert.equal(
-      await exists(join(dirOf("app-cap"), "attachments", "file-0.txt")),
+      await exists(join(dirOf("app-cap"), "attachments", "file-0.pdf")),
       false,
       "the deleted attachment is gone from disk"
     );
-    assert.equal((await attachmentFile("app-cap", "file-0.txt", "DELETE")).status, 200, "deleting twice is idempotent");
+    assert.equal((await attachmentFile("app-cap", "file-0.pdf", "DELETE")).status, 200, "deleting twice is idempotent");
+  }
+
+  // The browser deletes through the full tracker mutation endpoint. That path
+  // must move the whole application directory too, not only remove metadata.
+  {
+    await saveDocument("app-delete", "resume", { sourceText: resumeSource });
+    await uploadAttachment("app-delete", {
+      fileName: "supporting.pdf",
+      dataBase64: b64(pdfBytes)
+    });
+    const current = await readApplications(workspaceDir);
+    const deleted = current.find((application) => application.id === "app-delete");
+    const res = new FakeResponse();
+    await handleSaveApplications(
+      jsonRequest("PUT", {
+        applications: current.filter((application) => application.id !== "app-delete"),
+        mutations: [{
+          id: "app-delete",
+          operation: "delete",
+          baseUpdatedAt: deleted.updatedAt
+        }]
+      }),
+      res,
+      workspaceDir
+    );
+    assert.equal(res.status, 200, "the ordinary tracker delete succeeds");
+    assert.equal(await exists(dirOf("app-delete")), false, "tracker delete removes the live application directory");
+    assert.ok(
+      (await readdir(join(workspaceDir, "applications", ".trash"))).some((name) => name.startsWith("app-delete-")),
+      "tracker delete keeps the application's personal files in recoverable trash"
+    );
   }
 
   assert.deepEqual(
     (await readdir(join(workspaceDir, "applications"))).sort(),
-    ["app-123", "app-cap", "app-pair", "app-source-only", "app-traversal"],
-    "only the valid saves persisted application directories"
+    [".trash", "app-123", "app-cap", "app-pair", "app-source-only", "app-traversal"],
+    "only valid live saves and recoverable trash persisted application directories"
   );
 
   // Name derivation must be idempotent: the upload route stores what it returns

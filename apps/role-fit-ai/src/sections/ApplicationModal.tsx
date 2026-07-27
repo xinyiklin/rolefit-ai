@@ -26,8 +26,8 @@ import {
   type ApplicationStatus,
   type SalaryPeriod
 } from "../hooks/useApplications";
-import type { ApplicationAttachment } from "../hooks/useApplications";
 import type { ApplicationDocumentKind } from "../lib/applicationDocumentRequests";
+import type { DocumentUpload } from "../lib/applicationDocumentRequests";
 import { ApplicationDocumentsTab } from "./application/ApplicationDocumentsTab";
 import { STATUS_LABEL, fitTone, formatSalary } from "../lib/applicationDisplay";
 import { VERDICT_LABEL, verdictFromScore } from "../lib/fitVerdict";
@@ -41,13 +41,24 @@ type ApplicationModalProps = {
   onClose: () => void;
   onSave: (application: Application) => Promise<boolean>;
   onDelete?: (id: string, title: string) => void;
-  // Load this application's job target + resume snapshot into the Polish editor.
+  // Load this application's job target + saved resume into the Polish editor.
   onLoad?: (application: Application) => void;
-  // Open a saved document's PDF in the in-app react-pdf viewer.
+  // Open a saved application document in the in-app PDF viewer.
   onPreviewDocument?: (application: Application, kind: ApplicationDocumentKind) => void;
-  // Persist the attachment list as soon as the server has stored (or removed)
-  // the file itself, rather than waiting for this modal's Save.
-  onAttachmentsChange?: (id: string, attachments: ApplicationAttachment[]) => Promise<boolean>;
+  // Render/download a source-only saved document as PDF on demand.
+  onDownloadDocument?: (application: Application, kind: ApplicationDocumentKind) => void;
+  onSaveDocument: (
+    id: string,
+    kind: ApplicationDocumentKind,
+    upload: DocumentUpload,
+    sourceOrigin?: "editor" | "upload"
+  ) => Promise<{ ok: boolean; error?: string }>;
+  onRemoveDocument: (
+    id: string,
+    kind: ApplicationDocumentKind
+  ) => Promise<{ ok: boolean; error?: string }>;
+  onSaveAttachment: (id: string, file: File) => Promise<{ ok: boolean; error?: string }>;
+  onRemoveAttachment: (id: string, fileName: string) => Promise<{ ok: boolean; error?: string }>;
 };
 
 type ModalTab = "overview" | "interview" | "documents" | "questions";
@@ -161,7 +172,11 @@ export function ApplicationModal({
   onDelete,
   onLoad,
   onPreviewDocument,
-  onAttachmentsChange
+  onDownloadDocument,
+  onSaveDocument,
+  onRemoveDocument,
+  onSaveAttachment,
+  onRemoveAttachment
 }: ApplicationModalProps) {
   const isEdit = Boolean(application);
   const applicationId = application?.id ?? null;
@@ -624,10 +639,13 @@ export function ApplicationModal({
           {tab === "documents" ? (
             <ApplicationDocumentsTab
               application={application}
-              isEdit={isEdit}
               downloadBase={downloadBase}
+              onSaveDocument={onSaveDocument}
+              onRemoveDocument={onRemoveDocument}
               onPreviewDocument={onPreviewDocument}
-              onAttachmentsChange={onAttachmentsChange}
+              onDownloadDocument={onDownloadDocument}
+              onSaveAttachment={onSaveAttachment}
+              onRemoveAttachment={onRemoveAttachment}
             />
           ) : null}
 

@@ -29,6 +29,7 @@ import type { DocStyle, DocumentStyle } from "@typeset/engine/lib/documentStyle.
 import type { ResumeData } from "@typeset/engine/lib/resumeData.ts";
 import { toTypesetSchema } from "@typeset/engine/typeset/schema.ts";
 import { clearCoverLetterAutosaveDraft } from "./useCoverLetterAutosaveDraft";
+import type { DocumentUpload } from "../lib/applicationDocumentRequests";
 import {
   coverLetterStartupIsCurrent,
   loadLastCoverLetterName,
@@ -76,18 +77,6 @@ function loadTitle(): string {
 }
 
 // Blob → bare base64 (no data: prefix), matching the resume export's encoder.
-function blobToBase64(blob: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      const value = typeof reader.result === "string" ? reader.result : "";
-      resolve(value.includes(",") ? value.slice(value.indexOf(",") + 1) : "");
-    };
-    reader.onerror = () => reject(reader.error ?? new Error("Could not encode PDF."));
-    reader.readAsDataURL(blob);
-  });
-}
-
 function pdfFailureMessage(error: unknown): string {
   const detail = error instanceof Error ? error.message : "";
   if (/font|Unknown font format/i.test(detail)) {
@@ -98,7 +87,7 @@ function pdfFailureMessage(error: unknown): string {
 
 type UseCoverLetterEditorOptions = {
   // Fired when a letter is OPENED — a file, a starter, a blank page, a saved
-  // variant, or the pre-tailoring source. The host puts the caret in the
+  // variant, a recovery draft, or an application source. The host puts the caret in the
   // document. Deliberately NOT fired for a tailored result: that arrives while
   // the user is reading the review, and taking focus there would interrupt them.
   onOpenDocument?: () => void;
@@ -294,6 +283,34 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
         return true;
       } catch {
         setStatus("That recovered cover-letter draft could not be read.");
+        return false;
+      }
+    },
+    [editor.markClean, openDocument]
+  );
+
+  // Open the strict source owned by a tracked application. It is not a
+  // workspace variant, so later Save must ask for a destination rather than
+  // overwriting whichever variant happened to be active beforehand.
+  const openApplicationSource = useCallback(
+    (payload: string, title: string) => {
+      try {
+        const parsed = parseCoverLetterFile(payload);
+        openDocument(parsed.data);
+        editor.markClean();
+        setStyle((current) => ({
+          ...coverLetterStyleToDocumentStyle(parsed.style),
+          zoom: current.zoom,
+          spellCheck: current.spellCheck
+        }));
+        setPersistedFingerprint(serializeCoverLetterFile(parsed.data, parsed.style));
+        setActiveCoverFileName("");
+        saveLastCoverLetterName("");
+        if (title.trim()) setDocumentTitle(title.trim());
+        setStatus("Loaded the saved application cover letter.");
+        return true;
+      } catch {
+        setStatus("The saved application cover letter could not be read.");
         return false;
       }
     },
@@ -632,26 +649,23 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
   }, [documentTitle, editor.editedResume, renderPdfBytes]);
 
   // The letter's equivalent of the resume export's getResumeArtifacts: the
-  // compiled PDF plus the editable `.cover`, for the copy an application keeps.
-  // Returns null when there is nothing to render; a failed PDF still returns the
-  // source, so an export problem never costs the saved letter.
-  const getArtifacts = useCallback(async () => {
+  // editable `.cover` source an application keeps. PDF preview/download is
+  // rendered from this source on demand.
+  const getArtifacts = useCallback(async (): Promise<DocumentUpload | null> => {
     const data = editor.editedResume;
     if (!data || !coverLetterPlainText(data).trim()) return null;
-    const sourceText = serializeCoverLetterFile(data, documentStyleToCoverLetterStyle(styleRef.current));
-    let pdfBase64: string | null = null;
-    try {
-      const bytes = await renderPdfBytes(data);
-      pdfBase64 = await blobToBase64(new Blob([bytes as BlobPart]));
-    } catch {
-      // Fall through: the source alone is still worth saving.
-    }
     return {
-      pdfBase64,
-      sourceText,
-      fileName: coverLetterFileName(documentTitle).replace(/\.cover$/i, ".pdf")
+      sourceText: serializeCoverLetterFile(data, documentStyleToCoverLetterStyle(styleRef.current)),
+      fileName: coverLetterFileName(documentTitle)
     };
-  }, [documentTitle, editor.editedResume, renderPdfBytes]);
+  }, [documentTitle, editor.editedResume]);
+
+  const markApplicationSaved = useCallback(() => {
+    if (!currentFingerprint) return;
+    editor.markClean();
+    setPersistedFingerprint(currentFingerprint);
+    clearCoverLetterAutosaveDraft();
+  }, [currentFingerprint, editor.markClean]);
 
   return {
     data: editor.editedResume ?? initialData,
@@ -686,7 +700,9 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
     applyExternalText,
     applyTailoredText,
     openRecoveryDraft,
+    openApplicationSource,
     getArtifacts,
+    markApplicationSaved,
     // The serialized `.cover` payload behind `dirty`, reused as the recovery
     // draft so one definition of "the current document" feeds both.
     draftPayload: currentFingerprint
