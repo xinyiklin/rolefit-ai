@@ -1,7 +1,10 @@
 import { createServer } from "node:net";
 import { win32 } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
-import type { RoleFitHealthExpectation } from "../server/health-contract.js";
+import type {
+  RoleFitHealthExpectation,
+  RoleFitHealthLaunchKind
+} from "../server/health-contract.js";
 import { readBoundedResponseText } from "./bounded-response.cjs";
 
 export type RoleFitServerOwnership = "owned" | "reused";
@@ -22,6 +25,7 @@ export type DesktopWorkspaceRestore = Readonly<{ restoredFiles: number; previous
 export type DesktopServerHandle = {
   origin: string;
   ownership: RoleFitServerOwnership;
+  launchKind: RoleFitHealthLaunchKind;
   pid?: number;
   backupWorkspace(): Promise<DesktopWorkspaceBackup>;
   restoreWorkspace(body: string): Promise<DesktopWorkspaceRestore>;
@@ -30,12 +34,20 @@ export type DesktopServerHandle = {
   terminateNow(): void;
 };
 
-export type DesktopServerConflict = Readonly<{
-  status: "conflict";
-  kind: "compatible-rolefit" | "foreign-service";
-  origin: string;
-  port: number;
-}>;
+export type DesktopServerConflict =
+  | Readonly<{
+      status: "conflict";
+      kind: "compatible-rolefit";
+      launchKind: RoleFitHealthLaunchKind;
+      origin: string;
+      port: number;
+    }>
+  | Readonly<{
+      status: "conflict";
+      kind: "foreign-service";
+      origin: string;
+      port: number;
+    }>;
 
 export type DesktopServerStartOutcome =
   | Readonly<{ status: "ready"; server: DesktopServerHandle }>
@@ -65,8 +77,10 @@ export type DesktopServerIdentity = Pick<
   "host" | "mode" | "port" | "workspaceDir"
 >;
 
-type HealthState = "compatible" | "incompatible" | "unreachable";
-type HealthMatcher = (value: unknown) => boolean;
+type HealthState =
+  | Readonly<{ status: "compatible"; launchKind: RoleFitHealthLaunchKind }>
+  | Readonly<{ status: "incompatible" | "unreachable" }>;
+type HealthMatcher = (value: unknown) => RoleFitHealthLaunchKind | null;
 
 const INHERITED_SERVER_ENV_KEYS = [
   "PATH",
@@ -183,12 +197,15 @@ async function probeHealth(origin: string, matches: HealthMatcher): Promise<Heal
       response.redirected ||
       !response.headers.get("content-type")?.toLowerCase().includes("application/json")
     ) {
-      return "incompatible";
+      return { status: "incompatible" };
     }
     const body = await readBoundedResponseText(response, 4_096);
-    return matches(JSON.parse(body)) ? "compatible" : "incompatible";
+    const launchKind = matches(JSON.parse(body));
+    return launchKind
+      ? { status: "compatible", launchKind }
+      : { status: "incompatible" };
   } catch {
-    return "unreachable";
+    return { status: "unreachable" };
   }
 }
 
@@ -225,15 +242,23 @@ async function desktopHealthMatcher(
     mode: options.mode,
     workspaceFingerprint: computeWorkspaceFingerprint(options.workspaceDir)
   };
-  return (value) => isCompatibleRoleFitHealth(value, expectedHealth);
+  return (value) =>
+    isCompatibleRoleFitHealth(value, expectedHealth) ? value.launchKind : null;
 }
 
 export async function probeCompatibleDesktopServer(
   options: DesktopServerIdentity
 ): Promise<boolean> {
+  return (await probeDesktopServerLaunchKind(options)) !== null;
+}
+
+export async function probeDesktopServerLaunchKind(
+  options: DesktopServerIdentity
+): Promise<RoleFitHealthLaunchKind | null> {
   validatePort(options.port);
   const origin = `http://${options.host}:${options.port}`;
-  return await probeHealth(origin, await desktopHealthMatcher(options)) === "compatible";
+  const health = await probeHealth(origin, await desktopHealthMatcher(options));
+  return health.status === "compatible" ? health.launchKind : null;
 }
 
 async function waitForOwnedServer(
@@ -254,8 +279,8 @@ async function waitForOwnedServer(
         throw new Error(`RoleFit server stopped during startup (exit ${exitCode}).`);
       }
       const health = await probeHealth(origin, matches);
-      if (health === "compatible") return;
-      if (health === "incompatible") {
+      if (health.status === "compatible" && health.launchKind === "companion") return;
+      if (health.status === "incompatible" || health.status === "compatible") {
         throw new Error("The desktop server returned an incompatible health response.");
       }
       await delay(100);
@@ -296,13 +321,17 @@ async function stopOwnedProcess(
   }
 }
 
-function reusedServer(origin: string): DesktopServerHandle {
+function reusedServer(
+  origin: string,
+  launchKind: RoleFitHealthLaunchKind
+): DesktopServerHandle {
   const unavailable = async (): Promise<never> => {
     throw new Error("Restart the companion so it can own the local server before transferring a workspace.");
   };
   return {
     origin,
     ownership: "reused",
+    launchKind,
     backupWorkspace: unavailable,
     restoreWorkspace: unavailable,
     updateProviderSnapshot: () => false,
@@ -311,12 +340,22 @@ function reusedServer(origin: string): DesktopServerHandle {
   };
 }
 
-function conflict(
-  kind: DesktopServerConflict["kind"],
+function compatibleConflict(
   origin: string,
-  port: number
+  port: number,
+  launchKind: RoleFitHealthLaunchKind
 ): DesktopServerConflict {
-  return Object.freeze({ status: "conflict", kind, origin, port });
+  return Object.freeze({
+    status: "conflict",
+    kind: "compatible-rolefit",
+    launchKind,
+    origin,
+    port
+  });
+}
+
+function foreignConflict(origin: string, port: number): DesktopServerConflict {
+  return Object.freeze({ status: "conflict", kind: "foreign-service", origin, port });
 }
 
 export function connectToCompatibleDesktopServer(
@@ -325,7 +364,7 @@ export function connectToCompatibleDesktopServer(
   if (value.kind !== "compatible-rolefit") {
     throw new Error("Only a compatible RoleFit listener can be reused.");
   }
-  return reusedServer(value.origin);
+  return reusedServer(value.origin, value.launchKind);
 }
 
 export async function startOrReuseDesktopServer(
@@ -336,11 +375,11 @@ export async function startOrReuseDesktopServer(
   const matchesHealth = await desktopHealthMatcher(options);
 
   const initialHealth = await probeHealth(origin, matchesHealth);
-  if (initialHealth === "compatible") {
-    return conflict("compatible-rolefit", origin, options.port);
+  if (initialHealth.status === "compatible") {
+    return compatibleConflict(origin, options.port, initialHealth.launchKind);
   }
-  if (initialHealth === "incompatible" || !(await canBind(options.host, options.port))) {
-    return conflict("foreign-service", origin, options.port);
+  if (initialHealth.status === "incompatible" || !(await canBind(options.host, options.port))) {
+    return foreignConflict(origin, options.port);
   }
 
   const serverProcess = options.forkServer({
@@ -379,14 +418,18 @@ export async function startOrReuseDesktopServer(
     closing = true;
     await stopOwnedProcess(serverProcess, options.shutdownTimeoutMs ?? 5_000);
     const healthAfterStartupFailure = await probeHealth(origin, matchesHealth);
-    if (healthAfterStartupFailure === "compatible") {
-      return conflict("compatible-rolefit", origin, options.port);
+    if (healthAfterStartupFailure.status === "compatible") {
+      return compatibleConflict(
+        origin,
+        options.port,
+        healthAfterStartupFailure.launchKind
+      );
     }
     if (
-      healthAfterStartupFailure === "incompatible" ||
+      healthAfterStartupFailure.status === "incompatible" ||
       !(await canBind(options.host, options.port))
     ) {
-      return conflict("foreign-service", origin, options.port);
+      return foreignConflict(origin, options.port);
     }
     throw error;
   }
@@ -450,6 +493,7 @@ export async function startOrReuseDesktopServer(
     server: {
       origin,
       ownership: "owned",
+      launchKind: "companion",
       pid: serverProcess.pid,
       backupWorkspace: async () => {
         const result = await requestWorkspace("backup");

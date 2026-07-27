@@ -32,12 +32,13 @@ separate from standalone `PORT`. The companion opens the active
 `http://localhost:<port>` origin in the system browser, whose API calls remain
 relative and same-origin.
 
-Port `5181` remains the browser-extension route-target contract. The extension
-does not follow a custom companion port, so custom-port
-operation is direct-browser-only in this phase. A port change also changes the
-browser origin: origin-scoped `localStorage` is separate at the new port. The
-port change never relocates the active workspace or provider state; packaged
-runs keep those under `userData`.
+Source extension development defaults to port `5181`. The companion writes the
+resolved active server port into the runtime config in its materialized
+extension folder; after a port-changing restart, the browser must reload that
+unpacked extension once. The extension does not scan localhost. A port change
+also changes the browser origin: origin-scoped `localStorage` is separate at
+the new port. The port change never relocates the active workspace or provider
+state; packaged runs keep those under `userData`.
 This service is not a general cross-origin desktop bridge. Do not add blanket
 CORS or turn the hosted product/download page into a client of the local server.
 

@@ -127,7 +127,7 @@ const providerConnections = Object.freeze([
   })
 ]);
 
-assert.equal(ROLEFIT_DESKTOP_API_VERSION, 10);
+assert.equal(ROLEFIT_DESKTOP_API_VERSION, 11);
 assert.equal(ROLEFIT_DESKTOP_SETTINGS_SCHEMA_VERSION, 1);
 assert.equal(ROLEFIT_EXTENSION_ORIGIN_MAX_COUNT, 4);
 assert.equal(ROLEFIT_API_KEY_MAX_BYTES, 16_384);
@@ -152,7 +152,9 @@ assert.equal(ROLEFIT_WORKSPACE_BASE_RESUME_RE.test("fullstack.resume"), true);
 assert.equal(ROLEFIT_WORKSPACE_BASE_RESUME_RE.test("base-resume.txt"), false);
 assert.equal(ROLEFIT_WORKSPACE_LEGACY_BASE_RESUME_RE.test("base-resume.txt"), true);
 assert.equal(isRoleFitConnectionServerState("owned"), true);
-assert.equal(isRoleFitConnectionServerState("reused"), true);
+assert.equal(isRoleFitConnectionServerState("reused-standalone"), true);
+assert.equal(isRoleFitConnectionServerState("reused-companion"), true);
+assert.equal(isRoleFitConnectionServerState("reused"), false);
 assert.equal(isRoleFitConnectionServerState("starting"), true);
 assert.equal(isRoleFitConnectionServerState("unreachable"), true);
 assert.equal(isRoleFitConnectionServerState("stopped"), false);
@@ -176,7 +178,7 @@ assert.equal(isRoleFitProviderId("shell"), false);
 assert.equal(normalizeRoleFitExtensionOrigin(`${firefoxOrigin}/`), firefoxOrigin);
 assert.equal(normalizeRoleFitExtensionOrigin("https://example.com"), "");
 assert.deepEqual(runtimeInfo, {
-  apiVersion: 10,
+  apiVersion: 11,
   runtime: "electron-companion",
   platform: "darwin",
   appVersion: "0.1.0",
@@ -518,6 +520,16 @@ connectionStatusResult = { ...connectionStatusResult, serverState: "unreachable"
 const handledUnreachableStatus = await installedHandlers.get(channels.connectionStatus)(requestEvent());
 assert.equal(handledUnreachableStatus.serverState, "unreachable");
 assert.equal(handledUnreachableStatus.activeBrowserTabs, null);
+connectionStatusResult = { ...connectionStatusResult, serverState: "reused-standalone" };
+assert.equal(
+  (await installedHandlers.get(channels.connectionStatus)(requestEvent())).serverState,
+  "reused-standalone"
+);
+connectionStatusResult = { ...connectionStatusResult, serverState: "reused-companion" };
+assert.equal(
+  (await installedHandlers.get(channels.connectionStatus)(requestEvent())).serverState,
+  "reused-companion"
+);
 connectionStatusResult = { ...connectionStatusResult, serverState: "stopped" };
 await assert.rejects(
   installedHandlers.get(channels.connectionStatus)(requestEvent()),
@@ -860,10 +872,12 @@ try {
 assert.ok(sanitizedPairingError instanceof Error);
 assert.match(sanitizedPairingError.message, /could not be saved/);
 assert.doesNotMatch(sanitizedPairingError.message, /private settings path/);
-extensionPairingFailure = new Error("Browser extension pairing requires local site port 5181.");
+extensionPairingFailure = new Error(
+  "Restart RoleFit and let this companion start the local service before changing extension access."
+);
 await assert.rejects(
   installedHandlers.get(channels.saveExtension)(requestEvent(), firefoxOrigin),
-  /requires local site port 5181/
+  /let this companion start the local service/
 );
 extensionPairingFailure = null;
 
@@ -972,6 +986,21 @@ assert.match(
   companionRendererSource,
   /async function refreshConnectionStatus\(\)[\s\S]*window\.clearTimeout\(connectionPollTimer\)[\s\S]*finally[\s\S]*scheduleConnectionPoll\(\)/,
   "each connection refresh clears its predecessor and schedules one successor only after settling"
+);
+assert.match(
+  companionRendererSource,
+  /reused-standalone[\s\S]*standalone RoleFit development server[\s\S]*reused-companion[\s\S]*service this companion did not start/,
+  "Settings distinguishes current ownership from standalone and previous-companion reuse"
+);
+assert.match(
+  companionRendererSource,
+  /canManageExtension = liveConnectionStatus\?\.serverState === "owned"[\s\S]*approve\.disabled = extensionPairingPending \|\| !canManageExtension[\s\S]*remove\.disabled = extensionPairingPending \|\| !canManageExtension/,
+  "extension access mutations stay disabled unless this companion owns the server"
+);
+assert.match(
+  companionRendererSource,
+  /Reload the unpacked extension after RoleFit restarts/,
+  "port-change confirmation names the required browser extension reload"
 );
 assert.match(
   companionRendererSource,

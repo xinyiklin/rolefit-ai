@@ -16,12 +16,15 @@ Applies to `apps/role-fit-ai/desktop/` and `tsconfig.desktop.json`.
   companion page, never the RoleFit app.
 - `server-process.cts` starts the loopback RoleFit server or returns a typed
   compatible/foreign listener conflict for main to resolve. It never
-  implements product APIs. Main may ask a health-compatible external RoleFit
-  listener to stop with one graceful `SIGTERM` on macOS/Linux after resolving
-  its exact listening PID, revalidating compatibility, and resolving the same
-  PID again; it never force-kills that listener or signals an unidentified
-  service. Windows offers reuse or another port because Node cannot deliver an
-  equivalent graceful signal to an arbitrary process.
+  implements product APIs. Compatible health reports whether Electron or a
+  standalone entry launched the listener, but only main's live private utility
+  handle proves current ownership. Main may stop a verified standalone
+  development server or restart a verified previous companion service with one
+  graceful `SIGTERM` on macOS/Linux after resolving its exact listening PID,
+  revalidating compatibility, and resolving the same PID again; it never
+  force-kills that listener or signals an unidentified service. Windows offers
+  reuse or another port because Node cannot deliver an equivalent graceful
+  signal to an arbitrary process.
 - `companion.html` owns the local-file CSP; `security.cts` owns permissions,
   navigation, external-window, and webview policy.
 - `ipc-contract.cts` owns the fixed serializable companion methods;
@@ -104,11 +107,12 @@ Applies to `apps/role-fit-ai/desktop/` and `tsconfig.desktop.json`.
 - Keep the RoleFit server bind numeric-loopback-only. Port `5181` is the saved
   default; the companion may use a validated user-selected port or a locked
   `ROLEFIT_DESKTOP_PORT` override. A compatible listener must produce an
-  explicit startup choice: reuse it, gracefully take it over on macOS/Linux, or
-  scan for and persist another available port. An unidentified listener may
-  only offer another port or Quit. Reuse an existing listener only after its
-  versioned mode/workspace health contract matches, and never grant reused HTTP
-  content privileged Electron IPC.
+  explicit, provenance-specific startup choice: connect to or gracefully stop a
+  standalone development server; use or gracefully restart a previous
+  companion service; or scan for and persist another available port. An
+  unidentified listener may only offer another port or Quit. Reuse an existing
+  listener only after its versioned mode/workspace health contract matches, and
+  never grant reused HTTP content privileged Electron IPC.
 - An owned utility server starts with an empty authoritative companion snapshot
   before listening, skips app-local `.env` loading, and inherits no managed API
   credentials. Standalone/headless `.env` behavior belongs only to a server
@@ -116,11 +120,14 @@ Applies to `apps/role-fit-ai/desktop/` and `tsconfig.desktop.json`.
 - Open the active `http://localhost:<port>` origin in the system browser. Do not
   load that origin in the companion window or add hosted-page CORS/pairing.
   A port change creates a different origin and therefore separate browser
-  `localStorage`; it does not migrate browser state. The extension remains
-  fixed to `5181`, so a custom port is direct-browser-only. Deny every renderer
-  `window.open`; only typed IPC may reach main-owned external targets: the
-  selected browser origin, the exact official CLI installation URLs, and the
-  fixed app-owned unpacked browser-extension directory.
+  `localStorage`; it does not migrate browser state. Materialize the app-owned
+  extension only after resolving the active server, write its validated
+  localhost port into the fixed runtime config, and tell users to reload the
+  unpacked extension after a port-changing restart. Do not scan ports or accept
+  renderer/page-selected origins. Deny every renderer `window.open`; only typed
+  IPC may reach main-owned external targets: the selected browser origin, the
+  exact official CLI installation URLs, and the fixed app-owned unpacked
+  browser-extension directory.
 - Validate every IPC call against the exact companion `webContents`, main frame,
   and local `file:` URL. Expose fixed methods only; never expose `ipcRenderer`,
   generic channel names, generic send/invoke/listener methods, or renderer-

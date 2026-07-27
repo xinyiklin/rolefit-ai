@@ -37,7 +37,10 @@ import {
   handleExtensionInbox,
   handleExtensionRoutes
 } from "./extension/routes.ts";
-import { createRoleFitHealthPayload } from "./health-contract.ts";
+import {
+  createRoleFitHealthPayload,
+  type RoleFitHealthLaunchKind
+} from "./health-contract.ts";
 import { handleProviderConnections } from "./provider-connections.ts";
 
 export type RoleFitServerMode = "development" | "production";
@@ -51,6 +54,11 @@ export type RoleFitServerOptions = {
   host: string;
   port: number;
   logger?: RoleFitServerLogger | null;
+  /**
+   * Public provenance for startup recovery. It does not prove that the current
+   * Electron process owns the server; only its live utility handle can do that.
+   */
+  launchKind?: RoleFitHealthLaunchKind;
   /**
    * Standalone/headless entry points load the app-local `.env` by default.
    * Electron's owned utility process must pass `false`: its provider snapshot
@@ -275,6 +283,7 @@ export async function startRoleFitServer(options: RoleFitServerOptions): Promise
   const appRoot = resolve(options.appRoot);
   const workspaceDir = resolve(options.workspaceDir);
   const mode = options.mode;
+  const launchKind = options.launchKind ?? "standalone";
   const isProduction = mode === "production";
   const host = options.host.trim().toLowerCase();
   const configuredPort = validatePort(options.port);
@@ -365,7 +374,7 @@ export async function startRoleFitServer(options: RoleFitServerOptions): Promise
         sendJson(res, 405, { error: "Use GET." });
         return;
       }
-      sendJson(res, 200, createRoleFitHealthPayload(mode, workspaceDir));
+      sendJson(res, 200, createRoleFitHealthPayload(mode, workspaceDir, launchKind));
       return;
     }
 

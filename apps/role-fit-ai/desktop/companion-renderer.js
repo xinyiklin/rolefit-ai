@@ -85,6 +85,7 @@ const elements = Object.freeze({
   extensionRequestList: document.getElementById("extension-request-list"),
   extensionPairingList: document.getElementById("extension-pairing-list"),
   extensionPairingStatus: document.getElementById("extension-pairing-status"),
+  extensionSiteOrigin: document.getElementById("extension-site-origin"),
   openExtensionDirectory: document.getElementById("open-extension-directory"),
   overviewSiteOrigin: document.getElementById("overview-site-origin"),
   overviewProviderSummary: document.getElementById("overview-provider-summary"),
@@ -235,9 +236,7 @@ function parseLocalSitePortInput() {
 
 function currentPortStatus(settings) {
   if (settings.locked) {
-    return settings.localSitePort === 5_181
-      ? "Locked by ROLEFIT_DESKTOP_PORT."
-      : "Locked by ROLEFIT_DESKTOP_PORT. Extension imports still use localhost:5181.";
+    return `Locked by ROLEFIT_DESKTOP_PORT. The bundled extension folder targets localhost:${settings.localSitePort}.`;
   }
   if (settings.warning === "saved-settings-invalid") {
     return `Saved setting was invalid. Using ${settings.localSitePort}; apply to replace it.`;
@@ -245,9 +244,7 @@ function currentPortStatus(settings) {
   if (settings.warning === "saved-settings-unreadable") {
     return `Saved setting could not be read. Using ${settings.localSitePort}; apply to replace it.`;
   }
-  return settings.localSitePort === 5_181
-    ? "RoleFit opens at localhost:5181."
-    : `RoleFit opens at localhost:${settings.localSitePort}. Browser storage is separate by port; extension imports still use localhost:5181.`;
+  return `RoleFit opens at localhost:${settings.localSitePort}. The bundled extension folder targets the same port.`;
 }
 
 function updateSitePortControls({ preserveStatus = false } = {}) {
@@ -269,6 +266,7 @@ function updateSitePortControls({ preserveStatus = false } = {}) {
   }
   if (siteSettings) {
     elements.overviewSiteOrigin.textContent = `localhost:${siteSettings.localSitePort}`;
+    elements.extensionSiteOrigin.textContent = `localhost:${siteSettings.localSitePort}`;
   }
 }
 
@@ -299,7 +297,12 @@ function normalizeExtensionOriginInput(value) {
 
 function extensionPairingMessage() {
   if (!siteSettings) return "Local site settings are unavailable.";
-  if (siteSettings.localSitePort !== 5_181) return "Set the local site port to 5181 before pairing.";
+  if (!connectionStatusLoaded) return "Checking whether this companion can manage extension access.";
+  if (liveConnectionStatus?.serverState !== "owned") {
+    return liveConnectionStatus?.serverState === "unreachable"
+      ? "The local service is unavailable. Restart RoleFit before changing extension access."
+      : "Extension access is read-only while using a service this companion did not start.";
+  }
   const count = extensionPairingSettings?.origins?.length ?? 0;
   const pendingCount = extensionPairingSettings?.pendingOrigins?.length ?? 0;
   if (pendingCount > 0) return "Approve the extension request to enable job imports.";
@@ -317,6 +320,7 @@ function renderExtensionPairings() {
   const pendingOrigins = Array.isArray(extensionPairingSettings?.pendingOrigins)
     ? extensionPairingSettings.pendingOrigins.filter((origin) => !origins.includes(origin))
     : [];
+  const canManageExtension = liveConnectionStatus?.serverState === "owned";
   for (const origin of pendingOrigins) {
     const item = document.createElement("li");
     const value = createTextElement("code", "", origin);
@@ -324,7 +328,7 @@ function renderExtensionPairings() {
     const approve = createTextElement("button", "", "Approve");
     approve.type = "button";
     approve.dataset.extensionRequestOrigin = origin;
-    approve.disabled = extensionPairingPending || siteSettings?.localSitePort !== 5_181;
+    approve.disabled = extensionPairingPending || !canManageExtension;
     approve.setAttribute("aria-label", `Approve browser extension ${origin}`);
     item.append(value, approve);
     pendingFragment.append(item);
@@ -336,7 +340,7 @@ function renderExtensionPairings() {
     const remove = createTextElement("button", "", "Remove");
     remove.type = "button";
     remove.dataset.extensionOrigin = origin;
-    remove.disabled = extensionPairingPending;
+    remove.disabled = extensionPairingPending || !canManageExtension;
     remove.setAttribute("aria-label", `Remove paired extension ${origin}`);
     item.append(value, remove);
     pairedFragment.append(item);
@@ -388,8 +392,7 @@ function extensionPairingErrorMessage(error) {
   const message = error instanceof Error ? error.message : String(error);
   if (message.includes("exact extension origin")) return message;
   if (message.includes("up to")) return message;
-  if (message.includes("standalone RoleFit server")) return message;
-  if (message.includes("port 5181")) return message;
+  if (message.includes("let this companion start the local service")) return message;
   if (message.includes("already restarting")) return message;
   return "The extension pairing could not be saved. Check app permissions and try again.";
 }
@@ -790,12 +793,16 @@ function renderConnectionStatus() {
   let summary = "Starting the local service.";
   if (status.serverState === "owned") {
     state = "ok";
-    text = `Serving ${status.siteUrl} — this desktop app`;
-    summary = "Local service running.";
-  } else if (status.serverState === "reused") {
+    text = `Serving ${status.siteUrl} — managed by this companion`;
+    summary = "Managed local service running.";
+  } else if (status.serverState === "reused-standalone") {
     state = "warn";
-    text = `Already running at ${status.port} — another RoleFit process`;
-    summary = "Standalone RoleFit service detected.";
+    text = `Port ${status.port} — development server`;
+    summary = "Using a standalone RoleFit development server.";
+  } else if (status.serverState === "reused-companion") {
+    state = "warn";
+    text = `Port ${status.port} — another companion session`;
+    summary = "Using a service this companion did not start.";
   } else if (status.serverState === "unreachable") {
     state = "error";
     text = `Port ${status.port} — not responding`;
@@ -845,6 +852,7 @@ async function refreshConnectionStatus() {
     if (generation === connectionStatusGeneration) {
       connectionStatusLoaded = true;
       renderConnectionStatus();
+      updateExtensionPairingControls();
       scheduleConnectionPoll();
     }
   }
@@ -1113,7 +1121,7 @@ elements.sitePortForm.addEventListener("submit", async (event) => {
     sitePortConfirmValue = port;
     updateSitePortControls({ preserveStatus: true });
     elements.sitePortStatus.textContent =
-      "Changing ports uses separate browser storage. Extension imports remain on localhost:5181.";
+      "Changing ports uses separate browser storage. Reload the unpacked extension after RoleFit restarts.";
     return;
   }
 
@@ -1126,7 +1134,8 @@ elements.sitePortForm.addEventListener("submit", async (event) => {
     updateSitePortControls({ preserveStatus: true });
     elements.sitePortInput.disabled = true;
     elements.sitePortApply.disabled = true;
-    elements.sitePortStatus.textContent = `Saved. Restarting at localhost:${port}…`;
+    elements.sitePortStatus.textContent =
+      `Saved. Restarting at localhost:${port}… Reload the unpacked extension afterward.`;
     updateExtensionPairingControls();
   } catch (error) {
     sitePortApplyPending = false;

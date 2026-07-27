@@ -156,7 +156,7 @@
             <header class="panel-heading">
               <div>
                 <h1 id="extension-title">Browser extension</h1>
-                <p>Import job posts from Chrome, Edge, or Firefox. It uses <code>localhost:5181</code>.</p>
+                <p>Import job posts from Chrome, Edge, or Firefox. It uses <code id="extension-site-origin">localhost:5181</code>.</p>
               </div>
               <div class="extension-pairing-control">
                 <button
@@ -195,7 +195,7 @@
                   <li><span>2</span><p><strong>Chrome or Edge</strong><br />Open <code>chrome://extensions</code> or <code>edge://extensions</code>, enable Developer mode, then choose <em>Load unpacked</em>.</p></li>
                   <li><span>3</span><p><strong>Firefox</strong><br />Open <code>about:debugging#/runtime/this-firefox</code>, choose <em>Load Temporary Add-on&#8230;</em>, then select <code>manifest.json</code>.</p></li>
                 </ol>
-                <p class="extension-install__note">Extension imports require <code>localhost:5181</code>. Other local ports work in the browser only.</p>
+                <p class="extension-install__note">After changing ports, reload the unpacked extension once from your browser's Extensions page.</p>
               </section>
 
             </div>

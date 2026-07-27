@@ -227,11 +227,10 @@ function sanitizedExtensionPairingError(error: unknown): Error {
   if (message.includes("up to")) {
     return new Error(`RoleFit supports up to ${ROLEFIT_EXTENSION_ORIGIN_MAX_COUNT} paired browser extensions.`);
   }
-  if (message.includes("standalone RoleFit server")) {
-    return new Error("Stop the standalone RoleFit server, then reopen the companion before pairing the extension.");
-  }
-  if (message.includes("local site port 5181")) {
-    return new Error("Browser extension pairing requires local site port 5181.");
+  if (message.includes("let this companion start the local service")) {
+    return new Error(
+      "Restart RoleFit and let this companion start the local service before changing extension access."
+    );
   }
   if (message.includes("restart is already scheduled")) {
     return new Error("The companion is already restarting.");

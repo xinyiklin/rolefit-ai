@@ -141,17 +141,20 @@ local server owns workspace and tracker files. Changing the port also changes
 the browser origin, so browser-local draft and preference storage is separate
 on the new port. Packaged workspace files and provider configuration stay in
 the same operating-system `userData` directory.
-The browser extension remains fixed to the canonical port `5181` in this phase.
+After resolving the active server, the companion writes that same port into its
+materialized browser-extension folder. Reload the unpacked extension once after
+a port-changing restart.
 
-If a compatible standalone RoleFit server already uses the selected port, the
-companion asks whether to **Connect to it** (the default), **Take over the
-port** with one graceful `SIGTERM` on macOS/Linux, or **Use another port**.
-Alternate-port selection scans nearby ports and persists the first available
-choice. A server that does not stop within five seconds is never force-killed.
-Windows offers the non-takeover choices because it cannot provide the same
-graceful signal. If the listener does not identify itself as compatible
-RoleFit, the companion offers only another port or Quit and never signals that
-process.
+If a compatible RoleFit server already uses the selected port, its versioned
+health response identifies it as a standalone development server or a service
+launched by another companion session. The dialog names that state and offers
+to use it, **Stop development server** or **Restart RoleFit service** with one
+graceful `SIGTERM` on macOS/Linux, or **Use another port**. Alternate-port
+selection scans nearby ports and persists the first available choice. A service
+that does not stop within five seconds is never force-killed. Windows offers
+the non-termination choices because it cannot provide the same graceful
+signal. If the listener does not identify itself as compatible RoleFit, the
+companion offers only another port or Quit and never signals that process.
 
 Distribution scaffolding can build native macOS arm64/x64 DMG and ZIP artifacts
 and a Windows x64 Squirrel installer. Stable public releases fail closed unless
@@ -287,12 +290,13 @@ import and duplicate checking to the job board. On any posting, click the
   so that pair stays out of future duplicate review, and
 - a one-click **Import to RoleFit AI** that opens a fresh independent RoleFit tab, lets the server prepare the raw page text, then has that tab distill it with its own Distill provider before loading the Job field. **Polish automatically after import** can run polish as soon as the brief and your base resume are ready. Turning **Distill with AI** off skips the provider call, imports the prepared local text, and retains deterministic tracking extraction.
 
-It is Manifest V3 and sends requests **only** to your local server at
-`http://localhost:5181`. The manifest grants `http://localhost/*`, which covers
-HTTP on the `localhost` hostname across ports because Chrome and Firefox host
-match patterns cannot safely pin one localhost port. The popup itself remains
-fixed to port `5181`; a custom companion port supports direct browser use but
-not extension imports. The routes it calls require the exact installed popup
+It is Manifest V3 and sends requests **only** to the validated
+`http://localhost:<port>` configured for the local server. Source development
+defaults to `5181`; the companion writes its resolved active port into the
+materialized extension runtime config. The manifest grants
+`http://localhost/*` because Chrome and Firefox host match patterns cannot
+safely pin one localhost port. The popup never scans ports or accepts an
+arbitrary API origin. The routes it calls require the exact installed popup
 Origin approved in the companion and reflect only that non-wildcard Origin.
 Unapproved callers may only enqueue a short-lived pairing request; they cannot
 analyze or import a posting. The
@@ -305,17 +309,18 @@ posting, while other open tabs continue their current jobs; the app also shows
 a small read-only "other sessions" card when another tab is active. The
 extension never reads the base resume or produces a fit judgment.
 
-The installed desktop companion includes a fixed unpacked extension folder. In
-the companion, open **Browser extension** and choose **Open extension folder**;
-use that folder when your browser asks where to load the extension. Keep the
-folder in place after loading it. Source contributors can instead use
+The installed desktop companion includes an app-owned unpacked extension
+folder. In the companion, open **Browser extension** and choose **Open extension
+folder**; use that folder when your browser asks where to load the extension.
+Keep the folder in place after loading it. Source contributors can instead use
 `apps/role-fit-ai/extension/`:
 
 - **Chrome / Edge** — open `chrome://extensions`, enable **Developer mode**, click **Load unpacked**, and select the `extension/` folder.
 - **Firefox** — open `about:debugging#/runtime/this-firefox`, click **Load Temporary Add-on…**, and select `extension/manifest.json`.
 
-Start the companion on port `5181`, open the extension on a job page, approve
-the pending request in the companion, and reopen the popup. See
+Start the companion, open the extension on a job page, approve the pending
+request in the companion, and reopen the popup. After changing ports, reload
+the unpacked extension once from the browser's Extensions page. See
 [`extension/README.md`](extension/README.md) for the complete flow.
 
 ## Install and local data

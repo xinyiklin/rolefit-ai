@@ -11,7 +11,8 @@ import {
 } from "../../dist-electron/server/health-contract.js";
 import {
   buildDesktopServerEnvironment,
-  probeCompatibleDesktopServer
+  probeCompatibleDesktopServer,
+  probeDesktopServerLaunchKind
 } from "../../dist-electron/desktop/server-process.cjs";
 import {
   buildCliProcessEnvironment
@@ -100,7 +101,7 @@ assert.equal(
 
 const workspaceA = "/tmp/rolefit-contract-a";
 const workspaceB = "/tmp/rolefit-contract-b";
-const payload = createRoleFitHealthPayload("production", workspaceA);
+const payload = createRoleFitHealthPayload("production", workspaceA, "companion");
 const expected = {
   apiVersion: ROLEFIT_HEALTH_API_VERSION,
   desktopCompatibilityVersion: ROLEFIT_DESKTOP_COMPATIBILITY_VERSION,
@@ -109,6 +110,11 @@ const expected = {
 };
 
 assert.equal(isCompatibleRoleFitHealth(payload, expected), true);
+assert.equal(payload.launchKind, "companion");
+assert.equal(
+  createRoleFitHealthPayload("production", workspaceA, "standalone").launchKind,
+  "standalone"
+);
 assert.equal(
   isCompatibleRoleFitHealth(payload, { ...expected, mode: "development" }),
   false
@@ -127,6 +133,9 @@ assert.equal(
   }, expected),
   false
 );
+assert.equal(isCompatibleRoleFitHealth({ ...payload, launchKind: "unknown" }, expected), false);
+const { launchKind: _launchKind, ...payloadWithoutLaunchKind } = payload;
+assert.equal(isCompatibleRoleFitHealth(payloadWithoutLaunchKind, expected), false);
 assert.equal(isCompatibleRoleFitHealth({ service: "role-fit-ai" }, expected), false);
 assert.notEqual(computeWorkspaceFingerprint(workspaceA), computeWorkspaceFingerprint(workspaceB));
 
@@ -149,10 +158,16 @@ try {
     workspaceDir: workspaceA
   };
   assert.equal(await probeCompatibleDesktopServer(identity), true);
+  assert.equal(await probeDesktopServerLaunchKind(identity), "companion");
   assert.equal(
     await probeCompatibleDesktopServer({ ...identity, workspaceDir: workspaceB }),
     false,
     "takeover identity rejects a listener bound to a different workspace"
+  );
+  assert.equal(
+    await probeDesktopServerLaunchKind({ ...identity, workspaceDir: workspaceB }),
+    null,
+    "live status rejects a replacement listener with a mismatched identity"
   );
 } finally {
   await new Promise((resolveClose, rejectClose) => {
@@ -248,6 +263,16 @@ assert.match(
   "the companion-owned utility channel carries backup and restore requests"
 );
 assert.match(
+  serverSource,
+  /launchKind: companionOwned \? "companion" : "standalone"/,
+  "the server reports whether Electron launched it through a utility parent"
+);
+assert.match(
+  serverSource,
+  /function handleSignal\(\)[\s\S]*shutdown\(\)\.finally[\s\S]*process\.exit\(\)/,
+  "a graceful signal closes the server before exiting a utility kept alive by its parent port"
+);
+assert.match(
   mainSource,
   /server\.backupWorkspace\(\)[\s\S]*server\.restoreWorkspace\(body\)/,
   "desktop main uses the private child-process methods instead of loopback management routes"
@@ -261,6 +286,26 @@ assert.match(
   mainSource,
   /sourceEnvironment: desktopServerSourceEnvironment/,
   "the owned server receives its own allowlisted environment source"
+);
+assert.ok(
+  mainSource.indexOf("desktopServer = await resolveDesktopServer") <
+    mainSource.indexOf("const extensionDirectory = await materializeRoleFitExtension"),
+  "the companion resolves the active server before generating the extension config"
+);
+assert.match(
+  mainSource,
+  /materializeRoleFitExtension\(\{[\s\S]*localSitePort: localSiteSettings\.localSitePort/,
+  "the materialized extension receives the resolved local-site port"
+);
+assert.match(
+  mainSource,
+  /desktopServer\?\.ownership !== "owned"[\s\S]*return extensionPairingSettings/,
+  "a reused server cannot expose actionable extension pairing requests"
+);
+assert.match(
+  mainSource,
+  /onUnexpectedExit: \(code\)[\s\S]*code === 0[\s\S]*shutdownAndExit\(0\)[\s\S]*stopped unexpectedly/,
+  "a previous companion exits cleanly after another companion gracefully restarts its service"
 );
 assert.match(
   mainSource,

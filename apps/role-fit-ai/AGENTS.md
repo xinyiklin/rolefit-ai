@@ -151,11 +151,13 @@ npm test --workspace apps/role-fit-ai
 npx tsc -p apps/role-fit-ai/tsconfig.server.json --noEmit
 ```
 
-Standalone source development and extension imports use canonical port 5181.
-The installed product is launched through the companion, which
-may persist another numeric-loopback port for direct browser use; changing it
-changes browser-origin storage and does not retarget the extension. Reuse a
-compatible bound listener rather than starting a second server.
+Standalone source development defaults to canonical port 5181. The installed
+product is launched through the companion, which may persist another
+numeric-loopback port; after resolving the active server, it regenerates the
+app-owned extension runtime config for that same port. A port change creates
+separate browser-origin storage and requires one browser extension reload after
+the companion restarts. Reuse a compatible bound listener rather than starting
+a second server.
 
 - Client/type changes: RoleFit build, plus focused evals.
 - Server/AI changes: server TypeScript gate, affected route/eval, and full app
