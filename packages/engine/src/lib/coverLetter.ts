@@ -38,10 +38,10 @@ export const COVER_LETTER_STYLE_DEFAULTS: CoverLetterStyle = {
   fontFamily: "carlito",
   fontSizePt: 11,
   lineHeight: 2,
-  paragraphGapPt: 0,
-  marginTopPt: 54,
+  paragraphGapPt: 8,
+  marginTopPt: 36,
   marginRightPt: 54,
-  marginBottomPt: 54,
+  marginBottomPt: 36,
   marginLeftPt: 54,
   contactDivider: "|"
 };

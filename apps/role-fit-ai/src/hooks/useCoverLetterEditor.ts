@@ -40,7 +40,7 @@ import {
 
 const STYLE_STORAGE_KEY = "rolefit:coverLetterStyle.v1";
 const TITLE_STORAGE_KEY = "rolefit:coverLetterTitle.v1";
-const COVER_LETTER_STARTER = `[Date]
+const COVER_LETTER_STARTER = `<space-before=8>[Date]</space-before>
 
 Dear [Hiring manager],
 

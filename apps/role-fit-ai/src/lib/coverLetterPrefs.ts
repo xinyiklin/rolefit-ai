@@ -17,12 +17,52 @@ const LEGACY_STYLE_DEFAULTS: CoverLetterStyle = {
   contactDivider: "|"
 };
 
-// The old professional defaults were persisted as if the user had customized
-// them. Migrate only that exact snapshot; real custom values remain untouched.
+const PREVIOUS_STYLE_DEFAULTS: CoverLetterStyle = {
+  fontFamily: "carlito",
+  fontSizePt: 11,
+  lineHeight: 2,
+  paragraphGapPt: 0,
+  marginTopPt: 54,
+  marginRightPt: 54,
+  marginBottomPt: 54,
+  marginLeftPt: 54,
+  contactDivider: "|"
+};
+
+const PARAGRAPH_GAP_STYLE_DEFAULTS: CoverLetterStyle = {
+  fontFamily: "carlito",
+  fontSizePt: 11,
+  lineHeight: 1.15,
+  paragraphGapPt: 8,
+  marginTopPt: 36,
+  marginRightPt: 54,
+  marginBottomPt: 36,
+  marginLeftPt: 54,
+  contactDivider: "|"
+};
+
+const DATE_ONLY_STYLE_DEFAULTS: CoverLetterStyle = {
+  fontFamily: "carlito",
+  fontSizePt: 11,
+  lineHeight: 2,
+  paragraphGapPt: 0,
+  marginTopPt: 36,
+  marginRightPt: 54,
+  marginBottomPt: 36,
+  marginLeftPt: 54,
+  contactDivider: "|"
+};
+
+// Shipped or locally applied defaults were persisted as if the user had
+// customized them. Migrate only exact snapshots; real custom values stay put.
 export function migrateStoredCoverLetterStyle(style: CoverLetterStyle): CoverLetterStyle {
-  const isLegacyDefault = (Object.keys(LEGACY_STYLE_DEFAULTS) as Array<keyof CoverLetterStyle>)
-    .every((key) => style[key] === LEGACY_STYLE_DEFAULTS[key]);
-  return isLegacyDefault
+  const matches = (defaults: CoverLetterStyle) =>
+    (Object.keys(defaults) as Array<keyof CoverLetterStyle>)
+      .every((key) => style[key] === defaults[key]);
+  return matches(LEGACY_STYLE_DEFAULTS)
+      || matches(PREVIOUS_STYLE_DEFAULTS)
+      || matches(PARAGRAPH_GAP_STYLE_DEFAULTS)
+      || matches(DATE_ONLY_STYLE_DEFAULTS)
     ? { ...COVER_LETTER_STYLE_DEFAULTS }
     : style;
 }
