@@ -34,7 +34,12 @@ async function pickPort() {
   throw new Error("RoleFit desktop smoke ports 5182-5183 are already occupied.");
 }
 
-async function waitForHealth(origin, mode, timeoutMs = 20_000) {
+async function waitForHealth(
+  origin,
+  mode,
+  launchKind = "companion",
+  timeoutMs = 20_000
+) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     try {
@@ -50,6 +55,7 @@ async function waitForHealth(origin, mode, timeoutMs = 20_000) {
         data.apiVersion === ROLEFIT_HEALTH_API_VERSION &&
         data.desktopCompatibilityVersion === ROLEFIT_DESKTOP_COMPATIBILITY_VERSION &&
         data.mode === mode &&
+        data.launchKind === launchKind &&
         typeof data.workspaceFingerprint === "string"
       ) {
         return;
@@ -292,6 +298,18 @@ try {
     ownedProduction,
     "ROLEFIT_DESKTOP_SMOKE_OK ownership=owned mode=production phase=companion"
   );
+  assert.match(
+    await readFile(
+      join(
+        singleInstanceEnv.ROLEFIT_DESKTOP_USER_DATA,
+        "browser-extension",
+        "runtime-config.js"
+      ),
+      "utf8"
+    ),
+    new RegExp(`localSitePort: ${port}(?:\\D|$)`),
+    "the running companion must materialize the extension for its resolved port"
+  );
   await assertOwnedPidGone(ownedProductionPidFile, "owned production server");
   assert.equal(await canBind(port), true, "owned production server should release its port");
 
@@ -303,7 +321,7 @@ try {
     ROLEFIT_APP_ROOT: appRoot,
     ROLEFIT_WORKSPACE_DIR: workspaceDir
   });
-  await waitForHealth(origin, "production");
+  await waitForHealth(origin, "production", "standalone");
   const reusedProduction = await runProcess(
     electronPath,
     [appRoot],
@@ -316,7 +334,7 @@ try {
     reusedProduction,
     "ROLEFIT_DESKTOP_SMOKE_OK ownership=reused mode=production phase=companion"
   );
-  await waitForHealth(origin, "production", 2_000);
+  await waitForHealth(origin, "production", "standalone", 2_000);
   assert.equal(reusableProduction.child.exitCode, null, "Electron must not stop a reused server");
 
   const workspaceMismatch = await runProcess(
@@ -340,7 +358,7 @@ try {
     "mode mismatch Electron"
   );
   assertElectronFailure(modeMismatch, /not a compatible RoleFit server/);
-  await waitForHealth(origin, "production", 2_000);
+  await waitForHealth(origin, "production", "standalone", 2_000);
   await stopChild(reusableProduction, "reusable production server");
   assert.equal(await canBind(port), true, "reusable production cleanup should release its port");
 
@@ -352,7 +370,7 @@ try {
     ROLEFIT_APP_ROOT: appRoot,
     ROLEFIT_WORKSPACE_DIR: workspaceDir
   });
-  await waitForHealth(origin, "development");
+  await waitForHealth(origin, "development", "standalone");
   const reusedDevelopment = await runProcess(
     electronPath,
     [appRoot],
@@ -366,7 +384,7 @@ try {
     reusedDevelopment,
     "ROLEFIT_DESKTOP_SMOKE_OK ownership=reused mode=development phase=companion"
   );
-  await waitForHealth(origin, "development", 2_000);
+  await waitForHealth(origin, "development", "standalone", 2_000);
   assert.equal(reusableDevelopment.child.exitCode, null, "Electron must not stop reused Vite");
   await stopChild(reusableDevelopment, "reusable development server");
   assert.equal(await canBind(port), true, "reusable development cleanup should release its port");

@@ -1,10 +1,11 @@
 import { createHash } from "node:crypto";
 import { resolve } from "node:path";
 
-export const ROLEFIT_HEALTH_API_VERSION = 1 as const;
-export const ROLEFIT_DESKTOP_COMPATIBILITY_VERSION = 2 as const;
+export const ROLEFIT_HEALTH_API_VERSION = 2 as const;
+export const ROLEFIT_DESKTOP_COMPATIBILITY_VERSION = 3 as const;
 
 export type RoleFitHealthMode = "development" | "production";
+export type RoleFitHealthLaunchKind = "companion" | "standalone";
 
 export type RoleFitHealthPayload = {
   service: "role-fit-ai";
@@ -12,6 +13,7 @@ export type RoleFitHealthPayload = {
   apiVersion: typeof ROLEFIT_HEALTH_API_VERSION;
   desktopCompatibilityVersion: typeof ROLEFIT_DESKTOP_COMPATIBILITY_VERSION;
   mode: RoleFitHealthMode;
+  launchKind: RoleFitHealthLaunchKind;
   workspaceFingerprint: string;
 };
 
@@ -29,7 +31,8 @@ export function computeWorkspaceFingerprint(workspaceDir: string): string {
 
 export function createRoleFitHealthPayload(
   mode: RoleFitHealthMode,
-  workspaceDir: string
+  workspaceDir: string,
+  launchKind: RoleFitHealthLaunchKind = "standalone"
 ): RoleFitHealthPayload {
   return {
     service: "role-fit-ai",
@@ -37,6 +40,7 @@ export function createRoleFitHealthPayload(
     apiVersion: ROLEFIT_HEALTH_API_VERSION,
     desktopCompatibilityVersion: ROLEFIT_DESKTOP_COMPATIBILITY_VERSION,
     mode,
+    launchKind,
     workspaceFingerprint: computeWorkspaceFingerprint(workspaceDir)
   };
 }
@@ -52,5 +56,6 @@ export function isCompatibleRoleFitHealth(
     data.apiVersion === expected.apiVersion &&
     data.desktopCompatibilityVersion === expected.desktopCompatibilityVersion &&
     data.mode === expected.mode &&
+    (data.launchKind === "companion" || data.launchKind === "standalone") &&
     data.workspaceFingerprint === expected.workspaceFingerprint;
 }

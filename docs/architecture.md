@@ -103,9 +103,10 @@ and verify both apps.
   application bundle. Mutable workspace files, encrypted provider state, and
   the non-secret local-port setting live beneath Electron `userData`; packaging
   must never write into ASAR or depend on monorepo paths.
-- The companion's saved port changes only the direct browser origin. Browser
-  storage does not migrate between ports, and the browser extension remains on
-  canonical port `5181` until a separate multi-port extension trust decision.
+- The companion's saved port changes the browser origin and the generated
+  runtime config in its materialized extension folder. Browser storage does not
+  migrate between ports, and the unpacked extension must be reloaded once after
+  a port-changing companion restart.
 - The browser's same-origin provider registry is shape-only. Its selectors show
   only providers the user explicitly added; configured-but-unready providers
   remain visible with reconnect guidance, and no configured provider disables

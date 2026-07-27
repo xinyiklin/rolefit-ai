@@ -1,4 +1,4 @@
-import { copyFile, mkdir, stat } from "node:fs/promises";
+import { copyFile, mkdir, stat, writeFile } from "node:fs/promises";
 import { dirname, join, relative, resolve, sep } from "node:path";
 
 const EXTENSION_FILES = Object.freeze([
@@ -6,6 +6,7 @@ const EXTENSION_FILES = Object.freeze([
   "popup.html",
   "popup.css",
   "popup.js",
+  "runtime-config.js",
   "icons/icon.svg"
 ] as const);
 
@@ -14,7 +15,21 @@ export const ROLEFIT_EXTENSION_DIRECTORY_NAME = "browser-extension";
 export type ExtensionBundleOptions = Readonly<{
   sourceDirectory: string;
   userDataDirectory: string;
+  localSitePort: number;
 }>;
+
+export function createRoleFitExtensionRuntimeConfig(localSitePort: number): string {
+  if (!Number.isInteger(localSitePort) || localSitePort < 1 || localSitePort > 65_535) {
+    throw new Error("RoleFit extension port must be an integer from 1 through 65535.");
+  }
+  return [
+    "globalThis.ROLEFIT_EXTENSION_RUNTIME_CONFIG = Object.freeze({",
+    "  schemaVersion: 1,",
+    `  localSitePort: ${localSitePort}`,
+    "});",
+    ""
+  ].join("\n");
+}
 
 function requireContainedDirectory(parentDirectory: string, childDirectory: string): void {
   const parent = resolve(parentDirectory);
@@ -26,9 +41,9 @@ function requireContainedDirectory(parentDirectory: string, childDirectory: stri
 }
 
 /**
- * Browser extension loaders need ordinary files, so package the fixed static
- * extension in the app and materialize it beneath Electron userData. The
- * renderer never receives this path or controls the copied file set.
+ * Browser extension loaders need ordinary files, so materialize the fixed
+ * allowlist beneath Electron userData and replace only its runtime port config.
+ * The renderer never receives this path or controls the copied file set.
  */
 export async function materializeRoleFitExtension(
   options: ExtensionBundleOptions
@@ -47,6 +62,11 @@ export async function materializeRoleFitExtension(
     await mkdir(dirname(destinationPath), { recursive: true });
     await copyFile(sourcePath, destinationPath);
   }
+  await writeFile(
+    join(extensionDirectory, "runtime-config.js"),
+    createRoleFitExtensionRuntimeConfig(options.localSitePort),
+    "utf8"
+  );
 
   return extensionDirectory;
 }

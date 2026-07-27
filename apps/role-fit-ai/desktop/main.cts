@@ -9,6 +9,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import {
   connectToCompatibleDesktopServer,
   probeCompatibleDesktopServer,
+  probeDesktopServerLaunchKind,
   startOrReuseDesktopServer,
   type DesktopServerConflict,
   type DesktopServerHandle,
@@ -108,6 +109,7 @@ type SmokeResult = {
   panels: number;
   visiblePanels: number;
   activeSection: string;
+  visibleSection: string;
   workspaceControlsPresent: boolean;
   connectionControlsPresent: boolean;
   panelCopyConcise: boolean;
@@ -178,7 +180,7 @@ function getLocalSiteSettings(): RoleFitDesktopSiteSettings {
 
 async function getExtensionPairingSettings(): Promise<RoleFitExtensionPairingSettings> {
   if (!extensionPairingSettings) throw new Error("Extension pairing settings are unavailable.");
-  if (!desktopServer || localSiteSettings?.localSitePort !== 5_181) {
+  if (desktopServer?.ownership !== "owned") {
     return extensionPairingSettings;
   }
   const response = await fetch(`${desktopServer.origin}/api/extension/pairing-requests`, {
@@ -214,7 +216,7 @@ async function getExtensionPairingSettings(): Promise<RoleFitExtensionPairingSet
 function requireOwnedServerForProviderMutation(): void {
   if (desktopServer?.ownership !== "owned") {
     throw new Error(
-      "Stop the standalone RoleFit server and reopen RoleFit through this companion before changing providers."
+      "Restart RoleFit and let this companion start the local service before changing providers."
     );
   }
 }
@@ -222,7 +224,7 @@ function requireOwnedServerForProviderMutation(): void {
 function requireOwnedServerForExtensionPairing(): void {
   if (desktopServer?.ownership !== "owned") {
     throw new Error(
-      "Stop the standalone RoleFit server and reopen RoleFit through this companion before pairing the browser extension."
+      "Restart RoleFit and let this companion start the local service before changing extension access."
     );
   }
 }
@@ -338,21 +340,6 @@ async function getWorkspaceOverview(): Promise<RoleFitWorkspaceOverview> {
   });
 }
 
-async function probeServerAlive(origin: string): Promise<boolean> {
-  try {
-    const response = await fetch(`${origin}/api/health`, {
-      cache: "no-store",
-      headers: { Accept: "application/json" },
-      redirect: "error",
-      signal: AbortSignal.timeout(WORKSPACE_ACTIVITY_TIMEOUT_MS)
-    });
-    return response.ok &&
-      Boolean(response.headers.get("content-type")?.includes("application/json"));
-  } catch {
-    return false;
-  }
-}
-
 async function getConnectionStatus(): Promise<RoleFitConnectionStatus> {
   const settings = getLocalSiteSettings();
   const server = desktopServer;
@@ -362,11 +349,22 @@ async function getConnectionStatus(): Promise<RoleFitConnectionStatus> {
   let serverState: RoleFitConnectionStatus["serverState"] = "starting";
   let activeBrowserTabs: number | null = null;
   if (server) {
-    // Re-probe health so a listener that died after startup reports
-    // "unreachable" instead of stale ownership.
-    const alive = await probeServerAlive(server.origin);
-    serverState = alive ? server.ownership : "unreachable";
-    if (alive) activeBrowserTabs = await readWorkspaceActivity(server.origin);
+    const liveLaunchKind = activeWorkspaceDir
+      ? await probeDesktopServerLaunchKind({
+          host: DEFAULT_HOST,
+          mode: activeMode,
+          port: settings.localSitePort,
+          workspaceDir: activeWorkspaceDir
+        })
+      : null;
+    serverState = liveLaunchKind
+      ? server.ownership === "owned" && liveLaunchKind === "companion"
+        ? "owned"
+        : liveLaunchKind === "standalone"
+          ? "reused-standalone"
+          : "reused-companion"
+      : "unreachable";
+    if (liveLaunchKind) activeBrowserTabs = await readWorkspaceActivity(server.origin);
   }
   return Object.freeze({
     port: settings.localSitePort,
@@ -586,7 +584,7 @@ function apiProviderConnection(
       ? ready
         ? `${label} API access is stored securely on this device.`
         : !managedServer
-          ? `Restart the standalone RoleFit server through this companion to use its saved ${label} credential.`
+          ? `Restart RoleFit and let this companion start the local service to use its saved ${label} credential.`
           : `${label} API access is saved, but the operating-system credential store could not unlock it.`
       : `Add a ${label} API key to use this provider in RoleFit.`
   });
@@ -612,7 +610,7 @@ function cliProviderConnection(
       ? `Add ${status.label} to RoleFit. Its provider-owned sign-in stays outside RoleFit.`
       : `Install ${status.label}, then add it to RoleFit.`;
   } else if (!managedServer) {
-    guidance = `Restart the standalone RoleFit server through this companion to use ${status.label}.`;
+    guidance = `Restart RoleFit and let this companion start the local service to use ${status.label}.`;
   }
   return Object.freeze({
     id: status.id,
@@ -813,7 +811,7 @@ function connectionStatusMatches(
   value: unknown,
   expectedPort: number,
   expectedSiteUrl: string,
-  expectedState: RoleFitServerOwnership
+  expectedState: RoleFitConnectionStatus["serverState"]
 ): boolean {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const status = value as Record<string, unknown>;
@@ -901,6 +899,7 @@ function bringWindowForward(): void {
 
 async function inspectSmokeRenderer(
   ownership: RoleFitServerOwnership,
+  launchKind: DesktopServerHandle["launchKind"],
   companionUrl: string,
   serverOrigin: string
 ): Promise<void> {
@@ -985,6 +984,7 @@ async function inspectSmokeRenderer(
         panels: document.querySelectorAll('[data-companion-panel]').length,
         visiblePanels: [...document.querySelectorAll('[data-companion-panel]')].filter((panel) => !panel.hidden).length,
         activeSection: document.querySelector('[data-companion-tab][aria-current="page"]')?.getAttribute('data-companion-tab') ?? '',
+        visibleSection: document.querySelector('[data-companion-panel]:not([hidden])')?.getAttribute('data-companion-panel') ?? '',
         workspaceControlsPresent: ['workspace-path', 'open-workspace-folder', 'backup-workspace', 'restore-workspace', 'workspace-status', 'stat-base-resume', 'stat-applications'].every((id) => Boolean(document.getElementById(id))) &&
           ['workspace-activity', 'stat-pdfs', 'stat-history'].every((id) => !document.getElementById(id)),
         connectionControlsPresent: ['connection-state', 'connection-state-text', 'connection-browser-tabs'].every((id) => Boolean(document.getElementById(id))),
@@ -1002,6 +1002,12 @@ async function inspectSmokeRenderer(
 
   const expectedRuntimeInfo = getDesktopRuntimeInfo();
   const expectedSiteSettings = getLocalSiteSettings();
+  const expectedConnectionState: RoleFitConnectionStatus["serverState"] =
+    ownership === "owned"
+      ? "owned"
+      : launchKind === "standalone"
+        ? "reused-standalone"
+        : "reused-companion";
   const expectedBridgeKeys = [
     "applyLocalSitePort",
     "backupWorkspaceToFile",
@@ -1046,7 +1052,7 @@ async function inspectSmokeRenderer(
     ["provider mutation boundary", ownership === "owned"
       ? result.providerMutationError === null
       : typeof result.providerMutationError === "string" &&
-        result.providerMutationError.includes("standalone RoleFit server")],
+        result.providerMutationError.includes("let this companion start the local service")],
     ["provider status contract", providerStatusesMatch(result.providerStatus)],
     ["provider landmarks", result.providerLandmarks === 5],
     ["provider descriptions absent", result.providerDescriptions === 0],
@@ -1059,7 +1065,8 @@ async function inspectSmokeRenderer(
     ["site port lock status", result.sitePortLockReported === expectedSiteSettings.locked],
     ["sidebar navigation", result.navigationRegions === 1 && result.navigationItems === 5],
     ["section panels", result.panels === 5 && result.visiblePanels === 1],
-    ["default overview section", result.activeSection === "overview"],
+    ["active section", ["overview", "providers", "workspace", "extension", "settings"].includes(result.activeSection) &&
+      result.visibleSection === result.activeSection],
     ["workspace controls", result.workspaceControlsPresent],
     ["connection controls", result.connectionControlsPresent],
     ["concise panel copy", result.panelCopyConcise],
@@ -1070,7 +1077,7 @@ async function inspectSmokeRenderer(
       result.connectionStatus,
       expectedSiteSettings.localSitePort,
       canonicalBrowserOrigin(serverOrigin),
-      ownership
+      expectedConnectionState
     )],
     ["provider background refresh", holdMs < PROVIDER_SNAPSHOT_REFRESH_INTERVAL_MS ||
       result.providerBackgroundRefreshes >= 1],
@@ -1156,6 +1163,7 @@ function createMainWindow(
   companionPath: string,
   companionUrl: string,
   ownership: RoleFitServerOwnership,
+  launchKind: DesktopServerHandle["launchKind"],
   serverOrigin: string
 ): BrowserWindow {
   const smokeMode = process.env.ROLEFIT_DESKTOP_SMOKE === "companion";
@@ -1214,7 +1222,8 @@ function createMainWindow(
   });
   if (smokeMode) {
     window.webContents.once("did-finish-load", () => {
-      void inspectSmokeRenderer(ownership, companionUrl, serverOrigin).catch((error: unknown) => failStartup(error));
+      void inspectSmokeRenderer(ownership, launchKind, companionUrl, serverOrigin)
+        .catch((error: unknown) => failStartup(error));
     });
   }
   void window.loadFile(companionPath).catch(() => {
@@ -1352,17 +1361,26 @@ async function gracefullyStopCompatibleListener(
 async function chooseAfterTakeoverFailure(
   conflict: DesktopServerConflict
 ): Promise<"alternate" | "connect" | "quit"> {
+  if (conflict.kind !== "compatible-rolefit") {
+    throw new Error("Only a compatible RoleFit listener can reach takeover recovery.");
+  }
   const canChangePort = localSiteSettings?.locked === false;
+  const listenerLabel = conflict.launchKind === "standalone"
+    ? "development server"
+    : "previous RoleFit service";
+  const connectLabel = conflict.launchKind === "standalone"
+    ? "Connect to development server"
+    : "Use existing service";
   const buttons = canChangePort
-    ? ["Use another port", "Connect to it", "Quit"]
-    : ["Connect to it", "Quit"];
+    ? ["Use another port", connectLabel, "Quit"]
+    : [connectLabel, "Quit"];
   const response = await dialog.showMessageBox({
     type: "warning",
-    title: "RoleFit could not take over the port",
-    message: `RoleFit is still running on port ${conflict.port}.`,
+    title: "RoleFit could not restart the local service",
+    message: `The ${listenerLabel} is still running on port ${conflict.port}.`,
     detail: canChangePort
-      ? "The other server did not stop within five seconds. RoleFit did not force it to quit."
-      : "The other server did not stop within five seconds. RoleFit did not force it to quit, and ROLEFIT_DESKTOP_PORT prevents choosing another port.",
+      ? "It did not stop within five seconds. RoleFit did not force it to quit."
+      : "It did not stop within five seconds. RoleFit did not force it to quit, and ROLEFIT_DESKTOP_PORT prevents choosing another port.",
     buttons,
     defaultId: 0,
     cancelId: buttons.length - 1,
@@ -1416,16 +1434,28 @@ async function resolveDesktopServer(
     const actions: Array<"connect" | "takeover" | "alternate"> = ["connect"];
     if (canTakeOver) actions.push("takeover");
     if (canChangePort) actions.push("alternate");
+    const standalone = outcome.launchKind === "standalone";
+    const title = standalone
+      ? "RoleFit development server detected"
+      : "RoleFit service is already running";
+    const message = standalone
+      ? `A development server is already using port ${port}.`
+      : `A RoleFit service from another companion session is using port ${port}.`;
+    const detail = standalone
+      ? canTakeOver
+        ? "Connect without companion-managed features, stop the development server gracefully so this companion can start its own service, or use another port."
+        : "Connect without companion-managed features or use another port. Windows cannot gracefully stop an arbitrary listener."
+      : canTakeOver
+        ? "This companion does not own the active service's private connection. Use it without management, restart it gracefully, or use another port."
+        : "This companion does not own the active service's private connection. Use it without management or choose another port; Windows cannot gracefully stop an arbitrary listener.";
     const response = await dialog.showMessageBox({
       type: "warning",
-      title: "RoleFit is already running",
-      message: `RoleFit is already running on port ${port}.`,
-      detail: canTakeOver
-        ? "A RoleFit server started outside the companion is using this port. Extension pairing and workspace transfer need a server the companion started."
-        : "A RoleFit server started outside the companion is using this port. Connect to it or use another port; Windows cannot gracefully signal an arbitrary listener.",
+      title,
+      message,
+      detail,
       buttons: actions.map((action) => ({
-        connect: "Connect to it",
-        takeover: "Take over the port",
+        connect: standalone ? "Connect to development server" : "Use existing service",
+        takeover: standalone ? "Stop development server" : "Restart RoleFit service",
         alternate: "Use another port"
       })[action]),
       defaultId: 0,
@@ -1505,11 +1535,6 @@ async function startDesktop(): Promise<void> {
     extensionPairingSettings.origins.length > 0
       ? extensionPairingSettings.origins.join(",")
       : undefined;
-  const extensionDirectory = await materializeRoleFitExtension({
-    sourceDirectory: join(paths.appRoot, "extension"),
-    userDataDirectory: app.getPath("userData")
-  });
-
   desktopServer = await resolveDesktopServer({
     appRoot: paths.appRoot,
     serverEntry: paths.serverEntry,
@@ -1518,8 +1543,15 @@ async function startDesktop(): Promise<void> {
     sourceEnvironment: desktopServerSourceEnvironment,
     mode,
     host: DEFAULT_HOST,
-    onUnexpectedExit: () => {
-      if (!shuttingDown) failStartup(new Error("The RoleFit local server stopped unexpectedly."));
+    onUnexpectedExit: (code) => {
+      if (shuttingDown) return;
+      if (code === 0) {
+        // Another companion may have performed the user-approved graceful
+        // restart. The old owner should close without reporting a crash.
+        void shutdownAndExit(0);
+        return;
+      }
+      failStartup(new Error("The RoleFit local server stopped unexpectedly."));
     },
     forkServer: ({ modulePath, cwd, env }) =>
       utilityProcess.fork(modulePath, [], {
@@ -1533,6 +1565,11 @@ async function startDesktop(): Promise<void> {
     await shutdownAndExit(0);
     return;
   }
+  const extensionDirectory = await materializeRoleFitExtension({
+    sourceDirectory: join(paths.appRoot, "extension"),
+    userDataDirectory: app.getPath("userData"),
+    localSitePort: localSiteSettings.localSitePort
+  });
 
   const smokePidFile = process.env.ROLEFIT_DESKTOP_SMOKE_SERVER_PID_FILE;
   if (smokePidFile && desktopServer.pid !== undefined) {
@@ -1574,9 +1611,6 @@ async function startDesktop(): Promise<void> {
     saveExtensionOrigin: async (origin) => {
       if (relaunchScheduled) throw new Error("A companion restart is already scheduled.");
       requireOwnedServerForExtensionPairing();
-      if (localSiteSettings?.localSitePort !== 5_181) {
-        throw new Error("Browser extension pairing requires local site port 5181.");
-      }
       if (!desktopSettingsManager) throw new Error("Extension pairing settings are unavailable.");
       extensionPairingSettings = await desktopSettingsManager.saveExtensionOrigin(origin);
       scheduleDesktopRelaunch();
@@ -1636,6 +1670,7 @@ async function startDesktop(): Promise<void> {
     companionPath,
     companionUrl,
     desktopServer.ownership,
+    desktopServer.launchKind,
     desktopServer.origin
   );
 }
@@ -1657,6 +1692,7 @@ if (isSquirrelStartup || !hasSingleInstanceLock) {
         companionPath,
         pathToFileURL(companionPath).href,
         desktopServer.ownership,
+        desktopServer.launchKind,
         desktopServer.origin
       );
     }
@@ -1669,6 +1705,7 @@ if (isSquirrelStartup || !hasSingleInstanceLock) {
         companionPath,
         pathToFileURL(companionPath).href,
         desktopServer.ownership,
+        desktopServer.launchKind,
         desktopServer.origin
       );
     }

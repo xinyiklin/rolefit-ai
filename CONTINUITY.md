@@ -11,11 +11,19 @@ bounded; app-only operational detail belongs in the affected app documentation.
   history, and editing a second document cannot split the first one's typing
   group. Focused reducer probes, both app builds, and a live Typeset
   style-Undo/content-edit check passed.
-- [CODE+TOOL] Desktop port takeover now resolves the listener PID, revalidates
-  its exact RoleFit health identity, resolves the same PID again, and only then
-  sends one graceful `SIGTERM`. The desktop contract probe exercises matching
-  and mismatched workspace identities, and the Electron ownership/reuse smoke
-  passed.
+- [USER+CODE+TOOL] Desktop health now reports closed standalone/companion launch
+  provenance without treating public health as ownership; only the live private
+  utility handle proves that this companion started the server. Compatible
+  listeners get state-specific Connect/Stop or Use/Restart choices. Stop and
+  Restart still revalidate the exact RoleFit identity between two listener-PID
+  resolutions and send only one graceful `SIGTERM`; unknown listeners are never
+  signalled and external listeners are never force-killed. After resolving the
+  active server, the companion writes its validated port into the materialized
+  extension runtime config; a port-changing restart explicitly asks for one
+  browser extension reload. Reused services expose read-only extension access,
+  live status revalidates the full health identity, and the previous owning
+  companion exits cleanly after an approved graceful service handoff. Desktop,
+  lifecycle, and Electron ownership/reuse smoke checks pass.
 
 ## 2026-07-26
 

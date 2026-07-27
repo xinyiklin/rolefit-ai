@@ -128,10 +128,11 @@ locked per-launch override and is never written to the settings document.
 Changing the port changes the browser origin. Browser `localStorage` from the
 old port is not migrated or merged with the new origin; personal workspace and
 provider data remain under the same operating-system `userData` directory. The
-current browser extension API target remains fixed at
-`http://localhost:5181`, so a custom port is supported for direct browser use,
-not extension import. Multi-port extension support requires a separate setting
-and trust/validation decision.
+companion writes the resolved active port into the runtime config in its
+app-owned materialized extension folder. The extension validates that numeric
+localhost port and never scans for a service or accepts a page-selected origin.
+A port-changing restart explicitly requires one unpacked-extension reload;
+native live synchronization remains a separate future distribution decision.
 
 ## Artifact matrix
 

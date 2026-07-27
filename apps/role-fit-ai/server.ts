@@ -127,6 +127,7 @@ const runtime = await startRoleFitServer({
   mode,
   host,
   port,
+  launchKind: companionOwned ? "companion" : "standalone",
   // The standalone entry loaded `.env` before resolving its path/port/model
   // settings. The companion entry must never load it at all.
   loadLocalEnv: false
@@ -149,7 +150,12 @@ async function shutdown(): Promise<void> {
 }
 
 function handleSignal(): void {
-  void shutdown();
+  void shutdown().finally(() => {
+    // Electron's utility parent port can keep the process alive after the HTTP
+    // listener closes. Complete the graceful signal path explicitly so the
+    // owning companion observes the clean exit and can finish a handoff.
+    process.exit();
+  });
 }
 
 process.once("SIGINT", handleSignal);

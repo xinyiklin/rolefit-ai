@@ -17,9 +17,12 @@ V3 client of the local RoleFit server.
   exact-Origin CORS and the claim-token handoff into a fresh app tab.
 - Chrome and Firefox host match patterns cannot safely express one localhost
   port, so the manifest permits only the `http://localhost/*` host while the
-  popup keeps its API target fixed to the canonical port `5181`. Companion
-  custom ports are browser-only until a separate extension port/discovery
-  contract is implemented; do not imply otherwise in either surface.
+  popup accepts only the validated numeric localhost port from
+  `runtime-config.js`. Source development defaults that config to `5181`; the
+  companion overwrites only its materialized copy after resolving the active
+  server. Never scan localhost ports or accept a page-supplied API origin.
+  Changing ports requires the user to reload the unpacked extension once after
+  the companion restarts; do not imply live native synchronization.
 - Manifest host permission allows the popup to attempt the localhost request;
   it does not authenticate the extension to RoleFit. Keep the Firefox add-on
   id stable, but configure the actual browser/profile Origin reported by
@@ -28,5 +31,6 @@ V3 client of the local RoleFit server.
 - `Distill with AI` and auto-polish intent travel with the inbox entry; the app
   owns provider execution and fail/duplicate gates.
 - Keep popup copy aligned with `extension/README.md` and server route shapes.
-- Verify syntax, manifest validity, duplicate/import responses, and the fresh-tab
-  handoff. Browser manual checks are required for popup interaction changes.
+- Verify syntax, manifest validity, generated-port validation,
+  duplicate/import responses, and the fresh-tab handoff. Browser manual checks
+  are required for popup interaction changes.

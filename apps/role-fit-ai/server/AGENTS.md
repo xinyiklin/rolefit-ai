@@ -59,9 +59,10 @@ for provider, prompt, sanitizer, and review work.
   storage (`workspaceDir`). Hosts must pass both paths explicitly; server
   modules must not recover either path from a launcher's working directory.
 - Keep `/api/health` content-free and stable enough for local compatibility
-  probes. Its version/mode/workspace fingerprint is not secret; it must never be
-  treated as browser pairing/authorization or as authority for privileged
-  Electron IPC.
+  probes. Its version/mode/workspace fingerprint and closed
+  `companion|standalone` launch kind are not secret; they must never be treated
+  as browser pairing/authorization or as authority for privileged Electron
+  IPC. Only the live private utility-process handle proves ownership.
 - Validate request boundaries, cap bodies, and return stable user-safe JSON.
 - Keep file operations inside the configured RoleFit workspace. Defend against
   traversal, unsafe names, malformed JSON, and oversized data.

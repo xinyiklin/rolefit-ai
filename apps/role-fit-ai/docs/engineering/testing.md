@@ -251,16 +251,21 @@ The browser remains the product host, so companion verification must prove that
 Electron renders only its compact local setup page, never the Drafting Desk,
 and does not own workspace/tracker files. Focused companion probes should cover:
 
-- numeric-loopback-only server start, explicit compatible/foreign outcomes,
-  Connect-default compatible reuse, graceful-only POSIX takeover, listener-PID
-  parsing for `lsof`/`netstat`, alternate-port persistence, owned process
-  shutdown, and rejection of mode/workspace/arbitrary-listener mismatch;
+- numeric-loopback-only server start, explicit compatible/foreign conflict
+  outcomes, closed companion/standalone launch provenance, private-handle-only
+  ownership, graceful-only POSIX Stop/Restart, listener-PID parsing for
+  `lsof`/`netstat`, alternate-port persistence, owned process shutdown, and
+  rejection of mode/workspace/arbitrary-listener mismatch;
 - a strict local-file CSP, denied renderer permissions, absent Node globals,
   blocked renderer `window.open`, and main-owned external targets reachable
   only through fixed typed IPC methods;
 - exact trusted main-frame and exact `file:` URL validation for every IPC call,
   a frozen self-contained preload, fixed named methods, and rejection of unknown
   providers or extra arguments;
+- extension bundle materialization after active-server resolution, strict
+  generated-port validation, packaged inclusion of `runtime-config.js`, and
+  read-only pairing controls whenever the current companion does not own the
+  service;
 - fake-encryption/file-adapter cases for API-key save/remove, atomic versioned
   registry round trips, malformed input, insecure-backend refusal, and proof
   that saved keys never appear in IPC results, HTTP, logs, argv, environment, or
@@ -296,9 +301,10 @@ and does not own workspace/tracker files. Focused companion probes should cover:
   valid unapproved origins to enqueue only a bounded short-lived pairing
   request, and rejecting near-match, path-bearing, absent, malformed, and
   oversized identities without CORS;
-- changing ports being reported as a new browser-storage origin, and the
-  extension remaining truthfully default-port-only rather than silently
-  claiming custom-port import support;
+- changing ports being reported as a new browser-storage origin, the resolved
+  port being written into the materialized extension runtime config, and the
+  UI truthfully requiring one unpacked-extension reload rather than claiming
+  live synchronization;
 - no live provider login, hosted-page CORS/pairing, or paid AI call during
   automated verification.
 

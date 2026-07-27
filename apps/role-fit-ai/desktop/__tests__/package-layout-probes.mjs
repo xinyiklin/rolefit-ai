@@ -35,6 +35,7 @@ assert(files.includes("extension/manifest.json"));
 assert(files.includes("extension/popup.html"));
 assert(files.includes("extension/popup.css"));
 assert(files.includes("extension/popup.js"));
+assert(files.includes("extension/runtime-config.js"));
 assert(files.includes("extension/icons/icon.svg"));
 
 const allowedRoots = new Set([

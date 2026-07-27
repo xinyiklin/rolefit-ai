@@ -94,9 +94,10 @@ try {
   assert.deepEqual(JSON.parse(health.body), {
     service: "role-fit-ai",
     status: "ok",
-    apiVersion: 1,
-    desktopCompatibilityVersion: 2,
+    apiVersion: 2,
+    desktopCompatibilityVersion: 3,
     mode: "production",
+    launchKind: "standalone",
     workspaceFingerprint: computeWorkspaceFingerprint(workspaceDir)
   });
 
@@ -246,6 +247,7 @@ try {
   }
   const launcherHealth = await get(releasedPort, "/api/health");
   assert.equal(JSON.parse(launcherHealth.body).mode, "production");
+  assert.equal(JSON.parse(launcherHealth.body).launchKind, "standalone");
   assert.equal(
     JSON.parse(launcherHealth.body).workspaceFingerprint,
     computeWorkspaceFingerprint(join(appRoot, "relative-workspace"))

@@ -103,19 +103,27 @@ Malformed or unreadable saved settings fail back to `5181` with a bounded
 warning rather than selecting a random port.
 
 Startup treats a bound port as an explicit recoverable state rather than a
-silent reuse or terminal error. A versioned health-compatible listener offers
-**Connect to it**, **Take over the port**, and **Use another port**; Connect is
-the default. Takeover resolves the exact listener PID through `lsof -t` on
-macOS/Linux, revalidates the compatible health identity, resolves the same PID
-again, sends one `SIGTERM`, and waits up to five seconds. It never escalates to
-`SIGKILL`; failure returns to the alternate-port/reuse choice. The closed
-occupant lookup helper uses `lsof -t` on macOS/Linux and parses `netstat -ano`
-on Windows; Windows does not offer takeover because Node cannot deliver an
-equivalent graceful signal to an arbitrary process. An
-unidentified or health-incompatible listener receives no signal and offers
-only another port or Quit. Alternate selection reuses the settings availability
-check, scans a bounded nearby range, and persists the first free port before
-retrying startup, so the next launch does not ask again.
+silent reuse or terminal error. The versioned health payload carries a closed,
+non-secret `launchKind`: `standalone` when no Electron utility parent exists
+and `companion` when it does. This describes provenance only; main calls a
+server owned solely when it retains the live private utility-process handle.
+
+A compatible standalone listener offers **Connect to development server**,
+**Stop development server**, and **Use another port**. A compatible
+companion-launched listener without the current private handle offers **Use
+existing service**, **Restart RoleFit service**, and **Use another port**.
+Stop/Restart resolves the exact listener PID through `lsof -t` on macOS/Linux,
+revalidates the compatible health identity, resolves the same PID again, sends
+one `SIGTERM`, and waits up to five seconds. It never escalates to `SIGKILL`;
+the previous owning companion treats that clean shutdown as the approved
+handoff and exits without a crash dialog. Failure returns to the
+alternate-port/reuse choice. The closed occupant lookup helper uses `lsof -t`
+on macOS/Linux and parses `netstat -ano` on Windows; Windows does not offer
+termination because Node cannot deliver an equivalent graceful signal to an
+arbitrary process. An unidentified or health-incompatible listener receives no
+signal and offers only another port or Quit. Alternate selection reuses the
+settings availability check, scans a bounded nearby range, and persists the
+first free port before retrying startup, so the next launch does not ask again.
 
 `ROLEFIT_DESKTOP_PORT` is a per-launch operator/test override. When present it
 wins over the saved value and locks the renderer setting; it is not persisted.
@@ -126,11 +134,11 @@ A port is part of a browser origin. Changing it creates a different
 `localStorage` origin, so browser-only drafts and stage preferences from the old
 port do not automatically appear at the new one. Changing the port never moves
 the current workspace or provider vault; packaged runs keep both beneath their
-operating-system `userData` locations. The current browser extension's API
-target remains fixed at `http://localhost:5181`; a custom companion port
-therefore supports direct browser use only. Extension import on custom ports
-requires a separate extension setting and trust/validation design and is not
-implied by this setting.
+operating-system `userData` locations. After resolving the active server, the
+companion writes its numeric port into the runtime config in the app-owned
+materialized extension folder. The extension accepts only that validated
+localhost port and never scans or accepts a page-selected origin. After a
+port-changing restart, the user reloads the unpacked extension once.
 
 ## Provider state contract
 
@@ -348,16 +356,19 @@ creation, or hosted credential service is introduced.
 
 ## Browser extension behavior
 
-The extension remains a client only of `http://localhost:5181` extension
-routes. An import opens a fresh browser RoleFit tab with its claim token. It
-does not discover, install, configure, or authenticate providers and never
-receives provider credentials. Selecting a different companion site port does
-not rewrite the installed extension configuration or its route target; extension
-imports remain a default-port-only workflow in this phase.
+The extension remains a client only of validated `http://localhost:<port>`
+extension routes. An import opens a fresh browser RoleFit tab with its claim
+token. It does not discover, install, configure, or authenticate providers and
+never receives provider credentials. After resolving the active server, main
+writes its numeric port into the runtime config in the app-owned materialized
+extension folder. It never scans localhost or accepts a renderer/page-selected
+origin. A port-changing restart requires one browser extension reload; live
+native synchronization is deferred.
 
-The desktop package stages the extension's fixed static files. On launch, the
-main process materializes them into its app-owned `userData` extension folder,
-because browsers cannot load an unpacked extension from Electron's archive. The
+The desktop package stages the extension's allowlisted source files. On launch, the
+main process materializes them into its app-owned `userData` extension folder
+after resolving the active server because browsers cannot load an unpacked
+extension from Electron's archive. The
 trusted companion may open only that fixed folder through typed IPC; the
 renderer never receives a filesystem path or chooses files to open.
 

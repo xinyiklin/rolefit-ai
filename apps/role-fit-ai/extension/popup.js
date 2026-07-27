@@ -1,6 +1,17 @@
 /** RoleFit AI popup (ESM, Manifest V3). */
 
-const API_BASE = 'http://localhost:5181';
+const runtimeConfig = globalThis.ROLEFIT_EXTENSION_RUNTIME_CONFIG;
+if (
+  !runtimeConfig ||
+  runtimeConfig.schemaVersion !== 1 ||
+  !Number.isInteger(runtimeConfig.localSitePort) ||
+  runtimeConfig.localSitePort < 1 ||
+  runtimeConfig.localSitePort > 65_535
+) {
+  throw new Error('RoleFit extension runtime configuration is invalid.');
+}
+const LOCAL_SITE_PORT = runtimeConfig.localSitePort;
+const API_BASE = `http://localhost:${LOCAL_SITE_PORT}`;
 
 // ── DOM helpers ───────────────────────────────────────────────────────────
 
@@ -102,7 +113,7 @@ function renderPairingError(requested) {
           className: 'error-msg',
           textContent: requested
             ? 'RoleFit sent a one-time access request to the local companion. Open the companion, approve the browser extension, then reopen this popup.'
-            : 'RoleFit could not request access. Restart the local companion on port 5181, then reopen this popup.'
+            : `RoleFit could not request access. Restart the local companion on port ${LOCAL_SITE_PORT}, then reopen this popup.`
         })
       )
     )
@@ -357,7 +368,7 @@ async function main() {
       msg.includes('net::ERR');
     loadingEl.replaceWith(
       isConnRefused
-        ? renderError('RoleFit AI is not running', 'Open the app at localhost:5181, then reopen this popup.')
+        ? renderError('RoleFit AI is not running', `Open the app at localhost:${LOCAL_SITE_PORT}, then reopen this popup.`)
         : msg.includes('server-status:403')
           ? renderPairingError(await requestExtensionPairing())
         : renderError(

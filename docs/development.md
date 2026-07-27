@@ -98,12 +98,14 @@ whose public package contract changed.
   port from `1` through `65535` under Electron `userData`. `Apply & restart`
   checks loopback availability and relaunches through clean server shutdown;
   `ROLEFIT_DESKTOP_PORT` is a locked per-launch override.
-- Port `5181` remains the browser-extension route-target contract. The
-  extension does not follow a custom companion port, so custom ports support
-  direct browser use only. Changing ports also changes the browser origin and
-  creates separate origin-scoped `localStorage`; it does not migrate browser
-  drafts/preferences. The active workspace and provider data remain in place;
-  packaged runs keep them beneath operating-system `userData`.
+- Source extension development defaults to `5181`. The companion materializes
+  its packaged extension only after resolving the active server and writes that
+  numeric localhost port into the extension runtime config. After a
+  port-changing restart, reload the unpacked extension once in the browser.
+  Changing ports also creates separate origin-scoped `localStorage`; it does
+  not migrate browser drafts/preferences. The active workspace and provider
+  data remain in place; packaged runs keep them beneath operating-system
+  `userData`.
 
 A bound standalone canonical port normally means the correct app is already
 running. Inspect and reuse it rather than silently selecting another port. The

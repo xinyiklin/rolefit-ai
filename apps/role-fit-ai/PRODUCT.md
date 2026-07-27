@@ -62,13 +62,18 @@ The companion defaults to local port `5181` and may persist another available
 port after explicit confirmation and restart. Browser-local state is scoped by
 origin, so a different port has separate draft/preferences storage. Workspace
 and provider data keep their operating-system-local locations, and extension
-imports remain on canonical port `5181` until multi-port extension support has
-its own trust contract. If a compatible standalone RoleFit server already owns
-the selected port, startup explicitly offers to connect, gracefully take over
-on macOS/Linux, or persist another available port. Connect is the default.
-RoleFit never stops an unidentified listener, never force-kills a compatible
-listener, and does not offer process termination on Windows where an equivalent
-graceful signal is unavailable.
+imports follow the companion's resolved numeric localhost port through a
+generated extension runtime config. A port-changing restart tells the user to
+reload the unpacked extension once; there is no live native synchronization or
+localhost scanning. Health identifies a compatible server as
+companion-launched or standalone without treating that public response as proof
+of ownership; only the current private utility-process handle proves that this
+companion started it. Startup may connect to or gracefully stop a standalone
+development server, use or gracefully restart a previous companion service on
+macOS/Linux, or persist another available port. RoleFit never stops an
+unidentified listener, never force-kills a compatible listener, and does not
+offer process termination on Windows where an equivalent graceful signal is
+unavailable.
 
 ## Brand Personality
 

@@ -210,6 +210,7 @@ try {
     JSON.parse(health.body).desktopCompatibilityVersion,
     ROLEFIT_DESKTOP_COMPATIBILITY_VERSION
   );
+  assert.equal(JSON.parse(health.body).launchKind, "companion");
 
   const page = await waitForResponse(
     `${origin}/`,

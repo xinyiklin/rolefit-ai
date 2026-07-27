@@ -1,4 +1,4 @@
-export const ROLEFIT_DESKTOP_API_VERSION = 10 as const;
+export const ROLEFIT_DESKTOP_API_VERSION = 11 as const;
 export const ROLEFIT_DESKTOP_SETTINGS_SCHEMA_VERSION = 1 as const;
 export const ROLEFIT_PROVIDER_GUIDANCE_MAX_LENGTH = 240 as const;
 export const ROLEFIT_API_KEY_MAX_BYTES = 16_384 as const;
@@ -174,15 +174,17 @@ export type RoleFitWorkspaceOverview = Readonly<{
 
 export type RoleFitConnectionServerState =
   | "owned"
-  | "reused"
+  | "reused-standalone"
+  | "reused-companion"
   | "starting"
   | "unreachable";
 
 /**
  * Live loopback truth for the Connection tab: the active port, the canonical
- * browser URL, whether the responding server is companion-owned, a reused
- * standalone listener, still starting, or not answering health probes, and the
- * beaconed browser-tab count (null when unknown).
+ * browser URL, whether the responding server is owned by this companion,
+ * reused standalone, reused from another companion session, still starting,
+ * or not answering health probes, and the beaconed browser-tab count (null
+ * when unknown).
  */
 export type RoleFitConnectionStatus = Readonly<{
   port: number;
@@ -270,7 +272,8 @@ export function isRoleFitConnectionServerState(
   value: unknown
 ): value is RoleFitConnectionServerState {
   return value === "owned" ||
-    value === "reused" ||
+    value === "reused-standalone" ||
+    value === "reused-companion" ||
     value === "starting" ||
     value === "unreachable";
 }
