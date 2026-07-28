@@ -647,32 +647,44 @@ function matchSignatures(a: Signature, b: Signature): MatchResult | null {
   return null;
 }
 
-// A compact primitive dependency for React duplicate scans. It covers the full
-// identity content rather than text lengths, so same-length edits cannot leave a
-// stale duplicate group memoized.
+// A conservative cache version for the React duplicate scan. It shares the
+// matcher's effective text and role selectors, but intentionally keeps safe
+// over-invalidation for raw URL and metadata changes rather than pretending to
+// be a canonical equality representation.
 export function duplicateCandidateKey(rec: DuplicateCandidate): string {
+  const dismissedIds = [...new Set(rec.duplicateDismissedIds ?? [])].sort();
   const parts = [
     rec.id,
     rec.jobUrl,
     rec.company,
-    rec.role,
-    rec.title,
+    rec.role || roleFromTitle(rec.title),
     rec.location,
-    rec.rawJobDescription || rec.jobDescription,
+    candidateText(rec).slice(0, FINGERPRINT_CHARS),
     ...(rec.sourceUrls ?? []).map((entry) => entry?.url),
-    ...(rec.duplicateDismissedIds ?? [])
+    ...dismissedIds
   ];
-  let hash = 2166136261;
+  let length = 0;
+  let firstHash = 2166136261;
+  let secondHash = 0x9e3779b9;
+  const mix = (value: number) => {
+    firstHash = Math.imul(firstHash ^ value, 16777619);
+    secondHash = Math.imul(secondHash ^ value, 2246822519);
+    secondHash ^= secondHash >>> 13;
+  };
   for (const value of parts) {
     const text = String(value ?? "");
+    length += text.length;
+    // Length-prefix every part so embedded NULs or empty fields cannot make
+    // two different field sequences feed the same character stream.
+    mix(text.length & 0xff);
+    mix((text.length >>> 8) & 0xff);
+    mix((text.length >>> 16) & 0xff);
+    mix((text.length >>> 24) & 0xff);
     for (let index = 0; index < text.length; index += 1) {
-      hash ^= text.charCodeAt(index);
-      hash = Math.imul(hash, 16777619);
+      mix(text.charCodeAt(index));
     }
-    hash ^= 0;
-    hash = Math.imul(hash, 16777619);
   }
-  return (hash >>> 0).toString(36);
+  return `${length.toString(36)}-${(firstHash >>> 0).toString(36)}-${(secondHash >>> 0).toString(36)}`;
 }
 
 // Layered duplicate scan of the current job target against stored applications.

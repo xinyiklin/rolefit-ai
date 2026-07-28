@@ -37,8 +37,8 @@ assert.deepEqual(
       COVER_LETTER_STYLE_DEFAULTS.marginLeftPt
     ]
   },
-  { lineHeight: 2, paragraphGapPt: 0, margins: [54, 54, 54, 54] },
-  "new cover letters default to double spacing and 0.75-inch physical margins"
+  { lineHeight: 2, paragraphGapPt: 8, margins: [36, 54, 36, 54] },
+  "new cover letters default to double spacing, 8pt paragraph gaps, and 0.5/0.75-inch margins"
 );
 assert.deepEqual(
   documentStyleToCoverLetterStyle({

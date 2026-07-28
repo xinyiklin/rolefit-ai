@@ -10,7 +10,7 @@
 //   1. The O(n²) scan itself — held in a one-entry module cache that survives
 //      unmount, so returning to the tab with unchanged identity data is free.
 //   2. Re-hashing every record's job description to build the cache key — a
-//      per-record WeakMap memo means editing one row rehashes one row.
+//      per-record WeakMap memo avoids that work while record references survive.
 //   3. Over-invalidation — the key covers only fields the matcher actually
 //      reads. Status and date changes no longer discard the scan.
 //
@@ -48,10 +48,11 @@ export type DuplicateScanResult = {
 // signal. Never read by product code.
 export const duplicateScanStats = { scans: 0, hashedRecords: 0 };
 
-// Per-record identity hash. Application objects are replaced only when that
-// record changes (useApplications maps unchanged rows through by reference), so
-// memoizing on object identity means a notes keystroke rehashes one description
-// instead of every stored description.
+// Per-record identity hash. Optimistic local edits retain references for
+// untouched rows, so one edit normally hashes one new object. A full server
+// response currently replaces every object and therefore misses this WeakMap;
+// response reconciliation can restore that optimization without affecting the
+// correctness of this cache.
 const recordKeys = new WeakMap<object, string>();
 
 function recordKey(record: DuplicateCandidate): string {
@@ -64,10 +65,10 @@ function recordKey(record: DuplicateCandidate): string {
 }
 
 /**
- * Identity of only the fields the matcher reads. Status, applied/created dates,
- * notes, documents, and attachments are excluded on purpose: the duplicate
- * modal displays some of them, but none of them are duplicate EVIDENCE, and
- * including them made moving a row to "Interviewing" rerun the whole scan.
+ * Conservative version of matcher-observable identity. Status, applied/created
+ * dates, notes, documents, and attachments are excluded on purpose: the
+ * duplicate modal displays some of them, but none are duplicate EVIDENCE.
+ * Some raw URL/metadata representations may still over-invalidate safely.
  */
 export function duplicateScanIdentity(applications: readonly DuplicateCandidate[]): string {
   return applications.map(recordKey).join("\n");
