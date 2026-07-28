@@ -33,14 +33,13 @@ import type { DocumentUpload } from "../lib/applicationDocumentRequests";
 import {
   coverLetterStartupIsCurrent,
   loadLastCoverLetterName,
-  migrateStoredCoverLetterStyle,
   resolveCoverLetterStartup,
   saveLastCoverLetterName
 } from "../lib/coverLetterPrefs.ts";
 
 const STYLE_STORAGE_KEY = "rolefit:coverLetterStyle.v1";
 const TITLE_STORAGE_KEY = "rolefit:coverLetterTitle.v1";
-const COVER_LETTER_STARTER = `<space-before=8>[Date]</space-before>
+const COVER_LETTER_STARTER = `[Date]
 
 Dear [Hiring manager],
 
@@ -57,9 +56,7 @@ function loadStyle(): DocStyle {
   try {
     const raw = window.localStorage.getItem(STYLE_STORAGE_KEY);
     if (raw) {
-      const parsed = migrateStoredCoverLetterStyle(
-        parseCoverLetterStyle(JSON.parse(raw) as unknown)
-      );
+      const parsed = parseCoverLetterStyle(JSON.parse(raw) as unknown);
       return coverLetterStyleToDocumentStyle(parsed);
     }
   } catch {

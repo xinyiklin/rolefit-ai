@@ -22,12 +22,14 @@ import {
   decodeInlineClipboard,
   encodeInlineClipboard,
   inlineFragmentFromHtml,
+  paragraphFragmentsFromHtml,
   TYPESET_INLINE_CLIPBOARD_MIME
 } from "./clipboardFormatting.ts";
 
 export type QueuedIntent =
   | { kind: "insert"; text: string }
   | { kind: "paste"; fragment: string }
+  | { kind: "pasteParagraphs"; fragments: string[] }
   | { kind: "deleteBack" }
   | { kind: "deleteFwd" }
   | { kind: "deleteSelection" }
@@ -75,6 +77,7 @@ type TypesetInputEventsArgs = {
   // Measured width lets deletion remove exactly the spaces one Tab authored.
   indentWidthAt: (selection: TypesetSelection) => number;
   commitPaste: (selection: TypesetSelection, start: number, end: number, fragment: string) => void;
+  commitParagraphPaste: (selection: TypesetSelection, fragments: readonly string[]) => boolean;
   onEnter: (selection: TypesetSelection) => void;
   commitMergeBullet: (selection: TypesetSelection, direction: "up" | "down") => boolean;
   commitToggleMark: (selection: TypesetSelection, mark: "bold" | "italic" | "underline") => void;
@@ -84,9 +87,10 @@ type TypesetInputEventsArgs = {
   // paragraphs) has no single mapped field. The host applies these as one
   // batched edit and returns true when it consumed the intent.
   commitCrossFieldIntent: (intent: QueuedIntent) => boolean;
-  // Plain text for a selection crossing fields, read from the model; null when
-  // the selection does not cross fields.
-  crossFieldPlainText: () => string | null;
+  // Clipboard flavors are derived from logical model ranges. The painted DOM
+  // is split into visual lines and must never define external paragraph breaks.
+  selectionClipboardHtml: (selection: TypesetSelection) => string;
+  crossFieldClipboard: () => { plain: string; html: string } | null;
   onZoomShortcut: (command: -1 | 0 | 1) => void;
   setNonce: Dispatch<SetStateAction<number>>;
 };
@@ -104,13 +108,15 @@ export function useTypesetInputEvents({
   commitParagraphOutdent,
   indentWidthAt,
   commitPaste,
+  commitParagraphPaste,
   onEnter,
   commitMergeBullet,
   commitToggleMark,
   commitClearFormatting,
   commitHistory,
   commitCrossFieldIntent,
-  crossFieldPlainText,
+  selectionClipboardHtml,
+  crossFieldClipboard,
   onZoomShortcut,
   setNonce
 }: TypesetInputEventsArgs) {
@@ -603,13 +609,17 @@ export function useTypesetInputEvents({
       const ownFragment = decodeInlineClipboard(
         clipboard?.getData(TYPESET_INLINE_CLIPBOARD_MIME) ?? ""
       );
+      const html = clipboard?.getData("text/html") ?? "";
+      const paragraphFragments = ownFragment ? null : paragraphFragmentsFromHtml(html);
       const htmlFragment = ownFragment
         ? null
-        : inlineFragmentFromHtml(clipboard?.getData("text/html") ?? "");
+        : inlineFragmentFromHtml(html);
       const fragment = ownFragment ?? htmlFragment;
       const text = clipboard?.getData("text/plain") ?? "";
       if (commitPendingRef.current) {
-        if (fragment) queueIntent({ kind: "paste", fragment });
+        if (paragraphFragments) {
+          queueIntent({ kind: "pasteParagraphs", fragments: paragraphFragments });
+        } else if (fragment) queueIntent({ kind: "paste", fragment });
         else if (text) queueIntent({ kind: "insert", text });
         return;
       }
@@ -617,10 +627,13 @@ export function useTypesetInputEvents({
       if (!selection) {
         // Spanning several fields: drop the selection, then land the payload in
         // the collapsed caret that leaves behind.
-        if (fragment) commitCrossFieldIntent({ kind: "paste", fragment });
+        if (paragraphFragments) {
+          commitCrossFieldIntent({ kind: "pasteParagraphs", fragments: paragraphFragments });
+        } else if (fragment) commitCrossFieldIntent({ kind: "paste", fragment });
         else if (text) commitCrossFieldIntent({ kind: "insert", text });
         return;
       }
+      if (paragraphFragments && commitParagraphPaste(selection, paragraphFragments)) return;
       if (fragment) commitPaste(selection, selection.dStart, selection.dEnd, fragment);
       else commitReplace(selection, selection.dStart, selection.dEnd, text);
     };
@@ -639,12 +652,7 @@ export function useTypesetInputEvents({
       );
       clipboard.setData("text/plain", plain);
       clipboard.setData(TYPESET_INLINE_CLIPBOARD_MIME, encodeInlineClipboard(fragment));
-      const nativeSelection = window.getSelection();
-      if (nativeSelection?.rangeCount) {
-        const wrapper = document.createElement("div");
-        wrapper.append(nativeSelection.getRangeAt(0).cloneContents());
-        clipboard.setData("text/html", wrapper.innerHTML);
-      }
+      clipboard.setData("text/html", selectionClipboardHtml(selection));
       return true;
     };
 
@@ -655,19 +663,11 @@ export function useTypesetInputEvents({
         writeSelectionToClipboard(event, selection);
         return;
       }
-      // Cross-field copy uses model slices, avoiding painter spans and caret placeholders.
-      const nativeSelection = window.getSelection();
-      if (!event.clipboardData || !nativeSelection?.rangeCount) return;
-      const plain = crossFieldPlainText();
-      if (plain === null) return;
-      const wrapper = document.createElement("div");
-      wrapper.append(nativeSelection.getRangeAt(0).cloneContents());
-      wrapper.querySelectorAll<HTMLElement>("[data-tsde]").forEach((span) => {
-        span.textContent = "";
-      });
+      const clipboard = crossFieldClipboard();
+      if (!event.clipboardData || !clipboard) return;
       event.preventDefault();
-      event.clipboardData.setData("text/plain", plain);
-      event.clipboardData.setData("text/html", wrapper.innerHTML);
+      event.clipboardData.setData("text/plain", clipboard.plain);
+      event.clipboardData.setData("text/html", clipboard.html);
     };
 
     const onCut = (event: ClipboardEvent) => {
@@ -675,10 +675,11 @@ export function useTypesetInputEvents({
       if (!selection || selection.dStart === selection.dEnd) {
         // Spanning several fields: write the model's text, then delete the whole
         // selection as one edit. Without this, cut was a silent no-op.
-        const plain = crossFieldPlainText();
-        if (plain === null || !event.clipboardData) return;
+        const clipboard = crossFieldClipboard();
+        if (!clipboard || !event.clipboardData) return;
         event.preventDefault();
-        event.clipboardData.setData("text/plain", plain);
+        event.clipboardData.setData("text/plain", clipboard.plain);
+        event.clipboardData.setData("text/html", clipboard.html);
         if (commitPendingRef.current) queueIntent({ kind: "deleteSelection" });
         else commitCrossFieldIntent({ kind: "deleteSelection" });
         return;
@@ -738,22 +739,26 @@ export function useTypesetInputEvents({
     };
   }, [
     commitClearFormatting,
+    commitCrossFieldIntent,
     commitHistory,
     commitMergeBullet,
     commitPendingRef,
     commitIndent,
     commitParagraphOutdent,
+    commitParagraphPaste,
     commitPaste,
     commitReplace,
     indentWidthAt,
     onEnter,
     commitToggleMark,
+    crossFieldClipboard,
     docVersion,
     hostRef,
     nonce,
     onZoomShortcut,
     readSelection,
     replayQueueRef,
+    selectionClipboardHtml,
     setNonce,
     structuredTabScope
   ]);

@@ -230,11 +230,10 @@ function groupRuns(runs: GlyphRun[]): Segment[] {
     }
   }
   flush();
-  // Copy/selection fidelity: `white-space: pre` renders trailing whitespace
+  // Selection/text-extraction fidelity: `white-space: pre` renders trailing whitespace
   // inside a span's own box without moving any glyph, so appending it never
   // shifts layout. A trailing space where a glue gap separates two segments
-  // (style boundaries, the bullet marker) keeps copied words apart. The line's
-  // block element supplies the copied newline.
+  // (style boundaries, the bullet marker) keeps browser-derived words apart.
   for (let i = 0; i < segs.length - 1; i += 1) {
     if (segs[i + 1].x - segs[i].end > 0.3) segs[i].text += " ";
   }
@@ -277,9 +276,12 @@ function PageLines({
     <>
       {page.lines.map((line, li) => {
         const segs = groupRuns(line.runs);
-        // The line div is a REAL block box (true top/height): selection yields
-        // a newline per line on copy. Fixed-width inline segments share the
-        // browser's native baseline while margins preserve every engine x.
+        // The line div is a REAL block box (true top/height), so browser text
+        // extraction can distinguish visual lines. External editor copy is
+        // intercepted and serialized from logical fields instead; paint wraps
+        // must never become hard paragraph boundaries. Fixed-width inline
+        // segments share the browser's native baseline while margins preserve
+        // every engine x.
         const lineTop = segs.length
           ? Math.min(...segs.map((s) => line.baseline - browserFaceBox(s.family, s.face).ascent * s.size))
           : line.baseline - 10;
@@ -303,7 +305,13 @@ function PageLines({
               // Selection bands use owned leading because the div measures only ink.
               ...(line.leading === undefined
                 ? {}
-                : { "--tsd-line-leading": unit(line.leading) })
+                : { "--tsd-line-leading": unit(line.leading) }),
+              ...(line.paragraphSpaceBefore === undefined
+                ? {}
+                : { "--tsd-paragraph-space-before": unit(line.paragraphSpaceBefore) }),
+              ...(line.paragraphSpaceAfter === undefined
+                ? {}
+                : { "--tsd-paragraph-space-after": unit(line.paragraphSpaceAfter) })
             } as React.CSSProperties}
           >
             {segs.map((seg, si) => {

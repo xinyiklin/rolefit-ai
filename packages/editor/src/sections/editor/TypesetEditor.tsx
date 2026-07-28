@@ -88,6 +88,7 @@ import {
   setParagraphSpaceAfter,
   setLink,
   removeLink,
+  replaceWithParagraphFragments,
   replaceWithLink,
   explicitLinkRunAt,
   autoLinkWordAt,
@@ -96,8 +97,10 @@ import {
   suppressedAutoLinkValue,
   clearFormatting,
   hasClearableFormatting,
+  setEmptyFieldTypingFormat,
   toggleMark,
   typingFormatForDeletedRange,
+  typingFormatForEmptyField,
   type DisplayMap,
   type TypingFormat,
   type TypesetSelection
@@ -112,6 +115,10 @@ import {
   type FieldRange
 } from "./multiFieldSelection.ts";
 import { useTypesetInputEvents, type QueuedIntent } from "./useTypesetInputEvents.ts";
+import {
+  clipboardHtmlForRanges,
+  type ClipboardRange
+} from "./clipboardFormatting.ts";
 import {
   clearSelectionHighlights,
   paintSelectionHighlights
@@ -876,14 +883,13 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
         typingFormatRef.current = null;
         typingTargetRef.current = null;
       }
-      // Seed the typing format when the caret enters an EMPTY field so the first
-      // characters inherit the document's prevailing emphasis for that field kind
-      // (bold title, italic subtitle, bold skills label) instead of coming out
-      // unformatted. Whole-field marks can't be pre-baked onto an empty value, so
-      // this is the hook that carries the convention into new entries/skill rows.
+      // Recover a format deliberately stored on an empty paragraph before
+      // falling back to the document's prevailing emphasis for a brand-new
+      // structural field (bold title, italic subtitle, bold skills label).
       if (selection && !hasRange && selection.map.chars.length === 0 && !typingFormatRef.current) {
-        const seed = emphasisSeedForField(dataRef.current, selection.src);
-        if (seed && (seed.bold || seed.italic || seed.underline)) {
+        const stored = typingFormatForEmptyField(selection.map);
+        const seed = stored ?? emphasisSeedForField(dataRef.current, selection.src);
+        if (stored || (seed && (seed.bold || seed.italic || seed.underline))) {
           typingFormatRef.current = seed;
           typingTargetRef.current = typingTargetFor(selection);
         }
@@ -937,11 +943,11 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
               ? Math.round((effectiveSizes[0] ?? 0) * 10) / 10
               : null),
         alignment:
-          effectiveAlignments.length === 0
+          typingFormat?.alignment ?? (effectiveAlignments.length === 0
             ? docStyle.style.bodyAlign
             : effectiveAlignments.every((alignment) => alignment === effectiveAlignments[0])
               ? effectiveAlignments[0]
-              : null,
+              : null),
         alignmentScope: selection ? alignmentScopeForField(selection.src) : null,
         canFormatParagraph: Boolean(selection && paragraphSpacingAllowedIn(selection.src)),
         paragraphLineHeight:
@@ -1178,6 +1184,59 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
       scheduleCaretAfterFieldCommit(sel, value, caretValueIndex);
     },
     [actions, markPending, recordPreEditSelection, scheduleCaretAfterFieldCommit]
+  );
+
+  const commitParagraphPaste = useCallback(
+    (sel: TypesetSelection, fragments: readonly string[]): boolean => {
+      if (sel.src.kind !== "bullet" || fragments.length < 2) return false;
+      const { sectionId, entryId, bulletId } = sel.src;
+      const { values, lastCaretDisplayIndex } = replaceWithParagraphFragments(
+        sel.map,
+        sel.dStart,
+        sel.dEnd,
+        fragments
+      );
+      const isSummary =
+        dataRef.current.sections.find((section) => section.id === sectionId)?.type ===
+        "summary";
+      recordPreEditSelection(sel);
+      markPending();
+      typingFormatRef.current = null;
+      typingTargetRef.current = null;
+      actions.replaceBulletParagraphs(sectionId, entryId, bulletId, values);
+      pendingCaretRef.current = (fresh) => {
+        const section = fresh.sections.find((item) => item.id === sectionId);
+        const sourceEntryIndex =
+          section?.items.findIndex((item) => item.id === entryId) ?? -1;
+        const sourceEntry = sourceEntryIndex >= 0 ? section?.items[sourceEntryIndex] : undefined;
+        const targetEntry = isSummary
+          ? section?.items[sourceEntryIndex + values.length - 1]
+          : sourceEntry;
+        const sourceBulletIndex =
+          sourceEntry?.bullets.findIndex((bullet) => bullet.id === bulletId) ?? -1;
+        const targetBullet = isSummary
+          ? targetEntry?.bullets[0]
+          : targetEntry?.bullets[sourceBulletIndex + values.length - 1];
+        if (!targetEntry || !targetBullet) return null;
+        const src: FieldSrc = {
+          kind: "bullet",
+          sectionId,
+          entryId: targetEntry.id,
+          bulletId: targetBullet.id
+        };
+        const targetMap = mapFor(src, targetBullet.text);
+        return {
+          key: fieldKey(src),
+          valueIndex: valueIndexForDisplayIndex(
+            targetMap,
+            targetBullet.text,
+            lastCaretDisplayIndex
+          )
+        };
+      };
+      return true;
+    },
+    [actions, mapFor, markPending, recordPreEditSelection]
   );
 
   // The shared "re-highlight this display range after the repaint" closure
@@ -1437,6 +1496,10 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
           return commitRangesDelete(ranges);
         case "paste":
           return commitRangesDelete(ranges, "", intent.fragment);
+        case "pasteParagraphs":
+          if (!commitRangesDelete(ranges)) return false;
+          replayQueueRef.current.push(intent);
+          return true;
         case "splitBullet":
           // Drop the selection first, then let the queue replay the split into the
           // collapsed caret that leaves behind.
@@ -1486,6 +1549,35 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
       .join("\n");
   }, [readRanges]);
 
+  const clipboardRangeFor = useCallback(
+    (range: Pick<FieldRange, "map" | "src" | "dStart" | "dEnd">): ClipboardRange => ({
+      map: range.map,
+      dStart: range.dStart,
+      dEnd: range.dEnd,
+      defaultFontFamily: docStyle.style.fontFamily,
+      defaultFontSizePt: defaultFontSizeForField(range.src, docStyle.style),
+      defaultAlignment: defaultAlignmentForField(range.src, docStyle.style)
+    }),
+    [docStyle.style]
+  );
+
+  const selectionClipboardHtml = useCallback(
+    (selection: TypesetSelection): string =>
+      clipboardHtmlForRanges([clipboardRangeFor(selection)]),
+    [clipboardRangeFor]
+  );
+
+  const crossFieldClipboard = useCallback((): { plain: string; html: string } | null => {
+    const ranges = readRanges();
+    if (!ranges) return null;
+    return {
+      plain: ranges
+        .map((range) => range.map.display.slice(range.dStart, range.dEnd))
+        .join("\n"),
+      html: clipboardHtmlForRanges(ranges.map(clipboardRangeFor))
+    };
+  }, [clipboardRangeFor, readRanges]);
+
   // Clipboard primitives for the right-click menu. Each tries the cross-field
   // path first and falls back to the single-field one, exactly as the keyboard
   // equivalents in useTypesetInputEvents do — the menu must not be a second,
@@ -1526,6 +1618,50 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
     [actions, markPending, marksAllowedIn, recordPreEditSelection, restoreRangeAfterRepaint]
   );
 
+  const commitEmptyTypingFormat = useCallback(
+    (sel: TypesetSelection, format: TypingFormat): boolean => {
+      if (sel.map.chars.length > 0 || sel.dStart !== sel.dEnd) return false;
+      // Store a complete effective format, including defaults, so an explicit
+      // "off" choice (for example disabling inherited bold) remains
+      // distinguishable from an untouched empty structural field.
+      const persisted: TypingFormat = {
+        bold: format.bold,
+        italic: format.italic,
+        underline: format.underline,
+        fontFamily: format.fontFamily ?? docStyle.style.fontFamily,
+        fontSizePt:
+          format.fontSizePt ?? defaultFontSizeForField(sel.src, docStyle.style),
+        alignment:
+          format.alignment ?? defaultAlignmentForField(sel.src, docStyle.style)
+      };
+      typingFormatRef.current = persisted;
+      typingTargetRef.current = typingTargetFor(sel);
+      setInlineFormatState((state) => ({
+        ...state,
+        bold: persisted.bold,
+        italic: persisted.italic,
+        underline: persisted.underline,
+        fontFamily: persisted.fontFamily,
+        fontSizePt: persisted.fontSizePt,
+        alignment: persisted.alignment
+      }));
+      const { value } = setEmptyFieldTypingFormat(sel.map, persisted);
+      if (value === sel.value) return true;
+      recordPreEditSelection(sel);
+      markPending();
+      commitField(actions, sel.src, value);
+      restoreRangeAfterRepaint(sel, 0, 0);
+      return true;
+    },
+    [
+      actions,
+      docStyle.style,
+      markPending,
+      recordPreEditSelection,
+      restoreRangeAfterRepaint
+    ]
+  );
+
   // Bold/italic/underline with a COLLAPSED caret arms the next-typing format
   // instead of doing nothing, the way every word processor treats ⌘B before you
   // start typing. Ranged selections still rewrite the marks in place. Every
@@ -1548,11 +1684,13 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
         fontSizePt: char?.fontSizePt ?? defaultFontSizeForField(sel.src, docStyle.style),
         alignment: char?.alignment ?? defaultAlignmentForField(sel.src, docStyle.style)
       };
-      typingFormatRef.current = { ...base, [mark]: !base[mark] };
+      const next = { ...base, [mark]: !base[mark] };
+      if (commitEmptyTypingFormat(sel, next)) return;
+      typingFormatRef.current = next;
       typingTargetRef.current = typingTargetFor(sel);
       setInlineFormatState((state) => ({ ...state, [mark]: !base[mark] }));
     },
-    [commitToggleMark, docStyle.style, marksAllowedIn]
+    [commitEmptyTypingFormat, commitToggleMark, docStyle.style, marksAllowedIn]
   );
 
   const commitFontFamily = useCallback(
@@ -1714,7 +1852,7 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
         if (selection.dEnd > selection.dStart) commitFontFamily(selection, fontFamily);
         else {
           const char = selection.map.chars[Math.max(0, Math.min(selection.dStart - 1, selection.map.chars.length - 1))];
-          typingFormatRef.current = {
+          const next: TypingFormat = {
             bold: typingFormatRef.current?.bold ?? char?.bold ?? false,
             italic: typingFormatRef.current?.italic ?? char?.italic ?? false,
             underline: typingFormatRef.current?.underline ?? char?.underline ?? false,
@@ -1722,6 +1860,8 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
             fontSizePt: typingFormatRef.current?.fontSizePt ?? char?.fontSizePt ?? defaultFontSizeForField(selection.src, docStyle.style),
             alignment: typingFormatRef.current?.alignment ?? char?.alignment ?? defaultAlignmentForField(selection.src, docStyle.style)
           };
+          if (commitEmptyTypingFormat(selection, next)) return;
+          typingFormatRef.current = next;
           typingTargetRef.current = typingTargetFor(selection);
           setInlineFormatState((state) => ({ ...state, fontFamily }));
         }
@@ -1740,7 +1880,7 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
         if (selection.dEnd > selection.dStart) commitFontSize(selection, fontSizePt);
         else {
           const char = selection.map.chars[Math.max(0, Math.min(selection.dStart - 1, selection.map.chars.length - 1))];
-          typingFormatRef.current = {
+          const next: TypingFormat = {
             bold: typingFormatRef.current?.bold ?? char?.bold ?? false,
             italic: typingFormatRef.current?.italic ?? char?.italic ?? false,
             underline: typingFormatRef.current?.underline ?? char?.underline ?? false,
@@ -1748,6 +1888,8 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
             fontSizePt,
             alignment: typingFormatRef.current?.alignment ?? char?.alignment ?? defaultAlignmentForField(selection.src, docStyle.style)
           };
+          if (commitEmptyTypingFormat(selection, next)) return;
+          typingFormatRef.current = next;
           typingTargetRef.current = typingTargetFor(selection);
           setInlineFormatState((state) => ({ ...state, fontSizePt }));
         }
@@ -1759,7 +1901,26 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
         // field rather than to the selected characters.
         if (target.kind === "cross") {
           commitRangesFormatting(target.ranges, (range) => setAlignment(range.map, alignment).value);
-        } else commitAlignment(target.selection, alignment);
+        } else {
+          const selection = target.selection;
+          if (selection.map.chars.length === 0 && selection.dStart === selection.dEnd) {
+            const stored = typingFormatForEmptyField(selection.map);
+            commitEmptyTypingFormat(selection, {
+              bold: typingFormatRef.current?.bold ?? stored?.bold ?? false,
+              italic: typingFormatRef.current?.italic ?? stored?.italic ?? false,
+              underline: typingFormatRef.current?.underline ?? stored?.underline ?? false,
+              fontFamily:
+                typingFormatRef.current?.fontFamily ??
+                stored?.fontFamily ??
+                docStyle.style.fontFamily,
+              fontSizePt:
+                typingFormatRef.current?.fontSizePt ??
+                stored?.fontSizePt ??
+                defaultFontSizeForField(selection.src, docStyle.style),
+              alignment
+            });
+          } else commitAlignment(selection, alignment);
+        }
       },
       setParagraphLineHeight: (lineHeight) => {
         const target = commandTarget();
@@ -1912,6 +2073,7 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
       commandTarget,
       commitAlignment,
       commitClearFormatting,
+      commitEmptyTypingFormat,
       commitFontFamily,
       commitFontSize,
       commitHistory,
@@ -2179,6 +2341,10 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
         commitReplace(sel, sel.dStart, sel.dEnd, intent.text);
       } else if (intent.kind === "paste") {
         commitPaste(sel, sel.dStart, sel.dEnd, intent.fragment);
+      } else if (intent.kind === "pasteParagraphs") {
+        if (!commitParagraphPaste(sel, intent.fragments)) {
+          commitPaste(sel, sel.dStart, sel.dEnd, intent.fragments.join("\n"));
+        }
       } else if (intent.kind === "deleteBack" || intent.kind === "deleteFwd") {
         // Held Backspace/Delete replays through here, so it has to step over
         // authored indentation exactly as the live keystroke does.
@@ -2227,6 +2393,7 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
     commitCrossFieldIntent,
     commitIndent,
     commitParagraphOutdent,
+    commitParagraphPaste,
     commitPaste,
     commitReplace,
     docVersion,
@@ -2259,11 +2426,13 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
     commitParagraphOutdent,
     indentWidthAt,
     commitPaste,
+    commitParagraphPaste,
     onEnter: commitEnter,
     commitMergeBullet,
     commitToggleMark: applyMark,
     commitCrossFieldIntent,
-    crossFieldPlainText,
+    selectionClipboardHtml,
+    crossFieldClipboard,
     commitClearFormatting,
     commitHistory,
     onZoomShortcut: handleZoomShortcut,

@@ -56,6 +56,28 @@ assert.equal(merged.sections[0].items.length, 1, "Backspace at the next row star
 assert.equal(merged.sections[0].items[0].bullets[0].text, "Front endBack end", "merge restores the original paragraph text");
 assert.deepEqual(base.sections[0].items[0].bullets[0].text, "Front endBack end", "the reducer does not mutate its input");
 
+const pastedParagraphs = reduceResumeData(base, {
+  type: "replaceBulletParagraphs",
+  sectionId: "summary",
+  entryId: "paragraph-1",
+  bulletId: "summary-text-1",
+  values: [
+    "<space-before=8>Front end</space-before>",
+    "<space-after=12>Middle</space-after>",
+    "Back end"
+  ]
+});
+assert.equal(pastedParagraphs.sections[0].items.length, 3);
+assert.deepEqual(
+  pastedParagraphs.sections[0].items.map((entry) => entry.bullets[0].text),
+  [
+    "<space-before=8>Front end</space-before>",
+    "<space-after=12>Middle</space-after>",
+    "Back end"
+  ],
+  "rich multi-paragraph paste inserts separate summary paragraphs in one edit"
+);
+
 const skillsBase = {
   ...base,
   sections: [

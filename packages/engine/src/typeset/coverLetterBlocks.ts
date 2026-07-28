@@ -28,7 +28,6 @@ export function buildCoverLetterVerticalStream(
   const family = documentFontFamily(style.fontFamily);
   const size = style.baseFontSizePt;
   const tracking = style.letterSpacingPt;
-  const paragraphGap = style.bulletGapPt;
   const bodyAlign = (
     ["justify", "center", "right"].includes(style.bodyAlign) ? style.bodyAlign : "left"
   ) as ParagraphAlign;
@@ -56,7 +55,7 @@ export function buildCoverLetterVerticalStream(
       leading,
       index === 0
         ? header.length ? leading + style.headerSectionGapPt + spaceBeforePt : spaceBeforePt
-        : leading + paragraphGap + previousSpaceAfterPt + spaceBeforePt,
+        : leading + previousSpaceAfterPt + spaceBeforePt,
       false,
       family,
       tracking,
@@ -71,7 +70,11 @@ export function buildCoverLetterVerticalStream(
         ? paragraphSpacing.lineHeight ?? undefined
         : undefined
     );
-    if (index > 0 && lines.length) lines[0].keepWithPrev = false;
+    if (lines.length) {
+      lines[0].paragraphSpaceBefore = spaceBeforePt;
+      lines[lines.length - 1].paragraphSpaceAfter = spaceAfterPt;
+      if (index > 0) lines[0].keepWithPrev = false;
+    }
     out.push(...lines);
     previousSpaceAfterPt = spaceAfterPt;
   });

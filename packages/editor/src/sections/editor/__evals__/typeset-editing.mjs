@@ -10,25 +10,34 @@ import {
   buildDisplayMap,
   expandToLinkRun,
   inlineFragmentForRange,
+  replaceWithParagraphFragments,
   replaceWithLink,
   setAlignment,
   setLineHeightRanges,
   setParagraphLineHeight,
   setParagraphSpaceAfter,
   setParagraphSpaceBefore,
+  setEmptyFieldTypingFormat,
   setFontSize,
+  splitValueAt,
   suppressedAutoLinkValue,
   trailingLinkWordAt,
   typingFormatForDeletedRange
 } from "../inlineTextEditing.ts";
 import {
+  clipboardParagraphSpacePt,
+  clipboardHtmlForRanges,
   decodeInlineClipboard,
   encodeInlineClipboard
 } from "../clipboardFormatting.ts";
 import { commitField, valueForField } from "../resumeFieldAdapter.ts";
 import { anchorsFromDoc } from "../typesetStructure.ts";
 import { FONT_FAMILY_OPTIONS } from "@typeset/engine/lib/documentStyle.ts";
-import { clearInlineOverride, effectiveFieldFont } from "@typeset/engine/lib/inlineMarksText.ts";
+import {
+  clearInlineOverride,
+  effectiveFieldFont,
+  paragraphSpacingFromInlineMarks
+} from "@typeset/engine/lib/inlineMarksText.ts";
 import { automaticLinkHref } from "@typeset/engine/lib/links.ts";
 
 const skillsSrc = { kind: "skillsRow", sectionId: "skills", entryId: "row" };
@@ -119,6 +128,115 @@ assert.equal(mixedPasteMap.chars[1].fontFamily, "source-serif");
 assert.equal(mixedPasteMap.chars[2].fontFamily, "source-sans");
 assert.equal(mixedPasteMap.chars[2].fontSizePt, 24);
 assert.equal(mixedPasteMap.chars[2].bold, true);
+assert.equal(clipboardParagraphSpacePt("8pt"), 8);
+assert.equal(
+  clipboardParagraphSpacePt("16px"),
+  12,
+  "Google Docs CSS pixel margins convert to physical paragraph points"
+);
+
+// External rich copy is built from logical fields, never the engine's visual
+// line divs. A destination with a different measure may reflow the paragraph,
+// but it must not inherit Typeset's old wrap points as separate blocks.
+{
+  const paragraph = buildDisplayMap(
+    "<space-before=8><space-after=12><font=arimo><b>A paragraph that wraps wherever the destination needs.</b></font></space-after></space-before>",
+    { preserveWhitespace: true }
+  );
+  const html = clipboardHtmlForRanges([
+    {
+      map: paragraph,
+      dStart: 0,
+      dEnd: paragraph.chars.length,
+      defaultFontFamily: "tinos",
+      defaultFontSizePt: 10,
+      defaultAlignment: "left"
+    }
+  ]);
+  assert.equal(
+    html,
+    '<p style="margin-top: 8pt; margin-right: 0; margin-bottom: 12pt; margin-left: 0; text-align: left"><span style="font-family: Arial; font-size: 10pt; font-weight: 700; white-space: pre-wrap">A paragraph that wraps wherever the destination needs.</span></p>'
+  );
+  assert.equal(html.includes("&nbsp;"), false, "paragraph spacing does not create a blank paragraph");
+  assert.equal(
+    (html.match(/<p /g) ?? []).length,
+    1,
+    "one logical paragraph remains one external paragraph when it carries spacing"
+  );
+
+  const second = buildDisplayMap("<i>Second logical paragraph.</i>", {
+    preserveWhitespace: true
+  });
+  const crossField = clipboardHtmlForRanges([
+    {
+      map: paragraph,
+      dStart: 0,
+      dEnd: paragraph.chars.length,
+      defaultFontFamily: "tinos",
+      defaultFontSizePt: 10,
+      defaultAlignment: "left"
+    },
+    {
+      map: second,
+      dStart: 0,
+      dEnd: second.chars.length,
+      defaultFontFamily: "tinos",
+      defaultFontSizePt: 10,
+      defaultAlignment: "left"
+    }
+  ]);
+  assert.equal(
+    (crossField.match(/>A paragraph that wraps wherever the destination needs\.<\/span>/g) ?? []).length,
+    1,
+    "one model paragraph remains one clipboard block"
+  );
+  assert.equal(
+    (crossField.match(/<p style="/g) ?? []).length,
+    2,
+    "cross-field copy emits one block per logical field"
+  );
+
+  const automaticLink = buildDisplayMap("Portfolio: example.com", {
+    preserveWhitespace: true
+  });
+  const automaticLinkHtml = clipboardHtmlForRanges([
+    {
+      map: automaticLink,
+      dStart: 0,
+      dEnd: automaticLink.chars.length,
+      defaultFontFamily: "tinos",
+      defaultFontSizePt: 10,
+      defaultAlignment: "left"
+    }
+  ]);
+  assert.match(
+    automaticLinkHtml,
+    /<a href="https:\/\/example\.com\/?"><span[^>]*>example\.com<\/span><\/a>/,
+    "auto-detected editor links become real outbound HTML anchors"
+  );
+}
+
+{
+  const target = buildDisplayMap("BeforeAfter", { preserveWhitespace: true });
+  const replacement = replaceWithParagraphFragments(
+    target,
+    6,
+    6,
+    [
+      "<space-before=8><b>First</b></space-before>",
+      "<space-after=12><i>Second</i></space-after>"
+    ]
+  );
+  assert.equal(replacement.values.length, 2);
+  const first = buildDisplayMap(replacement.values[0], { preserveWhitespace: true });
+  const second = buildDisplayMap(replacement.values[1], { preserveWhitespace: true });
+  assert.equal(first.display, "BeforeFirst");
+  assert.equal(second.display, "SecondAfter");
+  assert(first.chars.slice(6).every((char) => char.bold));
+  assert(second.chars.slice(0, 6).every((char) => char.italic));
+  assert.equal(second.chars[0].spaceAfterPt, 12);
+  assert.equal(replacement.lastCaretDisplayIndex, 6);
+}
 assert.equal(mixedPasteMap.chars[3].italic, true);
 
 const boundedSizeSource = buildDisplayMap("ABC", { preserveWhitespace: true });
@@ -226,6 +344,122 @@ const typedEmptyParagraphMap = buildDisplayMap(typedEmptyParagraph.value, {
 });
 assert(typedEmptyParagraphMap.chars.every((char) => char.lineHeight === 1.5));
 assert(typedEmptyParagraphMap.chars.every((char) => char.spaceBeforePt === 8));
+
+const defaultSpacedParagraph = buildDisplayMap(
+  "<space-before=8>Paragraph</space-before>",
+  { preserveWhitespace: true }
+);
+const defaultSpacedSplitAtEnd = splitValueAt(
+  defaultSpacedParagraph,
+  defaultSpacedParagraph.chars.length
+);
+assert.equal(
+  paragraphSpacingFromInlineMarks(defaultSpacedSplitAtEnd.before).spaceBeforePt,
+  8
+);
+assert.equal(
+  paragraphSpacingFromInlineMarks(defaultSpacedSplitAtEnd.after).spaceBeforePt,
+  8,
+  "Enter at the end keeps the explicit default on the new empty paragraph"
+);
+const defaultSpacedSplitAtStart = splitValueAt(defaultSpacedParagraph, 0);
+assert.equal(
+  paragraphSpacingFromInlineMarks(defaultSpacedSplitAtStart.before).spaceBeforePt,
+  8,
+  "Enter at the start keeps the explicit default on the empty first paragraph"
+);
+assert.equal(
+  paragraphSpacingFromInlineMarks(defaultSpacedSplitAtStart.after).spaceBeforePt,
+  8
+);
+
+const fullyFormattedParagraph = buildDisplayMap(
+  "<space-before=8><font=source-sans><size=14><b><i><u>Styled paragraph</u></i></b></size></font></space-before>",
+  { preserveWhitespace: true }
+);
+const formattedSplit = splitValueAt(
+  fullyFormattedParagraph,
+  fullyFormattedParagraph.chars.length
+);
+const typedAfterFormattedSplit = applyEdit(
+  buildDisplayMap(formattedSplit.after, { preserveWhitespace: true }),
+  0,
+  0,
+  "Next"
+);
+const typedAfterFormattedSplitMap = buildDisplayMap(
+  typedAfterFormattedSplit.value,
+  { preserveWhitespace: true }
+);
+assert(
+  typedAfterFormattedSplitMap.chars.every(
+    (char) =>
+      char.bold &&
+      char.italic &&
+      char.underline &&
+      char.fontFamily === "source-sans" &&
+      char.fontSizePt === 14 &&
+      char.spaceBeforePt === 8
+  ),
+  "typing after Enter preserves the preceding paragraph's active formatting"
+);
+
+const linkedParagraph = buildDisplayMap(
+  "<link=https%3A%2F%2Fexample.com>example.com</link>",
+  { preserveWhitespace: true }
+);
+const linkedSplit = splitValueAt(linkedParagraph, linkedParagraph.chars.length);
+const typedAfterLinkedSplit = applyEdit(
+  buildDisplayMap(linkedSplit.after, { preserveWhitespace: true }),
+  0,
+  0,
+  "Not linked"
+);
+assert(
+  buildDisplayMap(typedAfterLinkedSplit.value, { preserveWhitespace: true })
+    .chars.every((char) => char.linkHref === null),
+  "Enter preserves typography without extending a hyperlink into the next paragraph"
+);
+
+const reformattedEmptyParagraph = setEmptyFieldTypingFormat(
+  buildDisplayMap(formattedSplit.after, { preserveWhitespace: true }),
+  {
+    bold: false,
+    italic: true,
+    underline: false,
+    fontFamily: "tinos",
+    fontSizePt: 18,
+    alignment: "right"
+  }
+);
+const returnedEmptyParagraphMap = buildDisplayMap(
+  reformattedEmptyParagraph.value,
+  { preserveWhitespace: true }
+);
+assert.equal(returnedEmptyParagraphMap.chars.length, 0);
+const typedAfterReturning = applyEdit(
+  returnedEmptyParagraphMap,
+  0,
+  0,
+  "Later"
+);
+const typedAfterReturningMap = buildDisplayMap(
+  typedAfterReturning.value,
+  { preserveWhitespace: true }
+);
+assert(
+  typedAfterReturningMap.chars.every(
+    (char) =>
+      !char.bold &&
+      char.italic &&
+      !char.underline &&
+      char.fontFamily === "tinos" &&
+      char.fontSizePt === 18 &&
+      char.alignment === "right" &&
+      char.spaceBeforePt === 8
+  ),
+  "formatting an empty paragraph persists after the caret leaves and returns"
+);
 assert(typedEmptyParagraphMap.chars.every((char) => char.spaceAfterPt === 12));
 const linkedEmptyParagraphMap = buildDisplayMap(
   replaceWithLink(
@@ -240,6 +474,22 @@ const linkedEmptyParagraphMap = buildDisplayMap(
 assert(linkedEmptyParagraphMap.chars.every((char) => char.lineHeight === 1.5));
 assert(linkedEmptyParagraphMap.chars.every((char) => char.spaceBeforePt === 8));
 assert(linkedEmptyParagraphMap.chars.every((char) => char.spaceAfterPt === 12));
+const explicitlySpacedPasteMap = buildDisplayMap(
+  applyInlineFragment(
+    buildDisplayMap(emptyParagraph.value, { preserveWhitespace: true }),
+    0,
+    0,
+    "<space-before=4><space-after=6>From Docs</space-after></space-before>"
+  ).value,
+  { preserveWhitespace: true }
+);
+assert(
+  explicitlySpacedPasteMap.chars.every((char) => char.spaceBeforePt === 4),
+  "explicit source paragraph spacing wins over an empty target's default"
+);
+assert(
+  explicitlySpacedPasteMap.chars.every((char) => char.spaceAfterPt === 6)
+);
 const centeredEmptyParagraph = setAlignment(
   buildDisplayMap(emptyParagraph.value, { preserveWhitespace: true }),
   "center"
@@ -746,30 +996,35 @@ for (const isALink of ["example.com", "sub.example.co.uk", "example.io/resume.pd
   assert.equal(indentStep(rung1, 0, 0, UNIT, "out").shift, -UNIT.length);
 }
 
-// Selection shading covers engine-owned line leading, not paragraph gaps.
+// Selection shading covers engine-owned line leading and authored paragraph spacing.
 {
-  const { selectionBandBottomOffset } = await import("../selectionHighlight.ts");
+  const { selectionBandBottomOffset, selectionBandTopOffset } = await import("../selectionHighlight.ts");
   // A 12pt ink box that owns 20pt of line spacing.
-  const line = { top: 100, bottom: 112, leading: 20 };
+  const line = { top: 100, bottom: 112, leading: 20, spaceAfter: 6 };
   const nextLine = (top) => ({ top, selected: true, samePage: true });
 
+  assert.equal(selectionBandTopOffset(8), -8, "authored space before extends above the first line");
+  assert.equal(selectionBandTopOffset(null), 0);
   assert.equal(
     selectionBandBottomOffset(line, nextLine(120)),
     8,
-    "the band covers the line's own spacing, not just its ink"
+    "a selected next line caps the band so translucent highlights tile"
   );
   assert.equal(
     selectionBandBottomOffset(line, null),
-    8,
-    "the last line of a paragraph gets the same band as every other line"
+    14,
+    "the last selected paragraph paints its authored after-space"
   );
   assert.equal(
-    selectionBandBottomOffset(line, { top: 120, selected: false, samePage: true }),
-    8,
-    "an unselected neighbour does not shrink it: the spacing is this line's own"
+    selectionBandBottomOffset(line, { top: 140, selected: false, samePage: true }),
+    14,
+    "an unselected neighbour does not shrink paragraph spacing this line owns"
   );
-  // A distant next block must not extend this line's selection band.
-  assert.equal(selectionBandBottomOffset(line, nextLine(160)), 8);
+  assert.equal(
+    selectionBandBottomOffset(line, nextLine(160)),
+    48,
+    "selected paragraphs paint continuously through their complete junction"
+  );
 
   // Overlapping selected lines tile instead of double-painting translucent bands.
   assert.equal(
@@ -779,8 +1034,8 @@ for (const isALink of ["example.com", "sub.example.co.uk", "example.io/resume.pd
   );
   assert.equal(
     selectionBandBottomOffset(line, { top: 108, selected: false, samePage: true }),
-    8,
-    "but only against a line that is actually painting a band"
+    -4,
+    "an unselected neighbour still bounds the highlight away from its ink"
   );
   assert.equal(
     selectionBandBottomOffset(line, { top: 900, selected: true, samePage: false }),
@@ -788,9 +1043,9 @@ for (const isALink of ["example.com", "sub.example.co.uk", "example.io/resume.pd
     "a selection never bridges a page break"
   );
 
-  // Structural rows without leading shade only their ink box.
-  const structural = { top: 100, bottom: 112, leading: null };
-  assert.equal(selectionBandBottomOffset(structural, nextLine(130)), 0);
+  // Structural rows without owned leading still join the next selected row.
+  const structural = { top: 100, bottom: 112, leading: null, spaceAfter: null };
+  assert.equal(selectionBandBottomOffset(structural, nextLine(130)), 18);
   assert.equal(selectionBandBottomOffset(structural, nextLine(106)), -6, "and still tiles");
 }
 

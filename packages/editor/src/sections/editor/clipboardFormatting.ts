@@ -1,7 +1,18 @@
 import type { DocumentFontFamily } from "@typeset/engine/typeset/fontRegistry.ts";
 import { FONT_FAMILY_OPTIONS } from "@typeset/engine/lib/documentStyle.ts";
-import { encodeLinkHref, normalizeLinkDestination } from "@typeset/engine/lib/links.ts";
-import { inlineFontSizePt } from "@typeset/engine/lib/inlineMarksText.ts";
+import {
+  automaticLinkHref,
+  encodeLinkHref,
+  normalizeLinkDestination
+} from "@typeset/engine/lib/links.ts";
+import {
+  inlineFontSizePt,
+  paragraphSpacePt,
+  paragraphSpacingFromInlineMarks,
+  type FieldAlignment
+} from "@typeset/engine/lib/inlineMarksText.ts";
+
+import type { DisplayMap } from "./inlineTextEditing.ts";
 
 export const TYPESET_INLINE_CLIPBOARD_MIME = "application/x-typeset-inline+json";
 
@@ -68,6 +79,123 @@ export function decodeInlineClipboard(payload: string): string | null {
   }
 }
 
+export type ClipboardRange = {
+  map: DisplayMap;
+  dStart: number;
+  dEnd: number;
+  defaultFontFamily: DocumentFontFamily;
+  defaultFontSizePt: number;
+  defaultAlignment: FieldAlignment;
+};
+
+const escapeHtml = (value: string): string =>
+  value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+
+const escapeAttribute = (value: string): string =>
+  escapeHtml(value).replace(/"/g, "&quot;");
+
+function externalFontFamily(family: DocumentFontFamily): string {
+  const option = FONT_FAMILY_OPTIONS.find((candidate) => candidate.value === family);
+  return option?.metricsOf ?? option?.label ?? family;
+}
+
+function inlineHtmlForRange(range: ClipboardRange): string {
+  const chunks: string[] = [];
+  let currentKey = "";
+  let currentText = "";
+  const automaticHrefs: Array<string | null> = range.map.chars.map(() => null);
+  let wordStart = 0;
+  for (let index = 0; index <= range.map.chars.length; index += 1) {
+    const char = range.map.display[index];
+    if (index < range.map.chars.length && char !== " " && char !== "\n") continue;
+    const word = range.map.chars.slice(wordStart, index);
+    if (
+      word.length &&
+      word.every((candidate) => candidate.linkHref === null && !candidate.linkSuppressed)
+    ) {
+      const href = automaticLinkHref(range.map.display.slice(wordStart, index));
+      if (href) {
+        for (let cursor = wordStart; cursor < index; cursor += 1) {
+          automaticHrefs[cursor] = href;
+        }
+      }
+    }
+    wordStart = index + 1;
+  }
+
+  const flush = () => {
+    if (!currentText) return;
+    const [family, size, bold, italic, underline, href] = JSON.parse(currentKey) as [
+      string,
+      number,
+      boolean,
+      boolean,
+      boolean,
+      string | null
+    ];
+    const styles = [
+      `font-family: ${family}`,
+      `font-size: ${size}pt`,
+      ...(bold ? ["font-weight: 700"] : []),
+      ...(italic ? ["font-style: italic"] : []),
+      ...(underline ? ["text-decoration: underline"] : []),
+      "white-space: pre-wrap"
+    ];
+    const content = `<span style="${styles.join("; ")}">${currentText}</span>`;
+    chunks.push(href ? `<a href="${escapeAttribute(href)}">${content}</a>` : content);
+    currentText = "";
+  };
+
+  for (let index = range.dStart; index < range.dEnd; index += 1) {
+    const char = range.map.chars[index];
+    if (!char) continue;
+    const key = JSON.stringify([
+      externalFontFamily(char.fontFamily ?? range.defaultFontFamily),
+      char.fontSizePt ?? range.defaultFontSizePt,
+      char.bold,
+      char.italic,
+      char.underline,
+      char.linkHref ?? automaticHrefs[index]
+    ]);
+    if (currentText && key !== currentKey) flush();
+    currentKey = key;
+    currentText += escapeHtml(range.map.display[index] ?? "").replace(/\r?\n/g, "<br>");
+  }
+  flush();
+  return chunks.join("");
+}
+
+// External copy follows the logical document, not the absolutely positioned
+// line divs used to paint it. Destination editors can therefore reflow one
+// paragraph to their own measure instead of treating every Typeset wrap point
+// as a hard block boundary.
+export function clipboardHtmlForRanges(ranges: readonly ClipboardRange[]): string {
+  if (!ranges.length) return "";
+  const blocks: string[] = [];
+
+  for (const range of ranges) {
+    const fullParagraph =
+      range.dStart === 0 && range.dEnd === range.map.chars.length;
+    const spacing = fullParagraph
+      ? paragraphSpacingFromInlineMarks(range.map.source)
+      : { spaceBeforePt: null, spaceAfterPt: null };
+
+    const inline = inlineHtmlForRange(range);
+    const alignment =
+      range.map.chars[range.dStart]?.alignment ?? range.defaultAlignment;
+    const asBlock = ranges.length > 1 || fullParagraph;
+    blocks.push(
+      asBlock
+        ? `<p style="margin-top: ${spacing.spaceBeforePt ?? 0}pt; margin-right: 0; margin-bottom: ${spacing.spaceAfterPt ?? 0}pt; margin-left: 0; text-align: ${alignment}">${inline || "<br>"}</p>`
+        : inline
+    );
+  }
+  return blocks.join("");
+}
+
 // Names beyond a family's own label that should resolve to it. Two kinds:
 // internal CSS families the painter emits (so copying inside the editor
 // round-trips), and the proprietary families a bundled font is metrically
@@ -101,6 +229,15 @@ function parsedFontSize(value: string): number | null {
   if (!Number.isFinite(numeric)) return null;
   const points = match[2].toLowerCase() === "px" ? numeric * 0.75 : numeric;
   return inlineFontSizePt(points);
+}
+
+export function clipboardParagraphSpacePt(value: string): number | null {
+  const match = /^\s*(\d+(?:\.\d+)?)\s*(pt|px)\s*$/i.exec(value);
+  if (!match) return null;
+  const numeric = Number(match[1]);
+  if (!Number.isFinite(numeric)) return null;
+  const points = match[2].toLowerCase() === "px" ? numeric * 0.75 : numeric;
+  return paragraphSpacePt(points);
 }
 
 function styleForElement(element: HTMLElement, inherited: RichStyle): RichStyle {
@@ -145,7 +282,9 @@ function wrapText(text: string, style: RichStyle): string {
 // Convert clipboard HTML into the editor's small, allowlisted inline grammar.
 // DOMParser gives us text nodes only; scripts, event handlers, arbitrary CSS,
 // unsupported fonts, and unknown markup never cross into document state.
-export function inlineFragmentFromHtml(html: string): string | null {
+const BLOCK_SEPARATOR = "\uFDD0";
+
+function fragmentValueFromHtml(html: string): string | null {
   if (!html || html.length > MAX_INLINE_CLIPBOARD_CHARS) return null;
   const document = new DOMParser().parseFromString(html, "text/html");
 
@@ -159,13 +298,45 @@ export function inlineFragmentFromHtml(html: string): string | null {
     let value = Array.from(node.childNodes)
       .map((child) => visit(child, style))
       .join("");
-    if (BLOCK_TAGS.has(node.tagName) && value && !value.endsWith("\n")) value += "\n";
+    if (BLOCK_TAGS.has(node.tagName)) {
+      // A wrapper such as Google Docs' docs-internal-guid container may contain
+      // several real paragraph blocks. Those descendants already own the
+      // separators and paragraph margins; wrapping the container again would
+      // add a false extra paragraph.
+      if (value.includes(BLOCK_SEPARATOR)) return value;
+      // Google Docs represents paragraph before/after spacing as block margins.
+      // Convert those physical values into the editor's explicit paragraph
+      // marks before reducing the block to its textual separator.
+      const spaceBeforePt = clipboardParagraphSpacePt(
+        node.style.marginTop || node.style.marginBlockStart
+      );
+      const spaceAfterPt = clipboardParagraphSpacePt(
+        node.style.marginBottom || node.style.marginBlockEnd
+      );
+      if ((spaceAfterPt ?? 0) > 0) {
+        value = `<space-after=${spaceAfterPt}>${value}</space-after>`;
+      }
+      if ((spaceBeforePt ?? 0) > 0) {
+        value = `<space-before=${spaceBeforePt}>${value}</space-before>`;
+      }
+      value += BLOCK_SEPARATOR;
+    }
     return value;
   };
 
   const value = Array.from(document.body.childNodes)
     .map((node) => visit(node, PLAIN_STYLE))
     .join("")
-    .replace(/\n+$/, "");
+    .replace(new RegExp(`${BLOCK_SEPARATOR}+$`), "");
   return value || null;
+}
+
+export function inlineFragmentFromHtml(html: string): string | null {
+  return fragmentValueFromHtml(html)?.split(BLOCK_SEPARATOR).join("\n") ?? null;
+}
+
+export function paragraphFragmentsFromHtml(html: string): string[] | null {
+  const value = fragmentValueFromHtml(html);
+  if (!value || !value.includes(BLOCK_SEPARATOR)) return null;
+  return value.split(BLOCK_SEPARATOR);
 }

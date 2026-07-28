@@ -9,18 +9,21 @@ import {
   PAGE_MARGIN_BOUNDS_PT,
   pageMarginsForValues
 } from "./pageMargins.ts";
-import { stripInlineMarks } from "./inlineMarksText.ts";
+import {
+  paragraphSpacingFromInlineMarks,
+  stripInlineMarks
+} from "./inlineMarksText.ts";
 import { newSummaryEntry, newSection, type ResumeData } from "./resumeData.ts";
 
 export const COVER_LETTER_FILE_MAGIC = "typeset-cover-letter" as const;
-export const COVER_LETTER_FILE_SCHEMA_VERSION = 2 as const;
+export const COVER_LETTER_FILE_SCHEMA_VERSION = 1 as const;
 export const MAX_COVER_LETTER_FILE_BYTES = 2 * 1024 * 1024;
+export const DEFAULT_COVER_LETTER_SPACE_BEFORE_PT = 8;
 
 export type CoverLetterStyle = {
   fontFamily: FontFamily;
   fontSizePt: number;
   lineHeight: number;
-  paragraphGapPt: number;
   marginTopPt: number;
   marginRightPt: number;
   marginBottomPt: number;
@@ -38,7 +41,6 @@ export const COVER_LETTER_STYLE_DEFAULTS: CoverLetterStyle = {
   fontFamily: "carlito",
   fontSizePt: 11,
   lineHeight: 2,
-  paragraphGapPt: 8,
   marginTopPt: 36,
   marginRightPt: 54,
   marginBottomPt: 36,
@@ -46,7 +48,7 @@ export const COVER_LETTER_STYLE_DEFAULTS: CoverLetterStyle = {
   contactDivider: "|"
 };
 
-export type CoverLetterFileV2 = {
+export type CoverLetterFileV1 = {
   format: typeof COVER_LETTER_FILE_MAGIC;
   schemaVersion: typeof COVER_LETTER_FILE_SCHEMA_VERSION;
   document: {
@@ -88,7 +90,6 @@ const STYLE_KEYS = [
   "fontFamily",
   "fontSizePt",
   "lineHeight",
-  "paragraphGapPt",
   "marginTopPt",
   "marginRightPt",
   "marginBottomPt",
@@ -138,10 +139,9 @@ function requireNumber(
   return value;
 }
 
-export function parseCoverLetterStyle(value: unknown, legacy = false): CoverLetterStyle {
+export function parseCoverLetterStyle(value: unknown): CoverLetterStyle {
   const style = requireRecord(value, "invalid-style", "Cover-letter style");
-  const keys = legacy ? STYLE_KEYS.filter((key) => key !== "contactDivider") : STYLE_KEYS;
-  requireExactKeys(style, keys, "invalid-style", "Cover-letter style");
+  requireExactKeys(style, STYLE_KEYS, "invalid-style", "Cover-letter style");
   const fontFamilies = FONT_FAMILY_OPTIONS.map((option) => option.value);
   if (typeof style.fontFamily !== "string" || !fontFamilies.includes(style.fontFamily as FontFamily)) {
     fail("invalid-style", "Cover-letter style fontFamily is unsupported.");
@@ -150,19 +150,16 @@ export function parseCoverLetterStyle(value: unknown, legacy = false): CoverLett
     fontFamily: style.fontFamily as FontFamily,
     fontSizePt: requireNumber(style.fontSizePt, "fontSizePt", 9, 13),
     lineHeight: requireNumber(style.lineHeight, "lineHeight", 1, 2),
-    paragraphGapPt: requireNumber(style.paragraphGapPt, "paragraphGapPt", 0, 36),
     marginTopPt: requireNumber(style.marginTopPt, "marginTopPt", PAGE_MARGIN_BOUNDS_PT.min, PAGE_MARGIN_BOUNDS_PT.max),
     marginRightPt: requireNumber(style.marginRightPt, "marginRightPt", PAGE_MARGIN_BOUNDS_PT.min, PAGE_MARGIN_BOUNDS_PT.max),
     marginBottomPt: requireNumber(style.marginBottomPt, "marginBottomPt", PAGE_MARGIN_BOUNDS_PT.min, PAGE_MARGIN_BOUNDS_PT.max),
     marginLeftPt: requireNumber(style.marginLeftPt, "marginLeftPt", PAGE_MARGIN_BOUNDS_PT.min, PAGE_MARGIN_BOUNDS_PT.max),
     contactDivider:
-      legacy
-        ? COVER_LETTER_STYLE_DEFAULTS.contactDivider
-        : typeof style.contactDivider === "string" &&
-            style.contactDivider.length >= 1 &&
-            style.contactDivider.length <= 2
-          ? style.contactDivider
-          : fail("invalid-style", "Cover-letter style contactDivider must be one or two characters.")
+      typeof style.contactDivider === "string" &&
+          style.contactDivider.length >= 1 &&
+          style.contactDivider.length <= 2
+        ? style.contactDivider
+        : fail("invalid-style", "Cover-letter style contactDivider must be one or two characters.")
   };
 }
 
@@ -255,9 +252,16 @@ export function coverLetterParagraphs(data: ResumeData): string[] {
 export function parseCoverLetterText(text: string): ResumeData {
   const normalized = text.replace(/\r\n?/g, "\n").trim();
   const paragraphs = normalized
-    ? normalized.split(/\n[ \t]*\n+/).map((paragraph) => paragraph.trim())
+    ? normalized
+        .split(/\n[ \t]*\n+/)
+        .map((paragraph) => paragraph.trim())
     : [""];
-  return coverLetterResumeData(paragraphs);
+  const formatted = paragraphs.map((paragraph) =>
+    paragraphSpacingFromInlineMarks(paragraph).spaceBeforePt === null
+      ? `<space-before=${DEFAULT_COVER_LETTER_SPACE_BEFORE_PT}>${paragraph}</space-before>`
+      : paragraph
+  );
+  return coverLetterResumeData(formatted);
 }
 
 export function coverLetterPlainText(data: ResumeData): string {
@@ -283,7 +287,7 @@ export function coverLetterStyleToDocumentStyle(
     fontFamily: style.fontFamily,
     baseFontSizePt: style.fontSizePt,
     lineHeight: style.lineHeight,
-    bulletGapPt: style.paragraphGapPt,
+    bulletGapPt: 0,
     entryIndentPt: 0,
     entryEndIndentPt: 0,
     sectionRule: false,
@@ -305,7 +309,6 @@ export function documentStyleToCoverLetterStyle(style: DocumentStyle): CoverLett
     fontFamily: style.fontFamily,
     fontSizePt: style.baseFontSizePt,
     lineHeight: style.lineHeight,
-    paragraphGapPt: style.bulletGapPt,
     marginTopPt: style.pageMarginTopPt,
     marginRightPt: style.pageMarginRightPt,
     marginBottomPt: style.pageMarginBottomPt,
@@ -317,7 +320,7 @@ export function documentStyleToCoverLetterStyle(style: DocumentStyle): CoverLett
 export function createCoverLetterFile(
   data: ResumeData,
   style: CoverLetterStyle
-): CoverLetterFileV2 {
+): CoverLetterFileV1 {
   const paragraphs = validateParagraphs(coverLetterParagraphs(data));
   const validatedHeader = validateHeader({
     name: (data as Partial<ResumeData>).name,
@@ -354,7 +357,7 @@ export function parseCoverLetterFile(
   if (file.format !== COVER_LETTER_FILE_MAGIC) {
     fail("invalid-format", "This is not a Typeset .cover file.");
   }
-  if (file.schemaVersion !== 1 && file.schemaVersion !== COVER_LETTER_FILE_SCHEMA_VERSION) {
+  if (file.schemaVersion !== COVER_LETTER_FILE_SCHEMA_VERSION) {
     fail(
       "unsupported-version",
       `This cover letter uses unsupported schema version ${JSON.stringify(file.schemaVersion)}.`
@@ -367,21 +370,20 @@ export function parseCoverLetterFile(
     "Cover-letter file"
   );
   const document = requireRecord(file.document, "invalid-document", "Cover-letter document");
-  const legacy = file.schemaVersion === 1;
   requireExactKeys(
     document,
-    legacy ? ["paragraphs"] : ["header", "paragraphs"],
+    ["header", "paragraphs"],
     "invalid-document",
     "Cover-letter document"
   );
   const paragraphs = validateParagraphs(document.paragraphs);
   let header: { name: string; contact: string[] } | null = null;
-  if (!legacy && document.header !== null) {
+  if (document.header !== null) {
     header = validateHeader(document.header);
   }
   return {
     data: coverLetterResumeData(paragraphs, header),
-    style: parseCoverLetterStyle(file.style, legacy)
+    style: parseCoverLetterStyle(file.style)
   };
 }
 

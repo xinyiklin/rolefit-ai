@@ -65,8 +65,12 @@ export type VLine = {
   riseOverflow: number; // above the baseline
   dropOverflow: number; // below the baseline
   dist: number; // baseline distance from previous line in the stream
-  // Paragraph rows expose owned leading so selections exclude unrelated block gaps.
+  // Paragraph rows expose selection geometry independently of their calibrated
+  // junction distance. The editor can then paint authored paragraph spacing
+  // without trying to reverse-engineer it from neighbouring baselines.
   leading?: number;
+  paragraphSpaceBefore?: number;
+  paragraphSpaceAfter?: number;
   // Inline line-height adjusts the following junction without moving this baseline.
   afterDist?: number;
   // Pagination policy: "keep" lines may not start a page-break separation from
@@ -620,7 +624,7 @@ export function buildVerticalStream(schema: TypesetSchema, style: DocumentStyle)
           : J.bulletBullet * stretch * fontScale + gap("bulletGapPt"))
           + previousParagraphSpaceAfterPt
           + (paragraphSpacing.spaceBeforePt ?? 0);
-        paragraphLines(
+        const lines = paragraphLines(
           summaryText,
           sizes.small,
           geo.entryIndent + summaryIndent,
@@ -639,7 +643,12 @@ export function buildVerticalStream(schema: TypesetSchema, style: DocumentStyle)
           stripInlineMarks(summaryText).trim().length === 0
             ? paragraphSpacing.lineHeight ?? undefined
             : undefined
-        ).forEach(push);
+        );
+        if (lines.length) {
+          lines[0].paragraphSpaceBefore = paragraphSpacing.spaceBeforePt ?? 0;
+          lines[lines.length - 1].paragraphSpaceAfter = paragraphSpacing.spaceAfterPt ?? 0;
+        }
+        lines.forEach(push);
         previousParagraphSpaceAfterPt = paragraphSpacing.spaceAfterPt ?? 0;
         firstInSection = false;
         continue;
@@ -769,6 +778,8 @@ export function buildVerticalStream(schema: TypesetSchema, style: DocumentStyle)
         // First line carries the bullet marker (tiny math bullet at 25.53bp).
         // It shares the bullet's provenance so clicking it edits the bullet.
         if (lines.length) {
+          lines[0].paragraphSpaceBefore = paragraphSpacing.spaceBeforePt ?? 0;
+          lines[lines.length - 1].paragraphSpaceAfter = paragraphSpacing.spaceAfterPt ?? 0;
           const marker = {
             ...styledRun(
               "•",

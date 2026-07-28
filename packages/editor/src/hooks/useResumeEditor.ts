@@ -133,6 +133,13 @@ type Action =
   | { type: "mergeBulletUp"; sectionId: string; entryId: string; bulletId: string; joined: string }
   | { type: "splitSummaryParagraph"; sectionId: string; entryId: string; bulletId: string; before: string; after: string }
   | { type: "mergeSummaryParagraphUp"; sectionId: string; entryId: string; joined: string }
+  | {
+      type: "replaceBulletParagraphs";
+      sectionId: string;
+      entryId: string;
+      bulletId: string;
+      values: readonly string[];
+    }
   // One edit that spans several fields — a selection crossing paragraphs, or a
   // Select All. The steps run in order against the same document and land as a
   // SINGLE undo step, so one Ctrl+Z restores the whole document rather than
@@ -412,6 +419,38 @@ export function reduceResumeData(data: ResumeData, action: Action): ResumeData {
         return { ...section, items };
       });
 
+    case "replaceBulletParagraphs":
+      if (action.values.length < 2) return data;
+      return mapSection(data, action.sectionId, (section) => {
+        const entryIndex = section.items.findIndex((entry) => entry.id === action.entryId);
+        if (entryIndex < 0) return section;
+        const entry = section.items[entryIndex];
+        const bulletIndex = entry.bullets.findIndex((bullet) => bullet.id === action.bulletId);
+        if (bulletIndex < 0) return section;
+        if (section.type === "summary") {
+          const items = section.items.slice();
+          const bullets = entry.bullets.slice();
+          bullets[bulletIndex] = { ...bullets[bulletIndex], text: action.values[0] };
+          items[entryIndex] = { ...entry, bullets };
+          items.splice(
+            entryIndex + 1,
+            0,
+            ...action.values.slice(1).map((value) => newSummaryEntry(value))
+          );
+          return { ...section, items };
+        }
+        const bullets = entry.bullets.slice();
+        bullets[bulletIndex] = { ...bullets[bulletIndex], text: action.values[0] };
+        bullets.splice(
+          bulletIndex + 1,
+          0,
+          ...action.values.slice(1).map((value) => ({ ...newBullet(), text: value }))
+        );
+        const items = section.items.slice();
+        items[entryIndex] = { ...entry, bullets };
+        return { ...section, items };
+      });
+
     default:
       return data;
   }
@@ -682,6 +721,12 @@ export function useResumeEditor(
         dispatch({ type: "splitSummaryParagraph", sectionId, entryId, bulletId, before, after }),
       mergeSummaryParagraphUp: (sectionId: string, entryId: string, joined: string) =>
         dispatch({ type: "mergeSummaryParagraphUp", sectionId, entryId, joined }),
+      replaceBulletParagraphs: (
+        sectionId: string,
+        entryId: string,
+        bulletId: string,
+        values: readonly string[]
+      ) => dispatch({ type: "replaceBulletParagraphs", sectionId, entryId, bulletId, values }),
       // One undoable edit spanning several fields. The caller supplies the
       // rewritten text for every field its selection covered, plus the rows and
       // paragraphs the edit emptied, in the order they must apply.

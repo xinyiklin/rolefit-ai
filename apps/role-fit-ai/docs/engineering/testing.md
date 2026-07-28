@@ -137,8 +137,9 @@ Good server verification covers:
   `ResumeData` directly, and export offers PDF + `.resume`
 - cover-letter import accepts `.cover`, `.txt`, and `.md`; `.cover` round trips
   its optional shared header, ordered paragraphs, and cover-specific print style
-  without session ids, reads v1 paragraph-only files, rejects malformed/unknown
-  data, and editor/PDF output uses the cover-letter layout
+  without session ids, accepts only the current schema v1 shape, rejects
+  malformed/unknown data and every other version, and editor/PDF output uses the
+  cover-letter layout
 - `workspace/` reads / writes stay inside the workspace; tracker and
   base-resume mutations are serialized/atomic, duplicate application ids are
   rejected, stale same-record tracker writes return `409` with the current

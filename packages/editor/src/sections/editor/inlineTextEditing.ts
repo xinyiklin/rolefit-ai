@@ -346,13 +346,15 @@ function serializeChars(prefix: string, chars: DisplayChar[], suffix: string, bo
 
 function emptyFieldFormat(map: DisplayMap): DisplayChar {
   const spacing = paragraphSpacingFromInlineMarks(map.source);
+  const fontFamily = new RegExp(`<font=(${FONT_FAMILY_ALTERNATION})>`, "i").exec(map.source)?.[1];
+  const fontSize = /<size=(\d+(?:\.\d+)?)>/i.exec(map.source)?.[1];
   return {
     raw: "",
-    bold: false,
-    italic: false,
-    underline: false,
-    fontFamily: null,
-    fontSizePt: null,
+    bold: /<b>/i.test(map.source),
+    italic: /<i>/i.test(map.source),
+    underline: /<u>/i.test(map.source),
+    fontFamily: (fontFamily?.toLowerCase() as DocumentFontFamily | undefined) ?? null,
+    fontSizePt: fontSize ? inlineFontSizePt(Number(fontSize)) : null,
     alignment: alignmentFromInlineMarks(map.source),
     lineHeight: spacing.lineHeight,
     spaceBeforePt: spacing.spaceBeforePt,
@@ -361,6 +363,40 @@ function emptyFieldFormat(map: DisplayMap): DisplayChar {
     linkHref: null,
     linkSuppressed: false
   };
+}
+
+export function typingFormatForEmptyField(map: DisplayMap): TypingFormat | null {
+  if (map.chars.length > 0 || map.source.length === 0) return null;
+  const format = emptyFieldFormat(map);
+  return {
+    bold: format.bold,
+    italic: format.italic,
+    underline: format.underline,
+    fontFamily: format.fontFamily,
+    fontSizePt: format.fontSizePt,
+    alignment: format.alignment
+  };
+}
+
+// An empty paragraph has no DisplayChar that can retain a collapsed-caret
+// toolbar choice. Persist the choice in a textless carrier so leaving and
+// returning to the paragraph recovers the same next-typing format.
+export function setEmptyFieldTypingFormat(
+  map: DisplayMap,
+  format: TypingFormat
+): { value: string; caretValueIndex: number } {
+  if (map.chars.length > 0) {
+    throw new Error("setEmptyFieldTypingFormat requires an empty display map");
+  }
+  const carrier: DisplayChar = {
+    ...emptyFieldFormat(map),
+    ...format,
+    raw: "",
+    linkHref: null,
+    linkSuppressed: false
+  };
+  const value = serializeChars(map.prefix, [carrier], map.suffix, 0).value;
+  return { value, caretValueIndex: value.length };
 }
 
 // Replace display range [dStart, dEnd) with plain text; returns the new value
@@ -464,11 +500,11 @@ export function applyInlineFragment(
   const inserted = map.chars.length === 0
     ? fragmentChars.map((char) => ({
         ...char,
-        alignment: inherit.alignment ?? char.alignment,
-        lineHeight: inherit.lineHeight ?? char.lineHeight,
-        spaceBeforePt: inherit.spaceBeforePt ?? char.spaceBeforePt,
-        spaceAfterPt: inherit.spaceAfterPt ?? char.spaceAfterPt,
-        indentPt: inherit.indentPt ?? char.indentPt
+        alignment: char.alignment ?? inherit.alignment,
+        lineHeight: char.lineHeight ?? inherit.lineHeight,
+        spaceBeforePt: char.spaceBeforePt ?? inherit.spaceBeforePt,
+        spaceAfterPt: char.spaceAfterPt ?? inherit.spaceAfterPt,
+        indentPt: char.indentPt ?? inherit.indentPt
       }))
     : fragmentChars;
   const reviveSuffix =
@@ -508,6 +544,43 @@ export function applyInlineFragment(
       dStart + leading.length + inserted.length
     )
   );
+}
+
+// Replace one range with several logical clipboard paragraphs. The first and
+// last fragments join the target's surviving text; middle fragments remain
+// independent mark-balanced values for the structural reducer to insert.
+export function replaceWithParagraphFragments(
+  map: DisplayMap,
+  dStart: number,
+  dEnd: number,
+  fragmentValues: readonly string[]
+): { values: string[]; lastCaretDisplayIndex: number } {
+  if (fragmentValues.length < 2) {
+    throw new Error("replaceWithParagraphFragments requires at least two paragraphs");
+  }
+  const fragments = fragmentValues.map((value) =>
+    buildDisplayMap(value, { preserveWhitespace: true })
+  );
+  const values = fragments.map((fragment, index) => {
+    const first = index === 0;
+    const last = index === fragments.length - 1;
+    const chars = [
+      ...(first ? map.chars.slice(0, dStart) : []),
+      ...fragment.chars,
+      ...(last ? map.chars.slice(dEnd) : [])
+    ];
+    if (chars.length === 0) return fragment.source;
+    return serializeChars(
+      first ? map.prefix : "",
+      chars,
+      last ? map.suffix : "",
+      chars.length
+    ).value;
+  });
+  return {
+    values,
+    lastCaretDisplayIndex: fragments[fragments.length - 1].display.length
+  };
 }
 
 // Authored indentation uses measured spaces that still behave as one tab stop.
@@ -954,8 +1027,23 @@ function withBoundary(res: { value: string; boundaryIndex: number }): { value: s
 
 // Split a display boundary into two mark-balanced value halves (Enter).
 export function splitValueAt(map: DisplayMap, d: number): { before: string; after: string } {
-  const before = serializeChars(map.prefix, map.chars.slice(0, d), "", 0).value;
-  const after = serializeChars("", map.chars.slice(d), map.suffix, 0).value;
+  // A boundary split has no DisplayChar on its empty side. Preserve the
+  // adjacent character and paragraph formatting in a textless carrier so
+  // typing into the new paragraph continues the active style. Links are
+  // intentionally excluded: Enter must not extend a hyperlink.
+  const emptyParagraph = (format: DisplayChar) =>
+    serializeChars(
+      "",
+      [{ ...format, raw: "", linkHref: null, linkSuppressed: false }],
+      "",
+      0
+    ).value;
+  const before = d === 0
+    ? emptyParagraph(map.chars[0] ?? emptyFieldFormat(map))
+    : serializeChars(map.prefix, map.chars.slice(0, d), "", 0).value;
+  const after = d === map.chars.length
+    ? emptyParagraph(map.chars[map.chars.length - 1] ?? emptyFieldFormat(map))
+    : serializeChars("", map.chars.slice(d), map.suffix, 0).value;
   return { before, after };
 }
 

@@ -11,7 +11,6 @@ globalThis.localStorage = {
 const {
   coverLetterStartupIsCurrent,
   loadLastCoverLetterName,
-  migrateStoredCoverLetterStyle,
   resolveCoverLetterStartup,
   saveLastCoverLetterName
 } = await import("../coverLetterPrefs.ts");
@@ -30,87 +29,6 @@ assert.equal(
   coverLetterStartupIsCurrent("initial", "initial", true),
   false,
   "an explicitly cancelled startup cannot replace the current document"
-);
-
-const legacyStyle = {
-  fontFamily: "carlito",
-  fontSizePt: 11,
-  lineHeight: 1.25,
-  paragraphGapPt: 10,
-  marginTopPt: 72,
-  marginRightPt: 72,
-  marginBottomPt: 72,
-  marginLeftPt: 72,
-  contactDivider: "|"
-};
-assert.deepEqual(
-  migrateStoredCoverLetterStyle(legacyStyle),
-  {
-    ...legacyStyle,
-    lineHeight: 2,
-    paragraphGapPt: 8,
-    marginTopPt: 36,
-    marginRightPt: 54,
-    marginBottomPt: 36,
-    marginLeftPt: 54
-  },
-  "the exact legacy default snapshot migrates to the current physical defaults"
-);
-const previousStyle = {
-  ...legacyStyle,
-  lineHeight: 2,
-  paragraphGapPt: 0,
-  marginTopPt: 54,
-  marginRightPt: 54,
-  marginBottomPt: 54,
-  marginLeftPt: 54
-};
-assert.deepEqual(
-  migrateStoredCoverLetterStyle(previousStyle),
-  {
-    ...previousStyle,
-    lineHeight: 2,
-    paragraphGapPt: 8,
-    marginTopPt: 36,
-    marginRightPt: 54,
-    marginBottomPt: 36,
-    marginLeftPt: 54
-  },
-  "the previous shipped default snapshot migrates to the current physical defaults"
-);
-const paragraphGapStyle = {
-  ...previousStyle,
-  lineHeight: 1.15,
-  paragraphGapPt: 8,
-  marginTopPt: 36,
-  marginBottomPt: 36
-};
-assert.deepEqual(
-  migrateStoredCoverLetterStyle(paragraphGapStyle),
-  {
-    ...paragraphGapStyle,
-    lineHeight: 2
-  },
-  "the locally applied paragraph-gap default migrates to double spacing"
-);
-const dateOnlyStyle = {
-  ...paragraphGapStyle,
-  lineHeight: 2,
-  paragraphGapPt: 0
-};
-assert.deepEqual(
-  migrateStoredCoverLetterStyle(dateOnlyStyle),
-  {
-    ...dateOnlyStyle,
-    paragraphGapPt: 8
-  },
-  "the locally applied date-only spacing default gains paragraph gaps"
-);
-const customizedStyle = { ...legacyStyle, marginLeftPt: 60 };
-assert.equal(
-  migrateStoredCoverLetterStyle(customizedStyle),
-  customizedStyle,
-  "a customized persisted style is preserved by identity"
 );
 
 assert.equal(loadLastCoverLetterName(), "", "a fresh browser has no remembered cover letter");
@@ -171,8 +89,8 @@ assert.match(
 );
 assert.match(
   hook,
-  /const COVER_LETTER_STARTER = `<space-before=8>\[Date\]<\/space-before>\n\nDear \[Hiring manager\],[\s\S]*\n\nSincerely,/,
-  "the starter adds paragraph spacing before the date only"
+  /const COVER_LETTER_STARTER = `\[Date\]\r?\n\r?\nDear \[Hiring manager\],[\s\S]*\r?\n\r?\nSincerely,/,
+  "the starter stays plain text so the shared parser applies the default to every paragraph"
 );
 
 console.log("Cover-letter remembered-variant preferences passed");

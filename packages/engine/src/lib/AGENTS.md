@@ -64,9 +64,14 @@ grammar, margin table, or link-normalization path.
 - Current saves use `format: "typeset-resume"` and `schemaVersion: 2`.
   Version 1 files remain readable and migrate to version 2 on the next save.
 - Current cover-letter saves use `format: "typeset-cover-letter"` and
-  `schemaVersion: 2`, with an optional name/contact header, ordered paragraphs,
-  and cover-letter print style. Version 1 paragraph-only files remain readable
-  and migrate to version 2 on the next save.
+  the sole `schemaVersion: 1`, with an optional name/contact header, ordered
+  paragraphs, and cover-letter print style. Reject every other cover-letter
+  version; there is no legacy cover-letter migration path.
+- Cover-letter paragraph rhythm is paragraph content, not document style.
+  Newly parsed paragraphs receive explicit 8pt `space-before` formatting, and
+  before/after marks remain the only persisted paragraph-spacing controls.
+  Do not add a hidden document-wide paragraph-gap field or accept the removed
+  beta prototype field as a compatibility alias.
 - Unsupported versions and pre-release prototype shapes must be rejected.
 - The file contains structured content plus every print-affecting style value.
   Page margins persist only as physical point values; Narrow, Normal, and
@@ -91,8 +96,8 @@ For model, transform, or codec changes:
 1. Run `npm run eval:resume-file --workspace packages/engine` for `.resume`
    changes or `npm run eval:cover-letter-file --workspace packages/engine` for
    `.cover` changes, plus the smallest probe for other pure functions.
-2. Verify a current v2 save/open round trip without session ids and the v1
-   migration path.
+2. Verify the current cover-letter v1 save/open round trip without session ids;
+   for resumes, also verify the current v2 round trip and v1 migration path.
 3. Check unsupported schema-version rejection; no prototype-version migration
    path should exist.
 4. Check malformed, unknown-field, invalid-bound, and

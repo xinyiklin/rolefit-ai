@@ -1,21 +1,38 @@
 const SELECTED_LINE_CLASS = "tsd-line--selected";
 const LEFT_PROPERTY = "--tsd-selection-left";
 const WIDTH_PROPERTY = "--tsd-selection-width";
+const TOP_PROPERTY = "--tsd-selection-top";
 const BOTTOM_PROPERTY = "--tsd-selection-bottom";
 
 // Stub shown for a selected EMPTY paragraph, as a fraction of its line box —
 // roughly one space, so a blank line still reads as selected.
 const EMPTY_LINE_STUB = 0.2;
 
-// Selection bands include engine-owned leading, exclude paragraph gaps, and tile overlaps.
+export function selectionBandTopOffset(spaceBefore: number | null): number {
+  return spaceBefore !== null && spaceBefore > 0 ? -spaceBefore : 0;
+}
+
+// Consecutive selected lines tile through their complete junction, including
+// default and authored paragraph gaps. Against an unselected neighbour, a line
+// paints only the leading and authored after-space it owns.
 export function selectionBandBottomOffset(
-  line: { top: number; bottom: number; leading: number | null },
+  line: {
+    top: number;
+    bottom: number;
+    leading: number | null;
+    spaceAfter: number | null;
+  },
   next: { top: number; selected: boolean; samePage: boolean } | null
 ): number {
   const ink = Math.max(0, line.bottom - line.top);
   const box = line.leading !== null && line.leading > 0 ? line.leading : ink;
-  const capped =
-    next && next.selected && next.samePage ? Math.min(box, Math.max(0, next.top - line.top)) : box;
+  const distance = next?.samePage ? Math.max(0, next.top - line.top) : null;
+  if (next?.selected && distance !== null) return distance - ink;
+  const owned =
+    box + ((next === null || next.samePage) && line.spaceAfter !== null && line.spaceAfter > 0
+      ? line.spaceAfter
+      : 0);
+  const capped = distance === null ? owned : Math.min(owned, distance);
   return capped - ink;
 }
 
@@ -29,14 +46,16 @@ type LineGeometry = {
   textHeight: number;
   // The line spacing this line owns, published by the engine's painter.
   leading: number | null;
+  spaceBefore: number | null;
+  spaceAfter: number | null;
   left: number;
   right: number;
 };
 
 // The painter publishes the leading in the same CSS length the rest of the page
 // uses, so it is directly comparable with client-rect pixels.
-function readLeading(line: HTMLElement): number | null {
-  const raw = line.style.getPropertyValue("--tsd-line-leading").trim();
+function readLength(line: HTMLElement, property: string): number | null {
+  const raw = line.style.getPropertyValue(property).trim();
   if (!raw) return null;
   const value = Number.parseFloat(raw);
   return Number.isFinite(value) && value > 0 ? value : null;
@@ -47,6 +66,7 @@ export function clearSelectionHighlights(host: HTMLElement): void {
     line.classList.remove(SELECTED_LINE_CLASS);
     line.style.removeProperty(LEFT_PROPERTY);
     line.style.removeProperty(WIDTH_PROPERTY);
+    line.style.removeProperty(TOP_PROPERTY);
     line.style.removeProperty(BOTTOM_PROPERTY);
   }
 }
@@ -96,7 +116,9 @@ export function paintSelectionHighlights(host: HTMLElement): void {
         ? Math.max(...boxes.map((box) => box.right)) - rect.left
         : rect.width,
       textHeight: boxes.length ? Math.max(...boxes.map((box) => box.height)) : rect.height,
-      leading: readLeading(element),
+      leading: readLength(element, "--tsd-line-leading"),
+      spaceBefore: readLength(element, "--tsd-paragraph-space-before"),
+      spaceAfter: readLength(element, "--tsd-paragraph-space-after"),
       left: Number.POSITIVE_INFINITY,
       right: Number.NEGATIVE_INFINITY
     };
@@ -143,17 +165,37 @@ export function paintSelectionHighlights(host: HTMLElement): void {
     const right = Math.max(left, Math.min(line.right, line.textRight));
     // An empty paragraph has no text extent of its own, so keep a visible stub.
     const width = Math.max(right - left, line.textHeight * EMPTY_LINE_STUB);
+    const previous = lines[index - 1];
     const next = lines[index + 1];
-    // A line never reaches UP: the spacing above it belongs to the line above,
-    // which paints it downward. Never bridge a page break.
+    const previousSelectedOnPage =
+      previous && isSelected(previous) && sharePage(previous, line);
+    const pageRect =
+      line.element.closest<HTMLElement>(".tsd-page")?.getBoundingClientRect() ?? null;
+    // A selected predecessor fills the whole junction downward. Only the first
+    // selected paragraph in a run claims its authored before-space upward.
+    // Page-start layout reserves that space; the page edge remains a hard cap.
+    const authoredTop = !previousSelectedOnPage
+      ? selectionBandTopOffset(line.spaceBefore)
+      : 0;
+    const top = pageRect
+      ? Math.max(authoredTop, pageRect.top - line.rect.top)
+      : authoredTop;
     const bottom = selectionBandBottomOffset(
-      { top: line.rect.top, bottom: line.rect.bottom, leading: line.leading },
+      {
+        top: line.rect.top,
+        bottom: line.rect.bottom,
+        leading: line.leading,
+        spaceAfter: line.spaceAfter
+      },
       next
         ? { top: next.rect.top, selected: isSelected(next), samePage: sharePage(line, next) }
-        : null
+        : pageRect
+          ? { top: pageRect.bottom, selected: false, samePage: true }
+          : null
     );
     line.element.style.setProperty(LEFT_PROPERTY, `${left}px`);
     line.element.style.setProperty(WIDTH_PROPERTY, `${width}px`);
+    line.element.style.setProperty(TOP_PROPERTY, `${top}px`);
     line.element.style.setProperty(BOTTOM_PROPERTY, `${bottom}px`);
     line.element.classList.add(SELECTED_LINE_CLASS);
   }

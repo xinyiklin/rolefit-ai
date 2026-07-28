@@ -1062,3 +1062,70 @@ bounded; app-only operational detail belongs in the affected app documentation.
   edges anchor from adjacent line whitespace but never snap the moving endpoint;
   measured caret fallback preserves partial forward/reverse selection at first,
   wrapped, and final glyphs. Browser typing/Tab/Undo QA passed.
+- [USER] 2026-07-28: Selection paint must be continuous through before/after
+  paragraph spacing. Copying from either shared editor into Google Docs must
+  preserve logical paragraphs: destination-width reflow is expected, but
+  Typeset's visual wrap points must not become separate pasted blocks. Nonzero
+  paragraph spacing should paste as a blank paragraph rather than CSS spacing.
+- [CODE] 2026-07-28: Supersedes the 2026-07-26 selection-gap detail above.
+  Consecutive selected engine lines now tile through their complete calibrated
+  junction; exposed paragraph edges use engine-published authored before/after
+  spacing without crossing page bounds. External HTML clipboard data is
+  serialized from logical model ranges with one block per field, supported
+  inline formatting, and one blank block at a nonzero spacing boundary; the
+  absolutely positioned visual-line DOM no longer defines pasted paragraphs.
+- [TOOL] 2026-07-28: The isolated worktree dev process was started on canonical
+  port 5181 after a clean lockfile dependency install; the server returned HTTP
+  200. Both owner checks and both consumer production builds passed; the
+  interface detector reported no findings.
+- [USER] 2026-07-28: Cover-letter default paragraph rhythm is explicit 8pt
+  space-before on every paragraph, never the generic resume bullet gap. The
+  erroneously introduced document-level cover-letter gap field is removed from
+  the current beta schema without a schema-version bump or compatibility path.
+- [CODE] 2026-07-28: New, imported, starter, and tailored cover-letter text is
+  normalized through the shared explicit space-before default. Enter preserves
+  paragraph properties on either empty split half. Cover-letter layout ignores
+  the generic resume bullet gap, and current `.cover` style parsing rejects the
+  removed beta prototype field.
+- [USER] 2026-07-28: The beta `.cover` contract has no legacy compatibility
+  obligation. Its current strict shape is renumbered as schema version 1, and
+  all other cover-letter versions must be rejected.
+- [CODE] 2026-07-28: The `.cover` codec now has one schema branch: version 1
+  includes the optional header, ordered paragraphs, and current print style.
+  The former paragraph-only compatibility branch and its migration probe were
+  removed; resume schema compatibility is unchanged.
+- [USER] 2026-07-28: Authored paragraph spacing remains visible at document
+  boundaries: the first paragraph/line shows before-space and the final
+  paragraph/line shows after-space.
+- [CODE] 2026-07-28: Page-start placement now reserves the first line's
+  authored before-space. Selection paint claims before-space without requiring
+  a predecessor and after-space without requiring a successor, capped at the
+  page edge so boundary highlighting cannot cross sheets.
+- [USER] 2026-07-28: Google Docs clipboard interop must preserve paragraph
+  before/after spacing in both directions and hyperlinks from the shared editor
+  to Docs, not only links pasted from Docs into the editor.
+- [CODE] 2026-07-28: External clipboard blanks now carry a non-breaking space
+  so Docs retains leading/trailing spacing boundaries. Outbound HTML promotes
+  both explicit and auto-detected URLs/emails to anchors, while inbound rich
+  block margins are converted from CSS points/pixels into explicit paragraph
+  before/after marks.
+- [USER] 2026-07-28: Enter/new-paragraph editing continues the active text and
+  paragraph formatting rather than resetting it.
+- [CODE] 2026-07-28: An empty half created by Enter now stores adjacent
+  emphasis, family, size, alignment, line-height, spacing, and indentation in
+  textless inline wrappers, which later typing reads back. Hyperlink and
+  link-suppression state intentionally stop at the paragraph boundary.
+- [USER] 2026-07-28: A format selected while the new paragraph is still empty
+  persists if the caret moves elsewhere and later returns.
+- [CODE] 2026-07-28: Collapsed-caret emphasis, font-family, and font-size
+  commands on an empty paragraph now commit a complete effective typing format
+  into its textless carrier. Selection synchronization restores that stored
+  format, including alignment, instead of relying on the caret-local ref.
+- [USER] 2026-07-28: Supersedes the clipboard blank-line expectation above.
+  Google Docs interop must preserve before/after spacing as paragraph style,
+  not add an empty paragraph or flatten pasted paragraphs into hard lines.
+- [CODE] 2026-07-28: Clipboard HTML now exports paragraph spacing as explicit
+  top/bottom margins. Inbound block HTML is separated from authored `<br>`
+  breaks and an atomic reducer action inserts multiple blocks as distinct
+  summary paragraphs or bullets; explicit source spacing wins over empty-target
+  defaults.

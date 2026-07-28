@@ -16,27 +16,33 @@ typesetting guide when a change affects painted output or layout provenance.
   transformations. Keep it free of React and DOM reads. Its anchored tag
   scanner is a deliberate second automaton over the grammar owned by
   `lib/inlineMarksText.ts`; keep the two tag inventories in sync.
-- `clipboardFormatting.ts` owns the versioned same-editor clipboard payload and
-  the allowlisted HTML-to-inline-mark sanitizer. Keep arbitrary clipboard CSS,
-  scripts, event attributes, unsupported fonts, and invalid links out of
-  document state.
+- `clipboardFormatting.ts` owns the versioned same-editor clipboard payload,
+  the allowlisted HTML-to-inline-mark sanitizer, and model-derived external
+  HTML copy. External copy emits one block per logical field, never one per
+  engine wrap line, so a destination editor reflows the paragraph to its own
+  measure. Paragraph before/after spacing stays CSS block margins; never encode
+  it as a blank paragraph, which changes document structure in Google Docs.
+  Explicit and engine-auto-detected links both serialize as HTML anchors. On
+  inbound rich paste, allowlisted block margins become explicit paragraph
+  before/after marks, and multiple HTML blocks become separate bullet/summary
+  fields through one structural editor action rather than hard breaks inside
+  one field. Keep all other arbitrary clipboard CSS, scripts, event attributes,
+  unsupported fonts, and invalid links out of document state.
 - `selectionHighlight.ts` owns the visual selection overlay. It coalesces the
-  browser range fragments per engine line and paints one highlight using that
-  line's full height (determined by its largest inline run) plus the vertical
-  gap below it. Exactly ONE line owns each gap and it is the line above, filling
-  downward — the engine's own between-only rule for leading and paragraph
-  spacing. When the line below claimed it as well, every paragraph gap was
-  painted twice and a short closing line left a floating band hanging above the
-  next paragraph, which read as that paragraph owning the spacing before it. The
-  band covers each line's LINE BOX: its ink plus the line spacing that line owns,
-  which the engine publishes per line as `--tsd-line-leading` because only the
-  engine knows it. The DOM box is the ink box, and the gap to the next line is
-  the leading only INSIDE a paragraph — at a block boundary it also carries the
-  paragraph gap, which belongs to neither side. Measuring from that gap left the
-  last line of every paragraph short (it has no next line of its own to measure
-  to) and, where it did measure, painted the paragraph gap as a tall empty slab
-  at the previous block's width. Lines with no leading of their own (entry
-  heads, headings, a contact row) fall back to their ink box. The offset is SIGNED and bands TILE: a line's box is its ink box,
+  browser range fragments per engine line and paints one text-bounded band.
+  Consecutive selected lines tile through their complete vertical junction, so
+  paragraph before/after spacing and the calibrated base gap cannot leave a
+  white seam inside one selection. The upper line owns that junction downward.
+  When a paragraph is selected without its predecessor, its first line may
+  extend upward by the engine-published authored before-space, including at a
+  page start where layout reserves that room. Its last line extends through
+  authored after-space even when it is the document's final line. The page edge
+  caps both boundary bands, preventing double-painted dark bands and
+  cross-page paint. Inside a paragraph, the band covers each
+  line's LINE BOX: its ink plus the line spacing that line owns, which the
+  engine publishes as `--tsd-line-leading`. Lines with no leading of their own
+  (entry heads, headings, a contact row) fall back to their ink box. The offset
+  is SIGNED and bands TILE: a line's box is its ink box,
   tight line spacing makes consecutive ink boxes overlap, and a translucent veil
   painted twice is a dark stripe across the text — so a band gives height back
   just as readily as it grows, always stopping where the next selected line
@@ -180,6 +186,12 @@ typesetting guide when a change affects painted output or layout provenance.
   character, and stepping over it desynchronizes everything after it.
 - Preserve authored interior and trailing whitespace. Deleting the final styled
   character must retain that character's typing format for the next insertion.
+  Enter at a paragraph boundary likewise gives the empty split half a textless
+  carrier for the adjacent typography and paragraph properties, so the next
+  insertion continues the active format. Formatting commands at a caret in an
+  empty paragraph update that carrier in document state, not only the transient
+  typing-format ref, so moving away and returning retains the choice. Never
+  carry link or link-suppression state across a new paragraph boundary.
   Summary/cover paragraphs also preserve leading whitespace so indentation
   survives repaint and PDF export; ordinary marked resume bullets may still
   trim accidental space after their marker.
@@ -332,9 +344,9 @@ typesetting guide when a change affects painted output or layout provenance.
   browser's `formatBold`/`formatItalic`/`formatUnderline` intents all route
   through one commit so they cannot diverge.
 - One selection rectangle per engine line, bounded by that line's painted text,
-  covering its own line box — ink plus the spacing that line owns — never
-  reaching up into the line above's, and never overlapping the next selected
-  line's band. The browser's own selection
+  covering its own line box and every complete junction inside the selection,
+  with authored before/after spacing at an exposed paragraph edge and no
+  overlap between adjacent bands. The browser's own selection
   paint is off for the WHOLE editable document, not just field spans: a contact
   divider is a run the engine owns and no field does, so it carries no
   `data-tsdf`, and a rule scoped to field spans left the native veil painting

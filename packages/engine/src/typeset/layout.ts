@@ -2,8 +2,8 @@
 //
 // Baseline rules used by the owned page builder:
 //   - First baseline of a page: margin + max(minimum inset, the row's own ink
-//     height) + any oversized-inline rise. Short rows use the common inset;
-//     tall display rows push down.
+//     height) + any oversized-inline rise + authored paragraph before-space.
+//     Short rows use the common inset; tall display rows push down.
 //   - Subsequent lines: previous baseline + the stream's junction distance.
 //   - A line whose baseline would exceed (page height − margin) moves to the
 //     next page, dragging its keep-with-previous chain along — the editor's
@@ -21,6 +21,8 @@ export type PlacedLine = {
   // The line spacing this line owns (see VLine.leading), for renderers that
   // need the line BOX rather than the ink box.
   leading?: number;
+  paragraphSpaceBefore?: number;
+  paragraphSpaceAfter?: number;
   rule?: { x: number; width: number; y: number; thickness: number };
 };
 
@@ -56,7 +58,8 @@ export function layoutVerticalStream(
   const startPage = (first: VLine) =>
     geo.marginTop +
     Math.max(geo.firstBaselineMin - geo.marginTop, first.height) +
-    first.riseOverflow;
+    first.riseOverflow +
+    (first.paragraphSpaceBefore ?? 0);
   const contentBottom = (line: VLine, lineBaseline: number) =>
     lineBaseline +
     Math.max(
@@ -93,6 +96,8 @@ export function layoutVerticalStream(
         runs: line.runs.map((r) => ({ ...r, x: r.x + geo.marginLeft })),
         baseline: b,
         leading: line.leading,
+        paragraphSpaceBefore: line.paragraphSpaceBefore,
+        paragraphSpaceAfter: line.paragraphSpaceAfter,
         rule: line.rule
           ? { x: line.rule.x + geo.marginLeft, width: line.rule.width, y: b + line.rule.yOffset, thickness: line.rule.thickness }
           : undefined

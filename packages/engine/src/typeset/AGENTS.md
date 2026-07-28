@@ -54,8 +54,13 @@ it truthfully.
   the leading it OWNS (`VLine.leading` → `PlacedLine.leading` → the painter's
   `--tsd-line-leading`): a renderer that needs the line BOX rather than the ink
   box cannot derive it from geometry, because the gap to the next line is that
-  leading only inside a paragraph. Do not
-  introduce screen-relative units into saved layout behavior.
+  leading only inside a paragraph. Paragraph rows likewise carry authored
+  before-space on their first visual line and after-space on their last visual
+  line through `VLine`/`PlacedLine` into DOM custom properties. This metadata is
+  selection provenance at ordinary junctions. At a page start, authored
+  before-space also shifts the first baseline because there is no preceding
+  junction to carry it; this keeps editor, print, and PDF behavior truthful.
+  Do not introduce screen-relative units into saved layout behavior.
 - Preserve literal interior and trailing whitespace according to the shared
   engine model. Summary and cover-letter prose also preserves authored leading
   whitespace as indentation; ordinary marked resume bullets may trim accidental

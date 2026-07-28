@@ -160,6 +160,10 @@ export function useResumeEditor(historyClock?: HistoryClock) {
         markManual();
         shared.mergeSummaryParagraphUp(...args);
       },
+      replaceBulletParagraphs: (...args: Parameters<typeof shared.replaceBulletParagraphs>) => {
+        markManual();
+        shared.replaceBulletParagraphs(...args);
+      },
       // Undo/redo never mark the document manually edited (unchanged from
       // before this fix), but they DO change `editedResume`'s reference — so
       // each must clear a stale pending flag left by an earlier no-op manual

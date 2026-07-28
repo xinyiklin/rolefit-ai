@@ -3,12 +3,16 @@ import assert from "node:assert/strict";
 import {
   COVER_LETTER_FILE_MAGIC,
   COVER_LETTER_STYLE_DEFAULTS,
+  DEFAULT_COVER_LETTER_SPACE_BEFORE_PT,
   CoverLetterFileError,
   coverLetterPlainText,
+  coverLetterParagraphs,
+  coverLetterResumeData,
   parseCoverLetterFile,
   parseCoverLetterText,
   serializeCoverLetterFile
 } from "../coverLetter.ts";
+import { paragraphSpacingFromInlineMarks } from "../inlineMarksText.ts";
 import { toTypesetSchema } from "../../typeset/schema.ts";
 import { layoutCoverLetter, lineSeparators } from "../../typeset/layout.ts";
 import { inkExtent, measure, paragraphItems, underlineRule, underlineSpans } from "../../typeset/measure.ts";
@@ -29,7 +33,6 @@ assert.equal(coverLetterStyleToDocumentStyle(COVER_LETTER_STYLE_DEFAULTS).pageMa
 assert.deepEqual(
   {
     lineHeight: COVER_LETTER_STYLE_DEFAULTS.lineHeight,
-    paragraphGapPt: COVER_LETTER_STYLE_DEFAULTS.paragraphGapPt,
     margins: [
       COVER_LETTER_STYLE_DEFAULTS.marginTopPt,
       COVER_LETTER_STYLE_DEFAULTS.marginRightPt,
@@ -37,8 +40,8 @@ assert.deepEqual(
       COVER_LETTER_STYLE_DEFAULTS.marginLeftPt
     ]
   },
-  { lineHeight: 2, paragraphGapPt: 8, margins: [36, 54, 36, 54] },
-  "new cover letters default to double spacing, 8pt paragraph gaps, and 0.5/0.75-inch margins"
+  { lineHeight: 2, margins: [36, 54, 36, 54] },
+  "new cover letters default to double spacing, no hidden paragraph gap, and 0.5/0.75-inch margins"
 );
 assert.deepEqual(
   documentStyleToCoverLetterStyle({
@@ -89,7 +92,7 @@ assert.equal(
 const serialized = serializeCoverLetterFile(data, COVER_LETTER_STYLE_DEFAULTS);
 const raw = JSON.parse(serialized);
 assert.equal(raw.format, COVER_LETTER_FILE_MAGIC);
-assert.equal(raw.schemaVersion, 2);
+assert.equal(raw.schemaVersion, 1);
 assert.equal(raw.document.header, null);
 assert.equal(JSON.stringify(raw).includes('"id"'), false, "session ids never cross the .cover boundary");
 
@@ -124,24 +127,47 @@ assert(
   "header contact items stay inside the text column"
 );
 
-const legacy = {
-  format: COVER_LETTER_FILE_MAGIC,
-  schemaVersion: 1,
-  document: { paragraphs: ["Legacy letter."] },
-  style: Object.fromEntries(
-    Object.entries(COVER_LETTER_STYLE_DEFAULTS).filter(([key]) => key !== "contactDivider")
-  )
-};
-const migratedLegacy = parseCoverLetterFile(JSON.stringify(legacy));
-assert.equal(migratedLegacy.data.name, "");
-assert.equal(migratedLegacy.style.contactDivider, "|");
-
 const layout = layoutCoverLetter(
   toTypesetSchema(parsed.data),
   coverLetterStyleToDocumentStyle(parsed.style)
 );
 assert.equal(layout.pages.length, 1);
 assert(layout.pages[0].lines.length >= 5, "cover-letter paragraphs reach the shared layout engine");
+
+const unspacedParagraphs = layoutCoverLetter(
+  toTypesetSchema(parseCoverLetterText("First paragraph.\n\nSecond paragraph.")),
+  coverLetterStyleToDocumentStyle(COVER_LETTER_STYLE_DEFAULTS)
+).pages[0].lines;
+assert.equal(
+  unspacedParagraphs[1].baseline - unspacedParagraphs[0].baseline,
+  COVER_LETTER_STYLE_DEFAULTS.fontSizePt * COVER_LETTER_STYLE_DEFAULTS.lineHeight
+    + DEFAULT_COVER_LETTER_SPACE_BEFORE_PT,
+  "default paragraph rhythm comes from visible space-before formatting"
+);
+const firstParagraphWithoutBefore = layoutCoverLetter(
+  toTypesetSchema(coverLetterResumeData(["First paragraph."])),
+  coverLetterStyleToDocumentStyle(COVER_LETTER_STYLE_DEFAULTS)
+).pages[0].lines[0];
+const firstParagraphWithBefore = layoutCoverLetter(
+  toTypesetSchema(
+    coverLetterResumeData(["<space-before=8>First paragraph.</space-before>"])
+  ),
+  coverLetterStyleToDocumentStyle(COVER_LETTER_STYLE_DEFAULTS)
+).pages[0].lines[0];
+assert.equal(
+  firstParagraphWithBefore.baseline - firstParagraphWithoutBefore.baseline,
+  8,
+  "space-before moves the first paragraph down from the page start"
+);
+assert(
+  coverLetterParagraphs(parseCoverLetterText("First paragraph.\n\nSecond paragraph."))
+    .every(
+      (paragraph) =>
+        paragraphSpacingFromInlineMarks(paragraph).spaceBeforePt
+          === DEFAULT_COVER_LETTER_SPACE_BEFORE_PT
+    ),
+  "every newly parsed cover-letter paragraph exposes the default before spacing"
+);
 
 const compactCoverStyle = { ...COVER_LETTER_STYLE_DEFAULTS, lineHeight: 1.15 };
 const doubleSpaced = parseCoverLetterFile(
@@ -495,7 +521,7 @@ assert.equal(
 
 for (const mutation of [
   { ...raw, format: "typeset-resume" },
-  { ...raw, schemaVersion: 3 },
+  { ...raw, schemaVersion: 2 },
   { ...raw, document: { header: null, paragraphs: [] } },
   { ...raw, style: { ...raw.style, fontSizePt: 40 } },
   { ...raw, extra: true }
@@ -551,5 +577,5 @@ for (const { value: family } of FONT_FAMILY_OPTIONS) {
 }
 
 console.log(
-  `cover-letter file v2 + v1 migration + layout probes: PASS (incl. ${FONT_FAMILY_OPTIONS.length} families × 6 faces through the file boundary)`
+  `cover-letter file v1 + layout probes: PASS (incl. ${FONT_FAMILY_OPTIONS.length} families × 6 faces through the file boundary)`
 );
