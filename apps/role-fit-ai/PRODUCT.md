@@ -29,12 +29,19 @@ never a hosted copy of the workbench.
 
 ## Product Purpose
 
-RoleFit AI turns a base resume, a candidate-authored cover letter, and a pasted
-job description into honest, tailored application materials. Resume proposals
+RoleFit AI turns a base resume, candidate-authored cover-letter prose or guided
+notes, and a pasted job description into honest, tailored application materials. Resume proposals
 remain constrained by server-side grounding and anti-fabrication checks, with a
 recruiter-style review for fit scoring and gap analysis. The cover-letter
-workflow revises the user's own writing in a dedicated plain-paragraph editor
-and never creates a letter from the job and resume alone. Both editors share
+workflow explicitly distinguishes an authored letter from the bundled guided
+starter. It preserves genuine source voice when polishing a letter; guided
+drafting pauses for the candidate's own motivation and chosen evidence instead
+of creating a letter from the job and resume alone. Preparation classifies
+every atomic resume fact, honest-context note, and candidate answer as use,
+skip, or clarify; candidates can override the plan, and drafting receives only
+the approved one to three evidence items. Standard correspondence fields
+resolve deterministically, unresolved template tokens cannot be ready, and an
+AI proposal never replaces the editor until the user accepts it. Both editors share
 deterministic typesetting and PDF export, and the same recovery and naming
 behavior: unsaved edits go to a per-tab recovery draft either page can restore,
 and a document is named `Name_Company_Resume` / `Name_Company_Cover_Letter` so
@@ -112,8 +119,8 @@ disappears into the task. Quiet competence, not salesmanship.
    the foot of the studio rail; tabbed
    outputs below (Resume with a consistent Open/Save/Polish
    document action bar and a post-polish review rail, Cover letter with the
-   matching Open/Save/Polish action bar, its plain editor and
-   deterministic checklist, Materials, the
+   matching document action bar, its plain editor and contextual
+   readiness/preparation/proposal rail, Materials, the
    Applications tracker, Analytics) and the header Fit
    popover. The engine-painted page remains the sole editor, the review rail
    navigates back to exact fields, and the editor itself remains the live

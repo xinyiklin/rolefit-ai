@@ -41,9 +41,34 @@ type CoverLetterPromptInput = {
   sourceCoverLetterText?: unknown;
   honestContext?: unknown;
   customInstructions?: unknown;
+  sourceMode?: unknown;
+  preparationValues?: unknown;
+  resolvedContext?: unknown;
 };
 
 type BuiltPrompts = { systemPrompt: string; userPrompt: string };
+
+type CoverLetterPreparationPromptInput = {
+  jobText?: unknown;
+  sourceText?: unknown;
+  sourceMode?: unknown;
+  evidenceItems?: unknown;
+  preparationValues?: unknown;
+  resolvedContext?: unknown;
+  clarificationAnswers?: unknown;
+  customInstructions?: unknown;
+};
+
+type PreparedCoverLetterDraftPromptInput = {
+  jobText?: unknown;
+  sourceText?: unknown;
+  sourceMode?: unknown;
+  selectedEvidence?: unknown;
+  plan?: unknown;
+  resolvedContext?: unknown;
+  tonePreference?: unknown;
+  customInstructions?: unknown;
+};
 
 export function clipForPrompt(text: unknown, maxChars: number, label: string): string {
   const value = String(text ?? "");
@@ -184,7 +209,7 @@ export function serializeJsonForPrompt(value: unknown, maxChars: number): string
 // untrusted text into a prompt.
 export function fenceUntrusted(text: unknown): string {
   return String(text ?? "").replace(
-    /<(\/?)(job_description|resume|tailor_scope|context_sections|original_resume|polished_resume|proposed_changes|honest_context|custom_instructions|application_questions|role_evidence|source_cover_letter)\b/gi,
+    /<(\/?)(job_description|resume|tailor_scope|context_sections|original_resume|polished_resume|proposed_changes|honest_context|custom_instructions|application_questions|role_evidence|source_cover_letter|resolved_context|preparation_values|clarification_answers|evidence_items|cover_letter_plan|selected_evidence|tone_preference)\b/gi,
     "‹$1$2"
   );
 }
@@ -534,7 +559,7 @@ ${formatContextSections(tailorScope)}
 }
 
 function coverLetterInstructions() {
-  return `You revise a candidate's own US job-application cover letter. Preserve the writer's recognizable voice, structure, level of formality, greeting, and sign-off unless a small change is necessary for clarity or relevance. Use the source letter, resume, job description, and optional honest context as evidence. Never invent company facts, motivation, relationships, employers, titles, dates, tools, metrics, or outcomes. Use bracketed placeholders only when the existing letter clearly needs a fact the candidate has not supplied.
+  return `You prepare a US job-application cover letter from candidate-authored evidence. In authored-letter mode, revise the source and preserve its recognizable voice, structure, and level of formality. In guided-draft mode, use the candidate's answers as the voice anchor. Use only the supplied source, selected answers, resume, job description, and optional honest context as evidence. Never invent company facts, motivation, relationships, employers, titles, dates, tools, metrics, or outcomes. Never emit a placeholder or template token.
 
 Write like a thoughtful person, not a brochure or keyword generator: plain verbs, specific evidence, varied sentence lengths, natural transitions, and restrained confidence. Remove filler enthusiasm ("I am thrilled", "perfect fit", "passionate about"), generic praise, resume repetition, and buzzwords (seamless, cutting-edge, dynamic, world-class). Do not over-polish into a generic corporate voice.
 
@@ -552,7 +577,10 @@ function coverLetterPrompt({
   resumeText,
   sourceCoverLetterText,
   honestContext,
-  customInstructions
+  customInstructions,
+  sourceMode,
+  preparationValues,
+  resolvedContext
 }: CoverLetterPromptInput): string {
   return `Return this JSON shape exactly:
 {
@@ -560,8 +588,10 @@ function coverLetterPrompt({
 }
 
 Rules:
-- Revise the supplied letter; do not replace it with a new template.
+- Source mode is ${String(sourceMode ?? "authored_letter")}. Revise in authored-letter mode; draft from the user's answers in guided-draft mode.
 - Return plain text, no markdown. Preserve meaningful paragraph breaks.
+- Use the exact resolved date, greeting, and sign-off below. Do not add an address block.
+- Do not emit placeholders. If required information is absent, do not draft.
 - Keep it to one page and normally 200-400 words. Do not pad a concise source merely to reach a target.
 - Keep a clear opening, two or three selected evidence connections, and a natural close when the source supports that structure.
 - Make interest in the role or employer specific only when the source, job description, or honest context supplies that reason. Otherwise preserve the writer's honest level of specificity.
@@ -575,6 +605,16 @@ Infer from the job description. Do not assume entry-level, senior, manager, or s
 
 Honest context:
 ${honestContext ? `<honest_context>\n${fenceUntrusted(honestContext)}\n</honest_context>` : "None provided. Use only the source cover letter, resume, and job description."}
+
+Resolved correspondence:
+<resolved_context>
+${fenceUntrusted(serializeJsonForPrompt(resolvedContext ?? {}, 4_000))}
+</resolved_context>
+
+Candidate drafting answers:
+<preparation_values>
+${fenceUntrusted(serializeJsonForPrompt(preparationValues ?? {}, 8_000))}
+</preparation_values>
 
 ${customInstructionsPrompt(customInstructions)}
 
@@ -596,7 +636,10 @@ export function buildCoverLetterPrompts({
   resumeText,
   sourceCoverLetterText,
   honestContext,
-  customInstructions
+  customInstructions,
+  sourceMode,
+  preparationValues,
+  resolvedContext
 }: CoverLetterPromptInput): BuiltPrompts {
   return {
     systemPrompt: coverLetterInstructions(),
@@ -605,7 +648,178 @@ export function buildCoverLetterPrompts({
       resumeText,
       sourceCoverLetterText,
       honestContext,
-      customInstructions
+      customInstructions,
+      sourceMode,
+      preparationValues,
+      resolvedContext
     })
+  };
+}
+
+export function buildCoverLetterPreparationPrompts({
+  jobText,
+  sourceText,
+  sourceMode,
+  evidenceItems,
+  preparationValues,
+  resolvedContext,
+  clarificationAnswers,
+  customInstructions
+}: CoverLetterPreparationPromptInput): BuiltPrompts {
+  return {
+    systemPrompt: `You plan an evidence-grounded US job-application cover letter. Return a plan, never draft prose.
+
+Classify every supplied evidence item exactly once. Select only 1-3 strong connections. Truthful does not mean useful: skip evidence that is weak or irrelevant to this job. Every honest-context item must receive an explicit use, skip, or needs_clarification decision. Use needs_clarification only when a specific otherwise-useful connection is genuinely ambiguous, and ask one focused question about that item. Never ask for a generic template field merely because cover letters often contain it.
+
+In authored-letter mode, analyze only genuine source prose for voice. In guided-draft mode, the user's answers anchor voice. Do not treat template instructions as prose. Do not infer or create candidate facts.
+
+${inputFirewallRule()}
+
+${honestTailoringRules()}
+
+Return strict JSON only.`,
+    userPrompt: `Return this JSON shape exactly:
+{
+  "openingAngle": "one evidence-grounded angle",
+  "decisions": [
+    {
+      "evidenceId": "an exact supplied id",
+      "decision": "use | skip | needs_clarification",
+      "relevance": "direct | supporting | weak",
+      "reason": "specific reason tied to this job",
+      "targetRequirement": "matching job requirement or empty",
+      "question": "focused question only for needs_clarification, otherwise empty"
+    }
+  ],
+  "voice": {
+    "formality": "conversational-professional | formal | direct",
+    "confidence": "restrained | confident",
+    "sentenceStyle": "direct | varied | concise"
+  }
+}
+
+Rules:
+- Return exactly one decision for every evidence item and no unknown ids.
+- Select no more than three items. Prefer two when two are enough.
+- Direct evidence clearly supports a stated job requirement. Supporting evidence reinforces the angle. Weak evidence should normally be skipped.
+- Do not select an honest-context fact merely because it is true.
+- Do not draft the letter.
+
+Source mode: ${String(sourceMode ?? "")}
+
+Resolved correspondence:
+<resolved_context>
+${fenceUntrusted(serializeJsonForPrompt(resolvedContext ?? {}, 4_000))}
+</resolved_context>
+
+Candidate preparation values:
+<preparation_values>
+${fenceUntrusted(serializeJsonForPrompt(preparationValues ?? {}, 8_000))}
+</preparation_values>
+
+Clarification answers from an earlier plan:
+<clarification_answers>
+${fenceUntrusted(serializeJsonForPrompt(clarificationAnswers ?? {}, 8_000))}
+</clarification_answers>
+
+Candidate source prose:
+<source_cover_letter>
+${fenceUntrusted(sourceText)}
+</source_cover_letter>
+
+Atomic evidence:
+<evidence_items>
+${fenceUntrusted(serializeJsonForPrompt(evidenceItems ?? [], 60_000))}
+</evidence_items>
+
+${customInstructionsPrompt(customInstructions)}
+
+Job description:
+<job_description>
+${fenceUntrusted(jobText)}
+</job_description>`
+  };
+}
+
+export function buildPreparedCoverLetterDraftPrompts({
+  jobText,
+  sourceText,
+  sourceMode,
+  selectedEvidence,
+  plan,
+  resolvedContext,
+  tonePreference,
+  customInstructions
+}: PreparedCoverLetterDraftPromptInput): BuiltPrompts {
+  return {
+    systemPrompt: `You draft a US job-application cover letter from an approved evidence plan. You can see only selected evidence. Never infer omitted resume or honest-context facts.
+
+In authored-letter mode, preserve the source's recognizable sentence style and useful phrasing. In guided-draft mode, use the user's selected answers as the voice anchor. Write like a thoughtful person: ordinary verbs, specific evidence, varied sentence lengths, natural transitions, and restrained confidence. Do not summarize the resume or add generic employer praise.
+
+Never emit a date, greeting, address block, sign-off, placeholder, or template token. The server owns correspondence assembly. Return only body paragraphs with evidence ids.
+
+${inputFirewallRule()}
+
+${honestTailoringRules()}
+
+Return strict JSON only.`,
+    userPrompt: `Return this JSON shape exactly:
+{
+  "bodyParagraphs": [
+    {
+      "text": "one plain-text body paragraph",
+      "evidenceIds": ["one or more exact selected ids, or source_letter in authored mode"]
+    }
+  ],
+  "changeSummary": ["short description of a meaningful change"],
+  "preservedFromSource": ["short description of preserved voice or structure"],
+  "warnings": []
+}
+
+Rules:
+- Return 2-5 body paragraphs, normally 200-400 words total after correspondence is assembled.
+- Name the exact resolved role in the body.
+- Use only the selected evidence below. Do not mention any fact whose id is absent.
+- Every paragraph must cite at least one selected evidence id. Authored-letter paragraphs may cite source_letter for facts already present in the source.
+- In authored-letter mode, retain at least one useful phrase of four or more words verbatim and report what was preserved.
+- Use two or three evidence connections, not every available fact.
+- Do not repeat resume bullets line by line.
+- Do not claim a perfect fit, unique blend, proven track record, dynamic environment, or generic admiration.
+- Do not make every paragraph end by restating how the experience applies.
+- Never return a placeholder. Missing required information is a contract failure, not bracketed output.
+
+Source mode: ${String(sourceMode ?? "")}
+
+Tone preference:
+<tone_preference>
+${fenceUntrusted(tonePreference)}
+</tone_preference>
+
+Resolved correspondence (reference only; the server assembles it):
+<resolved_context>
+${fenceUntrusted(serializeJsonForPrompt(resolvedContext ?? {}, 4_000))}
+</resolved_context>
+
+Approved plan:
+<cover_letter_plan>
+${fenceUntrusted(serializeJsonForPrompt(plan ?? {}, 16_000))}
+</cover_letter_plan>
+
+Selected evidence only:
+<selected_evidence>
+${fenceUntrusted(serializeJsonForPrompt(selectedEvidence ?? [], 24_000))}
+</selected_evidence>
+
+Candidate source prose:
+<source_cover_letter>
+${fenceUntrusted(sourceText)}
+</source_cover_letter>
+
+${customInstructionsPrompt(customInstructions)}
+
+Job description:
+<job_description>
+${fenceUntrusted(jobText)}
+</job_description>`
   };
 }

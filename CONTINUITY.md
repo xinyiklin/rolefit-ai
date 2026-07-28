@@ -3,6 +3,16 @@
 Cross-workspace decisions and handoff state. Keep entries factual, dated, and
 bounded; app-only operational detail belongs in the affected app documentation.
 
+## 2026-07-28
+
+- [CODE] Cover-letter AI now separates deterministic authored/guided preflight,
+  atomic evidence preparation, selected-only drafting, and explicit proposal
+  acceptance. Server contracts fail closed on placeholders, unknown or weak
+  evidence, generic prose, unsupported claims, and false voice preservation.
+- [TOOL] RoleFit production build, all 57 offline evals, and desktop/390px
+  browser interaction QA passed with a clean console. The synthetic live-provider
+  harness was added but not run.
+
 ## 2026-07-27
 
 - [USER+CODE] Ordinary tracker PUTs now send only records named by `upsert`

@@ -38,6 +38,7 @@ type CoverLetterToolbarProps = {
   hasLetter: boolean;
   canTailor: boolean;
   tailorHint: string;
+  actionLabel: string;
   isTailoring: boolean;
   targetLine: string;
   onTailor: () => void;
@@ -80,6 +81,7 @@ export function CoverLetterToolbar({
   hasLetter,
   canTailor,
   tailorHint,
+  actionLabel,
   isTailoring,
   targetLine,
   onTailor,
@@ -290,13 +292,12 @@ export function CoverLetterToolbar({
               onPromptOpenChange={setPdfPromptOpen}
               onDownloadPdf={(base) => void editor.downloadPdf(base)}
             />
-            {/* Named Polish to match the resume action bar. The underlying
-                operation is still tailoring this letter — the props and the hook
-                keep that name. The letter has no AI review stage, so unlike the
-                resume this stays a single direct action. */}
+            {/* The document action starts preparation; the rail owns the
+                evidence-review and draft steps so the toolbar never bypasses
+                candidate selection or proposal acceptance. */}
             <ToolbarButton
-              label={isTailoring ? "Working…" : "Polish"}
-              tooltip={tailorHint || "Tailor the existing cover letter"}
+              label={isTailoring ? "Working…" : actionLabel}
+              tooltip={tailorHint || (actionLabel === "Polish" ? "Polish the authored letter" : "Draft from your details")}
               icon={<Sparkles size={16} />}
               showLabel
               tone="primary"

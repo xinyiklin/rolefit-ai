@@ -1,5 +1,8 @@
-import { useRef, useState, type RefObject } from "react";
+import { useMemo, useRef, useState, type RefObject } from "react";
 
+import { parseCoverLetterText } from "@typeset/engine/lib/coverLetter.ts";
+import { toTypesetSchema } from "@typeset/engine/typeset/schema.ts";
+import { layoutCoverLetter } from "@typeset/engine/typeset/layout.ts";
 import {
   TypesetEditor,
   type InlineFormatState,
@@ -10,6 +13,16 @@ import type { ApplicationDocumentSync } from "../../hooks/useApplicationDocument
 import type { DraftAutosaveState } from "../../hooks/useAutosaveDraft";
 import type { CoverLetterAutosavedDraft } from "../../hooks/useCoverLetterAutosaveDraft";
 import type { CoverLetterEditorState } from "../../hooks/useCoverLetterEditor";
+import type {
+  CoverLetterEvidenceItem,
+  CoverLetterPreparation,
+  CoverLetterProposal
+} from "../../lib/coverLetterEvidence";
+import type {
+  CoverLetterPreparationFieldKey,
+  CoverLetterPreflight,
+  CoverLetterSourceMode
+} from "../../lib/coverLetterPreflight";
 import { useRestoredScroll } from "../../hooks/useRestoredScroll";
 import { CoverLetterReview } from "../cover-letter/CoverLetterReview";
 import { DraftRestoreBar } from "../DraftRestoreBar";
@@ -26,6 +39,7 @@ type CoverLetterTabProps = {
   inlineFormat: InlineFormatState;
   onInlineFormatStateChange: (state: InlineFormatState) => void;
   onTailor: () => void;
+  onDraft: () => void;
   applicationSync: ApplicationDocumentSync;
   draftAutosaveState: DraftAutosaveState;
   // Autosave recovery: non-null when a draft from a previous session was found.
@@ -39,6 +53,18 @@ type CoverLetterTabProps = {
   providerReady: boolean;
   providerMessage: string;
   jobTarget?: { role?: string; company?: string };
+  preflight: CoverLetterPreflight;
+  proposal: CoverLetterProposal | null;
+  evidence: CoverLetterEvidenceItem[];
+  preparation: CoverLetterPreparation | null;
+  clarificationAnswers: Record<string, string>;
+  onSourceModeChange: (mode: CoverLetterSourceMode) => void;
+  onPreparationFieldChange: (key: CoverLetterPreparationFieldKey, value: string) => void;
+  onClarificationChange: (evidenceId: string, value: string) => void;
+  onEvidenceDecisionChange: (evidenceId: string, decision: "use" | "skip") => void;
+  onAcceptProposal: () => void;
+  onEditProposal: () => void;
+  onDiscardProposal: () => void;
 };
 
 function wordCount(text: string): number {
@@ -55,6 +81,7 @@ export function CoverLetterTab({
   inlineFormat,
   onInlineFormatStateChange,
   onTailor,
+  onDraft,
   applicationSync,
   draftAutosaveState,
   pendingAutosaveDraft,
@@ -66,7 +93,19 @@ export function CoverLetterTab({
   jobReady,
   providerReady,
   providerMessage,
-  jobTarget
+  jobTarget,
+  preflight,
+  proposal,
+  evidence,
+  preparation,
+  clarificationAnswers,
+  onSourceModeChange,
+  onPreparationFieldChange,
+  onClarificationChange,
+  onEvidenceDecisionChange,
+  onAcceptProposal,
+  onEditProposal,
+  onDiscardProposal
 }: CoverLetterTabProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const scrollerRef = useRestoredScroll(initialScrollTop, onScrollExit);
@@ -76,12 +115,16 @@ export function CoverLetterTab({
   const [linkEditorOpen, setLinkEditorOpen] = useState(false);
   const hasLetter = true;
   const canTailor =
-    editor.text.trim().length >= 80 && resumeReady && jobReady && providerReady && !isTailoring;
+    preflight.readyForPreparation &&
+    resumeReady &&
+    jobReady &&
+    providerReady &&
+    !isTailoring &&
+    !preparation &&
+    !proposal;
   const targetLine = [jobTarget?.role, jobTarget?.company].filter(Boolean).join(" at ");
-  const hasPlaceholder = /\[(?:add|insert|your|company|name|date)[^\]]*\]/i.test(editor.text);
-  const hasGreeting = /\bdear\b/i.test(editor.text.slice(0, 400));
-  const tailorHint = editor.text.trim().length < 80
-    ? "Write or open at least 80 words before tailoring."
+  const readinessHint = preflight.blockingReasons[0]
+    ? preflight.blockingReasons[0]
     : !resumeReady && !jobReady
       ? "Add a resume and job description first."
       : !resumeReady
@@ -91,6 +134,22 @@ export function CoverLetterTab({
           : !providerReady
             ? providerMessage
             : "";
+  const tailorHint = proposal
+    ? "Review the proposal in the rail."
+    : preparation
+      ? "Review the evidence plan in the rail."
+      : readinessHint;
+  const proposalPageCount = useMemo(() => {
+    if (!proposal) return 0;
+    try {
+      return layoutCoverLetter(
+        toTypesetSchema(parseCoverLetterText(proposal.coverLetterText)),
+        editor.docStyle.style
+      ).pages.length;
+    } catch {
+      return 0;
+    }
+  }, [editor.docStyle.style, proposal]);
 
   return (
     <section className="studio-card studio-card--flush cover-letter-page">
@@ -104,6 +163,13 @@ export function CoverLetterTab({
         hasLetter={hasLetter}
         canTailor={canTailor}
         tailorHint={tailorHint}
+        actionLabel={
+          preflight.sourceMode === "authored_letter"
+            ? "Polish"
+            : preflight.readyForPreparation
+              ? "Draft"
+              : "Complete details"
+        }
         isTailoring={isTailoring}
         targetLine={targetLine}
         onTailor={onTailor}
@@ -145,8 +211,23 @@ export function CoverLetterTab({
         <CoverLetterReview
           words={wordCount(editor.text)}
           pageCount={pageCount}
-          hasGreeting={hasGreeting}
-          hasPlaceholder={hasPlaceholder}
+          proposalPageCount={proposalPageCount}
+          preflight={preflight}
+          evidence={evidence}
+          preparation={preparation}
+          proposal={proposal}
+          proposalWords={proposal ? wordCount(proposal.coverLetterText) : 0}
+          clarificationAnswers={clarificationAnswers}
+          isWorking={isTailoring}
+          onSourceModeChange={onSourceModeChange}
+          onPreparationFieldChange={onPreparationFieldChange}
+          onClarificationChange={onClarificationChange}
+          onEvidenceDecisionChange={onEvidenceDecisionChange}
+          onPrepare={onTailor}
+          onDraft={onDraft}
+          onAcceptProposal={onAcceptProposal}
+          onEditProposal={onEditProposal}
+          onDiscardProposal={onDiscardProposal}
           status={tailorHint || tailorStatus || editor.status}
         />
       </div>

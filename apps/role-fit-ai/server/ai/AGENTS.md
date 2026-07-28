@@ -15,8 +15,13 @@ sanitizer code is executable product behavior and anti-fabrication-critical.
 - `polish.ts` orchestrates Tailor and Review; its optional cover leg is retained
   only for compatibility with older clients.
 - `distill.ts`, `coverLetter.ts`, and `applicationAnswers.ts` own their routes.
-  Cover-letter tailoring requires the candidate's source letter and revises it;
-  it does not generate a new letter from resume/job inputs alone.
+  Cover-letter tailoring requires either an authored source letter or explicit
+  guided-draft answers; it never generates from resume/job inputs alone. The
+  route shares deterministic preflight with the browser, returns
+  `needs_input` before provider dispatch, and cannot return `ready` with
+  template tokens or unresolved correspondence fields. Preparation classifies
+  every atomic evidence item; drafting receives only the approved one to three
+  items, and every returned body paragraph cites approved ids.
 - `grounding.ts` and `eligibilityLexicon.ts` provide deterministic evidence
   checks, never a local fit-scoring system.
 - `json.ts` and `errors.ts` own response parsing and user-safe failure mapping.

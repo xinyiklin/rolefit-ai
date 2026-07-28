@@ -171,11 +171,24 @@ owns:
   from a missing letter, and a cover failure must not discard successful
   tailor/review results. The client surfaces "reviewed by" when either the
   audit provider or audit model differs from the Tailor configuration.
-  `/api/cover-letter` requires `sourceCoverLetterText` plus the current resume
-  and job description. It revises the source rather than creating a new
-  template, preserves the source as grounding evidence, and returns an empty
-  result if deterministic checks find an unsupported term, number, or outcome.
-  It and `/api/application-answers` echo the resolved `provider` / `model` /
+  `/api/cover-letter` requires an explicit `sourceMode`, `mode:
+  "prepare" | "draft"`, and the current job description. Authored-letter mode requires at least 80 genuine words
+  after template fields are removed. Guided-draft mode requires the candidate's
+  own motivation and selected experience notes; the bundled starter itself is
+  never sent as prose. Shared deterministic preflight resolves date, candidate,
+  role, company, greeting, and sign-off, returns `needs_input` before provider
+  dispatch when required fields are absent. The prepare pass receives atomic
+  evidence objects with stable ids and must classify every item as `use`,
+  `skip`, or `needs_clarification`; it cannot silently omit honest context or
+  select more than three items. The browser exposes those decisions and candidate
+  overrides. The draft pass receives only the approved evidence objects plus
+  the selected plan—not the full resume or skipped notes—and each body paragraph
+  must cite an approved id. The server assembles date, greeting, and sign-off
+  itself, then rejects template tokens, unknown evidence ids, unsupported
+  terms, numbers, outcomes, generic AI phrasing, false source-preservation
+  metadata, or a body that omits the resolved role.
+  The cover-letter UI keeps a successful result as a pending proposal until the
+  user explicitly accepts or discards it. It and `/api/application-answers` echo the resolved `provider` / `model` /
   `reasoningEffort`.
 - resume import into the structured editor: a `.txt` / `.md` / `.csv` (or pasted)
   resume is parsed once into `ResumeData`, the source of truth thereafter (no DOCX
@@ -521,7 +534,7 @@ The only deterministic non-AI alternative is the job distiller
 (`src/lib/jobExtract.ts`). It is a successful path only when the user has AI
 Distill turned off. If a requested AI Distill call fails, the local brief may be
 retained for inspection but the selected stage remains failed. Tailor, Review,
-cover-letter revision, and application-answer failures have no local
+  cover-letter preparation/drafting, and application-answer failures have no local
 substitutes. No
 locally generated draft, score, review, or verdict stands in.
 

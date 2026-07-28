@@ -39,7 +39,12 @@ browser-side effects; components render them and App composes them.
   reusable history/reducer behavior in `@typeset/editor`.
 - `useCoverLetterEditor` owns RoleFit's separate letter/file/export lifecycle
   while delegating history, editing, layout, and PDF to the shared packages.
-  `useCoverLetter` owns only its grounded AI revision workflow.
+  `useCoverLetter` owns deterministic preflight inputs, preparation and
+  clarification state, evidence overrides, selected-only drafting, stale-input
+  invalidation, and the pending proposal. Generated text stays out of the editor
+  until the user explicitly accepts it. Keep that request-generation boundary
+  in one coordinator: splitting its abort refs and stale-response checks across
+  hooks would weaken the atomic transition; extract pure contracts into `lib/`.
 - Both editors recover unsaved work the same way: `useAutosaveDraft` and
   `useCoverLetterAutosaveDraft` each own one document's debounced draft, over
   the shared per-tab rules in `lib/autosaveDraftStorage.ts` (tab scoping, live

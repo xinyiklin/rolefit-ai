@@ -128,10 +128,20 @@ Good server verification covers:
 - duplicate warnings before or after Distill must offer Continue/Stop; Stop
   prevents the current and every downstream AI request, while Continue is
   acknowledged for the same job target so the pipeline does not prompt twice
-- cover-letter revision and application-answer generation have no local
+- cover-letter drafting and application-answer generation have no local
   fallback and retain their own retryable task progress. Cover-letter probes
-  must require a candidate source, neutralize source-letter fence injection,
-  and reject unsupported terms, numbers, and outcomes
+  must distinguish authored and guided sources, count prose after removing all
+  template fields, treat `Dear [Hiring manager]` as incomplete, require guided
+  motivation/evidence answers, require exactly one preparation decision per
+  atomic evidence id, send only selected evidence to drafting, neutralize
+  source-letter fence injection, and reject placeholders, unknown evidence ids,
+  unsupported terms, numbers, and outcomes. The ten-fixture synthetic corpus
+  grades evidence relevance, skipped-evidence leakage, source voice,
+  meaningful authored-phrase preservation, resume-dump behavior, generic
+  language, exact correspondence, role/company
+  specificity, word range, and page count. It is offline by default; run the
+  real-provider harness deliberately with
+  `npm run eval:live:cover-letter --workspace apps/role-fit-ai -- [fixture-id|all] [runs]`
 - resume import (`.txt` / `.md` / `.csv`, or paste) reaches the structured editor
   as a one-time conversion into `ResumeData`; a `.resume` file loads its
   `ResumeData` directly, and export offers PDF + `.resume`
@@ -183,8 +193,11 @@ Good frontend verification covers:
 - changed controls are reachable by keyboard
 - loading / data refresh does not cause avoidable layout shift
 - API error states show user-safe messaging (no raw provider bodies)
-- a failed cover-letter revision stays local to its page with safe retry copy;
-  the source remains restorable and the resume/review result remains usable
+- a failed cover-letter request stays local to its page with safe retry copy;
+  preparation exposes use/skip/clarify decisions and user overrides, a
+  successful draft remains a visible pending proposal until explicit
+  acceptance, and editing the source or changing the job invalidates either
+  prepared or proposed state
 - the owned typeset page stays the sole editor and live preview; the tracker may
   render or open a saved application document as PDF, `ReviewRail` docks only after polish
   produces review output, and a

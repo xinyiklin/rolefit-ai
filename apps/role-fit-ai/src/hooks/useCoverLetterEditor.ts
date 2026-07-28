@@ -30,6 +30,7 @@ import type { ResumeData } from "@typeset/engine/lib/resumeData.ts";
 import { toTypesetSchema } from "@typeset/engine/typeset/schema.ts";
 import { clearCoverLetterAutosaveDraft } from "./useCoverLetterAutosaveDraft";
 import type { DocumentUpload } from "../lib/applicationDocumentRequests";
+import type { CoverLetterSourceMode } from "../lib/coverLetterPreflight";
 import {
   coverLetterStartupIsCurrent,
   loadLastCoverLetterName,
@@ -96,6 +97,8 @@ type UseCoverLetterEditorOptions = {
 export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) {
   const [style, setStyle] = useState<DocStyle>(loadStyle);
   const [initialData] = useState(() => parseCoverLetterText(""));
+  const [sourceMode, setSourceMode] = useState<CoverLetterSourceMode>("guided_draft");
+  const [sourceRevision, setSourceRevision] = useState(0);
   const editor = useTypesetResumeEditor(initialData);
   const onOpenDocumentRef = useRef(options.onOpenDocument);
   onOpenDocumentRef.current = options.onOpenDocument;
@@ -103,9 +106,15 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
   // Every user-initiated load goes through here instead of `editor.seedData`,
   // so no open path can forget to move the caret into the new document.
   const openDocument = useCallback(
-    (data: ResumeData, automatic = false) => {
+    (
+      data: ResumeData,
+      automatic = false,
+      nextSourceMode: CoverLetterSourceMode = "authored_letter"
+    ) => {
       if (!automatic) cancelStartupOpenRef.current = true;
       editor.seedData(data);
+      setSourceMode(nextSourceMode);
+      setSourceRevision((current) => current + 1);
       onOpenDocumentRef.current?.();
     },
     [editor.seedData]
@@ -223,7 +232,7 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
     (source: string) => {
       if (!source.trim()) {
         const data = parseCoverLetterText("");
-        openDocument(data);
+        openDocument(data, false, "guided_draft");
         editor.markClean();
         setPersistedFingerprint(
           serializeCoverLetterFile(data, documentStyleToCoverLetterStyle(styleRef.current))
@@ -254,6 +263,8 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
         ? { ...parsed, name: editor.editedResume.name, contact: editor.editedResume.contact }
         : parsed;
       editor.seedData(data);
+      setSourceMode("authored_letter");
+      setSourceRevision((current) => current + 1);
       setStatus("Tailored draft loaded. Review it in your own voice before sending.");
     },
     [editor.editedResume, editor.seedData]
@@ -319,7 +330,7 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
 
   const startBlank = useCallback(() => {
     const data = parseCoverLetterText("");
-    openDocument(data);
+    openDocument(data, false, "guided_draft");
     editor.markClean();
     // A blank letter is the same document the page opens with, so New must not
     // leave it permanently "unsaved" — that warned on close and prompted to
@@ -335,7 +346,7 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
 
   const startStarter = useCallback(() => {
     const data = parseCoverLetterText(COVER_LETTER_STARTER);
-    openDocument(data);
+    openDocument(data, false, "guided_draft");
     editor.markClean();
     setPersistedFingerprint(
       serializeCoverLetterFile(data, documentStyleToCoverLetterStyle(styleRef.current))
@@ -343,8 +354,17 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
     setActiveCoverFileName("");
     saveLastCoverLetterName("");
     setDocumentTitle("Cover letter");
-    setStatus("Starter opened. Replace every bracketed prompt with your own facts before tailoring.");
+    setStatus("Starter opened. Complete the tailoring details beside the document.");
   }, [editor.markClean, openDocument]);
+
+  const chooseSourceMode = useCallback(
+    (nextSourceMode: CoverLetterSourceMode) => {
+      if (nextSourceMode === sourceMode) return;
+      setSourceMode(nextSourceMode);
+      setSourceRevision((current) => current + 1);
+    },
+    [sourceMode]
+  );
 
   const openFile = useCallback(
     async (file: File) => {
@@ -676,6 +696,9 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
     redoSequence: editor.redoSequence,
     dirty,
     text,
+    sourceMode,
+    sourceRevision,
+    chooseSourceMode,
     documentTitle,
     setDocumentTitle,
     docStyle,

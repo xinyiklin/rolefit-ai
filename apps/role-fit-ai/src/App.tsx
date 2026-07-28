@@ -800,9 +800,9 @@ function App() {
   });
 
 
-  // The cover-letter workflow revises the candidate's current letter against
-  // the current resume and job context. Its dedicated editor remains the
-  // single owner for direct edits, file lifecycle, restore, and application save.
+  // The cover workflow prepares atomic evidence before drafting. Its dedicated
+  // editor remains the single owner for accepted text, direct edits, file
+  // lifecycle, restore, and application save.
   const {
     coverLetterText,
     applyCoverLetter,
@@ -811,11 +811,24 @@ function App() {
     coverStatus,
     isGeneratingCover,
     handleGenerateCoverLetter,
+    generatePreparedDraft,
     coverProgress,
-    dismissCoverProgress
+    dismissCoverProgress,
+    preflight: coverLetterPreflight,
+    updatePreparationField: updateCoverLetterPreparationField,
+    evidenceItems: coverLetterEvidence,
+    preparation: coverLetterPreparation,
+    clarificationAnswers: coverLetterClarificationAnswers,
+    updateClarificationAnswer: updateCoverLetterClarificationAnswer,
+    updateEvidenceDecision: updateCoverLetterEvidenceDecision,
+    pendingProposal: coverLetterProposal,
+    acceptProposal: acceptCoverLetterProposal,
+    editProposalDetails: editCoverLetterProposalDetails,
+    discardProposal: discardCoverLetterProposal
   } = useCoverLetter({
     currentCoverLetterText: coverLetterEditor.text,
     currentResumeText,
+    resumeData: editedResume,
     jobText: jobDescription,
     honestContext: requestHonestContext,
     customInstructions: customInstructionsFor("cover"),
@@ -823,6 +836,13 @@ function App() {
     providerReady: coverProviderReady,
     providerMessage: coverProviderMessage,
     resumeText,
+    sourceMode: coverLetterEditor.sourceMode,
+    sourceRevision: coverLetterEditor.sourceRevision,
+    candidateName: resolveResumeApplicantName(
+      coverLetterEditor.data.name || editedResume?.name,
+      currentResumeText || resumeText
+    ),
+    jobTarget: { role: jobTracking.role || jobTracking.title, company: jobTracking.company },
     onApplyTailored: coverLetterEditor.applyTailoredText,
     onApplyExternal: coverLetterEditor.applyExternalText,
     onUsage: (usage) => setPipelineAiUsage((prev) => ({ ...prev, cover: usage }))
@@ -2042,6 +2062,7 @@ function App() {
               inlineFormat={coverLetterInlineFormat}
               onInlineFormatStateChange={setCoverLetterInlineFormat}
               onTailor={handleGenerateCoverLetter}
+              onDraft={generatePreparedDraft}
               applicationSync={coverLetterApplicationSync}
               draftAutosaveState={coverDraftAutosaveState}
               pendingAutosaveDraft={pendingCoverDraft}
@@ -2051,9 +2072,21 @@ function App() {
               tailorStatus={coverStatus}
               resumeReady={resumeReady}
               jobReady={jobReady}
-              providerReady={tailorProviderReady}
-              providerMessage={tailorProviderMessage}
+              providerReady={coverProviderReady}
+              providerMessage={coverProviderMessage}
               jobTarget={materialsJobTarget}
+              preflight={coverLetterPreflight}
+              proposal={coverLetterProposal}
+              evidence={coverLetterEvidence}
+              preparation={coverLetterPreparation}
+              clarificationAnswers={coverLetterClarificationAnswers}
+              onSourceModeChange={coverLetterEditor.chooseSourceMode}
+              onPreparationFieldChange={updateCoverLetterPreparationField}
+              onClarificationChange={updateCoverLetterClarificationAnswer}
+              onEvidenceDecisionChange={updateCoverLetterEvidenceDecision}
+              onAcceptProposal={acceptCoverLetterProposal}
+              onEditProposal={editCoverLetterProposalDetails}
+              onDiscardProposal={discardCoverLetterProposal}
             />
           ) : null}
 

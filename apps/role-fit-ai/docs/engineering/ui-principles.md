@@ -40,8 +40,9 @@ inputs pane was folded into the masthead by explicit user request,
   controls own add/remove/reorder, section type, and per-section tailor scope;
   Open/Save/Polish share one document action bar, and the
   suggestion/recruiter-review rail docks beside it post-polish), Cover
-  letter (a separate plain-paragraph editor that revises the user's source
-  letter with the matching Open/Save/Polish action bar), Materials
+  letter (a separate plain-paragraph editor with explicit authored/guided
+  modes and a readiness → evidence plan → proposal rail beside the matching
+  Open/Save/Polish action bar), Materials
   (application questions and role descriptions),
   Applications (table / calendar tracker views), Analytics — plus the
   document-specific review rails
