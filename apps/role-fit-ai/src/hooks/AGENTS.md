@@ -23,6 +23,10 @@ browser-side effects; components render them and App composes them.
   configured/readiness state and must not silently select a paid replacement.
 - `useWorkspaceResume`, `useApplyFlow`, `useApplications`, and
   `useApplicationFiles` own their local server/storage lifecycles.
+  `useApplications` sends only mutation-named upsert records, keeps optimistic
+  updates serial, and reconciles successful own-write snapshots by id/revision
+  so unchanged objects retain identity. Manual refreshes and conflict snapshots
+  remain fresh authoritative objects.
 - `useApplicationDocumentSync` owns the session's application link and the two
   explicit per-document saves that follow Apply. Saving is always user
   initiated; no effect may write a document into an application.

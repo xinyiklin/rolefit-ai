@@ -5,6 +5,16 @@ bounded; app-only operational detail belongs in the affected app documentation.
 
 ## 2026-07-27
 
+- [USER+CODE] Ordinary tracker PUTs now send only records named by `upsert`
+  mutations; delete-only requests send an empty applications array. The server
+  still accepts legacy full snapshots, treats unmutated client rows as
+  non-authoritative, prepends genuinely new records in incoming order, and
+  retains existing server order for edits and merges. Successful writes still
+  return the authoritative full tracker for cross-tab synchronization, but the
+  client reuses prior objects whose id and `updatedAt` are unchanged. Explicit
+  Refresh and `409` conflict snapshots remain fully fresh, and the shared
+  applications lock remains unchanged.
+
 - [USER+CODE] Cover letters now default to double line spacing with 8 pt after
   each paragraph, 0.5 inch top/bottom margins, and 0.75 inch side margins.
   Exact snapshots of both prior shipped defaults migrate to the new default;
@@ -30,7 +40,8 @@ bounded; app-only operational detail belongs in the affected app documentation.
   canonicalizes dismissed-id membership, and uses a length-prefixed two-hash
   composite. It remains a conservative cache version: raw URL/metadata changes
   may safely over-invalidate. The per-object `WeakMap` avoids rehashing only
-  while references survive; full server responses currently replace them.
+  while references survive. Successful own-write responses now preserve
+  unchanged id/revision objects; explicit GET and conflict snapshots stay fresh.
   **DEFERRED / NOT ACTIVE BACKLOG:** bucket candidate indexing and incremental
   edge maintenance. The tracker is capped at 500 records, and neither
   architecture is justified by measured user impact. Reconsider only if

@@ -612,9 +612,9 @@ function parseApplicationMutations(raw: unknown): ApplicationMutation[] {
 
 /**
  * Apply an explicitly described client mutation set to the latest disk state.
- * Unchanged rows come from `existing`, never the client's possibly stale full
- * snapshot. Every changed row carries the `updatedAt` value the client edited,
- * so two tabs cannot silently overwrite the same application.
+ * The client may send sparse upsert records or a legacy full snapshot, but
+ * unchanged rows always come from `existing`. New rows are prepended in
+ * incoming order; existing rows retain their server order.
  */
 export function reconcileApplicationMutations(
   existing: ReturnType<typeof sanitizeApplications>,
@@ -662,25 +662,27 @@ export function reconcileApplicationMutations(
     }
   }
 
-  const reconciled = incoming.map((application) => {
-    const mutation = mutationById.get(application.id);
-    if (mutation?.operation === "upsert") return application;
-    const current = existingById.get(application.id);
-    if (!current) {
+  for (const application of incoming) {
+    if (!existingById.has(application.id) && mutationById.get(application.id)?.operation !== "upsert") {
       throw new ApplicationsStorageError(
         "A new application must include an upsert mutation. No tracker changes were saved.",
         400
       );
     }
-    // The client sends a full snapshot for optimistic UI, but an unmutated row
-    // may be stale. Preserve the current server copy so unrelated-tab edits live.
-    return current;
-  });
+  }
 
-  const includedIds = new Set(reconciled.map((application) => application.id));
+  const reconciled = incoming.filter((application) =>
+    !existingById.has(application.id) &&
+    mutationById.get(application.id)?.operation === "upsert"
+  );
   for (const current of existing) {
-    if (includedIds.has(current.id) || mutationById.get(current.id)?.operation === "delete") continue;
-    reconciled.push(current);
+    const mutation = mutationById.get(current.id);
+    if (mutation?.operation === "delete") continue;
+    reconciled.push(
+      mutation?.operation === "upsert"
+        ? incomingById.get(current.id)!
+        : current
+    );
   }
   return reconciled;
 }

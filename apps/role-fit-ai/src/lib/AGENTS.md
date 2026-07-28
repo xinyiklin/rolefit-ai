@@ -15,6 +15,9 @@ Applies to `apps/role-fit-ai/src/lib/`.
   a verdict; it must not infer or recalculate the verdict.
 - Browser/server-shared helpers must remain safe to import in both runtimes and
   must not pull React-bearing package paths into Node.
+- `applicationMutation.ts` owns sparse tracker request selection and
+  reference-preserving own-write response reconciliation. It does not own
+  persistence, queueing, conflicts, or React state.
 - `jobIdentity.ts` owns both duplicate matching and the dependency-free
   candidate cache version. The key must use the matcher's effective text/role
   selectors and conservatively invalidate every observable verdict input; safe

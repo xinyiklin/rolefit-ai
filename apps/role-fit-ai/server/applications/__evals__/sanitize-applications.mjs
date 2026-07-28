@@ -202,11 +202,12 @@ try {
     { id: "record-a", title: "Record A", notes: "newer server A", updatedAt: "revision-a" },
     { id: "record-b", title: "Record B", notes: "server B", updatedAt: "revision-b" }
   ]);
-  const clientSnapshot = sanitizeApplications([
+  const legacyClientSnapshot = sanitizeApplications([
     { id: "record-a", title: "Record A", notes: "stale client A", updatedAt: "revision-a" },
     { id: "record-b", title: "Record B", notes: "client B", updatedAt: "revision-b-next" }
   ]);
-  const reconciled = reconcileApplicationMutations(serverSnapshot, clientSnapshot, [
+  const sparseClientSnapshot = [legacyClientSnapshot[1]];
+  const reconciled = reconcileApplicationMutations(serverSnapshot, sparseClientSnapshot, [
     { id: "record-b", operation: "upsert", baseUpdatedAt: "revision-b" }
   ]);
   if (reconciled.find((application) => application.id === "record-a")?.notes !== "newer server A") {
@@ -215,10 +216,55 @@ try {
   if (reconciled.find((application) => application.id === "record-b")?.notes !== "client B") {
     failures.push("a revision-matched mutation did not apply");
   }
+  if (reconciled.map((application) => application.id).join(",") !== "record-a,record-b") {
+    failures.push("an edited existing row did not retain its server list position");
+  }
+
+  const legacyReconciled = reconcileApplicationMutations(serverSnapshot, legacyClientSnapshot, [
+    { id: "record-b", operation: "upsert", baseUpdatedAt: "revision-b" }
+  ]);
+  if (
+    legacyReconciled[0]?.notes !== "newer server A" ||
+    legacyReconciled[1]?.notes !== "client B"
+  ) {
+    failures.push("a legacy full-snapshot request no longer reconciles safely");
+  }
+
+  const newRecords = sanitizeApplications([
+    { id: "record-new-b", title: "New B", updatedAt: "new-b-revision" },
+    { id: "record-new-a", title: "New A", updatedAt: "new-a-revision" }
+  ]);
+  const withNewRecords = reconcileApplicationMutations(serverSnapshot, newRecords, [
+    { id: "record-new-b", operation: "upsert", baseUpdatedAt: null },
+    { id: "record-new-a", operation: "upsert", baseUpdatedAt: null }
+  ]);
+  if (withNewRecords.map((application) => application.id).join(",") !== "record-new-b,record-new-a,record-a,record-b") {
+    failures.push("multiple new upserts were not prepended in incoming order");
+  }
+
+  const mergeSnapshot = sanitizeApplications([
+    { id: "record-a", title: "Record A", updatedAt: "revision-a" },
+    { id: "record-b", title: "Record B", updatedAt: "revision-b" },
+    { id: "record-c", title: "Record C", updatedAt: "revision-c" },
+    { id: "record-d", title: "Record D", updatedAt: "revision-d" }
+  ]);
+  const mergedCanonical = sanitizeApplications([
+    { id: "record-c", title: "Record C", notes: "merged", updatedAt: "revision-c-next" }
+  ]);
+  const merged = reconcileApplicationMutations(mergeSnapshot, mergedCanonical, [
+    { id: "record-c", operation: "upsert", baseUpdatedAt: "revision-c" },
+    { id: "record-b", operation: "delete", baseUpdatedAt: "revision-b" }
+  ]);
+  if (
+    merged.map((application) => application.id).join(",") !== "record-a,record-c,record-d" ||
+    merged[1]?.notes !== "merged"
+  ) {
+    failures.push("a merge did not retain the canonical record's server position");
+  }
 
   let conflictRejected = false;
   try {
-    reconcileApplicationMutations(serverSnapshot, clientSnapshot, [
+    reconcileApplicationMutations(serverSnapshot, sparseClientSnapshot, [
       { id: "record-b", operation: "upsert", baseUpdatedAt: "stale-revision" }
     ]);
   } catch (error) {
@@ -241,7 +287,7 @@ try {
 
   let collisionRejected = false;
   try {
-    reconcileApplicationMutations(serverSnapshot, clientSnapshot, [
+    reconcileApplicationMutations(serverSnapshot, sparseClientSnapshot, [
       { id: "record-b", operation: "upsert", baseUpdatedAt: null }
     ]);
   } catch (error) {
@@ -249,7 +295,7 @@ try {
   }
   if (!collisionRejected) failures.push("a new-record id collision overwrote an existing row");
 
-  const deleted = reconcileApplicationMutations(serverSnapshot, [serverSnapshot[1]], [
+  const deleted = reconcileApplicationMutations(serverSnapshot, [], [
     { id: "record-a", operation: "delete", baseUpdatedAt: "revision-a" }
   ]);
   if (deleted.some((application) => application.id === "record-a")) {

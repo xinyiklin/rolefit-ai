@@ -48,11 +48,10 @@ export type DuplicateScanResult = {
 // signal. Never read by product code.
 export const duplicateScanStats = { scans: 0, hashedRecords: 0 };
 
-// Per-record identity hash. Optimistic local edits retain references for
-// untouched rows, so one edit normally hashes one new object. A full server
-// response currently replaces every object and therefore misses this WeakMap;
-// response reconciliation can restore that optimization without affecting the
-// correctness of this cache.
+// Per-record identity hash. Optimistic edits and successful own-write responses
+// retain unchanged row references, so one edit normally hashes one new object.
+// Explicit GET and conflict snapshots intentionally replace every object to
+// preserve their fresh-authoritative boundary.
 const recordKeys = new WeakMap<object, string>();
 
 function recordKey(record: DuplicateCandidate): string {

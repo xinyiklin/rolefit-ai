@@ -88,7 +88,7 @@ export async function handleListApplications(
   }
 }
 
-// Serialize applications.json read-modify-write cycles. The merge/delete
+// Serialize applications.json read-modify-write cycles. Tracker mutations
 // handlers each read the file, derive a new list, and write it back; two
 // overlapping requests (e.g. Apply clicked in two tabs at once) could both read
 // the same disk state and the second write would drop the first's entry. A
@@ -111,18 +111,18 @@ export async function handleSaveApplications(
       return;
     }
     const applications = await withApplicationsLock(async () => {
-      // Reconcile the client's explicit mutation set against the latest disk
-      // snapshot. Unchanged rows stay server-authoritative, while changed rows
-      // must still match the revision the client originally edited.
+      // Sparse and legacy full-snapshot clients share one mutation contract.
+      // Unchanged rows stay server-authoritative, while changed rows must still
+      // match the revision the client originally edited.
       const existing = await readApplications(workspaceDir);
       const reconciled = reconcileApplicationMutations(existing, incoming, body.mutations);
       const deletedIds = existing
         .filter((application) => !reconciled.some((candidate) => candidate.id === application.id))
         .map((application) => application.id);
       const applications = await writeApplications(workspaceDir, reconciled);
-      // The browser's ordinary delete and duplicate-merge flows both use this
-      // full-snapshot mutation endpoint. Move removed records' personal files
-      // under the same lock so no path depends on the separate DELETE route.
+      // Ordinary delete and duplicate-merge flows use this mutation endpoint.
+      // Move removed records' personal files under the same lock so no path
+      // depends on the separate DELETE route.
       for (const deletedId of deletedIds) {
         await trashApplicationFiles(deletedId, workspaceDir);
       }

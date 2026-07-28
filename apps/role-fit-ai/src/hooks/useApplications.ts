@@ -7,6 +7,11 @@ import { dedupeSourceUrls, normalizeJobUrl, findDuplicateApplications } from "..
 import type { DuplicateTarget } from "../lib/jobIdentity";
 import type { ApplicationAiUsage } from "../lib/aiUsage";
 import { applicationMatchesJobTarget } from "../lib/applicationDocuments";
+import {
+  applicationMutationRecords,
+  reconcileApplicationWriteResponse,
+  type ApplicationMutation
+} from "../lib/applicationMutation";
 
 export type { ApplicationAiUsage, StageAiUsage } from "../lib/aiUsage";
 
@@ -310,12 +315,6 @@ function mergeSourceUrls(existing: Application, incoming: Application, now: stri
 
 type EditableField = "title" | "company" | "role" | "source" | "notes" | "followupAt" | "jobUrl";
 
-type ApplicationMutation = {
-  id: string;
-  operation: "upsert" | "delete";
-  baseUpdatedAt: string | null;
-};
-
 class ApplicationConflictError extends Error {
   applications: Application[];
 
@@ -405,7 +404,10 @@ export function useApplications() {
       const res = await fetch("/api/applications", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ applications: next, mutations })
+        body: JSON.stringify({
+          applications: applicationMutationRecords(next, mutations),
+          mutations
+        })
       });
       const data = await res.json();
       if (!res.ok) {
@@ -425,12 +427,16 @@ export function useApplications() {
 
     try {
       const data = await write;
-      confirmedApplications.current = data.applications;
+      const confirmed = reconcileApplicationWriteResponse(
+        confirmedApplications.current,
+        data.applications
+      );
+      confirmedApplications.current = confirmed;
       setHasLoadedApplications(true);
-      // Trust the server-sanitized list back
+      // Trust changed/new server rows while retaining unchanged references.
       if (requestId === persistVersion.current) {
-        applicationsRef.current = data.applications;
-        setApplications(data.applications);
+        applicationsRef.current = confirmed;
+        setApplications(confirmed);
         setError(conflictMessage.current || supersededFailure.current);
         supersededFailure.current = "";
       }
@@ -582,10 +588,8 @@ export function useApplications() {
       const next = current.filter((a) => a.id !== id);
       applicationsRef.current = next;
       setApplications(next);
-      // Use the same serialized full-snapshot write as every other mutation
-      // and name the deletion explicitly. This also means a delete queued after
-      // an optimistic edit carries that edit's revision instead of silently
-      // removing a newer server record.
+      // A delete needs no record body. Its revision still prevents a queued
+      // delete from silently removing a newer server record.
       void persist(next, [{ id, operation: "delete", baseUpdatedAt: existing.updatedAt }]);
     },
     [persist]

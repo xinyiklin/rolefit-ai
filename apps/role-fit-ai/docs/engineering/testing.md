@@ -142,9 +142,11 @@ Good server verification covers:
 - `workspace/` reads / writes stay inside the workspace; tracker and
   base-resume mutations are serialized/atomic, duplicate application ids are
   rejected, stale same-record tracker writes return `409` with the current
-  snapshot, legacy rows without `updatedAt` receive a stable first-edit
-  revision, and corrupt application JSON or malformed strict `.resume` data
-  fails closed without destructive reseeding
+  snapshot, sparse and legacy full tracker payloads preserve server-authoritative
+  unmutated rows and deterministic ordering, successful own writes retain
+  unchanged record references, legacy rows without `updatedAt` receive a stable
+  first-edit revision, and corrupt application JSON or malformed strict
+  `.resume` data fails closed without destructive reseeding
 - portable workspace backup includes only app-managed resumes/history, tracker
   data, saved application `.resume` / `.cover` sources and PDF-only
   replacements, and mirrored allowlisted RoleFit preferences; validates
