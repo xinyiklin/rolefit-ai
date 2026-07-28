@@ -1,13 +1,14 @@
 import type {
   CoverLetterEvidenceItem,
   CoverLetterPlan,
-  CoverLetterProposal
+  CoverLetterProposal,
 } from "../../src/lib/coverLetterEvidence.ts";
 import type {
   CoverLetterSourceMode,
-  ResolvedCoverLetterContext
+  ResolvedCoverLetterContext,
 } from "../../src/lib/coverLetterPreflight.ts";
 import { hasUnresolvedCoverLetterTokens } from "../../src/lib/coverLetterPreflight.ts";
+import { coverLetterHasAuthoredVoice } from "../../src/lib/coverLetterTemplate.ts";
 
 const GENERIC_AI_LANGUAGE =
   /\b(?:I am thrilled to apply|I am excited to apply|perfect fit|deeply impressed by|innovative company|dynamic team|proven track record|results[- ]driven|leverage my skills|passionate about the opportunity|seamless(?:ly)?|cutting[- ]edge)\b/i;
@@ -50,7 +51,10 @@ function normalizedWords(value: string): string[] {
     .filter(Boolean);
 }
 
-export function hasPreservedSourcePhrase(sourceText: string, bodyText: string): boolean {
+export function hasPreservedSourcePhrase(
+  sourceText: string,
+  bodyText: string,
+): boolean {
   const sourceWords = normalizedWords(sourceText);
   const normalizedBody = ` ${normalizedWords(bodyText).join(" ")} `;
   for (let index = 0; index <= sourceWords.length - 4; index += 1) {
@@ -74,28 +78,38 @@ export function gradeCoverLetterProposal({
   sourceMode,
   sourceText = "",
   resolved,
-  onePage
+  onePage,
 }: GradeCoverLetterInput): CoverLetterQualityReport {
   const bodyBlocks = proposal.blocks.filter((block) => block.kind === "body");
   const bodyText = bodyBlocks.map((block) => block.text).join("\n\n");
   const selectedIds = new Set(proposal.selectedEvidence.map((item) => item.id));
-  const selectedDecisions = plan.decisions.filter((decision) => selectedIds.has(decision.evidenceId));
-  const skippedEvidence = allEvidence.filter((item) => !selectedIds.has(item.id));
+  const selectedDecisions = plan.decisions.filter((decision) =>
+    selectedIds.has(decision.evidenceId),
+  );
+  const hasSourceProse = Boolean(sourceText.trim());
+  const hasAuthoredVoiceAnchor = coverLetterHasAuthoredVoice(sourceText);
+  const skippedEvidence = allEvidence.filter(
+    (item) => !selectedIds.has(item.id),
+  );
   const leakedSkipped = skippedEvidence.filter(
-    (item) => item.text.length >= 20 && bodyText.toLowerCase().includes(item.text.toLowerCase())
+    (item) =>
+      item.text.length >= 20 &&
+      bodyText.toLowerCase().includes(item.text.toLowerCase()),
   );
   const paragraphEvidenceValid = bodyBlocks.every(
     (block) =>
       block.evidenceIds.length > 0 &&
       block.evidenceIds.every(
-        (id) => selectedIds.has(id) || (sourceMode === "authored_letter" && id === "source_letter")
-      )
+        (id) =>
+          selectedIds.has(id) || (hasSourceProse && id === "source_letter"),
+      ),
   );
   const relevantSelection = selectedDecisions.every(
-    (decision) => decision.relevance !== "weak" || decision.userOverridden === true
+    (decision) =>
+      decision.relevance !== "weak" || decision.userOverridden === true,
   );
   const hasSourceVoice =
-    sourceMode === "guided_draft" ||
+    !hasAuthoredVoiceAnchor ||
     (proposal.preservedFromSource.length > 0 &&
       bodyBlocks.some((block) => block.evidenceIds.includes("source_letter")) &&
       hasPreservedSourcePhrase(sourceText, bodyText));
@@ -104,36 +118,40 @@ export function gradeCoverLetterProposal({
   const checks: Record<string, CoverLetterQualityCheck> = {
     placeholders: check(
       !hasUnresolvedCoverLetterTokens(proposal.coverLetterText),
-      "No unresolved bracketed, mustache, or template tokens."
+      "No unresolved bracketed, mustache, or template tokens.",
     ),
     evidenceGrounding: check(
       paragraphEvidenceValid && selectedIds.size >= 1 && selectedIds.size <= 3,
-      "Every body paragraph cites selected evidence and the proposal uses 1-3 atomic items."
+      "Every body paragraph cites selected evidence and the proposal uses 1-3 atomic items.",
     ),
     evidenceRelevance: check(
       relevantSelection,
-      "Selected evidence is direct or supporting unless the candidate explicitly overrode it."
+      "Selected evidence is direct or supporting unless the candidate explicitly overrode it.",
     ),
     skippedEvidence: check(
       leakedSkipped.length === 0,
       leakedSkipped.length
         ? "Skipped evidence appears verbatim in the body."
-        : "Skipped evidence does not appear verbatim in the body."
+        : "Skipped evidence does not appear verbatim in the body.",
     ),
     sourceVoice: check(
       hasSourceVoice,
-      sourceMode === "authored_letter"
+      hasAuthoredVoiceAnchor
         ? "Authored mode identifies and retains a meaningful four-word source phrase."
-        : "Guided mode uses candidate answers as its voice source."
+        : "A template-only guided mode uses candidate answers as its voice source.",
     ),
     focusedNarrative: check(
       selectedIds.size <= 3 && bodyBlocks.length >= 2 && bodyBlocks.length <= 5,
-      "The proposal uses a focused 2-5 paragraph narrative rather than a resume dump."
+      "The proposal uses a focused 2-5 paragraph narrative rather than a resume dump.",
     ),
     specificFit: check(
-      proposal.coverLetterText.toLowerCase().includes(resolved.role.toLowerCase()) &&
-        proposal.coverLetterText.toLowerCase().includes(resolved.company.toLowerCase()),
-      "The resolved role and company are named."
+      proposal.coverLetterText
+        .toLowerCase()
+        .includes(resolved.role.toLowerCase()) &&
+        proposal.coverLetterText
+          .toLowerCase()
+          .includes(resolved.company.toLowerCase()),
+      "The resolved role and company are named.",
     ),
     correspondence: check(
       proposal.blocks[0]?.kind === "date" &&
@@ -142,21 +160,23 @@ export function gradeCoverLetterProposal({
         proposal.blocks[1]?.text === resolved.greeting &&
         proposal.blocks.at(-1)?.kind === "signoff" &&
         proposal.blocks.at(-1)?.text === resolved.signoff,
-      "Date, greeting, and sign-off exactly match deterministic correspondence."
+      "Date, greeting, and sign-off exactly match deterministic correspondence.",
     ),
     concise: check(
       wordCount >= 180 && wordCount <= 420 && onePage,
-      `Proposal is ${wordCount} words and ${onePage ? "one page" : "not one page"}.`
+      `Proposal is ${wordCount} words and ${onePage ? "one page" : "not one page"}.`,
     ),
     naturalLanguage: check(
       !GENERIC_AI_LANGUAGE.test(bodyText),
-      "The body avoids generic AI and brochure phrasing."
-    )
+      "The body avoids generic AI and brochure phrasing.",
+    ),
   };
-  const passedCount = Object.values(checks).filter((item) => item.passed).length;
+  const passedCount = Object.values(checks).filter(
+    (item) => item.passed,
+  ).length;
   return {
     passed: passedCount === Object.keys(checks).length,
     score: Math.round((passedCount / Object.keys(checks).length) * 100),
-    checks
+    checks,
   };
 }

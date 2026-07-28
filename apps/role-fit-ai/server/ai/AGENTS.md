@@ -24,6 +24,13 @@ sanitizer code is executable product behavior and anti-fabrication-critical.
   items, and every returned body paragraph cites approved ids.
 - `grounding.ts` and `eligibilityLexicon.ts` provide deterministic evidence
   checks, never a local fit-scoring system.
+- Source template slots are valid preparation input and are resolved through
+  typed plan/draft decisions; only an unresolved final proposal fails closed.
+  Authored prose alone supplies source voice and candidate grounding. A guided
+  source needs candidate answers only when it lacks an authored voice anchor.
+  Unknown natural-language slots remain unclassified until preparation assigns
+  a safe source boundary, and refreshed plans must preserve candidate evidence
+  overrides exactly.
 - `json.ts` and `errors.ts` own response parsing and user-safe failure mapping.
 
 ## Trust and scoring contract

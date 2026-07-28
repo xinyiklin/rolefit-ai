@@ -5,23 +5,23 @@ import { AI_UNAVAILABLE, ApiError, classifyFailure } from "../lib/failures";
 import {
   workflowInputFingerprint,
   workflowRequestIsCurrent,
-  type AiStageState as StageState
+  type AiStageState as StageState,
 } from "../lib/aiWorkflow";
 import type { StageAiUsage } from "../lib/aiUsage";
 import {
+  applyCoverLetterEvidenceOverride,
   buildCoverLetterEvidence,
+  evidenceOverridesForPreparation,
   selectedEvidenceForPlan,
-  type CoverLetterPlan,
   type CoverLetterPreparation,
   type CoverLetterProposal,
-  type EvidenceDecision
 } from "../lib/coverLetterEvidence";
 import {
   buildCoverLetterPreflight,
   type CoverLetterPreparationFieldKey,
   type CoverLetterPreparationValues,
   type CoverLetterPreflight,
-  type CoverLetterSourceMode
+  type CoverLetterSourceMode,
 } from "../lib/coverLetterPreflight";
 
 type UseCoverLetterArgs = {
@@ -67,6 +67,7 @@ function preparationResponse(value: unknown): PreparationResponse | null {
     (candidate.status !== "ready" && candidate.status !== "needs_input") ||
     !candidate.plan ||
     !Array.isArray(candidate.plan.decisions) ||
+    !Array.isArray(candidate.plan.slotDecisions) ||
     !Array.isArray(candidate.clarifications)
   ) {
     return null;
@@ -90,19 +91,6 @@ function proposalResponse(value: unknown): CoverLetterProposal | null {
   return candidate as CoverLetterProposal;
 }
 
-function evidenceDecisionWithOverride(
-  decision: EvidenceDecision,
-  nextDecision: "use" | "skip"
-): EvidenceDecision {
-  return {
-    ...decision,
-    decision: nextDecision,
-    reason: nextDecision === "use" ? "Included by the candidate." : "Skipped by the candidate.",
-    userOverridden: true,
-    question: undefined
-  };
-}
-
 // Owns the complete cover-letter AI workflow: deterministic preflight,
 // preparation, clarification, evidence overrides, selected-evidence-only
 // drafting, cancellation, and the pending proposal. The editable document
@@ -124,15 +112,23 @@ export function useCoverLetter({
   jobTarget,
   onApplyTailored,
   onApplyExternal,
-  onUsage
+  onUsage,
 }: UseCoverLetterArgs) {
   const [coverStatus, setCoverStatus] = useState("");
   const [isGeneratingCover, setIsGeneratingCover] = useState(false);
-  const [coverProgress, setCoverProgress] = useState<StageState>({ status: "idle" });
-  const [preparationValues, setPreparationValues] = useState<CoverLetterPreparationValues>({});
-  const [clarificationAnswers, setClarificationAnswers] = useState<Record<string, string>>({});
-  const [preparation, setPreparation] = useState<CoverLetterPreparation | null>(null);
-  const [pendingProposal, setPendingProposal] = useState<CoverLetterProposal | null>(null);
+  const [coverProgress, setCoverProgress] = useState<StageState>({
+    status: "idle",
+  });
+  const [preparationValues, setPreparationValues] =
+    useState<CoverLetterPreparationValues>({});
+  const [clarificationAnswers, setClarificationAnswers] = useState<
+    Record<string, string>
+  >({});
+  const [preparation, setPreparation] = useState<CoverLetterPreparation | null>(
+    null,
+  );
+  const [pendingProposal, setPendingProposal] =
+    useState<CoverLetterProposal | null>(null);
   const requestGenerationRef = useRef(0);
   const requestAbortRef = useRef<AbortController | null>(null);
 
@@ -144,7 +140,8 @@ export function useCoverLetter({
         candidateName,
         role: jobTarget?.role,
         company: jobTarget?.company,
-        values: preparationValues
+        values: preparationValues,
+        slotAnswers: clarificationAnswers,
       }),
     [
       candidateName,
@@ -152,17 +149,18 @@ export function useCoverLetter({
       jobTarget?.company,
       jobTarget?.role,
       preparationValues,
-      sourceMode
-    ]
+      clarificationAnswers,
+      sourceMode,
+    ],
   );
   const baseEvidence = useMemo(
     () =>
       buildCoverLetterEvidence({
         resumeData,
         honestContext,
-        preparationValues
+        preparationValues,
       }),
-    [honestContext, preparationValues, resumeData]
+    [honestContext, preparationValues, resumeData],
   );
   const evidenceItems = useMemo(
     () =>
@@ -170,9 +168,9 @@ export function useCoverLetter({
         resumeData,
         honestContext,
         preparationValues,
-        clarificationAnswers
+        clarificationAnswers,
       }),
-    [clarificationAnswers, honestContext, preparationValues, resumeData]
+    [clarificationAnswers, honestContext, preparationValues, resumeData],
   );
   const inputFingerprint = workflowInputFingerprint({
     currentCoverLetterText,
@@ -182,12 +180,12 @@ export function useCoverLetter({
     customInstructions,
     aiRequest: buildStageRequestFields(aiRequest),
     preflight,
-    baseEvidence
+    baseEvidence,
   });
   const requestInputFingerprint = workflowInputFingerprint({
     inputFingerprint,
     clarificationAnswers,
-    preparation
+    preparation,
   });
   const requestInputFingerprintRef = useRef(requestInputFingerprint);
   requestInputFingerprintRef.current = requestInputFingerprint;
@@ -212,11 +210,14 @@ export function useCoverLetter({
     setPreparation(null);
     setPendingProposal(null);
     if (hadActiveRequest) {
-      setCoverStatus("The letter, resume, job, or AI settings changed. Start a new preparation pass.");
+      setCoverStatus(
+        "The letter, resume, job, or AI settings changed. Start a new preparation pass.",
+      );
       setCoverProgress({
         status: "stopped",
         errorHeadline: "Inputs changed",
-        error: "The previous cover-letter request was cancelled before it could produce a proposal."
+        error:
+          "The previous cover-letter request was cancelled before it could produce a proposal.",
       });
     }
   }, [inputFingerprint, invalidateCoverRequest]);
@@ -227,7 +228,7 @@ export function useCoverLetter({
       requestAbortRef.current?.abort();
       requestAbortRef.current = null;
     },
-    []
+    [],
   );
 
   const applyCoverLetter = useCallback(
@@ -239,7 +240,7 @@ export function useCoverLetter({
       setCoverStatus("");
       setCoverProgress({ status: "idle" });
     },
-    [invalidateCoverRequest, onApplyExternal]
+    [invalidateCoverRequest, onApplyExternal],
   );
 
   const resetCoverWorkflow = useCallback(() => {
@@ -247,7 +248,9 @@ export function useCoverLetter({
     setClarificationAnswers({});
     setPreparation(null);
     setPendingProposal(null);
-    setCoverStatus("Inputs changed. Prepare the current cover letter again for this context.");
+    setCoverStatus(
+      "Inputs changed. Prepare the current cover letter again for this context.",
+    );
     setCoverProgress({ status: "idle" });
   }, [invalidateCoverRequest]);
 
@@ -261,48 +264,58 @@ export function useCoverLetter({
       setCoverStatus(
         result.status === "ok"
           ? "A legacy cover-letter result was not applied. Use the Cover letter page to prepare it safely."
-          : "The legacy cover-letter step failed. The existing letter was kept."
+          : "The legacy cover-letter step failed. The existing letter was kept.",
       );
       setCoverProgress({
         status: "failed",
         errorHeadline: AI_UNAVAILABLE,
-        error: "The existing cover letter was not replaced."
+        error: "The existing cover letter was not replaced.",
       });
     },
-    [invalidateCoverRequest]
+    [invalidateCoverRequest],
   );
 
-  const dismissCoverProgress = useCallback(() => setCoverProgress({ status: "idle" }), []);
+  const dismissCoverProgress = useCallback(
+    () => setCoverProgress({ status: "idle" }),
+    [],
+  );
 
   const updatePreparationField = useCallback(
     (key: CoverLetterPreparationFieldKey, value: string) => {
       setPreparationValues((current) => ({ ...current, [key]: value }));
     },
-    []
+    [],
   );
 
   const updateClarificationAnswer = useCallback(
     (evidenceId: string, value: string) => {
       const hadActiveRequest = requestAbortRef.current !== null;
       invalidateCoverRequest();
-      setClarificationAnswers((current) => ({ ...current, [evidenceId]: value }));
+      setClarificationAnswers((current) => ({
+        ...current,
+        [evidenceId]: value,
+      }));
       if (hadActiveRequest) {
-        setCoverStatus("A clarification changed while the request was running. Update the plan again.");
+        setCoverStatus(
+          "A clarification changed while the request was running. Update the plan again.",
+        );
         setCoverProgress({
           status: "stopped",
           errorHeadline: "Clarification changed",
-          error: "The stale response was cancelled and the existing evidence plan was kept."
+          error:
+            "The stale response was cancelled and the existing evidence plan was kept.",
         });
       }
     },
-    [invalidateCoverRequest]
+    [invalidateCoverRequest],
   );
 
   const updateEvidenceDecision = useCallback(
     (evidenceId: string, nextDecision: "use" | "skip") => {
       if (!preparation) return;
       const selectedCount = preparation.plan.decisions.filter(
-          (decision) => decision.decision === "use" && decision.evidenceId !== evidenceId
+        (decision) =>
+          decision.decision === "use" && decision.evidenceId !== evidenceId,
       ).length;
       if (nextDecision === "use" && selectedCount >= 3) {
         setCoverStatus("Choose no more than three evidence items.");
@@ -312,26 +325,25 @@ export function useCoverLetter({
       setPendingProposal(null);
       setPreparation((current) => {
         if (!current) return current;
-        const plan: CoverLetterPlan = {
-          ...current.plan,
-          decisions: current.plan.decisions.map((decision) =>
-            decision.evidenceId === evidenceId
-              ? evidenceDecisionWithOverride(decision, nextDecision)
-              : decision
-          )
-        };
-        const remainingClarifications = current.clarifications.filter(
-          (field) => field.evidenceId !== evidenceId
-        );
-        return {
-          ...current,
-          status: remainingClarifications.length ? "needs_input" : "ready",
-          clarifications: remainingClarifications,
-          plan
-        };
+        return applyCoverLetterEvidenceOverride({
+          preparation: current,
+          evidenceId,
+          nextDecision,
+          slots: preflight.template.slots,
+        });
       });
+      if (
+        nextDecision === "skip" &&
+        preparation.plan.slotDecisions.some((decision) =>
+          decision.evidenceIds.includes(evidenceId),
+        )
+      ) {
+        setCoverStatus(
+          "That evidence supported a template field. Provide a replacement before updating the plan.",
+        );
+      }
     },
-    [invalidateCoverRequest, preparation]
+    [invalidateCoverRequest, preparation, preflight.template.slots],
   );
 
   const acceptProposal = useCallback(() => {
@@ -340,7 +352,11 @@ export function useCoverLetter({
     setPreparation(null);
     onApplyTailored(pendingProposal.coverLetterText);
     setCoverStatus("Proposal loaded. Review every claim before sending.");
-    setCoverProgress({ status: "done", note: "Proposal accepted", noteTone: "ok" });
+    setCoverProgress({
+      status: "done",
+      note: "Proposal accepted",
+      noteTone: "ok",
+    });
   }, [onApplyTailored, pendingProposal]);
 
   const editProposalDetails = useCallback(() => {
@@ -371,7 +387,7 @@ export function useCoverLetter({
         requestGenerationRef.current,
         requestFingerprint,
         requestInputFingerprintRef.current,
-        controller.signal
+        controller.signal,
       );
     setIsGeneratingCover(true);
     return { controller, isCurrent };
@@ -391,25 +407,31 @@ export function useCoverLetter({
       setCoverProgress({
         status: "failed",
         errorHeadline: failure.headline,
-        error: failure.detail
+        error: failure.detail,
       });
       onUsage?.({
         source: "none",
         requestedProvider: aiRequest.provider,
         requestedModel: aiRequest.selectedModel,
-        completedAt: new Date().toISOString()
+        completedAt: new Date().toISOString(),
       });
     },
-    [aiRequest.provider, aiRequest.selectedModel, onUsage]
+    [aiRequest.provider, aiRequest.selectedModel, onUsage],
   );
 
   async function handleGenerateCoverLetter() {
     setPendingProposal(null);
-    if (!preflight.readyForPreparation) {
-      setCoverStatus(preflight.blockingReasons[0] ?? "Complete the tailoring details first.");
+    if (!preflight.canPrepare) {
+      setCoverStatus(
+        preflight.preparationBlockers[0] ??
+          "Complete the tailoring details first.",
+      );
       return;
     }
-    if (!baseEvidence.some((item) => item.source === "resume") || jobText.trim().length < 40) {
+    if (
+      !baseEvidence.some((item) => item.source === "resume") ||
+      jobText.trim().length < 40
+    ) {
       setCoverStatus("Add your resume and the job description first.");
       return;
     }
@@ -418,14 +440,19 @@ export function useCoverLetter({
       setCoverProgress({
         status: "failed",
         errorHeadline: "Provider unavailable",
-        error: providerMessage
+        error: providerMessage,
       });
       return;
     }
 
+    const evidenceOverrides = evidenceOverridesForPreparation(preparation);
     const { controller, isCurrent } = beginRequest();
     setCoverStatus("Selecting evidence for this letter…");
-    setCoverProgress({ status: "running", note: "Preparing evidence plan", noteTone: "info" });
+    setCoverProgress({
+      status: "running",
+      note: "Preparing evidence plan",
+      noteTone: "info",
+    });
     try {
       const response = await fetch("/api/cover-letter", {
         method: "POST",
@@ -440,14 +467,18 @@ export function useCoverLetter({
           preparationValues,
           resolvedContext: preflight.resolved,
           evidenceItems,
-          clarificationAnswers
+          evidenceOverrides,
+          clarificationAnswers,
         }),
-        signal: controller.signal
+        signal: controller.signal,
       });
       const raw = await response.json();
       if (!isCurrent()) return;
       if (!response.ok) {
-        throw new ApiError(raw.error ?? "Could not prepare the cover letter.", response.status);
+        throw new ApiError(
+          raw.error ?? "Could not prepare the cover letter.",
+          response.status,
+        );
       }
       const nextPreparation = preparationResponse(raw);
       if (!nextPreparation) {
@@ -455,9 +486,13 @@ export function useCoverLetter({
       }
       setPreparation(nextPreparation);
       if (nextPreparation.status === "needs_input") {
-        setCoverStatus("The evidence plan needs a focused clarification before drafting.");
+        setCoverStatus(
+          "The evidence plan needs a focused clarification before drafting.",
+        );
       } else {
-        setCoverStatus("Evidence plan ready. Review what will be used before drafting.");
+        setCoverStatus(
+          "Evidence plan ready. Review what will be used before drafting.",
+        );
       }
       // Preparation is an intermediate review state, not a completed letter.
       // The rail owns that pause; the global task popover closes until drafting.
@@ -474,13 +509,16 @@ export function useCoverLetter({
       setCoverStatus("Prepare and resolve the evidence plan before drafting.");
       return;
     }
-    const selectedEvidence = selectedEvidenceForPlan(preparation.plan, evidenceItems);
+    const selectedEvidence = selectedEvidenceForPlan(
+      preparation.plan,
+      evidenceItems,
+    );
     if (selectedEvidence.length < 1 || selectedEvidence.length > 3) {
       setCoverStatus("Choose one to three evidence items before drafting.");
       return;
     }
     if (
-      sourceMode === "guided_draft" &&
+      preflight.requiresUserVoiceAnchor &&
       !selectedEvidence.some((item) => item.source === "user_answer")
     ) {
       setCoverStatus("A guided draft must use at least one of your answers.");
@@ -489,7 +527,11 @@ export function useCoverLetter({
 
     const { controller, isCurrent } = beginRequest();
     setCoverStatus("Drafting from the approved evidence…");
-    setCoverProgress({ status: "running", note: "Drafting selected evidence", noteTone: "info" });
+    setCoverProgress({
+      status: "running",
+      note: "Drafting selected evidence",
+      noteTone: "info",
+    });
     try {
       const response = await fetch("/api/cover-letter", {
         method: "POST",
@@ -504,14 +546,18 @@ export function useCoverLetter({
           preparationValues,
           resolvedContext: preflight.resolved,
           plan: preparation.plan,
-          selectedEvidence
+          selectedEvidence,
+          clarificationAnswers,
         }),
-        signal: controller.signal
+        signal: controller.signal,
       });
       const raw = await response.json();
       if (!isCurrent()) return;
       if (!response.ok) {
-        throw new ApiError(raw.error ?? "Could not draft the cover letter.", response.status);
+        throw new ApiError(
+          raw.error ?? "Could not draft the cover letter.",
+          response.status,
+        );
       }
       const proposal = proposalResponse(raw);
       if (!proposal) {
@@ -519,24 +565,32 @@ export function useCoverLetter({
       }
       const preparationAttempts = preparation.attempts ?? 0;
       const draftAttempts =
-        typeof raw.attempts === "number" && Number.isFinite(raw.attempts) ? raw.attempts : 0;
+        typeof raw.attempts === "number" && Number.isFinite(raw.attempts)
+          ? raw.attempts
+          : 0;
       setPendingProposal({
         ...proposal,
-        attempts: preparationAttempts + draftAttempts
+        attempts: preparationAttempts + draftAttempts,
       });
       setCoverStatus(
-        `Draft ready${proposal.model ? ` from ${proposal.model}` : ""}. Review it before replacing the editor.`
+        `Draft ready${proposal.model ? ` from ${proposal.model}` : ""}. Review it before replacing the editor.`,
       );
-      setCoverProgress({ status: "done", note: "Proposal ready", noteTone: "ok" });
+      setCoverProgress({
+        status: "done",
+        note: "Proposal ready",
+        noteTone: "ok",
+      });
       onUsage?.({
         source: "ai",
         ...(proposal.provider ? { provider: proposal.provider } : {}),
         ...(proposal.model ? { model: proposal.model } : {}),
-        ...(proposal.reasoningEffort ? { reasoningEffort: proposal.reasoningEffort } : {}),
+        ...(proposal.reasoningEffort
+          ? { reasoningEffort: proposal.reasoningEffort }
+          : {}),
         ...(preparationAttempts + draftAttempts > 0
           ? { attempts: preparationAttempts + draftAttempts }
           : {}),
-        completedAt: new Date().toISOString()
+        completedAt: new Date().toISOString(),
       });
     } catch (error) {
       failRequest(error, isCurrent);
@@ -567,6 +621,6 @@ export function useCoverLetter({
     pendingProposal,
     acceptProposal,
     editProposalDetails,
-    discardProposal
+    discardProposal,
   };
 }

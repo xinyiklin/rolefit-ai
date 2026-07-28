@@ -9,6 +9,31 @@ bounded; app-only operational detail belongs in the affected app documentation.
   atomic evidence preparation, selected-only drafting, and explicit proposal
   acceptance. Server contracts fail closed on placeholders, unknown or weak
   evidence, generic prose, unsupported claims, and false voice preservation.
+- [USER+CODE] 2026-07-28: Source template slots are accepted and resolved through
+  preparation; only an unresolved final proposal fails closed. Authored prose,
+  typed slot instructions, job context, and candidate evidence remain separate,
+  every slot is accounted for in the plan and draft, and guided answers are
+  mandatory only when the source lacks an authored voice anchor. This supersedes
+  the broader placeholder-failure wording above.
+- [TOOL] 2026-07-28: The updated cover-letter parser/workflow probes, all 57
+  RoleFit offline evals, client/server TypeScript gates, and the RoleFit
+  production build passed. Browser interaction QA was not rerun because the
+  in-app browser webview failed to attach after two fresh-tab attempts.
+- [CODE+TOOL] 2026-07-28: Post-review cover-letter hardening keeps private-slot
+  answers editable, replans slot-bound evidence overrides, treats posting-only
+  aliases as job context, preserves short source prose as grounding without
+  imposing the 80-word voice-preservation contract, and keeps mixed
+  employer/candidate sentences inside the candidate-claim gate. All 58 RoleFit
+  offline evals and the production build passed; browser QA was not run under
+  the repository's flag-first policy.
+- [USER+CODE+TOOL] 2026-07-28: Follow-up cover-letter hardening keeps employer-led
+  third-person candidate claims inside grounding checks, leaves unknown
+  natural-language slots unclassified until preparation assigns their safe
+  source boundary, and carries candidate evidence use/skip overrides through
+  clarification refreshes with server-side enforcement. Focused probes, the
+  server TypeScript gate, all 58 RoleFit offline evals, and the production build
+  passed. Browser QA was not run because these changes affect request contracts
+  and deterministic validation without changing the rendered interface.
 - [TOOL] RoleFit production build, all 57 offline evals, and desktop/390px
   browser interaction QA passed with a clean console. The synthetic live-provider
   harness was added but not run.

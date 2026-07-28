@@ -1,12 +1,12 @@
 import type {
   CoverLetterEvidenceItem,
   CoverLetterPreparation,
-  CoverLetterProposal
+  CoverLetterProposal,
 } from "../../lib/coverLetterEvidence";
 import type {
   CoverLetterPreparationFieldKey,
   CoverLetterPreflight,
-  CoverLetterSourceMode
+  CoverLetterSourceMode,
 } from "../../lib/coverLetterPreflight";
 import { CoverLetterPreparationPanel } from "./CoverLetterPreparation";
 import { CoverLetterProposalPanel } from "./CoverLetterProposal";
@@ -23,9 +23,15 @@ type CoverLetterReviewProps = {
   clarificationAnswers: Record<string, string>;
   isWorking: boolean;
   onSourceModeChange: (mode: CoverLetterSourceMode) => void;
-  onPreparationFieldChange: (key: CoverLetterPreparationFieldKey, value: string) => void;
+  onPreparationFieldChange: (
+    key: CoverLetterPreparationFieldKey,
+    value: string,
+  ) => void;
   onClarificationChange: (evidenceId: string, value: string) => void;
-  onEvidenceDecisionChange: (evidenceId: string, decision: "use" | "skip") => void;
+  onEvidenceDecisionChange: (
+    evidenceId: string,
+    decision: "use" | "skip",
+  ) => void;
   onPrepare: () => void;
   onDraft: () => void;
   onAcceptProposal: () => void;
@@ -48,32 +54,36 @@ const FIELD_COPY: Partial<
   candidate_name: {
     label: "Candidate name",
     placeholder: "Name for the sign-off",
-    maxLength: 200
+    maxLength: 200,
   },
-  role: { label: "Role", placeholder: "e.g. Software Engineer", maxLength: 300 },
+  role: {
+    label: "Role",
+    placeholder: "e.g. Software Engineer",
+    maxLength: 300,
+  },
   company: { label: "Company", placeholder: "Employer name", maxLength: 300 },
   recipient_name: {
     label: "Hiring contact (optional)",
     placeholder: "Leave blank to use Hiring Team",
-    maxLength: 300
+    maxLength: 300,
   },
   why_role: {
     label: "Why this role?",
     placeholder: "What genuinely interests you about this work?",
     multiline: true,
-    maxLength: 2_000
+    maxLength: 2_000,
   },
   lead_experience: {
     label: "Experience to lead with",
     placeholder: "One or two verified experiences to emphasize",
     multiline: true,
-    maxLength: 4_000
+    maxLength: 4_000,
   },
   tone: {
     label: "Tone (optional)",
     placeholder: "e.g. direct and conversational",
-    maxLength: 500
-  }
+    maxLength: 500,
+  },
 };
 
 export function CoverLetterReview({
@@ -96,10 +106,10 @@ export function CoverLetterReview({
   onAcceptProposal,
   onEditProposal,
   onDiscardProposal,
-  status
+  status,
 }: CoverLetterReviewProps) {
   const preparationKeys: CoverLetterPreparationFieldKey[] =
-    preflight.sourceMode === "guided_draft"
+    preflight.requiresUserVoiceAnchor
       ? [
           "candidate_name",
           "role",
@@ -107,20 +117,34 @@ export function CoverLetterReview({
           "recipient_name",
           "why_role",
           "lead_experience",
-          "tone"
+          "tone",
         ]
       : ["candidate_name", "role", "company", "recipient_name", "tone"];
-  const resolvedValues: Partial<Record<CoverLetterPreparationFieldKey, string>> = {
-    candidate_name: preflight.values.candidate_name ?? preflight.resolved.candidateName,
+  const resolvedValues: Partial<
+    Record<CoverLetterPreparationFieldKey, string>
+  > = {
+    candidate_name:
+      preflight.values.candidate_name ?? preflight.resolved.candidateName,
     role: preflight.values.role ?? preflight.resolved.role,
     company: preflight.values.company ?? preflight.resolved.company,
     recipient_name: preflight.values.recipient_name ?? "",
     why_role: preflight.values.why_role ?? "",
     lead_experience: preflight.values.lead_experience ?? "",
-    tone: preflight.values.tone ?? ""
+    tone: preflight.values.tone ?? "",
   };
+  const userInputSlotIds = new Set(
+    preflight.template.userInputSlots.map((slot) => slot.id),
+  );
+  const generativeSlots = preflight.template.slots.filter(
+    (slot) =>
+      slot.resolution.kind === "generate" && !userInputSlotIds.has(slot.id),
+  );
 
-  const eyebrow = proposal ? "Draft ready" : preparation ? "Evidence plan" : "Tailoring readiness";
+  const eyebrow = proposal
+    ? "Draft ready"
+    : preparation
+      ? "Evidence plan"
+      : "Tailoring readiness";
   const heading = proposal
     ? "Review the proposal"
     : preparation
@@ -132,7 +156,10 @@ export function CoverLetterReview({
         : "Polish your letter";
 
   return (
-    <aside className="cover-letter-review" aria-label="Cover letter tailoring readiness">
+    <aside
+      className="cover-letter-review"
+      aria-label="Cover letter tailoring readiness"
+    >
       <p className="cover-letter-review__eyebrow">{eyebrow}</p>
       <h2>{heading}</h2>
 
@@ -158,10 +185,16 @@ export function CoverLetterReview({
         />
       ) : (
         <>
-          <div className="cover-letter-review__mode-picker" role="group" aria-label="Writing source">
+          <div
+            className="cover-letter-review__mode-picker"
+            role="group"
+            aria-label="Writing source"
+          >
             <button
               type="button"
-              className={preflight.sourceMode === "authored_letter" ? "is-active" : ""}
+              className={
+                preflight.sourceMode === "authored_letter" ? "is-active" : ""
+              }
               aria-pressed={preflight.sourceMode === "authored_letter"}
               onClick={() => onSourceModeChange("authored_letter")}
             >
@@ -169,7 +202,9 @@ export function CoverLetterReview({
             </button>
             <button
               type="button"
-              className={preflight.sourceMode === "guided_draft" ? "is-active" : ""}
+              className={
+                preflight.sourceMode === "guided_draft" ? "is-active" : ""
+              }
               aria-pressed={preflight.sourceMode === "guided_draft"}
               onClick={() => onSourceModeChange("guided_draft")}
             >
@@ -181,16 +216,72 @@ export function CoverLetterReview({
               ? "Guided draft · your answers anchor the writing"
               : "Authored letter · your existing voice stays primary"}
           </p>
-          <div className="cover-letter-review__resolved" aria-label="Resolved correspondence details">
+          <div
+            className="cover-letter-review__resolved"
+            aria-label="Resolved correspondence details"
+          >
             <span>{preflight.resolved.date}</span>
             <span>{preflight.resolved.greeting}</span>
+          </div>
+          <div className="cover-letter-review__template-groups">
+            <section>
+              <h3>Filled automatically</h3>
+              <ul>
+                <li>Date · {preflight.resolved.date}</li>
+                <li>Role · {preflight.resolved.role || "Needed"}</li>
+                <li>Company · {preflight.resolved.company || "Needed"}</li>
+                <li>Greeting · {preflight.resolved.greeting}</li>
+                <li>
+                  Candidate · {preflight.resolved.candidateName || "Needed"}
+                </li>
+              </ul>
+            </section>
+            {generativeSlots.length > 0 ? (
+              <section>
+                <h3>RoleFit will tailor</h3>
+                <ul>
+                  {generativeSlots.map((slot) => (
+                    <li key={slot.id}>{slot.normalizedPrompt}</li>
+                  ))}
+                </ul>
+              </section>
+            ) : null}
+            {preflight.template.userInputSlots.length > 0 ? (
+              <section>
+                <h3>Need from you</h3>
+                {preflight.template.userInputSlots.map((slot) => (
+                  <label
+                    key={slot.id}
+                    htmlFor={`cover-template-answer-${slot.id}`}
+                  >
+                    <span>{slot.normalizedPrompt} · Required</span>
+                    <small>
+                      {slot.resolution.kind === "needs_input"
+                        ? slot.resolution.question
+                        : ""}
+                    </small>
+                    <textarea
+                      id={`cover-template-answer-${slot.id}`}
+                      rows={2}
+                      maxLength={2_000}
+                      value={clarificationAnswers[slot.id] ?? ""}
+                      onChange={(event) =>
+                        onClarificationChange(slot.id, event.target.value)
+                      }
+                    />
+                  </label>
+                ))}
+              </section>
+            ) : null}
           </div>
           <div className="cover-letter-review__fields">
             {preparationKeys.map((key) => {
               const copy = FIELD_COPY[key];
               if (!copy) return null;
               const id = `cover-letter-preparation-${key}`;
-              const missingField = preflight.missingFields.find((item) => item.key === key);
+              const missingField = preflight.missingFields.find(
+                (item) => item.key === key,
+              );
               const describedBy = missingField ? `${id}-reason` : undefined;
               return (
                 <label key={key} htmlFor={id}>
@@ -206,7 +297,9 @@ export function CoverLetterReview({
                       aria-describedby={describedBy}
                       value={resolvedValues[key] ?? ""}
                       placeholder={copy.placeholder}
-                      onChange={(event) => onPreparationFieldChange(key, event.target.value)}
+                      onChange={(event) =>
+                        onPreparationFieldChange(key, event.target.value)
+                      }
                     />
                   ) : (
                     <input
@@ -215,10 +308,14 @@ export function CoverLetterReview({
                       aria-describedby={describedBy}
                       value={resolvedValues[key] ?? ""}
                       placeholder={copy.placeholder}
-                      onChange={(event) => onPreparationFieldChange(key, event.target.value)}
+                      onChange={(event) =>
+                        onPreparationFieldChange(key, event.target.value)
+                      }
                     />
                   )}
-                  {missingField ? <small id={describedBy}>{missingField.reason}</small> : null}
+                  {missingField ? (
+                    <small id={describedBy}>{missingField.reason}</small>
+                  ) : null}
                 </label>
               );
             })}
@@ -233,21 +330,36 @@ export function CoverLetterReview({
               <span>keep it to one page</span>
             </li>
             <li className={preflight.hasCompletedGreeting ? "is-ok" : ""}>
-              Direct greeting <span>resolved safely when no person is named</span>
+              Direct greeting{" "}
+              <span>resolved safely when no person is named</span>
             </li>
-            <li className={preflight.placeholders.length === 0 ? "is-ok" : ""}>
-              No source placeholders <span>guided prompts never enter the model</span>
+            <li
+              className={
+                preflight.template.requiredInputs.length === 0 ? "is-ok" : ""
+              }
+            >
+              {preflight.template.slots.length} template field
+              {preflight.template.slots.length === 1 ? "" : "s"}
+              <span>
+                {preflight.template.requiredInputs.length === 0
+                  ? "resolved during Polish"
+                  : `${preflight.template.requiredInputs.length} need input`}
+              </span>
             </li>
           </ul>
         </>
       )}
 
       <p className="cover-letter-review__note">
-        Preparation selects evidence first. Drafting cannot see skipped personal notes or résumé items.
+        Preparation selects evidence first. Drafting cannot see skipped personal
+        notes or résumé items.
       </p>
       <details className="cover-letter-review__standard">
         <summary>Writing standard</summary>
-        <p>Specific interest, selected evidence, active voice, no résumé repetition, and a natural close.</p>
+        <p>
+          Specific interest, selected evidence, active voice, no résumé
+          repetition, and a natural close.
+        </p>
         <a
           href="https://capd.mit.edu/resources/career-toolkit-writing-a-cover-letter/"
           target="_blank"

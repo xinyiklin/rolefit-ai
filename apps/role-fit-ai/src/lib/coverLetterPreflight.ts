@@ -1,4 +1,11 @@
-export type CoverLetterSourceMode = "authored_letter" | "guided_draft";
+import {
+  analyzeCoverLetterTemplate,
+  templateHasUnresolvedSlots,
+  type CoverLetterSourceMode,
+  type CoverLetterTemplateAnalysis
+} from "./coverLetterTemplate.ts";
+
+export type { CoverLetterSourceMode } from "./coverLetterTemplate.ts";
 
 export type CoverLetterPreparationFieldKey =
   | "candidate_name"
@@ -9,9 +16,7 @@ export type CoverLetterPreparationFieldKey =
   | "lead_experience"
   | "tone";
 
-export type CoverLetterPreparationValues = Partial<
-  Record<CoverLetterPreparationFieldKey, string>
->;
+export type CoverLetterPreparationValues = Partial<Record<CoverLetterPreparationFieldKey, string>>;
 
 export type MissingCoverLetterField = {
   key: CoverLetterPreparationFieldKey;
@@ -33,16 +38,17 @@ export type ResolvedCoverLetterContext = {
 
 export type CoverLetterPreflight = {
   sourceMode: CoverLetterSourceMode;
-  placeholders: string[];
+  template: CoverLetterTemplateAnalysis;
   authoredText: string;
   authoredWordCount: number;
   hasCompletedGreeting: boolean;
   missingFields: MissingCoverLetterField[];
-  blockingReasons: string[];
+  preparationBlockers: string[];
   resolved: ResolvedCoverLetterContext;
   values: CoverLetterPreparationValues;
-  readyForPreparation: boolean;
-  readyToSend: boolean;
+  requiresUserVoiceAnchor: boolean;
+  canPrepare: boolean;
+  sourceReadyToSend: boolean;
 };
 
 type BuildCoverLetterPreflightInput = {
@@ -52,55 +58,25 @@ type BuildCoverLetterPreflightInput = {
   role?: string;
   company?: string;
   values?: CoverLetterPreparationValues;
+  slotAnswers?: Record<string, string>;
   date?: string;
 };
 
-const BRACKETED_PLACEHOLDER = /\[[^\]\n]{1,240}\]/g;
-const MUSTACHE_PLACEHOLDER = /\{\{[^}\n]{1,240}\}\}/g;
-const GENERIC_TEMPLATE_TOKEN = /<(?:placeholder|insert|replace)(?:\s[^>]*)?>/gi;
 const DIRECT_GREETING = /^\s*Dear\s+([^\n,]+),?/im;
 const SIGNOFF_LINE = /^\s*(Sincerely|Best(?: regards)?|Regards|Respectfully|Thank you),?\s*$/im;
 
 function clean(value: unknown): string {
-  return String(value ?? "").replace(/\s+/g, " ").trim();
-}
-
-function wordCount(text: string): number {
-  return text.trim() ? text.trim().split(/\s+/).length : 0;
-}
-
-function authoredProseWordCount(text: string): number {
-  const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
-  const signoffIndex = lines.findIndex((line) => SIGNOFF_LINE.test(line));
-  return wordCount(
-    lines
-      .filter((line, index) => {
-        if (signoffIndex >= 0 && index >= signoffIndex) return false;
-        if (/^Dear\b/i.test(line)) return false;
-        if (
-          /^(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},\s+\d{4}$/i.test(
-            line
-          )
-        ) {
-          return false;
-        }
-        return true;
-      })
-      .join(" ")
-  );
+  return String(value ?? "")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 export function findCoverLetterPlaceholders(text: string): string[] {
-  const matches = [
-    ...(text.match(BRACKETED_PLACEHOLDER) ?? []),
-    ...(text.match(MUSTACHE_PLACEHOLDER) ?? []),
-    ...(text.match(GENERIC_TEMPLATE_TOKEN) ?? [])
-  ];
-  return [...new Set(matches.map((match) => match.trim()).filter(Boolean))];
+  return [...new Set(analyzeCoverLetterTemplate({ text }).slots.map((slot) => slot.raw))];
 }
 
 export function hasUnresolvedCoverLetterTokens(text: string): boolean {
-  return /[\[\]]|\{\{|\}\}|<(?:placeholder|insert|replace)(?:\s[^>]*)?>/i.test(text);
+  return templateHasUnresolvedSlots(text);
 }
 
 export function coverLetterUsesResolvedCorrespondence(
@@ -120,19 +96,7 @@ export function coverLetterUsesResolvedCorrespondence(
 }
 
 export function stripCoverLetterTemplateText(text: string): string {
-  return text
-    .replace(BRACKETED_PLACEHOLDER, "")
-    .replace(MUSTACHE_PLACEHOLDER, "")
-    .replace(GENERIC_TEMPLATE_TOKEN, "")
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter((line) => {
-      if (!line || /^[,.:;!?()[\]{}<>-]+$/.test(line)) return false;
-      if (/^Dear\s*,?$/i.test(line)) return false;
-      return true;
-    })
-    .join("\n")
-    .trim();
+  return analyzeCoverLetterTemplate({ text }).authoredProse;
 }
 
 function completedGreeting(text: string): boolean {
@@ -145,7 +109,9 @@ function existingSignoff(text: string, candidateName: string): string {
   const signoffIndex = lines.findIndex((line) => SIGNOFF_LINE.test(line));
   if (signoffIndex >= 0) {
     const closing = lines[signoffIndex];
-    const name = lines.slice(signoffIndex + 1).find((line) => line && !hasUnresolvedCoverLetterTokens(line));
+    const name = lines
+      .slice(signoffIndex + 1)
+      .find((line) => line && !hasUnresolvedCoverLetterTokens(line));
     if (candidateName || name) {
       return `${closing.replace(/,?$/, ",")}\n${candidateName || name}`;
     }
@@ -170,6 +136,7 @@ export function buildCoverLetterPreflight({
   role,
   company,
   values = {},
+  slotAnswers = {},
   date
 }: BuildCoverLetterPreflightInput): CoverLetterPreflight {
   const resolvedCandidateName = clean(values.candidate_name) || clean(candidateName);
@@ -178,17 +145,28 @@ export function buildCoverLetterPreflight({
   const recipientName = clean(values.recipient_name);
   const resolvedDate =
     clean(date) ||
-    new Intl.DateTimeFormat("en-US", { month: "long", day: "numeric", year: "numeric" }).format(
-      new Date()
-    );
+    new Intl.DateTimeFormat("en-US", {
+      month: "long",
+      day: "numeric",
+      year: "numeric"
+    }).format(new Date());
   const greeting = recipientName
     ? `Dear ${recipientName},`
     : resolvedCompany
       ? `Dear ${resolvedCompany} Hiring Team,`
       : "Dear Hiring Team,";
-  const placeholders = findCoverLetterPlaceholders(text);
-  const authoredText = stripCoverLetterTemplateText(text);
-  const authoredWordCount = authoredProseWordCount(authoredText);
+  const template = analyzeCoverLetterTemplate({
+    text,
+    candidateName: resolvedCandidateName,
+    role: resolvedRole,
+    company: resolvedCompany,
+    recipientName,
+    date: resolvedDate,
+    slotAnswers
+  });
+  const authoredText = template.authoredProse;
+  const authoredWordCount = template.authoredWordCount;
+  const requiresUserVoiceAnchor = sourceMode === "guided_draft" && !template.hasAuthoredVoice;
   const missingFields: MissingCoverLetterField[] = [];
 
   if (!resolvedCandidateName) {
@@ -198,7 +176,9 @@ export function buildCoverLetterPreflight({
     missingFields.push(field("role", "Role", "The job description did not resolve a role."));
   }
   if (!resolvedCompany) {
-    missingFields.push(field("company", "Company", "The job description did not resolve a company."));
+    missingFields.push(
+      field("company", "Company", "The job description did not resolve a company.")
+    );
   }
   if (!recipientName) {
     missingFields.push(
@@ -211,10 +191,14 @@ export function buildCoverLetterPreflight({
       )
     );
   }
-  if (sourceMode === "guided_draft") {
+  if (requiresUserVoiceAnchor) {
     if (!clean(values.why_role)) {
       missingFields.push(
-        field("why_role", "Why this role?", "Give the draft a genuine motivation in your own words.")
+        field(
+          "why_role",
+          "Why this role?",
+          "Give the draft a genuine motivation in your own words."
+        )
       );
     }
     if (!clean(values.lead_experience)) {
@@ -228,26 +212,30 @@ export function buildCoverLetterPreflight({
     }
   }
 
-  const blockingReasons: string[] = [];
+  const preparationBlockers: string[] = [];
   if (sourceMode === "authored_letter" && authoredWordCount < 80) {
-    blockingReasons.push("Write or open at least 80 authored words before polishing.");
+    preparationBlockers.push("Write or open at least 80 authored words before polishing.");
   }
-  if (sourceMode === "authored_letter" && placeholders.length > 0) {
-    blockingReasons.push("Replace every bracketed or template field in the source letter.");
+  for (const slot of template.requiredInputs) {
+    preparationBlockers.push(
+      slot.resolution.kind === "needs_input"
+        ? slot.resolution.question
+        : `Complete ${slot.normalizedPrompt}.`
+    );
   }
   if (missingFields.some((item) => item.required)) {
-    blockingReasons.push("Complete the required tailoring details.");
+    preparationBlockers.push("Complete the required tailoring details.");
   }
 
-  const readyForPreparation = blockingReasons.length === 0;
+  const canPrepare = preparationBlockers.length === 0;
   return {
     sourceMode,
-    placeholders,
+    template,
     authoredText,
     authoredWordCount,
     hasCompletedGreeting: completedGreeting(text),
     missingFields,
-    blockingReasons,
+    preparationBlockers,
     resolved: {
       candidateName: resolvedCandidateName,
       role: resolvedRole,
@@ -258,11 +246,19 @@ export function buildCoverLetterPreflight({
       signoff: existingSignoff(text, resolvedCandidateName)
     },
     values,
-    readyForPreparation,
-    readyToSend:
+    requiresUserVoiceAnchor,
+    canPrepare,
+    sourceReadyToSend:
       sourceMode === "authored_letter" &&
-      readyForPreparation &&
-      completedGreeting(text) &&
-      !hasUnresolvedCoverLetterTokens(text)
+      canPrepare &&
+      coverLetterUsesResolvedCorrespondence(text, {
+        candidateName: resolvedCandidateName,
+        role: resolvedRole,
+        company: resolvedCompany,
+        date: resolvedDate,
+        recipientName,
+        greeting,
+        signoff: existingSignoff(text, resolvedCandidateName)
+      })
   };
 }

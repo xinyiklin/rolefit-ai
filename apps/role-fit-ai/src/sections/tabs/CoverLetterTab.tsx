@@ -115,7 +115,7 @@ export function CoverLetterTab({
   const [linkEditorOpen, setLinkEditorOpen] = useState(false);
   const hasLetter = true;
   const canTailor =
-    preflight.readyForPreparation &&
+    preflight.canPrepare &&
     resumeReady &&
     jobReady &&
     providerReady &&
@@ -123,8 +123,8 @@ export function CoverLetterTab({
     !preparation &&
     !proposal;
   const targetLine = [jobTarget?.role, jobTarget?.company].filter(Boolean).join(" at ");
-  const readinessHint = preflight.blockingReasons[0]
-    ? preflight.blockingReasons[0]
+  const readinessHint = preflight.preparationBlockers[0]
+    ? preflight.preparationBlockers[0]
     : !resumeReady && !jobReady
       ? "Add a resume and job description first."
       : !resumeReady
@@ -166,7 +166,7 @@ export function CoverLetterTab({
         actionLabel={
           preflight.sourceMode === "authored_letter"
             ? "Polish"
-            : preflight.readyForPreparation
+            : preflight.canPrepare
               ? "Draft"
               : "Complete details"
         }

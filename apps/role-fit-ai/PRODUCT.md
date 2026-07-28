@@ -34,13 +34,18 @@ notes, and a pasted job description into honest, tailored application materials.
 remain constrained by server-side grounding and anti-fabrication checks, with a
 recruiter-style review for fit scoring and gap analysis. The cover-letter
 workflow explicitly distinguishes an authored letter from the bundled guided
-starter. It preserves genuine source voice when polishing a letter; guided
-drafting pauses for the candidate's own motivation and chosen evidence instead
-of creating a letter from the job and resume alone. Preparation classifies
+starter. An authored template may keep inline customization slots and still
+begin Polish; a guided starter with little or no authored prose pauses for the
+candidate's own voice anchor instead of creating a letter from the job and
+resume alone. Preparation keeps source prose, typed template instructions, job
+context, and candidate evidence separate, then classifies
 every atomic resume fact, honest-context note, and candidate answer as use,
-skip, or clarify; candidates can override the plan, and drafting receives only
-the approved one to three evidence items. Standard correspondence fields
-resolve deterministically, unresolved template tokens cannot be ready, and an
+skip, or clarify and resolves every template slot through a typed decision;
+candidates can override the evidence plan, those choices remain binding when a
+clarification refreshes it, and drafting receives only the approved one to
+three evidence items. Standard correspondence fields resolve
+deterministically. Source slots are valid preparation inputs, but an unresolved
+slot can never appear in a proposal represented as ready to send, and an
 AI proposal never replaces the editor until the user accepts it. Both editors share
 deterministic typesetting and PDF export, and the same recovery and naming
 behavior: unsaved edits go to a per-tab recovery draft either page can restore,

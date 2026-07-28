@@ -8,7 +8,11 @@ const fixtures = JSON.parse(
   readFileSync(new URL("./fixtures/cover-letter-quality.json", import.meta.url), "utf8")
 );
 assert.equal(fixtures.length, 10, "the quality corpus contains ten synthetic scenarios");
-assert.equal(new Set(fixtures.map((fixture) => fixture.id)).size, fixtures.length, "fixture ids are unique");
+assert.equal(
+  new Set(fixtures.map((fixture) => fixture.id)).size,
+  fixtures.length,
+  "fixture ids are unique"
+);
 assert(fixtures.some((fixture) => fixture.sourceMode === "authored_letter"));
 assert(fixtures.some((fixture) => fixture.sourceMode === "guided_draft"));
 assert(fixtures.some((fixture) => fixture.recipientName));
@@ -64,7 +68,9 @@ function makeGoodProposal(fixture, resolved, selected) {
     blocks,
     changeSummary: ["Focused the narrative on approved evidence."],
     preservedFromSource:
-      fixture.sourceMode === "authored_letter" ? ["Preserved the source letter's direct voice."] : [],
+      fixture.sourceMode === "authored_letter"
+        ? ["Preserved the source letter's direct voice."]
+        : [],
     warnings: [],
     readyToSend: true,
     selectedEvidence: selected
@@ -98,7 +104,7 @@ for (const fixture of fixtures) {
     values,
     date: "July 28, 2026"
   });
-  assert.equal(preflight.readyForPreparation, true, `${fixture.id} passes deterministic preflight`);
+  assert.equal(preflight.canPrepare, true, `${fixture.id} passes deterministic preflight`);
 
   const selected = selectedForFixture(fixture);
   const selectedIds = new Set(selected.map((item) => item.id));
@@ -116,7 +122,8 @@ for (const fixture of fixtures) {
       reason: selectedIds.has(item.id)
         ? "Directly supports the role."
         : "True, but not needed for this focused narrative."
-    }))
+    })),
+    slotDecisions: []
   };
   const proposal = makeGoodProposal(fixture, preflight.resolved, selected);
   const report = gradeCoverLetterProposal({
@@ -124,7 +131,7 @@ for (const fixture of fixtures) {
     plan,
     allEvidence: fixture.evidence,
     sourceMode: fixture.sourceMode,
-    sourceText: fixture.sourceText,
+    sourceText: preflight.template.authoredProse,
     resolved: preflight.resolved,
     onePage: true
   });
@@ -136,11 +143,15 @@ for (const fixture of fixtures) {
     plan,
     allEvidence: fixture.evidence,
     sourceMode: fixture.sourceMode,
-    sourceText: fixture.sourceText,
+    sourceText: preflight.template.authoredProse,
     resolved: preflight.resolved,
     onePage: false
   });
-  assert.equal(overflowReport.checks.concise.passed, false, "page overflow is a hard quality failure");
+  assert.equal(
+    overflowReport.checks.concise.passed,
+    false,
+    "page overflow is a hard quality failure"
+  );
 }
 
 const first = fixtures[0];
@@ -170,7 +181,8 @@ const weakPlan = {
     decision: firstSelected.some((selected) => selected.id === item.id) ? "use" : "skip",
     relevance: "weak",
     reason: "Weak"
-  }))
+  })),
+  slotDecisions: []
 };
 const genericProposal = makeGoodProposal(first, firstPreflight.resolved, firstSelected);
 genericProposal.blocks[2].text = `I am excited to apply because I am a perfect fit. ${genericProposal.blocks[2].text}`;
@@ -180,7 +192,7 @@ const genericReport = gradeCoverLetterProposal({
   plan: weakPlan,
   allEvidence: first.evidence,
   sourceMode: first.sourceMode,
-  sourceText: first.sourceText,
+  sourceText: firstPreflight.template.authoredProse,
   resolved: firstPreflight.resolved,
   onePage: true
 });

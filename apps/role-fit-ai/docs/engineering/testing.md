@@ -131,11 +131,18 @@ Good server verification covers:
 - cover-letter drafting and application-answer generation have no local
   fallback and retain their own retryable task progress. Cover-letter probes
   must distinguish authored and guided sources, count prose after removing all
-  template fields, treat `Dear [Hiring manager]` as incomplete, require guided
-  motivation/evidence answers, require exactly one preparation decision per
-  atomic evidence id, send only selected evidence to drafting, neutralize
-  source-letter fence injection, and reject placeholders, unknown evidence ids,
-  unsupported terms, numbers, and outcomes. The ten-fixture synthetic corpus
+  typed template slots, leave markdown links/citations/indexes/escaped brackets
+  literal, recommend authored mode for substantial prose, and require guided
+  motivation/evidence answers only without an authored voice anchor. Probes
+  require exactly one preparation decision per atomic evidence id and template
+  slot, allow unknown natural-language slots to be classified during
+  preparation, preserve candidate evidence overrides across clarification
+  refreshes, send only selected evidence to drafting, keep slot text out of
+  authored prose and candidate grounding, require every generative slot in the
+  draft, and reject unresolved final slots, unknown ids, unsupported candidate
+  terms, numbers, and outcomes. Employer facts grounded in the posting must not
+  widen candidate evidence, including when an employer-led sentence also makes
+  a first- or third-person candidate claim. The ten-fixture synthetic corpus
   grades evidence relevance, skipped-evidence leakage, source voice,
   meaningful authored-phrase preservation, resume-dump behavior, generic
   language, exact correspondence, role/company

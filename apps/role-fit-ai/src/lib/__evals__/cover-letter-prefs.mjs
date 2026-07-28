@@ -126,7 +126,11 @@ assert.equal(
   "the remembered workspace filename round-trips"
 );
 saveLastCoverLetterName(" ");
-assert.equal(values.has("rolefit:lastCoverLetter"), false, "detached documents clear the preference");
+assert.equal(
+  values.has("rolefit:lastCoverLetter"),
+  false,
+  "detached documents clear the preference"
+);
 
 const available = ["default.cover", "backend-platform.cover", "frontend.cover"];
 assert.deepEqual(
@@ -150,10 +154,7 @@ assert.deepEqual(
   "an empty workspace clears stale identity without inventing a document"
 );
 
-const hook = readFileSync(
-  new URL("../../hooks/useCoverLetterEditor.ts", import.meta.url),
-  "utf8"
-);
+const hook = readFileSync(new URL("../../hooks/useCoverLetterEditor.ts", import.meta.url), "utf8");
 assert.match(
   hook,
   /resolveCoverLetterStartup\([\s\S]*loadLastCoverLetterName\(\)/,
@@ -171,7 +172,7 @@ assert.match(
 );
 assert.match(
   hook,
-  /const COVER_LETTER_STARTER = `<space-before=8>\[Date\]<\/space-before>\n\nDear \[Hiring manager\],[\s\S]*\n\nSincerely,/,
+  /const COVER_LETTER_STARTER = `<space-before=8>\[Date\]<\/space-before>\r?\n\r?\nDear \[Hiring manager\],[\s\S]*\r?\n\r?\nSincerely,/,
   "the starter adds paragraph spacing before the date only"
 );
 

@@ -76,14 +76,23 @@ async function runFixture(fixture, run) {
     values: preparationValues,
     date: "July 28, 2026"
   });
-  if (!preflight.readyForPreparation) {
-    return { fixture: fixture.id, run, error: "synthetic fixture failed preflight" };
+  if (!preflight.canPrepare) {
+    return {
+      fixture: fixture.id,
+      run,
+      error: "synthetic fixture failed preflight"
+    };
   }
   const common = {
     provider: PROVIDER,
     model: MODEL,
     jobText: fixture.jobText,
-    sourceText: fixture.sourceMode === "authored_letter" ? fixture.sourceText : "",
+    sourceContext: {
+      rawTemplateText: fixture.sourceText,
+      structuredTemplate: preflight.template.structuredTemplate,
+      authoredProse: preflight.template.authoredProse,
+      slots: preflight.template.slots
+    },
     sourceMode: fixture.sourceMode,
     preparationValues,
     resolvedContext: preflight.resolved,
@@ -117,7 +126,7 @@ async function runFixture(fixture, run) {
     plan: preparation.plan,
     allEvidence: fixture.evidence,
     sourceMode: fixture.sourceMode,
-    sourceText: fixture.sourceText,
+    sourceText: preflight.template.authoredProse,
     resolved: preflight.resolved,
     onePage: pageCount === 1
   });
@@ -166,7 +175,9 @@ for (const result of results) {
 }
 for (const [fixture, choices] of selectionSpread) {
   if (choices.size > 1) {
-    console.log(`WARN: ${fixture} selected ${choices.size} different evidence sets across identical runs.`);
+    console.log(
+      `WARN: ${fixture} selected ${choices.size} different evidence sets across identical runs.`
+    );
   }
 }
 

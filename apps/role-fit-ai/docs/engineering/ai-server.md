@@ -172,19 +172,30 @@ owns:
   tailor/review results. The client surfaces "reviewed by" when either the
   audit provider or audit model differs from the Tailor configuration.
   `/api/cover-letter` requires an explicit `sourceMode`, `mode:
-  "prepare" | "draft"`, and the current job description. Authored-letter mode requires at least 80 genuine words
-  after template fields are removed. Guided-draft mode requires the candidate's
-  own motivation and selected experience notes; the bundled starter itself is
-  never sent as prose. Shared deterministic preflight resolves date, candidate,
+  "prepare" | "draft"`, and the current job description. Authored-letter mode
+  requires at least 80 genuine words outside template slots, but those slots may
+  remain in the source when Polish begins. Guided-draft mode requires the
+  candidate's own motivation and selected experience notes only when the source
+  lacks an 80-word authored voice anchor. Shared deterministic analysis sends
+  authored prose and typed prose/slot segments separately; slot instructions
+  are never candidate evidence or voice text. Preflight resolves date, candidate,
   role, company, greeting, and sign-off, returns `needs_input` before provider
-  dispatch when required fields are absent. The prepare pass receives atomic
+  dispatch when a required field or private factual slot is absent. The prepare pass receives atomic
   evidence objects with stable ids and must classify every item as `use`,
   `skip`, or `needs_clarification`; it cannot silently omit honest context or
-  select more than three items. The browser exposes those decisions and candidate
-  overrides. The draft pass receives only the approved evidence objects plus
+  select more than three items. It also returns exactly one typed decision for
+  every source slot; deterministic slots stay server-resolved, job-context
+  slots cannot cite candidate evidence, and candidate-connected slots cite
+  selected evidence. Unknown natural-language slots remain unclassified until
+  this pass assigns job context, candidate evidence, both, or a focused input
+  question. The browser exposes those decisions and candidate overrides;
+  subsequent prepare requests carry the overrides, and server validation
+  rejects a refreshed provider plan that changes them. The draft pass receives
+  only the approved evidence objects plus
   the selected plan—not the full resume or skipped notes—and each body paragraph
-  must cite an approved id. The server assembles date, greeting, and sign-off
-  itself, then rejects template tokens, unknown evidence ids, unsupported
+  must cite approved evidence and the generative slot ids it addresses. The
+  server assembles date, greeting, and sign-off itself, then rejects omitted or
+  unknown slot ids, unresolved final template tokens, unknown evidence ids, unsupported
   terms, numbers, outcomes, generic AI phrasing, false source-preservation
   metadata, or a body that omits the resolved role.
   The cover-letter UI keeps a successful result as a pending proposal until the

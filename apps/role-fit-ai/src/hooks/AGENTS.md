@@ -45,6 +45,8 @@ browser-side effects; components render them and App composes them.
   until the user explicitly accepts it. Keep that request-generation boundary
   in one coordinator: splitting its abort refs and stale-response checks across
   hooks would weaken the atomic transition; extract pure contracts into `lib/`.
+  Evidence use/skip overrides travel with every clarification-driven prepare
+  refresh and remain server-enforced rather than prompt-advisory.
 - Both editors recover unsaved work the same way: `useAutosaveDraft` and
   `useCoverLetterAutosaveDraft` each own one document's debounced draft, over
   the shared per-tab rules in `lib/autosaveDraftStorage.ts` (tab scoping, live
