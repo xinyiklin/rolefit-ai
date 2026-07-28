@@ -61,8 +61,8 @@ const coverFingerprint = cover.slice(
 
 assert.match(
   applications,
-  /body: JSON\.stringify\(\{ applications: next, mutations \}\)/,
-  "application writes send explicit per-record mutations"
+  /applications: applicationMutationRecords\(next, mutations\),[\s\S]*mutations/,
+  "application writes send only explicit upsert records with their mutations"
 );
 assert.doesNotMatch(applications, /deleteIds/, "the obsolete deleteIds contract cannot return");
 assert.match(

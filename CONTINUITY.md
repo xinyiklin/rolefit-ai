@@ -5,6 +5,16 @@ bounded; app-only operational detail belongs in the affected app documentation.
 
 ## 2026-07-27
 
+- [USER+CODE] Ordinary tracker PUTs now send only records named by `upsert`
+  mutations; delete-only requests send an empty applications array. The server
+  still accepts legacy full snapshots, treats unmutated client rows as
+  non-authoritative, prepends genuinely new records in incoming order, and
+  retains existing server order for edits and merges. Successful writes still
+  return the authoritative full tracker for cross-tab synchronization, but the
+  client reuses prior objects whose id and `updatedAt` are unchanged. Explicit
+  Refresh and `409` conflict snapshots remain fully fresh, and the shared
+  applications lock remains unchanged.
+
 - [USER+CODE] The duplicate matcher no longer pays for content comparison it
   will not use. `matchSignatures` computed `jdSimilarity` and `setContainment`
   for EVERY pair at the top of the function, but a pair with an explicit id on
