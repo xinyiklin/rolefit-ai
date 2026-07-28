@@ -133,7 +133,6 @@ for (const [name, patch] of [
   ["jobUrl", { jobUrl: "https://boards.greenhouse.io/northwind/jobs/9999999" }],
   ["company", { company: "Southwind" }],
   ["role", { role: "Staff Engineer" }],
-  ["title", { title: "Staff Engineer at Northwind" }],
   ["location", { location: "Austin, TX" }],
   ["jobDescription", { jobDescription: `${JD_BODY} Additional duties apply.` }],
   // Must differ from jobDescription: the key (like the matcher) reads raw text
@@ -146,6 +145,62 @@ for (const [name, patch] of [
   const edited = [{ ...baseList[0], ...patch }, baseList[1], baseList[2]];
   check(`${name} edit changes the scan identity`, duplicateScanIdentity(edited) !== baseKey, true);
   check(`${name} edit misses the cache`, cachedDuplicateScan(duplicateScanIdentity(edited)), null);
+}
+
+// ── The key follows the matcher's effective inputs exactly where required ───
+{
+  const whitespaceRaw = app({ id: "key-whitespace", rawJobDescription: " \n\t " });
+  const withoutRaw = { ...whitespaceRaw, rawJobDescription: undefined };
+  check(
+    "whitespace-only raw text selects the distilled description",
+    duplicateScanIdentity([whitespaceRaw]),
+    duplicateScanIdentity([withoutRaw])
+  );
+  check(
+    "distilled edits invalidate when raw text is whitespace-only",
+    duplicateScanIdentity([{ ...whitespaceRaw, jobDescription: OTHER_BODY }]) !==
+      duplicateScanIdentity([whitespaceRaw]),
+    true
+  );
+  const preferredRaw = app({ id: "key-raw", rawJobDescription: JD_BODY });
+  check(
+    "distilled edits do not invalidate when nonempty raw text owns matching",
+    duplicateScanIdentity([{ ...preferredRaw, jobDescription: OTHER_BODY }]),
+    duplicateScanIdentity([preferredRaw])
+  );
+
+  const prefix = "x".repeat(15_000);
+  check(
+    "text edits inside the matcher boundary invalidate",
+    duplicateScanIdentity([app({ id: "key-inside", jobDescription: `${prefix.slice(0, -1)}a` })]) !==
+      duplicateScanIdentity([app({ id: "key-inside", jobDescription: `${prefix.slice(0, -1)}b` })]),
+    true
+  );
+  check(
+    "text edits after the matcher boundary do not invalidate",
+    duplicateScanIdentity([app({ id: "key-after", jobDescription: `${prefix}a` })]),
+    duplicateScanIdentity([app({ id: "key-after", jobDescription: `${prefix}b` })])
+  );
+
+  const explicitRole = app({ id: "key-role", role: "Platform Engineer" });
+  check(
+    "title edits do not invalidate when explicit role owns matching",
+    duplicateScanIdentity([{ ...explicitRole, title: "Old title at Northwind" }]),
+    duplicateScanIdentity([{ ...explicitRole, title: "New title at Northwind" }])
+  );
+  const titleFallback = app({ id: "key-title", role: undefined });
+  check(
+    "title edits invalidate when title supplies the role",
+    duplicateScanIdentity([{ ...titleFallback, title: "Old title at Northwind" }]) !==
+      duplicateScanIdentity([{ ...titleFallback, title: "New title at Northwind" }]),
+    true
+  );
+
+  check(
+    "dismissed-id order and duplicates do not invalidate",
+    duplicateScanIdentity([app({ id: "key-dismissed", duplicateDismissedIds: ["z", "a", "a"] })]),
+    duplicateScanIdentity([app({ id: "key-dismissed", duplicateDismissedIds: ["a", "z"] })])
+  );
 }
 
 // A dismissed pair really does stop grouping (the scan is re-run, not reused).
