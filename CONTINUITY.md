@@ -40,7 +40,8 @@ bounded; app-only operational detail belongs in the affected app documentation.
   canonicalizes dismissed-id membership, and uses a length-prefixed two-hash
   composite. It remains a conservative cache version: raw URL/metadata changes
   may safely over-invalidate. The per-object `WeakMap` avoids rehashing only
-  while references survive; full server responses currently replace them.
+  while references survive. Successful own-write responses now preserve
+  unchanged id/revision objects; explicit GET and conflict snapshots stay fresh.
   **DEFERRED / NOT ACTIVE BACKLOG:** bucket candidate indexing and incremental
   edge maintenance. The tracker is capped at 500 records, and neither
   architecture is justified by measured user impact. Reconsider only if
