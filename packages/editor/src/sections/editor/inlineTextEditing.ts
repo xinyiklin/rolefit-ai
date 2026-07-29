@@ -467,6 +467,13 @@ export function applyEdit(
   return withBoundary(serializeChars(map.prefix, chars, suffix, dStart + leading.length + inserted.length));
 }
 
+export function applyPlainTextInputEdit(
+  value: string,
+  nextText: string
+): { value: string; caretValueIndex: number } {
+  return { value: nextText, caretValueIndex: nextText.length };
+}
+
 // A mark-balanced fragment for the selected display range. The custom
 // clipboard transport stores this value alongside text/plain so paste inside
 // either host can restore supported font, size, emphasis, link, and alignment

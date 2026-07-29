@@ -8,6 +8,7 @@ import {
   autoLinkSuppressionForSelection,
   applyInlineFragment,
   applyEdit,
+  applyPlainTextInputEdit,
   buildDisplayMap,
   expandToLinkRun,
   inlineFragmentForRange,
@@ -115,6 +116,20 @@ const retypedMap = buildDisplayMap(retyped.value, { preserveWhitespace: true });
 assert.equal(retypedMap.display, "Z");
 assert.equal(retypedMap.chars[0].fontFamily, "source-sans");
 assert.equal(retypedMap.chars[0].fontSizePt, 14);
+
+assert.equal(
+  applyPlainTextInputEdit("<b>Candidate</b>", "Candidates").value,
+  "<b>Candidates</b>",
+  "editing a formatted header field through its plain-text input preserves inherited marks"
+);
+assert.equal(
+  applyPlainTextInputEdit(
+    "<b>Candidate</b> · <i>New York</i>",
+    "Candidate X · New York"
+  ).value,
+  "<b>Candidate X</b> · <i>New York</i>",
+  "plain-text header editing preserves marks outside the smallest changed range"
+);
 
 const authoredIndent = buildDisplayMap("    Indented", { preserveWhitespace: true });
 assert.equal(authoredIndent.display, "    Indented", "Tab-equivalent leading spaces remain editable");

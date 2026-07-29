@@ -47,6 +47,7 @@ import {
   type InlineFormatState,
   type TypesetEditorHandle
 } from "@typeset/editor/sections/editor/TypesetEditor.tsx";
+import { commitDocumentSaveBaseline } from "./documentSaveBaseline.ts";
 
 const AUTOSAVE_KEY = "typeset-resume.autosave.v2";
 const DOCUMENT_TITLE_KEY = "typeset-resume.documentTitle.v1";
@@ -281,14 +282,14 @@ export default function App() {
     setIsSavingFile(true);
     try {
       const fileName = downloadResumeFile(resume, docStyle.style, documentTitle);
-      editor.markClean();
+      commitDocumentSaveBaseline(editor.markClean, docStyle.markClean);
       setNotice({ tone: "info", message: `Saved ${fileName}.` });
     } catch (error) {
       setNotice({ tone: "error", message: readableError(error) });
     } finally {
       setIsSavingFile(false);
     }
-  }, [docStyle.style, documentTitle, editor.markClean, resume]);
+  }, [docStyle.markClean, docStyle.style, documentTitle, editor.markClean, resume]);
 
   const exportPdf = useCallback(async () => {
     if (!resume || isExporting) return;

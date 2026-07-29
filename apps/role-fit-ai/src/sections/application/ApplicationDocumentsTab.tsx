@@ -15,6 +15,7 @@ import {
   type ApplicationDocumentKind,
   type DocumentUpload
 } from "../../lib/applicationDocumentRequests";
+import { applicationDocumentAvailability } from "../../../shared/applicationDocumentContract.ts";
 
 type ApplicationDocumentsTabProps = {
   application: Application | null;
@@ -187,8 +188,10 @@ export function ApplicationDocumentsTab({
   const { alert, confirm } = useDialog();
   const resumeArtifacts = application?.resumeArtifacts;
   const coverArtifacts = application?.coverLetterArtifacts;
-  const hasResume = Boolean(application?.resumeData || resumeArtifacts?.hasPdf || resumeArtifacts?.hasSource);
-  const hasCover = Boolean(application?.coverLetterText || coverArtifacts?.hasPdf || coverArtifacts?.hasSource);
+  const hasResume =
+    applicationDocumentAvailability(resumeArtifacts, Boolean(application?.resumeData)) !== "none";
+  const hasCover =
+    applicationDocumentAvailability(coverArtifacts, Boolean(application?.coverLetterText)) !== "none";
 
   async function upload(kind: UploadKind, event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];

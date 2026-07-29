@@ -356,6 +356,31 @@ try {
     failures.push("an undated legacy row received an unstable read-time revision");
   }
 
+  const RealDate = globalThis.Date;
+  const dateAt = (iso) => class extends RealDate {
+    constructor(...args) {
+      super(...(args.length ? args : [iso]));
+    }
+    static now() {
+      return new RealDate(iso).getTime();
+    }
+  };
+  const undatedRaw = [{
+    id: "deterministic-read",
+    title: "Deterministic read",
+    sourceUrls: [{ url: "https://example.com/alternate" }],
+    attachments: [{ fileName: "work-sample.pdf", label: "Work sample", size: 1 }],
+    resumeArtifacts: { hasSource: true, fileName: "resume.resume" }
+  }];
+  globalThis.Date = dateAt("2026-07-29T10:00:00.000Z");
+  const deterministicFirst = sanitizeApplications(undatedRaw);
+  globalThis.Date = dateAt("2026-07-29T11:00:00.000Z");
+  const deterministicSecond = sanitizeApplications(undatedRaw);
+  globalThis.Date = RealDate;
+  if (JSON.stringify(deterministicFirst) !== JSON.stringify(deterministicSecond)) {
+    failures.push("the same stored application input sanitizes differently at different read times");
+  }
+
   // Corruption must fail closed and remain byte-for-byte recoverable. Returning
   // [] here would let the next save overwrite the user's tracker as if it were
   // intentionally empty.

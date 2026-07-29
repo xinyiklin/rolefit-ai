@@ -12,6 +12,7 @@ import {
   normalizeDocumentSnapshot,
   savedDocumentText
 } from "../applicationDocuments.ts";
+import { applicationDocumentAvailability } from "../../../shared/applicationDocumentContract.ts";
 import { documentSourceFingerprint } from "../documentSourceFingerprint.ts";
 
 const resumeSource = "{\"kind\":\"resume\",\"style\":\"original\"}";
@@ -23,6 +24,22 @@ const resumeData = {
   header: { visible: true, name: "Test Candidate", contact: [] },
   sections: [{ id: "s1", kind: "experience", heading: "Experience", entries: [] }]
 };
+
+assert.equal(
+  applicationDocumentAvailability(undefined, true),
+  "legacy-text-snapshot",
+  "tracker-only text is explicit legacy snapshot state, never a saved source artifact"
+);
+assert.equal(
+  applicationDocumentAvailability({ hasSource: true, hasPdf: false }, false),
+  "source-only",
+  "strict source alone is a saved editable document"
+);
+assert.equal(
+  applicationDocumentAvailability({ hasSource: false, hasPdf: true }, false),
+  "pdf-only",
+  "an uploaded PDF alone is a saved final document"
+);
 
 // The state Apply leaves behind: both snapshots stored, plus the metadata the
 // tracker owns (status, notes, dates, job details, fit) that no document save

@@ -524,14 +524,31 @@ function fragmentValueFromHtml(html: string): string | null {
   return value || null;
 }
 
+export type ParsedClipboardHtml = {
+  inlineValue: string | null;
+  blocks: string[] | null;
+  sawBlockStructure: boolean;
+};
+
+export function parsedClipboardHtml(
+  value: string | null,
+  sawBlockStructure: boolean
+): ParsedClipboardHtml {
+  return {
+    inlineValue: value?.split(BLOCK_SEPARATOR).join("\n") ?? null,
+    blocks: value?.includes(BLOCK_SEPARATOR) ? value.split(BLOCK_SEPARATOR) : null,
+    sawBlockStructure
+  };
+}
+
 export function inlineFragmentFromHtml(html: string): string | null {
-  return fragmentValueFromHtml(html)?.split(BLOCK_SEPARATOR).join("\n") ?? null;
+  const value = fragmentValueFromHtml(html);
+  return parsedClipboardHtml(value, Boolean(value?.includes(BLOCK_SEPARATOR))).inlineValue;
 }
 
 export function paragraphFragmentsFromHtml(html: string): string[] | null {
   const value = fragmentValueFromHtml(html);
-  if (!value || !value.includes(BLOCK_SEPARATOR)) return null;
-  return value.split(BLOCK_SEPARATOR);
+  return parsedClipboardHtml(value, Boolean(value?.includes(BLOCK_SEPARATOR))).blocks;
 }
 
 // Structural paste choices operate on logical blocks. Rich HTML wins because

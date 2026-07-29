@@ -157,8 +157,8 @@ assert.equal(
 );
 assert.equal(tabIdFromKey("resume", "rolefit:draftAutosave:v2:tab-1"), "tab-1", "tabIdFromKey recovers the owning tab id");
 assert.equal(tabIdFromKey("cover", "rolefit:coverDraftAutosave:v2:tab-1"), "tab-1", "the cover key resolves its owning tab too");
-assert.equal(tabIdFromKey("resume", "rolefit:draftAutosave"), "", "the pre-tab resume draft remains discoverable for lazy migration");
-assert.equal(tabIdFromKey("resume", "rolefit:draftAutosave:tab-1"), "tab-1", "a retired tab-scoped resume draft keeps its owner during migration");
+assert.equal(tabIdFromKey("resume", "rolefit:draftAutosave"), null, "the retired pre-tab resume key is ignored at runtime");
+assert.equal(tabIdFromKey("resume", "rolefit:draftAutosave:tab-1"), null, "retired tab-scoped resume drafts are ignored at runtime");
 assert.equal(tabIdFromKey("cover", "rolefit:draftAutosave"), null, "the retired resume key never belongs to the cover letter");
 assert.equal(
   tabIdFromKey("resume", "rolefit:coverDraftAutosave:v2:tab-1"),
@@ -179,27 +179,44 @@ class FakeStorage {
   removeItem(key) { this.entries.delete(key); }
 }
 globalThis.localStorage = new FakeStorage();
+globalThis.sessionStorage = new FakeStorage();
+sessionStorage.setItem("rolefit:tabId", "tab-a");
+localStorage.setItem("rolefit:tabPresence", JSON.stringify({
+  "tab-a": { jobLabel: "Current", phase: "idle", updatedAt: Date.now() },
+  "tab-b": { jobLabel: "Sibling", phase: "editing", updatedAt: Date.now() }
+}));
 localStorage.setItem("rolefit:draftAutosave:v2:tab-a", "{}");
 localStorage.setItem("rolefit:draftAutosave:v2:tab-b", "{}");
 localStorage.setItem("rolefit:draftAutosave:tab-a", "{}"); // retired structured-lossy draft
 localStorage.setItem("rolefit:draftAutosave", "{}"); // legacy orphan
 localStorage.setItem("rolefit:coverDraftAutosave:tab-a", "{}");
+localStorage.setItem("rolefit:coverDraftAutosave:v2:tab-b", "{}");
 localStorage.setItem("rolefit:settings", "{}"); // unrelated key, must survive
 localStorage.setItem("rolefit:adoptedRestoreStamp", RESTORE_STAMP); // unrelated key, must survive
 
 clearAllAutosaveDrafts();
 
 assert.equal(localStorage.getItem("rolefit:draftAutosave:v2:tab-a"), null, "clearAllAutosaveDrafts clears this tab's draft");
-assert.equal(localStorage.getItem("rolefit:draftAutosave:v2:tab-b"), null, "clearAllAutosaveDrafts clears a sibling tab's draft too");
-assert.equal(localStorage.getItem("rolefit:draftAutosave:tab-a"), null, "clearAllAutosaveDrafts clears retired resume drafts");
-assert.equal(localStorage.getItem("rolefit:draftAutosave"), null, "clearAllAutosaveDrafts clears the legacy orphan key");
+assert.equal(
+  localStorage.getItem("rolefit:draftAutosave:v2:tab-b"),
+  "{}",
+  "workspace adoption preserves a live sibling tab's resume recovery draft"
+);
+assert.equal(localStorage.getItem("rolefit:draftAutosave:tab-a"), "{}", "workspace adoption ignores retired resume keys");
+assert.equal(localStorage.getItem("rolefit:draftAutosave"), "{}", "workspace adoption ignores the retired orphan key");
 assert.equal(
   localStorage.getItem("rolefit:coverDraftAutosave:tab-a"),
-  null,
-  "a restore supersedes the cover-letter draft as well as the resume draft"
+  "{}",
+  "workspace adoption ignores retired cover-letter keys"
+);
+assert.equal(
+  localStorage.getItem("rolefit:coverDraftAutosave:v2:tab-b"),
+  "{}",
+  "workspace adoption preserves a live sibling tab's cover-letter recovery draft"
 );
 assert.equal(localStorage.getItem("rolefit:settings"), "{}", "clearAllAutosaveDrafts never touches unrelated settings storage");
 assert.equal(localStorage.getItem("rolefit:adoptedRestoreStamp"), RESTORE_STAMP, "clearAllAutosaveDrafts never touches the adopted-restore-stamp marker");
 delete globalThis.localStorage;
+delete globalThis.sessionStorage;
 
 console.log("workspace backup lifecycle probes: PASS");

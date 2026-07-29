@@ -13,6 +13,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { parseCoverLetterFile } from "@typeset/engine/lib/coverLetter.ts";
 import { clearTabDraft, recoverTabDraft, saveTabDraft } from "../lib/autosaveDraftStorage.ts";
+import { coverLetterRecoveryDirty } from "../lib/coverLetterRecovery.ts";
 import type { DraftAutosaveState } from "./useAutosaveDraft";
 
 export type CoverLetterAutosavedDraft = {
@@ -59,6 +60,7 @@ type UseCoverLetterAutosaveDraftArgs = {
   // The editor's serialized `.cover` payload, or null when no document is loaded.
   payload: string | null;
   documentTitle: string;
+  persistedDocumentTitle: string;
   dirty: boolean;
   // False for an empty letter: there is nothing worth recovering.
   hasContent: boolean;
@@ -70,6 +72,7 @@ type UseCoverLetterAutosaveDraftArgs = {
 export function useCoverLetterAutosaveDraft({
   payload,
   documentTitle,
+  persistedDocumentTitle,
   dirty,
   hasContent,
   jobLabel
@@ -82,7 +85,13 @@ export function useCoverLetterAutosaveDraft({
   latestTitle.current = documentTitle;
 
   useEffect(() => {
-    if (!dirty || !payload || !hasContent) {
+    const recoveryDirty = coverLetterRecoveryDirty({
+      documentDirty: dirty,
+      documentTitle,
+      persistedDocumentTitle,
+      hasContent
+    });
+    if (!recoveryDirty || !payload) {
       if (timerRef.current !== null) {
         clearTimeout(timerRef.current);
         timerRef.current = null;
@@ -110,7 +119,7 @@ export function useCoverLetterAutosaveDraft({
         timerRef.current = null;
       }
     };
-  }, [payload, dirty, hasContent, jobLabel]);
+  }, [payload, documentTitle, persistedDocumentTitle, dirty, hasContent, jobLabel]);
 
   return state;
 }

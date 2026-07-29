@@ -588,6 +588,76 @@ for (const invalidData of [
     "the serializer rejects header data its parser would reject"
   );
 }
+for (const [label, invalidData] of [
+  [
+    "a second section",
+    {
+      ...withHeader,
+      sections: [
+        ...withHeader.sections,
+        {
+          ...structuredClone(withHeader.sections[0]),
+          id: "hidden-second-section"
+        }
+      ]
+    }
+  ],
+  [
+    "a non-summary section",
+    {
+      ...withHeader,
+      sections: [{ ...structuredClone(withHeader.sections[0]), type: "standard" }]
+    }
+  ],
+  [
+    "entry title content",
+    {
+      ...withHeader,
+      sections: [{
+        ...structuredClone(withHeader.sections[0]),
+        items: [{
+          ...structuredClone(withHeader.sections[0].items[0]),
+          titleLeft: "Silently discarded title"
+        }]
+      }]
+    }
+  ],
+  [
+    "multiple bullets in one paragraph item",
+    {
+      ...withHeader,
+      sections: [{
+        ...structuredClone(withHeader.sections[0]),
+        items: [{
+          ...structuredClone(withHeader.sections[0].items[0]),
+          bullets: [
+            ...structuredClone(withHeader.sections[0].items[0].bullets),
+            { id: "hidden-second-bullet", text: "Silently discarded text" }
+          ]
+        }]
+      }]
+    }
+  ],
+  [
+    "a paragraph item without exactly one bullet",
+    {
+      ...withHeader,
+      sections: [{
+        ...structuredClone(withHeader.sections[0]),
+        items: [{
+          ...structuredClone(withHeader.sections[0].items[0]),
+          bullets: []
+        }]
+      }]
+    }
+  ]
+]) {
+  assert.throws(
+    () => serializeCoverLetterFile(invalidData, COVER_LETTER_STYLE_DEFAULTS),
+    (error) => error instanceof CoverLetterFileError && error.code === "invalid-document",
+    `.cover serialization rejects ${label} instead of projecting it away`
+  );
+}
 assert.throws(
   () => serializeCoverLetterFile(withHeader, { ...COVER_LETTER_STYLE_DEFAULTS, contactDivider: "" }),
   (error) => error instanceof CoverLetterFileError && error.code === "invalid-style",
