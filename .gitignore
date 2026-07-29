@@ -16,6 +16,7 @@ dist
 output/playwright/
 tmp/
 .impeccable/
+.font-tools/
 
 # Generated: mirrored from packages/engine/fonts by the app sync-fonts script.
 apps/typeset/public/fonts/

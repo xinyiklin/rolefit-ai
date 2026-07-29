@@ -42,6 +42,12 @@ jobs:
       - name: Install the locked workspace
         run: npm ci
 
+      - name: Install deterministic font tooling
+        run: |
+          python3 -m venv .font-tools
+          .font-tools/bin/pip install --requirement packages/engine/scripts/requirements-fonts.txt
+          echo "$GITHUB_WORKSPACE/.font-tools/bin" >> "$GITHUB_PATH"
+
       # The packaged RoleFit app consumes both private source packages, so a
       # signed tag must pass each owning package gate as well as the app gate.
       - name: Check shared engine

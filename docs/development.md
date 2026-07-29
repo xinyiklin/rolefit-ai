@@ -10,7 +10,9 @@ workspace; there is no generic root `dev`, `build`, or `preview` script.
   runtime for Electron Forge packaging. The packaging wrapper accepts only the
   Node 22-24 range; Node 24 is the verified packaging runtime.
 - npm with the root lockfile.
-- Python 3 only for engine font-generation/check scripts.
+- Python 3 only for engine font-generation/check scripts. Install their pinned
+  dependencies from `packages/engine/scripts/requirements-fonts.txt` in an
+  isolated environment; CI creates `.font-tools` and places it on `PATH`.
 
 ## Common commands
 
@@ -32,6 +34,15 @@ npm run make:rolefit:desktop           # native installer/archive artifacts
 npm run check             # every workspace check
 npm test                  # every workspace test/eval script
 npm run test:editor:browser  # headless Chrome editor/lifecycle contracts
+```
+
+For a clean machine, prepare the deterministic font tools before running the
+engine or root check:
+
+```bash
+python3 -m venv .font-tools
+.font-tools/bin/pip install --requirement packages/engine/scripts/requirements-fonts.txt
+PATH="$PWD/.font-tools/bin:$PATH" npm run check --workspace packages/engine
 ```
 
 Focused workspace commands:

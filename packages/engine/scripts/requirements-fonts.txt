@@ -1,0 +1,4 @@
+# Deterministic font generation/check dependencies. Keep these synchronized
+# with the exact version guards in both generate_font_*.py scripts.
+fonttools[woff]==4.60.2
+brotli==1.2.0
