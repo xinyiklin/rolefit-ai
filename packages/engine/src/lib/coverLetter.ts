@@ -22,6 +22,11 @@ import {
   type DocumentHeader,
   type ResumeData
 } from "./resumeData.ts";
+import {
+  assertJsonFileSize,
+  parseJsonFile,
+  serializeJsonFile
+} from "./jsonFileCodec.ts";
 
 export const COVER_LETTER_FILE_MAGIC = "typeset-cover-letter" as const;
 export const COVER_LETTER_FILE_SCHEMA_VERSION = 1 as const;
@@ -243,25 +248,8 @@ function validateHeader(value: unknown): DocumentHeader {
   return validated;
 }
 
-function enforceSize(byteLength: number) {
-  if (byteLength > MAX_COVER_LETTER_FILE_BYTES) {
-    fail("too-large", "This .cover file is larger than the 2 MB limit.");
-  }
-}
-
-function decodeInput(input: string | ArrayBuffer | Uint8Array): string {
-  if (typeof input === "string") {
-    enforceSize(new TextEncoder().encode(input).byteLength);
-    return input;
-  }
-  const bytes = input instanceof Uint8Array ? input : new Uint8Array(input);
-  enforceSize(bytes.byteLength);
-  try {
-    return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
-  } catch {
-    fail("invalid-json", "This .cover file is not valid UTF-8 text.");
-  }
-}
+const coverLetterFileTooLarge = (): never =>
+  fail("too-large", "This .cover file is larger than the 2 MB limit.");
 
 export function coverLetterResumeData(
   paragraphs: readonly string[],
@@ -456,21 +444,22 @@ export function createCoverLetterFile(
 }
 
 export function serializeCoverLetterFile(data: ResumeData, style: CoverLetterStyle): string {
-  const serialized = `${JSON.stringify(createCoverLetterFile(data, style), null, 2)}\n`;
-  enforceSize(new TextEncoder().encode(serialized).byteLength);
-  return serialized;
+  return serializeJsonFile(
+    createCoverLetterFile(data, style),
+    MAX_COVER_LETTER_FILE_BYTES,
+    coverLetterFileTooLarge
+  );
 }
 
 export function parseCoverLetterFile(
   input: string | ArrayBuffer | Uint8Array
 ): ParsedCoverLetterFile {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(decodeInput(input)) as unknown;
-  } catch (error) {
-    if (error instanceof CoverLetterFileError) throw error;
-    fail("invalid-json", "This .cover file does not contain valid JSON.");
-  }
+  const parsed = parseJsonFile(input, MAX_COVER_LETTER_FILE_BYTES, {
+    tooLarge: coverLetterFileTooLarge,
+    invalidUtf8: () => fail("invalid-json", "This .cover file is not valid UTF-8 text."),
+    invalidJson: () =>
+      fail("invalid-json", "This .cover file does not contain valid JSON.")
+  });
   const file = requireRecord(parsed, "invalid-format", "Cover-letter file");
   if (file.format !== COVER_LETTER_FILE_MAGIC) {
     fail("invalid-format", "This is not a Typeset .cover file.");
@@ -506,7 +495,11 @@ export function parseCoverLetterFile(
 }
 
 export async function readCoverLetterFile(file: File): Promise<ParsedCoverLetterFile> {
-  enforceSize(file.size);
+  assertJsonFileSize(
+    file.size,
+    MAX_COVER_LETTER_FILE_BYTES,
+    coverLetterFileTooLarge
+  );
   return parseCoverLetterFile(await file.arrayBuffer());
 }
 

@@ -16,6 +16,11 @@ import {
   type DocStyle,
   type DocumentStyle
 } from "./documentStyle.ts";
+import {
+  assertJsonFileSize,
+  parseJsonFile,
+  serializeJsonFile
+} from "./jsonFileCodec.ts";
 
 export const RESUME_FILE_MAGIC = "typeset-resume" as const;
 export const RESUME_FILE_SCHEMA_VERSION = 1 as const;
@@ -356,34 +361,9 @@ function rehydrateDocument(document: PortableResumeDocumentV1): ResumeData {
   };
 }
 
-function enforceSize(byteLength: number) {
-  if (byteLength > MAX_RESUME_FILE_BYTES) {
-    throw new ResumeFileError("too-large", "This resume file is larger than the 2 MB limit.");
-  }
-}
-
-function decodeInput(input: string | ArrayBuffer | Uint8Array): string {
-  if (typeof input === "string") {
-    enforceSize(new TextEncoder().encode(input).byteLength);
-    return input;
-  }
-
-  const bytes = input instanceof Uint8Array ? input : new Uint8Array(input);
-  enforceSize(bytes.byteLength);
-  try {
-    return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
-  } catch {
-    throw new ResumeFileError("invalid-json", "This resume file is not valid UTF-8 text.");
-  }
-}
-
-function parseJson(text: string): unknown {
-  try {
-    return JSON.parse(text) as unknown;
-  } catch {
-    throw new ResumeFileError("invalid-json", "This resume file does not contain valid JSON.");
-  }
-}
+const resumeFileTooLarge = (): never => {
+  throw new ResumeFileError("too-large", "This resume file is larger than the 2 MB limit.");
+};
 
 export function createResumeFile(data: ResumeData, style: DocStyle): ResumeFileV1 {
   const file: ResumeFileV1 = {
@@ -401,13 +381,23 @@ export function createResumeFile(data: ResumeData, style: DocStyle): ResumeFileV
 }
 
 export function serializeResumeFile(data: ResumeData, style: DocStyle): string {
-  const serialized = `${JSON.stringify(createResumeFile(data, style), null, 2)}\n`;
-  enforceSize(new TextEncoder().encode(serialized).byteLength);
-  return serialized;
+  return serializeJsonFile(
+    createResumeFile(data, style),
+    MAX_RESUME_FILE_BYTES,
+    resumeFileTooLarge
+  );
 }
 
 export function parseResumeFile(input: string | ArrayBuffer | Uint8Array): ParsedResumeFile {
-  const value = parseJson(decodeInput(input));
+  const value = parseJsonFile(input, MAX_RESUME_FILE_BYTES, {
+    tooLarge: resumeFileTooLarge,
+    invalidUtf8: () => {
+      throw new ResumeFileError("invalid-json", "This resume file is not valid UTF-8 text.");
+    },
+    invalidJson: () => {
+      throw new ResumeFileError("invalid-json", "This resume file does not contain valid JSON.");
+    }
+  });
   const file = requireRecord(value, "file");
 
   if (file.format !== RESUME_FILE_MAGIC) {
@@ -426,7 +416,7 @@ export function parseResumeFile(input: string | ArrayBuffer | Uint8Array): Parse
 }
 
 export async function readResumeFile(file: File): Promise<ParsedResumeFile> {
-  enforceSize(file.size);
+  assertJsonFileSize(file.size, MAX_RESUME_FILE_BYTES, resumeFileTooLarge);
   return parseResumeFile(await file.arrayBuffer());
 }
 
