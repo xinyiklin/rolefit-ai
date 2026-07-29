@@ -171,12 +171,32 @@ owns:
   from a missing letter, and a cover failure must not discard successful
   tailor/review results. The client surfaces "reviewed by" when either the
   audit provider or audit model differs from the Tailor configuration.
-  `/api/cover-letter` requires `sourceCoverLetterText` plus the current resume
-  and job description. It revises the source rather than creating a new
-  template, preserves the source as grounding evidence, and returns an empty
-  result if deterministic checks find an unsupported term, number, or outcome.
-  It and `/api/application-answers` echo the resolved `provider` / `model` /
-  `reasoningEffort`.
+  `/api/cover-letter` is **one operation**, not a staged workflow. It takes
+  `sourceCoverLetterText`, the whole `evidenceItems` corpus, the job
+  description, `resolvedContext` hints, any `slotAnswers`, and optional
+  app-supplied `employerContext`; there is no mode, plan, or selection field.
+  Shared deterministic preflight resolves date, candidate name, role, company,
+  greeting, and sign-off, and returns `422 needs_input` before any provider
+  dispatch only when a fact truly cannot be resolved: a missing candidate name,
+  role, or company, or an unanswered private template slot. Generative template
+  slots never block. A recipient named in the source greeting is preserved;
+  otherwise the company hiring team is the fallback.
+  The model receives the full corpus and chooses what to use — that selection is
+  its job, not the candidate's. It returns body paragraphs with the evidence ids
+  it actually used and the generative slot ids it resolved; the server assembles
+  date, greeting, body, and sign-off. Server validation collects **repairable
+  violations** rather than failing outright: unknown evidence or slot ids, a
+  paragraph citing nothing, a residual template token, a greeting/sign-off/date
+  inside the body, a missing role or company, a second greeting, generic
+  brochure phrasing, and ungrounded candidate terms, numbers, or outcomes. Any
+  violation triggers exactly **one silent repair request** carrying the
+  violations and the rejected output. A second failure returns `422` and the
+  candidate's existing letter is kept; the flow never escalates into asking the
+  candidate to plan evidence. Length is advisory — outside 180-420 words the
+  letter still returns, with a warning attached. Employer-subject sentences are
+  excluded from the candidate-claim surface, so a posting fact never widens
+  candidate evidence. It and `/api/application-answers` echo the resolved
+  `provider` / `model` / `reasoningEffort`.
 - resume import into the structured editor: a `.txt` / `.md` / `.csv` (or pasted)
   resume is parsed once into `ResumeData`, the source of truth thereafter (no DOCX
   or LaTeX import — the original is converted a single time into the editor
@@ -521,7 +541,7 @@ The only deterministic non-AI alternative is the job distiller
 (`src/lib/jobExtract.ts`). It is a successful path only when the user has AI
 Distill turned off. If a requested AI Distill call fails, the local brief may be
 retained for inspection but the selected stage remains failed. Tailor, Review,
-cover-letter revision, and application-answer failures have no local
+cover-letter tailoring, and application-answer failures have no local
 substitutes. No
 locally generated draft, score, review, or verdict stands in.
 

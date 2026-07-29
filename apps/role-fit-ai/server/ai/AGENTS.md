@@ -15,10 +15,28 @@ sanitizer code is executable product behavior and anti-fabrication-critical.
 - `polish.ts` orchestrates Tailor and Review; its optional cover leg is retained
   only for compatibility with older clients.
 - `distill.ts`, `coverLetter.ts`, and `applicationAnswers.ts` own their routes.
-  Cover-letter tailoring requires the candidate's source letter and revises it;
-  it does not generate a new letter from resume/job inputs alone.
+  Cover-letter tailoring is **one call**. It requires the candidate's source
+  letter and the evidence corpus derived from their own resume, notes, and
+  answers; it never generates from resume/job inputs alone. The route shares
+  deterministic preflight with the browser, returns `422 needs_input` before
+  provider dispatch only for a genuinely unresolvable fact, and cannot return
+  `ready` with template tokens or unresolved correspondence fields.
 - `grounding.ts` and `eligibilityLexicon.ts` provide deterministic evidence
   checks, never a local fit-scoring system.
+- Evidence selection belongs to the model, not to the candidate and not to a
+  prompt-enforced count. The server sends the whole corpus, verifies the ids
+  that come back, and reports provenance. Do not reintroduce a preparation plan,
+  a use/skip classification pass, or a selected-evidence request field.
+- Validation collects repairable violations and runs exactly one silent repair
+  request carrying them plus the rejected output. A second failure fails closed
+  and keeps the candidate's existing letter. Never route a model-authored slip
+  into a candidate-facing planning step.
+- Bracketed slot text is a drafting instruction, never candidate evidence and
+  never voice. Only a slot naming a private fact (a referral, a prior personal
+  relationship) may ask the candidate; every other slot is generative, and the
+  model may legitimately leave one unused.
+- Length is a warning, never a gate. Do not restore a word-count or
+  verbatim-source-phrase acceptance check: both reject genuinely better letters.
 - `json.ts` and `errors.ts` own response parsing and user-safe failure mapping.
 
 ## Trust and scoring contract

@@ -3,8 +3,8 @@
 A **companion-launched, browser-primary, local-first** application-materials
 tailoring
 workbench backed by a loopback Node server. Import a job posting (paste it, or pull it straight from
-the link), tailor your base resume, revise your own cover letter against the
-same job evidence, score the resume draft against the job description, and
+the link), tailor your base resume, tailor your cover letter against the
+same job evidence in one click, score the resume draft against the job description, and
 export either document to PDF or its reloadable editable format —
 without storing your personal data in a hosted app. The installed Electron
 companion starts the local service, manages the five supported local
@@ -51,10 +51,17 @@ editable documents.
 ## Highlights
 
 - **Resume input** — ingest a `.txt`, `.md`, or `.csv` resume (or paste text) into the typeset editor as a one-time conversion into the structured model, or load a previously saved `.resume` file directly; paste extracted PDF text when the original is only available as PDF.
-- **Candidate-authored cover letters** — open a `.cover`, `.txt`, or `.md`
-  letter in its own plain-paragraph editor, then ask RoleFit to revise that
-  writing for the current job using only the letter, resume, job description,
-  and optional honest context as evidence. Unsaved edits are kept in a
+- **One-click cover letters** — open a `.cover`, `.txt`, or `.md` letter (or your
+  own base variant full of bracketed prompts) and press **Tailor** once. RoleFit
+  resolves the date, your name, the role, the company, the greeting, and the
+  sign-off itself, and the model picks which of your experiences and personal
+  notes this posting actually warrants. Bracketed text is treated as an
+  instruction to the writer, never as something you wrote about yourself.
+  Grounding and placeholder checks run on the server, the finished letter loads
+  straight into the editor, and **Restore previous** puts back the exact document
+  it replaced until you edit it. You are only asked something when a fact cannot
+  be resolved at all — a missing company or role, or a template that names a
+  private detail such as a referral. Unsaved edits are kept in a
   recoverable draft and the letter is named like the resume
   (`Name_Company_Cover_Letter`), so both editors behave the same way.
   A new letter starts in Carlito at 11 pt with double line spacing, 8 pt after
@@ -190,11 +197,10 @@ the studio tab rail. Every stage section stays expanded together; there is no
 per-section collapse control:
 
 - **Distill** — job-link, paste, and import distillation into a compact job brief.
-- **Tailor** — evidence-grounded resume suggestions, revision of the user's
-  existing cover letter, and application-answer drafting.
+- **Tailor** — evidence-grounded resume suggestions.
 - **Review** — strict recruiter-style audit of the current edited draft.
-- **Cover letter tailor** — revision of your own written letter, run from the
-  Cover letter page's own Polish action.
+- **Cover letter** — one grounded tailoring pass over your own letter, run from
+  the Cover letter page's Tailor action.
 - **Application questions** — drafts for an application's free-text questions.
 
 Each stage has its own provider/model/effort settings and an optional instruction

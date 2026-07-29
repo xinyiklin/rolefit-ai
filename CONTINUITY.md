@@ -3,6 +3,69 @@
 Cross-workspace decisions and handoff state. Keep entries factual, dated, and
 bounded; app-only operational detail belongs in the affected app documentation.
 
+## 2026-07-28
+
+- [USER+CODE] 2026-07-28: **SUPERSEDES every cover-letter preparation/proposal
+  entry below.** The cover letter is one Tailor click. `/api/cover-letter` is a
+  single operation with no `mode`, plan, selected-evidence, or override field:
+  the server resolves date, candidate, role, company, greeting, and sign-off,
+  sends the whole evidence corpus with the typed source template, and the model
+  chooses which experiences and honest-context notes the posting warrants. A
+  valid letter is applied straight to the editor; the editor keeps the exact
+  pre-tailor `.cover` behind one Restore that expires on the next edit, open, or
+  Tailor. Removed as user-facing ceremony: the evidence plan, use/skip
+  decisions, clarification round-trips, the 1–3 evidence-item contract, the
+  "Continue to draft" and "Use this draft" steps, the Polish/Guide mode picker,
+  and the guided `why_role` / `lead_experience` / tone fields. Removed as
+  gates: the 80-authored-word requirement (now only a prompt voice signal), the
+  verbatim four-word source-phrase requirement, and the 180–420-word and
+  one-page acceptance checks (now warnings on a delivered letter).
+  The reason the branch was reworked rather than reverted: the template parser,
+  deterministic correspondence, stale-request cancellation, placeholder
+  rejection, and grounding checks were the right parts; the choreography around
+  them was not.
+- [USER+CODE] 2026-07-28: Questions are the exception path, not the workflow. A
+  missing candidate name, role title, or company blocks with one inline field
+  each; an unanswered private template slot (a referral, a prior personal
+  relationship) blocks with one focused question. Everything else generates: a
+  recipient comes from an authored `Dear <name>,` greeting or falls back to the
+  company hiring team, and an unrecognized natural-language slot stays
+  generative rather than becoming a blocker.
+- [CODE] 2026-07-28: Server validation collects *repairable violations* instead
+  of throwing, then runs exactly one silent repair request carrying the
+  violations and the rejected output. A second failure returns 422 and keeps the
+  candidate's current letter. The normal path is one provider request.
+- [ASSUMPTION] 2026-07-28: `/api/cover-letter` accepts an optional
+  `employerContext` array of `{fact, source}` and passes it to the prompt for
+  employer facts only. Nothing populates it yet — app-owned public company
+  research is a deliberate follow-up, must never delay or block Tailor, and must
+  never send resume or honest-context text to the fetcher.
+- [USER+CODE] 2026-07-28: The cover-letter quality corpus stays synthetic and
+  never reads `workspace/cover-letters/`. Ignoring a personal `.cover` protects
+  its path, not copied text; pasting it into the tracked fixture would publish
+  it, while loading it in the live harness would send it to the selected
+  provider and duplicate it in local eval output. The tracked synthetic job
+  families remain the portable quality floor without either exposure.
+- [TOOL] 2026-07-28: All 57 RoleFit offline evals, both TypeScript gates, and the
+  RoleFit production build passed after the rework. Browser QA was not run under
+  the repository's flag-first policy; the rail and toolbar changed shape, so
+  rendered QA of the Cover letter page is the outstanding check.
+- [TOOL] 2026-07-28 (historical, pre-rework): the two-stage flow passed 58
+  offline evals and live Claude CLI QA on a Saronic Full Stack Engineer
+  application, reaching a validated pending proposal. Recorded because the
+  grounding behavior it proved still holds; the workflow it describes does not.
+- [TOOL] RoleFit production build, all 57 offline evals, and desktop/390px
+  browser interaction QA passed with a clean console. The synthetic live-provider
+  harness was added but not run.
+- [CODE+TOOL] 2026-07-28: The final review kept employer research out of
+  candidate grounding (a public company technology can never substantiate the
+  candidate's use of it), made punctuation-heavy employer names safe for
+  employer-only sentence classification, and added the four new cover-letter
+  prompt wrappers to the shared fence-injection firewall. Adversarial probes
+  failed before each fix and passed after it. The full RoleFit gate then passed:
+  production and landing builds, desktop contracts, and all 57 offline evals.
+  No live provider eval ran.
+
 ## 2026-07-27
 
 - [USER+CODE] Ordinary tracker PUTs now send only records named by `upsert`
