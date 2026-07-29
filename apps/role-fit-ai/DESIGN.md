@@ -429,7 +429,8 @@ Calendar mode reuses the same query and lifecycle filter state.
 Working pages share one skeleton: content as paper sheets in the main
 column, one control surface docked right. Resume = one engine-painted structured
 editing sheet + review rail; Cover letter = one engine-painted plain
-correspondence sheet + a compact deterministic review rail; Materials = draft
+correspondence sheet + a compact rail that reports readiness before Tailor and
+the tailored result's length, provenance, and Restore after it; Materials = draft
 sheets; Applications = view surface + inspector. The rail is a single sheet
 (`--card`, hairline, rest shadow);
 the main column sits directly on the desk. Below ~1080px the rail drops

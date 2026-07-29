@@ -40,6 +40,11 @@ and `docs/engineering/ui-principles.md`.
   its file lifecycle and deterministic review rail remain RoleFit-owned. The
   editor is always mounted: without an opened or restored source, it starts as
   one empty editable paragraph.
+- The Cover letter page has exactly one workflow action. `CoverLetterReview`
+  reports readiness before Tailor and length, provenance, warnings, and Restore
+  after it; it never gates the action behind a review step, and its enabled
+  state depends only on real readiness, never on the presence of an
+  intermediate object.
 - Never fork shared editor markup or layout CSS for a host tweak. Add a narrow
   package seam and verify both apps.
 - Structure controls stay outside editable DOM and must not affect PDF layout.

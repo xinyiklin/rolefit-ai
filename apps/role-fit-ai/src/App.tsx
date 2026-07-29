@@ -800,9 +800,9 @@ function App() {
   });
 
 
-  // The cover-letter workflow revises the candidate's current letter against
-  // the current resume and job context. Its dedicated editor remains the
-  // single owner for direct edits, file lifecycle, restore, and application save.
+  // One Tailor click writes the letter. Its dedicated editor remains the single
+  // owner for applied text, direct edits, file lifecycle, the pre-tailor
+  // snapshot behind Restore, and application save.
   const {
     coverLetterText,
     applyCoverLetter,
@@ -810,12 +810,18 @@ function App() {
     applyPolishCoverResult,
     coverStatus,
     isGeneratingCover,
-    handleGenerateCoverLetter,
+    handleTailorCoverLetter,
     coverProgress,
-    dismissCoverProgress
+    dismissCoverProgress,
+    preflight: coverLetterPreflight,
+    updateDetail: updateCoverLetterDetail,
+    slotAnswers: coverLetterSlotAnswers,
+    updateSlotAnswer: updateCoverLetterSlotAnswer,
+    lastResult: coverLetterResult
   } = useCoverLetter({
     currentCoverLetterText: coverLetterEditor.text,
     currentResumeText,
+    resumeData: editedResume,
     jobText: jobDescription,
     honestContext: requestHonestContext,
     customInstructions: customInstructionsFor("cover"),
@@ -823,6 +829,13 @@ function App() {
     providerReady: coverProviderReady,
     providerMessage: coverProviderMessage,
     resumeText,
+    sourceRevision: coverLetterEditor.sourceRevision,
+    tailorApplied: coverLetterEditor.canRestorePreTailor,
+    candidateName: resolveResumeApplicantName(
+      coverLetterEditor.data.name || editedResume?.name,
+      currentResumeText || resumeText
+    ),
+    jobTarget: { role: jobTracking.role || jobTracking.title, company: jobTracking.company },
     onApplyTailored: coverLetterEditor.applyTailoredText,
     onApplyExternal: coverLetterEditor.applyExternalText,
     onUsage: (usage) => setPipelineAiUsage((prev) => ({ ...prev, cover: usage }))
@@ -1635,7 +1648,7 @@ function App() {
           <TaskProgress
             stageKey="cover"
             state={coverProgress}
-            onRetry={handleGenerateCoverLetter}
+            onRetry={handleTailorCoverLetter}
             onDismiss={dismissCoverProgress}
           />
           <TaskProgress
@@ -2041,7 +2054,7 @@ function App() {
               }}
               inlineFormat={coverLetterInlineFormat}
               onInlineFormatStateChange={setCoverLetterInlineFormat}
-              onTailor={handleGenerateCoverLetter}
+              onTailor={handleTailorCoverLetter}
               applicationSync={coverLetterApplicationSync}
               draftAutosaveState={coverDraftAutosaveState}
               pendingAutosaveDraft={pendingCoverDraft}
@@ -2051,9 +2064,17 @@ function App() {
               tailorStatus={coverStatus}
               resumeReady={resumeReady}
               jobReady={jobReady}
-              providerReady={tailorProviderReady}
-              providerMessage={tailorProviderMessage}
+              providerReady={coverProviderReady}
+              providerMessage={coverProviderMessage}
               jobTarget={materialsJobTarget}
+              preflight={coverLetterPreflight}
+              result={coverLetterResult}
+              slotAnswers={coverLetterSlotAnswers}
+              onDetailChange={updateCoverLetterDetail}
+              onSlotAnswerChange={updateCoverLetterSlotAnswer}
+              onRestorePreTailor={() => {
+                coverLetterEditor.restorePreTailor();
+              }}
             />
           ) : null}
 

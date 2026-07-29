@@ -29,12 +29,28 @@ never a hosted copy of the workbench.
 
 ## Product Purpose
 
-RoleFit AI turns a base resume, a candidate-authored cover letter, and a pasted
-job description into honest, tailored application materials. Resume proposals
-remain constrained by server-side grounding and anti-fabrication checks, with a
-recruiter-style review for fit scoring and gap analysis. The cover-letter
-workflow revises the user's own writing in a dedicated plain-paragraph editor
-and never creates a letter from the job and resume alone. Both editors share
+RoleFit AI turns a base resume, a candidate-authored cover letter or base
+variant, and a pasted job description into honest, tailored application
+materials. Resume proposals remain constrained by server-side grounding and
+anti-fabrication checks, with a recruiter-style review for fit scoring and gap
+analysis.
+
+The cover letter is **one Tailor click**. RoleFit resolves the date, candidate
+name, role, company, greeting, and sign-off itself, sends the whole candidate
+evidence corpus with the source letter, and lets the model choose which
+experiences and honest-context notes this particular posting warrants. Bracketed
+text in a base variant is a drafting instruction, never candidate evidence.
+Grounding, placeholder rejection, and a single silent repair pass all run on the
+server; a valid letter goes straight into the editor with an exact one-click
+Restore of the document it replaced, and a letter that still fails after repair
+is discarded with the current one kept.
+
+The letter asks a question only when a fact genuinely cannot be resolved — a
+missing company, role title, or candidate name, or a template that names a
+private fact such as a referral. A hiring manager's name, a reason for interest,
+which experience to lead with, and tone are never questions: an authored
+greeting supplies a recipient and the company hiring team is always a correct
+fallback. Both editors share
 deterministic typesetting and PDF export, and the same recovery and naming
 behavior: unsaved edits go to a per-tab recovery draft either page can restore,
 and a document is named `Name_Company_Resume` / `Name_Company_Cover_Letter` so
@@ -112,8 +128,8 @@ disappears into the task. Quiet competence, not salesmanship.
    the foot of the studio rail; tabbed
    outputs below (Resume with a consistent Open/Save/Polish
    document action bar and a post-polish review rail, Cover letter with the
-   matching Open/Save/Polish action bar, its plain editor and
-   deterministic checklist, Materials, the
+   matching document action bar, its plain editor and a compact rail that
+   reports readiness before Tailor and provenance after it, Materials, the
    Applications tracker, Analytics) and the header Fit
    popover. The engine-painted page remains the sole editor, the review rail
    navigates back to exact fields, and the editor itself remains the live

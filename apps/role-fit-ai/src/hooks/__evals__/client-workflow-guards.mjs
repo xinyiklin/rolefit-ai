@@ -12,10 +12,11 @@ const assert = new Proxy(assertStrict, {
       checkCount += 1;
       return value.apply(target, args);
     };
-  }
+  },
 });
 
-const readHook = (name) => readFileSync(new URL(`../${name}`, import.meta.url), "utf8");
+const readHook = (name) =>
+  readFileSync(new URL(`../${name}`, import.meta.url), "utf8");
 
 const applications = readHook("useApplications.ts");
 const applyFlow = readHook("useApplyFlow.ts");
@@ -24,150 +25,319 @@ const cover = readHook("useCoverLetter.ts");
 const polish = readHook("usePolishPipeline.ts");
 const inbox = readHook("useExtensionInbox.ts");
 const intake = readHook("useJobIntake.ts");
-const jobMenu = readFileSync(new URL("../../sections/JobMenu.tsx", import.meta.url), "utf8");
-const applicationModal = readFileSync(new URL("../../sections/ApplicationModal.tsx", import.meta.url), "utf8");
-const settingsStage = readFileSync(new URL("../../sections/SettingsStage.tsx", import.meta.url), "utf8");
-const reviewRail = readFileSync(new URL("../../sections/ReviewRail.tsx", import.meta.url), "utf8");
-const appIndex = readFileSync(new URL("../../../index.html", import.meta.url), "utf8");
-const styleTokens = readFileSync(new URL("../../styles/tokens.css", import.meta.url), "utf8");
+const jobMenu = readFileSync(
+  new URL("../../sections/JobMenu.tsx", import.meta.url),
+  "utf8",
+);
+const applicationModal = readFileSync(
+  new URL("../../sections/ApplicationModal.tsx", import.meta.url),
+  "utf8",
+);
+const settingsStage = readFileSync(
+  new URL("../../sections/SettingsStage.tsx", import.meta.url),
+  "utf8",
+);
+const reviewRail = readFileSync(
+  new URL("../../sections/ReviewRail.tsx", import.meta.url),
+  "utf8",
+);
+const appIndex = readFileSync(
+  new URL("../../../index.html", import.meta.url),
+  "utf8",
+);
+const styleTokens = readFileSync(
+  new URL("../../styles/tokens.css", import.meta.url),
+  "utf8",
+);
 const aiSettings = readHook("useAiSettings.ts");
-const persistedSettings = readFileSync(new URL("../../lib/settings.ts", import.meta.url), "utf8");
+const persistedSettings = readFileSync(
+  new URL("../../lib/settings.ts", import.meta.url),
+  "utf8",
+);
 const app = readFileSync(new URL("../../App.tsx", import.meta.url), "utf8");
 const coverEditor = readHook("useCoverLetterEditor.ts");
-const coverToolbar = readFileSync(new URL("../../sections/cover-letter/CoverLetterToolbar.tsx", import.meta.url), "utf8");
-const settingsDialog = readFileSync(new URL("../../sections/SettingsDialog.tsx", import.meta.url), "utf8");
-const candidateFacts = readFileSync(new URL("../../lib/candidateFacts.ts", import.meta.url), "utf8");
-const aiStages = readFileSync(new URL("../../config/aiStages.ts", import.meta.url), "utf8");
-const intakeFingerprintStart = intake.indexOf("const distillInputFingerprint = workflowInputFingerprint({");
+const coverPreflight = readFileSync(
+  new URL("../../lib/coverLetterPreflight.ts", import.meta.url),
+  "utf8",
+);
+const coverTab = readFileSync(
+  new URL("../../sections/tabs/CoverLetterTab.tsx", import.meta.url),
+  "utf8",
+);
+const coverReview = readFileSync(
+  new URL("../../sections/cover-letter/CoverLetterReview.tsx", import.meta.url),
+  "utf8",
+);
+const coverToolbar = readFileSync(
+  new URL(
+    "../../sections/cover-letter/CoverLetterToolbar.tsx",
+    import.meta.url,
+  ),
+  "utf8",
+);
+const settingsDialog = readFileSync(
+  new URL("../../sections/SettingsDialog.tsx", import.meta.url),
+  "utf8",
+);
+const candidateFacts = readFileSync(
+  new URL("../../lib/candidateFacts.ts", import.meta.url),
+  "utf8",
+);
+const aiStages = readFileSync(
+  new URL("../../config/aiStages.ts", import.meta.url),
+  "utf8",
+);
+const intakeFingerprintStart = intake.indexOf(
+  "const distillInputFingerprint = workflowInputFingerprint({",
+);
 const intakeFingerprint = intake.slice(
   intakeFingerprintStart,
-  intake.indexOf("});", intakeFingerprintStart) + 3
+  intake.indexOf("});", intakeFingerprintStart) + 3,
 );
-const polishFingerprintStart = polish.indexOf("const inputFingerprint = workflowInputFingerprint({");
+const polishFingerprintStart = polish.indexOf(
+  "const inputFingerprint = workflowInputFingerprint({",
+);
 const polishFingerprint = polish.slice(
   polishFingerprintStart,
-  polish.indexOf("});", polishFingerprintStart) + 3
+  polish.indexOf("});", polishFingerprintStart) + 3,
 );
-const answersFingerprintStart = answers.indexOf("const inputFingerprint = workflowInputFingerprint({");
+const answersFingerprintStart = answers.indexOf(
+  "const inputFingerprint = workflowInputFingerprint({",
+);
 const answersFingerprint = answers.slice(
   answersFingerprintStart,
-  answers.indexOf("});", answersFingerprintStart) + 3
+  answers.indexOf("});", answersFingerprintStart) + 3,
 );
-const coverFingerprintStart = cover.indexOf("const inputFingerprint = workflowInputFingerprint({");
+const coverFingerprintStart = cover.indexOf(
+  "const inputFingerprint = workflowInputFingerprint({",
+);
 const coverFingerprint = cover.slice(
   coverFingerprintStart,
-  cover.indexOf("});", coverFingerprintStart) + 3
+  cover.indexOf("});", coverFingerprintStart) + 3,
 );
 
 assert.match(
   applications,
   /applications: applicationMutationRecords\(next, mutations\),[\s\S]*mutations/,
-  "application writes send only explicit upsert records with their mutations"
+  "application writes send only explicit upsert records with their mutations",
 );
-assert.doesNotMatch(applications, /deleteIds/, "the obsolete deleteIds contract cannot return");
+assert.doesNotMatch(
+  applications,
+  /deleteIds/,
+  "the obsolete deleteIds contract cannot return",
+);
 assert.match(
   applications,
   /res\.status === 409[\s\S]*ApplicationConflictError/,
-  "a 409 response is recognized as a revision conflict"
+  "a 409 response is recognized as a revision conflict",
 );
 assert.match(
   applications,
   /confirmedApplications\.current = err\.applications/,
-  "a conflict adopts the server-confirmed snapshot"
+  "a conflict adopts the server-confirmed snapshot",
 );
-assert.match(applications, /return persist\(next, \[\{/, "upsert returns its confirmation promise");
+assert.match(
+  applications,
+  /return persist\(next, \[\{/,
+  "upsert returns its confirmation promise",
+);
 assert.match(
   applications,
   /const saveApplication[\s\S]*return persist\(next, \[\{/,
-  "the application modal save path returns its confirmation promise"
+  "the application modal save path returns its confirmation promise",
 );
 assert.match(
   applications,
   /loadVersion !== persistVersion\.current/,
-  "the mount GET cannot overwrite a mutation that began while it was in flight"
+  "the mount GET cannot overwrite a mutation that began while it was in flight",
 );
 assert.match(
   applications,
   /refreshVersion !== persistVersion\.current/,
-  "Refresh cannot overwrite a mutation that began while its GET was in flight"
+  "Refresh cannot overwrite a mutation that began while its GET was in flight",
 );
-assert.match(applications, /setPendingWrites\(\(count\) => count \+ 1\)/, "tracker writes increment reactive pending state");
-assert.match(applications, /finally \{[\s\S]*setPendingWrites/, "tracker writes always release reactive pending state");
+assert.match(
+  applications,
+  /setPendingWrites\(\(count\) => count \+ 1\)/,
+  "tracker writes increment reactive pending state",
+);
+assert.match(
+  applications,
+  /finally \{[\s\S]*setPendingWrites/,
+  "tracker writes always release reactive pending state",
+);
 
 const awaitedSave = applyFlow.indexOf("saved = await upsertApplication(app)");
 const failedSave = applyFlow.indexOf("if (!saved)", awaitedSave);
 const artifactSave = applyFlow.indexOf(
   "const savedDocuments = await saveAppliedDocumentArtifacts(",
-  failedSave
+  failedSave,
 );
 const resumeRecoveryClear = applyFlow.indexOf(
   "if (savedDocuments.resumeSaved) onResumeSaved();",
-  artifactSave
+  artifactSave,
 );
 const coverRecoveryClear = applyFlow.indexOf(
   "if (savedDocuments.coverSaved) onCoverLetterSaved();",
-  artifactSave
+  artifactSave,
 );
-assert.ok(awaitedSave >= 0 && failedSave > awaitedSave, "Apply awaits tracker persistence");
-assert.ok(artifactSave > failedSave, "document artifacts start only after the application is confirmed");
 assert.ok(
-  resumeRecoveryClear > artifactSave && coverRecoveryClear > resumeRecoveryClear,
-  "Apply settles each document's recovery state only after its own editable source persists"
+  awaitedSave >= 0 && failedSave > awaitedSave,
+  "Apply awaits tracker persistence",
+);
+assert.ok(
+  artifactSave > failedSave,
+  "document artifacts start only after the application is confirmed",
+);
+assert.ok(
+  resumeRecoveryClear > artifactSave &&
+    coverRecoveryClear > resumeRecoveryClear,
+  "Apply settles each document's recovery state only after its own editable source persists",
 );
 assert.match(
   applyFlow,
   /saveApplicationDocument\(id, "resume", resume\)[\s\S]{0,400}?saveApplicationDocument\(id, "cover", cover\)/,
-  "Apply saves the cover letter's files exactly as it saves the resume's"
+  "Apply saves the cover letter's files exactly as it saves the resume's",
 );
 
-for (const [name, source] of [["answers", answers], ["cover", cover], ["polish", polish]]) {
-  assert.match(source, /workflowRequestIsCurrent/, `${name} generation checks use the shared current-request guard`);
+for (const [name, source] of [
+  ["answers", answers],
+  ["cover", cover],
+  ["polish", polish],
+]) {
+  assert.match(
+    source,
+    /workflowRequestIsCurrent/,
+    `${name} generation checks use the shared current-request guard`,
+  );
   assert.match(source, /AbortController/, `${name} owns an abort controller`);
 }
-assert.match(answers, /if \(!providerReady\)/, "answer generation fails closed before requesting an unavailable provider");
-assert.match(cover, /if \(!providerReady\)/, "cover generation fails closed before requesting an unavailable provider");
-assert.doesNotMatch(answersFingerprint, /providerReady/, "provider polling cannot invalidate active answer generation");
-assert.doesNotMatch(coverFingerprint, /providerReady/, "provider polling cannot invalidate active cover generation");
+assert.match(
+  answers,
+  /if \(!providerReady\)/,
+  "answer generation fails closed before requesting an unavailable provider",
+);
+assert.match(
+  cover,
+  /if \(!providerReady\)/,
+  "cover generation fails closed before requesting an unavailable provider",
+);
+assert.doesNotMatch(
+  coverTab,
+  /placeholders\.length[^;\n]*(?:canTailor|disabled)/,
+  "source template slots never disable Tailor",
+);
+assert.doesNotMatch(
+  coverPreflight,
+  /(?:authoredWordCount|requiresUserVoiceAnchor)[^;\n]*(?:blockers|canTailor)/,
+  "authored word count is a voice signal, never a tailoring gate",
+);
+assert.doesNotMatch(
+  coverReview,
+  /Â/,
+  "cover-letter readiness copy contains no mojibake",
+);
+// One click, one request: no prepare/draft split and nothing to approve first.
+assert.equal(
+  cover.match(/await fetch\("\/api\/cover-letter"/g)?.length,
+  1,
+  "the cover-letter workflow makes exactly one kind of model request",
+);
+assert.doesNotMatch(
+  cover,
+  /pendingProposal|acceptProposal|evidenceOverrides|selectedEvidence|clarification/i,
+  "no preparation plan, evidence override, or proposal acceptance survives",
+);
+assert.match(
+  cover,
+  /onApplyTailored\(result\.coverLetterText\)[\s\S]{0,200}?setCoverProgress\(\{\s*status: "done"/,
+  "a valid letter enters the editor directly, then reports",
+);
+assert.match(
+  coverEditor,
+  /setPreTailorSnapshot\(\s*editor\.editedResume[\s\S]{0,240}?editor\.seedData\(data\)/,
+  "the exact pre-tailor .cover is captured before the replacement, not after",
+);
+assert.match(
+  coverEditor,
+  /const restorePreTailor[\s\S]{0,400}?parseCoverLetterFile\(preTailorSnapshot\)/,
+  "Restore replays the structured document, not its plain text",
+);
+assert.match(
+  cover,
+  /if \(!tailorApplied\) setLastResult\(null\)/,
+  "the result summary and Restore share one lifetime",
+);
+assert.doesNotMatch(
+  answersFingerprint,
+  /providerReady/,
+  "provider polling cannot invalidate active answer generation",
+);
+assert.doesNotMatch(
+  coverFingerprint,
+  /providerReady/,
+  "provider polling cannot invalidate active cover generation",
+);
 assert.equal(
   intake.match(/await ensureProviderReady\(\)/g)?.length,
   4,
-  "every AI Distill entry point awaits the shared initial provider discovery"
+  "every AI Distill entry point awaits the shared initial provider discovery",
 );
 assert.ok(
   intake.indexOf("const readiness = distillAi ? await ensureProviderReady()") <
     intake.indexOf("const releaseDistillRun = await waitAndClaimDistillRun()"),
-  "extension imports settle provider discovery before claiming and fingerprinting their Distill run"
+  "extension imports settle provider discovery before claiming and fingerprinting their Distill run",
 );
 assert.doesNotMatch(
   intakeFingerprint,
   /providerReady/,
-  "advisory provider polling cannot invalidate an active Distill request"
+  "advisory provider polling cannot invalidate an active Distill request",
 );
 assert.doesNotMatch(
   intakeFingerprint,
   /editedResume|tailorModes/,
-  "resume bootstrap and Tailor-mode reconciliation cannot invalidate an active Distill request"
+  "resume bootstrap and Tailor-mode reconciliation cannot invalidate an active Distill request",
 );
-assert.match(intakeFingerprint, /jobUrl/, "Distill still guards the live job URL");
-assert.match(intakeFingerprint, /jobDescription/, "Distill still guards the live job description");
-assert.match(intakeFingerprint, /aiRequest/, "Distill still guards its provider, model, and effort settings");
+assert.match(
+  intakeFingerprint,
+  /jobUrl/,
+  "Distill still guards the live job URL",
+);
+assert.match(
+  intakeFingerprint,
+  /jobDescription/,
+  "Distill still guards the live job description",
+);
+assert.match(
+  intakeFingerprint,
+  /aiRequest/,
+  "Distill still guards its provider, model, and effort settings",
+);
 assert.match(
   polish,
   /const results = await Promise\.all\(checks\)/,
-  "Polish checks selected stage providers in parallel through the shared readiness owner"
+  "Polish checks selected stage providers in parallel through the shared readiness owner",
 );
 assert.match(
   polish,
   /const providerBlocker = await selectedProviderBlocker\(/,
-  "Polish waits for initial provider discovery before beginning"
+  "Polish waits for initial provider discovery before beginning",
 );
 assert.doesNotMatch(
   polishFingerprint,
   /tailorProviderReady|reviewProviderReady/,
-  "advisory provider polling cannot invalidate an active Tailor or Review request"
+  "advisory provider polling cannot invalidate an active Tailor or Review request",
 );
-assert.match(polish, /polishRunLockRef/, "Polish has a synchronous double-run lock");
-assert.match(polish, /inputFingerprintRef\.current = inputFingerprint/, "Polish tracks live semantic inputs");
+assert.match(
+  polish,
+  /polishRunLockRef/,
+  "Polish has a synchronous double-run lock",
+);
+assert.match(
+  polish,
+  /inputFingerprintRef\.current = inputFingerprint/,
+  "Polish tracks live semantic inputs",
+);
 
 // The resume Polish action asks which stages to run. Because `polishStages` is
 // part of the pipeline's input fingerprint, and the fingerprint effect aborts a
@@ -177,21 +347,22 @@ assert.match(polish, /inputFingerprintRef\.current = inputFingerprint/, "Polish 
 assert.match(
   polishFingerprint,
   /polishStages/,
-  "the polish fingerprint still guards the selected stages"
+  "the polish fingerprint still guards the selected stages",
 );
 assert.match(
   app,
   /runPolishOnStagesCommitRef\.current = true;\s*setPolishStages\(nextStages\);/,
-  "the Polish chooser records the intent to run, then commits the stage selection"
+  "the Polish chooser records the intent to run, then commits the stage selection",
 );
 assert.match(
   app,
   /if \(!runPolishOnStagesCommitRef\.current\) return;\s*runPolishOnStagesCommitRef\.current = false;\s*void handlePolish\(\);/,
-  "the deferred Polish run fires from the committed polishStages, never in the same tick"
+  "the deferred Polish run fires from the committed polishStages, never in the same tick",
 );
 assert.ok(
-  app.indexOf("} = usePolishPipeline({") < app.indexOf("runPolishOnStagesCommitRef.current = false"),
-  "the deferred-run effect is registered after usePolishPipeline's fingerprint effect, so that effect sees no run in flight"
+  app.indexOf("} = usePolishPipeline({") <
+    app.indexOf("runPolishOnStagesCommitRef.current = false"),
+  "the deferred-run effect is registered after usePolishPipeline's fingerprint effect, so that effect sees no run in flight",
 );
 // Settings owns the DEFAULT stage selection and the Polish action owns the
 // per-run pick; both write the one persisted `polishStages` value. The retired
@@ -199,36 +370,44 @@ assert.ok(
 assert.match(
   settingsDialog,
   /onPolishStagesChange/,
-  "Settings exposes the default Polish stage selection"
+  "Settings exposes the default Polish stage selection",
 );
 assert.ok(
   !existsSync(new URL("../../sections/PolishMenu.tsx", import.meta.url)) &&
     !existsSync(new URL("../../sections/AiMenu.tsx", import.meta.url)),
-  "the masthead Options and AI menus stay retired — Settings is the one home for provider and guidance setup"
+  "the masthead Options and AI menus stay retired — Settings is the one home for provider and guidance setup",
 );
 
 // Every configurable stage is declared once, in config/aiStages.ts. The failure
 // this prevents is silent: a stage added to the Settings UI but left pointing at
 // another stage's provider still works, so nothing surfaces the mistake. Both
 // cover and answers shipped in exactly that state.
-assert.match(aiStages, /export const AI_STAGES/, "the stage list is declared in config/aiStages.ts");
+assert.match(
+  aiStages,
+  /export const AI_STAGES/,
+  "the stage list is declared in config/aiStages.ts",
+);
 for (const stage of ["distill", "tailor", "review", "cover", "answers"]) {
-  assert.match(aiStages, new RegExp(`id: "${stage}"`), `aiStages declares the ${stage} stage`);
+  assert.match(
+    aiStages,
+    new RegExp(`id: "${stage}"`),
+    `aiStages declares the ${stage} stage`,
+  );
 }
 assert.match(
   app,
   /aiRequest: stages\.cover,/,
-  "the cover-letter flow runs on its own stage config, not Tailor's"
+  "the cover-letter flow runs on its own stage config, not Tailor's",
 );
 assert.match(
   app,
   /aiRequest: stages\.answers,/,
-  "the application-answers flow runs on its own stage config, not Tailor's"
+  "the application-answers flow runs on its own stage config, not Tailor's",
 );
 assert.doesNotMatch(
   persistedSettings,
   /const STAGE_FIELD_GROUPS: Array<\[keyof PersistedSettings, keyof PersistedSettings, keyof PersistedSettings\]> = \[\s*\[/,
-  "persisted stage key groups are derived from the stage list, not hand-listed"
+  "persisted stage key groups are derived from the stage list, not hand-listed",
 );
 // The cover/answers stages inherit Tailor's config when they have none of their
 // own. That inheritance MUST live in the seeder: workspaceBackupContract only
@@ -240,12 +419,12 @@ assert.doesNotMatch(
 assert.match(
   aiSettings,
   /import \{ seedStages, stageFieldsToPersist \} from "\.\.\/lib\/stageSettings";/,
-  "the settings hook delegates stage seeding to the pure stageSettings module"
+  "the settings hook delegates stage seeding to the pure stageSettings module",
 );
 assert.doesNotMatch(
   persistedSettings,
   /bag\[keys\.provider\] = bag\[TAILOR_KEYS\.provider\]/,
-  "normalizeSettings never adds a stage key — it would break workspace-backup restore"
+  "normalizeSettings never adds a stage key — it would break workspace-backup restore",
 );
 
 // Anti-fabrication: every candidate fact is opt-in. A default that asserted a
@@ -254,22 +433,22 @@ assert.doesNotMatch(
 assert.match(
   candidateFacts,
   /if \(facts\.citizenshipStatus !== "unspecified"\)/,
-  "work-authorization facts are gated on a declared citizenship"
+  "work-authorization facts are gated on a declared citizenship",
 );
 assert.match(
   candidateFacts,
   /const educationLine = EDUCATION_CONTEXT\[facts\.educationLevel\];\s*if \(educationLine\) \{/,
-  "education facts are gated positively on a known level, so a corrupted level emits nothing"
+  "education facts are gated positively on a known level, so a corrupted level emits nothing",
 );
 assert.match(
   candidateFacts,
   /unspecified: "",/g,
-  "an unspecified fact contributes no prompt line"
+  "an unspecified fact contributes no prompt line",
 );
 assert.doesNotMatch(
   candidateFacts,
   /if \(facts\.citizenshipStatus === "unspecified"\) return ""/,
-  "citizenship no longer short-circuits the whole block — education is an independent opt-in"
+  "citizenship no longer short-circuits the whole block — education is an independent opt-in",
 );
 
 // Per-stage guidance: Tailor and Review are separate requests, so a shared
@@ -277,86 +456,125 @@ assert.doesNotMatch(
 assert.doesNotMatch(
   polish,
   /includeCoverLetter,\s*honestContext: requestHonestContext,\s*customInstructions\s*\};/,
-  "customInstructions is resolved per stage, not shared through commonBody"
+  "customInstructions is resolved per stage, not shared through commonBody",
 );
 assert.match(
   polish,
   /stages: "tailor", customInstructions: customInstructionsFor\("tailor"\)/,
-  "the Tailor request carries the Tailor stage's resolved guidance"
+  "the Tailor request carries the Tailor stage's resolved guidance",
 );
 assert.match(
   polish,
   /customInstructions: customInstructionsFor\("review"\),/,
-  "the Review request carries the Review stage's resolved guidance"
+  "the Review request carries the Review stage's resolved guidance",
 );
 
 const responseGuard = inbox.indexOf("if (!res.ok)");
 const deliveryBranch = inbox.indexOf("if (data === null", responseGuard);
-assert.ok(responseGuard >= 0 && deliveryBranch > responseGuard, "inbox rejects non-ok polls before delivery parsing");
-assert.match(inbox, /scheduleTransientRetry\(\)/, "transient inbox failures are retried");
-assert.match(inbox, /await onImportRef\.current/, "the inbox awaits the once-only client handoff");
+assert.ok(
+  responseGuard >= 0 && deliveryBranch > responseGuard,
+  "inbox rejects non-ok polls before delivery parsing",
+);
+assert.match(
+  inbox,
+  /scheduleTransientRetry\(\)/,
+  "transient inbox failures are retried",
+);
+assert.match(
+  inbox,
+  /await onImportRef\.current/,
+  "the inbox awaits the once-only client handoff",
+);
 
-assert.match(intake, /async function waitAndClaimDistillRun/, "extension imports can wait for the active distill");
+assert.match(
+  intake,
+  /async function waitAndClaimDistillRun/,
+  "extension imports can wait for the active distill",
+);
 assert.match(
   intake,
   /const releaseDistillRun = await waitAndClaimDistillRun\(\)/,
-  "a delivered extension payload enters the serialized distill handoff"
+  "a delivered extension payload enters the serialized distill handoff",
 );
-assert.match(intake, /const releaseDistillRun = tryClaimDistillRun\(\)/, "user distills share the same lock");
+assert.match(
+  intake,
+  /const releaseDistillRun = tryClaimDistillRun\(\)/,
+  "user distills share the same lock",
+);
 assert.match(
   intake,
   /const distillInputFingerprint = workflowInputFingerprint\(/,
-  "Distill snapshots its job and provider inputs"
+  "Distill snapshots its job and provider inputs",
 );
-assert.match(intake, /distillGenerationRef/, "Distill invalidates superseded request generations");
+assert.match(
+  intake,
+  /distillGenerationRef/,
+  "Distill invalidates superseded request generations",
+);
 assert.equal(
   intake.match(/const request = startDistillRequest\(\)/g)?.length,
   4,
-  "every link, paste, retry, and extension Distill owns a guarded request"
+  "every link, paste, retry, and extension Distill owns a guarded request",
 );
 assert.equal(
   intake.match(/signal: request\.signal/g)?.length,
   5,
-  "every Distill fetch receives the active abort signal"
+  "every Distill fetch receives the active abort signal",
 );
 assert.ok(
   (intake.match(/if \(!request\.isCurrent\(\)\) return;/g)?.length ?? 0) >= 16,
-  "Distill checks request currency after every asynchronous boundary"
+  "Distill checks request currency after every asynchronous boundary",
 );
 assert.equal(
   jobMenu.match(/disabled=\{isExtractingLink\}/g)?.length,
   2,
-  "job URL and posting text remain immutable while a distill owns the lock"
+  "job URL and posting text remain immutable while a distill owns the lock",
 );
 assert.match(
   jobMenu,
   /disabled=\{!jobUrl\.trim\(\) \|\| isExtractingLink \|\| !distillProviderReady\}/,
-  "Extract is disabled while busy or its selected provider is unavailable"
+  "Extract is disabled while busy or its selected provider is unavailable",
 );
 assert.match(
   jobMenu,
   /disabled=\{!distillReady \|\| isExtractingLink \|\| !distillProviderReady\}/,
-  "Distill paste is disabled while busy or its selected provider is unavailable"
+  "Distill paste is disabled while busy or its selected provider is unavailable",
 );
 
-assert.match(applicationModal, /saved = await onSave/, "the application modal awaits persistence");
-assert.match(applicationModal, /if \(!saved\)[\s\S]*setSaveError/, "failed modal saves retain visible error state");
-assert.match(applicationModal, /inert=\{isSaving\}/, "modal edits are frozen while their snapshot saves");
-assert.match(app, /const saved = await saveApplication\(application\)/, "App awaits modal persistence");
+assert.match(
+  applicationModal,
+  /saved = await onSave/,
+  "the application modal awaits persistence",
+);
+assert.match(
+  applicationModal,
+  /if \(!saved\)[\s\S]*setSaveError/,
+  "failed modal saves retain visible error state",
+);
+assert.match(
+  applicationModal,
+  /inert=\{isSaving\}/,
+  "modal edits are frozen while their snapshot saves",
+);
+assert.match(
+  app,
+  /const saved = await saveApplication\(application\)/,
+  "App awaits modal persistence",
+);
 assert.match(
   app,
   /hidden=\{activeOutputTab !== "materials"\}/,
-  "Materials stays mounted and is semantically hidden when another output tab is active"
+  "Materials stays mounted and is semantically hidden when another output tab is active",
 );
 assert.match(
   app,
   /pendingApplicationWrites > 0/,
-  "before-unload protection includes pending tracker persistence"
+  "before-unload protection includes pending tracker persistence",
 );
 assert.doesNotMatch(
   answers,
   /setAnswersResult\(null\)/,
-  "input and provider changes cannot erase completed application-answer drafts"
+  "input and provider changes cannot erase completed application-answer drafts",
 );
 
 // The stage row keeps provider/model/effort ALWAYS visible. The one disclosure it
@@ -365,62 +583,70 @@ assert.doesNotMatch(
 assert.match(
   settingsStage,
   /<section className="settings-stage" aria-labelledby=\{headingId\}>[\s\S]*<h3 id=\{headingId\}/,
-  "each AI stage is an always-rendered semantic section with a labelled heading"
+  "each AI stage is an always-rendered semantic section with a labelled heading",
 );
 assert.doesNotMatch(
   settingsStage.slice(0, settingsStage.indexOf("settings-stage__extra")),
   /aria-expanded|\bonToggle\b/,
-  "nothing above the instruction override is collapsible — provider, model, and effort stay visible"
+  "nothing above the instruction override is collapsible — provider, model, and effort stay visible",
 );
 assert.match(
   settingsStage,
   /aria-expanded=\{instructionsOpen\}/,
-  "the only disclosure is the per-stage instruction override, and it reports its state"
+  "the only disclosure is the per-stage instruction override, and it reports its state",
 );
 assert.match(
   settingsStage,
   /\{!instructionsOpen && hasInstructions \? \(/,
-  "a set-but-collapsed override still shows a preview — guidance being sent is never invisible"
+  "a set-but-collapsed override still shows a preview — guidance being sent is never invisible",
 );
 assert.match(
   settingsStage,
   /\{!selectedConnection\?\.ready \? \([\s\S]*selectedConnection \? selectedConnection\.guidance : availabilityMessage[\s\S]*Check providers/,
-  "provider descriptions stay hidden for ready providers while unavailable providers retain recovery guidance"
+  "provider descriptions stay hidden for ready providers while unavailable providers retain recovery guidance",
 );
 // Every declared stage gets a settings row, and none is filtered out.
 assert.match(
   settingsDialog,
   /\{AI_STAGES\.map\(\(stage\) => \([\s\S]*<SettingsStage/,
-  "Settings renders one stage row per declared stage, with no open-stage filter"
+  "Settings renders one stage row per declared stage, with no open-stage filter",
 );
 assert.doesNotMatch(
   aiSettings,
   /\bsectionOpen\b|\btoggleSection\b/,
-  "AI settings no longer own or persist accordion state"
+  "AI settings no longer own or persist accordion state",
 );
 assert.match(
   persistedSettings,
   /delete \(settings as unknown as Record<string, unknown>\)\.sectionOpen;/,
-  "loading legacy settings removes the retired accordion preference"
+  "loading legacy settings removes the retired accordion preference",
 );
 
 assert.match(
   reviewRail,
   /const invalidDropCount = Math\.max\(0, \(result\.droppedSuggestions\?\.total \?\? 0\) - unsupportedDropCount\)[\s\S]*if \(!sr && !suggestions\.length && unsupportedDropCount === 0 && invalidDropCount === 0\) return null/,
-  "the review rail remains visible for all-drop results and separates invalid response-shape drops"
+  "the review rail remains visible for all-drop results and separates invalid response-shape drops",
 );
 assert.match(
   reviewRail,
   /\{unsupportedDropCount\} AI[\s\S]*wording wasn.t supported by your resume or honest context/,
-  "unsupported AI edits remain visible as evidence-grounding rejections"
+  "unsupported AI edits remain visible as evidence-grounding rejections",
 );
 assert.match(
   reviewRail,
   /\{invalidDropCount\} \{unsupportedDropCount > 0 \? "additional AI " : "AI "\}[\s\S]*not be applied safely/,
-  "invalid AI edits are visible with grammatical copy whether or not unsupported edits also exist"
+  "invalid AI edits are visible with grammatical copy whether or not unsupported edits also exist",
 );
-assert.doesNotMatch(appIndex, /fonts\.googleapis\.com|fonts\.gstatic\.com/, "the local-first app does not fetch external web fonts");
-assert.match(styleTokens, /@font-face[\s\S]*SourceSans3-Regular\.woff2[\s\S]*SourceSerif4-Regular\.woff2/, "app chrome uses bundled local font assets");
+assert.doesNotMatch(
+  appIndex,
+  /fonts\.googleapis\.com|fonts\.gstatic\.com/,
+  "the local-first app does not fetch external web fonts",
+);
+assert.match(
+  styleTokens,
+  /@font-face[\s\S]*SourceSans3-Regular\.woff2[\s\S]*SourceSerif4-Regular\.woff2/,
+  "app chrome uses bundled local font assets",
+);
 
 // Replacing the cover letter ALWAYS confirms first, whatever replaces it. The
 // Open menu's saved list bypassed this and discarded unsaved edits silently,
@@ -428,41 +654,43 @@ assert.match(styleTokens, /@font-face[\s\S]*SourceSans3-Regular\.woff2[\s\S]*Sou
 assert.match(
   coverToolbar,
   /async function openSaved\(fileName: string\) \{\s*if \(await confirmReplace\(\)\)/,
-  "opening a saved letter confirms before discarding unsaved edits"
+  "opening a saved letter confirms before discarding unsaved edits",
 );
 assert.match(
   coverToolbar,
   /async function restoreSaved\(key: string\) \{\s*if \(await confirmReplace\(\)\)/,
-  "restoring a letter version confirms before discarding unsaved edits"
+  "restoring a letter version confirms before discarding unsaved edits",
 );
 assert.doesNotMatch(
   coverToolbar,
   /onOpen: \(\) => void editor\.(openWorkspace|restoreWorkspace)CoverLetter\(/,
-  "no saved-list row calls the workspace loader directly, bypassing the confirm"
+  "no saved-list row calls the workspace loader directly, bypassing the confirm",
 );
 
 // A document that did not come from the workspace clears the active pointer, so
 // Save cannot offer to overwrite an unrelated saved letter with it.
 for (const starter of ["startBlank", "startStarter"]) {
-  const body = coverEditor.slice(coverEditor.indexOf(`const ${starter} = useCallback`));
+  const body = coverEditor.slice(
+    coverEditor.indexOf(`const ${starter} = useCallback`),
+  );
   assert.match(
     body.slice(0, body.indexOf("}, [")),
     /setActiveCoverFileName\(""\)/,
-    `${starter} clears the active workspace file`
+    `${starter} clears the active workspace file`,
   );
 }
 assert.match(
   coverEditor,
   /setActiveCoverFileName\(""\);[\s\S]{0,200}?setDocumentTitle\(fileBase \|\| "Cover letter"\)/,
-  "opening an uploaded .cover clears the active workspace file"
+  "opening an uploaded .cover clears the active workspace file",
 );
 
 // `variant` is slugged by the server; `fileName` is not. Sending the active file
 // name as a variant mangled it into cover-letter-cover-letter-<x>-cover.cover.
 assert.match(
   coverEditor,
-  /fileName: target\?\.fileName \?\? \(target\?\.variant \? undefined : activeCoverFileName \|\| undefined\)/,
-  "the active workspace file is sent as fileName, never re-slugged as a variant"
+  /fileName:\s*target\?\.fileName \?\? \(target\?\.variant \? undefined : activeCoverFileName \|\| undefined\)/,
+  "the active workspace file is sent as fileName, never re-slugged as a variant",
 );
 
 // Per-document application saves. These guard the wiring that keeps saves
@@ -473,154 +701,172 @@ const applicationsHook = readHook("useApplications.ts");
 assert.match(
   applicationFiles,
   /application\.updatedAt,[\s\S]{0,100}?sourceOrigin/,
-  "a document mutation carries the current application revision"
+  "a document mutation carries the current application revision",
 );
 assert.match(
   applicationFiles,
   /await refreshApplications\(\)/,
-  "the current tab adopts the server's atomic file-and-metadata transaction"
+  "the current tab adopts the server's atomic file-and-metadata transaction",
 );
 assert.match(
   applicationFiles,
   /mutationQueue\.current\.then\(mutation, mutation\)/,
-  "same-tab file actions serialize so each receives the prior confirmed revision"
+  "same-tab file actions serialize so each receives the prior confirmed revision",
 );
 assert.match(
   applicationFiles,
   /await refreshApplications\(\)[\s\S]{0,300}?getApplication\(id\)/,
-  "a file mutation waits for pending tracker writes before choosing its base revision"
+  "a file mutation waits for pending tracker writes before choosing its base revision",
 );
 assert.match(
   applicationsHook,
   /Math\.max\(now, previousTime \+ 1\)/,
-  "tracker mutations advance revisions even when edits share a millisecond or the clock moves backwards"
+  "tracker mutations advance revisions even when edits share a millisecond or the clock moves backwards",
 );
 assert.match(
   documentSync,
   /const result = await saveApplicationDocument\(/,
-  "a document save awaits the atomic server mutation before reporting success"
+  "a document save awaits the atomic server mutation before reporting success",
 );
 assert.match(
   documentSync,
   /setSavingKinds\(\(current\) => new Set\(current\)\.add\(kind\)\)/,
-  "simultaneous Resume and Cover letter saves each retain their own busy state"
+  "simultaneous Resume and Cover letter saves each retain their own busy state",
 );
 assert.match(
   documentSync,
   /\[currentResumeText, resumeFeedback, resumeState, saveResume, savingKinds, targetLabel\]/,
-  "the resume application action reacts when content emptiness changes without a sync-state change"
+  "the resume application action reacts when content emptiness changes without a sync-state change",
 );
 assert.match(
   documentSync,
   /\[coverFeedback, coverLetterText, coverState, saveCoverLetter, savingKinds, targetLabel\]/,
-  "the cover-letter application action reacts when content emptiness changes without a sync-state change"
+  "the cover-letter application action reacts when content emptiness changes without a sync-state change",
 );
 assert.match(
   documentSync,
   /\(kind === "resume" \? onResumeSaved : onCoverLetterSaved\)\(\)/,
-  "a successful per-document application save settles only that document's recovery state"
+  "a successful per-document application save settles only that document's recovery state",
 );
 assert.match(
   coverEditor,
   /const markApplicationSaved[\s\S]{0,300}?clearCoverLetterAutosaveDraft\(\)/,
-  "a durable application cover letter clears its recovery draft"
+  "a durable application cover letter clears its recovery draft",
 );
 assert.match(
   documentSync,
   /if \(!application\) return;/,
-  "a document save without an application is a no-op — Apply creates the record"
+  "a document save without an application is a no-op — Apply creates the record",
 );
 assert.doesNotMatch(
   documentSync,
   /useEffect\([\s\S]{0,400}?\bsave\(/,
-  "no effect saves a document: regeneration and editing never rewrite the application"
+  "no effect saves a document: regeneration and editing never rewrite the application",
 );
 assert.match(
   documentSync,
   /if \(applicationMatchesJobTarget\(linked, jobUrl, jobDescription\)\) return;\s*setLinkedId\(null\)/,
-  "the remembered application is dropped once the desk points at another posting"
+  "the remembered application is dropped once the desk points at another posting",
 );
 assert.match(
   applyFlow,
   /applyMergeTargetRef\.current = null;[\s\S]{0,200}?linkApplication\(existing\?\.id \?\? app\.id\)/,
-  "a confirmed Apply links the session to that one application"
+  "a confirmed Apply links the session to that one application",
 );
 assert.match(
   app,
   /duplicateGuard\.ackApplication\(app\);[\s\S]{0,400}?linkApplication\(app\.id\)/,
-  "restoring a tracked application links later document saves to it"
+  "restoring a tracked application links later document saves to it",
 );
 assert.match(
   app,
   /applicationDocumentUrl\(app\.id, "resume", "source"\)[\s\S]{0,300}?parseResumeFile/,
-  "Open in Polish restores the strict saved resume source rather than flattened tracker text"
+  "Open in Polish restores the strict saved resume source rather than flattened tracker text",
 );
 assert.match(
   app,
   /applicationDocumentUrl\(app\.id, "cover", "source"\)[\s\S]{0,1200}?openApplicationSource/,
-  "Open in Polish restores the strict saved cover-letter source and its style"
+  "Open in Polish restores the strict saved cover-letter source and its style",
 );
 assert.match(
   app,
   /currentCoverLetterSource: coverLetterEditor\.draftPayload \?\? "",\s*saveApplicationDocument:/,
-  "the letter's saved state includes the full serialized editable source"
+  "the letter's saved state includes the full serialized editable source",
 );
 
 // Editor parity: the cover letter recovers unsaved work the way the resume
 // does, instead of only warning that it is unsaved, and neither editor keeps a
 // private restore path the other lacks.
 const coverDraft = readHook("useCoverLetterAutosaveDraft.ts");
-const draftStorage = readFileSync(new URL("../../lib/autosaveDraftStorage.ts", import.meta.url), "utf8");
-const coverTab = readFileSync(new URL("../../sections/tabs/CoverLetterTab.tsx", import.meta.url), "utf8");
+const draftStorage = readFileSync(
+  new URL("../../lib/autosaveDraftStorage.ts", import.meta.url),
+  "utf8",
+);
 assert.doesNotMatch(
   coverToolbar,
   /Unsaved cover letter"/,
-  "the letter reports recovery state, not a bare unsaved warning"
+  "the letter reports recovery state, not a bare unsaved warning",
 );
 assert.match(
   coverToolbar,
   /draftAutosaveState === "saved"\s*\?\s*\{ state: "saved", label: "Recovery draft saved" \}/,
-  "the letter uses the resume's recovery vocabulary"
+  "the letter uses the resume's recovery vocabulary",
 );
-assert.doesNotMatch(coverToolbar, /Restore source/, "the AI restore-source button is gone from the letter toolbar");
+// Undoing a tailor belongs to the result summary in the rail, beside what was
+// applied — not to a permanent toolbar button competing with Open and Save.
 assert.doesNotMatch(
-  coverEditor,
-  /sourceBeforeTailor|captureTailorSource|restoreTailorSource/,
-  "the pre-tailoring source state left with the button it served"
+  coverToolbar,
+  /Restore source|Restore previous/,
+  "the letter toolbar owns no restore button",
 );
-assert.doesNotMatch(cover, /onCaptureSource/, "the cover workflow no longer captures a pre-tailoring source");
+assert.match(
+  coverReview,
+  /canRestore \? \([\s\S]{0,200}?Restore previous/,
+  "Restore appears with the tailored result and disappears with it",
+);
+assert.doesNotMatch(
+  cover,
+  /onCaptureSource/,
+  "the workflow hook never owns the document snapshot the editor owns",
+);
 assert.match(
   coverDraft,
   /saveTabDraft\("cover"/,
-  "the letter's draft is written under its own kind, never the resume's key"
+  "the letter's draft is written under its own kind, never the resume's key",
 );
 assert.match(
   coverEditor,
   /editor\.markClean\(\);\s*setPersistedFingerprint\(payload\);[\s\S]{0,200}?clearCoverLetterAutosaveDraft\(\)/,
-  "the recovery draft is cleared only once the letter itself is durable"
+  "the recovery draft is cleared only once the letter itself is durable",
 );
 assert.match(
   coverEditor,
   /const openRecoveryDraft[\s\S]{0,400}?editor\.markClean\(\)/,
-  "restoring a letter draft seeds clean, like the resume restore"
+  "restoring a letter draft seeds clean, like the resume restore",
 );
-assert.match(coverTab, /DraftRestoreBar/, "the letter offers the same restore bar the resume does");
+assert.match(
+  coverTab,
+  /DraftRestoreBar/,
+  "the letter offers the same restore bar the resume does",
+);
 assert.match(
   draftStorage,
   /if \(ownerId !== "" && live\.has\(ownerId\)\) continue;/,
-  "one shared recovery rule protects a live sibling tab's draft for both editors"
+  "one shared recovery rule protects a live sibling tab's draft for both editors",
 );
 assert.match(
   app,
   /completeAutoDocumentTitle\("coverLetter", current, applicantName, company, COVER_LETTER_TITLE_PLACEHOLDERS\)/,
-  "the letter is named on the same Name_Company_<kind> rule as the resume"
+  "the letter is named on the same Name_Company_<kind> rule as the resume",
 );
 for (const kind of ["resume", "coverLetter"]) {
   assert.equal(
     app.match(new RegExp(`documentTitleForJob\\("${kind}"`, "g"))?.length,
     2,
-    `both a job import and a tracker restore retitle the ${kind} for the new role`
+    `both a job import and a tracker restore retitle the ${kind} for the new role`,
   );
 }
 
-console.log(`Client workflow guards eval: ${checkCount}/${checkCount} checks passed`);
+console.log(
+  `Client workflow guards eval: ${checkCount}/${checkCount} checks passed`,
+);

@@ -10,6 +10,11 @@ import type { ApplicationDocumentSync } from "../../hooks/useApplicationDocument
 import type { DraftAutosaveState } from "../../hooks/useAutosaveDraft";
 import type { CoverLetterAutosavedDraft } from "../../hooks/useCoverLetterAutosaveDraft";
 import type { CoverLetterEditorState } from "../../hooks/useCoverLetterEditor";
+import type { CoverLetterTailorResult } from "../../lib/coverLetterEvidence";
+import type {
+  CoverLetterDetailKey,
+  CoverLetterPreflight
+} from "../../lib/coverLetterPreflight";
 import { useRestoredScroll } from "../../hooks/useRestoredScroll";
 import { CoverLetterReview } from "../cover-letter/CoverLetterReview";
 import { DraftRestoreBar } from "../DraftRestoreBar";
@@ -39,6 +44,12 @@ type CoverLetterTabProps = {
   providerReady: boolean;
   providerMessage: string;
   jobTarget?: { role?: string; company?: string };
+  preflight: CoverLetterPreflight;
+  result: CoverLetterTailorResult | null;
+  slotAnswers: Record<string, string>;
+  onDetailChange: (key: CoverLetterDetailKey, value: string) => void;
+  onSlotAnswerChange: (slotId: string, value: string) => void;
+  onRestorePreTailor: () => void;
 };
 
 function wordCount(text: string): number {
@@ -66,7 +77,13 @@ export function CoverLetterTab({
   jobReady,
   providerReady,
   providerMessage,
-  jobTarget
+  jobTarget,
+  preflight,
+  result,
+  slotAnswers,
+  onDetailChange,
+  onSlotAnswerChange,
+  onRestorePreTailor
 }: CoverLetterTabProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const scrollerRef = useRestoredScroll(initialScrollTop, onScrollExit);
@@ -75,22 +92,20 @@ export function CoverLetterTab({
   // can open the same link popover the toolbar button opens.
   const [linkEditorOpen, setLinkEditorOpen] = useState(false);
   const hasLetter = true;
+  // Enabled state depends only on real readiness — never on whether some
+  // intermediate review object happens to exist.
   const canTailor =
-    editor.text.trim().length >= 80 && resumeReady && jobReady && providerReady && !isTailoring;
+    preflight.canTailor && resumeReady && jobReady && providerReady && !isTailoring;
   const targetLine = [jobTarget?.role, jobTarget?.company].filter(Boolean).join(" at ");
-  const hasPlaceholder = /\[(?:add|insert|your|company|name|date)[^\]]*\]/i.test(editor.text);
-  const hasGreeting = /\bdear\b/i.test(editor.text.slice(0, 400));
-  const tailorHint = editor.text.trim().length < 80
-    ? "Write or open at least 80 words before tailoring."
-    : !resumeReady && !jobReady
-      ? "Add a resume and job description first."
-      : !resumeReady
-        ? "Add your resume first."
-        : !jobReady
-          ? "Add the job description first."
-          : !providerReady
-            ? providerMessage
-            : "";
+  const readinessHint = !resumeReady && !jobReady
+    ? "Add a resume and job description first."
+    : !resumeReady
+      ? "Add your resume first."
+      : !jobReady
+        ? "Add the job description first."
+        : !providerReady
+          ? providerMessage
+          : (preflight.blockers[0] ?? "");
 
   return (
     <section className="studio-card studio-card--flush cover-letter-page">
@@ -103,7 +118,8 @@ export function CoverLetterTab({
         inlineFormat={inlineFormat}
         hasLetter={hasLetter}
         canTailor={canTailor}
-        tailorHint={tailorHint}
+        tailorHint={readinessHint}
+        actionLabel={result ? "Retry" : "Tailor"}
         isTailoring={isTailoring}
         targetLine={targetLine}
         onTailor={onTailor}
@@ -145,9 +161,17 @@ export function CoverLetterTab({
         <CoverLetterReview
           words={wordCount(editor.text)}
           pageCount={pageCount}
-          hasGreeting={hasGreeting}
-          hasPlaceholder={hasPlaceholder}
-          status={tailorHint || tailorStatus || editor.status}
+          preflight={preflight}
+          result={result}
+          canRestore={editor.canRestorePreTailor}
+          resumeReady={resumeReady}
+          jobReady={jobReady}
+          providerReady={providerReady}
+          slotAnswers={slotAnswers}
+          onDetailChange={onDetailChange}
+          onSlotAnswerChange={onSlotAnswerChange}
+          onRestore={onRestorePreTailor}
+          status={tailorStatus || readinessHint || editor.status}
         />
       </div>
     </section>

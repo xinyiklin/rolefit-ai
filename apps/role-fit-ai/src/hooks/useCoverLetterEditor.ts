@@ -19,7 +19,11 @@ import { downloadBlob } from "@typeset/engine/lib/download.ts";
 
 /** Mirrors the server's cover-letter workspace snapshot fields. */
 export type CoverLetterOption = { fileName: string; label: string };
-export type CoverLetterHistoryEntry = { key: string; originalName: string; date: string };
+export type CoverLetterHistoryEntry = {
+  key: string;
+  originalName: string;
+  date: string;
+};
 export type CoverLetterHistoryGroup = {
   variant: string;
   label: string;
@@ -96,19 +100,31 @@ type UseCoverLetterEditorOptions = {
 export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) {
   const [style, setStyle] = useState<DocStyle>(loadStyle);
   const [initialData] = useState(() => parseCoverLetterText(""));
+  const [sourceRevision, setSourceRevision] = useState(0);
+  // The exact serialized `.cover` this document held immediately before the last
+  // Tailor. Tailoring applies straight to the editor, so one-click undo of the
+  // whole replacement — style included — has to be exact, not text-only.
+  const [preTailorSnapshot, setPreTailorSnapshot] = useState<string | null>(null);
+  const snapshotBaselineRef = useRef<string | null>(null);
   const editor = useTypesetResumeEditor(initialData);
   const onOpenDocumentRef = useRef(options.onOpenDocument);
   onOpenDocumentRef.current = options.onOpenDocument;
   const cancelStartupOpenRef = useRef(false);
+  const dropPreTailorSnapshot = useCallback(() => {
+    setPreTailorSnapshot(null);
+    snapshotBaselineRef.current = null;
+  }, []);
   // Every user-initiated load goes through here instead of `editor.seedData`,
   // so no open path can forget to move the caret into the new document.
   const openDocument = useCallback(
     (data: ResumeData, automatic = false) => {
       if (!automatic) cancelStartupOpenRef.current = true;
       editor.seedData(data);
+      dropPreTailorSnapshot();
+      setSourceRevision((current) => current + 1);
       onOpenDocumentRef.current?.();
     },
-    [editor.seedData]
+    [dropPreTailorSnapshot, editor.seedData]
   );
   const [documentTitle, setDocumentTitle] = useState(loadTitle);
   const [status, setStatus] = useState("");
@@ -132,18 +148,26 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
   const currentFingerprint = useMemo(
     () =>
       editor.editedResume
-        ? serializeCoverLetterFile(
-            editor.editedResume,
-            documentStyleToCoverLetterStyle(style)
-          )
+        ? serializeCoverLetterFile(editor.editedResume, documentStyleToCoverLetterStyle(style))
         : null,
     [editor.editedResume, style]
   );
-  const dirty =
-    currentFingerprint !== null && currentFingerprint !== persistedFingerprint;
+  const dirty = currentFingerprint !== null && currentFingerprint !== persistedFingerprint;
   const startupFingerprint = `${documentTitle}\u0000${currentFingerprint ?? ""}`;
   const startupFingerprintRef = useRef(startupFingerprint);
   startupFingerprintRef.current = startupFingerprint;
+
+  // Restore stays offered until the document changes again for any reason — an
+  // edit, a style change, another Tailor, or opening something else. The first
+  // pass after a tailor records the applied document as the baseline.
+  useEffect(() => {
+    if (!preTailorSnapshot || currentFingerprint === null) return;
+    if (snapshotBaselineRef.current === null) {
+      snapshotBaselineRef.current = currentFingerprint;
+      return;
+    }
+    if (snapshotBaselineRef.current !== currentFingerprint) dropPreTailorSnapshot();
+  }, [currentFingerprint, dropPreTailorSnapshot, preTailorSnapshot]);
 
   useEffect(() => {
     try {
@@ -246,18 +270,54 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
     [editor.markClean, openDocument]
   );
 
+  // Tailoring replaces the document in place. The exact prior `.cover` is kept
+  // first so a single Restore is a true undo of the replacement.
   const applyTailoredText = useCallback(
     (tailored: string) => {
       cancelStartupOpenRef.current = true;
       const parsed = parseCoverLetterText(tailored);
       const data = editor.editedResume
-        ? { ...parsed, name: editor.editedResume.name, contact: editor.editedResume.contact }
+        ? {
+            ...parsed,
+            name: editor.editedResume.name,
+            contact: editor.editedResume.contact
+          }
         : parsed;
+      setPreTailorSnapshot(
+        editor.editedResume
+          ? serializeCoverLetterFile(
+              editor.editedResume,
+              documentStyleToCoverLetterStyle(styleRef.current)
+            )
+          : null
+      );
+      snapshotBaselineRef.current = null;
       editor.seedData(data);
-      setStatus("Tailored draft loaded. Review it in your own voice before sending.");
+      setStatus("Tailored letter loaded. Read it once before sending.");
     },
     [editor.editedResume, editor.seedData]
   );
+
+  const restorePreTailor = useCallback(() => {
+    if (!preTailorSnapshot) return false;
+    try {
+      const parsed = parseCoverLetterFile(preTailorSnapshot);
+      cancelStartupOpenRef.current = true;
+      editor.seedData(parsed.data);
+      setStyle((current) => ({
+        ...coverLetterStyleToDocumentStyle(parsed.style),
+        zoom: current.zoom,
+        spellCheck: current.spellCheck
+      }));
+      dropPreTailorSnapshot();
+      setStatus("Restored the letter from before tailoring.");
+      return true;
+    } catch {
+      dropPreTailorSnapshot();
+      setStatus("The letter from before tailoring could not be restored.");
+      return false;
+    }
+  }, [dropPreTailorSnapshot, editor.seedData, preTailorSnapshot]);
 
   // Adopt a recovered autosave draft. Like the resume's restore it seeds CLEAN:
   // the payload is already the durable copy, so the next real edit is what
@@ -343,7 +403,7 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
     setActiveCoverFileName("");
     saveLastCoverLetterName("");
     setDocumentTitle("Cover letter");
-    setStatus("Starter opened. Replace every bracketed prompt with your own facts before tailoring.");
+    setStatus("Starter opened. Complete the tailoring details beside the document.");
   }, [editor.markClean, openDocument]);
 
   const openFile = useCallback(
@@ -450,7 +510,8 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
           // cover-letter-cover-letter-growth-cover.cover instead of updating.
           body: JSON.stringify({
             text: payload,
-            fileName: target?.fileName ?? (target?.variant ? undefined : activeCoverFileName || undefined),
+            fileName:
+              target?.fileName ?? (target?.variant ? undefined : activeCoverFileName || undefined),
             variant: target?.variant
           })
         });
@@ -482,11 +543,7 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
   );
 
   const openWorkspaceCoverLetter = useCallback(
-    async (
-      fileName: string,
-      automatic = false,
-      shouldCancel?: () => boolean
-    ) => {
+    async (fileName: string, automatic = false, shouldCancel?: () => boolean) => {
       try {
         const response = await fetch("/api/workspace/cover-letter/select", {
           method: "POST",
@@ -494,14 +551,16 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
           body: JSON.stringify({ fileName })
         });
         const data = (await response.json()) as {
-          error?: string; text?: string; fileName?: string; label?: string;
-          coverLetterOptions?: CoverLetterOption[]; coverLetterHistory?: CoverLetterHistoryGroup[];
+          error?: string;
+          text?: string;
+          fileName?: string;
+          label?: string;
+          coverLetterOptions?: CoverLetterOption[];
+          coverLetterHistory?: CoverLetterHistoryGroup[];
         };
-        if (!response.ok || !data.text) throw new Error(data.error ?? "Cover letter version not found.");
-        if (
-          automatic &&
-          (cancelStartupOpenRef.current || shouldCancel?.())
-        ) {
+        if (!response.ok || !data.text)
+          throw new Error(data.error ?? "Cover letter version not found.");
+        if (automatic && (cancelStartupOpenRef.current || shouldCancel?.())) {
           return;
         }
         adoptCoverPayload(
@@ -530,9 +589,10 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
           initialFingerprint,
           startupFingerprintRef.current,
           cancelled || cancelStartupOpenRef.current
-        )
-        || !snapshot
-      ) return;
+        ) ||
+        !snapshot
+      )
+        return;
 
       const available = snapshot.coverLetterOptions ?? [];
       const startup = resolveCoverLetterStartup(
@@ -570,11 +630,20 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
           body: JSON.stringify({ key })
         });
         const data = (await response.json()) as {
-          error?: string; text?: string; fileName?: string; label?: string;
-          coverLetterOptions?: CoverLetterOption[]; coverLetterHistory?: CoverLetterHistoryGroup[];
+          error?: string;
+          text?: string;
+          fileName?: string;
+          label?: string;
+          coverLetterOptions?: CoverLetterOption[];
+          coverLetterHistory?: CoverLetterHistoryGroup[];
         };
-        if (!response.ok || !data.text) throw new Error(data.error ?? "Cover letter restore failed.");
-        adoptCoverPayload(data.text, data.fileName ?? "default.cover", data.label ?? "Cover letter");
+        if (!response.ok || !data.text)
+          throw new Error(data.error ?? "Cover letter restore failed.");
+        adoptCoverPayload(
+          data.text,
+          data.fileName ?? "default.cover",
+          data.label ?? "Cover letter"
+        );
         setCoverLetterOptions(data.coverLetterOptions ?? []);
         setCoverLetterHistory(data.coverLetterHistory ?? []);
         setStatus(`Restored ${data.label ?? "cover letter"} from history.`);
@@ -615,38 +684,48 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
 
   // One renderer for both the download and the copy saved to an application, so
   // the letter the tracker keeps is byte-for-byte the letter the user exports.
-  const renderPdfBytes = useCallback(async (data: ResumeData) => {
-    const [{ layoutCoverLetter }, { emitPdf, fetchFontBytes }] = await Promise.all([
-      import("@typeset/engine/typeset/layout.ts"),
-      import("@typeset/engine/typeset/pdf/emit.ts")
-    ]);
-    const document = layoutCoverLetter(toTypesetSchema(data), styleRef.current);
-    const publicBase = import.meta.env.BASE_URL.replace(/\/$/, "");
-    const fonts = await fetchFontBytes(document, `${publicBase}/fonts`);
-    return emitPdf(document, fonts, { title: documentTitle.trim() || "Cover letter" });
-  }, [documentTitle]);
+  const renderPdfBytes = useCallback(
+    async (data: ResumeData) => {
+      const [{ layoutCoverLetter }, { emitPdf, fetchFontBytes }] = await Promise.all([
+        import("@typeset/engine/typeset/layout.ts"),
+        import("@typeset/engine/typeset/pdf/emit.ts")
+      ]);
+      const document = layoutCoverLetter(toTypesetSchema(data), styleRef.current);
+      const publicBase = import.meta.env.BASE_URL.replace(/\/$/, "");
+      const fonts = await fetchFontBytes(document, `${publicBase}/fonts`);
+      return emitPdf(document, fonts, {
+        title: documentTitle.trim() || "Cover letter"
+      });
+    },
+    [documentTitle]
+  );
 
   // `overrideBase` is the name the rename prompt collected, matching the resume
   // export. Omitted, it falls back to the document title as before.
-  const downloadPdf = useCallback(async (overrideBase?: string) => {
-    if (!editor.editedResume) {
-      setStatus("Open or start a cover letter before exporting.");
-      return;
-    }
-    setIsRenderingPdf(true);
-    setStatus("Typesetting cover-letter PDF…");
-    try {
-      const bytes = await renderPdfBytes(editor.editedResume);
-      const fileName = coverLetterFileName(overrideBase?.trim() || documentTitle)
-        .replace(/\.cover$/i, ".pdf");
-      downloadBlob(new Blob([bytes as BlobPart], { type: "application/pdf" }), fileName);
-      setStatus(`Downloaded ${fileName}.`);
-    } catch (error) {
-      setStatus(pdfFailureMessage(error));
-    } finally {
-      setIsRenderingPdf(false);
-    }
-  }, [documentTitle, editor.editedResume, renderPdfBytes]);
+  const downloadPdf = useCallback(
+    async (overrideBase?: string) => {
+      if (!editor.editedResume) {
+        setStatus("Open or start a cover letter before exporting.");
+        return;
+      }
+      setIsRenderingPdf(true);
+      setStatus("Typesetting cover-letter PDF…");
+      try {
+        const bytes = await renderPdfBytes(editor.editedResume);
+        const fileName = coverLetterFileName(overrideBase?.trim() || documentTitle).replace(
+          /\.cover$/i,
+          ".pdf"
+        );
+        downloadBlob(new Blob([bytes as BlobPart], { type: "application/pdf" }), fileName);
+        setStatus(`Downloaded ${fileName}.`);
+      } catch (error) {
+        setStatus(pdfFailureMessage(error));
+      } finally {
+        setIsRenderingPdf(false);
+      }
+    },
+    [documentTitle, editor.editedResume, renderPdfBytes]
+  );
 
   // The letter's equivalent of the resume export's getResumeArtifacts: the
   // editable `.cover` source an application keeps. PDF preview/download is
@@ -676,6 +755,7 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
     redoSequence: editor.redoSequence,
     dirty,
     text,
+    sourceRevision,
     documentTitle,
     setDocumentTitle,
     docStyle,
@@ -699,6 +779,8 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
     loadSourceText,
     applyExternalText,
     applyTailoredText,
+    canRestorePreTailor: preTailorSnapshot !== null,
+    restorePreTailor,
     openRecoveryDraft,
     openApplicationSource,
     getArtifacts,

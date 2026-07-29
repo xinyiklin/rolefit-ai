@@ -31,7 +31,11 @@ import { dirname, join, relative, sep } from "node:path";
 const repoRoot = dirname(fileURLToPath(import.meta.url));
 
 // Eval scripts that drive a real AI provider — never run in `npm test`.
-const LIVE = new Set(["fabrication-eval.mjs", "tailor-quality-eval.mjs"]);
+const LIVE = new Set([
+  "cover-letter-quality-eval.mjs",
+  "fabrication-eval.mjs",
+  "tailor-quality-eval.mjs"
+]);
 
 // Directories never worth walking when hunting for `__evals__` dirs.
 const SKIP_DIRS = new Set(["node_modules", ".git", "dist", ".trash", "workspace"]);

@@ -26,6 +26,8 @@
   "include": [
     "server.ts",
     "server/**/*.ts",
+    "src/lib/coverLetterEvidence.ts",
+    "src/lib/coverLetterPreflight.ts",
     "src/lib/jobIdentity.ts",
     "src/resume/sections.ts"
   ]

@@ -128,10 +128,32 @@ Good server verification covers:
 - duplicate warnings before or after Distill must offer Continue/Stop; Stop
   prevents the current and every downstream AI request, while Continue is
   acknowledged for the same job target so the pipeline does not prompt twice
-- cover-letter revision and application-answer generation have no local
+- cover-letter tailoring and application-answer generation have no local
   fallback and retain their own retryable task progress. Cover-letter probes
-  must require a candidate source, neutralize source-letter fence injection,
-  and reject unsupported terms, numbers, and outcomes
+  must prove the **one-click contract**: a template-only starter, a blank
+  document, and every base-variant job family reach Tailor with zero extra
+  fields; only a missing name/role/company or an unanswered private slot
+  blocks; a recipient named in the source survives and an impersonal greeting
+  falls back to the company hiring team; markdown links, citations, array
+  indexes, and escaped brackets stay literal. Probes must show the normal path
+  is exactly one provider request, that a violation triggers exactly one silent
+  repair carrying its reasons, and that a second failure fails closed with the
+  existing letter kept. Rejections must cover unknown evidence or slot ids, an
+  uncited paragraph, a residual template token, a body-level greeting or
+  sign-off, a missing role or company, generic phrasing, and ungrounded
+  candidate terms, numbers, and outcomes — while an employer-subject sentence
+  drawn from the posting must not widen candidate evidence. Length is asserted
+  as a warning, never a gate. The thirteen-fixture synthetic corpus spans
+  general full-stack, frontend, backend/platform, healthcare, applied AI, a
+  role whose strongest lead is not the most prominent project, relevant
+  AI-workflow honest context, and honest context that must be omitted; it
+  grades evidence grounding, resume-dump behavior, generic language, exact
+  correspondence, role/company specificity, word range, and page count. It is
+  offline by default; run the real-provider harness deliberately with
+  `npm run eval:live:cover-letter --workspace apps/role-fit-ai -- [fixture-id|all] [runs]`.
+  Both halves use only the tracked synthetic corpus: neither reads ignored
+  `workspace/cover-letters/` variants or copies personal letter text into a
+  fixture, console output, or provider request.
 - resume import (`.txt` / `.md` / `.csv`, or paste) reaches the structured editor
   as a one-time conversion into `ResumeData`; a `.resume` file loads its
   `ResumeData` directly, and export offers PDF + `.resume`
@@ -183,8 +205,11 @@ Good frontend verification covers:
 - changed controls are reachable by keyboard
 - loading / data refresh does not cause avoidable layout shift
 - API error states show user-safe messaging (no raw provider bodies)
-- a failed cover-letter revision stays local to its page with safe retry copy;
-  the source remains restorable and the resume/review result remains usable
+- a failed cover-letter request stays local to its page with safe retry copy and
+  never replaces the letter; a successful one loads directly into the editor
+  with an exact one-click Restore, and that Restore plus its result summary
+  disappear together the moment the user edits, opens another document, or
+  runs Tailor again
 - the owned typeset page stays the sole editor and live preview; the tracker may
   render or open a saved application document as PDF, `ReviewRail` docks only after polish
   produces review output, and a
