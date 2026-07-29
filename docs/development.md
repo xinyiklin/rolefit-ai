@@ -31,6 +31,7 @@ npm run make:rolefit:desktop           # native installer/archive artifacts
 
 npm run check             # every workspace check
 npm test                  # every workspace test/eval script
+npm run test:editor:browser  # headless Chrome editor/lifecycle contracts
 ```
 
 Focused workspace commands:
@@ -45,7 +46,9 @@ npm run eval:resume-file --workspace packages/engine
 npm run eval:cover-letter-file --workspace packages/engine
 npm run eval:pdf-font-parity --workspace packages/engine
 npm run fonts:check --workspace packages/engine
+npm run eval:layout --workspace packages/engine
 npm run eval:editor --workspace packages/editor
+npm run test:document-workflows --workspace apps/role-fit-ai
 npm run test:server-lifecycle --workspace apps/role-fit-ai
 npm run test:desktop:vault --workspace apps/role-fit-ai
 npm run test:desktop:security --workspace apps/role-fit-ai
@@ -76,12 +79,12 @@ signed-distribution check.
 | --- | --- | --- |
 | Engine domain / `.resume` | engine typecheck, `eval:resume-file` | engine check + affected app checks |
 | Engine `.cover` / cover layout | engine typecheck, `eval:cover-letter-file` | engine check + RoleFit build + rendered editor/PDF |
-| Engine layout / font / PDF | `eval:pdf-font-parity`, font check when relevant | engine check + both app builds + rendered output |
-| Shared editor | editor typecheck, `eval:editor` | editor check + both app builds + browser QA when material |
+| Engine layout / font / PDF | `eval:layout`, `eval:pdf-font-parity`, `fonts:check` | engine check + both app builds + rendered output |
+| Shared editor | editor typecheck, `eval:editor` | editor check + both app builds + `test:editor:browser` |
 | Typeset shell | Typeset build/check | browser/file/PDF QA proportional to change |
 | RoleFit UI | RoleFit build and focused offline eval | RoleFit check; browser QA under its scoped policy |
 | RoleFit public landing | landing build boundary + release-catalog probe | desktop/390px browser QA, current unavailable state, mocked complete release, and request inspection |
-| RoleFit server / AI | server TypeScript gate and affected probe; explicit lifecycle test for listener changes | RoleFit check; route smoke where relevant |
+| RoleFit server / AI | server TypeScript gate, `test:document-workflows`, and affected probe; explicit lifecycle test for listener changes | RoleFit check; route smoke where relevant |
 | RoleFit provider manager | desktop emit + vault/file-renderer/IPC/CLI/settings/provider-registry/process probes | explicit companion GUI smoke, ordinary-browser regression, then root check/test for lockfile changes |
 | RoleFit native package | staged-layout probe + matching-native packaged smoke | native make/signature checks, installed Squirrel smoke on Windows, and offline release-contract tests; signed publication only in protected CI |
 | Documentation only | path/link/command validation, scoped diff check | no runtime build unless docs expose a discovered code mismatch |

@@ -1347,3 +1347,27 @@ bounded; app-only operational detail belongs in the affected app documentation.
   heights into explicit inline marks; unsupported CSS remains discarded.
 - [USER+TOOL] 2026-07-29: The restarted desktop app passed the user's live
   Google Docs line-height copy/paste round trip.
+- [USER] 2026-07-29: The document-workflow hardening review requires one
+  current strict v1 shape per portable format, no runtime migration tooling,
+  truthful artifact status, tab-safe recovery, and separate behavior/refactor
+  commits. The application lock, revision check, client mutation queue, and
+  file-byte rollback transaction remain non-negotiable.
+- [CODE] 2026-07-29: `.cover` serialization now rejects unrepresentable editor
+  state; header-menu edits preserve inline marks; disabled structure controls,
+  one-block rich paste, and Typeset save baselines are corrected. Application
+  records retain only strict source/PDF artifacts as reloadable documents, and
+  sanitization is deterministic.
+- [CODE] 2026-07-29: Cover title/style recovery and live-sibling draft
+  protection now share the app-owned recovery timer. Retired autosave,
+  full-tracker, and workspace-backup compatibility paths are rejected rather
+  than migrated. Shared JSON codecs, clipboard/structure seams, cover services,
+  and application routes were extracted without moving editor caret ownership
+  or changing the application document transaction.
+- [TOOL] 2026-07-29: The required clean install, root check/test, standalone
+  font provenance gate, both app builds, landing build, server TypeScript and
+  lifecycle checks, document-workflow integrations, and headless Chromium
+  contracts passed. Live RoleFit QA found no console errors and verified header
+  popover focus plus artifact-backed document labels/actions. Layout snapshot
+  files are byte-identical to branch base `8016693`. The CI workflow is
+  committed but has no remote run because this branch was intentionally not
+  pushed.

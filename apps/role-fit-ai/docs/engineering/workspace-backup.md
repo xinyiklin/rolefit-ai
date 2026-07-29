@@ -58,13 +58,16 @@ managed backup path and never appears in `files`.
 
 Every completed restore also installs an internal `workspace-restore.json`
 generation marker. It is not portable backup content. The marker lets every
-browser origin detect that its pre-restore autosave drafts are obsolete even
-when the imported backup has no optional `browser` payload. In that case the
-browser clears drafts but preserves its existing origin-local preferences.
+browser origin detect that its own pre-restore autosave draft is obsolete even
+when the imported backup has no optional `browser` payload. The adopting tab
+also clears invalid, expired, and confirmed-dead-tab orphans, but preserves
+drafts owned by live sibling tabs and publishes a workspace-adoption event so
+those tabs can surface the change without losing their in-flight work. Existing
+origin-local preferences remain when the backup has no browser payload.
 
 On load, the browser adopts server-stored preferences in exactly two cases:
 after a restore (`source: "restore"` with an unseen `updatedAt` stamp — this
-also clears superseded autosave recovery drafts), or when the origin has no
+also performs the tab-safe draft cleanup above), or when the origin has no
 saved RoleFit preferences at all (continuity across a companion port change or
 cleared site data). Everything else is a no-op, and adoption fails open so the
 app always starts.
@@ -86,9 +89,8 @@ Candidate-authored `cover-letters/*.cover` files and their local `.trash`
 history remain standalone editable documents outside the portable workspace
 contract. Download those `.cover` variants separately when moving devices.
 
-Schema version 1 is retained only for backward-compatible restore and carries
-`applications/<id>/resume.pdf` as its sole per-application file. Schema version
-2 is the current writer: it carries the tracked application's one active
+Schema version 2 is the sole accepted and written backup shape. It carries the
+tracked application's one active
 Resume/Cover letter representation (`resume.resume` or `resume.pdf`,
 `cover.cover` or `cover.pdf`) plus validated PDF files under `attachments/`.
 Application paths whose ids are absent from `applications.json` are excluded.
@@ -135,9 +137,10 @@ Restore is replace-not-merge:
    `<workspace>.restore-backup-<stamp>-<id>` safety directory.
 7. Atomically rename the staging workspace into the configured active path. If
    this final rename fails, restore the previous workspace path.
-8. On its next load, the browser clears superseded autosave recovery drafts,
-   adopts staged preferences when the backup supplied them, and records the
-   restore stamp so adoption runs once per restore.
+8. On its next load, the browser clears its own superseded draft and dead
+   orphans, preserves live sibling drafts, publishes the adoption event, adopts
+   staged preferences when the backup supplied them, and records the restore
+   stamp so adoption runs once per restore.
 
 Unknown files from the previous workspace are not imported, but remain in the
 sibling safety copy. Safety copies are not silently pruned.

@@ -46,6 +46,8 @@ npm run build:rolefit:desktop  # compile the companion
 npm run test:rolefit:desktop   # explicit companion integration smoke
 npm run make:rolefit:desktop   # native, non-publicly-trusted test artifacts (Node 24)
 npm run test:rolefit:desktop:packaged
+npm run test:editor:browser
+npm run test:document-workflows --workspace apps/role-fit-ai
 npm run check --workspace packages/engine
 npm run check --workspace packages/editor
 npm run check --workspace apps/typeset

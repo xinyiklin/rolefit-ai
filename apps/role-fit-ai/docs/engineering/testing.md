@@ -165,10 +165,9 @@ Good server verification covers:
 - `workspace/` reads / writes stay inside the workspace; tracker and
   base-resume mutations are serialized/atomic, duplicate application ids are
   rejected, stale same-record tracker writes return `409` with the current
-  snapshot, sparse and legacy full tracker payloads preserve server-authoritative
-  unmutated rows and deterministic ordering, successful own writes retain
-  unchanged record references, legacy rows without `updatedAt` receive a stable
-  first-edit revision, and corrupt application JSON or malformed strict
+  snapshot, only sparse tracker mutations are accepted, server-authoritative
+  unmutated rows retain deterministic ordering, successful own writes retain
+  unchanged record references, and corrupt application JSON or malformed strict
   `.resume` data fails closed without destructive reseeding
 - portable workspace backup includes only app-managed resumes/history, tracker
   data, saved application `.resume` / `.cover` sources and PDF-only
@@ -188,7 +187,9 @@ Useful commands:
 
 ```bash
 npm test --workspace apps/role-fit-ai
+npm run test:document-workflows --workspace apps/role-fit-ai
 npm run test:server-lifecycle --workspace apps/role-fit-ai
+npm run test:editor:browser
 npx tsc -p apps/role-fit-ai/tsconfig.server.json --noEmit
 npm run dev:rolefit
 ```
@@ -241,6 +242,10 @@ Good frontend verification covers:
   `packages/editor/src/hooks/__evals__/resume-editor-structure.mjs` checks green
   so display/value mapping, history coalescing, and summary split/merge remain
   atomic
+- `npm run test:editor:browser` uses headless Chrome through the DevTools
+  protocol to exercise header mark preservation and undo, disabled open
+  controls, popover focus return, one-block rich document paste, the Typeset
+  explicit-save dirty baseline, and live two-tab workspace adoption
 
 Useful commands:
 

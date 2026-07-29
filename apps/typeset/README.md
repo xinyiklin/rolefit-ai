@@ -42,8 +42,8 @@ static assets, and your resume content never leaves your device.
   pausing starts a new group.
 - **Browser autosave** — status sits directly beside the filename, and the
   current document is restored from browser storage on the same browser and
-  origin. Retired browser drafts are rewritten once into the final v1 shape
-  before the strict codec restores them.
+  origin. Only the current strict v1 source shape is restored; retired browser
+  draft shapes are ignored rather than migrated at runtime.
 - **Private by design** — resume content stays in the browser and is never sent
   to an application service, even though the app is served from a hosted site.
 
@@ -67,7 +67,10 @@ Use **Save** to download a reopenable `.resume` file. Use **Export PDF** to
 download a finished `.pdf`: the owned typeset engine renders the pages and the app
 serializes them to PDF entirely in your browser (embedded fonts, vector rules, and
 clickable links), with no print dialog, document upload, or server-side conversion.
-PDF is final output, not an editable source format.
+PDF is final output, not an editable source format. A successful **Save**
+establishes the durable baseline for both content and print style, so a
+style-only change does not leave a false unsaved-leave warning after the file
+downloads.
 
 Autosave is a recovery convenience, not a replacement for saving a `.resume`
 file that can be backed up or moved to another device.
@@ -147,14 +150,17 @@ npm run preview --workspace apps/typeset
 
 # focused evals are owned by the shared packages
 npm run eval:resume-file     --workspace packages/engine
+npm run eval:layout          --workspace packages/engine
 npm run eval:editor          --workspace packages/editor
 npm run eval:pdf-font-parity --workspace packages/engine
+npm run test:editor:browser
 ```
 
 `npm run check` is the repository-wide local and CI gate: it checks both shared
 packages and both application workspaces. The focused eval commands are faster
-iteration targets for the `.resume` codec, direct-editing adapter, and PDF-font
-shaping contract respectively. The explicit workspace preview command serves
+iteration targets for the `.resume` codec, semantic layout invariants,
+direct-editing adapter, Chromium interaction contracts, and PDF-font shaping.
+The explicit workspace preview command serves
 the latest Typeset production build on port 5186. There is no separate lint
 command.
 
