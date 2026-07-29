@@ -1371,3 +1371,24 @@ bounded; app-only operational detail belongs in the affected app documentation.
   files are byte-identical to branch base `8016693`. The CI workflow is
   committed but has no remote run because this branch was intentionally not
   pushed.
+- [USER] 2026-07-29: Draft PR review found three merge blockers: tracker
+  revisions could regress, async document replacement could overwrite newer
+  local state, and editing an automatically linked contact could retain its old
+  destination. Merge also requires injected document-transaction rollback
+  evidence and green remote checks.
+- [CODE] 2026-07-29: Tracker reads and writes now require canonical ISO
+  revisions, reject retired/lossy fields and dual artifact representations, and
+  require existing upserts to advance monotonically after a matched base.
+  Resume replacement reads live content/style state at commit time; cover
+  replacement includes title changes; restore adoption is idempotent,
+  latest-response-only, and does not auto-apply a sibling document.
+- [CODE+TOOL] 2026-07-29: Derived email/URL/phone links now follow edited
+  visible text while custom label destinations remain stable, with Undo
+  restoring both. Production document rollback is fault-injected after real
+  source/PDF/deletion mutation. CI provisions pinned Python font tooling and
+  waits for Chromium termination before retry-safe profile cleanup.
+- [TOOL] 2026-07-29: The final local diff passed `npm run check`, the document
+  workflow and server-lifecycle probes, and the real-Chromium editor/recovery
+  contracts; no layout snapshot changed. At this local-verification checkpoint,
+  draft PR #97 remained unready and unmerged at remote SHA `49ac6cd`;
+  publication and required remote checks were still pending.
