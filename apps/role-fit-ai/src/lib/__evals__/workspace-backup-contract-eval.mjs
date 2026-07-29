@@ -180,17 +180,9 @@ const legacyEnvelope = {
   ...validEnvelope,
   schemaVersion: LEGACY_WORKSPACE_BACKUP_SCHEMA_VERSION
 };
-assert.equal(
-  parseWorkspaceBackupEnvelope({ ...legacyEnvelope, files: [pdfFile] }).schemaVersion,
-  LEGACY_WORKSPACE_BACKUP_SCHEMA_VERSION,
-  "schema version 1 remains readable for its original resume-PDF contract"
-);
 assert.throws(
-  () => parseWorkspaceBackupEnvelope({
-    ...legacyEnvelope,
-    files: [backupFile({ path: "applications/acme-swe/cover.cover" })]
-  }),
-  "schema version 1 does not silently acquire version 2 document paths"
+  () => parseWorkspaceBackupEnvelope({ ...legacyEnvelope, files: [pdfFile] }),
+  "the retired workspace backup schema is rejected instead of migrated"
 );
 
 const withBrowser = {
@@ -265,8 +257,8 @@ assert.equal(
   true,
   "resume history is managed"
 );
-assert.equal(isManagedWorkspaceBackupPath("base-resume.resume"), true, "a root base resume is managed");
-assert.equal(isManagedWorkspaceBackupPath("base-resume-fullstack.resume"), true, "a named root base resume is managed");
+assert.equal(isManagedWorkspaceBackupPath("base-resume.resume"), false, "a retired root resume path is unmanaged");
+assert.equal(isManagedWorkspaceBackupPath("base-resume-fullstack.resume"), false, "a retired named root path is unmanaged");
 assert.equal(isManagedWorkspaceBackupPath("applications/acme-swe/resume.pdf"), true, "an application PDF is managed");
 assert.equal(
   isManagedWorkspaceBackupPath("applications/acme-swe/attachments/sample.pdf"),

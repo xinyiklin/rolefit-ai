@@ -49,6 +49,7 @@ try {
     handleWorkspaceBaseResume,
     handleSelectBaseResume,
     handleRestoreBaseResume,
+    ensureJobWorkspace,
     readWorkspaceBaseResume
   } = await import(`../workspace.ts?workspace-probe=${Date.now()}`);
 
@@ -58,6 +59,19 @@ try {
     return res;
   }
   await mkdir(locations.workspaceDir, { recursive: true });
+  const retiredLayoutDir = join(isolatedRoot, "retired-layout");
+  await mkdir(retiredLayoutDir, { recursive: true });
+  await writeFile(join(retiredLayoutDir, "base-resume.resume"), starter, "utf8");
+  await ensureJobWorkspace(retiredLayoutDir);
+  assert.equal(
+    await readFile(join(retiredLayoutDir, "base-resume.resume"), "utf8"),
+    starter,
+    "workspace initialization ignores retired root document names"
+  );
+  await assert.rejects(
+    () => readFile(join(retiredLayoutDir, "resumes", "default.resume"), "utf8"),
+    "workspace initialization does not migrate retired document layouts"
+  );
 
   assert.equal(
     (await readWorkspaceBaseResume("default.resume", locations)).exists,
