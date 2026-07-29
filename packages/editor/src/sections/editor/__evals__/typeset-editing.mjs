@@ -27,17 +27,23 @@ import {
   typingFormatForDeletedRange
 } from "../inlineTextEditing.ts";
 import {
-  clipboardLineHeight,
-  clipboardParagraphSpacePt,
-  clipboardBlocks,
   clipboardHtmlForRanges,
-  clipboardPlainTextForRanges,
-  defaultDocumentPasteMapping,
+  clipboardPlainTextForRanges
+} from "../clipboardHtmlExport.ts";
+import {
+  clipboardLineHeight,
+  clipboardParagraphSpacePt
+} from "../clipboardHtmlImport.ts";
+import {
   decodeInlineClipboard,
   decodeSelectionClipboard,
   encodeInlineClipboard,
   encodeSelectionClipboard
-} from "../clipboardFormatting.ts";
+} from "../clipboardPrivateCodec.ts";
+import {
+  clipboardBlocks,
+  defaultDocumentPasteMapping
+} from "../documentPasteMapping.ts";
 import {
   commitField,
   historyCaretTarget,

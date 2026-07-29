@@ -3,7 +3,7 @@ import {
   encodeInlineClipboard,
   TYPESET_INLINE_CLIPBOARD_MIME,
   TYPESET_SELECTION_CLIPBOARD_MIME
-} from "./clipboardFormatting.ts";
+} from "./clipboardPrivateCodec.ts";
 
 export type RichClipboardPayload = {
   plain: string;

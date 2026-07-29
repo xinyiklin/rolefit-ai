@@ -129,15 +129,21 @@ import {
 import { useTypesetInputEvents, type QueuedIntent } from "./useTypesetInputEvents.ts";
 import {
   clipboardHtmlForRanges,
-  clipboardBlocks,
   clipboardPlainTextForRanges,
-  defaultDocumentPasteMapping,
-  decodeSelectionClipboard,
-  encodeSelectionClipboard,
-  inlineFragmentFromHtml,
-  paragraphFragmentsFromHtml,
   type ClipboardRange
-} from "./clipboardFormatting.ts";
+} from "./clipboardHtmlExport.ts";
+import {
+  inlineFragmentFromHtml,
+  paragraphFragmentsFromHtml
+} from "./clipboardHtmlImport.ts";
+import {
+  decodeSelectionClipboard,
+  encodeSelectionClipboard
+} from "./clipboardPrivateCodec.ts";
+import {
+  clipboardBlocks,
+  defaultDocumentPasteMapping
+} from "./documentPasteMapping.ts";
 import {
   readBrowserClipboard,
   writeRichClipboard,

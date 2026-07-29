@@ -20,14 +20,16 @@ import {
   type TypesetSelection
 } from "./inlineTextEditing.ts";
 import {
-  clipboardBlocks,
+  inlineFragmentFromHtml,
+  paragraphFragmentsFromHtml
+} from "./clipboardHtmlImport.ts";
+import {
   decodeInlineClipboard,
   encodeInlineClipboard,
-  inlineFragmentFromHtml,
-  paragraphFragmentsFromHtml,
   TYPESET_INLINE_CLIPBOARD_MIME,
   TYPESET_SELECTION_CLIPBOARD_MIME
-} from "./clipboardFormatting.ts";
+} from "./clipboardPrivateCodec.ts";
+import { clipboardBlocks } from "./documentPasteMapping.ts";
 
 export type QueuedIntent =
   | { kind: "insert"; text: string }

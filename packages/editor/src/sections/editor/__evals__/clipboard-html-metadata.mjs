@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-import { parsedClipboardHtml } from "../clipboardFormatting.ts";
+import { parsedClipboardHtml } from "../clipboardHtmlImport.ts";
 
 assert.deepEqual(
   parsedClipboardHtml("<b>One rich paragraph</b>", true),

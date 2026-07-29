@@ -16,9 +16,10 @@ typesetting guide when a change affects painted output or layout provenance.
   transformations. Keep it free of React and DOM reads. Its anchored tag
   scanner is a deliberate second automaton over the grammar owned by
   `lib/inlineMarksText.ts`; keep the two tag inventories in sync.
-- `clipboardFormatting.ts` owns the versioned same-editor clipboard payload,
-  the allowlisted HTML-to-inline-mark sanitizer, and model-derived external
-  HTML copy. External copy emits one block per logical field, never one per
+- `clipboardPrivateCodec.ts` owns the versioned same-editor payload.
+  `clipboardHtmlImport.ts` owns the allowlisted HTML-to-inline-mark sanitizer,
+  while `clipboardHtmlExport.ts` owns model-derived external HTML/plain copy.
+  External copy emits one block per logical field, never one per
   engine wrap line, so a destination editor reflows the paragraph to its own
   measure. Paragraph before/after spacing stays CSS block margins; never encode
   it as a blank paragraph, which changes document structure in Google Docs.
