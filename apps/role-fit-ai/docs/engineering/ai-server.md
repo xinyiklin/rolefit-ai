@@ -625,11 +625,11 @@ In the response:
   the source of truth. `.txt` / `.md` / `.csv` (or pasted) resumes are parsed once
   into that model; PDF-only sources must be pasted as extracted text. There is no
   DOCX or LaTeX import/export.
-- `.resume` is the portable save format for resume data: the strict shared
-  Typeset v2 envelope
-  (`{ format: "typeset-resume", schemaVersion: 2, document, style }`) written and
-  read entirely client-side (like PDF export — no server route). Version 1
-  remains readable and is upgraded on the next save. The
+- `.resume` is the portable save format for resume data: the sole strict shared
+  Typeset v1 envelope
+  (`{ format: "typeset-resume", schemaVersion: 1, document, style }`) written and
+  read entirely client-side (like PDF export — no server route). Retired wire
+  shapes are accepted only by the one-time workspace rewrite command. The
   `@typeset/engine` codec owns exact-key validation, strips session ids at the
   file boundary, restores fresh ids on load, and includes persistent document
   style while excluding view-only zoom and spell-check preferences.

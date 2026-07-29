@@ -31,11 +31,29 @@ export type ResumeSectionData = {
   items: ResumeEntry[];
 };
 
-export type ResumeData = {
-  name: string;
+export type DocumentHeader = {
+  // Visibility is presentation state with structural consequences: hiding a
+  // header preserves its exact editable fields while omitting it from layout.
+  visible: boolean;
+  // null removes the field; an empty string keeps a blank, caret-bearing name.
+  name: string | null;
+  // Empty strings are real structural contact fields, not absent values.
   contact: string[];
+};
+
+export type ResumeData = {
+  // null means the document has no header structure at all.
+  header: DocumentHeader | null;
   sections: ResumeSectionData[];
 };
+
+export function newDocumentHeader(): DocumentHeader {
+  return { visible: true, name: "", contact: [] };
+}
+
+export function normalizeDocumentHeader(header: DocumentHeader | null): DocumentHeader | null {
+  return header && header.name === null && header.contact.length === 0 ? null : header;
+}
 
 // Session-unique ids are deliberately opaque and disposable. Opening a file
 // creates a fresh set rather than trusting user-controlled ids from disk.

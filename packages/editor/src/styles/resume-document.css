@@ -315,6 +315,26 @@
   z-index: 1;
 }
 
+/* A blank structural name remains a real zero-width field. This hint is
+   screen-only generated content: it is absent from value space, selection,
+   copy, layout measurement, print, and PDF output. */
+.tsd-doc--editable [data-tsdf="name"][data-tsde="1"]::after {
+  position: absolute;
+  inset-inline-start: 0;
+  top: 50%;
+  width: max-content;
+  transform: translateY(-50%);
+  color: var(--ink-faint);
+  content: "Type your name";
+  font-family: var(--font-ui);
+  font-size: 0.72rem;
+  font-style: normal;
+  font-weight: 500;
+  line-height: 1;
+  pointer-events: none;
+  user-select: none;
+}
+
 /* The engine line band IS the selection paint, so the browser's own must be off
    for EVERYTHING the painter emits — not only field spans. A contact divider,
    like any run the engine owns but no field does (it belongs to no value and

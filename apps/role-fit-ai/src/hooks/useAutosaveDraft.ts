@@ -1,58 +1,23 @@
 import { useEffect, useRef, useState } from "react";
 import type { ResumeData } from "@typeset/engine/lib/resumeData.ts";
-import { serializeResumeData } from "../lib/resumeText";
+import type { DocStyle } from "@typeset/engine/lib/documentStyle.ts";
+import { serializeResumeFile } from "@typeset/engine/lib/resumeFile.ts";
 import type { StageAiUsage } from "../lib/aiUsage";
+import {
+  parseResumeAutosaveDraft,
+  type AutosavedDraft
+} from "../lib/resumeAutosaveDraft.ts";
 import { clearTabDraft, recoverTabDraft, saveTabDraft } from "../lib/autosaveDraftStorage.ts";
+
+export { parseResumeAutosaveDraft };
+export type { AutosavedDraft };
 
 // The RESUME recovery draft. Tab scoping, live-sibling protection, orphan
 // migration, and expiry live in lib/autosaveDraftStorage.ts, which the cover
 // letter's draft shares; only the payload below is resume-specific.
-// Stores the user's serialized resume text, timestamp, light job-target label,
+// Stores strict editable resume source, a timestamp, a light job-target label,
 // and optional recovery-only raw job text / AI-usage snapshot. API keys and
 // provider credentials are never stored here.
-
-export type AutosavedDraft = {
-  // Serialized resume text (plain text, same format as export/scoring).
-  resumeText: string;
-  // ISO timestamp of the last autosave.
-  savedAt: string;
-  // Light label for the job target — only the distilled role/company strings,
-  // never the full JD body.
-  jobLabel: string;
-  // Per-stage AI usage snapshot and raw pre-distill JD text, carried so a
-  // reload doesn't lose them while the resume draft itself is being recovered.
-  // Both optional/omittable: an older saved draft (or one from a session that
-  // never captured them) simply restores without these fields.
-  pipelineAiUsage?: Record<string, StageAiUsage>;
-  jobRawText?: string;
-  // Compact hash of the job target's identity (URL + text prefix — see
-  // useDuplicateGuard). Restores gate the provenance fields on it, because the
-  // jobLabel alone (role · company) collides across reposts of the same role.
-  // No JD text is stored, only the hash.
-  jobKeyHash?: string;
-};
-
-function parseDraft(raw: string | null): AutosavedDraft | null {
-  if (!raw) return null;
-  try {
-    const parsed = JSON.parse(raw) as Partial<AutosavedDraft>;
-    if (typeof parsed.resumeText !== "string" || !parsed.resumeText.trim()) return null;
-    if (typeof parsed.savedAt !== "string") return null;
-    if (!Number.isFinite(Date.parse(parsed.savedAt))) return null;
-    return {
-      resumeText: parsed.resumeText,
-      savedAt: parsed.savedAt,
-      jobLabel: typeof parsed.jobLabel === "string" ? parsed.jobLabel : "",
-      ...(parsed.pipelineAiUsage && typeof parsed.pipelineAiUsage === "object"
-        ? { pipelineAiUsage: parsed.pipelineAiUsage }
-        : {}),
-      ...(typeof parsed.jobRawText === "string" ? { jobRawText: parsed.jobRawText } : {}),
-      ...(typeof parsed.jobKeyHash === "string" ? { jobKeyHash: parsed.jobKeyHash } : {})
-    };
-  } catch {
-    return null;
-  }
-}
 
 // Clear THIS tab's resume draft (call on Apply / base-resume Save so a
 // recovered draft doesn't reappear after the edits are safely persisted
@@ -62,11 +27,12 @@ export function clearAutosaveDraft(): void {
 }
 
 export function recoverAutosaveDraft(): AutosavedDraft | null {
-  return recoverTabDraft("resume", parseDraft);
+  return recoverTabDraft("resume", parseResumeAutosaveDraft);
 }
 
 type UseAutosaveDraftArgs = {
   editedResume: ResumeData | null;
+  docStyle: DocStyle;
   dirty: boolean;
   // A short label for the current job target (role + company) — stored as
   // context only, never the full JD body.
@@ -87,7 +53,7 @@ type UseAutosaveDraftArgs = {
 // 1200 ms debounce balances responsiveness against write frequency.
 export type DraftAutosaveState = "idle" | "pending" | "saved" | "error";
 
-export function useAutosaveDraft({ editedResume, dirty, jobLabel, pipelineAiUsage, jobRawText, getJobKeyHash }: UseAutosaveDraftArgs): DraftAutosaveState {
+export function useAutosaveDraft({ editedResume, docStyle, dirty, jobLabel, pipelineAiUsage, jobRawText, getJobKeyHash }: UseAutosaveDraftArgs): DraftAutosaveState {
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [state, setState] = useState<DraftAutosaveState>("idle");
   // Latest usage/raw-text read inside the debounced write without re-triggering
@@ -111,23 +77,29 @@ export function useAutosaveDraft({ editedResume, dirty, jobLabel, pipelineAiUsag
     setState("pending");
     timerRef.current = setTimeout(() => {
       timerRef.current = null;
-      const resumeText = serializeResumeData(editedResume);
-      // Nothing to persist (all content deleted): settle the indicator instead
-      // of leaving it on "pending" for a save that will never happen.
-      if (!resumeText.trim()) {
-        setState("idle");
-        return;
+      try {
+        const resumeSource = serializeResumeFile(editedResume, docStyle);
+        const {
+          pipelineAiUsage: usage,
+          jobRawText: rawText,
+          getJobKeyHash: getHash
+        } = latestExtras.current;
+        const saved = saveTabDraft("resume", {
+          resumeSource,
+          savedAt: new Date().toISOString(),
+          jobLabel,
+          ...(usage && Object.keys(usage).length
+            ? { pipelineAiUsage: usage }
+            : {}),
+          ...(rawText ? { jobRawText: rawText } : {}),
+          ...(getHash ? { jobKeyHash: getHash() } : {})
+        });
+        setState(saved ? "saved" : "error");
+      } catch {
+        // Invalid in-memory document state must not escape an async timer or
+        // advertise a recovery draft the strict parser cannot reopen.
+        setState("error");
       }
-      const { pipelineAiUsage: usage, jobRawText: rawText, getJobKeyHash: getHash } = latestExtras.current;
-      const saved = saveTabDraft("resume", {
-        resumeText,
-        savedAt: new Date().toISOString(),
-        jobLabel,
-        ...(usage && Object.keys(usage).length ? { pipelineAiUsage: usage } : {}),
-        ...(rawText ? { jobRawText: rawText } : {}),
-        ...(getHash ? { jobKeyHash: getHash() } : {})
-      });
-      setState(saved ? "saved" : "error");
     }, 1200);
 
     return () => {
@@ -136,7 +108,7 @@ export function useAutosaveDraft({ editedResume, dirty, jobLabel, pipelineAiUsag
         timerRef.current = null;
       }
     };
-  }, [editedResume, dirty, jobLabel]);
+  }, [editedResume, docStyle, dirty, jobLabel]);
 
   return state;
 }

@@ -60,7 +60,7 @@ export const STYLE_FIELD_MARK_DEFAULTS: Record<StyleTextField, Record<FieldMark,
 
 function valuesForStyleField(data: ResumeData, field: StyleTextField): string[] {
   if (field === "contact") {
-    return data.contact.filter((value) => stripInlineMarks(value).trim());
+    return (data.header?.contact ?? []).filter((value) => stripInlineMarks(value).trim());
   }
   if (field === "sectionHeading") {
     return data.sections.map((section) => section.heading).filter((value) => stripInlineMarks(value).trim());
@@ -87,13 +87,14 @@ function mapStyleField(
   transform: (value: string) => string
 ): ResumeData {
   if (field === "contact") {
+    if (!data.header) return data;
     let contactChanged = false;
-    const contact = data.contact.map((value) => {
+    const contact = data.header.contact.map((value) => {
       const next = transform(value);
       if (next !== value) contactChanged = true;
       return next;
     });
-    return contactChanged ? { ...data, contact } : data;
+    return contactChanged ? { ...data, header: { ...data.header, contact } } : data;
   }
   let changed = false;
   const sections = data.sections.map((section) => {
@@ -209,7 +210,15 @@ export function globalAlignmentState(resume: ResumeData, style: DocumentStyle) {
   );
   return {
     body: commonAlignment(bodyFields, style.bodyAlign),
-    header: commonAlignment([resume.name, ...resume.contact], style.headerAlign),
+    header: commonAlignment(
+      resume.header
+        ? [
+            ...(resume.header.name === null ? [] : [resume.header.name]),
+            ...resume.header.contact
+          ]
+        : [],
+      style.headerAlign
+    ),
     heading: commonAlignment(resume.sections.map((section) => section.heading), style.headingAlign)
   };
 }

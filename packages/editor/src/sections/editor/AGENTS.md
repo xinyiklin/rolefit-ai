@@ -31,6 +31,10 @@ typesetting guide when a change affects painted output or layout provenance.
   through one structural editor action rather than hard breaks inside one
   field. Keep all other arbitrary clipboard CSS, scripts, event attributes,
   unsupported fonts, and invalid links out of document state.
+  Attach the private selection MIME only when every selected cover-letter field
+  is representable. A header plus paragraphs is a full-document payload; never
+  consume only its header or silently fall back to a lossy partial private
+  import.
 - `selectionHighlight.ts` owns the visual selection overlay. It coalesces the
   browser range fragments per engine line and paints one text-bounded band.
   Consecutive selected lines tile through their complete vertical junction, so
@@ -127,12 +131,17 @@ typesetting guide when a change affects painted output or layout provenance.
   line one resolved to no field at all, and the toolbar greyed out on an
   ordinary selection.
 - `useTypesetInputEvents.ts` intercepts browser input and keyboard intents.
-- `useTypesetStructure.ts` owns add/remove/reorder commands and drag state.
+- `useTypesetStructure.ts` owns add/remove/reorder commands and drag state. Its
+  `headerCommands` bundle must keep stable identity: caret-restoration callbacks
+  depend on it, and dependency churn can consume an in-flight caret against the
+  pre-edit DOM.
 - `useTypesetOverlayAnchors.ts` owns overlay geometry: page origins inside the
   wrapper, pointer-hover block targeting, and the caret-active field anchor.
 - `typesetStructure.ts` derives pure anchors, extents, and drop slots from the
   engine layout.
 - `TypesetStructureOverlay.tsx` paints drag affordances outside the editable DOM.
+  It never paints header actions; create, show, hide, and remove stay in the
+  toolbar, keyboard, and right-click command surfaces.
 - `useTypesetContextMenu.tsx` builds contextual document commands over the
   editor's shared command surface; `TypesetContextMenu.tsx` only renders the menu.
 - `useTypesetLinkCard.ts` resolves the link the CARET is in (or the selection
@@ -144,9 +153,17 @@ typesetting guide when a change affects painted output or layout provenance.
 - The engine-painted DOM is the editing surface, but the browser never commits
   mutations directly. Prevent the native edit, transform the serialized field,
   dispatch a structured action, repaint, and restore the caret.
+- Every paste path is a mutation intent, including asynchronous Clipboard API
+  reads and same-editor rich payloads. Queue it while the commit gate is closed,
+  then resolve and apply it against the post-paint selection; bypassing the gate
+  can target stale DOM and replay a caret against the wrong document state.
 - Keep display indexes and serialized-value indexes explicit. Inline tags are
   value-space metadata and must remain balanced across insert, delete, split,
   merge, copy, paste, undo, and redo.
+- Contact history restoration must compare structure before field values. A
+  missing trailing contact and a restored empty contact both read as `""`;
+  when a snapshot grows the contact list, restore the caret at offset zero of
+  the first added slot so it lands after the engine-owned preceding divider.
 - Line height and paragraph before/after spacing use the shared inline grammar.
   A caret or partial range expands to its painted visual line(s); selecting a
   whole paragraph targets the complete field. Each line-height override changes
@@ -276,11 +293,14 @@ typesetting guide when a change affects painted output or layout provenance.
   A menu item must never be a second implementation of a toolbar command: the
   menu kept editing one field at a time for a whole slice after the toolbar had
   learned to span them, and nothing failed loudly.
-- Every host gets the right-click menu. `structureEditing` gates only the
-  structural group (add/delete section, entry, bullet, skills row) — a cover
-  letter has no resume structure but still needs clipboard, emphasis, link, and
-  history commands, and gating the whole menu on that flag left it with the
-  browser's native menu instead.
+- Every host gets the right-click menu. `structureCapabilities.header` and
+  `.sections` gate their own structural groups independently: cover letters
+  expose name/contact structure without resume section, entry, or bullet
+  actions, while clipboard, emphasis, link, and history commands remain shared.
+- A multi-block paste into a header field never guesses structure. It opens the
+  anchored mapper, and cover letters offer a separate `Paste as document…`
+  mapper for explicit name/contact/body assignment. Direct Typeset clipboard
+  data may restore its exact private header block without that heuristic gate.
 - Structural menu commands target the field the POINTER was over, not the
   selection, so right-clicking a bullet offers to delete that bullet.
 - The link card follows the SELECTION, never the pointer: it shows for a caret
@@ -331,6 +351,12 @@ typesetting guide when a change affects painted output or layout provenance.
 - The painter's line-separator span (`data-tsds`) is not field content. Caret
   placement, line-edge movement, and the selection rectangle must exclude it, or
   End parks the caret in text that maps to no field.
+- Deferring an automatic link while its trailing caret is being typed repaints
+  that field between `<a>` and `<span>`. Never perform that swap while a primary
+  pointer selection is in flight: replacing the range's anchor node between
+  mousedown and mousemove collapses a backward drag from the link edge. Preserve
+  the current suppression until mouseup, then restore the final single- or
+  multi-field range across the settled paint.
 - Enter follows the field's grammar. Prose paragraphs (summary sections, which is
   how a cover letter is modelled) always split, including from an empty
   paragraph, so an author can open a blank line between blocks. List rows
@@ -367,6 +393,12 @@ typesetting guide when a change affects painted output or layout provenance.
   cover-letter layout while retaining the same edit/history/caret engine.
 - Keep structural actions in the reducer/history path. A pointer drag, keyboard
   move, context command, or Enter/Backspace edit must remain one undoable action.
+- Continuous same-field text input coalesces through a rolling 700 ms window,
+  but typing, backward deletion, and forward deletion are distinct groups.
+  Selection replacement, formatting, paste/cut, structural edits, field changes,
+  caret moves, pauses, and undo/redo close the active group. One undo/redo
+  restores or reapplies the complete held-key deletion burst. Background
+  persistence may clear dirty state but never split that user transaction.
 - Use refs for transient selection, replay, drag, and caret state that changes on
   hot input paths; derive visible toolbar state instead of duplicating it.
 

@@ -11,6 +11,7 @@
  */
 import { useEffect, useRef, useState } from "react";
 
+import { parseCoverLetterFile } from "@typeset/engine/lib/coverLetter.ts";
 import { clearTabDraft, recoverTabDraft, saveTabDraft } from "../lib/autosaveDraftStorage.ts";
 import type { DraftAutosaveState } from "./useAutosaveDraft";
 
@@ -32,6 +33,7 @@ function parseDraft(raw: string | null): CoverLetterAutosavedDraft | null {
   try {
     const parsed = JSON.parse(raw) as Partial<CoverLetterAutosavedDraft>;
     if (typeof parsed.coverPayload !== "string" || !parsed.coverPayload.trim()) return null;
+    parseCoverLetterFile(parsed.coverPayload);
     if (typeof parsed.savedAt !== "string") return null;
     if (!Number.isFinite(Date.parse(parsed.savedAt))) return null;
     return {

@@ -38,8 +38,7 @@ assert.equal(defaultTailorMode(section("s", "Education & Training", "standard", 
 
 // ── defaultTailorModes: off is the implicit absent-key default ─────────────
 const modesResume = {
-  name: "Jordan Lee",
-  contact: [],
+  header: { visible: true, name: "Jordan Lee", contact: [] },
   sections: [
     section("sum", "Summary", "summary", []),
     section("skl", "Technical Skills", "skills", []),
@@ -56,12 +55,15 @@ assert.deepEqual(
   "off sections (Hobbies, the blank heading) are absent keys, not explicit 'off' entries"
 );
 assert.deepEqual(defaultTailorModes(null), {}, "a null resume yields an empty mode map, not a throw");
-assert.deepEqual(defaultTailorModes({ name: "", contact: [], sections: [] }), {}, "an empty resume yields an empty mode map");
+assert.deepEqual(defaultTailorModes({ header: null, sections: [] }), {}, "an empty resume yields an empty mode map");
 
 // ── buildTailorScope: the three disjoint buckets ────────────────────────────
 const resume = {
-  name: "Jordan Lee",
-  contact: ["jordan@example.com"],
+  header: {
+    visible: true,
+    name: "Jordan Lee",
+    contact: ["jordan@example.com"]
+  },
   sections: [
     section("sum", "Summary", "summary", [entry("sum-1", { bullets: ["Backend engineer with 5 years of experience."] })]),
     section("exp", "Experience", "standard", [
@@ -92,7 +94,7 @@ assert.deepEqual(scopeAllOff.contextSections, [], "no context ids -> the read-on
 assert.deepEqual(scopeAllOff.locked.omittedSections, ["Summary", "Experience", "Education", "Awards", "Hobbies"], "every real heading is recorded as omitted when nothing is tailored or included");
 
 // Empty resume (no sections at all).
-const emptyResume = { name: "", contact: [], sections: [] };
+const emptyResume = { header: null, sections: [] };
 const scopeEmpty = buildTailorScope(emptyResume, ["sum"], ["edu"]);
 assert.deepEqual(scopeEmpty, { version: 1, locked: { omittedIdentity: true, omittedContact: true, omittedSections: [] }, sections: [], contextSections: [] }, "an empty resume yields an empty (but well-formed) scope, ignoring ids that don't exist");
 
@@ -120,8 +122,7 @@ assert.ok(editableOnlyText.includes("SUMMARY") && editableOnlyText.includes("EXP
 // Skills section line shape: "Label: skills" when a label is present, bare skills line otherwise.
 const skillsScope = buildTailorScope(
   {
-    name: "",
-    contact: [],
+    header: null,
     sections: [
       section("skl", "Technical Skills", "skills", [
         entry("skl-1", { titleLeft: "Languages", subtitleLeft: "TypeScript, Python, Go" }),

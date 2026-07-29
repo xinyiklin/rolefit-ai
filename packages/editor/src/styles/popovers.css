@@ -193,6 +193,68 @@
   font-weight: 590;
 }
 
+.structure-popover__field-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s2);
+}
+
+.structure-popover__field-head button,
+.structure-popover__empty-state button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 28px;
+  padding: 3px 8px;
+  color: var(--accent-deep);
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-veil);
+  border-radius: var(--r-md);
+  font: 620 0.68rem/1 var(--font-ui);
+}
+
+.structure-popover__field-head button.is-danger {
+  width: 28px;
+  padding: 0;
+  color: var(--ink-muted);
+  background: transparent;
+  border-color: var(--hairline);
+}
+
+.structure-popover__field-head button.is-danger:hover,
+.structure-popover__field-head button.is-danger:focus-visible {
+  color: var(--danger);
+  background: var(--danger-soft);
+  border-color: var(--danger-soft);
+  outline: none;
+}
+
+.structure-popover__notice {
+  margin: 0;
+  padding: 7px 8px;
+  color: var(--ink-muted);
+  background: var(--card-soft);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-md);
+  font-size: 0.71rem;
+  line-height: 1.4;
+}
+
+.structure-popover__empty-state {
+  display: grid;
+  justify-items: start;
+  gap: var(--s2);
+}
+
+.structure-popover__empty-state p {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 0.72rem;
+  line-height: 1.4;
+}
+
 .structure-popover__field input,
 .structure-popover__contact input {
   width: 100%;

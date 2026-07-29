@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
+import { DOC_STYLE_DEFAULTS } from "@typeset/engine/lib/documentStyle.ts";
+
 const values = new Map();
 globalThis.localStorage = {
   getItem: (key) => values.get(key) ?? null,
@@ -73,6 +75,10 @@ assert.deepEqual(
 );
 
 const hook = readFileSync(new URL("../../hooks/useCoverLetterEditor.ts", import.meta.url), "utf8");
+const coverLetter = readFileSync(
+  new URL("../../../../../packages/engine/src/lib/coverLetter.ts", import.meta.url),
+  "utf8"
+);
 assert.match(
   hook,
   /resolveCoverLetterStartup\([\s\S]*loadLastCoverLetterName\(\)/,
@@ -92,6 +98,30 @@ assert.match(
   hook,
   /const COVER_LETTER_STARTER = `\[Date\]\r?\n\r?\nDear \[Hiring manager\],[\s\S]*\r?\n\r?\nSincerely,/,
   "the starter stays plain text so the shared parser applies the default to every paragraph"
+);
+
+// Spell-check is off until the writer asks for it, and stays however they left
+// it. It was previously forced on by the shared adapter's default view, which
+// also meant a reload undid turning it off.
+assert.match(
+  hook,
+  /SPELL_CHECK_STORAGE_KEY[\s\S]*localStorage\.getItem\(SPELL_CHECK_STORAGE_KEY\) === "on"/,
+  "the letter's spell-check preference is read back from storage on load"
+);
+assert.match(
+  hook,
+  /localStorage\.setItem\(\s*SPELL_CHECK_STORAGE_KEY,\s*style\.spellCheck \? "on" : "off"\s*\)/,
+  "toggling spell-check persists it rather than lasting only for the session"
+);
+assert.equal(
+  DOC_STYLE_DEFAULTS.spellCheck,
+  false,
+  "a document starts with spell-check off in both editors"
+);
+assert.doesNotMatch(
+  coverLetter,
+  /spellCheck: true/,
+  "no adapter default turns spell-check back on"
 );
 
 console.log("Cover-letter remembered-variant preferences passed");

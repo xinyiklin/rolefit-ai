@@ -10,7 +10,15 @@ remain in `PRODUCT.md` and `DESIGN.md`.
   session ids.
 - `documentStyle.ts` owns the pure persisted document-style contract, defaults,
   bounds, spacing presets, coercion for browser preferences, and conversion that
-  excludes local zoom.
+  excludes local zoom. The contract is composed from three slices so each
+  consumer can name what it reads: `PageStyle` (face, body size, leading,
+  alignment, margins), `HeaderStyle` (the letterhead and its gaps), and
+  `ResumeBodyStyle` (sections, entries, bullets). `DocumentStyle` is all three
+  — an unchanged field set, still the `.resume` contract — and
+  `CoverLetterDocumentStyle` is page + header, which is everything a letter's
+  layout reads. A letter must never inherit `ResumeBodyStyle` values from the
+  resume defaults; `coverLetter.ts` states them as inert zeroes for the shared
+  editor's sake alone.
 - `documentTypography.ts` owns shared document-size scale math used by domain,
   editor, and typesetting consumers.
 - `resumeFile.ts` owns portable `.resume` validation, serialization, versioning,
@@ -31,9 +39,10 @@ remain in `PRODUCT.md` and `DESIGN.md`.
   encoding/decoding.
 - `pageMargins.ts` owns page-margin types, bounds, presets, and normalization.
 - `download.ts` owns the one browser file-download side effect (object URL,
-  anchor click, deferred revoke) used by `.resume` saves and PDF export. It is
-  the deliberate DOM exception in this directory; keep every other module
-  DOM-free.
+  anchor click, deferred cleanup) used by `.resume` saves and PDF export. Keep
+  its anchor and object URL alive until Chromium has consumed the requested
+  filename instead of falling back to the blob UUID. It is the deliberate DOM
+  exception in this directory; keep every other module DOM-free.
 
 Extend the existing owner rather than adding another model, parser, mark
 grammar, margin table, or link-normalization path.
@@ -61,12 +70,22 @@ grammar, margin table, or link-normalization path.
 - `.resume` is the resume open/save format and `.cover` is the cover-letter
   open/save format. The two strict schemas do not masquerade as one another.
   PDF is final output.
-- Current saves use `format: "typeset-resume"` and `schemaVersion: 2`.
-  Version 1 files remain readable and migrate to version 2 on the next save.
+- **Pre-release policy (see root `CONTINUITY.md`, in force until the user lifts
+  it):** one live shape per format, always `schemaVersion: 1`. A change to a
+  stored shape rewrites the existing documents through a throwaway developer
+  script that is not committed; the parsers here gain no compatibility branch,
+  no default for an absent field, and no second accepted shape. Spacing values
+  are absolute points and `style.spacingModel: "absolute"` is required, so a
+  document from before that change fails loudly instead of being reinterpreted.
+- Current saves use `format: "typeset-resume"` and the sole
+  `schemaVersion: 1`, with an optional explicit header object. Retired
+  name/contact and schema-v2 shapes are migration-tool inputs only, never
+  runtime parser aliases.
 - Current cover-letter saves use `format: "typeset-cover-letter"` and
-  the sole `schemaVersion: 1`, with an optional name/contact header, ordered
+  the sole `schemaVersion: 1`, with an optional explicit header, ordered
   paragraphs, and cover-letter print style. Reject every other cover-letter
-  version; there is no legacy cover-letter migration path.
+  version at runtime; retired shapes are inputs only to the explicit workspace
+  rewrite tool.
 - Cover-letter paragraph rhythm is paragraph content, not document style.
   Newly parsed paragraphs receive explicit 8pt `space-before` formatting, and
   before/after marks remain the only persisted paragraph-spacing controls.
@@ -97,7 +116,7 @@ For model, transform, or codec changes:
    changes or `npm run eval:cover-letter-file --workspace packages/engine` for
    `.cover` changes, plus the smallest probe for other pure functions.
 2. Verify the current cover-letter v1 save/open round trip without session ids;
-   for resumes, also verify the current v2 round trip and v1 migration path.
+   for resumes, verify the sole current v1 round trip without session ids.
 3. Check unsupported schema-version rejection; no prototype-version migration
    path should exist.
 4. Check malformed, unknown-field, invalid-bound, and

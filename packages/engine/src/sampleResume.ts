@@ -40,8 +40,11 @@ function section(heading: string, type: ResumeSectionData["type"], items: Resume
 // so a new user types over guidance instead of clearing a stranger's resume.
 export function buildStarterResume(): ResumeData {
   return {
-    name: "Your Name",
-    contact: ["you@email.com", "linkedin.com/in/yourprofile", "github.com/yourusername", "City, State"],
+    header: {
+      visible: true,
+      name: "Your Name",
+      contact: ["you@email.com", "linkedin.com/in/yourprofile", "github.com/yourusername", "City, State"]
+    },
     sections: [
       section("Education", "standard", [
         entry("University Name", "B.S. in Computer Science", "Aug. 2022 – May 2026", "City, State", [])

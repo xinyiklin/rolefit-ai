@@ -46,6 +46,8 @@ npm run eval:cover-letter-file --workspace packages/engine
 npm run eval:pdf-font-parity --workspace packages/engine
 npm run fonts:check --workspace packages/engine
 npm run eval:editor --workspace packages/editor
+npm run workspace:rewrite-resume-v1 -- --dry-run
+npm run workspace:rewrite-cover-v1 -- --dry-run
 npm run test:server-lifecycle --workspace apps/role-fit-ai
 npm run test:desktop:vault --workspace apps/role-fit-ai
 npm run test:desktop:security --workspace apps/role-fit-ai
@@ -119,7 +121,7 @@ terminating an unrelated process.
 - `packages/engine/src/typeset/metrics.gen.ts` is committed generated output;
   never hand-edit it.
 - `npm run fonts:check --workspace packages/engine` reproduces and compares both
-  WOFF2/metrics outputs and the PDF-embeddable OTF/TTF siblings.
+  WOFF2/metrics outputs and the PDF-embeddable TrueType siblings.
 - App `dist/` directories and `node_modules/` are generated and untracked.
 - `apps/role-fit-ai/dist-landing/` is the generated isolated public-site
   artifact. Pages uploads it instead of the companion-packaged `dist/` app.

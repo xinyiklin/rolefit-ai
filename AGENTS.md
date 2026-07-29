@@ -112,10 +112,10 @@ can verify the move.
 - `ResumeData` is the canonical resume model in both apps and the shared
   editor's in-memory document shape. RoleFit cover letters adapt an ordered
   paragraph document into that shape without exposing resume sections.
-- `.resume` uses `format: "typeset-resume"` and `schemaVersion: 2`; resume
-  version 1 remains readable and is upgraded on save. `.cover` uses
-  `format: "typeset-cover-letter"` and its sole current `schemaVersion: 1`;
-  no alternate cover-letter schema is accepted. Each is the strict portable
+- `.resume` uses `format: "typeset-resume"` and its sole current
+  `schemaVersion: 1`. `.cover` uses `format: "typeset-cover-letter"` and its
+  sole current `schemaVersion: 1`. Both documents persist an explicit optional
+  header object; no alternate runtime schema is accepted. Each is the strict portable
   editable format for its own document kind. PDF is final output.
 - Session ids never cross the file boundary. View-only preferences such as zoom
   and spell-check never enter `.resume` or `.cover` files.

@@ -34,8 +34,8 @@ never import each other.
 | Concern | Owner | Notes |
 | --- | --- | --- |
 | `ResumeData`, constructors, inline marks, links | `packages/engine/src/lib/` | Canonical domain; no app copies. |
-| `.resume` validation and serialization | `packages/engine/src/lib/resumeFile.ts` | Strict `typeset-resume`, schema v2 with v1 read compatibility; physical margins are persisted without UI preset identity. |
-| Cover-letter adapter and `.cover` codec | `packages/engine/src/lib/coverLetter.ts` | Strict `typeset-cover-letter` schema v1 with optional shared name/contact header; no alternate cover-letter schema is accepted. |
+| `.resume` validation and serialization | `packages/engine/src/lib/resumeFile.ts` | Sole strict `typeset-resume` schema v1 with an optional explicit header; physical margins are persisted without UI preset identity. |
+| Cover-letter adapter and `.cover` codec | `packages/engine/src/lib/coverLetter.ts` | Sole strict `typeset-cover-letter` schema v1 with the same optional explicit header; no alternate runtime schema is accepted. |
 | Document style and typography values | `packages/engine/src/lib/` | Persisted print state; view-only state excluded from files. |
 | Font assets and generated metrics | `packages/engine/fonts/`, `packages/engine/scripts/` | Consumers mirror fonts and pass their deployment-aware asset base to PDF loading. |
 | Measurement, line breaking, pagination | `packages/engine/src/typeset/` | Shared deterministic core with distinct resume and plain-paragraph composition streams. |

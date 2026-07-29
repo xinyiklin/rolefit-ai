@@ -37,9 +37,13 @@ static assets, and your resume content never leaves your device.
 - **Portable source files** — `.resume` preserves editable content and every
   print-affecting style setting.
 - **Real undo and redo** — text and structural edits share bounded history with
-  typing coalescing and caret restoration.
+  caret restoration. Continuous typing and held Backspace/Delete bursts each
+  undo as a group; changing direction, moving the caret, changing fields, or
+  pausing starts a new group.
 - **Browser autosave** — status sits directly beside the filename, and the
-  current document is restored from browser storage on the same browser and origin.
+  current document is restored from browser storage on the same browser and
+  origin. Retired browser drafts are rewritten once into the final v1 shape
+  before the strict codec restores them.
 - **Private by design** — resume content stays in the browser and is never sent
   to an application service, even though the app is served from a hosted site.
 
@@ -49,15 +53,15 @@ static assets, and your resume content never leaves your device.
 versioned JSON document with:
 
 - `format: "typeset-resume"`
-- `schemaVersion: 2`
+- `schemaVersion: 1`
 - structured resume content
 - print-affecting typography, alignment, margin, and spacing settings
 
 Disposable editor ids are regenerated when a file opens, and zoom and the
 spell-check toggle are kept as local viewing preferences rather than written
 into the document. Imports are validated field by field and limited to 2 MB. Other source-document formats are
-not accepted. Version 1 files remain readable and are upgraded to version 2 on
-the next save; pre-release prototype formats are intentionally unsupported.
+not accepted. Retired name/contact and schema-v2 prototype shapes are
+intentionally unsupported by the runtime parser.
 
 Use **Save** to download a reopenable `.resume` file. Use **Export PDF** to
 download a finished `.pdf`: the owned typeset engine renders the pages and the app
@@ -206,10 +210,12 @@ in `packages/engine/fonts/` and regenerates `src/typeset/metrics.gen.ts` from
 pinned, checksum-verified sources — these fonts are the source of truth, and each
 app mirrors them into its own `public/fonts/` at build time. Its header records
 the reproducible Python tooling; run it with `--check` to verify those committed
-outputs. `generate_pdf_fonts.py` beside it derives the matching OTF/TTF files
-consumed by the client-side PDF emitter; both generators support non-destructive
-verification through `npm run fonts:check --workspace packages/engine`. Both
-anchor their paths to the package root, so they run from any working directory.
+outputs. `generate_pdf_fonts.py` beside it derives matching TrueType files
+consumed by the client-side PDF emitter, including metric-preserving quadratic
+conversions of Latin Modern's CFF web outlines; both generators support
+non-destructive verification through
+`npm run fonts:check --workspace packages/engine`. Both anchor their paths to
+the package root, so they run from any working directory.
 After a font-pipeline change, regenerate both formats and run the font-parity
 eval. Source Serif 4, Source Sans 3, Arimo, and Carlito use the SIL Open Font
 License stored in `fonts/SourceSerif4-OFL.txt`, `fonts/SourceSans3-OFL.txt`,

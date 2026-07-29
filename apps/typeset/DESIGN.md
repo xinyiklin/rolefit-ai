@@ -290,7 +290,9 @@ and do not enter document history.
 
 The centered engine-rendered page is the signature component. It remains white,
 selectable, directly editable, and surrounded by enough neutral space to reveal
-page boundaries. Structure controls appear only on focus or hover.
+page boundaries. Reorder grips appear only for the active or hovered
+reorderable block. Header structure stays in toolbar, keyboard, and right-click
+commands and never floats over the document.
 
 ## 6. Do's and Don'ts
 

@@ -47,6 +47,10 @@ const tc = parseResumeData(titleCase);
 const ac = parseResumeData(titleCase.replace("Experience", "EXPERIENCE").replace("Technical Skills", "TECHNICAL SKILLS").replace("Education", "EDUCATION"));
 const lower = parseResumeData(titleCase.replace("Experience", "experience").replace("Education", "education"));
 const round = parseResumeData(serializeResumeData(tc));
+const hiddenHeaderText = serializeResumeData({
+  ...tc,
+  header: tc.header ? { ...tc.header, visible: false } : null
+});
 // Trailing-colon headers ("Experience:", "Education:") — common in pasted/PDF text.
 const colon = parseResumeData(titleCase.replace("Experience", "Experience:").replace("Education", "Education:").replace("Technical Skills", "Technical Skills:"));
 
@@ -71,8 +75,8 @@ const typeOf = (r, re) => r.sections.find((s) => re.test(s.heading))?.type;
 const checks = [
   // Title-Case is recognized (the core fix)
   ["Title-Case headers parse into 3 sections", tc.sections.length === 3],
-  ["name kept out of contact", tc.name === "Jane Dev"],
-  ["body not collapsed into contact (exactly the 2 contact entries)", tc.contact.length === 2],
+  ["name kept out of contact", tc.header?.name === "Jane Dev"],
+  ["body not collapsed into contact (exactly the 2 contact entries)", tc.header?.contact.length === 2],
 
   // trailing-colon headers parse + the stored heading drops the colon
   ["colon-suffixed headers parse into 3 sections", colon.sections.length === 3],
@@ -87,6 +91,7 @@ const checks = [
   // round-trip stability (serialize uppercases; re-parse must match)
   ["parse->serialize->parse keeps 3 sections", round.sections.length === 3],
   ["round-trip preserves section types", JSON.stringify(round.sections.map((s) => s.type)) === JSON.stringify(tc.sections.map((s) => s.type))],
+  ["hidden headers stay out of serialized resume text", !hiddenHeaderText.includes("Jane Dev") && !hiddenHeaderText.includes("jane@example.com")],
 
   // collision guards
   ["'Education Coordinator' entry is NOT a section header", !headings(collide).some((h) => /coordinator/i.test(h))],
@@ -97,7 +102,7 @@ const checks = [
 const failures = checks.filter(([, ok]) => !ok);
 if (failures.length) {
   for (const [name] of failures) console.error(`FAIL ${name}`);
-  console.error(`(debug) tc headings=${JSON.stringify(headings(tc))} contact=${JSON.stringify(tc.contact)} collide=${JSON.stringify(headings(collide))}`);
+  console.error(`(debug) tc headings=${JSON.stringify(headings(tc))} contact=${JSON.stringify(tc.header?.contact)} collide=${JSON.stringify(headings(collide))}`);
   process.exit(1);
 }
 console.log(`resumeData parse probes passed (${checks.length}/${checks.length})`);

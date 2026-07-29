@@ -583,12 +583,15 @@ function App() {
   const setImportedJobAndDocumentTitle = useCallback((snapshot: ImportedJobSnapshot | null) => {
     setImportedJob(snapshot);
     if (!snapshot) return;
-    const applicantName = resolveResumeApplicantName(editedResume?.name, currentResumeText || resumeText);
+    const applicantName = resolveResumeApplicantName(
+      editedResume?.header?.name,
+      currentResumeText || resumeText
+    );
     setDocumentTitle(documentTitleForJob("resume", snapshot.tracking, applicantName));
     // Retitle the letter for the new role too. Leaving it behind would keep the
     // previous company in the letter's name and in every file exported from it.
     setCoverLetterTitle(documentTitleForJob("coverLetter", snapshot.tracking, applicantName));
-  }, [currentResumeText, editedResume?.name, resumeText, setCoverLetterTitle]);
+  }, [currentResumeText, editedResume?.header?.name, resumeText, setCoverLetterTitle]);
   // Per-section tailoring choice. Off is the implicit default (absent key); the
   // map stores only "tailor"/"include" so the three states are mutually exclusive
   // by construction.
@@ -685,25 +688,25 @@ function App() {
   // becomes available. Only known automatic fallbacks are eligible, so a title
   // the user edited remains untouched.
   useEffect(() => {
-    const applicantName = resolveResumeApplicantName(editedResume?.name, resumeText);
+    const applicantName = resolveResumeApplicantName(editedResume?.header?.name, resumeText);
     const company = (jobTracking.company ?? "").trim();
     if (!applicantName || !company) return;
     setDocumentTitle((current) =>
       completeAutoDocumentTitle("resume", current, applicantName, company, [DEFAULT_DOCUMENT_TITLE])
     );
-  }, [editedResume?.name, jobTracking.company, resumeText]);
+  }, [editedResume?.header?.name, jobTracking.company, resumeText]);
 
   // The letter follows the same naming rule (Name_Company_Cover_Letter), so a
   // resume and its letter for one role read as one application. Partial identity
   // is enough here — the letter has no second automatic naming path to complete.
   useEffect(() => {
-    const applicantName = resolveResumeApplicantName(editedResume?.name, resumeText);
+    const applicantName = resolveResumeApplicantName(editedResume?.header?.name, resumeText);
     const company = (jobTracking.company ?? "").trim();
     if (!applicantName && !company) return;
     setCoverLetterTitle((current) =>
       completeAutoDocumentTitle("coverLetter", current, applicantName, company, COVER_LETTER_TITLE_PLACEHOLDERS)
     );
-  }, [editedResume?.name, jobTracking.company, resumeText, setCoverLetterTitle]);
+  }, [editedResume?.header?.name, jobTracking.company, resumeText, setCoverLetterTitle]);
 
   // Derive a short job-label for the autosave + cross-tab presence context (role
   // + company only — never the full JD body). Uses the shared `jobTracking` so
@@ -720,7 +723,8 @@ function App() {
   // component and is only read inside the debounced write, after mount.
   const draftAutosaveState = useAutosaveDraft({
     editedResume,
-    dirty: resumeEdited,
+    docStyle: docStyle.style,
+    dirty: resumeDocumentDirty,
     jobLabel: _autosaveJobLabel,
     pipelineAiUsage,
     jobRawText,
@@ -733,7 +737,9 @@ function App() {
     payload: coverLetterEditor.draftPayload,
     documentTitle: coverLetterEditor.documentTitle,
     dirty: coverLetterEditor.dirty,
-    hasContent: Boolean(coverLetterEditor.text.trim()),
+    hasContent: Boolean(
+      coverLetterEditor.text.trim() || coverLetterEditor.data.header
+    ),
     jobLabel: _autosaveJobLabel
   });
 
@@ -832,7 +838,7 @@ function App() {
     sourceRevision: coverLetterEditor.sourceRevision,
     tailorApplied: coverLetterEditor.canRestorePreTailor,
     candidateName: resolveResumeApplicantName(
-      coverLetterEditor.data.name || editedResume?.name,
+      coverLetterEditor.data.header?.name || editedResume?.header?.name,
       currentResumeText || resumeText
     ),
     jobTarget: { role: jobTracking.role || jobTracking.title, company: jobTracking.company },
@@ -858,8 +864,8 @@ function App() {
   // the autosave has since overwritten — dismiss it so it can't advertise (and,
   // on click, reseed) stale text over the fresher edits.
   useEffect(() => {
-    if (resumeEdited) setPendingAutosaveDraft(null);
-  }, [resumeEdited]);
+    if (resumeDocumentDirty) setPendingAutosaveDraft(null);
+  }, [resumeDocumentDirty]);
 
   useEffect(() => {
     if (coverLetterEditor.dirty) setPendingCoverDraft(null);
@@ -1393,7 +1399,7 @@ function App() {
       ? serializeResumeData(restoredResumeData)
       : app.polishedText || "";
     const applicantName = resolveResumeApplicantName(
-      restoredResumeData?.name,
+      restoredResumeData?.header?.name,
       restoredResume || currentResumeText || resumeText
     );
     const restoredTracking = { role: app.role, title: app.title, company: app.company };
@@ -1479,10 +1485,12 @@ function App() {
   // THIS tab's key (recovery migrates orphans), and Apply / base-resume save /
   // explicit replace / dismiss all clear it once the content is safe elsewhere.
   async function handleRestoreAutosaveDraft(draft: AutosavedDraft) {
-    if (resumeEdited) {
+    if (resumeDocumentDirty) {
       if (!(await confirmReplaceEditor())) return;
     }
-    seedResumeEditor(draft.resumeText, "");
+    const restored = parseResumeFile(draft.resumeSource);
+    seedResumeData(restored.data);
+    docStyle.replaceDocumentStyle(restored.documentStyle);
     resetCoverWorkflow();
     // The autosave doesn't carry the job description/URL, so a saved
     // pipelineAiUsage/rawText only applies when the SAME job target is still
@@ -1810,13 +1818,21 @@ function App() {
                   onFitZoom={fitResumePage}
                   documentStructureTools={(
                     <DocumentStructureControls
-                      name={editedResume?.name ?? ""}
-                      contact={editedResume?.contact ?? []}
+                      header={editedResume?.header ?? null}
                       contactDivider={docStyle.style.contactDivider}
                       disabled={!editedResume}
-                      onSetName={resumeEditorActions.setName}
+                      onCreateHeader={() => {
+                        if (typesetEditorRef.current) {
+                          typesetEditorRef.current.createHeader();
+                        } else {
+                          resumeEditorActions.createHeader();
+                        }
+                      }}
+                      onSetHeaderVisible={resumeEditorActions.setHeaderVisible}
+                      onSetHeaderName={resumeEditorActions.setHeaderName}
+                      onRemoveHeaderName={resumeEditorActions.removeHeaderName}
                       onUpdateContact={resumeEditorActions.updateContact}
-                      onAddContact={resumeEditorActions.addContact}
+                      onInsertContact={resumeEditorActions.insertContact}
                       onRemoveContact={resumeEditorActions.removeContact}
                       onContactDividerChange={(value) => docStyle.set("contactDivider", value)}
                       onAddSection={(type, position) => typesetEditorRef.current?.addSection(type, position)}

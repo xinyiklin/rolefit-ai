@@ -102,14 +102,20 @@ assert.deepEqual(parsed.style, COVER_LETTER_STYLE_DEFAULTS);
 
 const withHeader = {
   ...data,
-  name: "Candidate Name",
-  contact: ["candidate@example.com", "Portfolio"]
+  header: {
+    visible: true,
+    name: "Candidate Name",
+    contact: ["candidate@example.com", "Portfolio"]
+  }
 };
 const headerRoundTrip = parseCoverLetterFile(
   serializeCoverLetterFile(withHeader, { ...COVER_LETTER_STYLE_DEFAULTS, contactDivider: "•" })
 );
-assert.equal(headerRoundTrip.data.name, "Candidate Name");
-assert.deepEqual(headerRoundTrip.data.contact, ["candidate@example.com", "Portfolio"]);
+assert.deepEqual(headerRoundTrip.data.header, {
+  visible: true,
+  name: "Candidate Name",
+  contact: ["candidate@example.com", "Portfolio"]
+});
 assert.equal(headerRoundTrip.style.contactDivider, "•");
 const headerLayout = layoutCoverLetter(
   toTypesetSchema(headerRoundTrip.data),
@@ -125,6 +131,44 @@ assert(
     )
   ),
   "header contact items stay inside the text column"
+);
+const absentHeaderLayout = layoutCoverLetter(
+  toTypesetSchema({ ...data, header: null }),
+  coverLetterStyleToDocumentStyle(COVER_LETTER_STYLE_DEFAULTS)
+);
+const hiddenHeaderLayout = layoutCoverLetter(
+  toTypesetSchema({
+    ...data,
+    header: {
+      visible: false,
+      name: "Hidden Candidate",
+      contact: ["hidden@example.com"]
+    }
+  }),
+  coverLetterStyleToDocumentStyle(COVER_LETTER_STYLE_DEFAULTS)
+);
+assert.deepEqual(
+  hiddenHeaderLayout.pages[0].lines,
+  absentHeaderLayout.pages[0].lines,
+  "hidden and absent headers have the same rendered geometry"
+);
+const blankNameHeaderLayout = layoutCoverLetter(
+  toTypesetSchema({
+    ...data,
+    header: { visible: true, name: "", contact: [] }
+  }),
+  coverLetterStyleToDocumentStyle(COVER_LETTER_STYLE_DEFAULTS)
+);
+assert(
+  blankNameHeaderLayout.pages[0].lines.some((line) =>
+    line.runs.some((run) => run.src?.kind === "name" && run.text === "")
+  ),
+  "a visible blank name remains an editable rendered header field"
+);
+assert(
+  blankNameHeaderLayout.pages[0].lines.at(-1).baseline >
+    absentHeaderLayout.pages[0].lines.at(-1).baseline,
+  "a visible blank name reserves header spacing"
 );
 
 const layout = layoutCoverLetter(
@@ -533,9 +577,10 @@ for (const mutation of [
 }
 
 for (const invalidData of [
-  { ...withHeader, contact: Array.from({ length: 21 }, (_, index) => `item-${index}`) },
-  { ...withHeader, name: "x".repeat(1_001) },
-  { ...withHeader, contact: ["x".repeat(1_001)] }
+  { ...withHeader, header: { ...withHeader.header, contact: Array.from({ length: 21 }, (_, index) => `item-${index}`) } },
+  { ...withHeader, header: { ...withHeader.header, name: "x".repeat(1_001) } },
+  { ...withHeader, header: { ...withHeader.header, contact: ["x".repeat(1_001)] } },
+  { ...withHeader, header: { visible: true, name: null, contact: [] } }
 ]) {
   assert.throws(
     () => serializeCoverLetterFile(invalidData, COVER_LETTER_STYLE_DEFAULTS),

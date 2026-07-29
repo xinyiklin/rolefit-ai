@@ -15,22 +15,37 @@ export type HeadingCase = "smallcaps" | "uppercase" | "none";
 export type HeaderAlign = "left" | "center" | "right";
 // The document-level name for the one alignment union (see FieldAlignment).
 export type BodyAlign = FieldAlignment;
-export type NameSize = "large" | "xlarge" | "huge";
 export type AlignmentScope = "body" | "header" | "heading";
 
-// Everything that changes printed output. Keep this explicit rather than
-// deriving it from the view state: `.resume` validation treats this as a strict,
-// versioned persistence contract.
-export type DocumentStyle = {
+// The page every document is set on: its face, its body size and leading, its
+// text alignment, and the four physical margins. A resume and a letter are the
+// same page; only what sits on it differs.
+export type PageStyle = {
   fontFamily: FontFamily;
   baseFontSizePt: number;
-  letterSpacingPt: number;
   lineHeight: number; // unitless body-leading multiplier
-  entryIndentPt: number;
-  entryEndIndentPt: number;
+  bodyAlign: BodyAlign;
+  pageMarginTopPt: number;
+  pageMarginRightPt: number;
+  pageMarginBottomPt: number;
+  pageMarginLeftPt: number;
+};
+
+// The letterhead: a name, contact items, and the space around them. Genuinely
+// shared, because both documents paint it from the same stream.
+export type HeaderStyle = {
+  contactDivider: string;
+  headerAlign: HeaderAlign;
   nameContactGapPt: number;
   contactGapPt: number;
   headerSectionGapPt: number;
+};
+
+// Sections, entries, and bullets — structure a cover letter does not have. Kept
+// separate so a letter cannot inherit a resume's body settings by accident.
+export type ResumeBodyStyle = {
+  entryIndentPt: number;
+  entryEndIndentPt: number;
   sectionGapPt: number;
   sectionEntryGapPt: number;
   entryGapPt: number;
@@ -39,17 +54,18 @@ export type DocumentStyle = {
   skillsRowGapPt: number;
   bulletGapPt: number;
   headingCase: HeadingCase;
-  sectionRule: boolean;
-  contactDivider: string;
-  headerAlign: HeaderAlign;
-  bodyAlign: BodyAlign;
   headingAlign: HeaderAlign;
-  nameSize: NameSize;
-  pageMarginTopPt: number;
-  pageMarginRightPt: number;
-  pageMarginBottomPt: number;
-  pageMarginLeftPt: number;
+  sectionRule: boolean;
 };
+
+// What a cover letter's layout reads, and nothing else.
+export type CoverLetterDocumentStyle = PageStyle & HeaderStyle;
+
+// Everything that changes a resume's printed output. Keep this explicit rather
+// than deriving it from the view state: `.resume` validation treats it as a
+// strict, versioned persistence contract, and its field set is unchanged by the
+// split above.
+export type DocumentStyle = PageStyle & HeaderStyle & ResumeBodyStyle;
 
 // User-adjustable typography and page layout for the browser typesetting engine.
 export type DocStyle = DocumentStyle & {
@@ -64,18 +80,9 @@ export type DocStyle = DocumentStyle & {
   spellCheck: boolean;
 };
 
-const TEX_PT_TO_DOCUMENT_PT = 72 / 72.27;
-const CALIBRATED_NAME_CONTACT_GAP = 0.04;
-const CALIBRATED_HEADER_SECTION_GAP = 1.19;
-const CALIBRATED_SECTION_GAP = 0.85;
-
-const nameContactGapToPt = (value: number) =>
-  (1 + (value - CALIBRATED_NAME_CONTACT_GAP) * 10) * TEX_PT_TO_DOCUMENT_PT;
-const contactGapToPt = (value: number) => value * 10 * TEX_PT_TO_DOCUMENT_PT;
-const headerSectionGapToPt = (value: number) =>
-  (value - CALIBRATED_HEADER_SECTION_GAP + CALIBRATED_SECTION_GAP) * 11 * TEX_PT_TO_DOCUMENT_PT;
-const normalGapToPt = (value: number) => value * 11 * TEX_PT_TO_DOCUMENT_PT;
-const smallGapToPt = (value: number) => value * 10 * TEX_PT_TO_DOCUMENT_PT;
+// Every gap below is plain space ADDED at its junction, in PDF points. A gap of
+// 0 adds nothing: rows sit one line advance apart, and the contact separator
+// touches its neighbours.
 
 // Menu/validation view of lib/fontFamilies.ts. Derived, not declared, so the
 // codec enum and the toolbar can never disagree about which families exist.
@@ -90,28 +97,31 @@ export const FONT_FAMILY_OPTIONS: readonly {
 }));
 
 // One source of truth for UI constraints, local-state coercion, and strict file
-// validation. Point-gap bounds preserve the calibrated editor ranges.
+// validation. Gap bounds start at 0 because 0 is now a meaningful setting: no
+// space added at that junction.
 export const DOC_STYLE_BOUNDS = {
   zoom: { min: 0.5, max: 2, step: 0.01 },
   baseFontSizePt: { min: 8, max: 12, step: 0.5 },
-  letterSpacingPt: { min: -0.2, max: 0.5, step: 0.05 },
   lineHeight: { min: 1, max: 2, step: 0.01 },
   entryIndentPt: { min: 0, max: 36, step: 0.1 },
   entryEndIndentPt: { min: 0, max: 36, step: 0.1 },
-  nameContactGapPt: { min: nameContactGapToPt(0), max: nameContactGapToPt(0.8), step: 0.1 },
-  contactGapPt: { min: contactGapToPt(0.4), max: contactGapToPt(3), step: 0.1 },
-  headerSectionGapPt: {
-    min: headerSectionGapToPt(0),
-    max: headerSectionGapToPt(2.4),
-    step: 0.1
-  },
-  sectionGapPt: { min: normalGapToPt(0), max: normalGapToPt(2), step: 0.1 },
-  sectionEntryGapPt: { min: normalGapToPt(0), max: normalGapToPt(1.2), step: 0.1 },
-  entryGapPt: { min: normalGapToPt(0), max: normalGapToPt(1.6), step: 0.1 },
-  titleSubGapPt: { min: normalGapToPt(0), max: normalGapToPt(0.6), step: 0.1 },
-  headBulletGapPt: { min: normalGapToPt(0), max: normalGapToPt(1.4), step: 0.1 },
-  skillsRowGapPt: { min: smallGapToPt(0), max: smallGapToPt(0.8), step: 0.1 },
-  bulletGapPt: { min: normalGapToPt(0), max: normalGapToPt(1.2), step: 0.1 },
+  nameContactGapPt: { min: 0, max: 24, step: 0.1 },
+  // Horizontal slot for the contact separator; the painter floors it at the
+  // separator glyph's own width.
+  contactGapPt: { min: 0, max: 30, step: 0.1 },
+  headerSectionGapPt: { min: 0, max: 48, step: 0.1 },
+  sectionGapPt: { min: 0, max: 36, step: 0.1 },
+  sectionEntryGapPt: { min: 0, max: 24, step: 0.1 },
+  entryGapPt: { min: 0, max: 24, step: 0.1 },
+  // The one junction inside a block rather than between them: a resume's entry
+  // head is a title/subtitle pair traditionally set TIGHTER than single
+  // spacing. 0 is single-spaced like every other gap; negative pulls the
+  // subtitle up under its title, and the painter's ink floor still stops the
+  // two rows from ever touching.
+  titleSubGapPt: { min: -6, max: 18, step: 0.1 },
+  headBulletGapPt: { min: 0, max: 24, step: 0.1 },
+  skillsRowGapPt: { min: 0, max: 18, step: 0.1 },
+  bulletGapPt: { min: 0, max: 18, step: 0.1 },
   pageMarginTopPt: PAGE_MARGIN_BOUNDS_PT,
   pageMarginRightPt: PAGE_MARGIN_BOUNDS_PT,
   pageMarginBottomPt: PAGE_MARGIN_BOUNDS_PT,
@@ -123,29 +133,27 @@ export const DOC_STYLE_DEFAULTS: DocStyle = {
   spellCheck: false,
   fontFamily: "latin-modern",
   baseFontSizePt: 10,
-  letterSpacingPt: 0,
   lineHeight: 1.18,
   entryIndentPt: 10.8,
-  // Jake's 0.97\textwidth entry table inside its 0.15in list leaves a 5.4 pt
-  // end inset at the default US-Letter text width.
+  // A 5.4 pt end inset at the default US-Letter text width, matching the
+  // entry's 0.15in start inset.
   entryEndIndentPt: 5.4,
-  nameContactGapPt: nameContactGapToPt(0.04),
-  contactGapPt: contactGapToPt(1.82),
-  headerSectionGapPt: headerSectionGapToPt(1.19),
-  sectionGapPt: normalGapToPt(0.85),
-  sectionEntryGapPt: normalGapToPt(0.42),
-  entryGapPt: normalGapToPt(0.42),
-  titleSubGapPt: normalGapToPt(0.18),
-  headBulletGapPt: normalGapToPt(0.42),
-  skillsRowGapPt: smallGapToPt(0),
-  bulletGapPt: normalGapToPt(0.2),
+  nameContactGapPt: 4,
+  contactGapPt: 18,
+  headerSectionGapPt: 14,
+  sectionGapPt: 8.9,
+  sectionEntryGapPt: 5.4,
+  entryGapPt: 4.5,
+  titleSubGapPt: 0,
+  headBulletGapPt: 4.5,
+  skillsRowGapPt: 1.5,
+  bulletGapPt: 2.1,
   headingCase: "smallcaps",
   sectionRule: true,
   contactDivider: "|",
   headerAlign: "center",
   bodyAlign: "left",
   headingAlign: "left",
-  nameSize: "huge",
   pageMargins: "narrow",
   pageMarginTopPt: PAGE_MARGIN_PRESETS_PT.narrow,
   pageMarginRightPt: PAGE_MARGIN_PRESETS_PT.narrow,
@@ -157,7 +165,6 @@ export function toDocumentStyle(style: DocStyle): DocumentStyle {
   return {
     fontFamily: style.fontFamily,
     baseFontSizePt: style.baseFontSizePt,
-    letterSpacingPt: style.letterSpacingPt,
     lineHeight: style.lineHeight,
     entryIndentPt: style.entryIndentPt,
     entryEndIndentPt: style.entryEndIndentPt,
@@ -177,8 +184,7 @@ export function toDocumentStyle(style: DocStyle): DocumentStyle {
     headerAlign: style.headerAlign,
     bodyAlign: style.bodyAlign,
     headingAlign: style.headingAlign,
-    nameSize: style.nameSize,
-    pageMarginTopPt: style.pageMarginTopPt,
+      pageMarginTopPt: style.pageMarginTopPt,
     pageMarginRightPt: style.pageMarginRightPt,
     pageMarginBottomPt: style.pageMarginBottomPt,
     pageMarginLeftPt: style.pageMarginLeftPt
@@ -246,16 +252,16 @@ export const DOC_SPACING_PRESETS = {
     label: "Compact",
     values: {
       lineHeight: 1.08,
-      nameContactGapPt: nameContactGapToPt(0.02),
-      contactGapPt: contactGapToPt(1.6),
-      headerSectionGapPt: headerSectionGapToPt(0.82),
-      sectionGapPt: normalGapToPt(0.48),
-      sectionEntryGapPt: normalGapToPt(0.3),
-      entryGapPt: normalGapToPt(0.24),
-      titleSubGapPt: normalGapToPt(0.1),
-      headBulletGapPt: normalGapToPt(0.24),
-      skillsRowGapPt: smallGapToPt(0),
-      bulletGapPt: normalGapToPt(0.08)
+      nameContactGapPt: 3.2,
+      contactGapPt: 15.9,
+      headerSectionGapPt: 9.6,
+      sectionGapPt: 4.9,
+      sectionEntryGapPt: 4.0,
+      entryGapPt: 2.6,
+      titleSubGapPt: 0,
+      headBulletGapPt: 2.5,
+      skillsRowGapPt: 1.4,
+      bulletGapPt: 0.8
     }
   },
   balanced: {
@@ -278,15 +284,15 @@ export const DOC_SPACING_PRESETS = {
     label: "Spacious",
     values: {
       lineHeight: 1.3,
-      nameContactGapPt: 1.4,
+      nameContactGapPt: 5.7,
       contactGapPt: 20,
-      headerSectionGapPt: 11,
-      sectionGapPt: 12,
-      sectionEntryGapPt: 5.8,
-      entryGapPt: 6,
-      titleSubGapPt: 3.2,
-      headBulletGapPt: 5.6,
-      skillsRowGapPt: 1.2,
+      headerSectionGapPt: 16.2,
+      sectionGapPt: 11.6,
+      sectionEntryGapPt: 6.7,
+      entryGapPt: 5.9,
+      titleSubGapPt: 0.4,
+      headBulletGapPt: 5.5,
+      skillsRowGapPt: 2.9,
       bulletGapPt: 3.2
     }
   }
@@ -351,7 +357,6 @@ export function coerceDocStyle(raw: unknown): DocStyle {
     spellCheck: typeof r.spellCheck === "boolean" ? r.spellCheck : DOC_STYLE_DEFAULTS.spellCheck,
     fontFamily: coerceFontFamily(r.fontFamily, DOC_STYLE_DEFAULTS.fontFamily),
     baseFontSizePt: clampStyleNumber("baseFontSizePt", r.baseFontSizePt, DOC_STYLE_DEFAULTS.baseFontSizePt),
-    letterSpacingPt: clampStyleNumber("letterSpacingPt", r.letterSpacingPt, DOC_STYLE_DEFAULTS.letterSpacingPt),
     lineHeight: clampStyleNumber("lineHeight", r.lineHeight, DOC_STYLE_DEFAULTS.lineHeight),
     entryIndentPt: clampStyleNumber("entryIndentPt", r.entryIndentPt, DOC_STYLE_DEFAULTS.entryIndentPt),
     entryEndIndentPt: clampStyleNumber(
@@ -395,7 +400,6 @@ export function coerceDocStyle(raw: unknown): DocStyle {
         : DOC_STYLE_DEFAULTS.bodyAlign,
     headingAlign:
       r.headingAlign === "center" || r.headingAlign === "right" ? r.headingAlign : DOC_STYLE_DEFAULTS.headingAlign,
-    nameSize: r.nameSize === "large" || r.nameSize === "xlarge" ? r.nameSize : DOC_STYLE_DEFAULTS.nameSize,
     pageMargins: pageMarginsForValues(physicalMargins),
     pageMarginTopPt: physicalMargins.top,
     pageMarginRightPt: physicalMargins.right,

@@ -1,9 +1,12 @@
 import {
+  DOC_STYLE_BOUNDS,
   DOC_STYLE_DEFAULTS,
   FONT_FAMILY_OPTIONS,
+  type CoverLetterDocumentStyle,
   type DocStyle,
   type DocumentStyle,
-  type FontFamily
+  type FontFamily,
+  type ResumeBodyStyle
 } from "./documentStyle.ts";
 import {
   PAGE_MARGIN_BOUNDS_PT,
@@ -13,7 +16,12 @@ import {
   paragraphSpacingFromInlineMarks,
   stripInlineMarks
 } from "./inlineMarksText.ts";
-import { newSummaryEntry, newSection, type ResumeData } from "./resumeData.ts";
+import {
+  newSummaryEntry,
+  newSection,
+  type DocumentHeader,
+  type ResumeData
+} from "./resumeData.ts";
 
 export const COVER_LETTER_FILE_MAGIC = "typeset-cover-letter" as const;
 export const COVER_LETTER_FILE_SCHEMA_VERSION = 1 as const;
@@ -29,6 +37,13 @@ export type CoverLetterStyle = {
   marginBottomPt: number;
   marginLeftPt: number;
   contactDivider: string;
+  // The three gaps a letter shares with a resume, all of them the header's:
+  // name to contact, the contact separator's slot, and header to body. The
+  // other structural gaps belong to sections and entries, which a letter has
+  // none of. Absolute points, same meaning and bounds as a resume's.
+  nameContactGapPt: number;
+  contactGapPt: number;
+  headerSectionGapPt: number;
 };
 
 export const COVER_LETTER_STYLE_DEFAULTS: CoverLetterStyle = {
@@ -45,7 +60,12 @@ export const COVER_LETTER_STYLE_DEFAULTS: CoverLetterStyle = {
   marginRightPt: 54,
   marginBottomPt: 36,
   marginLeftPt: 54,
-  contactDivider: "|"
+  contactDivider: "|",
+  // Tuned on the letterhead itself: the contact line sits close under the name,
+  // the separators breathe, and the body clears the header.
+  nameContactGapPt: 10,
+  contactGapPt: 18,
+  headerSectionGapPt: 14
 };
 
 export type CoverLetterFileV1 = {
@@ -53,7 +73,8 @@ export type CoverLetterFileV1 = {
   schemaVersion: typeof COVER_LETTER_FILE_SCHEMA_VERSION;
   document: {
     header: {
-      name: string;
+      visible: boolean;
+      name: string | null;
       contact: string[];
     } | null;
     paragraphs: string[];
@@ -94,7 +115,10 @@ const STYLE_KEYS = [
   "marginRightPt",
   "marginBottomPt",
   "marginLeftPt",
-  "contactDivider"
+  "contactDivider",
+  "nameContactGapPt",
+  "contactGapPt",
+  "headerSectionGapPt"
 ] as const satisfies readonly (keyof CoverLetterStyle)[];
 
 function isRecord(value: unknown): value is JsonRecord {
@@ -146,10 +170,17 @@ export function parseCoverLetterStyle(value: unknown): CoverLetterStyle {
   if (typeof style.fontFamily !== "string" || !fontFamilies.includes(style.fontFamily as FontFamily)) {
     fail("invalid-style", "Cover-letter style fontFamily is unsupported.");
   }
+  const fontSizePt = requireNumber(style.fontSizePt, "fontSizePt", 9, 13);
+  const lineHeight = requireNumber(style.lineHeight, "lineHeight", 1, 2);
+  const spacing = (key: "nameContactGapPt" | "contactGapPt" | "headerSectionGapPt") =>
+    requireNumber(style[key], key, DOC_STYLE_BOUNDS[key].min, DOC_STYLE_BOUNDS[key].max);
   return {
     fontFamily: style.fontFamily as FontFamily,
-    fontSizePt: requireNumber(style.fontSizePt, "fontSizePt", 9, 13),
-    lineHeight: requireNumber(style.lineHeight, "lineHeight", 1, 2),
+    fontSizePt,
+    lineHeight,
+    nameContactGapPt: spacing("nameContactGapPt"),
+    contactGapPt: spacing("contactGapPt"),
+    headerSectionGapPt: spacing("headerSectionGapPt"),
     marginTopPt: requireNumber(style.marginTopPt, "marginTopPt", PAGE_MARGIN_BOUNDS_PT.min, PAGE_MARGIN_BOUNDS_PT.max),
     marginRightPt: requireNumber(style.marginRightPt, "marginRightPt", PAGE_MARGIN_BOUNDS_PT.min, PAGE_MARGIN_BOUNDS_PT.max),
     marginBottomPt: requireNumber(style.marginBottomPt, "marginBottomPt", PAGE_MARGIN_BOUNDS_PT.min, PAGE_MARGIN_BOUNDS_PT.max),
@@ -179,11 +210,14 @@ function validateParagraphs(value: unknown): string[] {
   });
 }
 
-function validateHeader(value: unknown): { name: string; contact: string[] } {
+function validateHeader(value: unknown): DocumentHeader {
   const header = requireRecord(value, "invalid-document", "Cover-letter header");
-  requireExactKeys(header, ["name", "contact"], "invalid-document", "Cover-letter header");
-  if (typeof header.name !== "string" || header.name.length > 1_000) {
-    fail("invalid-document", "Cover-letter header name must be text no longer than 1,000 characters.");
+  requireExactKeys(header, ["visible", "name", "contact"], "invalid-document", "Cover-letter header");
+  if (typeof header.visible !== "boolean") {
+    fail("invalid-document", "Cover-letter header visible must be true or false.");
+  }
+  if (header.name !== null && (typeof header.name !== "string" || header.name.length > 1_000)) {
+    fail("invalid-document", "Cover-letter header name must be null or text no longer than 1,000 characters.");
   }
   if (
     !Array.isArray(header.contact) ||
@@ -195,7 +229,18 @@ function validateHeader(value: unknown): { name: string; contact: string[] } {
       "Cover-letter header must contain at most 20 text contact items, each no longer than 1,000 characters."
     );
   }
-  return { name: header.name, contact: [...header.contact] as string[] };
+  const validated = {
+    visible: header.visible,
+    name: header.name as string | null,
+    contact: [...header.contact] as string[]
+  };
+  if (validated.name === null && validated.contact.length === 0) {
+    fail(
+      "invalid-document",
+      "Cover-letter header must contain a name field or at least one contact field."
+    );
+  }
+  return validated;
 }
 
 function enforceSize(byteLength: number) {
@@ -220,13 +265,18 @@ function decodeInput(input: string | ArrayBuffer | Uint8Array): string {
 
 export function coverLetterResumeData(
   paragraphs: readonly string[],
-  header: { name: string; contact: readonly string[] } | null = null
+  header: DocumentHeader | null = null
 ): ResumeData {
   const section = newSection("summary", "");
   const normalized = paragraphs.length ? paragraphs : [""];
   return {
-    name: header?.name ?? "",
-    contact: header ? [...header.contact] : [],
+    header: header
+      ? {
+          visible: header.visible,
+          name: header.name,
+          contact: [...header.contact]
+        }
+      : null,
     sections: [
       {
         ...section,
@@ -271,9 +321,55 @@ export function coverLetterPlainText(data: ResumeData): string {
     .trim();
 }
 
+// A letter has no sections, entries, or bullets, so none of these settings can
+// reach its page. They exist only because the shared editor's DocStyle is the
+// resume's shape; they are stated here as inert zeroes rather than inherited
+// from the resume defaults, so changing a resume default can never move a
+// letter. What a letter's layout actually reads is CoverLetterDocumentStyle.
+const NO_RESUME_BODY: ResumeBodyStyle = {
+  entryIndentPt: 0,
+  entryEndIndentPt: 0,
+  sectionGapPt: 0,
+  sectionEntryGapPt: 0,
+  entryGapPt: 0,
+  titleSubGapPt: 0,
+  headBulletGapPt: 0,
+  skillsRowGapPt: 0,
+  bulletGapPt: 0,
+  headingCase: "none",
+  headingAlign: "left",
+  sectionRule: false
+};
+
+// The letter's own document style: page + letterhead, and nothing else.
+export function coverLetterDocumentStyle(
+  style: CoverLetterStyle
+): CoverLetterDocumentStyle {
+  return {
+    fontFamily: style.fontFamily,
+    baseFontSizePt: style.fontSizePt,
+    lineHeight: style.lineHeight,
+    bodyAlign: "left",
+    pageMarginTopPt: style.marginTopPt,
+    pageMarginRightPt: style.marginRightPt,
+    pageMarginBottomPt: style.marginBottomPt,
+    pageMarginLeftPt: style.marginLeftPt,
+    contactDivider: style.contactDivider,
+    headerAlign: "center",
+    nameContactGapPt: style.nameContactGapPt,
+    contactGapPt: style.contactGapPt,
+    headerSectionGapPt: style.headerSectionGapPt
+  };
+}
+
+// The same letter widened to the shape the shared editor and its toolbars are
+// typed against.
 export function coverLetterStyleToDocumentStyle(
   style: CoverLetterStyle,
-  view: Pick<DocStyle, "zoom" | "spellCheck"> = { zoom: 1, spellCheck: true }
+  view: Pick<DocStyle, "zoom" | "spellCheck"> = {
+    zoom: DOC_STYLE_DEFAULTS.zoom,
+    spellCheck: DOC_STYLE_DEFAULTS.spellCheck
+  }
 ): DocStyle {
   const pageMargins = pageMarginsForValues({
     top: style.marginTopPt,
@@ -282,25 +378,10 @@ export function coverLetterStyleToDocumentStyle(
     left: style.marginLeftPt
   });
   return {
-    ...DOC_STYLE_DEFAULTS,
+    ...NO_RESUME_BODY,
+    ...coverLetterDocumentStyle(style),
     ...view,
-    fontFamily: style.fontFamily,
-    baseFontSizePt: style.fontSizePt,
-    lineHeight: style.lineHeight,
-    bulletGapPt: 0,
-    entryIndentPt: 0,
-    entryEndIndentPt: 0,
-    sectionRule: false,
-    headingCase: "none",
-    headerAlign: "center",
-    contactDivider: style.contactDivider,
-    bodyAlign: "left",
-    headingAlign: "left",
-    pageMargins,
-    pageMarginTopPt: style.marginTopPt,
-    pageMarginRightPt: style.marginRightPt,
-    pageMarginBottomPt: style.marginBottomPt,
-    pageMarginLeftPt: style.marginLeftPt
+    pageMargins
   };
 }
 
@@ -313,7 +394,10 @@ export function documentStyleToCoverLetterStyle(style: DocumentStyle): CoverLett
     marginRightPt: style.pageMarginRightPt,
     marginBottomPt: style.pageMarginBottomPt,
     marginLeftPt: style.pageMarginLeftPt,
-    contactDivider: style.contactDivider
+    contactDivider: style.contactDivider,
+    nameContactGapPt: style.nameContactGapPt,
+    contactGapPt: style.contactGapPt,
+    headerSectionGapPt: style.headerSectionGapPt
   });
 }
 
@@ -322,12 +406,12 @@ export function createCoverLetterFile(
   style: CoverLetterStyle
 ): CoverLetterFileV1 {
   const paragraphs = validateParagraphs(coverLetterParagraphs(data));
-  const validatedHeader = validateHeader({
-    name: (data as Partial<ResumeData>).name,
-    contact: (data as Partial<ResumeData>).contact
-  });
-  const header = validatedHeader.name.trim() || validatedHeader.contact.some((item) => item.trim())
-    ? validatedHeader
+  const header = data.header
+    ? validateHeader({
+        visible: data.header.visible,
+        name: data.header.name,
+        contact: [...data.header.contact]
+      })
     : null;
   return {
     format: COVER_LETTER_FILE_MAGIC,
@@ -377,7 +461,7 @@ export function parseCoverLetterFile(
     "Cover-letter document"
   );
   const paragraphs = validateParagraphs(document.paragraphs);
-  let header: { name: string; contact: string[] } | null = null;
+  let header: DocumentHeader | null = null;
   if (document.header !== null) {
     header = validateHeader(document.header);
   }

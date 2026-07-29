@@ -3,6 +3,140 @@
 Cross-workspace decisions and handoff state. Keep entries factual, dated, and
 bounded; app-only operational detail belongs in the affected app documentation.
 
+## 2026-07-29
+
+- [USER+CODE] Browser downloads now keep their hidden anchor and blob URL alive
+  through Chromium's asynchronous handoff. Immediate cleanup could deliver the
+  PDF bytes while losing the anchor's requested `.pdf` filename, leaving a
+  UUID-named file; the shared download path now cleans up after a bounded delay
+  and a focused lifecycle probe pins the filename and cleanup order.
+- [USER+CODE+TOOL] PDF export no longer rewrites Latin Modern's name-keyed
+  OpenType/CFF program as a CID-keyed `CIDFontType0` resource, a hybrid that
+  Firefox 153 / PDF.js 6 painted as missing or remapped glyphs even though
+  older PDF.js and Poppler could extract it. The reproducible PDF-font
+  generator now converts Latin Modern to metric-preserving TrueType siblings;
+  pdf-lib emits every face as `CIDFontType2` + `FontFile2` with the identity
+  CID-to-GID map. The engine gate, 1,266,912 font-parity checks, RoleFit and
+  Typeset builds, the PDF round-trip, and real-resume Poppler plus PDF.js 5/6
+  path-raster probes pass. The broader upstream-source font check remains red
+  only because the pre-existing Arimo/Carlito license outputs are stale; the
+  focused PDF-font regeneration check passes.
+- [USER] 2026-07-29: **Pre-release schema policy, in force until the user lifts
+  it.** While the products are in dev/preview/beta there is exactly one live
+  schema: whatever the current build writes, still called `schemaVersion: 1`.
+  Runtime parsers stay single-shape and reject anything else — no compatibility
+  branches, no derived defaults for absent fields, no version negotiation. When
+  a change alters a stored shape, the assistant converts the existing documents
+  with a throwaway developer script and keeps that script out of the commit.
+  The user will say when to lift this and move to real versioning and
+  migrations; the assistant may ask whether a lift is warranted.
+- [USER+CODE] 2026-07-29: **Spacing is absolute.** Every structural junction is
+  the following row's own line advance plus the gap the user set, so 0 adds
+  nothing; the retired TeX junction constants and tabular struts are gone from
+  the engine. The header keeps its own line spacing of 1 and does not inherit
+  the document's, so a gap of 0 is the same distance in a resume and in a
+  double-spaced letter, and the header's gaps are the only thing that moves its
+  rows. `titleSubGapPt` may go negative (floor -6): an entry head is a pair
+  inside one block, traditionally tighter than single spacing, and the ink floor
+  still prevents collision. `.cover` persists the three header gaps it actually
+  uses; the other eight belong to sections and entries a letter does not have.
+  Defaults, presets, and `starter.resume` were rebased so a new document looks
+  unchanged, and 21 live workspace documents (9 resume styles, 12 cover styles,
+  including snapshots inside application records) were converted with backups
+  under `workspace/.spacing-migration-backup/` and
+  `workspace/.header-lineheight-backup/`. Documents in `.trash/` and older
+  rewrite backups were left alone and will fail to open until converted.
+- [CODE] 2026-07-29: `vertical-parity.mjs` and `vertical-truth.json` are
+  retired. They measured the engine against a frozen Tectonic compile, and the
+  engine owns its layout now. `vertical-layout-snapshot.mjs` replaces them: 75
+  recorded lines across the three spacing presets, compared exactly rather than
+  within a TeX tolerance, updated only via `--update`. `pdf-roundtrip.mjs` now
+  lays out the engine's own starter document instead of the TeX fixture.
+- [USER+CODE] 2026-07-29: The three header gaps (`nameContactGapPt`,
+  `contactGapPt`, `headerSectionGapPt`) stay style-owned for both document
+  kinds; paragraph spacing does not replace them. Only style can express a gap
+  inside the header block or between wrapped contact rows, which are layout
+  products with no document node. The cover letter, which has no
+  document-spacing popover, now exposes them in its Header menu via
+  `DocumentStructureControls`'s `headerSpacing` prop; the resume keeps them in
+  `SpacingStylePopover`. `DOC_STYLE_BOUNDS` point gaps now round outward to the
+  0.1 step so every slider stop is a clean tenth, and the two trim gaps floor at
+  -6 pt: both sit on a calibrated baseline skip (13.6 pt name -> contact, 19.18
+  pt header -> body, one leading in a cover letter), so their old calibrated
+  floors could not close the gap they name. Widening a bound cannot invalidate
+  an existing document. UNCONFIRMED: on the cover letter, `headerSectionGapPt`
+  and the first paragraph's `space-before` still add rather than override
+  (`coverLetterBlocks.ts`), so the header gap is a floor the paragraph control
+  cannot reach below.
+- [USER+CODE] 2026-07-29: Typing/deletion undo grouping is word-sized, not
+  burst-sized (user: live grouping undid every character typed at once, unlike
+  Google Docs). A shared-editor text run still ends on an idle pause, field
+  change, or structural edit, and now also at a word boundary in the gesture's
+  own direction and at a 20-character cap. `TextEditOptions.historyText` is how
+  the editor reports the characters an edit moved; an edit that omits it counts
+  as one character against the cap. Editor checks and both app builds pass.
+- [USER+CODE] 2026-07-29: **SUPERSEDES the resume-v2 and cover-file
+  compatibility entries below.** `.resume` and `.cover` each have one strict
+  schema version 1. Both persist the same optional structural header contract:
+  absent, hidden, visible blank, named, and ordered contact fields remain
+  distinct. Retired resume name/contact, resume schema-v2, oldest
+  `rolefit.resume`, interim cover-header, and cover schema-v2 shapes are
+  accepted only by explicit workspace rewrite tools, never by runtime parsers.
+- [CODE] 2026-07-29: The shared editor owns header create/show/hide/remove,
+  name/contact editing, right-click actions, keyboard structure edits, rich
+  clipboard transfer, and explicit multi-block header/document paste mapping;
+  header hover action menus are intentionally absent. Cover letters enable
+  header structure while disabling resume sections.
+- [TOOL] 2026-07-29: The ignored local workspace was migrated with backups:
+  24 resume files and 12 cover files reparse through the sole strict-v1 codecs.
+  Seven resume and one cover application source fingerprint were reconciled
+  with tracker backups. A post-write audit caught the tracker sanitizer dropping
+  structural headers on its second pass; the boundary was corrected and all 249
+  affected resume header snapshots were restored exactly from the immediate
+  backup. Repeat dry runs report zero source or metadata changes, and all eight
+  tracked source fingerprints match their files.
+- [USER+CODE+TOOL] 2026-07-29: Header commands now retain stable identity so a
+  normal typing render cannot trigger the caret-restoration effect against the
+  pre-edit DOM. A synthetic browser reproduction changed from caret `10 -> 0`
+  before the fix to `10 -> 11` after it. The header hover add/delete menu and
+  its CSS were removed; header structure remains in the toolbar, keyboard, and
+  right-click paths. Editor checks and both consumer builds pass.
+- [CODE+TOOL] 2026-07-29: The final review made private structural paste
+  lossless across single- and multi-field selections, preserved style-only and
+  header-only autosaves, disabled every control in an already-open structure
+  popover, and added a strict storage-boundary rewrite for retired standalone
+  Typeset browser autosaves. The full repository check passes: all four
+  workspace gates, 59 RoleFit tests, 143 client workflow guards, both autosave
+  migration suites, and 1,266,912 PDF parity checks. Final workspace dry runs
+  remain zero-change for all 24 resumes and 12 cover letters.
+- [USER+CODE+TOOL] 2026-07-29: Automatic-link deferral no longer swaps an
+  editable `<a>`/`<span>` while a primary pointer selection is in flight. That
+  swap disconnected the range anchor and collapsed a backward drag beginning
+  at a linked contact's trailing edge. The current paint now stays stable until
+  mouseup, then the settled single- or multi-field range is restored. Shared
+  editor checks and both app builds pass; live RoleFit verified trailing-edge,
+  already-deferred, cross-contact, and repeated Shift-selection cases with no
+  console errors.
+- [USER+CODE+TOOL] 2026-07-29: Contact undo/redo now detects a restored slot
+  before comparing field text. A missing trailing contact and a restored empty
+  contact both read as `""`, which previously left history without a caret
+  target and let the browser collapse before the restored divider. The caret
+  now restores at offset zero inside the first added contact. The focused
+  regression ran red then green; the editor gate and both app builds pass, and
+  live RoleFit verified both undo-restoration and redo-restoration at
+  `contact|5`/0 with zero console errors.
+- [USER+CODE+TOOL] 2026-07-29: Text history now uses a rolling 700 ms
+  field-plus-intent group: typing, backward deletion, and forward deletion are
+  independent transactions; selections, formatting, structural edits, field or
+  caret moves, pauses, and undo/redo close the group, while background
+  persistence does not. React Strict Mode exposed that the shared history clock
+  allocated two sequences for one reducer dispatch, so sequence allocation is
+  now idempotent for the same state/action pair across both content and style
+  reducers. Red/green reducer probes cover held deletion, autosave, direction,
+  caret, pause, contacts, and double invocation. Live RoleFit verified grouped
+  typing/deletion undo and redo plus the caret-move boundary, restored the
+  original contact after each probe, and reported zero console errors.
+
 ## 2026-07-28
 
 - [USER+CODE] 2026-07-28: **SUPERSEDES every cover-letter preparation/proposal

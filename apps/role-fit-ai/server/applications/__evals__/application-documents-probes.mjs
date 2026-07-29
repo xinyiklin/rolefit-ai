@@ -122,8 +122,11 @@ const b64 = (buffer) => buffer.toString("base64");
 const dirOf = (id) => join(workspaceDir, "applications", id);
 const resumeSource = await readFile(new URL("../../starter.resume", import.meta.url), "utf8");
 const coverSource = serializeCoverLetterFile({
-  name: "Xinyi Lin",
-  contact: ["xinyi@example.test"],
+  header: {
+    visible: true,
+    name: "Xinyi Lin",
+    contact: ["xinyi@example.test"]
+  },
   sections: [{
     id: "cover",
     heading: "",
@@ -275,6 +278,14 @@ try {
     assert.equal(restoredSource.status, 200, "saving editable source again removes the uploaded PDF");
     assert.equal((await readDocument("app-123", kind, "pdf")).status, 404, "source-only storage leaves no PDF");
   }
+  const storedApplication = (await readApplications(workspaceDir)).find(
+    (application) => application.id === "app-123"
+  );
+  assert.deepEqual(
+    storedApplication.resumeData.header,
+    JSON.parse(resumeSource).document.header,
+    "saving strict resume source preserves the complete header snapshot in the tracker"
+  );
 
   assert.equal(
     (await saveDocument("app-good", "resume", {

@@ -72,7 +72,7 @@ try {
   await mkdir(join(sourceDir, "applications", "application-1", "attachments"), { recursive: true });
 
   const portableResume = JSON.parse(starterText);
-  portableResume.document.name = "Portable Candidate";
+  portableResume.document.header.name = "Portable Candidate";
   const portableResumeText = JSON.stringify(portableResume, null, 2);
   await writeFile(join(sourceDir, "base-resume.resume"), portableResumeText, "utf8");
   await writeFile(
@@ -116,8 +116,11 @@ try {
   );
   await writeFile(join(sourceDir, "applications", "application-1", "resume.resume"), portableResumeText, "utf8");
   const portableCoverText = serializeCoverLetterFile({
-    name: "Portable Candidate",
-    contact: ["portable@example.test"],
+    header: {
+      visible: true,
+      name: "Portable Candidate",
+      contact: ["portable@example.test"]
+    },
     sections: [{
       id: "section-cover",
       heading: "Cover Letter",
@@ -199,7 +202,7 @@ try {
   const result = await restoreWorkspaceBackup(targetDir, withBrowser, fixedDate);
   assert.equal(result.restoredFiles, 6);
   assert.equal(result.previousWorkspaceKept, true);
-  assert.equal(JSON.parse(await readFile(join(targetDir, "resumes", "default.resume"), "utf8")).document.name, "Portable Candidate");
+  assert.equal(JSON.parse(await readFile(join(targetDir, "resumes", "default.resume"), "utf8")).document.header.name, "Portable Candidate");
   assert.equal(await readFile(join(targetDir, "applications", "application-1", "resume.resume"), "utf8"), portableResumeText);
   assert.equal(await readFile(join(targetDir, "applications", "application-1", "cover.cover"), "utf8"), portableCoverText);
   assert.equal(

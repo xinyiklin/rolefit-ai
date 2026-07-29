@@ -1,5 +1,5 @@
 export type HistoryClock = Readonly<{
-  nextSequence(): number;
+  sequenceFor(state: object, action: object): number;
   noteUndo(sequence: number): number;
   noteRedo(sequence: number): void;
   reset(): void;
@@ -15,13 +15,22 @@ export function createHistoryClock(): HistoryClock {
   let branch = 0;
   let generation = 0;
   const undoneSequences = new Set<number>();
+  let sequenceByState = new WeakMap<object, WeakMap<object, number>>();
   return Object.freeze({
-    nextSequence() {
+    sequenceFor(state, action) {
+      let sequenceByAction = sequenceByState.get(state);
+      const allocated = sequenceByAction?.get(action);
+      if (allocated !== undefined) return allocated;
       if (undoneSequences.size > 0) {
         branch += 1;
         undoneSequences.clear();
       }
       sequence += 1;
+      if (!sequenceByAction) {
+        sequenceByAction = new WeakMap<object, number>();
+        sequenceByState.set(state, sequenceByAction);
+      }
+      sequenceByAction.set(action, sequence);
       return sequence;
     },
     noteUndo(value) {
@@ -35,6 +44,7 @@ export function createHistoryClock(): HistoryClock {
       branch += 1;
       generation += 1;
       undoneSequences.clear();
+      sequenceByState = new WeakMap<object, WeakMap<object, number>>();
     },
     currentBranch() {
       return branch;

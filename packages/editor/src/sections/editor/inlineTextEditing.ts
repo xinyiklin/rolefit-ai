@@ -966,6 +966,34 @@ export function trailingLinkWordAt(map: DisplayMap, index: number): { start: num
   return automaticLinkHref(map.display.slice(start, index)) ? { start, end: index } : null;
 }
 
+export type AutoLinkSuppression = {
+  key: string;
+  dStart: number;
+  dEnd: number;
+};
+
+// Repainting a deferred automatic link swaps its editable <a>/<span> node.
+// Preserve the current paint while a pointer selection is in flight so the
+// browser's range anchor remains connected; settle the link once mouseup has
+// produced the final caret or range.
+export function autoLinkSuppressionForSelection(
+  current: AutoLinkSuppression | null,
+  pointerSelectionActive: boolean,
+  selection: {
+    key: string;
+    map: DisplayMap;
+    dStart: number;
+    dEnd: number;
+  } | null
+): AutoLinkSuppression | null {
+  if (pointerSelectionActive) return current;
+  if (!selection || selection.dStart !== selection.dEnd) return null;
+  const word = trailingLinkWordAt(selection.map, selection.dStart);
+  return word
+    ? { key: selection.key, dStart: word.start, dEnd: word.end }
+    : null;
+}
+
 // A copy of the field value with [dStart, dEnd) marked <nolink>, so the render
 // suppresses its auto-link without touching the stored data.
 export function suppressAutoLink(map: DisplayMap, dStart: number, dEnd: number): string {

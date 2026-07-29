@@ -38,10 +38,9 @@ export function TypesetStructureOverlay({
 }: TypesetStructureOverlayProps) {
   const anchorOrigin = anchor ? pageOrigins[anchor.page] ?? null : null;
   const section = anchor ? data.sections.find((item) => item.id === anchor.sectionId) : null;
-  // A grip appears only where a drag would actually reorder something: contacts
-  // never reorder, and single-item lists / summary paragraphs report canDrag
-  // false, so no dead handle is painted.
-  const gripBlock = anchor && anchor.kind !== "contact" && canDrag(anchor) ? anchor : null;
+  // A grip appears only where a drag would actually reorder something;
+  // single-item lists and summary paragraphs report false.
+  const gripBlock = anchor && canDrag(anchor) ? anchor : null;
   // The handle scales with page zoom so it stays proportional to the document.
   const handleSize = Math.max(12, Math.min(24, Math.round(14 * zoom)));
   const gripNoun =

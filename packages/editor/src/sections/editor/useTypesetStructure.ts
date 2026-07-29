@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type MutableRefObject, type PointerEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject, type PointerEvent } from "react";
 
 import type { ResumeEditorActions } from "../../hooks/useResumeEditor.ts";
 import type { ResumeData, ResumeSectionType } from "@typeset/engine/lib/resumeData.ts";
@@ -16,6 +16,17 @@ export type PendingCaret = (
   valueEndIndex?: number;
   endKey?: string;
 } | null;
+
+export type HeaderStructureCommands = {
+  createHeader: () => void;
+  showHeader: () => void;
+  hideHeader: () => void;
+  addName: () => void;
+  removeName: () => void;
+  addContactAtEnd: () => void;
+  addContactRelative: (index: number, position: "before" | "after") => void;
+  removeContact: (index: number, focus?: "previous" | "next") => void;
+};
 
 // The dragged block's own box on the first page it occupies, for the lift
 // highlight (multi-page blocks just highlight from their top; the drop line is
@@ -42,6 +53,50 @@ function nearestVerticalScroller(start: HTMLElement | null): HTMLElement | null 
   return null;
 }
 
+function findSection(data: ResumeData, sectionId: string) {
+  return data.sections.find((section) => section.id === sectionId);
+}
+
+function entryCaretKey(
+  data: ResumeData,
+  sectionId: string,
+  entryId: string
+): string | null {
+  const section = findSection(data, sectionId);
+  const entry = section?.items.find((item) => item.id === entryId);
+  if (!section || !entry) return null;
+  if (section.type === "skills") {
+    return fieldKey({ kind: "skillsRow", sectionId, entryId });
+  }
+  if (section.type === "summary") {
+    return entry.bullets[0]
+      ? fieldKey({
+          kind: "bullet",
+          sectionId,
+          entryId,
+          bulletId: entry.bullets[0].id
+        })
+      : null;
+  }
+  return fieldKey({
+    kind: "entry",
+    sectionId,
+    entryId,
+    field: "titleLeft"
+  });
+}
+
+function bodyStartKey(data: ResumeData): string | null {
+  const firstSection = data.sections[0];
+  if (!firstSection) return null;
+  return firstSection.items[0]
+    ? entryCaretKey(data, firstSection.id, firstSection.items[0].id)
+    : fieldKey({ kind: "heading", sectionId: firstSection.id });
+}
+
+const relativeOffset = (position: "above" | "below") =>
+  position === "above" ? -1 : 1;
+
 type StructureControllerArgs = {
   actions: ResumeEditorActions;
   dataRef: MutableRefObject<ResumeData>;
@@ -63,19 +118,102 @@ export function useTypesetStructure({
   pageOrigins,
   zoom
 }: StructureControllerArgs) {
-  const findSection = (data: ResumeData, sectionId: string) => data.sections.find((section) => section.id === sectionId);
-  const entryCaretKey = (data: ResumeData, sectionId: string, entryId: string): string | null => {
-    const section = findSection(data, sectionId);
-    const entry = section?.items.find((item) => item.id === entryId);
-    if (!section || !entry) return null;
-    if (section.type === "skills") return fieldKey({ kind: "skillsRow", sectionId, entryId });
-    if (section.type === "summary") {
-      return entry.bullets[0]
-        ? fieldKey({ kind: "bullet", sectionId, entryId, bulletId: entry.bullets[0].id })
+  const createHeader = useCallback(() => {
+    markPending();
+    actions.createHeader();
+    pendingCaretRef.current = (data) =>
+      data.header?.name !== null && data.header?.name !== undefined
+        ? { key: fieldKey({ kind: "name" }), valueIndex: 0 }
         : null;
-    }
-    return fieldKey({ kind: "entry", sectionId, entryId, field: "titleLeft" });
-  };
+  }, [actions, markPending, pendingCaretRef]);
+
+  const showHeader = useCallback(() => {
+    markPending();
+    actions.setHeaderVisible(true);
+  }, [actions, markPending]);
+
+  const hideHeader = useCallback(() => {
+    markPending();
+    actions.setHeaderVisible(false);
+  }, [actions, markPending]);
+
+  const addName = useCallback(() => {
+    markPending();
+    actions.setHeaderName("");
+    pendingCaretRef.current = () => ({
+      key: fieldKey({ kind: "name" }),
+      valueIndex: 0
+    });
+  }, [actions, markPending, pendingCaretRef]);
+
+  const removeName = useCallback(() => {
+    markPending();
+    actions.removeHeaderName();
+    pendingCaretRef.current = (data) => {
+      if (data.header?.contact.length) {
+        return { key: fieldKey({ kind: "contact", index: 0 }), valueIndex: 0 };
+      }
+      const key = bodyStartKey(data);
+      return key ? { key, valueIndex: 0 } : null;
+    };
+  }, [actions, markPending, pendingCaretRef]);
+
+  const insertContact = useCallback(
+    (index: number) => {
+      markPending();
+      actions.insertContact(index);
+      pendingCaretRef.current = (data) => {
+        const safeIndex = Math.max(
+          0,
+          Math.min(index, (data.header?.contact.length ?? 1) - 1)
+        );
+        return {
+          key: fieldKey({ kind: "contact", index: safeIndex }),
+          valueIndex: 0
+        };
+      };
+    },
+    [actions, markPending, pendingCaretRef]
+  );
+
+  const addContactAtEnd = useCallback(() => {
+    insertContact(dataRef.current.header?.contact.length ?? 0);
+  }, [dataRef, insertContact]);
+
+  const addContactRelative = useCallback(
+    (index: number, position: "before" | "after") => {
+      insertContact(index + (position === "after" ? 1 : 0));
+    },
+    [insertContact]
+  );
+
+  const removeContact = useCallback(
+    (index: number, focus: "previous" | "next" = "previous") => {
+      markPending();
+      actions.removeContact(index);
+      pendingCaretRef.current = (data) => {
+        const contact = data.header?.contact ?? [];
+        if (contact.length) {
+          const targetIndex = focus === "next"
+            ? Math.min(index, contact.length - 1)
+            : Math.max(0, index - 1);
+          return {
+            key: fieldKey({ kind: "contact", index: targetIndex }),
+            valueIndex: focus === "next" ? 0 : Number.MAX_SAFE_INTEGER
+          };
+        }
+        if (data.header?.name !== null && data.header?.name !== undefined) {
+          return {
+            key: fieldKey({ kind: "name" }),
+            valueIndex: Number.MAX_SAFE_INTEGER
+          };
+        }
+        const key = bodyStartKey(data);
+        return key ? { key, valueIndex: 0 } : null;
+      };
+    },
+    [actions, markPending, pendingCaretRef]
+  );
 
   const removeBulletAt = useCallback(
     (sectionId: string, entryId: string, bulletId: string) => {
@@ -151,8 +289,6 @@ export function useTypesetStructure({
   // element sits at a new index; the freshly created sibling is one slot toward
   // the insert direction (above → refIndex-1, below → refIndex+1). The caret
   // lands in the new element so the user can type immediately.
-  const relativeOffset = (position: "above" | "below") => (position === "above" ? -1 : 1);
-
   const addEntryRelative = useCallback(
     (sectionId: string, entryId: string, position: "above" | "below") => {
       markPending();
@@ -410,7 +546,34 @@ export function useTypesetStructure({
     [actions, dragPlanFor, markPending]
   );
 
+  // The editor's post-paint caret effect depends on callbacks that consume
+  // these commands. A fresh bundle per render makes that effect run against
+  // stale DOM before the edited document has repainted.
+  const headerCommands = useMemo<HeaderStructureCommands>(
+    () => ({
+      createHeader,
+      showHeader,
+      hideHeader,
+      addName,
+      removeName,
+      addContactAtEnd,
+      addContactRelative,
+      removeContact
+    }),
+    [
+      addContactAtEnd,
+      addContactRelative,
+      addName,
+      createHeader,
+      hideHeader,
+      removeContact,
+      removeName,
+      showHeader
+    ]
+  );
+
   return {
+    headerCommands,
     removeBulletAt,
     addBulletToEntry,
     removeEntryAt,

@@ -233,7 +233,7 @@ Good frontend verification covers:
   metadata, company/culture marketing, and trailing benefits / legal
   boilerplate
 - shared-engine integration changes keep
-  `src/typeset/__evals__/linebreak-parity.mjs`, `vertical-parity.mjs`, and
+  `src/typeset/__evals__/linebreak-parity.mjs`, `vertical-layout-snapshot.mjs`, and
   `pdf-roundtrip.mjs` green. These are RoleFit integration and migration guards;
   the canonical engine checks live under `packages/engine/`
 - editor changes keep the shared

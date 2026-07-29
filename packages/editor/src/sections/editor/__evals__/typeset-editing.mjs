@@ -5,6 +5,7 @@
 import assert from "node:assert/strict";
 
 import {
+  autoLinkSuppressionForSelection,
   applyInlineFragment,
   applyEdit,
   buildDisplayMap,
@@ -27,11 +28,20 @@ import {
 import {
   clipboardLineHeight,
   clipboardParagraphSpacePt,
+  clipboardBlocks,
   clipboardHtmlForRanges,
+  clipboardPlainTextForRanges,
+  defaultDocumentPasteMapping,
   decodeInlineClipboard,
-  encodeInlineClipboard
+  decodeSelectionClipboard,
+  encodeInlineClipboard,
+  encodeSelectionClipboard
 } from "../clipboardFormatting.ts";
-import { commitField, valueForField } from "../resumeFieldAdapter.ts";
+import {
+  commitField,
+  historyCaretTarget,
+  valueForField
+} from "../resumeFieldAdapter.ts";
 import { anchorsFromDoc } from "../typesetStructure.ts";
 import { FONT_FAMILY_OPTIONS } from "@typeset/engine/lib/documentStyle.ts";
 import {
@@ -50,8 +60,7 @@ const actions = {
 };
 
 const storedData = () => ({
-  name: "",
-  contact: [],
+  header: { visible: true, name: "", contact: [] },
   sections: [
     {
       id: "skills",
@@ -154,6 +163,7 @@ assert.equal(clipboardLineHeight("normal", 11), null);
   );
   const html = clipboardHtmlForRanges([
     {
+      src: { kind: "bullet", sectionId: "summary", entryId: "one", bulletId: "one" },
       map: paragraph,
       dStart: 0,
       dEnd: paragraph.chars.length,
@@ -179,6 +189,7 @@ assert.equal(clipboardLineHeight("normal", 11), null);
   });
   const crossField = clipboardHtmlForRanges([
     {
+      src: { kind: "bullet", sectionId: "summary", entryId: "one", bulletId: "one" },
       map: paragraph,
       dStart: 0,
       dEnd: paragraph.chars.length,
@@ -188,6 +199,7 @@ assert.equal(clipboardLineHeight("normal", 11), null);
       defaultLineHeight: 1.15
     },
     {
+      src: { kind: "bullet", sectionId: "summary", entryId: "two", bulletId: "two" },
       map: second,
       dStart: 0,
       dEnd: second.chars.length,
@@ -213,6 +225,7 @@ assert.equal(clipboardLineHeight("normal", 11), null);
   });
   const automaticLinkHtml = clipboardHtmlForRanges([
     {
+      src: { kind: "bullet", sectionId: "summary", entryId: "link", bulletId: "link" },
       map: automaticLink,
       dStart: 0,
       dEnd: automaticLink.chars.length,
@@ -226,6 +239,120 @@ assert.equal(clipboardLineHeight("normal", 11), null);
     automaticLinkHtml,
     /<a href="https:\/\/example\.com\/?"><span[^>]*>example\.com<\/span><\/a>/,
     "auto-detected editor links become real outbound HTML anchors"
+  );
+
+  const name = buildDisplayMap("<b>Candidate Name</b>", { preserveWhitespace: true });
+  const email = buildDisplayMap("candidate@example.com", { preserveWhitespace: true });
+  const city = buildDisplayMap("New York, NY", { preserveWhitespace: true });
+  const headerRanges = [
+    { src: { kind: "name" }, map: name },
+    { src: { kind: "contact", index: 0 }, map: email },
+    { src: { kind: "contact", index: 1 }, map: city }
+  ].map(({ src, map }) => ({
+    src,
+    map,
+    dStart: 0,
+    dEnd: map.chars.length,
+    defaultFontFamily: "tinos",
+    defaultFontSizePt: 10,
+    defaultAlignment: "center",
+    defaultLineHeight: 1.15
+  }));
+  const headerHtml = clipboardHtmlForRanges(headerRanges, "•");
+  assert.equal((headerHtml.match(/data-typeset-role="contacts"/g) ?? []).length, 1);
+  assert.match(
+    headerHtml,
+    /candidate@example\.com.*•.*New York, NY/,
+    "external header HTML emits contacts on one logical line"
+  );
+  assert.equal(
+    clipboardPlainTextForRanges(headerRanges, "•"),
+    "Candidate Name\ncandidate@example.com • New York, NY"
+  );
+  assert.equal(
+    clipboardPlainTextForRanges(
+      [
+        ...headerRanges,
+        {
+          src: {
+            kind: "bullet",
+            sectionId: "summary",
+            entryId: "body",
+            bulletId: "body"
+          },
+          map: second,
+          dStart: 0,
+          dEnd: second.chars.length,
+          defaultFontFamily: "tinos",
+          defaultFontSizePt: 10,
+          defaultAlignment: "left",
+          defaultLineHeight: 1.15
+        }
+      ],
+      "•"
+    ),
+    "Candidate Name\ncandidate@example.com • New York, NY\n\nSecond logical paragraph.",
+    "plain-text copy separates a complete header from body paragraphs"
+  );
+
+  const directPayload = encodeSelectionClipboard([{
+    kind: "header",
+    header: {
+      visible: false,
+      name: "<b>Candidate Name</b>",
+      contact: ["candidate@example.com", "New York, NY"]
+    }
+  }]);
+  assert.deepEqual(decodeSelectionClipboard(directPayload), [{
+    kind: "header",
+    header: {
+      visible: false,
+      name: "<b>Candidate Name</b>",
+      contact: ["candidate@example.com", "New York, NY"]
+    }
+  }], "the private selection format restores exact header structure");
+  assert.equal(
+    decodeSelectionClipboard(JSON.stringify({
+      ...JSON.parse(directPayload),
+      ignored: true
+    })),
+    null,
+    "the private selection format rejects undeclared top-level data"
+  );
+  assert.equal(
+    decodeSelectionClipboard(encodeSelectionClipboard([
+      { kind: "paragraph", value: "Body" },
+      {
+        kind: "header",
+        header: { visible: true, name: "Candidate", contact: [] }
+      }
+    ])),
+    null,
+    "a private header block must be unique and first"
+  );
+
+  assert.deepEqual(
+    clipboardBlocks(
+      "",
+      "Name\nPortfolio"
+    ),
+    ["Name", "Portfolio"],
+    "plain-text structural fallback splits only nonempty authored lines"
+  );
+  assert.deepEqual(
+    defaultDocumentPasteMapping(1),
+    { nameIndex: null, bodyStart: 0 },
+    "one block remains body-only"
+  );
+  assert.deepEqual(
+    defaultDocumentPasteMapping(2),
+    { nameIndex: 0, bodyStart: 1 },
+    "two blocks cannot map the first block to both name and body"
+  );
+  assert.deepEqual(
+    defaultDocumentPasteMapping(3),
+    { nameIndex: 0, bodyStart: 2 },
+    "three blocks default to name, contact, and body"
   );
 }
 
@@ -862,6 +989,31 @@ for (const isALink of ["example.com", "sub.example.co.uk", "example.io/resume.pd
   assert.notEqual(automaticLinkHref(isALink), null, `${isALink} must still auto-link`);
 }
 
+// Restoring an empty trailing contact is a structural history change even
+// though both the missing field and its value read as an empty string.
+{
+  const base = storedData();
+  const after = {
+    ...base,
+    header: {
+      ...base.header,
+      contact: ["candidate@example.com", ""]
+    }
+  };
+  const before = {
+    ...base,
+    header: {
+      ...base.header,
+      contact: ["candidate@example.com"]
+    }
+  };
+  assert.deepEqual(
+    historyCaretTarget(before, after),
+    { key: "contact|1", valueIndex: 0 },
+    "undo/redo restores the caret inside the contact after its divider"
+  );
+}
+
 // 6. The render overlay for a deferred auto-link must always display exactly the
 //    CURRENT value. A cached overlay value was stale for the repaint after the
 //    next keystroke, and the caret restore then clamped one character short.
@@ -881,6 +1033,51 @@ for (const isALink of ["example.com", "sub.example.co.uk", "example.io/resume.pd
     const word = trailingLinkWordAt(map, map.chars.length);
     range = word ? { dStart: word.start, dEnd: word.end } : null;
   }
+}
+
+// 7. A pointer drag that starts at an automatic link's trailing edge must not
+//    repaint that link between mousedown and mousemove. Replacing its <a> with a
+//    <span> invalidates the browser's anchor node and collapses the drag.
+{
+  const map = dm("linkedin.com/in/xinyiklin");
+  const collapsedAtEnd = {
+    key: "contact|0",
+    map,
+    dStart: map.chars.length,
+    dEnd: map.chars.length
+  };
+  assert.equal(
+    autoLinkSuppressionForSelection(null, true, collapsedAtEnd),
+    null,
+    "pointer selection preserves the current paint at an automatic link edge"
+  );
+
+  const current = {
+    key: "contact|0",
+    dStart: 0,
+    dEnd: map.chars.length
+  };
+  assert.deepEqual(
+    autoLinkSuppressionForSelection(current, true, {
+      ...collapsedAtEnd,
+      dStart: 5
+    }),
+    current,
+    "an existing suppression remains stable until the pointer gesture ends"
+  );
+  assert.deepEqual(
+    autoLinkSuppressionForSelection(null, false, collapsedAtEnd),
+    current,
+    "a non-pointer caret still defers an automatic link while typing"
+  );
+  assert.equal(
+    autoLinkSuppressionForSelection(current, false, {
+      ...collapsedAtEnd,
+      dStart: 5
+    }),
+    null,
+    "the completed range restores normal link rendering"
+  );
 }
 
 // Authored prose indentation behaves as one measured tab stop.

@@ -22,9 +22,18 @@ import {
   type ReactNode
 } from "react";
 
-import type { ResumeData, ResumeSectionType } from "@typeset/engine/lib/resumeData.ts";
+import {
+  newSection,
+  newSummaryEntry,
+  type ResumeData,
+  type ResumeSectionType
+} from "@typeset/engine/lib/resumeData.ts";
 import { automaticLinkHref } from "@typeset/engine/lib/links.ts";
-import type { FieldEdit, ResumeEditorActions } from "../../hooks/useResumeEditor";
+import type {
+  FieldEdit,
+  ResumeEditorActions,
+  TextHistoryIntent
+} from "../../hooks/useResumeEditor";
 import {
   STYLE_FIELD_MARK_DEFAULTS,
   styleFieldDefaultSizePt,
@@ -38,6 +47,7 @@ import {
 } from "@typeset/engine/lib/inlineMarksText.ts";
 import type { DocStyleControls } from "../../hooks/useDocStyle";
 import { historySourceFor } from "../../hooks/historyClock.ts";
+import { useModalFocus } from "../../hooks/useModalFocus.ts";
 import {
   nextZoomOption,
   type AlignmentScope,
@@ -69,9 +79,11 @@ import {
   type DisplayRange
 } from "./domSelection.ts";
 import {
+  autoLinkSuppressionForSelection,
   applyInlineFragment,
   applyEdit,
   buildDisplayMap,
+  inlineFragmentForRange,
   displayIndexForValueIndex,
   valueIndexForDisplayIndex,
   indentDeletionRange,
@@ -93,7 +105,6 @@ import {
   explicitLinkRunAt,
   autoLinkWordAt,
   expandToLinkRun,
-  trailingLinkWordAt,
   suppressedAutoLinkValue,
   clearFormatting,
   hasClearableFormatting,
@@ -102,6 +113,7 @@ import {
   typingFormatForDeletedRange,
   typingFormatForEmptyField,
   type DisplayMap,
+  type AutoLinkSuppression,
   type TypingFormat,
   type TypesetSelection
 } from "./inlineTextEditing.ts";
@@ -117,6 +129,17 @@ import {
 import { useTypesetInputEvents, type QueuedIntent } from "./useTypesetInputEvents.ts";
 import {
   clipboardHtmlForRanges,
+  clipboardBlocks,
+  clipboardPlainTextForRanges,
+  defaultDocumentPasteMapping,
+  decodeInlineClipboard,
+  decodeSelectionClipboard,
+  encodeInlineClipboard,
+  encodeSelectionClipboard,
+  inlineFragmentFromHtml,
+  paragraphFragmentsFromHtml,
+  TYPESET_INLINE_CLIPBOARD_MIME,
+  TYPESET_SELECTION_CLIPBOARD_MIME,
   type ClipboardRange
 } from "./clipboardFormatting.ts";
 import {
@@ -158,10 +181,6 @@ function sameCaretGeometry(
   );
 }
 
-// Where a URL word's auto-link is being visually deferred while it is typed.
-// A range, never the field's text: see suppressedAutoLinkValue.
-type AutoLinkSuppression = { key: string; dStart: number; dEnd: number };
-
 export type InlineFormatState = {
   canFormat: boolean;
   bold: boolean;
@@ -200,6 +219,7 @@ export type TypesetEditorHandle = {
   // yields to a text field outside the editor that already has focus, so an
   // async load can never interrupt someone typing elsewhere.
   focusDocumentStart: () => void;
+  createHeader: () => void;
   toggleMark: (mark: "bold" | "italic" | "underline") => void;
   setFontFamily: (fontFamily: FontFamily) => void;
   setFontSize: (fontSizePt: number) => void;
@@ -227,6 +247,10 @@ export type TypesetEditorCommands = TypesetEditorHandle & {
   selectionText: () => string;
   deleteSelection: () => void;
   insertText: (text: string) => void;
+  copySelection: () => Promise<boolean>;
+  cutSelection: () => Promise<boolean>;
+  pasteFromClipboard: () => Promise<void>;
+  pasteAsDocumentFromClipboard: () => Promise<void>;
 };
 
 // The geometry/anchor context a host overlay positions itself from — the same
@@ -260,7 +284,10 @@ type TypesetEditorProps = {
   // scroll-into-view after each repaint. Not document state.
   highlightFieldKey?: string | null;
   documentKind?: "resume" | "cover-letter";
-  structureEditing?: boolean;
+  structureCapabilities?: {
+    header: boolean;
+    sections: boolean;
+  };
   onPageCount?: (count: number) => void;
   // Where the caret was when this editor last unmounted, so a host that swaps
   // the editor out (RoleFit's studio tabs) can return the user to the line they
@@ -294,6 +321,123 @@ const EMPTY_FORMAT_STATE: InlineFormatState = {
   canLink: false,
   canClearFormatting: false
 };
+
+const DEFAULT_STRUCTURE_CAPABILITIES = {
+  header: true,
+  sections: true
+} as const;
+
+type RichClipboardPayload = {
+  plain: string;
+  html: string;
+  inline?: string;
+  selection?: string;
+};
+
+type HeaderPastePrompt = {
+  selection: TypesetSelection;
+  blocks: string[];
+  dividerBlocks: string[];
+  x: number;
+  y: number;
+};
+
+type DocumentPastePrompt = {
+  blocks: string[];
+  nameIndex: number | null;
+  bodyStart: number;
+};
+
+function coverLetterDocument(
+  paragraphs: readonly string[],
+  header: ResumeData["header"]
+): ResumeData {
+  const section = newSection("summary", "");
+  return {
+    header: header
+      ? {
+          visible: header.visible,
+          name: header.name,
+          contact: [...header.contact]
+        }
+      : null,
+    sections: [{
+      ...section,
+      items: paragraphs.map((text) => {
+        const entry = newSummaryEntry();
+        return {
+          ...entry,
+          bullets: [{ ...entry.bullets[0], text }]
+        };
+      })
+    }]
+  };
+}
+
+function selectionClipboardParts(payload: string): {
+  header: ResumeData["header"];
+  hasHeader: boolean;
+  paragraphs: string[];
+} | null {
+  const blocks = decodeSelectionClipboard(payload);
+  if (!blocks) return null;
+  const headerBlock = blocks.find((block) => block.kind === "header");
+  return {
+    header: headerBlock?.kind === "header" ? headerBlock.header : null,
+    hasHeader: headerBlock?.kind === "header",
+    paragraphs: blocks
+      .filter((block) => block.kind === "paragraph")
+      .map((block) => block.value)
+  };
+}
+
+async function writeRichClipboard(payload: RichClipboardPayload): Promise<boolean> {
+  if (!payload.plain || typeof navigator === "undefined" || !navigator.clipboard) {
+    return false;
+  }
+  if (navigator.clipboard.write && typeof ClipboardItem !== "undefined") {
+    const entries: Record<string, Blob> = {
+      "text/plain": new Blob([payload.plain], { type: "text/plain" }),
+      "text/html": new Blob([payload.html], { type: "text/html" })
+    };
+    if (payload.inline) {
+      entries[TYPESET_INLINE_CLIPBOARD_MIME] = new Blob(
+        [encodeInlineClipboard(payload.inline)],
+        { type: TYPESET_INLINE_CLIPBOARD_MIME }
+      );
+    }
+    if (payload.selection) {
+      entries[TYPESET_SELECTION_CLIPBOARD_MIME] = new Blob(
+        [payload.selection],
+        { type: TYPESET_SELECTION_CLIPBOARD_MIME }
+      );
+    }
+    try {
+      await navigator.clipboard.write([new ClipboardItem(entries)]);
+      return true;
+    } catch {
+      // Some browsers reject custom ClipboardItem MIME types. Retry the same
+      // rich external payload without the private flavor before plain text.
+      try {
+        await navigator.clipboard.write([
+          new ClipboardItem({
+            "text/plain": entries["text/plain"],
+            "text/html": entries["text/html"]
+          })
+        ]);
+        return true;
+      } catch {
+        // Fall through to the broadly supported plain-text API.
+      }
+    }
+  }
+  try {
+    await navigator.clipboard.writeText(payload.plain);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 // The toolbar re-renders from this state on every selection change, so publish a
 // new object only when something a control shows actually changed.
@@ -336,11 +480,11 @@ function paragraphSpacingAllowedIn(src: FieldSrc): boolean {
   return src.kind === "bullet";
 }
 
-// Resolve through the shared role-size truth: the name via the document's
-// nameSize scale, every styleable field via styleFieldDefaultSizePt, and
+// Resolve through the shared role-size truth: the name via its display size,
+// every styleable field via styleFieldDefaultSizePt, and
 // bullets (which have no style-field role) at the body size.
 function defaultFontSizeForField(src: FieldSrc, style: DocStyle): number {
-  if (src.kind === "name") return nameSizePt(fontSizesFor(style.baseFontSizePt), style.nameSize);
+  if (src.kind === "name") return nameSizePt(fontSizesFor(style.baseFontSizePt));
   const field = styleFieldForSrc(src);
   return field
     ? styleFieldDefaultSizePt(field, style.baseFontSizePt)
@@ -403,7 +547,7 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
   overlay,
   highlightFieldKey = null,
   documentKind = "resume",
-  structureEditing = true,
+  structureCapabilities = DEFAULT_STRUCTURE_CAPABILITIES,
   onPageCount,
   initialCaret = null,
   onCaretExit
@@ -475,6 +619,68 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
   uppercaseRef.current = headingUppercase;
 
   const [nonce, setNonce] = useState(0);
+  const [headerPastePrompt, setHeaderPastePrompt] =
+    useState<HeaderPastePrompt | null>(null);
+  const [documentPastePrompt, setDocumentPastePrompt] =
+    useState<DocumentPastePrompt | null>(null);
+  const headerPasteDialogRef = useRef<HTMLDivElement | null>(null);
+  const headerPasteReturnFocusRef = useRef<HTMLElement | null>(null);
+  const documentPasteDialogRef = useRef<HTMLElement | null>(null);
+  const closeDocumentPastePrompt = useCallback(
+    () => setDocumentPastePrompt(null),
+    []
+  );
+  const handleDocumentPasteDialogKeyDown = useModalFocus({
+    active: documentPastePrompt !== null,
+    containerRef: documentPasteDialogRef,
+    initialFocusSelector: "[data-autofocus]",
+    onClose: closeDocumentPastePrompt
+  });
+
+  const closeHeaderPastePrompt = useCallback((restoreFocus = false) => {
+    setHeaderPastePrompt(null);
+    if (!restoreFocus) return;
+    const target = headerPasteReturnFocusRef.current;
+    window.requestAnimationFrame(() => {
+      if (target?.isConnected) target.focus();
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!headerPastePrompt) return;
+    headerPasteReturnFocusRef.current =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+    const frame = window.requestAnimationFrame(() => {
+      headerPasteDialogRef.current
+        ?.querySelector<HTMLElement>("[data-autofocus]")
+        ?.focus();
+    });
+    const onPointerDown = (event: PointerEvent) => {
+      if (!headerPasteDialogRef.current?.contains(event.target as Node)) {
+        closeHeaderPastePrompt(false);
+      }
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      event.stopPropagation();
+      closeHeaderPastePrompt(true);
+    };
+    const dismiss = () => closeHeaderPastePrompt(false);
+    document.addEventListener("pointerdown", onPointerDown, true);
+    document.addEventListener("keydown", onKeyDown, true);
+    window.addEventListener("scroll", dismiss, true);
+    window.addEventListener("resize", dismiss);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      document.removeEventListener("pointerdown", onPointerDown, true);
+      document.removeEventListener("keydown", onKeyDown, true);
+      window.removeEventListener("scroll", dismiss, true);
+      window.removeEventListener("resize", dismiss);
+    };
+  }, [closeHeaderPastePrompt, headerPastePrompt]);
 
   // Caret placement across a document open or an editor remount. Both are
   // consumed by the post-paint restore effect below, because a caret can only
@@ -542,6 +748,7 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
   });
 
   const {
+    headerCommands,
     removeBulletAt,
     addBulletToEntry,
     removeEntryAt,
@@ -662,6 +869,10 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
   // Restores always re-apply the range in the same task, so the sync that
   // follows sees the true caret.
   const restoringSelectionRef = useRef(false);
+  // Automatic links repaint between <a>/<span> while they are being typed.
+  // Pointer selection must keep that node stable until mouseup or the browser
+  // loses the range anchor before the drag develops.
+  const pointerSelectionRef = useRef(false);
   const [inlineFormatState, setInlineFormatState] = useState<InlineFormatState>(EMPTY_FORMAT_STATE);
   const [caretOverlay, setCaretOverlay] = useState<CaretOverlayGeometry | null>(null);
 
@@ -737,14 +948,11 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
       // trailing edge is the caret (it is being typed); it links once a space
       // follows or the caret leaves it. Computed before the toolbar-focus early
       // return so leaving the field to the toolbar also completes the word.
-      const suppressWord =
-        selection && selection.dStart === selection.dEnd
-          ? trailingLinkWordAt(selection.map, selection.dStart)
-          : null;
-      const nextSuppress: AutoLinkSuppression | null =
-        selection && suppressWord
-          ? { key: selection.key, dStart: suppressWord.start, dEnd: suppressWord.end }
-          : null;
+      const nextSuppress = autoLinkSuppressionForSelection(
+        autoLinkSuppressRef.current,
+        pointerSelectionRef.current,
+        selection
+      );
       const prevSuppress = autoLinkSuppressRef.current;
       if (
         (prevSuppress?.key ?? null) !== (nextSuppress?.key ?? null) ||
@@ -759,6 +967,20 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
           const vEnd =
             selection.dEnd > selection.dStart ? (selection.map.valueStart[selection.dEnd] ?? selection.value.length) : undefined;
           pendingCaretRef.current = () => ({ key, valueIndex: vStart, valueEndIndex: vEnd });
+        } else {
+          const ranges = readRanges();
+          const first = ranges?.[0];
+          const last = ranges?.[ranges.length - 1];
+          if (first && last) {
+            pendingCaretRef.current = () => ({
+              key: first.key,
+              valueIndex:
+                first.map.valueStart[first.dStart] ?? first.value.length,
+              endKey: last.key,
+              valueEndIndex:
+                last.map.valueStart[last.dEnd] ?? last.value.length
+            });
+          }
         }
         autoLinkSuppressRef.current = nextSuppress;
         setAutoLinkSuppress(nextSuppress);
@@ -999,12 +1221,38 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
       });
     };
 
+    const beginPointerSelection = (event: MouseEvent) => {
+      if (event.button !== 0) return;
+      pointerSelectionRef.current = Boolean(
+        host &&
+        event.target instanceof Node &&
+        host.contains(event.target)
+      );
+    };
+    const finishPointerSelection = () => {
+      if (!pointerSelectionRef.current) return;
+      pointerSelectionRef.current = false;
+      // Native selection finishes as the mouse event unwinds. Settle the
+      // deferred link from that final range, not the preceding move.
+      queueMicrotask(sync);
+    };
+    const cancelPointerSelection = () => {
+      pointerSelectionRef.current = false;
+    };
+
+    document.addEventListener("mousedown", beginPointerSelection, true);
+    document.addEventListener("mouseup", finishPointerSelection, true);
+    window.addEventListener("blur", cancelPointerSelection);
     document.addEventListener("selectionchange", sync);
     document.addEventListener("focusin", sync);
     sync();
     return () => {
+      document.removeEventListener("mousedown", beginPointerSelection, true);
+      document.removeEventListener("mouseup", finishPointerSelection, true);
+      window.removeEventListener("blur", cancelPointerSelection);
       document.removeEventListener("selectionchange", sync);
       document.removeEventListener("focusin", sync);
+      pointerSelectionRef.current = false;
       if (host) clearSelectionHighlights(host);
     };
   }, [docStyle.style, docVersion, lineRangesFor, nonce, readRanges, readSelection, syncCaretOverlay]);
@@ -1131,7 +1379,13 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
   );
 
   const commitReplace = useCallback(
-    (sel: TypesetSelection, dStart: number, dEnd: number, insert: string) => {
+    (
+      sel: TypesetSelection,
+      dStart: number,
+      dEnd: number,
+      insert: string,
+      historyIntent?: TextHistoryIntent
+    ) => {
       const singleLine = sel.src.kind !== "bullet";
       const normalized = insert.replace(/\r/g, "");
       const text = singleLine ? normalized.replace(/\s*\n+\s*/g, " ") : normalized;
@@ -1144,7 +1398,19 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
       const { value, caretValueIndex } = applyEdit(sel.map, dStart, dEnd, text, typingFormat);
       recordPreEditSelection(sel);
       markPending();
-      commitField(actions, sel.src, value);
+      commitField(
+        actions,
+        sel.src,
+        value,
+        historyIntent
+          ? {
+              historyIntent,
+              // History groups typing by word, so it needs the characters this
+              // keystroke moved: what was typed, or what deletion consumed.
+              historyText: text || sel.map.display.slice(dStart, dEnd)
+            }
+          : undefined
+      );
       if (sel.src.kind === "skillsRow") {
         // Typing the colon crosses from the label into the skills: drop the seeded
         // label emphasis (see emphasisSeedForField) so the skills come out plain
@@ -1184,6 +1450,102 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
       scheduleCaretAfterFieldCommit(sel, value, caretValueIndex);
     },
     [actions, markPending, recordPreEditSelection, scheduleCaretAfterFieldCommit]
+  );
+
+  const requestHeaderPasteChoice = useCallback(
+    (
+      selection: TypesetSelection,
+      blocks: readonly string[],
+      plainText: string
+    ): boolean => {
+      if (
+        blocks.length < 2 ||
+        (selection.src.kind !== "name" && selection.src.kind !== "contact")
+      ) {
+        return false;
+      }
+      const field = hostRef.current?.querySelector<HTMLElement>(
+        `[data-tsdf="${CSS.escape(selection.key)}"]:not([data-tsdm])`
+      );
+      const rect = field?.getBoundingClientRect();
+      const divider = docStyle.style.contactDivider;
+      const dividerBlocks = plainText
+        .split(divider)
+        .map((item) => item.trim())
+        .filter(Boolean);
+      setHeaderPastePrompt({
+        selection,
+        blocks: [...blocks],
+        dividerBlocks: dividerBlocks.length > 1 ? dividerBlocks : [],
+        x: rect?.left ?? window.innerWidth / 2,
+        y: rect?.bottom ?? window.innerHeight / 2
+      });
+      return true;
+    },
+    [docStyle.style.contactDivider, hostRef]
+  );
+
+  const applyHeaderPasteChoice = useCallback(
+    (mode: "inline" | "structure" | "divider") => {
+      const prompt = headerPastePrompt;
+      if (!prompt) return;
+      const src = prompt.selection.src;
+      if (src.kind !== "name" && src.kind !== "contact") return;
+      closeHeaderPastePrompt(false);
+      const blocks = mode === "divider" ? prompt.dividerBlocks : prompt.blocks;
+      if (mode === "inline") {
+        commitPaste(
+          prompt.selection,
+          prompt.selection.dStart,
+          prompt.selection.dEnd,
+          blocks.join("\n")
+        );
+        return;
+      }
+      const current = dataRef.current.header ?? {
+        visible: true,
+        name: null,
+        contact: []
+      };
+      const header = src.kind === "name"
+        ? {
+            visible: true,
+            name: blocks[0] ?? "",
+            contact: blocks.slice(1)
+          }
+        : {
+            ...current,
+            visible: true,
+            contact: [
+              ...current.contact.slice(0, src.index),
+              ...blocks,
+              ...current.contact.slice(src.index + 1)
+            ]
+          };
+      markPending();
+      actions.replaceHeader(header);
+      pendingCaretRef.current = () => {
+        if (src.kind === "name") {
+          return { key: "name", valueIndex: Number.MAX_SAFE_INTEGER };
+        }
+        return {
+          key: fieldKey({
+            kind: "contact",
+            index: src.index + Math.max(0, blocks.length - 1)
+          }),
+          valueIndex: Number.MAX_SAFE_INTEGER
+        };
+      };
+    },
+    [
+      actions,
+      closeHeaderPastePrompt,
+      commitPaste,
+      dataRef,
+      headerPastePrompt,
+      markPending,
+      pendingCaretRef
+    ]
   );
 
   const commitParagraphPaste = useCallback(
@@ -1550,6 +1912,63 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
     [commitRangesFormatting, marksAllowedIn]
   );
 
+  const commitPrivateStructuralPaste = useCallback(
+    (payload: string, headerTarget: boolean): boolean => {
+      const parts = selectionClipboardParts(payload);
+      if (!parts) return false;
+      if (
+        documentKind === "cover-letter" &&
+        parts.hasHeader &&
+        parts.paragraphs.length
+      ) {
+        markPending();
+        actions.replaceDocument(
+          coverLetterDocument(parts.paragraphs, parts.header)
+        );
+        pendingCaretRef.current = (fresh) => {
+          const first = fresh.sections[0]?.items[0]?.bullets[0];
+          return first
+            ? {
+                key: fieldKey({
+                  kind: "bullet",
+                  sectionId: fresh.sections[0].id,
+                  entryId: fresh.sections[0].items[0].id,
+                  bulletId: first.id
+                }),
+                valueIndex: 0
+              }
+            : null;
+        };
+        return true;
+      }
+      if (
+        parts.hasHeader &&
+        parts.paragraphs.length === 0 &&
+        headerTarget
+      ) {
+        markPending();
+        actions.replaceHeader(parts.header);
+        pendingCaretRef.current = (fresh) => {
+          if (fresh.header?.name !== null && fresh.header?.name !== undefined) {
+            return {
+              key: fieldKey({ kind: "name" }),
+              valueIndex: Number.MAX_SAFE_INTEGER
+            };
+          }
+          return fresh.header?.contact.length
+            ? {
+                key: fieldKey({ kind: "contact", index: 0 }),
+                valueIndex: Number.MAX_SAFE_INTEGER
+              }
+            : null;
+        };
+        return true;
+      }
+      return false;
+    },
+    [actions, documentKind, markPending]
+  );
+
   // The same intents the input hook builds, applied to a cross-field selection.
   // Returns false when there is no such selection, so every caller can fall
   // through to its single-field path unchanged.
@@ -1564,16 +1983,51 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
         case "deleteFwd":
         case "deleteSelection":
           return commitRangesDelete(ranges);
-        case "paste":
-          return commitRangesDelete(ranges, "", intent.fragment);
-        case "pasteParagraphs":
-          return commitRangesDelete(ranges, "", undefined, intent.fragments);
-        case "splitBullet":
+        case "richPaste":
+          if (
+            intent.selectionPayload &&
+            commitPrivateStructuralPaste(
+              intent.selectionPayload,
+              ranges.every(
+                (range) =>
+                  range.src.kind === "name" ||
+                  range.src.kind === "contact"
+              )
+            )
+          ) {
+            return true;
+          }
+          {
+            const privateParts = intent.selectionPayload
+              ? selectionClipboardParts(intent.selectionPayload)
+              : null;
+            const paragraphFragments =
+              privateParts && !privateParts.hasHeader
+                ? privateParts.paragraphs
+                : intent.paragraphFragments;
+            if (paragraphFragments?.length) {
+              return commitRangesDelete(
+                ranges,
+                "",
+                undefined,
+                paragraphFragments
+              );
+            }
+          }
+          if (intent.fragment) {
+            return commitRangesDelete(ranges, "", intent.fragment);
+          }
+          return intent.plainText
+            ? commitRangesDelete(ranges, intent.plainText)
+            : false;
+        case "enter":
           // Drop the selection first, then let the queue replay the split into the
           // collapsed caret that leaves behind.
           if (!commitRangesDelete(ranges)) return false;
           replayQueueRef.current.push(intent);
           return true;
+        case "deleteHeaderField":
+          return false;
         case "toggleMark":
           return applyMarkAcross(ranges, intent.mark);
         case "clearFormatting":
@@ -1604,6 +2058,7 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
       applyMarkAcross,
       commitRangesDelete,
       commitRangesFormatting,
+      commitPrivateStructuralPaste,
       indentWidthAt,
       readRanges
     ]
@@ -1619,6 +2074,7 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
 
   const clipboardRangeFor = useCallback(
     (range: Pick<FieldRange, "map" | "src" | "dStart" | "dEnd">): ClipboardRange => ({
+      src: range.src,
       map: range.map,
       dStart: range.dStart,
       dEnd: range.dEnd,
@@ -1632,48 +2088,424 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
 
   const selectionClipboardHtml = useCallback(
     (selection: TypesetSelection): string =>
-      clipboardHtmlForRanges([clipboardRangeFor(selection)]),
-    [clipboardRangeFor]
+      clipboardHtmlForRanges(
+        [clipboardRangeFor(selection)],
+        docStyle.style.contactDivider
+      ),
+    [clipboardRangeFor, docStyle.style.contactDivider]
   );
 
-  const crossFieldClipboard = useCallback((): { plain: string; html: string } | null => {
+  const crossFieldClipboard = useCallback((): {
+    plain: string;
+    html: string;
+    selection?: string;
+  } | null => {
     const ranges = readRanges();
     if (!ranges) return null;
+    const clipboardRanges = ranges.map(clipboardRangeFor);
+    const expectedHeaderKeys = dataRef.current.header?.visible
+      ? [
+          ...(dataRef.current.header.name === null ? [] : ["name"]),
+          ...dataRef.current.header.contact.map((_, index) => `contact|${index}`)
+        ]
+      : [];
+    const selectedHeaderRanges = ranges.filter(
+      (range) => range.src.kind === "name" || range.src.kind === "contact"
+    );
+    const selectedHeaderKeys = selectedHeaderRanges.map((range) => range.key);
+    const completeHeader =
+      dataRef.current.header?.visible &&
+      expectedHeaderKeys.length > 0 &&
+      expectedHeaderKeys.every((key) => selectedHeaderKeys.includes(key)) &&
+      selectedHeaderRanges.every(
+        (range) =>
+          range.dStart === 0 && range.dEnd === range.map.chars.length
+      );
+    const paragraphRanges = ranges.filter(
+      (range) => range.src.kind === "bullet"
+    );
+    const fullParagraphs = paragraphRanges.every(
+      (range) =>
+        range.dStart === 0 && range.dEnd === range.map.chars.length
+    );
+    const everyRangeRepresented =
+      selectedHeaderRanges.length + paragraphRanges.length === ranges.length;
+    const hostKeys = hostRef.current ? orderedFieldKeys(hostRef.current) : [];
+    const fullDocument =
+      hostKeys.length === ranges.length &&
+      hostKeys.every((key, index) => ranges[index]?.key === key) &&
+      ranges.every(
+        (range) =>
+          range.dStart === 0 && range.dEnd === range.map.chars.length
+      );
+    const hasHeader = Boolean(completeHeader);
+    const hasParagraphs = paragraphRanges.length > 0;
+    const selectionIsLossless =
+      documentKind === "cover-letter" &&
+      everyRangeRepresented &&
+      fullParagraphs &&
+      (
+        (hasHeader && !hasParagraphs) ||
+        (!selectedHeaderRanges.length && hasParagraphs) ||
+        (hasHeader && hasParagraphs && fullDocument)
+      );
+    const blocks = selectionIsLossless ? [
+      ...(completeHeader && dataRef.current.header
+        ? [{
+            kind: "header" as const,
+            header: {
+              ...dataRef.current.header,
+              contact: [...dataRef.current.header.contact]
+            }
+          }]
+        : []),
+      ...paragraphRanges
+        .map((range) => ({
+          kind: "paragraph" as const,
+          value: inlineFragmentForRange(
+            range.map,
+            range.dStart,
+            range.dEnd
+          )
+        }))
+    ] : [];
     return {
-      plain: ranges
-        .map((range) => range.map.display.slice(range.dStart, range.dEnd))
-        .join("\n"),
-      html: clipboardHtmlForRanges(ranges.map(clipboardRangeFor))
+      plain: clipboardPlainTextForRanges(
+        clipboardRanges,
+        docStyle.style.contactDivider
+      ),
+      html: clipboardHtmlForRanges(
+        clipboardRanges,
+        docStyle.style.contactDivider
+      ),
+      selection: blocks.length ? encodeSelectionClipboard(blocks) : undefined
     };
-  }, [clipboardRangeFor, readRanges]);
+  }, [
+    clipboardRangeFor,
+    dataRef,
+    documentKind,
+    docStyle.style.contactDivider,
+    hostRef,
+    readRanges
+  ]);
+
+  const commitSelectionPaste = useCallback(
+    (selection: TypesetSelection, payload: string): boolean => {
+      if (
+        commitPrivateStructuralPaste(
+          payload,
+          selection.src.kind === "name" ||
+            selection.src.kind === "contact"
+        )
+      ) {
+        return true;
+      }
+      const parts = selectionClipboardParts(payload);
+      return parts && !parts.hasHeader && parts.paragraphs.length > 0
+        ? commitParagraphPaste(selection, parts.paragraphs)
+        : false;
+    },
+    [
+      commitParagraphPaste,
+      commitPrivateStructuralPaste
+    ]
+  );
+
+  const commitRichPaste = useCallback(
+    (
+      selection: TypesetSelection,
+      intent: Extract<QueuedIntent, { kind: "richPaste" }>
+    ): boolean => {
+      if (
+        intent.selectionPayload &&
+        commitSelectionPaste(selection, intent.selectionPayload)
+      ) {
+        return true;
+      }
+      if (
+        requestHeaderPasteChoice(
+          selection,
+          intent.blocks,
+          intent.plainText
+        )
+      ) {
+        return true;
+      }
+      if (
+        intent.paragraphFragments &&
+        commitParagraphPaste(selection, intent.paragraphFragments)
+      ) {
+        return true;
+      }
+      if (intent.fragment) {
+        commitPaste(
+          selection,
+          selection.dStart,
+          selection.dEnd,
+          intent.fragment
+        );
+        return true;
+      }
+      if (!intent.plainText) return false;
+      commitReplace(
+        selection,
+        selection.dStart,
+        selection.dEnd,
+        intent.plainText
+      );
+      return true;
+    },
+    [
+      commitParagraphPaste,
+      commitPaste,
+      commitReplace,
+      commitSelectionPaste,
+      requestHeaderPasteChoice
+    ]
+  );
 
   // Clipboard primitives for the right-click menu. Each tries the cross-field
   // path first and falls back to the single-field one, exactly as the keyboard
   // equivalents in useTypesetInputEvents do — the menu must not be a second,
   // weaker implementation of Cut/Copy/Paste.
   const selectionText = useCallback((): string => {
-    const cross = crossFieldPlainText();
-    if (cross !== null) return cross;
     const selection = readSelection();
-    return selection ? selection.map.display.slice(selection.dStart, selection.dEnd) : "";
+    if (selection) {
+      return selection.map.display.slice(selection.dStart, selection.dEnd);
+    }
+    const cross = crossFieldPlainText();
+    return cross ?? "";
   }, [crossFieldPlainText, readSelection]);
 
   const deleteSelection = useCallback(() => {
-    if (commitCrossFieldIntent({ kind: "deleteSelection" })) return;
     const selection = readSelection();
     if (selection && selection.dEnd > selection.dStart) {
       commitReplace(selection, selection.dStart, selection.dEnd, "");
+      return;
     }
+    commitCrossFieldIntent({ kind: "deleteSelection" });
   }, [commitCrossFieldIntent, commitReplace, readSelection]);
 
   const insertText = useCallback(
     (text: string) => {
-      if (commitCrossFieldIntent({ kind: "insert", text })) return;
       const selection = readSelection();
-      if (selection) commitReplace(selection, selection.dStart, selection.dEnd, text);
+      if (selection) {
+        commitReplace(selection, selection.dStart, selection.dEnd, text);
+        return;
+      }
+      commitCrossFieldIntent({ kind: "insert", text });
     },
     [commitCrossFieldIntent, commitReplace, readSelection]
   );
+
+  const clipboardPayload = useCallback((): RichClipboardPayload | null => {
+    const cross = crossFieldClipboard();
+    if (cross?.selection) return cross;
+    const selection = readSelection();
+    if (selection && selection.dStart !== selection.dEnd) {
+      return {
+        plain: selection.map.display.slice(selection.dStart, selection.dEnd),
+        html: selectionClipboardHtml(selection),
+        inline: inlineFragmentForRange(
+          selection.map,
+          selection.dStart,
+          selection.dEnd
+        )
+      };
+    }
+    return cross;
+  }, [crossFieldClipboard, readSelection, selectionClipboardHtml]);
+
+  const copySelection = useCallback(async (): Promise<boolean> => {
+    const payload = clipboardPayload();
+    return payload ? writeRichClipboard(payload) : false;
+  }, [clipboardPayload]);
+
+  const cutSelection = useCallback(async (): Promise<boolean> => {
+    const selection = readSelection();
+    const ranges = selection ? null : readRanges();
+    const payload = clipboardPayload();
+    if (!payload || (!selection && !ranges)) return false;
+    const documentAtCopy = dataRef.current;
+    const copied = await writeRichClipboard(payload);
+    // Clipboard permission prompts are asynchronous. If anything edited the
+    // document while one was open, deleting the now-stale captured selection
+    // would cut unrelated text. The successful copy remains available.
+    if (
+      copied &&
+      dataRef.current === documentAtCopy &&
+      !commitPendingRef.current
+    ) {
+      if (selection) {
+        commitReplace(selection, selection.dStart, selection.dEnd, "");
+      } else if (ranges) {
+        commitRangesDelete(ranges);
+      }
+    }
+    return copied;
+  }, [
+    clipboardPayload,
+    commitPendingRef,
+    commitRangesDelete,
+    commitReplace,
+    dataRef,
+    readRanges,
+    readSelection
+  ]);
+
+  const pasteFromClipboard = useCallback(async (): Promise<void> => {
+    if (typeof navigator === "undefined" || !navigator.clipboard) return;
+    let inline: string | null = null;
+    let selectionPayload = "";
+    let html = "";
+    let text = "";
+    if (navigator.clipboard.read) {
+      try {
+        const items = await navigator.clipboard.read();
+        for (const item of items) {
+          if (
+            !selectionPayload &&
+            item.types.includes(TYPESET_SELECTION_CLIPBOARD_MIME)
+          ) {
+            selectionPayload = await (
+              await item.getType(TYPESET_SELECTION_CLIPBOARD_MIME)
+            ).text();
+          }
+          if (!inline && item.types.includes(TYPESET_INLINE_CLIPBOARD_MIME)) {
+            inline = decodeInlineClipboard(
+              await (await item.getType(TYPESET_INLINE_CLIPBOARD_MIME)).text()
+            );
+          }
+          if (!html && item.types.includes("text/html")) {
+            html = await (await item.getType("text/html")).text();
+          }
+          if (!text && item.types.includes("text/plain")) {
+            text = await (await item.getType("text/plain")).text();
+          }
+        }
+      } catch {
+        // Permission or unsupported rich read: use readText below.
+      }
+    }
+    if (!inline && !html && !text && navigator.clipboard.readText) {
+      try {
+        text = await navigator.clipboard.readText();
+      } catch {
+        return;
+      }
+    }
+    const paragraphs = inline ? null : paragraphFragmentsFromHtml(html);
+    const blocks = inline ? [] : clipboardBlocks(html, text);
+    const fragment = inline ?? inlineFragmentFromHtml(html);
+    const intent: Extract<QueuedIntent, { kind: "richPaste" }> = {
+      kind: "richPaste",
+      selectionPayload,
+      paragraphFragments: paragraphs,
+      fragment,
+      blocks,
+      plainText: text
+    };
+    const selection = readSelection();
+    if (commitPendingRef.current) {
+      replayQueueRef.current.push(intent);
+      return;
+    }
+    if (selection && commitRichPaste(selection, intent)) return;
+    if (!selection) {
+      commitCrossFieldIntent(intent);
+    }
+  }, [
+    commitCrossFieldIntent,
+    commitRichPaste,
+    commitPendingRef,
+    readSelection,
+    replayQueueRef
+  ]);
+
+  const pasteAsDocumentFromClipboard = useCallback(async (): Promise<void> => {
+    if (
+      documentKind !== "cover-letter" ||
+      typeof navigator === "undefined" ||
+      !navigator.clipboard
+    ) {
+      return;
+    }
+    let html = "";
+    let text = "";
+    if (navigator.clipboard.read) {
+      try {
+        const items = await navigator.clipboard.read();
+        for (const item of items) {
+          if (!html && item.types.includes("text/html")) {
+            html = await (await item.getType("text/html")).text();
+          }
+          if (!text && item.types.includes("text/plain")) {
+            text = await (await item.getType("text/plain")).text();
+          }
+        }
+      } catch {
+        // A plain-text read below still gives the explicit mapper a safe input.
+      }
+    }
+    if (!html && !text && navigator.clipboard.readText) {
+      try {
+        text = await navigator.clipboard.readText();
+      } catch {
+        return;
+      }
+    }
+    const blocks = clipboardBlocks(html, text);
+    if (!blocks.length) return;
+    const mapping = defaultDocumentPasteMapping(blocks.length);
+    setDocumentPastePrompt({
+      blocks,
+      ...mapping
+    });
+  }, [documentKind]);
+
+  const applyDocumentPaste = useCallback(() => {
+    const prompt = documentPastePrompt;
+    if (!prompt) return;
+    const { blocks, bodyStart, nameIndex } = prompt;
+    const body = blocks.slice(bodyStart);
+    if (!body.length) return;
+    const contact = blocks.filter(
+      (_, index) =>
+        index < bodyStart && index !== nameIndex
+    );
+    const imported = coverLetterDocument(
+      body,
+      nameIndex === null && !contact.length
+        ? null
+        : {
+            visible: true,
+            name: nameIndex === null ? null : blocks[nameIndex] ?? "",
+            contact
+          }
+    );
+    markPending();
+    actions.replaceDocument(imported);
+    pendingCaretRef.current = (fresh) => {
+      const first = fresh.sections[0]?.items[0]?.bullets[0];
+      return first
+        ? {
+            key: fieldKey({
+              kind: "bullet",
+              sectionId: fresh.sections[0].id,
+              entryId: fresh.sections[0].items[0].id,
+              bulletId: first.id
+            }),
+            valueIndex: 0
+          }
+        : null;
+    };
+    setDocumentPastePrompt(null);
+  }, [
+    actions,
+    documentPastePrompt,
+    markPending,
+    pendingCaretRef
+  ]);
 
   const commitToggleMark = useCallback(
     (sel: TypesetSelection, mark: "bold" | "italic" | "underline") => {
@@ -1897,10 +2729,15 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
       selectionText,
       deleteSelection,
       insertText,
+      copySelection,
+      cutSelection,
+      pasteFromClipboard,
+      pasteAsDocumentFromClipboard,
       undo: () => commitHistory("undo"),
       redo: () => commitHistory("redo"),
       focusSelection,
       focusDocumentStart,
+      createHeader: headerCommands.createHeader,
       toggleMark: (mark) => {
         const target = commandTarget();
         if (!target) return;
@@ -2150,13 +2987,18 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
       commitParagraphFormatting,
       commitRangesFormatting,
       commitReplaceWithLink,
+      copySelection,
+      cutSelection,
       deleteSelection,
       docStyle.style,
       focusDocumentStart,
       focusSelection,
+      headerCommands,
       insertText,
       lineRangesFor,
       mapFor,
+      pasteFromClipboard,
+      pasteAsDocumentFromClipboard,
       resolveLinkTarget,
       selectionText
     ]
@@ -2201,9 +3043,59 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
     [actions, mapFor, markPending, recordPreEditSelection]
   );
 
-  // Enter grows non-empty list rows, while prose always permits a new paragraph.
+  const commitEmptyHeaderField = useCallback(
+    (
+      selection: TypesetSelection,
+      direction: "back" | "forward"
+    ): boolean => {
+      if (
+        selection.dStart !== selection.dEnd ||
+        selection.map.display.length !== 0
+      ) {
+        return false;
+      }
+      if (selection.src.kind === "name") {
+        headerCommands.removeName();
+        return true;
+      }
+      if (selection.src.kind === "contact") {
+        headerCommands.removeContact(
+          selection.src.index,
+          direction === "forward" ? "next" : "previous"
+        );
+        return true;
+      }
+      return false;
+    },
+    [headerCommands]
+  );
+
+  // Enter grows header contacts and non-empty list rows; prose always permits
+  // a new paragraph.
   const commitEnter = useCallback(
-    (sel: TypesetSelection) => {
+    (sel: TypesetSelection, shiftKey = false) => {
+      if (sel.src.kind === "contact") {
+        headerCommands.addContactRelative(
+          sel.src.index,
+          shiftKey ? "before" : "after"
+        );
+        return;
+      }
+      if (sel.src.kind === "name") {
+        const firstContact = dataRef.current.header?.contact[0];
+        if (firstContact === undefined) {
+          headerCommands.addContactAtEnd();
+          return;
+        }
+        const host = hostRef.current;
+        const src: FieldSrc = { kind: "contact", index: 0 };
+        const display = mapFor(src, firstContact).display;
+        if (host) {
+          host.focus({ preventScroll: true });
+          selectDisplayRange(host, fieldKey(src), display, 0, 0);
+        }
+        return;
+      }
       if (sel.src.kind === "bullet") {
         const src = sel.src;
         const isProse =
@@ -2220,7 +3112,7 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
         }
       }
     },
-    [addEntryRelative, commitSplitBullet]
+    [addEntryRelative, commitSplitBullet, headerCommands, hostRef, mapFor]
   );
 
   const commitMergeBullet = useCallback(
@@ -2407,13 +3299,15 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
         return;
       }
       if (intent.kind === "insert") {
-        commitReplace(sel, sel.dStart, sel.dEnd, intent.text);
-      } else if (intent.kind === "paste") {
-        commitPaste(sel, sel.dStart, sel.dEnd, intent.fragment);
-      } else if (intent.kind === "pasteParagraphs") {
-        if (!commitParagraphPaste(sel, intent.fragments)) {
-          commitPaste(sel, sel.dStart, sel.dEnd, intent.fragments.join("\n"));
-        }
+        commitReplace(
+          sel,
+          sel.dStart,
+          sel.dEnd,
+          intent.text,
+          sel.dStart === sel.dEnd ? "insert" : undefined
+        );
+      } else if (intent.kind === "richPaste") {
+        commitRichPaste(sel, intent);
       } else if (intent.kind === "deleteBack" || intent.kind === "deleteFwd") {
         // Held Backspace/Delete replays through here, so it has to step over
         // authored indentation exactly as the live keystroke does.
@@ -2427,22 +3321,47 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
               indentWidthAt(sel)
             )
           : null;
-        if (indent) commitReplace(sel, indent.start, indent.end, "");
+        if (indent) {
+          commitReplace(
+            sel,
+            indent.start,
+            indent.end,
+            "",
+            backward ? "deleteBackward" : "deleteForward"
+          );
+        }
         else if (collapsed && backward && sel.dStart === 0) {
           if (!commitParagraphOutdent(sel)) commitMergeBullet(sel, "up");
         }
         else if (collapsed && !backward && sel.dEnd === sel.map.chars.length) {
           commitMergeBullet(sel, "down");
         } else if (collapsed) {
-          if (backward) commitReplace(sel, sel.dStart - 1, sel.dStart, "");
-          else commitReplace(sel, sel.dStart, sel.dStart + 1, "");
+          if (backward) {
+            commitReplace(
+              sel,
+              sel.dStart - 1,
+              sel.dStart,
+              "",
+              "deleteBackward"
+            );
+          } else {
+            commitReplace(
+              sel,
+              sel.dStart,
+              sel.dStart + 1,
+              "",
+              "deleteForward"
+            );
+          }
         } else commitReplace(sel, sel.dStart, sel.dEnd, "");
       } else if (intent.kind === "indent" || intent.kind === "outdent") {
         commitIndent(sel, intent.kind === "indent" ? "in" : "out");
       } else if (intent.kind === "deleteSelection") {
         if (sel.dStart !== sel.dEnd) commitReplace(sel, sel.dStart, sel.dEnd, "");
-      } else if (intent.kind === "splitBullet") {
-        commitEnter(sel);
+      } else if (intent.kind === "enter") {
+        commitEnter(sel, intent.shiftKey);
+      } else if (intent.kind === "deleteHeaderField") {
+        commitEmptyHeaderField(sel, intent.direction);
       } else if (intent.kind === "toggleMark") {
         applyMark(sel, intent.mark);
       } else if (intent.kind === "clearFormatting") {
@@ -2456,14 +3375,14 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
     placeCaret,
     commitClearFormatting,
     commitEnter,
+    commitEmptyHeaderField,
     commitHistory,
     commitMergeBullet,
     applyMark,
     commitCrossFieldIntent,
     commitIndent,
     commitParagraphOutdent,
-    commitParagraphPaste,
-    commitPaste,
+    commitRichPaste,
     commitReplace,
     docVersion,
     mapFor,
@@ -2494,9 +3413,9 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
     commitIndent,
     commitParagraphOutdent,
     indentWidthAt,
-    commitPaste,
-    commitParagraphPaste,
+    commitRichPaste,
     onEnter: commitEnter,
+    commitEmptyHeaderField,
     commitMergeBullet,
     commitToggleMark: applyMark,
     commitCrossFieldIntent,
@@ -2504,6 +3423,7 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
     crossFieldClipboard,
     commitClearFormatting,
     commitHistory,
+    breakTextHistoryGroup: actions.breakTextHistoryGroup,
     onZoomShortcut: handleZoomShortcut,
     setNonce
   });
@@ -2521,7 +3441,9 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
   const { contextMenu, menuItems, openContextMenu, closeContextMenu } = useTypesetContextMenu({
     data,
     hostRef,
-    structureEditing,
+    structureCapabilities,
+    canPasteAsDocument: documentKind === "cover-letter",
+    headerCommands,
     commands,
     inlineFormat: inlineFormatState,
     addSectionRelative,
@@ -2608,7 +3530,7 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
           }}
         />
       ) : null}
-      {structureEditing ? (
+      {structureCapabilities.sections ? (
         <TypesetStructureOverlay
           data={data}
           anchor={overlayAnchor}
@@ -2631,6 +3553,166 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
           items={menuItems}
           onClose={closeContextMenu}
         />
+      ) : null}
+      {headerPastePrompt ? (
+        <div
+          ref={headerPasteDialogRef}
+          className="ts-paste-choice"
+          role="dialog"
+          aria-modal="false"
+          aria-label="Choose header paste structure"
+          tabIndex={-1}
+          style={{
+            left: Math.max(
+              16,
+              Math.min(headerPastePrompt.x, window.innerWidth - 300)
+            ),
+            top: Math.max(
+              16,
+              Math.min(headerPastePrompt.y + 8, window.innerHeight - 240)
+            )
+          }}
+        >
+          <strong>
+            {headerPastePrompt.selection.src.kind === "name"
+              ? "Paste into name"
+              : "Paste into contact"}
+          </strong>
+          <p>{headerPastePrompt.blocks.length} blocks found. Choose how they map.</p>
+          <button
+            type="button"
+            data-autofocus
+            onClick={() => applyHeaderPasteChoice("inline")}
+          >
+            Paste into this field
+          </button>
+          <button type="button" onClick={() => applyHeaderPasteChoice("structure")}>
+            {headerPastePrompt.selection.src.kind === "name"
+              ? "Use first as name; rest as contacts"
+              : `Create ${headerPastePrompt.blocks.length} contact items`}
+          </button>
+          {headerPastePrompt.dividerBlocks.length > 1 ? (
+            <button type="button" onClick={() => applyHeaderPasteChoice("divider")}>
+              Split on “{docStyle.style.contactDivider}” into{" "}
+              {headerPastePrompt.dividerBlocks.length} contacts
+            </button>
+          ) : null}
+          <button
+            type="button"
+            onClick={() => closeHeaderPastePrompt(true)}
+          >
+            Cancel
+          </button>
+        </div>
+      ) : null}
+      {documentPastePrompt ? (
+        <div
+          className="ts-document-paste-backdrop"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setDocumentPastePrompt(null);
+          }}
+        >
+          <section
+            ref={documentPasteDialogRef}
+            className="ts-document-paste-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="ts-document-paste-title"
+            tabIndex={-1}
+            onKeyDown={handleDocumentPasteDialogKeyDown}
+          >
+            <header>
+              <strong id="ts-document-paste-title">Paste as document</strong>
+              <p>Map the copied blocks explicitly. Nothing is guessed.</p>
+            </header>
+            <label>
+              Name
+              <select
+                data-autofocus
+                value={documentPastePrompt.nameIndex ?? -1}
+                onChange={(event) =>
+                  setDocumentPastePrompt((current) =>
+                    current
+                      ? {
+                          ...current,
+                          nameIndex:
+                            Number(event.target.value) < 0
+                              ? null
+                              : Number(event.target.value)
+                        }
+                      : null
+                  )
+                }
+              >
+                <option value={-1}>No name</option>
+                {documentPastePrompt.blocks
+                  .slice(0, documentPastePrompt.bodyStart)
+                  .map((block, index) => (
+                    <option key={index} value={index}>
+                      {stripInlineMarks(block).slice(0, 80) || "(blank block)"}
+                    </option>
+                  ))}
+              </select>
+            </label>
+            <label>
+              Body begins at
+              <select
+                value={documentPastePrompt.bodyStart}
+                onChange={(event) => {
+                  const bodyStart = Number(event.target.value);
+                  setDocumentPastePrompt((current) =>
+                    current
+                      ? {
+                          ...current,
+                          bodyStart,
+                          nameIndex:
+                            current.nameIndex !== null &&
+                            current.nameIndex >= bodyStart
+                              ? null
+                              : current.nameIndex
+                        }
+                      : null
+                  );
+                }}
+              >
+                {documentPastePrompt.blocks.map((block, index) => (
+                  <option key={index} value={index}>
+                    Block {index + 1}:{" "}
+                    {stripInlineMarks(block).slice(0, 72) || "(blank block)"}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <div className="ts-document-paste-preview">
+              <span>Contacts</span>
+              <p>
+                {documentPastePrompt.blocks
+                  .filter(
+                    (_, index) =>
+                      index < documentPastePrompt.bodyStart &&
+                      index !== documentPastePrompt.nameIndex
+                  )
+                  .map((block) => stripInlineMarks(block))
+                  .join(` ${docStyle.style.contactDivider} `) || "None"}
+              </p>
+              <span>Body</span>
+              <p>
+                {documentPastePrompt.blocks.length -
+                  documentPastePrompt.bodyStart}{" "}
+                paragraph(s)
+              </p>
+            </div>
+            <footer>
+              <button type="button" onClick={closeDocumentPastePrompt}>
+                Cancel
+              </button>
+              <button type="button" onClick={applyDocumentPaste}>
+                Replace document
+              </button>
+            </footer>
+          </section>
+        </div>
       ) : null}
       {linkCardTarget ? (
         <TypesetLinkCard

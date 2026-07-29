@@ -20,8 +20,7 @@ const coverSource = "{\"kind\":\"cover\",\"style\":\"original\"}";
 const editedCoverSource = "{\"kind\":\"cover\",\"style\":\"edited\"}";
 
 const resumeData = {
-  name: "Test Candidate",
-  contact: [],
+  header: { visible: true, name: "Test Candidate", contact: [] },
   sections: [{ id: "s1", kind: "experience", heading: "Experience", entries: [] }]
 };
 

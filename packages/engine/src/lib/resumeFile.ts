@@ -4,6 +4,7 @@ import {
   newSection,
   newSkillEntry,
   newSummaryEntry,
+  type DocumentHeader,
   type ResumeData,
   type ResumeEntry,
   type ResumeSectionType
@@ -17,7 +18,7 @@ import {
 } from "./documentStyle.ts";
 
 export const RESUME_FILE_MAGIC = "typeset-resume" as const;
-export const RESUME_FILE_SCHEMA_VERSION = 2 as const;
+export const RESUME_FILE_SCHEMA_VERSION = 1 as const;
 export const MAX_RESUME_FILE_BYTES = 2 * 1024 * 1024;
 
 type PortableResumeBullet = { text: string };
@@ -36,17 +37,19 @@ type PortableResumeSection = {
   items: PortableResumeEntry[];
 };
 
-export type PortableResumeDocument = {
-  name: string;
-  contact: string[];
+export type PortableResumeDocumentV1 = {
+  header: DocumentHeader | null;
   sections: PortableResumeSection[];
 };
 
-export type ResumeFileV2 = {
+export type ResumeFileV1 = {
   format: typeof RESUME_FILE_MAGIC;
   schemaVersion: typeof RESUME_FILE_SCHEMA_VERSION;
-  document: PortableResumeDocument;
-  style: DocumentStyle;
+  document: PortableResumeDocumentV1;
+  // The marker states which spacing model the numbers are on. It is written on
+  // every save and stays optional on read, so schemaVersion 1 still describes
+  // both the files this build writes and the ones written before it.
+  style: DocumentStyle & { spacingModel: "absolute" };
 };
 
 export type ParsedResumeFile = {
@@ -74,14 +77,14 @@ export class ResumeFileError extends Error {
 
 type JsonRecord = Record<string, unknown>;
 
-const DOCUMENT_KEYS = ["name", "contact", "sections"] as const;
+const DOCUMENT_KEYS = ["header", "sections"] as const;
+const HEADER_KEYS = ["visible", "name", "contact"] as const;
 const SECTION_KEYS = ["heading", "type", "items"] as const;
 const ENTRY_KEYS = ["titleLeft", "titleRight", "subtitleLeft", "subtitleRight", "bullets"] as const;
 const BULLET_KEYS = ["text"] as const;
 const STYLE_KEYS = [
   "fontFamily",
   "baseFontSizePt",
-  "letterSpacingPt",
   "lineHeight",
   "entryIndentPt",
   "entryEndIndentPt",
@@ -101,13 +104,14 @@ const STYLE_KEYS = [
   "headerAlign",
   "bodyAlign",
   "headingAlign",
-  "nameSize",
   "pageMarginTopPt",
   "pageMarginRightPt",
   "pageMarginBottomPt",
-  "pageMarginLeftPt"
-] as const satisfies readonly (keyof DocumentStyle)[];
-const LEGACY_STYLE_KEYS = [...STYLE_KEYS.slice(0, -4), "pageMargins", ...STYLE_KEYS.slice(-4)] as const;
+  "pageMarginLeftPt",
+  // Which spacing model the numbers above are on. Required: a file without it
+  // predates absolute spacing and is not a v1 file.
+  "spacingModel"
+] as const satisfies readonly (keyof DocumentStyle | "spacingModel")[];
 
 function isRecord(value: unknown): value is JsonRecord {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -126,8 +130,13 @@ function requireRecord(value: unknown, path: string): JsonRecord {
   return value;
 }
 
-function requireExactKeys(record: JsonRecord, keys: readonly string[], path: string) {
-  const allowed = new Set(keys);
+function requireExactKeys(
+  record: JsonRecord,
+  keys: readonly string[],
+  path: string,
+  optionalKeys: readonly string[] = []
+) {
+  const allowed = new Set([...keys, ...optionalKeys]);
   for (const key of Object.keys(record)) {
     if (!allowed.has(key)) invalid(path, `contains unsupported field ${JSON.stringify(key)}`);
   }
@@ -166,13 +175,33 @@ function requireEnum<T extends string>(value: unknown, values: readonly T[], pat
   return value as T;
 }
 
-function validateDocument(value: unknown): PortableResumeDocument {
+function validateContact(value: unknown, path: string): string[] {
+  return requireArray(value, path, 1_000).map((item, index) =>
+    requireString(item, `${path}[${index}]`, 10_000)
+  );
+}
+
+function validateHeader(value: unknown, path: string): DocumentHeader | null {
+  if (value === null) return null;
+  const header = requireRecord(value, path);
+  requireExactKeys(header, HEADER_KEYS, path);
+  const validated = {
+    visible: requireBoolean(header.visible, `${path}.visible`),
+    name: header.name === null ? null : requireString(header.name, `${path}.name`, 10_000),
+    contact: validateContact(header.contact, `${path}.contact`)
+  };
+  if (validated.name === null && validated.contact.length === 0) {
+    invalid(path, "must contain a name field or at least one contact field");
+  }
+  return validated;
+}
+
+function validateDocument(
+  value: unknown
+): PortableResumeDocumentV1 {
   const document = requireRecord(value, "document");
   requireExactKeys(document, DOCUMENT_KEYS, "document");
 
-  const contact = requireArray(document.contact, "document.contact", 1_000).map((item, index) =>
-    requireString(item, `document.contact[${index}]`, 10_000)
-  );
   const sections = requireArray(document.sections, "document.sections", 500).map((rawSection, sectionIndex) => {
     const path = `document.sections[${sectionIndex}]`;
     const section = requireRecord(rawSection, path);
@@ -208,11 +237,17 @@ function validateDocument(value: unknown): PortableResumeDocument {
   });
 
   return {
-    name: requireString(document.name, "document.name", 10_000),
-    contact,
+    header: validateHeader(document.header, "document.header"),
     sections
   };
 }
+
+// Spacing values are absolute points. A file whose gaps are on the retired
+// scale is not a v1 file and is not read here: the workspace rewrite tool
+// converts it, and this marker is how a converted file says so. Runtime parsing
+// stays single-shape, so a stale document fails loudly instead of rendering
+// quietly wrong.
+const ABSOLUTE_SPACING = "absolute";
 
 function requireStyleNumber<K extends keyof typeof DOC_STYLE_BOUNDS>(
   style: JsonRecord,
@@ -222,15 +257,11 @@ function requireStyleNumber<K extends keyof typeof DOC_STYLE_BOUNDS>(
   return requireNumber(style[key], `style.${key}`, min, max);
 }
 
-function readDocumentStyle(style: JsonRecord, legacy = false): DocumentStyle {
+function readDocumentStyle(style: JsonRecord): DocumentStyle {
   const fontFamilies = FONT_FAMILY_OPTIONS.map((option) => option.value);
-  if (legacy) {
-    requireEnum(style.pageMargins, ["narrow", "normal", "wide", "custom"] as const, "style.pageMargins");
-  }
   return {
     fontFamily: requireEnum(style.fontFamily, fontFamilies, "style.fontFamily"),
     baseFontSizePt: requireStyleNumber(style, "baseFontSizePt"),
-    letterSpacingPt: requireStyleNumber(style, "letterSpacingPt"),
     lineHeight: requireStyleNumber(style, "lineHeight"),
     entryIndentPt: requireStyleNumber(style, "entryIndentPt"),
     entryEndIndentPt: requireStyleNumber(style, "entryEndIndentPt"),
@@ -254,7 +285,6 @@ function readDocumentStyle(style: JsonRecord, legacy = false): DocumentStyle {
     headerAlign: requireEnum(style.headerAlign, ["left", "center", "right"] as const, "style.headerAlign"),
     bodyAlign: requireEnum(style.bodyAlign, ["left", "justify", "center", "right"] as const, "style.bodyAlign"),
     headingAlign: requireEnum(style.headingAlign, ["left", "center", "right"] as const, "style.headingAlign"),
-    nameSize: requireEnum(style.nameSize, ["large", "xlarge", "huge"] as const, "style.nameSize"),
     pageMarginTopPt: requireStyleNumber(style, "pageMarginTopPt"),
     pageMarginRightPt: requireStyleNumber(style, "pageMarginRightPt"),
     pageMarginBottomPt: requireStyleNumber(style, "pageMarginBottomPt"),
@@ -262,16 +292,24 @@ function readDocumentStyle(style: JsonRecord, legacy = false): DocumentStyle {
   };
 }
 
-function validateStyle(value: unknown, legacy = false): DocumentStyle {
+function validateStyle(value: unknown): DocumentStyle {
   const style = requireRecord(value, "style");
-  requireExactKeys(style, legacy ? LEGACY_STYLE_KEYS : STYLE_KEYS, "style");
-  return readDocumentStyle(style, legacy);
+  requireExactKeys(style, STYLE_KEYS, "style");
+  if (style.spacingModel !== ABSOLUTE_SPACING) {
+    invalid("style.spacingModel", `must be ${JSON.stringify(ABSOLUTE_SPACING)}`);
+  }
+  return readDocumentStyle(style);
 }
 
-function toPortableDocument(data: ResumeData): PortableResumeDocument {
+function toPortableDocument(data: ResumeData): PortableResumeDocumentV1 {
   return {
-    name: data.name,
-    contact: [...data.contact],
+    header: data.header
+      ? {
+          visible: data.header.visible,
+          name: data.header.name,
+          contact: [...data.header.contact]
+        }
+      : null,
     sections: data.sections.map((section) => ({
       heading: section.heading,
       type: section.type,
@@ -286,10 +324,15 @@ function toPortableDocument(data: ResumeData): PortableResumeDocument {
   };
 }
 
-function rehydrateDocument(document: PortableResumeDocument): ResumeData {
+function rehydrateDocument(document: PortableResumeDocumentV1): ResumeData {
   return {
-    name: document.name,
-    contact: [...document.contact],
+    header: document.header
+      ? {
+          visible: document.header.visible,
+          name: document.header.name,
+          contact: [...document.header.contact]
+        }
+      : null,
     sections: document.sections.map((portableSection) => {
       const section = newSection(portableSection.type, portableSection.heading);
       const items: ResumeEntry[] = portableSection.items.map((portableItem) => {
@@ -342,12 +385,12 @@ function parseJson(text: string): unknown {
   }
 }
 
-export function createResumeFile(data: ResumeData, style: DocStyle): ResumeFileV2 {
-  const file: ResumeFileV2 = {
+export function createResumeFile(data: ResumeData, style: DocStyle): ResumeFileV1 {
+  const file: ResumeFileV1 = {
     format: RESUME_FILE_MAGIC,
     schemaVersion: RESUME_FILE_SCHEMA_VERSION,
     document: toPortableDocument(data),
-    style: toDocumentStyle(style)
+    style: { ...toDocumentStyle(style), spacingModel: ABSOLUTE_SPACING }
   };
 
   // Validate typed callers too. An unsafe cast can still corrupt runtime state,
@@ -370,7 +413,7 @@ export function parseResumeFile(input: string | ArrayBuffer | Uint8Array): Parse
   if (file.format !== RESUME_FILE_MAGIC) {
     throw new ResumeFileError("invalid-format", "This is not a Typeset .resume file.");
   }
-  if (file.schemaVersion !== 1 && file.schemaVersion !== RESUME_FILE_SCHEMA_VERSION) {
+  if (file.schemaVersion !== RESUME_FILE_SCHEMA_VERSION) {
     throw new ResumeFileError(
       "unsupported-version",
       `This resume uses unsupported schema version ${JSON.stringify(file.schemaVersion)}.`
@@ -378,7 +421,7 @@ export function parseResumeFile(input: string | ArrayBuffer | Uint8Array): Parse
   }
   requireExactKeys(file, ["format", "schemaVersion", "document", "style"], "file");
   const document = validateDocument(file.document);
-  const documentStyle = validateStyle(file.style, file.schemaVersion === 1);
+  const documentStyle = validateStyle(file.style);
   return { data: rehydrateDocument(document), documentStyle };
 }
 

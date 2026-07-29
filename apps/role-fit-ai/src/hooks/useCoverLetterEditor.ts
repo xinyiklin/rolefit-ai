@@ -7,7 +7,9 @@ import {
   CoverLetterFileError,
   MAX_COVER_LETTER_FILE_BYTES,
   coverLetterFileName,
+  coverLetterParagraphs,
   coverLetterPlainText,
+  coverLetterResumeData,
   coverLetterStyleToDocumentStyle,
   documentStyleToCoverLetterStyle,
   parseCoverLetterFile,
@@ -29,7 +31,7 @@ export type CoverLetterHistoryGroup = {
   label: string;
   entries: CoverLetterHistoryEntry[];
 };
-import type { DocStyle, DocumentStyle } from "@typeset/engine/lib/documentStyle.ts";
+import { DOC_STYLE_DEFAULTS, type DocStyle, type DocumentStyle } from "@typeset/engine/lib/documentStyle.ts";
 import type { ResumeData } from "@typeset/engine/lib/resumeData.ts";
 import { toTypesetSchema } from "@typeset/engine/typeset/schema.ts";
 import { clearCoverLetterAutosaveDraft } from "./useCoverLetterAutosaveDraft";
@@ -42,6 +44,9 @@ import {
 } from "../lib/coverLetterPrefs.ts";
 
 const STYLE_STORAGE_KEY = "rolefit:coverLetterStyle.v1";
+// Spell-check is a view preference: it never enters a .cover file, but it is
+// the writer's choice and must survive a reload rather than snapping back on.
+const SPELL_CHECK_STORAGE_KEY = "rolefit:coverLetterSpellCheck.v1";
 const TITLE_STORAGE_KEY = "rolefit:coverLetterTitle.v1";
 const COVER_LETTER_STARTER = `[Date]
 
@@ -56,17 +61,36 @@ Dear [Hiring manager],
 Sincerely,
 [Your name]`;
 
+// The starter's header is placeholder text for the same reason its body is:
+// a letter opens with the letterhead already in place, ready to be typed over
+// rather than added from a menu the writer has to find.
+const COVER_LETTER_STARTER_HEADER = {
+  visible: true,
+  name: "[Your name]",
+  contact: ["[email]", "[phone]", "[city, state]"]
+};
+
+function loadSpellCheck(): boolean {
+  try {
+    return window.localStorage.getItem(SPELL_CHECK_STORAGE_KEY) === "on";
+  } catch {
+    // Storage unavailable: fall back to the default, which is off.
+    return DOC_STYLE_DEFAULTS.spellCheck;
+  }
+}
+
 function loadStyle(): DocStyle {
+  const view = { zoom: DOC_STYLE_DEFAULTS.zoom, spellCheck: loadSpellCheck() };
   try {
     const raw = window.localStorage.getItem(STYLE_STORAGE_KEY);
     if (raw) {
       const parsed = parseCoverLetterStyle(JSON.parse(raw) as unknown);
-      return coverLetterStyleToDocumentStyle(parsed);
+      return coverLetterStyleToDocumentStyle(parsed, view);
     }
   } catch {
     // Corrupt or unavailable browser storage falls back to the professional default.
   }
-  return coverLetterStyleToDocumentStyle(COVER_LETTER_STYLE_DEFAULTS);
+  return coverLetterStyleToDocumentStyle(COVER_LETTER_STYLE_DEFAULTS, view);
 }
 
 function loadTitle(): string {
@@ -179,6 +203,14 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
 
   useEffect(() => {
     try {
+      window.localStorage.setItem(SPELL_CHECK_STORAGE_KEY, style.spellCheck ? "on" : "off");
+    } catch {
+      // The in-session preference still applies when storage is unavailable.
+    }
+  }, [style.spellCheck]);
+
+  useEffect(() => {
+    try {
       window.sessionStorage.setItem(TITLE_STORAGE_KEY, documentTitle.trim() || "Cover letter");
     } catch {
       // The in-memory title remains authoritative for this session.
@@ -276,8 +308,12 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
       const data = editor.editedResume
         ? {
             ...parsed,
-            name: editor.editedResume.name,
-            contact: editor.editedResume.contact
+            header: editor.editedResume.header
+              ? {
+                  ...editor.editedResume.header,
+                  contact: [...editor.editedResume.header.contact]
+                }
+              : null
           }
         : parsed;
       setPreTailorSnapshot(
@@ -391,7 +427,10 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
   }, [editor.markClean, openDocument]);
 
   const startStarter = useCallback(() => {
-    const data = parseCoverLetterText(COVER_LETTER_STARTER);
+    const data = coverLetterResumeData(
+      coverLetterParagraphs(parseCoverLetterText(COVER_LETTER_STARTER)),
+      COVER_LETTER_STARTER_HEADER
+    );
     openDocument(data);
     editor.markClean();
     setPersistedFingerprint(

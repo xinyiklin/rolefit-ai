@@ -7,8 +7,9 @@ navigation behavior.
 
 ## Owns
 
-- `src/hooks/`: document/history reducer state, document/view-style controls,
-  and the host-agnostic stacked-modal focus contract.
+- `src/hooks/`: document/history reducer state, including operation-aware
+  typing/delete coalescing, document/view-style controls, and the host-agnostic
+  stacked-modal focus contract.
 - `src/sections/editor/`: contenteditable interception, structured commits,
   selection/caret mapping, context commands, optional structure overlays, and
   the narrow resume/cover-letter layout seam.

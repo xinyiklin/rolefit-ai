@@ -362,13 +362,24 @@ export function CoverLetterToolbar({
         docStyle={editor.docStyle}
         documentStructureTools={(
           <DocumentStructureControls
-            name={editor.data.name}
-            contact={editor.data.contact}
+            header={editor.data.header}
             contactDivider={editor.docStyle.style.contactDivider}
             disabled={!hasLetter}
-            onSetName={editor.actions.setName}
+            // A cover letter has no document-spacing popover: paragraph spacing
+            // covers its body, so the header's own gaps live in the Header menu.
+            headerSpacing={{
+              values: editor.docStyle.style,
+              onChange: (key, value) => editor.docStyle.set(key, value)
+            }}
+            onCreateHeader={() => {
+              if (editorRef.current) editorRef.current.createHeader();
+              else editor.actions.createHeader();
+            }}
+            onSetHeaderVisible={editor.actions.setHeaderVisible}
+            onSetHeaderName={editor.actions.setHeaderName}
+            onRemoveHeaderName={editor.actions.removeHeaderName}
             onUpdateContact={editor.actions.updateContact}
-            onAddContact={editor.actions.addContact}
+            onInsertContact={editor.actions.insertContact}
             onRemoveContact={editor.actions.removeContact}
             onContactDividerChange={(value) => editor.docStyle.set("contactDivider", value)}
             showSections={false}

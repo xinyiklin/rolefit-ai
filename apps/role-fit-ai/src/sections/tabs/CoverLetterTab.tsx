@@ -20,6 +20,11 @@ import { CoverLetterReview } from "../cover-letter/CoverLetterReview";
 import { DraftRestoreBar } from "../DraftRestoreBar";
 import { CoverLetterToolbar } from "../cover-letter/CoverLetterToolbar";
 
+const COVER_LETTER_STRUCTURE_CAPABILITIES = {
+  header: true,
+  sections: false
+} as const;
+
 type CoverLetterTabProps = {
   editor: CoverLetterEditorState;
   editorRef: RefObject<TypesetEditorHandle | null>;
@@ -149,7 +154,7 @@ export function CoverLetterTab({
             contentRedoSequence={editor.redoSequence}
             docStyle={editor.docStyle}
             documentKind="cover-letter"
-            structureEditing={false}
+            structureCapabilities={COVER_LETTER_STRUCTURE_CAPABILITIES}
             initialCaret={initialCaret}
             onCaretExit={onCaretExit}
             onRequestLinkEditor={() => setLinkEditorOpen(true)}

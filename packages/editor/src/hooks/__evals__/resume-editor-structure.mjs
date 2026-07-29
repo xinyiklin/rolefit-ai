@@ -11,8 +11,7 @@ import { DOC_STYLE_DEFAULTS } from "@typeset/engine/lib/documentStyle.ts";
 import { fieldMarkState, setFieldMark } from "@typeset/engine/lib/inlineMarksText.ts";
 
 const base = {
-  name: "Candidate",
-  contact: [],
+  header: { visible: true, name: "Candidate", contact: [] },
   sections: [
     {
       id: "summary",
@@ -31,6 +30,46 @@ const base = {
     }
   ]
 };
+
+const absentHeader = { ...base, header: null };
+const createdHeader = reduceResumeData(absentHeader, { type: "createHeader" });
+assert.deepEqual(
+  createdHeader.header,
+  { visible: true, name: "", contact: [] },
+  "creating an absent header creates one structurally blank name field"
+);
+const hiddenHeader = reduceResumeData(base, {
+  type: "setHeaderVisible",
+  visible: false
+});
+assert.deepEqual(
+  hiddenHeader.header,
+  { visible: false, name: "Candidate", contact: [] },
+  "hiding preserves the complete header payload"
+);
+assert.deepEqual(
+  reduceResumeData(hiddenHeader, { type: "setHeaderVisible", visible: true }).header,
+  base.header,
+  "showing a hidden header restores the exact payload"
+);
+const oneEmptyContact = {
+  ...base,
+  header: { visible: true, name: null, contact: [""] }
+};
+assert.equal(
+  reduceResumeData(oneEmptyContact, {
+    type: "updateContact",
+    index: 0,
+    value: ""
+  }),
+  oneEmptyContact,
+  "clearing an already-empty contact does not remove its structure"
+);
+assert.equal(
+  reduceResumeData(oneEmptyContact, { type: "removeContact", index: 0 }).header,
+  null,
+  "removing the final header field removes the header in the same transition"
+);
 
 const split = reduceResumeData(base, {
   type: "splitSummaryParagraph",
@@ -179,8 +218,7 @@ assert.equal(skillsUpdated.sections[0].items[0].subtitleLeft, "TypeScript, Vite"
 // Consecutive same-field edits in this eval run back-to-back, so their Date.now()
 // deltas fall inside COALESCE_MS and merge deterministically into one undo step.
 const historyBase = {
-  name: "Candidate",
-  contact: ["a@b.com"],
+  header: { visible: true, name: "Candidate", contact: ["a@b.com"] },
   sections: [
     {
       id: "sec-1",
@@ -219,6 +257,28 @@ const seeded = reduceRoot(
 );
 assert.equal(seeded.past.length, 0, "a fresh seed starts with empty history");
 
+const finalHeaderSeed = reduceRoot(
+  {
+    data: null,
+    dirty: false,
+    past: [],
+    future: [],
+    coalesceKey: null,
+    coalesceAt: 0
+  },
+  { type: "seed", data: oneEmptyContact }
+);
+const finalHeaderRemoved = reduceRoot(finalHeaderSeed, {
+  type: "removeContact",
+  index: 0
+});
+assert.equal(finalHeaderRemoved.data.header, null);
+assert.deepEqual(
+  reduceRoot(finalHeaderRemoved, { type: "undo" }).data.header,
+  oneEmptyContact.header,
+  "one undo restores both the final field and its header"
+);
+
 const typeRun = ["H", "He", "Hel"].reduce(
   (state, value) => reduceRoot(state, { type: "updateBullet", sectionId: "sec-1", entryId: "entry-1", bulletId: "b-1", value }),
   seeded
@@ -230,6 +290,282 @@ const undone = reduceRoot(typeRun, { type: "undo" });
 assert.equal(undone.data.sections[0].items[0].bullets[0].text, "", "one undo reverts the whole typing run");
 const redone = reduceRoot(undone, { type: "redo" });
 assert.equal(redone.data.sections[0].items[0].bullets[0].text, "Hel", "redo reapplies the coalesced run");
+
+const historyRun = (data = historyBase) => {
+  const clock = createHistoryClock();
+  let state = rootReducer(
+    {
+      data: null,
+      dirty: false,
+      past: [],
+      future: [],
+      coalesceKey: null,
+      coalesceAt: 0
+    },
+    { type: "seed", data },
+    clock
+  );
+  return {
+    get state() {
+      return state;
+    },
+    dispatch(action) {
+      state = rootReducer(state, action, clock);
+      return state;
+    },
+    elapse(ms) {
+      state = { ...state, coalesceAt: state.coalesceAt - ms };
+    }
+  };
+};
+const contactHistoryRun = (contact = "abc") =>
+  historyRun({
+    ...historyBase,
+    header: {
+      ...historyBase.header,
+      contact: [contact]
+    }
+  });
+
+const strictModeClock = createHistoryClock();
+const strictModeSeed = rootReducer(
+  {
+    data: null,
+    dirty: false,
+    past: [],
+    future: [],
+    coalesceKey: null,
+    coalesceAt: 0
+  },
+  { type: "seed", data: historyBase },
+  strictModeClock
+);
+const strictModeAction = {
+  type: "updateContact",
+  index: 0,
+  value: "a@b.co",
+  historyIntent: "deleteBackward"
+};
+const strictModeFirst = rootReducer(
+  strictModeSeed,
+  strictModeAction,
+  strictModeClock
+);
+const strictModeSecond = rootReducer(
+  strictModeSeed,
+  strictModeAction,
+  strictModeClock
+);
+assert.deepEqual(
+  strictModeSecond,
+  strictModeFirst,
+  "React Strict Mode double invocation allocates one history sequence"
+);
+
+const typedThenDeleted = historyRun();
+for (const value of ["H", "He", "Hel"]) {
+  typedThenDeleted.dispatch({
+    type: "updateBullet",
+    sectionId: "sec-1",
+    entryId: "entry-1",
+    bulletId: "b-1",
+    value,
+    historyIntent: "insert"
+  });
+}
+typedThenDeleted.dispatch({
+  type: "updateBullet",
+  sectionId: "sec-1",
+  entryId: "entry-1",
+  bulletId: "b-1",
+  value: "He",
+  historyIntent: "deleteBackward"
+});
+typedThenDeleted.dispatch({ type: "markClean" });
+typedThenDeleted.dispatch({
+  type: "updateBullet",
+  sectionId: "sec-1",
+  entryId: "entry-1",
+  bulletId: "b-1",
+  value: "H",
+  historyIntent: "deleteBackward"
+});
+assert.equal(
+  typedThenDeleted.state.past.length,
+  2,
+  "a held delete run stays separate from typing and survives background persistence"
+);
+assert.equal(
+  typedThenDeleted.dispatch({ type: "undo" }).data.sections[0].items[0].bullets[0].text,
+  "Hel",
+  "one undo restores the whole held backward-delete run"
+);
+
+const changedDirection = contactHistoryRun();
+changedDirection.dispatch({
+  type: "updateContact",
+  index: 0,
+  value: "ab",
+  historyIntent: "deleteBackward"
+});
+changedDirection.dispatch({
+  type: "updateContact",
+  index: 0,
+  value: "b",
+  historyIntent: "deleteForward"
+});
+assert.equal(changedDirection.state.past.length, 2, "switching delete direction starts a new undo step");
+assert.equal(
+  changedDirection.dispatch({ type: "undo" }).data.header.contact[0],
+  "ab",
+  "undo after changing direction restores only the forward-delete run"
+);
+
+const movedCaret = contactHistoryRun();
+movedCaret.dispatch({
+  type: "updateContact",
+  index: 0,
+  value: "ab",
+  historyIntent: "deleteBackward"
+});
+movedCaret.dispatch({ type: "breakTextHistoryGroup" });
+movedCaret.dispatch({
+  type: "updateContact",
+  index: 0,
+  value: "a",
+  historyIntent: "deleteBackward"
+});
+assert.equal(movedCaret.state.past.length, 2, "moving the caret closes the active delete group");
+assert.equal(
+  movedCaret.dispatch({ type: "undo" }).data.header.contact[0],
+  "ab",
+  "undo after a caret move restores only the later deletion"
+);
+
+const pausedDelete = contactHistoryRun();
+pausedDelete.dispatch({
+  type: "updateContact",
+  index: 0,
+  value: "ab",
+  historyIntent: "deleteBackward"
+});
+pausedDelete.elapse(1_000);
+pausedDelete.dispatch({
+  type: "updateContact",
+  index: 0,
+  value: "a",
+  historyIntent: "deleteBackward"
+});
+assert.equal(pausedDelete.state.past.length, 2, "a pause beyond the coalescing window starts a new delete group");
+
+const heldContactDelete = contactHistoryRun("a@b.com");
+heldContactDelete.dispatch({
+  type: "updateContact",
+  index: 0,
+  value: "a@b.co",
+  historyIntent: "deleteBackward"
+});
+heldContactDelete.dispatch({
+  type: "updateContact",
+  index: 0,
+  value: "a@b.c",
+  historyIntent: "deleteBackward"
+});
+assert.equal(heldContactDelete.state.past.length, 1, "held deletion coalesces for contact fields too");
+assert.equal(
+  heldContactDelete.dispatch({ type: "undo" }).data.header.contact[0],
+  "a@b.com",
+  "one undo restores every character deleted in the contact burst"
+);
+
+// ----- word-sized undo chunks inside one burst -----
+// A burst that reports its characters is bounded by word boundaries and by the
+// group character cap, so undo hands the text back the way it was written
+// instead of erasing the entire run at once.
+const bulletTextBase = (text) => ({
+  ...historyBase,
+  sections: [
+    {
+      ...historyBase.sections[0],
+      items: [
+        {
+          ...historyBase.sections[0].items[0],
+          bullets: [{ id: "b-1", text }, { id: "b-2", text: "x" }]
+        }
+      ]
+    }
+  ]
+});
+const bulletTextOf = (state) => state.data.sections[0].items[0].bullets[0].text;
+const typeBullet = (run, text) => {
+  text.split("").forEach((char, index) => {
+    run.dispatch({
+      type: "updateBullet",
+      sectionId: "sec-1",
+      entryId: "entry-1",
+      bulletId: "b-1",
+      value: text.slice(0, index + 1),
+      historyIntent: "insert",
+      historyText: char
+    });
+  });
+  return run;
+};
+
+const typedSentence = typeBullet(historyRun(), "Hello world");
+assert.equal(typedSentence.state.past.length, 2, "typing crosses into a new undo step at the next word");
+assert.equal(
+  bulletTextOf(typedSentence.dispatch({ type: "undo" })),
+  "Hello ",
+  "one undo takes back the last typed word, not the whole burst"
+);
+assert.equal(
+  bulletTextOf(typedSentence.dispatch({ type: "undo" })),
+  "",
+  "the next undo takes back the preceding word"
+);
+assert.equal(
+  bulletTextOf(typedSentence.dispatch({ type: "redo" })),
+  "Hello ",
+  "redo replays the same word-sized chunk"
+);
+
+const heldBackspace = historyRun(bulletTextBase("Hello world"));
+for (let length = "Hello world".length; length > 0; length -= 1) {
+  heldBackspace.dispatch({
+    type: "updateBullet",
+    sectionId: "sec-1",
+    entryId: "entry-1",
+    bulletId: "b-1",
+    value: "Hello world".slice(0, length - 1),
+    historyIntent: "deleteBackward",
+    historyText: "Hello world"[length - 1]
+  });
+}
+assert.equal(heldBackspace.state.past.length, 2, "a held backspace run ends at the word boundary it reaches");
+assert.equal(
+  bulletTextOf(heldBackspace.dispatch({ type: "undo" })),
+  "Hello ",
+  "one undo restores the word the held key just ate"
+);
+assert.equal(
+  bulletTextOf(heldBackspace.dispatch({ type: "undo" })),
+  "Hello world",
+  "the next undo restores the rest of the deleted run"
+);
+
+const longToken = "abcdefghijklmnopqrstuvwxy";
+const typedLongToken = typeBullet(historyRun(), longToken);
+assert.equal(
+  typedLongToken.state.past.length,
+  2,
+  "a run with no word boundary still ends at the group character cap"
+);
+assert.equal(
+  bulletTextOf(typedLongToken.dispatch({ type: "undo" })),
+  longToken.slice(0, 20),
+  "undo takes back only the characters past the cap"
+);
 
 const styleSeeded = {
   style: { ...DOC_STYLE_DEFAULTS },
@@ -477,8 +813,7 @@ assert.equal(structural.coalesceKey, null, "a structural edit closes the typing 
 // A Select All delete rewrites one row, drops the rest, and must be a SINGLE
 // undo step: one Ctrl+Z has to bring the whole document back.
 const crossFieldBase = {
-  name: "Candidate",
-  contact: ["a@b.com"],
+  header: { visible: true, name: "Candidate", contact: ["a@b.com"] },
   sections: [
     {
       id: "cover",
@@ -564,8 +899,7 @@ assert.equal(fieldMarkState("<b>A</b> B", "bold"), null, "a partially bold field
 assert.equal(fieldMarkState("Foo", "bold"), false, "a plain field is not marked");
 
 const emphasisBase = {
-  name: "Candidate",
-  contact: [],
+  header: { visible: true, name: "Candidate", contact: [] },
   sections: [
     {
       id: "exp",
@@ -595,8 +929,7 @@ assert.equal(unbolded.sections[0].items[0].titleLeft, "Engineer", "bulk bold-off
 // One fixture with known ids at every depth; `structuralPristine` guards the
 // reducer's non-mutation contract after each cluster (same pattern as above).
 const structuralBase = {
-  name: "Candidate",
-  contact: ["a@b.com"],
+  header: { visible: true, name: "Candidate", contact: ["a@b.com"] },
   sections: [
     {
       id: "s1",
@@ -778,14 +1111,17 @@ const resetFormatting = reduceResumeData(sizedAndFonted, { type: "resetStyleFiel
 assert.equal(resetFormatting.sections[0].items[0].titleLeft, "<b>Engineer</b>", "reset restores the default title bold and clears the font override");
 assert.equal(resetFormatting.sections[0].items[0].subtitleLeft, "<i>Acme</i>", "reset restores the default subtitle italic and clears the size override");
 assert.equal(resetFormatting.sections[2].items[0].titleLeft, "<b>Languages</b>", "reset restores the default bold skill label");
-assert.equal(resetFormatting.contact[0], "a@b.com", "reset leaves unmarked contact defaults untouched");
+assert.equal(resetFormatting.header.contact[0], "a@b.com", "reset leaves unmarked contact defaults untouched");
 
 assert.deepEqual(structuralBase, structuralPristine, "style-formatting actions never mutate their input state");
 
 // ----- clearAlignmentOverrides per scope -----
 const alignmentBase = {
-  name: "<align=left>Candidate</align>",
-  contact: ["<align=left>a@b.com</align>"],
+  header: {
+    visible: true,
+    name: "<align=left>Candidate</align>",
+    contact: ["<align=left>a@b.com</align>"]
+  },
   sections: [
     {
       id: "s1",
@@ -815,13 +1151,13 @@ const alignmentBase = {
 const alignmentPristine = structuredClone(alignmentBase);
 
 const clearedHeader = reduceResumeData(alignmentBase, { type: "clearAlignmentOverrides", scope: "header" });
-assert.equal(clearedHeader.name, "Candidate", "header scope clears the name override");
-assert.equal(clearedHeader.contact[0], "a@b.com", "header scope clears contact overrides");
+assert.equal(clearedHeader.header.name, "Candidate", "header scope clears the name override");
+assert.equal(clearedHeader.header.contact[0], "a@b.com", "header scope clears contact overrides");
 assert.equal(clearedHeader.sections[0].heading, "<align=center>Experience</align>", "header scope leaves headings alone");
 
 const clearedHeadings = reduceResumeData(alignmentBase, { type: "clearAlignmentOverrides", scope: "heading" });
 assert.equal(clearedHeadings.sections[0].heading, "Experience", "heading scope clears section-heading overrides");
-assert.equal(clearedHeadings.name, "<align=left>Candidate</align>", "heading scope leaves the header alone");
+assert.equal(clearedHeadings.header.name, "<align=left>Candidate</align>", "heading scope leaves the header alone");
 
 const clearedBody = reduceResumeData(alignmentBase, { type: "clearAlignmentOverrides", scope: "body" });
 assert.equal(clearedBody.sections[0].items[0].bullets[0].text, "one", "body scope clears bullet overrides");

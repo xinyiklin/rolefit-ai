@@ -81,12 +81,17 @@ editable documents.
   paragraph, or the whole paragraph at once when it is all selected — and
   Shift+Tab takes those indents back. Same-editor copy/paste keeps supported inline font and
   formatting runs, mixed families and sizes share a typographic baseline, and
-  Ctrl/Cmd +/-/0 controls page zoom in both document layouts.
+  Ctrl/Cmd +/-/0 controls page zoom in both document layouts. Continuous
+  typing and held Backspace/Delete bursts undo as groups; direction changes,
+  caret or field moves, selections, formatting, structural edits, and pauses
+  start a new group.
 - **Ordered AI workflow** — Distill, Tailor, and Review share one reusable progress surface with exact step counts, specific failure reasons, Retry/Stop behavior, and later stages marked not run after a failure.
 - **WYSIWYG editor + PDF export** — the editor *is* the preview: it and the exported PDF use the same shared Typeset layout engine, so visible line breaks and page flow match the export exactly. No external toolchain to install — typesetting and PDF generation run in the browser.
-- **`.resume` save/load** — download the structured resume data as a `.resume` file (lossless JSON, formatting preserved) and reload it later, or keep it as a portable backup of your work.
+- **`.resume` save/load** — download strict schema-v1 structured resume data,
+  including explicit hidden/visible/absent header state, as a `.resume` file
+  (lossless JSON, formatting preserved) and reload it later.
 - **`.cover` save/load** — download ordered cover-letter paragraphs plus their
-  optional name/contact header and print-style contract as a strict `.cover`
+  explicit optional header and print-style contract as a strict schema-v1 `.cover`
   file. `.resume` remains
   resume-only; `.rolefit-backup` is the separate allowlisted saved-workspace format.
 - **Named variants for both documents** — resumes and cover letters both live in

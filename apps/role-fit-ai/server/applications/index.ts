@@ -320,15 +320,38 @@ function sanitizeResumeData(raw: unknown) {
     })
     .filter(isPresent);
 
+  const rawHeader =
+    r.header && typeof r.header === "object" && !Array.isArray(r.header)
+      ? r.header as Record<string, unknown>
+      : null;
+  const sanitizedHeader =
+    rawHeader &&
+    typeof rawHeader.visible === "boolean" &&
+    (rawHeader.name === null || typeof rawHeader.name === "string") &&
+    Array.isArray(rawHeader.contact)
+    ? {
+        visible: rawHeader.visible,
+        name:
+          rawHeader.name === null
+            ? null
+            : sanitizeString(rawHeader.name, 300),
+        // Blank structural fields are intentional editor state. Dropping them
+        // would make the application snapshot disagree with its strict source.
+        contact: (Array.isArray(rawHeader.contact) ? rawHeader.contact : [])
+          .slice(0, 12)
+          .map((contact) => sanitizeString(contact, 300))
+      }
+    : null;
+  const header =
+    sanitizedHeader &&
+    (sanitizedHeader.name !== null || sanitizedHeader.contact.length)
+      ? sanitizedHeader
+      : null;
   const data = {
-    name: sanitizeString(r.name, 300),
-    contact: (Array.isArray(r.contact) ? r.contact : [])
-      .slice(0, 12)
-      .map((contact) => sanitizeString(contact, 300))
-      .filter(Boolean),
+    header,
     sections
   };
-  return data.name || data.contact.length || data.sections.length ? data : undefined;
+  return data.header || data.sections.length ? data : undefined;
 }
 
 function sanitizeEvidenceType(value: unknown): "exact" | "adjacent" | "none" | undefined {

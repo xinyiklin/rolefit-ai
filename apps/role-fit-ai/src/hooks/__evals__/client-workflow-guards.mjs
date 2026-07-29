@@ -812,6 +812,11 @@ assert.match(
   /draftAutosaveState === "saved"\s*\?\s*\{ state: "saved", label: "Recovery draft saved" \}/,
   "the letter uses the resume's recovery vocabulary",
 );
+assert.match(
+  app,
+  /hasContent: Boolean\(\s*coverLetterEditor\.text\.trim\(\) \|\| coverLetterEditor\.data\.header\s*\)/,
+  "an intentional header-only cover letter remains eligible for recovery autosave",
+);
 // Undoing a tailor belongs to the result summary in the rail, beside what was
 // applied — not to a permanent toolbar button competing with Open and Save.
 assert.doesNotMatch(
@@ -851,7 +856,7 @@ assert.match(
 );
 assert.match(
   draftStorage,
-  /if \(ownerId !== "" && live\.has\(ownerId\)\) continue;/,
+  /if \(ownerId !== "" && ownerId !== myId && live\.has\(ownerId\)\) continue;/,
   "one shared recovery rule protects a live sibling tab's draft for both editors",
 );
 assert.match(

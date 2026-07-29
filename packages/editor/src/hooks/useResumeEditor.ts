@@ -2,11 +2,14 @@ import { useCallback, useMemo, useReducer, useRef } from "react";
 
 import {
   newBullet,
+  newDocumentHeader,
   newEntry,
+  normalizeDocumentHeader,
   newSkillEntry,
   newSummaryEntry,
   newSection,
   type ResumeData,
+  type DocumentHeader,
   type ResumeEntry,
   type ResumeSectionData,
   type ResumeSectionType
@@ -39,9 +42,12 @@ function newEntryForSection(section: ResumeSectionData): ResumeEntry {
 // `past`/`future` = the undo/redo history: snapshots of `data` (structural
 // sharing keeps them cheap), reset on seed, capped so a long session can't
 // grow unbounded. `coalesceKey`/`coalesceAt` group a run of consecutive edits
-// to the SAME field into ONE undo step: typing a sentence, then ⌘Z, reverts the
-// whole run rather than one character at a time. A different field, a structural
-// edit, a pause, or an undo/redo starts a fresh group.
+// with the same field AND text intent into one undo step: typing, backward
+// deletion, and forward deletion never merge with each other. A caret/field
+// move, structural edit, pause, or undo/redo starts a fresh group.
+// `coalesceEdge`/`coalesceCount` bound that group the way a word processor
+// does, so undo walks a burst back in readable chunks instead of erasing it
+// whole: the run also ends at a word boundary and at TEXT_GROUP_CHAR_CAP.
 type State = {
   data: ResumeData | null;
   dirty: boolean;
@@ -49,60 +55,124 @@ type State = {
   future: { data: ResumeData; sequence: number; branch: number; generation: number }[];
   coalesceKey: string | null;
   coalesceAt: number;
+  // Last character the open group absorbed, in the gesture's own direction.
+  coalesceEdge: string | null;
+  coalesceCount: number;
 };
 
 const HISTORY_CAP = 100;
 // Consecutive same-field edits within this window merge into one undo step; a
 // longer pause closes the group so the next keystroke is separately undoable.
 const COALESCE_MS = 700;
+// A run with no word boundary in it (a held key, a long token) still has to end
+// somewhere, or one undo would swallow an arbitrarily long burst.
+const TEXT_GROUP_CHAR_CAP = 20;
+
+export type TextHistoryIntent =
+  | "insert"
+  | "deleteBackward"
+  | "deleteForward";
+
+export type TextEditOptions = {
+  coalesce?: boolean;
+  historyIntent?: TextHistoryIntent;
+  // The characters this edit inserted or removed. Only history grouping reads
+  // it; the document value in the action stays the single source of truth.
+  historyText?: string;
+};
 
 // The undo-group signature for a text edit, or null for structural operations
 // that must always be their own undo step.
 function coalesceKeyFor(action: Action): string | null {
+  const withIntent = (field: string, options: TextEditOptions) => {
+    if (options.coalesce === false) return null;
+    return `${field}:${options.historyIntent ?? "edit"}`;
+  };
   switch (action.type) {
-    case "setName":
-      return "name";
+    case "setHeaderName":
+      return withIntent("name", action);
     case "updateContact":
-      return `contact:${action.index}`;
+      return withIntent(`contact:${action.index}`, action);
     case "setHeading":
-      return `heading:${action.sectionId}`;
+      return withIntent(`heading:${action.sectionId}`, action);
     case "updateEntry":
-      return action.coalesce === false ? null : `entry:${action.sectionId}:${action.entryId}:${action.field}`;
+      return withIntent(
+        `entry:${action.sectionId}:${action.entryId}:${action.field}`,
+        action
+      );
     case "updateSkillsRow":
-      return `skills:${action.sectionId}:${action.entryId}`;
+      return withIntent(`skills:${action.sectionId}:${action.entryId}`, action);
     case "updateBullet":
-      return action.coalesce === false ? null : `bullet:${action.sectionId}:${action.entryId}:${action.bulletId}`;
+      return withIntent(
+        `bullet:${action.sectionId}:${action.entryId}:${action.bulletId}`,
+        action
+      );
     default:
       return null;
   }
 }
 
+// The characters a text edit added or removed, when the caller reported them.
+function historyTextFor(action: Action): string {
+  return "historyText" in action && typeof action.historyText === "string"
+    ? action.historyText
+    : "";
+}
+
+// Word-processor undo granularity: a burst is undone a word at a time rather
+// than all at once. Insertion and forward deletion travel left to right, so a
+// run ends where the next word begins. Backward deletion travels right to left,
+// so it ends where the caret reaches the whitespace ahead of the word it just
+// removed — that keeps the chunk "space + word" in both directions.
+function startsNewTextGroup(
+  intent: TextHistoryIntent | undefined,
+  edge: string | null,
+  text: string
+): boolean {
+  if (!edge || !text) return false;
+  const edgeIsSpace = /\s/.test(edge);
+  const nextIsSpace = /\s/.test(text[0]!);
+  if (intent === "deleteBackward") return nextIsSpace && !edgeIsSpace;
+  return edgeIsSpace && !nextIsSpace;
+}
+
 type Action =
   | { type: "seed"; data: ResumeData | null }
   | { type: "markClean" }
+  | { type: "breakTextHistoryGroup" }
   | { type: "undo" }
   | { type: "redo" }
-  | { type: "setName"; name: string }
-  | { type: "updateContact"; index: number; value: string }
-  | { type: "addContact" }
+  | { type: "createHeader" }
+  | { type: "setHeaderVisible"; visible: boolean }
+  | ({ type: "setHeaderName"; value: string } & TextEditOptions)
+  | { type: "removeHeaderName" }
+  | { type: "replaceHeader"; header: DocumentHeader | null }
+  | { type: "replaceDocument"; data: ResumeData }
+  | ({ type: "updateContact"; index: number; value: string } & TextEditOptions)
+  | { type: "insertContact"; index: number }
   | { type: "removeContact"; index: number }
   | { type: "addSection"; sectionType: ResumeSectionType; position?: "top" | "bottom" }
   | { type: "insertSection"; sectionType: ResumeSectionType; sectionId: string; position: "above" | "below" }
   | { type: "removeSection"; sectionId: string }
   | { type: "reorderSections"; from: number; to: number }
-  | { type: "setHeading"; sectionId: string; heading: string }
+  | ({ type: "setHeading"; sectionId: string; heading: string } & TextEditOptions)
   | { type: "insertEntry"; sectionId: string; afterEntryId: string; position?: "above" | "below" }
   | { type: "removeEntry"; sectionId: string; entryId: string }
   | { type: "reorderEntries"; sectionId: string; from: number; to: number }
-  | {
+  | ({
       type: "updateEntry";
       sectionId: string;
       entryId: string;
       field: EntryTextField;
       value: string;
-      coalesce?: boolean;
-    }
-  | { type: "updateSkillsRow"; sectionId: string; entryId: string; label: string; skills: string }
+    } & TextEditOptions)
+  | ({
+      type: "updateSkillsRow";
+      sectionId: string;
+      entryId: string;
+      label: string;
+      skills: string;
+    } & TextEditOptions)
   // Bulk emphasis from Styles applies/removes a mark on one entry field across
   // every standard entry. It remains ordinary formatting that can be changed
   // later on an individual selection (not a global render flag).
@@ -118,14 +188,13 @@ type Action =
   | { type: "insertBullet"; sectionId: string; entryId: string; afterBulletId: string; position?: "above" | "below" }
   | { type: "removeBullet"; sectionId: string; entryId: string; bulletId: string }
   | { type: "reorderBullets"; sectionId: string; entryId: string; from: number; to: number }
-  | {
+  | ({
       type: "updateBullet";
       sectionId: string;
       entryId: string;
       bulletId: string;
       value: string;
-      coalesce?: boolean;
-    }
+    } & TextEditOptions)
   // Typeset-editor structural edits (Enter/Backspace inside a bullet or summary
   // paragraph). The caller pre-computes mark-balanced halves / joined text; the
   // reducer owns the new ids so each edit stays one undo step.
@@ -195,16 +264,78 @@ export function reduceResumeData(data: ResumeData, action: Action): ResumeData {
     case "batch":
       return action.steps.reduce(reduceResumeData, data);
 
-    case "setName":
-      return { ...data, name: action.name };
+    case "createHeader":
+      return data.header
+        ? data.header.visible
+          ? data
+          : { ...data, header: { ...data.header, visible: true } }
+        : { ...data, header: newDocumentHeader() };
 
-    case "updateContact":
-      return { ...data, contact: data.contact.map((c, i) => (i === action.index ? action.value : c)) };
-    case "addContact":
-      return { ...data, contact: [...data.contact, ""] };
+    case "setHeaderVisible":
+      if (!data.header) {
+        return action.visible ? { ...data, header: newDocumentHeader() } : data;
+      }
+      return data.header.visible === action.visible
+        ? data
+        : { ...data, header: { ...data.header, visible: action.visible } };
+
+    case "setHeaderName":
+      return data.header
+        ? data.header.name === action.value
+          ? data
+          : { ...data, header: { ...data.header, name: action.value } }
+        : { ...data, header: { visible: true, name: action.value, contact: [] } };
+
+    case "removeHeaderName": {
+      if (!data.header || data.header.name === null) return data;
+      return {
+        ...data,
+        header: normalizeDocumentHeader({ ...data.header, name: null })
+      };
+    }
+    case "replaceHeader":
+      return {
+        ...data,
+        header: normalizeDocumentHeader(
+          action.header
+            ? {
+              visible: action.header.visible,
+              name: action.header.name,
+              contact: [...action.header.contact]
+            }
+            : null
+        )
+      };
+    case "replaceDocument":
+      return action.data;
+
+    case "updateContact": {
+      if (!data.header || action.index < 0 || action.index >= data.header.contact.length) return data;
+      if (data.header.contact[action.index] === action.value) return data;
+      return {
+        ...data,
+        header: {
+          ...data.header,
+          contact: data.header.contact.map((contact, index) =>
+            index === action.index ? action.value : contact
+          )
+        }
+      };
+    }
+    case "insertContact": {
+      const header = data.header ?? { visible: true, name: null, contact: [] };
+      const index = Math.max(0, Math.min(action.index, header.contact.length));
+      const contact = header.contact.slice();
+      contact.splice(index, 0, "");
+      return { ...data, header: { ...header, visible: true, contact } };
+    }
     case "removeContact": {
-      const contact = data.contact.filter((_, i) => i !== action.index);
-      return contact.length === data.contact.length ? data : { ...data, contact };
+      if (!data.header || action.index < 0 || action.index >= data.header.contact.length) return data;
+      const contact = data.header.contact.filter((_, index) => index !== action.index);
+      return {
+        ...data,
+        header: normalizeDocumentHeader({ ...data.header, contact })
+      };
     }
 
     case "addSection": {
@@ -281,14 +412,18 @@ export function reduceResumeData(data: ResumeData, action: Action): ResumeData {
       return resetStyleFieldFormatting(data);
     case "clearAlignmentOverrides":
       if (action.scope === "header") {
+        if (!data.header) return data;
+        const name = data.header.name === null
+          ? null
+          : clearAlignmentOverride(data.header.name);
+        const contact = data.header.contact.map(clearAlignmentOverride);
         if (
-          clearAlignmentOverride(data.name) === data.name
-          && data.contact.every((value) => clearAlignmentOverride(value) === value)
+          name === data.header.name
+          && contact.every((value, index) => value === data.header?.contact[index])
         ) return data;
         return {
           ...data,
-          name: clearAlignmentOverride(data.name),
-          contact: data.contact.map(clearAlignmentOverride)
+          header: { ...data.header, name, contact }
         };
       }
       if (action.scope === "heading") {
@@ -484,7 +619,7 @@ export type FieldEdit =
 function actionForFieldEdit(edit: FieldEdit): Action {
   switch (edit.kind) {
     case "name":
-      return { type: "setName", name: edit.value };
+      return { type: "setHeaderName", value: edit.value };
     case "contact":
       return { type: "updateContact", index: edit.index, value: edit.value };
     case "heading":
@@ -550,13 +685,20 @@ export function rootReducer(
       past: [],
       future: [],
       coalesceKey: null,
-      coalesceAt: 0
+      coalesceAt: 0,
+      coalesceEdge: null,
+      coalesceCount: 0
     };
   }
-  // Mark the model as saved without reseeding. Undo history remains useful, but
-  // the next edit starts a new coalescing group.
+  // Persistence is not an editing gesture. Marking a recovery/autosave clean
+  // must not split a held-key typing or deletion transaction.
   if (action.type === "markClean")
-    return state.dirty ? { ...state, dirty: false, coalesceKey: null } : state;
+    return state.dirty ? { ...state, dirty: false } : state;
+  if (action.type === "breakTextHistoryGroup") {
+    return state.coalesceKey === null
+      ? state
+      : { ...state, coalesceKey: null, coalesceEdge: null, coalesceCount: 0 };
+  }
   if (!state.data) return state;
   if (action.type === "undo") {
     let index = state.past.length - 1;
@@ -585,7 +727,9 @@ export function rootReducer(
       ].slice(0, HISTORY_CAP),
       // Restored snapshots are their own boundary: don't let post-undo typing
       // merge into the group that was just traversed.
-      coalesceKey: null
+      coalesceKey: null,
+      coalesceEdge: null,
+      coalesceCount: 0
     };
   }
   if (action.type === "redo") {
@@ -611,7 +755,9 @@ export function rootReducer(
         }
       ].slice(-HISTORY_CAP),
       future: state.future.filter((_, futureIndex) => futureIndex !== index),
-      coalesceKey: null
+      coalesceKey: null,
+      coalesceEdge: null,
+      coalesceCount: 0
     };
   }
   const data = reduceResumeData(state.data, action);
@@ -619,20 +765,29 @@ export function rootReducer(
   // Coalesce a run of consecutive same-field edits into one undo step: keep the
   // existing `past` (whose top is the pre-run snapshot) instead of pushing a new
   // one. A new field, a structural edit, or a pause past COALESCE_MS starts a
-  // fresh group and pushes a snapshot.
+  // fresh group and pushes a snapshot. Within one burst the run still ends at a
+  // word boundary and at the character cap, so undo gives the text back in
+  // chunks the writer recognizes.
   const key = coalesceKeyFor(action);
   const now = Date.now();
   // A shared clock prevents content edits from coalescing across a style edit.
-  const sequence = historyClock.nextSequence();
+  const sequence = historyClock.sequenceFor(state, action);
   const branch = historyClock.currentBranch();
   const generation = historyClock.currentGeneration();
   const previous = state.past[state.past.length - 1];
+  const intent = "historyIntent" in action ? action.historyIntent : undefined;
+  const text = historyTextFor(action);
+  // An edit that did not report its characters still advances the cap by one,
+  // so an unreported burst cannot grow without bound either.
+  const length = text.length || 1;
   const coalesce =
     key !== null &&
     key === state.coalesceKey &&
     now - state.coalesceAt < COALESCE_MS &&
     previous?.generation === generation &&
-    previous?.sequence === sequence - 1;
+    previous?.sequence === sequence - 1 &&
+    !startsNewTextGroup(intent, state.coalesceEdge, text) &&
+    state.coalesceCount + length <= TEXT_GROUP_CHAR_CAP;
   return {
     data,
     dirty: true,
@@ -644,7 +799,9 @@ export function rootReducer(
         ].slice(-HISTORY_CAP),
     future: [],
     coalesceKey: key,
-    coalesceAt: now
+    coalesceAt: now,
+    coalesceEdge: text ? text[text.length - 1]! : null,
+    coalesceCount: coalesce ? state.coalesceCount + length : length
   };
 }
 
@@ -667,7 +824,9 @@ export function useResumeEditor(
     past: [],
     future: [],
     coalesceKey: null,
-    coalesceAt: 0
+    coalesceAt: 0,
+    coalesceEdge: null,
+    coalesceCount: 0
   });
 
   const seedData = useCallback((data: ResumeData | null) => {
@@ -681,9 +840,18 @@ export function useResumeEditor(
 
   const actions = useMemo(
     () => ({
-      setName: (name: string) => dispatch({ type: "setName", name }),
-      updateContact: (index: number, value: string) => dispatch({ type: "updateContact", index, value }),
-      addContact: () => dispatch({ type: "addContact" }),
+      createHeader: () => dispatch({ type: "createHeader" }),
+      setHeaderVisible: (visible: boolean) => dispatch({ type: "setHeaderVisible", visible }),
+      setHeaderName: (value: string, options?: TextEditOptions) =>
+        dispatch({ type: "setHeaderName", value, ...options }),
+      removeHeaderName: () => dispatch({ type: "removeHeaderName" }),
+      replaceHeader: (header: DocumentHeader | null) =>
+        dispatch({ type: "replaceHeader", header }),
+      replaceDocument: (data: ResumeData) =>
+        dispatch({ type: "replaceDocument", data }),
+      updateContact: (index: number, value: string, options?: TextEditOptions) =>
+        dispatch({ type: "updateContact", index, value, ...options }),
+      insertContact: (index: number) => dispatch({ type: "insertContact", index }),
       removeContact: (index: number) => dispatch({ type: "removeContact", index }),
       addSection: (sectionType: ResumeSectionType, position?: "top" | "bottom") =>
         dispatch({ type: "addSection", sectionType, position }),
@@ -691,7 +859,11 @@ export function useResumeEditor(
         dispatch({ type: "insertSection", sectionType, sectionId, position }),
       removeSection: (sectionId: string) => dispatch({ type: "removeSection", sectionId }),
       reorderSections: (from: number, to: number) => dispatch({ type: "reorderSections", from, to }),
-      setHeading: (sectionId: string, heading: string) => dispatch({ type: "setHeading", sectionId, heading }),
+      setHeading: (
+        sectionId: string,
+        heading: string,
+        options?: TextEditOptions
+      ) => dispatch({ type: "setHeading", sectionId, heading, ...options }),
       insertEntry: (sectionId: string, afterEntryId: string, position?: "above" | "below") =>
         dispatch({ type: "insertEntry", sectionId, afterEntryId, position }),
       removeEntry: (sectionId: string, entryId: string) => dispatch({ type: "removeEntry", sectionId, entryId }),
@@ -702,10 +874,15 @@ export function useResumeEditor(
         entryId: string,
         field: EntryTextField,
         value: string,
-        options?: { coalesce?: boolean }
-      ) => dispatch({ type: "updateEntry", sectionId, entryId, field, value, coalesce: options?.coalesce }),
-      updateSkillsRow: (sectionId: string, entryId: string, label: string, skills: string) =>
-        dispatch({ type: "updateSkillsRow", sectionId, entryId, label, skills }),
+        options?: TextEditOptions
+      ) => dispatch({ type: "updateEntry", sectionId, entryId, field, value, ...options }),
+      updateSkillsRow: (
+        sectionId: string,
+        entryId: string,
+        label: string,
+        skills: string,
+        options?: TextEditOptions
+      ) => dispatch({ type: "updateSkillsRow", sectionId, entryId, label, skills, ...options }),
       setStyleFieldMark: (field: StyleTextField, mark: FieldMark, on: boolean) =>
         dispatch({ type: "setStyleFieldMark", field, mark, on }),
       setStyleFieldFont: (field: StyleTextField, family: FieldFontFamily | "default") =>
@@ -726,8 +903,8 @@ export function useResumeEditor(
         entryId: string,
         bulletId: string,
         value: string,
-        options?: { coalesce?: boolean }
-      ) => dispatch({ type: "updateBullet", sectionId, entryId, bulletId, value, coalesce: options?.coalesce }),
+        options?: TextEditOptions
+      ) => dispatch({ type: "updateBullet", sectionId, entryId, bulletId, value, ...options }),
       splitBullet: (sectionId: string, entryId: string, bulletId: string, before: string, after: string) =>
         dispatch({ type: "splitBullet", sectionId, entryId, bulletId, before, after }),
       mergeBulletUp: (sectionId: string, entryId: string, bulletId: string, joined: string) =>
@@ -749,6 +926,7 @@ export function useResumeEditor(
         const steps = edits.map(actionForFieldEdit);
         if (steps.length) dispatch({ type: "batch", steps });
       },
+      breakTextHistoryGroup: () => dispatch({ type: "breakTextHistoryGroup" }),
       undo: () => dispatch({ type: "undo" }),
       redo: () => dispatch({ type: "redo" })
     }),

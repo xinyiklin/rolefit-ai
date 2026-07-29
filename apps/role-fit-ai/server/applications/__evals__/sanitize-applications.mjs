@@ -68,7 +68,11 @@ try {
         BADKEY: { source: "ai" }
       },
       resumeData: {
-        name: "Candidate",
+        header: {
+          visible: false,
+          name: "",
+          contact: ["", "candidate@example.com"]
+        },
         ignored: "drop me",
         sections: [
           {
@@ -108,6 +112,35 @@ try {
   if (valid?.review?.gaps?.[0]?.canHonestlyAdd !== false) failures.push("string review boolean became an affirmative judgment");
   if (valid?.resumeData?.ignored) failures.push("unknown resume data fields survived");
   if (valid?.resumeData?.sections?.[0]?.type !== "skills") failures.push("resume section type was not inferred");
+  if (
+    valid?.resumeData?.header?.visible !== false ||
+    valid.resumeData.header.name !== "" ||
+    valid.resumeData.header.contact.join("|") !== "|candidate@example.com"
+  ) {
+    failures.push("explicit hidden/blank resume header structure did not survive");
+  }
+  const noncanonicalHeaders = sanitizeApplications([
+    {
+      id: "legacy-flat-header",
+      title: "Legacy flat header",
+      resumeData: {
+        name: "Must not hydrate at runtime",
+        contact: ["legacy@example.test"],
+        sections: [{ heading: "Experience", items: [] }]
+      }
+    },
+    {
+      id: "empty-structural-header",
+      title: "Empty structural header",
+      resumeData: {
+        header: { visible: true, name: null, contact: [] },
+        sections: [{ heading: "Experience", items: [] }]
+      }
+    }
+  ]);
+  if (noncanonicalHeaders.some((application) => application.resumeData?.header)) {
+    failures.push("runtime tracker sanitization accepted a retired or structurally empty header");
+  }
 
   // rawJobDescription roundtrips (trimmed via slice, not .trim()).
   if (valid?.rawJobDescription !== "  Raw JD text here.  ") failures.push("rawJobDescription did not persist");

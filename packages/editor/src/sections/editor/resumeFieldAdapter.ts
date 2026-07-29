@@ -4,21 +4,37 @@
 
 import type { ResumeData } from "@typeset/engine/lib/resumeData.ts";
 import { fieldKey, type FieldSrc } from "@typeset/engine/typeset/types.ts";
-import type { FieldValueEdit } from "../../hooks/useResumeEditor";
+import type {
+  FieldValueEdit,
+  TextEditOptions
+} from "../../hooks/useResumeEditor";
 import { buildDisplayMap, splitValueAt } from "./inlineTextEditing.ts";
 
 type ResumeFieldActions = {
-  setName: (value: string) => void;
-  updateContact: (index: number, value: string) => void;
-  setHeading: (sectionId: string, value: string) => void;
+  setHeaderName: (value: string, options?: TextEditOptions) => void;
+  updateContact: (index: number, value: string, options?: TextEditOptions) => void;
+  setHeading: (sectionId: string, value: string, options?: TextEditOptions) => void;
   updateEntry: (
     sectionId: string,
     entryId: string,
     field: "titleLeft" | "titleRight" | "subtitleLeft" | "subtitleRight",
-    value: string
+    value: string,
+    options?: TextEditOptions
   ) => void;
-  updateBullet: (sectionId: string, entryId: string, bulletId: string, value: string) => void;
-  updateSkillsRow: (sectionId: string, entryId: string, label: string, skills: string) => void;
+  updateBullet: (
+    sectionId: string,
+    entryId: string,
+    bulletId: string,
+    value: string,
+    options?: TextEditOptions
+  ) => void;
+  updateSkillsRow: (
+    sectionId: string,
+    entryId: string,
+    label: string,
+    skills: string,
+    options?: TextEditOptions
+  ) => void;
 };
 
 function findEntry(data: ResumeData, sectionId: string, entryId: string) {
@@ -29,9 +45,9 @@ function findEntry(data: ResumeData, sectionId: string, entryId: string) {
 export function valueForField(data: ResumeData, src: FieldSrc): string {
   switch (src.kind) {
     case "name":
-      return data.name;
+      return data.header?.name ?? "";
     case "contact":
-      return data.contact[src.index] ?? "";
+      return data.header?.contact[src.index] ?? "";
     case "heading":
       return data.sections.find((section) => section.id === src.sectionId)?.heading ?? "";
     case "entry":
@@ -65,9 +81,21 @@ export function withFieldValue(data: ResumeData, src: FieldSrc, value: string): 
     });
   switch (src.kind) {
     case "name":
-      return { ...data, name: value };
+      return data.header
+        ? { ...data, header: { ...data.header, name: value } }
+        : { ...data, header: { visible: true, name: value, contact: [] } };
     case "contact":
-      return { ...data, contact: data.contact.map((v, i) => (i === src.index ? value : v)) };
+      return data.header
+        ? {
+            ...data,
+            header: {
+              ...data.header,
+              contact: data.header.contact.map((contact, index) =>
+                index === src.index ? value : contact
+              )
+            }
+          }
+        : data;
     case "heading":
       return { ...data, sections: data.sections.map((s) => (s.id === src.sectionId ? { ...s, heading: value } : s)) };
     case "entry":
@@ -95,8 +123,11 @@ export function withFieldValue(data: ResumeData, src: FieldSrc, value: string): 
 }
 
 function fieldSources(data: ResumeData): FieldSrc[] {
-  const sources: FieldSrc[] = [{ kind: "name" }];
-  data.contact.forEach((_, index) => sources.push({ kind: "contact", index }));
+  const sources: FieldSrc[] = [];
+  if (data.header?.name !== null && data.header?.name !== undefined) {
+    sources.push({ kind: "name" });
+  }
+  data.header?.contact.forEach((_, index) => sources.push({ kind: "contact", index }));
   for (const section of data.sections) {
     sources.push({ kind: "heading", sectionId: section.id });
     for (const entry of section.items) {
@@ -120,6 +151,24 @@ export function historyCaretTarget(
   before: ResumeData,
   after: ResumeData
 ): { key: string; valueIndex: number; valueEndIndex?: number } | null {
+  const beforeContacts = before.header?.contact ?? [];
+  const afterContacts = after.header?.contact ?? [];
+  // A missing slot and a restored empty contact both read as "", so field
+  // value comparison alone cannot place the caret after the restored divider.
+  if (afterContacts.length > beforeContacts.length) {
+    let restoredIndex = 0;
+    while (
+      restoredIndex < beforeContacts.length &&
+      beforeContacts[restoredIndex] === afterContacts[restoredIndex]
+    ) {
+      restoredIndex += 1;
+    }
+    return {
+      key: fieldKey({ kind: "contact", index: restoredIndex }),
+      valueIndex: 0
+    };
+  }
+
   for (const src of fieldSources(after)) {
     const afterValue = valueForField(after, src);
     const beforeValue = valueForField(before, src);
@@ -183,20 +232,43 @@ export function fieldEditFor(src: FieldSrc, value: string): FieldValueEdit {
   }
 }
 
-export function commitField(actions: ResumeFieldActions, src: FieldSrc, value: string): void {
+export function commitField(
+  actions: ResumeFieldActions,
+  src: FieldSrc,
+  value: string,
+  options: TextEditOptions = { coalesce: false }
+): void {
   const edit = fieldEditFor(src, value);
   switch (edit.kind) {
     case "name":
-      return actions.setName(edit.value);
+      return actions.setHeaderName(edit.value, options);
     case "contact":
-      return actions.updateContact(edit.index, edit.value);
+      return actions.updateContact(edit.index, edit.value, options);
     case "heading":
-      return actions.setHeading(edit.sectionId, edit.value);
+      return actions.setHeading(edit.sectionId, edit.value, options);
     case "entry":
-      return actions.updateEntry(edit.sectionId, edit.entryId, edit.field, edit.value);
+      return actions.updateEntry(
+        edit.sectionId,
+        edit.entryId,
+        edit.field,
+        edit.value,
+        options
+      );
     case "bullet":
-      return actions.updateBullet(edit.sectionId, edit.entryId, edit.bulletId, edit.value);
+      return actions.updateBullet(
+        edit.sectionId,
+        edit.entryId,
+        edit.bulletId,
+        edit.value,
+        options
+      );
     case "skillsRow":
-      return actions.updateSkillsRow(edit.sectionId, edit.entryId, edit.label, edit.skills);
+      return actions.updateSkillsRow(
+        edit.sectionId,
+        edit.entryId,
+        edit.label,
+        edit.skills,
+        options
+      );
   }
 }

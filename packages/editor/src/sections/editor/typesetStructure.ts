@@ -10,10 +10,9 @@ export type BlockAnchor = {
   sectionId: string;
   entryId?: string;
   bulletId?: string;
-  contactIndex?: number;
   x0?: number;
   x1?: number;
-  kind: "heading" | "entry" | "skillsRow" | "bullet" | "contact";
+  kind: "heading" | "entry" | "skillsRow" | "bullet";
 };
 
 export type TypesetAnchors = {
@@ -49,31 +48,6 @@ export function anchorsFromDoc(doc: LayoutDocument): TypesetAnchors {
   const byKey = new Map<string, BlockAnchor>();
   doc.pages.forEach((page, pageIndex) => {
     for (const line of page.lines) {
-      for (const run of line.runs) {
-        if (!run.src || run.marker || run.src.kind !== "contact") continue;
-        const key = `contact|${run.src.index}|${pageIndex}`;
-        const top = line.baseline - run.style.size;
-        const bottom = line.baseline + run.style.size * 0.35;
-        const existing = byKey.get(key);
-        if (existing) {
-          existing.top = Math.min(existing.top, top);
-          existing.bottom = Math.max(existing.bottom, bottom);
-          existing.x0 = Math.min(existing.x0 ?? run.x, run.x);
-          existing.x1 = Math.max(existing.x1 ?? run.x + run.width, run.x + run.width);
-        } else {
-          byKey.set(key, {
-            page: pageIndex,
-            top,
-            bottom,
-            sectionId: "",
-            contactIndex: run.src.index,
-            x0: run.x,
-            x1: run.x + run.width,
-            kind: "contact"
-          });
-        }
-      }
-
       const run = line.runs.find(
         (candidate) => candidate.src && !candidate.marker && candidate.src.kind !== "contact" && candidate.src.kind !== "name"
       );
@@ -172,11 +146,8 @@ export function slotsFor(extents: Extent[]): Array<{ page: number; yBp: number }
 export function anchorForField(anchors: TypesetAnchors | null, key: string | null): BlockAnchor | null {
   if (!anchors || !key) return null;
   const src = parseFieldKey(key);
-  if (!src || src.kind === "name") return null;
+  if (!src || src.kind === "name" || src.kind === "contact") return null;
   if (src.kind === "heading") return anchors.headings.get(src.sectionId) ?? null;
-  if (src.kind === "contact") {
-    return anchors.blocks.find((block) => block.kind === "contact" && block.contactIndex === src.index) ?? null;
-  }
   if (src.kind === "bullet") {
     return anchors.blocks.find((block) => block.kind === "bullet" && block.bulletId === src.bulletId) ?? null;
   }

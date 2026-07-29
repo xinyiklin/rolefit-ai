@@ -1,4 +1,5 @@
 import { useLayoutEffect, useRef, type Dispatch, type MutableRefObject, type SetStateAction } from "react";
+import type { TextHistoryIntent } from "../../hooks/useResumeEditor.ts";
 
 import {
   caretClientX,
@@ -19,30 +20,39 @@ import {
   type TypesetSelection
 } from "./inlineTextEditing.ts";
 import {
+  clipboardBlocks,
   decodeInlineClipboard,
   encodeInlineClipboard,
   inlineFragmentFromHtml,
   paragraphFragmentsFromHtml,
-  TYPESET_INLINE_CLIPBOARD_MIME
+  TYPESET_INLINE_CLIPBOARD_MIME,
+  TYPESET_SELECTION_CLIPBOARD_MIME
 } from "./clipboardFormatting.ts";
 
 export type QueuedIntent =
   | { kind: "insert"; text: string }
-  | { kind: "paste"; fragment: string }
-  | { kind: "pasteParagraphs"; fragments: string[] }
+  | {
+      kind: "richPaste";
+      selectionPayload: string;
+      paragraphFragments: string[] | null;
+      fragment: string | null;
+      blocks: string[];
+      plainText: string;
+    }
   | { kind: "deleteBack" }
   | { kind: "deleteFwd" }
   | { kind: "deleteSelection" }
   | { kind: "indent" }
   | { kind: "outdent" }
-  | { kind: "splitBullet" }
+  | { kind: "enter"; shiftKey: boolean }
+  | { kind: "deleteHeaderField"; direction: "back" | "forward" }
   | { kind: "toggleMark"; mark: "bold" | "italic" | "underline" }
   | { kind: "clearFormatting" }
   | { kind: "history"; direction: "undo" | "redo" };
 
 // Normalize beforeinput so deferred and cross-field paths replay the same intent.
 function intentForInput(event: InputEvent, type: string): QueuedIntent | null {
-  if (type === "insertParagraph") return { kind: "splitBullet" };
+  if (type === "insertParagraph") return { kind: "enter", shiftKey: false };
   if (type === "deleteContentBackward") return { kind: "deleteBack" };
   if (type === "deleteContentForward") return { kind: "deleteFwd" };
   if (type.startsWith("delete")) return { kind: "deleteSelection" };
@@ -69,20 +79,33 @@ type TypesetInputEventsArgs = {
   commitPendingRef: MutableRefObject<boolean>;
   replayQueueRef: MutableRefObject<QueuedIntent[]>;
   readSelection: () => TypesetSelection | null;
-  commitReplace: (selection: TypesetSelection, start: number, end: number, text: string) => void;
+  commitReplace: (
+    selection: TypesetSelection,
+    start: number,
+    end: number,
+    text: string,
+    historyIntent?: TextHistoryIntent
+  ) => void;
   // The host measures tab width and owns the document-dependent indent ladder.
   commitIndent: (selection: TypesetSelection, direction: "in" | "out") => void;
   // Return false when no block indent exists so normal deletion can proceed.
   commitParagraphOutdent: (selection: TypesetSelection) => boolean;
   // Measured width lets deletion remove exactly the spaces one Tab authored.
   indentWidthAt: (selection: TypesetSelection) => number;
-  commitPaste: (selection: TypesetSelection, start: number, end: number, fragment: string) => void;
-  commitParagraphPaste: (selection: TypesetSelection, fragments: readonly string[]) => boolean;
-  onEnter: (selection: TypesetSelection) => void;
+  commitRichPaste: (
+    selection: TypesetSelection,
+    intent: Extract<QueuedIntent, { kind: "richPaste" }>
+  ) => boolean;
+  onEnter: (selection: TypesetSelection, shiftKey: boolean) => void;
+  commitEmptyHeaderField: (
+    selection: TypesetSelection,
+    direction: "back" | "forward"
+  ) => boolean;
   commitMergeBullet: (selection: TypesetSelection, direction: "up" | "down") => boolean;
   commitToggleMark: (selection: TypesetSelection, mark: "bold" | "italic" | "underline") => void;
   commitClearFormatting: (selection: TypesetSelection) => void;
   commitHistory: (direction: "undo" | "redo") => void;
+  breakTextHistoryGroup: () => void;
   // A selection crossing field boundaries (Select All, a drag across
   // paragraphs) has no single mapped field. The host applies these as one
   // batched edit and returns true when it consumed the intent.
@@ -90,7 +113,11 @@ type TypesetInputEventsArgs = {
   // Clipboard flavors are derived from logical model ranges. The painted DOM
   // is split into visual lines and must never define external paragraph breaks.
   selectionClipboardHtml: (selection: TypesetSelection) => string;
-  crossFieldClipboard: () => { plain: string; html: string } | null;
+  crossFieldClipboard: () => {
+    plain: string;
+    html: string;
+    selection?: string;
+  } | null;
   onZoomShortcut: (command: -1 | 0 | 1) => void;
   setNonce: Dispatch<SetStateAction<number>>;
 };
@@ -107,13 +134,14 @@ export function useTypesetInputEvents({
   commitIndent,
   commitParagraphOutdent,
   indentWidthAt,
-  commitPaste,
-  commitParagraphPaste,
+  commitRichPaste,
   onEnter,
+  commitEmptyHeaderField,
   commitMergeBullet,
   commitToggleMark,
   commitClearFormatting,
   commitHistory,
+  breakTextHistoryGroup,
   commitCrossFieldIntent,
   selectionClipboardHtml,
   crossFieldClipboard,
@@ -217,7 +245,7 @@ export function useTypesetInputEvents({
       }
 
       if (type === "insertParagraph") {
-        onEnter(selection);
+        onEnter(selection, false);
         return;
       }
       if (
@@ -252,7 +280,13 @@ export function useTypesetInputEvents({
           type === "insertLineBreak"
             ? "\n"
             : event.data ?? event.dataTransfer?.getData("text/plain") ?? "";
-        commitReplace(selection, dStart, dEnd, text);
+        commitReplace(
+          selection,
+          dStart,
+          dEnd,
+          text,
+          dStart === dEnd && text ? "insert" : undefined
+        );
         return;
       }
       if (type.startsWith("delete")) {
@@ -280,7 +314,13 @@ export function useTypesetInputEvents({
               indentWidthAt(selection)
             );
             if (indent) {
-              commitReplace(selection, indent.start, indent.end, "");
+              commitReplace(
+                selection,
+                indent.start,
+                indent.end,
+                "",
+                backward ? "deleteBackward" : "deleteForward"
+              );
               return;
             }
           }
@@ -308,7 +348,13 @@ export function useTypesetInputEvents({
             }
           }
           if (start < 0 || end > selection.map.chars.length || start === end) return;
-          commitReplace(selection, start, end, "");
+          commitReplace(
+            selection,
+            start,
+            end,
+            "",
+            backward ? "deleteBackward" : "deleteForward"
+          );
         } else {
           commitReplace(selection, selection.dStart, selection.dEnd, "");
         }
@@ -321,6 +367,21 @@ export function useTypesetInputEvents({
 
     const onKeyDown = (event: KeyboardEvent) => {
       const mod = event.metaKey || event.ctrlKey;
+      if (
+        [
+          "ArrowLeft",
+          "ArrowRight",
+          "ArrowUp",
+          "ArrowDown",
+          "Home",
+          "End",
+          "PageUp",
+          "PageDown",
+          "Tab"
+        ].includes(event.key)
+      ) {
+        breakTextHistoryGroup();
+      }
       if (mod && !event.altKey) {
         const command =
           event.code === "Digit0" || event.code === "Numpad0" || event.key === "0"
@@ -400,6 +461,45 @@ export function useTypesetInputEvents({
         if (commitPendingRef.current) queueIntent({ kind: "history", direction: "redo" });
         else commitHistory("redo");
         return;
+      }
+      if (event.key === "Enter" && !mod && !event.altKey) {
+        const selection = readSelection();
+        if (
+          selection &&
+          isHeaderField(selection.key)
+        ) {
+          event.preventDefault();
+          goalXRef.current = null;
+          const intent: QueuedIntent = { kind: "enter", shiftKey: event.shiftKey };
+          if (commitPendingRef.current) queueIntent(intent);
+          else onEnter(selection, event.shiftKey);
+          return;
+        }
+      }
+      if (
+        (event.key === "Backspace" || event.key === "Delete") &&
+        !mod &&
+        !event.altKey
+      ) {
+        const selection = readSelection();
+        if (
+          selection &&
+          selection.dStart === selection.dEnd &&
+          selection.map.display.length === 0 &&
+          isHeaderField(selection.key)
+        ) {
+          event.preventDefault();
+          // A held key may keep firing after focus moves to the next empty
+          // field. Only a fresh press is allowed to remove structure.
+          if (event.repeat) return;
+          const direction = event.key === "Backspace" ? "back" : "forward";
+          if (commitPendingRef.current) {
+            queueIntent({ kind: "deleteHeaderField", direction });
+          } else {
+            commitEmptyHeaderField(selection, direction);
+          }
+          return;
+        }
       }
       if (event.key === "Tab") {
         const selection = readSelection();
@@ -520,6 +620,7 @@ export function useTypesetInputEvents({
     };
 
     const onMouseDown = (event: MouseEvent) => {
+      breakTextHistoryGroup();
       goalXRef.current = null;
       dragEdgeStart = null;
       const target = event.target as HTMLElement;
@@ -606,6 +707,8 @@ export function useTypesetInputEvents({
     const onPaste = (event: ClipboardEvent) => {
       event.preventDefault();
       const clipboard = event.clipboardData;
+      const selectionPayload =
+        clipboard?.getData(TYPESET_SELECTION_CLIPBOARD_MIME) ?? "";
       const ownFragment = decodeInlineClipboard(
         clipboard?.getData(TYPESET_INLINE_CLIPBOARD_MIME) ?? ""
       );
@@ -616,26 +719,24 @@ export function useTypesetInputEvents({
         : inlineFragmentFromHtml(html);
       const fragment = ownFragment ?? htmlFragment;
       const text = clipboard?.getData("text/plain") ?? "";
-      if (commitPendingRef.current) {
-        if (paragraphFragments) {
-          queueIntent({ kind: "pasteParagraphs", fragments: paragraphFragments });
-        } else if (fragment) queueIntent({ kind: "paste", fragment });
-        else if (text) queueIntent({ kind: "insert", text });
-        return;
-      }
+      const blocks = ownFragment ? [] : clipboardBlocks(html, text);
+      const intent: Extract<QueuedIntent, { kind: "richPaste" }> = {
+        kind: "richPaste",
+        selectionPayload,
+        paragraphFragments,
+        fragment,
+        blocks,
+        plainText: text
+      };
       const selection = readSelection();
-      if (!selection) {
-        // Spanning several fields: drop the selection, then land the payload in
-        // the collapsed caret that leaves behind.
-        if (paragraphFragments) {
-          commitCrossFieldIntent({ kind: "pasteParagraphs", fragments: paragraphFragments });
-        } else if (fragment) commitCrossFieldIntent({ kind: "paste", fragment });
-        else if (text) commitCrossFieldIntent({ kind: "insert", text });
+      if (commitPendingRef.current) {
+        queueIntent(intent);
         return;
       }
-      if (paragraphFragments && commitParagraphPaste(selection, paragraphFragments)) return;
-      if (fragment) commitPaste(selection, selection.dStart, selection.dEnd, fragment);
-      else commitReplace(selection, selection.dStart, selection.dEnd, text);
+      if (selection && commitRichPaste(selection, intent)) return;
+      if (!selection) {
+        commitCrossFieldIntent(intent);
+      }
     };
 
     const writeSelectionToClipboard = (
@@ -656,30 +757,54 @@ export function useTypesetInputEvents({
       return true;
     };
 
+    const writeCrossFieldClipboard = (
+      event: ClipboardEvent,
+      clipboard: ReturnType<typeof crossFieldClipboard>
+    ) => {
+      if (!event.clipboardData || !clipboard) return false;
+      event.clipboardData.setData("text/plain", clipboard.plain);
+      event.clipboardData.setData("text/html", clipboard.html);
+      if (clipboard.selection) {
+        event.clipboardData.setData(
+          TYPESET_SELECTION_CLIPBOARD_MIME,
+          clipboard.selection
+        );
+      }
+      return true;
+    };
+
     const onCopy = (event: ClipboardEvent) => {
+      const cross = crossFieldClipboard();
+      if (cross?.selection) {
+        event.preventDefault();
+        writeCrossFieldClipboard(event, cross);
+        return;
+      }
       const selection = readSelection();
       if (selection && selection.dStart !== selection.dEnd) {
         event.preventDefault();
         writeSelectionToClipboard(event, selection);
         return;
       }
-      const clipboard = crossFieldClipboard();
-      if (!event.clipboardData || !clipboard) return;
+      if (!writeCrossFieldClipboard(event, cross)) return;
       event.preventDefault();
-      event.clipboardData.setData("text/plain", clipboard.plain);
-      event.clipboardData.setData("text/html", clipboard.html);
     };
 
     const onCut = (event: ClipboardEvent) => {
+      const cross = crossFieldClipboard();
+      if (cross?.selection) {
+        if (!writeCrossFieldClipboard(event, cross)) return;
+        event.preventDefault();
+        if (commitPendingRef.current) queueIntent({ kind: "deleteSelection" });
+        else commitCrossFieldIntent({ kind: "deleteSelection" });
+        return;
+      }
       const selection = readSelection();
       if (!selection || selection.dStart === selection.dEnd) {
         // Spanning several fields: write the model's text, then delete the whole
         // selection as one edit. Without this, cut was a silent no-op.
-        const clipboard = crossFieldClipboard();
-        if (!clipboard || !event.clipboardData) return;
+        if (!writeCrossFieldClipboard(event, cross)) return;
         event.preventDefault();
-        event.clipboardData.setData("text/plain", clipboard.plain);
-        event.clipboardData.setData("text/html", clipboard.html);
         if (commitPendingRef.current) queueIntent({ kind: "deleteSelection" });
         else commitCrossFieldIntent({ kind: "deleteSelection" });
         return;
@@ -705,7 +830,15 @@ export function useTypesetInputEvents({
       if (commitPendingRef.current) {
         if (event.data) queueIntent({ kind: "insert", text: event.data });
       } else if (selection) {
-        commitReplace(selection, selection.dStart, selection.dEnd, event.data ?? "");
+        commitReplace(
+          selection,
+          selection.dStart,
+          selection.dEnd,
+          event.data ?? "",
+          selection.dStart === selection.dEnd && event.data
+            ? "insert"
+            : undefined
+        );
       }
     };
 
@@ -738,15 +871,16 @@ export function useTypesetInputEvents({
       host.removeEventListener("compositionend", onCompositionEnd);
     };
   }, [
+    breakTextHistoryGroup,
     commitClearFormatting,
     commitCrossFieldIntent,
+    commitRichPaste,
     commitHistory,
+    commitEmptyHeaderField,
     commitMergeBullet,
     commitPendingRef,
     commitIndent,
     commitParagraphOutdent,
-    commitParagraphPaste,
-    commitPaste,
     commitReplace,
     indentWidthAt,
     onEnter,

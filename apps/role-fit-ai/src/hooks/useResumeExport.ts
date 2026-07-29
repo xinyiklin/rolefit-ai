@@ -83,7 +83,9 @@ export function useResumeExport({
     const publicBase = import.meta.env.BASE_URL.replace(/\/$/, "");
     const fonts = await fetchFontBytes(document, `${publicBase}/fonts`);
     return emitPdf(document, fonts, {
-      title: documentTitle.trim() || (schema.name ? `${schema.name} Resume` : "Resume")
+      title: documentTitle.trim() || (
+        schema.header?.name ? `${schema.header.name} Resume` : "Resume"
+      )
     });
   }
 
@@ -122,7 +124,7 @@ export function useResumeExport({
     // Prefer the structured model's name; fall back to scanning the serialized
     // text only when there is no structured model yet (text-only polish result).
     const applicant =
-      (editedResume?.name ?? "").replace(/<\/?[a-z]+>/gi, "").trim() ||
+      (editedResume?.header?.name ?? "").replace(/<\/?[a-z]+>/gi, "").trim() ||
       extractApplicantName(currentResumeText || resumeText);
     return buildResumeFileName(applicant, company, ext);
   }

@@ -1,5 +1,5 @@
 // Strict editable-file contract guard.
-// Run: node --experimental-strip-types src/lib/__evals__/resume-file-v2.mjs
+// Run: node --experimental-strip-types src/lib/__evals__/resume-file-v1.mjs
 
 import assert from "node:assert/strict";
 
@@ -19,8 +19,8 @@ const starter = buildStarterResume();
 const serialized = serializeResumeFile(starter, DOC_STYLE_DEFAULTS);
 const saved = JSON.parse(serialized);
 
-assert.equal(RESUME_FILE_SCHEMA_VERSION, 2);
-assert.equal(saved.schemaVersion, 2);
+assert.equal(RESUME_FILE_SCHEMA_VERSION, 1);
+assert.equal(saved.schemaVersion, 1);
 assert.equal(saved.style.entryEndIndentPt, 5.4);
 assert.equal(Object.hasOwn(saved.style, "pageMargins"), false, "preset identity is UI state, not file data");
 assert.equal(saved.style.pageMarginTopPt, 36);
@@ -32,6 +32,19 @@ const roundTripped = JSON.parse(
   serializeResumeFile(parsed.data, { ...parsed.documentStyle, zoom: DOC_STYLE_DEFAULTS.zoom })
 );
 assert.deepEqual(roundTripped, saved);
+const hiddenHeaderResume = structuredClone(starter);
+hiddenHeaderResume.header = {
+  visible: false,
+  name: "Candidate Name",
+  contact: ["candidate@example.com"]
+};
+assert.deepEqual(
+  parseResumeFile(
+    serializeResumeFile(hiddenHeaderResume, DOC_STYLE_DEFAULTS)
+  ).data.header,
+  hiddenHeaderResume.header,
+  "strict v1 preserves hidden header content without flattening it"
+);
 
 function assertNoSessionIds(value) {
   if (Array.isArray(value)) {
@@ -52,25 +65,17 @@ function expectError(input, code) {
   );
 }
 
-for (const schemaVersion of [0, 3, 99]) {
+for (const schemaVersion of [0, 2, 3, 99]) {
   expectError({ ...saved, schemaVersion }, "unsupported-version");
 }
 
-const legacyV1 = structuredClone(saved);
-legacyV1.schemaVersion = 1;
-legacyV1.style.pageMargins = "normal";
-const migratedLegacy = parseResumeFile(JSON.stringify(legacyV1));
-assert.equal(migratedLegacy.documentStyle.pageMarginTopPt, 36);
-assert.equal(
-  Object.hasOwn(JSON.parse(serializeResumeFile(migratedLegacy.data, {
-    ...migratedLegacy.documentStyle,
-    pageMargins: "narrow",
-    zoom: DOC_STYLE_DEFAULTS.zoom,
-    spellCheck: DOC_STYLE_DEFAULTS.spellCheck
-  })).style, "pageMargins"),
-  false,
-  "v1 preset state is dropped when the file is saved as v2"
-);
+const interimV1 = structuredClone(saved);
+interimV1.document = {
+  name: interimV1.document.header?.name ?? "",
+  contact: interimV1.document.header?.contact ?? [],
+  sections: interimV1.document.sections
+};
+expectError(interimV1, "invalid-document");
 
 expectError({ ...saved, prototypeField: true }, "invalid-format");
 
@@ -100,7 +105,7 @@ function firstBulletOf(file) {
 }
 
 expectError(mutated((file) => { file.document.sections[0].type = "custom"; }), "invalid-document");
-expectError(mutated((file) => { file.document.contact = "a@b.com"; }), "invalid-document");
+expectError(mutated((file) => { file.document.header.contact = "a@b.com"; }), "invalid-document");
 expectError(mutated((file) => { file.document.sections = {}; }), "invalid-document");
 expectError(mutated((file) => { file.document.sections[0].items = null; }), "invalid-document");
 expectError(mutated((file) => { file.document.sections[0].items[0].bullets = "text"; }), "invalid-document");
@@ -112,14 +117,18 @@ expectError(mutated((file) => { file.document.sections[0].items[0].id = "entry-1
 expectError(mutated((file) => { firstBulletOf(file).id = "bullet-1"; }), "invalid-document");
 
 // Missing keys are rejected at every depth.
-expectError(mutated((file) => { delete file.document.name; }), "invalid-document");
+expectError(mutated((file) => { delete file.document.header.visible; }), "invalid-document");
 expectError(mutated((file) => { delete file.document.sections[0].heading; }), "invalid-document");
 expectError(mutated((file) => { delete file.document.sections[0].items[0].titleRight; }), "invalid-document");
 expectError(mutated((file) => { delete firstBulletOf(file).text; }), "invalid-document");
 
 // Wrong primitive types.
-expectError(mutated((file) => { file.document.name = 42; }), "invalid-document");
-expectError(mutated((file) => { file.document.contact[0] = 12; }), "invalid-document");
+expectError(mutated((file) => { file.document.header.name = 42; }), "invalid-document");
+expectError(mutated((file) => { file.document.header.contact[0] = 12; }), "invalid-document");
+expectError(mutated((file) => {
+  file.document.header.name = null;
+  file.document.header.contact = [];
+}), "invalid-document");
 expectError(mutated((file) => { firstBulletOf(file).text = null; }), "invalid-document");
 
 // ----- invalid-style: bounds, enums, and the contact-divider rule -----
@@ -197,5 +206,5 @@ assert.equal(resumeFileName(""), "Untitled resume.resume");
 assert.equal(resumeFileName("<b></b>. ."), "Untitled resume.resume", "a name that sanitizes to nothing falls back");
 
 console.log(
-  "resume file v2: v1 migration, round-trip, strict rejection, style-bound, binary-input, and filename checks passed"
+  "resume file v1: round-trip, strict rejection, style-bound, binary-input, and filename checks passed"
 );

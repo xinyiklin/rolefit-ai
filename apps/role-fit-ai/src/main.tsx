@@ -2,14 +2,8 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
 import { DialogProvider } from "./hooks/useDialog";
-import { migrateLegacyDocStylePrefs } from "./lib/docStyleMigration";
 import { adoptWorkspacePreferences } from "./lib/browserPrefsSync";
 import "./styles/index.css";
-
-// One-shot, idempotent: carries a returning user's pre-monorepo docStyle/
-// editorPrefs localStorage keys over to the shared useDocStyle hook's keys
-// before it ever reads them. See src/lib/docStyleMigration.ts.
-migrateLegacyDocStylePrefs();
 
 // Minimal error boundary: catches render-time throws so the whole app doesn't
 // go blank. Shows a calm recovery message (no stack traces, no resume text).

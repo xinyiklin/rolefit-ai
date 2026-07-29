@@ -24,8 +24,10 @@ export type TypesetSchemaSection = {
 };
 
 export type TypesetSchema = {
-  name: string;
-  contact: string[];
+  header: {
+    name: string | null;
+    contact: string[];
+  } | null;
   sections: TypesetSchemaSection[];
 };
 
@@ -33,8 +35,12 @@ export type TypesetSchema = {
 // fields and provenance ids stay present so direct editing remains addressable.
 export function toTypesetSchema(data: ResumeData): TypesetSchema {
   return {
-    name: data.name.trimStart(),
-    contact: data.contact.map((item) => item.trimStart()),
+    header: data.header?.visible
+      ? {
+          name: data.header.name === null ? null : data.header.name.trimStart(),
+          contact: data.header.contact.map((item) => item.trimStart())
+        }
+      : null,
     sections: data.sections.map((section) => ({
       id: section.id,
       heading: section.heading.trimStart(),

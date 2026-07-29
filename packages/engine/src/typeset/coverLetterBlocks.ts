@@ -1,4 +1,4 @@
-import type { DocumentStyle } from "../lib/documentStyle.ts";
+import type { CoverLetterDocumentStyle } from "../lib/documentStyle.ts";
 import {
   alignmentFromInlineMarks,
   paragraphIndentFromInlineMarks,
@@ -8,7 +8,7 @@ import {
 import { documentFontFamily } from "./fontRegistry.ts";
 import {
   buildHeaderVerticalStream,
-  pageGeometry,
+  pageBox,
   paragraphLines,
   type VLine
 } from "./blocks.ts";
@@ -22,12 +22,13 @@ import type { TypesetSchema } from "./schema.ts";
 // correspondence-style margins, body size, leading, and paragraph spacing.
 export function buildCoverLetterVerticalStream(
   schema: TypesetSchema,
-  style: DocumentStyle
+  style: CoverLetterDocumentStyle
 ): VLine[] {
-  const geo = pageGeometry(style);
+  const geo = pageBox(style);
   const family = documentFontFamily(style.fontFamily);
   const size = style.baseFontSizePt;
-  const tracking = style.letterSpacingPt;
+  // See buildVerticalStream: tracking is the font's own, never adjusted.
+  const tracking = 0;
   const bodyAlign = (
     ["justify", "center", "right"].includes(style.bodyAlign) ? style.bodyAlign : "left"
   ) as ParagraphAlign;

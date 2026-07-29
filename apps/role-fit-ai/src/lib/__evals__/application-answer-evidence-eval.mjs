@@ -3,8 +3,7 @@ import assert from "node:assert/strict";
 import { buildApplicationRoleEvidence } from "../applicationAnswerEvidence.ts";
 
 const resume = {
-  name: "Candidate",
-  contact: [],
+  header: { visible: true, name: "Candidate", contact: [] },
   sections: [
     {
       id: "experience",

@@ -10,9 +10,9 @@
 //     keep-together policy keeps entry heads with their first bullet.
 
 import { fieldKey, type GlyphRun } from "./types.ts";
-import { buildVerticalStream, pageGeometry, type VLine } from "./blocks.ts";
+import { buildVerticalStream, pageBox, pageGeometry, type VLine } from "./blocks.ts";
 import { buildCoverLetterVerticalStream } from "./coverLetterBlocks.ts";
-import type { DocumentStyle } from "../lib/documentStyle.ts";
+import type { CoverLetterDocumentStyle, DocumentStyle } from "../lib/documentStyle.ts";
 import type { TypesetSchema } from "./schema.ts";
 
 export type PlacedLine = {
@@ -30,7 +30,9 @@ export type LayoutPage = { lines: PlacedLine[] };
 
 export type LayoutDocument = {
   pages: LayoutPage[];
-  geometry: ReturnType<typeof pageGeometry>;
+  // The page box both document kinds share. A resume's entry insets belong to
+  // building its stream, not to the placed result, and nothing reads them here.
+  geometry: ReturnType<typeof pageBox>;
 };
 
 // Baseline distance for one junction: the stream's calibrated distance plus the
@@ -43,7 +45,7 @@ function junctionDistance(previous: VLine, current: VLine): number {
 
 export function layoutVerticalStream(
   stream: VLine[],
-  geo: ReturnType<typeof pageGeometry>
+  geo: ReturnType<typeof pageBox>
 ): LayoutDocument {
   // Split into keep-chains: a chain starts at a line with keepWithPrev=false.
   const chains: VLine[][] = [];
@@ -156,7 +158,10 @@ export function layoutResume(schema: TypesetSchema, style: DocumentStyle): Layou
   return layoutVerticalStream(buildVerticalStream(schema, style), geo);
 }
 
-export function layoutCoverLetter(schema: TypesetSchema, style: DocumentStyle): LayoutDocument {
-  const geo = pageGeometry(style);
+export function layoutCoverLetter(
+  schema: TypesetSchema,
+  style: CoverLetterDocumentStyle
+): LayoutDocument {
+  const geo = pageBox(style);
   return layoutVerticalStream(buildCoverLetterVerticalStream(schema, style), geo);
 }

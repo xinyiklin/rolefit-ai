@@ -37,6 +37,8 @@
     "test:desktop:release": "node --test scripts/desktop-release-contract.test.mjs desktop/__tests__/windows-installer-contract.test.mjs",
     "test:desktop:windows-runtime": "node server/ai-cli/__evals__/windows-cli-runtime-probe.test.mjs",
     "test:server-lifecycle": "node server/__evals__/server-lifecycle-probes.test.mjs",
+    "workspace:rewrite-cover-v1": "node scripts/rewrite-cover-workspace-v1.mjs",
+    "workspace:rewrite-resume-v1": "node scripts/rewrite-resume-workspace-v1.mjs",
     "eval:live:fabrication": "node server/ai/__evals__/fabrication-eval.mjs",
     "eval:live:tailor": "node server/ai/__evals__/tailor-quality-eval.mjs",
     "eval:live:cover-letter": "node server/ai/__evals__/cover-letter-quality-eval.mjs",

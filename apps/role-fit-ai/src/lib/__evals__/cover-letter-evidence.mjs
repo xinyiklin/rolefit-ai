@@ -6,8 +6,7 @@ import {
 } from "../coverLetterEvidence.ts";
 
 const resumeData = {
-  name: "Candidate",
-  contact: [],
+  header: { visible: true, name: "Candidate", contact: [] },
   sections: [
     {
       id: "volatile-section-id",

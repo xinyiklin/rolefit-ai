@@ -5,6 +5,7 @@ import {
   Bold,
   ClipboardPaste,
   Copy,
+  EyeOff,
   ExternalLink,
   Italic,
   Link2,
@@ -22,6 +23,9 @@ import { SECTION_TYPE_OPTIONS, type ResumeData, type ResumeSectionType } from "@
 import { parseFieldKey, type FieldSrc } from "@typeset/engine/typeset/types.ts";
 import type { InlineFormatState, TypesetEditorCommands } from "./TypesetEditor.tsx";
 import type { ContextMenuItem } from "./TypesetContextMenu.tsx";
+import type {
+  HeaderStructureCommands
+} from "./useTypesetStructure.ts";
 
 const IS_MAC =
   typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent || "");
@@ -48,10 +52,12 @@ type ContextMenuState = {
 type ContextMenuControllerArgs = {
   data: ResumeData;
   hostRef: RefObject<HTMLDivElement | null>;
-  // Structural commands belong to the resume grammar. A cover letter is plain
-  // correspondence — paragraphs, no sections or bullets — so it shows the menu
-  // without them rather than showing no menu at all.
-  structureEditing: boolean;
+  structureCapabilities: {
+    header: boolean;
+    sections: boolean;
+  };
+  canPasteAsDocument: boolean;
+  headerCommands: HeaderStructureCommands;
   commands: TypesetEditorCommands;
   // The same state the toolbar renders from, so an item is enabled exactly when
   // its toolbar twin is.
@@ -71,7 +77,9 @@ type ContextMenuControllerArgs = {
 export function useTypesetContextMenu({
   data,
   hostRef,
-  structureEditing,
+  structureCapabilities,
+  canPasteAsDocument,
+  headerCommands,
   commands,
   inlineFormat,
   addSectionRelative,
@@ -98,9 +106,32 @@ export function useTypesetContextMenu({
       const target = event.target as HTMLElement;
       // A right-click in a line's blank area still targets that line, so the
       // structural commands cover the full row and not just its glyphs.
-      const field =
-        target.closest<HTMLElement>("[data-tsdf]:not([data-tsdm])") ??
-        target.closest<HTMLElement>(".tsd-line")?.querySelector<HTMLElement>("[data-tsdf]:not([data-tsdm])");
+      const directField = target.closest<HTMLElement>("[data-tsdf]:not([data-tsdm])");
+      const line = target.closest<HTMLElement>(".tsd-line");
+      let field = directField;
+      if (!field && line) {
+        const candidates = Array.from(
+          line.querySelectorAll<HTMLElement>("[data-tsdf]:not([data-tsdm])")
+        );
+        const contacts = candidates.filter((candidate) =>
+          candidate.getAttribute("data-tsdf")?.startsWith("contact|")
+        );
+        if (contacts.length) {
+          field = contacts.reduce((nearest, candidate) => {
+            const nearestRect = nearest.getBoundingClientRect();
+            const candidateRect = candidate.getBoundingClientRect();
+            const nearestDistance = Math.abs(
+              event.clientX - (nearestRect.left + nearestRect.right) / 2
+            );
+            const candidateDistance = Math.abs(
+              event.clientX - (candidateRect.left + candidateRect.right) / 2
+            );
+            return candidateDistance < nearestDistance ? candidate : nearest;
+          });
+        } else {
+          field = candidates[0];
+        }
+      }
       const key = field?.getAttribute("data-tsdf");
 
       setContextMenu({
@@ -113,10 +144,7 @@ export function useTypesetContextMenu({
     [commands, hostRef]
   );
 
-  // Resolves true only when the text actually reached the clipboard, so Cut
-  // can refuse to delete a selection whose copy failed (permission denied,
-  // insecure context) instead of silently losing it.
-  const writeClipboard = useCallback((text: string): Promise<boolean> => {
+  const writePlainText = useCallback((text: string): Promise<boolean> => {
     if (!text || !navigator.clipboard?.writeText) return Promise.resolve(false);
     return navigator.clipboard.writeText(text).then(
       () => true,
@@ -128,7 +156,9 @@ export function useTypesetContextMenu({
     if (!contextMenu) return [];
     const { structuralSrc, selectedText } = contextMenu;
     const hasRange = Boolean(selectedText);
-    const canPaste = typeof navigator !== "undefined" && Boolean(navigator.clipboard?.readText);
+    const canPaste =
+      typeof navigator !== "undefined" &&
+      Boolean(navigator.clipboard?.read || navigator.clipboard?.readText);
 
     const insertItem = (
       id: string,
@@ -154,9 +184,67 @@ export function useTypesetContextMenu({
       onSelect
     });
 
-    const source = structureEditing ? structuralSrc : null;
+    const headerSource = structureCapabilities.header ? structuralSrc : null;
+    const source = structureCapabilities.sections ? structuralSrc : null;
     const structural: Array<ContextMenuItem | "divider"> = [];
-    if (source?.kind === "heading") {
+    if (headerSource?.kind === "contact") {
+      structural.push(
+        {
+          id: "add-contact-before",
+          label: "Add contact before",
+          icon: <ArrowUpToLine size={14} />,
+          onSelect: () => headerCommands.addContactRelative(headerSource.index, "before")
+        },
+        {
+          id: "add-contact-after",
+          label: "Add contact after",
+          icon: <ArrowDownToLine size={14} />,
+          onSelect: () => headerCommands.addContactRelative(headerSource.index, "after")
+        },
+        deleteItem("delete-contact", "contact", () =>
+          headerCommands.removeContact(headerSource.index)
+        ),
+        ...(data.header?.name === null
+          ? [{
+              id: "add-name",
+              label: "Add name",
+              icon: <ListPlus size={14} />,
+              onSelect: headerCommands.addName
+            } satisfies ContextMenuItem]
+          : []),
+        "divider",
+        {
+          id: "hide-header",
+          label: "Hide header",
+          icon: <EyeOff size={14} />,
+          onSelect: headerCommands.hideHeader
+        },
+        "divider"
+      );
+    } else if (headerSource?.kind === "name") {
+      structural.push(
+        {
+          id: "add-contact-at-end",
+          label: data.header?.contact.length ? "Add contact at end" : "Add contact",
+          icon: <ListPlus size={14} />,
+          onSelect: headerCommands.addContactAtEnd
+        },
+        {
+          id: "remove-name",
+          label: "Remove name",
+          icon: <Trash2 size={14} />,
+          onSelect: headerCommands.removeName
+        },
+        "divider",
+        {
+          id: "hide-header",
+          label: "Hide header",
+          icon: <EyeOff size={14} />,
+          onSelect: headerCommands.hideHeader
+        },
+        "divider"
+      );
+    } else if (source?.kind === "heading") {
       const submenu = (position: Position): ContextMenuItem[] =>
         SECTION_TYPE_OPTIONS.map(({ type, label }) => ({
           id: `add-section-${position}-${type}`,
@@ -232,9 +320,7 @@ export function useTypesetContextMenu({
         icon: <Scissors size={14} />,
         disabled: !hasRange,
         onSelect: () => {
-          void writeClipboard(selectedText).then((copied) => {
-            if (copied) commands.deleteSelection();
-          });
+          void commands.cutSelection();
         }
       },
       {
@@ -243,7 +329,7 @@ export function useTypesetContextMenu({
         shortcut: `${MOD}C`,
         icon: <Copy size={14} />,
         disabled: !hasRange,
-        onSelect: () => void writeClipboard(selectedText)
+        onSelect: () => void commands.copySelection()
       },
       {
         id: "paste",
@@ -252,14 +338,20 @@ export function useTypesetContextMenu({
         icon: <ClipboardPaste size={14} />,
         disabled: !canPaste,
         onSelect: () => {
-          void navigator.clipboard
-            ?.readText()
-            .then((text) => {
-              if (text) commands.insertText(text);
-            })
-            .catch(() => {});
+          void commands.pasteFromClipboard();
         }
       },
+      ...(canPasteAsDocument
+        ? [{
+            id: "paste-as-document",
+            label: "Paste as document…",
+            icon: <ClipboardPaste size={14} />,
+            disabled: !canPaste,
+            onSelect: () => {
+              void commands.pasteAsDocumentFromClipboard();
+            }
+          } satisfies ContextMenuItem]
+        : []),
       "divider",
       {
         id: "bold",
@@ -313,7 +405,7 @@ export function useTypesetContextMenu({
               id: "copy-link",
               label: "Copy link",
               icon: <Copy size={14} />,
-              onSelect: () => void writeClipboard(href)
+              onSelect: () => void writePlainText(href)
             },
             {
               // Works for a detected bare URL too: removing an automatic link
@@ -361,16 +453,18 @@ export function useTypesetContextMenu({
     addSectionRelative,
     canRedo,
     canUndo,
+    canPasteAsDocument,
     commands,
     contextMenu,
     data,
+    headerCommands,
     inlineFormat,
     onRequestLinkEditor,
     removeBulletAt,
     removeEntryAt,
     removeSectionAt,
-    structureEditing,
-    writeClipboard
+    structureCapabilities,
+    writePlainText
   ]);
 
   return { contextMenu, menuItems, openContextMenu, closeContextMenu };

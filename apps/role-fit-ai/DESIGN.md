@@ -177,8 +177,8 @@ The resume and cover-letter pages, document/formatting primitives, fonts,
 direct-edit behavior, measurement, pagination, and PDF path come from
 `@typeset/editor` over `@typeset/engine`. RoleFit frames those surfaces with
 Drafting Desk host chrome. The resume injects its section-scope/review overlay;
-the cover letter selects the plain-paragraph layout and disables structural
-controls. It uses the same two-row document/formatting toolbar, replacing only
+the cover letter selects the plain-paragraph layout, keeps header structure
+controls, and disables resume section/entry/bullet controls. It uses the same two-row document/formatting toolbar, replacing only
 the resume style-menu group with a focused line-height control and the shared
 page-margin control. Shared zoom, selection typography, emphasis, alignment,
 links, and spell-check remain in place. Its file actions and deterministic
