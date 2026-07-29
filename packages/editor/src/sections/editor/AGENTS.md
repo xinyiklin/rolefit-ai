@@ -362,6 +362,10 @@ typesetting guide when a change affects painted output or layout provenance.
   mousedown and mousemove collapses a backward drag from the link edge. Preserve
   the current suppression until mouseup, then restore the final single- or
   multi-field range across the settled paint.
+- Plain-text header controls preserve custom label/destination pairs, but a
+  destination derived from visible email, URL, or phone text must be recomputed
+  when that visible run changes. If the new text is not linkable, remove the
+  derived destination; Undo restores text and destination together.
 - Enter follows the field's grammar. Prose paragraphs (summary sections, which is
   how a cover letter is modelled) always split, including from an empty
   paragraph, so an author can open a blank line between blocks. List rows

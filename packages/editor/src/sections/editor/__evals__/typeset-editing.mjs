@@ -136,6 +136,69 @@ assert.equal(
   "<b>Candidate</b> X · <i>New York</i>",
   "plain-text header editing preserves marks outside the smallest changed range and inherits at the actual insertion point"
 );
+for (const {
+  previous,
+  next,
+  expectedHref,
+  label
+} of [
+  {
+    previous: "<link=mailto%3Ajane%40example.com>jane@example.com</link>",
+    next: "john@example.com",
+    expectedHref: "mailto:john@example.com",
+    label: "editing an email recalculates its derived destination"
+  },
+  {
+    previous: "<link=https%3A%2F%2Fexample.com%2Fold>example.com/old</link>",
+    next: "example.org/new",
+    expectedHref: "https://example.org/new",
+    label: "replacing a URL recalculates its derived destination"
+  },
+  {
+    previous: "<link=https%3A%2F%2Fexample.com>example.com</link>",
+    next: "example.org",
+    expectedHref: "https://example.org/",
+    label: "editing a bare domain recalculates its normalized destination"
+  },
+  {
+    previous: "<link=tel%3A%2B12125550100>+1 (212) 555-0100</link>",
+    next: "+1 (646) 555-0199",
+    expectedHref: "tel:+16465550199",
+    label: "editing a phone number recalculates its derived destination"
+  },
+  {
+    previous: "<link=mailto%3Ajane%40example.com>jane@example.com</link>",
+    next: "New York City",
+    expectedHref: null,
+    label: "replacing an automatic link with plain text removes its destination"
+  },
+  {
+    previous: "<link=https%3A%2F%2Fportfolio.example>Portfolio</link>",
+    next: "Selected work",
+    expectedHref: "https://portfolio.example/",
+    label: "editing a custom link label preserves its independent destination"
+  }
+]) {
+  const edited = applyPlainTextInputEdit(previous, next);
+  const editedMap = buildDisplayMap(edited.value, { preserveWhitespace: true });
+  assert.equal(editedMap.display, next, `${label}: visible text`);
+  assert.equal(editedMap.chars[0]?.linkHref ?? null, expectedHref, label);
+}
+assert.equal(
+  automaticLinkHref("+1 (212) 555-0100"),
+  "tel:+12125550100",
+  "phone contacts auto-link to a canonical tel destination"
+);
+assert.equal(
+  automaticLinkHref("2026-07-29"),
+  null,
+  "an ISO date is not mistaken for a telephone link"
+);
+assert.equal(
+  automaticLinkHref("+1 (212) 555-0100 ext 42"),
+  "tel:+12125550100;ext=42",
+  "phone extensions use a stable tel destination"
+);
 
 const authoredIndent = buildDisplayMap("    Indented", { preserveWhitespace: true });
 assert.equal(authoredIndent.display, "    Indented", "Tab-equivalent leading spaces remain editable");

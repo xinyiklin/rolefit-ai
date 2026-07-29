@@ -2588,7 +2588,17 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
       const replacement = applyPlainTextInputEdit(current, nextText);
       if (replacement.value === current) return;
       markPending();
-      commitField(actions, src, replacement.value);
+      commitField(
+        actions,
+        src,
+        replacement.value,
+        replacement.historyIntent
+          ? {
+              historyIntent: replacement.historyIntent,
+              historyText: replacement.historyText
+            }
+          : undefined
+      );
     },
     [actions, markPending]
   );

@@ -24,7 +24,12 @@ import {
   paragraphSpacePt,
   type FieldAlignment
 } from "@typeset/engine/lib/inlineMarksText.ts";
-import { automaticLinkHref, decodeLinkHref, encodeLinkHref } from "@typeset/engine/lib/links.ts";
+import {
+  automaticLinkHref,
+  decodeLinkHref,
+  encodeLinkHref,
+  normalizeLinkDestination
+} from "@typeset/engine/lib/links.ts";
 
 type DisplayChar = {
   // The value substring this display char covers ("---" for "—", a whole
@@ -470,7 +475,12 @@ export function applyEdit(
 export function applyPlainTextInputEdit(
   value: string,
   nextText: string
-): { value: string; caretValueIndex: number } {
+): {
+  value: string;
+  caretValueIndex: number;
+  historyIntent?: "insert" | "deleteBackward";
+  historyText?: string;
+} {
   const map = buildDisplayMap(value, { preserveWhitespace: true });
   if (map.display === nextText) {
     return { value, caretValueIndex: value.length };
@@ -488,12 +498,92 @@ export function applyPlainTextInputEdit(
   ) {
     suffix += 1;
   }
-  return applyEdit(
+  const dEnd = map.display.length - suffix;
+  const insert = nextText.slice(prefix, nextText.length - suffix);
+  const removed = map.display.slice(prefix, dEnd);
+  const affectedLinks: Array<{
+    start: number;
+    end: number;
+    href: string;
+    automatic: boolean;
+  }> = [];
+  for (let index = 0; index < map.chars.length;) {
+    const href = map.chars[index]?.linkHref ?? null;
+    if (!href) {
+      index += 1;
+      continue;
+    }
+    const start = index;
+    while (index < map.chars.length && map.chars[index]?.linkHref === href) index += 1;
+    const end = index;
+    const intersectsReplacement = prefix < dEnd && start < dEnd && end > prefix;
+    const insertionInside =
+      prefix === dEnd && prefix > start && prefix < end;
+    if (intersectsReplacement || insertionInside) {
+      const automaticHref = automaticLinkHref(map.display.slice(start, end));
+      affectedLinks.push({
+        start,
+        end,
+        href,
+        automatic: Boolean(
+          automaticHref &&
+          normalizeLinkDestination(automaticHref) ===
+            normalizeLinkDestination(href)
+        )
+      });
+    }
+  }
+
+  let edited = applyEdit(
     map,
     prefix,
-    map.display.length - suffix,
-    nextText.slice(prefix, nextText.length - suffix)
+    dEnd,
+    insert
   );
+  const delta = insert.length - (dEnd - prefix);
+  const transformedBoundary = (
+    index: number,
+    edge: "start" | "end"
+  ): number => {
+    if (index <= prefix) return index;
+    if (index >= dEnd) return index + delta;
+    return edge === "start" ? prefix : prefix + insert.length;
+  };
+  for (const link of affectedLinks) {
+    const editedMap = buildDisplayMap(edited.value, { preserveWhitespace: true });
+    const start = Math.max(
+      0,
+      Math.min(transformedBoundary(link.start, "start"), editedMap.chars.length)
+    );
+    const end = Math.max(
+      start,
+      Math.min(transformedBoundary(link.end, "end"), editedMap.chars.length)
+    );
+    const href = link.automatic
+      ? automaticLinkHref(editedMap.display.slice(start, end))
+      : link.href;
+    const chars = editedMap.chars.map((char, index) =>
+      index >= start && index < end
+        ? { ...char, linkHref: href, linkSuppressed: false }
+        : char
+    );
+    edited = withBoundary(
+      serializeChars(
+        editedMap.prefix,
+        chars,
+        editedMap.suffix,
+        Math.min(prefix + insert.length, chars.length)
+      )
+    );
+  }
+  return {
+    ...edited,
+    ...(removed.length === 0 && insert.length > 0
+      ? { historyIntent: "insert" as const, historyText: insert }
+      : insert.length === 0 && removed.length > 0
+        ? { historyIntent: "deleteBackward" as const, historyText: removed }
+        : {})
+  };
 }
 
 // A mark-balanced fragment for the selected display range. The custom

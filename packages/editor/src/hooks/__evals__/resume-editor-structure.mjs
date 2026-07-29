@@ -9,6 +9,10 @@ import { documentStyleIsDirty, styleReducer } from "../useDocStyle.ts";
 import { createHistoryClock, historySourceFor } from "../historyClock.ts";
 import { DOC_STYLE_DEFAULTS } from "@typeset/engine/lib/documentStyle.ts";
 import { fieldMarkState, setFieldMark } from "@typeset/engine/lib/inlineMarksText.ts";
+import {
+  applyPlainTextInputEdit,
+  buildDisplayMap
+} from "../../sections/editor/inlineTextEditing.ts";
 
 const base = {
   header: { visible: true, name: "Candidate", contact: [] },
@@ -476,6 +480,33 @@ assert.equal(
   heldContactDelete.dispatch({ type: "undo" }).data.header.contact[0],
   "a@b.com",
   "one undo restores every character deleted in the contact burst"
+);
+
+const linkedContact =
+  "<link=mailto%3Ajane%40example.com>jane@example.com</link>";
+const relinkedContact = applyPlainTextInputEdit(
+  linkedContact,
+  "john@example.com"
+).value;
+const linkedContactHistory = contactHistoryRun(linkedContact);
+linkedContactHistory.dispatch({
+  type: "updateContact",
+  index: 0,
+  value: relinkedContact
+});
+assert.equal(
+  buildDisplayMap(linkedContactHistory.state.data.header.contact[0], {
+    preserveWhitespace: true
+  }).chars[0]?.linkHref,
+  "mailto:john@example.com",
+  "a plain header edit commits its recalculated link destination"
+);
+const restoredLinkedContact = linkedContactHistory.dispatch({ type: "undo" })
+  .data.header.contact[0];
+assert.equal(
+  restoredLinkedContact,
+  linkedContact,
+  "undo restores the linked contact's exact visible text and destination"
 );
 
 // ----- word-sized undo chunks inside one burst -----
