@@ -6,8 +6,7 @@ assert.equal(
   coverLetterRecoveryDirty({
     documentDirty: false,
     documentTitle: "Cover letter",
-    persistedDocumentTitle: "Cover letter",
-    hasContent: false
+    persistedDocumentTitle: "Cover letter"
   }),
   false,
   "an untouched blank default letter does not create recovery noise"
@@ -16,8 +15,7 @@ assert.equal(
   coverLetterRecoveryDirty({
     documentDirty: false,
     documentTitle: "Acme cover letter",
-    persistedDocumentTitle: "Cover letter",
-    hasContent: false
+    persistedDocumentTitle: "Cover letter"
   }),
   true,
   "a user-authored title-only change is recoverable"
@@ -26,8 +24,7 @@ assert.equal(
   coverLetterRecoveryDirty({
     documentDirty: true,
     documentTitle: "Cover letter",
-    persistedDocumentTitle: "Cover letter",
-    hasContent: false
+    persistedDocumentTitle: "Cover letter"
   }),
   true,
   "a style-only change to a blank letter is recoverable"

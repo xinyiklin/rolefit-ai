@@ -62,8 +62,6 @@ type UseCoverLetterAutosaveDraftArgs = {
   documentTitle: string;
   persistedDocumentTitle: string;
   dirty: boolean;
-  // False for an empty letter: there is nothing worth recovering.
-  hasContent: boolean;
   jobLabel: string;
 };
 
@@ -74,22 +72,16 @@ export function useCoverLetterAutosaveDraft({
   documentTitle,
   persistedDocumentTitle,
   dirty,
-  hasContent,
   jobLabel
 }: UseCoverLetterAutosaveDraftArgs): DraftAutosaveState {
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [state, setState] = useState<DraftAutosaveState>("idle");
-  // Read inside the debounced write so a title edit alone does not reschedule
-  // the document's own pending save.
-  const latestTitle = useRef(documentTitle);
-  latestTitle.current = documentTitle;
 
   useEffect(() => {
     const recoveryDirty = coverLetterRecoveryDirty({
       documentDirty: dirty,
       documentTitle,
-      persistedDocumentTitle,
-      hasContent
+      persistedDocumentTitle
     });
     if (!recoveryDirty || !payload) {
       if (timerRef.current !== null) {
@@ -106,7 +98,7 @@ export function useCoverLetterAutosaveDraft({
       timerRef.current = null;
       const saved = saveTabDraft("cover", {
         coverPayload: payload,
-        documentTitle: latestTitle.current,
+        documentTitle,
         savedAt: new Date().toISOString(),
         jobLabel
       });
@@ -119,7 +111,7 @@ export function useCoverLetterAutosaveDraft({
         timerRef.current = null;
       }
     };
-  }, [payload, documentTitle, persistedDocumentTitle, dirty, hasContent, jobLabel]);
+  }, [payload, documentTitle, persistedDocumentTitle, dirty, jobLabel]);
 
   return state;
 }

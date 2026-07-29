@@ -736,14 +736,8 @@ function App() {
   const coverDraftAutosaveState = useCoverLetterAutosaveDraft({
     payload: coverLetterEditor.draftPayload,
     documentTitle: coverLetterEditor.documentTitle,
-    // The current implementation does not yet own a durable title baseline;
-    // using the live title here preserves existing behavior for the regression
-    // test that introduces that missing contract.
-    persistedDocumentTitle: coverLetterEditor.documentTitle,
+    persistedDocumentTitle: coverLetterEditor.persistedDocumentTitle,
     dirty: coverLetterEditor.dirty,
-    hasContent: Boolean(
-      coverLetterEditor.text.trim() || coverLetterEditor.data.header
-    ),
     jobLabel: _autosaveJobLabel
   });
 

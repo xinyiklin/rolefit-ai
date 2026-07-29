@@ -148,6 +148,7 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
     [dropPreTailorSnapshot, editor.seedData]
   );
   const [documentTitle, setDocumentTitle] = useState(loadTitle);
+  const [persistedDocumentTitle, setPersistedDocumentTitle] = useState(documentTitle);
   const [status, setStatus] = useState("");
   const [isRenderingPdf, setIsRenderingPdf] = useState(false);
   // Workspace-resident cover letters. Cover letters gained the same named
@@ -158,6 +159,13 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
   const [activeCoverFileName, setActiveCoverFileName] = useState("");
   const [persistedFingerprint, setPersistedFingerprint] = useState<string | null>(() =>
     serializeCoverLetterFile(initialData, documentStyleToCoverLetterStyle(style))
+  );
+  const commitPersistenceBaseline = useCallback(
+    (fingerprint: string, title = documentTitle) => {
+      setPersistedFingerprint(fingerprint);
+      setPersistedDocumentTitle(title.trim() || "Cover letter");
+    },
+    [documentTitle]
   );
   const styleRef = useRef(style);
   styleRef.current = style;
@@ -261,15 +269,17 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
       const data = parseCoverLetterText(source);
       openDocument(data);
       editor.markClean();
-      setPersistedFingerprint(
-        serializeCoverLetterFile(data, documentStyleToCoverLetterStyle(styleRef.current))
+      const nextTitle = title?.trim() || documentTitle;
+      commitPersistenceBaseline(
+        serializeCoverLetterFile(data, documentStyleToCoverLetterStyle(styleRef.current)),
+        nextTitle
       );
       setActiveCoverFileName("");
       saveLastCoverLetterName("");
-      if (title?.trim()) setDocumentTitle(title.trim());
+      if (title?.trim()) setDocumentTitle(nextTitle);
       setStatus("Cover letter loaded. Tailor it when the job description is ready.");
     },
-    [editor.markClean, openDocument]
+    [commitPersistenceBaseline, documentTitle, editor.markClean, openDocument]
   );
 
   const applyExternalText = useCallback(
@@ -278,7 +288,7 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
         const data = parseCoverLetterText("");
         openDocument(data);
         editor.markClean();
-        setPersistedFingerprint(
+        commitPersistenceBaseline(
           serializeCoverLetterFile(data, documentStyleToCoverLetterStyle(styleRef.current))
         );
         setActiveCoverFileName("");
@@ -289,14 +299,14 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
       const data = parseCoverLetterText(source);
       openDocument(data);
       editor.markClean();
-      setPersistedFingerprint(
+      commitPersistenceBaseline(
         serializeCoverLetterFile(data, documentStyleToCoverLetterStyle(styleRef.current))
       );
       setActiveCoverFileName("");
       saveLastCoverLetterName("");
       setStatus("Cover letter restored.");
     },
-    [editor.markClean, openDocument]
+    [commitPersistenceBaseline, editor.markClean, openDocument]
   );
 
   // Tailoring replaces the document in place. The exact prior `.cover` is kept
@@ -366,12 +376,16 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
           zoom: current.zoom,
           spellCheck: current.spellCheck
         }));
-        setPersistedFingerprint(serializeCoverLetterFile(parsed.data, parsed.style));
+        const nextTitle = title.trim() || documentTitle;
+        commitPersistenceBaseline(
+          serializeCoverLetterFile(parsed.data, parsed.style),
+          nextTitle
+        );
         // A draft is not the workspace copy, so Save must not offer to overwrite
         // whichever saved letter happened to be open before.
         setActiveCoverFileName("");
         saveLastCoverLetterName("");
-        if (title.trim()) setDocumentTitle(title.trim());
+        if (title.trim()) setDocumentTitle(nextTitle);
         setStatus("Restored the unsaved cover letter.");
         return true;
       } catch {
@@ -379,7 +393,7 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
         return false;
       }
     },
-    [editor.markClean, openDocument]
+    [commitPersistenceBaseline, documentTitle, editor.markClean, openDocument]
   );
 
   // Open the strict source owned by a tracked application. It is not a
@@ -396,10 +410,14 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
           zoom: current.zoom,
           spellCheck: current.spellCheck
         }));
-        setPersistedFingerprint(serializeCoverLetterFile(parsed.data, parsed.style));
+        const nextTitle = title.trim() || documentTitle;
+        commitPersistenceBaseline(
+          serializeCoverLetterFile(parsed.data, parsed.style),
+          nextTitle
+        );
         setActiveCoverFileName("");
         saveLastCoverLetterName("");
-        if (title.trim()) setDocumentTitle(title.trim());
+        if (title.trim()) setDocumentTitle(nextTitle);
         setStatus("Loaded the saved application cover letter.");
         return true;
       } catch {
@@ -407,7 +425,7 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
         return false;
       }
     },
-    [editor.markClean, openDocument]
+    [commitPersistenceBaseline, documentTitle, editor.markClean, openDocument]
   );
 
   const startBlank = useCallback(() => {
@@ -417,14 +435,15 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
     // A blank letter is the same document the page opens with, so New must not
     // leave it permanently "unsaved" — that warned on close and prompted to
     // replace an empty letter that had nothing to lose.
-    setPersistedFingerprint(
-      serializeCoverLetterFile(data, documentStyleToCoverLetterStyle(styleRef.current))
+    commitPersistenceBaseline(
+      serializeCoverLetterFile(data, documentStyleToCoverLetterStyle(styleRef.current)),
+      "Cover letter"
     );
     setActiveCoverFileName("");
     saveLastCoverLetterName("");
     setDocumentTitle("Cover letter");
     setStatus("Blank cover letter ready.");
-  }, [editor.markClean, openDocument]);
+  }, [commitPersistenceBaseline, editor.markClean, openDocument]);
 
   const startStarter = useCallback(() => {
     const data = coverLetterResumeData(
@@ -433,14 +452,15 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
     );
     openDocument(data);
     editor.markClean();
-    setPersistedFingerprint(
-      serializeCoverLetterFile(data, documentStyleToCoverLetterStyle(styleRef.current))
+    commitPersistenceBaseline(
+      serializeCoverLetterFile(data, documentStyleToCoverLetterStyle(styleRef.current)),
+      "Cover letter"
     );
     setActiveCoverFileName("");
     saveLastCoverLetterName("");
     setDocumentTitle("Cover letter");
     setStatus("Starter opened. Complete the tailoring details beside the document.");
-  }, [editor.markClean, openDocument]);
+  }, [commitPersistenceBaseline, editor.markClean, openDocument]);
 
   const openFile = useCallback(
     async (file: File) => {
@@ -462,12 +482,16 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
             zoom: current.zoom,
             spellCheck: current.spellCheck
           }));
-          setPersistedFingerprint(serializeCoverLetterFile(parsed.data, parsed.style));
+          const nextTitle = fileBase || "Cover letter";
+          commitPersistenceBaseline(
+            serializeCoverLetterFile(parsed.data, parsed.style),
+            nextTitle
+          );
           // An uploaded file is not the workspace copy, so Save must not offer to
           // overwrite whichever saved letter happened to be open before.
           setActiveCoverFileName("");
           saveLastCoverLetterName("");
-          setDocumentTitle(fileBase || "Cover letter");
+          setDocumentTitle(nextTitle);
           setStatus(`Opened ${file.name}.`);
           return;
         }
@@ -482,7 +506,7 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
         );
       }
     },
-    [editor.markClean, openDocument, loadSourceText]
+    [commitPersistenceBaseline, editor.markClean, openDocument, loadSourceText]
   );
 
   // Adopt a .cover payload read from the workspace. Same seed/style/fingerprint
@@ -498,12 +522,16 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
         zoom: current.zoom,
         spellCheck: current.spellCheck
       }));
-      setPersistedFingerprint(serializeCoverLetterFile(parsed.data, parsed.style));
+      const nextTitle = label === "Default" ? "Cover letter" : label;
+      commitPersistenceBaseline(
+        serializeCoverLetterFile(parsed.data, parsed.style),
+        nextTitle
+      );
       setActiveCoverFileName(fileName);
       saveLastCoverLetterName(fileName);
-      setDocumentTitle(label === "Default" ? "Cover letter" : label);
+      setDocumentTitle(nextTitle);
     },
-    [editor.markClean, openDocument]
+    [commitPersistenceBaseline, editor.markClean, openDocument]
   );
 
   const refreshCoverWorkspace = useCallback(async () => {
@@ -566,7 +594,7 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
           saveLastCoverLetterName(data.fileName);
         }
         editor.markClean();
-        setPersistedFingerprint(payload);
+        commitPersistenceBaseline(payload);
         // The letter is durable in the workspace now, so the recovery draft has
         // nothing left to protect. The next edit re-arms it.
         clearCoverLetterAutosaveDraft();
@@ -575,7 +603,7 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
         setStatus(error instanceof Error ? error.message : "Cover letter save failed.");
       }
     },
-    [activeCoverFileName, editor.editedResume, editor.markClean]
+    [activeCoverFileName, commitPersistenceBaseline, editor.editedResume, editor.markClean]
   );
 
   const openWorkspaceCoverLetter = useCallback(
@@ -702,10 +730,10 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
     );
     downloadBlob(new Blob([payload], { type: "application/json" }), fileName);
     editor.markClean();
-    setPersistedFingerprint(payload);
+    commitPersistenceBaseline(payload);
     clearCoverLetterAutosaveDraft();
     setStatus(`Saved ${fileName}.`);
-  }, [documentTitle, editor.editedResume, editor.markClean]);
+  }, [commitPersistenceBaseline, documentTitle, editor.editedResume, editor.markClean]);
 
   const saveTextFile = useCallback(() => {
     const source = text.trim();
@@ -778,9 +806,9 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
   const markApplicationSaved = useCallback(() => {
     if (!currentFingerprint) return;
     editor.markClean();
-    setPersistedFingerprint(currentFingerprint);
+    commitPersistenceBaseline(currentFingerprint);
     clearCoverLetterAutosaveDraft();
-  }, [currentFingerprint, editor.markClean]);
+  }, [commitPersistenceBaseline, currentFingerprint, editor.markClean]);
 
   return {
     data: editor.editedResume ?? initialData,
@@ -793,6 +821,7 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
     text,
     sourceRevision,
     documentTitle,
+    persistedDocumentTitle,
     setDocumentTitle,
     docStyle,
     status,
