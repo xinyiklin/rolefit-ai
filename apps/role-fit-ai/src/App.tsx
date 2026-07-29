@@ -228,7 +228,6 @@ const EMPTY_INLINE_FORMAT: InlineFormatState = {
 };
 
 const DEFAULT_DOCUMENT_TITLE = "Resume";
-const LEGACY_DEFAULT_DOCUMENT_TITLE = "Resume draft";
 // The untouched titles the cover-letter editor sets itself (blank, starter, the
 // workspace default). Only these — never a title the user typed — are upgraded
 // to the shared Name_Company_Cover_Letter form.
@@ -306,9 +305,7 @@ function App() {
   const [documentTitle, setDocumentTitle] = useState(() => {
     try {
       const stored = sessionStorage.getItem(DOCUMENT_TITLE_STORAGE_KEY)?.trim();
-      // `Resume draft` was the old generated default, not a user-authored file
-      // contract. Normalize that one known value to the current D075 fallback.
-      return !stored || stored === LEGACY_DEFAULT_DOCUMENT_TITLE ? DEFAULT_DOCUMENT_TITLE : stored;
+      return stored || DEFAULT_DOCUMENT_TITLE;
     } catch {
       return DEFAULT_DOCUMENT_TITLE;
     }

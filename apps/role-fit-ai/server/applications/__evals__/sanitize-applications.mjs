@@ -327,25 +327,24 @@ try {
     failures.push("a revision-matched delete did not remove its row");
   }
 
-  // Legacy records without updatedAt need a stable first-edit revision. Using
-  // the read time here would make GET return t1 and PUT compare against t2,
-  // causing the row's first edit to conflict with itself. Empty strings are
-  // legacy-missing too; they must not survive as an unmatchable revision.
-  const legacyCreatedAt = "2024-01-02T03:04:05.000Z";
-  const legacyWithCreatedAt = sanitizeApplications([
-    { id: "legacy-created", title: "Legacy created", createdAt: legacyCreatedAt, updatedAt: "" }
+  // Missing persisted revisions receive a stable sentinel. Using the read time
+  // would make GET return t1 and PUT compare against t2, causing a first edit
+  // to conflict with itself.
+  const createdAt = "2024-01-02T03:04:05.000Z";
+  const withCreatedAt = sanitizeApplications([
+    { id: "missing-revision-created", title: "Missing revision", createdAt, updatedAt: "" }
   ])[0];
-  const legacyUndatedFirst = sanitizeApplications([
-    { id: "legacy-undated", title: "Legacy undated" }
+  const undatedFirst = sanitizeApplications([
+    { id: "missing-revision-undated", title: "Missing revision" }
   ])[0];
-  const legacyUndatedSecond = sanitizeApplications([
-    { id: "legacy-undated", title: "Legacy undated" }
+  const undatedSecond = sanitizeApplications([
+    { id: "missing-revision-undated", title: "Missing revision" }
   ])[0];
-  if (legacyWithCreatedAt?.updatedAt !== legacyCreatedAt) {
-    failures.push("a legacy row did not reuse createdAt as its stable migration revision");
+  if (withCreatedAt?.updatedAt !== createdAt) {
+    failures.push("a row without a revision did not reuse its persisted creation timestamp");
   }
-  if (!legacyUndatedFirst?.updatedAt || legacyUndatedFirst.updatedAt !== legacyUndatedSecond?.updatedAt) {
-    failures.push("an undated legacy row received an unstable read-time revision");
+  if (!undatedFirst?.updatedAt || undatedFirst.updatedAt !== undatedSecond?.updatedAt) {
+    failures.push("an undated row received an unstable read-time revision");
   }
 
   const RealDate = globalThis.Date;

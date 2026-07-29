@@ -6,11 +6,9 @@ export function displayCompany(app: Application) {
 }
 
 /**
- * Return only a persisted, provider-backed fit score. Historical deterministic
- * estimates remain readable for data compatibility but are not fit judgments.
+ * Return only a persisted, provider-backed fit score.
  */
 export function fitScore(app: Application) {
-  if (app.fitScoreSource === "local") return null;
   return typeof app.fitScore === "number"
     ? app.fitScore
     : typeof app.tailoredFitScore === "number"

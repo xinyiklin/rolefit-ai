@@ -503,7 +503,7 @@ function sanitizeApplication(raw: unknown) {
     fitScore: sanitizeScore(r.fitScore),
     baseFitScore: sanitizeScore(r.baseFitScore),
     tailoredFitScore: sanitizeScore(r.tailoredFitScore),
-    fitScoreSource: r.fitScoreSource === "ai" || r.fitScoreSource === "local" ? r.fitScoreSource : null,
+    fitScoreSource: r.fitScoreSource === "ai" ? r.fitScoreSource : null,
     templateId: typeof r.templateId === "string" ? r.templateId.slice(0, 80) : "",
     review: sanitizeReview(r.review),
     missingRequiredSkills: sanitizeMissingRequiredSkills(r.missingRequiredSkills),
@@ -552,9 +552,9 @@ function parseApplicationMutations(raw: unknown): ApplicationMutation[] {
 
 /**
  * Apply an explicitly described client mutation set to the latest disk state.
- * The client may send sparse upsert records or a legacy full snapshot, but
- * unchanged rows always come from `existing`. New rows are prepended in
- * incoming order; existing rows retain their server order.
+ * The client sends only records named by upsert mutations. Unchanged rows
+ * always come from `existing`. New rows are prepended in incoming order;
+ * existing rows retain their server order.
  */
 export function reconcileApplicationMutations(
   existing: ReturnType<typeof sanitizeApplications>,
@@ -603,9 +603,9 @@ export function reconcileApplicationMutations(
   }
 
   for (const application of incoming) {
-    if (!existingById.has(application.id) && mutationById.get(application.id)?.operation !== "upsert") {
+    if (mutationById.get(application.id)?.operation !== "upsert") {
       throw new ApplicationsStorageError(
-        "A new application must include an upsert mutation. No tracker changes were saved.",
+        "Application records must correspond exactly to upsert mutations. No tracker changes were saved.",
         400
       );
     }

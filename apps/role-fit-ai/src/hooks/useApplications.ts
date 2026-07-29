@@ -146,9 +146,8 @@ export type Application = {
   // tailored draft, so the pipeline can show the lift tailoring produced.
   baseFitScore?: number | null;
   tailoredFitScore?: number | null;
-  // Which engine produced the pair. "local" is accepted only for backward
-  // compatibility with saved records and is never restored as an AI judgment.
-  fitScoreSource?: "ai" | "local" | null;
+  // A fit comparison is persisted only when AI Review produced it.
+  fitScoreSource?: "ai" | null;
   templateId?: string;
   review?: ApplicationReview;
   missingRequiredSkills?: MissingRequiredSkill[];

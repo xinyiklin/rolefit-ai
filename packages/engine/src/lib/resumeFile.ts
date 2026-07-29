@@ -51,9 +51,8 @@ export type ResumeFileV1 = {
   format: typeof RESUME_FILE_MAGIC;
   schemaVersion: typeof RESUME_FILE_SCHEMA_VERSION;
   document: PortableResumeDocumentV1;
-  // The marker states which spacing model the numbers are on. It is written on
-  // every save and stays optional on read, so schemaVersion 1 still describes
-  // both the files this build writes and the ones written before it.
+  // The marker states which spacing model the numbers are on. It is required on
+  // both read and write, so schemaVersion 1 has exactly one live style shape.
   style: DocumentStyle & { spacingModel: "absolute" };
 };
 

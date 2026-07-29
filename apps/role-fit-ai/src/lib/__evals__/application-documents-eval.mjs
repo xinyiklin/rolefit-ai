@@ -20,17 +20,17 @@ const coverSource = "{\"kind\":\"cover\",\"style\":\"original\"}";
 const editedCoverSource = "{\"kind\":\"cover\",\"style\":\"edited\"}";
 
 assert.equal(
-  applicationDocumentAvailability(undefined, true),
-  "legacy-text-snapshot",
-  "tracker-only text is explicit legacy snapshot state, never a saved source artifact"
+  applicationDocumentAvailability(undefined),
+  "none",
+  "missing artifact metadata is never presented as a saved document"
 );
 assert.equal(
-  applicationDocumentAvailability({ hasSource: true, hasPdf: false }, false),
+  applicationDocumentAvailability({ hasSource: true, hasPdf: false }),
   "source-only",
   "strict source alone is a saved editable document"
 );
 assert.equal(
-  applicationDocumentAvailability({ hasSource: false, hasPdf: true }, false),
+  applicationDocumentAvailability({ hasSource: false, hasPdf: true }),
   "pdf-only",
   "an uploaded PDF alone is a saved final document"
 );

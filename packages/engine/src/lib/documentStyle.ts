@@ -341,11 +341,14 @@ const coerceDivider = (value: unknown): string => {
 
 export function coerceDocStyle(raw: unknown): DocStyle {
   const r = (raw ?? {}) as Record<string, unknown>;
-  const legacyPageMargins: PageMargins =
+  // Local preference patches may carry the current derived preset without all
+  // four physical values. Use that current UI state only as their fallback;
+  // portable files are parsed by the strict codec instead.
+  const requestedPageMargins: PageMargins =
     r.pageMargins === "narrow" || r.pageMargins === "custom"
       ? r.pageMargins
       : "normal";
-  const fallbackMargins = pageMarginValuesFor(legacyPageMargins);
+  const fallbackMargins = pageMarginValuesFor(requestedPageMargins);
   const physicalMargins = {
     top: clampStyleNumber("pageMarginTopPt", r.pageMarginTopPt, fallbackMargins.top),
     right: clampStyleNumber("pageMarginRightPt", r.pageMarginRightPt, fallbackMargins.right),

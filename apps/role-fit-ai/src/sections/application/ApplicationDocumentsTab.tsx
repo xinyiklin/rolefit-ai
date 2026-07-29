@@ -88,7 +88,7 @@ function DocumentPane({
   const title = isResume ? "Resume" : "Cover letter";
   const sourceExtension = isResume ? ".resume" : ".cover";
   const pdfName = `${downloadBase}_${isResume ? "Resume" : "Cover_Letter"}.pdf`;
-  const hasArtifact = availability !== "none" && availability !== "legacy-text-snapshot";
+  const hasArtifact = availability !== "none";
 
   return (
     <article className="application-doc-card" aria-label={title}>
@@ -168,10 +168,6 @@ function DocumentPane({
             ) : null}
           </div>
         </div>
-      ) : availability === "legacy-text-snapshot" ? (
-        <p className="application-muted">
-          Text snapshot only — no editable document file is saved.
-        </p>
       ) : (
         <p className="application-muted">No {title.toLowerCase()} saved.</p>
       )}
@@ -196,14 +192,8 @@ export function ApplicationDocumentsTab({
   const { alert, confirm } = useDialog();
   const resumeArtifacts = application?.resumeArtifacts;
   const coverArtifacts = application?.coverLetterArtifacts;
-  const resumeAvailability = applicationDocumentAvailability(
-    resumeArtifacts,
-    false
-  );
-  const coverAvailability = applicationDocumentAvailability(
-    coverArtifacts,
-    false
-  );
+  const resumeAvailability = applicationDocumentAvailability(resumeArtifacts);
+  const coverAvailability = applicationDocumentAvailability(coverArtifacts);
 
   async function upload(kind: UploadKind, event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];

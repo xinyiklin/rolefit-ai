@@ -47,8 +47,7 @@ const applications = [
     id: "saved",
     company: "Beta",
     status: "interested",
-    fitScoreSource: "local",
-    fitScore: 99
+    fitScore: 79
   }
 ];
 
@@ -62,7 +61,7 @@ assert.deepEqual(
   { highFit: 2, missingFollowup: 1, closed: 1, submitted: 1 },
   "tracking facts are exact counts over stored fields"
 );
-assert.equal(highestFitApplication(applications)?.id, "submitted", "legacy local estimates are excluded from best fit");
+assert.equal(highestFitApplication(applications)?.id, "submitted", "the highest stored fit is selected");
 assert.deepEqual(topTrackedCompanies(applications)[0], ["Acme", 2], "company counts aggregate displayed company identity");
 
 console.log("PASS application analytics provenance");

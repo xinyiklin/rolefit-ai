@@ -110,9 +110,9 @@ export async function handleSaveApplications(
       return;
     }
     const applications = await withApplicationsLock(async () => {
-      // Sparse and legacy full-snapshot clients share one mutation contract.
-      // Unchanged rows stay server-authoritative, while changed rows must still
-      // match the revision the client originally edited.
+      // The request carries only upsert records. Unchanged rows stay
+      // server-authoritative, while changed rows must still match the revision
+      // the client originally edited.
       const existing = await readApplications(workspaceDir);
       const reconciled = reconcileApplicationMutations(existing, incoming, body.mutations);
       const deletedIds = existing
