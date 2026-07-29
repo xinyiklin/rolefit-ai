@@ -11,6 +11,7 @@ import {
   WorkspaceBackupError
 } from "../workspaceBackup.ts";
 import { writeStoredBrowserPreferences } from "../browserPreferences.ts";
+import { writeApplications } from "../applications/storage.ts";
 import { countActiveTabs, isValidPresenceTabId } from "../presence.ts";
 import { withWorkspaceLock } from "../workspace.ts";
 import {
@@ -81,40 +82,33 @@ try {
     starterText,
     "utf8"
   );
-  await writeFile(
-    join(sourceDir, "applications.json"),
-    JSON.stringify({
-      savedAt: fixedDate.toISOString(),
-      applications: [{
-        id: "application-1",
-        title: "Portable role",
-        jobUrl: "",
-        status: "applied",
-        createdAt: fixedDate.toISOString(),
-        updatedAt: fixedDate.toISOString(),
-        resumeArtifacts: {
-          hasPdf: false,
-          hasSource: true,
-          fileName: "Portable_Resume.resume",
-          savedAt: fixedDate.toISOString()
-        },
-        coverLetterArtifacts: {
-          hasPdf: false,
-          hasSource: true,
-          fileName: "Portable_Cover_Letter.cover",
-          savedAt: fixedDate.toISOString()
-        },
-        attachments: [{
-          fileName: "writing sample.pdf",
-          label: "Writing sample",
-          size: 21,
-          contentType: "application/pdf",
-          savedAt: fixedDate.toISOString()
-        }]
-      }]
-    }, null, 2),
-    "utf8"
-  );
+  await writeApplications(sourceDir, [{
+    id: "application-1",
+    title: "Portable role",
+    jobUrl: "",
+    status: "applied",
+    createdAt: fixedDate.toISOString(),
+    updatedAt: fixedDate.toISOString(),
+    resumeArtifacts: {
+      hasPdf: false,
+      hasSource: true,
+      fileName: "Portable_Resume.resume",
+      savedAt: fixedDate.toISOString()
+    },
+    coverLetterArtifacts: {
+      hasPdf: false,
+      hasSource: true,
+      fileName: "Portable_Cover_Letter.cover",
+      savedAt: fixedDate.toISOString()
+    },
+    attachments: [{
+      fileName: "writing sample.pdf",
+      label: "Writing sample",
+      size: 21,
+      contentType: "application/pdf",
+      savedAt: fixedDate.toISOString()
+    }]
+  }]);
   await writeFile(join(sourceDir, "applications", "application-1", "resume.resume"), portableResumeText, "utf8");
   const portableCoverText = serializeCoverLetterFile(
     coverLetterResumeData(["Dear Hiring Team,"], {

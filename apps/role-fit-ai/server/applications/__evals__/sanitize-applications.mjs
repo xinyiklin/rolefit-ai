@@ -19,6 +19,8 @@ try {
     {
       id: "app_valid-123",
       title: "Valid application",
+      createdAt: "2026-07-01T00:00:00.000Z",
+      updatedAt: "2026-07-29T10:00:00.000Z",
       jobUrl: "https://example.com/job",
       status: "applied",
       review: {
@@ -38,8 +40,13 @@ try {
       ],
       rawJobDescription: "  Raw JD text here.  ",
       duplicateDismissedIds: ["other-app", "other-app", "app_valid-123", "../bad"],
-      resumeArtifacts: { hasPdf: "false", hasTex: "false", fileName: "phantom.pdf" },
-      coverLetterArtifacts: { hasPdf: true, hasSource: true, fileName: "letter.pdf", savedAt: "2026-07-27T00:00:00.000Z" },
+      coverLetterArtifacts: {
+        hasPdf: false,
+        hasSource: true,
+        sourceFingerprint: "typeset-cover-letter-1",
+        fileName: "letter.cover",
+        savedAt: "2026-07-27T00:00:00.000Z"
+      },
       attachments: [
         { fileName: "../escape.pdf", label: "Escape", size: 10, savedAt: "2026-07-27T00:00:00.000Z" },
         { fileName: "transcript.pdf", label: "  Transcript  ", size: 2048, savedAt: "2026-07-27T00:00:00.000Z" },
@@ -68,23 +75,21 @@ try {
         cover: { source: "ai", attempts: 12 },
         // Bad stage key (uppercase) → dropped.
         BADKEY: { source: "ai" }
-      },
-      resumeData: {
-        header: { visible: false, name: "", contact: ["candidate@example.com"] },
-        sections: [{ id: "sec-1", heading: "Technical Skills", items: [] }]
-      },
-      polishedText: "retired flattened resume",
-      coverLetterText: "retired flattened letter"
+      }
     },
     {
       id: "../escape",
       title: "Invalid id",
+      createdAt: "2026-07-01T00:00:00.000Z",
+      updatedAt: "2026-07-29T10:00:00.000Z",
       status: "interested"
     },
     {
       // Empty aiUsage (no valid entries) → undefined.
       id: "app_empty-ai",
       title: "Empty AI usage",
+      createdAt: "2026-07-01T00:00:00.000Z",
+      updatedAt: "2026-07-29T10:00:00.000Z",
       status: "interested",
       aiUsage: { review: { source: "nope" }, "9bad": { source: "ai" } }
     }
@@ -102,17 +107,14 @@ try {
     failures.push("invalid review severity was normalized into a fabricated judgment");
   }
   if (valid?.review?.gaps?.[0]?.canHonestlyAdd !== false) failures.push("string review boolean became an affirmative judgment");
-  if (
-    Object.hasOwn(valid ?? {}, "resumeData") ||
-    Object.hasOwn(valid ?? {}, "polishedText") ||
-    Object.hasOwn(valid ?? {}, "coverLetterText")
-  ) {
-    failures.push("retired duplicate document models survived tracker sanitization");
-  }
+  const canonicalCreatedAt = "2026-07-01T00:00:00.000Z";
+  const canonicalUpdatedAt = "2026-07-29T10:00:00.000Z";
   const noncanonicalHeaders = sanitizeApplications([
     {
       id: "legacy-flat-header",
       title: "Legacy flat header",
+      createdAt: canonicalCreatedAt,
+      updatedAt: canonicalUpdatedAt,
       resumeData: {
         name: "Must not hydrate at runtime",
         contact: ["legacy@example.test"],
@@ -122,23 +124,25 @@ try {
     {
       id: "empty-structural-header",
       title: "Empty structural header",
+      createdAt: canonicalCreatedAt,
+      updatedAt: canonicalUpdatedAt,
       resumeData: {
         header: { visible: true, name: null, contact: [] },
         sections: [{ heading: "Experience", items: [] }]
       }
     }
   ]);
-  if (noncanonicalHeaders.some((application) => Object.hasOwn(application, "resumeData"))) {
-    failures.push("runtime tracker sanitization retained a retired resume snapshot");
+  if (noncanonicalHeaders.length !== 0) {
+    failures.push("runtime tracker sanitization accepted a retired resume snapshot");
   }
 
   // rawJobDescription roundtrips (trimmed via slice, not .trim()).
   if (valid?.rawJobDescription !== "  Raw JD text here.  ") failures.push("rawJobDescription did not persist");
-  if (valid?.resumeArtifacts !== undefined) failures.push("string artifact booleans created a phantom saved file");
+  if (valid?.resumeArtifacts !== undefined) failures.push("an absent resume artifact slot was invented");
 
   // The cover letter's artifacts carry the same shape as the resume's, so the
   // tracker can never describe one document more richly than the other.
-  if (valid?.coverLetterArtifacts?.hasPdf !== true || valid?.coverLetterArtifacts?.hasSource !== true) {
+  if (valid?.coverLetterArtifacts?.hasPdf !== false || valid?.coverLetterArtifacts?.hasSource !== true) {
     failures.push("cover-letter artifacts did not roundtrip");
   }
 
@@ -201,7 +205,9 @@ try {
   try {
     await writeApplications(workspace, Array.from({ length: 501 }, (_, index) => ({
       id: `overflow-${index}`,
-      title: `Overflow ${index}`
+      title: `Overflow ${index}`,
+      createdAt: canonicalCreatedAt,
+      updatedAt: canonicalUpdatedAt
     })));
   } catch (error) {
     overflowRejected = error instanceof ApplicationsStorageError && error.status === 400;
@@ -213,25 +219,31 @@ try {
   let duplicateWriteRejected = false;
   try {
     await writeApplications(workspace, sanitizeApplications([
-      { id: "duplicate", title: "First" },
-      { id: "duplicate", title: "Second" }
+      { id: "duplicate", title: "First", createdAt: canonicalCreatedAt, updatedAt: canonicalUpdatedAt },
+      { id: "duplicate", title: "Second", createdAt: canonicalCreatedAt, updatedAt: canonicalUpdatedAt }
     ]));
   } catch (error) {
     duplicateWriteRejected = error instanceof ApplicationsStorageError && error.status === 400;
   }
   if (!duplicateWriteRejected) failures.push("duplicate application ids were accepted for storage");
 
+  const revisionA = "2026-07-29T10:00:00.000Z";
+  const revisionB = "2026-07-29T11:00:00.000Z";
+  const revisionBNext = "2026-07-29T12:00:00.000Z";
+  const revisionC = "2026-07-29T13:00:00.000Z";
+  const revisionCNext = "2026-07-29T14:00:00.000Z";
+  const revisionD = "2026-07-29T15:00:00.000Z";
   const serverSnapshot = sanitizeApplications([
-    { id: "record-a", title: "Record A", notes: "newer server A", updatedAt: "revision-a" },
-    { id: "record-b", title: "Record B", notes: "server B", updatedAt: "revision-b" }
+    { id: "record-a", title: "Record A", notes: "newer server A", createdAt: canonicalCreatedAt, updatedAt: revisionA },
+    { id: "record-b", title: "Record B", notes: "server B", createdAt: canonicalCreatedAt, updatedAt: revisionB }
   ]);
   const fullClientSnapshot = sanitizeApplications([
-    { id: "record-a", title: "Record A", notes: "stale client A", updatedAt: "revision-a" },
-    { id: "record-b", title: "Record B", notes: "client B", updatedAt: "revision-b-next" }
+    { id: "record-a", title: "Record A", notes: "stale client A", createdAt: canonicalCreatedAt, updatedAt: revisionA },
+    { id: "record-b", title: "Record B", notes: "client B", createdAt: canonicalCreatedAt, updatedAt: revisionBNext }
   ]);
   const sparseClientSnapshot = [fullClientSnapshot[1]];
   const reconciled = reconcileApplicationMutations(serverSnapshot, sparseClientSnapshot, [
-    { id: "record-b", operation: "upsert", baseUpdatedAt: "revision-b" }
+    { id: "record-b", operation: "upsert", baseUpdatedAt: revisionB }
   ]);
   if (reconciled.find((application) => application.id === "record-a")?.notes !== "newer server A") {
     failures.push("an unmutated stale row overwrote a newer server row");
@@ -246,7 +258,7 @@ try {
   let fullSnapshotRejected = false;
   try {
     reconcileApplicationMutations(serverSnapshot, fullClientSnapshot, [
-      { id: "record-b", operation: "upsert", baseUpdatedAt: "revision-b" }
+      { id: "record-b", operation: "upsert", baseUpdatedAt: revisionB }
     ]);
   } catch (error) {
     fullSnapshotRejected =
@@ -258,8 +270,8 @@ try {
   }
 
   const newRecords = sanitizeApplications([
-    { id: "record-new-b", title: "New B", updatedAt: "new-b-revision" },
-    { id: "record-new-a", title: "New A", updatedAt: "new-a-revision" }
+    { id: "record-new-b", title: "New B", createdAt: revisionBNext, updatedAt: revisionBNext },
+    { id: "record-new-a", title: "New A", createdAt: revisionC, updatedAt: revisionC }
   ]);
   const withNewRecords = reconcileApplicationMutations(serverSnapshot, newRecords, [
     { id: "record-new-b", operation: "upsert", baseUpdatedAt: null },
@@ -270,17 +282,17 @@ try {
   }
 
   const mergeSnapshot = sanitizeApplications([
-    { id: "record-a", title: "Record A", updatedAt: "revision-a" },
-    { id: "record-b", title: "Record B", updatedAt: "revision-b" },
-    { id: "record-c", title: "Record C", updatedAt: "revision-c" },
-    { id: "record-d", title: "Record D", updatedAt: "revision-d" }
+    { id: "record-a", title: "Record A", createdAt: canonicalCreatedAt, updatedAt: revisionA },
+    { id: "record-b", title: "Record B", createdAt: canonicalCreatedAt, updatedAt: revisionB },
+    { id: "record-c", title: "Record C", createdAt: canonicalCreatedAt, updatedAt: revisionC },
+    { id: "record-d", title: "Record D", createdAt: canonicalCreatedAt, updatedAt: revisionD }
   ]);
   const mergedCanonical = sanitizeApplications([
-    { id: "record-c", title: "Record C", notes: "merged", updatedAt: "revision-c-next" }
+    { id: "record-c", title: "Record C", notes: "merged", createdAt: canonicalCreatedAt, updatedAt: revisionCNext }
   ]);
   const merged = reconcileApplicationMutations(mergeSnapshot, mergedCanonical, [
-    { id: "record-c", operation: "upsert", baseUpdatedAt: "revision-c" },
-    { id: "record-b", operation: "delete", baseUpdatedAt: "revision-b" }
+    { id: "record-c", operation: "upsert", baseUpdatedAt: revisionC },
+    { id: "record-b", operation: "delete", baseUpdatedAt: revisionB }
   ]);
   if (
     merged.map((application) => application.id).join(",") !== "record-a,record-c,record-d" ||
@@ -298,19 +310,40 @@ try {
     conflictRejected =
       error instanceof ApplicationsStorageError &&
       error.status === 409 &&
-      error.currentApplications?.[1]?.updatedAt === "revision-b";
+      error.currentApplications?.[1]?.updatedAt === revisionB;
   }
   if (!conflictRejected) failures.push("a stale same-record mutation did not return the current 409 snapshot");
 
   let reusedRevisionRejected = false;
   try {
     reconcileApplicationMutations(serverSnapshot, serverSnapshot, [
-      { id: "record-b", operation: "upsert", baseUpdatedAt: "revision-b" }
+      { id: "record-b", operation: "upsert", baseUpdatedAt: revisionB }
     ]);
   } catch (error) {
     reusedRevisionRejected = error instanceof ApplicationsStorageError && error.status === 400;
   }
   if (!reusedRevisionRejected) failures.push("an upsert reused its optimistic-concurrency revision");
+
+  let olderRevisionRejected = false;
+  try {
+    const older = sanitizeApplications([
+      {
+        id: "record-b",
+        title: "Record B",
+        createdAt: canonicalCreatedAt,
+        updatedAt: revisionA
+      }
+    ]);
+    reconcileApplicationMutations(serverSnapshot, older, [
+      { id: "record-b", operation: "upsert", baseUpdatedAt: revisionB }
+    ]);
+  } catch (error) {
+    olderRevisionRejected =
+      error instanceof ApplicationsStorageError && error.status === 400;
+  }
+  if (!olderRevisionRejected) {
+    failures.push("an upsert moved its optimistic-concurrency revision backward");
+  }
 
   let collisionRejected = false;
   try {
@@ -323,55 +356,41 @@ try {
   if (!collisionRejected) failures.push("a new-record id collision overwrote an existing row");
 
   const deleted = reconcileApplicationMutations(serverSnapshot, [], [
-    { id: "record-a", operation: "delete", baseUpdatedAt: "revision-a" }
+    { id: "record-a", operation: "delete", baseUpdatedAt: revisionA }
   ]);
   if (deleted.some((application) => application.id === "record-a")) {
     failures.push("a revision-matched delete did not remove its row");
   }
 
-  // Missing persisted revisions receive a stable sentinel. Using the read time
-  // would make GET return t1 and PUT compare against t2, causing a first edit
-  // to conflict with itself.
-  const createdAt = "2024-01-02T03:04:05.000Z";
-  const withCreatedAt = sanitizeApplications([
-    { id: "missing-revision-created", title: "Missing revision", createdAt, updatedAt: "" }
-  ])[0];
-  const undatedFirst = sanitizeApplications([
-    { id: "missing-revision-undated", title: "Missing revision" }
-  ])[0];
-  const undatedSecond = sanitizeApplications([
-    { id: "missing-revision-undated", title: "Missing revision" }
-  ])[0];
-  if (withCreatedAt?.updatedAt !== createdAt) {
-    failures.push("a row without a revision did not reuse its persisted creation timestamp");
-  }
-  if (!undatedFirst?.updatedAt || undatedFirst.updatedAt !== undatedSecond?.updatedAt) {
-    failures.push("an undated row received an unstable read-time revision");
-  }
-
-  const RealDate = globalThis.Date;
-  const dateAt = (iso) => class extends RealDate {
-    constructor(...args) {
-      super(...(args.length ? args : [iso]));
+  const invalidCurrentShapes = [
+    { id: "missing-created", title: "Missing created", updatedAt: canonicalUpdatedAt },
+    { id: "missing-updated", title: "Missing updated", createdAt: canonicalCreatedAt },
+    { id: "invalid-updated", title: "Invalid updated", createdAt: canonicalCreatedAt, updatedAt: "not-a-date" },
+    { id: "retired-resume", title: "Retired resume", createdAt: canonicalCreatedAt, updatedAt: canonicalUpdatedAt, resumeData: {} },
+    { id: "retired-text", title: "Retired text", createdAt: canonicalCreatedAt, updatedAt: canonicalUpdatedAt, polishedText: "legacy" },
+    {
+      id: "retired-artifact",
+      title: "Retired artifact",
+      createdAt: canonicalCreatedAt,
+      updatedAt: canonicalUpdatedAt,
+      resumeArtifacts: { hasSource: true, hasPdf: false, hasTex: false }
+    },
+    {
+      id: "impossible-artifact",
+      title: "Impossible artifact",
+      createdAt: canonicalCreatedAt,
+      updatedAt: canonicalUpdatedAt,
+      resumeArtifacts: { hasSource: true, hasPdf: true }
     }
-    static now() {
-      return new RealDate(iso).getTime();
+  ];
+  for (const invalid of invalidCurrentShapes) {
+    let rejected = false;
+    try {
+      await writeApplications(workspace, [invalid]);
+    } catch (error) {
+      rejected = error instanceof ApplicationsStorageError && error.status === 400;
     }
-  };
-  const undatedRaw = [{
-    id: "deterministic-read",
-    title: "Deterministic read",
-    sourceUrls: [{ url: "https://example.com/alternate" }],
-    attachments: [{ fileName: "work-sample.pdf", label: "Work sample", size: 1 }],
-    resumeArtifacts: { hasSource: true, fileName: "resume.resume" }
-  }];
-  globalThis.Date = dateAt("2026-07-29T10:00:00.000Z");
-  const deterministicFirst = sanitizeApplications(undatedRaw);
-  globalThis.Date = dateAt("2026-07-29T11:00:00.000Z");
-  const deterministicSecond = sanitizeApplications(undatedRaw);
-  globalThis.Date = RealDate;
-  if (JSON.stringify(deterministicFirst) !== JSON.stringify(deterministicSecond)) {
-    failures.push("the same stored application input sanitizes differently at different read times");
+    if (!rejected) failures.push(`invalid current tracker shape was accepted: ${invalid.id}`);
   }
 
   // Corruption must fail closed and remain byte-for-byte recoverable. Returning
@@ -379,8 +398,8 @@ try {
   // intentionally empty.
   const filePath = applicationsFilePath(workspace);
   await writeFile(filePath, JSON.stringify({ applications: [
-    { id: "duplicate", title: "First" },
-    { id: "duplicate", title: "Second" }
+    { id: "duplicate", title: "First", createdAt: canonicalCreatedAt, updatedAt: canonicalUpdatedAt },
+    { id: "duplicate", title: "Second", createdAt: canonicalCreatedAt, updatedAt: canonicalUpdatedAt }
   ] }), "utf8");
   let duplicateDiskRejected = false;
   try {
@@ -389,6 +408,38 @@ try {
     duplicateDiskRejected = error instanceof ApplicationsStorageError;
   }
   if (!duplicateDiskRejected) failures.push("duplicate ids in applications.json did not fail closed");
+
+  for (const invalid of [
+    {
+      id: "retired-on-disk",
+      title: "Retired on disk",
+      createdAt: canonicalCreatedAt,
+      updatedAt: canonicalUpdatedAt,
+      coverLetterText: "legacy"
+    },
+    {
+      id: "impossible-on-disk",
+      title: "Impossible on disk",
+      createdAt: canonicalCreatedAt,
+      updatedAt: canonicalUpdatedAt,
+      coverLetterArtifacts: { hasPdf: true, hasSource: true }
+    }
+  ]) {
+    await writeFile(
+      filePath,
+      JSON.stringify({ applications: [invalid] }),
+      "utf8"
+    );
+    let rejected = false;
+    try {
+      await readApplications(workspace);
+    } catch (error) {
+      rejected = error instanceof ApplicationsStorageError;
+    }
+    if (!rejected) {
+      failures.push(`invalid on-disk tracker shape did not fail closed: ${invalid.id}`);
+    }
+  }
 
   await writeFile(filePath, "{not valid json", "utf8");
   const corruptBytes = await readFile(filePath, "utf8");

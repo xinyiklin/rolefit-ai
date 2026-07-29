@@ -20,6 +20,7 @@ import {
   handleApplicationDocumentFile,
   handleSaveApplicationDocument
 } from "../documentRoutes.ts";
+import { persistApplicationDocument } from "../documentService.ts";
 import { handleSaveApplications } from "../trackerRoutes.ts";
 import { MAX_ATTACHMENTS_PER_APPLICATION, safeAttachmentFileName } from "../documents.ts";
 import { readApplications, writeApplications } from "../storage.ts";
@@ -186,6 +187,9 @@ try {
     "app-source-only",
     "app-pair",
     "app-remove",
+    "app-rollback-delete",
+    "app-rollback-pdf-to-source",
+    "app-rollback-source-to-pdf",
     "app-delete",
     "app-cap",
     "app-traversal"
@@ -299,6 +303,167 @@ try {
     400,
     "the route refuses duplicate source and PDF storage for one document"
   );
+
+  async function assertTrackerUnchanged(id, before) {
+    const after = (await readApplications(workspaceDir)).find(
+      (application) => application.id === id
+    );
+    assert.deepEqual(after, before, `${id} tracker metadata and revision remain unchanged`);
+  }
+
+  // The production transaction receives only its metadata writer as a narrow
+  // test seam. Throwing there proves rollback happens after real file mutation,
+  // without copying the rollback algorithm into this probe.
+  {
+    const id = "app-rollback-source-to-pdf";
+    await saveDocument(id, "resume", {
+      sourceText: resumeSource,
+      fileName: "previous.resume"
+    });
+    const before = (await readApplications(workspaceDir)).find(
+      (application) => application.id === id
+    );
+    const previousSource = await readFile(join(dirOf(id), "resume.resume"));
+    await assert.rejects(
+      persistApplicationDocument(
+        {
+          workspaceDir,
+          id,
+          kind: "resume",
+          baseUpdatedAt: before.updatedAt,
+          fileName: "replacement.pdf",
+          sourceOrigin: "upload",
+          sourceText: "",
+          sourceBuffer: null,
+          pdfBuffer: pdfBytes,
+          remove: false
+        },
+        {
+          writeApplications: async () => {
+            assert.equal(
+              await exists(join(dirOf(id), "resume.resume")),
+              false,
+              "source-to-PDF mutation removed the previous source before metadata commit"
+            );
+            assert.ok(
+              (await readFile(join(dirOf(id), "resume.pdf"))).equals(pdfBytes),
+              "source-to-PDF mutation wrote the replacement PDF before metadata commit"
+            );
+            throw new Error("injected tracker write failure");
+          }
+        }
+      ),
+      /injected tracker write failure/
+    );
+    assert.ok(
+      (await readFile(join(dirOf(id), "resume.resume"))).equals(previousSource),
+      "source-to-PDF rollback restores the previous source bytes exactly"
+    );
+    assert.equal(
+      await exists(join(dirOf(id), "resume.pdf")),
+      false,
+      "source-to-PDF rollback removes the uncommitted PDF"
+    );
+    await assertTrackerUnchanged(id, before);
+  }
+
+  {
+    const id = "app-rollback-pdf-to-source";
+    await saveDocument(id, "resume", {
+      pdfBase64: b64(pdfBytes),
+      fileName: "previous.pdf"
+    });
+    const before = (await readApplications(workspaceDir)).find(
+      (application) => application.id === id
+    );
+    const previousPdf = await readFile(join(dirOf(id), "resume.pdf"));
+    await assert.rejects(
+      persistApplicationDocument(
+        {
+          workspaceDir,
+          id,
+          kind: "resume",
+          baseUpdatedAt: before.updatedAt,
+          fileName: "replacement.resume",
+          sourceOrigin: "editor",
+          sourceText: resumeSource,
+          sourceBuffer: Buffer.from(resumeSource, "utf8"),
+          pdfBuffer: null,
+          remove: false
+        },
+        {
+          writeApplications: async () => {
+            assert.equal(
+              await exists(join(dirOf(id), "resume.pdf")),
+              false,
+              "PDF-to-source mutation removed the previous PDF before metadata commit"
+            );
+            assert.equal(
+              await readFile(join(dirOf(id), "resume.resume"), "utf8"),
+              resumeSource,
+              "PDF-to-source mutation wrote the replacement source before metadata commit"
+            );
+            throw new Error("injected tracker write failure");
+          }
+        }
+      ),
+      /injected tracker write failure/
+    );
+    assert.ok(
+      (await readFile(join(dirOf(id), "resume.pdf"))).equals(previousPdf),
+      "PDF-to-source rollback restores the previous PDF bytes exactly"
+    );
+    assert.equal(
+      await exists(join(dirOf(id), "resume.resume")),
+      false,
+      "PDF-to-source rollback removes the uncommitted source"
+    );
+    await assertTrackerUnchanged(id, before);
+  }
+
+  {
+    const id = "app-rollback-delete";
+    await saveDocument(id, "cover", {
+      sourceText: coverSource,
+      fileName: "previous.cover"
+    });
+    const before = (await readApplications(workspaceDir)).find(
+      (application) => application.id === id
+    );
+    const previousSource = await readFile(join(dirOf(id), "cover.cover"));
+    await assert.rejects(
+      persistApplicationDocument(
+        {
+          workspaceDir,
+          id,
+          kind: "cover",
+          baseUpdatedAt: before.updatedAt,
+          fileName: "",
+          sourceOrigin: "editor",
+          sourceText: "",
+          sourceBuffer: null,
+          pdfBuffer: null,
+          remove: true
+        },
+        {
+          writeApplications: async () => {
+            assert.equal(
+              await exists(join(dirOf(id), "cover.cover")),
+              false,
+              "deletion removed the source before metadata commit"
+            );
+            throw new Error("injected tracker write failure");
+          }
+        }
+      ),
+      /injected tracker write failure/
+    );
+    assert.ok(
+      (await readFile(join(dirOf(id), "cover.cover"))).equals(previousSource),
+      "deletion rollback restores the previous source bytes exactly"
+    );
+    await assertTrackerUnchanged(id, before);
+  }
 
   // A source-only save keeps the editable file and replaces an earlier PDF so
   // the tracker and disk never retain two representations of one document.
@@ -516,7 +681,17 @@ try {
 
   assert.deepEqual(
     (await readdir(join(workspaceDir, "applications"))).sort(),
-    [".trash", "app-123", "app-cap", "app-pair", "app-source-only", "app-traversal"],
+    [
+      ".trash",
+      "app-123",
+      "app-cap",
+      "app-pair",
+      "app-rollback-delete",
+      "app-rollback-pdf-to-source",
+      "app-rollback-source-to-pdf",
+      "app-source-only",
+      "app-traversal"
+    ],
     "only valid live saves and recoverable trash persisted application directories"
   );
 

@@ -92,17 +92,6 @@ export function reconcileApplicationMutations(
         400
       );
     }
-    if (
-      mutation.operation === "upsert" &&
-      current &&
-      requested?.updatedAt === current.updatedAt
-    ) {
-      throw new ApplicationsStorageError(
-        "A changed application must advance its updatedAt revision. No tracker changes were saved.",
-        400
-      );
-    }
-
     const revisionMatches = current
       ? mutation.baseUpdatedAt === current.updatedAt
       : mutation.baseUpdatedAt === null;
@@ -111,6 +100,17 @@ export function reconcileApplicationMutations(
         "This application changed in another tab. The latest saved tracker has been restored; review it before trying again.",
         409,
         existing
+      );
+    }
+    if (
+      mutation.operation === "upsert" &&
+      current &&
+      requested &&
+      Date.parse(requested.updatedAt) <= Date.parse(current.updatedAt)
+    ) {
+      throw new ApplicationsStorageError(
+        "A changed application must use an updatedAt revision later than the saved revision. No tracker changes were saved.",
+        400
       );
     }
   }

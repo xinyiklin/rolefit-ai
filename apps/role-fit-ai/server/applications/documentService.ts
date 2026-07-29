@@ -34,6 +34,14 @@ type PersistApplicationDocumentOptions = {
   remove: boolean;
 };
 
+type PersistApplicationDocumentDependencies = {
+  writeApplications: typeof writeApplications;
+};
+
+const documentServiceDependencies: PersistApplicationDocumentDependencies = {
+  writeApplications
+};
+
 // File bytes and tracker metadata form one application-revision transaction.
 // Capture the previous slot before mutation and restore it if metadata commit
 // fails; callers must not reorder these operations independently.
@@ -48,7 +56,7 @@ export async function persistApplicationDocument({
   sourceBuffer,
   pdfBuffer,
   remove
-}: PersistApplicationDocumentOptions) {
+}: PersistApplicationDocumentOptions, dependencies = documentServiceDependencies) {
   const dir = applicationDocumentDir(id, workspaceDir);
   if (!dir) {
     throw new ApplicationDocumentError("Invalid application id.", 400);
@@ -109,7 +117,7 @@ export async function persistApplicationDocument({
           await rm(join(dir, sourceFileName), { force: true });
         }
       }
-      const applications = await writeApplications(
+      const applications = await dependencies.writeApplications(
         workspaceDir,
         nextApplications
       );

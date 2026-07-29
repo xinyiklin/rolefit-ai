@@ -21,10 +21,13 @@ const APPLICATION_STATUSES = ["interested", "applied", "interviewing", "offer", 
 export const APPLICATION_ID_RE = /^[A-Za-z0-9_-]{1,80}$/;
 export const MAX_APPLICATIONS = 500;
 const MAX_FIELD = 50_000;
-// Sanitization is a pure read boundary. Missing persisted timestamps use one
-// stable sentinel so repeated reads cannot manufacture different tracker
-// revisions or metadata merely because wall-clock time advanced.
 const MISSING_PERSISTED_TIMESTAMP = "1970-01-01T00:00:00.000Z";
+const RETIRED_TRACKER_FIELDS = [
+  "resumeData",
+  "polishedText",
+  "coverLetterText",
+  "hasTex"
+] as const;
 
 export class ApplicationsStorageError extends Error {
   status: number;
@@ -90,6 +93,16 @@ function sanitizeString(value: unknown, maxLength: number): string {
   return typeof value === "string" ? value.slice(0, maxLength) : "";
 }
 
+export function isCanonicalApplicationTimestamp(value: unknown): value is string {
+  if (typeof value !== "string" || !value || value.length > 100) return false;
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) && new Date(parsed).toISOString() === value;
+}
+
+function hasOwnRetiredTrackerField(value: Record<string, unknown>): boolean {
+  return RETIRED_TRACKER_FIELDS.some((field) => Object.hasOwn(value, field));
+}
+
 function sanitizeContacts(raw: unknown) {
   if (!Array.isArray(raw)) return undefined;
   const contacts = raw
@@ -109,15 +122,16 @@ function sanitizeContacts(raw: unknown) {
 // other. New writes store strict source or an explicit PDF. Retired artifact
 // flags are not part of the current storage contract.
 function sanitizeDocumentArtifacts(raw: unknown) {
-  if (!raw || typeof raw !== "object") return undefined;
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined;
   const r = raw as Record<string, unknown>;
+  if (hasOwnRetiredTrackerField(r)) return null;
   const hasPdf = r.hasPdf === true;
   const hasSource = r.hasSource === true;
+  if (hasPdf === hasSource) return null;
   const sourceFingerprint =
     hasSource && typeof r.sourceFingerprint === "string" && /^[a-z0-9]+-[a-z0-9]+-[a-z0-9]+$/.test(r.sourceFingerprint)
       ? r.sourceFingerprint.slice(0, 80)
       : undefined;
-  if (!hasPdf && !hasSource) return undefined;
   return {
     hasPdf,
     hasSource,
@@ -357,20 +371,29 @@ function sanitizeAiUsage(raw: unknown) {
 }
 
 function sanitizeApplication(raw: unknown) {
-  if (!raw || typeof raw !== "object") return null;
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
   const r = raw as Record<string, unknown>;
+  if (hasOwnRetiredTrackerField(r)) return null;
   const rawId = sanitizeString(r.id, 80);
   const id = APPLICATION_ID_RE.test(rawId) ? rawId : "";
   const title = typeof r.title === "string" ? r.title.slice(0, 200) : "";
-  if (!id || !title) return null;
+  if (
+    !id ||
+    !title ||
+    !isCanonicalApplicationTimestamp(r.createdAt) ||
+    !isCanonicalApplicationTimestamp(r.updatedAt)
+  ) {
+    return null;
+  }
 
   const status = inList(APPLICATION_STATUSES, r.status) ? r.status : "interested";
   const source = inList(APPLICATION_SOURCES, r.source) ? r.source : "";
-  const storedCreatedAt = typeof r.createdAt === "string" ? r.createdAt.trim().slice(0, 100) : "";
-  const storedUpdatedAt = typeof r.updatedAt === "string" ? r.updatedAt.trim().slice(0, 100) : "";
-  const createdAt = storedCreatedAt || MISSING_PERSISTED_TIMESTAMP;
-  const updatedAt = storedUpdatedAt || createdAt;
+  const createdAt = r.createdAt;
+  const updatedAt = r.updatedAt;
   const jobUrl = typeof r.jobUrl === "string" ? r.jobUrl.slice(0, 2_000) : "";
+  const resumeArtifacts = sanitizeDocumentArtifacts(r.resumeArtifacts);
+  const coverLetterArtifacts = sanitizeDocumentArtifacts(r.coverLetterArtifacts);
+  if (resumeArtifacts === null || coverLetterArtifacts === null) return null;
 
   return {
     id,
@@ -399,8 +422,8 @@ function sanitizeApplication(raw: unknown) {
     salaryPeriod: inList(SALARY_PERIODS, r.salaryPeriod) ? r.salaryPeriod : undefined,
     interviewTips: typeof r.interviewTips === "string" ? r.interviewTips.slice(0, 8_000) : "",
     contacts: sanitizeContacts(r.contacts),
-    resumeArtifacts: sanitizeDocumentArtifacts(r.resumeArtifacts),
-    coverLetterArtifacts: sanitizeDocumentArtifacts(r.coverLetterArtifacts),
+    resumeArtifacts,
+    coverLetterArtifacts,
     attachments: sanitizeAttachments(r.attachments),
     notes: typeof r.notes === "string" ? r.notes.slice(0, 8_000) : "",
     fitScore: sanitizeScore(r.fitScore),

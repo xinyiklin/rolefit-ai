@@ -4,6 +4,7 @@
 import { randomUUID } from "node:crypto";
 import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { isDeepStrictEqual } from "node:util";
 
 import {
   ApplicationsStorageError,
@@ -70,11 +71,13 @@ export async function readApplications(workspaceDir: string) {
     }
     const apps = (data as { applications: unknown[] }).applications;
     const sane = sanitizeApplications(apps);
+    const canonical = JSON.parse(JSON.stringify(sane)) as unknown[];
     // Never silently erase an invalid on-disk record during the next write.
     if (
       apps.length > MAX_APPLICATIONS ||
       sane.length !== apps.length ||
-      duplicateApplicationId(sane)
+      duplicateApplicationId(sane) ||
+      !isDeepStrictEqual(apps, canonical)
     ) {
       throw new Error("Invalid application record.");
     }

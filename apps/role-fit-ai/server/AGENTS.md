@@ -89,9 +89,9 @@ for provider, prompt, sanitizer, and review work.
   race. Application writes must reject duplicate ids, preserve the latest
   server copy of unmutated rows, and require each changed row's pre-edit
   `updatedAt`; return the current snapshot on a same-row `409` conflict rather
-  than retrying or overwriting. Normalize legacy missing revisions
-  deterministically so the first edit does not conflict with itself. Preserve
-  recoverable history/trash behavior.
+  than retrying or overwriting. Require canonical ISO creation/update revisions,
+  reject lossy or retired tracker shapes, and advance an existing row's
+  `updatedAt` monotonically. Preserve recoverable history/trash behavior.
 - Treat corrupt application JSON and malformed strict `.resume` content as
   visible fail-closed errors. Never erase, reseed, or guess over corrupt user
   data.
