@@ -815,7 +815,6 @@ function App() {
   // snapshot behind Restore, and application save.
   const {
     coverLetterText,
-    applyCoverLetter,
     resetCoverWorkflow,
     applyPolishCoverResult,
     coverStatus,
@@ -1346,9 +1345,6 @@ function App() {
     jobRawText,
     result,
     currentResumeText,
-    resumeText,
-    editedResume,
-    coverLetterText,
     headlineScore,
     fitComparison,
     pipelineAiUsage,
@@ -1398,10 +1394,8 @@ function App() {
       return;
     }
 
-    const restoredResumeData = savedResumeSource?.data ?? app.resumeData;
-    const restoredResume = restoredResumeData
-      ? serializeResumeData(restoredResumeData)
-      : app.polishedText || "";
+    const restoredResumeData = savedResumeSource?.data ?? null;
+    const restoredResume = restoredResumeData ? serializeResumeData(restoredResumeData) : "";
     const applicantName = resolveResumeApplicantName(
       restoredResumeData?.header?.name,
       restoredResume || currentResumeText || resumeText
@@ -1428,7 +1422,10 @@ function App() {
     setJobUrl(app.jobUrl || "");
     setImportedJob(null);
     setDocumentTitle(resumeTitle);
-    if (!savedCoverSource) setCoverLetterTitle(coverTitle);
+    if (!savedCoverSource) {
+      coverLetterEditor.startBlank();
+      setCoverLetterTitle(coverTitle);
+    }
     // Restore a consistent AI-usage/raw-text pair regardless of which branch
     // below runs — a tracker-restore must not carry over the PREVIOUS working
     // job's provider attribution or raw text.
@@ -1441,7 +1438,6 @@ function App() {
     // Work continues against THIS record: later document saves update it rather
     // than creating a second row for the same posting.
     linkApplication(app.id);
-    if (!savedCoverSource) applyCoverLetter(app.coverLetterText || "");
     if (restoredResumeData || restoredResume) {
       const restoredAnalysis = analyzeResumeText(restoredResume, app.jobDescription || "");
       setResumeText(restoredResume);
@@ -1452,7 +1448,6 @@ function App() {
       setResult({
         ...restoredAnalysis,
         polishedText: restoredResume,
-        coverLetterText: app.coverLetterText || undefined,
         // Restore only a saved AI comparison. Legacy deterministic estimates
         // are intentionally ignored and require a fresh AI Review.
         savedFit:

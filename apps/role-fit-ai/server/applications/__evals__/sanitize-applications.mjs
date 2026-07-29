@@ -68,21 +68,11 @@ try {
         BADKEY: { source: "ai" }
       },
       resumeData: {
-        header: {
-          visible: false,
-          name: "",
-          contact: ["", "candidate@example.com"]
-        },
-        ignored: "drop me",
-        sections: [
-          {
-            id: "sec-1",
-            heading: "Technical Skills",
-            type: "nonsense",
-            items: [{ id: "entry-1", titleLeft: "", bullets: [{ id: "b-1", text: "React" }] }]
-          }
-        ]
-      }
+        header: { visible: false, name: "", contact: ["candidate@example.com"] },
+        sections: [{ id: "sec-1", heading: "Technical Skills", items: [] }]
+      },
+      polishedText: "retired flattened resume",
+      coverLetterText: "retired flattened letter"
     },
     {
       id: "../escape",
@@ -110,14 +100,12 @@ try {
     failures.push("invalid review severity was normalized into a fabricated judgment");
   }
   if (valid?.review?.gaps?.[0]?.canHonestlyAdd !== false) failures.push("string review boolean became an affirmative judgment");
-  if (valid?.resumeData?.ignored) failures.push("unknown resume data fields survived");
-  if (valid?.resumeData?.sections?.[0]?.type !== "skills") failures.push("resume section type was not inferred");
   if (
-    valid?.resumeData?.header?.visible !== false ||
-    valid.resumeData.header.name !== "" ||
-    valid.resumeData.header.contact.join("|") !== "|candidate@example.com"
+    Object.hasOwn(valid ?? {}, "resumeData") ||
+    Object.hasOwn(valid ?? {}, "polishedText") ||
+    Object.hasOwn(valid ?? {}, "coverLetterText")
   ) {
-    failures.push("explicit hidden/blank resume header structure did not survive");
+    failures.push("retired duplicate document models survived tracker sanitization");
   }
   const noncanonicalHeaders = sanitizeApplications([
     {
@@ -138,8 +126,8 @@ try {
       }
     }
   ]);
-  if (noncanonicalHeaders.some((application) => application.resumeData?.header)) {
-    failures.push("runtime tracker sanitization accepted a retired or structurally empty header");
+  if (noncanonicalHeaders.some((application) => Object.hasOwn(application, "resumeData"))) {
+    failures.push("runtime tracker sanitization retained a retired resume snapshot");
   }
 
   // rawJobDescription roundtrips (trimmed via slice, not .trim()).

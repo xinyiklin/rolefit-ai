@@ -9,8 +9,7 @@ import assert from "node:assert/strict";
 import {
   applicationDocumentSyncState,
   applicationMatchesJobTarget,
-  normalizeDocumentSnapshot,
-  savedDocumentText
+  normalizeDocumentSnapshot
 } from "../applicationDocuments.ts";
 import { applicationDocumentAvailability } from "../../../shared/applicationDocumentContract.ts";
 import { documentSourceFingerprint } from "../documentSourceFingerprint.ts";
@@ -19,11 +18,6 @@ const resumeSource = "{\"kind\":\"resume\",\"style\":\"original\"}";
 const editedResumeSource = "{\"kind\":\"resume\",\"style\":\"edited\"}";
 const coverSource = "{\"kind\":\"cover\",\"style\":\"original\"}";
 const editedCoverSource = "{\"kind\":\"cover\",\"style\":\"edited\"}";
-
-const resumeData = {
-  header: { visible: true, name: "Test Candidate", contact: [] },
-  sections: [{ id: "s1", kind: "experience", heading: "Experience", entries: [] }]
-};
 
 assert.equal(
   applicationDocumentAvailability(undefined, true),
@@ -41,7 +35,7 @@ assert.equal(
   "an uploaded PDF alone is a saved final document"
 );
 
-// The state Apply leaves behind: both snapshots stored, plus the metadata the
+// The state Apply leaves behind: both strict sources stored, plus the metadata the
 // tracker owns (status, notes, dates, job details, fit) that no document save
 // may touch.
 const applied = {
@@ -69,10 +63,7 @@ const applied = {
     hasSource: true,
     sourceFingerprint: documentSourceFingerprint(coverSource),
     fileName: "acme.cover"
-  },
-  resumeData,
-  polishedText: "APPLIED RESUME TEXT",
-  coverLetterText: "Untailored starter letter."
+  }
 };
 
 // ----- Sync state -----
@@ -100,7 +91,7 @@ assert.equal(
     resumeSource
   ),
   "unsaved",
-  "matching tracker text without a committed source stays retryable"
+  "content without a committed strict source stays retryable"
 );
 assert.equal(
   applicationDocumentSyncState(applied, "resume", "APPLIED RESUME TEXT", editedResumeSource),
@@ -110,17 +101,17 @@ assert.equal(
 assert.equal(
   applicationDocumentSyncState(applied, "resume", "  APPLIED\n RESUME  TEXT ", resumeSource),
   "saved",
-  "re-serialization whitespace alone is not an unsaved change"
+  "the strict source fingerprint, not flattened display text, owns saved state"
 );
 assert.equal(
   applicationDocumentSyncState(
-    { ...applied, polishedText: "TRACKER TEXT CLIPPED BEFORE THE FULL DOCUMENT" },
+    applied,
     "resume",
     "THE COMPLETE CURRENT RESUME TEXT",
     resumeSource
   ),
   "saved",
-  "an exact strict source remains saved when the lossy tracker text differs"
+  "an exact strict source remains saved without a duplicate tracker document model"
 );
 assert.equal(
   applicationDocumentSyncState(applied, "resume", "APPLIED RESUME TEXT, now edited", editedResumeSource),
@@ -133,41 +124,41 @@ assert.equal(
   "a cover letter tailored after Apply reports as unsaved"
 );
 assert.equal(
-  applicationDocumentSyncState({ ...applied, coverLetterText: undefined }, "coverLetter", "", ""),
+  applicationDocumentSyncState(
+    { ...applied, coverLetterArtifacts: undefined },
+    "coverLetter",
+    "",
+    ""
+  ),
   "saved",
   "an application with no stored letter matches an empty editor"
 );
 assert.equal(
-  applicationDocumentSyncState({ ...applied, coverLetterText: undefined }, "coverLetter", "Written later.", editedCoverSource),
+  applicationDocumentSyncState(
+    { ...applied, coverLetterArtifacts: undefined },
+    "coverLetter",
+    "Written later.",
+    editedCoverSource
+  ),
   "unsaved",
   "a letter written after applying without one reports as unsaved"
 );
 assert.equal(normalizeDocumentSnapshot("  a \n\n b  "), "a b", "snapshots normalize whitespace runs");
-assert.equal(savedDocumentText(applied, "resume"), "APPLIED RESUME TEXT", "the resume snapshot is read from polishedText");
-assert.equal(
-  savedDocumentText(applied, "coverLetter"),
-  "Untailored starter letter.",
-  "the cover-letter snapshot is read from coverLetterText"
-);
-assert.equal(savedDocumentText(null, "resume"), "", "no application has no stored resume");
 
 // ----- Independent updates -----
 
 const afterResumeUpdate = {
   ...applied,
-  polishedText: "EDITED RESUME TEXT",
-  resumeData,
   resumeArtifacts: {
     hasPdf: false,
     hasSource: true,
     sourceFingerprint: documentSourceFingerprint(editedResumeSource)
   }
 };
-assert.equal(afterResumeUpdate.polishedText, "EDITED RESUME TEXT", "updating the resume replaces the stored resume");
 assert.equal(
-  afterResumeUpdate.coverLetterText,
-  applied.coverLetterText,
-  "updating the resume leaves the saved cover letter untouched"
+  afterResumeUpdate.coverLetterArtifacts,
+  applied.coverLetterArtifacts,
+  "updating the resume leaves the saved cover-letter source metadata untouched"
 );
 assert.equal(
   applicationDocumentSyncState(afterResumeUpdate, "resume", "EDITED RESUME TEXT", editedResumeSource),
@@ -177,24 +168,12 @@ assert.equal(
 
 const afterCoverUpdate = {
   ...afterResumeUpdate,
-  coverLetterText: "Tailored letter.",
   coverLetterArtifacts: {
     hasPdf: false,
     hasSource: true,
     sourceFingerprint: documentSourceFingerprint(editedCoverSource)
   }
 };
-assert.equal(afterCoverUpdate.coverLetterText, "Tailored letter.", "updating the letter replaces the stored letter");
-assert.equal(
-  afterCoverUpdate.polishedText,
-  "EDITED RESUME TEXT",
-  "updating the cover letter leaves the saved resume untouched"
-);
-assert.deepEqual(
-  afterCoverUpdate.resumeData,
-  resumeData,
-  "updating the cover letter leaves the stored editor snapshot untouched"
-);
 assert.equal(
   applicationDocumentSyncState(afterCoverUpdate, "coverLetter", "Tailored letter.", editedCoverSource),
   "saved",

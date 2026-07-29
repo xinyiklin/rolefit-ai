@@ -17,9 +17,8 @@ import { readBody, sendJson } from "../http.ts";
 import { base64ToBuffer } from "../base64.ts";
 import { jobWorkspaceDir } from "../workspace.ts";
 import { WorkspaceRestoreConflictError } from "../workspaceRestoreGate.ts";
-import { coverLetterPlainText, parseCoverLetterFile } from "@typeset/engine/lib/coverLetter.ts";
+import { parseCoverLetterFile } from "@typeset/engine/lib/coverLetter.ts";
 import { parseResumeFile } from "@typeset/engine/lib/resumeFile.ts";
-import { serializeResumeData } from "../../src/lib/resumeText.ts";
 import { documentSourceFingerprint } from "../../src/lib/documentSourceFingerprint.ts";
 import {
   ApplicationDocumentError,
@@ -251,12 +250,10 @@ export async function handleSaveApplicationDocument(
       return;
     }
 
-    let parsedResume: ReturnType<typeof parseResumeFile> | null = null;
-    let parsedCover: ReturnType<typeof parseCoverLetterFile> | null = null;
     if (sourceText) {
       try {
-        if (kind === "resume") parsedResume = parseResumeFile(sourceText);
-        else parsedCover = parseCoverLetterFile(sourceText);
+        if (kind === "resume") parseResumeFile(sourceText);
+        else parseCoverLetterFile(sourceText);
       } catch {
         sendJson(res, 400, {
           error: kind === "resume"
@@ -300,25 +297,13 @@ export async function handleSaveApplicationDocument(
       const nextApplication = {
         ...current,
         ...(kind === "resume"
-          ? req.method === "DELETE" || !sourceBuffer
-            ? {
-                resumeData: undefined,
-                polishedText: "",
-                resumeUsed: undefined,
-                resumeArtifacts: artifacts
-              }
-            : {
-                resumeData: parsedResume?.data,
-                polishedText: parsedResume ? serializeResumeData(parsedResume.data) : "",
-                ...(sourceOrigin === "upload" ? { resumeUsed: undefined } : {}),
-                resumeArtifacts: artifacts
-              }
-          : req.method === "DELETE" || !sourceBuffer
-            ? { coverLetterText: "", coverLetterArtifacts: artifacts }
-            : {
-                coverLetterText: parsedCover ? coverLetterPlainText(parsedCover.data) : "",
-                coverLetterArtifacts: artifacts
-              }),
+          ? {
+              ...(req.method === "DELETE" || sourceOrigin === "upload"
+                ? { resumeUsed: undefined }
+                : {}),
+              resumeArtifacts: artifacts
+            }
+          : { coverLetterArtifacts: artifacts }),
         updatedAt: nextApplicationRevision(current.updatedAt)
       };
       const nextApplications = existing.map((application) =>

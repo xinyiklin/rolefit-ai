@@ -28,14 +28,6 @@ export function normalizeDocumentSnapshot(text: string): string {
   return text.replace(/\s+/g, " ").trim();
 }
 
-export function savedDocumentText(
-  application: Application | null | undefined,
-  kind: ApplicationDocumentKind
-): string {
-  if (!application) return "";
-  return (kind === "resume" ? application.polishedText : application.coverLetterText) ?? "";
-}
-
 export function applicationDocumentSyncState(
   application: Application | null | undefined,
   kind: ApplicationDocumentKind,
@@ -47,18 +39,12 @@ export function applicationDocumentSyncState(
     ? application.resumeArtifacts
     : application.coverLetterArtifacts;
   // The strict source is the lossless document contract. Prefer its complete
-  // fingerprint over the flattened tracker text, which is retained only for
-  // search/legacy compatibility and may be clipped or serialized differently.
+  // fingerprint over any flattened preview. The tracker stores metadata only;
+  // editable document content lives exclusively in the strict source file.
   if (currentSourceText && artifacts?.hasSource && artifacts.sourceFingerprint) {
     return artifacts.sourceFingerprint === documentSourceFingerprint(currentSourceText)
       ? "saved"
       : "unsaved";
-  }
-  if (
-    normalizeDocumentSnapshot(savedDocumentText(application, kind)) !==
-    normalizeDocumentSnapshot(currentText)
-  ) {
-    return "unsaved";
   }
   if (!currentText.trim()) return "saved";
   return "unsaved";

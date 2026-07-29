@@ -281,10 +281,12 @@ try {
   const storedApplication = (await readApplications(workspaceDir)).find(
     (application) => application.id === "app-123"
   );
-  assert.deepEqual(
-    storedApplication.resumeData.header,
-    JSON.parse(resumeSource).document.header,
-    "saving strict resume source preserves the complete header snapshot in the tracker"
+  assert.equal(
+    Object.hasOwn(storedApplication, "resumeData") ||
+      Object.hasOwn(storedApplication, "polishedText") ||
+      Object.hasOwn(storedApplication, "coverLetterText"),
+    false,
+    "strict document files remain the sole application document model"
   );
 
   assert.equal(

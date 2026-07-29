@@ -22,7 +22,6 @@ import {
 import type { ApplyDuplicateResolution } from "./useDuplicateGuard";
 import type { ExtractedJobTracking } from "../lib/jobExtract";
 import type { StageAiUsage } from "../lib/aiUsage";
-import type { ResumeData } from "@typeset/engine/lib/resumeData.ts";
 import type { PolishedResume } from "../resumeEngine";
 import type { FitComparison, OutputTab } from "../sections/shared";
 import { normalizeDocumentSnapshot } from "../lib/applicationDocuments";
@@ -34,9 +33,6 @@ type UseApplyFlowArgs = {
   jobRawText: string;
   result: PolishedResume | null;
   currentResumeText: string;
-  resumeText: string;
-  editedResume: ResumeData | null;
-  coverLetterText: string;
   headlineScore: number | null;
   fitComparison: FitComparison | null;
   pipelineAiUsage: Record<string, StageAiUsage>;
@@ -71,9 +67,6 @@ export function useApplyFlow({
   jobRawText,
   result,
   currentResumeText,
-  resumeText,
-  editedResume,
-  coverLetterText,
   headlineScore,
   fitComparison,
   pipelineAiUsage,
@@ -141,7 +134,6 @@ export function useApplyFlow({
       Boolean(result?.polishedText) &&
       normalizeDocumentSnapshot(currentResumeText) !== normalizeDocumentSnapshot(result?.polishedText ?? "");
     const usedBase = !result?.polishedText || (hasStructuredSuggestions && !acceptedStructuredSuggestions);
-    const sentResume = currentResumeText || resumeText || result?.polishedText || "";
     // A duplicate scan in handleApply may have already identified which record
     // this apply should merge into (exact/high confidence, user-confirmed when
     // not "interested"). Prefer that over the exact-only findForTarget lookup;
@@ -163,10 +155,7 @@ export function useApplyFlow({
       baseFitScore: fitComparison?.base ?? null,
       tailoredFitScore: fitComparison?.tailored ?? null,
       fitScoreSource: fitComparison?.source ?? null,
-      resumeData: editedResume ?? undefined,
-      polishedText: sentResume,
       resumeUsed: usedBase ? "base" : "tailored",
-      coverLetterText: coverLetterText || "",
       missingRequiredSkills: result?.missingRequiredSkills?.length ? result.missingRequiredSkills : undefined,
       // Only set rawJobDescription when it differs from the distilled jobDescription
       // (avoids storing the same text twice) — omitted entirely, never `undefined`,

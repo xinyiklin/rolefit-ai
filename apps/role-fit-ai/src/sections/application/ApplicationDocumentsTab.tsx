@@ -198,11 +198,11 @@ export function ApplicationDocumentsTab({
   const coverArtifacts = application?.coverLetterArtifacts;
   const resumeAvailability = applicationDocumentAvailability(
     resumeArtifacts,
-    Boolean(application?.resumeData)
+    false
   );
   const coverAvailability = applicationDocumentAvailability(
     coverArtifacts,
-    Boolean(application?.coverLetterText)
+    false
   );
 
   async function upload(kind: UploadKind, event: ChangeEvent<HTMLInputElement>) {

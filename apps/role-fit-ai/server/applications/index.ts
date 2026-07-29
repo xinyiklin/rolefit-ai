@@ -28,7 +28,6 @@ const APPLICATION_STATUSES = ["interested", "applied", "interviewing", "offer", 
 export const APPLICATION_ID_RE = /^[A-Za-z0-9_-]{1,80}$/;
 const MAX_APPLICATIONS = 500;
 const MAX_FIELD = 50_000;
-const MAX_RESUME_DATA_BYTES = 400_000;
 // Sanitization is a pure read boundary. Missing persisted timestamps use one
 // stable sentinel so repeated reads cannot manufacture different tracker
 // revisions or metadata merely because wall-clock time advanced.
@@ -160,7 +159,6 @@ const EVIDENCE_TYPES = ["exact", "adjacent", "none"] as const;
 
 const APPLICATION_PRIORITIES = ["High", "Medium", "Low"] as const;
 const SALARY_PERIODS = ["yr", "mo", "hr"] as const;
-const RESUME_SECTION_TYPES = ["standard", "skills", "summary"] as const;
 const REVIEW_GAP_SEVERITIES = ["BLOCKER", "HIGH", "MEDIUM", "LOW"] as const;
 const REVIEW_VERDICTS = ["STRONG FIT", "REASONABLE FIT", "STRETCH", "DON'T APPLY"] as const;
 // Per-stage AI-usage provenance: which model produced each pipeline stage's
@@ -260,99 +258,6 @@ function sanitizeAttachments(raw: unknown) {
     }];
   });
   return attachments.length ? attachments : undefined;
-}
-
-function sanitizeResumeSectionType(value: unknown, heading: unknown): "standard" | "skills" | "summary" {
-  if (inList(RESUME_SECTION_TYPES, value)) return value;
-  const normalized = sanitizeString(heading, 120);
-  if (/\b(?:technical\s+skills|skills|core\s+skills)\b/i.test(normalized)) return "skills";
-  if (/\b(?:summary|objective|profile|about\s+me|highlights)\b/i.test(normalized)) return "summary";
-  return "standard";
-}
-
-function jsonByteLength(value: unknown): number {
-  try {
-    return Buffer.byteLength(JSON.stringify(value), "utf8");
-  } catch {
-    return Infinity;
-  }
-}
-
-function sanitizeResumeData(raw: unknown) {
-  if (!raw || typeof raw !== "object" || jsonByteLength(raw) > MAX_RESUME_DATA_BYTES) return undefined;
-  const r = raw as Record<string, unknown>;
-
-  const sections = (Array.isArray(r.sections) ? r.sections : [])
-    .slice(0, 24)
-    .map((section, sectionIndex) => {
-      const heading = sanitizeString(section?.heading, 160);
-      const type = sanitizeResumeSectionType(section?.type, heading);
-      const items = ((Array.isArray(section?.items) ? section.items : []) as any[])
-        .slice(0, 80)
-        .map((item, itemIndex) => {
-          const bullets = ((Array.isArray(item?.bullets) ? item.bullets : []) as any[])
-            .slice(0, 40)
-            .map((bullet, bulletIndex) => ({
-              id: sanitizeString(bullet?.id, 80) || `bullet-${sectionIndex + 1}-${itemIndex + 1}-${bulletIndex + 1}`,
-              text: sanitizeString(bullet?.text, 6_000)
-            }))
-            .filter((bullet) => bullet.text);
-          const entry = {
-            id: sanitizeString(item?.id, 80) || `entry-${sectionIndex + 1}-${itemIndex + 1}`,
-            titleLeft: sanitizeString(item?.titleLeft, 2_000),
-            titleRight: sanitizeString(item?.titleRight, 2_000),
-            subtitleLeft: sanitizeString(item?.subtitleLeft, 2_000),
-            subtitleRight: sanitizeString(item?.subtitleRight, 2_000),
-            bullets
-          };
-          return entry.titleLeft || entry.titleRight || entry.subtitleLeft || entry.subtitleRight || entry.bullets.length
-            ? entry
-            : null;
-        })
-        .filter(isPresent);
-      return heading || items.length
-        ? {
-            id: sanitizeString(section?.id, 80) || `section-${sectionIndex + 1}`,
-            heading,
-            type,
-            items
-          }
-        : null;
-    })
-    .filter(isPresent);
-
-  const rawHeader =
-    r.header && typeof r.header === "object" && !Array.isArray(r.header)
-      ? r.header as Record<string, unknown>
-      : null;
-  const sanitizedHeader =
-    rawHeader &&
-    typeof rawHeader.visible === "boolean" &&
-    (rawHeader.name === null || typeof rawHeader.name === "string") &&
-    Array.isArray(rawHeader.contact)
-    ? {
-        visible: rawHeader.visible,
-        name:
-          rawHeader.name === null
-            ? null
-            : sanitizeString(rawHeader.name, 300),
-        // Blank structural fields are intentional editor state. Dropping them
-        // would make the application snapshot disagree with its strict source.
-        contact: (Array.isArray(rawHeader.contact) ? rawHeader.contact : [])
-          .slice(0, 12)
-          .map((contact) => sanitizeString(contact, 300))
-      }
-    : null;
-  const header =
-    sanitizedHeader &&
-    (sanitizedHeader.name !== null || sanitizedHeader.contact.length)
-      ? sanitizedHeader
-      : null;
-  const data = {
-    header,
-    sections
-  };
-  return data.header || data.sections.length ? data : undefined;
 }
 
 function sanitizeEvidenceType(value: unknown): "exact" | "adjacent" | "none" | undefined {
@@ -600,9 +505,6 @@ function sanitizeApplication(raw: unknown) {
     tailoredFitScore: sanitizeScore(r.tailoredFitScore),
     fitScoreSource: r.fitScoreSource === "ai" || r.fitScoreSource === "local" ? r.fitScoreSource : null,
     templateId: typeof r.templateId === "string" ? r.templateId.slice(0, 80) : "",
-    resumeData: sanitizeResumeData(r.resumeData),
-    polishedText: typeof r.polishedText === "string" ? r.polishedText.slice(0, MAX_FIELD) : "",
-    coverLetterText: typeof r.coverLetterText === "string" ? r.coverLetterText.slice(0, MAX_FIELD) : "",
     review: sanitizeReview(r.review),
     missingRequiredSkills: sanitizeMissingRequiredSkills(r.missingRequiredSkills),
     resumeUsed: r.resumeUsed === "base" || r.resumeUsed === "tailored" ? r.resumeUsed : undefined,
