@@ -1,136 +1,134 @@
+// Offline half of the cover-letter quality corpus: proves the fixtures cover the
+// job families the workflow has to serve, that every one of them reaches Tailor
+// in a single click, and that the grader can both pass a good letter and catch a
+// bad one. The live counterpart drives a real provider over the same fixtures.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
-import { gradeCoverLetterProposal } from "../coverLetterQuality.ts";
+import { gradeCoverLetterResult } from "../coverLetterQuality.ts";
+import { assembleCoverLetterText } from "../coverLetterContracts.ts";
 import { buildCoverLetterPreflight } from "../../../src/lib/coverLetterPreflight.ts";
 
 const fixtures = JSON.parse(
   readFileSync(new URL("./fixtures/cover-letter-quality.json", import.meta.url), "utf8")
 );
-assert.equal(fixtures.length, 10, "the quality corpus contains ten synthetic scenarios");
+
+assert.equal(fixtures.length, 13, "the quality corpus contains thirteen synthetic scenarios");
 assert.equal(
   new Set(fixtures.map((fixture) => fixture.id)).size,
   fixtures.length,
   "fixture ids are unique"
 );
-assert(fixtures.some((fixture) => fixture.sourceMode === "authored_letter"));
-assert(fixtures.some((fixture) => fixture.sourceMode === "guided_draft"));
-assert(fixtures.some((fixture) => fixture.recipientName));
-assert(fixtures.some((fixture) => !fixture.recipientName));
-assert(fixtures.some((fixture) => /irrelevant/i.test(fixture.scenario)));
-assert(fixtures.some((fixture) => /Adjacent experience/i.test(fixture.scenario)));
-assert(fixtures.some((fixture) => /Distinctive authored phrasing/i.test(fixture.scenario)));
-assert(fixtures.some((fixture) => /Generic source language/i.test(fixture.scenario)));
 
-function selectedForFixture(fixture) {
-  if (fixture.sourceMode === "guided_draft") {
-    const answer = fixture.evidence.find((item) => item.source === "user_answer");
-    assert(answer, `${fixture.id} supplies a candidate answer`);
-    const resume = fixture.evidence.find((item) => item.source === "resume");
-    assert(resume, `${fixture.id} supplies resume evidence`);
-    return [resume, answer];
-  }
-  return fixture.evidence.slice(0, 2);
+// The job families the user's base variant actually has to serve.
+for (const [label, pattern] of [
+  ["general full-stack", /Full Stack Engineer/],
+  ["frontend", /Frontend Engineer/],
+  ["backend/platform", /Platform Engineer|Backend Engineer/],
+  ["healthcare", /Healthcare Software Engineer/],
+  ["applied AI", /Applied AI Engineer/]
+]) {
+  assert(
+    fixtures.some((fixture) => pattern.test(fixture.role)),
+    `the corpus covers ${label} postings`
+  );
 }
+assert(
+  fixtures.filter((fixture) => fixture.baseVariant).length >= 2,
+  "the bundled base variant is a permanent fixture across more than one posting"
+);
+assert(
+  fixtures.some((fixture) => /must still lead with/i.test(fixture.scenario)),
+  "one fixture forces a lead other than the most prominent project"
+);
+assert(
+  fixtures.some((fixture) =>
+    fixture.evidence.some(
+      (item) => item.source === "honest_context" && /AI assistance/i.test(item.text)
+    )
+  ),
+  "one fixture makes an AI-workflow honest-context item relevant"
+);
+assert(
+  fixtures.some((fixture) => /irrelevant/i.test(fixture.scenario)),
+  "one fixture requires irrelevant honest context to be omitted"
+);
+assert(
+  fixtures.some((fixture) => /Adjacent experience/i.test(fixture.scenario)),
+  "one fixture requires an honest adjacent-experience framing"
+);
+assert(
+  fixtures.some((fixture) => /Distinctive authored phrasing/i.test(fixture.scenario)),
+  "one fixture protects a distinctive authored voice"
+);
+assert(
+  fixtures.some((fixture) => /Generic source language/i.test(fixture.scenario)),
+  "one fixture requires generic source language to be improved"
+);
+assert(fixtures.some((fixture) => fixture.sourceText === ""), "one fixture starts blank");
 
-function makeGoodProposal(fixture, resolved, selected) {
-  const sentence =
-    "I approach the work with clear judgment, careful follow-through, and respect for the people who depend on the result.";
-  const bodyBlocks = [
+const sentence =
+  "I approach the work with clear judgment, careful follow-through, and respect for the people who depend on the result.";
+
+function goodResult(fixture, resolved, used) {
+  const bodyParagraphs = [
     {
-      kind: "body",
-      text: `I am applying for the ${fixture.role} role at ${fixture.company}. ${fixture.preservePhrase ?? ""} ${sentence} ${sentence} ${sentence}`,
-      evidenceIds:
-        fixture.sourceMode === "authored_letter"
-          ? [selected[0].id, "source_letter"]
-          : selected.map((item) => item.id)
+      text: `I am applying for the ${fixture.role} role at ${fixture.company}. ${sentence} ${sentence} ${sentence}`,
+      evidenceIds: [used[0].id],
+      slotIds: []
     },
     {
-      kind: "body",
       text: `${sentence} ${sentence} ${sentence} ${sentence}`,
-      evidenceIds: [selected[0].id]
+      evidenceIds: [used[0].id],
+      slotIds: []
     },
     {
-      kind: "body",
-      text: `${sentence} ${sentence} ${sentence} I would welcome a conversation about the ${fixture.role} role at ${fixture.company}.`,
-      evidenceIds: [selected.at(-1).id]
+      text: `${sentence} ${sentence} I would welcome a conversation about the ${fixture.role} role at ${fixture.company}.`,
+      evidenceIds: [used.at(-1).id],
+      slotIds: []
     }
-  ];
-  const blocks = [
-    { kind: "date", text: resolved.date, evidenceIds: [] },
-    { kind: "greeting", text: resolved.greeting, evidenceIds: [] },
-    ...bodyBlocks,
-    { kind: "signoff", text: resolved.signoff, evidenceIds: [] }
   ];
   return {
     status: "ready",
-    coverLetterText: blocks.map((block) => block.text).join("\n\n"),
-    blocks,
-    changeSummary: ["Focused the narrative on approved evidence."],
-    preservedFromSource:
-      fixture.sourceMode === "authored_letter"
-        ? ["Preserved the source letter's direct voice."]
-        : [],
-    warnings: [],
-    readyToSend: true,
-    selectedEvidence: selected
+    coverLetterText: assembleCoverLetterText(bodyParagraphs, resolved),
+    bodyParagraphs,
+    evidenceUsed: used,
+    warnings: []
   };
 }
 
 for (const fixture of fixtures) {
   assert.equal(typeof fixture.jobText, "string");
   assert(fixture.jobText.length >= 40, `${fixture.id} has a usable job description`);
-  assert(fixture.evidence.length >= 2, `${fixture.id} has multiple atomic evidence items`);
+  assert(fixture.evidence.length >= 1, `${fixture.id} supplies atomic evidence`);
   assert.equal(
     new Set(fixture.evidence.map((item) => item.id)).size,
     fixture.evidence.length,
     `${fixture.id} has unique evidence ids`
   );
 
-  const values = {
-    candidate_name: "Jordan Lee",
-    role: fixture.role,
-    company: fixture.company,
-    recipient_name: fixture.recipientName,
-    why_role: fixture.whyRole,
-    lead_experience: fixture.leadExperience
-  };
   const preflight = buildCoverLetterPreflight({
     text: fixture.sourceText,
-    sourceMode: fixture.sourceMode,
     candidateName: "Jordan Lee",
     role: fixture.role,
     company: fixture.company,
-    values,
     date: "July 28, 2026"
   });
-  assert.equal(preflight.canPrepare, true, `${fixture.id} passes deterministic preflight`);
+  // The whole point of the corpus: none of these stops to ask a question.
+  assert.equal(preflight.canTailor, true, `${fixture.id} tailors in one click`);
+  assert.deepEqual(preflight.blockers, [], `${fixture.id} asks the candidate nothing`);
+  if (fixture.expectedGreeting) {
+    assert.equal(
+      preflight.resolved.greeting,
+      fixture.expectedGreeting,
+      `${fixture.id} resolves its greeting deterministically`
+    );
+  }
 
-  const selected = selectedForFixture(fixture);
-  const selectedIds = new Set(selected.map((item) => item.id));
-  const plan = {
-    openingAngle: `Connect verified experience to the ${fixture.role} role.`,
-    voice: {
-      formality: "conversational-professional",
-      confidence: "confident",
-      sentenceStyle: "direct"
-    },
-    decisions: fixture.evidence.map((item) => ({
-      evidenceId: item.id,
-      decision: selectedIds.has(item.id) ? "use" : "skip",
-      relevance: selectedIds.has(item.id) ? "direct" : "weak",
-      reason: selectedIds.has(item.id)
-        ? "Directly supports the role."
-        : "True, but not needed for this focused narrative."
-    })),
-    slotDecisions: []
-  };
-  const proposal = makeGoodProposal(fixture, preflight.resolved, selected);
-  const report = gradeCoverLetterProposal({
-    proposal,
-    plan,
+  const used = fixture.evidence.slice(0, Math.min(2, fixture.evidence.length));
+  const report = gradeCoverLetterResult({
+    result: goodResult(fixture, preflight.resolved, used),
     allEvidence: fixture.evidence,
-    sourceMode: fixture.sourceMode,
     sourceText: preflight.template.authoredProse,
     resolved: preflight.resolved,
     onePage: true
@@ -138,65 +136,77 @@ for (const fixture of fixtures) {
   assert.equal(report.passed, true, `${fixture.id} can satisfy every quality dimension`);
   assert.equal(report.score, 100);
 
-  const overflowReport = gradeCoverLetterProposal({
-    proposal,
-    plan,
-    allEvidence: fixture.evidence,
-    sourceMode: fixture.sourceMode,
-    sourceText: preflight.template.authoredProse,
-    resolved: preflight.resolved,
-    onePage: false
-  });
   assert.equal(
-    overflowReport.checks.concise.passed,
+    gradeCoverLetterResult({
+      result: goodResult(fixture, preflight.resolved, used),
+      allEvidence: fixture.evidence,
+      sourceText: preflight.template.authoredProse,
+      resolved: preflight.resolved,
+      onePage: false
+    }).checks.concise.passed,
     false,
-    "page overflow is a hard quality failure"
+    "page overflow is a quality failure, even though it never withholds the letter"
   );
 }
 
+// The grader has to be able to fail: a good-looking letter with brochure copy,
+// an invented evidence id, or a pasted resume bullet is not a pass.
 const first = fixtures[0];
 const firstPreflight = buildCoverLetterPreflight({
   text: first.sourceText,
-  sourceMode: first.sourceMode,
   candidateName: "Jordan Lee",
   role: first.role,
   company: first.company,
-  values: {
-    candidate_name: "Jordan Lee",
-    role: first.role,
-    company: first.company
-  },
   date: "July 28, 2026"
 });
-const firstSelected = selectedForFixture(first);
-const weakPlan = {
-  openingAngle: "Test",
-  voice: {
-    formality: "formal",
-    confidence: "restrained",
-    sentenceStyle: "concise"
-  },
-  decisions: first.evidence.map((item) => ({
-    evidenceId: item.id,
-    decision: firstSelected.some((selected) => selected.id === item.id) ? "use" : "skip",
-    relevance: "weak",
-    reason: "Weak"
-  })),
-  slotDecisions: []
-};
-const genericProposal = makeGoodProposal(first, firstPreflight.resolved, firstSelected);
-genericProposal.blocks[2].text = `I am excited to apply because I am a perfect fit. ${genericProposal.blocks[2].text}`;
-genericProposal.coverLetterText = genericProposal.blocks.map((block) => block.text).join("\n\n");
-const genericReport = gradeCoverLetterProposal({
-  proposal: genericProposal,
-  plan: weakPlan,
-  allEvidence: first.evidence,
-  sourceMode: first.sourceMode,
-  sourceText: firstPreflight.template.authoredProse,
-  resolved: firstPreflight.resolved,
-  onePage: true
-});
-assert.equal(genericReport.checks.naturalLanguage.passed, false);
-assert.equal(genericReport.checks.evidenceRelevance.passed, false);
+const used = first.evidence.slice(0, 2);
+
+const generic = goodResult(first, firstPreflight.resolved, used);
+generic.bodyParagraphs[2].text = `I am excited to apply because I am a perfect fit. ${generic.bodyParagraphs[2].text}`;
+generic.coverLetterText = assembleCoverLetterText(
+  generic.bodyParagraphs,
+  firstPreflight.resolved
+);
+assert.equal(
+  gradeCoverLetterResult({
+    result: generic,
+    allEvidence: first.evidence,
+    sourceText: firstPreflight.template.authoredProse,
+    resolved: firstPreflight.resolved,
+    onePage: true
+  }).checks.naturalLanguage.passed,
+  false
+);
+
+const unknownEvidence = goodResult(first, firstPreflight.resolved, used);
+unknownEvidence.bodyParagraphs[0].evidenceIds = ["resume:invented"];
+assert.equal(
+  gradeCoverLetterResult({
+    result: unknownEvidence,
+    allEvidence: first.evidence,
+    sourceText: firstPreflight.template.authoredProse,
+    resolved: firstPreflight.resolved,
+    onePage: true
+  }).checks.evidenceGrounding.passed,
+  false
+);
+
+const dumped = goodResult(first, firstPreflight.resolved, used);
+dumped.bodyParagraphs[1].text = `${first.evidence[0].text} ${sentence} ${sentence}`;
+dumped.coverLetterText = assembleCoverLetterText(
+  dumped.bodyParagraphs,
+  firstPreflight.resolved
+);
+assert.equal(
+  gradeCoverLetterResult({
+    result: dumped,
+    allEvidence: first.evidence,
+    sourceText: firstPreflight.template.authoredProse,
+    resolved: firstPreflight.resolved,
+    onePage: true
+  }).checks.noResumeDump.passed,
+  false,
+  "a pasted resume bullet is a resume dump, not elaboration"
+);
 
 console.log("cover-letter synthetic quality contracts: PASS");

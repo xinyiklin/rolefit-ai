@@ -29,24 +29,28 @@ never a hosted copy of the workbench.
 
 ## Product Purpose
 
-RoleFit AI turns a base resume, candidate-authored cover-letter prose or guided
-notes, and a pasted job description into honest, tailored application materials. Resume proposals
-remain constrained by server-side grounding and anti-fabrication checks, with a
-recruiter-style review for fit scoring and gap analysis. The cover-letter
-workflow explicitly distinguishes an authored letter from the bundled guided
-starter. An authored template may keep inline customization slots and still
-begin Polish; a guided starter with little or no authored prose pauses for the
-candidate's own voice anchor instead of creating a letter from the job and
-resume alone. Preparation keeps source prose, typed template instructions, job
-context, and candidate evidence separate, then classifies
-every atomic resume fact, honest-context note, and candidate answer as use,
-skip, or clarify and resolves every template slot through a typed decision;
-candidates can override the evidence plan, those choices remain binding when a
-clarification refreshes it, and drafting receives only the approved one to
-three evidence items. Standard correspondence fields resolve
-deterministically. Source slots are valid preparation inputs, but an unresolved
-slot can never appear in a proposal represented as ready to send, and an
-AI proposal never replaces the editor until the user accepts it. Both editors share
+RoleFit AI turns a base resume, a candidate-authored cover letter or base
+variant, and a pasted job description into honest, tailored application
+materials. Resume proposals remain constrained by server-side grounding and
+anti-fabrication checks, with a recruiter-style review for fit scoring and gap
+analysis.
+
+The cover letter is **one Tailor click**. RoleFit resolves the date, candidate
+name, role, company, greeting, and sign-off itself, sends the whole candidate
+evidence corpus with the source letter, and lets the model choose which
+experiences and honest-context notes this particular posting warrants. Bracketed
+text in a base variant is a drafting instruction, never candidate evidence.
+Grounding, placeholder rejection, and a single silent repair pass all run on the
+server; a valid letter goes straight into the editor with an exact one-click
+Restore of the document it replaced, and a letter that still fails after repair
+is discarded with the current one kept.
+
+The letter asks a question only when a fact genuinely cannot be resolved — a
+missing company, role title, or candidate name, or a template that names a
+private fact such as a referral. A hiring manager's name, a reason for interest,
+which experience to lead with, and tone are never questions: an authored
+greeting supplies a recipient and the company hiring team is always a correct
+fallback. Both editors share
 deterministic typesetting and PDF export, and the same recovery and naming
 behavior: unsaved edits go to a per-tab recovery draft either page can restore,
 and a document is named `Name_Company_Resume` / `Name_Company_Cover_Letter` so
@@ -124,8 +128,8 @@ disappears into the task. Quiet competence, not salesmanship.
    the foot of the studio rail; tabbed
    outputs below (Resume with a consistent Open/Save/Polish
    document action bar and a post-polish review rail, Cover letter with the
-   matching document action bar, its plain editor and contextual
-   readiness/preparation/proposal rail, Materials, the
+   matching document action bar, its plain editor and a compact rail that
+   reports readiness before Tailor and provenance after it, Materials, the
    Applications tracker, Analytics) and the header Fit
    popover. The engine-painted page remains the sole editor, the review rail
    navigates back to exact fields, and the editor itself remains the live

@@ -1,145 +1,153 @@
 [
   {
+    "id": "base-variant-general-full-stack",
+    "scenario": "The bundled base variant against a general full-stack posting must tailor in one click, with no field left for the candidate.",
+    "baseVariant": true,
+    "jobText": "Northwind is hiring a Full Stack Engineer to build customer-facing features end to end across a React client and a Python API.",
+    "sourceText": "[Date]\n\nDear [Hiring Manager's Name or Hiring Team],\n\nI am applying for the [Exact Position Title] role at [Company]. [Name the role and explain, in your own words, why it interests you.]\n\n[Connect one or two verified experiences from your resume to the role. Focus on what you did and the outcome.]\n\n[Explain why this company or team is a fit, using details from the job posting.]\n\nSincerely,\n[Your name]",
+    "role": "Full Stack Engineer",
+    "company": "Northwind",
+    "evidence": [
+      { "id": "resume:fullstack", "source": "resume", "text": "Delivered customer-facing features across a React client and a Python API." },
+      { "id": "resume:pipeline", "source": "resume", "text": "Built reporting data pipelines and the operational dashboards on top of them." },
+      { "id": "resume:clinic", "source": "resume", "text": "Digitized clinic intake workflows for a small medical practice." }
+    ]
+  },
+  {
+    "id": "base-variant-frontend",
+    "scenario": "The same base variant against a frontend posting must lead with the interface work, not the strongest backend project.",
+    "baseVariant": true,
+    "jobText": "Acme is hiring a Frontend Engineer to build accessible workflows in React, with keyboard and screen-reader support treated as product requirements.",
+    "sourceText": "[Date]\n\nDear [Hiring Manager's Name or Hiring Team],\n\nI am applying for the [Exact Position Title] role at [Company]. [Name the role and explain, in your own words, why it interests you.]\n\n[Connect one or two verified experiences from your resume to the role.]\n\nSincerely,\n[Your name]",
+    "role": "Frontend Engineer",
+    "company": "Acme",
+    "evidence": [
+      { "id": "resume:react", "source": "resume", "text": "Built accessible React workflows with full keyboard navigation." },
+      { "id": "resume:api", "source": "resume", "text": "Built dependable API services for reporting workflows." },
+      { "id": "resume:pipeline", "source": "resume", "text": "Built Python data pipelines for nightly reporting." }
+    ]
+  },
+  {
+    "id": "backend-platform-lead-choice",
+    "scenario": "The candidate's most prominent project is a frontend one; a platform posting must still lead with the platform evidence.",
+    "jobText": "Orbit is hiring a Platform Engineer to maintain service tooling, incident workflows, and deployment reliability for other engineering teams.",
+    "sourceText": "",
+    "role": "Platform Engineer",
+    "company": "Orbit",
+    "evidence": [
+      { "id": "resume:design-system", "source": "resume", "text": "Led a design-system rewrite adopted across four product surfaces." },
+      { "id": "resume:tooling", "source": "resume", "text": "Built service tooling and documented incident response workflows." },
+      { "id": "resume:deploys", "source": "resume", "text": "Automated deployment checks that ran before every release." }
+    ]
+  },
+  {
+    "id": "healthcare-adjacent-experience",
+    "scenario": "Adjacent experience should be framed honestly without claiming the exact missing domain.",
+    "jobText": "Harbor seeks a Healthcare Software Engineer familiar with clinical scheduling systems and patient-facing intake.",
+    "sourceText": "",
+    "role": "Healthcare Software Engineer",
+    "company": "Harbor",
+    "evidence": [
+      { "id": "resume:scheduling", "source": "resume", "text": "Built privacy-conscious scheduling workflows for service teams." },
+      { "id": "resume:intake", "source": "resume", "text": "Digitized paper intake forms for a small medical practice." },
+      { "id": "context:no-clinical", "source": "honest_context", "text": "I have not worked on a certified clinical system." }
+    ]
+  },
+  {
+    "id": "applied-ai-relevant-context",
+    "scenario": "An applied-AI posting makes the candidate's verified AI-assisted engineering workflow relevant honest context.",
+    "jobText": "Loom Labs is hiring an Applied AI Engineer to build evaluation harnesses and grounded generation pipelines for internal tools.",
+    "sourceText": "",
+    "role": "Applied AI Engineer",
+    "company": "Loom Labs",
+    "evidence": [
+      { "id": "resume:evals", "source": "resume", "text": "Built offline regression evaluations for a grounded generation pipeline." },
+      { "id": "resume:api", "source": "resume", "text": "Built dependable API services for reporting workflows." },
+      { "id": "context:ai-workflow", "source": "honest_context", "text": "I develop with AI assistance daily and review every generated change against real evidence before merging." }
+    ]
+  },
+  {
+    "id": "honest-context-irrelevant",
+    "scenario": "True but irrelevant context should be omitted rather than dumped into the letter.",
+    "jobText": "Maple needs a Backend Engineer with Python API and data pipeline experience for its reporting platform.",
+    "sourceText": "",
+    "role": "Backend Engineer",
+    "company": "Maple",
+    "evidence": [
+      { "id": "resume:pipeline", "source": "resume", "text": "Built Python APIs and data pipelines for reporting." },
+      { "id": "context:relevant", "source": "honest_context", "text": "I prefer backend work that stays close to operational users." },
+      { "id": "context:commute", "source": "honest_context", "text": "I am available to commute on Tuesdays." },
+      { "id": "context:languages", "source": "honest_context", "text": "I studied conversational Portuguese for two years." }
+    ]
+  },
+  {
     "id": "authored-strong-light-tailor",
-    "sourceMode": "authored_letter",
     "scenario": "A complete authored letter should be lightly tailored without losing its direct voice.",
-    "preservePhrase": "I care about software that earns trust through clear behavior.",
     "jobText": "Northstar is hiring a Software Engineer to build dependable APIs and collaborate with product partners.",
     "sourceText": "Dear Northstar Hiring Team,\n\nI care about software that earns trust through clear behavior and dependable delivery. In my recent work, I built API services and worked closely with product partners to turn ambiguous needs into small, testable changes. I am drawn to the Software Engineer role because Northstar treats reliability as a product quality, not an afterthought. I would bring a direct writing style, careful engineering judgment, and respect for the people using the system. I also value teams that examine tradeoffs openly, document the reason for a decision, and leave maintainable paths for the next engineer.\n\nSincerely,\nJordan Lee",
     "role": "Software Engineer",
     "company": "Northstar",
-    "recipientName": "",
     "evidence": [
       { "id": "resume:api", "source": "resume", "text": "Built dependable API services for reporting workflows." },
       { "id": "resume:product", "source": "resume", "text": "Partnered with product teams to refine ambiguous requirements." }
     ]
   },
   {
-    "id": "guided-placeholder-starter",
-    "sourceMode": "guided_draft",
-    "scenario": "A placeholder starter requires candidate answers before preparation.",
-    "jobText": "Acme is hiring a Frontend Engineer to build accessible workflows with React.",
-    "sourceText": "Dear [Hiring manager],\n\n[Explain why this role interests you.]\n\nSincerely,\n[Your name]",
-    "role": "Frontend Engineer",
-    "company": "Acme",
-    "recipientName": "",
-    "whyRole": "I value interfaces that make complicated work feel clear.",
-    "leadExperience": "I built accessible React workflows and tested them with keyboard navigation.",
-    "evidence": [
-      { "id": "resume:react", "source": "resume", "text": "Built accessible React workflows with keyboard navigation." },
-      { "id": "answer:why", "source": "user_answer", "text": "I value interfaces that make complicated work feel clear." }
-    ]
-  },
-  {
     "id": "sparse-job-description",
-    "sourceMode": "guided_draft",
     "scenario": "A sparse posting should produce a restrained letter without invented company praise.",
     "jobText": "Beacon seeks a Software Developer. Maintain internal web applications and work with a small team.",
     "sourceText": "",
     "role": "Software Developer",
     "company": "Beacon",
-    "recipientName": "",
-    "whyRole": "I prefer small teams where engineers stay close to the people using internal tools.",
-    "leadExperience": "I maintained internal applications and handled support feedback.",
     "evidence": [
       { "id": "resume:internal", "source": "resume", "text": "Maintained internal applications and incorporated support feedback." },
-      { "id": "answer:small-team", "source": "user_answer", "text": "I prefer small teams where engineers stay close to the people using internal tools." }
-    ]
-  },
-  {
-    "id": "unnamed-hiring-manager",
-    "sourceMode": "guided_draft",
-    "scenario": "No named contact should use the deterministic company hiring-team greeting.",
-    "jobText": "Orbit is hiring a Platform Engineer to maintain service tooling and incident workflows.",
-    "sourceText": "",
-    "role": "Platform Engineer",
-    "company": "Orbit",
-    "recipientName": "",
-    "whyRole": "I like tools that help engineers understand and respond to service behavior.",
-    "leadExperience": "I built service tooling and documented incident workflows.",
-    "evidence": [
-      { "id": "resume:tooling", "source": "resume", "text": "Built service tooling and documented incident workflows." },
-      { "id": "answer:service", "source": "user_answer", "text": "I like tools that help engineers understand and respond to service behavior." }
+      { "id": "context:small-team", "source": "honest_context", "text": "I prefer small teams where engineers stay close to the people using internal tools." }
     ]
   },
   {
     "id": "named-hiring-manager",
-    "sourceMode": "guided_draft",
-    "scenario": "A named contact should be used exactly once in the greeting.",
+    "scenario": "A recipient the writer already named should survive tailoring and appear exactly once.",
+    "expectedGreeting": "Dear Morgan Patel,",
     "jobText": "Cedar is hiring a Full Stack Engineer to build customer support tools.",
-    "sourceText": "",
+    "sourceText": "Dear Morgan Patel,\n\nI would like to be considered for the Full Stack Engineer role. I have delivered customer support workflows across a React client and an API, and I care about tools that let a support team resolve a problem without guessing. I would bring that same attention to Cedar's tooling, and I am comfortable working directly with the people who use what I build.\n\nSincerely,\nJordan Lee",
     "role": "Full Stack Engineer",
     "company": "Cedar",
-    "recipientName": "Morgan Patel",
-    "whyRole": "I enjoy building tools that let support teams resolve customer problems clearly.",
-    "leadExperience": "I delivered customer support workflows across a React client and API.",
     "evidence": [
-      { "id": "resume:support", "source": "resume", "text": "Delivered customer support workflows across a React client and API." },
-      { "id": "answer:support", "source": "user_answer", "text": "I enjoy building tools that let support teams resolve customer problems clearly." }
+      { "id": "resume:support", "source": "resume", "text": "Delivered customer support workflows across a React client and API." }
     ]
   },
   {
-    "id": "relevant-and-irrelevant-honest-context",
-    "sourceMode": "guided_draft",
-    "scenario": "True but irrelevant context should be skipped rather than dumped into the letter.",
-    "jobText": "Maple needs a Backend Engineer with Python API and data pipeline experience.",
+    "id": "unnamed-hiring-manager",
+    "scenario": "No named contact should use the deterministic company hiring-team greeting.",
+    "expectedGreeting": "Dear Orbit Hiring Team,",
+    "jobText": "Orbit is hiring a Platform Engineer to maintain service tooling and incident workflows.",
     "sourceText": "",
-    "role": "Backend Engineer",
-    "company": "Maple",
-    "recipientName": "",
-    "whyRole": "I want to keep working on dependable data flows that make operational decisions easier.",
-    "leadExperience": "I built Python APIs and data pipelines for reporting.",
+    "role": "Platform Engineer",
+    "company": "Orbit",
     "evidence": [
-      { "id": "resume:pipeline", "source": "resume", "text": "Built Python APIs and data pipelines for reporting." },
-      { "id": "context:relevant", "source": "honest_context", "text": "I prefer backend work that stays close to operational users." },
-      { "id": "context:irrelevant", "source": "honest_context", "text": "I am available to commute on Tuesdays." },
-      { "id": "answer:data", "source": "user_answer", "text": "I want to keep working on dependable data flows that make operational decisions easier." }
-    ]
-  },
-  {
-    "id": "adjacent-experience",
-    "sourceMode": "guided_draft",
-    "scenario": "Adjacent experience should be framed honestly without claiming the exact missing domain.",
-    "jobText": "Harbor seeks a Healthcare Software Engineer familiar with clinical scheduling systems.",
-    "sourceText": "",
-    "role": "Healthcare Software Engineer",
-    "company": "Harbor",
-    "recipientName": "",
-    "whyRole": "I want to apply careful workflow engineering in a domain where clarity matters.",
-    "leadExperience": "I built privacy-conscious scheduling workflows for service teams, not clinical systems.",
-    "evidence": [
-      { "id": "resume:scheduling", "source": "resume", "text": "Built privacy-conscious scheduling workflows for service teams." },
-      { "id": "context:no-clinical", "source": "honest_context", "text": "I have not worked on clinical systems." },
-      { "id": "answer:clarity", "source": "user_answer", "text": "I want to apply careful workflow engineering in a domain where clarity matters." }
+      { "id": "resume:tooling", "source": "resume", "text": "Built service tooling and documented incident workflows." },
+      { "id": "context:service", "source": "honest_context", "text": "I like tools that help engineers understand and respond to service behavior." }
     ]
   },
   {
     "id": "technical-resume-nontechnical-role",
-    "sourceMode": "guided_draft",
     "scenario": "A technical resume targeting a product role should select collaborative evidence rather than list tools.",
     "jobText": "Fieldwork is hiring a Technical Product Manager to clarify requirements and coordinate delivery.",
     "sourceText": "",
     "role": "Technical Product Manager",
     "company": "Fieldwork",
-    "recipientName": "",
-    "whyRole": "I enjoy turning unclear user problems into focused delivery decisions.",
-    "leadExperience": "I partnered with design and operations to define requirements and sequence releases.",
     "evidence": [
       { "id": "resume:stack", "source": "resume", "text": "Used React, TypeScript, Python, PostgreSQL, Docker, and AWS." },
-      { "id": "resume:requirements", "source": "resume", "text": "Partnered with design and operations to define requirements and sequence releases." },
-      { "id": "answer:product", "source": "user_answer", "text": "I enjoy turning unclear user problems into focused delivery decisions." }
+      { "id": "resume:requirements", "source": "resume", "text": "Partnered with design and operations to define requirements and sequence releases." }
     ]
   },
   {
     "id": "distinctive-source-voice",
-    "sourceMode": "authored_letter",
-    "scenario": "Distinctive authored phrasing should be preserved and reported in proposal metadata.",
-    "preservePhrase": "Good software gives people room to think.",
+    "scenario": "Distinctive authored phrasing should stay recognizable through tailoring.",
     "jobText": "Lumen seeks a Product Engineer to build calm, comprehensible tools for complex operations.",
     "sourceText": "Dear Lumen Hiring Team,\n\nThe software I admire most does not announce its complexity; it gives people room to think. That principle has shaped how I build operational tools, from naming interactions clearly to testing the awkward paths that appear after launch. Lumen's Product Engineer role stands out because it treats comprehension as part of engineering quality. I would bring an editor's attention to language, an engineer's attention to behavior, and a steady habit of listening before changing a workflow. I pay particular attention to the moments where a sensible default, honest label, or reversible action can prevent uncertainty from becoming frustration.\n\nSincerely,\nJordan Lee",
     "role": "Product Engineer",
     "company": "Lumen",
-    "recipientName": "",
     "evidence": [
       { "id": "resume:operations", "source": "resume", "text": "Built operational tools and tested post-launch edge cases." },
       { "id": "resume:language", "source": "resume", "text": "Revised interface language to make complex workflows easier to understand." }
@@ -147,14 +155,11 @@
   },
   {
     "id": "generic-source-language",
-    "sourceMode": "authored_letter",
     "scenario": "Generic source language should be improved without inventing praise or claims.",
-    "preservePhrase": "I have maintained web workflows and investigated support reports.",
     "jobText": "Pine is hiring an Application Engineer to maintain web workflows and respond to user feedback.",
     "sourceText": "Dear Pine Hiring Team,\n\nI am excited to apply for this amazing opportunity at your innovative company. I am a passionate, results-driven professional with a proven track record and believe I would be a perfect fit. In concrete terms, I have maintained web workflows, investigated support reports, and shipped focused fixes. I want the Application Engineer role because it keeps engineering close to real user feedback. I would welcome the chance to bring that practical work to Pine. I am most effective when I can trace a reported problem through the interface and service, explain the tradeoff, and deliver a focused correction.\n\nSincerely,\nJordan Lee",
     "role": "Application Engineer",
     "company": "Pine",
-    "recipientName": "",
     "evidence": [
       { "id": "resume:web", "source": "resume", "text": "Maintained web workflows and investigated support reports." },
       { "id": "resume:fixes", "source": "resume", "text": "Shipped focused fixes in response to user feedback." }

@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 
 import {
   buildCoverLetterEvidence,
-  selectedEvidenceForPlan,
   splitHonestContextEvidence
 } from "../coverLetterEvidence.ts";
 
@@ -46,6 +45,9 @@ const resumeData = {
   ]
 };
 
+const honestContext =
+  "Candidate facts:\n- Work authorization: authorized.\n\nC++ was my primary college language.";
+
 assert.deepEqual(
   splitHonestContextEvidence(
     "Candidate facts:\n- Work authorization: authorized.\n\nC++ was my primary college language.\nMicrosoft Office."
@@ -58,17 +60,17 @@ assert.deepEqual(
   "legacy honest context splits conservatively by authored lines"
 );
 
-const evidence = buildCoverLetterEvidence({
-  resumeData,
-  honestContext:
-    "Candidate facts:\n- Work authorization: authorized.\n\nC++ was my primary college language.",
-  preparationValues: {
-    why_role: "I want to build practical tools for coaches.",
-    lead_experience: "Lead with the scheduling workflow."
-  }
-});
-assert.equal(evidence.length, 7, "resume bullets, skill text, honest facts, and user answers are atomic");
-assert.equal(new Set(evidence.map((item) => item.id)).size, evidence.length, "evidence ids are unique");
+const evidence = buildCoverLetterEvidence({ resumeData, honestContext });
+assert.equal(
+  evidence.length,
+  5,
+  "resume bullets, skill text, and honest facts are atomic; nothing is invented"
+);
+assert.equal(
+  new Set(evidence.map((item) => item.id)).size,
+  evidence.length,
+  "evidence ids are unique"
+);
 assert(
   evidence.every((item) => !/volatile/.test(item.id)),
   "ids never depend on disposable ResumeData session ids"
@@ -83,14 +85,16 @@ assert(
   "resume evidence preserves exact source text and context"
 );
 
+// The whole corpus is offered every time. Choosing from it is the model's job,
+// so nothing here filters, ranks, or pre-selects.
+assert(
+  evidence.some((item) => item.source === "honest_context"),
+  "honest context is offered as optional evidence, never withheld"
+);
+
 const reloaded = buildCoverLetterEvidence({
   resumeData: JSON.parse(JSON.stringify(resumeData)),
-  honestContext:
-    "Candidate facts:\n- Work authorization: authorized.\n\nC++ was my primary college language.",
-  preparationValues: {
-    why_role: "I want to build practical tools for coaches.",
-    lead_experience: "Lead with the scheduling workflow."
-  }
+  honestContext
 });
 assert.deepEqual(
   reloaded.map((item) => item.id),
@@ -98,23 +102,25 @@ assert.deepEqual(
   "the same source content produces stable ids across document loads"
 );
 
-const selected = selectedEvidenceForPlan(
-  {
-    openingAngle: "Product delivery",
-    voice: {
-      formality: "conversational-professional",
-      confidence: "restrained",
-      sentenceStyle: "direct"
-    },
-    decisions: evidence.map((item, index) => ({
-      evidenceId: item.id,
-      decision: index < 2 ? "use" : "skip",
-      relevance: index < 2 ? "direct" : "weak",
-      reason: index < 2 ? "Supports delivery." : "Not needed."
-    }))
-  },
-  evidence
+// Answers to private template slots enter the corpus like any other evidence.
+const withPrivateAnswer = buildCoverLetterEvidence({
+  resumeData,
+  honestContext,
+  slotAnswers: { "slot:3:1:abc": "Morgan Rivera referred me." },
+  slotLabels: { "slot:3:1:abc": "Referral name" }
+});
+assert.equal(withPrivateAnswer.length, evidence.length + 1);
+const answer = withPrivateAnswer.at(-1);
+assert.equal(answer.source, "user_answer");
+assert.equal(answer.entry, "Referral name");
+assert.equal(
+  buildCoverLetterEvidence({
+    resumeData,
+    honestContext,
+    slotAnswers: { "slot:3:1:abc": "   " }
+  }).length,
+  evidence.length,
+  "a blank answer contributes no evidence"
 );
-assert.deepEqual(selected, evidence.slice(0, 2), "selection returns only use decisions in source order");
 
 console.log("cover-letter evidence probes: PASS");

@@ -225,27 +225,48 @@ assert.match(
 assert.doesNotMatch(
   coverTab,
   /placeholders\.length[^;\n]*(?:canTailor|disabled)/,
-  "source template slots never disable Polish",
+  "source template slots never disable Tailor",
 );
 assert.doesNotMatch(
   coverPreflight,
-  /sourceMode === "authored_letter"[^{}]*placeholders\.length/,
-  "authored preflight never restores the placeholder blocker",
+  /(?:authoredWordCount|requiresUserVoiceAnchor)[^;\n]*(?:blockers|canTailor)/,
+  "authored word count is a voice signal, never a tailoring gate",
 );
 assert.doesNotMatch(
   coverReview,
   /Â/,
   "cover-letter readiness copy contains no mojibake",
 );
-assert.match(
+// One click, one request: no prepare/draft split and nothing to approve first.
+assert.equal(
+  cover.match(/await fetch\("\/api\/cover-letter"/g)?.length,
+  1,
+  "the cover-letter workflow makes exactly one kind of model request",
+);
+assert.doesNotMatch(
   cover,
-  /preflight\.requiresUserVoiceAnchor[\s\S]{0,160}?user_answer/,
-  "a selected candidate answer is required only when preflight says the guided source lacks a voice anchor",
+  /pendingProposal|acceptProposal|evidenceOverrides|selectedEvidence|clarification/i,
+  "no preparation plan, evidence override, or proposal acceptance survives",
 );
 assert.match(
   cover,
-  /evidenceOverridesForPreparation\(preparation\)[\s\S]{0,800}?evidenceOverrides,/,
-  "preparation refreshes send the candidate's explicit evidence choices",
+  /onApplyTailored\(result\.coverLetterText\)[\s\S]{0,200}?setCoverProgress\(\{\s*status: "done"/,
+  "a valid letter enters the editor directly, then reports",
+);
+assert.match(
+  coverEditor,
+  /setPreTailorSnapshot\(\s*editor\.editedResume[\s\S]{0,240}?editor\.seedData\(data\)/,
+  "the exact pre-tailor .cover is captured before the replacement, not after",
+);
+assert.match(
+  coverEditor,
+  /const restorePreTailor[\s\S]{0,400}?parseCoverLetterFile\(preTailorSnapshot\)/,
+  "Restore replays the structured document, not its plain text",
+);
+assert.match(
+  cover,
+  /if \(!tailorApplied\) setLastResult\(null\)/,
+  "the result summary and Restore share one lifetime",
 );
 assert.doesNotMatch(
   answersFingerprint,
@@ -791,20 +812,22 @@ assert.match(
   /draftAutosaveState === "saved"\s*\?\s*\{ state: "saved", label: "Recovery draft saved" \}/,
   "the letter uses the resume's recovery vocabulary",
 );
+// Undoing a tailor belongs to the result summary in the rail, beside what was
+// applied — not to a permanent toolbar button competing with Open and Save.
 assert.doesNotMatch(
   coverToolbar,
-  /Restore source/,
-  "the AI restore-source button is gone from the letter toolbar",
+  /Restore source|Restore previous/,
+  "the letter toolbar owns no restore button",
 );
-assert.doesNotMatch(
-  coverEditor,
-  /sourceBeforeTailor|captureTailorSource|restoreTailorSource/,
-  "the pre-tailoring source state left with the button it served",
+assert.match(
+  coverReview,
+  /canRestore \? \([\s\S]{0,200}?Restore previous/,
+  "Restore appears with the tailored result and disappears with it",
 );
 assert.doesNotMatch(
   cover,
   /onCaptureSource/,
-  "the cover workflow no longer captures a pre-tailoring source",
+  "the workflow hook never owns the document snapshot the editor owns",
 );
 assert.match(
   coverDraft,

@@ -1,70 +1,60 @@
-// Cover-letter AI has two explicit standalone stages: preparation classifies
-// every atomic evidence item, then drafting receives only selected evidence.
-// The legacy grounded reviser remains for the older optional /api/polish cover
-// leg, but the browser workflow never uses that one-string path.
+// Cover-letter AI is one request. The model sees the whole evidence corpus and
+// decides what to use; the server resolves correspondence deterministically,
+// validates the result, and repairs once in silence before giving up. Nothing
+// here pauses for candidate approval. The legacy grounded reviser below still
+// serves the older optional /api/polish cover leg, which the browser never uses.
 
 import type { IncomingMessage, ServerResponse } from "node:http";
 import {
   FetchTimeoutError,
   isRequestAborted,
   requestAbortSignal,
-  sendJson,
+  sendJson
 } from "../http.ts";
 import { UserSafeAiError, safeConfigErrorMessage } from "./errors.ts";
 import { readAiJsonBody } from "./json.ts";
 import { resolveProviderRequest } from "./providers.ts";
 import {
-  buildCoverLetterPreparationPrompts,
   buildCoverLetterPrompts,
-  buildPreparedCoverLetterDraftPrompts,
+  buildCoverLetterTailorPrompts,
   clipForPrompt,
   COVER_JOB_CHAR_LIMIT,
   COVER_RESUME_CHAR_LIMIT,
-  COVER_SOURCE_CHAR_LIMIT,
+  COVER_SOURCE_CHAR_LIMIT
 } from "./prompts.ts";
 import { callConfiguredProvider } from "./clients.ts";
-import {
-  findUngroundedOutcomeClaim,
-  proseHasUngroundedTerm,
-} from "./grounding.ts";
+import { findUngroundedJdTerm, findUngroundedOutcomeClaim } from "./grounding.ts";
 import { hasUngroundedNumericClaim } from "./sanitize.ts";
 import {
   buildCoverLetterPreflight,
   hasUnresolvedCoverLetterTokens,
-  type CoverLetterPreparationValues,
-  type CoverLetterSourceMode,
-  type ResolvedCoverLetterContext,
+  type ResolvedCoverLetterContext
 } from "../../src/lib/coverLetterPreflight.ts";
 import type {
-  CoverLetterEvidenceOverride,
   CoverLetterEvidenceItem,
-  CoverLetterPlan,
-  CoverLetterPreparation,
-  CoverLetterProposal,
+  CoverLetterTailorResult
 } from "../../src/lib/coverLetterEvidence.ts";
 import {
-  assembleCoverLetterProposal,
-  parseCoverLetterEvidenceOverrides,
+  assembleCoverLetterText,
+  coverLetterLengthWarnings,
+  COVER_LETTER_CHAR_LIMIT,
+  evidenceUsedByParagraphs,
   parseCoverLetterEvidenceItems,
-  validateCoverLetterDraftOutput,
-  validateCoverLetterPlanForDraft,
-  validateCoverLetterPreparationOutput,
+  SOURCE_LETTER_EVIDENCE_ID,
+  validateCoverLetterTailorOutput
 } from "./coverLetterContracts.ts";
-import { hasPreservedSourcePhrase } from "./coverLetterQuality.ts";
 import {
   analyzeCoverLetterTemplate,
-  coverLetterHasAuthoredVoice,
-  type CoverLetterSourceContext,
+  type CoverLetterSourceContext
 } from "../../src/lib/coverLetterTemplate.ts";
-
-// Upper bound on a returned cover letter (~3 paragraphs / 180-280 words is ~2k
-// chars; this just caps a pathological provider response, matching the per-field
-// caps in applicationAnswers.ts).
-const COVER_LETTER_CHAR_LIMIT = 8_000;
 
 // Optional dispatch-attempt collector (same additive pattern as the sanitizer's
 // drop-stats): callConfiguredProvider bumps `attempts` once per dispatch attempt.
 type AttemptStats = { attempts?: number };
+
+// A public employer fact plus where it came from. Populated by an app-owned
+// research step; absent employer context never blocks or delays tailoring.
+export type CoverLetterEmployerFact = { fact: string; source: string };
 
 function escapeRegex(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -75,35 +65,31 @@ function escapeRegex(value: string): string {
 // subject is clearly the resolved employer, team, role, or posting only when
 // they contain no candidate reference. Mixed employer/candidate sentences remain
 // visible to the JD-term candidate-claim gate.
-function candidateClaimSurface(
-  text: string,
-  resolved: ResolvedCoverLetterContext,
-): string {
+function candidateClaimSurface(text: string, resolved: ResolvedCoverLetterContext): string {
   const company = resolved.company.trim();
   const candidateName = resolved.candidateName.trim();
   const employerSubject = company
     ? new RegExp(
-        `^(?:${escapeRegex(company)}(?:'s)?|The company|The team|This role|The posting)\\b`,
-        "i",
+        `^(?:${escapeRegex(company)}(?:['’]s)?(?=\\s|[,:;.!?]|$)|The company\\b|The team\\b|This role\\b|The posting\\b)`,
+        "i"
       )
     : /^(?:The company|The team|This role|The posting)\b/i;
-  const candidateReferences = [
-    candidateName,
-    candidateName.split(/\s+/)[0] ?? "",
-  ]
-    .filter(
-      (value, index, values) =>
-        value.length >= 2 && values.indexOf(value) === index,
-    )
+  const candidateReferences = [candidateName, candidateName.split(/\s+/)[0] ?? ""]
+    .filter((value, index, values) => value.length >= 2 && values.indexOf(value) === index)
     .map(escapeRegex);
   const candidateReference = new RegExp(
     `\\b(?:I|me|my|mine|we|us|our|ours|candidate|applicant${
       candidateReferences.length > 0 ? `|${candidateReferences.join("|")}` : ""
     })\\b`,
-    "i",
+    "i"
   );
-  return text
-    .split(/(?<=[.!?])\s+|[\r\n]+/)
+  // The server's supported Node runtime includes sentence segmentation. It
+  // preserves abbreviations in employer names such as "Acme, Inc."; a raw
+  // punctuation split would turn that valid employer-only fact into fragments.
+  const sentences = [
+    ...new Intl.Segmenter("en", { granularity: "sentence" }).segment(text)
+  ].flatMap(({ segment }) => segment.split(/[\r\n]+/));
+  return sentences
     .filter((sentence) => {
       const trimmed = sentence.trim();
       return !employerSubject.test(trimmed) || candidateReference.test(trimmed);
@@ -111,7 +97,7 @@ function candidateClaimSurface(
     .join(" ");
 }
 
-// The resolved provider config + grounding inputs the grounded generator needs.
+// The resolved provider config + grounding inputs the legacy reviser needs.
 type CoverLetterArgs = {
   provider: string;
   model: string;
@@ -122,32 +108,15 @@ type CoverLetterArgs = {
   sourceCoverLetterText: string;
   honestContext: string;
   customInstructions: string;
-  sourceMode?: CoverLetterSourceMode;
-  preparationValues?: CoverLetterPreparationValues;
   resolvedContext?: ResolvedCoverLetterContext;
-  signal?: AbortSignal;
-};
-
-type PreparedCoverLetterCommonArgs = {
-  provider: string;
-  model: string;
-  reasoningEffort?: string | null;
-  apiKey?: string;
-  jobText: string;
-  sourceContext: CoverLetterSourceContext;
-  sourceMode: CoverLetterSourceMode;
-  preparationValues: CoverLetterPreparationValues;
-  resolvedContext: ResolvedCoverLetterContext;
-  customInstructions: string;
   signal?: AbortSignal;
 };
 
 // Build the cover-letter revision prompt, call the provider, and apply the grounding
 // backstop. The grounding corpus is the resume text fed to the prompt plus
 // honest context, so each caller grounds against exactly what produced the
-// letter: the polish pass passes its polished/tailored text, the standalone
-// path passes the current resume. Returns the letter, or "" when it is empty or
-// blanked for an ungrounded claim (callers treat that as a failed revision).
+// letter. Returns the letter, or "" when it is empty or blanked for an
+// ungrounded claim (callers treat that as a failed revision).
 export async function reviseGroundedCoverLetter(
   {
     provider,
@@ -159,12 +128,10 @@ export async function reviseGroundedCoverLetter(
     sourceCoverLetterText,
     honestContext,
     customInstructions,
-    sourceMode = "authored_letter",
-    preparationValues = {},
     resolvedContext,
-    signal,
+    signal
   }: CoverLetterArgs,
-  stats?: AttemptStats,
+  stats?: AttemptStats
 ): Promise<string> {
   const legacySource = analyzeCoverLetterTemplate({
     text: sourceCoverLetterText,
@@ -172,7 +139,7 @@ export async function reviseGroundedCoverLetter(
     role: resolvedContext?.role,
     company: resolvedContext?.company,
     recipientName: resolvedContext?.recipientName,
-    date: resolvedContext?.date,
+    date: resolvedContext?.date
   });
   const { systemPrompt, userPrompt } = buildCoverLetterPrompts({
     jobText: clipForPrompt(jobText, COVER_JOB_CHAR_LIMIT, "job description"),
@@ -180,241 +147,197 @@ export async function reviseGroundedCoverLetter(
     sourceCoverLetterText: clipForPrompt(
       legacySource.authoredProse,
       COVER_SOURCE_CHAR_LIMIT,
-      "source cover letter",
+      "source cover letter"
     ),
     honestContext,
     customInstructions,
-    sourceMode,
-    preparationValues,
-    resolvedContext,
+    resolvedContext
   });
   const parsed = await callConfiguredProvider(
-    {
-      provider,
-      model,
-      reasoningEffort,
-      apiKey,
-      systemPrompt,
-      userPrompt,
-      signal,
-    },
-    stats,
+    { provider, model, reasoningEffort, apiKey, systemPrompt, userPrompt, signal },
+    stats
   );
-  const letter = String(
-    (parsed as { coverLetterText?: unknown }).coverLetterText ?? "",
-  )
+  const letter = String((parsed as { coverLetterText?: unknown }).coverLetterText ?? "")
     .trim()
     .slice(0, COVER_LETTER_CHAR_LIMIT);
-  const preparationEvidence = Object.values(preparationValues).join("\n");
-  const grounding = `${legacySource.authoredProse}\n${resumeText}\n${honestContext}\n${preparationEvidence}\n${JSON.stringify(resolvedContext ?? {})}`;
+  const grounding = `${legacySource.authoredProse}\n${resumeText}\n${honestContext}\n${JSON.stringify(resolvedContext ?? {})}`;
   if (
     hasUnresolvedCoverLetterTokens(letter) ||
-    proseHasUngroundedTerm(
-      letter,
-      jobText.toLowerCase(),
-      grounding.toLowerCase(),
-    ) ||
+    findUngroundedJdTerm(letter, jobText.toLowerCase(), grounding.toLowerCase(), {
+      proseMode: true
+    }) ||
     hasUngroundedNumericClaim(letter, grounding) ||
     findUngroundedOutcomeClaim(letter, grounding, { candidateProse: true })
   ) {
     console.warn(
       "[ai] cover letter failed grounding or placeholder checks; returning an empty result",
-      { provider },
+      { provider }
     );
     return "";
   }
   return letter;
 }
 
-export async function prepareCoverLetter(
-  {
-    provider,
-    model,
-    reasoningEffort,
-    apiKey,
-    jobText,
-    sourceContext,
-    sourceMode,
-    preparationValues,
-    resolvedContext,
-    customInstructions,
-    signal,
-    evidenceItems,
-    evidenceOverrides = [],
-    clarificationAnswers,
-  }: PreparedCoverLetterCommonArgs & {
-    evidenceItems: CoverLetterEvidenceItem[];
-    evidenceOverrides?: CoverLetterEvidenceOverride[];
-    clarificationAnswers: Record<string, string>;
-  },
-  stats?: AttemptStats,
-): Promise<CoverLetterPreparation> {
-  const { systemPrompt, userPrompt } = buildCoverLetterPreparationPrompts({
-    jobText: clipForPrompt(jobText, COVER_JOB_CHAR_LIMIT, "job description"),
-    sourceContext: {
-      structuredTemplate: sourceContext.structuredTemplate,
-      authoredProse: sourceContext.authoredProse,
-      slots: sourceContext.slots,
-    },
-    sourceMode,
-    evidenceItems,
-    evidenceOverrides,
-    preparationValues,
-    resolvedContext,
-    clarificationAnswers,
-    customInstructions,
-  });
-  const parsed = await callConfiguredProvider(
-    {
-      provider,
-      model,
-      reasoningEffort,
-      apiKey,
-      systemPrompt,
-      userPrompt,
-      signal,
-    },
-    stats,
-  );
-  return validateCoverLetterPreparationOutput(
-    parsed,
-    evidenceItems,
-    sourceMode,
-    sourceContext,
-    sourceMode === "guided_draft" &&
-      !coverLetterHasAuthoredVoice(sourceContext.authoredProse),
-    evidenceOverrides,
-  );
-}
+type TailorCoverLetterArgs = {
+  provider: string;
+  model: string;
+  reasoningEffort?: string | null;
+  apiKey?: string;
+  jobText: string;
+  sourceContext: CoverLetterSourceContext;
+  evidenceItems: CoverLetterEvidenceItem[];
+  resolvedContext: ResolvedCoverLetterContext;
+  employerContext: CoverLetterEmployerFact[];
+  customInstructions: string;
+  signal?: AbortSignal;
+};
 
-export async function draftPreparedCoverLetter(
-  {
-    provider,
-    model,
-    reasoningEffort,
-    apiKey,
-    jobText,
-    sourceContext,
-    sourceMode,
-    preparationValues,
-    resolvedContext,
-    customInstructions,
-    signal,
-    plan,
-    selectedEvidence,
-  }: PreparedCoverLetterCommonArgs & {
-    plan: CoverLetterPlan;
-    selectedEvidence: CoverLetterEvidenceItem[];
-  },
-  stats?: AttemptStats,
-): Promise<CoverLetterProposal> {
-  const selectedPlan: CoverLetterPlan = {
-    ...plan,
-    decisions: plan.decisions.filter((decision) => decision.decision === "use"),
-  };
-  const { systemPrompt, userPrompt } = buildPreparedCoverLetterDraftPrompts({
-    jobText: clipForPrompt(jobText, COVER_JOB_CHAR_LIMIT, "job description"),
-    sourceContext: {
-      structuredTemplate: sourceContext.structuredTemplate,
-      authoredProse: sourceContext.authoredProse,
-      slots: sourceContext.slots,
-    },
-    sourceMode,
-    selectedEvidence,
-    plan: selectedPlan,
-    resolvedContext,
-    tonePreference: preparationValues.tone,
-    customInstructions,
-  });
-  const parsed = await callConfiguredProvider(
-    {
-      provider,
-      model,
-      reasoningEffort,
-      apiKey,
-      systemPrompt,
-      userPrompt,
-      signal,
-    },
-    stats,
+// Candidate-claim grounding, expressed as repairable violations rather than a
+// single opaque rejection so the repair pass knows what to fix.
+function groundingViolations({
+  coverLetterText,
+  jobText,
+  grounding,
+  resolved
+}: {
+  coverLetterText: string;
+  jobText: string;
+  grounding: string;
+  resolved: ResolvedCoverLetterContext;
+}): string[] {
+  const claims = candidateClaimSurface(coverLetterText, resolved);
+  const violations: string[] = [];
+  const ungroundedTerm = findUngroundedJdTerm(
+    claims,
+    jobText.toLowerCase(),
+    grounding.toLowerCase(),
+    { proseMode: true }
   );
-  const output = validateCoverLetterDraftOutput(
-    parsed,
-    selectedEvidence,
-    sourceContext,
-    plan,
-    resolvedContext,
-  );
-  const proposal = assembleCoverLetterProposal(
-    output,
-    resolvedContext,
-    selectedEvidence,
-  );
-  const bodyText = proposal.blocks
-    .filter((block) => block.kind === "body")
-    .map((block) => block.text)
-    .join("\n\n");
-  if (
-    coverLetterHasAuthoredVoice(sourceContext.authoredProse) &&
-    !hasPreservedSourcePhrase(sourceContext.authoredProse, bodyText)
-  ) {
-    throw new UserSafeAiError(
-      "The draft did not preserve a recognizable phrase from the authored letter. Try again.",
-      502,
+  if (ungroundedTerm) {
+    violations.push(
+      `The letter claims "${ungroundedTerm}" for the candidate, but no supplied evidence supports it. Remove the claim or ground it in real evidence.`
     );
   }
+  if (hasUngroundedNumericClaim(claims, grounding)) {
+    violations.push(
+      "The letter states a number, scale, or duration that no supplied evidence contains. Remove it or use a figure the evidence states."
+    );
+  }
+  const outcome = findUngroundedOutcomeClaim(claims, grounding, { candidateProse: true });
+  if (outcome) {
+    violations.push(
+      `The letter claims an outcome no evidence supports: "${outcome}". Describe only what the evidence records.`
+    );
+  }
+  return violations;
+}
+
+export async function tailorCoverLetter(
+  {
+    provider,
+    model,
+    reasoningEffort,
+    apiKey,
+    jobText,
+    sourceContext,
+    evidenceItems,
+    resolvedContext,
+    employerContext,
+    customInstructions,
+    signal
+  }: TailorCoverLetterArgs,
+  stats?: AttemptStats
+): Promise<CoverLetterTailorResult> {
+  const promptInput = {
+    jobText: clipForPrompt(jobText, COVER_JOB_CHAR_LIMIT, "job description"),
+    sourceContext: {
+      structuredTemplate: sourceContext.structuredTemplate,
+      authoredProse: sourceContext.authoredProse,
+      slots: sourceContext.slots
+    },
+    evidenceItems,
+    resolvedContext,
+    employerContext,
+    customInstructions
+  };
   const grounding = [
     sourceContext.authoredProse,
-    ...selectedEvidence.map((item) => item.text),
-    JSON.stringify(resolvedContext),
+    ...evidenceItems.map((item) => item.text),
+    JSON.stringify(resolvedContext)
   ].join("\n");
-  const candidateClaims = candidateClaimSurface(
-    proposal.coverLetterText,
-    resolvedContext,
-  );
-  if (
-    proseHasUngroundedTerm(
-      candidateClaims,
-      jobText.toLowerCase(),
-      grounding.toLowerCase(),
-    ) ||
-    hasUngroundedNumericClaim(candidateClaims, grounding) ||
-    findUngroundedOutcomeClaim(candidateClaims, grounding, {
-      candidateProse: true,
-    })
-  ) {
+
+  const attempt = async (repair?: { violations: string[]; rejectedOutput: unknown }) => {
+    const { systemPrompt, userPrompt } = buildCoverLetterTailorPrompts({
+      ...promptInput,
+      ...(repair ? { repair } : {})
+    });
+    const parsed = await callConfiguredProvider(
+      { provider, model, reasoningEffort, apiKey, systemPrompt, userPrompt, signal },
+      stats
+    );
+    const validation = validateCoverLetterTailorOutput({
+      value: parsed,
+      evidence: evidenceItems,
+      sourceContext,
+      resolved: resolvedContext
+    });
+    const violations = [
+      ...validation.violations,
+      ...(validation.output
+        ? groundingViolations({
+            coverLetterText: validation.coverLetterText,
+            jobText,
+            grounding,
+            resolved: resolvedContext
+          })
+        : [])
+    ];
+    return { parsed, validation, violations };
+  };
+
+  let run = await attempt();
+  let repaired = false;
+  if (run.violations.length > 0) {
+    // One silent repair. A model that omits an id or reaches for a stock phrase
+    // is a drafting slip, not a reason to hand the candidate a planning task.
+    repaired = true;
+    run = await attempt({ violations: run.violations, rejectedOutput: run.parsed });
+  }
+  if (!run.validation.output || run.violations.length > 0) {
     throw new UserSafeAiError(
-      "The draft did not pass evidence checks. Review the selected evidence and try again.",
-      422,
+      "The tailored letter did not pass RoleFit's evidence checks, so your current letter was kept. Try again, or add the missing detail to your resume or personal context.",
+      422
     );
   }
-  return proposal;
+
+  const { output } = run.validation;
+  const coverLetterText = assembleCoverLetterText(output.bodyParagraphs, resolvedContext);
+  return {
+    status: "ready",
+    coverLetterText,
+    bodyParagraphs: output.bodyParagraphs,
+    evidenceUsed: evidenceUsedByParagraphs(output.bodyParagraphs, evidenceItems),
+    warnings: [...output.warnings, ...coverLetterLengthWarnings(coverLetterText)],
+    ...(repaired ? { repaired: true } : {})
+  };
 }
 
-function parsePreparationValues(
-  body: Record<string, unknown>,
-): CoverLetterPreparationValues {
+function parseDetailValues(body: Record<string, unknown>) {
   const rawValues =
-    body.preparationValues && typeof body.preparationValues === "object"
-      ? (body.preparationValues as Record<string, unknown>)
+    body.detailValues && typeof body.detailValues === "object"
+      ? (body.detailValues as Record<string, unknown>)
       : {};
   return {
     candidate_name: String(rawValues.candidate_name ?? "").slice(0, 200),
     role: String(rawValues.role ?? "").slice(0, 300),
-    company: String(rawValues.company ?? "").slice(0, 300),
-    recipient_name: String(rawValues.recipient_name ?? "").slice(0, 300),
-    why_role: String(rawValues.why_role ?? "").slice(0, 2_000),
-    lead_experience: String(rawValues.lead_experience ?? "").slice(0, 4_000),
-    tone: String(rawValues.tone ?? "").slice(0, 500),
+    company: String(rawValues.company ?? "").slice(0, 300)
   };
 }
 
-function parseClarificationAnswers(value: unknown): Record<string, string> {
+function parseSlotAnswers(value: unknown): Record<string, string> {
   if (!value || typeof value !== "object" || Array.isArray(value)) return {};
   const answers: Record<string, string> = {};
-  for (const [key, rawAnswer] of Object.entries(
-    value as Record<string, unknown>,
-  ).slice(0, 20)) {
+  for (const [key, rawAnswer] of Object.entries(value as Record<string, unknown>).slice(0, 20)) {
     if (!/^[A-Za-z0-9:_-]{1,140}$/.test(key)) continue;
     const answer = String(rawAnswer ?? "")
       .trim()
@@ -424,9 +347,29 @@ function parseClarificationAnswers(value: unknown): Record<string, string> {
   return answers;
 }
 
+// Employer research is optional and app-owned. Unusable context is dropped
+// silently rather than failing the request.
+function parseEmployerContext(value: unknown): CoverLetterEmployerFact[] {
+  if (!Array.isArray(value)) return [];
+  const facts: CoverLetterEmployerFact[] = [];
+  for (const raw of value.slice(0, 12)) {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) continue;
+    const record = raw as Record<string, unknown>;
+    const fact = String(record.fact ?? "")
+      .trim()
+      .slice(0, 600);
+    const source = String(record.source ?? "")
+      .trim()
+      .slice(0, 500);
+    if (!fact || !/^https?:\/\//i.test(source)) continue;
+    facts.push({ fact, source });
+  }
+  return facts;
+}
+
 export async function handleCoverLetter(
   req: IncomingMessage,
-  res: ServerResponse,
+  res: ServerResponse
 ): Promise<void> {
   if (req.method !== "POST") {
     sendJson(res, 405, { error: "Use POST." });
@@ -436,158 +379,79 @@ export async function handleCoverLetter(
   const request = requestAbortSignal(req, res);
   try {
     const body = await readAiJsonBody(req, 1_000_000);
-    const mode =
-      body.mode === "prepare" || body.mode === "draft" ? body.mode : null;
-    if (!mode) {
-      sendJson(res, 400, {
-        error: "Choose prepare or draft mode for the cover-letter request.",
-      });
-      return;
-    }
     const jobText = String(body.jobText ?? "").slice(0, 35_000);
-    const sourceCoverLetterText = String(
-      body.sourceCoverLetterText ?? "",
-    ).slice(0, 35_000);
-    const customInstructions = String(body.customInstructions ?? "").slice(
-      0,
-      4_000,
-    );
-
-    const sourceMode: CoverLetterSourceMode | null =
-      body.sourceMode === "authored_letter" ||
-      body.sourceMode === "guided_draft"
-        ? body.sourceMode
-        : null;
-    if (!sourceMode) {
-      sendJson(res, 400, {
-        error: "Choose authored-letter or guided-draft mode before continuing.",
-      });
-      return;
-    }
-    const preparationValues = parsePreparationValues(body);
+    const sourceCoverLetterText = String(body.sourceCoverLetterText ?? "").slice(0, 35_000);
+    const customInstructions = String(body.customInstructions ?? "").slice(0, 4_000);
+    const detailValues = parseDetailValues(body);
     const rawResolved =
       body.resolvedContext && typeof body.resolvedContext === "object"
         ? (body.resolvedContext as Record<string, unknown>)
         : {};
-    const clarificationAnswers = parseClarificationAnswers(
-      body.clarificationAnswers,
-    );
+    const slotAnswers = parseSlotAnswers(body.slotAnswers);
     const preflight = buildCoverLetterPreflight({
       text: sourceCoverLetterText,
-      sourceMode,
       candidateName: String(rawResolved.candidateName ?? "").slice(0, 200),
       role: String(rawResolved.role ?? "").slice(0, 300),
       company: String(rawResolved.company ?? "").slice(0, 300),
-      values: preparationValues,
-      slotAnswers: clarificationAnswers,
-      date: String(rawResolved.date ?? "").slice(0, 100),
+      values: detailValues,
+      slotAnswers,
+      date: String(rawResolved.date ?? "").slice(0, 100)
     });
-    if (!preflight.canPrepare) {
+    if (!preflight.canTailor) {
       sendJson(res, 422, {
         status: "needs_input",
         missingFields: preflight.missingFields,
-        reasons: preflight.preparationBlockers,
+        privateSlots: preflight.privateSlots.map((slot) => ({
+          id: slot.id,
+          prompt: slot.normalizedPrompt
+        })),
+        reasons: preflight.blockers
       });
       return;
     }
     if (jobText.trim().length < 40) {
       sendJson(res, 400, {
-        error:
-          "Add the job description so the cover letter can be tailored to this role.",
+        error: "Add the job description so the cover letter can be tailored to this role."
       });
+      return;
+    }
+
+    const evidenceItems = parseCoverLetterEvidenceItems(body.evidenceItems);
+    if (!evidenceItems.some((item) => item.source === "resume")) {
+      sendJson(res, 400, { error: "Add your resume before tailoring a cover letter." });
       return;
     }
 
     const resolved = resolveProviderRequest(body);
     const { provider, apiKey, model, reasoningEffort } = resolved;
     const coverStats: AttemptStats = {};
-    const sourceContext: CoverLetterSourceContext = {
-      rawTemplateText: sourceCoverLetterText,
-      structuredTemplate: preflight.template.structuredTemplate,
-      authoredProse: preflight.template.authoredProse,
-      slots: preflight.template.slots,
-    };
-    const common = {
-      provider,
-      model,
-      reasoningEffort,
-      apiKey,
-      jobText,
-      sourceContext,
-      sourceMode,
-      preparationValues,
-      resolvedContext: preflight.resolved,
-      customInstructions,
-      signal: request.signal,
-    };
-    if (mode === "prepare") {
-      const evidenceItems = parseCoverLetterEvidenceItems(body.evidenceItems);
-      const evidenceOverrides = parseCoverLetterEvidenceOverrides(
-        body.evidenceOverrides,
-        evidenceItems,
-      );
-      if (!evidenceItems.some((item) => item.source === "resume")) {
-        sendJson(res, 400, {
-          error: "Add your resume before preparing a cover letter.",
-        });
-        return;
-      }
-      const preparation = await prepareCoverLetter(
-        {
-          ...common,
-          evidenceItems,
-          evidenceOverrides,
-          clarificationAnswers,
-        },
-        coverStats,
-      );
-      sendJson(res, 200, {
-        ...preparation,
-        model,
-        provider,
-        reasoningEffort,
-        attempts: coverStats.attempts ?? 1,
-      });
-      return;
-    }
-
-    const selectedEvidence = parseCoverLetterEvidenceItems(
-      body.selectedEvidence,
-    );
-    if (selectedEvidence.length > 3) {
-      sendJson(res, 400, {
-        error: "Choose no more than three evidence items for this letter.",
-      });
-      return;
-    }
-    if (
-      preflight.requiresUserVoiceAnchor &&
-      !selectedEvidence.some((item) => item.source === "user_answer")
-    ) {
-      sendJson(res, 400, {
-        error: "A guided draft must use at least one candidate answer.",
-      });
-      return;
-    }
-    const plan = validateCoverLetterPlanForDraft(
-      body.plan,
-      selectedEvidence,
-      sourceContext,
-    );
-    const proposal = await draftPreparedCoverLetter(
+    const result = await tailorCoverLetter(
       {
-        ...common,
-        plan,
-        selectedEvidence,
+        provider,
+        model,
+        reasoningEffort,
+        apiKey,
+        jobText,
+        sourceContext: {
+          rawTemplateText: sourceCoverLetterText,
+          structuredTemplate: preflight.template.structuredTemplate,
+          authoredProse: preflight.template.authoredProse,
+          slots: preflight.template.slots
+        },
+        evidenceItems,
+        resolvedContext: preflight.resolved,
+        employerContext: parseEmployerContext(body.employerContext),
+        customInstructions,
+        signal: request.signal
       },
-      coverStats,
+      coverStats
     );
     sendJson(res, 200, {
-      ...proposal,
+      ...result,
       model,
       provider,
       reasoningEffort,
-      attempts: coverStats.attempts ?? 1,
+      attempts: coverStats.attempts ?? 1
     });
   } catch (error) {
     if (isRequestAborted(error, req, res)) return;
@@ -600,29 +464,27 @@ export async function handleCoverLetter(
       (error instanceof Error && /timed out|timeout/i.test(error.message))
     ) {
       sendJson(res, 504, {
-        error: "The AI provider timed out. Try again or switch providers.",
+        error: "The AI provider timed out. Try again or switch providers."
       });
       return;
     }
     if (error instanceof Error && error.message === "Request is too large.") {
       sendJson(res, 413, {
-        error:
-          "Request is too large. Shorten the cover letter, resume, or job text.",
+        error: "Request is too large. Shorten the cover letter, resume, or job text."
       });
       return;
     }
-    const configMessage = safeConfigErrorMessage(
-      error instanceof Error ? error.message : "",
-    );
+    const configMessage = safeConfigErrorMessage(error instanceof Error ? error.message : "");
     if (configMessage) {
       sendJson(res, 400, { error: configMessage });
       return;
     }
     sendJson(res, 500, {
-      error:
-        "Could not tailor the cover letter. Check AI settings and try again.",
+      error: "Could not tailor the cover letter. Check AI settings and try again."
     });
   } finally {
     request.dispose();
   }
 }
+
+export { SOURCE_LETTER_EVIDENCE_ID };

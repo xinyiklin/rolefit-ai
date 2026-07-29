@@ -292,12 +292,11 @@ export function CoverLetterToolbar({
               onPromptOpenChange={setPdfPromptOpen}
               onDownloadPdf={(base) => void editor.downloadPdf(base)}
             />
-            {/* The document action starts preparation; the rail owns the
-                evidence-review and draft steps so the toolbar never bypasses
-                candidate selection or proposal acceptance. */}
+            {/* One action writes the letter. The rail reports what happened
+                afterwards; it never gates the click behind a review step. */}
             <ToolbarButton
-              label={isTailoring ? "Working…" : actionLabel}
-              tooltip={tailorHint || (actionLabel === "Polish" ? "Polish the authored letter" : "Draft from your details")}
+              label={isTailoring ? "Tailoring…" : actionLabel}
+              tooltip={tailorHint || "Tailor this letter for the job target"}
               icon={<Sparkles size={16} />}
               showLabel
               tone="primary"

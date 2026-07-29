@@ -800,9 +800,9 @@ function App() {
   });
 
 
-  // The cover workflow prepares atomic evidence before drafting. Its dedicated
-  // editor remains the single owner for accepted text, direct edits, file
-  // lifecycle, restore, and application save.
+  // One Tailor click writes the letter. Its dedicated editor remains the single
+  // owner for applied text, direct edits, file lifecycle, the pre-tailor
+  // snapshot behind Restore, and application save.
   const {
     coverLetterText,
     applyCoverLetter,
@@ -810,21 +810,14 @@ function App() {
     applyPolishCoverResult,
     coverStatus,
     isGeneratingCover,
-    handleGenerateCoverLetter,
-    generatePreparedDraft,
+    handleTailorCoverLetter,
     coverProgress,
     dismissCoverProgress,
     preflight: coverLetterPreflight,
-    updatePreparationField: updateCoverLetterPreparationField,
-    evidenceItems: coverLetterEvidence,
-    preparation: coverLetterPreparation,
-    clarificationAnswers: coverLetterClarificationAnswers,
-    updateClarificationAnswer: updateCoverLetterClarificationAnswer,
-    updateEvidenceDecision: updateCoverLetterEvidenceDecision,
-    pendingProposal: coverLetterProposal,
-    acceptProposal: acceptCoverLetterProposal,
-    editProposalDetails: editCoverLetterProposalDetails,
-    discardProposal: discardCoverLetterProposal
+    updateDetail: updateCoverLetterDetail,
+    slotAnswers: coverLetterSlotAnswers,
+    updateSlotAnswer: updateCoverLetterSlotAnswer,
+    lastResult: coverLetterResult
   } = useCoverLetter({
     currentCoverLetterText: coverLetterEditor.text,
     currentResumeText,
@@ -836,8 +829,8 @@ function App() {
     providerReady: coverProviderReady,
     providerMessage: coverProviderMessage,
     resumeText,
-    sourceMode: coverLetterEditor.sourceMode,
     sourceRevision: coverLetterEditor.sourceRevision,
+    tailorApplied: coverLetterEditor.canRestorePreTailor,
     candidateName: resolveResumeApplicantName(
       coverLetterEditor.data.name || editedResume?.name,
       currentResumeText || resumeText
@@ -1655,7 +1648,7 @@ function App() {
           <TaskProgress
             stageKey="cover"
             state={coverProgress}
-            onRetry={handleGenerateCoverLetter}
+            onRetry={handleTailorCoverLetter}
             onDismiss={dismissCoverProgress}
           />
           <TaskProgress
@@ -2061,8 +2054,7 @@ function App() {
               }}
               inlineFormat={coverLetterInlineFormat}
               onInlineFormatStateChange={setCoverLetterInlineFormat}
-              onTailor={handleGenerateCoverLetter}
-              onDraft={generatePreparedDraft}
+              onTailor={handleTailorCoverLetter}
               applicationSync={coverLetterApplicationSync}
               draftAutosaveState={coverDraftAutosaveState}
               pendingAutosaveDraft={pendingCoverDraft}
@@ -2076,17 +2068,13 @@ function App() {
               providerMessage={coverProviderMessage}
               jobTarget={materialsJobTarget}
               preflight={coverLetterPreflight}
-              proposal={coverLetterProposal}
-              evidence={coverLetterEvidence}
-              preparation={coverLetterPreparation}
-              clarificationAnswers={coverLetterClarificationAnswers}
-              onSourceModeChange={coverLetterEditor.chooseSourceMode}
-              onPreparationFieldChange={updateCoverLetterPreparationField}
-              onClarificationChange={updateCoverLetterClarificationAnswer}
-              onEvidenceDecisionChange={updateCoverLetterEvidenceDecision}
-              onAcceptProposal={acceptCoverLetterProposal}
-              onEditProposal={editCoverLetterProposalDetails}
-              onDiscardProposal={discardCoverLetterProposal}
+              result={coverLetterResult}
+              slotAnswers={coverLetterSlotAnswers}
+              onDetailChange={updateCoverLetterDetail}
+              onSlotAnswerChange={updateCoverLetterSlotAnswer}
+              onRestorePreTailor={() => {
+                coverLetterEditor.restorePreTailor();
+              }}
             />
           ) : null}
 

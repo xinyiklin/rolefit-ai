@@ -1,364 +1,168 @@
+import type { CoverLetterTailorResult } from "../../lib/coverLetterEvidence";
 import type {
-  CoverLetterEvidenceItem,
-  CoverLetterPreparation,
-  CoverLetterProposal,
-} from "../../lib/coverLetterEvidence";
-import type {
-  CoverLetterPreparationFieldKey,
-  CoverLetterPreflight,
-  CoverLetterSourceMode,
+  CoverLetterDetailKey,
+  CoverLetterPreflight
 } from "../../lib/coverLetterPreflight";
-import { CoverLetterPreparationPanel } from "./CoverLetterPreparation";
-import { CoverLetterProposalPanel } from "./CoverLetterProposal";
 
 type CoverLetterReviewProps = {
   words: number;
   pageCount: number;
-  proposalPageCount: number;
   preflight: CoverLetterPreflight;
-  evidence: CoverLetterEvidenceItem[];
-  preparation: CoverLetterPreparation | null;
-  proposal: CoverLetterProposal | null;
-  proposalWords: number;
-  clarificationAnswers: Record<string, string>;
-  isWorking: boolean;
-  onSourceModeChange: (mode: CoverLetterSourceMode) => void;
-  onPreparationFieldChange: (
-    key: CoverLetterPreparationFieldKey,
-    value: string,
-  ) => void;
-  onClarificationChange: (evidenceId: string, value: string) => void;
-  onEvidenceDecisionChange: (
-    evidenceId: string,
-    decision: "use" | "skip",
-  ) => void;
-  onPrepare: () => void;
-  onDraft: () => void;
-  onAcceptProposal: () => void;
-  onEditProposal: () => void;
-  onDiscardProposal: () => void;
+  result: CoverLetterTailorResult | null;
+  canRestore: boolean;
+  resumeReady: boolean;
+  jobReady: boolean;
+  providerReady: boolean;
+  slotAnswers: Record<string, string>;
+  onDetailChange: (key: CoverLetterDetailKey, value: string) => void;
+  onSlotAnswerChange: (slotId: string, value: string) => void;
+  onRestore: () => void;
   status: string;
 };
 
-const FIELD_COPY: Partial<
-  Record<
-    CoverLetterPreparationFieldKey,
-    {
-      label: string;
-      placeholder: string;
-      multiline?: boolean;
-      maxLength: number;
-    }
-  >
+const FIELD_COPY: Record<
+  CoverLetterDetailKey,
+  { placeholder: string; maxLength: number }
 > = {
-  candidate_name: {
-    label: "Candidate name",
-    placeholder: "Name for the sign-off",
-    maxLength: 200,
-  },
-  role: {
-    label: "Role",
-    placeholder: "e.g. Software Engineer",
-    maxLength: 300,
-  },
-  company: { label: "Company", placeholder: "Employer name", maxLength: 300 },
-  recipient_name: {
-    label: "Hiring contact (optional)",
-    placeholder: "Leave blank to use Hiring Team",
-    maxLength: 300,
-  },
-  why_role: {
-    label: "Why this role?",
-    placeholder: "What genuinely interests you about this work?",
-    multiline: true,
-    maxLength: 2_000,
-  },
-  lead_experience: {
-    label: "Experience to lead with",
-    placeholder: "One or two verified experiences to emphasize",
-    multiline: true,
-    maxLength: 4_000,
-  },
-  tone: {
-    label: "Tone (optional)",
-    placeholder: "e.g. direct and conversational",
-    maxLength: 500,
-  },
+  candidate_name: { placeholder: "Name for the sign-off", maxLength: 200 },
+  role: { placeholder: "e.g. Software Engineer", maxLength: 300 },
+  company: { placeholder: "Employer name", maxLength: 300 }
 };
+
+function readiness(label: string, ready: boolean, hint: string) {
+  return { label, ready, hint };
+}
 
 export function CoverLetterReview({
   words,
   pageCount,
-  proposalPageCount,
   preflight,
-  evidence,
-  preparation,
-  proposal,
-  proposalWords,
-  clarificationAnswers,
-  isWorking,
-  onSourceModeChange,
-  onPreparationFieldChange,
-  onClarificationChange,
-  onEvidenceDecisionChange,
-  onPrepare,
-  onDraft,
-  onAcceptProposal,
-  onEditProposal,
-  onDiscardProposal,
-  status,
+  result,
+  canRestore,
+  resumeReady,
+  jobReady,
+  providerReady,
+  slotAnswers,
+  onDetailChange,
+  onSlotAnswerChange,
+  onRestore,
+  status
 }: CoverLetterReviewProps) {
-  const preparationKeys: CoverLetterPreparationFieldKey[] =
-    preflight.requiresUserVoiceAnchor
-      ? [
-          "candidate_name",
-          "role",
-          "company",
-          "recipient_name",
-          "why_role",
-          "lead_experience",
-          "tone",
-        ]
-      : ["candidate_name", "role", "company", "recipient_name", "tone"];
-  const resolvedValues: Partial<
-    Record<CoverLetterPreparationFieldKey, string>
-  > = {
-    candidate_name:
-      preflight.values.candidate_name ?? preflight.resolved.candidateName,
-    role: preflight.values.role ?? preflight.resolved.role,
-    company: preflight.values.company ?? preflight.resolved.company,
-    recipient_name: preflight.values.recipient_name ?? "",
-    why_role: preflight.values.why_role ?? "",
-    lead_experience: preflight.values.lead_experience ?? "",
-    tone: preflight.values.tone ?? "",
-  };
-  const userInputSlotIds = new Set(
-    preflight.template.userInputSlots.map((slot) => slot.id),
-  );
-  const generativeSlots = preflight.template.slots.filter(
-    (slot) =>
-      slot.resolution.kind === "generate" && !userInputSlotIds.has(slot.id),
-  );
-
-  const eyebrow = proposal
-    ? "Draft ready"
-    : preparation
-      ? "Evidence plan"
-      : "Tailoring readiness";
-  const heading = proposal
-    ? "Review the proposal"
-    : preparation
-      ? preparation.status === "needs_input"
-        ? "Clarify the plan"
-        : "Choose the evidence"
-      : preflight.sourceMode === "guided_draft"
-        ? "Complete your brief"
-        : "Polish your letter";
+  const { resolved } = preflight;
+  const target = [resolved.role, resolved.company].filter(Boolean).join(" at ");
+  const checks = [
+    readiness("Resume", resumeReady, "Add your resume"),
+    readiness("Job description", jobReady, "Add the job description"),
+    readiness("AI provider", providerReady, "Check AI settings")
+  ];
 
   return (
-    <aside
-      className="cover-letter-review"
-      aria-label="Cover letter tailoring readiness"
-    >
-      <p className="cover-letter-review__eyebrow">{eyebrow}</p>
-      <h2>{heading}</h2>
-
-      {proposal ? (
-        <CoverLetterProposalPanel
-          proposal={proposal}
-          words={proposalWords}
-          pageCount={proposalPageCount}
-          onAccept={onAcceptProposal}
-          onEdit={onEditProposal}
-          onDiscard={onDiscardProposal}
-        />
-      ) : preparation ? (
-        <CoverLetterPreparationPanel
-          preparation={preparation}
-          evidence={evidence}
-          clarificationAnswers={clarificationAnswers}
-          isWorking={isWorking}
-          onClarificationChange={onClarificationChange}
-          onEvidenceDecisionChange={onEvidenceDecisionChange}
-          onPrepare={onPrepare}
-          onDraft={onDraft}
-        />
-      ) : (
+    <aside className="cover-letter-review" aria-label="Cover letter tailoring">
+      {result ? (
         <>
-          <div
-            className="cover-letter-review__mode-picker"
-            role="group"
-            aria-label="Writing source"
-          >
-            <button
-              type="button"
-              className={
-                preflight.sourceMode === "authored_letter" ? "is-active" : ""
-              }
-              aria-pressed={preflight.sourceMode === "authored_letter"}
-              onClick={() => onSourceModeChange("authored_letter")}
-            >
-              Polish my letter
-            </button>
-            <button
-              type="button"
-              className={
-                preflight.sourceMode === "guided_draft" ? "is-active" : ""
-              }
-              aria-pressed={preflight.sourceMode === "guided_draft"}
-              onClick={() => onSourceModeChange("guided_draft")}
-            >
-              Guide a draft
-            </button>
-          </div>
-          <p className="cover-letter-review__mode">
-            {preflight.sourceMode === "guided_draft"
-              ? "Guided draft · your answers anchor the writing"
-              : "Authored letter · your existing voice stays primary"}
-          </p>
-          <div
-            className="cover-letter-review__resolved"
-            aria-label="Resolved correspondence details"
-          >
-            <span>{preflight.resolved.date}</span>
-            <span>{preflight.resolved.greeting}</span>
-          </div>
-          <div className="cover-letter-review__template-groups">
-            <section>
-              <h3>Filled automatically</h3>
-              <ul>
-                <li>Date · {preflight.resolved.date}</li>
-                <li>Role · {preflight.resolved.role || "Needed"}</li>
-                <li>Company · {preflight.resolved.company || "Needed"}</li>
-                <li>Greeting · {preflight.resolved.greeting}</li>
-                <li>
-                  Candidate · {preflight.resolved.candidateName || "Needed"}
-                </li>
-              </ul>
-            </section>
-            {generativeSlots.length > 0 ? (
-              <section>
-                <h3>RoleFit will tailor</h3>
-                <ul>
-                  {generativeSlots.map((slot) => (
-                    <li key={slot.id}>{slot.normalizedPrompt}</li>
-                  ))}
-                </ul>
-              </section>
-            ) : null}
-            {preflight.template.userInputSlots.length > 0 ? (
-              <section>
-                <h3>Need from you</h3>
-                {preflight.template.userInputSlots.map((slot) => (
-                  <label
-                    key={slot.id}
-                    htmlFor={`cover-template-answer-${slot.id}`}
-                  >
-                    <span>{slot.normalizedPrompt} · Required</span>
-                    <small>
-                      {slot.resolution.kind === "needs_input"
-                        ? slot.resolution.question
-                        : ""}
-                    </small>
-                    <textarea
-                      id={`cover-template-answer-${slot.id}`}
-                      rows={2}
-                      maxLength={2_000}
-                      value={clarificationAnswers[slot.id] ?? ""}
-                      onChange={(event) =>
-                        onClarificationChange(slot.id, event.target.value)
-                      }
-                    />
-                  </label>
-                ))}
-              </section>
-            ) : null}
-          </div>
-          <div className="cover-letter-review__fields">
-            {preparationKeys.map((key) => {
-              const copy = FIELD_COPY[key];
-              if (!copy) return null;
-              const id = `cover-letter-preparation-${key}`;
-              const missingField = preflight.missingFields.find(
-                (item) => item.key === key,
-              );
-              const describedBy = missingField ? `${id}-reason` : undefined;
-              return (
-                <label key={key} htmlFor={id}>
-                  <span>
-                    {copy.label}
-                    {missingField?.required ? " · Required" : ""}
-                  </span>
-                  {copy.multiline ? (
-                    <textarea
-                      id={id}
-                      rows={3}
-                      maxLength={copy.maxLength}
-                      aria-describedby={describedBy}
-                      value={resolvedValues[key] ?? ""}
-                      placeholder={copy.placeholder}
-                      onChange={(event) =>
-                        onPreparationFieldChange(key, event.target.value)
-                      }
-                    />
-                  ) : (
-                    <input
-                      id={id}
-                      maxLength={copy.maxLength}
-                      aria-describedby={describedBy}
-                      value={resolvedValues[key] ?? ""}
-                      placeholder={copy.placeholder}
-                      onChange={(event) =>
-                        onPreparationFieldChange(key, event.target.value)
-                      }
-                    />
-                  )}
-                  {missingField ? (
-                    <small id={describedBy}>{missingField.reason}</small>
-                  ) : null}
-                </label>
-              );
-            })}
-          </div>
-
+          <p className="cover-letter-review__eyebrow">Tailored</p>
+          <h2>{target || "This letter"}</h2>
           <ul className="cover-letter-review__checks">
-            <li className={words >= 200 && words <= 400 ? "is-ok" : ""}>
-              {words || 0} words <span>source guidance 200–400</span>
+            <li className="is-ok">
+              {words} words
+              <span>{pageCount === 1 ? "1 page" : `${pageCount || 0} pages`}</span>
             </li>
-            <li className={pageCount === 1 ? "is-ok" : ""}>
-              {pageCount || 0} {pageCount === 1 ? "page" : "pages"}
-              <span>keep it to one page</span>
-            </li>
-            <li className={preflight.hasCompletedGreeting ? "is-ok" : ""}>
-              Direct greeting{" "}
-              <span>resolved safely when no person is named</span>
-            </li>
-            <li
-              className={
-                preflight.template.requiredInputs.length === 0 ? "is-ok" : ""
-              }
-            >
-              {preflight.template.slots.length} template field
-              {preflight.template.slots.length === 1 ? "" : "s"}
-              <span>
-                {preflight.template.requiredInputs.length === 0
-                  ? "resolved during Polish"
-                  : `${preflight.template.requiredInputs.length} need input`}
-              </span>
+            <li className="is-ok">
+              Evidence checked
+              <span>resume and personal context</span>
             </li>
           </ul>
+          {pageCount > 1 ? (
+            <p className="cover-letter-review__warning">
+              Runs {pageCount} pages — shorten before exporting.
+            </p>
+          ) : null}
+          {result.warnings.map((warning) => (
+            <p key={warning} className="cover-letter-review__warning">
+              {warning}
+            </p>
+          ))}
+          {canRestore ? (
+            <button type="button" className="cover-letter-review__restore" onClick={onRestore}>
+              Restore previous
+            </button>
+          ) : null}
+          {result.evidenceUsed.length > 0 ? (
+            <details className="cover-letter-review__standard">
+              <summary>Evidence used</summary>
+              <ul>
+                {result.evidenceUsed.map((item) => (
+                  <li key={item.id}>{item.entry || item.section || item.text}</li>
+                ))}
+              </ul>
+            </details>
+          ) : null}
+        </>
+      ) : (
+        <>
+          <p className="cover-letter-review__eyebrow">Tailoring</p>
+          <h2>{target || "Set a job target"}</h2>
+          <ul className="cover-letter-review__checks">
+            {checks.map((check) => (
+              <li key={check.label} className={check.ready ? "is-ok" : ""}>
+                {check.label}
+                <span>{check.ready ? "Ready" : check.hint}</span>
+              </li>
+            ))}
+          </ul>
+
+          {preflight.missingFields.length > 0 ? (
+            <div className="cover-letter-review__fields">
+              {preflight.missingFields.map((field) => {
+                const id = `cover-letter-detail-${field.key}`;
+                return (
+                  <label key={field.key} htmlFor={id}>
+                    <span>{field.label}</span>
+                    <input
+                      id={id}
+                      maxLength={FIELD_COPY[field.key].maxLength}
+                      value={preflight.values[field.key] ?? ""}
+                      placeholder={FIELD_COPY[field.key].placeholder}
+                      aria-describedby={`${id}-reason`}
+                      onChange={(event) =>
+                        onDetailChange(field.key, event.target.value)
+                      }
+                    />
+                    <small id={`${id}-reason`}>{field.reason}</small>
+                  </label>
+                );
+              })}
+            </div>
+          ) : null}
+
+          {preflight.privateSlots.length > 0 ? (
+            <div className="cover-letter-review__fields">
+              {preflight.privateSlots.map((slot) => {
+                const id = `cover-template-answer-${slot.id}`;
+                return (
+                  <label key={slot.id} htmlFor={id}>
+                    <span>{slot.normalizedPrompt}</span>
+                    <textarea
+                      id={id}
+                      rows={2}
+                      maxLength={2_000}
+                      value={slotAnswers[slot.id] ?? ""}
+                      placeholder="Only you know this one"
+                      onChange={(event) => onSlotAnswerChange(slot.id, event.target.value)}
+                    />
+                  </label>
+                );
+              })}
+            </div>
+          ) : null}
         </>
       )}
 
-      <p className="cover-letter-review__note">
-        Preparation selects evidence first. Drafting cannot see skipped personal
-        notes or résumé items.
-      </p>
       <details className="cover-letter-review__standard">
         <summary>Writing standard</summary>
         <p>
-          Specific interest, selected evidence, active voice, no résumé
-          repetition, and a natural close.
+          Specific interest, real evidence, active voice, no résumé repetition, and a natural
+          close.
         </p>
         <a
           href="https://capd.mit.edu/resources/career-toolkit-writing-a-cover-letter/"

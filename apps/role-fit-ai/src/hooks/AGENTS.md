@@ -39,22 +39,24 @@ browser-side effects; components render them and App composes them.
   reusable history/reducer behavior in `@typeset/editor`.
 - `useCoverLetterEditor` owns RoleFit's separate letter/file/export lifecycle
   while delegating history, editing, layout, and PDF to the shared packages.
-  `useCoverLetter` owns deterministic preflight inputs, preparation and
-  clarification state, evidence overrides, selected-only drafting, stale-input
-  invalidation, and the pending proposal. Generated text stays out of the editor
-  until the user explicitly accepts it. Keep that request-generation boundary
-  in one coordinator: splitting its abort refs and stale-response checks across
-  hooks would weaken the atomic transition; extract pure contracts into `lib/`.
-  Evidence use/skip overrides travel with every clarification-driven prepare
-  refresh and remain server-enforced rather than prompt-advisory.
+  It also owns the exact pre-tailor `.cover` snapshot behind Restore, because it
+  owns the document that snapshot replaces. `useCoverLetter` owns deterministic
+  preflight inputs, the single tailoring request, stale-input invalidation, and
+  the result summary — it never holds the document. A valid letter is applied
+  directly; there is no pending proposal to accept. Keep that request-generation
+  boundary in one coordinator: splitting its abort refs and stale-response checks
+  across hooks would weaken the atomic transition; extract pure contracts into
+  `lib/`. Restore and the result summary share one lifetime (`tailorApplied`),
+  so the rail cannot advertise an undo the editor can no longer perform.
 - Both editors recover unsaved work the same way: `useAutosaveDraft` and
   `useCoverLetterAutosaveDraft` each own one document's debounced draft, over
   the shared per-tab rules in `lib/autosaveDraftStorage.ts` (tab scoping, live
   siblings, orphan migration, expiry). A draft is cleared only where its own
   document becomes durable, and a restore seeds CLEAN so a crash right after it
-  still has something to recover. The letter has no separate pre-tailoring
-  restore: the AI reseed clears editor history, so its recovery lives in the
-  draft and the workspace variants/history, as it does for the resume.
+  still has something to recover. Cover-letter Tailor also keeps one exact
+  in-memory pre-tailor `.cover` snapshot because the AI reseed clears editor
+  history; its Restore expires on the next edit, open, or Tailor and does not
+  replace crash recovery or workspace variants/history.
 - Every user-initiated load in that hook goes through its own `openDocument`
   rather than the shared `seedData`, so no open path can forget to fire
   `onOpenDocument` (the host's "put the caret in the new letter"). Applying a

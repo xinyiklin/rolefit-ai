@@ -15,13 +15,16 @@ Applies to `apps/role-fit-ai/src/lib/`.
   a verdict; it must not infer or recalculate the verdict.
 - Browser/server-shared helpers must remain safe to import in both runtimes and
   must not pull React-bearing package paths into Node.
-- `coverLetterPreflight.ts` owns source-mode readiness, complete template-token
-  detection, authored-word counting, deterministic correspondence fields, and
-  ready-result correspondence invariants. Components and routes consume this
-  contract instead of maintaining separate regexes.
+- `coverLetterPreflight.ts` owns template-token detection, deterministic
+  correspondence resolution (date, name, role, company, recipient, greeting,
+  sign-off), and the short list of facts that genuinely block tailoring.
+  Components and routes consume this contract instead of maintaining separate
+  regexes. Authored word count is a voice signal for the prompt, never a gate:
+  keep `canTailor` limited to facts nothing can resolve.
 - `coverLetterEvidence.ts` owns atomic resume/context/answer extraction, stable
-  content-derived ids, preparation-plan types, selected-evidence resolution,
-  and clarification fields. It stays deterministic and browser/server safe.
+  content-derived ids, and the tailoring result shape. It offers the whole
+  corpus and ranks nothing — selection is the model's job. It stays
+  deterministic and browser/server safe.
 - `applicationMutation.ts` owns sparse tracker request selection and
   reference-preserving own-write response reconciliation. It does not own
   persistence, queueing, conflicts, or React state.

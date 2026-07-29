@@ -34,8 +34,6 @@ import type { ResumeData } from "@typeset/engine/lib/resumeData.ts";
 import { toTypesetSchema } from "@typeset/engine/typeset/schema.ts";
 import { clearCoverLetterAutosaveDraft } from "./useCoverLetterAutosaveDraft";
 import type { DocumentUpload } from "../lib/applicationDocumentRequests";
-import type { CoverLetterSourceMode } from "../lib/coverLetterPreflight";
-import { analyzeCoverLetterTemplate } from "../lib/coverLetterTemplate";
 import {
   coverLetterStartupIsCurrent,
   loadLastCoverLetterName,
@@ -102,26 +100,31 @@ type UseCoverLetterEditorOptions = {
 export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) {
   const [style, setStyle] = useState<DocStyle>(loadStyle);
   const [initialData] = useState(() => parseCoverLetterText(""));
-  const [sourceMode, setSourceMode] = useState<CoverLetterSourceMode>("guided_draft");
   const [sourceRevision, setSourceRevision] = useState(0);
+  // The exact serialized `.cover` this document held immediately before the last
+  // Tailor. Tailoring applies straight to the editor, so one-click undo of the
+  // whole replacement — style included — has to be exact, not text-only.
+  const [preTailorSnapshot, setPreTailorSnapshot] = useState<string | null>(null);
+  const snapshotBaselineRef = useRef<string | null>(null);
   const editor = useTypesetResumeEditor(initialData);
   const onOpenDocumentRef = useRef(options.onOpenDocument);
   onOpenDocumentRef.current = options.onOpenDocument;
   const cancelStartupOpenRef = useRef(false);
+  const dropPreTailorSnapshot = useCallback(() => {
+    setPreTailorSnapshot(null);
+    snapshotBaselineRef.current = null;
+  }, []);
   // Every user-initiated load goes through here instead of `editor.seedData`,
   // so no open path can forget to move the caret into the new document.
   const openDocument = useCallback(
-    (data: ResumeData, automatic = false, nextSourceMode?: CoverLetterSourceMode) => {
+    (data: ResumeData, automatic = false) => {
       if (!automatic) cancelStartupOpenRef.current = true;
       editor.seedData(data);
-      setSourceMode(
-        nextSourceMode ??
-          analyzeCoverLetterTemplate({ text: coverLetterPlainText(data) }).recommendedSourceMode
-      );
+      dropPreTailorSnapshot();
       setSourceRevision((current) => current + 1);
       onOpenDocumentRef.current?.();
     },
-    [editor.seedData]
+    [dropPreTailorSnapshot, editor.seedData]
   );
   const [documentTitle, setDocumentTitle] = useState(loadTitle);
   const [status, setStatus] = useState("");
@@ -153,6 +156,18 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
   const startupFingerprint = `${documentTitle}\u0000${currentFingerprint ?? ""}`;
   const startupFingerprintRef = useRef(startupFingerprint);
   startupFingerprintRef.current = startupFingerprint;
+
+  // Restore stays offered until the document changes again for any reason — an
+  // edit, a style change, another Tailor, or opening something else. The first
+  // pass after a tailor records the applied document as the baseline.
+  useEffect(() => {
+    if (!preTailorSnapshot || currentFingerprint === null) return;
+    if (snapshotBaselineRef.current === null) {
+      snapshotBaselineRef.current = currentFingerprint;
+      return;
+    }
+    if (snapshotBaselineRef.current !== currentFingerprint) dropPreTailorSnapshot();
+  }, [currentFingerprint, dropPreTailorSnapshot, preTailorSnapshot]);
 
   useEffect(() => {
     try {
@@ -232,7 +247,7 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
     (source: string) => {
       if (!source.trim()) {
         const data = parseCoverLetterText("");
-        openDocument(data, false, "guided_draft");
+        openDocument(data);
         editor.markClean();
         setPersistedFingerprint(
           serializeCoverLetterFile(data, documentStyleToCoverLetterStyle(styleRef.current))
@@ -255,6 +270,8 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
     [editor.markClean, openDocument]
   );
 
+  // Tailoring replaces the document in place. The exact prior `.cover` is kept
+  // first so a single Restore is a true undo of the replacement.
   const applyTailoredText = useCallback(
     (tailored: string) => {
       cancelStartupOpenRef.current = true;
@@ -266,13 +283,41 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
             contact: editor.editedResume.contact
           }
         : parsed;
+      setPreTailorSnapshot(
+        editor.editedResume
+          ? serializeCoverLetterFile(
+              editor.editedResume,
+              documentStyleToCoverLetterStyle(styleRef.current)
+            )
+          : null
+      );
+      snapshotBaselineRef.current = null;
       editor.seedData(data);
-      setSourceMode("authored_letter");
-      setSourceRevision((current) => current + 1);
-      setStatus("Tailored draft loaded. Review it in your own voice before sending.");
+      setStatus("Tailored letter loaded. Read it once before sending.");
     },
     [editor.editedResume, editor.seedData]
   );
+
+  const restorePreTailor = useCallback(() => {
+    if (!preTailorSnapshot) return false;
+    try {
+      const parsed = parseCoverLetterFile(preTailorSnapshot);
+      cancelStartupOpenRef.current = true;
+      editor.seedData(parsed.data);
+      setStyle((current) => ({
+        ...coverLetterStyleToDocumentStyle(parsed.style),
+        zoom: current.zoom,
+        spellCheck: current.spellCheck
+      }));
+      dropPreTailorSnapshot();
+      setStatus("Restored the letter from before tailoring.");
+      return true;
+    } catch {
+      dropPreTailorSnapshot();
+      setStatus("The letter from before tailoring could not be restored.");
+      return false;
+    }
+  }, [dropPreTailorSnapshot, editor.seedData, preTailorSnapshot]);
 
   // Adopt a recovered autosave draft. Like the resume's restore it seeds CLEAN:
   // the payload is already the durable copy, so the next real edit is what
@@ -334,7 +379,7 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
 
   const startBlank = useCallback(() => {
     const data = parseCoverLetterText("");
-    openDocument(data, false, "guided_draft");
+    openDocument(data);
     editor.markClean();
     // A blank letter is the same document the page opens with, so New must not
     // leave it permanently "unsaved" — that warned on close and prompted to
@@ -350,7 +395,7 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
 
   const startStarter = useCallback(() => {
     const data = parseCoverLetterText(COVER_LETTER_STARTER);
-    openDocument(data, false, "guided_draft");
+    openDocument(data);
     editor.markClean();
     setPersistedFingerprint(
       serializeCoverLetterFile(data, documentStyleToCoverLetterStyle(styleRef.current))
@@ -360,15 +405,6 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
     setDocumentTitle("Cover letter");
     setStatus("Starter opened. Complete the tailoring details beside the document.");
   }, [editor.markClean, openDocument]);
-
-  const chooseSourceMode = useCallback(
-    (nextSourceMode: CoverLetterSourceMode) => {
-      if (nextSourceMode === sourceMode) return;
-      setSourceMode(nextSourceMode);
-      setSourceRevision((current) => current + 1);
-    },
-    [sourceMode]
-  );
 
   const openFile = useCallback(
     async (file: File) => {
@@ -719,9 +755,7 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
     redoSequence: editor.redoSequence,
     dirty,
     text,
-    sourceMode,
     sourceRevision,
-    chooseSourceMode,
     documentTitle,
     setDocumentTitle,
     docStyle,
@@ -745,6 +779,8 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
     loadSourceText,
     applyExternalText,
     applyTailoredText,
+    canRestorePreTailor: preTailorSnapshot !== null,
+    restorePreTailor,
     openRecoveryDraft,
     openApplicationSource,
     getArtifacts,

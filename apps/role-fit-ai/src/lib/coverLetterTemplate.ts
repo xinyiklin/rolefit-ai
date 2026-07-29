@@ -1,5 +1,3 @@
-export type CoverLetterSourceMode = "authored_letter" | "guided_draft";
-
 export type CoverLetterTemplateSlotResolution =
   | {
       kind: "deterministic";
@@ -39,10 +37,11 @@ export type CoverLetterTemplateAnalysis = {
     segments: CoverLetterTemplateSegment[];
   }>;
   slots: CoverLetterTemplateSlot[];
+  // Slots that name a genuinely private fact (a referral, a prior personal
+  // relationship). Everything else is generative and never blocks Tailor.
   userInputSlots: CoverLetterTemplateSlot[];
   requiredInputs: CoverLetterTemplateSlot[];
   hasAuthoredVoice: boolean;
-  recommendedSourceMode: CoverLetterSourceMode;
 };
 
 export type CoverLetterSourceContext = {
@@ -68,6 +67,9 @@ const SIGNOFF_LINE =
   /^(?:Sincerely|Best(?: regards)?|Regards|Respectfully|Thank you),?\s*$/i;
 const DATE_LINE =
   /^(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},\s+\d{4}$/i;
+// A voice-classification signal only: enough authored prose that the model
+// should preserve the writer's idiom rather than compose from scratch. It never
+// decides whether tailoring is allowed.
 export const COVER_LETTER_AUTHORED_VOICE_WORDS = 80;
 
 function clean(value: unknown): string {
@@ -154,8 +156,10 @@ function slotResolution(
   ) {
     return { kind: "deterministic", field: "role", value: clean(context.role) };
   }
+  // A recipient is never asked for: an authored greeting supplies one, and the
+  // company hiring team is always a correct fallback.
   if (
-    /^(?:hiring manager|hiring manager(?:'s)? name(?: or hiring team)?|hiring team|recipient|recipient name|hiring contact)$/.test(
+    /^(?:(?:the\s+)?hiring (?:manager|team|contact|committee)(?:'s)?(?: name)?(?: or hiring team)?|recipient(?: name)?)$/.test(
       prompt,
     )
   ) {
@@ -201,9 +205,8 @@ function slotResolution(
   if (candidateContext)
     return { kind: "generate", source: "candidate_evidence" };
   if (jobContext) return { kind: "generate", source: "job_context" };
-  // Custom natural-language fields enter preparation for classification. They
-  // do not become a preflight blocker merely because RoleFit has not seen the
-  // wording before.
+  // Wording RoleFit has not seen before stays generative: the model classifies
+  // it from its actual text. Unfamiliar is not the same as private.
   return { kind: "generate", source: "unclassified" };
 }
 
@@ -308,11 +311,6 @@ export function analyzeCoverLetterTemplate(
       (slot) => !clean(input.slotAnswers?.[slot.id]),
     ),
     hasAuthoredVoice,
-    recommendedSourceMode: hasAuthoredVoice
-      ? "authored_letter"
-      : slots.length > 0
-        ? "guided_draft"
-        : "authored_letter",
   };
 }
 

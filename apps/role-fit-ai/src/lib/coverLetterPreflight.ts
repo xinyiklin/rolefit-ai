@@ -1,29 +1,20 @@
 import {
   analyzeCoverLetterTemplate,
   templateHasUnresolvedSlots,
-  type CoverLetterSourceMode,
-  type CoverLetterTemplateAnalysis
+  type CoverLetterTemplateAnalysis,
+  type CoverLetterTemplateSlot
 } from "./coverLetterTemplate.ts";
 
-export type { CoverLetterSourceMode } from "./coverLetterTemplate.ts";
+// Only facts RoleFit genuinely cannot resolve on its own. Everything a model can
+// derive from the posting, the resume, or honest context is generated, not asked.
+export type CoverLetterDetailKey = "candidate_name" | "role" | "company";
 
-export type CoverLetterPreparationFieldKey =
-  | "candidate_name"
-  | "role"
-  | "company"
-  | "recipient_name"
-  | "why_role"
-  | "lead_experience"
-  | "tone";
-
-export type CoverLetterPreparationValues = Partial<Record<CoverLetterPreparationFieldKey, string>>;
+export type CoverLetterDetailValues = Partial<Record<CoverLetterDetailKey, string>>;
 
 export type MissingCoverLetterField = {
-  key: CoverLetterPreparationFieldKey;
+  key: CoverLetterDetailKey;
   label: string;
-  required: boolean;
   reason: string;
-  fallback: string | null;
 };
 
 export type ResolvedCoverLetterContext = {
@@ -37,33 +28,35 @@ export type ResolvedCoverLetterContext = {
 };
 
 export type CoverLetterPreflight = {
-  sourceMode: CoverLetterSourceMode;
   template: CoverLetterTemplateAnalysis;
   authoredText: string;
   authoredWordCount: number;
   hasCompletedGreeting: boolean;
   missingFields: MissingCoverLetterField[];
-  preparationBlockers: string[];
+  // Template slots naming a private fact RoleFit cannot infer (a referral, a
+  // prior personal relationship). These are the only slots that block Tailor.
+  privateSlots: CoverLetterTemplateSlot[];
+  blockers: string[];
   resolved: ResolvedCoverLetterContext;
-  values: CoverLetterPreparationValues;
-  requiresUserVoiceAnchor: boolean;
-  canPrepare: boolean;
-  sourceReadyToSend: boolean;
+  values: CoverLetterDetailValues;
+  canTailor: boolean;
 };
 
 type BuildCoverLetterPreflightInput = {
   text: string;
-  sourceMode: CoverLetterSourceMode;
   candidateName?: string;
   role?: string;
   company?: string;
-  values?: CoverLetterPreparationValues;
+  values?: CoverLetterDetailValues;
   slotAnswers?: Record<string, string>;
   date?: string;
 };
 
 const DIRECT_GREETING = /^\s*Dear\s+([^\n,]+),?/im;
 const SIGNOFF_LINE = /^\s*(Sincerely|Best(?: regards)?|Regards|Respectfully|Thank you),?\s*$/im;
+// A greeting that names no person: it carries no recipient to preserve.
+const IMPERSONAL_RECIPIENT =
+  /^(?:hiring|recruit|talent|people|to whom|sir|madam|team\b)|\b(?:hiring team|hiring manager|hiring committee|recruiting team|search committee)\b/i;
 
 function clean(value: unknown): string {
   return String(value ?? "")
@@ -104,6 +97,15 @@ function completedGreeting(text: string): boolean {
   return Boolean(match?.[1]?.trim()) && !hasUnresolvedCoverLetterTokens(match?.[0] ?? "");
 }
 
+// A recipient the writer already named survives tailoring. Without one the
+// greeting falls back to the company hiring team — never a question.
+function authoredRecipient(text: string): string {
+  const match = text.slice(0, 500).match(DIRECT_GREETING);
+  const name = clean(match?.[1]);
+  if (!name || hasUnresolvedCoverLetterTokens(name) || IMPERSONAL_RECIPIENT.test(name)) return "";
+  return name;
+}
+
 function existingSignoff(text: string, candidateName: string): string {
   const lines = text.split(/\r?\n/).map((line) => line.trim());
   const signoffIndex = lines.findIndex((line) => SIGNOFF_LINE.test(line));
@@ -120,18 +122,18 @@ function existingSignoff(text: string, candidateName: string): string {
 }
 
 function field(
-  key: CoverLetterPreparationFieldKey,
+  key: CoverLetterDetailKey,
   label: string,
-  reason: string,
-  fallback: string | null = null,
-  required = true
+  reason: string
 ): MissingCoverLetterField {
-  return { key, label, required, reason, fallback };
+  return { key, label, reason };
 }
 
+// Resolves everything a tailoring request needs and reports only the facts that
+// genuinely cannot be resolved. A blank document, a bare template, or a letter
+// full of generative prompts is tailorable; a missing employer is not.
 export function buildCoverLetterPreflight({
   text,
-  sourceMode,
   candidateName,
   role,
   company,
@@ -142,7 +144,7 @@ export function buildCoverLetterPreflight({
   const resolvedCandidateName = clean(values.candidate_name) || clean(candidateName);
   const resolvedRole = clean(values.role) || clean(role);
   const resolvedCompany = clean(values.company) || clean(company);
-  const recipientName = clean(values.recipient_name);
+  const recipientName = authoredRecipient(text);
   const resolvedDate =
     clean(date) ||
     new Intl.DateTimeFormat("en-US", {
@@ -164,78 +166,37 @@ export function buildCoverLetterPreflight({
     date: resolvedDate,
     slotAnswers
   });
-  const authoredText = template.authoredProse;
-  const authoredWordCount = template.authoredWordCount;
-  const requiresUserVoiceAnchor = sourceMode === "guided_draft" && !template.hasAuthoredVoice;
   const missingFields: MissingCoverLetterField[] = [];
 
   if (!resolvedCandidateName) {
-    missingFields.push(field("candidate_name", "Candidate name", "Needed for the sign-off."));
+    missingFields.push(
+      field("candidate_name", "Your name", "No name was found in the resume for the sign-off.")
+    );
   }
   if (!resolvedRole) {
-    missingFields.push(field("role", "Role", "The job description did not resolve a role."));
+    missingFields.push(field("role", "Role", "The job description did not resolve a role title."));
   }
   if (!resolvedCompany) {
-    missingFields.push(
-      field("company", "Company", "The job description did not resolve a company.")
-    );
-  }
-  if (!recipientName) {
-    missingFields.push(
-      field(
-        "recipient_name",
-        "Hiring contact",
-        "The posting does not name a hiring contact.",
-        greeting,
-        false
-      )
-    );
-  }
-  if (requiresUserVoiceAnchor) {
-    if (!clean(values.why_role)) {
-      missingFields.push(
-        field(
-          "why_role",
-          "Why this role?",
-          "Give the draft a genuine motivation in your own words."
-        )
-      );
-    }
-    if (!clean(values.lead_experience)) {
-      missingFields.push(
-        field(
-          "lead_experience",
-          "Experience to lead with",
-          "Choose one or two verified experiences the letter should emphasize."
-        )
-      );
-    }
+    missingFields.push(field("company", "Company", "The job description did not resolve a company."));
   }
 
-  const preparationBlockers: string[] = [];
-  if (sourceMode === "authored_letter" && authoredWordCount < 80) {
-    preparationBlockers.push("Write or open at least 80 authored words before polishing.");
-  }
-  for (const slot of template.requiredInputs) {
-    preparationBlockers.push(
+  const blockers: string[] = [
+    ...missingFields.map((item) => item.reason),
+    ...template.requiredInputs.map((slot) =>
       slot.resolution.kind === "needs_input"
         ? slot.resolution.question
-        : `Complete ${slot.normalizedPrompt}.`
-    );
-  }
-  if (missingFields.some((item) => item.required)) {
-    preparationBlockers.push("Complete the required tailoring details.");
-  }
+        : `Answer ${slot.normalizedPrompt}.`
+    )
+  ];
 
-  const canPrepare = preparationBlockers.length === 0;
   return {
-    sourceMode,
     template,
-    authoredText,
-    authoredWordCount,
+    authoredText: template.authoredProse,
+    authoredWordCount: template.authoredWordCount,
     hasCompletedGreeting: completedGreeting(text),
     missingFields,
-    preparationBlockers,
+    privateSlots: template.userInputSlots,
+    blockers,
     resolved: {
       candidateName: resolvedCandidateName,
       role: resolvedRole,
@@ -246,19 +207,6 @@ export function buildCoverLetterPreflight({
       signoff: existingSignoff(text, resolvedCandidateName)
     },
     values,
-    requiresUserVoiceAnchor,
-    canPrepare,
-    sourceReadyToSend:
-      sourceMode === "authored_letter" &&
-      canPrepare &&
-      coverLetterUsesResolvedCorrespondence(text, {
-        candidateName: resolvedCandidateName,
-        role: resolvedRole,
-        company: resolvedCompany,
-        date: resolvedDate,
-        recipientName,
-        greeting,
-        signoff: existingSignoff(text, resolvedCandidateName)
-      })
+    canTailor: blockers.length === 0
   };
 }
