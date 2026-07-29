@@ -20,7 +20,7 @@
     "eval": "npm run eval:resume-file && npm run eval:cover-letter-file && npm run eval:download && npm run eval:pdf-font-parity",
     "test": "npm run eval",
     "typecheck": "tsc --noEmit",
-    "check": "npm run typecheck && npm run eval",
+    "check": "npm run typecheck && npm run eval && npm run fonts:check",
     "fonts:check": "python3 scripts/generate_font_assets.py --check && python3 scripts/generate_pdf_fonts.py --check"
   },
   "peerDependencies": {
