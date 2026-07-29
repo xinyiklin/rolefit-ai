@@ -3,12 +3,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   ApplicationsStorageError,
+  sanitizeApplications
+} from "../schema.ts";
+import { reconcileApplicationMutations } from "../reconcile.ts";
+import {
   applicationsFilePath,
   readApplications,
-  reconcileApplicationMutations,
-  sanitizeApplications,
   writeApplications
-} from "../index.ts";
+} from "../storage.ts";
 
 const workspace = await mkdtemp(join(tmpdir(), "rolefit-applications-"));
 

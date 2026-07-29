@@ -19,13 +19,17 @@ import {
 import { handleImportJob } from "./jobImport.ts";
 import {
   handleApplicationAttachmentFile,
+  handleUploadApplicationAttachment
+} from "./applications/attachmentRoutes.ts";
+import {
   handleApplicationDocumentFile,
+  handleSaveApplicationDocument
+} from "./applications/documentRoutes.ts";
+import {
   handleDeleteApplication,
   handleListApplications,
-  handleSaveApplicationDocument,
-  handleSaveApplications,
-  handleUploadApplicationAttachment
-} from "./applications/routes.ts";
+  handleSaveApplications
+} from "./applications/trackerRoutes.ts";
 import { isApplicationDocumentKind } from "./applications/documents.ts";
 import { handleBrowserPreferences } from "./browserPreferences.ts";
 import {

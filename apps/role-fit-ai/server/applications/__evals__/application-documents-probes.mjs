@@ -14,13 +14,15 @@ import { Readable } from "node:stream";
 
 import {
   handleApplicationAttachmentFile,
-  handleApplicationDocumentFile,
-  handleSaveApplicationDocument,
-  handleSaveApplications,
   handleUploadApplicationAttachment
-} from "../routes.ts";
+} from "../attachmentRoutes.ts";
+import {
+  handleApplicationDocumentFile,
+  handleSaveApplicationDocument
+} from "../documentRoutes.ts";
+import { handleSaveApplications } from "../trackerRoutes.ts";
 import { MAX_ATTACHMENTS_PER_APPLICATION, safeAttachmentFileName } from "../documents.ts";
-import { readApplications, writeApplications } from "../index.ts";
+import { readApplications, writeApplications } from "../storage.ts";
 import {
   COVER_LETTER_STYLE_DEFAULTS,
   serializeCoverLetterFile
@@ -481,7 +483,7 @@ try {
     assert.equal((await attachmentFile("app-cap", "file-0.pdf", "DELETE")).status, 200, "deleting twice is idempotent");
   }
 
-  // The browser deletes through the full tracker mutation endpoint. That path
+  // The browser deletes through the sparse tracker mutation endpoint. That path
   // must move the whole application directory too, not only remove metadata.
   {
     await saveDocument("app-delete", "resume", { sourceText: resumeSource });
@@ -494,7 +496,7 @@ try {
     const res = new FakeResponse();
     await handleSaveApplications(
       jsonRequest("PUT", {
-        applications: current.filter((application) => application.id !== "app-delete"),
+        applications: [],
         mutations: [{
           id: "app-delete",
           operation: "delete",

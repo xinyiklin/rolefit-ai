@@ -1,11 +1,4 @@
-// Application tracker — JSON file as DB.
-// Stored at <workspaceDir>/applications.json which is gitignored.
-
-import { randomUUID } from "node:crypto";
-import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
-import { join } from "node:path";
 import { dedupeSourceUrls } from "../../src/lib/jobIdentity.ts";
-import { assertWorkspaceAccessAllowed, captureWorkspaceAccess } from "../workspaceRestoreGate.ts";
 import {
   MAX_ATTACHMENTS_PER_APPLICATION,
   MAX_DOCUMENT_BYTES,
@@ -26,16 +19,12 @@ const APPLICATION_STATUSES = ["interested", "applied", "interviewing", "offer", 
 // Shared with the application-tracker routes (routes.ts imports this) so the id
 // validation used for storage and for route dispatch can never drift.
 export const APPLICATION_ID_RE = /^[A-Za-z0-9_-]{1,80}$/;
-const MAX_APPLICATIONS = 500;
+export const MAX_APPLICATIONS = 500;
 const MAX_FIELD = 50_000;
 // Sanitization is a pure read boundary. Missing persisted timestamps use one
 // stable sentinel so repeated reads cannot manufacture different tracker
 // revisions or metadata merely because wall-clock time advanced.
 const MISSING_PERSISTED_TIMESTAMP = "1970-01-01T00:00:00.000Z";
-
-export function applicationsFilePath(workspaceDir: string): string {
-  return join(workspaceDir, "applications.json");
-}
 
 export class ApplicationsStorageError extends Error {
   status: number;
@@ -52,30 +41,6 @@ export class ApplicationsStorageError extends Error {
   }
 }
 
-// Serialize every tracker read-modify-write cycle and any workspace-wide
-// snapshot/restore that must observe applications.json and its PDF artifacts as
-// one consistent state.
-let applicationsWriteQueue: Promise<unknown> = Promise.resolve();
-export function withApplicationsLock<T>(
-  task: () => Promise<T>,
-  options: { allowDuringRestore?: boolean } = {}
-): Promise<T> {
-  const capture = captureWorkspaceAccess();
-  const run = applicationsWriteQueue.then(() => {
-    if (!options.allowDuringRestore) assertWorkspaceAccessAllowed(capture);
-    return task();
-  });
-  applicationsWriteQueue = run.then(
-    () => undefined,
-    () => undefined
-  );
-  return run;
-}
-
-function isMissingFile(error: unknown): boolean {
-  return Boolean(error && typeof error === "object" && "code" in error && error.code === "ENOENT");
-}
-
 export function sanitizeApplications(applications: unknown) {
   return (Array.isArray(applications) ? applications : [])
     .map(sanitizeApplication)
@@ -83,75 +48,13 @@ export function sanitizeApplications(applications: unknown) {
     .slice(0, MAX_APPLICATIONS);
 }
 
-function duplicateApplicationId(applications: { id: string }[]): string | null {
+export function duplicateApplicationId(applications: { id: string }[]): string | null {
   const ids = new Set<string>();
   for (const application of applications) {
     if (ids.has(application.id)) return application.id;
     ids.add(application.id);
   }
   return null;
-}
-
-export async function readApplications(workspaceDir: string) {
-  const path = applicationsFilePath(workspaceDir);
-  let text: string;
-  try {
-    text = await readFile(path, "utf8");
-  } catch (error) {
-    if (isMissingFile(error)) return [];
-    throw new ApplicationsStorageError();
-  }
-
-  try {
-    const data: unknown = JSON.parse(text);
-    if (!data || typeof data !== "object" || !Array.isArray((data as { applications?: unknown }).applications)) {
-      throw new Error("Invalid applications file shape.");
-    }
-    const apps = (data as { applications: unknown[] }).applications;
-    const sane = sanitizeApplications(apps);
-    // Never silently erase an invalid on-disk record during the next merge/write.
-    // A malformed saved file needs explicit repair, with the original bytes left
-    // untouched for recovery.
-    if (apps.length > MAX_APPLICATIONS || sane.length !== apps.length || duplicateApplicationId(sane)) {
-      throw new Error("Invalid application record.");
-    }
-    return sane;
-  } catch {
-    throw new ApplicationsStorageError();
-  }
-}
-
-export async function writeApplications(workspaceDir: string, applications: unknown) {
-  await mkdir(workspaceDir, { recursive: true });
-  const path = applicationsFilePath(workspaceDir);
-  if (!Array.isArray(applications) || applications.length > MAX_APPLICATIONS) {
-    throw new ApplicationsStorageError(
-      `The tracker supports at most ${MAX_APPLICATIONS} applications. No tracker changes were saved.`,
-      400
-    );
-  }
-  const sane = sanitizeApplications(applications);
-  if (sane.length !== applications.length) {
-    throw new ApplicationsStorageError("One or more applications are invalid. No tracker changes were saved.", 400);
-  }
-  if (duplicateApplicationId(sane)) {
-    throw new ApplicationsStorageError("Application ids must be unique. No tracker changes were saved.", 400);
-  }
-  const payload = JSON.stringify(
-    { savedAt: new Date().toISOString(), applications: sane },
-    null,
-    2
-  );
-  // A crash or process kill during writeFile must not truncate the user's tracker.
-  // Write a private sibling file, then atomically replace the committed snapshot.
-  const temporaryPath = `${path}.${process.pid}.${randomUUID()}.tmp`;
-  try {
-    await writeFile(temporaryPath, payload, { encoding: "utf8", mode: 0o600 });
-    await rename(temporaryPath, path);
-  } finally {
-    await rm(temporaryPath, { force: true }).catch(() => undefined);
-  }
-  return sane;
 }
 
 const APPLICATION_SOURCES = ["LinkedIn", "Company site", "Referral", "Job board", "Recruiter", "Other"] as const;
@@ -512,117 +415,4 @@ function sanitizeApplication(raw: unknown) {
     aiUsage: sanitizeAiUsage(r.aiUsage),
     duplicateDismissedIds: sanitizeDuplicateDismissedIds(r.duplicateDismissedIds, id)
   };
-}
-
-export type ApplicationMutation = {
-  id: string;
-  operation: "upsert" | "delete";
-  baseUpdatedAt: string | null;
-};
-
-function parseApplicationMutations(raw: unknown): ApplicationMutation[] {
-  if (!Array.isArray(raw) || raw.length === 0 || raw.length > MAX_APPLICATIONS) {
-    throw new ApplicationsStorageError(
-      "Each tracker save must name between 1 and 500 application mutations.",
-      400
-    );
-  }
-
-  const ids = new Set<string>();
-  return raw.map((value) => {
-    if (!value || typeof value !== "object" || Array.isArray(value)) {
-      throw new ApplicationsStorageError("One or more application mutations are invalid.", 400);
-    }
-    const record = value as Record<string, unknown>;
-    const id = typeof record.id === "string" ? record.id : "";
-    const operation = record.operation;
-    const baseUpdatedAt = record.baseUpdatedAt;
-    if (
-      !APPLICATION_ID_RE.test(id) ||
-      (operation !== "upsert" && operation !== "delete") ||
-      (baseUpdatedAt !== null && (typeof baseUpdatedAt !== "string" || baseUpdatedAt.length > 100)) ||
-      ids.has(id)
-    ) {
-      throw new ApplicationsStorageError("One or more application mutations are invalid.", 400);
-    }
-    ids.add(id);
-    return { id, operation, baseUpdatedAt };
-  });
-}
-
-/**
- * Apply an explicitly described client mutation set to the latest disk state.
- * The client sends only records named by upsert mutations. Unchanged rows
- * always come from `existing`. New rows are prepended in incoming order;
- * existing rows retain their server order.
- */
-export function reconcileApplicationMutations(
-  existing: ReturnType<typeof sanitizeApplications>,
-  incoming: ReturnType<typeof sanitizeApplications>,
-  rawMutations: unknown
-) {
-  if (duplicateApplicationId(existing) || duplicateApplicationId(incoming)) {
-    throw new ApplicationsStorageError("Application ids must be unique. No tracker changes were saved.", 400);
-  }
-
-  const mutations = parseApplicationMutations(rawMutations);
-  const mutationById = new Map(mutations.map((mutation) => [mutation.id, mutation]));
-  const existingById = new Map(existing.map((application) => [application.id, application]));
-  const incomingById = new Map(incoming.map((application) => [application.id, application]));
-
-  for (const mutation of mutations) {
-    const current = existingById.get(mutation.id);
-    const requested = incomingById.get(mutation.id);
-    if (mutation.operation === "upsert" && !requested) {
-      throw new ApplicationsStorageError("An upsert mutation must include its application record.", 400);
-    }
-    if (mutation.operation === "delete" && requested) {
-      throw new ApplicationsStorageError("A delete mutation must omit its application record.", 400);
-    }
-    if (
-      mutation.operation === "upsert" &&
-      current &&
-      requested?.updatedAt === current.updatedAt
-    ) {
-      throw new ApplicationsStorageError(
-        "A changed application must advance its updatedAt revision. No tracker changes were saved.",
-        400
-      );
-    }
-
-    const revisionMatches = current
-      ? mutation.baseUpdatedAt === current.updatedAt
-      : mutation.baseUpdatedAt === null;
-    if (!revisionMatches) {
-      throw new ApplicationsStorageError(
-        "This application changed in another tab. The latest saved tracker has been restored; review it before trying again.",
-        409,
-        existing
-      );
-    }
-  }
-
-  for (const application of incoming) {
-    if (mutationById.get(application.id)?.operation !== "upsert") {
-      throw new ApplicationsStorageError(
-        "Application records must correspond exactly to upsert mutations. No tracker changes were saved.",
-        400
-      );
-    }
-  }
-
-  const reconciled = incoming.filter((application) =>
-    !existingById.has(application.id) &&
-    mutationById.get(application.id)?.operation === "upsert"
-  );
-  for (const current of existing) {
-    const mutation = mutationById.get(current.id);
-    if (mutation?.operation === "delete") continue;
-    reconciled.push(
-      mutation?.operation === "upsert"
-        ? incomingById.get(current.id)!
-        : current
-    );
-  }
-  return reconciled;
 }

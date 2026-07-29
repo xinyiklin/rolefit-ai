@@ -14,7 +14,10 @@ import {
   type WorkspaceBackupEnvelope,
   type WorkspaceBackupFile
 } from "../src/lib/workspaceBackupContract.ts";
-import { readApplications, withApplicationsLock } from "./applications/index.ts";
+import {
+  readApplications,
+  withApplicationsLock
+} from "./applications/storage.ts";
 import { ensureJobWorkspace, validateBaseResumeText, withWorkspaceLock } from "./workspace.ts";
 import {
   beginWorkspaceRestore,

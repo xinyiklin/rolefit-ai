@@ -11,7 +11,10 @@
 
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { readBody, sendJson } from "../http.ts";
-import { readApplications, withApplicationsLock } from "../applications/index.ts";
+import {
+  readApplications,
+  withApplicationsLock
+} from "../applications/storage.ts";
 import { jobWorkspaceDir } from "../workspace.ts";
 import { resolveImportedJobText } from "../jobImport.ts";
 import { findMatchingApplication, extractJobMeta } from "./index.ts";
