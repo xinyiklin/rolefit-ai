@@ -471,7 +471,29 @@ export function applyPlainTextInputEdit(
   value: string,
   nextText: string
 ): { value: string; caretValueIndex: number } {
-  return { value: nextText, caretValueIndex: nextText.length };
+  const map = buildDisplayMap(value, { preserveWhitespace: true });
+  if (map.display === nextText) {
+    return { value, caretValueIndex: value.length };
+  }
+  const commonLength = Math.min(map.display.length, nextText.length);
+  let prefix = 0;
+  while (prefix < commonLength && map.display[prefix] === nextText[prefix]) {
+    prefix += 1;
+  }
+  let suffix = 0;
+  while (
+    suffix < commonLength - prefix &&
+    map.display[map.display.length - 1 - suffix] ===
+      nextText[nextText.length - 1 - suffix]
+  ) {
+    suffix += 1;
+  }
+  return applyEdit(
+    map,
+    prefix,
+    map.display.length - suffix,
+    nextText.slice(prefix, nextText.length - suffix)
+  );
 }
 
 // A mark-balanced fragment for the selected display range. The custom

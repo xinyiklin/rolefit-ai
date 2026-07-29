@@ -81,6 +81,7 @@ import {
   autoLinkSuppressionForSelection,
   applyInlineFragment,
   applyEdit,
+  applyPlainTextInputEdit,
   buildDisplayMap,
   inlineFragmentForRange,
   displayIndexForValueIndex,
@@ -219,6 +220,8 @@ export type TypesetEditorHandle = {
   // async load can never interrupt someone typing elsewhere.
   focusDocumentStart: () => void;
   createHeader: () => void;
+  replaceHeaderNameText: (nextText: string) => void;
+  replaceHeaderContactText: (index: number, nextText: string) => void;
   toggleMark: (mark: "bold" | "italic" | "underline") => void;
   setFontFamily: (fontFamily: FontFamily) => void;
   setFontSize: (fontSizePt: number) => void;
@@ -2697,6 +2700,17 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
     return lastRangeRef.current ? { kind: "single", selection: lastRangeRef.current } : null;
   }, [readRanges, readSelection]);
 
+  const replaceHeaderPlainText = useCallback(
+    (src: Extract<FieldSrc, { kind: "name" | "contact" }>, nextText: string) => {
+      const current = valueForField(dataRef.current, src);
+      const replacement = applyPlainTextInputEdit(current, nextText);
+      if (replacement.value === current) return;
+      markPending();
+      commitField(actions, src, replacement.value);
+    },
+    [actions, markPending]
+  );
+
   const commands = useMemo<TypesetEditorCommands>(
     () => ({
       selectionText,
@@ -2711,6 +2725,10 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
       focusSelection,
       focusDocumentStart,
       createHeader: headerCommands.createHeader,
+      replaceHeaderNameText: (nextText) =>
+        replaceHeaderPlainText({ kind: "name" }, nextText),
+      replaceHeaderContactText: (index, nextText) =>
+        replaceHeaderPlainText({ kind: "contact", index }, nextText),
       toggleMark: (mark) => {
         const target = commandTarget();
         if (!target) return;
@@ -2972,6 +2990,7 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
       mapFor,
       pasteFromClipboard,
       pasteAsDocumentFromClipboard,
+      replaceHeaderPlainText,
       resolveLinkTarget,
       selectionText
     ]

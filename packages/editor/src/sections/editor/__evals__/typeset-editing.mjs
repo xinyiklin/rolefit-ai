@@ -127,8 +127,8 @@ assert.equal(
     "<b>Candidate</b> · <i>New York</i>",
     "Candidate X · New York"
   ).value,
-  "<b>Candidate X</b> · <i>New York</i>",
-  "plain-text header editing preserves marks outside the smallest changed range"
+  "<b>Candidate</b> X · <i>New York</i>",
+  "plain-text header editing preserves marks outside the smallest changed range and inherits at the actual insertion point"
 );
 
 const authoredIndent = buildDisplayMap("    Indented", { preserveWhitespace: true });

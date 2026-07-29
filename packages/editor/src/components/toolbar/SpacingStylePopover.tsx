@@ -83,6 +83,7 @@ export function SpacingStylePopover({ docStyle, disabled = false }: SpacingStyle
                       min={1}
                       max={2}
                       step={0.01}
+                      disabled={disabled}
                       displayValue={formatSpacingValue(docStyle.style.lineHeight, "")}
                       onChange={(value) => docStyle.set("lineHeight", value)}
                     />
@@ -101,6 +102,7 @@ export function SpacingStylePopover({ docStyle, disabled = false }: SpacingStyle
                           min={control.min}
                           max={control.max}
                           step={control.step}
+                          disabled={disabled}
                           displayValue={formatSpacingValue(docStyle.style[control.key], control.unit)}
                           onChange={(value) => docStyle.set(control.key, value)}
                         />

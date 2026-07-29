@@ -1833,9 +1833,21 @@ function App() {
                         }
                       }}
                       onSetHeaderVisible={resumeEditorActions.setHeaderVisible}
-                      onSetHeaderName={resumeEditorActions.setHeaderName}
+                      onSetHeaderName={(nextText) => {
+                        if (typesetEditorRef.current) {
+                          typesetEditorRef.current.replaceHeaderNameText(nextText);
+                        } else {
+                          resumeEditorActions.setHeaderName(nextText);
+                        }
+                      }}
                       onRemoveHeaderName={resumeEditorActions.removeHeaderName}
-                      onUpdateContact={resumeEditorActions.updateContact}
+                      onUpdateContact={(index, nextText) => {
+                        if (typesetEditorRef.current) {
+                          typesetEditorRef.current.replaceHeaderContactText(index, nextText);
+                        } else {
+                          resumeEditorActions.updateContact(index, nextText);
+                        }
+                      }}
                       onInsertContact={resumeEditorActions.insertContact}
                       onRemoveContact={resumeEditorActions.removeContact}
                       onContactDividerChange={(value) => docStyle.set("contactDivider", value)}

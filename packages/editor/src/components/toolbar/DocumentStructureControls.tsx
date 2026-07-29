@@ -277,6 +277,7 @@ export function DocumentStructureControls({
                           min={control.min}
                           max={control.max}
                           step={control.step}
+                          disabled={disabled}
                           displayValue={formatSpacingValue(
                             headerSpacing.values[control.key],
                             control.unit

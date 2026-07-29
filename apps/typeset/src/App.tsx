@@ -424,9 +424,15 @@ export default function App() {
             else editor.actions.createHeader();
           },
           onSetHeaderVisible: editor.actions.setHeaderVisible,
-          onSetHeaderName: editor.actions.setHeaderName,
+          onSetHeaderName: (nextText) => {
+            if (editorRef.current) editorRef.current.replaceHeaderNameText(nextText);
+            else editor.actions.setHeaderName(nextText);
+          },
           onRemoveHeaderName: editor.actions.removeHeaderName,
-          onUpdateContact: editor.actions.updateContact,
+          onUpdateContact: (index, nextText) => {
+            if (editorRef.current) editorRef.current.replaceHeaderContactText(index, nextText);
+            else editor.actions.updateContact(index, nextText);
+          },
           onInsertContact: editor.actions.insertContact,
           onRemoveContact: editor.actions.removeContact,
           onAddSection: (type, position) => editorRef.current?.addSection(type, position)
