@@ -223,11 +223,11 @@ try {
     { id: "record-a", title: "Record A", notes: "newer server A", updatedAt: "revision-a" },
     { id: "record-b", title: "Record B", notes: "server B", updatedAt: "revision-b" }
   ]);
-  const legacyClientSnapshot = sanitizeApplications([
+  const fullClientSnapshot = sanitizeApplications([
     { id: "record-a", title: "Record A", notes: "stale client A", updatedAt: "revision-a" },
     { id: "record-b", title: "Record B", notes: "client B", updatedAt: "revision-b-next" }
   ]);
-  const sparseClientSnapshot = [legacyClientSnapshot[1]];
+  const sparseClientSnapshot = [fullClientSnapshot[1]];
   const reconciled = reconcileApplicationMutations(serverSnapshot, sparseClientSnapshot, [
     { id: "record-b", operation: "upsert", baseUpdatedAt: "revision-b" }
   ]);
@@ -241,14 +241,18 @@ try {
     failures.push("an edited existing row did not retain its server list position");
   }
 
-  const legacyReconciled = reconcileApplicationMutations(serverSnapshot, legacyClientSnapshot, [
-    { id: "record-b", operation: "upsert", baseUpdatedAt: "revision-b" }
-  ]);
-  if (
-    legacyReconciled[0]?.notes !== "newer server A" ||
-    legacyReconciled[1]?.notes !== "client B"
-  ) {
-    failures.push("a legacy full-snapshot request no longer reconciles safely");
+  let fullSnapshotRejected = false;
+  try {
+    reconcileApplicationMutations(serverSnapshot, fullClientSnapshot, [
+      { id: "record-b", operation: "upsert", baseUpdatedAt: "revision-b" }
+    ]);
+  } catch (error) {
+    fullSnapshotRejected =
+      error instanceof ApplicationsStorageError &&
+      error.status === 400;
+  }
+  if (!fullSnapshotRejected) {
+    failures.push("a retired full-snapshot mutation request was accepted");
   }
 
   const newRecords = sanitizeApplications([
