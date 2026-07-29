@@ -29,13 +29,10 @@ export const APPLICATION_ID_RE = /^[A-Za-z0-9_-]{1,80}$/;
 const MAX_APPLICATIONS = 500;
 const MAX_FIELD = 50_000;
 const MAX_RESUME_DATA_BYTES = 400_000;
-// A legacy row can predate createdAt/updatedAt. Its optimistic-concurrency
-// revision must still be stable across GET and the later PUT; generating "now"
-// during each read makes the first edit conflict with itself. Rows with a real
-// createdAt use that as their one-time migration revision, while the oldest
-// undated rows use this fixed sentinel until their first successful edit writes
-// a current updatedAt.
-const LEGACY_APPLICATION_REVISION = "1970-01-01T00:00:00.000Z";
+// Sanitization is a pure read boundary. Missing persisted timestamps use one
+// stable sentinel so repeated reads cannot manufacture different tracker
+// revisions or metadata merely because wall-clock time advanced.
+const MISSING_PERSISTED_TIMESTAMP = "1970-01-01T00:00:00.000Z";
 
 export function applicationsFilePath(workspaceDir: string): string {
   return join(workspaceDir, "applications.json");
@@ -208,27 +205,28 @@ function sanitizeContacts(raw: unknown) {
 
 // What one document kind has on disk. Both the resume and the cover letter use
 // this shape, so the tracker cannot describe one of them more richly than the
-// other. New writes store strict source or an explicit PDF; both flags remain
-// readable for compatibility with legacy rows.
+// other. New writes store strict source or an explicit PDF. Retired artifact
+// flags are not part of the current storage contract.
 function sanitizeDocumentArtifacts(raw: unknown) {
   if (!raw || typeof raw !== "object") return undefined;
   const r = raw as Record<string, unknown>;
-  const hasTex = r.hasTex === true;
   const hasPdf = r.hasPdf === true;
   const hasSource = r.hasSource === true;
   const sourceFingerprint =
     hasSource && typeof r.sourceFingerprint === "string" && /^[a-z0-9]+-[a-z0-9]+-[a-z0-9]+$/.test(r.sourceFingerprint)
       ? r.sourceFingerprint.slice(0, 80)
       : undefined;
-  if (!hasTex && !hasPdf && !hasSource) return undefined;
+  if (!hasPdf && !hasSource) return undefined;
   return {
-    hasTex,
     hasPdf,
     hasSource,
     sourceFingerprint,
     fileName: sanitizeString(r.fileName, 200),
     templateId: sanitizeString(r.templateId, 80),
-    savedAt: typeof r.savedAt === "string" ? r.savedAt : new Date().toISOString()
+    savedAt:
+      typeof r.savedAt === "string" && r.savedAt
+        ? r.savedAt.slice(0, 100)
+        : MISSING_PERSISTED_TIMESTAMP
   };
 }
 
@@ -255,7 +253,10 @@ function sanitizeAttachments(raw: unknown) {
       label: sanitizeString(value.label, 120).trim() || safe.fileName,
       size,
       contentType: attachmentContentType(safe.fileName),
-      savedAt: typeof value.savedAt === "string" ? value.savedAt : new Date().toISOString()
+      savedAt:
+        typeof value.savedAt === "string" && value.savedAt
+          ? value.savedAt.slice(0, 100)
+          : MISSING_PERSISTED_TIMESTAMP
     }];
   });
   return attachments.length ? attachments : undefined;
@@ -424,13 +425,15 @@ function sanitizeReview(raw: unknown) {
 
 function sanitizeApplicationAnswers(raw: unknown) {
   if (!Array.isArray(raw)) return undefined;
-  const now = new Date().toISOString();
   const answers = raw
     .slice(0, 40)
     .map((a) => ({
       question: sanitizeString(a?.question, 400),
       answer: sanitizeString(a?.answer, 4_000),
-      savedAt: typeof a?.savedAt === "string" ? a.savedAt : now
+      savedAt:
+        typeof a?.savedAt === "string" && a.savedAt
+          ? a.savedAt.slice(0, 100)
+          : MISSING_PERSISTED_TIMESTAMP
     }))
     .filter((a) => a.answer && a.question);
   return answers.length ? answers : undefined;
@@ -444,18 +447,31 @@ function sanitizeApplicationAnswers(raw: unknown) {
 // already-sanitized jobUrl of the same record.
 function sanitizeSourceUrls(raw: unknown, ownJobUrl: string) {
   if (!Array.isArray(raw)) return undefined;
-  const now = new Date().toISOString();
   // Clip strings first, then dedupe with the SHARED rules (normalized-URL
   // dedup, own-jobUrl exclusion, earliest addedAt, cap) so this sanitizer can
   // never drift from the client's two merge paths.
   const clipped = raw
-    .filter((entry) => entry && typeof entry === "object")
+    .filter(
+      (entry) =>
+        entry &&
+        typeof entry === "object" &&
+        typeof entry.addedAt === "string" &&
+        entry.addedAt
+    )
     .map((entry) => ({
       url: sanitizeString(entry.url, 2_000).trim(),
       source: sanitizeString(entry.source, 40) || undefined,
-      addedAt: typeof entry.addedAt === "string" && entry.addedAt ? entry.addedAt.slice(0, 40) : now
+      addedAt:
+        typeof entry.addedAt === "string" && entry.addedAt
+          ? entry.addedAt.slice(0, 40)
+          : MISSING_PERSISTED_TIMESTAMP
     }));
-  const out = dedupeSourceUrls(clipped, ownJobUrl, now, SOURCE_URLS_MAX)
+  const out = dedupeSourceUrls(
+    clipped,
+    ownJobUrl,
+    MISSING_PERSISTED_TIMESTAMP,
+    SOURCE_URLS_MAX
+  )
     .map((entry) => ({ ...entry, source: entry.source ?? "" }));
   return out.length ? out : undefined;
 }
@@ -542,11 +558,10 @@ function sanitizeApplication(raw: unknown) {
 
   const status = inList(APPLICATION_STATUSES, r.status) ? r.status : "interested";
   const source = inList(APPLICATION_SOURCES, r.source) ? r.source : "";
-  const now = new Date().toISOString();
-  const legacyCreatedAt = typeof r.createdAt === "string" ? r.createdAt.trim().slice(0, 100) : "";
+  const storedCreatedAt = typeof r.createdAt === "string" ? r.createdAt.trim().slice(0, 100) : "";
   const storedUpdatedAt = typeof r.updatedAt === "string" ? r.updatedAt.trim().slice(0, 100) : "";
-  const createdAt = legacyCreatedAt || now;
-  const updatedAt = storedUpdatedAt || legacyCreatedAt || LEGACY_APPLICATION_REVISION;
+  const createdAt = storedCreatedAt || MISSING_PERSISTED_TIMESTAMP;
+  const updatedAt = storedUpdatedAt || createdAt;
   const jobUrl = typeof r.jobUrl === "string" ? r.jobUrl.slice(0, 2_000) : "";
 
   return {
