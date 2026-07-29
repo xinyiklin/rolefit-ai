@@ -64,6 +64,7 @@ type Registry = Record<string, Omit<PresenceEntry, "tabId">>;
 
 export type WorkspaceRestoreAdoptionEvent = {
   type: "workspace-restore-adopted";
+  eventId: string;
   sourceTabId: string;
   adoptedAt: number;
 };
@@ -235,12 +236,15 @@ function parseWorkspaceRestoreAdoptionEvent(
   if (!value || typeof value !== "object") return null;
   const event = value as Record<string, unknown>;
   return event.type === "workspace-restore-adopted" &&
+    typeof event.eventId === "string" &&
+    event.eventId.length > 0 &&
     typeof event.sourceTabId === "string" &&
     typeof event.adoptedAt === "number" &&
     Number.isFinite(event.adoptedAt)
-    ? {
-        type: "workspace-restore-adopted",
-        sourceTabId: event.sourceTabId,
+      ? {
+          type: "workspace-restore-adopted",
+          eventId: event.eventId,
+          sourceTabId: event.sourceTabId,
         adoptedAt: event.adoptedAt
       }
     : null;
@@ -253,6 +257,7 @@ function parseWorkspaceRestoreAdoptionEvent(
 export function publishWorkspaceRestoreAdoption(now = Date.now()): void {
   const event: WorkspaceRestoreAdoptionEvent = {
     type: "workspace-restore-adopted",
+    eventId: randomId(),
     sourceTabId: getTabId(),
     adoptedAt: now
   };
@@ -272,15 +277,28 @@ export function subscribeWorkspaceRestoreAdoption(
   onAdoption: (event: WorkspaceRestoreAdoptionEvent) => void
 ): () => void {
   const ch = getChannel();
+  const seenEventIds = new Set<string>();
+  const deliver = (event: WorkspaceRestoreAdoptionEvent | null) => {
+    if (
+      !event ||
+      event.sourceTabId === getTabId() ||
+      seenEventIds.has(event.eventId)
+    ) {
+      return;
+    }
+    seenEventIds.add(event.eventId);
+    if (seenEventIds.size > 128) {
+      seenEventIds.delete(seenEventIds.values().next().value!);
+    }
+    onAdoption(event);
+  };
   const onMessage = (message: MessageEvent<unknown>) => {
-    const event = parseWorkspaceRestoreAdoptionEvent(message.data);
-    if (event && event.sourceTabId !== getTabId()) onAdoption(event);
+    deliver(parseWorkspaceRestoreAdoptionEvent(message.data));
   };
   const onStorage = (storageEvent: StorageEvent) => {
     if (storageEvent.key !== WORKSPACE_RESTORE_EVENT_KEY || !storageEvent.newValue) return;
     try {
-      const event = parseWorkspaceRestoreAdoptionEvent(JSON.parse(storageEvent.newValue));
-      if (event && event.sourceTabId !== getTabId()) onAdoption(event);
+      deliver(parseWorkspaceRestoreAdoptionEvent(JSON.parse(storageEvent.newValue)));
     } catch {
       // Ignore malformed cross-tab state.
     }

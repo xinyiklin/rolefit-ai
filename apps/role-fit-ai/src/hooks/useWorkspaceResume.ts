@@ -15,13 +15,12 @@
  * editor, export status, autosave draft, dialogs) stays owned by App and
  * arrives via args, mirroring usePolishPipeline's pattern.
  */
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { ChangeEvent } from "react";
 import type { ResumeData } from "@typeset/engine/lib/resumeData.ts";
 import { parseResumeFile, serializeResumeFile } from "@typeset/engine/lib/resumeFile.ts";
 import type { DocStyleControls } from "@typeset/editor/hooks/useDocStyle.ts";
 import type { ConfirmOptions } from "./useDialog";
-import type { AutosavedDraft } from "./useAutosaveDraft";
 import { loadLastBaseResumeName, saveLastBaseResumeName } from "../lib/baseResumePrefs.ts";
 import { serializeResumeData } from "../lib/resumeText.ts";
 import type { PolishedResume } from "../resumeEngine";
@@ -80,6 +79,13 @@ type UploadFileLike = {
   text: () => Promise<string>;
 };
 
+export type DocumentReplacementGuard = {
+  isDirtyNow: () => boolean;
+  currentVersion: () => string;
+  confirmReplacement: () => Promise<boolean>;
+  onReplacementCommitted: () => void;
+};
+
 function prepareResumeText(text: string, structured: boolean): PreparedResumeCandidate {
   return structured ? { kind: "resume", parsed: parseResumeFile(text) } : { kind: "text", text };
 }
@@ -107,8 +113,7 @@ export async function prepareResumeUpload(file: UploadFileLike): Promise<Prepare
 
 type UseWorkspaceResumeArgs = {
   confirm: (opts: ConfirmOptions) => Promise<boolean>;
-  confirmReplaceEditor: () => Promise<boolean>;
-  resumeEdited: boolean;
+  replacementGuard: DocumentReplacementGuard;
   seedResumeEditor: (text: string, sourceText?: string) => void;
   fileName: string;
   setResumeText: (text: string) => void;
@@ -120,8 +125,6 @@ type UseWorkspaceResumeArgs = {
   setPolishStatus: (value: string) => void;
   resetExportStatuses: () => void;
   setExportStatus: (value: string) => void;
-  clearAutosaveDraft: () => void;
-  setPendingAutosaveDraft: (draft: AutosavedDraft | null) => void;
   // Seeds the structured editor directly from a ResumeData object (bypasses
   // the plain-text parser) — used when loading a `.resume` file, whose
   // content is already the structured model.
@@ -134,8 +137,7 @@ type UseWorkspaceResumeArgs = {
 
 export function useWorkspaceResume({
   confirm,
-  confirmReplaceEditor,
-  resumeEdited,
+  replacementGuard,
   seedResumeEditor,
   fileName,
   setResumeText,
@@ -147,8 +149,6 @@ export function useWorkspaceResume({
   setPolishStatus,
   resetExportStatuses,
   setExportStatus,
-  clearAutosaveDraft,
-  setPendingAutosaveDraft,
   seedResumeData,
   currentResumeText,
   resumeText,
@@ -162,20 +162,34 @@ export function useWorkspaceResume({
   const [baseResumeHistory, setBaseResumeHistory] = useState<BaseResumeHistoryGroup[]>([]);
   const [workspaceStatus, setWorkspaceStatus] = useState("");
   const [isSavingBaseResume, setIsSavingBaseResume] = useState(false);
+  const workspaceLoadGenerationRef = useRef(0);
   // This is the one-shot startup check, not a generic loading flag. It begins
   // true so the first paint does not claim the workspace is empty, then only
   // ever settles to false. Explicit Reload actions keep the current editor on
   // screen while their request runs.
   const [isWorkspaceBootstrapping, setIsWorkspaceBootstrapping] = useState(true);
 
-  // `skipConfirm` is true on paths that PRESERVE the user's work (Save) or are
-  // triggered on first mount before the user has made any edits. It is false on
-  // explicit Reload, Load-version, and Restore actions where the user could have
-  // unsaved edits they'd lose.
+  async function approveCurrentReplacement(
+    approvedVersion?: string
+  ): Promise<string | null> {
+    const version = replacementGuard.currentVersion();
+    if (!replacementGuard.isDirtyNow() || version === approvedVersion) return version;
+    if (!(await replacementGuard.confirmReplacement())) return null;
+
+    // A dialog is normally modal, but the guard is also used after network/file
+    // awaits. If the document changed while approval was pending, approve the
+    // state that will actually be replaced rather than the captured render.
+    const afterApproval = replacementGuard.currentVersion();
+    return replacementGuard.isDirtyNow() && afterApproval !== version
+      ? approveCurrentReplacement()
+      : afterApproval;
+  }
+
   async function applyWorkspaceBaseResume(
     baseResume: WorkspaceBaseResume,
     status: string,
-    skipConfirm = false,
+    approvedVersion?: string,
+    skipGuard = false,
     clearRecoveryOnCommit = false
   ): Promise<boolean> {
     if (!baseResume.exists || !baseResume.text) return false;
@@ -188,17 +202,29 @@ export function useWorkspaceResume({
       return false;
     }
 
-    if (!skipConfirm && resumeEdited) {
-      if (!(await confirmReplaceEditor())) return false;
-      clearRecoveryOnCommit = true;
+    if (!skipGuard) {
+      const approved = await approveCurrentReplacement(approvedVersion);
+      if (approved === null) return false;
+      approvedVersion = approved;
+
+      // This is the final await-free commit boundary. Re-read the live version
+      // here so a response that began while clean cannot replace edits made
+      // while it was in flight.
+      if (
+        replacementGuard.isDirtyNow() &&
+        replacementGuard.currentVersion() !== approvedVersion
+      ) {
+        const refreshedApproval = await approveCurrentReplacement();
+        if (refreshedApproval === null) return false;
+      }
+      clearRecoveryOnCommit ||= replacementGuard.isDirtyNow();
     }
 
     // Validation and any required confirmation have both succeeded. Recovery
     // data is superseded only at this commit boundary, never while a file is
     // still unread, malformed, or awaiting user confirmation.
     if (clearRecoveryOnCommit) {
-      clearAutosaveDraft();
-      setPendingAutosaveDraft(null);
+      replacementGuard.onReplacementCommitted();
     }
 
     saveLastBaseResumeName(baseResume.fileName ?? "");
@@ -238,10 +264,13 @@ export function useWorkspaceResume({
   }
 
   async function loadWorkspace(applyBaseResume = false) {
+    const generation = workspaceLoadGenerationRef.current + 1;
+    workspaceLoadGenerationRef.current = generation;
     try {
       const response = await fetch("/api/workspace");
       const workspace = (await response.json()) as JobWorkspace & { error?: string };
       if (!response.ok) throw new Error(workspace.error ?? "Workspace check failed.");
+      if (generation !== workspaceLoadGenerationRef.current) return;
 
       updateWorkspaceState(workspace);
       if (workspace.baseResume?.exists) {
@@ -257,7 +286,7 @@ export function useWorkspaceResume({
             rememberedExists &&
             rememberedName !== workspace.baseResume.fileName
           ) {
-            await loadBaseResumeVersion(rememberedName);
+            await loadBaseResumeVersion(rememberedName, false);
             return;
           }
           if (rememberedName && !rememberedExists) {
@@ -312,40 +341,21 @@ export function useWorkspaceResume({
         throw new Error("The bundled starter template is unavailable.");
       }
 
-      const candidate = prepareResumeText(
-        workspace.starterResume.text,
-        workspace.starterResume.kind === "resume"
+      const applied = await applyWorkspaceBaseResume(
+        workspace.starterResume,
+        "Starter template opened. Replace its sample content with your own experience.",
+        undefined,
+        false,
+        true
       );
-      if (resumeEdited && !(await confirmReplaceEditor())) return;
-
-      if (resumeEdited) {
-        clearAutosaveDraft();
-        setPendingAutosaveDraft(null);
-      }
+      if (!applied) return;
       saveLastBaseResumeName("");
       setBaseResumeName("");
-      setFileName(workspace.starterResume.fileName ?? "starter.resume");
-      setResult(null);
-      resetCoverWorkflow();
-      setFileError("");
-      setPolishStatus("");
-      resetExportStatuses();
-      setExportStatus("");
-
-      if (candidate.kind === "resume") {
-        setResumeText(serializeResumeData(candidate.parsed.data));
-        seedResumeData(candidate.parsed.data);
-        docStyle.replaceDocumentStyle(candidate.parsed.documentStyle);
-      } else {
-        setResumeText(candidate.text);
-        seedResumeEditor(candidate.text, "");
-      }
       updateWorkspaceState(workspace);
       // The starter is intentionally detached from any saved base. Saving it
       // next creates the default base or a named variant instead of silently
       // overwriting whichever base happened to be active before this action.
       setBaseResumeName("");
-      setFileStatus("Starter template opened. Replace its sample content with your own experience.");
     } catch (error) {
       setFileError(error instanceof Error ? error.message : "Starter template could not be loaded.");
     }
@@ -372,7 +382,13 @@ export function useWorkspaceResume({
       // Save preserves the user's work, so no replace confirmation is needed.
       // Validate the server-returned file and commit it before clearing the
       // autosave that is now persisted in the workspace.
-      const applied = await applyWorkspaceBaseResume(workspace.baseResume, "", true, true);
+      const applied = await applyWorkspaceBaseResume(
+        workspace.baseResume,
+        "",
+        undefined,
+        true,
+        true
+      );
       if (!applied) {
         setWorkspaceStatus("Saved the base resume, but its returned file could not be loaded. The current editor was kept.");
         return;
@@ -438,10 +454,8 @@ export function useWorkspaceResume({
   }
 
   async function restoreBaseResume(key: string) {
-    const replacingEditedResume = resumeEdited;
-    if (resumeEdited) {
-      if (!(await confirmReplaceEditor())) return;
-    }
+    const approvedVersion = await approveCurrentReplacement();
+    if (approvedVersion === null) return;
     setIsSavingBaseResume(true);
     setWorkspaceStatus("Restoring from history…");
     try {
@@ -461,9 +475,10 @@ export function useWorkspaceResume({
       const applied = await applyWorkspaceBaseResume(
         workspace.baseResume,
         "",
-        true,
-        replacingEditedResume
-      ); // confirmed above
+        approvedVersion,
+        false,
+        true
+      );
       if (!applied) {
         setWorkspaceStatus("The restored base resume could not be loaded. The current editor was kept.");
         return;
@@ -504,11 +519,10 @@ export function useWorkspaceResume({
     await saveBaseResume({ fileName: targetName, text });
   }
 
-  async function loadBaseResumeVersion(fileName: string) {
-    const replacingEditedResume = resumeEdited;
-    if (resumeEdited) {
-      if (!(await confirmReplaceEditor())) return;
-    }
+  async function loadBaseResumeVersion(
+    fileName: string,
+    clearRecoveryOnCommit = true
+  ) {
     setIsSavingBaseResume(true);
     setWorkspaceStatus("Loading base resume version…");
     try {
@@ -527,9 +541,10 @@ export function useWorkspaceResume({
       const applied = await applyWorkspaceBaseResume(
         workspace.baseResume,
         "",
-        true,
-        replacingEditedResume
-      ); // confirmed above
+        undefined,
+        false,
+        clearRecoveryOnCommit
+      );
       if (!applied) {
         setWorkspaceStatus("The selected base resume could not be loaded. The current editor was kept.");
         return;
@@ -568,15 +583,20 @@ export function useWorkspaceResume({
       return;
     }
 
-    if (resumeEdited) {
-      if (!(await confirmReplaceEditor())) {
-        // Reset the file input so the same file can be chosen again later.
-        input.value = "";
-        return;
-      }
-      clearAutosaveDraft();
-      setPendingAutosaveDraft(null);
+    const approvedVersion = await approveCurrentReplacement();
+    if (approvedVersion === null) {
+      // Reset the file input so the same file can be chosen again later.
+      input.value = "";
+      return;
     }
+    if (
+      replacementGuard.isDirtyNow() &&
+      replacementGuard.currentVersion() !== approvedVersion
+    ) {
+      input.value = "";
+      return;
+    }
+    replacementGuard.onReplacementCommitted();
 
     setFileName(file.name);
     setFileError("");

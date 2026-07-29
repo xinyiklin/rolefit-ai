@@ -25,6 +25,7 @@ import type { ApplicationDocumentSync } from "../../hooks/useApplicationDocument
 import type { DraftAutosaveState } from "../../hooks/useAutosaveDraft";
 import type { CoverLetterEditorState } from "../../hooks/useCoverLetterEditor";
 import { useDialog } from "../../hooks/useDialog";
+import { coverLetterRecoveryDirty } from "../../lib/coverLetterRecovery";
 import { formatHistoryDate } from "../../lib/historyDate";
 import { ExportMenu } from "../ExportRail";
 import { DocumentOpenMenu } from "../document/DocumentOpenMenu";
@@ -95,7 +96,13 @@ export function CoverLetterToolbar({
   const [pdfPromptOpen, setPdfPromptOpen] = useState(false);
 
   async function confirmReplace(): Promise<boolean> {
-    if (!editor.dirty) return true;
+    if (!coverLetterRecoveryDirty({
+      documentDirty: editor.dirty,
+      documentTitle: editor.documentTitle,
+      persistedDocumentTitle: editor.persistedDocumentTitle
+    })) {
+      return true;
+    }
     return confirm({
       title: "Replace cover letter?",
       message: "Replace the current cover letter? Unsaved edits will be lost.",

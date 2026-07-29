@@ -30,7 +30,11 @@ import {
   type TypesetCaret,
   type TypesetEditorHandle
 } from "@typeset/editor/sections/editor/TypesetEditor.tsx";
-import { DOC_PAGE_WIDTH_PX, DOC_STYLE_BOUNDS } from "@typeset/engine/lib/documentStyle.ts";
+import {
+  DOC_PAGE_WIDTH_PX,
+  DOC_STYLE_BOUNDS,
+  toDocumentStyle
+} from "@typeset/engine/lib/documentStyle.ts";
 import {
   STYLE_FIELD_MARK_DEFAULTS,
   globalAlignmentState,
@@ -610,6 +614,31 @@ function App() {
   // strict .resume file; zoom and spellcheck remain local view preferences.
   const docStyle = useDocStyle(resumeHistoryClock);
   const resumeDocumentDirty = resumeEdited || docStyle.dirty;
+  const resumeReplacementStateRef = useRef({
+    dirty: resumeDocumentDirty,
+    version: ""
+  });
+  resumeReplacementStateRef.current = {
+    dirty: resumeDocumentDirty,
+    version: `${serializedResume}\u0000${JSON.stringify(toDocumentStyle(docStyle.style))}`
+  };
+  const resumeReplacementGuard = useMemo(
+    () => ({
+      isDirtyNow: () => resumeReplacementStateRef.current.dirty,
+      currentVersion: () => resumeReplacementStateRef.current.version,
+      confirmReplacement: () =>
+        confirm({
+          title: "Replace resume?",
+          message: "Replace the resume in the editor? Unsaved edits will be lost.",
+          confirmLabel: "Replace"
+        }),
+      onReplacementCommitted: () => {
+        clearAutosaveDraft();
+        setPendingAutosaveDraft(null);
+      }
+    }),
+    [confirm]
+  );
   const markResumeDocumentClean = useCallback(() => {
     markResumeClean();
     docStyle.markClean();
@@ -1212,8 +1241,7 @@ function App() {
     handleFileUpload
   } = useWorkspaceResume({
     confirm,
-    confirmReplaceEditor,
-    resumeEdited: resumeDocumentDirty,
+    replacementGuard: resumeReplacementGuard,
     seedResumeEditor,
     fileName,
     setResumeText,
@@ -1225,8 +1253,6 @@ function App() {
     setPolishStatus,
     resetExportStatuses,
     setExportStatus,
-    clearAutosaveDraft,
-    setPendingAutosaveDraft,
     seedResumeData,
     currentResumeText,
     resumeText,
@@ -1234,34 +1260,34 @@ function App() {
     docStyle
   });
 
+  const workspaceRestoreAdoptionHandlerRef = useRef<() => void>(() => undefined);
+  workspaceRestoreAdoptionHandlerRef.current = () => {
+    if (resumeDocumentDirty) {
+      setLinkStatus(
+        "A workspace restore finished in another window. Your unsaved resume remains preserved in this tab."
+      );
+    } else {
+      // A sibling restore refreshes workspace choices only. Automatically
+      // applying its base document would race with edits begun after this
+      // event but before the workspace response returns.
+      void loadWorkspace(false);
+      setLinkStatus("Workspace restored in another window. Refreshed saved resume options.");
+    }
+    const coverDocumentDirty =
+      coverLetterEditor.dirty ||
+      coverLetterEditor.documentTitle !== coverLetterEditor.persistedDocumentTitle;
+    coverLetterEditor.setStatus(
+      coverDocumentDirty
+        ? "A workspace restore finished in another window. Your unsaved cover letter remains preserved in this tab."
+        : "Workspace restored in another window. Reopen a saved cover letter to use the restored copy."
+    );
+  };
   useEffect(
     () =>
       subscribeWorkspaceRestoreAdoption(() => {
-        if (resumeDocumentDirty) {
-          setLinkStatus(
-            "A workspace restore finished in another window. Your unsaved resume remains preserved in this tab."
-          );
-        } else {
-          void loadWorkspace(true);
-          setLinkStatus("Workspace restored in another window. Refreshed saved resume options.");
-        }
-        const coverDocumentDirty =
-          coverLetterEditor.dirty ||
-          coverLetterEditor.documentTitle !== coverLetterEditor.persistedDocumentTitle;
-        coverLetterEditor.setStatus(
-          coverDocumentDirty
-            ? "A workspace restore finished in another window. Your unsaved cover letter remains preserved in this tab."
-            : "Workspace restored in another window. Reopen a saved cover letter to use the restored copy."
-        );
+        workspaceRestoreAdoptionHandlerRef.current();
       }),
-    [
-      coverLetterEditor.dirty,
-      coverLetterEditor.documentTitle,
-      coverLetterEditor.persistedDocumentTitle,
-      coverLetterEditor.setStatus,
-      loadWorkspace,
-      resumeDocumentDirty
-    ]
+    []
   );
 
   // The friendly name of the base resume currently loaded. Both the Open menu's

@@ -699,6 +699,11 @@ const documentSync = readHook("useApplicationDocumentSync.ts");
 const applicationFiles = readHook("useApplicationFiles.ts");
 const applicationsHook = readHook("useApplications.ts");
 assert.match(
+  coverToolbar,
+  /coverLetterRecoveryDirty\(\{\s*documentDirty: editor\.dirty,\s*documentTitle: editor\.documentTitle,\s*persistedDocumentTitle: editor\.persistedDocumentTitle/,
+  "opening another cover letter treats a title-only edit as unsaved replacement state",
+);
+assert.match(
   applicationFiles,
   /application\.updatedAt,[\s\S]{0,100}?sourceOrigin/,
   "a document mutation carries the current application revision",

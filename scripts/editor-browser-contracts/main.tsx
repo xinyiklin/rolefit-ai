@@ -1,4 +1,11 @@
-import { StrictMode, useEffect, useMemo, useRef, useState } from "react";
+import {
+  StrictMode,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ChangeEvent
+} from "react";
 import { createRoot } from "react-dom/client";
 
 import TypesetApp from "../../apps/typeset/src/App.tsx";
@@ -24,6 +31,8 @@ import {
   publishPresence,
   subscribeWorkspaceRestoreAdoption
 } from "../../apps/role-fit-ai/src/lib/tabPresence.ts";
+import { useWorkspaceResume } from "../../apps/role-fit-ai/src/hooks/useWorkspaceResume.ts";
+import { toDocumentStyle } from "../../packages/engine/src/lib/documentStyle.ts";
 
 type EditorContract = {
   data: ResumeData | null;
@@ -47,6 +56,29 @@ declare global {
       adopt(): void;
       read(key: string): string | null;
       adoptionCount(): number;
+    };
+    __workspaceResumeContract?: {
+      makeStyleDirty(): void;
+      makeContentDirty(): void;
+      markClean(): void;
+      setConfirmAllowed(value: boolean): void;
+      resetStats(): void;
+      startLoadWorkspace(applyBaseResume: boolean): {
+        taskId: number;
+        requestId: number;
+      };
+      startLoadStarter(): { taskId: number; requestId: number };
+      startTextUpload(): { taskId: number };
+      resolveRequest(requestId: number, payload: unknown, ok?: boolean): void;
+      waitTask(taskId: number): Promise<void>;
+      snapshot(): {
+        dirty: boolean;
+        confirmCount: number;
+        appliedCount: number;
+        recoveryCommitCount: number;
+        baseResumeName: string;
+        uploadInputValue: string;
+      };
     };
   }
 }
@@ -173,12 +205,179 @@ function RecoveryContractApp() {
   return <p>Recovery browser contract</p>;
 }
 
+type PendingFetch = {
+  id: number;
+  resolve: (response: Response) => void;
+};
+
+function WorkspaceResumeContractApp() {
+  const historyClock = useMemo(createHistoryClock, []);
+  const docStyle = useDocStyle(historyClock);
+  const [contentVersion, setContentVersion] = useState("clean-content");
+  const [contentDirty, setContentDirty] = useState(false);
+  const [fileName, setFileName] = useState("");
+  const replacementStateRef = useRef({ dirty: false, version: "" });
+  replacementStateRef.current = {
+    dirty: contentDirty || docStyle.dirty,
+    version: `${contentVersion}\u0000${JSON.stringify(
+      toDocumentStyle(docStyle.style)
+    )}`
+  };
+
+  const confirmAllowedRef = useRef(false);
+  const confirmCountRef = useRef(0);
+  const appliedCountRef = useRef(0);
+  const recoveryCommitCountRef = useRef(0);
+  const pendingFetchesRef = useRef<PendingFetch[]>([]);
+  const nextRequestIdRef = useRef(1);
+  const tasksRef = useRef(new Map<number, Promise<void>>());
+  const nextTaskIdRef = useRef(1);
+  const uploadInputValueRef = useRef("");
+
+  const workspace = useWorkspaceResume({
+    confirm: async () => true,
+    replacementGuard: {
+      isDirtyNow: () => replacementStateRef.current.dirty,
+      currentVersion: () => replacementStateRef.current.version,
+      confirmReplacement: async () => {
+        confirmCountRef.current += 1;
+        return confirmAllowedRef.current;
+      },
+      onReplacementCommitted: () => {
+        recoveryCommitCountRef.current += 1;
+      }
+    },
+    seedResumeEditor: () => {
+      appliedCountRef.current += 1;
+    },
+    fileName,
+    setResumeText: () => undefined,
+    setFileName,
+    setResult: () => undefined,
+    resetCoverWorkflow: () => undefined,
+    setFileError: () => undefined,
+    setFileStatus: () => undefined,
+    setPolishStatus: () => undefined,
+    resetExportStatuses: () => undefined,
+    setExportStatus: () => undefined,
+    seedResumeData: () => {
+      appliedCountRef.current += 1;
+    },
+    currentResumeText: contentVersion,
+    resumeText: contentVersion,
+    editedResume: null,
+    docStyle
+  });
+
+  useEffect(() => {
+    const originalFetch = window.fetch;
+    window.fetch = () =>
+      new Promise<Response>((resolve) => {
+        pendingFetchesRef.current.push({
+          id: nextRequestIdRef.current,
+          resolve
+        });
+        nextRequestIdRef.current += 1;
+      });
+    return () => {
+      window.fetch = originalFetch;
+    };
+  }, []);
+
+  useEffect(() => {
+    const startTask = (task: Promise<unknown>) => {
+      const taskId = nextTaskIdRef.current;
+      nextTaskIdRef.current += 1;
+      tasksRef.current.set(taskId, task.then(() => undefined));
+      const request = pendingFetchesRef.current.at(-1);
+      if (!request) throw new Error("Expected the hook to start a fetch.");
+      return { taskId, requestId: request.id };
+    };
+
+    window.__workspaceResumeContract = {
+      makeStyleDirty: () => {
+        docStyle.set("lineHeight", docStyle.style.lineHeight + 0.01);
+      },
+      makeContentDirty: () => {
+        setContentVersion((current) => `${current}-edited`);
+        setContentDirty(true);
+      },
+      markClean: () => {
+        setContentDirty(false);
+        docStyle.markClean();
+      },
+      setConfirmAllowed: (value) => {
+        confirmAllowedRef.current = value;
+      },
+      resetStats: () => {
+        confirmCountRef.current = 0;
+        appliedCountRef.current = 0;
+        recoveryCommitCountRef.current = 0;
+        uploadInputValueRef.current = "";
+      },
+      startLoadWorkspace: (applyBaseResume) =>
+        startTask(workspace.loadWorkspace(applyBaseResume)),
+      startLoadStarter: () => startTask(workspace.loadStarterTemplate()),
+      startTextUpload: () => {
+        const taskId = nextTaskIdRef.current;
+        nextTaskIdRef.current += 1;
+        const input = {
+          files: [
+            {
+              name: "candidate.txt",
+              text: async () => "Uploaded candidate"
+            }
+          ],
+          value: "candidate.txt"
+        };
+        const task = workspace.handleFileUpload({
+          target: input
+        } as unknown as ChangeEvent<HTMLInputElement>);
+        tasksRef.current.set(
+          taskId,
+          task.then(() => {
+            uploadInputValueRef.current = input.value;
+          })
+        );
+        return { taskId };
+      },
+      resolveRequest: (requestId, payload, ok = true) => {
+        const pending = pendingFetchesRef.current.find(
+          (candidate) => candidate.id === requestId
+        );
+        if (!pending) throw new Error(`Unknown request ${requestId}.`);
+        pending.resolve({
+          ok,
+          json: async () => payload
+        } as Response);
+      },
+      waitTask: async (taskId) => {
+        const task = tasksRef.current.get(taskId);
+        if (!task) throw new Error(`Unknown task ${taskId}.`);
+        await task;
+      },
+      snapshot: () => ({
+        dirty: replacementStateRef.current.dirty,
+        confirmCount: confirmCountRef.current,
+        appliedCount: appliedCountRef.current,
+        recoveryCommitCount: recoveryCommitCountRef.current,
+        baseResumeName: workspace.baseResumeName,
+        uploadInputValue: uploadInputValueRef.current
+      })
+    };
+  }, [docStyle, workspace]);
+
+  return <p>Workspace resume hook browser contract</p>;
+}
+
 const hash = window.location.hash;
 const app =
   hash === "#typeset" ? (
     <TypesetApp />
   ) : hash === "#recovery" ? (
     <RecoveryContractApp />
+  ) : hash === "#workspace-resume" ? (
+    <WorkspaceResumeContractApp />
   ) : (
     <EditorContractApp />
   );

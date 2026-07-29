@@ -62,8 +62,12 @@ browser origin detect that its own pre-restore autosave draft is obsolete even
 when the imported backup has no optional `browser` payload. The adopting tab
 also clears invalid, expired, and confirmed-dead-tab orphans, but preserves
 drafts owned by live sibling tabs and publishes a workspace-adoption event so
-those tabs can surface the change without losing their in-flight work. Existing
-origin-local preferences remain when the backup has no browser payload.
+those tabs can surface the change without losing their in-flight work. Each
+event has a unique id because storage and `BroadcastChannel` may both deliver
+it. Siblings de-duplicate that id and refresh workspace choices without
+automatically replacing an open document; reordered refreshes commit only
+the latest response. Existing origin-local preferences remain when the backup
+has no browser payload.
 
 On load, the browser adopts server-stored preferences in exactly two cases:
 after a restore (`source: "restore"` with an unseen `updatedAt` stamp — this

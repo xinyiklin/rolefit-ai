@@ -302,6 +302,24 @@ async function runEditorContracts() {
       "<link=mailto%3Ajane%40example.com>jane@example.com</link> · <i>New York City</i>"`,
     "contact edit with preserved link and marks"
   );
+  await setInput(
+    win,
+    'input[aria-label="Contact item 1"]',
+    "john@example.com · New York City"
+  );
+  await waitFor(
+    win,
+    `window.__editorContract?.data?.header?.contact?.[0] ===
+      "<link=mailto%3Ajohn%40example.com>john@example.com</link> · <i>New York City</i>"`,
+    "contact edit with recalculated email destination"
+  );
+  await click(win, '[data-testid="undo"]');
+  await waitFor(
+    win,
+    `window.__editorContract?.data?.header?.contact?.[0] ===
+      "<link=mailto%3Ajane%40example.com>jane@example.com</link> · <i>New York City</i>"`,
+    "contact undo restores visible text and destination"
+  );
 
   await win.webContents.executeJavaScript(
     'document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }))'
@@ -529,12 +547,201 @@ async function runRecoveryContracts() {
   );
   await waitFor(
     sibling,
-    "window.__recoveryContract.adoptionCount() > 0",
+    "window.__recoveryContract.adoptionCount() === 1",
     "cross-tab restore adoption event"
+  );
+  await new Promise((resolve) => setTimeout(resolve, 100));
+  assert.equal(
+    await sibling.webContents.executeJavaScript(
+      "window.__recoveryContract.adoptionCount()"
+    ),
+    1,
+    "storage and BroadcastChannel delivery must invoke one logical adoption once"
   );
 
   await sibling.destroy();
   await adopter.destroy();
+}
+
+function workspacePayload(fileName, text = "Candidate resume") {
+  return {
+    path: `/workspace/${fileName}`,
+    baseResume: {
+      exists: true,
+      fileName,
+      kind: "text",
+      text
+    },
+    baseResumeOptions: [],
+    baseResumeHistory: [],
+    files: [fileName]
+  };
+}
+
+async function runWorkspaceResumeContracts() {
+  const win = await makeWindow();
+  await win.loadURL(`${baseUrl}#workspace-resume`);
+  await waitFor(
+    win,
+    "window.__workspaceResumeContract",
+    "workspace resume hook fixture"
+  );
+
+  await win.webContents.executeJavaScript(
+    "window.__workspaceResumeContract.makeStyleDirty()"
+  );
+  await waitFor(
+    win,
+    "window.__workspaceResumeContract.snapshot().dirty === true",
+    "style-only resume dirty state"
+  );
+  await win.webContents.executeJavaScript(`(() => {
+    window.__workspaceResumeContract.resetStats();
+    window.__workspaceResumeContract.setConfirmAllowed(false);
+  })()`);
+  const starter = await win.webContents.executeJavaScript(
+    "window.__workspaceResumeContract.startLoadStarter()"
+  );
+  await win.webContents.executeJavaScript(
+    `window.__workspaceResumeContract.resolveRequest(
+      ${starter.requestId},
+      ${JSON.stringify({
+        ...workspacePayload("default.resume"),
+        starterResume: {
+          exists: true,
+          fileName: "starter.txt",
+          kind: "text",
+          text: "Starter resume"
+        }
+      })}
+    )`
+  );
+  await win.webContents.executeJavaScript(
+    `window.__workspaceResumeContract.waitTask(${starter.taskId})`
+  );
+  let snapshot = await win.webContents.executeJavaScript(
+    "window.__workspaceResumeContract.snapshot()"
+  );
+  assert.equal(snapshot.confirmCount, 1, "style-only starter replacement must confirm");
+  assert.equal(snapshot.appliedCount, 0, "declining starter replacement preserves style edits");
+  assert.equal(snapshot.recoveryCommitCount, 0, "declined starter replacement keeps recovery");
+
+  await win.webContents.executeJavaScript(
+    "window.__workspaceResumeContract.markClean()"
+  );
+  await waitFor(
+    win,
+    "window.__workspaceResumeContract.snapshot().dirty === false",
+    "clean reset before upload"
+  );
+  await win.webContents.executeJavaScript(
+    "window.__workspaceResumeContract.makeStyleDirty()"
+  );
+  await waitFor(
+    win,
+    "window.__workspaceResumeContract.snapshot().dirty === true",
+    "style-only upload dirty state"
+  );
+  await win.webContents.executeJavaScript(
+    "window.__workspaceResumeContract.resetStats()"
+  );
+  const upload = await win.webContents.executeJavaScript(
+    "window.__workspaceResumeContract.startTextUpload()"
+  );
+  await win.webContents.executeJavaScript(
+    `window.__workspaceResumeContract.waitTask(${upload.taskId})`
+  );
+  snapshot = await win.webContents.executeJavaScript(
+    "window.__workspaceResumeContract.snapshot()"
+  );
+  assert.equal(snapshot.confirmCount, 1, "style-only upload replacement must confirm");
+  assert.equal(snapshot.appliedCount, 0, "declining upload replacement preserves style edits");
+  assert.equal(snapshot.uploadInputValue, "", "a declined upload can be selected again");
+
+  await win.webContents.executeJavaScript(
+    "window.__workspaceResumeContract.markClean()"
+  );
+  await waitFor(
+    win,
+    "window.__workspaceResumeContract.snapshot().dirty === false",
+    "clean reset before delayed workspace fetch"
+  );
+  await win.webContents.executeJavaScript(
+    "window.__workspaceResumeContract.resetStats()"
+  );
+  const delayed = await win.webContents.executeJavaScript(
+    "window.__workspaceResumeContract.startLoadWorkspace(true)"
+  );
+  await win.webContents.executeJavaScript(
+    "window.__workspaceResumeContract.makeContentDirty()"
+  );
+  await waitFor(
+    win,
+    "window.__workspaceResumeContract.snapshot().dirty === true",
+    "edit begun during workspace fetch"
+  );
+  await win.webContents.executeJavaScript(
+    `window.__workspaceResumeContract.resolveRequest(
+      ${delayed.requestId},
+      ${JSON.stringify(workspacePayload("delayed.resume", "Delayed response"))}
+    )`
+  );
+  await win.webContents.executeJavaScript(
+    `window.__workspaceResumeContract.waitTask(${delayed.taskId})`
+  );
+  snapshot = await win.webContents.executeJavaScript(
+    "window.__workspaceResumeContract.snapshot()"
+  );
+  assert.equal(snapshot.confirmCount, 1, "a response that began clean rechecks dirty state");
+  assert.equal(snapshot.appliedCount, 0, "edits begun during fetch survive a declined replacement");
+
+  await win.webContents.executeJavaScript(
+    "window.__workspaceResumeContract.markClean()"
+  );
+  await waitFor(
+    win,
+    "window.__workspaceResumeContract.snapshot().dirty === false",
+    "clean reset before reordered fetches"
+  );
+  const older = await win.webContents.executeJavaScript(
+    "window.__workspaceResumeContract.startLoadWorkspace(false)"
+  );
+  const latest = await win.webContents.executeJavaScript(
+    "window.__workspaceResumeContract.startLoadWorkspace(false)"
+  );
+  await win.webContents.executeJavaScript(
+    `window.__workspaceResumeContract.resolveRequest(
+      ${latest.requestId},
+      ${JSON.stringify(workspacePayload("latest.resume"))}
+    )`
+  );
+  await win.webContents.executeJavaScript(
+    `window.__workspaceResumeContract.waitTask(${latest.taskId})`
+  );
+  await waitFor(
+    win,
+    'window.__workspaceResumeContract.snapshot().baseResumeName === "latest.resume"',
+    "latest workspace response"
+  );
+  await win.webContents.executeJavaScript(
+    `window.__workspaceResumeContract.resolveRequest(
+      ${older.requestId},
+      ${JSON.stringify(workspacePayload("older.resume"))}
+    )`
+  );
+  await win.webContents.executeJavaScript(
+    `window.__workspaceResumeContract.waitTask(${older.taskId})`
+  );
+  snapshot = await win.webContents.executeJavaScript(
+    "window.__workspaceResumeContract.snapshot()"
+  );
+  assert.equal(
+    snapshot.baseResumeName,
+    "latest.resume",
+    "a stale earlier response cannot replace the latest workspace generation"
+  );
+
+  await win.destroy();
 }
 
 let chromium;
@@ -551,9 +758,11 @@ try {
   await runTypesetSaveContract();
   console.log("Chromium contracts: two-tab recovery");
   await runRecoveryContracts();
+  console.log("Chromium contracts: workspace replacement races");
+  await runWorkspaceResumeContracts();
   assert.deepEqual(pageErrors, [], "browser pages must not report console/load errors");
   console.log(
-    "editor Chromium contracts passed: header marks/undo, disabled controls, focus, rich paste, Typeset dirty baseline, two-tab restore"
+    "editor Chromium contracts passed: header marks/link undo, disabled controls, focus, rich paste, Typeset dirty baseline, deduplicated two-tab restore, live resume replacement guards"
   );
 } catch (error) {
   console.error(error);
@@ -567,8 +776,24 @@ try {
       new Promise((resolve) => chromium.child.once("exit", resolve)),
       new Promise((resolve) => setTimeout(resolve, 2_000))
     ]);
+    if (chromium.child.exitCode === null) {
+      chromium.child.kill("SIGKILL");
+      await Promise.race([
+        new Promise((resolve) => chromium.child.once("exit", resolve)),
+        new Promise((resolve) => setTimeout(resolve, 2_000))
+      ]);
+    }
   }
   if (chromium?.profileDir) {
-    await rm(chromium.profileDir, { recursive: true, force: true });
+    // Chrome may finish releasing Default/ cache handles just after process
+    // exit on CI filesystems. Node retries ENOTEMPTY/EBUSY for recursive rm
+    // when maxRetries is nonzero, so cleanup cannot turn a passing behavior
+    // contract into a false-negative job.
+    await rm(chromium.profileDir, {
+      recursive: true,
+      force: true,
+      maxRetries: 5,
+      retryDelay: 100
+    });
   }
 }

@@ -16,6 +16,7 @@ import {
   keyForTab,
   tabIdFromKey
 } from "../../lib/autosaveDraftRegistry.ts";
+import { subscribeWorkspaceRestoreAdoption } from "../../lib/tabPresence.ts";
 
 const RESTORE_STAMP = "2026-07-18T12:00:00.000Z";
 const NEWER_RESTORE_STAMP = "2026-07-20T09:30:00.000Z";
@@ -181,10 +182,26 @@ class FakeStorage {
 globalThis.localStorage = new FakeStorage();
 globalThis.sessionStorage = new FakeStorage();
 const channelMessages = [];
+const channelListeners = new Set();
 globalThis.BroadcastChannel = class {
   postMessage(message) { channelMessages.push(message); }
-  addEventListener() {}
-  removeEventListener() {}
+  addEventListener(type, listener) {
+    if (type === "message") channelListeners.add(listener);
+  }
+  removeEventListener(type, listener) {
+    if (type === "message") channelListeners.delete(listener);
+  }
+};
+const windowListeners = new Map();
+globalThis.window = {
+  addEventListener(type, listener) {
+    const listeners = windowListeners.get(type) ?? new Set();
+    listeners.add(listener);
+    windowListeners.set(type, listeners);
+  },
+  removeEventListener(type, listener) {
+    windowListeners.get(type)?.delete(listener);
+  }
 };
 sessionStorage.setItem("rolefit:tabId", "tab-a");
 localStorage.setItem("rolefit:tabPresence", JSON.stringify({
@@ -236,15 +253,42 @@ assert.equal(
   channelMessages.some(
     (message) =>
       message?.type === "workspace-restore-adopted" &&
+      typeof message.eventId === "string" &&
       message.sourceTabId === "tab-a"
   ),
   true,
   "workspace adoption publishes a restore-generation event for live siblings"
 );
+let adoptionCallbacks = 0;
+const unsubscribe = subscribeWorkspaceRestoreAdoption(() => {
+  adoptionCallbacks += 1;
+});
+const duplicatedEvent = {
+  type: "workspace-restore-adopted",
+  eventId: "restore-event-1",
+  sourceTabId: "tab-b",
+  adoptedAt: Date.now()
+};
+for (const listener of channelListeners) {
+  listener({ data: duplicatedEvent });
+}
+for (const listener of windowListeners.get("storage") ?? []) {
+  listener({
+    key: "rolefit:workspaceRestoreAdoption",
+    newValue: JSON.stringify(duplicatedEvent)
+  });
+}
+assert.equal(
+  adoptionCallbacks,
+  1,
+  "one restore event delivered by storage and BroadcastChannel invokes its subscriber exactly once"
+);
+unsubscribe();
 assert.equal(localStorage.getItem("rolefit:settings"), "{}", "workspace adoption never touches unrelated settings storage");
 assert.equal(localStorage.getItem("rolefit:adoptedRestoreStamp"), RESTORE_STAMP, "workspace adoption never touches the adopted-restore-stamp marker");
 delete globalThis.localStorage;
 delete globalThis.sessionStorage;
 delete globalThis.BroadcastChannel;
+delete globalThis.window;
 
 console.log("workspace backup lifecycle probes: PASS");
