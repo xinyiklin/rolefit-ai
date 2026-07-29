@@ -35,6 +35,10 @@ typesetting guide when a change affects painted output or layout provenance.
   is representable. A header plus paragraphs is a full-document payload; never
   consume only its header or silently fall back to a lossy partial private
   import.
+- `clipboardBrowser.ts` owns Clipboard API permission handling and MIME
+  fallback. The paste-dialog components own only prompt rendering and mapping
+  controls; selection, commit, caret, and replay-queue state remain in
+  `TypesetEditor`.
 - `selectionHighlight.ts` owns the visual selection overlay. It coalesces the
   browser range fragments per engine line and paints one text-bounded band.
   Consecutive selected lines tile through their complete vertical junction, so

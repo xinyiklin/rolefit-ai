@@ -132,16 +132,25 @@ import {
   clipboardBlocks,
   clipboardPlainTextForRanges,
   defaultDocumentPasteMapping,
-  decodeInlineClipboard,
   decodeSelectionClipboard,
-  encodeInlineClipboard,
   encodeSelectionClipboard,
   inlineFragmentFromHtml,
   paragraphFragmentsFromHtml,
-  TYPESET_INLINE_CLIPBOARD_MIME,
-  TYPESET_SELECTION_CLIPBOARD_MIME,
   type ClipboardRange
 } from "./clipboardFormatting.ts";
+import {
+  readBrowserClipboard,
+  writeRichClipboard,
+  type RichClipboardPayload
+} from "./clipboardBrowser.ts";
+import {
+  HeaderPasteChoiceDialog,
+  type HeaderPastePrompt
+} from "./HeaderPasteChoiceDialog.tsx";
+import {
+  DocumentPasteDialog,
+  type DocumentPastePrompt
+} from "./DocumentPasteDialog.tsx";
 import {
   clearSelectionHighlights,
   paintSelectionHighlights
@@ -329,27 +338,6 @@ const DEFAULT_STRUCTURE_CAPABILITIES = {
   sections: true
 } as const;
 
-type RichClipboardPayload = {
-  plain: string;
-  html: string;
-  inline?: string;
-  selection?: string;
-};
-
-type HeaderPastePrompt = {
-  selection: TypesetSelection;
-  blocks: string[];
-  dividerBlocks: string[];
-  x: number;
-  y: number;
-};
-
-type DocumentPastePrompt = {
-  blocks: string[];
-  nameIndex: number | null;
-  bodyStart: number;
-};
-
 function selectionClipboardParts(payload: string): {
   header: ResumeData["header"];
   hasHeader: boolean;
@@ -365,54 +353,6 @@ function selectionClipboardParts(payload: string): {
       .filter((block) => block.kind === "paragraph")
       .map((block) => block.value)
   };
-}
-
-async function writeRichClipboard(payload: RichClipboardPayload): Promise<boolean> {
-  if (!payload.plain || typeof navigator === "undefined" || !navigator.clipboard) {
-    return false;
-  }
-  if (navigator.clipboard.write && typeof ClipboardItem !== "undefined") {
-    const entries: Record<string, Blob> = {
-      "text/plain": new Blob([payload.plain], { type: "text/plain" }),
-      "text/html": new Blob([payload.html], { type: "text/html" })
-    };
-    if (payload.inline) {
-      entries[TYPESET_INLINE_CLIPBOARD_MIME] = new Blob(
-        [encodeInlineClipboard(payload.inline)],
-        { type: TYPESET_INLINE_CLIPBOARD_MIME }
-      );
-    }
-    if (payload.selection) {
-      entries[TYPESET_SELECTION_CLIPBOARD_MIME] = new Blob(
-        [payload.selection],
-        { type: TYPESET_SELECTION_CLIPBOARD_MIME }
-      );
-    }
-    try {
-      await navigator.clipboard.write([new ClipboardItem(entries)]);
-      return true;
-    } catch {
-      // Some browsers reject custom ClipboardItem MIME types. Retry the same
-      // rich external payload without the private flavor before plain text.
-      try {
-        await navigator.clipboard.write([
-          new ClipboardItem({
-            "text/plain": entries["text/plain"],
-            "text/html": entries["text/html"]
-          })
-        ]);
-        return true;
-      } catch {
-        // Fall through to the broadly supported plain-text API.
-      }
-    }
-  }
-  try {
-    await navigator.clipboard.writeText(payload.plain);
-    return true;
-  } catch {
-    return false;
-  }
 }
 
 // The toolbar re-renders from this state on every selection change, so publish a
@@ -2330,46 +2270,9 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
   ]);
 
   const pasteFromClipboard = useCallback(async (): Promise<void> => {
-    if (typeof navigator === "undefined" || !navigator.clipboard) return;
-    let inline: string | null = null;
-    let selectionPayload = "";
-    let html = "";
-    let text = "";
-    if (navigator.clipboard.read) {
-      try {
-        const items = await navigator.clipboard.read();
-        for (const item of items) {
-          if (
-            !selectionPayload &&
-            item.types.includes(TYPESET_SELECTION_CLIPBOARD_MIME)
-          ) {
-            selectionPayload = await (
-              await item.getType(TYPESET_SELECTION_CLIPBOARD_MIME)
-            ).text();
-          }
-          if (!inline && item.types.includes(TYPESET_INLINE_CLIPBOARD_MIME)) {
-            inline = decodeInlineClipboard(
-              await (await item.getType(TYPESET_INLINE_CLIPBOARD_MIME)).text()
-            );
-          }
-          if (!html && item.types.includes("text/html")) {
-            html = await (await item.getType("text/html")).text();
-          }
-          if (!text && item.types.includes("text/plain")) {
-            text = await (await item.getType("text/plain")).text();
-          }
-        }
-      } catch {
-        // Permission or unsupported rich read: use readText below.
-      }
-    }
-    if (!inline && !html && !text && navigator.clipboard.readText) {
-      try {
-        text = await navigator.clipboard.readText();
-      } catch {
-        return;
-      }
-    }
+    const clipboard = await readBrowserClipboard();
+    if (!clipboard) return;
+    const { inline, selectionPayload, html, text } = clipboard;
     const paragraphs = inline ? null : paragraphFragmentsFromHtml(html);
     const blocks = inline ? [] : clipboardBlocks(html, text);
     const fragment = inline ?? inlineFragmentFromHtml(html);
@@ -2399,37 +2302,10 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
   ]);
 
   const pasteAsDocumentFromClipboard = useCallback(async (): Promise<void> => {
-    if (
-      documentKind !== "cover-letter" ||
-      typeof navigator === "undefined" ||
-      !navigator.clipboard
-    ) {
-      return;
-    }
-    let html = "";
-    let text = "";
-    if (navigator.clipboard.read) {
-      try {
-        const items = await navigator.clipboard.read();
-        for (const item of items) {
-          if (!html && item.types.includes("text/html")) {
-            html = await (await item.getType("text/html")).text();
-          }
-          if (!text && item.types.includes("text/plain")) {
-            text = await (await item.getType("text/plain")).text();
-          }
-        }
-      } catch {
-        // A plain-text read below still gives the explicit mapper a safe input.
-      }
-    }
-    if (!html && !text && navigator.clipboard.readText) {
-      try {
-        text = await navigator.clipboard.readText();
-      } catch {
-        return;
-      }
-    }
+    if (documentKind !== "cover-letter") return;
+    const clipboard = await readBrowserClipboard();
+    if (!clipboard) return;
+    const { html, text } = clipboard;
     const blocks = clipboardBlocks(html, text);
     if (!blocks.length) return;
     const mapping = defaultDocumentPasteMapping(blocks.length);
@@ -3547,164 +3423,24 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
         />
       ) : null}
       {headerPastePrompt ? (
-        <div
-          ref={headerPasteDialogRef}
-          className="ts-paste-choice"
-          role="dialog"
-          aria-modal="false"
-          aria-label="Choose header paste structure"
-          tabIndex={-1}
-          style={{
-            left: Math.max(
-              16,
-              Math.min(headerPastePrompt.x, window.innerWidth - 300)
-            ),
-            top: Math.max(
-              16,
-              Math.min(headerPastePrompt.y + 8, window.innerHeight - 240)
-            )
-          }}
-        >
-          <strong>
-            {headerPastePrompt.selection.src.kind === "name"
-              ? "Paste into name"
-              : "Paste into contact"}
-          </strong>
-          <p>{headerPastePrompt.blocks.length} blocks found. Choose how they map.</p>
-          <button
-            type="button"
-            data-autofocus
-            onClick={() => applyHeaderPasteChoice("inline")}
-          >
-            Paste into this field
-          </button>
-          <button type="button" onClick={() => applyHeaderPasteChoice("structure")}>
-            {headerPastePrompt.selection.src.kind === "name"
-              ? "Use first as name; rest as contacts"
-              : `Create ${headerPastePrompt.blocks.length} contact items`}
-          </button>
-          {headerPastePrompt.dividerBlocks.length > 1 ? (
-            <button type="button" onClick={() => applyHeaderPasteChoice("divider")}>
-              Split on “{docStyle.style.contactDivider}” into{" "}
-              {headerPastePrompt.dividerBlocks.length} contacts
-            </button>
-          ) : null}
-          <button
-            type="button"
-            onClick={() => closeHeaderPastePrompt(true)}
-          >
-            Cancel
-          </button>
-        </div>
+        <HeaderPasteChoiceDialog
+          dialogRef={headerPasteDialogRef}
+          prompt={headerPastePrompt}
+          contactDivider={docStyle.style.contactDivider}
+          onChoose={applyHeaderPasteChoice}
+          onCancel={() => closeHeaderPastePrompt(true)}
+        />
       ) : null}
       {documentPastePrompt ? (
-        <div
-          className="ts-document-paste-backdrop"
-          role="presentation"
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget) setDocumentPastePrompt(null);
-          }}
-        >
-          <section
-            ref={documentPasteDialogRef}
-            className="ts-document-paste-dialog"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="ts-document-paste-title"
-            tabIndex={-1}
-            onKeyDown={handleDocumentPasteDialogKeyDown}
-          >
-            <header>
-              <strong id="ts-document-paste-title">Paste as document</strong>
-              <p>Map the copied blocks explicitly. Nothing is guessed.</p>
-            </header>
-            <label>
-              Name
-              <select
-                data-autofocus
-                value={documentPastePrompt.nameIndex ?? -1}
-                onChange={(event) =>
-                  setDocumentPastePrompt((current) =>
-                    current
-                      ? {
-                          ...current,
-                          nameIndex:
-                            Number(event.target.value) < 0
-                              ? null
-                              : Number(event.target.value)
-                        }
-                      : null
-                  )
-                }
-              >
-                <option value={-1}>No name</option>
-                {documentPastePrompt.blocks
-                  .slice(0, documentPastePrompt.bodyStart)
-                  .map((block, index) => (
-                    <option key={index} value={index}>
-                      {stripInlineMarks(block).slice(0, 80) || "(blank block)"}
-                    </option>
-                  ))}
-              </select>
-            </label>
-            <label>
-              Body begins at
-              <select
-                value={documentPastePrompt.bodyStart}
-                onChange={(event) => {
-                  const bodyStart = Number(event.target.value);
-                  setDocumentPastePrompt((current) =>
-                    current
-                      ? {
-                          ...current,
-                          bodyStart,
-                          nameIndex:
-                            current.nameIndex !== null &&
-                            current.nameIndex >= bodyStart
-                              ? null
-                              : current.nameIndex
-                        }
-                      : null
-                  );
-                }}
-              >
-                {documentPastePrompt.blocks.map((block, index) => (
-                  <option key={index} value={index}>
-                    Block {index + 1}:{" "}
-                    {stripInlineMarks(block).slice(0, 72) || "(blank block)"}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <div className="ts-document-paste-preview">
-              <span>Contacts</span>
-              <p>
-                {documentPastePrompt.blocks
-                  .filter(
-                    (_, index) =>
-                      index < documentPastePrompt.bodyStart &&
-                      index !== documentPastePrompt.nameIndex
-                  )
-                  .map((block) => stripInlineMarks(block))
-                  .join(` ${docStyle.style.contactDivider} `) || "None"}
-              </p>
-              <span>Body</span>
-              <p>
-                {documentPastePrompt.blocks.length -
-                  documentPastePrompt.bodyStart}{" "}
-                paragraph(s)
-              </p>
-            </div>
-            <footer>
-              <button type="button" onClick={closeDocumentPastePrompt}>
-                Cancel
-              </button>
-              <button type="button" onClick={applyDocumentPaste}>
-                Replace document
-              </button>
-            </footer>
-          </section>
-        </div>
+        <DocumentPasteDialog
+          dialogRef={documentPasteDialogRef}
+          prompt={documentPastePrompt}
+          contactDivider={docStyle.style.contactDivider}
+          setPrompt={setDocumentPastePrompt}
+          onKeyDown={handleDocumentPasteDialogKeyDown}
+          onCancel={closeDocumentPastePrompt}
+          onApply={applyDocumentPaste}
+        />
       ) : null}
       {linkCardTarget ? (
         <TypesetLinkCard
