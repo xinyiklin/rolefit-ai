@@ -37,7 +37,7 @@ import {
   ROLEFIT_PROVIDER_IDS,
   ROLEFIT_WORKSPACE_BACKUP_MAX_JSON_BYTES,
   ROLEFIT_WORKSPACE_BASE_RESUME_RE,
-  ROLEFIT_WORKSPACE_LEGACY_BASE_RESUME_RE,
+  ROLEFIT_WORKSPACE_TEXT_BASE_RESUME_RE,
   ROLEFIT_WORKSPACE_STAT_FILE_MAX_BYTES,
   createRoleFitDesktopRuntimeInfo,
   isRoleFitWorkspaceBackupFileName,
@@ -313,7 +313,7 @@ async function readWorkspaceStats(workspaceDir: string): Promise<WorkspaceStats>
     const resumeEntries = await safeWorkspaceDirents(join(workspaceDir, "resumes"));
     const hasBaseResume = resumeEntries.some((entry) => entry.isFile() &&
       (ROLEFIT_WORKSPACE_BASE_RESUME_RE.test(entry.name) ||
-        ROLEFIT_WORKSPACE_LEGACY_BASE_RESUME_RE.test(entry.name)));
+        ROLEFIT_WORKSPACE_TEXT_BASE_RESUME_RE.test(entry.name)));
     const applicationCount = rootEntries.some((entry) => entry.isFile() && entry.name === "applications.json")
       ? await readApplicationCount(join(workspaceDir, "applications.json"))
       : null;

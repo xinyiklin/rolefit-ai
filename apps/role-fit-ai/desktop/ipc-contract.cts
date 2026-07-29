@@ -23,7 +23,7 @@ export const ROLEFIT_WORKSPACE_STAT_FILE_MAX_BYTES = 10_000_000 as const;
 // file contents never cross this boundary.
 export const ROLEFIT_WORKSPACE_BASE_RESUME_RE =
   /^[A-Za-z0-9][A-Za-z0-9_-]*\.resume$/;
-export const ROLEFIT_WORKSPACE_LEGACY_BASE_RESUME_RE = /^[A-Za-z0-9][A-Za-z0-9_-]*\.(?:txt|md|csv)$/;
+export const ROLEFIT_WORKSPACE_TEXT_BASE_RESUME_RE = /^[A-Za-z0-9][A-Za-z0-9_-]*\.(?:txt|md|csv)$/;
 
 // Const enums inline into the compiled sandboxed preload, so this file remains
 // the one source of truth without emitting a forbidden neighboring require.

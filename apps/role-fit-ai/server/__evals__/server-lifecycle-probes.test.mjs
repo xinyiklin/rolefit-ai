@@ -57,9 +57,10 @@ try {
     `<!doctype html><title>RoleFit test</title><main>${indexMarker}</main>`,
     "utf8"
   );
+  await mkdir(join(workspaceDir, "resumes"), { recursive: true });
   await cp(
     join(sourceAppRoot, "server", "starter.resume"),
-    join(workspaceDir, "base-resume.resume")
+    join(workspaceDir, "resumes", "default.resume")
   );
   await cp(
     join(sourceAppRoot, "server", "starter.resume"),

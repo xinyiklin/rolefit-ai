@@ -26,7 +26,7 @@ function serverRestore(updatedAt) {
     source: "restore",
     updatedAt,
     settings: { aiProvider: "openai" },
-    lastBaseResume: "base-resume.resume",
+    lastBaseResume: "default.resume",
     restoreStamp: updatedAt
   };
 }
@@ -137,7 +137,7 @@ const validRestore = {
   source: "restore",
   updatedAt: RESTORE_STAMP,
   settings: { aiProvider: "openai" },
-  lastBaseResume: "base-resume.resume",
+  lastBaseResume: "default.resume",
   restoreStamp: RESTORE_STAMP
 };
 assert.deepEqual(parseServerPreferencesResponse(validRestore), validRestore, "a well-formed restore payload parses through unchanged");

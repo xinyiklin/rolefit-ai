@@ -10,7 +10,7 @@ import {
   ROLEFIT_PROVIDER_GUIDANCE_MAX_LENGTH,
   ROLEFIT_WORKSPACE_BACKUP_MAX_JSON_BYTES,
   ROLEFIT_WORKSPACE_BASE_RESUME_RE,
-  ROLEFIT_WORKSPACE_LEGACY_BASE_RESUME_RE,
+  ROLEFIT_WORKSPACE_TEXT_BASE_RESUME_RE,
   ROLEFIT_WORKSPACE_MESSAGE_MAX_LENGTH,
   ROLEFIT_WORKSPACE_STAT_FILE_MAX_BYTES,
   createRoleFitDesktopRuntimeInfo,
@@ -146,11 +146,11 @@ const sharedFileLimit = workspaceContractSource
   .match(/MAX_WORKSPACE_BACKUP_FILE_BYTES = ([\d_]+)/)?.[1];
 assert.equal(Number(sharedFileLimit?.replaceAll("_", "")), ROLEFIT_WORKSPACE_STAT_FILE_MAX_BYTES);
 assert.ok(workspaceContractSource.includes(ROLEFIT_WORKSPACE_BASE_RESUME_RE.source));
-assert.ok(workspaceContractSource.includes(ROLEFIT_WORKSPACE_LEGACY_BASE_RESUME_RE.source));
+assert.ok(workspaceContractSource.includes(ROLEFIT_WORKSPACE_TEXT_BASE_RESUME_RE.source));
 assert.equal(ROLEFIT_WORKSPACE_BASE_RESUME_RE.test("default.resume"), true);
 assert.equal(ROLEFIT_WORKSPACE_BASE_RESUME_RE.test("fullstack.resume"), true);
 assert.equal(ROLEFIT_WORKSPACE_BASE_RESUME_RE.test("base-resume.txt"), false);
-assert.equal(ROLEFIT_WORKSPACE_LEGACY_BASE_RESUME_RE.test("base-resume.txt"), true);
+assert.equal(ROLEFIT_WORKSPACE_TEXT_BASE_RESUME_RE.test("base-resume.txt"), true);
 assert.equal(isRoleFitConnectionServerState("owned"), true);
 assert.equal(isRoleFitConnectionServerState("reused-standalone"), true);
 assert.equal(isRoleFitConnectionServerState("reused-companion"), true);

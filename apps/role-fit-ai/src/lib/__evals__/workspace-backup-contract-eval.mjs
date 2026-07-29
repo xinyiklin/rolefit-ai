@@ -11,7 +11,6 @@ import assert from "node:assert/strict";
 import {
   BROWSER_PREFERENCES_FORMAT,
   BROWSER_PREFERENCES_SCHEMA_VERSION,
-  LEGACY_WORKSPACE_BACKUP_SCHEMA_VERSION,
   WORKSPACE_BACKUP_FORMAT,
   WORKSPACE_BACKUP_SCHEMA_VERSION,
   WORKSPACE_RESTORE_MARKER_FORMAT,
@@ -178,7 +177,7 @@ for (const path of [
 
 const legacyEnvelope = {
   ...validEnvelope,
-  schemaVersion: LEGACY_WORKSPACE_BACKUP_SCHEMA_VERSION
+  schemaVersion: 1
 };
 assert.throws(
   () => parseWorkspaceBackupEnvelope({ ...legacyEnvelope, files: [pdfFile] }),
@@ -240,7 +239,7 @@ for (const [name, badFile] of [
 // aggregate 64 MB guard rather than tripping the per-file one first.
 {
   const bigFiles = Array.from({ length: 8 }, (_, i) =>
-    backupFile({ path: `base-resume-variant${i}.resume`, byteLength: 9_000_000 })
+    backupFile({ path: `resumes/variant${i}.resume`, byteLength: 9_000_000 })
   ); // 8 x 9,000,000 = 72,000,000 > 64,000,000 aggregate cap
   assert.throws(
     () => parseWorkspaceBackupEnvelope({ ...validEnvelope, files: bigFiles }),
