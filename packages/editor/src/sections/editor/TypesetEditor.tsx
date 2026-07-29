@@ -23,11 +23,10 @@ import {
 } from "react";
 
 import {
-  newSection,
-  newSummaryEntry,
   type ResumeData,
   type ResumeSectionType
 } from "@typeset/engine/lib/resumeData.ts";
+import { coverLetterResumeData } from "@typeset/engine/lib/coverLetter.ts";
 import { automaticLinkHref } from "@typeset/engine/lib/links.ts";
 import type {
   FieldEdit,
@@ -347,32 +346,6 @@ type DocumentPastePrompt = {
   nameIndex: number | null;
   bodyStart: number;
 };
-
-function coverLetterDocument(
-  paragraphs: readonly string[],
-  header: ResumeData["header"]
-): ResumeData {
-  const section = newSection("summary", "");
-  return {
-    header: header
-      ? {
-          visible: header.visible,
-          name: header.name,
-          contact: [...header.contact]
-        }
-      : null,
-    sections: [{
-      ...section,
-      items: paragraphs.map((text) => {
-        const entry = newSummaryEntry();
-        return {
-          ...entry,
-          bullets: [{ ...entry.bullets[0], text }]
-        };
-      })
-    }]
-  };
-}
 
 function selectionClipboardParts(payload: string): {
   header: ResumeData["header"];
@@ -1923,7 +1896,7 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
       ) {
         markPending();
         actions.replaceDocument(
-          coverLetterDocument(parts.paragraphs, parts.header)
+          coverLetterResumeData(parts.paragraphs, parts.header)
         );
         pendingCaretRef.current = (fresh) => {
           const first = fresh.sections[0]?.items[0]?.bullets[0];
@@ -2473,7 +2446,7 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
       (_, index) =>
         index < bodyStart && index !== nameIndex
     );
-    const imported = coverLetterDocument(
+    const imported = coverLetterResumeData(
       body,
       nameIndex === null && !contact.length
         ? null

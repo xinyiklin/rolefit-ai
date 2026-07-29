@@ -292,11 +292,44 @@ export function coverLetterResumeData(
   };
 }
 
-export function coverLetterParagraphs(data: ResumeData): string[] {
+export function assertCoverLetterDocumentShape(data: ResumeData): void {
+  if (data.sections.length !== 1) {
+    fail(
+      "invalid-document",
+      "A cover letter must contain exactly one paragraph section."
+    );
+  }
   const section = data.sections[0];
-  if (!section || section.type !== "summary") return [""];
-  const paragraphs = section.items.map((item) => item.bullets[0]?.text ?? "");
-  return paragraphs.length ? paragraphs : [""];
+  if (section.type !== "summary" || section.heading !== "") {
+    fail(
+      "invalid-document",
+      "A cover letter must use one untitled paragraph section."
+    );
+  }
+  for (const [index, item] of section.items.entries()) {
+    if (
+      item.titleLeft !== "" ||
+      item.titleRight !== "" ||
+      item.subtitleLeft !== "" ||
+      item.subtitleRight !== ""
+    ) {
+      fail(
+        "invalid-document",
+        `Cover-letter paragraph ${index + 1} contains unsupported entry text.`
+      );
+    }
+    if (item.bullets.length !== 1) {
+      fail(
+        "invalid-document",
+        `Cover-letter paragraph ${index + 1} must contain exactly one text value.`
+      );
+    }
+  }
+}
+
+export function coverLetterParagraphs(data: ResumeData): string[] {
+  assertCoverLetterDocumentShape(data);
+  return data.sections[0].items.map((item) => item.bullets[0].text);
 }
 
 export function parseCoverLetterText(text: string): ResumeData {
@@ -405,6 +438,7 @@ export function createCoverLetterFile(
   data: ResumeData,
   style: CoverLetterStyle
 ): CoverLetterFileV1 {
+  assertCoverLetterDocumentShape(data);
   const paragraphs = validateParagraphs(coverLetterParagraphs(data));
   const header = data.header
     ? validateHeader({
