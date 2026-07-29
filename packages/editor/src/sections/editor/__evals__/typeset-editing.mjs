@@ -25,6 +25,7 @@ import {
   typingFormatForDeletedRange
 } from "../inlineTextEditing.ts";
 import {
+  clipboardLineHeight,
   clipboardParagraphSpacePt,
   clipboardHtmlForRanges,
   decodeInlineClipboard,
@@ -134,13 +135,21 @@ assert.equal(
   12,
   "Google Docs CSS pixel margins convert to physical paragraph points"
 );
+assert.equal(clipboardLineHeight("1.5", 11), 1.5);
+assert.equal(clipboardLineHeight("150%", 11), 1.5);
+assert.equal(
+  clipboardLineHeight("22px", 11),
+  1.5,
+  "Google Docs absolute CSS line height resolves against the paragraph font size"
+);
+assert.equal(clipboardLineHeight("normal", 11), null);
 
 // External rich copy is built from logical fields, never the engine's visual
 // line divs. A destination with a different measure may reflow the paragraph,
 // but it must not inherit Typeset's old wrap points as separate blocks.
 {
   const paragraph = buildDisplayMap(
-    "<space-before=8><space-after=12><font=arimo><b>A paragraph that wraps wherever the destination needs.</b></font></space-after></space-before>",
+    "<line-height=1.5><space-before=8><space-after=12><font=arimo><b>A paragraph that wraps wherever the destination needs.</b></font></space-after></space-before></line-height>",
     { preserveWhitespace: true }
   );
   const html = clipboardHtmlForRanges([
@@ -150,12 +159,13 @@ assert.equal(
       dEnd: paragraph.chars.length,
       defaultFontFamily: "tinos",
       defaultFontSizePt: 10,
-      defaultAlignment: "left"
+      defaultAlignment: "left",
+      defaultLineHeight: 1.15
     }
   ]);
   assert.equal(
     html,
-    '<p style="margin-top: 8pt; margin-right: 0; margin-bottom: 12pt; margin-left: 0; text-align: left"><span style="font-family: Arial; font-size: 10pt; font-weight: 700; white-space: pre-wrap">A paragraph that wraps wherever the destination needs.</span></p>'
+    '<p style="margin-top: 8pt; margin-right: 0; margin-bottom: 12pt; margin-left: 0; text-align: left; line-height: 1.5"><span style="font-family: Arial; font-size: 10pt; line-height: 1.5; font-weight: 700; white-space: pre-wrap">A paragraph that wraps wherever the destination needs.</span></p>'
   );
   assert.equal(html.includes("&nbsp;"), false, "paragraph spacing does not create a blank paragraph");
   assert.equal(
@@ -174,7 +184,8 @@ assert.equal(
       dEnd: paragraph.chars.length,
       defaultFontFamily: "tinos",
       defaultFontSizePt: 10,
-      defaultAlignment: "left"
+      defaultAlignment: "left",
+      defaultLineHeight: 1.15
     },
     {
       map: second,
@@ -182,7 +193,8 @@ assert.equal(
       dEnd: second.chars.length,
       defaultFontFamily: "tinos",
       defaultFontSizePt: 10,
-      defaultAlignment: "left"
+      defaultAlignment: "left",
+      defaultLineHeight: 1.15
     }
   ]);
   assert.equal(
@@ -206,7 +218,8 @@ assert.equal(
       dEnd: automaticLink.chars.length,
       defaultFontFamily: "tinos",
       defaultFontSizePt: 10,
-      defaultAlignment: "left"
+      defaultAlignment: "left",
+      defaultLineHeight: 1.15
     }
   ]);
   assert.match(
@@ -236,6 +249,24 @@ assert.equal(
   assert(second.chars.slice(0, 6).every((char) => char.italic));
   assert.equal(second.chars[0].spaceAfterPt, 12);
   assert.equal(replacement.lastCaretDisplayIndex, 6);
+
+  const crossFieldReplacement = replaceWithParagraphFragments(
+    buildDisplayMap("BeforeSelected", { preserveWhitespace: true }),
+    6,
+    "BeforeSelected".length,
+    ["<b>First</b>", "<i>Second</i>"],
+    {
+      map: buildDisplayMap("SelectedAfter", { preserveWhitespace: true }),
+      dEnd: "Selected".length
+    }
+  );
+  assert.deepEqual(
+    crossFieldReplacement.values.map(
+      (value) => buildDisplayMap(value, { preserveWhitespace: true }).display
+    ),
+    ["BeforeFirst", "SecondAfter"],
+    "one paragraph replacement preserves both boundary remainders across fields"
+  );
 }
 assert.equal(mixedPasteMap.chars[3].italic, true);
 

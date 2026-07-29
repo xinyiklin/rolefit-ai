@@ -546,14 +546,16 @@ export function applyInlineFragment(
   );
 }
 
-// Replace one range with several logical clipboard paragraphs. The first and
-// last fragments join the target's surviving text; middle fragments remain
+// Replace one selection with several logical clipboard paragraphs. The first
+// fragment joins the leading boundary and the last joins either the same field
+// or an explicitly supplied trailing boundary; middle fragments stay
 // independent mark-balanced values for the structural reducer to insert.
 export function replaceWithParagraphFragments(
   map: DisplayMap,
   dStart: number,
   dEnd: number,
-  fragmentValues: readonly string[]
+  fragmentValues: readonly string[],
+  tail?: { map: DisplayMap; dEnd: number }
 ): { values: string[]; lastCaretDisplayIndex: number } {
   if (fragmentValues.length < 2) {
     throw new Error("replaceWithParagraphFragments requires at least two paragraphs");
@@ -561,19 +563,21 @@ export function replaceWithParagraphFragments(
   const fragments = fragmentValues.map((value) =>
     buildDisplayMap(value, { preserveWhitespace: true })
   );
+  const tailMap = tail?.map ?? map;
+  const tailEnd = tail?.dEnd ?? dEnd;
   const values = fragments.map((fragment, index) => {
     const first = index === 0;
     const last = index === fragments.length - 1;
     const chars = [
       ...(first ? map.chars.slice(0, dStart) : []),
       ...fragment.chars,
-      ...(last ? map.chars.slice(dEnd) : [])
+      ...(last ? tailMap.chars.slice(tailEnd) : [])
     ];
     if (chars.length === 0) return fragment.source;
     return serializeChars(
       first ? map.prefix : "",
       chars,
-      last ? map.suffix : "",
+      last ? tailMap.suffix : "",
       chars.length
     ).value;
   });

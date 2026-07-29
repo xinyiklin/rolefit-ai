@@ -1385,7 +1385,12 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
   // structure controls, not by typing. A summary section always keeps one
   // paragraph so the document remains editable.
   const commitRangesDelete = useCallback(
-    (ranges: FieldRange[], insert = "", fragment?: string): boolean => {
+    (
+      ranges: FieldRange[],
+      insert = "",
+      fragment?: string,
+      paragraphFragments?: readonly string[]
+    ): boolean => {
       const listOf = (src: FieldSrc): string | null => {
         if (src.kind !== "bullet") return null;
         const section = dataRef.current.sections.find((item) => item.id === src.sectionId);
@@ -1396,22 +1401,36 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
 
       const first = ranges[0];
       const last = ranges[ranges.length - 1];
+      const firstList = listOf(first.src);
+      const joinsTail =
+        ranges.length > 1 && firstList !== null && firstList === listOf(last.src);
+      const paragraphReplacement =
+        paragraphFragments && first.src.kind === "bullet"
+          ? replaceWithParagraphFragments(
+              first.map,
+              first.dStart,
+              first.dEnd,
+              paragraphFragments,
+              joinsTail ? { map: last.map, dEnd: last.dEnd } : undefined
+            )
+          : null;
       // A pasted fragment carries its own formatting, so it replaces the covered
       // text in the same edit rather than after a second commit — one undo step,
       // as a word processor gives for paste-over-selection.
+      const inlineFragment =
+        paragraphFragments && !paragraphReplacement
+          ? paragraphFragments.join("\n")
+          : fragment;
       const head =
-        fragment === undefined
+        inlineFragment === undefined
           ? remainderOf(first, insert)
           : applyInlineFragment(
               first.map,
               first.dStart,
               first.dEnd,
-              fragment,
+              inlineFragment,
               first.src.kind !== "bullet"
             );
-      const firstList = listOf(first.src);
-      const joinsTail =
-        ranges.length > 1 && firstList !== null && firstList === listOf(last.src);
 
       // Each list keeps its FIRST covered row, so a fully selected list ends as
       // one empty row instead of vanishing.
@@ -1422,7 +1441,18 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
       }
 
       const edits: FieldEdit[] = [
-        fieldEditFor(first.src, joinsTail ? head.value + remainderOf(last, "").value : head.value)
+        paragraphReplacement && first.src.kind === "bullet"
+          ? {
+              kind: "replaceBulletParagraphs",
+              sectionId: first.src.sectionId,
+              entryId: first.src.entryId,
+              bulletId: first.src.bulletId,
+              values: paragraphReplacement.values
+            }
+          : fieldEditFor(
+              first.src,
+              joinsTail ? head.value + remainderOf(last, "").value : head.value
+            )
       ];
       for (const range of ranges.slice(1)) {
         const src = range.src;
@@ -1454,6 +1484,46 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
       actions.applyFieldEdits(edits);
       typingFormatRef.current = null;
       typingTargetRef.current = null;
+      if (paragraphReplacement && first.src.kind === "bullet") {
+        const { sectionId, entryId, bulletId } = first.src;
+        const isSummary =
+          dataRef.current.sections.find((section) => section.id === sectionId)?.type ===
+          "summary";
+        const valuesLength = paragraphReplacement.values.length;
+        const caretDisplayIndex = paragraphReplacement.lastCaretDisplayIndex;
+        pendingCaretRef.current = (fresh) => {
+          const section = fresh.sections.find((item) => item.id === sectionId);
+          const sourceEntryIndex =
+            section?.items.findIndex((item) => item.id === entryId) ?? -1;
+          const sourceEntry =
+            sourceEntryIndex >= 0 ? section?.items[sourceEntryIndex] : undefined;
+          const targetEntry = isSummary
+            ? section?.items[sourceEntryIndex + valuesLength - 1]
+            : sourceEntry;
+          const sourceBulletIndex =
+            sourceEntry?.bullets.findIndex((bullet) => bullet.id === bulletId) ?? -1;
+          const targetBullet = isSummary
+            ? targetEntry?.bullets[0]
+            : targetEntry?.bullets[sourceBulletIndex + valuesLength - 1];
+          if (!targetEntry || !targetBullet) return null;
+          const src: FieldSrc = {
+            kind: "bullet",
+            sectionId,
+            entryId: targetEntry.id,
+            bulletId: targetBullet.id
+          };
+          const targetMap = mapFor(src, targetBullet.text);
+          return {
+            key: fieldKey(src),
+            valueIndex: valueIndexForDisplayIndex(
+              targetMap,
+              targetBullet.text,
+              caretDisplayIndex
+            )
+          };
+        };
+        return true;
+      }
       const caretKey = first.key;
       const caretSrc = first.src;
       const caretValueIndex = head.caretValueIndex;
@@ -1463,7 +1533,7 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
       });
       return true;
     },
-    [actions, markPending]
+    [actions, mapFor, markPending]
   );
 
   const applyMarkAcross = useCallback(
@@ -1497,9 +1567,7 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
         case "paste":
           return commitRangesDelete(ranges, "", intent.fragment);
         case "pasteParagraphs":
-          if (!commitRangesDelete(ranges)) return false;
-          replayQueueRef.current.push(intent);
-          return true;
+          return commitRangesDelete(ranges, "", undefined, intent.fragments);
         case "splitBullet":
           // Drop the selection first, then let the queue replay the split into the
           // collapsed caret that leaves behind.
@@ -1556,7 +1624,8 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
       dEnd: range.dEnd,
       defaultFontFamily: docStyle.style.fontFamily,
       defaultFontSizePt: defaultFontSizeForField(range.src, docStyle.style),
-      defaultAlignment: defaultAlignmentForField(range.src, docStyle.style)
+      defaultAlignment: defaultAlignmentForField(range.src, docStyle.style),
+      defaultLineHeight: docStyle.style.lineHeight
     }),
     [docStyle.style]
   );

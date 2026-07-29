@@ -78,6 +78,73 @@ assert.deepEqual(
   "rich multi-paragraph paste inserts separate summary paragraphs in one edit"
 );
 
+const crossFieldPasteBase = {
+  ...base,
+  sections: [
+    {
+      ...base.sections[0],
+      items: [
+        base.sections[0].items[0],
+        {
+          ...base.sections[0].items[0],
+          id: "paragraph-2",
+          bullets: [{ id: "summary-text-2", text: "Selected middle" }]
+        },
+        {
+          ...base.sections[0].items[0],
+          id: "paragraph-3",
+          bullets: [{ id: "summary-text-3", text: "Selected tail" }]
+        }
+      ]
+    }
+  ]
+};
+const crossFieldClock = createHistoryClock();
+const crossFieldSeed = rootReducer(
+  {
+    data: null,
+    dirty: false,
+    past: [],
+    future: [],
+    coalesceKey: null,
+    coalesceAt: 0
+  },
+  { type: "seed", data: crossFieldPasteBase },
+  crossFieldClock
+);
+const crossFieldPasted = rootReducer(
+  crossFieldSeed,
+  {
+    type: "batch",
+    steps: [
+      {
+        type: "replaceBulletParagraphs",
+        sectionId: "summary",
+        entryId: "paragraph-1",
+        bulletId: "summary-text-1",
+        values: ["Front endFirst", "Second tail"]
+      },
+      { type: "removeEntry", sectionId: "summary", entryId: "paragraph-2" },
+      { type: "removeEntry", sectionId: "summary", entryId: "paragraph-3" }
+    ]
+  },
+  crossFieldClock
+);
+assert.equal(
+  crossFieldPasted.past.length,
+  1,
+  "cross-field multi-paragraph paste is one history transaction"
+);
+assert.deepEqual(
+  crossFieldPasted.data.sections[0].items.map((entry) => entry.bullets[0].text),
+  ["Front endFirst", "Second tail"]
+);
+assert.deepEqual(
+  rootReducer(crossFieldPasted, { type: "undo" }, crossFieldClock).data,
+  crossFieldPasteBase,
+  "one undo restores the complete document replaced by the paste"
+);
+
 const skillsBase = {
   ...base,
   sections: [

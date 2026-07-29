@@ -1157,6 +1157,18 @@ bounded; app-only operational detail belongs in the affected app documentation.
   includes the optional header, ordered paragraphs, and current print style.
   The former paragraph-only compatibility branch and its migration probe were
   removed; resume schema compatibility is unchanged.
+- [TOOL] 2026-07-28: A privacy-safe shape audit found all five ignored local
+  cover-letter variants use schema v2 and the retired `paragraphGapPt` wire
+  field; no document text was read or printed.
+- [USER+TOOL] 2026-07-28: The v1-only contract above is intentional. The five
+  ignored local variants were privately backed up, converted to schema v1, and
+  one saved application `.cover` received the same migration. All six active
+  files were verified through the strict parser without printing document
+  text. Their retired document gap was moved into explicit paragraph marks
+  before the wire field was removed; converted files and backups remain
+  ignored. The saved application's tracker fingerprint and revision were
+  refreshed through the running app's sparse mutation route, with the prior
+  tracker snapshot in the ignored migration backup.
 - [USER] 2026-07-28: Authored paragraph spacing remains visible at document
   boundaries: the first paragraph/line shows before-space and the final
   paragraph/line shows after-space.
@@ -1191,4 +1203,13 @@ bounded; app-only operational detail belongs in the affected app documentation.
   top/bottom margins. Inbound block HTML is separated from authored `<br>`
   breaks and an atomic reducer action inserts multiple blocks as distinct
   summary paragraphs or bullets; explicit source spacing wins over empty-target
-  defaults.
+  defaults. A cross-field paste performs deletion, structural insertion, and
+  boundary joining in that same reducer transaction, so one Undo restores it.
+- [USER] 2026-07-29: Google Docs clipboard interop must preserve line height in
+  both directions, alongside the existing paragraph-spacing contract.
+- [CODE] 2026-07-29: Model-derived clipboard HTML now publishes effective
+  unitless line height on paragraph blocks and inline runs. Inbound rich HTML
+  converts allowlisted unitless, percentage, and font-relative point/pixel line
+  heights into explicit inline marks; unsupported CSS remains discarded.
+- [USER+TOOL] 2026-07-29: The restarted desktop app passed the user's live
+  Google Docs line-height copy/paste round trip.

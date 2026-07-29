@@ -456,9 +456,9 @@ export function reduceResumeData(data: ResumeData, action: Action): ResumeData {
   }
 }
 
-// The write vocabulary a multi-field edit needs: one rewritten value per field
-// it covered, plus removal of the rows and paragraphs it emptied. It mirrors
-// FieldSrc so the editor's field adapter owns the only translation.
+// The write vocabulary a multi-field edit needs: rewritten values, structural
+// paragraph insertion, and removal of rows it emptied. It mirrors FieldSrc so
+// the editor's field adapter owns the only translation.
 // Writing one field's value. Every field kind has exactly one of these, so a
 // caller that maps a field to its write is total.
 export type FieldValueEdit =
@@ -472,7 +472,14 @@ export type FieldValueEdit =
 export type FieldEdit =
   | FieldValueEdit
   | { kind: "removeBullet"; sectionId: string; entryId: string; bulletId: string }
-  | { kind: "removeEntry"; sectionId: string; entryId: string };
+  | { kind: "removeEntry"; sectionId: string; entryId: string }
+  | {
+      kind: "replaceBulletParagraphs";
+      sectionId: string;
+      entryId: string;
+      bulletId: string;
+      values: readonly string[];
+    };
 
 function actionForFieldEdit(edit: FieldEdit): Action {
   switch (edit.kind) {
@@ -517,6 +524,14 @@ function actionForFieldEdit(edit: FieldEdit): Action {
       };
     case "removeEntry":
       return { type: "removeEntry", sectionId: edit.sectionId, entryId: edit.entryId };
+    case "replaceBulletParagraphs":
+      return {
+        type: "replaceBulletParagraphs",
+        sectionId: edit.sectionId,
+        entryId: edit.entryId,
+        bulletId: edit.bulletId,
+        values: edit.values
+      };
   }
 }
 

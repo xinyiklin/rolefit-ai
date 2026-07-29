@@ -7,6 +7,7 @@ import {
 } from "@typeset/engine/lib/links.ts";
 import {
   inlineFontSizePt,
+  paragraphLineHeight,
   paragraphSpacePt,
   paragraphSpacingFromInlineMarks,
   type FieldAlignment
@@ -26,6 +27,7 @@ type RichStyle = {
   underline: boolean;
   fontFamily: DocumentFontFamily | null;
   fontSizePt: number | null;
+  lineHeight: number | null;
   href: string | null;
 };
 
@@ -35,6 +37,7 @@ const PLAIN_STYLE: RichStyle = {
   underline: false,
   fontFamily: null,
   fontSizePt: null,
+  lineHeight: null,
   href: null
 };
 
@@ -86,6 +89,7 @@ export type ClipboardRange = {
   defaultFontFamily: DocumentFontFamily;
   defaultFontSizePt: number;
   defaultAlignment: FieldAlignment;
+  defaultLineHeight: number;
 };
 
 const escapeHtml = (value: string): string =>
@@ -128,8 +132,9 @@ function inlineHtmlForRange(range: ClipboardRange): string {
 
   const flush = () => {
     if (!currentText) return;
-    const [family, size, bold, italic, underline, href] = JSON.parse(currentKey) as [
+    const [family, size, lineHeight, bold, italic, underline, href] = JSON.parse(currentKey) as [
       string,
+      number,
       number,
       boolean,
       boolean,
@@ -139,6 +144,7 @@ function inlineHtmlForRange(range: ClipboardRange): string {
     const styles = [
       `font-family: ${family}`,
       `font-size: ${size}pt`,
+      `line-height: ${lineHeight}`,
       ...(bold ? ["font-weight: 700"] : []),
       ...(italic ? ["font-style: italic"] : []),
       ...(underline ? ["text-decoration: underline"] : []),
@@ -155,6 +161,7 @@ function inlineHtmlForRange(range: ClipboardRange): string {
     const key = JSON.stringify([
       externalFontFamily(char.fontFamily ?? range.defaultFontFamily),
       char.fontSizePt ?? range.defaultFontSizePt,
+      char.lineHeight ?? range.defaultLineHeight,
       char.bold,
       char.italic,
       char.underline,
@@ -181,15 +188,19 @@ export function clipboardHtmlForRanges(ranges: readonly ClipboardRange[]): strin
       range.dStart === 0 && range.dEnd === range.map.chars.length;
     const spacing = fullParagraph
       ? paragraphSpacingFromInlineMarks(range.map.source)
-      : { spaceBeforePt: null, spaceAfterPt: null };
+      : { lineHeight: null, spaceBeforePt: null, spaceAfterPt: null };
 
     const inline = inlineHtmlForRange(range);
     const alignment =
       range.map.chars[range.dStart]?.alignment ?? range.defaultAlignment;
+    const lineHeight =
+      range.map.chars[range.dStart]?.lineHeight ??
+      spacing.lineHeight ??
+      range.defaultLineHeight;
     const asBlock = ranges.length > 1 || fullParagraph;
     blocks.push(
       asBlock
-        ? `<p style="margin-top: ${spacing.spaceBeforePt ?? 0}pt; margin-right: 0; margin-bottom: ${spacing.spaceAfterPt ?? 0}pt; margin-left: 0; text-align: ${alignment}">${inline || "<br>"}</p>`
+        ? `<p style="margin-top: ${spacing.spaceBeforePt ?? 0}pt; margin-right: 0; margin-bottom: ${spacing.spaceAfterPt ?? 0}pt; margin-left: 0; text-align: ${alignment}; line-height: ${lineHeight}">${inline || "<br>"}</p>`
         : inline
     );
   }
@@ -240,6 +251,23 @@ export function clipboardParagraphSpacePt(value: string): number | null {
   return paragraphSpacePt(points);
 }
 
+export function clipboardLineHeight(
+  value: string,
+  fontSizePt: number | null
+): number | null {
+  const normalized = value.trim().toLowerCase();
+  const unitless = /^(\d+(?:\.\d+)?)$/.exec(normalized);
+  if (unitless) return paragraphLineHeight(Number(unitless[1]));
+  const percent = /^(\d+(?:\.\d+)?)%$/.exec(normalized);
+  if (percent) return paragraphLineHeight(Number(percent[1]) / 100);
+  const absolute = /^(\d+(?:\.\d+)?)\s*(pt|px)$/.exec(normalized);
+  if (!absolute || fontSizePt === null || fontSizePt <= 0) return null;
+  const numeric = Number(absolute[1]);
+  if (!Number.isFinite(numeric)) return null;
+  const points = absolute[2] === "px" ? numeric * 0.75 : numeric;
+  return paragraphLineHeight(points / fontSizePt);
+}
+
 function styleForElement(element: HTMLElement, inherited: RichStyle): RichStyle {
   const next = { ...inherited };
   const tag = element.tagName;
@@ -261,6 +289,8 @@ function styleForElement(element: HTMLElement, inherited: RichStyle): RichStyle 
   if (family) next.fontFamily = family;
   const size = parsedFontSize(element.style.fontSize);
   if (size !== null) next.fontSizePt = size;
+  const lineHeight = clipboardLineHeight(element.style.lineHeight, next.fontSizePt);
+  if (lineHeight !== null) next.lineHeight = lineHeight;
 
   if (tag === "A") {
     next.href = normalizeLinkDestination(element.getAttribute("href") ?? "");
@@ -276,6 +306,9 @@ function wrapText(text: string, style: RichStyle): string {
   if (style.fontFamily) value = `<font=${style.fontFamily}>${value}</font>`;
   if (style.fontSizePt !== null) value = `<size=${style.fontSizePt}>${value}</size>`;
   if (style.href) value = `<link=${encodeLinkHref(style.href)}>${value}</link>`;
+  if (style.lineHeight !== null) {
+    value = `<line-height=${style.lineHeight}>${value}</line-height>`;
+  }
   return value;
 }
 
@@ -318,6 +351,9 @@ function fragmentValueFromHtml(html: string): string | null {
       }
       if ((spaceBeforePt ?? 0) > 0) {
         value = `<space-before=${spaceBeforePt}>${value}</space-before>`;
+      }
+      if (style.lineHeight !== null && !/<line-height=/i.test(value)) {
+        value = `<line-height=${style.lineHeight}>${value}</line-height>`;
       }
       value += BLOCK_SEPARATOR;
     }

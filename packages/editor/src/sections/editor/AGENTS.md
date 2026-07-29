@@ -22,11 +22,14 @@ typesetting guide when a change affects painted output or layout provenance.
   engine wrap line, so a destination editor reflows the paragraph to its own
   measure. Paragraph before/after spacing stays CSS block margins; never encode
   it as a blank paragraph, which changes document structure in Google Docs.
-  Explicit and engine-auto-detected links both serialize as HTML anchors. On
-  inbound rich paste, allowlisted block margins become explicit paragraph
-  before/after marks, and multiple HTML blocks become separate bullet/summary
-  fields through one structural editor action rather than hard breaks inside
-  one field. Keep all other arbitrary clipboard CSS, scripts, event attributes,
+  Effective line height is unitless CSS on both the paragraph and its inline
+  runs; inbound unitless/percentage values, or physical values with a known
+  font size, become explicit line-height marks. Explicit and
+  engine-auto-detected links both serialize as HTML anchors. On inbound rich
+  paste, allowlisted block margins become explicit paragraph before/after
+  marks, and multiple HTML blocks become separate bullet/summary fields
+  through one structural editor action rather than hard breaks inside one
+  field. Keep all other arbitrary clipboard CSS, scripts, event attributes,
   unsupported fonts, and invalid links out of document state.
 - `selectionHighlight.ts` owns the visual selection overlay. It coalesces the
   browser range fragments per engine line and paints one text-bounded band.
