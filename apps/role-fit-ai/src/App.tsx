@@ -67,7 +67,10 @@ import {
   type CoverLetterAutosavedDraft
 } from "./hooks/useCoverLetterAutosaveDraft";
 import { useTabPresence } from "./hooks/useTabPresence";
-import { type PresencePhase } from "./lib/tabPresence";
+import {
+  subscribeWorkspaceRestoreAdoption,
+  type PresencePhase
+} from "./lib/tabPresence";
 import {
   buildDocumentTitle,
   completeAutoDocumentTitle,
@@ -1233,6 +1236,36 @@ function App() {
     editedResume,
     docStyle
   });
+
+  useEffect(
+    () =>
+      subscribeWorkspaceRestoreAdoption(() => {
+        if (resumeDocumentDirty) {
+          setLinkStatus(
+            "A workspace restore finished in another window. Your unsaved resume remains preserved in this tab."
+          );
+        } else {
+          void loadWorkspace(true);
+          setLinkStatus("Workspace restored in another window. Refreshed saved resume options.");
+        }
+        const coverDocumentDirty =
+          coverLetterEditor.dirty ||
+          coverLetterEditor.documentTitle !== coverLetterEditor.persistedDocumentTitle;
+        coverLetterEditor.setStatus(
+          coverDocumentDirty
+            ? "A workspace restore finished in another window. Your unsaved cover letter remains preserved in this tab."
+            : "Workspace restored in another window. Reopen a saved cover letter to use the restored copy."
+        );
+      }),
+    [
+      coverLetterEditor.dirty,
+      coverLetterEditor.documentTitle,
+      coverLetterEditor.persistedDocumentTitle,
+      coverLetterEditor.setStatus,
+      loadWorkspace,
+      resumeDocumentDirty
+    ]
+  );
 
   // The friendly name of the base resume currently loaded. Both the Open menu's
   // description and the Save menu's "update this base" row name it, so it is

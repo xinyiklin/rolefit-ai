@@ -491,7 +491,7 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
           // overwrite whichever saved letter happened to be open before.
           setActiveCoverFileName("");
           saveLastCoverLetterName("");
-          setDocumentTitle(nextTitle);
+          setDocumentTitle(fileBase || "Cover letter");
           setStatus(`Opened ${file.name}.`);
           return;
         }

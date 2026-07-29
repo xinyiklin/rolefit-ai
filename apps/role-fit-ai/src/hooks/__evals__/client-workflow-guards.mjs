@@ -814,8 +814,13 @@ assert.match(
 );
 assert.match(
   app,
-  /hasContent: Boolean\(\s*coverLetterEditor\.text\.trim\(\) \|\| coverLetterEditor\.data\.header\s*\)/,
-  "an intentional header-only cover letter remains eligible for recovery autosave",
+  /persistedDocumentTitle: coverLetterEditor\.persistedDocumentTitle,\s*dirty: coverLetterEditor\.dirty/,
+  "cover-letter recovery compares the live title with its durable baseline",
+);
+assert.doesNotMatch(
+  coverDraft,
+  /hasContent/,
+  "title-only and style-only cover-letter changes are not gated on body content",
 );
 // Undoing a tailor belongs to the result summary in the rail, beside what was
 // applied — not to a permanent toolbar button competing with Open and Save.
@@ -841,8 +846,8 @@ assert.match(
 );
 assert.match(
   coverEditor,
-  /editor\.markClean\(\);\s*setPersistedFingerprint\(payload\);[\s\S]{0,200}?clearCoverLetterAutosaveDraft\(\)/,
-  "the recovery draft is cleared only once the letter itself is durable",
+  /editor\.markClean\(\);\s*commitPersistenceBaseline\(payload\);[\s\S]{0,200}?clearCoverLetterAutosaveDraft\(\)/,
+  "the recovery draft is cleared only once the letter and title baseline are durable",
 );
 assert.match(
   coverEditor,
@@ -856,7 +861,7 @@ assert.match(
 );
 assert.match(
   draftStorage,
-  /if \(ownerId !== "" && ownerId !== myId && live\.has\(ownerId\)\) continue;/,
+  /if \(ownerId !== myId && live\.has\(ownerId\)\) continue;/,
   "one shared recovery rule protects a live sibling tab's draft for both editors",
 );
 assert.match(

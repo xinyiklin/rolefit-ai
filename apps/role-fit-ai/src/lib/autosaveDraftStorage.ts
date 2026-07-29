@@ -66,16 +66,8 @@ export function recoverTabDraft<T extends StoredDraft>(
       if (!key) continue;
       const ownerId = tabIdFromKey(kind, key);
       if (ownerId === null || key === myKey) continue;
-      if (ownerId === myId && own) {
-        // A successful prior migration may have written the current key but
-        // failed to remove its retired predecessor. The strict current draft
-        // wins, and the stale predecessor must not reappear after it is cleared.
-        orphanKeys.push(key);
-        continue;
-      }
-      // A live sibling owns this draft — leave it strictly alone. A retired key
-      // owned by THIS tab is migration input, not a sibling.
-      if (ownerId !== "" && ownerId !== myId && live.has(ownerId)) continue;
+      // A live sibling owns this current-schema draft — leave it strictly alone.
+      if (ownerId !== myId && live.has(ownerId)) continue;
 
       const draft = parse(localStorage.getItem(key));
       const ageMs = draft ? now - new Date(draft.savedAt).getTime() : Infinity;

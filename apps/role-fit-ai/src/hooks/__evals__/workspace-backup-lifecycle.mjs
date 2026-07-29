@@ -4,7 +4,7 @@
 // duplicate storage-key knowledge already owned elsewhere. This eval probes
 // that decision logic directly — no React, no DOM, no localStorage needed for
 // the decision itself — and, with a minimal in-memory localStorage polyfill,
-// the one storage side effect (clearAllAutosaveDrafts) it can trigger.
+// the one storage side effect (adoptWorkspaceRestoreDrafts) it can trigger.
 
 import assert from "node:assert/strict";
 import {
@@ -12,7 +12,7 @@ import {
   parseServerPreferencesResponse
 } from "../../lib/browserPrefsSync.ts";
 import {
-  clearAllAutosaveDrafts,
+  adoptWorkspaceRestoreDrafts,
   keyForTab,
   tabIdFromKey
 } from "../../lib/autosaveDraftRegistry.ts";
@@ -167,7 +167,7 @@ assert.equal(
 );
 assert.equal(tabIdFromKey("resume", "rolefit:settings"), null, "an unrelated key is not mistaken for an autosave key");
 
-// clearAllAutosaveDrafts needs a localStorage — polyfill a minimal in-memory one
+// adoptWorkspaceRestoreDrafts needs a localStorage — polyfill a minimal in-memory one
 // (Node has none) rather than mocking the whole browser to exercise the one
 // real side effect this eval can drive directly.
 class FakeStorage {
@@ -180,6 +180,12 @@ class FakeStorage {
 }
 globalThis.localStorage = new FakeStorage();
 globalThis.sessionStorage = new FakeStorage();
+const channelMessages = [];
+globalThis.BroadcastChannel = class {
+  postMessage(message) { channelMessages.push(message); }
+  addEventListener() {}
+  removeEventListener() {}
+};
 sessionStorage.setItem("rolefit:tabId", "tab-a");
 localStorage.setItem("rolefit:tabPresence", JSON.stringify({
   "tab-a": { jobLabel: "Current", phase: "idle", updatedAt: Date.now() },
@@ -187,16 +193,18 @@ localStorage.setItem("rolefit:tabPresence", JSON.stringify({
 }));
 localStorage.setItem("rolefit:draftAutosave:v2:tab-a", "{}");
 localStorage.setItem("rolefit:draftAutosave:v2:tab-b", "{}");
+localStorage.setItem("rolefit:draftAutosave:v2:dead-tab", "{}");
 localStorage.setItem("rolefit:draftAutosave:tab-a", "{}"); // retired structured-lossy draft
 localStorage.setItem("rolefit:draftAutosave", "{}"); // legacy orphan
 localStorage.setItem("rolefit:coverDraftAutosave:tab-a", "{}");
 localStorage.setItem("rolefit:coverDraftAutosave:v2:tab-b", "{}");
+localStorage.setItem("rolefit:coverDraftAutosave:v2:dead-tab", "{}");
 localStorage.setItem("rolefit:settings", "{}"); // unrelated key, must survive
 localStorage.setItem("rolefit:adoptedRestoreStamp", RESTORE_STAMP); // unrelated key, must survive
 
-clearAllAutosaveDrafts();
+adoptWorkspaceRestoreDrafts();
 
-assert.equal(localStorage.getItem("rolefit:draftAutosave:v2:tab-a"), null, "clearAllAutosaveDrafts clears this tab's draft");
+assert.equal(localStorage.getItem("rolefit:draftAutosave:v2:tab-a"), null, "workspace adoption clears this tab's draft");
 assert.equal(
   localStorage.getItem("rolefit:draftAutosave:v2:tab-b"),
   "{}",
@@ -214,9 +222,29 @@ assert.equal(
   "{}",
   "workspace adoption preserves a live sibling tab's cover-letter recovery draft"
 );
-assert.equal(localStorage.getItem("rolefit:settings"), "{}", "clearAllAutosaveDrafts never touches unrelated settings storage");
-assert.equal(localStorage.getItem("rolefit:adoptedRestoreStamp"), RESTORE_STAMP, "clearAllAutosaveDrafts never touches the adopted-restore-stamp marker");
+assert.equal(
+  localStorage.getItem("rolefit:draftAutosave:v2:dead-tab"),
+  null,
+  "workspace adoption clears a dead tab's resume orphan"
+);
+assert.equal(
+  localStorage.getItem("rolefit:coverDraftAutosave:v2:dead-tab"),
+  null,
+  "workspace adoption clears a dead tab's cover-letter orphan"
+);
+assert.equal(
+  channelMessages.some(
+    (message) =>
+      message?.type === "workspace-restore-adopted" &&
+      message.sourceTabId === "tab-a"
+  ),
+  true,
+  "workspace adoption publishes a restore-generation event for live siblings"
+);
+assert.equal(localStorage.getItem("rolefit:settings"), "{}", "workspace adoption never touches unrelated settings storage");
+assert.equal(localStorage.getItem("rolefit:adoptedRestoreStamp"), RESTORE_STAMP, "workspace adoption never touches the adopted-restore-stamp marker");
 delete globalThis.localStorage;
 delete globalThis.sessionStorage;
+delete globalThis.BroadcastChannel;
 
 console.log("workspace backup lifecycle probes: PASS");

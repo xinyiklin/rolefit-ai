@@ -35,7 +35,7 @@ import {
   saveLastBaseResumeName,
   setLastBaseResumeSaveListener
 } from "./baseResumePrefs.ts";
-import { clearAllAutosaveDrafts } from "./autosaveDraftRegistry.ts";
+import { adoptWorkspaceRestoreDrafts } from "./autosaveDraftRegistry.ts";
 
 const MIRROR_PUSH_DEBOUNCE_MS = 1500;
 const ADOPT_FETCH_TIMEOUT_MS = 1500;
@@ -228,7 +228,7 @@ export async function adoptWorkspacePreferences(): Promise<void> {
   if (decision.action === "noop") return;
 
   if (decision.action === "clear-drafts") {
-    clearAllAutosaveDrafts();
+    adoptWorkspaceRestoreDrafts();
     writeAdoptedRestoreStamp(decision.writeStamp);
     return;
   }
@@ -238,7 +238,7 @@ export async function adoptWorkspacePreferences(): Promise<void> {
   try {
     saveSettings(normalizeSettings(server.settings));
     saveLastBaseResumeName(server.lastBaseResume);
-    if (decision.clearDrafts) clearAllAutosaveDrafts();
+    if (decision.clearDrafts) adoptWorkspaceRestoreDrafts();
     if (decision.writeStamp) writeAdoptedRestoreStamp(decision.writeStamp);
   } finally {
     suppressMirrorPush = false;
