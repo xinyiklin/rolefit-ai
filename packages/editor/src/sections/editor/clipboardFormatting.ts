@@ -474,9 +474,12 @@ function wrapText(text: string, style: RichStyle): string {
 // unsupported fonts, and unknown markup never cross into document state.
 const BLOCK_SEPARATOR = "\uFDD0";
 
-function fragmentValueFromHtml(html: string): string | null {
-  if (!html || html.length > MAX_INLINE_CLIPBOARD_CHARS) return null;
+function fragmentsFromHtml(html: string): ParsedClipboardHtml {
+  if (!html || html.length > MAX_INLINE_CLIPBOARD_CHARS) {
+    return parsedClipboardHtml(null, false);
+  }
   const document = new DOMParser().parseFromString(html, "text/html");
+  let sawBlockStructure = false;
 
   const visit = (node: Node, inherited: RichStyle): string => {
     if (node.nodeType === Node.TEXT_NODE) {
@@ -489,6 +492,7 @@ function fragmentValueFromHtml(html: string): string | null {
       .map((child) => visit(child, style))
       .join("");
     if (BLOCK_TAGS.has(node.tagName)) {
+      sawBlockStructure = true;
       // A wrapper such as Google Docs' docs-internal-guid container may contain
       // several real paragraph blocks. Those descendants already own the
       // separators and paragraph margins; wrapping the container again would
@@ -521,7 +525,7 @@ function fragmentValueFromHtml(html: string): string | null {
     .map((node) => visit(node, PLAIN_STYLE))
     .join("")
     .replace(new RegExp(`${BLOCK_SEPARATOR}+$`), "");
-  return value || null;
+  return parsedClipboardHtml(value || null, sawBlockStructure);
 }
 
 export type ParsedClipboardHtml = {
@@ -536,19 +540,17 @@ export function parsedClipboardHtml(
 ): ParsedClipboardHtml {
   return {
     inlineValue: value?.split(BLOCK_SEPARATOR).join("\n") ?? null,
-    blocks: value?.includes(BLOCK_SEPARATOR) ? value.split(BLOCK_SEPARATOR) : null,
+    blocks: value && sawBlockStructure ? value.split(BLOCK_SEPARATOR) : null,
     sawBlockStructure
   };
 }
 
 export function inlineFragmentFromHtml(html: string): string | null {
-  const value = fragmentValueFromHtml(html);
-  return parsedClipboardHtml(value, Boolean(value?.includes(BLOCK_SEPARATOR))).inlineValue;
+  return fragmentsFromHtml(html).inlineValue;
 }
 
 export function paragraphFragmentsFromHtml(html: string): string[] | null {
-  const value = fragmentValueFromHtml(html);
-  return parsedClipboardHtml(value, Boolean(value?.includes(BLOCK_SEPARATOR))).blocks;
+  return fragmentsFromHtml(html).blocks;
 }
 
 // Structural paste choices operate on logical blocks. Rich HTML wins because
