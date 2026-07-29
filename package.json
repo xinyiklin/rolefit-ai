@@ -25,6 +25,7 @@
     "test:rolefit:release": "npm run test:desktop:release --workspace apps/role-fit-ai",
     "test:rolefit:windows-runtime": "npm run test:desktop:windows-runtime --workspace apps/role-fit-ai",
     "check:package-scripts": "node scripts/check-package-script-paths.mjs",
+    "test:editor:browser": "node scripts/editor-browser-contracts.mjs",
     "check": "npm run check:package-scripts && npm run check --workspaces --if-present",
     "test": "npm run test --workspaces --if-present"
   }
