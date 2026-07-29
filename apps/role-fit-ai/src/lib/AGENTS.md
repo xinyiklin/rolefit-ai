@@ -28,6 +28,9 @@ Applies to `apps/role-fit-ai/src/lib/`.
 - `applicationMutation.ts` owns sparse tracker request selection and
   reference-preserving own-write response reconciliation. It does not own
   persistence, queueing, conflicts, or React state.
+- `coverLetterWorkspaceRepository.ts` is the typed HTTP boundary for named
+  letter variants and history. `coverLetterExport.ts` owns pure source/PDF
+  artifact construction; neither helper owns React state or document history.
 - `jobIdentity.ts` owns both duplicate matching and the dependency-free
   candidate cache version. The key must use the matcher's effective text/role
   selectors and conservatively invalidate every observable verdict input; safe

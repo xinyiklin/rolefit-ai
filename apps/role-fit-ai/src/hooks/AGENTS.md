@@ -37,10 +37,12 @@ browser-side effects; components render them and App composes them.
   retryable and updating one document never rewrites the other.
 - `useResumeEditor` is a RoleFit adapter over the shared editor hook; keep
   reusable history/reducer behavior in `@typeset/editor`.
-- `useCoverLetterEditor` owns RoleFit's separate letter/file/export lifecycle
-  while delegating history, editing, layout, and PDF to the shared packages.
-  It also owns the exact pre-tailor `.cover` snapshot behind Restore, because it
-  owns the document that snapshot replaces. `useCoverLetter` owns deterministic
+- `useCoverLetterEditor` composes RoleFit's separate letter lifecycle while
+  delegating file transport to `coverLetterWorkspaceRepository`, export and
+  application-artifact construction to `coverLetterExport`, title/baseline
+  state to `useCoverLetterDocumentIdentity`, and the exact one-snapshot
+  lifecycle to `useCoverLetterPreTailorSnapshot`. History, editing, layout, and
+  PDF primitives remain in the shared packages. `useCoverLetter` owns deterministic
   preflight inputs, the single tailoring request, stale-input invalidation, and
   the result summary — it never holds the document. A valid letter is applied
   directly; there is no pending proposal to accept. Keep that request-generation

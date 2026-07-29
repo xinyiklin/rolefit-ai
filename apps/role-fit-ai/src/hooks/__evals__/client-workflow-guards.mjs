@@ -255,7 +255,7 @@ assert.match(
 );
 assert.match(
   coverEditor,
-  /setPreTailorSnapshot\(\s*editor\.editedResume[\s\S]{0,240}?editor\.seedData\(data\)/,
+  /capturePreTailorSnapshot\(\s*editor\.editedResume[\s\S]{0,240}?editor\.seedData\(data\)/,
   "the exact pre-tailor .cover is captured before the replacement, not after",
 );
 assert.match(

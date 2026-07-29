@@ -18,36 +18,35 @@ import {
   serializeCoverLetterFile
 } from "@typeset/engine/lib/coverLetter.ts";
 import { downloadBlob } from "@typeset/engine/lib/download.ts";
-
-/** Mirrors the server's cover-letter workspace snapshot fields. */
-export type CoverLetterOption = { fileName: string; label: string };
-export type CoverLetterHistoryEntry = {
-  key: string;
-  originalName: string;
-  date: string;
-};
-export type CoverLetterHistoryGroup = {
-  variant: string;
-  label: string;
-  entries: CoverLetterHistoryEntry[];
-};
 import { DOC_STYLE_DEFAULTS, type DocStyle, type DocumentStyle } from "@typeset/engine/lib/documentStyle.ts";
 import type { ResumeData } from "@typeset/engine/lib/resumeData.ts";
-import { toTypesetSchema } from "@typeset/engine/typeset/schema.ts";
 import { clearCoverLetterAutosaveDraft } from "./useCoverLetterAutosaveDraft";
-import type { DocumentUpload } from "../lib/applicationDocumentRequests";
 import {
   coverLetterStartupIsCurrent,
   loadLastCoverLetterName,
   resolveCoverLetterStartup,
   saveLastCoverLetterName
 } from "../lib/coverLetterPrefs.ts";
+import {
+  readCoverLetterWorkspace,
+  restoreCoverLetterWorkspaceDocument,
+  saveCoverLetterWorkspace,
+  selectCoverLetterWorkspaceDocument,
+  type CoverLetterHistoryGroup,
+  type CoverLetterOption
+} from "../lib/coverLetterWorkspaceRepository.ts";
+import {
+  coverLetterPdfFailureMessage,
+  createCoverLetterDocumentUpload,
+  renderCoverLetterPdfBytes
+} from "../lib/coverLetterExport.ts";
+import { useCoverLetterDocumentIdentity } from "./useCoverLetterDocumentIdentity.ts";
+import { useCoverLetterPreTailorSnapshot } from "./useCoverLetterPreTailorSnapshot.ts";
 
 const STYLE_STORAGE_KEY = "rolefit:coverLetterStyle.v1";
 // Spell-check is a view preference: it never enters a .cover file, but it is
 // the writer's choice and must survive a reload rather than snapping back on.
 const SPELL_CHECK_STORAGE_KEY = "rolefit:coverLetterSpellCheck.v1";
-const TITLE_STORAGE_KEY = "rolefit:coverLetterTitle.v1";
 const COVER_LETTER_STARTER = `[Date]
 
 Dear [Hiring manager],
@@ -93,23 +92,6 @@ function loadStyle(): DocStyle {
   return coverLetterStyleToDocumentStyle(COVER_LETTER_STYLE_DEFAULTS, view);
 }
 
-function loadTitle(): string {
-  try {
-    return window.sessionStorage.getItem(TITLE_STORAGE_KEY)?.trim() || "Cover letter";
-  } catch {
-    return "Cover letter";
-  }
-}
-
-// Blob → bare base64 (no data: prefix), matching the resume export's encoder.
-function pdfFailureMessage(error: unknown): string {
-  const detail = error instanceof Error ? error.message : "";
-  if (/font|Unknown font format/i.test(detail)) {
-    return "PDF export failed because the bundled document fonts could not be loaded.";
-  }
-  return "PDF export failed. Try again.";
-}
-
 type UseCoverLetterEditorOptions = {
   // Fired when a letter is OPENED — a file, a starter, a blank page, a saved
   // variant, a recovery draft, or an application source. The host puts the caret in the
@@ -122,19 +104,41 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
   const [style, setStyle] = useState<DocStyle>(loadStyle);
   const [initialData] = useState(() => parseCoverLetterText(""));
   const [sourceRevision, setSourceRevision] = useState(0);
-  // The exact serialized `.cover` this document held immediately before the last
-  // Tailor. Tailoring applies straight to the editor, so one-click undo of the
-  // whole replacement — style included — has to be exact, not text-only.
-  const [preTailorSnapshot, setPreTailorSnapshot] = useState<string | null>(null);
-  const snapshotBaselineRef = useRef<string | null>(null);
   const editor = useTypesetResumeEditor(initialData);
   const onOpenDocumentRef = useRef(options.onOpenDocument);
   onOpenDocumentRef.current = options.onOpenDocument;
   const cancelStartupOpenRef = useRef(false);
-  const dropPreTailorSnapshot = useCallback(() => {
-    setPreTailorSnapshot(null);
-    snapshotBaselineRef.current = null;
-  }, []);
+  const styleRef = useRef(style);
+  styleRef.current = style;
+  const text = useMemo(
+    () => (editor.editedResume ? coverLetterPlainText(editor.editedResume) : ""),
+    [editor.editedResume]
+  );
+  const currentFingerprint = useMemo(
+    () =>
+      editor.editedResume
+        ? serializeCoverLetterFile(editor.editedResume, documentStyleToCoverLetterStyle(style))
+        : null,
+    [editor.editedResume, style]
+  );
+  const {
+    documentTitle,
+    persistedDocumentTitle,
+    setDocumentTitle,
+    dirty,
+    commitPersistenceBaseline,
+    startupFingerprintRef
+  } = useCoverLetterDocumentIdentity(
+    serializeCoverLetterFile(initialData, documentStyleToCoverLetterStyle(style)),
+    currentFingerprint
+  );
+  // The exact serialized `.cover` immediately before Tailor is a true one-step
+  // replacement undo. Its hook retires the snapshot after any subsequent edit.
+  const {
+    snapshot: preTailorSnapshot,
+    capture: capturePreTailorSnapshot,
+    drop: dropPreTailorSnapshot
+  } = useCoverLetterPreTailorSnapshot(currentFingerprint);
   // Every user-initiated load goes through here instead of `editor.seedData`,
   // so no open path can forget to move the caret into the new document.
   const openDocument = useCallback(
@@ -147,8 +151,6 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
     },
     [dropPreTailorSnapshot, editor.seedData]
   );
-  const [documentTitle, setDocumentTitle] = useState(loadTitle);
-  const [persistedDocumentTitle, setPersistedDocumentTitle] = useState(documentTitle);
   const [status, setStatus] = useState("");
   const [isRenderingPdf, setIsRenderingPdf] = useState(false);
   // Workspace-resident cover letters. Cover letters gained the same named
@@ -157,46 +159,6 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
   const [coverLetterOptions, setCoverLetterOptions] = useState<CoverLetterOption[]>([]);
   const [coverLetterHistory, setCoverLetterHistory] = useState<CoverLetterHistoryGroup[]>([]);
   const [activeCoverFileName, setActiveCoverFileName] = useState("");
-  const [persistedFingerprint, setPersistedFingerprint] = useState<string | null>(() =>
-    serializeCoverLetterFile(initialData, documentStyleToCoverLetterStyle(style))
-  );
-  const commitPersistenceBaseline = useCallback(
-    (fingerprint: string, title = documentTitle) => {
-      setPersistedFingerprint(fingerprint);
-      setPersistedDocumentTitle(title.trim() || "Cover letter");
-    },
-    [documentTitle]
-  );
-  const styleRef = useRef(style);
-  styleRef.current = style;
-
-  const text = useMemo(
-    () => (editor.editedResume ? coverLetterPlainText(editor.editedResume) : ""),
-    [editor.editedResume]
-  );
-  const currentFingerprint = useMemo(
-    () =>
-      editor.editedResume
-        ? serializeCoverLetterFile(editor.editedResume, documentStyleToCoverLetterStyle(style))
-        : null,
-    [editor.editedResume, style]
-  );
-  const dirty = currentFingerprint !== null && currentFingerprint !== persistedFingerprint;
-  const startupFingerprint = `${documentTitle}\u0000${currentFingerprint ?? ""}`;
-  const startupFingerprintRef = useRef(startupFingerprint);
-  startupFingerprintRef.current = startupFingerprint;
-
-  // Restore stays offered until the document changes again for any reason — an
-  // edit, a style change, another Tailor, or opening something else. The first
-  // pass after a tailor records the applied document as the baseline.
-  useEffect(() => {
-    if (!preTailorSnapshot || currentFingerprint === null) return;
-    if (snapshotBaselineRef.current === null) {
-      snapshotBaselineRef.current = currentFingerprint;
-      return;
-    }
-    if (snapshotBaselineRef.current !== currentFingerprint) dropPreTailorSnapshot();
-  }, [currentFingerprint, dropPreTailorSnapshot, preTailorSnapshot]);
 
   useEffect(() => {
     try {
@@ -216,14 +178,6 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
       // The in-session preference still applies when storage is unavailable.
     }
   }, [style.spellCheck]);
-
-  useEffect(() => {
-    try {
-      window.sessionStorage.setItem(TITLE_STORAGE_KEY, documentTitle.trim() || "Cover letter");
-    } catch {
-      // The in-memory title remains authoritative for this session.
-    }
-  }, [documentTitle]);
 
   const set = useCallback(<K extends keyof DocStyle>(key: K, value: DocStyle[K]) => {
     setStyle((current) => ({ ...current, [key]: value }));
@@ -326,7 +280,7 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
               : null
           }
         : parsed;
-      setPreTailorSnapshot(
+      capturePreTailorSnapshot(
         editor.editedResume
           ? serializeCoverLetterFile(
               editor.editedResume,
@@ -334,11 +288,10 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
             )
           : null
       );
-      snapshotBaselineRef.current = null;
       editor.seedData(data);
       setStatus("Tailored letter loaded. Read it once before sending.");
     },
-    [editor.editedResume, editor.seedData]
+    [capturePreTailorSnapshot, editor.editedResume, editor.seedData]
   );
 
   const restorePreTailor = useCallback(() => {
@@ -535,21 +488,11 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
   );
 
   const refreshCoverWorkspace = useCallback(async () => {
-    try {
-      const response = await fetch("/api/workspace");
-      if (!response.ok) return;
-      const snapshot = (await response.json()) as {
-        coverLetterOptions?: CoverLetterOption[];
-        coverLetterHistory?: CoverLetterHistoryGroup[];
-      };
-      setCoverLetterOptions(snapshot.coverLetterOptions ?? []);
-      setCoverLetterHistory(snapshot.coverLetterHistory ?? []);
-      return snapshot;
-    } catch {
-      // The list is an affordance, not the document — a failed refresh must not
-      // interrupt editing. The next mutation reports its own error.
-      return null;
-    }
+    const snapshot = await readCoverLetterWorkspace();
+    if (!snapshot) return null;
+    setCoverLetterOptions(snapshot.coverLetterOptions ?? []);
+    setCoverLetterHistory(snapshot.coverLetterHistory ?? []);
+    return snapshot;
   }, []);
 
   // Write the current letter into the workspace, either over the active file or
@@ -565,28 +508,14 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
         documentStyleToCoverLetterStyle(styleRef.current)
       );
       try {
-        const response = await fetch("/api/workspace/cover-letter", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          // `variant` is a LABEL the server slugs; `fileName` is already a file
-          // name it only validates. The active file must go in `fileName` — sent
-          // as a variant it was re-slugged, so "Update Growth" wrote
-          // cover-letter-cover-letter-growth-cover.cover instead of updating.
-          body: JSON.stringify({
-            text: payload,
-            fileName:
-              target?.fileName ?? (target?.variant ? undefined : activeCoverFileName || undefined),
-            variant: target?.variant
-          })
+        // `variant` is a LABEL the server slugs; `fileName` is already validated
+        // workspace identity. Keeping that distinction here prevents an update
+        // from being re-slugged as a new doubly-prefixed variant.
+        const data = await saveCoverLetterWorkspace(payload, {
+          fileName:
+            target?.fileName ?? (target?.variant ? undefined : activeCoverFileName || undefined),
+          variant: target?.variant
         });
-        const data = (await response.json()) as {
-          error?: string;
-          fileName?: string;
-          label?: string;
-          coverLetterOptions?: CoverLetterOption[];
-          coverLetterHistory?: CoverLetterHistoryGroup[];
-        };
-        if (!response.ok) throw new Error(data.error ?? "Cover letter save failed.");
         setCoverLetterOptions(data.coverLetterOptions ?? []);
         setCoverLetterHistory(data.coverLetterHistory ?? []);
         if (data.fileName) {
@@ -609,33 +538,19 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
   const openWorkspaceCoverLetter = useCallback(
     async (fileName: string, automatic = false, shouldCancel?: () => boolean) => {
       try {
-        const response = await fetch("/api/workspace/cover-letter/select", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ fileName })
-        });
-        const data = (await response.json()) as {
-          error?: string;
-          text?: string;
-          fileName?: string;
-          label?: string;
-          coverLetterOptions?: CoverLetterOption[];
-          coverLetterHistory?: CoverLetterHistoryGroup[];
-        };
-        if (!response.ok || !data.text)
-          throw new Error(data.error ?? "Cover letter version not found.");
+        const data = await selectCoverLetterWorkspaceDocument(fileName);
         if (automatic && (cancelStartupOpenRef.current || shouldCancel?.())) {
           return;
         }
         adoptCoverPayload(
           data.text,
-          data.fileName ?? fileName,
-          data.label ?? "Cover letter",
+          data.fileName,
+          data.label,
           automatic
         );
         setCoverLetterOptions(data.coverLetterOptions ?? []);
         setCoverLetterHistory(data.coverLetterHistory ?? []);
-        setStatus(automatic ? "" : `Opened ${data.label ?? fileName}.`);
+        setStatus(automatic ? "" : `Opened ${data.label}.`);
       } catch (error) {
         setStatus(error instanceof Error ? error.message : "Cover letter load failed.");
       }
@@ -688,29 +603,15 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
   const restoreWorkspaceCoverLetter = useCallback(
     async (key: string) => {
       try {
-        const response = await fetch("/api/workspace/cover-letter/restore", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ key })
-        });
-        const data = (await response.json()) as {
-          error?: string;
-          text?: string;
-          fileName?: string;
-          label?: string;
-          coverLetterOptions?: CoverLetterOption[];
-          coverLetterHistory?: CoverLetterHistoryGroup[];
-        };
-        if (!response.ok || !data.text)
-          throw new Error(data.error ?? "Cover letter restore failed.");
+        const data = await restoreCoverLetterWorkspaceDocument(key);
         adoptCoverPayload(
           data.text,
-          data.fileName ?? "default.cover",
-          data.label ?? "Cover letter"
+          data.fileName,
+          data.label
         );
         setCoverLetterOptions(data.coverLetterOptions ?? []);
         setCoverLetterHistory(data.coverLetterHistory ?? []);
-        setStatus(`Restored ${data.label ?? "cover letter"} from history.`);
+        setStatus(`Restored ${data.label} from history.`);
       } catch (error) {
         setStatus(error instanceof Error ? error.message : "Cover letter restore failed.");
       }
@@ -750,15 +651,12 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
   // the letter the tracker keeps is byte-for-byte the letter the user exports.
   const renderPdfBytes = useCallback(
     async (data: ResumeData) => {
-      const [{ layoutCoverLetter }, { emitPdf, fetchFontBytes }] = await Promise.all([
-        import("@typeset/engine/typeset/layout.ts"),
-        import("@typeset/engine/typeset/pdf/emit.ts")
-      ]);
-      const document = layoutCoverLetter(toTypesetSchema(data), styleRef.current);
       const publicBase = import.meta.env.BASE_URL.replace(/\/$/, "");
-      const fonts = await fetchFontBytes(document, `${publicBase}/fonts`);
-      return emitPdf(document, fonts, {
-        title: documentTitle.trim() || "Cover letter"
+      return renderCoverLetterPdfBytes({
+        data,
+        style: styleRef.current,
+        title: documentTitle,
+        fontBaseUrl: `${publicBase}/fonts`
       });
     },
     [documentTitle]
@@ -783,7 +681,7 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
         downloadBlob(new Blob([bytes as BlobPart], { type: "application/pdf" }), fileName);
         setStatus(`Downloaded ${fileName}.`);
       } catch (error) {
-        setStatus(pdfFailureMessage(error));
+        setStatus(coverLetterPdfFailureMessage(error));
       } finally {
         setIsRenderingPdf(false);
       }
@@ -794,13 +692,12 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
   // The letter's equivalent of the resume export's getResumeArtifacts: the
   // editable `.cover` source an application keeps. PDF preview/download is
   // rendered from this source on demand.
-  const getArtifacts = useCallback(async (): Promise<DocumentUpload | null> => {
-    const data = editor.editedResume;
-    if (!data || !coverLetterPlainText(data).trim()) return null;
-    return {
-      sourceText: serializeCoverLetterFile(data, documentStyleToCoverLetterStyle(styleRef.current)),
-      fileName: coverLetterFileName(documentTitle)
-    };
+  const getArtifacts = useCallback(async () => {
+    return createCoverLetterDocumentUpload(
+      editor.editedResume,
+      styleRef.current,
+      documentTitle
+    );
   }, [documentTitle, editor.editedResume]);
 
   const markApplicationSaved = useCallback(() => {
