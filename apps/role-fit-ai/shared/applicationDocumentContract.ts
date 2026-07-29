@@ -10,6 +10,7 @@ export type ApplicationDocumentArtifacts = {
   hasSource: boolean;
   sourceFingerprint?: string;
   fileName?: string;
+  templateId?: string;
   savedAt?: string;
 };
 
@@ -27,6 +28,6 @@ export function applicationDocumentAvailability(
   if (artifacts?.hasSource && artifacts.hasPdf) return "source-and-pdf";
   if (artifacts?.hasSource) return "source-only";
   if (artifacts?.hasPdf) return "pdf-only";
-  if (hasLegacyTextSnapshot) return "source-only";
+  if (hasLegacyTextSnapshot) return "legacy-text-snapshot";
   return "none";
 }

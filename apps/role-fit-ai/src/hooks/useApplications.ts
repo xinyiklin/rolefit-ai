@@ -12,6 +12,7 @@ import {
   reconcileApplicationWriteResponse,
   type ApplicationMutation
 } from "../lib/applicationMutation";
+import type { ApplicationDocumentArtifacts } from "../../shared/applicationDocumentContract.ts";
 
 export type { ApplicationAiUsage, StageAiUsage } from "../lib/aiUsage";
 
@@ -83,20 +84,7 @@ export const JOB_TYPES = ["Full-time", "Part-time", "Contract", "Internship", "T
 // document is later updated. The active representation is strict source or an
 // explicitly uploaded PDF; this record only remembers what exists so the
 // detail modal can offer preview/download actions.
-export type DocumentArtifacts = {
-  hasPdf: boolean;
-  hasSource?: boolean;
-  // Deterministic marker for the complete strict source, including document
-  // style and inline formatting. Missing on legacy rows, which intentionally
-  // makes the editor offer an Update action to establish the current version.
-  sourceFingerprint?: string;
-  fileName?: string;
-  templateId?: string;
-  savedAt?: string;
-};
-
-/** @deprecated Use DocumentArtifacts — kept as the historical resume-only name. */
-export type ResumeArtifacts = DocumentArtifacts;
+export type DocumentArtifacts = ApplicationDocumentArtifacts;
 
 // An extra file the user attached to this application (transcript, portfolio,
 // writing sample). Stored under <workspace>/applications/<id>/attachments/;

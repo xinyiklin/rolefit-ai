@@ -15,7 +15,10 @@ import {
   type ApplicationDocumentKind,
   type DocumentUpload
 } from "../../lib/applicationDocumentRequests";
-import { applicationDocumentAvailability } from "../../../shared/applicationDocumentContract.ts";
+import {
+  applicationDocumentAvailability,
+  type ApplicationDocumentAvailability
+} from "../../../shared/applicationDocumentContract.ts";
 
 type ApplicationDocumentsTabProps = {
   application: Application | null;
@@ -60,7 +63,7 @@ function DocumentPane({
   application,
   kind,
   artifacts,
-  hasDocument,
+  availability,
   busy,
   uploadRef,
   downloadBase,
@@ -72,7 +75,7 @@ function DocumentPane({
   application: Application | null;
   kind: ApplicationDocumentKind;
   artifacts?: DocumentArtifacts;
-  hasDocument: boolean;
+  availability: ApplicationDocumentAvailability;
   busy: boolean;
   uploadRef: RefObject<HTMLInputElement | null>;
   downloadBase: string;
@@ -85,6 +88,7 @@ function DocumentPane({
   const title = isResume ? "Resume" : "Cover letter";
   const sourceExtension = isResume ? ".resume" : ".cover";
   const pdfName = `${downloadBase}_${isResume ? "Resume" : "Cover_Letter"}.pdf`;
+  const hasArtifact = availability !== "none" && availability !== "legacy-text-snapshot";
 
   return (
     <article className="application-doc-card" aria-label={title}>
@@ -108,7 +112,7 @@ function DocumentPane({
           >
             <Upload size={13} aria-hidden="true" />
           </button>
-          {hasDocument ? (
+          {hasArtifact ? (
             <button
               type="button"
               className="ghost-button is-icon"
@@ -164,8 +168,12 @@ function DocumentPane({
             ) : null}
           </div>
         </div>
+      ) : availability === "legacy-text-snapshot" ? (
+        <p className="application-muted">
+          Text snapshot only — no editable document file is saved.
+        </p>
       ) : (
-        <p className="application-muted">{hasDocument ? `${title} saved.` : `No ${title.toLowerCase()} saved.`}</p>
+        <p className="application-muted">No {title.toLowerCase()} saved.</p>
       )}
     </article>
   );
@@ -188,10 +196,14 @@ export function ApplicationDocumentsTab({
   const { alert, confirm } = useDialog();
   const resumeArtifacts = application?.resumeArtifacts;
   const coverArtifacts = application?.coverLetterArtifacts;
-  const hasResume =
-    applicationDocumentAvailability(resumeArtifacts, Boolean(application?.resumeData)) !== "none";
-  const hasCover =
-    applicationDocumentAvailability(coverArtifacts, Boolean(application?.coverLetterText)) !== "none";
+  const resumeAvailability = applicationDocumentAvailability(
+    resumeArtifacts,
+    Boolean(application?.resumeData)
+  );
+  const coverAvailability = applicationDocumentAvailability(
+    coverArtifacts,
+    Boolean(application?.coverLetterText)
+  );
 
   async function upload(kind: UploadKind, event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -313,7 +325,7 @@ export function ApplicationDocumentsTab({
           application={application}
           kind="resume"
           artifacts={resumeArtifacts}
-          hasDocument={hasResume}
+          availability={resumeAvailability}
           busy={busy}
           uploadRef={resumeUploadRef}
           downloadBase={downloadBase}
@@ -326,7 +338,7 @@ export function ApplicationDocumentsTab({
           application={application}
           kind="cover"
           artifacts={coverArtifacts}
-          hasDocument={hasCover}
+          availability={coverAvailability}
           busy={busy}
           uploadRef={coverUploadRef}
           downloadBase={downloadBase}
