@@ -2,7 +2,8 @@ type MarkClean = () => void;
 
 export function commitDocumentSaveBaseline(
   markContentClean: MarkClean,
-  _markStyleClean: MarkClean
+  markStyleClean: MarkClean
 ): void {
   markContentClean();
+  markStyleClean();
 }

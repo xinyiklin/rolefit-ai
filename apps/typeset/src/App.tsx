@@ -168,10 +168,12 @@ export default function App() {
       });
     }
 
-    editor.seedData(initialData);
-    docStyle.replaceDocumentStyle(initialDocumentStyle);
+    commitDocumentSaveBaseline(
+      () => editor.seedData(initialData),
+      () => docStyle.replaceDocumentStyle(initialDocumentStyle)
+    );
     setDocumentTitle(initialTitle);
-  }, [editor.seedData]);
+  }, [docStyle.replaceDocumentStyle, editor.seedData]);
 
   // The editable source is continuously kept in this browser. Saving a file is
   // still a separate, explicit action so users can move or version a resume.
@@ -183,8 +185,7 @@ export default function App() {
       try {
         window.localStorage.setItem(AUTOSAVE_KEY, serializeResumeFile(resume, docStyle.style));
         window.localStorage.setItem(DOCUMENT_TITLE_KEY, documentTitle.trim() || UNTITLED_RESUME_TITLE);
-        editor.markClean();
-        docStyle.markClean();
+        commitDocumentSaveBaseline(editor.markClean, docStyle.markClean);
         setSaveStatus("saved");
       } catch {
         setSaveStatus({ state: "error", label: "Local save unavailable" });
@@ -210,8 +211,10 @@ export default function App() {
 
   const applyReplacement = useCallback(
     (replacement: Replacement) => {
-      editor.seedData(replacement.data);
-      docStyle.replaceDocumentStyle(replacement.documentStyle);
+      commitDocumentSaveBaseline(
+        () => editor.seedData(replacement.data),
+        () => docStyle.replaceDocumentStyle(replacement.documentStyle)
+      );
       setDocumentTitle(replacement.title);
       setPendingReplacement(null);
       setInlineFormat(EMPTY_INLINE_FORMAT);
@@ -220,7 +223,7 @@ export default function App() {
         message: replacement.kind === "open" ? `Opened ${replacement.title}.` : "Started a fresh resume."
       });
     },
-    [editor.seedData]
+    [docStyle.replaceDocumentStyle, editor.seedData]
   );
 
   const queueReplacement = useCallback(
