@@ -46,8 +46,6 @@ npm run eval:cover-letter-file --workspace packages/engine
 npm run eval:pdf-font-parity --workspace packages/engine
 npm run fonts:check --workspace packages/engine
 npm run eval:editor --workspace packages/editor
-npm run workspace:rewrite-resume-v1 -- --dry-run
-npm run workspace:rewrite-cover-v1 -- --dry-run
 npm run test:server-lifecycle --workspace apps/role-fit-ai
 npm run test:desktop:vault --workspace apps/role-fit-ai
 npm run test:desktop:security --workspace apps/role-fit-ai

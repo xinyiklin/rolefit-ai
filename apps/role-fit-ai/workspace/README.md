@@ -22,15 +22,8 @@ Local, ignored storage for the RoleFit AI app.
   you intentionally want them tracked.
 - Files in this folder are intentionally ignored by git except this README.
 
-Before running a build that finalizes a document wire contract, audit first and
-then rewrite every active, history, application, and application-trash source:
-
-```bash
-npm run workspace:rewrite-resume-v1 -- --dry-run
-npm run workspace:rewrite-cover-v1 -- --dry-run
-npm run workspace:rewrite-resume-v1
-npm run workspace:rewrite-cover-v1
-```
-
-Both commands validate every candidate before the first write, keep timestamped
-ignored backups, replace files atomically, and re-parse the complete workspace.
+Before finalizing a pre-release document-shape change, audit the ignored
+workspace and convert every active, history, application, and
+application-trash source with a throwaway developer tool. Keep that tool and
+its timestamped backups outside the commit, then re-parse the complete
+workspace before continuing.
