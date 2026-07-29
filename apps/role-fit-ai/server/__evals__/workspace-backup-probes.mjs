@@ -30,6 +30,7 @@ import {
 } from "../../src/lib/workspaceBackupContract.ts";
 import {
   COVER_LETTER_STYLE_DEFAULTS,
+  coverLetterResumeData,
   serializeCoverLetterFile
 } from "@typeset/engine/lib/coverLetter.ts";
 
@@ -115,26 +116,14 @@ try {
     "utf8"
   );
   await writeFile(join(sourceDir, "applications", "application-1", "resume.resume"), portableResumeText, "utf8");
-  const portableCoverText = serializeCoverLetterFile({
-    header: {
+  const portableCoverText = serializeCoverLetterFile(
+    coverLetterResumeData(["Dear Hiring Team,"], {
       visible: true,
       name: "Portable Candidate",
       contact: ["portable@example.test"]
-    },
-    sections: [{
-      id: "section-cover",
-      heading: "Cover Letter",
-      type: "summary",
-      items: [{
-        id: "entry-cover",
-        titleLeft: "Dear Hiring Team,",
-        titleRight: "",
-        subtitleLeft: "",
-        subtitleRight: "",
-        bullets: []
-      }]
-    }]
-  }, COVER_LETTER_STYLE_DEFAULTS);
+    }),
+    COVER_LETTER_STYLE_DEFAULTS
+  );
   await writeFile(join(sourceDir, "applications", "application-1", "cover.cover"), portableCoverText, "utf8");
   await writeFile(
     join(sourceDir, "applications", "application-1", "attachments", "writing sample.pdf"),
