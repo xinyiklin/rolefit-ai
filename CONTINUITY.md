@@ -5,6 +5,11 @@ bounded; app-only operational detail belongs in the affected app documentation.
 
 ## 2026-07-29
 
+- [USER+CODE+TOOL] React and React DOM now resolve once at 19.2.8, and all
+  three Lucide consumers resolve once at 1.27.0. Shared-editor checks, the
+  Typeset app gate, RoleFit's production build, and the dependency contract
+  pass. No product UI code changed; visual QA remains deferred under the
+  flag-first policy until the Vite/browser tranche.
 - [USER+CODE+TOOL] Dependency-modernization tranche 1 pins the workspace to
   Node 24.18+ below 25 (`.node-version`: 24.18.0) and npm 11.16.0, aligns CI
   and Node types with that runtime, and makes shared TypeScript/Vite/React
