@@ -5,6 +5,15 @@ bounded; app-only operational detail belongs in the affected app documentation.
 
 ## 2026-07-29
 
+- [USER+CODE+TOOL] Electron 43.2.0 now shares one desktop runtime contract for
+  its 43.2 major/minor, embedded Node 24.18, the `node24.18` esbuild target,
+  and Node 24-only Forge host. Build staging, Forge, release contracts, IPC
+  fixtures, package layout, and packaged smoke consume that owner; the exact
+  Electron installer is included in the reviewed lifecycle-script allowlist.
+  Source desktop probes, release tests, the real Electron owned/reused server
+  smoke, native macOS arm64 packaging, ASAR/PDF-worker presence, security
+  fuses, ad-hoc signature, and packaged startup pass. Native macOS x64 and
+  Windows x64 remain workflow-only verification on this ARM64 host.
 - [USER+CODE+TOOL] RoleFit now shares the root Vite 8.1.5 and React plugin
   6.0.4 with Typeset, with the Vite 7 browser baseline retained explicitly for
   the renderer and public landing page. Dependency checks, both app gates,

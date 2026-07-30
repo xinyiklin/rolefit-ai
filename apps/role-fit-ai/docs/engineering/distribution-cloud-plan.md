@@ -273,7 +273,7 @@ Before creating any preview tag, the maintainer must:
 4. Run `npm run check --workspace apps/role-fit-ai` and
    `npm run test:rolefit:desktop`; do not treat the first command as coverage
    for the explicit Electron smoke.
-5. On a matching native host with Node 22-24, make the package and run
+5. On a matching native host with Node 24, make the package and run
    `test:desktop:packaged` against that fresh output.
 6. Run `npm run test:desktop:release --workspace apps/role-fit-ai`, review the
    final tag/notes/version tuple, and only then create the immutable tag.
@@ -413,8 +413,8 @@ npm run test:rolefit:release
 git diff --check
 ```
 
-Use Node 24 for Forge packaging and making. The wrapper accepts Node 22-24,
-with Node 24 as the verified runtime, rejects cross-compilation, and supports
+Use Node 24 for Forge packaging and making. The wrapper rejects every other
+host Node major, rejects cross-compilation, and supports
 only native macOS arm64/x64 or Windows x64 targets. Pass an explicit native
 target when needed, for example:
 

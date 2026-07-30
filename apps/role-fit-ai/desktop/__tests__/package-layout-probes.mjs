@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { builtinModules } from "node:module";
 import { readFile, readdir, stat } from "node:fs/promises";
 import { join, relative, resolve, sep } from "node:path";
+import { assertElectronPackageVersion } from "../runtime-versions.mjs";
 
 const appRoot = resolve(import.meta.dirname, "../..");
 const stageRoot = join(appRoot, ".forge", "app");
@@ -25,6 +26,7 @@ assert(files.includes("package.json"));
 assert(files.includes("LICENSE"));
 assert(files.includes("dist/index.html"));
 assert(files.some((file) => /^dist\/assets\/.*\.js$/.test(file)));
+assert(files.some((file) => /^dist\/assets\/pdf\.worker\.min-.*\.mjs$/.test(file)));
 assert(files.includes("dist/fonts/LMRoman10-Regular.woff2"));
 assert(files.includes("dist-electron/desktop/main.cjs"));
 assert(files.includes("dist-electron/desktop/preload.cjs"));
@@ -67,6 +69,7 @@ assert.equal(manifest.license, "MIT");
 assert.equal(manifest.config.forge, "./forge.config.cjs");
 assert.deepEqual(manifest.dependencies, undefined);
 assert.deepEqual(Object.keys(manifest.devDependencies), ["electron"]);
+assertElectronPackageVersion(manifest.devDependencies.electron);
 
 const bundleMeta = JSON.parse(
   await readFile(join(appRoot, ".forge", "bundle-metafile.json"), "utf8")
