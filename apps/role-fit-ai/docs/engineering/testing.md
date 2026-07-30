@@ -70,8 +70,9 @@ and rebound.
 Good server verification covers:
 
 - `npx tsc -p apps/role-fit-ai/tsconfig.server.json --noEmit` passes after
-  server edits (the server runs
-  under Node's native TypeScript type stripping; this is the type + syntax gate)
+  server edits (the server runs under Node's native TypeScript type stripping;
+  the NodeNext, rewrite, and erasable-syntax options make this the type +
+  native-runtime syntax gate)
 - the affected route returns the expected JSON shape and HTTP status
 - `/api/polish` accepts a structured `tailorScope`, does not require or read
   full-resume `resumeText`, and returns only suggestions targeting IDs from

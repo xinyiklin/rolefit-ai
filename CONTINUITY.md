@@ -5,6 +5,13 @@ bounded; app-only operational detail belongs in the affected app documentation.
 
 ## 2026-07-29
 
+- [USER+CODE+TOOL] TypeScript 6.0.3 is the explicit migration bridge before
+  TypeScript 7. The shared browser config now has an independently runnable
+  probe, while child configs keep their existing browser options. The
+  Node-native server gate alone intentionally moves to ESNext/NodeNext with
+  relative-import rewriting, erasable syntax, verbatim modules, and no emit;
+  the emitting desktop config remains separate. All seven explicit tsconfigs
+  pass and their effective configurations show no other target/module drift.
 - [USER+CODE+TOOL] Electron 43.2.0 now shares one desktop runtime contract for
   its 43.2 major/minor, embedded Node 24.18, the `node24.18` esbuild target,
   and Node 24-only Forge host. Build staging, Forge, release contracts, IPC
