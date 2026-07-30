@@ -1399,3 +1399,9 @@ bounded; app-only operational detail belongs in the affected app documentation.
   same Ubuntu image. Font-tool setup now pins `certifi` and exports its CA bundle
   in every engine-checking workflow so mirror trust does not depend on runner
   image timing.
+- [TOOL+CODE] 2026-07-29: Superseding the CA-only diagnosis above, the next
+  remote engine job reproduced the redirected CTAN mirror's incomplete trust
+  chain even with pinned `certifi`. Latin Modern provenance now uses the named
+  official Illinois CTAN mirror instead of the proximity redirector while
+  retaining exact source digests; the CA pin remains deterministic runner
+  setup, not a fallback for an invalid upstream chain.
