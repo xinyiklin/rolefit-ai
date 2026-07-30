@@ -33,8 +33,9 @@ npm run dev:typeset  # http://localhost:5186
 npm run check        # every workspace's type/build/eval gate
 ```
 
-Requires Node 22.18 or newer (direct TypeScript execution is enabled by
-default); Node 24 matches CI and the Typeset Docker build.
+Requires Node 24.18 or newer in the Node 24 line. `.node-version` pins
+Node 24.18.0, matching CI and Electron's embedded runtime, and the workspace
+pins npm 11.16.0.
 
 Focused commands:
 
@@ -48,6 +49,7 @@ npm run make:rolefit:desktop   # native, non-publicly-trusted test artifacts (No
 npm run test:rolefit:desktop:packaged
 npm run test:editor:browser
 npm run test:document-workflows --workspace apps/role-fit-ai
+npm run deps:check
 npm run check --workspace packages/engine
 npm run check --workspace packages/editor
 npm run check --workspace apps/typeset

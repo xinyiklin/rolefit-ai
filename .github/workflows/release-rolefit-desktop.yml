@@ -32,7 +32,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24
+          node-version: 24.18.0
           package-manager-cache: false
 
       - name: Validate tag, package version, and main ancestry
@@ -101,7 +101,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24
+          node-version: 24.18.0
           architecture: ${{ matrix.arch }}
           package-manager-cache: false
 
@@ -295,7 +295,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24
+          node-version: 24.18.0
           architecture: x64
           package-manager-cache: false
 
@@ -433,7 +433,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24
+          node-version: 24.18.0
           package-manager-cache: false
 
       - name: Download all platform artifacts without merging names

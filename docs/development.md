@@ -5,11 +5,14 @@ workspace; there is no generic root `dev`, `build`, or `preview` script.
 
 ## Requirements
 
-- Node.js 22.18 minimum so the repository's direct `.ts` launchers run without
-  an experimental flag; Node 24 matches CI/Docker and is the recommended
-  runtime for Electron Forge packaging. The packaging wrapper accepts only the
-  Node 22-24 range; Node 24 is the verified packaging runtime.
-- npm with the root lockfile.
+- Node.js 24.18 or newer in the Node 24 line. `.node-version` pins 24.18.0,
+  matching CI and Electron's embedded runtime; direct `.ts` launchers use its
+  built-in type stripping.
+- npm 11.16.0, declared by the root `packageManager` field, with the root
+  lockfile. `npm run deps:check` validates both runtime versions and the
+  installed dependency contracts. The root `allowScripts` list pins the five
+  reviewed build/native-package lifecycle scripts, and `.npmrc` rejects any
+  newly introduced install script until it is reviewed.
 - Python 3 only for engine font-generation/check scripts. Install their pinned
   dependencies from `packages/engine/scripts/requirements-fonts.txt` in an
   isolated environment; CI creates `.font-tools` and places it on `PATH`.
@@ -33,6 +36,7 @@ npm run make:rolefit:desktop           # native installer/archive artifacts
 
 npm run check             # every workspace check
 npm test                  # every workspace test/eval script
+npm run deps:check        # runtime and installed dependency contracts
 npm run test:editor:browser  # headless Chrome editor/lifecycle contracts
 ```
 

@@ -3,9 +3,6 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "engines": {
-    "node": ">=22.6"
-  },
   "scripts": {
     "sync-fonts": "node scripts/sync-fonts.mjs",
     "predev": "npm run sync-fonts",
@@ -24,12 +21,5 @@
     "pdf-lib": "^1.17.1",
     "react": "^19.2.7",
     "react-dom": "^19.2.7"
-  },
-  "devDependencies": {
-    "@types/react": "^19.2.14",
-    "@types/react-dom": "^19.2.3",
-    "@vitejs/plugin-react": "^6.0.3",
-    "typescript": "^5.9.3",
-    "vite": "^8.1.4"
   }
 }

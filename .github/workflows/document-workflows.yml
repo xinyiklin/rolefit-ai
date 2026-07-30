@@ -8,7 +8,10 @@ on:
       - "packages/**"
       - "scripts/editor-browser-contracts*"
       - "scripts/editor-browser-contracts/**"
+      - "scripts/check-dependency-contracts.mjs"
       - "scripts/check-package-script-paths.mjs"
+      - ".node-version"
+      - ".npmrc"
       - "package.json"
       - "package-lock.json"
       - "tsconfig.base.json"
@@ -21,7 +24,10 @@ on:
       - "packages/**"
       - "scripts/editor-browser-contracts*"
       - "scripts/editor-browser-contracts/**"
+      - "scripts/check-dependency-contracts.mjs"
       - "scripts/check-package-script-paths.mjs"
+      - ".node-version"
+      - ".npmrc"
       - "package.json"
       - "package-lock.json"
       - "tsconfig.base.json"
@@ -36,6 +42,20 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  dependencies:
+    name: Runtime and dependency contracts
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.18.0
+          package-manager-cache: false
+      - run: npm ci
+      - run: npm run deps:check
+
   engine:
     name: Engine codecs, layout, PDF, and fonts
     runs-on: ubuntu-24.04
@@ -45,7 +65,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24
+          node-version: 24.18.0
           package-manager-cache: false
       - run: npm ci
       - run: |
@@ -64,7 +84,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24
+          node-version: 24.18.0
           package-manager-cache: false
       - run: npm ci
       - run: npm run check --workspace packages/editor
@@ -78,7 +98,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24
+          node-version: 24.18.0
           package-manager-cache: false
       - run: npm ci
       - run: npm run check --workspace apps/typeset
@@ -92,7 +112,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24
+          node-version: 24.18.0
           package-manager-cache: false
       - run: npm ci
       - run: npm run check --workspace apps/role-fit-ai
@@ -106,7 +126,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24
+          node-version: 24.18.0
           package-manager-cache: false
       - run: npm ci
       - run: npx tsc -p apps/role-fit-ai/tsconfig.server.json --noEmit
@@ -122,7 +142,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24
+          node-version: 24.18.0
           package-manager-cache: false
       - run: npm ci
       - run: npm run test:editor:browser

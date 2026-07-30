@@ -5,6 +5,19 @@ bounded; app-only operational detail belongs in the affected app documentation.
 
 ## 2026-07-29
 
+- [USER+CODE+TOOL] Dependency-modernization tranche 1 pins the workspace to
+  Node 24.18+ below 25 (`.node-version`: 24.18.0) and npm 11.16.0, aligns CI
+  and Node types with that runtime, and makes shared TypeScript/Vite/React
+  tooling root-owned. A strict, version-pinned install-script allowlist and the
+  dependency-contract gate now protect clean installs. RoleFit's Vite 7/plugin
+  5 pair remains the sole explicit migration exception until its dedicated
+  Vite 8 tranche; Electron Forge's private TypeScript 5.4 compiler is not a
+  workspace compiler. Two clean `npm ci` runs preserved the lockfile hash;
+  production audit, full repository check, Chromium editor contracts, and
+  effective RoleFit tsconfig comparison passed under the pinned toolchain.
+  The production audit is zero; the separate full audit still reports 29 high
+  and 1 critical no-fix advisories, all in dev-only Electron Forge
+  packaging/rebuild transitives, for the Electron tranche to reassess.
 - [USER+CODE] Browser downloads now keep their hidden anchor and blob URL alive
   through Chromium's asynchronous handoff. Immediate cleanup could deliver the
   PDF bytes while losing the anchor's requested `.pdf` filename, leaving a
