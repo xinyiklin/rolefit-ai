@@ -5,13 +5,17 @@ bounded; app-only operational detail belongs in the affected app documentation.
 
 ## 2026-07-29
 
-- [USER+CODE+TOOL] TypeScript 6.0.3 is the explicit migration bridge before
-  TypeScript 7. The shared browser config now has an independently runnable
-  probe, while child configs keep their existing browser options. The
-  Node-native server gate alone intentionally moves to ESNext/NodeNext with
-  relative-import rewriting, erasable syntax, verbatim modules, and no emit;
-  the emitting desktop config remains separate. All seven explicit tsconfigs
-  pass and their effective configurations show no other target/module drift.
+- [USER+CODE+TOOL] TypeScript 7.0.2 is the sole workspace compiler after an
+  explicit 6.0.3 bridge. The root probe and all six child configs pass without
+  diagnostics; browser configs retain their previous options, the Node-native
+  server gate alone uses ESNext/NodeNext with relative-import rewriting,
+  erasable syntax, verbatim modules, and no emit, and the desktop emit remains
+  separate. The editor component probe now loads its TSX through Vite rather
+  than TypeScript's removed JavaScript compiler API. On this macOS ARM64 host,
+  real wall-clock typechecks changed from 5.04s to 0.86s for RoleFit, 2.67s to
+  0.81s for Typeset, 1.98s to 0.46s for engine, and 2.74s to 0.66s for editor.
+  Node-native `.ts` evals and desktop `.cts` emit/probes pass. Other native
+  compiler platforms remain assigned to the PR CI tranche.
 - [USER+CODE+TOOL] Electron 43.2.0 now shares one desktop runtime contract for
   its 43.2 major/minor, embedded Node 24.18, the `node24.18` esbuild target,
   and Node 24-only Forge host. Build staging, Forge, release contracts, IPC

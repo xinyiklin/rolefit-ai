@@ -10,9 +10,14 @@ workspace; there is no generic root `dev`, `build`, or `preview` script.
   built-in type stripping.
 - npm 11.16.0, declared by the root `packageManager` field, with the root
   lockfile. `npm run deps:check` validates both runtime versions and the
-  installed dependency contracts. The root `allowScripts` list pins the five
+  installed dependency contracts. The root `allowScripts` list pins the six
   reviewed build/native-package lifecycle scripts, and `.npmrc` rejects any
   newly introduced install script until it is reviewed.
+- TypeScript 7.0.2 is the root-owned workspace compiler. Its platform package
+  supplies the native `tsc` executable, so dependency CI must execute it on
+  every supported runner rather than treating one host's lockfile entries as
+  cross-platform proof. Electron Forge's nested TypeScript 5 compiler is
+  private implementation detail and is not a workspace compiler.
 - Python 3 only for engine font-generation/check scripts. Install their pinned
   dependencies from `packages/engine/scripts/requirements-fonts.txt` in an
   isolated environment; CI creates `.font-tools` and places it on `PATH`.
@@ -108,6 +113,19 @@ signed-distribution check.
 
 Package changes are not complete after one consumer builds. Verify every host
 whose public package contract changed.
+
+## TypeScript compiler contract
+
+The browser-facing root, engine, editor, RoleFit, and Typeset configs keep
+bundler resolution and their existing browser targets. RoleFit's server config
+is the Node-native syntax gate: ESNext/NodeNext, relative-import rewriting,
+erasable syntax, verbatim modules, and no emit. The desktop config separately
+emits CommonJS companion code. Run the root probe and all six child configs
+when compiler settings or versions change.
+
+Node 24 executes the source-owned `.ts` eval paths through native type
+stripping. Runtime probes must not import TypeScript's JavaScript compiler API
+just to load TSX; use the owning build/runtime boundary instead.
 
 ## Ports
 
