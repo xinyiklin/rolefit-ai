@@ -42,7 +42,9 @@ engine or root check:
 ```bash
 python3 -m venv .font-tools
 .font-tools/bin/pip install --requirement packages/engine/scripts/requirements-fonts.txt
-PATH="$PWD/.font-tools/bin:$PATH" npm run check --workspace packages/engine
+FONT_CERT_FILE="$("$PWD/.font-tools/bin/python" -m certifi)"
+SSL_CERT_FILE="$FONT_CERT_FILE" PATH="$PWD/.font-tools/bin:$PATH" \
+  npm run check --workspace packages/engine
 ```
 
 Focused workspace commands:

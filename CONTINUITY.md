@@ -1392,3 +1392,10 @@ bounded; app-only operational detail belongs in the affected app documentation.
   contracts; no layout snapshot changed. At this local-verification checkpoint,
   draft PR #97 remained unready and unmerged at remote SHA `49ac6cd`;
   publication and required remote checks were still pending.
+- [TOOL+CODE] 2026-07-29: The first corrective remote run passed all six
+  Document workflow jobs, including engine fonts and Chromium. The separate
+  Typeset verify job passed the parity corpus but one dynamically selected CTAN
+  mirror failed Python TLS verification; the parallel engine job passed on the
+  same Ubuntu image. Font-tool setup now pins `certifi` and exports its CA bundle
+  in every engine-checking workflow so mirror trust does not depend on runner
+  image timing.
