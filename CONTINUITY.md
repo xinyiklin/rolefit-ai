@@ -5,6 +5,14 @@ bounded; app-only operational detail belongs in the affected app documentation.
 
 ## 2026-07-29
 
+- [USER+CODE+TOOL] RoleFit now shares the root Vite 8.1.5 and React plugin
+  6.0.4 with Typeset, with the Vite 7 browser baseline retained explicitly for
+  the renderer and public landing page. Dependency checks, both app gates,
+  RoleFit/landing builds, lifecycle probes, Chromium lazy-panel/React-refresh
+  checks, and the built landing CSP smoke pass. Real saved-resume QA also found
+  and fixed a pre-existing CSP omission: `connect-src` now permits only the
+  in-memory `blob:` fetch PDF.js needs. The public starter resume, fonts,
+  PDF.js worker, and object URL all returned 200 with no browser errors.
 - [USER+CODE+TOOL] React and React DOM now resolve once at 19.2.8, and all
   three Lucide consumers resolve once at 1.27.0. Shared-editor checks, the
   Typeset app gate, RoleFit's production build, and the dependency contract

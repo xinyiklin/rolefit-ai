@@ -71,33 +71,17 @@ for (const dependency of canonicalTooling) {
   const workspaceOwners = workspaceManifests
     .filter(({ manifest }) => declaredDependency(manifest, dependency))
     .map(({ path }) => path);
-  const isDeferredRoleFitBundler = (
-    dependency === "vite"
-    || dependency === "@vitejs/plugin-react"
-  );
-  const expectedOwners = isDeferredRoleFitBundler
-    ? ["apps/role-fit-ai/package.json"]
-    : [];
-
   check(
-    sameValues(workspaceOwners, expectedOwners),
+    workspaceOwners.length === 0,
     `${dependency} has unexpected workspace owners: ${formatList(workspaceOwners)}.`
-      + ` Expected ${formatList(expectedOwners)}.`,
+      + " Expected root ownership only.",
   );
 }
 
 const viteInstallations = lockfileInstallations("vite");
 const pluginInstallations = lockfileInstallations("@vitejs/plugin-react");
-checkKnownBundlerTransition(viteInstallations, {
-  packageName: "vite",
-  rootMajor: 8,
-  roleFitMajor: 7,
-});
-checkKnownBundlerTransition(pluginInstallations, {
-  packageName: "@vitejs/plugin-react",
-  rootMajor: 6,
-  roleFitMajor: 5,
-});
+checkSingleMajor(viteInstallations, "vite");
+checkSingleMajor(pluginInstallations, "@vitejs/plugin-react");
 
 const reactVersions = uniqueVersions(lockfileInstallations("react"));
 const reactDomVersions = uniqueVersions(lockfileInstallations("react-dom"));
@@ -249,35 +233,13 @@ function lockfileInstallations(packageName) {
     .sort((left, right) => left.path.localeCompare(right.path));
 }
 
-function checkKnownBundlerTransition(installations, {
-  packageName,
-  rootMajor,
-  roleFitMajor,
-}) {
+function checkSingleMajor(installations, packageName) {
   const majors = [...new Set(installations.map(({ version }) => versionParts(version)[0]))]
     .sort((left, right) => left - right);
-  if (majors.length <= 1) return;
-
-  const rootInstallation = installations.find(({ path }) => path === `node_modules/${packageName}`);
-  const roleFitInstallation = installations.find(({ path }) => (
-    path === `apps/role-fit-ai/node_modules/${packageName}`
-  ));
-  const isKnownTransition = (
-    sameValues(majors, [roleFitMajor, rootMajor])
-    && versionParts(rootInstallation?.version)[0] === rootMajor
-    && versionParts(roleFitInstallation?.version)[0] === roleFitMajor
-  );
-
   check(
-    isKnownTransition,
+    majors.length === 1,
     `${packageName} must not install multiple majors; found ${formatInstallations(installations)}.`,
   );
-  if (isKnownTransition) {
-    notices.push(
-      `${packageName} majors ${roleFitMajor}/${rootMajor} are the explicit PR-3 migration`
-        + " exception; no other split is allowed.",
-    );
-  }
 }
 
 function resolvedVersion(packageName, workspacePath) {
@@ -358,11 +320,6 @@ function versionParts(version) {
 function specifierMajor(specifier) {
   const match = String(specifier ?? "").match(/(\d+)/);
   return match ? Number(match[1]) : Number.NaN;
-}
-
-function sameValues(actual, expected) {
-  return actual.length === expected.length
-    && actual.every((value, index) => value === expected[index]);
 }
 
 function formatList(values) {

@@ -93,7 +93,9 @@ const ROLEFIT_CONTENT_SECURITY_POLICY = [
   "font-src 'self'",
   "style-src 'self' 'unsafe-inline'",
   "script-src 'self'",
-  "connect-src 'self' ws: wss:",
+  // React-PDF reads generated previews from an in-memory object URL; without
+  // this narrow source Chromium blocks the PDF.js fetch before parsing starts.
+  "connect-src 'self' blob: ws: wss:",
   "worker-src 'self' blob:",
   "child-src 'self' blob:"
 ].join("; ");

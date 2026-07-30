@@ -87,6 +87,11 @@ try {
   assert.match(page.body, new RegExp(indexMarker));
   assert.match(String(page.headers["content-security-policy"]), /default-src 'self'/);
   assert.match(String(page.headers["content-security-policy"]), /frame-ancestors 'none'/);
+  assert.match(
+    String(page.headers["content-security-policy"]),
+    /connect-src 'self' blob: ws: wss:/,
+    "saved PDF previews fetch an in-memory object URL through PDF.js"
+  );
   assert.equal(page.headers["x-content-type-options"], "nosniff");
   assert.equal(page.headers["referrer-policy"], "no-referrer");
 
