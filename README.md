@@ -84,8 +84,9 @@ Use the named root command or an explicit workspace command.
   GitHub prerelease after the same native packaging, smoke, installer, artifact,
   checksum, and atomic-publication gates. It never receives signing secrets.
 - `.github/workflows/deploy-typeset.yml` verifies the engine, editor, and
-  Typeset app, then builds `apps/typeset/Dockerfile` for the configured EC2
-  host. The public Typeset runtime is static Nginx content.
+  Typeset app, then builds and HTTP-probes the digest-pinned
+  `apps/typeset/Dockerfile` before the configured EC2 deployment. The public
+  Typeset runtime is static Nginx content.
 
 ## License
 

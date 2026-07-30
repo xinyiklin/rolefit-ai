@@ -5,6 +5,15 @@ bounded; app-only operational detail belongs in the affected app documentation.
 
 ## 2026-07-29
 
+- [USER+CODE+TOOL] The final dependency-modernization tranche SHA-pins every
+  third-party GitHub Action, fixes workflow runners to named current images,
+  and executes TypeScript 7's native compiler plus all seven configs on Linux
+  x64/ARM64, macOS ARM64/x64, and Windows x64. Typeset's Node 24.18.0 and
+  unprivileged Nginx bases are multi-architecture digest-pinned; pull requests
+  build the image and require an HTTP response before deployment. Native
+  Dependabot now groups npm, Actions, Docker, and Python updates without an
+  auto-merge path, leaving Vite, TypeScript, Electron, PDF/font, Python, and
+  generated-asset changes under their documented manual gates.
 - [USER+CODE+TOOL] The PDF dependency audit retains `pdf-lib` 1.17.1,
   `@pdf-lib/fontkit` 1.1.1, React-PDF 10.4.1, and its `pdfjs-dist` 5.4.296
   transitive. RoleFit's unused direct `fontkit` 2.0.4 dev dependency and its

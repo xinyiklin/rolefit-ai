@@ -140,6 +140,30 @@ check(
   resolvedVersion("typescript", ".") === expectedCompilerVersion,
   `The executable project compiler does not match TypeScript ${expectedCompilerVersion}.`,
 );
+const nativeCompilerPackage = `@typescript/typescript-${process.platform}-${process.arch}`;
+const nativeCompilerVersion = resolvedVersion(nativeCompilerPackage, ".");
+check(
+  nativeCompilerVersion === expectedCompilerVersion,
+  `The current host must install ${nativeCompilerPackage} at TypeScript`
+    + ` ${expectedCompilerVersion}; found ${nativeCompilerVersion ?? "(missing)"}.`,
+);
+if (process.env.EXPECTED_TYPESCRIPT_PLATFORM) {
+  check(
+    process.platform === process.env.EXPECTED_TYPESCRIPT_PLATFORM,
+    `CI expected TypeScript platform ${process.env.EXPECTED_TYPESCRIPT_PLATFORM},`
+      + ` but Node reports ${process.platform}.`,
+  );
+}
+if (process.env.EXPECTED_TYPESCRIPT_ARCH) {
+  check(
+    process.arch === process.env.EXPECTED_TYPESCRIPT_ARCH,
+    `CI expected TypeScript architecture ${process.env.EXPECTED_TYPESCRIPT_ARCH},`
+      + ` but Node reports ${process.arch}.`,
+  );
+}
+notices.push(
+  `TypeScript native compiler ${nativeCompilerPackage}@${nativeCompilerVersion ?? "(missing)"}.`,
+);
 
 const forgeVersions = forgePackages.map((packageName) => ({
   packageName,

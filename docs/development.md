@@ -42,6 +42,7 @@ npm run make:rolefit:desktop           # native installer/archive artifacts
 npm run check             # every workspace check
 npm test                  # every workspace test/eval script
 npm run deps:check        # runtime and installed dependency contracts
+npm run types:check       # root probe plus every workspace/server/desktop config
 npm run test:editor:browser  # headless Chrome editor/lifecycle contracts
 ```
 
@@ -126,6 +127,25 @@ when compiler settings or versions change.
 Node 24 executes the source-owned `.ts` eval paths through native type
 stripping. Runtime probes must not import TypeScript's JavaScript compiler API
 just to load TSX; use the owning build/runtime boundary instead.
+
+Document CI runs the TypeScript 7 compiler and every explicit config on Linux
+x64/ARM64, macOS ARM64/x64, and Windows x64. Each matrix entry asserts its
+actual Node platform and architecture and verifies the matching
+`@typescript/typescript-*` native package before typechecking.
+
+## Dependency and image maintenance
+
+`.github/dependabot.yml` checks npm, SHA-pinned GitHub Actions, the Typeset
+Docker bases, and the exact Python font-tool requirements. Related packages are
+grouped by their verification contract. There is no dependency auto-merge
+workflow: Vite, TypeScript, Electron, PDF/font, Python, and generated-asset
+changes remain manual review decisions.
+
+All third-party Actions use immutable commit SHAs with readable release
+comments so Dependabot can advance both together. The Typeset Dockerfile pins
+Node 24.18.0 and unprivileged Nginx by multi-architecture digest. Its PR
+workflow builds that exact image and requires an HTTP response from the
+unprivileged static server before deployment can proceed.
 
 ## Ports
 

@@ -37,6 +37,7 @@
     "deps:tree": "npm ls --all",
     "deps:outdated": "npm outdated --workspaces --include-workspace-root",
     "deps:audit:production": "npm audit --omit=dev",
+    "types:check": "tsc -p tsconfig.base.json --noEmit && tsc -p packages/engine/tsconfig.json --noEmit && tsc -p packages/editor/tsconfig.json --noEmit && tsc -p apps/role-fit-ai/tsconfig.json --noEmit && tsc -p apps/role-fit-ai/tsconfig.server.json --noEmit && tsc -p apps/role-fit-ai/tsconfig.desktop.json --noEmit && tsc -p apps/typeset/tsconfig.json --noEmit",
     "check:package-scripts": "node scripts/check-package-script-paths.mjs",
     "test:editor:browser": "node scripts/editor-browser-contracts.mjs",
     "check": "npm run deps:check && npm run check:package-scripts && npm run check --workspaces --if-present",
