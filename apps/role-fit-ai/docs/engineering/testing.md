@@ -208,6 +208,42 @@ Good frontend verification covers:
 - changed controls are reachable by keyboard
 - loading / data refresh does not cause avoidable layout shift
 - API error states show user-safe messaging (no raw provider bodies)
+- Prepare is the first/default tab in the PREPARE group and the only production
+  job-intake surface: URL fetch and pasted text appear there, no `JobMenu` or
+  masthead `jobControl` remains, and the masthead contains only Sessions plus
+  the shared Apply command
+- extension receipt and delivery select Prepare before updating visible intake
+  state, progress stays there through Distill and automatic resume tailoring,
+  AI-off preparation still yields the deterministic brief, and retry/stale
+  guards cannot apply an earlier posting to the current session
+- extension-triggered automatic tailoring never replaces a dirty editor;
+  multiple saved resume variants are ranked from their actual strict document
+  contents, only a clear high-confidence winner can be selected automatically
+  while the editor is clean, ambiguous or dirty state recommends/pauses, no
+  variant metadata is persisted, and success does not navigate away from
+  Prepare
+- Resume and Cover Letter render the same material-card structure with separate
+  variant selectors and Include toggles, neither is labeled optional, and a
+  fresh prepared job starts with Resume included and Cover Letter excluded
+- masthead Apply and Prepare Apply invoke the same handler and readiness model:
+  a matching completed preparation is required, each included material must be
+  ready while its work is idle, neither material is required, and non-empty
+  source alone remains blocked. Applying with both excluded records the job;
+  excluding a previously saved material on re-Apply preserves that artifact
+- every prepared JD field can be corrected locally on Prepare after partial or
+  failed extraction without invalidating the matching prepared source snapshot:
+  tracked job facts, company context, responsibilities, required/preferred
+  qualifications, technical keywords, seniority/domain signals, and benefits.
+  Extraction and candidate-review gaps remain visible until addressed; View
+  source and Prepare again retain the captured posting, Apply stores the full
+  corrected brief, and reopening restores benefits without adding them to the
+  Tailor projection. Candidate gaps from a saved Apply snapshot are labeled
+  historical until a matching Review replaces them
+- opening a stored application validates its job and strict document sources,
+  preserves the dirty-document confirmation, restores the session, and lands
+  on Prepare through the visible **Open preparation** action
+- Applications routes its new-work action to Prepare, while its modal edits
+  existing committed records and exposes no independent job-intake controls
 - a failed cover-letter request stays local to its page with safe retry copy and
   never replaces the letter; a successful one loads directly into the editor
   with an exact one-click Restore, and that Restore plus its result summary
@@ -226,10 +262,10 @@ Good frontend verification covers:
   configured providers appear, configured-but-unready selections stay visible
   and disabled, and no API key appears in DOM, browser storage, or HTTP requests
 - at 720px and below, only precise Resume authoring is replaced by the width
-  notice; masthead/navigation, Cover letter, Materials, Applications, and
-  Analytics remain reachable, including under high browser zoom
+  notice; Prepare, masthead/navigation, Cover letter, Materials, Applications,
+  and Analytics remain reachable, including under high browser zoom
 - job-import distiller changes prove the before/after shape without
-  printing raw private text: the resulting job field should keep role
+  printing raw private text: the resulting structured brief should keep role
   intro / responsibilities / requirements while stripping empty bullets,
   apply/navigation furniture, duplicated titles, low-value Workday
   metadata, company/culture marketing, and trailing benefits / legal
@@ -359,6 +395,13 @@ and does not own workspace/tracker files. Focused companion probes should cover:
   valid unapproved origins to enqueue only a bounded short-lived pairing
   request, and rejecting near-match, path-bearing, absent, malformed, and
   oversized identities without CORS;
+- extension preparation preserving the internal `autoTailor`, `distillAi`,
+  `extensionImport`, `claimToken`, `tabId`, and `"distilling"` wire contract;
+  sending the same claim token in the import body and fresh-tab query; claiming
+  a reserved inbox entry only from its intended tab; opening an independent tab
+  in the current Firefox container when available with the ordinary fresh-tab
+  fallback elsewhere; and keeping duplicate, AI-off, retry, and stale-response
+  guards intact;
 - changing ports being reported as a new browser-storage origin, the resolved
   port being written into the materialized extension runtime config, and the
   UI truthfully requiring one unpacked-extension reload rather than claiming
@@ -419,7 +462,7 @@ layout/theming risk, and let the user decide. When it runs, check:
 
 - for public landing changes, the complete desktop/390px page, release status,
   installer rows, and absence of horizontal overflow;
-- the affected control in the normal navbar-inputs + studio workflow
+- the affected control in the Prepare + studio workflow
 - the typeset editor itself (its own WYSIWYG preview), rather than a legacy HTML
   editor or a separate compile-preview surface
 - tab open/close behavior in the output panel when tabs changed

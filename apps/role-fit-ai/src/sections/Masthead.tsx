@@ -2,9 +2,9 @@ import type { ReactNode } from "react";
 import { ClipboardCheck, X } from "lucide-react";
 
 type MastheadProps = {
-  // Mark the current role as applied and save it to the pipeline, using the
-  // resume draft currently in the editor. Runs a duplicate-application scan
-  // first (may await a confirm dialog), hence the async-friendly signature.
+  // Mark the current role as applied and save the included materials. Runs a
+  // duplicate-application scan first (which may await a confirm dialog), hence
+  // the async-friendly signature.
   onApply: () => void | Promise<void>;
   applyDisabled: boolean;
   // Explains why Apply is greyed out (mirrors polishHint).
@@ -12,7 +12,6 @@ type MastheadProps = {
   applyStatus?: string;
   applyStatusIsError?: boolean;
   onDismissApplyStatus?: () => void;
-  jobControl?: ReactNode;
   sessionsControl?: ReactNode;
 };
 
@@ -23,7 +22,6 @@ export function Masthead({
   applyStatus,
   applyStatusIsError = false,
   onDismissApplyStatus,
-  jobControl,
   sessionsControl
 }: MastheadProps) {
   return (
@@ -38,11 +36,6 @@ export function Masthead({
         <div className="menu-group" role="group" aria-label="Sessions">
           {sessionsControl}
         </div>
-        {/* Provider and guidance setup moved to the Settings dialog, opened from
-            the bottom of the studio sidebar. */}
-        <div className="menu-group" role="group" aria-label="Inputs">
-          {jobControl}
-        </div>
       </div>
       <div className="masthead__actions">
         <span className="masthead-action">
@@ -52,15 +45,19 @@ export function Masthead({
             onClick={() => {
               if (!applyDisabled) void onApply();
             }}
-            aria-label="Apply with current resume"
+            aria-label="Apply prepared application"
             aria-disabled={applyDisabled}
             aria-describedby={applyDisabled ? "masthead-apply-hint" : undefined}
-            title={applyDisabled ? applyHint : "Mark as applied and save to the pipeline using the current resume draft"}
+            title={applyDisabled ? applyHint : "Mark as applied and save included materials"}
           >
             <ClipboardCheck size={14} aria-hidden="true" />
             <span>Apply</span>
           </button>
-          {applyDisabled ? <span className="masthead-action__hint" id="masthead-apply-hint">{applyHint}</span> : null}
+          {applyDisabled ? (
+            <span className="masthead-action__hint" id="masthead-apply-hint">
+              {applyHint}
+            </span>
+          ) : null}
         </span>
         {applyStatus ? (
           <div className="masthead-feedback-stack">

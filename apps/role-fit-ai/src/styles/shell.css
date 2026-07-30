@@ -284,7 +284,7 @@
 
 /* -------- Workspace grid -------- */
 
-/* Single full-width studio: the resume/job inputs live in navbar menus now. */
+/* Single full-width studio: job intake lives in the Prepare workspace. */
 .workspace-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -293,7 +293,7 @@
   overflow: hidden;
 }
 
-/* -------- Navbar dropdown menus (Resume, Job, AI, Options) -------- */
+/* -------- Navbar dropdown menus -------- */
 
 /* Typographic menu groups: no box, no pills — quiet inline items separated by
    hairline verticals (handled on .masthead__menus level). */
@@ -382,8 +382,8 @@
   transition: color 150ms var(--ease);
 }
 
-/* The two high-value actions retain both icon and label at every supported
-   width; only the five menu triggers disclose to icon-only controls. */
+/* The global Apply action retains both icon and label at every supported
+   width; masthead menu triggers disclose to icon-only controls. */
 .masthead__actions button > svg {
   display: block;
 }
@@ -423,8 +423,6 @@
 
 .nav-menu__sub.is-ready { color: var(--accent-deep); }
 .nav-menu__sub.is-ready::before { background: var(--accent); border-color: var(--accent); }
-.nav-menu__sub.is-empty { color: var(--warm); }
-.nav-menu__sub.is-empty::before { border-color: var(--warm); }
 
 /* Caret rotates to point up when the menu is open — a quiet open/close cue. */
 .nav-menu__caret {
@@ -462,27 +460,15 @@
   animation: nav-menu-in 150ms var(--ease) both;
 }
 
-/* Masthead menu popovers anchor to their OWN trigger's right edge, like every
-   other menu in the app. They used to share their group's LEFT edge, which
-   existed only to align the paired Resume/Job and AI provider/Options menus
-   under one another; both pairs are gone, and the surviving menus sit at the
-   right of the bar, where a left-anchored 380px panel ran past the window and
-   was left pressed against it by the viewport clamp. Right-anchoring opens each
-   panel inboard, under the control that owns it. */
+/* Masthead menu popovers anchor to their own trigger's right edge so they open
+   inboard beneath the control that owns them. */
 .masthead .menu-group { position: relative; }
-
-/* Taller panel for the one content-heavy masthead menu that remains (Job
-   posting) so more shows before the panel scrolls. Provider and guidance setup
-   moved to the Settings dialog (settings.css). */
-.job-menu .nav-menu__popover {
-  max-height: min(88vh, 780px);
-}
 
 .sessions-menu .nav-menu__popover {
   width: min(300px, 92vw);
 }
 
-/* Subtle scrollbar styling for WebKit so long popovers (Job/AI) read clean. */
+/* Subtle scrollbar styling for WebKit so long popovers read clean. */
 .nav-menu__popover::-webkit-scrollbar { width: 8px; }
 .nav-menu__popover::-webkit-scrollbar-thumb {
   background: var(--hairline-strong);

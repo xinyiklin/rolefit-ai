@@ -110,8 +110,9 @@ export type Application = {
   // at 10; deduped by normalized URL. Lets duplicate detection match a record no
   // matter which board the user is currently looking at.
   sourceUrls?: { url: string; source?: string; addedAt: string }[];
-  // Raw pre-distill posting text, kept ONLY when it differs from jobDescription
-  // (the distilled brief) — avoids storing the same text twice.
+  // Immutable captured posting text. Keep it even when it initially matches
+  // jobDescription so later prepared-brief edits cannot rewrite View source or
+  // change what "Prepare again" distills.
   rawJobDescription?: string;
   // Per-stage AI usage snapshot (distill/tailor/review/cover), captured at Apply
   // time. Whole-map-replace on upsert — an incoming snapshot always wins, no
@@ -194,7 +195,10 @@ function cleanDraftString(value: unknown, max = 200) {
 }
 
 function cleanDraftSource(value: unknown): ApplicationSource {
-  return APPLICATION_SOURCES.includes(value as ApplicationSource) ? (value as ApplicationSource) : "";
+  if (typeof value !== "string" || !value.trim()) return "";
+  return APPLICATION_SOURCES.includes(value as ApplicationSource)
+    ? (value as ApplicationSource)
+    : "Other";
 }
 
 export function makeApplicationDraft(
@@ -482,7 +486,7 @@ export function useApplications() {
 
   // Full overwrite of one application by id (the detail/add modal's save path).
   // Unlike `upsert` — which deliberately preserves existing non-empty title /
-  // company / role / source for the Apply + save-answers dedup flow — this lets
+  // company / role / source for deduplicated secondary writes — this lets
   // the user actually edit those fields. Incoming wins for every field; only id
   // and createdAt are pinned. A new id (no match) is prepended.
   const saveApplication = useCallback(

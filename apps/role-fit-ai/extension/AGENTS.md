@@ -28,8 +28,10 @@ V3 client of the local RoleFit server.
   id stable, but configure the actual browser/profile Origin reported by
   `location.origin`; do not add a repo-authored Chrome manifest key or a static
   bearer value as a substitute for server-side identity validation.
-- `Distill with AI` and auto-polish intent travel with the inbox entry; the app
-  owns provider execution and fail/duplicate gates.
+- The popup labels these choices `Prepare job details with AI` and `Tailor
+  resume after preparation`; their existing `distillAi` and `autoTailor` fields
+  travel unchanged with the inbox entry. The app owns provider execution and
+  fail/duplicate gates.
 - Keep popup copy aligned with `extension/README.md` and server route shapes.
 - Verify syntax, manifest validity, generated-port validation,
   duplicate/import responses, and the fresh-tab handoff. Browser manual checks

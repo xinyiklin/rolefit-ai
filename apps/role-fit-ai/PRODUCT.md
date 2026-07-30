@@ -29,11 +29,17 @@ never a hosted copy of the workbench.
 
 ## Product Purpose
 
-RoleFit AI turns a base resume, a candidate-authored cover letter or base
-variant, and a pasted job description into honest, tailored application
-materials. Resume proposals remain constrained by server-side grounding and
-anti-fabrication checks, with a recruiter-style review for fit scoring and gap
-analysis.
+RoleFit AI can turn a prepared job posting, a base resume, and a
+candidate-authored cover letter or base variant into honest, tailored
+application materials. Prepare is the first/default page and the sole job-intake
+surface: the paired browser extension is primary, with URL fetch and pasted text
+as deliberate fallbacks. Its complete editable brief exposes tracked job facts,
+company context, responsibilities, required and preferred qualifications,
+technical keywords, seniority and domain signals, benefits, and extraction or
+candidate-review gaps. Resume proposals remain constrained by server-side
+grounding and anti-fabrication checks, with a recruiter-style review for fit
+scoring and gap analysis. Candidate gaps restored from a saved Apply record are
+labeled historical until Review runs against the current materials.
 
 The cover letter is **one Tailor click**. RoleFit resolves the date, candidate
 name, role, company, greeting, and sign-off itself, sends the whole candidate
@@ -60,17 +66,25 @@ workspace changed. A document is named
 one role's materials read as one application.
 `.resume` and `.cover` are their separate reloadable formats. The product also
 includes application-question drafts and a lightweight application pipeline
-tracker. Apply creates the tracked application and stores both documents as they
-stand; because a letter is often finished after applying, the resume and the
-cover letter then keep independent saved/unsaved states and an explicit
-"Update application" action in their own Save menus that rewrites only that
-document. Regenerating or editing a document never rewrites a stored one. An
-application keeps one space-efficient representation of each document:
+tracker. Prepare gives Resume and Cover Letter matching material cards, each
+with its own named-variant selector and Include toggle. Resume starts included
+and Cover Letter starts excluded. Apply creates the tracked application once the
+job is prepared and stores only included, ready materials; it also supports a
+tracker-only application with both cards excluded. On a later re-Apply, an
+excluded slot is left untouched so a previously saved artifact is never deleted
+or replaced implicitly. The resume and cover letter keep independent
+saved/unsaved states and an explicit "Update application" action in their own
+Save menus that rewrites only that document. Regenerating or editing a document
+never rewrites a stored one. An application keeps one space-efficient
+representation of each document:
 editable `.resume`/`.cover` source for documents saved from RoleFit, or the PDF
 when the user explicitly uploads one. Its Documents tab previews or downloads
 either form and accepts additional PDF files the posting asked for. Tracker
 text and analytics projections never count as a saved document and cannot
 reload or overwrite the strict source.
+Opening a stored application restores its validated posting and documents into
+the current session, lands on Prepare, and preserves the dirty-document
+replacement guard.
 A versioned `.rolefit-backup` file
 ports the saved local workspace and allowlisted RoleFit preferences between
 devices without creating an account or synchronization service. An original resume (text) is converted
@@ -95,7 +109,7 @@ The companion defaults to local port `5181` and may persist another available
 port after explicit confirmation and restart. Browser-local state is scoped by
 origin, so a different port has separate draft/preferences storage. Workspace
 and provider data keep their operating-system-local locations, and extension
-imports follow the companion's resolved numeric localhost port through a
+preparation follows the companion's resolved numeric localhost port through a
 generated extension runtime config. A port-changing restart tells the user to
 reload the unpacked extension once; there is no live native synchronization or
 localhost scanning. Health identifies a compatible server as
@@ -128,15 +142,17 @@ disappears into the task. Quiet competence, not salesmanship.
 1. Honesty is the product: never imply the AI can safely supply missing facts;
    ground proposals in provided evidence and surface gaps or placeholders for
    human review instead of hiding them.
-2. Preserve the compact masthead + full-width studio workflow: masthead menus
-   (Sessions, Job target) plus the global Apply action, the Settings dialog at
-   the foot of the studio rail; tabbed
-   outputs below (Resume with a consistent Open/Save/Polish
+2. Preserve the compact masthead + full-width studio workflow: the masthead
+   carries Sessions plus the global Apply action, while the Settings dialog
+   stays at the foot of the studio rail. The rail starts with a PREPARE group
+   containing Prepare, followed by DRAFT and TRACK groups. Prepare is the
+   first/default and sole job-intake surface; tabbed
+   workspaces continue with Resume and its consistent Open/Save/Polish
    document action bar and a post-polish review rail, Cover letter with the
    matching document action bar, its plain editor and a compact rail that
    reports readiness before Tailor and provenance after it, Materials, the
-   Applications tracker, Analytics) and the header Fit
-   popover. The engine-painted page remains the sole editor, the review rail
+   Applications tracker, and Analytics. The engine-painted page remains the
+   sole editor, the review rail
    navigates back to exact fields, and the editor itself remains the live
    preview. Saved-application PDF preview is a tracker detail, not a second live
    editing/compile surface. Changes refine this workflow, never reshape it.
@@ -166,6 +182,27 @@ disappears into the task. Quiet competence, not salesmanship.
    staging workspace before replacement, and keeps the previous saved
    workspace as a local safety copy; the browser adopts restored preferences
    on its next load.
+10. Keep application readiness singular: the masthead and Prepare page expose
+    the same Apply command and blocker model. The current job must be prepared
+    and preparation for selected work must be idle. Resume and Cover Letter
+    each have an Include toggle; only included material must be ready, and both
+    may be excluded. Resume defaults on and Cover Letter defaults off. A later
+    re-Apply must preserve any previously saved artifact for an excluded slot.
+11. Preserve safe extension automation: a claimed extension posting opens and
+    progresses on Prepare. Automatic resume tailoring stays there and ranks
+    actual saved `.resume` contents against the prepared job. It may select only
+    a clear high-confidence winner while the editor is clean; otherwise it
+    recommends or pauses without replacing the editor. Do not add persisted
+    variant metadata or another document schema for this decision.
+12. Keep the complete prepared job correctable without another AI run. Along
+    with role, company, location, type, source, work authorization,
+    compensation, and role summary, expose company context, responsibilities,
+    required and preferred qualifications, technical keywords, seniority and
+    domain signals, benefits, and extraction or candidate-review gaps. Preserve
+    the captured posting separately, persist the complete corrected brief on
+    Apply, and restore both without feeding benefits into resume tailoring.
+    Treat restored candidate gaps as historical until a matching Review
+    replaces them.
 
 ## Accessibility & Inclusion
 
@@ -174,4 +211,5 @@ Keyboard access for all changed controls (APG tabs nav, focus-visible rings,
 24px minimum icon hit targets). aria-live for async preview/export status.
 Desktop is primary; content wraps rather than clips at narrow widths. At 720px
 and below, precise Resume authoring yields to a focused width notice, but
-navigation, Cover letter, Materials, Applications, and Analytics remain available.
+Prepare, navigation, Cover letter, Materials, Applications, and Analytics remain
+available.

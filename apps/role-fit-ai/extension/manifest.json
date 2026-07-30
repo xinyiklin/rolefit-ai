@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "RoleFit AI",
   "version": "1.0.0",
-  "description": "Import job postings into RoleFit AI for AI-powered resume tailoring and review.",
+  "description": "Prepare job postings in RoleFit AI for AI-powered resume tailoring and review.",
   "action": {
     "default_popup": "popup.html",
     "default_title": "RoleFit AI",

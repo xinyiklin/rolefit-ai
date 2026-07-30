@@ -1,8 +1,8 @@
 // Which document versions a tracked application currently holds.
 //
-// Apply snapshots both documents at once. Afterwards the resume and the cover
-// letter each keep their own saved/unsaved state, because the common workflow
-// is to apply first and finish the letter later. File bytes and tracker fields
+// Apply snapshots only the documents included in the prepared package.
+// Afterwards the resume and cover letter each keep their own saved/unsaved
+// state, so either can be revised independently. File bytes and tracker fields
 // are committed together by the application-document server boundary.
 
 import type { Application } from "../hooks/useApplications";

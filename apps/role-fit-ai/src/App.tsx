@@ -15,10 +15,7 @@ import {
   type LucideIcon
 } from "lucide-react";
 
-import {
-  analyzeResumeText,
-  type PolishedResume
-} from "./resumeEngine";
+import { analyzeResumeText, type PolishedResume } from "./resumeEngine";
 
 import { useDebouncedValue } from "./hooks/useDebouncedValue";
 import { useDocStyle } from "@typeset/editor/hooks/useDocStyle.ts";
@@ -30,11 +27,7 @@ import {
   type TypesetCaret,
   type TypesetEditorHandle
 } from "@typeset/editor/sections/editor/TypesetEditor.tsx";
-import {
-  DOC_PAGE_WIDTH_PX,
-  DOC_STYLE_BOUNDS,
-  toDocumentStyle
-} from "@typeset/engine/lib/documentStyle.ts";
+import { DOC_PAGE_WIDTH_PX, DOC_STYLE_BOUNDS, toDocumentStyle } from "@typeset/engine/lib/documentStyle.ts";
 import {
   STYLE_FIELD_MARK_DEFAULTS,
   globalAlignmentState,
@@ -46,11 +39,7 @@ import {
 import { useAiSettings } from "./hooks/useAiSettings";
 import { useAvailableProviders } from "./hooks/useAvailableProviders";
 import { useApplicationAnswers } from "./hooks/useApplicationAnswers";
-import {
-  useApplications,
-  missingRequiredSkillsFromApplication,
-  type Application
-} from "./hooks/useApplications";
+import { useApplications, missingRequiredSkillsFromApplication, type Application } from "./hooks/useApplications";
 import { useResumeAnalysis } from "./hooks/useResumeAnalysis";
 import { useResumeEditor } from "./hooks/useResumeEditor";
 import { useResumeExport } from "./hooks/useResumeExport";
@@ -71,10 +60,7 @@ import {
   type CoverLetterAutosavedDraft
 } from "./hooks/useCoverLetterAutosaveDraft";
 import { useTabPresence } from "./hooks/useTabPresence";
-import {
-  subscribeWorkspaceRestoreAdoption,
-  type PresencePhase
-} from "./lib/tabPresence";
+import { subscribeWorkspaceRestoreAdoption, type PresencePhase } from "./lib/tabPresence";
 import {
   buildDocumentTitle,
   completeAutoDocumentTitle,
@@ -98,14 +84,22 @@ import { useWorkspaceResume } from "./hooks/useWorkspaceResume";
 import { useApplyFlow } from "./hooks/useApplyFlow";
 import { useApplicationDocumentSync } from "./hooks/useApplicationDocumentSync";
 import { useApplicationFiles } from "./hooks/useApplicationFiles";
+import { getPreparationReadiness } from "./lib/preparationReadiness";
 import {
-  applicationDocumentUrl,
-  type ApplicationDocumentKind
-} from "./lib/applicationDocumentRequests";
+  assemblePreparedJobApplicationText,
+  assemblePreparedJobTailoringText,
+  buildPreparedJobBrief,
+  preparedJobBriefFieldFromText,
+  reconcilePreparedJobManualReviewFields,
+  removePreparedJobRoleSummary,
+  type PreparedJobBriefField
+} from "./lib/preparedJobBrief";
+import { recommendResumeVariant, type ResumeVariantRecommendation } from "./lib/resumeVariantRecommendation";
+import { coverLetterRecoveryDirty } from "./lib/coverLetterRecovery";
+import { applicationDocumentUrl, type ApplicationDocumentKind } from "./lib/applicationDocumentRequests";
 import { applicationDocumentPdfBlob } from "./lib/applicationDocumentPdf";
 
 import { Masthead } from "./sections/Masthead";
-import { JobMenu } from "./sections/JobMenu";
 import { AiWorkflowProgress, TaskProgress } from "./sections/AiWorkflowProgress";
 import type { AiWorkflowStage } from "./lib/aiWorkflow";
 import { SessionsMenu } from "./sections/SessionsRail";
@@ -118,6 +112,7 @@ import { ExportMenu } from "./sections/ExportRail";
 import { ApplyDownloadDialog } from "./sections/ApplyDownloadDialog";
 import { ResumePrintLayer } from "@typeset/editor/sections/ResumePrintLayer.tsx";
 import { ResumeTab } from "./sections/tabs/ResumeTab";
+import { PrepareTab } from "./sections/tabs/PrepareTab";
 import { CoverLetterTab } from "./sections/tabs/CoverLetterTab";
 import { MaterialsTab } from "./sections/tabs/MaterialsTab";
 import type { TrackerView } from "./sections/tabs/TrackerTab";
@@ -127,8 +122,16 @@ import { formatHistoryDate } from "./lib/historyDate";
 import type { ApplicationActivityFilter } from "./lib/applicationDisplay";
 
 const PreviewOverlay = lazy(() => import("./sections/PreviewOverlay"));
+
+const DEFAULT_MATERIAL_SELECTION = {
+  resume: true,
+  coverLetter: false
+} as const;
+
 const ApplicationModal = lazy(() =>
-  import("./sections/ApplicationModal").then((module) => ({ default: module.ApplicationModal }))
+  import("./sections/ApplicationModal").then((module) => ({
+    default: module.ApplicationModal
+  }))
 );
 
 // Named importers so the rail can warm a split chunk before the tab is
@@ -138,9 +141,7 @@ const importTrackerTab = () => import("./sections/tabs/TrackerTab");
 const importAnalyticsTab = () => import("./sections/tabs/AnalyticsTab");
 
 const TrackerTab = lazy(() => importTrackerTab().then((module) => ({ default: module.TrackerTab })));
-const AnalyticsTab = lazy(() =>
-  importAnalyticsTab().then((module) => ({ default: module.AnalyticsTab }))
-);
+const AnalyticsTab = lazy(() => importAnalyticsTab().then((module) => ({ default: module.AnalyticsTab })));
 
 // Applications and Analytics are the only code-split tabs, so they are the only
 // ones whose first visit pays a chunk fetch. Warming them on hover/focus (and
@@ -162,7 +163,9 @@ function ApplicationModalLoading() {
     <div className="application-modal">
       <div className="application-modal__scrim" aria-hidden="true" />
       <section className="application-modal__panel" aria-busy="true">
-        <p className="pipeline-note" role="status" aria-live="polite">Loading application…</p>
+        <p className="pipeline-note" role="status" aria-live="polite">
+          Loading application…
+        </p>
       </section>
     </div>
   );
@@ -238,6 +241,7 @@ const DEFAULT_DOCUMENT_TITLE = "Resume";
 const COVER_LETTER_TITLE_PLACEHOLDERS = ["Cover letter", "Untitled cover letter"] as const;
 const DOCUMENT_TITLE_STORAGE_KEY = "rolefit:documentTitle";
 const OUTPUT_TABS: OutputTabDescriptor[] = [
+  { id: "prepare", label: "Prepare", group: "PREPARE" },
   { id: "resume", label: "Resume" },
   { id: "cover", label: "Cover letter" },
   { id: "materials", label: "Materials" },
@@ -253,11 +257,7 @@ function definedTracking(tracking: ExtractedJobTracking) {
   ) as ExtractedJobTracking;
 }
 
-function documentTitleForJob(
-  kind: DocumentTitleKind,
-  tracking: ExtractedJobTracking,
-  applicantName: string
-): string {
+function documentTitleForJob(kind: DocumentTitleKind, tracking: ExtractedJobTracking, applicantName: string): string {
   return buildDocumentTitle(kind, applicantName, (tracking.company || "").trim());
 }
 
@@ -303,6 +303,11 @@ function App() {
   const [jobDescription, setJobDescription] = useState("");
   const [jobUrl, setJobUrl] = useState("");
   const [importedJob, setImportedJob] = useState<ImportedJobSnapshot | null>(null);
+  const [materialSelection, setMaterialSelection] = useState<{
+    resume: boolean;
+    coverLetter: boolean;
+  }>(DEFAULT_MATERIAL_SELECTION);
+  const [isSelectingCoverVariant, setIsSelectingCoverVariant] = useState(false);
   // Tab-local document identity: independent tailoring sessions can name their
   // drafts independently, and the same title becomes the default PDF/.resume
   // file name. Successful imports/distills replace it with the new job target.
@@ -319,10 +324,9 @@ function App() {
   // deleted (not set to "none") when a fresh polish run starts, so a stale
   // provider attribution can never linger from a prior run into the new one.
   const [pipelineAiUsage, setPipelineAiUsage] = useState<Record<string, StageAiUsage>>({});
-  // Pre-distill raw posting text, kept ONLY when it differs from the working
-  // jobDescription (the distilled brief) — mirrors Application.rawJobDescription
-  // and feeds duplicate detection's requisition-id/fingerprint tiers, which work
-  // best against the raw posting rather than the compact tailoring scaffold.
+  // Immutable captured posting text. It remains separate even when it initially
+  // matches jobDescription so prepared-brief edits and "Prepare again" never
+  // rewrite or accidentally re-distill the compact tailoring scaffold.
   const [jobRawText, setJobRawText] = useState("");
   // Starts empty; the mount effect (loadWorkspace) auto-loads a workspace
   // base-resume when one exists, otherwise the editor stays blank.
@@ -342,6 +346,12 @@ function App() {
   // later import/paste/edit, or a toggle-OFF import, can never trigger a surprise
   // polish against the wrong posting.
   const [autoTailorJob, setAutoTailorJob] = useState<string | null>(null);
+  const [resumeVariantRecommendation, setResumeVariantRecommendation] = useState<ResumeVariantRecommendation | null>(
+    null
+  );
+  const [isRankingResumeVariants, setIsRankingResumeVariants] = useState(false);
+  const resumeVariantRecommendationKeyRef = useRef("");
+  const resumeVariantRecommendationGenerationRef = useRef(0);
   // Export and Apply report to their own local action surfaces instead of a
   // shared global toast.
   const [exportStatus, setExportStatus] = useState("");
@@ -400,7 +410,12 @@ function App() {
       if (!connection) return `Add ${providerLabel(provider)} in RoleFit Companion.`;
       return connection.ready ? "" : connection.guidance;
     },
-    [availableProviderById, providerAvailability.companionManaged, providerAvailability.message, providerAvailability.status]
+    [
+      availableProviderById,
+      providerAvailability.companionManaged,
+      providerAvailability.message,
+      providerAvailability.status
+    ]
   );
   const distillProviderReady = providerReady(stages.distill.provider);
   const tailorProviderReady = providerReady(stages.tailor.provider);
@@ -425,8 +440,7 @@ function App() {
     [providerAvailability.ensureProvider, stages.review.provider]
   );
   const selectedPolishProvidersReady =
-    (polishStages === "review" || tailorProviderReady) &&
-    (polishStages === "tailor" || reviewProviderReady);
+    (polishStages === "review" || tailorProviderReady) && (polishStages === "tailor" || reviewProviderReady);
   const polishProviderMessage =
     polishStages !== "review" && !tailorProviderReady
       ? tailorProviderMessage
@@ -445,15 +459,23 @@ function App() {
   // the copy buttons, not a live link). Shared by every distill entry point
   // (link, paste, extension import, and their retries).
   const distillRequestFields = () => buildStageRequestFields(stages.distill);
-  const [activeOutputTab, setActiveOutputTab] = useState<OutputTab>("resume");
+  const [activeOutputTab, setActiveOutputTab] = useState<OutputTab>("prepare");
   const [statusFilter, setStatusFilter] = useState<ApplicationActivityFilter>("all");
   const [trackerView, setTrackerView] = useState<TrackerView>("table");
   const [expandedApplicationId, setExpandedApplicationId] = useState<string | null>(null);
   // Saved-application resume PDF preview ({url,name} → open; null → closed).
-  const [resumePreview, setResumePreview] = useState<{ url: string; name: string } | null>(null);
+  const [resumePreview, setResumePreview] = useState<{
+    url: string;
+    name: string;
+  } | null>(null);
   const [isApplicationModalOpen, setIsApplicationModalOpen] = useState(false);
   // null → the modal is in "add" mode; an id → it edits that application.
   const [modalApplicationId, setModalApplicationId] = useState<string | null>(null);
+  const applicationOpenInFlightRef = useRef(false);
+  // Apply and tracker restore establish one application of record for the
+  // current preparation. Manual brief edits must keep targeting that row even
+  // though they intentionally make its last-saved job description stale.
+  const [applicationOfRecordId, setApplicationOfRecordId] = useState<string | null>(null);
 
   useEffect(() => {
     const url = resumePreview?.url;
@@ -571,10 +593,52 @@ function App() {
   // Aliased next to the editor so every naming path below can use it; the
   // setter itself is a plain useState setter and stable.
   const setCoverLetterTitle = coverLetterEditor.setDocumentTitle;
-  const [coverLetterInlineFormat, setCoverLetterInlineFormat] =
-    useState<InlineFormatState>(EMPTY_INLINE_FORMAT);
+  const [coverLetterInlineFormat, setCoverLetterInlineFormat] = useState<InlineFormatState>(EMPTY_INLINE_FORMAT);
   const [linkEditorOpen, setLinkEditorOpen] = useState(false);
   const currentResumeText = serializedResume || result?.polishedText || "";
+  const coverReplacementStateRef = useRef({
+    dirty: false,
+    version: ""
+  });
+  coverReplacementStateRef.current = {
+    dirty: coverLetterRecoveryDirty({
+      documentDirty: coverLetterEditor.dirty,
+      documentTitle: coverLetterEditor.documentTitle,
+      persistedDocumentTitle: coverLetterEditor.persistedDocumentTitle
+    }),
+    version: `${coverLetterEditor.draftPayload ?? ""}\u0000${coverLetterEditor.documentTitle}`
+  };
+
+  const handleSelectPreparedCoverLetter = useCallback(
+    async (fileName: string) => {
+      if (!fileName || fileName === coverLetterEditor.activeCoverFileName) return;
+      if (coverReplacementStateRef.current.dirty && !(await confirmReplaceCoverLetter())) {
+        return;
+      }
+      const approvedVersion = coverReplacementStateRef.current.version;
+      setIsSelectingCoverVariant(true);
+      try {
+        const opened = await coverLetterEditor.openWorkspaceCoverLetter(
+          fileName,
+          false,
+          () => coverReplacementStateRef.current.version !== approvedVersion
+        );
+        if (!opened && coverReplacementStateRef.current.version !== approvedVersion) {
+          coverLetterEditor.setStatus(
+            "The cover letter changed while that variant was loading. The current draft was kept."
+          );
+        }
+      } finally {
+        setIsSelectingCoverVariant(false);
+      }
+    },
+    [
+      confirmReplaceCoverLetter,
+      coverLetterEditor.activeCoverFileName,
+      coverLetterEditor.openWorkspaceCoverLetter,
+      coverLetterEditor.setStatus
+    ]
+  );
 
   useEffect(() => {
     try {
@@ -584,18 +648,91 @@ function App() {
     }
   }, [documentTitle]);
 
-  const setImportedJobAndDocumentTitle = useCallback((snapshot: ImportedJobSnapshot | null) => {
-    setImportedJob(snapshot);
-    if (!snapshot) return;
-    const applicantName = resolveResumeApplicantName(
-      editedResume?.header?.name,
-      currentResumeText || resumeText
-    );
-    setDocumentTitle(documentTitleForJob("resume", snapshot.tracking, applicantName));
-    // Retitle the letter for the new role too. Leaving it behind would keep the
-    // previous company in the letter's name and in every file exported from it.
-    setCoverLetterTitle(documentTitleForJob("coverLetter", snapshot.tracking, applicantName));
-  }, [currentResumeText, editedResume?.header?.name, resumeText, setCoverLetterTitle]);
+  const setImportedJobAndDocumentTitle = useCallback(
+    (snapshot: ImportedJobSnapshot | null) => {
+      const continuesPreparedSource = Boolean(
+        snapshot &&
+          importedJob &&
+          snapshot.url === importedJob.url &&
+          snapshot.sourceText === importedJob.sourceText
+      );
+      setImportedJob(snapshot);
+      // This setter is owned by fresh intake paths. Restoring or editing an
+      // existing preparation uses setImportedJob directly. Re-preparing the
+      // same captured source also keeps its application-of-record identity.
+      if (!continuesPreparedSource) {
+        setApplicationOfRecordId(null);
+        setMaterialSelection(DEFAULT_MATERIAL_SELECTION);
+        setResumeVariantRecommendation(null);
+      }
+      if (!snapshot) return;
+      const applicantName = resolveResumeApplicantName(editedResume?.header?.name, currentResumeText || resumeText);
+      setDocumentTitle(documentTitleForJob("resume", snapshot.tracking, applicantName));
+      // Retitle the letter for the new role too. Leaving it behind would keep the
+      // previous company in the letter's name and in every file exported from it.
+      setCoverLetterTitle(documentTitleForJob("coverLetter", snapshot.tracking, applicantName));
+    },
+    [currentResumeText, editedResume?.header?.name, importedJob, resumeText, setCoverLetterTitle]
+  );
+  const handlePreparedJobTrackingChange = useCallback(
+    (field: keyof ExtractedJobTracking, value: string | number | null) => {
+      if (!importedJob) return;
+      const roleValue = typeof value === "string" ? value : "";
+      const rolePatch: Partial<ExtractedJobTracking> =
+        field === "role"
+          ? { role: roleValue, title: roleValue }
+          : ({ [field]: value } as Partial<ExtractedJobTracking>);
+      const nextTracking = definedTracking({
+        ...importedJob.tracking,
+        ...rolePatch
+      });
+      const nextTailoringText = assemblePreparedJobTailoringText(nextTracking, importedJob.brief);
+      setImportedJob({
+        ...importedJob,
+        tailoringText: nextTailoringText,
+        tracking: nextTracking,
+        manualReviewFields: reconcilePreparedJobManualReviewFields(
+          nextTracking,
+          importedJob.brief,
+          importedJob.manualReviewFields
+        )
+      });
+      setJobDescription(nextTailoringText);
+      if (nextTailoringText !== importedJob.tailoringText) setResult(null);
+      if (field === "role" || field === "title" || field === "company") {
+        const applicantName = resolveResumeApplicantName(editedResume?.header?.name, currentResumeText || resumeText);
+        setDocumentTitle(documentTitleForJob("resume", nextTracking, applicantName));
+        setCoverLetterTitle(documentTitleForJob("coverLetter", nextTracking, applicantName));
+      }
+    },
+    [currentResumeText, editedResume?.header?.name, importedJob, resumeText, setCoverLetterTitle]
+  );
+  const handlePreparedJobBriefChange = useCallback(
+    (field: PreparedJobBriefField, value: string) => {
+      if (!importedJob) return;
+      const nextBrief = {
+        ...importedJob.brief,
+        [field]: preparedJobBriefFieldFromText(field, value)
+      };
+      const nextManualReviewFields = reconcilePreparedJobManualReviewFields(
+        importedJob.tracking,
+        nextBrief,
+        importedJob.manualReviewFields
+      );
+      const nextTailoringText = assemblePreparedJobTailoringText(importedJob.tracking, nextBrief);
+      setImportedJob({
+        ...importedJob,
+        brief: nextBrief,
+        tailoringText: nextTailoringText,
+        manualReviewFields: nextManualReviewFields
+      });
+      setJobDescription(nextTailoringText);
+      if (field !== "benefits" && nextTailoringText !== importedJob.tailoringText) {
+        setResult(null);
+      }
+    },
+    [importedJob]
+  );
   // Per-section tailoring choice. Off is the implicit default (absent key); the
   // map stores only "tailor"/"include" so the three states are mutually exclusive
   // by construction.
@@ -648,19 +785,19 @@ function App() {
     markResumeDocumentClean();
   }, [markResumeDocumentClean]);
   const globalAlignments = useMemo(
-    () => editedResume ? globalAlignmentState(editedResume, docStyle.style) : null,
+    () => (editedResume ? globalAlignmentState(editedResume, docStyle.style) : null),
     [docStyle.style, editedResume]
   );
   const styleMarkStates = useMemo(
-    () => editedResume ? styleFieldMarkStates(editedResume) : undefined,
+    () => (editedResume ? styleFieldMarkStates(editedResume) : undefined),
     [editedResume]
   );
   const styleFontStates = useMemo(
-    () => editedResume ? styleFieldFontStates(editedResume, docStyle.style.fontFamily) : undefined,
+    () => (editedResume ? styleFieldFontStates(editedResume, docStyle.style.fontFamily) : undefined),
     [docStyle.style.fontFamily, editedResume]
   );
   const styleSizeStates = useMemo(
-    () => editedResume ? styleFieldSizeStates(editedResume, docStyle.style.baseFontSizePt) : undefined,
+    () => (editedResume ? styleFieldSizeStates(editedResume, docStyle.style.baseFontSizePt) : undefined),
     [docStyle.style.baseFontSizePt, editedResume]
   );
   const fitResumePage = useCallback(() => {
@@ -687,9 +824,7 @@ function App() {
   // uses, with no behavior change.
   const jobTracking = useMemo((): ExtractedJobTracking => {
     const imported =
-      importedJob &&
-      importedJob.url === jobUrl.trim() &&
-      importedJob.tailoringText === jobDescription.trim()
+      importedJob && importedJob.url === jobUrl.trim() && importedJob.tailoringText === jobDescription.trim()
         ? importedJob.tracking
         : null;
     // The import (AI or deterministic) is the authoritative distill output. Don't
@@ -808,6 +943,14 @@ function App() {
     findDuplicatesForTarget,
     confirm
   });
+  const preparedSnapshotMatchesInputs = Boolean(
+    importedJob &&
+      importedJob.url === jobUrl.trim() &&
+      importedJob.tailoringText === jobDescription.trim()
+  );
+  const preparedApplicationJobDescription = preparedSnapshotMatchesInputs && importedJob
+    ? assemblePreparedJobApplicationText(importedJob.tracking, importedJob.brief)
+    : jobDescription.trim();
 
   const {
     answersResult,
@@ -822,6 +965,13 @@ function App() {
     resumeText: currentResumeText || resumeText,
     resumeData: editedResume,
     jobDescription,
+    applicationJobDescription: preparedApplicationJobDescription,
+    applicationRawJobDescription: jobRawText,
+    applicationTracking: jobTracking,
+    linkedApplication:
+      applicationOfRecordId !== null
+        ? (applications.find((application) => application.id === applicationOfRecordId) ?? null)
+        : null,
     jobUrl,
     honestContext: requestHonestContext,
     customInstructions: customInstructionsFor("answers"),
@@ -831,7 +981,6 @@ function App() {
     upsertApplication,
     findForTarget
   });
-
 
   // One Tailor click writes the letter. Its dedicated editor remains the single
   // owner for applied text, direct edits, file lifecycle, the pre-tailor
@@ -867,7 +1016,10 @@ function App() {
       coverLetterEditor.data.header?.name || editedResume?.header?.name,
       currentResumeText || resumeText
     ),
-    jobTarget: { role: jobTracking.role || jobTracking.title, company: jobTracking.company },
+    jobTarget: {
+      role: jobTracking.role || jobTracking.title,
+      company: jobTracking.company
+    },
     onApplyTailored: coverLetterEditor.applyTailoredText,
     onApplyExternal: coverLetterEditor.applyExternalText,
     onUsage: (usage) => setPipelineAiUsage((prev) => ({ ...prev, cover: usage }))
@@ -926,9 +1078,9 @@ function App() {
     }
   }, [applications, expandedApplicationId]);
 
-  // Stale-review: when the JD changes after a polish, the review describes the
-  // old posting. Track whether the text matches what the result was based on.
-  // We store the JD text at the time Polish ran, then compare on JD edits.
+  // Stale AI output: when the JD changes after Tailor or Review, that result
+  // describes the old posting. Track whether the text still matches what the
+  // result was based on, including valid Tailor runs with zero suggestions.
   const lastPolishedJobRef = useRef<string>("");
   useEffect(() => {
     if (!result) return;
@@ -938,10 +1090,10 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [result]);
   useEffect(() => {
-    // JD changed after a polish — mark stale if the review has substance.
+    // Any AI result is bound to its job input, even when Tailor correctly found
+    // zero suggestions and there is no strict Review payload.
     if (!result) return;
-    const hasReview = Boolean(result.strictReview || result.suggestedChanges?.length);
-    if (!hasReview) return;
+    if (result.source !== "ai") return;
     setReviewStale(jobDescription !== lastPolishedJobRef.current);
   }, [jobDescription, result]);
   useEffect(() => {
@@ -961,34 +1113,40 @@ function App() {
   // The job link has its own field now: the description textarea holds the text
   // we tailor against, while `jobUrl` is optional metadata saved with the
   // application for pipeline tracking only — it is never sent to the model.
-  const resumeReady = (currentResumeText || resumeText).trim().length > 80;
+  const resumeReady = Boolean(editedResume && (currentResumeText || resumeText).trim().length > 80);
+  const coverLetterReady =
+    coverLetterPreflight.authoredWordCount >= 40 && coverLetterPreflight.template.slots.length === 0;
+  // A usable application starts with a completed intake snapshot. Nonempty
+  // source text alone is not enough: editing either source field invalidates
+  // the snapshot until Prepare runs again.
+  const jobPrepared = Boolean(
+    preparedSnapshotMatchesInputs &&
+    importedJob &&
+    importedJob.tailoringText.length > 40
+  );
   // Everything except provider readiness. Every stage selection needs these —
   // buildPolishContext requires an editable Tailor scope even for Review only —
   // so this gates the Polish trigger, and each stage row in its menu adds its own
   // provider check.
   const polishInputsReady = useMemo(() => {
     return Boolean(
+      jobPrepared &&
       editedResume &&
-        resumeReady &&
-        Object.values(tailorModes).some((mode) => mode === "tailor") &&
-        jobDescription.trim().length > 40
+      resumeReady &&
+      Object.values(tailorModes).some((mode) => mode === "tailor") &&
+      jobDescription.trim().length > 40
     );
-  }, [editedResume, jobDescription, resumeReady, tailorModes]);
+  }, [editedResume, jobDescription, jobPrepared, resumeReady, tailorModes]);
   const canPolish = polishInputsReady && selectedPolishProvidersReady;
 
   // The edited resume is debounced before the diff recompute so typing in the
   // editor stays smooth (the editor preview itself updates live).
   const debouncedCurrentResumeText = useDebouncedValue(currentResumeText);
+  const debouncedPreparedJobDescription = useDebouncedValue(jobDescription);
 
   // Every review-score/diff derivation the UI shows is pure (read-only) and lives
   // in useResumeAnalysis, so it stays decoupled from App's setters.
-  const {
-    resumeDiff,
-    fitComparison,
-    headlineScore,
-    jobConstraints,
-    resultSourceLabel
-  } = useResumeAnalysis({
+  const { resumeDiff, fitComparison, headlineScore, jobConstraints, resultSourceLabel } = useResumeAnalysis({
     resumeText,
     jobDescription,
     debouncedCurrentResumeText,
@@ -999,7 +1157,7 @@ function App() {
   });
 
   // ----- Derived (non-memo) -----
-  const jobReady = jobDescription.trim().length > 40;
+  const jobReady = jobPrepared;
   // Quiet target label for the Materials tab plan rail header.
   // Only derived when a job description is present; never invents content.
   const materialsJobTarget =
@@ -1010,18 +1168,18 @@ function App() {
   // compile preview), so they unlock as soon as a resume is loaded — not only
   // after an AI polish.
   const canExportResume = Boolean(result || editedResume);
-  // Name what is actually blocking Polish; both inputs now live in navbar menus.
+  // Name what is actually blocking Polish at its two owning surfaces.
   const polishGateHint = canPolish
     ? ""
     : !resumeReady && !jobReady
-    ? "Add a resume (Resume menu) and the job description (Job menu) to polish."
-    : !jobReady
-    ? "Add the job description from the Job menu to polish."
-    : !editedResume || !Object.values(tailorModes).some((mode) => mode === "tailor")
-    ? "Load a resume and set at least one section to Tailor."
-    : !selectedPolishProvidersReady
-    ? polishProviderMessage
-    : "Add more resume text in the Resume menu (a few lines at least).";
+      ? "Add a resume in Draft and prepare the job description in Prepare."
+      : !jobReady
+        ? "Prepare the job description before polishing."
+        : !editedResume || !Object.values(tailorModes).some((mode) => mode === "tailor")
+          ? "Load a resume and set at least one section to Tailor."
+          : !selectedPolishProvidersReady
+            ? polishProviderMessage
+            : "Add more resume text in the Resume menu (a few lines at least).";
   // Per-stage readiness for the Polish chooser: a stage the user can pick must
   // have its own provider, and a blocked row says which one and why.
   const polishStageReady: Record<"tailor" | "review" | "both", boolean> = {
@@ -1068,6 +1226,7 @@ function App() {
   // them below for render + the presence phase + the before-unload guard.
   const {
     isExtractingLink,
+    extensionImportPhase,
     distillProgress,
     distillProgressVisible,
     distillContinuesToPolish,
@@ -1089,6 +1248,8 @@ function App() {
     setAutoTailorJob,
     setPolishStatus,
     setLinkStatus,
+    onExtensionPrepareStarted: () => setActiveOutputTab("prepare"),
+    onExtensionJobReceived: () => setActiveOutputTab("prepare"),
     confirmDuplicateBeforeDistill: duplicateGuard.confirmDuplicateBeforeDistill,
     confirmDuplicateAfterDistill: duplicateGuard.confirmDuplicateAfterDistill,
     distillRequestFields,
@@ -1097,6 +1258,8 @@ function App() {
     tailorModes,
     editedResume
   });
+  const jobPreparationActive =
+    isExtractingLink || extensionImportPhase !== null || distillProgress.status === "running";
 
   // ----- Polish pipeline (Tailor -> Review) -----
   // buildPolishContext, the reviewer-attribution + merge helpers, the two
@@ -1134,7 +1297,6 @@ function App() {
     setExportStatus,
     confirmDuplicateBeforePolish: duplicateGuard.confirmDuplicateBeforePolish
   });
-
   // Polish asks which stages to run, then runs them. `polishStages` stays the one
   // owner of that choice (it is a persisted AI setting, and the progress card,
   // retryStage, and the presence phase all read it), so the chooser SETS it and
@@ -1165,7 +1327,11 @@ function App() {
 
   const aiWorkflowStages: AiWorkflowStage[] = [];
   if (distillProgressVisible) {
-    aiWorkflowStages.push({ key: "distill", state: distillProgress, onRetry: distillRetry });
+    aiWorkflowStages.push({
+      key: "distill",
+      state: distillProgress,
+      onRetry: distillRetry
+    });
   }
   if (polishProgressVisible || (distillProgressVisible && distillContinuesToPolish)) {
     if (polishStages !== "review") {
@@ -1196,29 +1362,33 @@ function App() {
   // instrumented into the stage runners) and read back the OTHER live tabs for
   // the shared in-progress card. Privacy: only the role · company label leaves
   // the tab, never JD/resume text.
-  const _myPhase: PresencePhase = distillProgress.status === "running"
-    ? "distilling"
-    : isPolishing
-      ? polishStages === "review"
-        ? "reviewing"
-        : polishStages === "tailor"
-          ? "tailoring"
-          : "tailoring+reviewing"
+  const _myPhase: PresencePhase =
+    distillProgress.status === "running"
+      ? "distilling"
+      : isPolishing
+        ? polishStages === "review"
+          ? "reviewing"
+          : polishStages === "tailor"
+            ? "tailoring"
+            : "tailoring+reviewing"
         : resumeDocumentDirty
           ? "editing"
           : "idle";
-  const otherSessions = useTabPresence({ jobLabel: _autosaveJobLabel, phase: _myPhase });
+  const otherSessions = useTabPresence({
+    jobLabel: _autosaveJobLabel,
+    phase: _myPhase
+  });
 
   // Warn before close/reload when there are unsaved edits OR a distill/tailor/
   // review is mid-flight (losing an in-progress run is as costly as losing edits).
-  // Apply marks content and document style clean after persisting both.
+  // Apply marks each included document clean only after its source persists.
   useBeforeUnloadGuard(
-    resumeDocumentDirty
-      || coverLetterEditor.dirty
-      || isGeneratingCover
-      || isPolishing
-      || distillProgress.status === "running"
-      || pendingApplicationWrites > 0
+    resumeDocumentDirty ||
+      coverLetterEditor.dirty ||
+      isGeneratingCover ||
+      isPolishing ||
+      distillProgress.status === "running" ||
+      pendingApplicationWrites > 0
   );
 
   // ----- Handlers -----
@@ -1230,6 +1400,7 @@ function App() {
     baseResumeName,
     baseResumeOptions,
     baseResumeHistory,
+    baseResumeCandidatesRevision,
     workspaceStatus,
     isSavingBaseResume,
     isWorkspaceBootstrapping,
@@ -1238,6 +1409,8 @@ function App() {
     restoreBaseResume,
     saveCurrentAsBaseResume,
     loadBaseResumeVersion,
+    readBaseResumeCandidates,
+    detachBaseResumeIdentity,
     handleFileUpload
   } = useWorkspaceResume({
     confirm,
@@ -1274,8 +1447,7 @@ function App() {
       setLinkStatus("Workspace restored in another window. Refreshed saved resume options.");
     }
     const coverDocumentDirty =
-      coverLetterEditor.dirty ||
-      coverLetterEditor.documentTitle !== coverLetterEditor.persistedDocumentTitle;
+      coverLetterEditor.dirty || coverLetterEditor.documentTitle !== coverLetterEditor.persistedDocumentTitle;
     coverLetterEditor.setStatus(
       coverDocumentDirty
         ? "A workspace restore finished in another window. Your unsaved cover letter remains preserved in this tab."
@@ -1294,25 +1466,170 @@ function App() {
   // description and the Save menu's "update this base" row name it, so it is
   // derived once here rather than recomputed at each call site.
   const activeBaseResumeLabel =
-    baseResumeOptions.find((option) => option.fileName === baseResumeName)?.label
-    || baseResumeName;
+    baseResumeOptions.find((option) => option.fileName === baseResumeName)?.label || baseResumeName;
 
-  // Auto-tailor: when an extension import requested it (toggle on), jump straight to
-  // polish as soon as a resume is ready. Scoped to the imported job's text — if the
-  // user swapped in a different JD (another import, a paste, or a hand edit) before a
-  // resume loaded, drop the intent instead of firing a surprise polish on the wrong
-  // posting.
+  const rankingJobDescription = debouncedPreparedJobDescription.trim();
+  const resumeVariantRecommendationInputKey =
+    jobPrepared && rankingJobDescription === jobDescription.trim() && baseResumeOptions.length > 1
+      ? JSON.stringify({
+          job: rankingJobDescription,
+          variants: baseResumeOptions.map((option) => option.fileName),
+          candidatesRevision: baseResumeCandidatesRevision
+        })
+      : "";
+  const resumeVariantSelectionStateRef = useRef({
+    baseResumeName,
+    resumeDocumentDirty,
+    isWorkspaceBootstrapping,
+    isSavingBaseResume,
+    applicationOfRecordId,
+    jobPrepared,
+    preparedJobDescription: jobDescription.trim(),
+    options: baseResumeOptions,
+    loadBaseResumeVersion
+  });
+  resumeVariantSelectionStateRef.current = {
+    baseResumeName,
+    resumeDocumentDirty,
+    isWorkspaceBootstrapping,
+    isSavingBaseResume,
+    applicationOfRecordId,
+    jobPrepared,
+    preparedJobDescription: jobDescription.trim(),
+    options: baseResumeOptions,
+    loadBaseResumeVersion
+  };
+
+  useEffect(() => {
+    if (!resumeVariantRecommendationInputKey) {
+      resumeVariantRecommendationKeyRef.current = "";
+      resumeVariantRecommendationGenerationRef.current += 1;
+      setResumeVariantRecommendation(null);
+      setIsRankingResumeVariants(false);
+      return;
+    }
+    if (resumeVariantRecommendationKeyRef.current === resumeVariantRecommendationInputKey) {
+      return;
+    }
+
+    resumeVariantRecommendationKeyRef.current = resumeVariantRecommendationInputKey;
+    const generation = resumeVariantRecommendationGenerationRef.current + 1;
+    resumeVariantRecommendationGenerationRef.current = generation;
+    const startState = resumeVariantSelectionStateRef.current;
+    const startingBaseResumeName = startState.baseResumeName;
+    const options = startState.options;
+    setIsRankingResumeVariants(true);
+    setResumeVariantRecommendation(null);
+
+    void (async () => {
+      const candidates = await readBaseResumeCandidates(options);
+      if (
+        generation !== resumeVariantRecommendationGenerationRef.current ||
+        !resumeVariantSelectionStateRef.current.jobPrepared ||
+        resumeVariantSelectionStateRef.current.preparedJobDescription !== rankingJobDescription
+      ) {
+        return;
+      }
+      const recommendation = recommendResumeVariant(rankingJobDescription, candidates, options.length);
+      setResumeVariantRecommendation(recommendation);
+
+      const current = resumeVariantSelectionStateRef.current;
+      const canAdoptRecommendation =
+        recommendation?.confidence === "high" &&
+        current.preparedJobDescription === rankingJobDescription &&
+        recommendation.fileName !== current.baseResumeName &&
+        current.baseResumeName === startingBaseResumeName &&
+        current.applicationOfRecordId === null &&
+        !current.resumeDocumentDirty &&
+        !current.isWorkspaceBootstrapping &&
+        !current.isSavingBaseResume;
+      if (canAdoptRecommendation) {
+        await current.loadBaseResumeVersion(recommendation.fileName, true, () => {
+          const latest = resumeVariantSelectionStateRef.current;
+          return (
+            generation !== resumeVariantRecommendationGenerationRef.current ||
+            !latest.jobPrepared ||
+            latest.preparedJobDescription !== rankingJobDescription ||
+            latest.applicationOfRecordId !== null
+          );
+        });
+      }
+      if (generation === resumeVariantRecommendationGenerationRef.current) {
+        setIsRankingResumeVariants(false);
+      }
+    })();
+
+    return () => {
+      if (generation === resumeVariantRecommendationGenerationRef.current) {
+        resumeVariantRecommendationGenerationRef.current += 1;
+      }
+    };
+  }, [readBaseResumeCandidates, rankingJobDescription, resumeVariantRecommendationInputKey]);
+
+  // Auto-tailor remains a Prepare workflow. With multiple variants, Distill's
+  // content comparison may continue only after a clear winner has been loaded;
+  // an ambiguous result or dirty editor remains an explicit user decision.
   useEffect(() => {
     if (autoTailorJob === null) return;
     if (autoTailorJob !== jobDescription.trim()) {
       setAutoTailorJob(null);
       return;
     }
+    if (
+      isWorkspaceBootstrapping ||
+      isSavingBaseResume ||
+      resumeDocumentDirty ||
+      isRankingResumeVariants ||
+      (baseResumeOptions.length > 1 &&
+        (resumeVariantRecommendation?.confidence !== "high" || resumeVariantRecommendation.fileName !== baseResumeName))
+    ) {
+      return;
+    }
     if (canPolish && !isPolishing) {
       setAutoTailorJob(null);
-      void handlePolish();
+      void handlePolish({ revealResumeOnSuccess: false });
     }
-  }, [autoTailorJob, jobDescription, canPolish, isPolishing]);
+  }, [
+    autoTailorJob,
+    jobDescription,
+    canPolish,
+    isPolishing,
+    isWorkspaceBootstrapping,
+    isSavingBaseResume,
+    resumeDocumentDirty,
+    isRankingResumeVariants,
+    baseResumeOptions.length,
+    baseResumeName,
+    resumeVariantRecommendation
+  ]);
+
+  const autoTailorNeedsVariantChoice =
+    autoTailorJob !== null &&
+    baseResumeOptions.length > 1 &&
+    (isRankingResumeVariants ||
+      resumeVariantRecommendation?.confidence !== "high" ||
+      resumeVariantRecommendation.fileName !== baseResumeName);
+  const applicationPreparationActive =
+    jobPreparationActive ||
+    (materialSelection.resume &&
+      (isPolishing || isRankingResumeVariants || isSavingBaseResume || isWorkspaceBootstrapping)) ||
+    (materialSelection.coverLetter && (isGeneratingCover || isSelectingCoverVariant));
+  const preparationReadiness = getPreparationReadiness({
+    jobPrepared,
+    includeResume: materialSelection.resume,
+    resumeReady,
+    includeCoverLetter: materialSelection.coverLetter,
+    coverLetterReady,
+    isPreparing: applicationPreparationActive
+  });
+  function handleTailorPreparedResume() {
+    if (!jobPrepared || !canPolish || isPolishing || isSavingBaseResume) return;
+    // This click is the confirmation missing from automatic mode. It tailors
+    // exactly the resume currently shown; loading a different variant remains
+    // protected by useWorkspaceResume's dirty-document confirmation.
+    setAutoTailorJob(null);
+    void handlePolish({ revealResumeOnSuccess: false });
+  }
 
   // Called from the ReviewRail "Add evidence" button on gaps/missing-skills rows.
   // Appends a template line to honestContext (unless the keyword is already there),
@@ -1352,10 +1669,11 @@ function App() {
     return jobTracking;
   }
 
-  // Per-document application saves. Apply snapshots both documents; afterwards
-  // the resume and the cover letter each keep their own saved/unsaved state and
-  // their own explicit "Update application" action in their Save menus.
+  // Per-document application saves. Apply snapshots only the selected package;
+  // afterwards each editor keeps its own saved/unsaved state and explicit
+  // "Update application" action in its Save menu.
   const {
+    application: preparedApplication,
     linkApplication,
     resume: resumeApplicationSync,
     coverLetter: coverLetterApplicationSync
@@ -1363,25 +1681,55 @@ function App() {
     applications,
     findForTarget,
     jobUrl,
-    jobDescription,
+    jobDescription: preparedApplicationJobDescription,
     currentResumeText,
     currentResumeSource,
+    resumeDocumentVersion: resumeReplacementStateRef.current.version,
     coverLetterText: coverLetterEditor.text,
     currentCoverLetterSource: coverLetterEditor.draftPayload ?? "",
+    coverLetterDocumentVersion: coverReplacementStateRef.current.version,
     saveApplicationDocument: applicationFiles.saveDocument,
     getResumeArtifacts,
     getCoverLetterArtifacts: coverLetterEditor.getArtifacts,
     onResumeSaved: markResumeApplicationSaved,
-    onCoverLetterSaved: coverLetterEditor.markApplicationSaved
+    onCoverLetterSaved: coverLetterEditor.markApplicationSaved,
+    preserveLinkedApplication: applicationOfRecordId !== null && jobPrepared
   });
+  const linkPreparedApplication = useCallback(
+    (id: string | null) => {
+      setApplicationOfRecordId(id);
+      linkApplication(id);
+    },
+    [linkApplication]
+  );
+  const polishOutputCurrent = result?.source === "ai" && !reviewStale && !resumeManuallyEdited;
+  const currentReviewAvailable = polishOutputCurrent && Boolean(result?.strictReview);
+  const savedApplicationReviewAvailable = Boolean(
+    jobPrepared &&
+      preparedApplication?.review &&
+      (preparedApplication.jobDescription ?? "").trim() ===
+        preparedApplicationJobDescription.trim()
+  );
+  const prepareReviewGaps =
+    currentReviewAvailable && result?.strictReview
+      ? result.strictReview.gaps
+      : savedApplicationReviewAvailable
+        ? preparedApplication?.review?.gaps ?? []
+        : [];
+  const prepareReviewGapsProvenance = currentReviewAvailable
+    ? "current"
+    : savedApplicationReviewAvailable
+      ? "saved"
+      : "none";
 
   // The Apply flow (download-prompt state + commitApply/handleApply/
-  // handleApplyDownloadPick/handleApplyOnly/saveAppliedResumeArtifacts) lives in
+  // handleApplyDownloadPick/handleApplyOnly/saveAppliedDocumentArtifacts) lives in
   // useApplyFlow; App passes in the job/resume/result/export/duplicate-guard
   // dependencies it needs and reads back the download-prompt state + handlers
   // the Apply button and ApplyDownloadDialog wire up.
   const {
     applyMergeTargetRef,
+    applyMaterialSelectionRef,
     applyDownloadPrompt,
     setApplyDownloadPrompt,
     isApplying,
@@ -1390,8 +1738,12 @@ function App() {
     handleApplyDownloadPick,
     handleApplyOnly
   } = useApplyFlow({
+    canApply: preparationReadiness.canApply,
+    applyBlocker: preparationReadiness.primaryBlocker,
+    includeResume: materialSelection.resume,
+    includeCoverLetter: materialSelection.coverLetter,
     jobUrl,
-    jobDescription,
+    preparedJobDescription: preparedApplicationJobDescription,
     jobRawText,
     result,
     currentResumeText,
@@ -1399,16 +1751,19 @@ function App() {
     fitComparison,
     pipelineAiUsage,
     applications,
+    linkedApplicationId: applicationOfRecordId,
     findForTarget,
-    upsertApplication,
+    persistAppliedApplication: saveApplication,
     saveApplicationDocument: applicationFiles.saveDocument,
-    linkApplication,
+    linkApplication: linkPreparedApplication,
     currentJobTracking,
     resolveApplyDuplicate: duplicateGuard.resolveApplyDuplicate,
     canExportResume,
     handleDownloadPdf,
     getResumeArtifacts,
     getCoverLetterArtifacts: coverLetterEditor.getArtifacts,
+    resumeDocumentVersion: resumeReplacementStateRef.current.version,
+    coverLetterDocumentVersion: coverReplacementStateRef.current.version,
     onResumeSaved: markResumeApplicationSaved,
     onCoverLetterSaved: coverLetterEditor.markApplicationSaved,
     setApplyStatus,
@@ -1416,114 +1771,210 @@ function App() {
     setExpandedApplicationId
   });
 
-  async function handleLoadApplication(app: Application) {
-    if (resumeDocumentDirty || coverLetterEditor.dirty) {
-      if (!(await confirmReplaceApplicationDraft())) return;
-    }
-
-    // Strict application sources are authoritative for editor content and
-    // style. Validate both before replacing either current editor.
-    let savedResumeSource: ReturnType<typeof parseResumeFile> | null = null;
-    let savedCoverSource = "";
+  async function handleLoadApplication(app: Application): Promise<boolean> {
+    if (applicationOpenInFlightRef.current) return false;
+    applicationOpenInFlightRef.current = true;
     try {
-      if (app.resumeArtifacts?.hasSource) {
-        const response = await fetch(applicationDocumentUrl(app.id, "resume", "source"));
-        if (!response.ok) throw new Error("The saved resume source could not be read.");
-        savedResumeSource = parseResumeFile(await response.arrayBuffer());
+      if (resumeReplacementStateRef.current.dirty || coverReplacementStateRef.current.dirty) {
+        if (!(await confirmReplaceApplicationDraft())) return false;
       }
-      if (app.coverLetterArtifacts?.hasSource) {
-        const response = await fetch(applicationDocumentUrl(app.id, "cover", "source"));
-        if (!response.ok) throw new Error("The saved cover letter source could not be read.");
-        savedCoverSource = await response.text();
+      const approvedResumeVersion = resumeReplacementStateRef.current.version;
+      const approvedCoverVersion = coverReplacementStateRef.current.version;
+
+      // Strict application sources are authoritative for editor content and
+      // style. Validate both before replacing either current editor.
+      let savedResumeSource: ReturnType<typeof parseResumeFile> | null = null;
+      let savedCoverSource = "";
+      try {
+        if (app.resumeArtifacts?.hasSource) {
+          const response = await fetch(applicationDocumentUrl(app.id, "resume", "source"));
+          if (!response.ok) throw new Error("The saved resume source could not be read.");
+          savedResumeSource = parseResumeFile(await response.arrayBuffer());
+        }
+        if (app.coverLetterArtifacts?.hasSource) {
+          const response = await fetch(applicationDocumentUrl(app.id, "cover", "source"));
+          if (!response.ok) throw new Error("The saved cover letter source could not be read.");
+          savedCoverSource = await response.text();
+        }
+      } catch (error) {
+        await alert({
+          title: "Open failed",
+          message: error instanceof Error ? error.message : "The saved application documents could not be read."
+        });
+        return false;
       }
+      if (
+        resumeReplacementStateRef.current.version !== approvedResumeVersion ||
+        coverReplacementStateRef.current.version !== approvedCoverVersion
+      ) {
+        await alert({
+          title: "Open paused",
+          message:
+            "The resume or cover letter changed while the saved application was loading. Your current drafts were kept; open the preparation again when you are ready."
+        });
+        return false;
+      }
+
+      const restoredResumeData = savedResumeSource?.data ?? null;
+      const restoredResume = restoredResumeData ? serializeResumeData(restoredResumeData) : "";
+      const applicantName = resolveResumeApplicantName(
+        restoredResumeData?.header?.name,
+        restoredResume || currentResumeText || resumeText
+      );
+      const restoredJobDescription = (app.jobDescription || "").trim();
+      const restoredSourceText = (app.rawJobDescription || restoredJobDescription).trim();
+      const restoredExtraction = extractJobPosting(restoredSourceText, {
+        url: app.jobUrl || undefined
+      });
+      const restoredTracking: ExtractedJobTracking = definedTracking({
+        ...restoredExtraction.tracking,
+        title: app.role,
+        role: app.role,
+        company: app.company,
+        source: app.source,
+        location: app.location,
+        jobType: app.jobType,
+        workAuth: app.workAuth,
+        salaryMin: app.salaryMin,
+        salaryMax: app.salaryMax,
+        salaryCurrency: app.salaryCurrency,
+        salaryPeriod: app.salaryPeriod,
+        roleDescription: app.roleDescription
+      });
+      const storedBrief = removePreparedJobRoleSummary(
+        buildPreparedJobBrief(restoredJobDescription, restoredJobDescription),
+        app.roleDescription
+      );
+      const fallbackBrief = buildPreparedJobBrief(restoredExtraction.tailoringText, restoredSourceText);
+      const storedPreparedDescription =
+        /^Job Title\s*:/im.test(restoredJobDescription) &&
+        /^Company \/ Product Context\s*:/im.test(restoredJobDescription) &&
+        /^Core Responsibilities\s*:/im.test(restoredJobDescription) &&
+        /^Required Qualifications\s*:/im.test(restoredJobDescription);
+      const storedBenefitsSection = /^Benefits\s*:/im.test(restoredJobDescription);
+      const restoredBrief = storedPreparedDescription
+        ? {
+            ...storedBrief,
+            // New prepared applications always persist an explicit Benefits
+            // section. "Not specified" is an intentional empty edit; only
+            // legacy structured text with no section falls back to raw source.
+            benefits: storedBenefitsSection ? storedBrief.benefits : fallbackBrief.benefits
+          }
+        : fallbackBrief;
+      const restoredManualReviewFields = reconcilePreparedJobManualReviewFields(
+        restoredTracking,
+        restoredBrief,
+        restoredExtraction.manualReviewFields
+      );
+      const restoredTailoringText = assemblePreparedJobTailoringText(restoredTracking, restoredBrief);
+      const resumeTitle = documentTitleForJob("resume", restoredTracking, applicantName);
+      const coverTitle = documentTitleForJob("coverLetter", restoredTracking, applicantName);
+      if (savedCoverSource && !coverLetterEditor.openApplicationSource(savedCoverSource, coverTitle)) {
+        await alert({
+          title: "Open failed",
+          message: "The saved cover letter source could not be read."
+        });
+        return false;
+      }
+
+      // Opening a tracked application supersedes any recovery prompt from the
+      // previous desk state, even when that state happened to be clean.
+      clearAutosaveDraft();
+      clearCoverLetterAutosaveDraft();
+      setPendingAutosaveDraft(null);
+      setPendingCoverDraft(null);
+      // Description and link are separate fields: restore each from its own slot.
+      setJobDescription(restoredTailoringText);
+      setJobUrl(app.jobUrl || "");
+      setImportedJob(
+        restoredTailoringText.length > 40
+          ? {
+              url: (app.jobUrl || "").trim(),
+              sourceText: restoredSourceText,
+              tailoringText: restoredTailoringText,
+              tracking: restoredTracking,
+              brief: restoredBrief,
+              manualReviewFields: restoredManualReviewFields
+            }
+          : null
+      );
+      setDocumentTitle(resumeTitle);
+      if (!savedCoverSource) {
+        coverLetterEditor.startBlank();
+        setCoverLetterTitle(coverTitle);
+      }
+      // Restore a consistent AI-usage/raw-text pair regardless of which branch
+      // below runs — a tracker-restore must not carry over the PREVIOUS working
+      // job's provider attribution or raw text.
+      setPipelineAiUsage(app.aiUsage ?? { distill: { source: "none" } });
+      setJobRawText(restoredSourceText);
+      // Include controls describe the NEXT Apply package, not which historical
+      // artifacts happen to exist. Reopen with the documented defaults; retained
+      // excluded artifacts remain visible in the saved-application summary.
+      setMaterialSelection(DEFAULT_MATERIAL_SELECTION);
+      // Deliberately reloading a tracked application for another pass: pre-ack
+      // its own record so the polish/apply duplicate gates don't nag that it
+      // "already exists" — merging back into it is the point.
+      duplicateGuard.ackApplication(app);
+      // Work continues against THIS record: later document saves update it rather
+      // than creating a second row for the same posting.
+      linkPreparedApplication(app.id);
+      detachBaseResumeIdentity();
+      setFileName("");
+      if (restoredResumeData || restoredResume) {
+        const restoredAnalysis = analyzeResumeText(restoredResume, restoredTailoringText);
+        setResumeText(restoredResume);
+        setFileStatus("Loaded the saved resume into the editor. Save it as base if you want it at startup.");
+        // Single-owner cover letter: show the saved letter alongside its restored
+        // resume in the dedicated editor.
+        setResult({
+          ...restoredAnalysis,
+          polishedText: restoredResume,
+          // Restore only a saved AI comparison. Legacy deterministic estimates
+          // are intentionally ignored and require a fresh AI Review.
+          savedFit:
+            app.fitScoreSource === "ai" &&
+            typeof app.baseFitScore === "number" &&
+            typeof app.tailoredFitScore === "number"
+              ? {
+                  source: "ai",
+                  base: app.baseFitScore,
+                  tailored: app.tailoredFitScore
+                }
+              : undefined,
+          missingRequiredSkills: missingRequiredSkillsFromApplication(app)
+        });
+        if (restoredResumeData) {
+          seedResumeData(restoredResumeData);
+          if (savedResumeSource) {
+            docStyle.replaceDocumentStyle(savedResumeSource.documentStyle);
+          }
+        } else {
+          seedResumeEditor(restoredResume, "");
+        }
+        setLinkStatus(`Opened "${app.title}" preparation with its saved resume.`);
+      } else {
+        setLinkStatus(`Opened "${app.title}" preparation.`);
+        setResult(null);
+        seedResumeEditor("");
+      }
+      setPolishStatus("");
+      resetExportStatuses();
+      setExportStatus("");
+      setActiveOutputTab("prepare");
+      window.requestAnimationFrame(() => {
+        document.getElementById("tab-prepare")?.focus();
+      });
+      return true;
     } catch (error) {
       await alert({
         title: "Open failed",
-        message: error instanceof Error ? error.message : "The saved application documents could not be read."
+        message: error instanceof Error ? error.message : "The saved application could not be opened."
       });
-      return;
+      return false;
+    } finally {
+      applicationOpenInFlightRef.current = false;
     }
-
-    const restoredResumeData = savedResumeSource?.data ?? null;
-    const restoredResume = restoredResumeData ? serializeResumeData(restoredResumeData) : "";
-    const applicantName = resolveResumeApplicantName(
-      restoredResumeData?.header?.name,
-      restoredResume || currentResumeText || resumeText
-    );
-    const restoredTracking = { role: app.role, title: app.title, company: app.company };
-    const resumeTitle = documentTitleForJob("resume", restoredTracking, applicantName);
-    const coverTitle = documentTitleForJob("coverLetter", restoredTracking, applicantName);
-    if (savedCoverSource && !coverLetterEditor.openApplicationSource(savedCoverSource, coverTitle)) {
-      await alert({
-        title: "Open failed",
-        message: "The saved cover letter source could not be read."
-      });
-      return;
-    }
-
-    // Opening a tracked application supersedes any recovery prompt from the
-    // previous desk state, even when that state happened to be clean.
-    clearAutosaveDraft();
-    clearCoverLetterAutosaveDraft();
-    setPendingAutosaveDraft(null);
-    setPendingCoverDraft(null);
-    // Description and link are separate fields: restore each from its own slot.
-    setJobDescription(app.jobDescription || "");
-    setJobUrl(app.jobUrl || "");
-    setImportedJob(null);
-    setDocumentTitle(resumeTitle);
-    if (!savedCoverSource) {
-      coverLetterEditor.startBlank();
-      setCoverLetterTitle(coverTitle);
-    }
-    // Restore a consistent AI-usage/raw-text pair regardless of which branch
-    // below runs — a tracker-restore must not carry over the PREVIOUS working
-    // job's provider attribution or raw text.
-    setPipelineAiUsage(app.aiUsage ?? { distill: { source: "none" } });
-    setJobRawText(app.rawJobDescription ?? "");
-    // Deliberately reloading a tracked application for another pass: pre-ack
-    // its own record so the polish/apply duplicate gates don't nag that it
-    // "already exists" — merging back into it is the point.
-    duplicateGuard.ackApplication(app);
-    // Work continues against THIS record: later document saves update it rather
-    // than creating a second row for the same posting.
-    linkApplication(app.id);
-    if (restoredResumeData || restoredResume) {
-      const restoredAnalysis = analyzeResumeText(restoredResume, app.jobDescription || "");
-      setResumeText(restoredResume);
-      setFileName("");
-      setFileStatus("Loaded the saved resume into the editor. Save it as base if you want it at startup.");
-      // Single-owner cover letter: show the saved letter alongside its restored
-      // resume in the dedicated editor.
-      setResult({
-        ...restoredAnalysis,
-        polishedText: restoredResume,
-        // Restore only a saved AI comparison. Legacy deterministic estimates
-        // are intentionally ignored and require a fresh AI Review.
-        savedFit:
-          app.fitScoreSource === "ai" && typeof app.baseFitScore === "number" && typeof app.tailoredFitScore === "number"
-            ? { source: "ai", base: app.baseFitScore, tailored: app.tailoredFitScore }
-            : undefined,
-        missingRequiredSkills: missingRequiredSkillsFromApplication(app)
-      });
-      if (restoredResumeData) {
-        seedResumeData(restoredResumeData);
-        if (savedResumeSource) {
-          docStyle.replaceDocumentStyle(savedResumeSource.documentStyle);
-        }
-      } else {
-        seedResumeEditor(restoredResume, "");
-      }
-      setLinkStatus(`Loaded "${app.title}" and its saved resume from pipeline.`);
-    } else {
-      setLinkStatus(`Loaded "${app.title}" job target from pipeline.`);
-      setResult(null);
-      seedResumeEditor("");
-    }
-    setPolishStatus("");
-    resetExportStatuses();
-    setExportStatus("");
-    setActiveOutputTab("resume");
   }
 
   // Restore the autosaved draft into the editor and clear the prompt. The
@@ -1602,18 +2053,11 @@ function App() {
   // Source-only `.resume`/`.cover` documents are rendered on demand so the
   // workspace does not need duplicate PDF bytes. Stored PDFs are fetched first
   // as well, so a missing file surfaces through the same recoverable dialog.
-  async function handlePreviewApplicationDocument(
-    application: Application,
-    kind: ApplicationDocumentKind = "resume"
-  ) {
-    const base = sanitizeFileBase(
-      application.company || application.role || application.title || "resume"
-    );
+  async function handlePreviewApplicationDocument(application: Application, kind: ApplicationDocumentKind = "resume") {
+    const base = sanitizeFileBase(application.company || application.role || application.title || "resume");
     try {
       setResumePreview({
-        url: URL.createObjectURL(
-          await applicationDocumentPdfBlob(application, kind, import.meta.env.BASE_URL)
-        ),
+        url: URL.createObjectURL(await applicationDocumentPdfBlob(application, kind, import.meta.env.BASE_URL)),
         name: `${base}_${kind === "resume" ? "Resume" : "Cover_Letter"}.pdf`
       });
     } catch (error) {
@@ -1624,13 +2068,8 @@ function App() {
     }
   }
 
-  async function handleDownloadApplicationDocument(
-    application: Application,
-    kind: ApplicationDocumentKind
-  ) {
-    const base = sanitizeFileBase(
-      application.company || application.role || application.title || "resume"
-    );
+  async function handleDownloadApplicationDocument(application: Application, kind: ApplicationDocumentKind) {
+    const base = sanitizeFileBase(application.company || application.role || application.title || "resume");
     try {
       const [{ downloadBlob }, blob] = await Promise.all([
         import("@typeset/engine/lib/download.ts"),
@@ -1645,9 +2084,11 @@ function App() {
     }
   }
 
-  function handleAddApplication() {
-    setModalApplicationId(null);
-    setIsApplicationModalOpen(true);
+  function handlePrepareApplication() {
+    setActiveOutputTab("prepare");
+    window.requestAnimationFrame(() => {
+      document.getElementById("tab-prepare")?.focus();
+    });
   }
 
   async function handleSaveApplicationFromModal(application: Application): Promise<boolean> {
@@ -1662,26 +2103,11 @@ function App() {
     <div className="app-shell">
       <Masthead
         onApply={handleApply}
-        applyDisabled={!jobUrl.trim() && !jobDescription.trim()}
-        applyHint="Add a job link or description (Job menu) before applying."
+        applyDisabled={!preparationReadiness.canApply || isApplying}
+        applyHint={preparationReadiness.primaryBlocker || "Applying…"}
         applyStatus={applyStatus}
         applyStatusIsError={applyStatusIsError}
         onDismissApplyStatus={() => setApplyStatus("")}
-        jobControl={
-          <JobMenu
-            jobDescription={jobDescription}
-            setJobDescription={handleManualJobDescriptionChange}
-            jobUrl={jobUrl}
-            setJobUrl={setJobUrl}
-            onExtractFromLink={handleExtractFromLink}
-            isExtractingLink={isExtractingLink}
-            onDistillPaste={handleDistillPaste}
-            linkStatus={linkStatus}
-            jobReady={jobReady}
-            distillProviderReady={distillProviderReady}
-            distillProviderMessage={distillProviderMessage}
-          />
-        }
         sessionsControl={
           <SessionsMenu self={{ jobLabel: _autosaveJobLabel, phase: _myPhase }} others={otherSessions} />
         }
@@ -1754,6 +2180,82 @@ function App() {
             ) : null
           }
         >
+          {activeOutputTab === "prepare" ? (
+            <PrepareTab
+              jobUrl={jobUrl}
+              onJobUrlChange={setJobUrl}
+              jobDescription={jobDescription}
+              onJobDescriptionChange={handleManualJobDescriptionChange}
+              jobRawText={jobRawText}
+              importedJob={importedJob}
+              onJobTrackingChange={handlePreparedJobTrackingChange}
+              onJobBriefChange={handlePreparedJobBriefChange}
+              jobPrepared={jobPrepared}
+              isPreparing={jobPreparationActive}
+              extensionImportPhase={extensionImportPhase}
+              distillProgress={distillProgress}
+              preparationStatus={linkStatus}
+              distillProviderReady={distillProviderReady}
+              distillProviderMessage={distillProviderMessage}
+              onFetchPosting={handleExtractFromLink}
+              onPreparePosting={handleDistillPaste}
+              autoTailorPending={autoTailorJob !== null}
+              autoTailorNeedsVariantChoice={autoTailorNeedsVariantChoice}
+              resumeDirty={resumeDocumentDirty}
+              resumeReady={resumeReady}
+              includeResume={materialSelection.resume}
+              onIncludeResumeChange={(resume) => setMaterialSelection((current) => ({ ...current, resume }))}
+              baseResumeName={baseResumeName}
+              activeBaseResumeLabel={activeBaseResumeLabel}
+              baseResumeOptions={baseResumeOptions}
+              onSelectBaseResume={loadBaseResumeVersion}
+              resumeVariantRecommendation={resumeVariantRecommendation}
+              isRankingResumeVariants={isRankingResumeVariants}
+              isSelectingResume={isSavingBaseResume}
+              canTailor={canPolish && !isSavingBaseResume}
+              isPolishing={isPolishing}
+              polishProgress={polishProgress}
+              polishOutputCurrent={polishOutputCurrent}
+              polishStatus={polishStatus}
+              onTailorPreparedResume={handleTailorPreparedResume}
+              onReviewResume={() => setActiveOutputTab("resume")}
+              includeCoverLetter={materialSelection.coverLetter}
+              onIncludeCoverLetterChange={(coverLetter) =>
+                setMaterialSelection((current) => ({ ...current, coverLetter }))
+              }
+              coverLetterReady={coverLetterReady}
+              coverLetterFileName={coverLetterEditor.activeCoverFileName}
+              activeCoverLetterLabel={coverLetterEditor.activeCoverLabel}
+              coverLetterOptions={coverLetterEditor.coverLetterOptions}
+              isSelectingCoverLetter={isSelectingCoverVariant}
+              onSelectCoverLetter={handleSelectPreparedCoverLetter}
+              canTailorCoverLetter={
+                coverLetterPreflight.canTailor && resumeReady && jobReady && coverProviderReady && !isGeneratingCover
+              }
+              coverLetterTailorHint={
+                !resumeReady && !jobReady
+                  ? "Add a resume and prepare the job first."
+                  : !resumeReady
+                    ? "Add a resume first."
+                    : !jobReady
+                      ? "Prepare the job first."
+                      : !coverProviderReady
+                        ? coverProviderMessage
+                        : (coverLetterPreflight.blockers[0] ?? "")
+              }
+              isTailoringCoverLetter={isGeneratingCover}
+              coverLetterStatus={coverStatus}
+              onTailorCoverLetter={handleTailorCoverLetter}
+              onOpenCoverLetter={() => setActiveOutputTab("cover")}
+              reviewGaps={prepareReviewGaps}
+              reviewGapsProvenance={prepareReviewGapsProvenance}
+              linkedApplication={preparedApplication}
+              readiness={preparationReadiness}
+              isApplying={isApplying}
+              onApply={handleApply}
+            />
+          ) : null}
+
           {activeOutputTab === "resume" ? (
             <ResumeTab
               documentTitle={documentTitle}
@@ -1772,7 +2274,7 @@ function App() {
               result={result}
               resumeDiff={resumeDiff}
               docStyle={docStyle}
-              formattingToolbar={(
+              formattingToolbar={
                 <FormattingToolbar
                   onUndo={() => {
                     if (typesetEditorRef.current) typesetEditorRef.current.undo();
@@ -1837,35 +2339,51 @@ function App() {
                   globalAlignments={globalAlignments ?? undefined}
                   onGlobalAlignmentChange={(scope, alignment) => {
                     resumeEditorActions.clearAlignmentOverrides(scope);
-                    setInlineFormat((current) => current.alignmentScope === scope ? { ...current, alignment } : current);
+                    setInlineFormat((current) =>
+                      current.alignmentScope === scope ? { ...current, alignment } : current
+                    );
                     if (scope === "body") docStyle.set("bodyAlign", alignment);
-                    else if (scope === "header") docStyle.set("headerAlign", alignment === "justify" ? "left" : alignment);
+                    else if (scope === "header")
+                      docStyle.set("headerAlign", alignment === "justify" ? "left" : alignment);
                     else docStyle.set("headingAlign", alignment === "justify" ? "left" : alignment);
                   }}
                   styleMarkStates={styleMarkStates}
                   onStyleFieldMarkChange={(field, mark, on) => {
                     resumeEditorActions.setStyleFieldMark(field, mark, on);
-                    setInlineFormat((current) => current.entryField === field ? { ...current, [mark]: on } : current);
+                    setInlineFormat((current) => (current.entryField === field ? { ...current, [mark]: on } : current));
                   }}
                   styleFontStates={styleFontStates}
                   onStyleFieldFontChange={(field, family) => {
-                    resumeEditorActions.setStyleFieldFont(field, family === docStyle.style.fontFamily ? "default" : family);
-                    setInlineFormat((current) => current.entryField === field ? { ...current, fontFamily: family } : current);
+                    resumeEditorActions.setStyleFieldFont(
+                      field,
+                      family === docStyle.style.fontFamily ? "default" : family
+                    );
+                    setInlineFormat((current) =>
+                      current.entryField === field ? { ...current, fontFamily: family } : current
+                    );
                   }}
                   styleSizeStates={styleSizeStates}
                   onStyleFieldSizeChange={(field, sizePt) => {
-                    const isDefault = Math.abs(sizePt - styleFieldDefaultSizePt(field, docStyle.style.baseFontSizePt)) < 0.05;
+                    const isDefault =
+                      Math.abs(sizePt - styleFieldDefaultSizePt(field, docStyle.style.baseFontSizePt)) < 0.05;
                     resumeEditorActions.setStyleFieldSize(field, isDefault ? "default" : sizePt);
-                    setInlineFormat((current) => current.entryField === field ? { ...current, fontSizePt: sizePt } : current);
+                    setInlineFormat((current) =>
+                      current.entryField === field ? { ...current, fontSizePt: sizePt } : current
+                    );
                   }}
                   onResetStyleFormatting={() => {
                     resumeEditorActions.resetStyleFieldFormatting();
-                    setInlineFormat((current) => current.entryField
-                      ? { ...current, ...STYLE_FIELD_MARK_DEFAULTS[current.entryField] }
-                      : current);
+                    setInlineFormat((current) =>
+                      current.entryField
+                        ? {
+                            ...current,
+                            ...STYLE_FIELD_MARK_DEFAULTS[current.entryField]
+                          }
+                        : current
+                    );
                   }}
                   onFitZoom={fitResumePage}
-                  documentStructureTools={(
+                  documentStructureTools={
                     <DocumentStructureControls
                       header={editedResume?.header ?? null}
                       contactDivider={docStyle.style.contactDivider}
@@ -1898,9 +2416,9 @@ function App() {
                       onContactDividerChange={(value) => docStyle.set("contactDivider", value)}
                       onAddSection={(type, position) => typesetEditorRef.current?.addSection(type, position)}
                     />
-                  )}
+                  }
                 />
-              )}
+              }
               editorRef={typesetEditorRef}
               initialCaret={resumeCaretRef.current}
               onCaretExit={(caret) => {
@@ -1920,7 +2438,7 @@ function App() {
               onDismissAutosaveDraft={handleDismissAutosaveDraft}
               reviewStale={reviewStale}
               jobTarget={materialsJobTarget}
-              documentActions={(
+              documentActions={
                 <>
                   {/* The resume file picker is a hidden input the menu's "Choose a
                       file" row clicks, matching the cover letter — the menu is the
@@ -1938,9 +2456,7 @@ function App() {
                     disabled={isWorkspaceBootstrapping}
                     title={isWorkspaceBootstrapping ? "Checking workspace…" : "Open resume"}
                     description={
-                      activeBaseResumeLabel
-                        ? `Current variant: ${activeBaseResumeLabel}`
-                        : "No workspace variant open."
+                      activeBaseResumeLabel ? `Current variant: ${activeBaseResumeLabel}` : "No workspace variant open."
                     }
                     actions={[
                       {
@@ -1980,8 +2496,8 @@ function App() {
                           label: `${group.label} earlier versions`,
                           collapsible: true,
                           defaultOpen:
-                            baseResumeName.replace(/\.[a-z]+$/i, "") === group.variant
-                            && baseResumeHistory.length === 1,
+                            baseResumeName.replace(/\.[a-z]+$/i, "") === group.variant &&
+                            baseResumeHistory.length === 1,
                           entries: group.entries.map((entry) => ({
                             key: entry.key,
                             title: formatHistoryDate(entry.date),
@@ -1995,13 +2511,19 @@ function App() {
                     footer={
                       <>
                         {fileError ? (
-                          <p className="document-open-note document-open-note--warn" role="status">{fileError}</p>
+                          <p className="document-open-note document-open-note--warn" role="status">
+                            {fileError}
+                          </p>
                         ) : null}
                         {fileStatus ? (
-                          <p className="document-open-note" role="status">{fileStatus}</p>
+                          <p className="document-open-note" role="status">
+                            {fileStatus}
+                          </p>
                         ) : null}
                         {workspaceStatus ? (
-                          <p className="document-open-note" role="status">{workspaceStatus}</p>
+                          <p className="document-open-note" role="status">
+                            {workspaceStatus}
+                          </p>
                         ) : null}
                       </>
                     }
@@ -2113,7 +2635,7 @@ function App() {
                     ) : null}
                   </span>
                 </>
-              )}
+              }
             />
           ) : null}
 
@@ -2155,9 +2677,14 @@ function App() {
             />
           ) : null}
 
-
           {activeOutputTab === "applications" ? (
-            <Suspense fallback={<p className="pipeline-note" role="status">Loading applications…</p>}>
+            <Suspense
+              fallback={
+                <p className="pipeline-note" role="status">
+                  Loading applications…
+                </p>
+              }
+            >
               <TrackerTab
                 applications={applications}
                 applicationsPath={applicationsPath}
@@ -2177,7 +2704,7 @@ function App() {
                 onOpenApplication={handleOpenApplicationDetail}
                 onPreviewResume={(app) => handlePreviewApplicationDocument(app, "resume")}
                 onDelete={handleDeleteApplication}
-                onAddApplication={handleAddApplication}
+                onPrepareApplication={handlePrepareApplication}
                 onRefresh={refreshApplications}
                 onMergeApplications={mergeApplications}
                 onDismissDuplicateGroup={dismissDuplicateGroup}
@@ -2206,7 +2733,13 @@ function App() {
           </div>
 
           {activeOutputTab === "analytics" ? (
-            <Suspense fallback={<p className="pipeline-note" role="status">Loading analytics…</p>}>
+            <Suspense
+              fallback={
+                <p className="pipeline-note" role="status">
+                  Loading analytics…
+                </p>
+              }
+            >
               <AnalyticsTab applications={applications} onOpenApplications={() => setActiveOutputTab("applications")} />
             </Suspense>
           ) : null}
@@ -2253,14 +2786,13 @@ function App() {
         <Suspense fallback={<ApplicationModalLoading />}>
           <ApplicationModal
             open
-            application={modalApplicationId ? applications.find((app) => app.id === modalApplicationId) ?? null : null}
+            application={
+              modalApplicationId ? (applications.find((app) => app.id === modalApplicationId) ?? null) : null
+            }
             onClose={() => setIsApplicationModalOpen(false)}
             onSave={handleSaveApplicationFromModal}
             onDelete={handleDeleteApplication}
-            onLoad={(app) => {
-              setIsApplicationModalOpen(false);
-              handleLoadApplication(app);
-            }}
+            onLoad={handleLoadApplication}
             onPreviewDocument={handlePreviewApplicationDocument}
             onDownloadDocument={handleDownloadApplicationDocument}
             onSaveDocument={applicationFiles.saveDocument}
@@ -2283,18 +2815,14 @@ function App() {
             // whole apply without committing, so any duplicate-merge target
             // this flow identified must not leak into a later apply.
             applyMergeTargetRef.current = null;
+            applyMaterialSelectionRef.current = null;
             setApplyDownloadPrompt(null);
           }}
           onApplyOnly={handleApplyOnly}
         />
       ) : null}
 
-      {editedResume ? (
-        <ResumePrintLayer
-          resume={editedResume}
-          docStyle={docStyle.style}
-        />
-      ) : null}
+      {editedResume ? <ResumePrintLayer resume={editedResume} docStyle={docStyle.style} /> : null}
     </div>
   );
 }

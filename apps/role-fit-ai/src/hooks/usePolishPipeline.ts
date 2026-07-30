@@ -59,6 +59,13 @@ type ReviewSnapshot = {
   fingerprint: string;
 };
 
+export type PolishRunOptions = {
+  // Manual Polish actions reveal the resulting resume. Prepare-owned automatic
+  // runs keep the user on Prepare so its progress and package readiness stay in
+  // one place; the result remains available from the Resume tab.
+  revealResumeOnSuccess?: boolean;
+};
+
 async function readAiResponse(response: Response, stage: "tailor" | "review"): Promise<Record<string, unknown>> {
   try {
     return await response.json() as Record<string, unknown>;
@@ -147,6 +154,7 @@ export function usePolishPipeline({
   });
   const inputFingerprintRef = useRef(inputFingerprint);
   inputFingerprintRef.current = inputFingerprint;
+  const previousJobDescriptionRef = useRef(jobDescription);
 
   async function selectedProviderBlocker(
     includeTailor: boolean,
@@ -179,7 +187,16 @@ export function usePolishPipeline({
   }
 
   useEffect(() => {
-    if (!polishRunLockRef.current && !polishAbortRef.current) return;
+    const jobChanged = previousJobDescriptionRef.current !== jobDescription;
+    previousJobDescriptionRef.current = jobDescription;
+    if (!polishRunLockRef.current && !polishAbortRef.current) {
+      if (jobChanged) {
+        reviewSnapshotRef.current = null;
+        setPolishProgress(idleProgress());
+        setPolishProgressVisible(false);
+      }
+      return;
+    }
     polishGenerationRef.current += 1;
     polishAbortRef.current?.abort();
     polishAbortRef.current = null;
@@ -195,7 +212,7 @@ export function usePolishPipeline({
     }));
     setPolishProgressVisible(true);
     setPolishStatus("Resume, job, workflow, or AI settings changed. Start a new AI workflow for the current inputs.");
-  }, [inputFingerprint, setPolishStatus]);
+  }, [inputFingerprint, jobDescription, setPolishStatus]);
 
   useEffect(() => () => {
     polishGenerationRef.current += 1;
@@ -295,7 +312,8 @@ export function usePolishPipeline({
   async function runTailorStage(
     ctx: PolishContext,
     generation: number,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    revealResumeOnSuccess = true
   ): Promise<ReviewSuggestions | null> {
     if (!runCanCommit(generation, ctx, signal)) return null;
     const { scopedResumeText, commonBody } = ctx;
@@ -363,7 +381,7 @@ export function usePolishPipeline({
         ...(typeof data.model === "string" && data.model ? { model: data.model } : {}),
         ...(typeof data.reasoningEffort === "string" && data.reasoningEffort ? { reasoningEffort: data.reasoningEffort } : {})
       });
-      setActiveOutputTab("resume");
+      if (revealResumeOnSuccess) setActiveOutputTab("resume");
       setPolishProgress((prev) => ({ ...prev, tailor: { status: "done", note: "Tailored with AI", noteTone: "ok" } }));
       const tailorUsage: StageAiUsage = {
         source: "ai",
@@ -417,7 +435,8 @@ export function usePolishPipeline({
     ctx: PolishContext,
     snapshot: ReviewSnapshot,
     generation: number,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    revealResumeOnSuccess = true
   ): Promise<void> {
     if (!runCanCommit(generation, ctx, signal)) return;
     const { scopedResumeText, commonBody } = ctx;
@@ -487,7 +506,7 @@ export function usePolishPipeline({
         }
         return mergeReviewIntoResult(prev, data, reviewedBy);
       });
-      setActiveOutputTab("resume");
+      if (revealResumeOnSuccess) setActiveOutputTab("resume");
       setPolishProgress((prev) => ({ ...prev, review: { status: "done", note: "Reviewed with AI", noteTone: "ok" } }));
       const reviewProvider = (data.auditProvider ?? data.provider) as string | undefined;
       const reviewModel = (data.auditModel ?? data.model) as string | undefined;
@@ -557,7 +576,8 @@ export function usePolishPipeline({
     polishAbortRef.current?.abort();
   }
 
-  async function handlePolish() {
+  async function handlePolish(options: PolishRunOptions = {}) {
+    const revealResumeOnSuccess = options.revealResumeOnSuccess !== false;
     if (polishRunLockRef.current) return;
     polishRunLockRef.current = true;
     polishGenerationRef.current += 1;
@@ -627,7 +647,7 @@ export function usePolishPipeline({
 
     try {
       if (polishStages === "tailor") {
-        await runTailorStage(ctx, generation, signal);
+        await runTailorStage(ctx, generation, signal, revealResumeOnSuccess);
       } else if (polishStages === "review") {
         // A fresh standalone Review audits the CURRENT edited draft as-is. Old
         // result suggestions may describe a prior draft and must not be silently
@@ -636,16 +656,16 @@ export function usePolishPipeline({
           target: "current",
           suggestions: [],
           fingerprint: ctx.reviewFingerprint
-        }, generation, signal);
+        }, generation, signal, revealResumeOnSuccess);
       } else {
         // both: tailor first, then review only if tailor succeeded.
-        const suggestions = await runTailorStage(ctx, generation, signal);
+        const suggestions = await runTailorStage(ctx, generation, signal, revealResumeOnSuccess);
         if (suggestions !== null) {
           await runReviewStage(ctx, {
             target: "proposal",
             suggestions,
             fingerprint: ctx.reviewFingerprint
-          }, generation, signal);
+          }, generation, signal, revealResumeOnSuccess);
         }
       }
     } catch (error) {

@@ -108,6 +108,7 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
   const onOpenDocumentRef = useRef(options.onOpenDocument);
   onOpenDocumentRef.current = options.onOpenDocument;
   const cancelStartupOpenRef = useRef(false);
+  const workspaceOpenGenerationRef = useRef(0);
   const styleRef = useRef(style);
   styleRef.current = style;
   const text = useMemo(
@@ -143,7 +144,10 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
   // so no open path can forget to move the caret into the new document.
   const openDocument = useCallback(
     (data: ResumeData, automatic = false) => {
-      if (!automatic) cancelStartupOpenRef.current = true;
+      if (!automatic) {
+        cancelStartupOpenRef.current = true;
+        workspaceOpenGenerationRef.current += 1;
+      }
       editor.seedData(data);
       dropPreTailorSnapshot();
       setSourceRevision((current) => current + 1);
@@ -231,7 +235,7 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
       setActiveCoverFileName("");
       saveLastCoverLetterName("");
       if (title?.trim()) setDocumentTitle(nextTitle);
-      setStatus("Cover letter loaded. Tailor it when the job description is ready.");
+      setStatus("Cover letter loaded. Tailor it after preparing the job on Prepare.");
     },
     [commitPersistenceBaseline, documentTitle, editor.markClean, openDocument]
   );
@@ -536,11 +540,21 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
   );
 
   const openWorkspaceCoverLetter = useCallback(
-    async (fileName: string, automatic = false, shouldCancel?: () => boolean) => {
+    async (
+      fileName: string,
+      automatic = false,
+      shouldCancel?: () => boolean
+    ): Promise<boolean> => {
+      const generation = workspaceOpenGenerationRef.current + 1;
+      workspaceOpenGenerationRef.current = generation;
       try {
         const data = await selectCoverLetterWorkspaceDocument(fileName);
-        if (automatic && (cancelStartupOpenRef.current || shouldCancel?.())) {
-          return;
+        if (
+          generation !== workspaceOpenGenerationRef.current ||
+          shouldCancel?.() ||
+          (automatic && cancelStartupOpenRef.current)
+        ) {
+          return false;
         }
         adoptCoverPayload(
           data.text,
@@ -551,8 +565,10 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
         setCoverLetterOptions(data.coverLetterOptions ?? []);
         setCoverLetterHistory(data.coverLetterHistory ?? []);
         setStatus(automatic ? "" : `Opened ${data.label}.`);
+        return true;
       } catch (error) {
         setStatus(error instanceof Error ? error.message : "Cover letter load failed.");
+        return false;
       }
     },
     [adoptCoverPayload]

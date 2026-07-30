@@ -27,7 +27,7 @@ export function ViewportGate({ children }: { children: ReactNode }) {
           Resume authoring needs more room
         </h2>
         <p className="viewport-gate__body">
-          Widen this window for precise editing. Materials, Applications, and Analytics remain available from the left rail.
+          Widen this window for precise editing. Prepare, Materials, Applications, and Analytics remain available from the left rail.
         </p>
       </div>
     </div>

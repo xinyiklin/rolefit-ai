@@ -17,7 +17,6 @@ import {
   APPLICATION_SOURCES,
   APPLICATION_STATUSES,
   JOB_TYPES,
-  makeApplicationDraft,
   type Application,
   type ApplicationAnswer,
   type ApplicationContact,
@@ -36,13 +35,14 @@ import { useModalFocus } from "@typeset/editor/hooks/useModalFocus.ts";
 
 type ApplicationModalProps = {
   open: boolean;
-  // null = add mode (blank form); an application = detail/edit mode.
+  // Null is only a vanished-record safety state. New job intake belongs to
+  // Prepare; this modal edits applications that already exist.
   application: Application | null;
   onClose: () => void;
   onSave: (application: Application) => Promise<boolean>;
   onDelete?: (id: string, title: string) => void;
-  // Load this application's job target + saved resume into the Polish editor.
-  onLoad?: (application: Application) => void;
+  // Load this application's prepared job + saved documents into the workspace.
+  onLoad?: (application: Application) => Promise<boolean>;
   // Open a saved application document in the in-app PDF viewer.
   onPreviewDocument?: (application: Application, kind: ApplicationDocumentKind) => void;
   // Render/download a source-only saved document as PDF on demand.
@@ -178,11 +178,11 @@ export function ApplicationModal({
   onSaveAttachment,
   onRemoveAttachment
 }: ApplicationModalProps) {
-  const isEdit = Boolean(application);
   const applicationId = application?.id ?? null;
   const [tab, setTab] = useState<ModalTab>("overview");
   const [form, setForm] = useState<FormState>(() => formFromApplication(application));
   const [isSaving, setIsSaving] = useState(false);
+  const [isOpeningPreparation, setIsOpeningPreparation] = useState(false);
   const [saveError, setSaveError] = useState("");
   const panelRef = useRef<HTMLElement>(null);
   const companyInputRef = useRef<HTMLInputElement>(null);
@@ -208,10 +208,12 @@ export function ApplicationModal({
     setTab("overview");
     setSaveError("");
     setIsSaving(false);
+    setIsOpeningPreparation(false);
   }, [open, applicationId]);
 
+  const isBusy = isSaving || isOpeningPreparation;
   const requestClose = () => {
-    if (!isSaving) onClose();
+    if (!isBusy) onClose();
   };
 
   const handleModalKeyDown = useModalFocus({
@@ -226,8 +228,14 @@ export function ApplicationModal({
     const value = Number(form.fitScore);
     return Number.isFinite(value) ? Math.max(0, Math.min(100, Math.round(value))) : null;
   }, [form.fitScore]);
+  const formHasUnsavedChanges = useMemo(
+    () =>
+      Boolean(application) &&
+      JSON.stringify(form) !== JSON.stringify(formFromApplication(application)),
+    [application, form]
+  );
 
-  if (!open) return null;
+  if (!open || !application) return null;
 
   function update<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((current) => ({ ...current, [key]: value }));
@@ -267,8 +275,7 @@ export function ApplicationModal({
   }
 
   function buildApplication(statusOverride: ApplicationStatus): Application {
-    const base =
-      application ?? makeApplicationDraft(form.jobUrl, form.jobDescription || `${form.role}\n${form.company}`);
+    const base = application as Application;
     const now = new Date().toISOString();
     const cleanContacts = form.contacts
       .map((c) => ({
@@ -311,14 +318,14 @@ export function ApplicationModal({
       fitScore: fitNumber,
       // A manually entered tracker number is not an AI Review result. Keep it as
       // the standalone fitScore only; comparison/provenance require AI Review.
-      tailoredFitScore: isEdit ? base.tailoredFitScore ?? null : null,
-      fitScoreSource: isEdit ? base.fitScoreSource ?? null : null,
+      tailoredFitScore: base.tailoredFitScore ?? null,
+      fitScoreSource: base.fitScoreSource ?? null,
       updatedAt: now
     };
   }
 
   async function save(statusOverride: ApplicationStatus = form.status) {
-    if (isSaving) return;
+    if (isBusy) return;
     setIsSaving(true);
     setSaveError("");
     let saved = false;
@@ -336,8 +343,38 @@ export function ApplicationModal({
     onClose();
   }
 
+  async function openPreparation() {
+    if (!application || !onLoad || isBusy) return;
+    if (formHasUnsavedChanges && !canSave) {
+      setSaveError(
+        "Add a company, role, or job URL before opening this preparation. Your edits are still here."
+      );
+      return;
+    }
+    setIsOpeningPreparation(true);
+    setSaveError("");
+    try {
+      const applicationToOpen = formHasUnsavedChanges
+        ? buildApplication(form.status)
+        : application;
+      if (formHasUnsavedChanges && !(await onSave(applicationToOpen))) {
+        setSaveError(
+          "Could not save your edits before opening this preparation. Your edits are still here; review and retry."
+        );
+        return;
+      }
+      const opened = await onLoad(applicationToOpen);
+      if (opened) onClose();
+    } catch {
+      setSaveError("Could not open this preparation. The current workspace was kept.");
+    } finally {
+      setIsOpeningPreparation(false);
+    }
+  }
+
   const canSave =
     form.company.trim().length > 1 || form.role.trim().length > 1 || form.jobUrl.trim().length > 6;
+  const openPreparationBlocked = formHasUnsavedChanges && !canSave;
   // New scores arrive only from AI Review and are read-only here.
   const displayedFitNumber = fitNumber;
   const ringTone = fitTone(displayedFitNumber);
@@ -369,33 +406,44 @@ export function ApplicationModal({
       onKeyDown={handleModalKeyDown}
     >
       <div className="application-modal__scrim" aria-hidden="true" onMouseDown={requestClose} />
-      <section className="application-modal__panel" ref={panelRef} tabIndex={-1} aria-busy={isSaving}>
+      <section className="application-modal__panel" ref={panelRef} tabIndex={-1} aria-busy={isBusy}>
         <header className="application-modal__head">
           <div>
-            <h2 id="application-modal-title" className="page-serif">{isEdit ? headerName : "Add application"}</h2>
-            {saveError ? <p className="application-modal__save-error" role="alert">{saveError}</p> : null}
+            <h2 id="application-modal-title" className="page-serif">
+              {headerName}
+            </h2>
+            {saveError ? (
+              <p className="application-modal__save-error" role="alert">
+                {saveError}
+              </p>
+            ) : openPreparationBlocked ? (
+              <p className="application-modal__save-error" id="application-open-requirements">
+                Add a company, role, or job URL before opening this preparation. Your edits are still here.
+              </p>
+            ) : null}
           </div>
           <div className="application-modal__actions">
-            {isEdit && onLoad ? (
-              <button type="button" className="secondary-button is-compact" onClick={() => onLoad(application as Application)} disabled={isSaving}>
-                <ExternalLink size={14} aria-hidden="true" /> Open in Polish
+            {onLoad ? (
+              <button
+                type="button"
+                className="secondary-button is-compact"
+                onClick={() => void openPreparation()}
+                disabled={isBusy || openPreparationBlocked}
+                aria-describedby={openPreparationBlocked ? "application-open-requirements" : undefined}
+              >
+                <ExternalLink size={14} aria-hidden="true" /> {isOpeningPreparation ? "Opening…" : "Open preparation"}
               </button>
             ) : null}
-            {!isEdit ? (
-              <button type="button" className="secondary-button is-compact" disabled={!canSave || isSaving} onClick={() => void save("interested")}>
-                {isSaving ? "Saving…" : "Save draft"}
-              </button>
-            ) : null}
-            <button type="button" className="primary-button is-compact" disabled={!canSave || isSaving} onClick={() => void save()}>
-              {isSaving ? "Saving…" : isEdit ? "Save changes" : "Save application"}
+            <button type="button" className="primary-button is-compact" disabled={!canSave || isBusy} onClick={() => void save()}>
+              {isSaving ? "Saving…" : "Save changes"}
             </button>
-            <button type="button" className="ghost-button is-icon" aria-label="Close" onClick={requestClose} disabled={isSaving}>
+            <button type="button" className="ghost-button is-icon" aria-label="Close" onClick={requestClose} disabled={isBusy}>
               <X size={16} aria-hidden="true" />
             </button>
           </div>
         </header>
 
-        <nav className="application-modal__tabs" aria-label="Application sections" inert={isSaving}>
+        <nav className="application-modal__tabs" aria-label="Application sections" inert={isBusy}>
           {TABS.map(({ id, label, icon: Icon }) => (
             <button
               type="button"
@@ -409,7 +457,7 @@ export function ApplicationModal({
           ))}
         </nav>
 
-        <div className="application-modal__body" inert={isSaving}>
+        <div className="application-modal__body" inert={isBusy}>
           {tab === "overview" ? (
             <>
               <section className="application-form">
@@ -676,20 +724,16 @@ export function ApplicationModal({
         </div>
 
         <footer className="application-modal__foot">
-          <span>
-            {isEdit
-              ? "Edits save to the local workspace tracker."
-              : "Tip: attach the job description here, then use Job target to tailor."}
-          </span>
+          <span>Edits save to the local workspace tracker.</span>
           <div className="application-modal__actions">
-            {isEdit && onDelete ? (
-              <button type="button" className="secondary-button is-compact danger-button" disabled={isSaving} onClick={() => onDelete((application as Application).id, (application as Application).title)}>
+            {onDelete ? (
+              <button type="button" className="secondary-button is-compact danger-button" disabled={isBusy} onClick={() => onDelete(application.id, application.title)}>
                 <Trash2 size={14} aria-hidden="true" /> Delete
               </button>
             ) : null}
-            <button type="button" className="secondary-button is-compact" onClick={requestClose} disabled={isSaving}>Close</button>
-            <button type="button" className="primary-button is-compact" disabled={!canSave || isSaving} onClick={() => void save()}>
-              {isSaving ? "Saving…" : isEdit ? "Save changes" : "Save application"}
+            <button type="button" className="secondary-button is-compact" onClick={requestClose} disabled={isBusy}>Close</button>
+            <button type="button" className="primary-button is-compact" disabled={!canSave || isBusy} onClick={() => void save()}>
+              {isSaving ? "Saving…" : "Save changes"}
             </button>
           </div>
         </footer>

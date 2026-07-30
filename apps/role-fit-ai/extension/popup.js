@@ -80,7 +80,7 @@ function renderMasthead() {
   return el('div', { className: 'masthead' },
     el('div', { className: 'brand-mark', textContent: 'R' }),
     el('span', { className: 'brand-name', textContent: 'RoleFit AI' }),
-    el('span', { className: 'brand-tag', textContent: 'job import' })
+    el('span', { className: 'brand-tag', textContent: 'prepare application' })
   );
 }
 
@@ -137,7 +137,7 @@ function renderResult(data, onImport) {
 
   const importBtn = el('button', { className: 'btn-import', type: 'button', 'aria-live': 'polite' },
     el('span', { className: 'btn-arrow', textContent: '↧' }),
-    'Import to RoleFit AI'
+    'Prepare in RoleFit AI'
   );
 
   // Optional shortcut: when checked, the app auto-runs the polish once the
@@ -156,11 +156,11 @@ function renderResult(data, onImport) {
   });
   const autoTailorToggle = el('label', { className: 'auto-tailor' },
     autoTailorInput,
-    el('span', { className: 'auto-tailor__label', textContent: 'Polish automatically after import' })
+    el('span', { className: 'auto-tailor__label', textContent: 'Tailor resume after preparation' })
   );
 
-  // Distill with AI: default TRUE (preserves current behavior). Off → the app
-  // uses the deterministic parser instead of an AI provider call for this import.
+  // Prepare job details with AI: default TRUE (preserves current behavior).
+  // Off → the app uses the deterministic parser instead of an AI provider call.
   const distillAiInput = el('input', { type: 'checkbox', className: 'auto-tailor__input' });
   let distillAiTouched = false;
   chrome.storage?.local?.get?.(['distillAi'], (saved) => {
@@ -175,7 +175,7 @@ function renderResult(data, onImport) {
   });
   const distillAiToggle = el('label', { className: 'auto-tailor' },
     distillAiInput,
-    el('span', { className: 'auto-tailor__label', textContent: 'Distill with AI' })
+    el('span', { className: 'auto-tailor__label', textContent: 'Prepare job details with AI' })
   );
 
   importBtn.addEventListener('click', () => onImport(importBtn, autoTailorInput.checked, distillAiInput.checked));
@@ -209,7 +209,7 @@ function renderResult(data, onImport) {
     ),
     el('div', { className: 'no-resume' },
       el('div', { className: 'no-resume-mark', textContent: 'AI' }),
-      'Import this role, then run AI Review for the score and verdict.'
+      'Prepare this role, then run AI Review for the score and verdict.'
     ),
     importBtn,
     autoTailorToggle,
@@ -263,8 +263,9 @@ async function handleImport(btn, pageData, autoTailor, distillAi, cookieStoreId)
   btn.disabled = true;
   // The import returns immediately; the server resolves the raw job text in the
   // background and the receiving app tab distills it client-side (honoring its
-  // own Distill provider and this popup's "Distill with AI" toggle). Stays fast.
-  btn.textContent = 'Importing…';
+  // own Distill provider and this popup's "Prepare job details with AI" toggle).
+  // Stays fast.
+  btn.textContent = 'Preparing…';
   const claimToken = randomClaimToken();
 
   try {
@@ -284,7 +285,7 @@ async function handleImport(btn, pageData, autoTailor, distillAi, cookieStoreId)
     // The import never reached the inbox — don't mislead the user into
     // thinking the job was captured. Re-enable so they can retry.
     btn.disabled = false;
-    btn.textContent = 'Import failed. Reopen the popup to check pairing.';
+    btn.textContent = 'Preparation failed. Reopen the popup to check pairing.';
     return;
   }
 
@@ -295,10 +296,10 @@ async function handleImport(btn, pageData, autoTailor, distillAi, cookieStoreId)
   // in the same Firefox Multi-Account Container the job was viewed in.
   try {
     await createImportTab(`${API_BASE}/?extensionImport=${encodeURIComponent(claimToken)}`, cookieStoreId);
-    btn.textContent = 'Imported ✓';
+    btn.textContent = 'Opened in RoleFit ✓';
   } catch {
     // The capture succeeded; only the redirect/focus failed.
-    btn.textContent = 'Imported ✓. Open RoleFit AI.';
+    btn.textContent = 'Opened in RoleFit ✓. Open RoleFit AI.';
   }
 }
 

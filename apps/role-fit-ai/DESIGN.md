@@ -135,9 +135,9 @@ shimmer, decorative motion, and nested card-in-card containers. Status is
 stated quietly (a small dot beside a word), never shouted (filled pills,
 banners, badges everywhere).
 
-Layout is structural and predictable: masthead menus (Sessions, Job) plus the
-global Apply action, full-width tabbed studio below, Settings pinned at the foot
-of the tab rail, matched
+Layout is structural and predictable: a masthead with Sessions plus the global
+Apply action, a full-width studio whose rail moves through PREPARE, DRAFT, and
+TRACK, Settings pinned at the foot of that rail, matched
 resume and cover-letter document action bars, and document-specific review
 rails. Breakpoints (1280/1180/1080/900/820/760
 px) collapse structure; they never fluidly rescale type. Desktop ~1440px is
@@ -375,27 +375,68 @@ interactive control shares the same focus treatment: 2px Forest Ink outline,
   show reconnect guidance. API credentials are never rendered or entered in
   the browser.
 
+### Prepare
+
+- **Role:** the first/default studio page and the sole job-intake surface.
+  Extension receipt is primary; URL fetch and pasted text are compact fallback
+  controls on the same page, never masthead inputs or a second intake menu.
+- **Composition:** framed source and editable structured-brief sheets sit beside
+  a narrow progress/readiness rail. Collapse prepared source by default, while
+  keeping explicit View source, Replace source, and Prepare again paths. Keep
+  View source and Prepare again bound to the immutable captured posting, not
+  the compact brief as the user edits it. Keep role, company, location, type,
+  source, work authorization, compensation, and
+  role summary in one aligned form grid rather than a card per field. Continue
+  the brief with company context, responsibilities, required and preferred
+  qualifications, technical keywords, seniority and domain signals, and
+  benefits. Show extraction and candidate-review gaps beside the fields they
+  qualify; missing extraction is an edit invitation, not hidden uncertainty.
+  Label candidate gaps restored from an Apply snapshot as historical until
+  Review runs for the current resume and prepared job.
+  Below the brief, Resume and Cover Letter use the same material-card anatomy:
+  title, Include toggle, named-variant selector, status, and document-specific
+  actions. Neither card is labeled “optional.” Resume starts included and Cover
+  Letter starts excluded.
+- **Automation:** extension receipt and Distill progress remain visible on
+  Prepare. Automatic resume tailoring also completes there. Rank the actual
+  contents of saved resume variants against the prepared job; select a clear
+  high-confidence winner only while the editor is clean. A dirty editor is
+  never replaced automatically, and ambiguous comparisons remain visible as a
+  recommendation or pause for the user. This comparison needs no persisted
+  variant metadata.
+- **Apply:** the page and masthead invoke the same Apply command and show the
+  same readiness blockers. The current job must be prepared; each included
+  material must be ready; and preparation for selected work must be idle.
+  Either or both materials may be excluded, so a prepared tracker-only
+  application is valid. Re-Apply leaves any previously saved artifact intact
+  when its card is excluded. Apply persists the complete corrected brief,
+  including benefits, while Tailor receives the benefits-excluded projection.
+
 ### Navigation
 
 - **Masthead:** newspaper-style: a 26px Forest-Ink seal tile with the serif
   initial beside the serif wordmark (the one place the accent is identity,
-  not action), then typographic menu triggers (no boxes, no pills) separated
-  into groups by hairline verticals; each trigger leads with a small icon
-  (`--ink-faint`, accent on hover/open); hover shows a 1px ink underline at
-  18% opacity (35% when open) and a `--card-soft` tint. Each trigger carries
-  a dot-plus-word input-state readout (`is-ready` accent, `is-empty` warm).
-  Popovers are 14px-radius raised sheets with `--shadow-lift`, entering with
-  a 140ms 4px slide-fade.
+  not action), then the typographic Sessions menu trigger and the global Apply
+  action separated by a hairline. The trigger has no box or pill and leads with
+  a small icon (`--ink-faint`, accent on hover/open); hover shows a 1px ink
+  underline at 18% opacity (35% when open) and a `--card-soft` tint. Its
+  popover is a 14px-radius raised sheet with `--shadow-lift`, entering with a
+  140ms 4px slide-fade. Apply carries the shared readiness state; no job input
+  or Inputs group lives in this bar.
+- **Applications:** its new-work action returns to Prepare. The application
+  detail modal edits committed tracker records and never becomes a second job
+  intake surface.
 - **Tab rail:** icon-led entries ([icon] [label]) on `--card-soft`, under
-  small-caps mono group eyebrows (DRAFT / TRACK) above hairline-separated
-  groups. The active entry is the rail's one committed moment: an
+  small-caps mono group eyebrows (PREPARE / DRAFT / TRACK) above
+  hairline-separated groups. Prepare is first and selected by default. The
+  active entry is the rail's one committed moment: an
   `--accent-soft` washed row with a `--accent-veil` ring, deep-accent icon,
   ink-strong label. Below 1080px it collapses in place to a 52px icon rail; it
   never changes axis into a top navbar. APG tabs keyboard model is mandatory.
 - **Narrow authoring:** at 720px and below, only the Resume tab's precise editor
-  becomes the width notice. The simpler Cover letter page, masthead, tab rail,
-  Materials, Applications, and Analytics remain part of the working product,
-  including under high zoom.
+  becomes the width notice. Prepare, the simpler Cover letter page, masthead,
+  tab rail, Materials, Applications, and Analytics remain part of the working
+  product, including under high zoom.
 
 ### Ledger Rows (signature)
 
@@ -427,11 +468,12 @@ Calendar mode reuses the same query and lifecycle filter state.
 ### Page Anatomy: Sheets Center, Rail Right
 
 Working pages share one skeleton: content as paper sheets in the main
-column, one control surface docked right. Resume = one engine-painted structured
-editing sheet + review rail; Cover letter = one engine-painted plain
-correspondence sheet + a compact rail that reports readiness before Tailor and
-the tailored result's length, provenance, and Restore after it; Materials = draft
-sheets; Applications = view surface + inspector. The rail is a single sheet
+column, one control surface docked right. Prepare = source, brief, and matching
+material cards + progress/readiness rail; Resume = one engine-painted
+structured editing sheet + review rail; Cover letter = one engine-painted
+plain correspondence sheet + a compact rail that reports readiness before
+Tailor and the tailored result's length, provenance, and Restore after it;
+Materials = draft sheets; Applications = view surface + inspector. The rail is a single sheet
 (`--card`, hairline, rest shadow);
 the main column sits directly on the desk. Below ~1080px the rail drops
 under the content. New pages reuse this skeleton rather than inventing a

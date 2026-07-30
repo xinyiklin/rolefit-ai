@@ -297,8 +297,9 @@
 .studio-body::-webkit-scrollbar { width: 8px; }
 .studio-body::-webkit-scrollbar-thumb { background: var(--hairline-strong); border-radius: var(--r-pill); }
 
-/* Non-resume tabs: deeper paper tone so content reads as sheets on a desk.
-   Matches the paper-warm palette; the Resume tab keeps its own override below. */
+/* Scrollable workspace tabs: deeper paper tone so content reads as sheets on a
+   desk. Matches the paper-warm palette; document tabs keep their own override. */
+.studio-body[data-tab="prepare"],
 .studio-body[data-tab="applications"],
 .studio-body[data-tab="analytics"],
 .studio-body[data-tab="materials"] {
@@ -309,6 +310,7 @@
   padding-bottom: 0;
 }
 
+.studio-body[data-tab="prepare"]::after,
 .studio-body[data-tab="applications"]::after,
 .studio-body[data-tab="analytics"]::after,
 .studio-body[data-tab="materials"]::after {

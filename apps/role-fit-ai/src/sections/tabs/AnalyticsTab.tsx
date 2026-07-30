@@ -126,7 +126,7 @@ export function AnalyticsTab({ applications, onOpenApplications }: AnalyticsTabP
               ))}
             </dl>
           ) : (
-            <p className="analytics-empty">Add applications to see company patterns.</p>
+            <p className="analytics-empty">Prepare and apply to roles to see company patterns.</p>
           )}
         </section>
 

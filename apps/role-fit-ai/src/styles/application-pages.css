@@ -1784,7 +1784,7 @@ button.table-sort svg {
   margin: var(--s2) 0;
 }
 
-/* -------- Add application modal -------- */
+/* -------- Application detail modal -------- */
 
 .application-modal {
   position: fixed;

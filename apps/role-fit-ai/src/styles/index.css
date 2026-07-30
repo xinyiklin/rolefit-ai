@@ -6,6 +6,7 @@
 @import "./shell.css";
 @import "./sources.css";
 @import "./studio.css";
+@import "./prepare.css";
 @import "@typeset/editor/styles/resume-document.css";
 @import "@typeset/editor/styles/editor-overlay.css";
 @import "@typeset/editor/styles/toolbar.css";

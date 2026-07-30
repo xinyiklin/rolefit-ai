@@ -87,6 +87,27 @@ bounded; app-only operational detail belongs in the affected app documentation.
   is the first environment to exercise it. `devEngines` is accepted by npm
   11.16.0 but its enforcement on a mismatched toolchain is UNCONFIRMED.
 
+## 2026-07-30
+
+- [USER+CODE+TOOL] Prepare is the first/default and sole job-intake surface. Its
+  editable brief includes tracked job facts, company context,
+  responsibilities, required/preferred qualifications, technical keywords,
+  seniority/domain signals, benefits, and extraction/candidate-review gaps.
+  Resume and Cover Letter share the same card pattern with Include toggles and
+  variant selectors; Resume starts included, Cover Letter starts excluded, and
+  Apply requires readiness only for included materials while allowing neither.
+  Re-Apply preserves any previously saved artifact for an excluded material.
+  Current candidate gaps come only from the matching Review result; a restored
+  Apply snapshot is labeled historical until Review runs again. Applications
+  routes new work back to Prepare and its detail modal edits existing records.
+  Resume recommendation ranks actual variant contents and auto-selects only a
+  clear high-confidence winner while the editor is clean; ambiguous or dirty
+  state pauses without persisted variant metadata or a schema change. Saved
+  variant mutations invalidate the ranking, and an in-flight automatic choice
+  cannot replace a restored application's resume. The full RoleFit gate passes:
+  production and landing builds, desktop contracts, and all 61 offline
+  evaluations. Browser QA was not run.
+
 ## 2026-07-29
 
 - [USER+CODE+TOOL] The final dependency-modernization tranche SHA-pins every
@@ -399,9 +420,10 @@ bounded; app-only operational detail belongs in the affected app documentation.
   remaining issue is responsiveness rather than total CPU, evaluate a worker or
   cooperative chunking before behavior-pruning buckets.
 
-- [USER+CODE] Apply still creates the application and snapshots both documents,
-  but the resume and the cover letter are no longer frozen at that moment. Each
-  carries its own saved/unsaved state and an explicit "Update application" row
+- [USER+CODE] Apply still creates the application and snapshots each included
+  document. The resume and the cover letter are no longer frozen at that
+  moment; each carries its own saved/unsaved state and an explicit "Update
+  application" row
   in its own Save menu, so a letter tailored after applying is saved to the
   same record instead of being copied by hand. The strict source bytes and only
   that document's tracker fields commit atomically against the current

@@ -5,8 +5,13 @@ browser-side effects; components render them and App composes them.
 
 ## Ownership
 
-- `useJobIntake` owns link/paste/extension import, Distill progress/retry, and
-  auto-polish intent.
+- `useJobIntake` owns Prepare's link/paste/extension intake, Distill
+  progress/retry, and automatic-tailor intent. Its extension progress callback
+  and first delivered-posting callback select Prepare before visible intake
+  state changes; claim tokens and fresh-tab ownership remain transport
+  concerns. The imported snapshot carries the complete editable Prepare brief,
+  including benefits and extraction gaps, alongside the exact model-facing
+  tailoring text; candidate-review gaps remain owned by the Review result.
 - `usePolishPipeline` owns Tailor/Review orchestration, abort/retry, and progress.
 - `useDuplicateGuard` owns duplicate acknowledgments and pipeline/apply gates.
 - `useDuplicateScan` owns the Applications tab's tracker-wide duplicate
@@ -23,13 +28,31 @@ browser-side effects; components render them and App composes them.
   configured/readiness state and must not silently select a paid replacement.
 - `useWorkspaceResume`, `useApplyFlow`, `useApplications`, and
   `useApplicationFiles` own their local server/storage lifecycles.
+  `useApplyFlow` consumes the shared readiness result used by both masthead and
+  Prepare controls; it requires the prepared job and readiness only for
+  included materials. It captures the Resume/Cover Letter Include selection
+  before duplicate or download dialogs, permits either or both to be excluded,
+  and leaves a previously saved excluded artifact untouched on re-Apply. Apply
+  stores the complete editable prepared brief (including benefits) while
+  Tailor receives the benefits-excluded model-facing projection. The captured
+  posting remains immutable and separately persisted even when it initially
+  matches that prepared projection.
+  `useWorkspaceResume` may read actual saved resume documents to support
+  Prepare's deterministic recommendation, but that decision stays session-only
+  and never adds persisted variant metadata. Authoritative workspace snapshots
+  invalidate cached candidate rankings because a saved variant can change
+  without changing its filename; automatic selection must also cancel before
+  commit if the session becomes linked to an application of record.
   `useApplications` sends only mutation-named upsert records, keeps optimistic
   updates serial, and reconciles successful own-write snapshots by id/revision
   so unchanged objects retain identity. Manual refreshes and conflict snapshots
   remain fresh authoritative objects.
 - `useApplicationDocumentSync` owns the session's application link and the two
   explicit per-document saves that follow Apply. Saving is always user
-  initiated; no effect may write a document into an application.
+  initiated; no effect may write a document into an application. Apply or
+  tracker restore establishes an application of record, and editing its
+  prepared brief must not sever that identity; only fresh intake may release
+  the link.
   `useApplicationFiles` sends the current application revision and refreshes
   the authoritative tracker after the server atomically commits one strict
   source or explicit PDF with that document's metadata. Saved-state comparison
@@ -83,12 +106,19 @@ browser-side effects; components render them and App composes them.
 - Provider availability effects fetch shape-only state; they never request,
   cache, or infer API keys, account identity, executable paths, or raw CLI
   output.
-- Automatic extension imports must await both the shared initial provider fetch
+- Automatic extension intake must await both the shared initial provider fetch
   and an authoritative applications snapshot; transient `loading` is not a
   terminal provider failure, and duplicate gates must never inspect the
   mount-time empty applications array. Provider readiness is a preflight
   signal, not semantic request input, so background readiness polls must not
   invalidate an already-running AI request.
+- Automatic extension tailoring remains on Prepare. It may not replace a dirty
+  editor without an explicit user action. When multiple saved resume variants
+  exist, compare their actual strict document contents with the prepared job
+  and auto-select only a clear high-confidence winner while the editor is
+  clean; otherwise surface the recommendation and pause. A successful
+  automatic run must not force the Resume tab; user-initiated Resume tailoring
+  retains its normal reveal behavior.
 - Distill stale-input guards cover only the job source and Distill-stage AI
   settings. Resume bootstrap and Tailor-mode reconciliation are downstream
   auto-Tailor inputs; they must not cancel an extension Distill that is already

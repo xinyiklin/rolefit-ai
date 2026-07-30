@@ -52,7 +52,7 @@ export function CoverLetterReview({
   const target = [resolved.role, resolved.company].filter(Boolean).join(" at ");
   const checks = [
     readiness("Resume", resumeReady, "Add your resume"),
-    readiness("Job description", jobReady, "Add the job description"),
+    readiness("Job description", jobReady, "Prepare the job on Prepare"),
     readiness("AI provider", providerReady, "Check AI settings")
   ];
 
@@ -101,7 +101,7 @@ export function CoverLetterReview({
       ) : (
         <>
           <p className="cover-letter-review__eyebrow">Tailoring</p>
-          <h2>{target || "Set a job target"}</h2>
+          <h2>{target || "Prepare a job first"}</h2>
           <ul className="cover-letter-review__checks">
             {checks.map((check) => (
               <li key={check.label} className={check.ready ? "is-ok" : ""}>

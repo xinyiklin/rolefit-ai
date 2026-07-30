@@ -107,11 +107,11 @@ export function MaterialsTab({
   const gateHint = canGenerate
     ? ""
     : !resumeReady && !jobReady
-    ? "Add your resume and the job description first."
+    ? "Add your resume and prepare the job on Prepare."
     : !resumeReady
     ? "Add your resume first."
     : !jobReady
-    ? "Add the job description (Job menu, top bar) first."
+    ? "Prepare the job on Prepare first."
     : aiProviderMessage;
   const nothingChosen = buildQuestionList().length === 0 && !includeRoles;
   const hasAnswerDrafts = drafts.length > 0 || roleDrafts.length > 0;
@@ -135,7 +135,7 @@ export function MaterialsTab({
         {targetLine ? (
           <span className="materials-page__meta">{targetLine}</span>
         ) : (
-          <span className="materials-page__meta">Load a job to tailor drafts</span>
+          <span className="materials-page__meta">Prepare a job to tailor drafts</span>
         )}
       </header>
 
@@ -152,7 +152,7 @@ export function MaterialsTab({
                     type="button"
                     onClick={handleSaveAnswers}
                     disabled={!canSave || selectedToSave === 0}
-                    title={canSave ? undefined : "Apply this job first, or add a job link."}
+                    title={canSave ? undefined : "Prepare this job on Prepare first."}
                   >
                     {selectedToSave
                       ? `Save ${selectedToSave} to application`

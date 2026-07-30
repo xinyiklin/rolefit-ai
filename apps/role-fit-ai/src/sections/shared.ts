@@ -6,23 +6,25 @@
 // "applications" as a Table / Calendar view switcher (TrackerTab).
 // Cover letters are a first-class editable document again. Materials remains
 // focused on application questions and role-description drafts.
-export type OutputTab = "resume" | "cover" | "materials" | "applications" | "analytics";
+export type OutputTab = "prepare" | "resume" | "cover" | "materials" | "applications" | "analytics";
 
 // Rail groups for the sidebar tab list.
-export type OutputTabGroup = "DRAFT" | "TRACK";
+export type OutputTabGroup = "PREPARE" | "DRAFT" | "TRACK";
 
 export type OutputTabDescriptor = {
   id: OutputTab;
   label: string;
   badge?: string | number;
-  /** Rail group this tab belongs to ("DRAFT" or "TRACK").
+  /** Rail group this tab belongs to ("PREPARE", "DRAFT", or "TRACK").
    *  When absent, StudioPane derives it from the tab id. */
   group?: OutputTabGroup;
 };
 
 // Canonical group membership for the sidebar rail.
-// DRAFT: Resume + Cover letter + Materials; TRACK: tracker + analytics.
+// PREPARE: job intake; DRAFT: Resume + Cover letter + Materials;
+// TRACK: tracker + analytics.
 export const TAB_GROUPS: Record<OutputTab, OutputTabGroup> = {
+  prepare:      "PREPARE",
   resume:       "DRAFT",
   cover:        "DRAFT",
   materials:    "DRAFT",

@@ -117,7 +117,7 @@ type TrackerTabProps = {
   onOpenApplication: (app: Application) => void;
   onPreviewResume: (app: Application) => void;
   onDelete: (id: string, title: string) => void;
-  onAddApplication: () => void;
+  onPrepareApplication: () => void;
   onRefresh: () => Promise<boolean>;
   // Merge action for duplicate clusters, threaded from useApplications via
   // App.tsx. The clusters themselves are computed HERE (this component only
@@ -324,7 +324,7 @@ export function TrackerTab({
   onOpenApplication,
   onPreviewResume,
   onDelete,
-  onAddApplication,
+  onPrepareApplication,
   onRefresh,
   onMergeApplications,
   onDismissDuplicateGroup
@@ -460,7 +460,7 @@ export function TrackerTab({
         const app = rowMenu.app;
         const items: RowMenuItem[] = [
           { kind: "action", label: "Open details", icon: SquareArrowOutUpRight, onSelect: () => onOpenApplication(app) },
-          { kind: "action", label: "Open in Polish", icon: Sparkles, onSelect: () => onLoad(app) }
+          { kind: "action", label: "Open preparation", icon: Sparkles, onSelect: () => onLoad(app) }
         ];
         if (app.resumeArtifacts?.hasPdf) {
           items.push({ kind: "action", label: "Preview resume", icon: Eye, onSelect: () => onPreviewResume(app) });
@@ -545,9 +545,9 @@ export function TrackerTab({
               Review duplicates · {duplicateGroups.length}
             </button>
           ) : null}
-          <button type="button" className="primary-button is-compact" onClick={onAddApplication}>
+          <button type="button" className="primary-button is-compact" onClick={onPrepareApplication}>
             <Plus size={14} aria-hidden="true" />
-            Add application
+            Prepare application
           </button>
         </div>
       </header>

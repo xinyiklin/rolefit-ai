@@ -276,11 +276,16 @@ export function useCoverLetter({
       );
       return;
     }
-    if (
-      !evidenceItems.some((item) => item.source === "resume") ||
-      jobText.trim().length < 40
-    ) {
-      setCoverStatus("Add your resume and the job description first.");
+    const hasResumeEvidence = evidenceItems.some((item) => item.source === "resume");
+    const hasPreparedJob = jobText.trim().length >= 40;
+    if (!hasResumeEvidence || !hasPreparedJob) {
+      setCoverStatus(
+        !hasResumeEvidence && !hasPreparedJob
+          ? "Add your resume and prepare the job on Prepare."
+          : !hasResumeEvidence
+            ? "Add your resume first."
+            : "Prepare the job on Prepare first."
+      );
       return;
     }
     if (!providerReady) {

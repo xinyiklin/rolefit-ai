@@ -24,6 +24,29 @@ and `docs/engineering/ui-principles.md`.
   companion.
 - Keep components declarative. Network, storage, cross-tab, and pipeline state
   belong in hooks; components receive values and callbacks.
+- `PrepareTab` is the first/default and sole job-intake page. It composes the
+  URL/paste fallbacks, receipt/Distill progress, collapsed source, editable
+  full job brief and its extraction/candidate-review gaps, resume-variant
+  recommendation, material selection, readiness, and the shared Apply callback;
+  it does not own their async state. Its brief includes tracked job facts,
+  company context, responsibilities, required/preferred qualifications,
+  technical keywords, seniority/domain signals, and benefits. Candidate gaps
+  restored from a saved Apply snapshot are visibly historical until Review
+  produces a matching current result.
+- Resume and Cover Letter use the same Prepare card component and visual
+  hierarchy, each with an Include toggle and named-variant selector plus its
+  document-specific actions. Resume defaults included and Cover Letter defaults
+  excluded. Do not label either card optional. Readiness gates only included
+  materials, and either or both may be excluded.
+- Resume recommendations compare actual saved document contents. A clear
+  high-confidence winner may be selected automatically only when the editor is
+  clean; dirty or ambiguous state recommends/pauses for the user. Do not add
+  persisted variant metadata to support this UI.
+- The masthead contains Sessions and the shared Apply command only. Do not
+  reintroduce an Inputs group, `jobControl`, intake control, or parallel Apply
+  gate.
+- Restored applications return to Prepare through **Open preparation** after
+  the host validates their posting and document sources.
 - Keep feature-specific composition near its tab/menu. Extract a shared section
   component only for demonstrated repetition or a stable interaction contract.
 - Avoid mode-heavy components. Prefer a small base primitive plus explicit
@@ -51,7 +74,8 @@ and `docs/engineering/ui-principles.md`.
 
 ## UX rules
 
-- Preserve the masthead + vertical studio navigation + tabbed workspace.
+- Preserve the Sessions/Apply masthead + vertical PREPARE / DRAFT / TRACK
+  navigation + tabbed workspace. Prepare is first and selected by default.
 - Use app tokens/classes for host chrome and package styles for shared editor
   behavior. Document intentional overrides.
 - Keep errors local, specific, and recoverable. Async stage UI must show exact

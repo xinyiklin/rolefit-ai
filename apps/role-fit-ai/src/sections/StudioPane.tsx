@@ -1,10 +1,11 @@
 import { useRef, type KeyboardEvent, type ReactNode } from "react";
-import { BarChart3, ClipboardList, FileQuestion, FileText, Mail } from "lucide-react";
+import { BarChart3, BriefcaseBusiness, ClipboardList, FileQuestion, FileText, Mail } from "lucide-react";
 import type { OutputTab, OutputTabDescriptor, OutputTabGroup } from "./shared";
 import { TAB_GROUPS } from "./shared";
 
 // Sidebar rail entries lead with a fixed icon per tab id.
 const TAB_ICONS: Record<OutputTab, ReactNode> = {
+  prepare: <BriefcaseBusiness size={15} aria-hidden="true" />,
   resume: <FileText size={15} aria-hidden="true" />,
   cover: <Mail size={15} aria-hidden="true" />,
   materials: <FileQuestion size={15} aria-hidden="true" />,
@@ -58,9 +59,11 @@ export function StudioPane({
 
   // Build the grouped rail structure. Tabs are emitted in their original order
   // so the APG keyboard model (roving tabindex by position) is preserved.
-  // Groups are rendered in first-seen order so the DRAFT / TRACK split is stable.
+  // Groups are rendered in first-seen order so the PREPARE / DRAFT / TRACK
+  // split is stable.
   const groupOrder: OutputTabGroup[] = [];
   const grouped: Record<OutputTabGroup, { tab: OutputTabDescriptor; posIndex: number }[]> = {
+    PREPARE: [],
     DRAFT: [],
     TRACK: [],
   };

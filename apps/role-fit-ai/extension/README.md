@@ -1,8 +1,8 @@
 # RoleFit AI — browser extension
 
-A Manifest V3 popup (Chrome / Edge / Firefox) that imports job postings into
+A Manifest V3 popup (Chrome / Edge / Firefox) that prepares job postings in
 RoleFit AI. Click the toolbar icon to see whether you've already tracked or
-applied to that posting and import it into a fresh app tab. Fit score, coverage,
+applied to that posting and open it in a fresh Prepare tab. Fit score, coverage,
 and verdict are produced only by AI Review in the main app.
 
 It sends requests **only** to your local RoleFit AI server at a validated
@@ -15,10 +15,11 @@ arbitrary origin.
 The server also requires this installed extension's exact Origin. A manifest
 host permission permits the request but does not prove which extension sent it.
 On first use, the popup sends a short-lived local access request; approve that
-exact origin once in the companion before analyze/import becomes available.
-For imports, the server prepares the raw posting text; the receiving RoleFit tab
-then runs its own Distill-stage CLI or native API provider, or falls straight to the
-deterministic parser when **Distill with AI** is off. Start the app
+exact origin once in the companion before analysis/preparation becomes
+available. For preparation handoffs, the server prepares the raw posting text;
+the receiving RoleFit tab then runs its own Distill-stage CLI or native API
+provider, or falls straight to the deterministic parser when **Prepare job
+details with AI** is off. Start the app
 (`npm run dev:rolefit` from the repository root) before using it.
 
 ## Install (unpacked)
@@ -78,29 +79,32 @@ one-time approval.
    requires substantial descriptions with aligned metadata plus strong lexical
    and ordered-phrase overlap; small amounts of shared boilerplate do not
    produce a warning.
-3. **Import** POSTs the page text to `POST /api/extension/import` and opens a
-   fresh app tab with a short claim token. The server prepares the raw posting
+3. **Prepare in RoleFit AI** POSTs the page text to the existing
+   `POST /api/extension/import` route and opens a fresh app tab with a short
+   claim token. The server prepares the raw posting
    text in the BACKGROUND (e.g. fetching the full description for a Greenhouse
    link), so it survives the popup closing on focus loss; the app polls
    `GET /api/extension/inbox?tabId=...&claimToken=...`, which reports progress
    until the text is ready. The receiving tab then runs the AI distill itself
    with its own selected Distill provider and loads the brief into that tab's
-   Job field. If AI Distill was selected and fails, the deterministic brief may
-   remain visible for inspection, but the stage is failed and automatic polish
-   stops. The deterministic parser is a successful path only when **Distill
-   with AI** is off.
-4. A **Polish automatically after import** toggle (a checkbox in the popup,
-   persisted via `chrome.storage.local`) makes the app jump straight to polish
-   once the brief and your base resume are ready — no second click needed.
-5. A **Distill with AI** toggle (also persisted via `chrome.storage.local`,
-   default **on**) controls whether the receiving tab runs the AI distiller on
-   the imported posting or falls straight to the deterministic parser. Turn it
-   off to skip the provider call for an import. The flag rides the import as
-   `distillAi` and is handed back to the app in the inbox payload.
+   Prepare page. If AI Distill was selected and fails, the deterministic brief
+   may remain visible for inspection, but the stage is failed and automatic
+   tailoring stops. The deterministic parser is a successful path only when
+   **Prepare job details with AI** is off.
+4. A **Tailor resume after preparation** toggle (a checkbox in the popup,
+   persisted via `chrome.storage.local`) makes the app continue from Prepare
+   into tailoring once the brief and base resume are ready — no second click
+   needed. Its existing inbox field remains `autoTailor`.
+5. A **Prepare job details with AI** toggle (also persisted via
+   `chrome.storage.local`, default **on**) controls whether the receiving tab
+   runs the AI distiller on the prepared posting or falls straight to the
+   deterministic parser. Turn it off to skip the provider call. The unchanged
+   `distillAi` field travels through the import and inbox payloads.
 
-Each import is its own independent RoleFit tab. The claim token keeps the new
-posting out of older visible tabs while still allowing a no-strand fallback if
-the new tab never opens or closes before draining the import.
+Each preparation handoff is its own independent RoleFit tab. The claim token
+keeps the new posting out of older visible tabs while still allowing a
+no-strand fallback if the new tab never opens or closes before draining the
+import inbox entry.
 
 Duplicate detection is a workflow gate, not a score. A warning found before or
 after Distill asks the user to continue the current pipeline or stop; stopping

@@ -10,11 +10,16 @@ import {
 import { buildApplicationRoleEvidence } from "../lib/applicationAnswerEvidence";
 import type { ResumeData } from "@typeset/engine/lib/resumeData.ts";
 import { makeApplicationDraft, type Application } from "./useApplications";
+import type { ExtractedJobTracking } from "../lib/jobExtract";
 
 type UseApplicationAnswersArgs = {
   resumeText: string;
   resumeData: ResumeData | null;
   jobDescription: string;
+  applicationJobDescription: string;
+  applicationRawJobDescription: string;
+  applicationTracking: ExtractedJobTracking;
+  linkedApplication: Application | null;
   jobUrl: string;
   honestContext: string;
   customInstructions: string;
@@ -33,6 +38,10 @@ export function useApplicationAnswers({
   resumeText,
   resumeData,
   jobDescription,
+  applicationJobDescription,
+  applicationRawJobDescription,
+  applicationTracking,
+  linkedApplication,
   jobUrl,
   honestContext,
   customInstructions,
@@ -210,12 +219,12 @@ export function useApplicationAnswers({
   async function handleSaveAnswers(items: { question: string; answer: string }[]) {
     if (!items.length) return;
     if (!jobUrl.trim() && !jobDescription.trim()) {
-      setAnswersStatus("Add a job link or description before saving answers to the pipeline.");
+      setAnswersStatus("Prepare a job on Prepare before saving answers to the pipeline.");
       return;
     }
     const now = new Date().toISOString();
     const saved = items.map((it) => ({ question: it.question, answer: it.answer, savedAt: now }));
-    const existing = findForTarget(jobUrl, jobDescription);
+    const existing = linkedApplication ?? findForTarget(jobUrl, applicationJobDescription);
     if (existing) {
       const byQuestion = new Map<string, { question: string; answer: string; savedAt: string }>();
       for (const a of existing.applicationAnswers ?? []) byQuestion.set(a.question, a);
@@ -227,7 +236,8 @@ export function useApplicationAnswers({
       return;
     }
     const app: Application = {
-      ...makeApplicationDraft(jobUrl, jobDescription),
+      ...makeApplicationDraft(jobUrl, applicationJobDescription, applicationTracking),
+      rawJobDescription: applicationRawJobDescription.trim(),
       applicationAnswers: saved
     };
     const didSave = await upsertApplication(app);

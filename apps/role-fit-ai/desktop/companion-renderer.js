@@ -305,7 +305,7 @@ function extensionPairingMessage() {
   }
   const count = extensionPairingSettings?.origins?.length ?? 0;
   const pendingCount = extensionPairingSettings?.pendingOrigins?.length ?? 0;
-  if (pendingCount > 0) return "Approve the extension request to enable job imports.";
+  if (pendingCount > 0) return "Approve the extension request to enable job preparation.";
   return count === 0
     ? "Open the RoleFit browser extension once to request access."
     : `${count} browser extension${count === 1 ? "" : "s"} paired.`;

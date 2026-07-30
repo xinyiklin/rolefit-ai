@@ -103,11 +103,11 @@ export function CoverLetterTab({
     preflight.canTailor && resumeReady && jobReady && providerReady && !isTailoring;
   const targetLine = [jobTarget?.role, jobTarget?.company].filter(Boolean).join(" at ");
   const readinessHint = !resumeReady && !jobReady
-    ? "Add a resume and job description first."
+    ? "Add a resume and prepare the job on Prepare."
     : !resumeReady
       ? "Add your resume first."
       : !jobReady
-        ? "Add the job description first."
+        ? "Prepare the job on Prepare first."
         : !providerReady
           ? providerMessage
           : (preflight.blockers[0] ?? "");

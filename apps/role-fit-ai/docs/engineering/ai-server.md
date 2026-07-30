@@ -212,13 +212,18 @@ owns:
   and reject private / loopback / link-local targets. Distilling is
   AI-first (`/api/distill`, below) with the deterministic
   `src/lib/jobExtract.ts` engine as the deterministic non-AI path; it then splits the result
-  into compact model-facing tailoring text and tracking-only facts (role summary,
-  company, location, job type, work-auth note, compensation). The visible
-  job-description field is a structured brief with Job Title,
+  into compact model-facing tailoring text and tracking-only facts (role
+  summary, company, location, job type, work-auth note, compensation). The
+  model-facing job-description field is a structured brief with Job Title,
   Company/Product Context, Core Responsibilities, Required Qualifications,
-  Preferred Qualifications, Tech Stack/Keywords, Seniority Signals, and
-  Domain Signals. The link itself is kept only for pipeline tracking and is
-  never sent to the AI.
+  Preferred Qualifications, Tech Stack/Keywords, Seniority Signals, and Domain
+  Signals. Prepare adapts those fields plus the retained raw source into its
+  complete editable review brief, including benefits and extraction or
+  candidate-review gaps. Benefits remain review context and are not added to
+  the resume-tailoring prompt. Apply persists that complete review brief and the
+  immutable captured posting separately; reopening reconstructs the same
+  editable/model-facing projections. The link itself is kept only for pipeline
+  tracking and is never sent to the AI.
 - AI job distiller (`/api/distill`, `server/ai/distill.ts`): sends the
   raw (tag-stripped) posting text to the Distill-stage provider and returns
   the SAME structured fields the deterministic engine emits, resolved
@@ -272,16 +277,27 @@ owns:
   clearing it, and the tab distills client-side through `/api/distill` with
   its own Distill provider — or skips the AI request entirely when the
   import's `distillAi` flag is off. Extension imports include a short
-  claim token and open a fresh app tab with that token, so a new posting starts
-  a new independent tailoring session instead of replacing an existing tab's
-  job target. The import also carries an optional `autoTailor` flag from the
-  popup's "Polish automatically after import" toggle, so the app can jump
-  straight to polish once the brief and a base resume are ready, plus an
-  optional `distillAi` flag from the popup's "Distill with AI" toggle
+  `claimToken` and open a fresh app tab with that token and its own `tabId`, so
+  a new posting starts a new independent preparation session instead of
+  replacing an existing tab's job. The first progress or delivered-posting
+  callback selects Prepare before updating intake state, so receipt, Distill,
+  and any follow-on tailoring remain visible on the sole job-intake surface.
+  The import also carries an optional internal `autoTailor` flag from the
+  popup's "Tailor resume after preparation" toggle, so the app can tailor once
+  the brief and a base resume are ready, plus an optional internal `distillAi`
+  flag from the popup's "Prepare job details with AI" toggle
   (`body.distillAi === false` → false, anything else → true, so older extension
   builds that omit it keep distilling); both flags are stored on the inbox entry
   and returned in the `inbox` delivery payload so the claiming tab knows whether
   to run the AI distiller or fall straight to the deterministic parser.
+  Those internal transport names, `extensionImport`, and the
+  `"distilling"` inbox status remain stable even though visible copy says
+  preparation. Automatic tailoring never changes tabs on success or replaces a
+  dirty editor automatically. When multiple resume variants exist, the client
+  ranks their actual strict document contents against the prepared job and may
+  auto-select only a clear high-confidence winner while the editor is clean;
+  otherwise it recommends or pauses. This is a session decision, not persisted
+  variant metadata or a schema extension.
   `analyze` / `import` are reachable cross-origin from the extension popup and
   require its exact, explicitly configured `EXTENSION_ALLOWED_ORIGINS` identity
   (`chrome-extension://`, `moz-extension://`, or
@@ -564,7 +580,9 @@ Keep the import pipeline split by responsibility:
   pay-transparency text, application instructions, EEO/legal boilerplate,
   cookie prompts, and similar noise. Extract tracking-only facts separately
   instead of leaving compensation and boilerplate in the model-facing job
-  description.
+  description. The client may recover benefits from the retained raw source for
+  Prepare's editable human-review brief, but it must not put that material back
+  into the model-facing tailoring text.
 
 Distilling should stay conservative: do not cut trailing boilerplate until
 meaningful role content has already been seen, and keep uncertain text

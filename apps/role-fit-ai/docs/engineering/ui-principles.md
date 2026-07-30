@@ -26,15 +26,17 @@ marketing landing page, a SaaS dashboard, or a native desktop installer.
 
 ## Workflow Shape
 
-Preserve the compact masthead + full-width studio workflow (the former left
-inputs pane was folded into the masthead by explicit user request,
-2026-06-09; document file actions moved into their editor bars on 2026-07-25):
+Preserve the compact masthead + full-width studio workflow (document file
+actions moved into their editor bars on 2026-07-25; job intake moved from the
+masthead into the first/default Prepare page on 2026-07-29):
 
 - masthead (navbar): a standalone Sessions menu for concurrent job tabs first,
-  followed by Job target (link + description), plus the global Apply action.
-  Provider and guidance setup live in the Settings dialog at the foot of the
-  studio rail, not here
-- studio (full width): the tabbed output views — Resume (the engine-painted
+  plus the global Apply action. Provider and guidance setup live in the
+  Settings dialog at the foot of the studio rail; no Inputs group or intake
+  control lives here
+- studio (full width): PREPARE comes first and contains Prepare, the sole
+  job-intake and application-readiness surface. DRAFT contains Resume (the
+  engine-painted
   page is the sole editor, so what you see is exactly what exports — it is its
   own live preview, so there is no separate compile-preview; its margin
   controls own add/remove/reorder, section type, and per-section tailor scope;
@@ -42,10 +44,43 @@ inputs pane was folded into the masthead by explicit user request,
   suggestion/recruiter-review rail docks beside it post-polish), Cover
   letter (a separate plain-paragraph editor with one Tailor action and a rail
   that reports readiness before it and the result's provenance after it),
-  Materials
-  (application questions and role descriptions),
-  Applications (table / calendar tracker views), Analytics — plus the
+  Materials (application questions and role descriptions); TRACK contains
+  Applications (table / calendar tracker views) and Analytics — plus the
   document-specific review rails
+
+Prepare treats the paired extension as the primary intake path, with URL fetch
+and pasted text as deliberate fallbacks on the same page. Extension receipt and
+Distill progress navigate to and remain visible on Prepare; once ready, source
+collapses behind explicit View source, Replace source, and Prepare again paths
+while the structured brief remains visible. A restored application returns to
+Prepare after its job and documents pass their existing source validation and
+dirty-document replacement guards.
+
+Every extracted tracker field remains editable on Prepare: role, company,
+location, job type, source, work authorization, compensation range/currency/
+period, and role summary. Company context, responsibilities, required and
+preferred qualifications, technical keywords, seniority and domain signals,
+and benefits are editable in the same brief. Surface both extraction gaps and
+candidate-review gaps so partial Distill output can be corrected without
+another AI run. Benefits remain visible preparation context rather than being
+silently folded into resume-tailoring evidence.
+
+Resume and Cover Letter share the same Prepare material-card structure and
+hierarchy while retaining their document-specific actions. Each card has an
+Include toggle and a named-variant selector; Resume starts included and Cover
+Letter starts excluded. Do not add “optional” labels, badges, or card-specific
+visual hierarchy. The Prepare and masthead Apply buttons invoke one handler and
+one readiness model: the current job must match a completed preparation, and
+only included materials must be ready while their preparation is idle. Either
+or both cards may be excluded. Re-Apply treats exclusion as non-destructive:
+any artifact already saved for that application remains untouched.
+
+Extension-triggered automatic resume tailoring remains on Prepare. Rank the
+actual contents of saved `.resume` variants against the prepared job. A clear
+high-confidence winner may be selected only while the editor is clean; dirty
+or ambiguous state shows the recommendation and pauses for the user. Do not
+persist parallel variant metadata or widen the strict document schema for this
+decision.
 
 Resume and cover letter share ONE Open menu (`DocumentOpenMenu`): the same
 component renders each page's start actions (bundled starter, blank, choose a
@@ -126,7 +161,8 @@ unless the task explicitly touches them.
 - `@typeset/engine` owns the resume model, constrained cover-letter adapter,
   strict `.resume`/`.cover` codecs, deterministic layout, fonts, print painting,
   and PDF emission.
-- RoleFit owns the masthead, studio navigation, AI workflow, review rails,
+- RoleFit owns the masthead, Prepare intake/readiness page, studio navigation,
+  AI workflow, review rails,
   tracker, cover-letter file/source lifecycle, and its narrow resume-editor
   overlay for section scope and review targets.
 - Adapt shared surfaces through values, callbacks, and deliberate slots. Do not
@@ -211,7 +247,7 @@ Never show:
 - Every preference lives in ONE place: the Settings dialog, opened from the foot
   of the studio tab rail. Its three sections are AI stages, About you, and
   Guidance, with Reset pinned below them at the foot of the section rail. The
-  masthead keeps only Sessions, Job target, and Apply. Do not add a second
+  masthead keeps only Sessions and Apply. Do not add a second
   control for a setting Settings already owns.
 - A settings section must earn its nav entry. Reset was briefly a section of its
   own and rendered a near-empty panel holding one button. It belongs at the foot
@@ -282,9 +318,9 @@ Never show:
   chrome ends. A panel that runs past the window both clips and extends the
   scroll area of whatever contains it, which shifts the document behind it; the
   panel scrolls inside itself instead.
-- Masthead menu panels anchor to their own trigger's right edge so they open
-  inboard, under the control that owns them. The bar's controls sit at the right
-  of the window, so a left-anchored panel runs off it and ends up pressed
+- The Sessions masthead menu panel anchors to its trigger's right edge so it
+  opens inboard, under the control that owns it. The bar's controls sit at the
+  right of the window, so a left-anchored panel runs off it and ends up pressed
   against the edge by the viewport clamp.
 - Keep keyboard access for changed controls.
 - Prefer existing select / segmented / toggle patterns over hand-rolled
@@ -315,25 +351,26 @@ Never show:
   overlay never consumes editor space; do not shrink type, add a horizontally
   cropped toolbar, or make an overflowing toolbar scroll.
 - The Resume tab's editable document title is the default PDF and `.resume`
-  name. A successful job import/distill sets the shared header/export base to
+  name. A successfully prepared job sets the shared header/export base to
   `Name_Company_Resume`, with `Name_Resume`, `Company_Resume`, and `Resume`
   fallbacks when job or resume metadata is unavailable.
-- Masthead menus use labels at normal widths and familiar, evenly spaced icons
-  at compact widths. The RoleFit wordmark and the Polish/Apply icon-and-label
-  buttons remain visible throughout the supported range. The masthead stays
+- The Sessions menu uses its label at normal widths and a familiar, evenly
+  spaced icon at compact widths. The RoleFit wordmark and Apply icon-and-label
+  button remain visible throughout the supported range. The masthead stays
   57px tall across disclosure states and meets the studio/sidebar through one
   structural hairline; it never wraps or paints a false gap below itself. At
   720px and below, only the Resume tab's precise authoring surface is replaced
-  by the non-dismissible width notice. Masthead/navigation, the simpler Cover
-  letter page, Materials, Applications, and Analytics remain usable, including
-  when browser zoom makes the effective viewport cross that threshold.
+  by the non-dismissible width notice. Prepare, masthead/navigation, the simpler
+  Cover letter page, Materials, Applications, and Analytics remain usable,
+  including when browser zoom makes the effective viewport cross that
+  threshold.
 
 ## Visual QA
 
 For meaningful UI changes:
 
 1. Run `npm run dev:rolefit` and open `http://localhost:5181` in Chrome.
-2. Walk through the affected control in the normal navbar-inputs + studio workflow.
+2. Walk through the affected control in the Prepare + studio workflow.
 3. Confirm no console errors, overlap, unexpected layout shift, or
    broken keyboard path.
 4. Capture a screenshot or describe the visual QA in the final response.

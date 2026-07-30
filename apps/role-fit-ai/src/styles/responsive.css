@@ -56,8 +56,8 @@
 }
 
 @media (max-width: 1180px) {
-  /* First disclosure: remove secondary state words while preserving the menu
-     names. Readiness remains available inside each menu. */
+  /* First disclosure: remove the secondary session state while preserving the
+     menu name. Session detail remains available inside the menu. */
   .nav-menu__sub { display: none; }
 }
 
@@ -73,8 +73,8 @@
 }
 
 @media (max-width: 940px) {
-  /* Menus disclose to identical icon controls. Parent and intra-group gaps
-     match so all five icons read as one evenly spaced sequence. */
+  /* Masthead menus disclose to compact icon controls while retaining even
+     spacing with the global action. */
   .masthead__menus,
   .masthead .menu-group {
     gap: 8px;

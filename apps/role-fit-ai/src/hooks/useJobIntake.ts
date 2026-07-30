@@ -8,9 +8,9 @@
  * State ownership: distillProgress/distillProgressVisible/distillRetrySource/
  * isExtractingLink are OWNED here (not passed in) because every mutator of
  * them is one of these handlers — App only READS them for render (the
- * shared AI workflow, the progress-dock visibility check, JobMenu's
- * isExtractingLink prop, and the _myPhase presence memo), so returning them
- * keeps the interface small without leaking control back to App.
+ * shared AI workflow, Prepare's source controls, the progress-dock visibility
+ * check, and the _myPhase presence memo), so returning them keeps the
+ * interface small without leaking control back to App.
  *
  * jobUrl/jobDescription/importedJob/result/pipelineAiUsage/jobRawText/
  * autoTailorJob/polishStatus stay in App (it seeds/derives from them well
@@ -39,13 +39,44 @@ import type { TailorMode } from "../lib/tailorScope";
 import type { PolishedResume } from "../resumeEngine";
 import type { ResumeData } from "@typeset/engine/lib/resumeData.ts";
 import type { ProviderReadiness } from "./useAvailableProviders";
+import {
+  buildPreparedJobBrief,
+  reconcilePreparedJobManualReviewFields,
+  type PreparedJobBrief
+} from "../lib/preparedJobBrief";
 
 export type ImportedJobSnapshot = {
   url: string;
+  // Immutable source identity for this prepared snapshot. It lets App
+  // distinguish "Prepare again" from unrelated fresh intake without comparing
+  // the distilled projection.
+  sourceText: string;
   tailoringText: string;
   tracking: ExtractedJobTracking;
+  brief: PreparedJobBrief;
   manualReviewFields: string[];
 };
+
+function importedJobSnapshot(
+  url: string,
+  tailoringText: string,
+  extracted: ReturnType<typeof extractJobPosting>,
+  sourceText: string
+): ImportedJobSnapshot {
+  const brief = buildPreparedJobBrief(extracted.tailoringText, sourceText);
+  return {
+    url,
+    sourceText: sourceText.trim(),
+    tailoringText: tailoringText.trim(),
+    tracking: extracted.tracking,
+    brief,
+    manualReviewFields: reconcilePreparedJobManualReviewFields(
+      extracted.tracking,
+      brief,
+      extracted.manualReviewFields
+    )
+  };
+}
 
 function presentTrackingFields(tracking: ExtractedJobTracking) {
   const fields = [
@@ -94,6 +125,8 @@ type UseJobIntakeArgs = {
   distillRequestFields: () => Record<string, unknown>;
   ensureProviderReady: () => Promise<ProviderReadiness>;
   extensionImportsReady: boolean;
+  onExtensionPrepareStarted: () => void;
+  onExtensionJobReceived: () => void;
   tailorModes: Record<string, TailorMode>;
   editedResume: ResumeData | null;
 };
@@ -116,10 +149,13 @@ export function useJobIntake({
   distillRequestFields,
   ensureProviderReady,
   extensionImportsReady,
+  onExtensionPrepareStarted,
+  onExtensionJobReceived,
   tailorModes,
   editedResume
 }: UseJobIntakeArgs) {
   const [isExtractingLink, setIsExtractingLink] = useState(false);
+  const [extensionImportPhase, setExtensionImportPhase] = useState<"receiving" | "preparing" | null>(null);
   // Distill progress row in the shared AI workflow. Driven by both
   // job-brief entry points (Extract-from-link and Distill-paste); the DONE card
   // reports whether the brief came from the AI or the local fallback.
@@ -199,7 +235,7 @@ export function useJobIntake({
       error: "The active Distill was cancelled before it could replace the current job target."
     });
     setDistillProgressVisible(true);
-    setLinkStatus("Job or resume inputs changed. Start Distill again for the current target.");
+    setLinkStatus("Job inputs changed. Prepare the current posting again.");
   }, [distillInputFingerprint, setAutoTailorJob, setLinkStatus]);
 
   useEffect(() => () => {
@@ -259,7 +295,7 @@ export function useJobIntake({
     setDistillContinuesToPolish(false);
   }
 
-  // JobMenu's direct-typing path (manual edits to the description textarea) —
+  // Prepare's direct-typing path (manual edits to the description textarea) —
   // NOT used by the distill entry points above, which call the raw
   // setJobDescription and set pipelineAiUsage.distill to their own real usage.
   // A manual edit means whatever distill result was showing no longer describes
@@ -268,6 +304,10 @@ export function useJobIntake({
   // polish result on screen, so its attribution still describes that output.)
   function handleManualJobDescriptionChange(value: string) {
     setJobDescription(value);
+    // Typing or replacing source starts fresh intake immediately. Clear the
+    // prepared snapshot so App also releases any restored/applied application
+    // link before a document can be saved against the wrong posting.
+    setImportedJob(null);
     setPipelineAiUsage((prev) => ({ ...prev, distill: { source: "none" } }));
     setJobRawText("");
   }
@@ -289,7 +329,12 @@ export function useJobIntake({
   async function handleExtractFromLink() {
     const url = jobUrl.trim();
     if (!url) return;
+    const readinessInputFingerprint = distillInputFingerprintRef.current;
     const readiness = await ensureProviderReady();
+    if (readinessInputFingerprint !== distillInputFingerprintRef.current) {
+      setLinkStatus("Job inputs changed while AI setup was being checked. Prepare the current posting again.");
+      return;
+    }
     if (!readiness.ready) {
       setLinkStatus(readiness.message);
       // Point the failed card's Retry at THIS action — without it the button
@@ -321,7 +366,7 @@ export function useJobIntake({
       // AI distiller (server-side keys) trims the scraped page to the parts worth
       // polishing and extracts tracker details; falls back to the deterministic
       // engine on any failure so a link import always produces a brief.
-      setLinkStatus("Distilling the posting…");
+      setLinkStatus("Preparing job details…");
       const rawText = String(data.text ?? "");
       const localExtracted = extractJobPosting(rawText, { url });
       const duplicateBefore = await confirmDuplicateBeforeDistill(url, rawText, localExtracted.tracking);
@@ -329,7 +374,7 @@ export function useJobIntake({
       if (!duplicateBefore.proceed) {
         applyRawImportedJob(rawText.trim(), url);
         setDistillProgress(duplicateStoppedState("before"));
-        setLinkStatus("Import stopped because this application is already tracked.");
+        setLinkStatus("Preparation stopped because this application is already tracked.");
         return;
       }
       const result = await distillJobPosting(rawText, {
@@ -356,25 +401,20 @@ export function useJobIntake({
         : await confirmDuplicateAfterDistill(url, rawText, extracted.tracking);
       if (!request.isCurrent()) return;
       setJobDescription(relevant);
-      setImportedJob({
-        url,
-        tailoringText: relevant.trim(),
-        tracking: extracted.tracking,
-        manualReviewFields: extracted.manualReviewFields
-      });
+      setImportedJob(importedJobSnapshot(url, relevant, extracted, rawText));
       setResult(null);
       resetCoverWorkflow();
       setPipelineAiUsage(freshDistillUsage(usage));
-      setJobRawText(relevant.trim() !== rawText.trim() ? rawText : "");
+      setJobRawText(rawText);
       if (!duplicateAfter.proceed) {
         setDistillProgress(duplicateStoppedState("after"));
-        setLinkStatus("Distill completed, then the pipeline stopped because this application is already tracked.");
+        setLinkStatus("Job details were prepared, then the workflow stopped because this application is already tracked.");
         return;
       }
       const missing = compactManualReviewFields(extracted.manualReviewFields);
       setLinkStatus(result.failure
-        ? `${result.failure.headline}: ${result.failure.detail}. A local brief was loaded; the pipeline stopped.`
-        : `Distilled ${relevant.length.toLocaleString()} compact characters for tailoring and captured ${presentTrackingFields(
+        ? `${result.failure.headline}: ${result.failure.detail}. A local brief is available; preparation stopped.`
+        : `Prepared ${relevant.length.toLocaleString()} compact characters for tailoring and captured ${presentTrackingFields(
             extracted.tracking
           )}${missing ? `; add ${missing} manually if needed` : ""}.`);
       setDistillProgress(distillTerminalState(result, duplicateAfter.note));
@@ -400,10 +440,15 @@ export function useJobIntake({
   // pipeline the link path uses. Covers JDs the server can't fetch (Workday
   // wd1 tenants, ADP, anything JS-only): user copies the visible page text from
   // their browser, pastes it in, and gets the structured brief plus tracking.
-  async function handleDistillPaste() {
-    const raw = jobDescription;
+  async function handleDistillPaste(sourceOverride?: string) {
+    const raw = sourceOverride ?? jobDescription;
     if (!raw.trim() || distillBusyRef.current) return;
+    const readinessInputFingerprint = distillInputFingerprintRef.current;
     const readiness = await ensureProviderReady();
+    if (readinessInputFingerprint !== distillInputFingerprintRef.current) {
+      setLinkStatus("Job inputs changed while AI setup was being checked. Prepare the current posting again.");
+      return;
+    }
     if (!readiness.ready) {
       setLinkStatus(readiness.message);
       // Point the failed card's Retry at THIS action (see handleExtractFromLink).
@@ -431,7 +476,7 @@ export function useJobIntake({
           .replace(/&quot;|&#39;/gi, '"')
       : raw;
     if (cleaned.trim().length < 80) {
-      setLinkStatus("Paste a bit more job text first. Distillation needs a real description to work from.");
+      setLinkStatus("Paste a bit more job text first. Preparation needs a real description to work from.");
       return;
     }
     const releaseDistillRun = tryClaimDistillRun();
@@ -442,7 +487,7 @@ export function useJobIntake({
     setDistillContinuesToPolish(false);
     setDistillProgress({ status: "running" });
     setDistillProgressVisible(true);
-    setLinkStatus("Distilling the paste…");
+    setLinkStatus("Preparing the pasted posting…");
     try {
       const trimmedUrl = jobUrl.trim();
       const localExtracted = extractJobPosting(cleaned, { url: trimmedUrl || undefined });
@@ -451,7 +496,7 @@ export function useJobIntake({
       if (!duplicateBefore.proceed) {
         applyRawImportedJob(cleaned.trim(), trimmedUrl);
         setDistillProgress(duplicateStoppedState("before"));
-        setLinkStatus("Distill stopped because this application is already tracked.");
+        setLinkStatus("Preparation stopped because this application is already tracked.");
         return;
       }
       const result = await distillJobPosting(cleaned, {
@@ -477,25 +522,20 @@ export function useJobIntake({
         : await confirmDuplicateAfterDistill(trimmedUrl, cleaned, extracted.tracking);
       if (!request.isCurrent()) return;
       setJobDescription(relevant);
-      setImportedJob({
-        url: trimmedUrl,
-        tailoringText: relevant.trim(),
-        tracking: extracted.tracking,
-        manualReviewFields: extracted.manualReviewFields
-      });
+      setImportedJob(importedJobSnapshot(trimmedUrl, relevant, extracted, cleaned));
       setResult(null);
       resetCoverWorkflow();
       setPipelineAiUsage(freshDistillUsage(usage));
-      setJobRawText(relevant.trim() !== cleaned.trim() ? cleaned : "");
+      setJobRawText(cleaned);
       if (!duplicateAfter.proceed) {
         setDistillProgress(duplicateStoppedState("after"));
-        setLinkStatus("Distill completed, then the pipeline stopped because this application is already tracked.");
+        setLinkStatus("Job details were prepared, then the workflow stopped because this application is already tracked.");
         return;
       }
       const missing = compactManualReviewFields(extracted.manualReviewFields);
       setLinkStatus(result.failure
-        ? `${result.failure.headline}: ${result.failure.detail}. A local brief was loaded; the pipeline stopped.`
-        : `Distilled ${relevant.length.toLocaleString()} compact characters from the paste and captured ${presentTrackingFields(
+        ? `${result.failure.headline}: ${result.failure.detail}. A local brief is available; preparation stopped.`
+        : `Prepared ${relevant.length.toLocaleString()} compact characters from the paste and captured ${presentTrackingFields(
             extracted.tracking
           )}${missing ? `; add ${missing} manually if needed` : ""}.`);
       setDistillProgress(distillTerminalState(result, duplicateAfter.note));
@@ -505,7 +545,7 @@ export function useJobIntake({
       // this only fires on an unexpected error — surface it instead of leaving
       // the card stuck on "running".
       const message = error instanceof Error ? error.message.replace(/[.。]\s*$/, "") : "distillation failed";
-      setLinkStatus(`Couldn't distill the paste: ${message}.`);
+      setLinkStatus(`Couldn't prepare the pasted posting: ${message}.`);
       const f = classifyFailure(error);
       setDistillProgress({ status: "failed", errorHeadline: f.headline, error: f.detail });
     } finally {
@@ -518,22 +558,18 @@ export function useJobIntake({
   // Shared by the extension-import AI-off branch and its Retry: use the RAW
   // resolved text as the working job description (no AI request — the user
   // turned AI distillation off in the extension), with tracking metadata from
-  // the deterministic engine only. The working JD IS the raw text here, so
-  // jobRawText stays cleared (no separate pre-distill version to remember).
+  // the deterministic engine only. Keep the captured source separately even
+  // when it initially equals the working description: later brief edits must
+  // not rewrite View source.
   function applyRawImportedJob(rawTrimmed: string, trimmedUrl: string) {
     const localExtracted = extractJobPosting(rawTrimmed, { url: trimmedUrl || undefined });
     setJobUrl(trimmedUrl);
     setJobDescription(rawTrimmed);
-    setImportedJob({
-      url: trimmedUrl,
-      tailoringText: rawTrimmed,
-      tracking: localExtracted.tracking,
-      manualReviewFields: localExtracted.manualReviewFields
-    });
+    setImportedJob(importedJobSnapshot(trimmedUrl, rawTrimmed, localExtracted, rawTrimmed));
     setResult(null);
     resetCoverWorkflow();
     setPipelineAiUsage(freshDistillUsage({ source: "none", completedAt: new Date().toISOString() }));
-    setJobRawText("");
+    setJobRawText(rawTrimmed);
     setDistillProgress({
       status: "done",
       note: "AI distillation off · Raw description imported",
@@ -621,16 +657,11 @@ export function useJobIntake({
       // memo's importedJob.url === jobUrl.trim() guard holds after the retry.
       setJobUrl(payload.url);
       setJobDescription(relevant);
-      setImportedJob({
-        url: payload.url,
-        tailoringText: relevant.trim(),
-        tracking: extracted.tracking,
-        manualReviewFields: extracted.manualReviewFields
-      });
+      setImportedJob(importedJobSnapshot(payload.url, relevant, extracted, payload.text));
       setResult(null);
       resetCoverWorkflow();
       setPipelineAiUsage(freshDistillUsage(usage));
-      setJobRawText(relevant.trim() !== payload.text.trim() ? payload.text : "");
+      setJobRawText(payload.text);
       if (!duplicateAfter.proceed) {
         setAutoTailorJob(null);
         setDistillProgress(duplicateStoppedState("after"));
@@ -655,6 +686,8 @@ export function useJobIntake({
   // deterministic engine is the fallback.
   useExtensionInbox(
     async (item: ExtensionImport) => {
+      onExtensionJobReceived();
+      setExtensionImportPhase("preparing");
       const { text, url, fields, autoTailor, distillAi } = item;
       const readiness = distillAi ? await ensureProviderReady() : null;
       const releaseDistillRun = await waitAndClaimDistillRun();
@@ -686,7 +719,7 @@ export function useJobIntake({
         setDistillRetrySource("import");
         setDistillProgress(duplicateStoppedState("before"));
         setDistillProgressVisible(true);
-        setPolishStatus("Extension import stopped because this application is already tracked.");
+        setPolishStatus("Preparation stopped because this application is already tracked.");
         return;
       }
 
@@ -696,7 +729,7 @@ export function useJobIntake({
       // extractJobPosting is not an AI call.
       if (!distillAi) {
         if (rawTrimmed.length < 40) {
-          setPolishStatus("The extension import had too little job text. Paste it manually.");
+          setPolishStatus("The extension posting had too little job text. Paste it manually.");
           setDistillRetrySource("import");
           setDistillProgress({
             status: "failed",
@@ -714,10 +747,10 @@ export function useJobIntake({
           Boolean(editedResume) && Object.values(tailorModes).some((mode) => mode === "tailor");
         setPolishStatus(
           autoTailor && !readyToTailorRaw
-            ? `Job imported from the browser extension. ${
+            ? `Application prepared from the browser extension. ${
                 editedResume ? "set a section to Tailor" : "load a resume"
-              } and it'll polish automatically.`
-            : "Job imported from the browser extension."
+              } and automatic tailoring can continue.`
+            : "Application prepared from the browser extension."
         );
         return;
       }
@@ -728,7 +761,7 @@ export function useJobIntake({
         setDistillRetrySource("import");
         setDistillProgress({ status: "failed", errorHeadline: "Provider unavailable", error: readiness.message });
         setDistillProgressVisible(true);
-        setPolishStatus(`Job imported without AI Distill. ${readiness.message}`);
+        setPolishStatus(`Application prepared without AI job-detail extraction. ${readiness.message}`);
         return;
       }
 
@@ -748,7 +781,7 @@ export function useJobIntake({
         const { extracted, usage } = result;
         const relevant = extracted.tailoringText;
         if (relevant.trim().length < 40) {
-          setPolishStatus("The extension import had too little job text. Paste it manually.");
+          setPolishStatus("The extension posting had too little job text. Paste it manually.");
           setDistillRetrySource("import");
           setDistillProgress({
             status: "failed",
@@ -764,22 +797,17 @@ export function useJobIntake({
         if (!request.isCurrent()) return;
         setJobUrl(trimmedUrl);
         setJobDescription(relevant);
-        setImportedJob({
-          url: trimmedUrl,
-          tailoringText: relevant.trim(),
-          tracking: extracted.tracking,
-          manualReviewFields: extracted.manualReviewFields,
-        });
+        setImportedJob(importedJobSnapshot(trimmedUrl, relevant, extracted, text));
         setResult(null);
         resetCoverWorkflow();
         setPipelineAiUsage(freshDistillUsage(usage));
-        setJobRawText(relevant.trim() !== text.trim() ? text : "");
+        setJobRawText(text);
         if (!duplicateAfter.proceed) {
           setAutoTailorJob(null);
           setDistillRetrySource("import");
           setDistillProgress(duplicateStoppedState("after"));
           setDistillProgressVisible(true);
-          setPolishStatus("Distill completed, then the pipeline stopped because this application is already tracked.");
+          setPolishStatus("Job details were prepared, then the workflow stopped because this application is already tracked.");
           return;
         }
         // Auto-tailor only when Distill itself succeeded. A local fallback is
@@ -799,10 +827,10 @@ export function useJobIntake({
         setPolishStatus(result.failure
           ? `${result.failure.headline}: ${result.failure.detail}. A local brief was loaded; Tailor and Review were not run.`
           : autoTailor && !readyToTailor
-            ? `Job imported from the browser extension. ${
+            ? `Application prepared from the browser extension. ${
                 editedResume ? "set a section to Tailor" : "load a resume"
-              } and it'll polish automatically.`
-            : "Job imported from the browser extension.");
+              } and automatic tailoring can continue.`
+            : "Application prepared from the browser extension.");
       } catch (error) {
         if (!request.isCurrent()) return;
         const failure = classifyFailure(error);
@@ -810,14 +838,17 @@ export function useJobIntake({
         setDistillRetrySource("import");
         setDistillProgress({ status: "failed", errorHeadline: failure.headline, error: failure.detail });
         setDistillProgressVisible(true);
-        setPolishStatus(`Extension import could not be distilled: ${failure.detail}. Retry from the workflow card.`);
+        setPolishStatus(`The extension posting could not be prepared: ${failure.detail}. Retry from the workflow card.`);
       } finally {
         finishDistillRequest(request.controller);
         setIsExtractingLink(false);
+        setExtensionImportPhase(null);
         releaseDistillRun();
       }
     },
     () => {
+      onExtensionPrepareStarted();
+      setExtensionImportPhase("receiving");
       // Background server-side distill still running — surface it on the same card
       // the link/paste flows use (no Retry: an extension import has nothing to
       // re-run). Guard the running state so repeated polls don't churn renders.
@@ -842,6 +873,7 @@ export function useJobIntake({
 
   return {
     isExtractingLink,
+    extensionImportPhase,
     distillProgress,
     distillProgressVisible,
     distillContinuesToPolish,

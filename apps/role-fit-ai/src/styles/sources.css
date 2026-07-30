@@ -1,4 +1,4 @@
-/* -------- Resume/Job source controls (navbar menus) + shared form fields -------- */
+/* -------- Shared form fields and source-file controls -------- */
 
 /* -------- Form fields (shared) -------- */
 
@@ -25,23 +25,6 @@
   font-size: 0.9em;
 }
 
-.input-with-icon {
-  display: grid;
-  grid-template-columns: 14px 1fr;
-  align-items: center;
-  gap: var(--s2);
-  min-height: 32px;
-  padding: 0 var(--s2);
-  border: 1px solid var(--hairline-strong);
-  border-radius: var(--r-md);
-  background: var(--card-elev);
-  color: var(--ink-soft);
-  transition: border-color 160ms var(--ease), box-shadow 160ms var(--ease);
-}
-
-.input-with-icon svg { color: var(--ink-soft); }
-
-.input-with-icon:focus-within,
 .textarea:focus,
 .upload-box:focus-within,
 select:focus,
@@ -96,41 +79,6 @@ select,
 .textarea {
   -webkit-appearance: none;
   appearance: none;
-}
-
-/* Link field + inline Extract button on one row */
-.link-input-row {
-  display: flex;
-  align-items: stretch;
-  gap: var(--s2);
-}
-
-.link-input-row .input-with-icon {
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
-.link-input-row .link-extract {
-  flex: 0 0 auto;
-  white-space: nowrap;
-}
-
-/* Distill button + hint under the Job posting textarea */
-.job-distill-row {
-  display: flex;
-  align-items: center;
-  gap: var(--s2);
-  margin-top: calc(-1 * var(--s1));
-}
-
-.job-distill-row .secondary-button {
-  flex: 0 0 auto;
-}
-
-.job-distill-hint {
-  color: var(--ink-soft);
-  line-height: 1.4;
-  flex: 1 1 auto;
 }
 
 .field--inline {
@@ -839,4 +787,3 @@ select,
   text-transform: uppercase;
   color: var(--ink-muted);
 }
-
