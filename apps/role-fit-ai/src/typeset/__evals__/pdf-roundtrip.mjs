@@ -6,20 +6,36 @@
 // means engine-PDF ≡ engine-layout ≡ the layout we intend.
 //
 //   node src/typeset/__evals__/pdf-roundtrip.mjs
-import { readFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
+import {
+  COVER_LETTER_STYLE_DEFAULTS,
+  coverLetterStyleToDocumentStyle,
+  coverLetterResumeData
+} from "@typeset/engine/lib/coverLetter.ts";
 import { DOC_STYLE_DEFAULTS } from "@typeset/engine/lib/documentStyle.ts";
 import { buildStarterResume } from "@typeset/engine/sampleResume.ts";
 import { toTypesetSchema } from "@typeset/engine/typeset/schema.ts";
 import { DOCUMENT_FONT_FAMILIES, sfntAssetFile } from "@typeset/engine/typeset/fontRegistry.ts";
-import { layoutResume } from "@typeset/engine/typeset/layout.ts";
+import { layoutCoverLetter, layoutResume } from "@typeset/engine/typeset/layout.ts";
 import { emitPdf } from "@typeset/engine/typeset/pdf/emit.ts";
 import { PDFDict, PDFDocument, PDFName, PDFRawStream } from "pdf-lib";
 
-// The engine's own starter document is the fixture: a real resume exercising
-// headings, entry heads with linked metas, skills rows, and wrapped bullets.
-const schema = toTypesetSchema(buildStarterResume());
+// The engine's starter supplies the real resume structure. The first bullet
+// deliberately covers the last emitted face and paint contracts the starter
+// otherwise leaves implicit: bold italic, accents, shaping, an explicit link,
+// and a continuous underline.
+const starter = buildStarterResume();
+starter.sections[1].items[0].bullets[0].text =
+  "<b><i>Efficient AVA café résumé workflow</i></b> with "
+  + "<u><link=https://example.test/pdf-audit>one underlined link</link></u>.";
+const schema = toTypesetSchema(starter);
+const auditDir = process.env.ROLEFIT_PDF_AUDIT_DIR?.trim();
+if (auditDir) mkdirSync(auditDir, { recursive: true });
+const retainAuditPdf = (file, value) => {
+  if (auditDir) writeFileSync(join(auditDir, file), value);
+};
 
 
 // Node-side bytes from the engine package's exact sfnt siblings. The woff2 -> sfnt
@@ -38,6 +54,7 @@ for (const [family, config] of Object.entries(DOCUMENT_FONT_FAMILIES)) {
 
 const layout = layoutResume(schema, DOC_STYLE_DEFAULTS);
 const bytes = await emitPdf(layout, fonts, { title: "roundtrip probe" });
+retainAuditPdf("representative-resume-default.pdf", bytes);
 
 // Every PDF face, including the metric-preserving Latin Modern conversion, is
 // a TrueType sfnt. Lock the serialized declaration: the former post-save CFF
@@ -157,7 +174,22 @@ for (const family of Object.keys(DOCUMENT_FONT_FAMILIES)) {
     ...DOC_STYLE_DEFAULTS,
     fontFamily: family
   });
+  const usedFaces = new Set(
+    familyLayout.pages.flatMap((page) =>
+      page.lines.flatMap((line) =>
+        line.runs
+          .filter((run) => run.style.family === family)
+          .map((run) => run.style.face)
+      )
+    )
+  );
+  const missingFaces = Object.keys(DOCUMENT_FONT_FAMILIES[family].faces)
+    .filter((face) => !usedFaces.has(face));
+  if (missingFaces.length) {
+    familyFailures.push(`${family}: fixture did not paint ${missingFaces.join(", ")}`);
+  }
   const familyBytes = await emitPdf(familyLayout, fonts, { title: `roundtrip ${family}` });
+  retainAuditPdf(`representative-resume-${family}.pdf`, familyBytes);
   if (!familyBytes?.length) {
     familyFailures.push(`${family}: emitPdf produced no bytes`);
     continue;
@@ -193,11 +225,52 @@ if (familyFailures.length) {
   failures += familyFailures.length;
 }
 
+// A separate cover-letter export proves the plain-paragraph adapter and shared
+// paginator, not only the resume schema. Enough deterministic paragraphs are
+// used to cross a page boundary; the first carries the same link/underline and
+// shaping stress as the resume fixture.
+const coverParagraphs = Array.from(
+  { length: 36 },
+  (_, index) => index === 0
+    ? "<b><i>Efficient AVA café résumé workflow</i></b> with "
+      + "<u><link=https://example.test/cover-audit>one underlined link</link></u>."
+    : `Deterministic cover-letter paragraph ${index + 1} keeps pagination stable.`
+);
+const coverLayout = layoutCoverLetter(
+  toTypesetSchema(coverLetterResumeData(coverParagraphs, starter.header)),
+  coverLetterStyleToDocumentStyle(COVER_LETTER_STYLE_DEFAULTS)
+);
+const coverBytes = await emitPdf(coverLayout, fonts, { title: "roundtrip cover letter" });
+retainAuditPdf("representative-cover-letter.pdf", coverBytes);
+const coverDoc = await pdfjs.getDocument({
+  data: coverBytes.slice(),
+  useWorkerFetch: false,
+  isEvalSupported: false
+}).promise;
+let coverTextItems = 0;
+let coverLinks = 0;
+for (let pageNumber = 1; pageNumber <= coverDoc.numPages; pageNumber += 1) {
+  const page = await coverDoc.getPage(pageNumber);
+  coverTextItems += (await page.getTextContent()).items.filter((item) => item.str.trim()).length;
+  coverLinks += (await page.getAnnotations()).filter((annotation) => annotation.subtype === "Link").length;
+}
+if (coverDoc.numPages < 2) {
+  console.error(`cover letter: expected multiple pages, emitted ${coverDoc.numPages}`);
+  failures += 1;
+}
+if (coverTextItems < coverParagraphs.length || coverLinks < 1) {
+  console.error(
+    `cover letter: ${coverTextItems} text items and ${coverLinks} links across ${coverDoc.numPages} pages`
+  );
+  failures += 1;
+}
+
 if (failures) {
   console.error(`pdf-roundtrip: ${failures} failures (${checked} runs checked)`);
   process.exit(1);
 }
 console.log(
   `pdf-roundtrip: ${checked} runs at exact positions, ${annots} link annotations, text layer searchable; ` +
-    `all ${Object.keys(DOCUMENT_FONT_FAMILIES).length} families embed and re-extract`
+    `all ${Object.keys(DOCUMENT_FONT_FAMILIES).length} families × 6 faces embed and re-extract; ` +
+    `${coverDoc.numPages}-page cover letter stays searchable`
 );

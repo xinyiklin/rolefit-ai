@@ -5,6 +5,19 @@ bounded; app-only operational detail belongs in the affected app documentation.
 
 ## 2026-07-29
 
+- [USER+CODE+TOOL] The PDF dependency audit retains `pdf-lib` 1.17.1,
+  `@pdf-lib/fontkit` 1.1.1, React-PDF 10.4.1, and its `pdfjs-dist` 5.4.296
+  transitive. RoleFit's unused direct `fontkit` 2.0.4 dev dependency and its
+  nine exclusive transitive lockfile records are removed: source search found
+  no import, the desktop bundle metafile retains no runtime import, and the
+  staged package remains 128 allowlisted files. The strengthened round-trip
+  fixture emits all six families and six faces with accents, ligatures,
+  kerning, links, and underlines plus a searchable two-page cover letter.
+  PDF.js exact-position/extraction checks, 1,266,912 shaping comparisons,
+  reproducible web/PDF font checks, both app builds, Poppler renders of every
+  retained artifact, and a real React-PDF Source Serif preview pass with no
+  browser errors or warnings. Python pins and generated font assets are
+  unchanged; the production npm audit remains zero.
 - [USER+CODE+TOOL] TypeScript 7.0.2 is the sole workspace compiler after an
   explicit 6.0.3 bridge. The root probe and all six child configs pass without
   diagnostics; browser configs retain their previous options, the Node-native

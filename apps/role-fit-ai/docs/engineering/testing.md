@@ -235,9 +235,13 @@ Good frontend verification covers:
   metadata, company/culture marketing, and trailing benefits / legal
   boilerplate
 - shared-engine integration changes keep
-  `src/typeset/__evals__/linebreak-parity.mjs`, `vertical-layout-snapshot.mjs`, and
-  `pdf-roundtrip.mjs` green. These are RoleFit integration and migration guards;
-  the canonical engine checks live under `packages/engine/`
+  `src/typeset/__evals__/linebreak-snapshot.mjs`,
+  `vertical-layout-snapshot.mjs`, and `pdf-roundtrip.mjs` green. The PDF probe
+  emits every supported family and face, covers shaping/links/underlines, and
+  exports a multi-page cover letter. Set `ROLEFIT_PDF_AUDIT_DIR` to an ignored
+  or temporary directory when external-viewer artifacts are needed. These are
+  RoleFit integration and migration guards; the canonical engine checks live
+  under `packages/engine/`
 - editor changes keep the shared
   `packages/editor/src/sections/editor/__evals__/typeset-editing.mjs` and
   `packages/editor/src/hooks/__evals__/resume-editor-structure.mjs` checks green
