@@ -6,7 +6,6 @@ import {
   MAX_WORKSPACE_BACKUP_FILE_BYTES,
   MAX_WORKSPACE_BACKUP_BYTES,
   MAX_WORKSPACE_BACKUP_FILES,
-  LEGACY_WORKSPACE_BACKUP_SCHEMA_VERSION,
   WORKSPACE_BACKUP_FORMAT,
   WORKSPACE_BACKUP_SCHEMA_VERSION,
   isManagedWorkspaceBackupPath,
@@ -15,7 +14,10 @@ import {
   type WorkspaceBackupEnvelope,
   type WorkspaceBackupFile
 } from "../src/lib/workspaceBackupContract.ts";
-import { readApplications, withApplicationsLock } from "./applications/index.ts";
+import {
+  readApplications,
+  withApplicationsLock
+} from "./applications/storage.ts";
 import { ensureJobWorkspace, validateBaseResumeText, withWorkspaceLock } from "./workspace.ts";
 import {
   beginWorkspaceRestore,
@@ -284,20 +286,18 @@ async function writeStagedBackup(stageDir: string, envelope: WorkspaceBackupEnve
       throw new WorkspaceBackupError("The backup's application tracker data is invalid.");
     }
   }
-  if (envelope.schemaVersion !== LEGACY_WORKSPACE_BACKUP_SCHEMA_VERSION) {
-    const expectedPaths = expectedApplicationPaths(stagedApplications);
-    const bundledPaths = new Set(
-      envelope.files
-        .map((file) => file.path)
-        .filter((path) => path.startsWith("applications/"))
+  const expectedPaths = expectedApplicationPaths(stagedApplications);
+  const bundledPaths = new Set(
+    envelope.files
+      .map((file) => file.path)
+      .filter((path) => path.startsWith("applications/"))
+  );
+  const missing = [...expectedPaths].find((path) => !bundledPaths.has(path));
+  const extra = [...bundledPaths].find((path) => !expectedPaths.has(path));
+  if (missing || extra) {
+    throw new WorkspaceBackupError(
+      "The backup's application tracker and saved document files do not match."
     );
-    const missing = [...expectedPaths].find((path) => !bundledPaths.has(path));
-    const extra = [...bundledPaths].find((path) => !expectedPaths.has(path));
-    if (missing || extra) {
-      throw new WorkspaceBackupError(
-        "The backup's application tracker and saved document files do not match."
-      );
-    }
   }
   for (const file of envelope.files) {
     const data = await readFile(join(stageDir, ...file.path.split("/")));

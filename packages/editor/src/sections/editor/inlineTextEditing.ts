@@ -24,7 +24,12 @@ import {
   paragraphSpacePt,
   type FieldAlignment
 } from "@typeset/engine/lib/inlineMarksText.ts";
-import { automaticLinkHref, decodeLinkHref, encodeLinkHref } from "@typeset/engine/lib/links.ts";
+import {
+  automaticLinkHref,
+  decodeLinkHref,
+  encodeLinkHref,
+  normalizeLinkDestination
+} from "@typeset/engine/lib/links.ts";
 
 type DisplayChar = {
   // The value substring this display char covers ("---" for "—", a whole
@@ -346,13 +351,15 @@ function serializeChars(prefix: string, chars: DisplayChar[], suffix: string, bo
 
 function emptyFieldFormat(map: DisplayMap): DisplayChar {
   const spacing = paragraphSpacingFromInlineMarks(map.source);
+  const fontFamily = new RegExp(`<font=(${FONT_FAMILY_ALTERNATION})>`, "i").exec(map.source)?.[1];
+  const fontSize = /<size=(\d+(?:\.\d+)?)>/i.exec(map.source)?.[1];
   return {
     raw: "",
-    bold: false,
-    italic: false,
-    underline: false,
-    fontFamily: null,
-    fontSizePt: null,
+    bold: /<b>/i.test(map.source),
+    italic: /<i>/i.test(map.source),
+    underline: /<u>/i.test(map.source),
+    fontFamily: (fontFamily?.toLowerCase() as DocumentFontFamily | undefined) ?? null,
+    fontSizePt: fontSize ? inlineFontSizePt(Number(fontSize)) : null,
     alignment: alignmentFromInlineMarks(map.source),
     lineHeight: spacing.lineHeight,
     spaceBeforePt: spacing.spaceBeforePt,
@@ -361,6 +368,40 @@ function emptyFieldFormat(map: DisplayMap): DisplayChar {
     linkHref: null,
     linkSuppressed: false
   };
+}
+
+export function typingFormatForEmptyField(map: DisplayMap): TypingFormat | null {
+  if (map.chars.length > 0 || map.source.length === 0) return null;
+  const format = emptyFieldFormat(map);
+  return {
+    bold: format.bold,
+    italic: format.italic,
+    underline: format.underline,
+    fontFamily: format.fontFamily,
+    fontSizePt: format.fontSizePt,
+    alignment: format.alignment
+  };
+}
+
+// An empty paragraph has no DisplayChar that can retain a collapsed-caret
+// toolbar choice. Persist the choice in a textless carrier so leaving and
+// returning to the paragraph recovers the same next-typing format.
+export function setEmptyFieldTypingFormat(
+  map: DisplayMap,
+  format: TypingFormat
+): { value: string; caretValueIndex: number } {
+  if (map.chars.length > 0) {
+    throw new Error("setEmptyFieldTypingFormat requires an empty display map");
+  }
+  const carrier: DisplayChar = {
+    ...emptyFieldFormat(map),
+    ...format,
+    raw: "",
+    linkHref: null,
+    linkSuppressed: false
+  };
+  const value = serializeChars(map.prefix, [carrier], map.suffix, 0).value;
+  return { value, caretValueIndex: value.length };
 }
 
 // Replace display range [dStart, dEnd) with plain text; returns the new value
@@ -431,6 +472,120 @@ export function applyEdit(
   return withBoundary(serializeChars(map.prefix, chars, suffix, dStart + leading.length + inserted.length));
 }
 
+export function applyPlainTextInputEdit(
+  value: string,
+  nextText: string
+): {
+  value: string;
+  caretValueIndex: number;
+  historyIntent?: "insert" | "deleteBackward";
+  historyText?: string;
+} {
+  const map = buildDisplayMap(value, { preserveWhitespace: true });
+  if (map.display === nextText) {
+    return { value, caretValueIndex: value.length };
+  }
+  const commonLength = Math.min(map.display.length, nextText.length);
+  let prefix = 0;
+  while (prefix < commonLength && map.display[prefix] === nextText[prefix]) {
+    prefix += 1;
+  }
+  let suffix = 0;
+  while (
+    suffix < commonLength - prefix &&
+    map.display[map.display.length - 1 - suffix] ===
+      nextText[nextText.length - 1 - suffix]
+  ) {
+    suffix += 1;
+  }
+  const dEnd = map.display.length - suffix;
+  const insert = nextText.slice(prefix, nextText.length - suffix);
+  const removed = map.display.slice(prefix, dEnd);
+  const affectedLinks: Array<{
+    start: number;
+    end: number;
+    href: string;
+    automatic: boolean;
+  }> = [];
+  for (let index = 0; index < map.chars.length;) {
+    const href = map.chars[index]?.linkHref ?? null;
+    if (!href) {
+      index += 1;
+      continue;
+    }
+    const start = index;
+    while (index < map.chars.length && map.chars[index]?.linkHref === href) index += 1;
+    const end = index;
+    const intersectsReplacement = prefix < dEnd && start < dEnd && end > prefix;
+    const insertionInside =
+      prefix === dEnd && prefix > start && prefix < end;
+    if (intersectsReplacement || insertionInside) {
+      const automaticHref = automaticLinkHref(map.display.slice(start, end));
+      affectedLinks.push({
+        start,
+        end,
+        href,
+        automatic: Boolean(
+          automaticHref &&
+          normalizeLinkDestination(automaticHref) ===
+            normalizeLinkDestination(href)
+        )
+      });
+    }
+  }
+
+  let edited = applyEdit(
+    map,
+    prefix,
+    dEnd,
+    insert
+  );
+  const delta = insert.length - (dEnd - prefix);
+  const transformedBoundary = (
+    index: number,
+    edge: "start" | "end"
+  ): number => {
+    if (index <= prefix) return index;
+    if (index >= dEnd) return index + delta;
+    return edge === "start" ? prefix : prefix + insert.length;
+  };
+  for (const link of affectedLinks) {
+    const editedMap = buildDisplayMap(edited.value, { preserveWhitespace: true });
+    const start = Math.max(
+      0,
+      Math.min(transformedBoundary(link.start, "start"), editedMap.chars.length)
+    );
+    const end = Math.max(
+      start,
+      Math.min(transformedBoundary(link.end, "end"), editedMap.chars.length)
+    );
+    const href = link.automatic
+      ? automaticLinkHref(editedMap.display.slice(start, end))
+      : link.href;
+    const chars = editedMap.chars.map((char, index) =>
+      index >= start && index < end
+        ? { ...char, linkHref: href, linkSuppressed: false }
+        : char
+    );
+    edited = withBoundary(
+      serializeChars(
+        editedMap.prefix,
+        chars,
+        editedMap.suffix,
+        Math.min(prefix + insert.length, chars.length)
+      )
+    );
+  }
+  return {
+    ...edited,
+    ...(removed.length === 0 && insert.length > 0
+      ? { historyIntent: "insert" as const, historyText: insert }
+      : insert.length === 0 && removed.length > 0
+        ? { historyIntent: "deleteBackward" as const, historyText: removed }
+        : {})
+  };
+}
+
 // A mark-balanced fragment for the selected display range. The custom
 // clipboard transport stores this value alongside text/plain so paste inside
 // either host can restore supported font, size, emphasis, link, and alignment
@@ -464,11 +619,11 @@ export function applyInlineFragment(
   const inserted = map.chars.length === 0
     ? fragmentChars.map((char) => ({
         ...char,
-        alignment: inherit.alignment ?? char.alignment,
-        lineHeight: inherit.lineHeight ?? char.lineHeight,
-        spaceBeforePt: inherit.spaceBeforePt ?? char.spaceBeforePt,
-        spaceAfterPt: inherit.spaceAfterPt ?? char.spaceAfterPt,
-        indentPt: inherit.indentPt ?? char.indentPt
+        alignment: char.alignment ?? inherit.alignment,
+        lineHeight: char.lineHeight ?? inherit.lineHeight,
+        spaceBeforePt: char.spaceBeforePt ?? inherit.spaceBeforePt,
+        spaceAfterPt: char.spaceAfterPt ?? inherit.spaceAfterPt,
+        indentPt: char.indentPt ?? inherit.indentPt
       }))
     : fragmentChars;
   const reviveSuffix =
@@ -508,6 +663,47 @@ export function applyInlineFragment(
       dStart + leading.length + inserted.length
     )
   );
+}
+
+// Replace one selection with several logical clipboard paragraphs. The first
+// fragment joins the leading boundary and the last joins either the same field
+// or an explicitly supplied trailing boundary; middle fragments stay
+// independent mark-balanced values for the structural reducer to insert.
+export function replaceWithParagraphFragments(
+  map: DisplayMap,
+  dStart: number,
+  dEnd: number,
+  fragmentValues: readonly string[],
+  tail?: { map: DisplayMap; dEnd: number }
+): { values: string[]; lastCaretDisplayIndex: number } {
+  if (fragmentValues.length < 2) {
+    throw new Error("replaceWithParagraphFragments requires at least two paragraphs");
+  }
+  const fragments = fragmentValues.map((value) =>
+    buildDisplayMap(value, { preserveWhitespace: true })
+  );
+  const tailMap = tail?.map ?? map;
+  const tailEnd = tail?.dEnd ?? dEnd;
+  const values = fragments.map((fragment, index) => {
+    const first = index === 0;
+    const last = index === fragments.length - 1;
+    const chars = [
+      ...(first ? map.chars.slice(0, dStart) : []),
+      ...fragment.chars,
+      ...(last ? tailMap.chars.slice(tailEnd) : [])
+    ];
+    if (chars.length === 0) return fragment.source;
+    return serializeChars(
+      first ? map.prefix : "",
+      chars,
+      last ? tailMap.suffix : "",
+      chars.length
+    ).value;
+  });
+  return {
+    values,
+    lastCaretDisplayIndex: fragments[fragments.length - 1].display.length
+  };
 }
 
 // Authored indentation uses measured spaces that still behave as one tab stop.
@@ -889,6 +1085,34 @@ export function trailingLinkWordAt(map: DisplayMap, index: number): { start: num
   return automaticLinkHref(map.display.slice(start, index)) ? { start, end: index } : null;
 }
 
+export type AutoLinkSuppression = {
+  key: string;
+  dStart: number;
+  dEnd: number;
+};
+
+// Repainting a deferred automatic link swaps its editable <a>/<span> node.
+// Preserve the current paint while a pointer selection is in flight so the
+// browser's range anchor remains connected; settle the link once mouseup has
+// produced the final caret or range.
+export function autoLinkSuppressionForSelection(
+  current: AutoLinkSuppression | null,
+  pointerSelectionActive: boolean,
+  selection: {
+    key: string;
+    map: DisplayMap;
+    dStart: number;
+    dEnd: number;
+  } | null
+): AutoLinkSuppression | null {
+  if (pointerSelectionActive) return current;
+  if (!selection || selection.dStart !== selection.dEnd) return null;
+  const word = trailingLinkWordAt(selection.map, selection.dStart);
+  return word
+    ? { key: selection.key, dStart: word.start, dEnd: word.end }
+    : null;
+}
+
 // A copy of the field value with [dStart, dEnd) marked <nolink>, so the render
 // suppresses its auto-link without touching the stored data.
 export function suppressAutoLink(map: DisplayMap, dStart: number, dEnd: number): string {
@@ -954,8 +1178,23 @@ function withBoundary(res: { value: string; boundaryIndex: number }): { value: s
 
 // Split a display boundary into two mark-balanced value halves (Enter).
 export function splitValueAt(map: DisplayMap, d: number): { before: string; after: string } {
-  const before = serializeChars(map.prefix, map.chars.slice(0, d), "", 0).value;
-  const after = serializeChars("", map.chars.slice(d), map.suffix, 0).value;
+  // A boundary split has no DisplayChar on its empty side. Preserve the
+  // adjacent character and paragraph formatting in a textless carrier so
+  // typing into the new paragraph continues the active style. Links are
+  // intentionally excluded: Enter must not extend a hyperlink.
+  const emptyParagraph = (format: DisplayChar) =>
+    serializeChars(
+      "",
+      [{ ...format, raw: "", linkHref: null, linkSuppressed: false }],
+      "",
+      0
+    ).value;
+  const before = d === 0
+    ? emptyParagraph(map.chars[0] ?? emptyFieldFormat(map))
+    : serializeChars(map.prefix, map.chars.slice(0, d), "", 0).value;
+  const after = d === map.chars.length
+    ? emptyParagraph(map.chars[map.chars.length - 1] ?? emptyFieldFormat(map))
+    : serializeChars("", map.chars.slice(d), map.suffix, 0).value;
   return { before, after };
 }
 

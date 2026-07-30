@@ -338,9 +338,8 @@ export function ApplicationModal({
 
   const canSave =
     form.company.trim().length > 1 || form.role.trim().length > 1 || form.jobUrl.trim().length > 6;
-  // Keep legacy local estimates in the saved record, but never present them as
-  // current fit. New scores arrive only from AI Review and are read-only here.
-  const displayedFitNumber = application?.fitScoreSource === "local" ? null : fitNumber;
+  // New scores arrive only from AI Review and are read-only here.
+  const displayedFitNumber = fitNumber;
   const ringTone = fitTone(displayedFitNumber);
   const fitVerdictDerived = verdictFromScore(displayedFitNumber);
   const review = application?.review;

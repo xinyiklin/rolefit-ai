@@ -150,7 +150,7 @@ export function styleReducer(
   const now = Date.now();
   // Advance the shared clock before coalescing so content edits still split
   // otherwise-adjacent style transactions.
-  const sequence = historyClock.nextSequence();
+  const sequence = historyClock.sequenceFor(state, action);
   const branch = historyClock.currentBranch();
   const generation = historyClock.currentGeneration();
   const previous = state.past[state.past.length - 1];

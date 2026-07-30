@@ -7,7 +7,7 @@ import {
 } from "lucide-react";
 
 import type { DocStyleControls } from "../../hooks/useDocStyle";
-import type { ResumeSectionType } from "@typeset/engine/lib/resumeData.ts";
+import type { DocumentHeader, ResumeSectionType } from "@typeset/engine/lib/resumeData.ts";
 import { DocumentStructureControls } from "./DocumentStructureControls";
 
 export type ToolbarSaveState = "saved" | "saving" | "unsaved" | "error";
@@ -20,12 +20,14 @@ export type ToolbarSaveStatus =
     };
 
 export type DocumentStructureToolbarControls = {
-  name: string;
-  contact: string[];
+  header: DocumentHeader | null;
   disabled?: boolean;
-  onSetName: (name: string) => void;
+  onCreateHeader: () => void;
+  onSetHeaderVisible: (visible: boolean) => void;
+  onSetHeaderName: (name: string) => void;
+  onRemoveHeaderName: () => void;
   onUpdateContact: (index: number, value: string) => void;
-  onAddContact: () => void;
+  onInsertContact: (index: number) => void;
   onRemoveContact: (index: number) => void;
   onAddSection: (type: ResumeSectionType, position: "top" | "bottom") => void;
 };
@@ -125,13 +127,15 @@ export function DocumentToolbar({
 
       {documentStructure ? (
         <DocumentStructureControls
-          name={documentStructure.name}
-          contact={documentStructure.contact}
+          header={documentStructure.header}
           contactDivider={docStyle.style.contactDivider}
           disabled={documentStructure.disabled}
-          onSetName={documentStructure.onSetName}
+          onCreateHeader={documentStructure.onCreateHeader}
+          onSetHeaderVisible={documentStructure.onSetHeaderVisible}
+          onSetHeaderName={documentStructure.onSetHeaderName}
+          onRemoveHeaderName={documentStructure.onRemoveHeaderName}
           onUpdateContact={documentStructure.onUpdateContact}
-          onAddContact={documentStructure.onAddContact}
+          onInsertContact={documentStructure.onInsertContact}
           onRemoveContact={documentStructure.onRemoveContact}
           onContactDividerChange={(value) => docStyle.set("contactDivider", value)}
           onAddSection={documentStructure.onAddSection}

@@ -15,6 +15,10 @@ import {
   type ApplicationDocumentKind,
   type DocumentUpload
 } from "../../lib/applicationDocumentRequests";
+import {
+  applicationDocumentAvailability,
+  type ApplicationDocumentAvailability
+} from "../../../shared/applicationDocumentContract.ts";
 
 type ApplicationDocumentsTabProps = {
   application: Application | null;
@@ -59,7 +63,7 @@ function DocumentPane({
   application,
   kind,
   artifacts,
-  hasDocument,
+  availability,
   busy,
   uploadRef,
   downloadBase,
@@ -71,7 +75,7 @@ function DocumentPane({
   application: Application | null;
   kind: ApplicationDocumentKind;
   artifacts?: DocumentArtifacts;
-  hasDocument: boolean;
+  availability: ApplicationDocumentAvailability;
   busy: boolean;
   uploadRef: RefObject<HTMLInputElement | null>;
   downloadBase: string;
@@ -84,6 +88,7 @@ function DocumentPane({
   const title = isResume ? "Resume" : "Cover letter";
   const sourceExtension = isResume ? ".resume" : ".cover";
   const pdfName = `${downloadBase}_${isResume ? "Resume" : "Cover_Letter"}.pdf`;
+  const hasArtifact = availability !== "none";
 
   return (
     <article className="application-doc-card" aria-label={title}>
@@ -107,7 +112,7 @@ function DocumentPane({
           >
             <Upload size={13} aria-hidden="true" />
           </button>
-          {hasDocument ? (
+          {hasArtifact ? (
             <button
               type="button"
               className="ghost-button is-icon"
@@ -164,7 +169,7 @@ function DocumentPane({
           </div>
         </div>
       ) : (
-        <p className="application-muted">{hasDocument ? `${title} saved.` : `No ${title.toLowerCase()} saved.`}</p>
+        <p className="application-muted">No {title.toLowerCase()} saved.</p>
       )}
     </article>
   );
@@ -187,8 +192,8 @@ export function ApplicationDocumentsTab({
   const { alert, confirm } = useDialog();
   const resumeArtifacts = application?.resumeArtifacts;
   const coverArtifacts = application?.coverLetterArtifacts;
-  const hasResume = Boolean(application?.resumeData || resumeArtifacts?.hasPdf || resumeArtifacts?.hasSource);
-  const hasCover = Boolean(application?.coverLetterText || coverArtifacts?.hasPdf || coverArtifacts?.hasSource);
+  const resumeAvailability = applicationDocumentAvailability(resumeArtifacts);
+  const coverAvailability = applicationDocumentAvailability(coverArtifacts);
 
   async function upload(kind: UploadKind, event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -310,7 +315,7 @@ export function ApplicationDocumentsTab({
           application={application}
           kind="resume"
           artifacts={resumeArtifacts}
-          hasDocument={hasResume}
+          availability={resumeAvailability}
           busy={busy}
           uploadRef={resumeUploadRef}
           downloadBase={downloadBase}
@@ -323,7 +328,7 @@ export function ApplicationDocumentsTab({
           application={application}
           kind="cover"
           artifacts={coverArtifacts}
-          hasDocument={hasCover}
+          availability={coverAvailability}
           busy={busy}
           uploadRef={coverUploadRef}
           downloadBase={downloadBase}

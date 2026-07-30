@@ -21,6 +21,7 @@
 const TAB_ID_KEY = "rolefit:tabId";
 const REGISTRY_KEY = "rolefit:tabPresence";
 const CHANNEL_NAME = "rolefit:presence";
+const WORKSPACE_RESTORE_EVENT_KEY = "rolefit:workspaceRestoreAdoption";
 
 // A tab republishes its heartbeat on this cadence; an entry older than its
 // staleness budget is treated as a dead tab (crash / hard close that skipped the
@@ -60,6 +61,13 @@ export type PresenceEntry = {
 };
 
 type Registry = Record<string, Omit<PresenceEntry, "tabId">>;
+
+export type WorkspaceRestoreAdoptionEvent = {
+  type: "workspace-restore-adopted";
+  eventId: string;
+  sourceTabId: string;
+  adoptedAt: number;
+};
 
 // Lazily-created singleton channel, shared by publish + subscribe in this tab.
 let channel: BroadcastChannel | null = null;
@@ -220,6 +228,87 @@ export function activeSessionsSignature(sessions: PresenceEntry[]): string {
 // live tab's draft alone while reclaiming a dead tab's orphan.
 export function liveTabIds(now: number): Set<string> {
   return new Set(Object.keys(prune(readRegistry(), now)));
+}
+
+function parseWorkspaceRestoreAdoptionEvent(
+  value: unknown
+): WorkspaceRestoreAdoptionEvent | null {
+  if (!value || typeof value !== "object") return null;
+  const event = value as Record<string, unknown>;
+  return event.type === "workspace-restore-adopted" &&
+    typeof event.eventId === "string" &&
+    event.eventId.length > 0 &&
+    typeof event.sourceTabId === "string" &&
+    typeof event.adoptedAt === "number" &&
+    Number.isFinite(event.adoptedAt)
+      ? {
+          type: "workspace-restore-adopted",
+          eventId: event.eventId,
+          sourceTabId: event.sourceTabId,
+        adoptedAt: event.adoptedAt
+      }
+    : null;
+}
+
+// Workspace adoption is origin-wide, but live sibling editors still own their
+// drafts. Notify them after the adopting tab has cleared only its own and dead
+// orphan keys so each sibling can refresh clean workspace state or explain that
+// its dirty document remains preserved locally.
+export function publishWorkspaceRestoreAdoption(now = Date.now()): void {
+  const event: WorkspaceRestoreAdoptionEvent = {
+    type: "workspace-restore-adopted",
+    eventId: randomId(),
+    sourceTabId: getTabId(),
+    adoptedAt: now
+  };
+  try {
+    localStorage.setItem(WORKSPACE_RESTORE_EVENT_KEY, JSON.stringify(event));
+  } catch {
+    // BroadcastChannel may still deliver the event.
+  }
+  try {
+    getChannel()?.postMessage(event);
+  } catch {
+    // The storage event is the fallback.
+  }
+}
+
+export function subscribeWorkspaceRestoreAdoption(
+  onAdoption: (event: WorkspaceRestoreAdoptionEvent) => void
+): () => void {
+  const ch = getChannel();
+  const seenEventIds = new Set<string>();
+  const deliver = (event: WorkspaceRestoreAdoptionEvent | null) => {
+    if (
+      !event ||
+      event.sourceTabId === getTabId() ||
+      seenEventIds.has(event.eventId)
+    ) {
+      return;
+    }
+    seenEventIds.add(event.eventId);
+    if (seenEventIds.size > 128) {
+      seenEventIds.delete(seenEventIds.values().next().value!);
+    }
+    onAdoption(event);
+  };
+  const onMessage = (message: MessageEvent<unknown>) => {
+    deliver(parseWorkspaceRestoreAdoptionEvent(message.data));
+  };
+  const onStorage = (storageEvent: StorageEvent) => {
+    if (storageEvent.key !== WORKSPACE_RESTORE_EVENT_KEY || !storageEvent.newValue) return;
+    try {
+      deliver(parseWorkspaceRestoreAdoptionEvent(JSON.parse(storageEvent.newValue)));
+    } catch {
+      // Ignore malformed cross-tab state.
+    }
+  };
+  ch?.addEventListener("message", onMessage);
+  window.addEventListener("storage", onStorage);
+  return () => {
+    ch?.removeEventListener("message", onMessage);
+    window.removeEventListener("storage", onStorage);
+  };
 }
 
 // Subscribe to presence changes from any source: BroadcastChannel push, the

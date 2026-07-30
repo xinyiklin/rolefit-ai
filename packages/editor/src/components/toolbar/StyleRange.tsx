@@ -9,6 +9,7 @@ export function StyleRange({
   max,
   step,
   displayValue,
+  disabled = false,
   onChange
 }: {
   id: string;
@@ -18,6 +19,7 @@ export function StyleRange({
   max: number;
   step: number;
   displayValue: string;
+  disabled?: boolean;
   onChange: (value: number) => void;
 }) {
   return (
@@ -35,6 +37,7 @@ export function StyleRange({
         max={max}
         step={step}
         value={value}
+        disabled={disabled}
         onChange={(event) => onChange(Number(event.target.value))}
       />
     </label>

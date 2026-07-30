@@ -96,11 +96,16 @@ export function parseResumeData(text: string, sourceText?: string): ResumeData {
 
   // Recover a name/contact from the original source when the polished output
   // dropped its header.
-  if (!data.name && sourceText) {
+  if (!data.header?.name && sourceText) {
     const src = parsePlainResume(sourceText);
-    if (src.name) {
-      data.name = src.name;
-      if (!data.contact.length) data.contact = src.contact;
+    if (src.header?.name) {
+      data.header = {
+        visible: data.header?.visible ?? true,
+        name: src.header.name,
+        contact: data.header?.contact.length
+          ? data.header.contact
+          : src.header.contact
+      };
     }
   }
   return data;
@@ -176,7 +181,12 @@ function parsePlainResume(text: string): ResumeData {
     currentSection.items.push(currentItem);
   }
 
-  return { name, contact, sections };
+  return {
+    header: name || contact.length
+      ? { visible: true, name: name || null, contact }
+      : null,
+    sections
+  };
 }
 
 // ===== Serialize (structured → plain text) =====
@@ -193,8 +203,10 @@ function formatSkillRow(item: ResumeEntry): string {
 
 export function serializeResumeData(data: ResumeData): string {
   const lines: string[] = [];
-  if (data.name.trim()) lines.push(data.name.trim());
-  const contact = data.contact.map((c) => c.trim()).filter(Boolean);
+  const header = data.header?.visible ? data.header : null;
+  const name = header?.name?.trim() ?? "";
+  if (name) lines.push(name);
+  const contact = (header?.contact ?? []).map((item) => item.trim()).filter(Boolean);
   if (contact.length) lines.push(contact.join(" | "));
 
   for (const section of data.sections) {

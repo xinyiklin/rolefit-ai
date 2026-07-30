@@ -1,7 +1,6 @@
 {
-  "note": "Tectonic truth: end word of the first wrapped line of each paragraph (raggedright, \\small = 9.963bp, column = 505.2bp). Regenerate: compile the inputs (with <b> as \\textbf) in an 11pt article + lmodern + fullpage[empty] + 0.5in margins at \\hsize 507.09 TeX pt, extract first-line end words from the PDF.",
-  "columnBp": 505.2,
   "sizeBp": 9.963,
+  "columnBp": 505.2,
   "cases": [
     {
       "input": "Built and maintained a continuous integration pipeline spanning multiple repositories and delivering artifacts for authentication, validation, and facility isolation across several environments.",

@@ -54,8 +54,13 @@ it truthfully.
   the leading it OWNS (`VLine.leading` → `PlacedLine.leading` → the painter's
   `--tsd-line-leading`): a renderer that needs the line BOX rather than the ink
   box cannot derive it from geometry, because the gap to the next line is that
-  leading only inside a paragraph. Do not
-  introduce screen-relative units into saved layout behavior.
+  leading only inside a paragraph. Paragraph rows likewise carry authored
+  before-space on their first visual line and after-space on their last visual
+  line through `VLine`/`PlacedLine` into DOM custom properties. This metadata is
+  selection provenance at ordinary junctions. At a page start, authored
+  before-space also shifts the first baseline because there is no preceding
+  junction to carry it; this keeps editor, print, and PDF behavior truthful.
+  Do not introduce screen-relative units into saved layout behavior.
 - Preserve literal interior and trailing whitespace according to the shared
   engine model. Summary and cover-letter prose also preserves authored leading
   whitespace as indentation; ordinary marked resume bullets may trim accidental
@@ -137,16 +142,21 @@ it truthfully.
 
 - `scripts/generate_font_assets.py` is the pinned, checksum-verified source for
   WOFF2 assets and `metrics.gen.ts`.
-- `scripts/generate_pdf_fonts.py` derives PDF-embeddable OTF/TTF siblings from
+- `scripts/generate_pdf_fonts.py` derives PDF-embeddable TrueType siblings from
   the committed WOFF2 files and must fail if the sources contain shaping the
-  engine does not model.
+  engine does not model. Latin Modern's name-keyed CFF web outlines are
+  reproducibly converted to quadratic `glyf` outlines with the same glyph
+  order, metrics, and shaping tables; this avoids ambiguous CFF/CID declarations
+  across PDF viewers.
 - Browser fonts, PDF fonts, and committed metrics share one shaping model:
   `liga` is limited to `ff`, `fi`, `fl`, `ffi`, and `ffl`; unmodeled default-on
   GSUB behavior is removed; GPOS kerning retains only modeled pure pairs.
-- Latin Modern's full OpenType/CFF programs must be declared as
-  `CIDFontType0` + `FontFile3`/`OpenType` in emitted PDFs. Keep the identity
-  CID-to-GID map used by the engine's glyph ids; `pdf-roundtrip.mjs` locks the
-  declaration, searchable text layer, and exact run positions.
+- Every full PDF font must be declared as `CIDFontType2` + `FontFile2`, with the
+  identity CID-to-GID map used by the engine's glyph ids. Do not reintroduce the
+  former Latin Modern `CIDFontType0` rewrite: its embedded program remained
+  name-keyed CFF, which newer Firefox/PDF.js releases rendered as missing or
+  remapped glyphs. `pdf-roundtrip.mjs` locks the TrueType declaration,
+  searchable text layer, and exact run positions.
 - Do not patch generated fonts or metrics by hand. Change the pinned generator,
   regenerate all affected artifacts, and preserve license/checksum provenance.
 

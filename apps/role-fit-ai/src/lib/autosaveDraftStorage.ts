@@ -66,8 +66,8 @@ export function recoverTabDraft<T extends StoredDraft>(
       if (!key) continue;
       const ownerId = tabIdFromKey(kind, key);
       if (ownerId === null || key === myKey) continue;
-      // A live sibling owns this draft — leave it strictly alone.
-      if (ownerId !== "" && live.has(ownerId)) continue;
+      // A live sibling owns this current-schema draft — leave it strictly alone.
+      if (ownerId !== myId && live.has(ownerId)) continue;
 
       const draft = parse(localStorage.getItem(key));
       const ageMs = draft ? now - new Date(draft.savedAt).getTime() : Infinity;

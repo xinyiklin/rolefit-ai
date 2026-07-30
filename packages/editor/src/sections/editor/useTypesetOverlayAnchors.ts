@@ -61,9 +61,9 @@ export function useTypesetOverlayAnchors({
 
   useLayoutEffect(() => {
     measurePageOrigins();
-    // Fresh layout = stale hover: the anchor under the pointer may have moved
-    // (or its contact INDEX may now mean a different item). Hide the overlay
-    // until the pointer moves again rather than act on old geometry.
+    // Fresh layout = stale hover: the anchor under the pointer may have moved.
+    // Hide the overlay until the pointer moves again rather than act on old
+    // geometry.
     setHovered(null);
     const onResize = () => measurePageOrigins();
     window.addEventListener("resize", onResize);
@@ -108,35 +108,22 @@ export function useTypesetOverlayAnchors({
         const o = origins[pi];
         if (x < o.left || x > o.left + PAGE_WIDTH_BP * zoom || y < o.top || y > o.top + PAGE_HEIGHT_BP * zoom) continue;
         const yBp = (y - o.top) / zoom;
-        const xBp = (x - o.left) / zoom;
         // Adjacent block ranges can OVERLAP by a couple of bp (a block's
         // descender allowance reaches past the next block's ascender line), so
         // first-match would target the PREVIOUS block near a top edge — pick
         // the candidate whose center is nearest instead. QA caught this as a
-        // delete landing on the wrong bullet. Contact items also discriminate
-        // by x (they share one line): x-matched contact wins over its line.
+        // delete landing on the wrong bullet.
         let best: BlockAnchor | null = null;
         let bestDist = Infinity;
-        let bestContact: BlockAnchor | null = null;
-        let bestContactDist = Infinity;
         for (const b of anchors.blocks) {
           if (b.page !== pi || yBp < b.top - 1 || yBp > b.bottom + 1) continue;
-          if (b.kind === "contact") {
-            if (xBp < (b.x0 ?? 0) - 3 || xBp > (b.x1 ?? 0) + 3) continue;
-            const dx = Math.abs(xBp - ((b.x0 ?? 0) + (b.x1 ?? 0)) / 2);
-            if (dx < bestContactDist) {
-              bestContactDist = dx;
-              bestContact = b;
-            }
-            continue;
-          }
           const dist = Math.abs(yBp - (b.top + b.bottom) / 2);
           if (dist < bestDist) {
             bestDist = dist;
             best = b;
           }
         }
-        next = bestContact ?? best;
+        next = best;
         break;
       }
       setHovered((prev) => {
@@ -147,11 +134,7 @@ export function useTypesetOverlayAnchors({
           prev.kind === next.kind &&
           prev.sectionId === next.sectionId &&
           prev.entryId === next.entryId &&
-          prev.bulletId === next.bulletId &&
-          // contactIndex is part of a contact anchor's identity — omitting it
-          // froze hover on the FIRST contact item ever hovered (QA caught a
-          // delete landing on the wrong contact item).
-          prev.contactIndex === next.contactIndex
+          prev.bulletId === next.bulletId
         ) {
           return prev; // same block — keep the identity, skip the re-render
         }

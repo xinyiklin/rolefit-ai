@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { HistoryClock } from "@typeset/editor/hooks/historyClock.ts";
 import { useResumeEditor as useTypesetResumeEditor } from "@typeset/editor/hooks/useResumeEditor.ts";
+import type { TextEditOptions } from "@typeset/editor/hooks/useResumeEditor.ts";
 import type { EntryTextField } from "@typeset/engine/lib/styleFieldFormatting.ts";
 import { parseResumeData, serializeResumeData } from "../lib/resumeText.ts";
 
@@ -55,15 +56,35 @@ export function useResumeEditor(historyClock?: HistoryClock) {
     const shared = editor.actions;
 
     return {
-      setName: (name: string) => { markManual(); shared.setName(name); },
-      updateContact: (index: number, value: string) => { markManual(); shared.updateContact(index, value); },
-      addContact: () => { markManual(); shared.addContact(); },
+      createHeader: () => { markManual(); shared.createHeader(); },
+      setHeaderVisible: (visible: boolean) => { markManual(); shared.setHeaderVisible(visible); },
+      setHeaderName: (...args: Parameters<typeof shared.setHeaderName>) => {
+        markManual();
+        shared.setHeaderName(...args);
+      },
+      removeHeaderName: () => { markManual(); shared.removeHeaderName(); },
+      replaceHeader: (...args: Parameters<typeof shared.replaceHeader>) => {
+        markManual();
+        shared.replaceHeader(...args);
+      },
+      replaceDocument: (...args: Parameters<typeof shared.replaceDocument>) => {
+        markManual();
+        shared.replaceDocument(...args);
+      },
+      updateContact: (...args: Parameters<typeof shared.updateContact>) => {
+        markManual();
+        shared.updateContact(...args);
+      },
+      insertContact: (index: number) => { markManual(); shared.insertContact(index); },
       removeContact: (index: number) => { markManual(); shared.removeContact(index); },
       addSection: (...args: Parameters<typeof shared.addSection>) => { markManual(); shared.addSection(...args); },
       insertSection: (...args: Parameters<typeof shared.insertSection>) => { markManual(); shared.insertSection(...args); },
       removeSection: (sectionId: string) => { markManual(); shared.removeSection(sectionId); },
       reorderSections: (from: number, to: number) => { markManual(); shared.reorderSections(from, to); },
-      setHeading: (sectionId: string, heading: string) => { markManual(); shared.setHeading(sectionId, heading); },
+      setHeading: (...args: Parameters<typeof shared.setHeading>) => {
+        markManual();
+        shared.setHeading(...args);
+      },
       insertEntry: (...args: Parameters<typeof shared.insertEntry>) => { markManual(); shared.insertEntry(...args); },
       removeEntry: (sectionId: string, entryId: string) => { markManual(); shared.removeEntry(sectionId, entryId); },
       reorderEntries: (sectionId: string, from: number, to: number) => {
@@ -75,7 +96,7 @@ export function useResumeEditor(historyClock?: HistoryClock) {
         entryId: string,
         field: EntryTextField,
         value: string,
-        viaSuggestionOrOptions?: boolean | { coalesce?: boolean }
+        viaSuggestionOrOptions?: boolean | TextEditOptions
       ) => {
         const viaSuggestion = viaSuggestionOrOptions === true;
         // Accepting a reviewed suggestion is not a free edit; it also
@@ -93,9 +114,9 @@ export function useResumeEditor(historyClock?: HistoryClock) {
             : { coalesce: !viaSuggestion }
         );
       },
-      updateSkillsRow: (sectionId: string, entryId: string, label: string, skills: string) => {
+      updateSkillsRow: (...args: Parameters<typeof shared.updateSkillsRow>) => {
         markManual();
-        shared.updateSkillsRow(sectionId, entryId, label, skills);
+        shared.updateSkillsRow(...args);
       },
       setStyleFieldMark: (...args: Parameters<typeof shared.setStyleFieldMark>) => {
         markManual();
@@ -129,7 +150,7 @@ export function useResumeEditor(historyClock?: HistoryClock) {
         entryId: string,
         bulletId: string,
         value: string,
-        viaSuggestionOrOptions?: boolean | { coalesce?: boolean }
+        viaSuggestionOrOptions?: boolean | TextEditOptions
       ) => {
         const viaSuggestion = viaSuggestionOrOptions === true;
         if (viaSuggestion) clearPendingManual();
@@ -150,6 +171,7 @@ export function useResumeEditor(historyClock?: HistoryClock) {
         markManual();
         shared.applyFieldEdits(...args);
       },
+      breakTextHistoryGroup: () => shared.breakTextHistoryGroup(),
       splitBullet: (...args: Parameters<typeof shared.splitBullet>) => { markManual(); shared.splitBullet(...args); },
       mergeBulletUp: (...args: Parameters<typeof shared.mergeBulletUp>) => { markManual(); shared.mergeBulletUp(...args); },
       splitSummaryParagraph: (...args: Parameters<typeof shared.splitSummaryParagraph>) => {
@@ -159,6 +181,10 @@ export function useResumeEditor(historyClock?: HistoryClock) {
       mergeSummaryParagraphUp: (...args: Parameters<typeof shared.mergeSummaryParagraphUp>) => {
         markManual();
         shared.mergeSummaryParagraphUp(...args);
+      },
+      replaceBulletParagraphs: (...args: Parameters<typeof shared.replaceBulletParagraphs>) => {
+        markManual();
+        shared.replaceBulletParagraphs(...args);
       },
       // Undo/redo never mark the document manually edited (unchanged from
       // before this fix), but they DO change `editedResume`'s reference — so

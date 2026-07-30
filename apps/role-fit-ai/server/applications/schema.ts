@@ -1,11 +1,4 @@
-// Application tracker — JSON file as DB.
-// Stored at <workspaceDir>/applications.json which is gitignored.
-
-import { randomUUID } from "node:crypto";
-import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
-import { join } from "node:path";
 import { dedupeSourceUrls } from "../../src/lib/jobIdentity.ts";
-import { assertWorkspaceAccessAllowed, captureWorkspaceAccess } from "../workspaceRestoreGate.ts";
 import {
   MAX_ATTACHMENTS_PER_APPLICATION,
   MAX_DOCUMENT_BYTES,
@@ -26,20 +19,15 @@ const APPLICATION_STATUSES = ["interested", "applied", "interviewing", "offer", 
 // Shared with the application-tracker routes (routes.ts imports this) so the id
 // validation used for storage and for route dispatch can never drift.
 export const APPLICATION_ID_RE = /^[A-Za-z0-9_-]{1,80}$/;
-const MAX_APPLICATIONS = 500;
+export const MAX_APPLICATIONS = 500;
 const MAX_FIELD = 50_000;
-const MAX_RESUME_DATA_BYTES = 400_000;
-// A legacy row can predate createdAt/updatedAt. Its optimistic-concurrency
-// revision must still be stable across GET and the later PUT; generating "now"
-// during each read makes the first edit conflict with itself. Rows with a real
-// createdAt use that as their one-time migration revision, while the oldest
-// undated rows use this fixed sentinel until their first successful edit writes
-// a current updatedAt.
-const LEGACY_APPLICATION_REVISION = "1970-01-01T00:00:00.000Z";
-
-export function applicationsFilePath(workspaceDir: string): string {
-  return join(workspaceDir, "applications.json");
-}
+const MISSING_PERSISTED_TIMESTAMP = "1970-01-01T00:00:00.000Z";
+const RETIRED_TRACKER_FIELDS = [
+  "resumeData",
+  "polishedText",
+  "coverLetterText",
+  "hasTex"
+] as const;
 
 export class ApplicationsStorageError extends Error {
   status: number;
@@ -56,30 +44,6 @@ export class ApplicationsStorageError extends Error {
   }
 }
 
-// Serialize every tracker read-modify-write cycle and any workspace-wide
-// snapshot/restore that must observe applications.json and its PDF artifacts as
-// one consistent state.
-let applicationsWriteQueue: Promise<unknown> = Promise.resolve();
-export function withApplicationsLock<T>(
-  task: () => Promise<T>,
-  options: { allowDuringRestore?: boolean } = {}
-): Promise<T> {
-  const capture = captureWorkspaceAccess();
-  const run = applicationsWriteQueue.then(() => {
-    if (!options.allowDuringRestore) assertWorkspaceAccessAllowed(capture);
-    return task();
-  });
-  applicationsWriteQueue = run.then(
-    () => undefined,
-    () => undefined
-  );
-  return run;
-}
-
-function isMissingFile(error: unknown): boolean {
-  return Boolean(error && typeof error === "object" && "code" in error && error.code === "ENOENT");
-}
-
 export function sanitizeApplications(applications: unknown) {
   return (Array.isArray(applications) ? applications : [])
     .map(sanitizeApplication)
@@ -87,7 +51,7 @@ export function sanitizeApplications(applications: unknown) {
     .slice(0, MAX_APPLICATIONS);
 }
 
-function duplicateApplicationId(applications: { id: string }[]): string | null {
+export function duplicateApplicationId(applications: { id: string }[]): string | null {
   const ids = new Set<string>();
   for (const application of applications) {
     if (ids.has(application.id)) return application.id;
@@ -96,74 +60,11 @@ function duplicateApplicationId(applications: { id: string }[]): string | null {
   return null;
 }
 
-export async function readApplications(workspaceDir: string) {
-  const path = applicationsFilePath(workspaceDir);
-  let text: string;
-  try {
-    text = await readFile(path, "utf8");
-  } catch (error) {
-    if (isMissingFile(error)) return [];
-    throw new ApplicationsStorageError();
-  }
-
-  try {
-    const data: unknown = JSON.parse(text);
-    if (!data || typeof data !== "object" || !Array.isArray((data as { applications?: unknown }).applications)) {
-      throw new Error("Invalid applications file shape.");
-    }
-    const apps = (data as { applications: unknown[] }).applications;
-    const sane = sanitizeApplications(apps);
-    // Never silently erase an invalid on-disk record during the next merge/write.
-    // A malformed saved file needs explicit repair, with the original bytes left
-    // untouched for recovery.
-    if (apps.length > MAX_APPLICATIONS || sane.length !== apps.length || duplicateApplicationId(sane)) {
-      throw new Error("Invalid application record.");
-    }
-    return sane;
-  } catch {
-    throw new ApplicationsStorageError();
-  }
-}
-
-export async function writeApplications(workspaceDir: string, applications: unknown) {
-  await mkdir(workspaceDir, { recursive: true });
-  const path = applicationsFilePath(workspaceDir);
-  if (!Array.isArray(applications) || applications.length > MAX_APPLICATIONS) {
-    throw new ApplicationsStorageError(
-      `The tracker supports at most ${MAX_APPLICATIONS} applications. No tracker changes were saved.`,
-      400
-    );
-  }
-  const sane = sanitizeApplications(applications);
-  if (sane.length !== applications.length) {
-    throw new ApplicationsStorageError("One or more applications are invalid. No tracker changes were saved.", 400);
-  }
-  if (duplicateApplicationId(sane)) {
-    throw new ApplicationsStorageError("Application ids must be unique. No tracker changes were saved.", 400);
-  }
-  const payload = JSON.stringify(
-    { savedAt: new Date().toISOString(), applications: sane },
-    null,
-    2
-  );
-  // A crash or process kill during writeFile must not truncate the user's tracker.
-  // Write a private sibling file, then atomically replace the committed snapshot.
-  const temporaryPath = `${path}.${process.pid}.${randomUUID()}.tmp`;
-  try {
-    await writeFile(temporaryPath, payload, { encoding: "utf8", mode: 0o600 });
-    await rename(temporaryPath, path);
-  } finally {
-    await rm(temporaryPath, { force: true }).catch(() => undefined);
-  }
-  return sane;
-}
-
 const APPLICATION_SOURCES = ["LinkedIn", "Company site", "Referral", "Job board", "Recruiter", "Other"] as const;
 const EVIDENCE_TYPES = ["exact", "adjacent", "none"] as const;
 
 const APPLICATION_PRIORITIES = ["High", "Medium", "Low"] as const;
 const SALARY_PERIODS = ["yr", "mo", "hr"] as const;
-const RESUME_SECTION_TYPES = ["standard", "skills", "summary"] as const;
 const REVIEW_GAP_SEVERITIES = ["BLOCKER", "HIGH", "MEDIUM", "LOW"] as const;
 const REVIEW_VERDICTS = ["STRONG FIT", "REASONABLE FIT", "STRETCH", "DON'T APPLY"] as const;
 // Per-stage AI-usage provenance: which model produced each pipeline stage's
@@ -192,6 +93,16 @@ function sanitizeString(value: unknown, maxLength: number): string {
   return typeof value === "string" ? value.slice(0, maxLength) : "";
 }
 
+export function isCanonicalApplicationTimestamp(value: unknown): value is string {
+  if (typeof value !== "string" || !value || value.length > 100) return false;
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) && new Date(parsed).toISOString() === value;
+}
+
+function hasOwnRetiredTrackerField(value: Record<string, unknown>): boolean {
+  return RETIRED_TRACKER_FIELDS.some((field) => Object.hasOwn(value, field));
+}
+
 function sanitizeContacts(raw: unknown) {
   if (!Array.isArray(raw)) return undefined;
   const contacts = raw
@@ -208,27 +119,29 @@ function sanitizeContacts(raw: unknown) {
 
 // What one document kind has on disk. Both the resume and the cover letter use
 // this shape, so the tracker cannot describe one of them more richly than the
-// other. New writes store strict source or an explicit PDF; both flags remain
-// readable for compatibility with legacy rows.
+// other. New writes store strict source or an explicit PDF. Retired artifact
+// flags are not part of the current storage contract.
 function sanitizeDocumentArtifacts(raw: unknown) {
-  if (!raw || typeof raw !== "object") return undefined;
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined;
   const r = raw as Record<string, unknown>;
-  const hasTex = r.hasTex === true;
+  if (hasOwnRetiredTrackerField(r)) return null;
   const hasPdf = r.hasPdf === true;
   const hasSource = r.hasSource === true;
+  if (hasPdf === hasSource) return null;
   const sourceFingerprint =
     hasSource && typeof r.sourceFingerprint === "string" && /^[a-z0-9]+-[a-z0-9]+-[a-z0-9]+$/.test(r.sourceFingerprint)
       ? r.sourceFingerprint.slice(0, 80)
       : undefined;
-  if (!hasTex && !hasPdf && !hasSource) return undefined;
   return {
-    hasTex,
     hasPdf,
     hasSource,
     sourceFingerprint,
     fileName: sanitizeString(r.fileName, 200),
     templateId: sanitizeString(r.templateId, 80),
-    savedAt: typeof r.savedAt === "string" ? r.savedAt : new Date().toISOString()
+    savedAt:
+      typeof r.savedAt === "string" && r.savedAt
+        ? r.savedAt.slice(0, 100)
+        : MISSING_PERSISTED_TIMESTAMP
   };
 }
 
@@ -255,80 +168,13 @@ function sanitizeAttachments(raw: unknown) {
       label: sanitizeString(value.label, 120).trim() || safe.fileName,
       size,
       contentType: attachmentContentType(safe.fileName),
-      savedAt: typeof value.savedAt === "string" ? value.savedAt : new Date().toISOString()
+      savedAt:
+        typeof value.savedAt === "string" && value.savedAt
+          ? value.savedAt.slice(0, 100)
+          : MISSING_PERSISTED_TIMESTAMP
     }];
   });
   return attachments.length ? attachments : undefined;
-}
-
-function sanitizeResumeSectionType(value: unknown, heading: unknown): "standard" | "skills" | "summary" {
-  if (inList(RESUME_SECTION_TYPES, value)) return value;
-  const normalized = sanitizeString(heading, 120);
-  if (/\b(?:technical\s+skills|skills|core\s+skills)\b/i.test(normalized)) return "skills";
-  if (/\b(?:summary|objective|profile|about\s+me|highlights)\b/i.test(normalized)) return "summary";
-  return "standard";
-}
-
-function jsonByteLength(value: unknown): number {
-  try {
-    return Buffer.byteLength(JSON.stringify(value), "utf8");
-  } catch {
-    return Infinity;
-  }
-}
-
-function sanitizeResumeData(raw: unknown) {
-  if (!raw || typeof raw !== "object" || jsonByteLength(raw) > MAX_RESUME_DATA_BYTES) return undefined;
-  const r = raw as Record<string, unknown>;
-
-  const sections = (Array.isArray(r.sections) ? r.sections : [])
-    .slice(0, 24)
-    .map((section, sectionIndex) => {
-      const heading = sanitizeString(section?.heading, 160);
-      const type = sanitizeResumeSectionType(section?.type, heading);
-      const items = ((Array.isArray(section?.items) ? section.items : []) as any[])
-        .slice(0, 80)
-        .map((item, itemIndex) => {
-          const bullets = ((Array.isArray(item?.bullets) ? item.bullets : []) as any[])
-            .slice(0, 40)
-            .map((bullet, bulletIndex) => ({
-              id: sanitizeString(bullet?.id, 80) || `bullet-${sectionIndex + 1}-${itemIndex + 1}-${bulletIndex + 1}`,
-              text: sanitizeString(bullet?.text, 6_000)
-            }))
-            .filter((bullet) => bullet.text);
-          const entry = {
-            id: sanitizeString(item?.id, 80) || `entry-${sectionIndex + 1}-${itemIndex + 1}`,
-            titleLeft: sanitizeString(item?.titleLeft, 2_000),
-            titleRight: sanitizeString(item?.titleRight, 2_000),
-            subtitleLeft: sanitizeString(item?.subtitleLeft, 2_000),
-            subtitleRight: sanitizeString(item?.subtitleRight, 2_000),
-            bullets
-          };
-          return entry.titleLeft || entry.titleRight || entry.subtitleLeft || entry.subtitleRight || entry.bullets.length
-            ? entry
-            : null;
-        })
-        .filter(isPresent);
-      return heading || items.length
-        ? {
-            id: sanitizeString(section?.id, 80) || `section-${sectionIndex + 1}`,
-            heading,
-            type,
-            items
-          }
-        : null;
-    })
-    .filter(isPresent);
-
-  const data = {
-    name: sanitizeString(r.name, 300),
-    contact: (Array.isArray(r.contact) ? r.contact : [])
-      .slice(0, 12)
-      .map((contact) => sanitizeString(contact, 300))
-      .filter(Boolean),
-    sections
-  };
-  return data.name || data.contact.length || data.sections.length ? data : undefined;
 }
 
 function sanitizeEvidenceType(value: unknown): "exact" | "adjacent" | "none" | undefined {
@@ -401,13 +247,15 @@ function sanitizeReview(raw: unknown) {
 
 function sanitizeApplicationAnswers(raw: unknown) {
   if (!Array.isArray(raw)) return undefined;
-  const now = new Date().toISOString();
   const answers = raw
     .slice(0, 40)
     .map((a) => ({
       question: sanitizeString(a?.question, 400),
       answer: sanitizeString(a?.answer, 4_000),
-      savedAt: typeof a?.savedAt === "string" ? a.savedAt : now
+      savedAt:
+        typeof a?.savedAt === "string" && a.savedAt
+          ? a.savedAt.slice(0, 100)
+          : MISSING_PERSISTED_TIMESTAMP
     }))
     .filter((a) => a.answer && a.question);
   return answers.length ? answers : undefined;
@@ -421,18 +269,31 @@ function sanitizeApplicationAnswers(raw: unknown) {
 // already-sanitized jobUrl of the same record.
 function sanitizeSourceUrls(raw: unknown, ownJobUrl: string) {
   if (!Array.isArray(raw)) return undefined;
-  const now = new Date().toISOString();
   // Clip strings first, then dedupe with the SHARED rules (normalized-URL
   // dedup, own-jobUrl exclusion, earliest addedAt, cap) so this sanitizer can
   // never drift from the client's two merge paths.
   const clipped = raw
-    .filter((entry) => entry && typeof entry === "object")
+    .filter(
+      (entry) =>
+        entry &&
+        typeof entry === "object" &&
+        typeof entry.addedAt === "string" &&
+        entry.addedAt
+    )
     .map((entry) => ({
       url: sanitizeString(entry.url, 2_000).trim(),
       source: sanitizeString(entry.source, 40) || undefined,
-      addedAt: typeof entry.addedAt === "string" && entry.addedAt ? entry.addedAt.slice(0, 40) : now
+      addedAt:
+        typeof entry.addedAt === "string" && entry.addedAt
+          ? entry.addedAt.slice(0, 40)
+          : MISSING_PERSISTED_TIMESTAMP
     }));
-  const out = dedupeSourceUrls(clipped, ownJobUrl, now, SOURCE_URLS_MAX)
+  const out = dedupeSourceUrls(
+    clipped,
+    ownJobUrl,
+    MISSING_PERSISTED_TIMESTAMP,
+    SOURCE_URLS_MAX
+  )
     .map((entry) => ({ ...entry, source: entry.source ?? "" }));
   return out.length ? out : undefined;
 }
@@ -510,21 +371,29 @@ function sanitizeAiUsage(raw: unknown) {
 }
 
 function sanitizeApplication(raw: unknown) {
-  if (!raw || typeof raw !== "object") return null;
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
   const r = raw as Record<string, unknown>;
+  if (hasOwnRetiredTrackerField(r)) return null;
   const rawId = sanitizeString(r.id, 80);
   const id = APPLICATION_ID_RE.test(rawId) ? rawId : "";
   const title = typeof r.title === "string" ? r.title.slice(0, 200) : "";
-  if (!id || !title) return null;
+  if (
+    !id ||
+    !title ||
+    !isCanonicalApplicationTimestamp(r.createdAt) ||
+    !isCanonicalApplicationTimestamp(r.updatedAt)
+  ) {
+    return null;
+  }
 
   const status = inList(APPLICATION_STATUSES, r.status) ? r.status : "interested";
   const source = inList(APPLICATION_SOURCES, r.source) ? r.source : "";
-  const now = new Date().toISOString();
-  const legacyCreatedAt = typeof r.createdAt === "string" ? r.createdAt.trim().slice(0, 100) : "";
-  const storedUpdatedAt = typeof r.updatedAt === "string" ? r.updatedAt.trim().slice(0, 100) : "";
-  const createdAt = legacyCreatedAt || now;
-  const updatedAt = storedUpdatedAt || legacyCreatedAt || LEGACY_APPLICATION_REVISION;
+  const createdAt = r.createdAt;
+  const updatedAt = r.updatedAt;
   const jobUrl = typeof r.jobUrl === "string" ? r.jobUrl.slice(0, 2_000) : "";
+  const resumeArtifacts = sanitizeDocumentArtifacts(r.resumeArtifacts);
+  const coverLetterArtifacts = sanitizeDocumentArtifacts(r.coverLetterArtifacts);
+  if (resumeArtifacts === null || coverLetterArtifacts === null) return null;
 
   return {
     id,
@@ -553,18 +422,15 @@ function sanitizeApplication(raw: unknown) {
     salaryPeriod: inList(SALARY_PERIODS, r.salaryPeriod) ? r.salaryPeriod : undefined,
     interviewTips: typeof r.interviewTips === "string" ? r.interviewTips.slice(0, 8_000) : "",
     contacts: sanitizeContacts(r.contacts),
-    resumeArtifacts: sanitizeDocumentArtifacts(r.resumeArtifacts),
-    coverLetterArtifacts: sanitizeDocumentArtifacts(r.coverLetterArtifacts),
+    resumeArtifacts,
+    coverLetterArtifacts,
     attachments: sanitizeAttachments(r.attachments),
     notes: typeof r.notes === "string" ? r.notes.slice(0, 8_000) : "",
     fitScore: sanitizeScore(r.fitScore),
     baseFitScore: sanitizeScore(r.baseFitScore),
     tailoredFitScore: sanitizeScore(r.tailoredFitScore),
-    fitScoreSource: r.fitScoreSource === "ai" || r.fitScoreSource === "local" ? r.fitScoreSource : null,
+    fitScoreSource: r.fitScoreSource === "ai" ? r.fitScoreSource : null,
     templateId: typeof r.templateId === "string" ? r.templateId.slice(0, 80) : "",
-    resumeData: sanitizeResumeData(r.resumeData),
-    polishedText: typeof r.polishedText === "string" ? r.polishedText.slice(0, MAX_FIELD) : "",
-    coverLetterText: typeof r.coverLetterText === "string" ? r.coverLetterText.slice(0, MAX_FIELD) : "",
     review: sanitizeReview(r.review),
     missingRequiredSkills: sanitizeMissingRequiredSkills(r.missingRequiredSkills),
     resumeUsed: r.resumeUsed === "base" || r.resumeUsed === "tailored" ? r.resumeUsed : undefined,
@@ -572,117 +438,4 @@ function sanitizeApplication(raw: unknown) {
     aiUsage: sanitizeAiUsage(r.aiUsage),
     duplicateDismissedIds: sanitizeDuplicateDismissedIds(r.duplicateDismissedIds, id)
   };
-}
-
-export type ApplicationMutation = {
-  id: string;
-  operation: "upsert" | "delete";
-  baseUpdatedAt: string | null;
-};
-
-function parseApplicationMutations(raw: unknown): ApplicationMutation[] {
-  if (!Array.isArray(raw) || raw.length === 0 || raw.length > MAX_APPLICATIONS) {
-    throw new ApplicationsStorageError(
-      "Each tracker save must name between 1 and 500 application mutations.",
-      400
-    );
-  }
-
-  const ids = new Set<string>();
-  return raw.map((value) => {
-    if (!value || typeof value !== "object" || Array.isArray(value)) {
-      throw new ApplicationsStorageError("One or more application mutations are invalid.", 400);
-    }
-    const record = value as Record<string, unknown>;
-    const id = typeof record.id === "string" ? record.id : "";
-    const operation = record.operation;
-    const baseUpdatedAt = record.baseUpdatedAt;
-    if (
-      !APPLICATION_ID_RE.test(id) ||
-      (operation !== "upsert" && operation !== "delete") ||
-      (baseUpdatedAt !== null && (typeof baseUpdatedAt !== "string" || baseUpdatedAt.length > 100)) ||
-      ids.has(id)
-    ) {
-      throw new ApplicationsStorageError("One or more application mutations are invalid.", 400);
-    }
-    ids.add(id);
-    return { id, operation, baseUpdatedAt };
-  });
-}
-
-/**
- * Apply an explicitly described client mutation set to the latest disk state.
- * The client may send sparse upsert records or a legacy full snapshot, but
- * unchanged rows always come from `existing`. New rows are prepended in
- * incoming order; existing rows retain their server order.
- */
-export function reconcileApplicationMutations(
-  existing: ReturnType<typeof sanitizeApplications>,
-  incoming: ReturnType<typeof sanitizeApplications>,
-  rawMutations: unknown
-) {
-  if (duplicateApplicationId(existing) || duplicateApplicationId(incoming)) {
-    throw new ApplicationsStorageError("Application ids must be unique. No tracker changes were saved.", 400);
-  }
-
-  const mutations = parseApplicationMutations(rawMutations);
-  const mutationById = new Map(mutations.map((mutation) => [mutation.id, mutation]));
-  const existingById = new Map(existing.map((application) => [application.id, application]));
-  const incomingById = new Map(incoming.map((application) => [application.id, application]));
-
-  for (const mutation of mutations) {
-    const current = existingById.get(mutation.id);
-    const requested = incomingById.get(mutation.id);
-    if (mutation.operation === "upsert" && !requested) {
-      throw new ApplicationsStorageError("An upsert mutation must include its application record.", 400);
-    }
-    if (mutation.operation === "delete" && requested) {
-      throw new ApplicationsStorageError("A delete mutation must omit its application record.", 400);
-    }
-    if (
-      mutation.operation === "upsert" &&
-      current &&
-      requested?.updatedAt === current.updatedAt
-    ) {
-      throw new ApplicationsStorageError(
-        "A changed application must advance its updatedAt revision. No tracker changes were saved.",
-        400
-      );
-    }
-
-    const revisionMatches = current
-      ? mutation.baseUpdatedAt === current.updatedAt
-      : mutation.baseUpdatedAt === null;
-    if (!revisionMatches) {
-      throw new ApplicationsStorageError(
-        "This application changed in another tab. The latest saved tracker has been restored; review it before trying again.",
-        409,
-        existing
-      );
-    }
-  }
-
-  for (const application of incoming) {
-    if (!existingById.has(application.id) && mutationById.get(application.id)?.operation !== "upsert") {
-      throw new ApplicationsStorageError(
-        "A new application must include an upsert mutation. No tracker changes were saved.",
-        400
-      );
-    }
-  }
-
-  const reconciled = incoming.filter((application) =>
-    !existingById.has(application.id) &&
-    mutationById.get(application.id)?.operation === "upsert"
-  );
-  for (const current of existing) {
-    const mutation = mutationById.get(current.id);
-    if (mutation?.operation === "delete") continue;
-    reconciled.push(
-      mutation?.operation === "upsert"
-        ? incomingById.get(current.id)!
-        : current
-    );
-  }
-  return reconciled;
 }

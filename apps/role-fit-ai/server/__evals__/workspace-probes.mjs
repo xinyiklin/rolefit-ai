@@ -49,6 +49,7 @@ try {
     handleWorkspaceBaseResume,
     handleSelectBaseResume,
     handleRestoreBaseResume,
+    ensureJobWorkspace,
     readWorkspaceBaseResume
   } = await import(`../workspace.ts?workspace-probe=${Date.now()}`);
 
@@ -58,6 +59,19 @@ try {
     return res;
   }
   await mkdir(locations.workspaceDir, { recursive: true });
+  const retiredLayoutDir = join(isolatedRoot, "retired-layout");
+  await mkdir(retiredLayoutDir, { recursive: true });
+  await writeFile(join(retiredLayoutDir, "base-resume.resume"), starter, "utf8");
+  await ensureJobWorkspace(retiredLayoutDir);
+  assert.equal(
+    await readFile(join(retiredLayoutDir, "base-resume.resume"), "utf8"),
+    starter,
+    "workspace initialization ignores retired root document names"
+  );
+  await assert.rejects(
+    () => readFile(join(retiredLayoutDir, "resumes", "default.resume"), "utf8"),
+    "workspace initialization does not migrate retired document layouts"
+  );
 
   assert.equal(
     (await readWorkspaceBaseResume("default.resume", locations)).exists,
@@ -90,9 +104,9 @@ try {
   assert.equal((await readWorkspaceBaseResume(undefined, locations)).exists, true, "valid strict .resume loads");
 
   const first = JSON.parse(starter);
-  first.document.name = "First Concurrent Save";
+  first.document.header.name = "First Concurrent Save";
   const second = JSON.parse(starter);
-  second.document.name = "Second Concurrent Save";
+  second.document.header.name = "Second Concurrent Save";
   const firstRes = new FakeResponse();
   const secondRes = new FakeResponse();
   await Promise.all([
@@ -102,7 +116,7 @@ try {
   assert.equal(firstRes.status, 200);
   assert.equal(secondRes.status, 200);
   const final = JSON.parse(await readFile(join(resumeDir, "default.resume"), "utf8"));
-  assert.equal(final.document.name, "Second Concurrent Save", "serialized saves preserve invocation order");
+  assert.equal(final.document.header.name, "Second Concurrent Save", "serialized saves preserve invocation order");
   const history = await readdir(join(resumeDir, ".trash"));
   assert.equal(history.length, 2, "both superseded versions remain recoverable with collision-free names");
   assert.equal((await readdir(resumeDir)).some((name) => name.endsWith(".tmp")), false, "atomic writes leave no temporary file");

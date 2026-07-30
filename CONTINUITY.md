@@ -3,6 +3,140 @@
 Cross-workspace decisions and handoff state. Keep entries factual, dated, and
 bounded; app-only operational detail belongs in the affected app documentation.
 
+## 2026-07-29
+
+- [USER+CODE] Browser downloads now keep their hidden anchor and blob URL alive
+  through Chromium's asynchronous handoff. Immediate cleanup could deliver the
+  PDF bytes while losing the anchor's requested `.pdf` filename, leaving a
+  UUID-named file; the shared download path now cleans up after a bounded delay
+  and a focused lifecycle probe pins the filename and cleanup order.
+- [USER+CODE+TOOL] PDF export no longer rewrites Latin Modern's name-keyed
+  OpenType/CFF program as a CID-keyed `CIDFontType0` resource, a hybrid that
+  Firefox 153 / PDF.js 6 painted as missing or remapped glyphs even though
+  older PDF.js and Poppler could extract it. The reproducible PDF-font
+  generator now converts Latin Modern to metric-preserving TrueType siblings;
+  pdf-lib emits every face as `CIDFontType2` + `FontFile2` with the identity
+  CID-to-GID map. The engine gate, 1,266,912 font-parity checks, RoleFit and
+  Typeset builds, the PDF round-trip, and real-resume Poppler plus PDF.js 5/6
+  path-raster probes pass. The broader upstream-source font check remains red
+  only because the pre-existing Arimo/Carlito license outputs are stale; the
+  focused PDF-font regeneration check passes.
+- [USER] 2026-07-29: **Pre-release schema policy, in force until the user lifts
+  it.** While the products are in dev/preview/beta there is exactly one live
+  schema: whatever the current build writes, still called `schemaVersion: 1`.
+  Runtime parsers stay single-shape and reject anything else — no compatibility
+  branches, no derived defaults for absent fields, no version negotiation. When
+  a change alters a stored shape, the assistant converts the existing documents
+  with a throwaway developer script and keeps that script out of the commit.
+  The user will say when to lift this and move to real versioning and
+  migrations; the assistant may ask whether a lift is warranted.
+- [USER+CODE] 2026-07-29: **Spacing is absolute.** Every structural junction is
+  the following row's own line advance plus the gap the user set, so 0 adds
+  nothing; the retired TeX junction constants and tabular struts are gone from
+  the engine. The header keeps its own line spacing of 1 and does not inherit
+  the document's, so a gap of 0 is the same distance in a resume and in a
+  double-spaced letter, and the header's gaps are the only thing that moves its
+  rows. `titleSubGapPt` may go negative (floor -6): an entry head is a pair
+  inside one block, traditionally tighter than single spacing, and the ink floor
+  still prevents collision. `.cover` persists the three header gaps it actually
+  uses; the other eight belong to sections and entries a letter does not have.
+  Defaults, presets, and `starter.resume` were rebased so a new document looks
+  unchanged, and 21 live workspace documents (9 resume styles, 12 cover styles,
+  including snapshots inside application records) were converted with backups
+  under `workspace/.spacing-migration-backup/` and
+  `workspace/.header-lineheight-backup/`. Documents in `.trash/` and older
+  rewrite backups were left alone and will fail to open until converted.
+- [CODE] 2026-07-29: `vertical-parity.mjs` and `vertical-truth.json` are
+  retired. They measured the engine against a frozen Tectonic compile, and the
+  engine owns its layout now. `vertical-layout-snapshot.mjs` replaces them: 75
+  recorded lines across the three spacing presets, compared exactly rather than
+  within a TeX tolerance, updated only via `--update`. `pdf-roundtrip.mjs` now
+  lays out the engine's own starter document instead of the TeX fixture.
+- [USER+CODE] 2026-07-29: The three header gaps (`nameContactGapPt`,
+  `contactGapPt`, `headerSectionGapPt`) stay style-owned for both document
+  kinds; paragraph spacing does not replace them. Only style can express a gap
+  inside the header block or between wrapped contact rows, which are layout
+  products with no document node. The cover letter, which has no
+  document-spacing popover, now exposes them in its Header menu via
+  `DocumentStructureControls`'s `headerSpacing` prop; the resume keeps them in
+  `SpacingStylePopover`. `DOC_STYLE_BOUNDS` point gaps now round outward to the
+  0.1 step so every slider stop is a clean tenth, and the two trim gaps floor at
+  -6 pt: both sit on a calibrated baseline skip (13.6 pt name -> contact, 19.18
+  pt header -> body, one leading in a cover letter), so their old calibrated
+  floors could not close the gap they name. Widening a bound cannot invalidate
+  an existing document. UNCONFIRMED: on the cover letter, `headerSectionGapPt`
+  and the first paragraph's `space-before` still add rather than override
+  (`coverLetterBlocks.ts`), so the header gap is a floor the paragraph control
+  cannot reach below.
+- [USER+CODE] 2026-07-29: Typing/deletion undo grouping is word-sized, not
+  burst-sized (user: live grouping undid every character typed at once, unlike
+  Google Docs). A shared-editor text run still ends on an idle pause, field
+  change, or structural edit, and now also at a word boundary in the gesture's
+  own direction and at a 20-character cap. `TextEditOptions.historyText` is how
+  the editor reports the characters an edit moved; an edit that omits it counts
+  as one character against the cap. Editor checks and both app builds pass.
+- [USER+CODE] 2026-07-29: **SUPERSEDES the resume-v2 and cover-file
+  compatibility entries below.** `.resume` and `.cover` each have one strict
+  schema version 1. Both persist the same optional structural header contract:
+  absent, hidden, visible blank, named, and ordered contact fields remain
+  distinct. Retired resume name/contact, resume schema-v2, oldest
+  `rolefit.resume`, interim cover-header, and cover schema-v2 shapes are
+  accepted only by explicit workspace rewrite tools, never by runtime parsers.
+- [CODE] 2026-07-29: The shared editor owns header create/show/hide/remove,
+  name/contact editing, right-click actions, keyboard structure edits, rich
+  clipboard transfer, and explicit multi-block header/document paste mapping;
+  header hover action menus are intentionally absent. Cover letters enable
+  header structure while disabling resume sections.
+- [TOOL] 2026-07-29: The ignored local workspace was migrated with backups:
+  24 resume files and 12 cover files reparse through the sole strict-v1 codecs.
+  Seven resume and one cover application source fingerprint were reconciled
+  with tracker backups. A post-write audit caught the tracker sanitizer dropping
+  structural headers on its second pass; the boundary was corrected and all 249
+  affected resume header snapshots were restored exactly from the immediate
+  backup. Repeat dry runs report zero source or metadata changes, and all eight
+  tracked source fingerprints match their files.
+- [USER+CODE+TOOL] 2026-07-29: Header commands now retain stable identity so a
+  normal typing render cannot trigger the caret-restoration effect against the
+  pre-edit DOM. A synthetic browser reproduction changed from caret `10 -> 0`
+  before the fix to `10 -> 11` after it. The header hover add/delete menu and
+  its CSS were removed; header structure remains in the toolbar, keyboard, and
+  right-click paths. Editor checks and both consumer builds pass.
+- [CODE+TOOL] 2026-07-29: The final review made private structural paste
+  lossless across single- and multi-field selections, preserved style-only and
+  header-only autosaves, disabled every control in an already-open structure
+  popover, and added a strict storage-boundary rewrite for retired standalone
+  Typeset browser autosaves. The full repository check passes: all four
+  workspace gates, 59 RoleFit tests, 143 client workflow guards, both autosave
+  migration suites, and 1,266,912 PDF parity checks. Final workspace dry runs
+  remain zero-change for all 24 resumes and 12 cover letters.
+- [USER+CODE+TOOL] 2026-07-29: Automatic-link deferral no longer swaps an
+  editable `<a>`/`<span>` while a primary pointer selection is in flight. That
+  swap disconnected the range anchor and collapsed a backward drag beginning
+  at a linked contact's trailing edge. The current paint now stays stable until
+  mouseup, then the settled single- or multi-field range is restored. Shared
+  editor checks and both app builds pass; live RoleFit verified trailing-edge,
+  already-deferred, cross-contact, and repeated Shift-selection cases with no
+  console errors.
+- [USER+CODE+TOOL] 2026-07-29: Contact undo/redo now detects a restored slot
+  before comparing field text. A missing trailing contact and a restored empty
+  contact both read as `""`, which previously left history without a caret
+  target and let the browser collapse before the restored divider. The caret
+  now restores at offset zero inside the first added contact. The focused
+  regression ran red then green; the editor gate and both app builds pass, and
+  live RoleFit verified both undo-restoration and redo-restoration at
+  `contact|5`/0 with zero console errors.
+- [USER+CODE+TOOL] 2026-07-29: Text history now uses a rolling 700 ms
+  field-plus-intent group: typing, backward deletion, and forward deletion are
+  independent transactions; selections, formatting, structural edits, field or
+  caret moves, pauses, and undo/redo close the group, while background
+  persistence does not. React Strict Mode exposed that the shared history clock
+  allocated two sequences for one reducer dispatch, so sequence allocation is
+  now idempotent for the same state/action pair across both content and style
+  reducers. Red/green reducer probes cover held deletion, autosave, direction,
+  caret, pause, contacts, and double invocation. Live RoleFit verified grouped
+  typing/deletion undo and redo plus the caret-move boundary, restored the
+  original contact after each probe, and reported zero console errors.
+
 ## 2026-07-28
 
 - [USER+CODE] 2026-07-28: **SUPERSEDES every cover-letter preparation/proposal
@@ -1125,3 +1259,149 @@ bounded; app-only operational detail belongs in the affected app documentation.
   edges anchor from adjacent line whitespace but never snap the moving endpoint;
   measured caret fallback preserves partial forward/reverse selection at first,
   wrapped, and final glyphs. Browser typing/Tab/Undo QA passed.
+- [USER] 2026-07-28: Selection paint must be continuous through before/after
+  paragraph spacing. Copying from either shared editor into Google Docs must
+  preserve logical paragraphs: destination-width reflow is expected, but
+  Typeset's visual wrap points must not become separate pasted blocks. Nonzero
+  paragraph spacing should paste as a blank paragraph rather than CSS spacing.
+- [CODE] 2026-07-28: Supersedes the 2026-07-26 selection-gap detail above.
+  Consecutive selected engine lines now tile through their complete calibrated
+  junction; exposed paragraph edges use engine-published authored before/after
+  spacing without crossing page bounds. External HTML clipboard data is
+  serialized from logical model ranges with one block per field, supported
+  inline formatting, and one blank block at a nonzero spacing boundary; the
+  absolutely positioned visual-line DOM no longer defines pasted paragraphs.
+- [TOOL] 2026-07-28: The isolated worktree dev process was started on canonical
+  port 5181 after a clean lockfile dependency install; the server returned HTTP
+  200. Both owner checks and both consumer production builds passed; the
+  interface detector reported no findings.
+- [USER] 2026-07-28: Cover-letter default paragraph rhythm is explicit 8pt
+  space-before on every paragraph, never the generic resume bullet gap. The
+  erroneously introduced document-level cover-letter gap field is removed from
+  the current beta schema without a schema-version bump or compatibility path.
+- [CODE] 2026-07-28: New, imported, starter, and tailored cover-letter text is
+  normalized through the shared explicit space-before default. Enter preserves
+  paragraph properties on either empty split half. Cover-letter layout ignores
+  the generic resume bullet gap, and current `.cover` style parsing rejects the
+  removed beta prototype field.
+- [USER] 2026-07-28: The beta `.cover` contract has no legacy compatibility
+  obligation. Its current strict shape is renumbered as schema version 1, and
+  all other cover-letter versions must be rejected.
+- [CODE] 2026-07-28: The `.cover` codec now has one schema branch: version 1
+  includes the optional header, ordered paragraphs, and current print style.
+  The former paragraph-only compatibility branch and its migration probe were
+  removed; resume schema compatibility is unchanged.
+- [TOOL] 2026-07-28: A privacy-safe shape audit found all five ignored local
+  cover-letter variants use schema v2 and the retired `paragraphGapPt` wire
+  field; no document text was read or printed.
+- [USER+TOOL] 2026-07-28: The v1-only contract above is intentional. The five
+  ignored local variants were privately backed up, converted to schema v1, and
+  one saved application `.cover` received the same migration. All six active
+  files were verified through the strict parser without printing document
+  text. Their retired document gap was moved into explicit paragraph marks
+  before the wire field was removed; converted files and backups remain
+  ignored. The saved application's tracker fingerprint and revision were
+  refreshed through the running app's sparse mutation route, with the prior
+  tracker snapshot in the ignored migration backup.
+- [USER] 2026-07-28: Authored paragraph spacing remains visible at document
+  boundaries: the first paragraph/line shows before-space and the final
+  paragraph/line shows after-space.
+- [CODE] 2026-07-28: Page-start placement now reserves the first line's
+  authored before-space. Selection paint claims before-space without requiring
+  a predecessor and after-space without requiring a successor, capped at the
+  page edge so boundary highlighting cannot cross sheets.
+- [USER] 2026-07-28: Google Docs clipboard interop must preserve paragraph
+  before/after spacing in both directions and hyperlinks from the shared editor
+  to Docs, not only links pasted from Docs into the editor.
+- [CODE] 2026-07-28: External clipboard blanks now carry a non-breaking space
+  so Docs retains leading/trailing spacing boundaries. Outbound HTML promotes
+  both explicit and auto-detected URLs/emails to anchors, while inbound rich
+  block margins are converted from CSS points/pixels into explicit paragraph
+  before/after marks.
+- [USER] 2026-07-28: Enter/new-paragraph editing continues the active text and
+  paragraph formatting rather than resetting it.
+- [CODE] 2026-07-28: An empty half created by Enter now stores adjacent
+  emphasis, family, size, alignment, line-height, spacing, and indentation in
+  textless inline wrappers, which later typing reads back. Hyperlink and
+  link-suppression state intentionally stop at the paragraph boundary.
+- [USER] 2026-07-28: A format selected while the new paragraph is still empty
+  persists if the caret moves elsewhere and later returns.
+- [CODE] 2026-07-28: Collapsed-caret emphasis, font-family, and font-size
+  commands on an empty paragraph now commit a complete effective typing format
+  into its textless carrier. Selection synchronization restores that stored
+  format, including alignment, instead of relying on the caret-local ref.
+- [USER] 2026-07-28: Supersedes the clipboard blank-line expectation above.
+  Google Docs interop must preserve before/after spacing as paragraph style,
+  not add an empty paragraph or flatten pasted paragraphs into hard lines.
+- [CODE] 2026-07-28: Clipboard HTML now exports paragraph spacing as explicit
+  top/bottom margins. Inbound block HTML is separated from authored `<br>`
+  breaks and an atomic reducer action inserts multiple blocks as distinct
+  summary paragraphs or bullets; explicit source spacing wins over empty-target
+  defaults. A cross-field paste performs deletion, structural insertion, and
+  boundary joining in that same reducer transaction, so one Undo restores it.
+- [USER] 2026-07-29: Google Docs clipboard interop must preserve line height in
+  both directions, alongside the existing paragraph-spacing contract.
+- [CODE] 2026-07-29: Model-derived clipboard HTML now publishes effective
+  unitless line height on paragraph blocks and inline runs. Inbound rich HTML
+  converts allowlisted unitless, percentage, and font-relative point/pixel line
+  heights into explicit inline marks; unsupported CSS remains discarded.
+- [USER+TOOL] 2026-07-29: The restarted desktop app passed the user's live
+  Google Docs line-height copy/paste round trip.
+- [USER] 2026-07-29: The document-workflow hardening review requires one
+  current strict v1 shape per portable format, no runtime migration tooling,
+  truthful artifact status, tab-safe recovery, and separate behavior/refactor
+  commits. The application lock, revision check, client mutation queue, and
+  file-byte rollback transaction remain non-negotiable.
+- [CODE] 2026-07-29: `.cover` serialization now rejects unrepresentable editor
+  state; header-menu edits preserve inline marks; disabled structure controls,
+  one-block rich paste, and Typeset save baselines are corrected. Application
+  records retain only strict source/PDF artifacts as reloadable documents, and
+  sanitization is deterministic.
+- [CODE] 2026-07-29: Cover title/style recovery and live-sibling draft
+  protection now share the app-owned recovery timer. Retired autosave,
+  full-tracker, and workspace-backup compatibility paths are rejected rather
+  than migrated. Shared JSON codecs, clipboard/structure seams, cover services,
+  and application routes were extracted without moving editor caret ownership
+  or changing the application document transaction.
+- [TOOL] 2026-07-29: The required clean install, root check/test, standalone
+  font provenance gate, both app builds, landing build, server TypeScript and
+  lifecycle checks, document-workflow integrations, and headless Chromium
+  contracts passed. Live RoleFit QA found no console errors and verified header
+  popover focus plus artifact-backed document labels/actions. Layout snapshot
+  files are byte-identical to branch base `8016693`. The CI workflow is
+  committed but has no remote run because this branch was intentionally not
+  pushed.
+- [USER] 2026-07-29: Draft PR review found three merge blockers: tracker
+  revisions could regress, async document replacement could overwrite newer
+  local state, and editing an automatically linked contact could retain its old
+  destination. Merge also requires injected document-transaction rollback
+  evidence and green remote checks.
+- [CODE] 2026-07-29: Tracker reads and writes now require canonical ISO
+  revisions, reject retired/lossy fields and dual artifact representations, and
+  require existing upserts to advance monotonically after a matched base.
+  Resume replacement reads live content/style state at commit time; cover
+  replacement includes title changes; restore adoption is idempotent,
+  latest-response-only, and does not auto-apply a sibling document.
+- [CODE+TOOL] 2026-07-29: Derived email/URL/phone links now follow edited
+  visible text while custom label destinations remain stable, with Undo
+  restoring both. Production document rollback is fault-injected after real
+  source/PDF/deletion mutation. CI provisions pinned Python font tooling and
+  waits for Chromium termination before retry-safe profile cleanup.
+- [TOOL] 2026-07-29: The final local diff passed `npm run check`, the document
+  workflow and server-lifecycle probes, and the real-Chromium editor/recovery
+  contracts; no layout snapshot changed. At this local-verification checkpoint,
+  draft PR #97 remained unready and unmerged at remote SHA `49ac6cd`;
+  publication and required remote checks were still pending.
+- [TOOL+CODE] 2026-07-29: The first corrective remote run passed all six
+  Document workflow jobs, including engine fonts and Chromium. The separate
+  Typeset verify job passed the parity corpus but one dynamically selected CTAN
+  mirror failed Python TLS verification; the parallel engine job passed on the
+  same Ubuntu image. Font-tool setup now pins `certifi` and exports its CA bundle
+  in every engine-checking workflow so mirror trust does not depend on runner
+  image timing.
+- [TOOL+CODE] 2026-07-29: Superseding the CA-only diagnosis above, the next
+  remote engine job reproduced the redirected CTAN mirror's incomplete trust
+  chain even with pinned `certifi`. Latin Modern provenance now uses the named
+  official Illinois CTAN mirror instead of the proximity redirector while
+  retaining exact source digests; the CA pin remains deterministic runner
+  setup, not a fallback for an invalid upstream chain.

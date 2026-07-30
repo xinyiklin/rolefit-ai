@@ -3,12 +3,16 @@ import assert from "node:assert/strict";
 import {
   COVER_LETTER_FILE_MAGIC,
   COVER_LETTER_STYLE_DEFAULTS,
+  DEFAULT_COVER_LETTER_SPACE_BEFORE_PT,
   CoverLetterFileError,
   coverLetterPlainText,
+  coverLetterParagraphs,
+  coverLetterResumeData,
   parseCoverLetterFile,
   parseCoverLetterText,
   serializeCoverLetterFile
 } from "../coverLetter.ts";
+import { paragraphSpacingFromInlineMarks } from "../inlineMarksText.ts";
 import { toTypesetSchema } from "../../typeset/schema.ts";
 import { layoutCoverLetter, lineSeparators } from "../../typeset/layout.ts";
 import { inkExtent, measure, paragraphItems, underlineRule, underlineSpans } from "../../typeset/measure.ts";
@@ -29,7 +33,6 @@ assert.equal(coverLetterStyleToDocumentStyle(COVER_LETTER_STYLE_DEFAULTS).pageMa
 assert.deepEqual(
   {
     lineHeight: COVER_LETTER_STYLE_DEFAULTS.lineHeight,
-    paragraphGapPt: COVER_LETTER_STYLE_DEFAULTS.paragraphGapPt,
     margins: [
       COVER_LETTER_STYLE_DEFAULTS.marginTopPt,
       COVER_LETTER_STYLE_DEFAULTS.marginRightPt,
@@ -37,8 +40,8 @@ assert.deepEqual(
       COVER_LETTER_STYLE_DEFAULTS.marginLeftPt
     ]
   },
-  { lineHeight: 2, paragraphGapPt: 8, margins: [36, 54, 36, 54] },
-  "new cover letters default to double spacing, 8pt paragraph gaps, and 0.5/0.75-inch margins"
+  { lineHeight: 2, margins: [36, 54, 36, 54] },
+  "new cover letters default to double spacing, no hidden paragraph gap, and 0.5/0.75-inch margins"
 );
 assert.deepEqual(
   documentStyleToCoverLetterStyle({
@@ -89,7 +92,7 @@ assert.equal(
 const serialized = serializeCoverLetterFile(data, COVER_LETTER_STYLE_DEFAULTS);
 const raw = JSON.parse(serialized);
 assert.equal(raw.format, COVER_LETTER_FILE_MAGIC);
-assert.equal(raw.schemaVersion, 2);
+assert.equal(raw.schemaVersion, 1);
 assert.equal(raw.document.header, null);
 assert.equal(JSON.stringify(raw).includes('"id"'), false, "session ids never cross the .cover boundary");
 
@@ -99,14 +102,20 @@ assert.deepEqual(parsed.style, COVER_LETTER_STYLE_DEFAULTS);
 
 const withHeader = {
   ...data,
-  name: "Candidate Name",
-  contact: ["candidate@example.com", "Portfolio"]
+  header: {
+    visible: true,
+    name: "Candidate Name",
+    contact: ["candidate@example.com", "Portfolio"]
+  }
 };
 const headerRoundTrip = parseCoverLetterFile(
   serializeCoverLetterFile(withHeader, { ...COVER_LETTER_STYLE_DEFAULTS, contactDivider: "•" })
 );
-assert.equal(headerRoundTrip.data.name, "Candidate Name");
-assert.deepEqual(headerRoundTrip.data.contact, ["candidate@example.com", "Portfolio"]);
+assert.deepEqual(headerRoundTrip.data.header, {
+  visible: true,
+  name: "Candidate Name",
+  contact: ["candidate@example.com", "Portfolio"]
+});
 assert.equal(headerRoundTrip.style.contactDivider, "•");
 const headerLayout = layoutCoverLetter(
   toTypesetSchema(headerRoundTrip.data),
@@ -123,18 +132,44 @@ assert(
   ),
   "header contact items stay inside the text column"
 );
-
-const legacy = {
-  format: COVER_LETTER_FILE_MAGIC,
-  schemaVersion: 1,
-  document: { paragraphs: ["Legacy letter."] },
-  style: Object.fromEntries(
-    Object.entries(COVER_LETTER_STYLE_DEFAULTS).filter(([key]) => key !== "contactDivider")
-  )
-};
-const migratedLegacy = parseCoverLetterFile(JSON.stringify(legacy));
-assert.equal(migratedLegacy.data.name, "");
-assert.equal(migratedLegacy.style.contactDivider, "|");
+const absentHeaderLayout = layoutCoverLetter(
+  toTypesetSchema({ ...data, header: null }),
+  coverLetterStyleToDocumentStyle(COVER_LETTER_STYLE_DEFAULTS)
+);
+const hiddenHeaderLayout = layoutCoverLetter(
+  toTypesetSchema({
+    ...data,
+    header: {
+      visible: false,
+      name: "Hidden Candidate",
+      contact: ["hidden@example.com"]
+    }
+  }),
+  coverLetterStyleToDocumentStyle(COVER_LETTER_STYLE_DEFAULTS)
+);
+assert.deepEqual(
+  hiddenHeaderLayout.pages[0].lines,
+  absentHeaderLayout.pages[0].lines,
+  "hidden and absent headers have the same rendered geometry"
+);
+const blankNameHeaderLayout = layoutCoverLetter(
+  toTypesetSchema({
+    ...data,
+    header: { visible: true, name: "", contact: [] }
+  }),
+  coverLetterStyleToDocumentStyle(COVER_LETTER_STYLE_DEFAULTS)
+);
+assert(
+  blankNameHeaderLayout.pages[0].lines.some((line) =>
+    line.runs.some((run) => run.src?.kind === "name" && run.text === "")
+  ),
+  "a visible blank name remains an editable rendered header field"
+);
+assert(
+  blankNameHeaderLayout.pages[0].lines.at(-1).baseline >
+    absentHeaderLayout.pages[0].lines.at(-1).baseline,
+  "a visible blank name reserves header spacing"
+);
 
 const layout = layoutCoverLetter(
   toTypesetSchema(parsed.data),
@@ -142,6 +177,41 @@ const layout = layoutCoverLetter(
 );
 assert.equal(layout.pages.length, 1);
 assert(layout.pages[0].lines.length >= 5, "cover-letter paragraphs reach the shared layout engine");
+
+const unspacedParagraphs = layoutCoverLetter(
+  toTypesetSchema(parseCoverLetterText("First paragraph.\n\nSecond paragraph.")),
+  coverLetterStyleToDocumentStyle(COVER_LETTER_STYLE_DEFAULTS)
+).pages[0].lines;
+assert.equal(
+  unspacedParagraphs[1].baseline - unspacedParagraphs[0].baseline,
+  COVER_LETTER_STYLE_DEFAULTS.fontSizePt * COVER_LETTER_STYLE_DEFAULTS.lineHeight
+    + DEFAULT_COVER_LETTER_SPACE_BEFORE_PT,
+  "default paragraph rhythm comes from visible space-before formatting"
+);
+const firstParagraphWithoutBefore = layoutCoverLetter(
+  toTypesetSchema(coverLetterResumeData(["First paragraph."])),
+  coverLetterStyleToDocumentStyle(COVER_LETTER_STYLE_DEFAULTS)
+).pages[0].lines[0];
+const firstParagraphWithBefore = layoutCoverLetter(
+  toTypesetSchema(
+    coverLetterResumeData(["<space-before=8>First paragraph.</space-before>"])
+  ),
+  coverLetterStyleToDocumentStyle(COVER_LETTER_STYLE_DEFAULTS)
+).pages[0].lines[0];
+assert.equal(
+  firstParagraphWithBefore.baseline - firstParagraphWithoutBefore.baseline,
+  8,
+  "space-before moves the first paragraph down from the page start"
+);
+assert(
+  coverLetterParagraphs(parseCoverLetterText("First paragraph.\n\nSecond paragraph."))
+    .every(
+      (paragraph) =>
+        paragraphSpacingFromInlineMarks(paragraph).spaceBeforePt
+          === DEFAULT_COVER_LETTER_SPACE_BEFORE_PT
+    ),
+  "every newly parsed cover-letter paragraph exposes the default before spacing"
+);
 
 const compactCoverStyle = { ...COVER_LETTER_STYLE_DEFAULTS, lineHeight: 1.15 };
 const doubleSpaced = parseCoverLetterFile(
@@ -495,7 +565,7 @@ assert.equal(
 
 for (const mutation of [
   { ...raw, format: "typeset-resume" },
-  { ...raw, schemaVersion: 3 },
+  { ...raw, schemaVersion: 2 },
   { ...raw, document: { header: null, paragraphs: [] } },
   { ...raw, style: { ...raw.style, fontSizePt: 40 } },
   { ...raw, extra: true }
@@ -507,14 +577,85 @@ for (const mutation of [
 }
 
 for (const invalidData of [
-  { ...withHeader, contact: Array.from({ length: 21 }, (_, index) => `item-${index}`) },
-  { ...withHeader, name: "x".repeat(1_001) },
-  { ...withHeader, contact: ["x".repeat(1_001)] }
+  { ...withHeader, header: { ...withHeader.header, contact: Array.from({ length: 21 }, (_, index) => `item-${index}`) } },
+  { ...withHeader, header: { ...withHeader.header, name: "x".repeat(1_001) } },
+  { ...withHeader, header: { ...withHeader.header, contact: ["x".repeat(1_001)] } },
+  { ...withHeader, header: { visible: true, name: null, contact: [] } }
 ]) {
   assert.throws(
     () => serializeCoverLetterFile(invalidData, COVER_LETTER_STYLE_DEFAULTS),
     (error) => error instanceof CoverLetterFileError && error.code === "invalid-document",
     "the serializer rejects header data its parser would reject"
+  );
+}
+for (const [label, invalidData] of [
+  [
+    "a second section",
+    {
+      ...withHeader,
+      sections: [
+        ...withHeader.sections,
+        {
+          ...structuredClone(withHeader.sections[0]),
+          id: "hidden-second-section"
+        }
+      ]
+    }
+  ],
+  [
+    "a non-summary section",
+    {
+      ...withHeader,
+      sections: [{ ...structuredClone(withHeader.sections[0]), type: "standard" }]
+    }
+  ],
+  [
+    "entry title content",
+    {
+      ...withHeader,
+      sections: [{
+        ...structuredClone(withHeader.sections[0]),
+        items: [{
+          ...structuredClone(withHeader.sections[0].items[0]),
+          titleLeft: "Silently discarded title"
+        }]
+      }]
+    }
+  ],
+  [
+    "multiple bullets in one paragraph item",
+    {
+      ...withHeader,
+      sections: [{
+        ...structuredClone(withHeader.sections[0]),
+        items: [{
+          ...structuredClone(withHeader.sections[0].items[0]),
+          bullets: [
+            ...structuredClone(withHeader.sections[0].items[0].bullets),
+            { id: "hidden-second-bullet", text: "Silently discarded text" }
+          ]
+        }]
+      }]
+    }
+  ],
+  [
+    "a paragraph item without exactly one bullet",
+    {
+      ...withHeader,
+      sections: [{
+        ...structuredClone(withHeader.sections[0]),
+        items: [{
+          ...structuredClone(withHeader.sections[0].items[0]),
+          bullets: []
+        }]
+      }]
+    }
+  ]
+]) {
+  assert.throws(
+    () => serializeCoverLetterFile(invalidData, COVER_LETTER_STYLE_DEFAULTS),
+    (error) => error instanceof CoverLetterFileError && error.code === "invalid-document",
+    `.cover serialization rejects ${label} instead of projecting it away`
   );
 }
 assert.throws(
@@ -551,5 +692,5 @@ for (const { value: family } of FONT_FAMILY_OPTIONS) {
 }
 
 console.log(
-  `cover-letter file v2 + v1 migration + layout probes: PASS (incl. ${FONT_FAMILY_OPTIONS.length} families × 6 faces through the file boundary)`
+  `cover-letter file v1 + layout probes: PASS (incl. ${FONT_FAMILY_OPTIONS.length} families × 6 faces through the file boundary)`
 );

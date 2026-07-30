@@ -63,16 +63,38 @@ function pointControl(key: DocSpacingKey, label: string): SpacingControl {
   };
 }
 
+// The header's own gaps. A document whose only structure is a header (a cover
+// letter) offers these from its Header menu instead of the resume's full
+// document-spacing popover, so both surfaces read one definition.
+export type HeaderSpacingKey =
+  | "nameContactGapPt"
+  | "contactGapPt"
+  | "headerSectionGapPt";
+
+export const HEADER_SPACING_CONTROLS: readonly (SpacingControl & {
+  key: HeaderSpacingKey;
+})[] = [
+  pointControl("nameContactGapPt", "Name to contact"),
+  // Horizontal slot width between contact items (not a vertical line gap):
+  // the label says so to set it apart from the surrounding vertical gaps.
+  pointControl("contactGapPt", "Contact spacing"),
+  pointControl("headerSectionGapPt", "Header to body")
+] as (SpacingControl & { key: HeaderSpacingKey })[];
+
+// Shared so every popover prints a gap the same way.
+export const formatSpacingValue = (value: number, unit: string) =>
+  `${value.toFixed(2).replace(/\.00$/, "").replace(/(\.\d)0$/, "$1")}${unit}`;
+
 export const SPACING_CONTROL_GROUPS: SpacingControlGroup[] = [
   {
     label: "Header",
-    controls: [
-      pointControl("nameContactGapPt", "Name to contact"),
-      // Horizontal slot width between contact items (not a vertical line gap):
-      // the label says so to set it apart from the surrounding vertical gaps.
-      pointControl("contactGapPt", "Contact spacing"),
-      pointControl("headerSectionGapPt", "Header to section")
-    ]
+    // A resume's first body element is a section heading, so this surface names
+    // that gap for what actually follows the header here.
+    controls: HEADER_SPACING_CONTROLS.map((control) =>
+      control.key === "headerSectionGapPt"
+        ? { ...control, label: "Header to section" }
+        : { ...control }
+    )
   },
   {
     label: "Sections",

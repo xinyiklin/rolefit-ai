@@ -20,12 +20,16 @@ for provider, prompt, sanitizer, and review work.
 - `workspace.ts` owns resume variants/history plus the serialized atomic
   storage primitives shared with `coverLetterWorkspace.ts`. Keep strict
   cover-letter storage separate from resume import and starter fallbacks.
-- `applications/` owns tracker persistence and routes. `documents.ts` owns the
-  per-application file rules: each document slot stores either strict editable
-  source or an explicitly uploaded PDF under one route vocabulary. Additional
-  uploads are PDF-only, validated by extension + magic bytes, and capped per
-  application. File bytes and tracker metadata commit under the same
-  application revision, and every byte served back is a download (narrow
+- `applications/` owns tracker persistence and routes. `schema.ts` validates the
+  current record shape, `storage.ts` owns the serialized write queue,
+  `reconcile.ts` applies sparse revision-checked mutations, and
+  `routeSupport.ts` holds shared revision/rollback path mechanics.
+  `documentService.ts` owns the strict document file + tracker metadata
+  transaction; the focused document, attachment, and tracker route modules own
+  only their HTTP workflows. `documents.ts` owns per-file validation rules.
+  Each document slot stores either strict editable source or an explicitly
+  uploaded PDF. Additional uploads are validated by extension + magic bytes
+  and capped per application. Every byte served back is a download (narrow
   content type, `nosniff`, no inline render).
 - `extension/` owns extension-origin routes and inbox handoff.
 - The provider-connections boundary owns the validated in-memory companion
@@ -85,9 +89,9 @@ for provider, prompt, sanitizer, and review work.
   race. Application writes must reject duplicate ids, preserve the latest
   server copy of unmutated rows, and require each changed row's pre-edit
   `updatedAt`; return the current snapshot on a same-row `409` conflict rather
-  than retrying or overwriting. Normalize legacy missing revisions
-  deterministically so the first edit does not conflict with itself. Preserve
-  recoverable history/trash behavior.
+  than retrying or overwriting. Require canonical ISO creation/update revisions,
+  reject lossy or retired tracker shapes, and advance an existing row's
+  `updatedAt` monotonically. Preserve recoverable history/trash behavior.
 - Treat corrupt application JSON and malformed strict `.resume` content as
   visible fail-closed errors. Never erase, reseed, or guess over corrupt user
   data.

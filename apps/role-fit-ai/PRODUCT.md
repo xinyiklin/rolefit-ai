@@ -53,7 +53,10 @@ greeting supplies a recipient and the company hiring team is always a correct
 fallback. Both editors share
 deterministic typesetting and PDF export, and the same recovery and naming
 behavior: unsaved edits go to a per-tab recovery draft either page can restore,
-and a document is named `Name_Company_Resume` / `Name_Company_Cover_Letter` so
+including a cover letter changed only by title or style. Workspace adoption
+never deletes a live sibling tab's draft and notifies that tab that the saved
+workspace changed. A document is named
+`Name_Company_Resume` / `Name_Company_Cover_Letter` so
 one role's materials read as one application.
 `.resume` and `.cover` are their separate reloadable formats. The product also
 includes application-question drafts and a lightweight application pipeline
@@ -65,7 +68,9 @@ document. Regenerating or editing a document never rewrites a stored one. An
 application keeps one space-efficient representation of each document:
 editable `.resume`/`.cover` source for documents saved from RoleFit, or the PDF
 when the user explicitly uploads one. Its Documents tab previews or downloads
-either form and accepts additional PDF files the posting asked for.
+either form and accepts additional PDF files the posting asked for. Tracker
+text and analytics projections never count as a saved document and cannot
+reload or overwrite the strict source.
 A versioned `.rolefit-backup` file
 ports the saved local workspace and allowlisted RoleFit preferences between
 devices without creating an account or synchronization service. An original resume (text) is converted

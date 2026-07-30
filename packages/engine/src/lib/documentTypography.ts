@@ -1,7 +1,6 @@
 // Shared document type scale. This is domain math used by formatting controls
 // and the deterministic engine, so it lives below both UI and rendering layers.
 
-import type { NameSize } from "./documentStyle.ts";
 
 const FONT_SIZE_RATIOS = {
   tiny: 0.59992,
@@ -26,8 +25,9 @@ export function fontSizesFor(baseFontSizePt: number): FontSizeScale {
   ) as FontSizeScale;
 }
 
-// The display size the resume name renders at for a nameSize style. One truth
-// shared by the layout engine and the editor's caret-format fallbacks.
-export function nameSizePt(sizes: FontSizeScale, nameSize: NameSize): number {
-  return nameSize === "large" ? sizes.Large : nameSize === "xlarge" ? sizes.LARGE : sizes.Huge;
+// The display size the resume name renders at. One truth shared by the layout
+// engine and the editor's caret-format fallbacks. It was briefly a three-way
+// document setting that no surface ever exposed.
+export function nameSizePt(sizes: FontSizeScale): number {
+  return sizes.Huge;
 }

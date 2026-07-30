@@ -9,10 +9,13 @@
  * and expiry are shared with the resume draft (lib/autosaveDraftStorage.ts).
  * No job description body, API key, or provider credential is ever stored.
  */
-import { useEffect, useRef, useState } from "react";
+import { useMemo } from "react";
 
+import { parseCoverLetterFile } from "@typeset/engine/lib/coverLetter.ts";
 import { clearTabDraft, recoverTabDraft, saveTabDraft } from "../lib/autosaveDraftStorage.ts";
+import { coverLetterRecoveryDirty } from "../lib/coverLetterRecovery.ts";
 import type { DraftAutosaveState } from "./useAutosaveDraft";
+import { useDebouncedRecoveryDraft } from "./useDebouncedRecoveryDraft.ts";
 
 export type CoverLetterAutosavedDraft = {
   // Serialized `.cover` payload (document + style), the same format the
@@ -32,6 +35,7 @@ function parseDraft(raw: string | null): CoverLetterAutosavedDraft | null {
   try {
     const parsed = JSON.parse(raw) as Partial<CoverLetterAutosavedDraft>;
     if (typeof parsed.coverPayload !== "string" || !parsed.coverPayload.trim()) return null;
+    parseCoverLetterFile(parsed.coverPayload);
     if (typeof parsed.savedAt !== "string") return null;
     if (!Number.isFinite(Date.parse(parsed.savedAt))) return null;
     return {
@@ -57,9 +61,8 @@ type UseCoverLetterAutosaveDraftArgs = {
   // The editor's serialized `.cover` payload, or null when no document is loaded.
   payload: string | null;
   documentTitle: string;
+  persistedDocumentTitle: string;
   dirty: boolean;
-  // False for an empty letter: there is nothing worth recovering.
-  hasContent: boolean;
   jobLabel: string;
 };
 
@@ -68,47 +71,30 @@ type UseCoverLetterAutosaveDraftArgs = {
 export function useCoverLetterAutosaveDraft({
   payload,
   documentTitle,
+  persistedDocumentTitle,
   dirty,
-  hasContent,
   jobLabel
 }: UseCoverLetterAutosaveDraftArgs): DraftAutosaveState {
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [state, setState] = useState<DraftAutosaveState>("idle");
-  // Read inside the debounced write so a title edit alone does not reschedule
-  // the document's own pending save.
-  const latestTitle = useRef(documentTitle);
-  latestTitle.current = documentTitle;
-
-  useEffect(() => {
-    if (!dirty || !payload || !hasContent) {
-      if (timerRef.current !== null) {
-        clearTimeout(timerRef.current);
-        timerRef.current = null;
-      }
-      setState("idle");
-      return;
-    }
-
-    if (timerRef.current !== null) clearTimeout(timerRef.current);
-    setState("pending");
-    timerRef.current = setTimeout(() => {
-      timerRef.current = null;
-      const saved = saveTabDraft("cover", {
+  const revision = useMemo(
+    () => ({ payload, documentTitle, persistedDocumentTitle, dirty, jobLabel }),
+    [dirty, documentTitle, jobLabel, payload, persistedDocumentTitle]
+  );
+  return useDebouncedRecoveryDraft({
+    shouldSave:
+      payload !== null &&
+      coverLetterRecoveryDirty({
+        documentDirty: dirty,
+        documentTitle,
+        persistedDocumentTitle
+      }),
+    revision,
+    save: () =>
+      payload !== null &&
+      saveTabDraft("cover", {
         coverPayload: payload,
-        documentTitle: latestTitle.current,
+        documentTitle,
         savedAt: new Date().toISOString(),
         jobLabel
-      });
-      setState(saved ? "saved" : "error");
-    }, 1200);
-
-    return () => {
-      if (timerRef.current !== null) {
-        clearTimeout(timerRef.current);
-        timerRef.current = null;
-      }
-    };
-  }, [payload, dirty, hasContent, jobLabel]);
-
-  return state;
+      })
+  });
 }

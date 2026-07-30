@@ -27,6 +27,8 @@ to change, edit its owner and verify both application consumers.
   approval.
 - `.resume` is the sole portable editable format; PDF is final output.
 - Autosave is recovery state, not a replacement for an explicitly saved file.
+- Retired browser autosaves may be rewritten once at their versioned storage
+  boundary, but the public `.resume` parser remains strict final v1.
 - Zoom and spell-check are view preferences and never cross the file boundary.
 - The editor, browser print path, and dedicated PDF emitter share one document,
   style, font, metrics, and layout contract.

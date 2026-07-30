@@ -16,27 +16,45 @@ typesetting guide when a change affects painted output or layout provenance.
   transformations. Keep it free of React and DOM reads. Its anchored tag
   scanner is a deliberate second automaton over the grammar owned by
   `lib/inlineMarksText.ts`; keep the two tag inventories in sync.
-- `clipboardFormatting.ts` owns the versioned same-editor clipboard payload and
-  the allowlisted HTML-to-inline-mark sanitizer. Keep arbitrary clipboard CSS,
-  scripts, event attributes, unsupported fonts, and invalid links out of
-  document state.
+- `clipboardPrivateCodec.ts` owns the versioned same-editor payload.
+  `clipboardHtmlImport.ts` owns the allowlisted HTML-to-inline-mark sanitizer,
+  while `clipboardHtmlExport.ts` owns model-derived external HTML/plain copy.
+  External copy emits one block per logical field, never one per
+  engine wrap line, so a destination editor reflows the paragraph to its own
+  measure. Paragraph before/after spacing stays CSS block margins; never encode
+  it as a blank paragraph, which changes document structure in Google Docs.
+  Effective line height is unitless CSS on both the paragraph and its inline
+  runs; inbound unitless/percentage values, or physical values with a known
+  font size, become explicit line-height marks. Explicit and
+  engine-auto-detected links both serialize as HTML anchors. On inbound rich
+  paste, allowlisted block margins become explicit paragraph before/after
+  marks, and multiple HTML blocks become separate bullet/summary fields
+  through one structural editor action rather than hard breaks inside one
+  field. Keep all other arbitrary clipboard CSS, scripts, event attributes,
+  unsupported fonts, and invalid links out of document state.
+  Attach the private selection MIME only when every selected cover-letter field
+  is representable. A header plus paragraphs is a full-document payload; never
+  consume only its header or silently fall back to a lossy partial private
+  import.
+- `clipboardBrowser.ts` owns Clipboard API permission handling and MIME
+  fallback. The paste-dialog components own only prompt rendering and mapping
+  controls; selection, commit, caret, and replay-queue state remain in
+  `TypesetEditor`.
 - `selectionHighlight.ts` owns the visual selection overlay. It coalesces the
-  browser range fragments per engine line and paints one highlight using that
-  line's full height (determined by its largest inline run) plus the vertical
-  gap below it. Exactly ONE line owns each gap and it is the line above, filling
-  downward — the engine's own between-only rule for leading and paragraph
-  spacing. When the line below claimed it as well, every paragraph gap was
-  painted twice and a short closing line left a floating band hanging above the
-  next paragraph, which read as that paragraph owning the spacing before it. The
-  band covers each line's LINE BOX: its ink plus the line spacing that line owns,
-  which the engine publishes per line as `--tsd-line-leading` because only the
-  engine knows it. The DOM box is the ink box, and the gap to the next line is
-  the leading only INSIDE a paragraph — at a block boundary it also carries the
-  paragraph gap, which belongs to neither side. Measuring from that gap left the
-  last line of every paragraph short (it has no next line of its own to measure
-  to) and, where it did measure, painted the paragraph gap as a tall empty slab
-  at the previous block's width. Lines with no leading of their own (entry
-  heads, headings, a contact row) fall back to their ink box. The offset is SIGNED and bands TILE: a line's box is its ink box,
+  browser range fragments per engine line and paints one text-bounded band.
+  Consecutive selected lines tile through their complete vertical junction, so
+  paragraph before/after spacing and the calibrated base gap cannot leave a
+  white seam inside one selection. The upper line owns that junction downward.
+  When a paragraph is selected without its predecessor, its first line may
+  extend upward by the engine-published authored before-space, including at a
+  page start where layout reserves that room. Its last line extends through
+  authored after-space even when it is the document's final line. The page edge
+  caps both boundary bands, preventing double-painted dark bands and
+  cross-page paint. Inside a paragraph, the band covers each
+  line's LINE BOX: its ink plus the line spacing that line owns, which the
+  engine publishes as `--tsd-line-leading`. Lines with no leading of their own
+  (entry heads, headings, a contact row) fall back to their ink box. The offset
+  is SIGNED and bands TILE: a line's box is its ink box,
   tight line spacing makes consecutive ink boxes overlap, and a translucent veil
   painted twice is a dark stripe across the text — so a band gives height back
   just as readily as it grows, always stopping where the next selected line
@@ -118,12 +136,17 @@ typesetting guide when a change affects painted output or layout provenance.
   line one resolved to no field at all, and the toolbar greyed out on an
   ordinary selection.
 - `useTypesetInputEvents.ts` intercepts browser input and keyboard intents.
-- `useTypesetStructure.ts` owns add/remove/reorder commands and drag state.
+- `useTypesetStructure.ts` owns add/remove/reorder commands and drag state. Its
+  `headerCommands` bundle must keep stable identity: caret-restoration callbacks
+  depend on it, and dependency churn can consume an in-flight caret against the
+  pre-edit DOM.
 - `useTypesetOverlayAnchors.ts` owns overlay geometry: page origins inside the
   wrapper, pointer-hover block targeting, and the caret-active field anchor.
 - `typesetStructure.ts` derives pure anchors, extents, and drop slots from the
   engine layout.
 - `TypesetStructureOverlay.tsx` paints drag affordances outside the editable DOM.
+  It never paints header actions; create, show, hide, and remove stay in the
+  toolbar, keyboard, and right-click command surfaces.
 - `useTypesetContextMenu.tsx` builds contextual document commands over the
   editor's shared command surface; `TypesetContextMenu.tsx` only renders the menu.
 - `useTypesetLinkCard.ts` resolves the link the CARET is in (or the selection
@@ -135,9 +158,17 @@ typesetting guide when a change affects painted output or layout provenance.
 - The engine-painted DOM is the editing surface, but the browser never commits
   mutations directly. Prevent the native edit, transform the serialized field,
   dispatch a structured action, repaint, and restore the caret.
+- Every paste path is a mutation intent, including asynchronous Clipboard API
+  reads and same-editor rich payloads. Queue it while the commit gate is closed,
+  then resolve and apply it against the post-paint selection; bypassing the gate
+  can target stale DOM and replay a caret against the wrong document state.
 - Keep display indexes and serialized-value indexes explicit. Inline tags are
   value-space metadata and must remain balanced across insert, delete, split,
   merge, copy, paste, undo, and redo.
+- Contact history restoration must compare structure before field values. A
+  missing trailing contact and a restored empty contact both read as `""`;
+  when a snapshot grows the contact list, restore the caret at offset zero of
+  the first added slot so it lands after the engine-owned preceding divider.
 - Line height and paragraph before/after spacing use the shared inline grammar.
   A caret or partial range expands to its painted visual line(s); selecting a
   whole paragraph targets the complete field. Each line-height override changes
@@ -180,6 +211,12 @@ typesetting guide when a change affects painted output or layout provenance.
   character, and stepping over it desynchronizes everything after it.
 - Preserve authored interior and trailing whitespace. Deleting the final styled
   character must retain that character's typing format for the next insertion.
+  Enter at a paragraph boundary likewise gives the empty split half a textless
+  carrier for the adjacent typography and paragraph properties, so the next
+  insertion continues the active format. Formatting commands at a caret in an
+  empty paragraph update that carrier in document state, not only the transient
+  typing-format ref, so moving away and returning retains the choice. Never
+  carry link or link-suppression state across a new paragraph boundary.
   Summary/cover paragraphs also preserve leading whitespace so indentation
   survives repaint and PDF export; ordinary marked resume bullets may still
   trim accidental space after their marker.
@@ -261,11 +298,14 @@ typesetting guide when a change affects painted output or layout provenance.
   A menu item must never be a second implementation of a toolbar command: the
   menu kept editing one field at a time for a whole slice after the toolbar had
   learned to span them, and nothing failed loudly.
-- Every host gets the right-click menu. `structureEditing` gates only the
-  structural group (add/delete section, entry, bullet, skills row) — a cover
-  letter has no resume structure but still needs clipboard, emphasis, link, and
-  history commands, and gating the whole menu on that flag left it with the
-  browser's native menu instead.
+- Every host gets the right-click menu. `structureCapabilities.header` and
+  `.sections` gate their own structural groups independently: cover letters
+  expose name/contact structure without resume section, entry, or bullet
+  actions, while clipboard, emphasis, link, and history commands remain shared.
+- A multi-block paste into a header field never guesses structure. It opens the
+  anchored mapper, and cover letters offer a separate `Paste as document…`
+  mapper for explicit name/contact/body assignment. Direct Typeset clipboard
+  data may restore its exact private header block without that heuristic gate.
 - Structural menu commands target the field the POINTER was over, not the
   selection, so right-clicking a bullet offers to delete that bullet.
 - The link card follows the SELECTION, never the pointer: it shows for a caret
@@ -316,6 +356,16 @@ typesetting guide when a change affects painted output or layout provenance.
 - The painter's line-separator span (`data-tsds`) is not field content. Caret
   placement, line-edge movement, and the selection rectangle must exclude it, or
   End parks the caret in text that maps to no field.
+- Deferring an automatic link while its trailing caret is being typed repaints
+  that field between `<a>` and `<span>`. Never perform that swap while a primary
+  pointer selection is in flight: replacing the range's anchor node between
+  mousedown and mousemove collapses a backward drag from the link edge. Preserve
+  the current suppression until mouseup, then restore the final single- or
+  multi-field range across the settled paint.
+- Plain-text header controls preserve custom label/destination pairs, but a
+  destination derived from visible email, URL, or phone text must be recomputed
+  when that visible run changes. If the new text is not linkable, remove the
+  derived destination; Undo restores text and destination together.
 - Enter follows the field's grammar. Prose paragraphs (summary sections, which is
   how a cover letter is modelled) always split, including from an empty
   paragraph, so an author can open a blank line between blocks. List rows
@@ -332,9 +382,9 @@ typesetting guide when a change affects painted output or layout provenance.
   browser's `formatBold`/`formatItalic`/`formatUnderline` intents all route
   through one commit so they cannot diverge.
 - One selection rectangle per engine line, bounded by that line's painted text,
-  covering its own line box — ink plus the spacing that line owns — never
-  reaching up into the line above's, and never overlapping the next selected
-  line's band. The browser's own selection
+  covering its own line box and every complete junction inside the selection,
+  with authored before/after spacing at an exposed paragraph edge and no
+  overlap between adjacent bands. The browser's own selection
   paint is off for the WHOLE editable document, not just field spans: a contact
   divider is a run the engine owns and no field does, so it carries no
   `data-tsdf`, and a rule scoped to field spans left the native veil painting
@@ -352,6 +402,12 @@ typesetting guide when a change affects painted output or layout provenance.
   cover-letter layout while retaining the same edit/history/caret engine.
 - Keep structural actions in the reducer/history path. A pointer drag, keyboard
   move, context command, or Enter/Backspace edit must remain one undoable action.
+- Continuous same-field text input coalesces through a rolling 700 ms window,
+  but typing, backward deletion, and forward deletion are distinct groups.
+  Selection replacement, formatting, paste/cut, structural edits, field changes,
+  caret moves, pauses, and undo/redo close the active group. One undo/redo
+  restores or reapplies the complete held-key deletion burst. Background
+  persistence may clear dirty state but never split that user transaction.
 - Use refs for transient selection, replay, drag, and caret state that changes on
   hot input paths; derive visible toolbar state instead of duplicating it.
 

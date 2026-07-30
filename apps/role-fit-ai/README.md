@@ -81,12 +81,17 @@ editable documents.
   paragraph, or the whole paragraph at once when it is all selected — and
   Shift+Tab takes those indents back. Same-editor copy/paste keeps supported inline font and
   formatting runs, mixed families and sizes share a typographic baseline, and
-  Ctrl/Cmd +/-/0 controls page zoom in both document layouts.
+  Ctrl/Cmd +/-/0 controls page zoom in both document layouts. Continuous
+  typing and held Backspace/Delete bursts undo as groups; direction changes,
+  caret or field moves, selections, formatting, structural edits, and pauses
+  start a new group.
 - **Ordered AI workflow** — Distill, Tailor, and Review share one reusable progress surface with exact step counts, specific failure reasons, Retry/Stop behavior, and later stages marked not run after a failure.
 - **WYSIWYG editor + PDF export** — the editor *is* the preview: it and the exported PDF use the same shared Typeset layout engine, so visible line breaks and page flow match the export exactly. No external toolchain to install — typesetting and PDF generation run in the browser.
-- **`.resume` save/load** — download the structured resume data as a `.resume` file (lossless JSON, formatting preserved) and reload it later, or keep it as a portable backup of your work.
+- **`.resume` save/load** — download strict schema-v1 structured resume data,
+  including explicit hidden/visible/absent header state, as a `.resume` file
+  (lossless JSON, formatting preserved) and reload it later.
 - **`.cover` save/load** — download ordered cover-letter paragraphs plus their
-  optional name/contact header and print-style contract as a strict `.cover`
+  explicit optional header and print-style contract as a strict schema-v1 `.cover`
   file. `.resume` remains
   resume-only; `.rolefit-backup` is the separate allowlisted saved-workspace format.
 - **Named variants for both documents** — resumes and cover letters both live in
@@ -99,8 +104,12 @@ editable documents.
   active copy, adds a variant, or takes a `.resume`/`.cover`/`.txt`/PDF away.
   Each editor automatically reopens its last active saved variant on that
   browser origin, falling back to Default when no remembered variant remains.
+  Recovery includes title-only and style-only cover-letter edits. Drafts are
+  tab-owned: adopting a restored workspace clears this tab's stale draft and
+  confirmed-dead orphans, preserves drafts owned by live sibling tabs, and
+  notifies those siblings that the saved workspace changed.
 - **Portable workspace backup + restore** — the companion's Workspace section saves one versioned `.rolefit-backup` containing validated base resumes, resume history, tracker records, each application's saved `.resume`, `.cover`, or PDF document, PDF attachments, and mirrored allowlisted RoleFit preferences. Restore validates every checksum and domain file in a staging workspace before replacing the active saved workspace, then keeps the previous workspace as a local safety copy. The JSON backup is not encrypted and never contains standalone cover-letter variants, provider keys, CLI sessions, arbitrary workspace files, or unsaved recovery drafts.
-- **On-disk pipeline tracker** — a sortable, paginated applications table (right-click any row for quick actions: open details, change stage, preview the saved resume as a PDF, or delete) alongside a calendar view of submissions and upcoming follow-ups. Tracks status / source / company / role / follow-up date / notes plus saved resume, cover letter, and additional PDF documents per application, and survives browser wipes.
+- **On-disk pipeline tracker** — a sortable, paginated applications table (right-click any row for quick actions: open details, change stage, preview the saved resume as a PDF, or delete) alongside a calendar view of submissions and upcoming follow-ups. Tracks status / source / company / role / follow-up date / notes plus saved resume, cover letter, and additional PDF documents per application, and survives browser wipes. A document is shown as saved only when its strict `.resume`/`.cover` source or explicit PDF exists; tracker text is never a reloadable document or an artifact claim.
 - **Local-first personal workflow** — the browser app, server, paired extension bridge, and workspace files run on your own device. Source development uses the gitignored `workspace/`; an installed companion uses `app.getPath("userData")/workspace/`. Origin-scoped browser storage may contain recovery resume/job drafts plus user settings and context, but never API keys. The Electron companion encrypts supported API keys with the operating system through `safeStorage` and stores only encrypted bytes locally beneath its own `userData`; keys never enter browser storage, browser requests, status payloads, or logs. A companion-owned server receives decrypted keys only in memory through a private parent/child channel. AI-backed import, polish, cover-letter, and application-answer features still send the relevant job/resume text directly from the local server to the provider you choose; resume/job payloads do not cross Electron IPC.
 
 ## Stack
@@ -380,8 +389,10 @@ before choosing **Restore backup** — the server refuses to restore while live
 tabs are detected. RoleFit validates the complete backup in a staging
 directory, moves the current saved workspace to a timestamped sibling safety
 directory, and installs the restored workspace; the browser adopts the
-restored preferences and clears superseded recovery drafts the next time it
-loads. Add providers again on a new device. Before uninstalling, make the
+restored preferences and clears only this tab's superseded draft plus
+confirmed-dead orphans the next time it loads. A live sibling's recovery draft
+is retained and that tab receives a workspace-changed event. Add providers
+again on a new device. Before uninstalling, make the
 backup you want. To erase RoleFit's retained local data, remove the
 separate `userData` directory and clear site data in your browser for every
 RoleFit loopback origin you used, including each configured port under

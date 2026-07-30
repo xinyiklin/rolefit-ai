@@ -1,13 +1,14 @@
 import type { DocumentFontFamily } from "@typeset/engine/typeset/fontRegistry.ts";
 import { FONT_FAMILY_OPTIONS } from "@typeset/engine/lib/documentStyle.ts";
-import { encodeLinkHref, normalizeLinkDestination } from "@typeset/engine/lib/links.ts";
-import { inlineFontSizePt } from "@typeset/engine/lib/inlineMarksText.ts";
-
-export const TYPESET_INLINE_CLIPBOARD_MIME = "application/x-typeset-inline+json";
-
-const INLINE_CLIPBOARD_FORMAT = "typeset-inline";
-const INLINE_CLIPBOARD_VERSION = 1;
-const MAX_INLINE_CLIPBOARD_CHARS = 1_000_000;
+import {
+  encodeLinkHref,
+  normalizeLinkDestination
+} from "@typeset/engine/lib/links.ts";
+import {
+  inlineFontSizePt,
+  paragraphLineHeight,
+  paragraphSpacePt
+} from "@typeset/engine/lib/inlineMarksText.ts";
 
 type RichStyle = {
   bold: boolean;
@@ -15,6 +16,7 @@ type RichStyle = {
   underline: boolean;
   fontFamily: DocumentFontFamily | null;
   fontSizePt: number | null;
+  lineHeight: number | null;
   href: string | null;
 };
 
@@ -24,6 +26,7 @@ const PLAIN_STYLE: RichStyle = {
   underline: false,
   fontFamily: null,
   fontSizePt: null,
+  lineHeight: null,
   href: null
 };
 
@@ -41,32 +44,7 @@ const BLOCK_TAGS = new Set([
   "P",
   "PRE"
 ]);
-
-export function encodeInlineClipboard(fragment: string): string {
-  return JSON.stringify({
-    format: INLINE_CLIPBOARD_FORMAT,
-    schemaVersion: INLINE_CLIPBOARD_VERSION,
-    value: fragment
-  });
-}
-
-export function decodeInlineClipboard(payload: string): string | null {
-  if (!payload || payload.length > MAX_INLINE_CLIPBOARD_CHARS) return null;
-  try {
-    const parsed = JSON.parse(payload) as Record<string, unknown>;
-    if (
-      parsed.format !== INLINE_CLIPBOARD_FORMAT ||
-      parsed.schemaVersion !== INLINE_CLIPBOARD_VERSION ||
-      typeof parsed.value !== "string" ||
-      parsed.value.length > MAX_INLINE_CLIPBOARD_CHARS
-    ) {
-      return null;
-    }
-    return parsed.value;
-  } catch {
-    return null;
-  }
-}
+const MAX_INLINE_CLIPBOARD_CHARS = 1_000_000;
 
 // Names beyond a family's own label that should resolve to it. Two kinds:
 // internal CSS families the painter emits (so copying inside the editor
@@ -103,6 +81,32 @@ function parsedFontSize(value: string): number | null {
   return inlineFontSizePt(points);
 }
 
+export function clipboardParagraphSpacePt(value: string): number | null {
+  const match = /^\s*(\d+(?:\.\d+)?)\s*(pt|px)\s*$/i.exec(value);
+  if (!match) return null;
+  const numeric = Number(match[1]);
+  if (!Number.isFinite(numeric)) return null;
+  const points = match[2].toLowerCase() === "px" ? numeric * 0.75 : numeric;
+  return paragraphSpacePt(points);
+}
+
+export function clipboardLineHeight(
+  value: string,
+  fontSizePt: number | null
+): number | null {
+  const normalized = value.trim().toLowerCase();
+  const unitless = /^(\d+(?:\.\d+)?)$/.exec(normalized);
+  if (unitless) return paragraphLineHeight(Number(unitless[1]));
+  const percent = /^(\d+(?:\.\d+)?)%$/.exec(normalized);
+  if (percent) return paragraphLineHeight(Number(percent[1]) / 100);
+  const absolute = /^(\d+(?:\.\d+)?)\s*(pt|px)$/.exec(normalized);
+  if (!absolute || fontSizePt === null || fontSizePt <= 0) return null;
+  const numeric = Number(absolute[1]);
+  if (!Number.isFinite(numeric)) return null;
+  const points = absolute[2] === "px" ? numeric * 0.75 : numeric;
+  return paragraphLineHeight(points / fontSizePt);
+}
+
 function styleForElement(element: HTMLElement, inherited: RichStyle): RichStyle {
   const next = { ...inherited };
   const tag = element.tagName;
@@ -124,6 +128,8 @@ function styleForElement(element: HTMLElement, inherited: RichStyle): RichStyle 
   if (family) next.fontFamily = family;
   const size = parsedFontSize(element.style.fontSize);
   if (size !== null) next.fontSizePt = size;
+  const lineHeight = clipboardLineHeight(element.style.lineHeight, next.fontSizePt);
+  if (lineHeight !== null) next.lineHeight = lineHeight;
 
   if (tag === "A") {
     next.href = normalizeLinkDestination(element.getAttribute("href") ?? "");
@@ -139,15 +145,23 @@ function wrapText(text: string, style: RichStyle): string {
   if (style.fontFamily) value = `<font=${style.fontFamily}>${value}</font>`;
   if (style.fontSizePt !== null) value = `<size=${style.fontSizePt}>${value}</size>`;
   if (style.href) value = `<link=${encodeLinkHref(style.href)}>${value}</link>`;
+  if (style.lineHeight !== null) {
+    value = `<line-height=${style.lineHeight}>${value}</line-height>`;
+  }
   return value;
 }
 
 // Convert clipboard HTML into the editor's small, allowlisted inline grammar.
 // DOMParser gives us text nodes only; scripts, event handlers, arbitrary CSS,
 // unsupported fonts, and unknown markup never cross into document state.
-export function inlineFragmentFromHtml(html: string): string | null {
-  if (!html || html.length > MAX_INLINE_CLIPBOARD_CHARS) return null;
+const BLOCK_SEPARATOR = "\uFDD0";
+
+function fragmentsFromHtml(html: string): ParsedClipboardHtml {
+  if (!html || html.length > MAX_INLINE_CLIPBOARD_CHARS) {
+    return parsedClipboardHtml(null, false);
+  }
   const document = new DOMParser().parseFromString(html, "text/html");
+  let sawBlockStructure = false;
 
   const visit = (node: Node, inherited: RichStyle): string => {
     if (node.nodeType === Node.TEXT_NODE) {
@@ -159,13 +173,59 @@ export function inlineFragmentFromHtml(html: string): string | null {
     let value = Array.from(node.childNodes)
       .map((child) => visit(child, style))
       .join("");
-    if (BLOCK_TAGS.has(node.tagName) && value && !value.endsWith("\n")) value += "\n";
+    if (BLOCK_TAGS.has(node.tagName)) {
+      sawBlockStructure = true;
+      // Descendant blocks already own their separators and margins; wrapping a
+      // container such as Google Docs' internal root would add a false block.
+      if (value.includes(BLOCK_SEPARATOR)) return value;
+      const spaceBeforePt = clipboardParagraphSpacePt(
+        node.style.marginTop || node.style.marginBlockStart
+      );
+      const spaceAfterPt = clipboardParagraphSpacePt(
+        node.style.marginBottom || node.style.marginBlockEnd
+      );
+      if ((spaceAfterPt ?? 0) > 0) {
+        value = `<space-after=${spaceAfterPt}>${value}</space-after>`;
+      }
+      if ((spaceBeforePt ?? 0) > 0) {
+        value = `<space-before=${spaceBeforePt}>${value}</space-before>`;
+      }
+      if (style.lineHeight !== null && !/<line-height=/i.test(value)) {
+        value = `<line-height=${style.lineHeight}>${value}</line-height>`;
+      }
+      value += BLOCK_SEPARATOR;
+    }
     return value;
   };
 
   const value = Array.from(document.body.childNodes)
     .map((node) => visit(node, PLAIN_STYLE))
     .join("")
-    .replace(/\n+$/, "");
-  return value || null;
+    .replace(new RegExp(`${BLOCK_SEPARATOR}+$`), "");
+  return parsedClipboardHtml(value || null, sawBlockStructure);
+}
+
+export type ParsedClipboardHtml = {
+  inlineValue: string | null;
+  blocks: string[] | null;
+  sawBlockStructure: boolean;
+};
+
+export function parsedClipboardHtml(
+  value: string | null,
+  sawBlockStructure: boolean
+): ParsedClipboardHtml {
+  return {
+    inlineValue: value?.split(BLOCK_SEPARATOR).join("\n") ?? null,
+    blocks: value && sawBlockStructure ? value.split(BLOCK_SEPARATOR) : null,
+    sawBlockStructure
+  };
+}
+
+export function inlineFragmentFromHtml(html: string): string | null {
+  return fragmentsFromHtml(html).inlineValue;
+}
+
+export function paragraphFragmentsFromHtml(html: string): string[] | null {
+  return fragmentsFromHtml(html).blocks;
 }

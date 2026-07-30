@@ -11,7 +11,6 @@ import assert from "node:assert/strict";
 import {
   BROWSER_PREFERENCES_FORMAT,
   BROWSER_PREFERENCES_SCHEMA_VERSION,
-  LEGACY_WORKSPACE_BACKUP_SCHEMA_VERSION,
   WORKSPACE_BACKUP_FORMAT,
   WORKSPACE_BACKUP_SCHEMA_VERSION,
   WORKSPACE_RESTORE_MARKER_FORMAT,
@@ -178,19 +177,11 @@ for (const path of [
 
 const legacyEnvelope = {
   ...validEnvelope,
-  schemaVersion: LEGACY_WORKSPACE_BACKUP_SCHEMA_VERSION
+  schemaVersion: 1
 };
-assert.equal(
-  parseWorkspaceBackupEnvelope({ ...legacyEnvelope, files: [pdfFile] }).schemaVersion,
-  LEGACY_WORKSPACE_BACKUP_SCHEMA_VERSION,
-  "schema version 1 remains readable for its original resume-PDF contract"
-);
 assert.throws(
-  () => parseWorkspaceBackupEnvelope({
-    ...legacyEnvelope,
-    files: [backupFile({ path: "applications/acme-swe/cover.cover" })]
-  }),
-  "schema version 1 does not silently acquire version 2 document paths"
+  () => parseWorkspaceBackupEnvelope({ ...legacyEnvelope, files: [pdfFile] }),
+  "the retired workspace backup schema is rejected instead of migrated"
 );
 
 const withBrowser = {
@@ -248,7 +239,7 @@ for (const [name, badFile] of [
 // aggregate 64 MB guard rather than tripping the per-file one first.
 {
   const bigFiles = Array.from({ length: 8 }, (_, i) =>
-    backupFile({ path: `base-resume-variant${i}.resume`, byteLength: 9_000_000 })
+    backupFile({ path: `resumes/variant${i}.resume`, byteLength: 9_000_000 })
   ); // 8 x 9,000,000 = 72,000,000 > 64,000,000 aggregate cap
   assert.throws(
     () => parseWorkspaceBackupEnvelope({ ...validEnvelope, files: bigFiles }),
@@ -265,8 +256,8 @@ assert.equal(
   true,
   "resume history is managed"
 );
-assert.equal(isManagedWorkspaceBackupPath("base-resume.resume"), true, "a root base resume is managed");
-assert.equal(isManagedWorkspaceBackupPath("base-resume-fullstack.resume"), true, "a named root base resume is managed");
+assert.equal(isManagedWorkspaceBackupPath("base-resume.resume"), false, "a retired root resume path is unmanaged");
+assert.equal(isManagedWorkspaceBackupPath("base-resume-fullstack.resume"), false, "a retired named root path is unmanaged");
 assert.equal(isManagedWorkspaceBackupPath("applications/acme-swe/resume.pdf"), true, "an application PDF is managed");
 assert.equal(
   isManagedWorkspaceBackupPath("applications/acme-swe/attachments/sample.pdf"),

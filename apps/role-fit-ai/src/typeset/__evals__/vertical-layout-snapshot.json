@@ -1,0 +1,458 @@
+{
+  "balanced": [
+    {
+      "page": 1,
+      "y": 53.15,
+      "x": 235.288,
+      "text": "Your Name"
+    },
+    {
+      "page": 1,
+      "y": 67.15,
+      "x": 104.725,
+      "text": "you@email.com|linkedin.com/in/yo"
+    },
+    {
+      "page": 1,
+      "y": 95.31,
+      "x": 36,
+      "text": "Education"
+    },
+    {
+      "page": 1,
+      "y": 113.69,
+      "x": 46.8,
+      "text": "University NameAug. 2022 – May 2"
+    },
+    {
+      "page": 1,
+      "y": 125.49,
+      "x": 46.8,
+      "text": "B.S. in Computer ScienceCity, St"
+    },
+    {
+      "page": 1,
+      "y": 148.55,
+      "x": 36,
+      "text": "Experience"
+    },
+    {
+      "page": 1,
+      "y": 166.93,
+      "x": 46.8,
+      "text": "Company NameJun. 2025 – Aug. 202"
+    },
+    {
+      "page": 1,
+      "y": 178.73,
+      "x": 46.8,
+      "text": "Software Engineering InternCity,"
+    },
+    {
+      "page": 1,
+      "y": 195.03,
+      "x": 61.53,
+      "text": "•Accomplishmentwithametric—whaty"
+    },
+    {
+      "page": 1,
+      "y": 208.93,
+      "x": 61.53,
+      "text": "•Secondaccomplishment.Keepeachbu"
+    },
+    {
+      "page": 1,
+      "y": 226.41,
+      "x": 46.8,
+      "text": "Another CompanyJan. 2025 – May 2"
+    },
+    {
+      "page": 1,
+      "y": 238.21,
+      "x": 46.8,
+      "text": "Role TitleRemote"
+    },
+    {
+      "page": 1,
+      "y": 254.51,
+      "x": 61.53,
+      "text": "•Whatyouownedandwhattheoutcomewa"
+    },
+    {
+      "page": 1,
+      "y": 277.57,
+      "x": 36,
+      "text": "Projects"
+    },
+    {
+      "page": 1,
+      "y": 295.95,
+      "x": 46.8,
+      "text": "Project Name"
+    },
+    {
+      "page": 1,
+      "y": 307.75,
+      "x": 46.8,
+      "text": "React, Node.js, PostgreSQL"
+    },
+    {
+      "page": 1,
+      "y": 324.05,
+      "x": 61.53,
+      "text": "•One-sentencedescriptionofwhatth"
+    },
+    {
+      "page": 1,
+      "y": 337.95,
+      "x": 61.53,
+      "text": "•Technicaldetailoruserimpactwort"
+    },
+    {
+      "page": 1,
+      "y": 355.43,
+      "x": 46.8,
+      "text": "Another Project"
+    },
+    {
+      "page": 1,
+      "y": 367.23,
+      "x": 46.8,
+      "text": "Python, FastAPI"
+    },
+    {
+      "page": 1,
+      "y": 383.53,
+      "x": 61.53,
+      "text": "•Whatitdoesandwhatyoulearnedorsh"
+    },
+    {
+      "page": 1,
+      "y": 406.59,
+      "x": 36,
+      "text": "Technical Skills"
+    },
+    {
+      "page": 1,
+      "y": 423.79,
+      "x": 46.8,
+      "text": "Languages:Python,TypeScript,Java"
+    },
+    {
+      "page": 1,
+      "y": 437.09,
+      "x": 46.8,
+      "text": "Frameworks:React,Node.js,Express"
+    },
+    {
+      "page": 1,
+      "y": 450.39,
+      "x": 46.8,
+      "text": "Tools:Git,Docker,AWS,PostgreSQL,"
+    }
+  ],
+  "compact": [
+    {
+      "page": 1,
+      "y": 53.15,
+      "x": 235.288,
+      "text": "Your Name"
+    },
+    {
+      "page": 1,
+      "y": 66.35,
+      "x": 107.875,
+      "text": "you@email.com|linkedin.com/in/yo"
+    },
+    {
+      "page": 1,
+      "y": 88.91,
+      "x": 36,
+      "text": "Education"
+    },
+    {
+      "page": 1,
+      "y": 104.79,
+      "x": 46.8,
+      "text": "University NameAug. 2022 – May 2"
+    },
+    {
+      "page": 1,
+      "y": 115.59,
+      "x": 46.8,
+      "text": "B.S. in Computer ScienceCity, St"
+    },
+    {
+      "page": 1,
+      "y": 133.45,
+      "x": 36,
+      "text": "Experience"
+    },
+    {
+      "page": 1,
+      "y": 149.33,
+      "x": 46.8,
+      "text": "Company NameJun. 2025 – Aug. 202"
+    },
+    {
+      "page": 1,
+      "y": 160.13,
+      "x": 46.8,
+      "text": "Software Engineering InternCity,"
+    },
+    {
+      "page": 1,
+      "y": 173.43,
+      "x": 61.53,
+      "text": "•Accomplishmentwithametric—whaty"
+    },
+    {
+      "page": 1,
+      "y": 185.03,
+      "x": 61.53,
+      "text": "•Secondaccomplishment.Keepeachbu"
+    },
+    {
+      "page": 1,
+      "y": 199.51,
+      "x": 46.8,
+      "text": "Another CompanyJan. 2025 – May 2"
+    },
+    {
+      "page": 1,
+      "y": 210.31,
+      "x": 46.8,
+      "text": "Role TitleRemote"
+    },
+    {
+      "page": 1,
+      "y": 223.61,
+      "x": 61.53,
+      "text": "•Whatyouownedandwhattheoutcomewa"
+    },
+    {
+      "page": 1,
+      "y": 241.47,
+      "x": 36,
+      "text": "Projects"
+    },
+    {
+      "page": 1,
+      "y": 257.35,
+      "x": 46.8,
+      "text": "Project Name"
+    },
+    {
+      "page": 1,
+      "y": 268.15,
+      "x": 46.8,
+      "text": "React, Node.js, PostgreSQL"
+    },
+    {
+      "page": 1,
+      "y": 281.45,
+      "x": 61.53,
+      "text": "•One-sentencedescriptionofwhatth"
+    },
+    {
+      "page": 1,
+      "y": 293.05,
+      "x": 61.53,
+      "text": "•Technicaldetailoruserimpactwort"
+    },
+    {
+      "page": 1,
+      "y": 307.53,
+      "x": 46.8,
+      "text": "Another Project"
+    },
+    {
+      "page": 1,
+      "y": 318.33,
+      "x": 46.8,
+      "text": "Python, FastAPI"
+    },
+    {
+      "page": 1,
+      "y": 331.63,
+      "x": 61.53,
+      "text": "•Whatitdoesandwhatyoulearnedorsh"
+    },
+    {
+      "page": 1,
+      "y": 349.49,
+      "x": 36,
+      "text": "Technical Skills"
+    },
+    {
+      "page": 1,
+      "y": 364.29,
+      "x": 46.8,
+      "text": "Languages:Python,TypeScript,Java"
+    },
+    {
+      "page": 1,
+      "y": 376.49,
+      "x": 46.8,
+      "text": "Frameworks:React,Node.js,Express"
+    },
+    {
+      "page": 1,
+      "y": 388.69,
+      "x": 46.8,
+      "text": "Tools:Git,Docker,AWS,PostgreSQL,"
+    }
+  ],
+  "spacious": [
+    {
+      "page": 1,
+      "y": 53.15,
+      "x": 235.288,
+      "text": "Your Name"
+    },
+    {
+      "page": 1,
+      "y": 68.85,
+      "x": 101.725,
+      "text": "you@email.com|linkedin.com/in/yo"
+    },
+    {
+      "page": 1,
+      "y": 100.65,
+      "x": 36,
+      "text": "Education"
+    },
+    {
+      "page": 1,
+      "y": 121.65,
+      "x": 46.8,
+      "text": "University NameAug. 2022 – May 2"
+    },
+    {
+      "page": 1,
+      "y": 135.05,
+      "x": 46.8,
+      "text": "B.S. in Computer ScienceCity, St"
+    },
+    {
+      "page": 1,
+      "y": 162.25,
+      "x": 36,
+      "text": "Experience"
+    },
+    {
+      "page": 1,
+      "y": 183.25,
+      "x": 46.8,
+      "text": "Company NameJun. 2025 – Aug. 202"
+    },
+    {
+      "page": 1,
+      "y": 196.65,
+      "x": 46.8,
+      "text": "Software Engineering InternCity,"
+    },
+    {
+      "page": 1,
+      "y": 215.15,
+      "x": 61.53,
+      "text": "•Accomplishmentwithametric—whaty"
+    },
+    {
+      "page": 1,
+      "y": 231.35,
+      "x": 61.53,
+      "text": "•Secondaccomplishment.Keepeachbu"
+    },
+    {
+      "page": 1,
+      "y": 251.55,
+      "x": 46.8,
+      "text": "Another CompanyJan. 2025 – May 2"
+    },
+    {
+      "page": 1,
+      "y": 264.95,
+      "x": 46.8,
+      "text": "Role TitleRemote"
+    },
+    {
+      "page": 1,
+      "y": 283.45,
+      "x": 61.53,
+      "text": "•Whatyouownedandwhattheoutcomewa"
+    },
+    {
+      "page": 1,
+      "y": 310.65,
+      "x": 36,
+      "text": "Projects"
+    },
+    {
+      "page": 1,
+      "y": 331.65,
+      "x": 46.8,
+      "text": "Project Name"
+    },
+    {
+      "page": 1,
+      "y": 345.05,
+      "x": 46.8,
+      "text": "React, Node.js, PostgreSQL"
+    },
+    {
+      "page": 1,
+      "y": 363.55,
+      "x": 61.53,
+      "text": "•One-sentencedescriptionofwhatth"
+    },
+    {
+      "page": 1,
+      "y": 379.75,
+      "x": 61.53,
+      "text": "•Technicaldetailoruserimpactwort"
+    },
+    {
+      "page": 1,
+      "y": 399.95,
+      "x": 46.8,
+      "text": "Another Project"
+    },
+    {
+      "page": 1,
+      "y": 413.35,
+      "x": 46.8,
+      "text": "Python, FastAPI"
+    },
+    {
+      "page": 1,
+      "y": 431.85,
+      "x": 61.53,
+      "text": "•Whatitdoesandwhatyoulearnedorsh"
+    },
+    {
+      "page": 1,
+      "y": 459.05,
+      "x": 36,
+      "text": "Technical Skills"
+    },
+    {
+      "page": 1,
+      "y": 478.75,
+      "x": 46.8,
+      "text": "Languages:Python,TypeScript,Java"
+    },
+    {
+      "page": 1,
+      "y": 494.65,
+      "x": 46.8,
+      "text": "Frameworks:React,Node.js,Express"
+    },
+    {
+      "page": 1,
+      "y": 510.55,
+      "x": 46.8,
+      "text": "Tools:Git,Docker,AWS,PostgreSQL,"
+    }
+  ]
+}

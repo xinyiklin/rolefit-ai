@@ -5,7 +5,7 @@
 // Pull the applicant's name from a resume's plain text so downloads can be named
 // after the person. Scans the first lines and takes the first "First Last"
 // sequence. Returns "" when nothing confident is found. (Callers prefer the
-// structured ResumeData.name; this is the fallback for text-only sources.)
+// structured ResumeData.header name; this is the fallback for text-only sources.)
 export function extractApplicantName(text: string): string {
   // Scan line by line (the name sits on its own line at the top) and take the
   // first 2-3 word "First Last" from the start of a line. Matching per-line

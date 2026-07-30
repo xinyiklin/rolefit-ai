@@ -25,6 +25,7 @@ import type { ApplicationDocumentSync } from "../../hooks/useApplicationDocument
 import type { DraftAutosaveState } from "../../hooks/useAutosaveDraft";
 import type { CoverLetterEditorState } from "../../hooks/useCoverLetterEditor";
 import { useDialog } from "../../hooks/useDialog";
+import { coverLetterRecoveryDirty } from "../../lib/coverLetterRecovery";
 import { formatHistoryDate } from "../../lib/historyDate";
 import { ExportMenu } from "../ExportRail";
 import { DocumentOpenMenu } from "../document/DocumentOpenMenu";
@@ -95,7 +96,13 @@ export function CoverLetterToolbar({
   const [pdfPromptOpen, setPdfPromptOpen] = useState(false);
 
   async function confirmReplace(): Promise<boolean> {
-    if (!editor.dirty) return true;
+    if (!coverLetterRecoveryDirty({
+      documentDirty: editor.dirty,
+      documentTitle: editor.documentTitle,
+      persistedDocumentTitle: editor.persistedDocumentTitle
+    })) {
+      return true;
+    }
     return confirm({
       title: "Replace cover letter?",
       message: "Replace the current cover letter? Unsaved edits will be lost.",
@@ -362,13 +369,30 @@ export function CoverLetterToolbar({
         docStyle={editor.docStyle}
         documentStructureTools={(
           <DocumentStructureControls
-            name={editor.data.name}
-            contact={editor.data.contact}
+            header={editor.data.header}
             contactDivider={editor.docStyle.style.contactDivider}
             disabled={!hasLetter}
-            onSetName={editor.actions.setName}
-            onUpdateContact={editor.actions.updateContact}
-            onAddContact={editor.actions.addContact}
+            // A cover letter has no document-spacing popover: paragraph spacing
+            // covers its body, so the header's own gaps live in the Header menu.
+            headerSpacing={{
+              values: editor.docStyle.style,
+              onChange: (key, value) => editor.docStyle.set(key, value)
+            }}
+            onCreateHeader={() => {
+              if (editorRef.current) editorRef.current.createHeader();
+              else editor.actions.createHeader();
+            }}
+            onSetHeaderVisible={editor.actions.setHeaderVisible}
+            onSetHeaderName={(nextText) => {
+              if (editorRef.current) editorRef.current.replaceHeaderNameText(nextText);
+              else editor.actions.setHeaderName(nextText);
+            }}
+            onRemoveHeaderName={editor.actions.removeHeaderName}
+            onUpdateContact={(index, nextText) => {
+              if (editorRef.current) editorRef.current.replaceHeaderContactText(index, nextText);
+              else editor.actions.updateContact(index, nextText);
+            }}
+            onInsertContact={editor.actions.insertContact}
             onRemoveContact={editor.actions.removeContact}
             onContactDividerChange={(value) => editor.docStyle.set("contactDivider", value)}
             showSections={false}

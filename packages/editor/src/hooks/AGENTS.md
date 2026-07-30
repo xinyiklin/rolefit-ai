@@ -18,9 +18,16 @@ style state; app lifecycle and persistence policy remain in the apps.
 
 - Keep reducer transitions explicit, deterministic, serializable, and atomic.
   One visible edit or structural action produces one history step.
+- Typing and held-key deletion coalesce into word-processor-sized undo steps,
+  not whole bursts: a run ends at an idle pause, a word boundary in the
+  gesture's own direction, or the group character cap. Callers report the
+  characters an edit moved through `historyText`; an edit that omits it still
+  advances the cap, so no burst can grow into one unbounded undo step.
 - Content and print-style reducers share one `createHistoryClock()` per
   document. Never couple separate editors through module-global history state;
-  a new transaction after Undo invalidates Redo in both reducers.
+  a new transaction after Undo invalidates Redo in both reducers. Sequence
+  allocation must be idempotent for the same state/action pair because React
+  Strict Mode may invoke a reducer twice before committing either result.
 - Prefer derived state over synchronized copies. Use refs only for transient
   controller values that should not trigger presentation.
 - Hooks do not own app files, autosave destinations, provider settings, tracker

@@ -10,6 +10,7 @@ import {
   SPACING_CONTROL_GROUPS,
   activeSpacingPresetId,
   applySpacingPreset,
+  formatSpacingValue,
   spacingPresetOptions
 } from "./styleOptions";
 
@@ -17,9 +18,6 @@ export type SpacingStylePopoverProps = {
   docStyle: DocStyleControls;
   disabled?: boolean;
 };
-
-const formatSpacingValue = (value: number, unit: string) =>
-  `${value.toFixed(2).replace(/\.00$/, "").replace(/(\.\d)0$/, "$1")}${unit}`;
 
 export function SpacingStylePopover({ docStyle, disabled = false }: SpacingStylePopoverProps) {
   const idPrefix = `spacing-style-${useId()}`;
@@ -85,6 +83,7 @@ export function SpacingStylePopover({ docStyle, disabled = false }: SpacingStyle
                       min={1}
                       max={2}
                       step={0.01}
+                      disabled={disabled}
                       displayValue={formatSpacingValue(docStyle.style.lineHeight, "")}
                       onChange={(value) => docStyle.set("lineHeight", value)}
                     />
@@ -103,6 +102,7 @@ export function SpacingStylePopover({ docStyle, disabled = false }: SpacingStyle
                           min={control.min}
                           max={control.max}
                           step={control.step}
+                          disabled={disabled}
                           displayValue={formatSpacingValue(docStyle.style[control.key], control.unit)}
                           onChange={(value) => docStyle.set(control.key, value)}
                         />

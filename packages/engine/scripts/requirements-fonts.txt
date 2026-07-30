@@ -1,0 +1,6 @@
+# Deterministic font generation/check dependencies. Keep the font packages
+# synchronized with the exact version guards in both generate_font_*.py
+# scripts; certifi keeps HTTPS source verification independent of runner images.
+fonttools[woff]==4.60.2
+brotli==1.2.0
+certifi==2026.7.22

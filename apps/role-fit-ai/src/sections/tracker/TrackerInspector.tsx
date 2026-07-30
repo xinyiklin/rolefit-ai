@@ -192,12 +192,17 @@ export function TrackerInspector({
       ) : null}
 
       {/* Sent dossier — only rendered when any of the three data points exist */}
-      {(selected.resumeUsed || selected.resumeArtifacts?.hasPdf || selected.coverLetterText || selected.applicationAnswers?.length) ? (
+      {(selected.resumeUsed ||
+        selected.resumeArtifacts?.hasPdf ||
+        selected.resumeArtifacts?.hasSource ||
+        selected.coverLetterArtifacts?.hasPdf ||
+        selected.coverLetterArtifacts?.hasSource ||
+        selected.applicationAnswers?.length) ? (
         <>
           <div className="inspector-divider" aria-hidden="true" />
           <p className="inspector-sent__eyebrow">Sent</p>
           <dl className="ledger-rows inspector-facts">
-            {(selected.resumeUsed || selected.resumeArtifacts?.hasPdf) ? (
+            {(selected.resumeUsed || selected.resumeArtifacts?.hasPdf || selected.resumeArtifacts?.hasSource) ? (
               <div className="ledger-row">
                 <dt>Resume</dt>
                 <span className="ledger-row__leader" aria-hidden="true" />
@@ -219,7 +224,7 @@ export function TrackerInspector({
                 </dd>
               </div>
             ) : null}
-            {selected.coverLetterText ? (
+            {(selected.coverLetterArtifacts?.hasPdf || selected.coverLetterArtifacts?.hasSource) ? (
               <div className="ledger-row">
                 <dt>Cover letter</dt>
                 <span className="ledger-row__leader" aria-hidden="true" />

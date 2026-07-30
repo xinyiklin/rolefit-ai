@@ -14,8 +14,7 @@ const SENTENCE =
   + "does to the lines the author never started themselves.";
 
 const letter = (text) => ({
-  name: "",
-  contact: [],
+  header: null,
   sections: [
     {
       id: "cover-letter",

@@ -11,6 +11,7 @@ import {
   WorkspaceBackupError
 } from "../workspaceBackup.ts";
 import { writeStoredBrowserPreferences } from "../browserPreferences.ts";
+import { writeApplications } from "../applications/storage.ts";
 import { countActiveTabs, isValidPresenceTabId } from "../presence.ts";
 import { withWorkspaceLock } from "../workspace.ts";
 import {
@@ -30,6 +31,7 @@ import {
 } from "../../src/lib/workspaceBackupContract.ts";
 import {
   COVER_LETTER_STYLE_DEFAULTS,
+  coverLetterResumeData,
   serializeCoverLetterFile
 } from "@typeset/engine/lib/coverLetter.ts";
 
@@ -68,70 +70,54 @@ async function snapshot(directory) {
 }
 
 try {
-  await mkdir(join(sourceDir, ".trash"), { recursive: true });
+  await mkdir(join(sourceDir, "resumes", ".trash"), { recursive: true });
   await mkdir(join(sourceDir, "applications", "application-1", "attachments"), { recursive: true });
 
   const portableResume = JSON.parse(starterText);
-  portableResume.document.name = "Portable Candidate";
+  portableResume.document.header.name = "Portable Candidate";
   const portableResumeText = JSON.stringify(portableResume, null, 2);
-  await writeFile(join(sourceDir, "base-resume.resume"), portableResumeText, "utf8");
+  await writeFile(join(sourceDir, "resumes", "default.resume"), portableResumeText, "utf8");
   await writeFile(
-    join(sourceDir, ".trash", "2026-07-19T12-00-00-000Z__base-resume.resume"),
+    join(sourceDir, "resumes", ".trash", "2026-07-19T12-00-00-000Z__default.resume"),
     starterText,
     "utf8"
   );
-  await writeFile(
-    join(sourceDir, "applications.json"),
-    JSON.stringify({
-      savedAt: fixedDate.toISOString(),
-      applications: [{
-        id: "application-1",
-        title: "Portable role",
-        jobUrl: "",
-        status: "applied",
-        createdAt: fixedDate.toISOString(),
-        updatedAt: fixedDate.toISOString(),
-        resumeArtifacts: {
-          hasPdf: false,
-          hasSource: true,
-          fileName: "Portable_Resume.resume",
-          savedAt: fixedDate.toISOString()
-        },
-        coverLetterArtifacts: {
-          hasPdf: false,
-          hasSource: true,
-          fileName: "Portable_Cover_Letter.cover",
-          savedAt: fixedDate.toISOString()
-        },
-        attachments: [{
-          fileName: "writing sample.pdf",
-          label: "Writing sample",
-          size: 21,
-          contentType: "application/pdf",
-          savedAt: fixedDate.toISOString()
-        }]
-      }]
-    }, null, 2),
-    "utf8"
-  );
-  await writeFile(join(sourceDir, "applications", "application-1", "resume.resume"), portableResumeText, "utf8");
-  const portableCoverText = serializeCoverLetterFile({
-    name: "Portable Candidate",
-    contact: ["portable@example.test"],
-    sections: [{
-      id: "section-cover",
-      heading: "Cover Letter",
-      type: "summary",
-      items: [{
-        id: "entry-cover",
-        titleLeft: "Dear Hiring Team,",
-        titleRight: "",
-        subtitleLeft: "",
-        subtitleRight: "",
-        bullets: []
-      }]
+  await writeApplications(sourceDir, [{
+    id: "application-1",
+    title: "Portable role",
+    jobUrl: "",
+    status: "applied",
+    createdAt: fixedDate.toISOString(),
+    updatedAt: fixedDate.toISOString(),
+    resumeArtifacts: {
+      hasPdf: false,
+      hasSource: true,
+      fileName: "Portable_Resume.resume",
+      savedAt: fixedDate.toISOString()
+    },
+    coverLetterArtifacts: {
+      hasPdf: false,
+      hasSource: true,
+      fileName: "Portable_Cover_Letter.cover",
+      savedAt: fixedDate.toISOString()
+    },
+    attachments: [{
+      fileName: "writing sample.pdf",
+      label: "Writing sample",
+      size: 21,
+      contentType: "application/pdf",
+      savedAt: fixedDate.toISOString()
     }]
-  }, COVER_LETTER_STYLE_DEFAULTS);
+  }]);
+  await writeFile(join(sourceDir, "applications", "application-1", "resume.resume"), portableResumeText, "utf8");
+  const portableCoverText = serializeCoverLetterFile(
+    coverLetterResumeData(["Dear Hiring Team,"], {
+      visible: true,
+      name: "Portable Candidate",
+      contact: ["portable@example.test"]
+    }),
+    COVER_LETTER_STYLE_DEFAULTS
+  );
   await writeFile(join(sourceDir, "applications", "application-1", "cover.cover"), portableCoverText, "utf8");
   await writeFile(
     join(sourceDir, "applications", "application-1", "attachments", "writing sample.pdf"),
@@ -140,7 +126,10 @@ try {
   );
   await writeFile(join(sourceDir, "notes-private.txt"), "not app-managed", "utf8");
   try {
-    await symlink(join(sourceDir, "base-resume.resume"), join(sourceDir, "base-resume-linked.resume"));
+    await symlink(
+      join(sourceDir, "resumes", "default.resume"),
+      join(sourceDir, "resumes", "linked.resume")
+    );
   } catch (error) {
     // Windows requires Developer Mode or an elevated token for symlinks. The
     // rest of the backup contract remains testable when that capability is
@@ -171,14 +160,14 @@ try {
     ...backup,
     browser: {
       settings: { polishStages: "both", honestContext: "Grounded experience only" },
-      lastBaseResume: "base-resume.resume"
+      lastBaseResume: "default.resume"
     }
   });
   assert.equal(withBrowser.browser?.settings.polishStages, "both", "portable browser preferences survive contract parsing");
   assert.throws(
     () => parseWorkspaceBackupEnvelope({
       ...backup,
-      browser: { settings: { polishStages: "both", credential: "must-not-travel" }, lastBaseResume: "base-resume.resume" }
+      browser: { settings: { polishStages: "both", credential: "must-not-travel" }, lastBaseResume: "default.resume" }
     }),
     /unsupported or invalid values/,
     "portable preferences reject settings outside the owned allowlist"
@@ -193,13 +182,14 @@ try {
   );
 
   await mkdir(targetDir, { recursive: true });
-  await writeFile(join(targetDir, "base-resume.resume"), starterText, "utf8");
+  await mkdir(join(targetDir, "resumes"), { recursive: true });
+  await writeFile(join(targetDir, "resumes", "default.resume"), starterText, "utf8");
   await writeFile(join(targetDir, "keep-me.txt"), "previous unknown workspace file", "utf8");
 
   const result = await restoreWorkspaceBackup(targetDir, withBrowser, fixedDate);
   assert.equal(result.restoredFiles, 6);
   assert.equal(result.previousWorkspaceKept, true);
-  assert.equal(JSON.parse(await readFile(join(targetDir, "resumes", "default.resume"), "utf8")).document.name, "Portable Candidate");
+  assert.equal(JSON.parse(await readFile(join(targetDir, "resumes", "default.resume"), "utf8")).document.header.name, "Portable Candidate");
   assert.equal(await readFile(join(targetDir, "applications", "application-1", "resume.resume"), "utf8"), portableResumeText);
   assert.equal(await readFile(join(targetDir, "applications", "application-1", "cover.cover"), "utf8"), portableCoverText);
   assert.equal(
@@ -229,7 +219,7 @@ try {
   assert.equal(restoredMirror.format, "rolefit-browser-preferences");
   assert.equal(restoredMirror.schemaVersion, 1);
   assert.equal(restoredMirror.settings.polishStages, "both", "the restored mirror carries the envelope's browser settings");
-  assert.equal(restoredMirror.lastBaseResume, "base-resume.resume");
+  assert.equal(restoredMirror.lastBaseResume, "default.resume");
   const restoredMarker = parseStoredWorkspaceRestoreMarker(
     JSON.parse(await readFile(join(targetDir, WORKSPACE_RESTORE_MARKER_FILE_NAME), "utf8"))
   );
@@ -238,8 +228,8 @@ try {
   // A backup without optional browser preferences still records the restore so
   // the next browser load can clear recovery drafts from the previous workspace.
   const noBrowserTarget = join(isolatedRoot, "no-browser-target");
-  await mkdir(noBrowserTarget, { recursive: true });
-  await writeFile(join(noBrowserTarget, "base-resume.resume"), starterText, "utf8");
+  await mkdir(join(noBrowserTarget, "resumes"), { recursive: true });
+  await writeFile(join(noBrowserTarget, "resumes", "default.resume"), starterText, "utf8");
   await restoreWorkspaceBackup(noBrowserTarget, backup, fixedDate);
   await assert.rejects(
     () => readFile(join(noBrowserTarget, BROWSER_PREFERENCES_FILE_NAME), "utf8"),
@@ -399,8 +389,8 @@ try {
 
   // --- Browser-preferences mirror <-> backup envelope ---
   const prefsDir = join(isolatedRoot, "prefs-workspace");
-  await mkdir(prefsDir, { recursive: true });
-  await writeFile(join(prefsDir, "base-resume.resume"), portableResumeText, "utf8");
+  await mkdir(join(prefsDir, "resumes"), { recursive: true });
+  await writeFile(join(prefsDir, "resumes", "default.resume"), portableResumeText, "utf8");
 
   // No mirror yet: backup omits browser and never lists the mirror file.
   const withoutMirror = await createWorkspaceBackup(prefsDir, fixedDate);
@@ -413,13 +403,13 @@ try {
   // A valid mirror is folded into envelope.browser but still excluded from files.
   await writeStoredBrowserPreferences(
     prefsDir,
-    { settings: { polishStages: "review", honestContext: "" }, lastBaseResume: "base-resume.resume" },
+    { settings: { polishStages: "review", honestContext: "" }, lastBaseResume: "default.resume" },
     "mirror",
     fixedDate
   );
   const withMirror = await createWorkspaceBackup(prefsDir, fixedDate);
   assert.equal(withMirror.browser?.settings.polishStages, "review", "a valid mirror is folded into envelope.browser");
-  assert.equal(withMirror.browser?.lastBaseResume, "base-resume.resume");
+  assert.equal(withMirror.browser?.lastBaseResume, "default.resume");
   assert.ok(
     !withMirror.files.some((file) => file.path === BROWSER_PREFERENCES_FILE_NAME),
     "a present mirror is still excluded from the backed-up file list"

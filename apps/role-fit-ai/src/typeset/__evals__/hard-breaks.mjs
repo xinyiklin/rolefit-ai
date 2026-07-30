@@ -47,8 +47,7 @@ assert.deepEqual(
 // for either backend to reinterpret.
 const layout = layoutResume(
   {
-    name: "Candidate",
-    contact: ["candidate@example.com"],
+    header: { name: "Candidate", contact: ["candidate@example.com"] },
     sections: [
       {
         id: "experience",

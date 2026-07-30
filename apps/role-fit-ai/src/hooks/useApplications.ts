@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { EvidenceType, MissingRequiredSkill, StrictReviewSeverity } from "../resumeEngine";
 import { inferApplicationTitle, inferCompanyFromUrl } from "../lib/jobTarget";
 import { sourceFromUrl, type ExtractedJobTracking } from "../lib/jobExtract";
-import type { ResumeData } from "@typeset/engine/lib/resumeData.ts";
 import { dedupeSourceUrls, normalizeJobUrl, findDuplicateApplications } from "../lib/jobIdentity";
 import type { DuplicateTarget } from "../lib/jobIdentity";
 import type { ApplicationAiUsage } from "../lib/aiUsage";
@@ -12,6 +11,7 @@ import {
   reconcileApplicationWriteResponse,
   type ApplicationMutation
 } from "../lib/applicationMutation";
+import type { ApplicationDocumentArtifacts } from "../../shared/applicationDocumentContract.ts";
 
 export type { ApplicationAiUsage, StageAiUsage } from "../lib/aiUsage";
 
@@ -83,20 +83,7 @@ export const JOB_TYPES = ["Full-time", "Part-time", "Contract", "Internship", "T
 // document is later updated. The active representation is strict source or an
 // explicitly uploaded PDF; this record only remembers what exists so the
 // detail modal can offer preview/download actions.
-export type DocumentArtifacts = {
-  hasPdf: boolean;
-  hasSource?: boolean;
-  // Deterministic marker for the complete strict source, including document
-  // style and inline formatting. Missing on legacy rows, which intentionally
-  // makes the editor offer an Update action to establish the current version.
-  sourceFingerprint?: string;
-  fileName?: string;
-  templateId?: string;
-  savedAt?: string;
-};
-
-/** @deprecated Use DocumentArtifacts — kept as the historical resume-only name. */
-export type ResumeArtifacts = DocumentArtifacts;
+export type DocumentArtifacts = ApplicationDocumentArtifacts;
 
 // An extra file the user attached to this application (transcript, portfolio,
 // writing sample). Stored under <workspace>/applications/<id>/attachments/;
@@ -159,16 +146,9 @@ export type Application = {
   // tailored draft, so the pipeline can show the lift tailoring produced.
   baseFitScore?: number | null;
   tailoredFitScore?: number | null;
-  // Which engine produced the pair. "local" is accepted only for backward
-  // compatibility with saved records and is never restored as an AI judgment.
-  fitScoreSource?: "ai" | "local" | null;
+  // A fit comparison is persisted only when AI Review produced it.
+  fitScoreSource?: "ai" | null;
   templateId?: string;
-  // Structured editor snapshot captured at Apply time. `polishedText` stays as
-  // the plain-text compatibility/search field; this restores the exact editor
-  // model without re-inferring section types from text.
-  resumeData?: ResumeData;
-  polishedText?: string;
-  coverLetterText?: string;
   review?: ApplicationReview;
   missingRequiredSkills?: MissingRequiredSkill[];
   // Which resume actually went out — the AI-tailored draft or the original/base

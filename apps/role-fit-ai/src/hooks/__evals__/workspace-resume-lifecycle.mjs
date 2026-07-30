@@ -51,6 +51,7 @@ assert.equal(structuredCandidate.kind, "resume", "valid .resume input becomes a 
 assert.ok(structuredCandidate.parsed.data.sections.length > 0, "structured candidate carries parsed resume data");
 
 const source = readFileSync(new URL("../useWorkspaceResume.ts", import.meta.url), "utf8");
+const appSource = readFileSync(new URL("../../App.tsx", import.meta.url), "utf8");
 const functionSlice = (name, nextName) => {
   const start = source.indexOf(`  async function ${name}`);
   const end = source.indexOf(`  async function ${nextName}`, start + 1);
@@ -60,44 +61,63 @@ const functionSlice = (name, nextName) => {
 
 const applyWorkspace = functionSlice("applyWorkspaceBaseResume", "loadWorkspace");
 const prepared = applyWorkspace.indexOf("candidate = prepareResumeText");
-const confirmed = applyWorkspace.indexOf("await confirmReplaceEditor()", prepared);
-const recoveryCleared = applyWorkspace.indexOf("clearAutosaveDraft()", confirmed);
+const confirmed = applyWorkspace.indexOf("await approveCurrentReplacement(", prepared);
+const liveVersionCheck = applyWorkspace.indexOf("replacementGuard.currentVersion()", confirmed);
+const recoveryCleared = applyWorkspace.indexOf("replacementGuard.onReplacementCommitted()", liveVersionCheck);
 const identityCommitted = applyWorkspace.indexOf("setFileName(", recoveryCleared);
 assert.ok(prepared >= 0 && confirmed > prepared, "workspace files validate before replacement confirmation");
-assert.ok(recoveryCleared > confirmed, "workspace recovery clears only after validation and confirmation");
+assert.ok(liveVersionCheck > confirmed, "workspace replacement re-checks the live document version at its commit boundary");
+assert.ok(recoveryCleared > liveVersionCheck, "workspace recovery clears only after validation and current-state confirmation");
 assert.ok(identityCommitted > recoveryCleared, "workspace identity changes only inside the validated commit");
 
 const starterLoad = functionSlice("loadStarterTemplate", "saveBaseResume");
 const starterResponse = starterLoad.indexOf("if (!response.ok");
-const starterPrepared = starterLoad.indexOf("prepareResumeText(", starterResponse);
-const starterConfirmed = starterLoad.indexOf("await confirmReplaceEditor()", starterPrepared);
-const starterIdentity = starterLoad.indexOf("setFileName(", starterConfirmed);
-assert.ok(starterResponse >= 0 && starterPrepared > starterResponse, "starter validates only after a successful workspace response");
-assert.ok(starterConfirmed > starterPrepared, "starter validates before replacement confirmation");
-assert.ok(starterIdentity > starterConfirmed, "starter identity changes only after validation and confirmation");
+const starterCommit = starterLoad.indexOf("await applyWorkspaceBaseResume(", starterResponse);
+assert.ok(starterResponse >= 0 && starterCommit > starterResponse, "starter replacement uses the central current-state guard after a successful response");
 assert.match(starterLoad, /setBaseResumeName\(""\)/, "starter remains detached from the active saved base");
 
 const restore = functionSlice("restoreBaseResume", "saveCurrentAsBaseResume");
+const restoreApproval = restore.indexOf("await approveCurrentReplacement()");
 const restoreResponse = restore.indexOf("if (!response.ok");
 const restoreCommit = restore.indexOf("await applyWorkspaceBaseResume", restoreResponse);
+assert.ok(restoreApproval >= 0 && restoreApproval < restoreResponse, "restore obtains approval before mutating the saved workspace file");
 assert.ok(restoreResponse >= 0 && restoreCommit > restoreResponse, "restore commits only after a successful response");
-assert.doesNotMatch(restore, /clearAutosaveDraft\(\)/, "restore does not clear recovery before the server succeeds");
+assert.match(restore, /approvedVersion/, "restore carries the approved document version across the server request for a commit-time re-check");
+assert.doesNotMatch(restore, /onReplacementCommitted\(\)/, "restore does not clear recovery before the server succeeds");
 
 const select = functionSlice("loadBaseResumeVersion", "handleFileUpload");
 const selectResponse = select.indexOf("if (!response.ok");
 const selectCommit = select.indexOf("await applyWorkspaceBaseResume", selectResponse);
 assert.ok(selectResponse >= 0 && selectCommit > selectResponse, "selection commits only after a successful response");
-assert.doesNotMatch(select, /clearAutosaveDraft\(\)/, "selection does not clear recovery before the server succeeds");
+assert.doesNotMatch(select, /onReplacementCommitted\(\)/, "selection does not clear recovery before the server succeeds");
 
 const uploadStart = source.indexOf("  async function handleFileUpload");
 const uploadEnd = source.indexOf("\n  return {", uploadStart);
 const upload = source.slice(uploadStart, uploadEnd);
 const uploadPrepared = upload.indexOf("candidate = await prepareResumeUpload(file)");
-const uploadConfirmed = upload.indexOf("await confirmReplaceEditor()", uploadPrepared);
-const uploadRecovery = upload.indexOf("clearAutosaveDraft()", uploadConfirmed);
+const uploadConfirmed = upload.indexOf("await approveCurrentReplacement()", uploadPrepared);
+const uploadLiveVersion = upload.indexOf("replacementGuard.currentVersion()", uploadConfirmed);
+const uploadRecovery = upload.indexOf("replacementGuard.onReplacementCommitted()", uploadLiveVersion);
 const uploadIdentity = upload.indexOf("setFileName(file.name)", uploadRecovery);
 assert.ok(uploadPrepared >= 0 && uploadConfirmed > uploadPrepared, "upload preflight completes before confirmation");
-assert.ok(uploadRecovery > uploadConfirmed, "upload recovery clears only after confirmation");
+assert.ok(uploadLiveVersion > uploadConfirmed, "upload re-checks the live document version before replacement");
+assert.ok(uploadRecovery > uploadLiveVersion, "upload recovery clears only after current-state confirmation");
 assert.ok(uploadIdentity > uploadRecovery, "upload identity changes only at commit");
+
+assert.match(
+  appSource,
+  /dirty:\s*resumeDocumentDirty[\s\S]*?version:\s*`\$\{serializedResume\}\\u0000\$\{JSON\.stringify\(toDocumentStyle\(docStyle\.style\)\)\}`/,
+  "the replacement guard's live state includes resume content and persisted style state"
+);
+assert.match(
+  appSource,
+  /subscribeWorkspaceRestoreAdoption[\s\S]*?void loadWorkspace\(false\)/,
+  "cross-tab restore adoption refreshes workspace choices without automatically replacing the open resume"
+);
+assert.match(
+  source,
+  /workspaceLoadGenerationRef\.current[\s\S]*?generation !== workspaceLoadGenerationRef\.current/,
+  "reordered workspace responses are rejected by the latest-request generation"
+);
 
 console.log("Workspace resume lifecycle probes passed");

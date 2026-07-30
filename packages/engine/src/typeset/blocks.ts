@@ -3,9 +3,9 @@
 //
 // MODEL — a vertical list flattened to baseline arithmetic:
 //   nextBaseline = prevBaseline + junction(prev, next)
-// Each junction is either line leading or a named constant calibrated against
-// committed visual truth fixtures. Constants live in one place, and DocStyle
-// sliders enter linearly so every rendering surface shares the same rhythm.
+// Each junction is the following row's own line advance plus the document's gap
+// for that junction, so every rendering surface shares the same rhythm and a
+// gap of 0 adds nothing.
 
 import { documentFontFamily, type DocumentFontFamily } from "./fontRegistry.ts";
 import type { FieldSrc, FontStyle, GlyphRun, ParagraphAlign } from "./types.ts";
@@ -29,7 +29,12 @@ import {
   paragraphSpacingFromInlineMarks,
   stripInlineMarks
 } from "../lib/inlineMarksText.ts";
-import { DOC_STYLE_DEFAULTS, type DocumentStyle } from "../lib/documentStyle.ts";
+import {
+  DOC_STYLE_DEFAULTS,
+  type DocumentStyle,
+  type HeaderStyle,
+  type PageStyle
+} from "../lib/documentStyle.ts";
 import type { TypesetSchema } from "./schema.ts";
 
 // US-Letter page in bp (1/72in): 8.5in × 11in. The one owner of the physical
@@ -37,16 +42,6 @@ import type { TypesetSchema } from "./schema.ts";
 // editor's pointer math.
 export const PAGE_WIDTH_BP = 612;
 export const PAGE_HEIGHT_BP = 792;
-
-// Source font point → PDF point (bp).
-const PT = 72 / 72.27;
-
-// Baseline spacing for the resume's 11pt font scale, in bp.
-const BSK = {
-  normalsize: 13.6 * PT,
-  small: 12 * PT,
-  large: 14 * PT
-} as const;
 
 // One typeset line placed in the vertical stream. x/runs are relative to the
 // text column's left edge; `dist` is the baseline distance from the PREVIOUS
@@ -65,8 +60,12 @@ export type VLine = {
   riseOverflow: number; // above the baseline
   dropOverflow: number; // below the baseline
   dist: number; // baseline distance from previous line in the stream
-  // Paragraph rows expose owned leading so selections exclude unrelated block gaps.
+  // Paragraph rows expose selection geometry independently of their calibrated
+  // junction distance. The editor can then paint authored paragraph spacing
+  // without trying to reverse-engineer it from neighbouring baselines.
   leading?: number;
+  paragraphSpaceBefore?: number;
+  paragraphSpaceAfter?: number;
   // Inline line-height adjusts the following junction without moving this baseline.
   afterDist?: number;
   // Pagination policy: "keep" lines may not start a page-break separation from
@@ -78,97 +77,82 @@ export type VLine = {
 const num = (v: unknown, fallback: number): number =>
   typeof v === "number" && Number.isFinite(v) ? v : fallback;
 
-// Defaults mirror DOC_STYLE_DEFAULTS. These are physical PDF/DTP points, not
-// font-relative CSS em values. The exact numbers preserve the calibrated layout.
+// Defaults mirror DOC_STYLE_DEFAULTS. These are physical PDF/DTP points of
+// space ADDED to a junction, not font-relative CSS em values: 0 is no added
+// space anywhere.
 const GAP_PT = {
-  nameContactGapPt: 1 * PT,
-  contactGapPt: 18.2 * PT,
-  headerSectionGapPt: 0.85 * 11 * PT,
-  sectionGapPt: 0.85 * 11 * PT,
-  sectionEntryGapPt: 0.42 * 11 * PT,
-  entryGapPt: 0.42 * 11 * PT,
-  titleSubGapPt: 0.06 * 11 * PT,
-  headBulletGapPt: 0.42 * 11 * PT,
-  skillsRowGapPt: 0,
-  bulletGapPt: 0.2 * 11 * PT
+  nameContactGapPt: 4,
+  contactGapPt: 18,
+  headerSectionGapPt: 14,
+  sectionGapPt: 8.9,
+  sectionEntryGapPt: 5.4,
+  entryGapPt: 4.5,
+  titleSubGapPt: 0,
+  headBulletGapPt: 4.5,
+  skillsRowGapPt: 1.5,
+  bulletGapPt: 2.1
 } as const;
 
 // ---- Geometry (bp) ----
-export function pageGeometry(style: DocumentStyle) {
+// The page box: margins, the measure, and the first/last baseline limits. A
+// cover letter needs exactly this much geometry.
+export function pageBox(style: PageStyle) {
   const margins = {
     top: style.pageMarginTopPt,
     right: style.pageMarginRightPt,
     bottom: style.pageMarginBottomPt,
     left: style.pageMarginLeftPt
   };
-  const textWidth = PAGE_WIDTH_BP - margins.left - margins.right;
   const sizes = fontSizesFor(num(style.baseFontSizePt, 10));
-  const entryIndent = num(style.entryIndentPt, DOC_STYLE_DEFAULTS.entryIndentPt);
-  const entryEndIndent = num(style.entryEndIndentPt, DOC_STYLE_DEFAULTS.entryEndIndentPt);
   return {
     marginTop: margins.top,
     marginRight: margins.right,
     marginBottom: margins.bottom,
     marginLeft: margins.left,
-    textWidth,
-    // Entry content is inset 0.15in; bullets add 2.2em at the body size.
-    entryIndent,
-    entryEndIndent,
-    bulletIndent: entryIndent + 2.2 * sizes.normalsize,
-    // Start indent moves only the left edge. End indent independently moves the
-    // right edge, so changing one never drags the other. The default end inset
-    // is the size of Jake's 0.97\textwidth entry table at normal page margins:
-    // that table starts at 46.8bp and ends 5.4bp short of the 576bp text edge.
-    //
-    // Where it APPLIES is a deliberate product choice, not Jake's: the inset is
-    // the entry's right edge, so every row of the entry keeps it — head rows,
-    // bullets, summary paragraphs, and skills rows alike. Jake insets only the
-    // head row (his bullets are a plain `itemize` with no right margin), so the
-    // frozen TeX fixture wraps one long bullet a word later than we do; that
-    // divergence is expected and `vertical-parity.mjs` zeroes the inset for the
-    // legacy comparison rather than the engine changing to match it.
-    headRowWidth: Math.max(1, textWidth - entryIndent - entryEndIndent),
+    textWidth: PAGE_WIDTH_BP - margins.left - margins.right,
     firstBaselineMin: margins.top + sizes.normalsize, // minimum first-line inset
     lastBaselineMax: PAGE_HEIGHT_BP - margins.bottom
   };
 }
 
-// ---- Junction constants (bp), calibrated against visual truth fixtures ----
-// Each J_* is the baseline-distance REMAINDER after the linear docStyle terms;
-// see the vertical-parity check. Values scale with line-height stretch where
-// flexible leading applies.
-const J = {
-  // name baseline → contact baseline, before the user-controlled gap.
-  nameContact: BSK.normalsize,
-  // contact → section heading, after the header/section slider terms.
-  contactHeading: 19.18,
-  // section heading → first entry title / skills row, before its point gap.
-  headingEntry: 14.04,
-  headingSkills: 12.2,
-  // subtitle (or title) → first bullet, before its point gap.
-  headBullet: 11.9,
-  // last line of an entry → next entry title, before its point gap.
-  entryEntry: 13.12,
-  // last content line → next section heading, before its point gap.
-  contentHeading: 14.02,
-  // skills row → skills row, before its point gap.
-  skillsRow: BSK.normalsize,
-  // bullet last line → next bullet first line, before its point gap.
-  bulletBullet: BSK.small
-} as const;
+// The page box plus the entry insets only a resume's body uses.
+export function pageGeometry(style: DocumentStyle) {
+  const box = pageBox(style);
+  const sizes = fontSizesFor(num(style.baseFontSizePt, 10));
+  const entryIndent = num(style.entryIndentPt, DOC_STYLE_DEFAULTS.entryIndentPt);
+  const entryEndIndent = num(style.entryEndIndentPt, DOC_STYLE_DEFAULTS.entryEndIndentPt);
+  const textWidth = box.textWidth;
+  return {
+    ...box,
+    // Entry content is inset 0.15in; bullets add 2.2em at the body size.
+    entryIndent,
+    entryEndIndent,
+    bulletIndent: entryIndent + 2.2 * sizes.normalsize,
+    // Start indent moves only the left edge. End indent independently moves the
+    // right edge, so changing one never drags the other. The inset applies to
+    // the entry's right edge, so every row of the entry keeps it — head rows,
+    // bullets, summary paragraphs, and skills rows alike.
+    headRowWidth: Math.max(1, textWidth - entryIndent - entryEndIndent)
+  };
+}
 
-// Head rows use a strut split into 0.7·baseline spacing above and 0.3 below.
-// Deeper ink, such as an underlined link, switches the distance to an ink-based
-// 1pt floor. This makes linked metadata sit slightly looser than plain rows and
-// is computed mechanically from ink extents.
-const LINESKIP = 1 * PT;
+// ---- Junctions ----
+// Every structural junction is "the next row's own line advance, plus the gap
+// the user set". A gap of 0 therefore means exactly what 0 means in the
+// paragraph before/after controls: no space beyond one line, so every control
+// can close the gap it names.
+const lineAdvance = (size: number, lineHeight: number) => size * lineHeight;
+// The header is a letterhead, not body copy: its rows sit one line apart at
+// their own size and do not inherit the document's line spacing. That leaves
+// the header's own gaps as the only thing that moves them, and makes a gap of 0
+// mean the same distance in a resume and in a double-spaced cover letter.
+const HEADER_LINE_HEIGHT = 1;
+
 // Shared link rules extend about 2pt below the content's ink depth.
 const UNDERLINE_EXTRA = 2.04;
-// Base title-to-subtitle spacing adjustment before the user-controlled gap.
-const TITLE_SUB_VSPACE_BASE = -4.5 * PT;
-// Minimal clear gap between the title's descender ink and the subtitle's ascender
-// ink. Ink extents do not scale with line height but the calibrated distance
-// does, so tightening the line height below the default drives the rows into
+// Minimal clear gap between the title's descender ink and the subtitle's
+// ascender ink. Ink extents do not scale with line height, so a tight line
+// height or a negative head-row gap would otherwise drive the rows into
 // overlap; this floors the distance so they can never collapse onto each other.
 const MIN_TITLE_SUB_INK_GAP = 0.3;
 
@@ -404,24 +388,29 @@ function alignRuns(runs: GlyphRun[], width: number, mode: string, origin = 0): G
 }
 
 /** The one shared name/contact stream used by resume and cover-letter pages. */
-export function buildHeaderVerticalStream(schema: TypesetSchema, style: DocumentStyle): VLine[] {
-  const geo = pageGeometry(style);
+export function buildHeaderVerticalStream(
+  schema: TypesetSchema,
+  style: PageStyle & HeaderStyle
+): VLine[] {
+  const geo = pageBox(style);
   const family = documentFontFamily(style.fontFamily);
   const baseFontSize = num(style.baseFontSizePt, 10);
   const sizes = fontSizesFor(baseFontSize);
-  const fontScale = baseFontSize / 10;
-  const tracking = num(style.letterSpacingPt, 0);
-  const stretch = num(style.lineHeight, 1.18) / 1.2;
-  const gap = (key: keyof typeof GAP_PT) => num(style[key], GAP_PT[key]);
+  // Tracking stays at the font's designed advances: the document style has no
+  // letter-spacing control, so nothing widens or condenses them.
+  const tracking = 0;
+  const gap = (key: keyof HeaderStyle & keyof typeof GAP_PT) =>
+    num(style[key], GAP_PT[key]);
   const headerAlign = style.headerAlign === "left" || style.headerAlign === "right" ? style.headerAlign : "center";
-  const nameSize = nameSizePt(sizes, style.nameSize);
+  const nameSize = nameSizePt(sizes);
   const out: VLine[] = [];
 
-  if (schema.name) {
+  const header = schema.header;
+  if (header?.name !== null && header?.name !== undefined) {
     const nameRuns = styledFieldRuns(
-      schema.name, nameSize, true, false, 0, family, tracking, { kind: "name" }, "boldDisplay"
+      header.name, nameSize, true, false, 0, family, tracking, { kind: "name" }, "boldDisplay"
     );
-    const runs = alignRuns(nameRuns, geo.textWidth, alignmentFromInlineMarks(schema.name) ?? headerAlign);
+    const runs = alignRuns(nameRuns, geo.textWidth, alignmentFromInlineMarks(header.name) ?? headerAlign);
     const rowInk = rowInkOfRuns(runs, nameSize, inkOfRuns(runs));
     const overflow = boxOverflowOfRuns(runs, nameSize);
     out.push({
@@ -434,14 +423,18 @@ export function buildHeaderVerticalStream(schema: TypesetSchema, style: Document
       keepWithPrev: false
     });
   }
-  if (schema.contact.length) {
+  if (header?.contact.length) {
     const size = sizes.small;
     const divider = (style.contactDivider || "|").slice(0, 2);
-    const dividerBox = gap("contactGapPt");
+    // Horizontal slot the separator is centred in. Unlike the vertical gaps this
+    // one contains a glyph, so it floors at that glyph's width: 0 is the
+    // tightest legal setting rather than a separator overlapping its neighbours.
+    const dividerWidth = measure(divider, { family, face: "regular", size, tracking });
+    const dividerBox = Math.max(gap("contactGapPt"), dividerWidth);
     const rows: GlyphRun[][] = [];
     let runs: GlyphRun[] = [];
     let x = 0;
-    schema.contact.forEach((piece, index) => {
+    header.contact.forEach((piece, index) => {
       const pieceRunsAtOrigin = styledFieldRuns(
         piece, size, false, false, 0, family, tracking, { kind: "contact", index }
       );
@@ -465,7 +458,7 @@ export function buildHeaderVerticalStream(schema: TypesetSchema, style: Document
       if (pieceRuns.length) x = pieceRuns[pieceRuns.length - 1].x + pieceRuns[pieceRuns.length - 1].width;
     });
     if (runs.length) rows.push(runs);
-    const contactAlignment = schema.contact.map(alignmentFromInlineMarks).find(Boolean) ?? headerAlign;
+    const contactAlignment = header.contact.map(alignmentFromInlineMarks).find(Boolean) ?? headerAlign;
     rows.forEach((row, rowIndex) => {
       const aligned = alignRuns(row, geo.textWidth, contactAlignment);
       const rowInk = rowInkOfRuns(aligned, size, inkOfRuns(aligned));
@@ -477,9 +470,11 @@ export function buildHeaderVerticalStream(schema: TypesetSchema, style: Document
         riseOverflow: overflow.rise,
         dropOverflow: overflow.drop,
         dist: rowIndex === 0
-          ? schema.name ? J.nameContact * stretch * fontScale + gap("nameContactGapPt") : 0
-          : size * style.lineHeight,
-        keepWithPrev: Boolean(schema.name || rowIndex > 0)
+          ? header.name !== null
+            ? lineAdvance(size, HEADER_LINE_HEIGHT) + gap("nameContactGapPt")
+            : 0
+          : lineAdvance(size, HEADER_LINE_HEIGHT),
+        keepWithPrev: Boolean(header.name !== null || rowIndex > 0)
       });
     });
   }
@@ -492,13 +487,9 @@ export function buildVerticalStream(schema: TypesetSchema, style: DocumentStyle)
   const baseFontSize = num(style.baseFontSizePt, 10);
   const sizes = fontSizesFor(baseFontSize);
   const fontScale = baseFontSize / 10;
-  const tracking = num(style.letterSpacingPt, 0);
-  const stretch = num(style.lineHeight, 1.18) / 1.2;
-  const bsk = {
-    normalsize: BSK.normalsize * stretch * fontScale,
-    small: BSK.small * stretch * fontScale,
-    large: BSK.large * stretch * fontScale
-  };
+  // Tracking stays at the font's designed advances: the document style has no
+  // letter-spacing control, so nothing widens or condenses them.
+  const tracking = 0;
   const gap = (key: keyof typeof GAP_PT) => num(style[key], GAP_PT[key]);
   const bodyAlign = (["justify", "center", "right"].includes(style.bodyAlign ?? "") ? style.bodyAlign : "left") as ParagraphAlign;
   const headingAlign = style.headingAlign === "center" || style.headingAlign === "right" ? style.headingAlign : "left";
@@ -547,9 +538,8 @@ export function buildVerticalStream(schema: TypesetSchema, style: DocumentStyle)
       // Header→first-heading depends only on headerSectionGap. The sectionGap
       // slider must not move the first heading.
       const beforeGap =
-        prevKind === "header"
-          ? J.contactHeading * stretch * fontScale + gap("headerSectionGapPt")
-          : J.contentHeading * stretch * fontScale + gap("sectionGapPt");
+        lineAdvance(sizes.large, style.lineHeight) +
+        (prevKind === "header" ? gap("headerSectionGapPt") : gap("sectionGapPt"));
       push({
         runs,
         height: rowInk.height,
@@ -588,16 +578,16 @@ export function buildVerticalStream(schema: TypesetSchema, style: DocumentStyle)
         // Keep the complete separator even before any skills are typed so the
         // first trailing space after a rebuilt label survives the repaint.
         const text = label ? `${label}: ${skills}` : skills;
-        const dist = firstInSection
-          ? J.headingSkills * stretch * fontScale + gap("sectionEntryGapPt")
-          : J.skillsRow * stretch * fontScale + gap("skillsRowGapPt");
+        const dist =
+          lineAdvance(size, style.lineHeight) +
+          (firstInSection ? gap("sectionEntryGapPt") : gap("skillsRowGapPt"));
         const lines = paragraphLines(
           text,
           size,
           geo.entryIndent,
           geo.textWidth - geo.entryIndent - geo.entryEndIndent,
           alignmentFromInlineMarks(label) ?? alignmentFromInlineMarks(skills) ?? bodyAlign,
-          bsk.small,
+          lineAdvance(size, style.lineHeight),
           dist,
           firstInSection,
           family,
@@ -615,12 +605,12 @@ export function buildVerticalStream(schema: TypesetSchema, style: DocumentStyle)
         // Left indent: every line of the paragraph starts further in and its
         // measure narrows to match (see paragraphIndentFromInlineMarks).
         const summaryIndent = paragraphIndentFromInlineMarks(summaryText);
-        const dist = (firstInSection
-          ? J.headingSkills * stretch * fontScale + gap("sectionEntryGapPt")
-          : J.bulletBullet * stretch * fontScale + gap("bulletGapPt"))
-          + previousParagraphSpaceAfterPt
-          + (paragraphSpacing.spaceBeforePt ?? 0);
-        paragraphLines(
+        const dist =
+          lineAdvance(sizes.small, style.lineHeight) +
+          (firstInSection ? gap("sectionEntryGapPt") : gap("bulletGapPt")) +
+          previousParagraphSpaceAfterPt +
+          (paragraphSpacing.spaceBeforePt ?? 0);
+        const lines = paragraphLines(
           summaryText,
           sizes.small,
           geo.entryIndent + summaryIndent,
@@ -639,7 +629,12 @@ export function buildVerticalStream(schema: TypesetSchema, style: DocumentStyle)
           stripInlineMarks(summaryText).trim().length === 0
             ? paragraphSpacing.lineHeight ?? undefined
             : undefined
-        ).forEach(push);
+        );
+        if (lines.length) {
+          lines[0].paragraphSpaceBefore = paragraphSpacing.spaceBeforePt ?? 0;
+          lines[lines.length - 1].paragraphSpaceAfter = paragraphSpacing.spaceAfterPt ?? 0;
+        }
+        lines.forEach(push);
         previousParagraphSpaceAfterPt = paragraphSpacing.spaceAfterPt ?? 0;
         firstInSection = false;
         continue;
@@ -672,9 +667,9 @@ export function buildVerticalStream(schema: TypesetSchema, style: DocumentStyle)
         depth: titleRowInk.depth,
         riseOverflow: titleOverflow.rise,
         dropOverflow: titleOverflow.drop,
-        dist: firstInSection
-          ? J.headingEntry * stretch * fontScale + gap("sectionEntryGapPt")
-          : J.entryEntry * stretch * fontScale + gap("entryGapPt"),
+        dist:
+          lineAdvance(titleSize, style.lineHeight) +
+          (firstInSection ? gap("sectionEntryGapPt") : gap("entryGapPt")),
         keepWithPrev: firstInSection
       });
       firstInSection = false;
@@ -712,19 +707,11 @@ export function buildVerticalStream(schema: TypesetSchema, style: DocumentStyle)
         const inkS = inkOfRuns(subRuns);
         const subRowInk = rowInkOfRuns(subRuns, subSize, inkS);
         const subOverflow = boxOverflowOfRuns(subRuns, subSize);
-        // Row-strut mechanics (see LINESKIP above): use baseline spacing unless
-        // a box extends beyond the strut, as underlined links can.
-        const arstrutH = 0.7 * BSK.normalsize * stretch * fontScale;
-        const arstrutD = 0.3 * BSK.normalsize * stretch * fontScale;
         const titleInkDepth = inkT.depth + (titleRuns.some((run) => run.href || run.underline) ? UNDERLINE_EXTRA : 0);
-        const row1Depth = Math.max(arstrutD, titleInkDepth);
-        const row2Height = Math.max(arstrutH, inkS.height);
-        const bskRow = BSK.normalsize * stretch * fontScale;
-        const solid = row1Depth + LINESKIP + row2Height;
-        const rowDist = bskRow - row1Depth - row2Height >= -1e-6 ? bskRow : solid;
-        const spaced = rowDist + TITLE_SUB_VSPACE_BASE * fontScale + gap("titleSubGapPt");
-        // A tight line height must never pull the subtitle up into the title:
-        // clamp to an ink-based floor that keeps a hair of clearance regardless.
+        const spaced = lineAdvance(subSize, style.lineHeight) + gap("titleSubGapPt");
+        // A tight line height, or a deep box such as an underlined link, must
+        // never pull the subtitle up into the title: clamp to an ink-based floor
+        // that keeps a hair of clearance regardless of the authored gap.
         const inkFloor = titleInkDepth + inkS.height + MIN_TITLE_SUB_INK_GAP * fontScale;
         push({
           runs: subRuns,
@@ -741,11 +728,11 @@ export function buildVerticalStream(schema: TypesetSchema, style: DocumentStyle)
       item.bullets.forEach((bullet, bi) => {
         const paragraphSpacing = paragraphSpacingFromInlineMarks(bullet);
         const bulletIndentPt = paragraphIndentFromInlineMarks(bullet);
-        const dist = (
-          bi === 0
-            ? J.headBullet * stretch * fontScale + gap("headBulletGapPt")
-            : J.bulletBullet * stretch * fontScale + gap("bulletGapPt")
-        ) + previousBulletSpaceAfterPt + (paragraphSpacing.spaceBeforePt ?? 0);
+        const dist =
+          lineAdvance(sizes.small, style.lineHeight) +
+          (bi === 0 ? gap("headBulletGapPt") : gap("bulletGapPt")) +
+          previousBulletSpaceAfterPt +
+          (paragraphSpacing.spaceBeforePt ?? 0);
         const lines = paragraphLines(
           bullet,
           sizes.small,
@@ -769,6 +756,8 @@ export function buildVerticalStream(schema: TypesetSchema, style: DocumentStyle)
         // First line carries the bullet marker (tiny math bullet at 25.53bp).
         // It shares the bullet's provenance so clicking it edits the bullet.
         if (lines.length) {
+          lines[0].paragraphSpaceBefore = paragraphSpacing.spaceBeforePt ?? 0;
+          lines[lines.length - 1].paragraphSpaceAfter = paragraphSpacing.spaceAfterPt ?? 0;
           const marker = {
             ...styledRun(
               "•",
@@ -794,7 +783,3 @@ export function buildVerticalStream(schema: TypesetSchema, style: DocumentStyle)
   }
   return out;
 }
-
-// Exposed for the vertical-parity checks.
-export const JUNCTIONS = J;
-export const BASELINESKIPS = BSK;

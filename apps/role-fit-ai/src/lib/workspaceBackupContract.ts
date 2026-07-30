@@ -1,7 +1,6 @@
 import { normalizeSettings } from "./settings.ts";
 
 export const WORKSPACE_BACKUP_FORMAT = "rolefit-workspace-backup" as const;
-export const LEGACY_WORKSPACE_BACKUP_SCHEMA_VERSION = 1 as const;
 export const WORKSPACE_BACKUP_SCHEMA_VERSION = 2 as const;
 export const WORKSPACE_BACKUP_EXTENSION = ".rolefit-backup";
 
@@ -34,23 +33,16 @@ export type PortableBrowserPreferences = {
 
 export type WorkspaceBackupEnvelope = {
   format: typeof WORKSPACE_BACKUP_FORMAT;
-  schemaVersion:
-    | typeof LEGACY_WORKSPACE_BACKUP_SCHEMA_VERSION
-    | typeof WORKSPACE_BACKUP_SCHEMA_VERSION;
+  schemaVersion: typeof WORKSPACE_BACKUP_SCHEMA_VERSION;
   createdAt: string;
   files: WorkspaceBackupFile[];
   browser?: PortableBrowserPreferences;
 };
 
-const ROOT_BASE_RESUME_RE = /^base-resume(?:-[A-Za-z0-9][A-Za-z0-9_-]*)?\.resume$/;
-const LEGACY_BASE_RESUME_RE = /^base-resume\.(?:txt|md|csv)$/;
-const HISTORY_BASE_RESUME_RE = /^\.trash\/[A-Za-z0-9T-]+Z__base-resume(?:-[A-Za-z0-9][A-Za-z0-9_-]*)?\.(?:resume|txt|md|csv)$/;
 const RESUME_RE = /^resumes\/[A-Za-z0-9][A-Za-z0-9_-]*\.(?:resume|txt|md|csv)$/;
 const RESUME_HISTORY_RE = /^resumes\/\.trash\/[A-Za-z0-9T+-]+Z?__[A-Za-z0-9][A-Za-z0-9_-]*\.(?:resume|txt|md|csv)$/;
 const BASE_RESUME_FILE_NAME_RE = /^[A-Za-z0-9][A-Za-z0-9_-]*\.resume$/;
-const LEGACY_RESUME_FILE_NAME_RE = /^[A-Za-z0-9][A-Za-z0-9_-]*\.(?:txt|md|csv)$/;
-const LEGACY_APPLICATION_DOCUMENT_RE =
-  /^applications\/[A-Za-z0-9_-]{1,80}\/resume\.pdf$/;
+const BASE_RESUME_TEXT_FILE_NAME_RE = /^[A-Za-z0-9][A-Za-z0-9_-]*\.(?:txt|md|csv)$/;
 const APPLICATION_DOCUMENT_RE =
   /^applications\/[A-Za-z0-9_-]{1,80}\/(?:resume\.(?:pdf|resume)|cover\.(?:pdf|cover))$/;
 const APPLICATION_ATTACHMENT_RE =
@@ -67,20 +59,12 @@ function hasExactKeys(value: Record<string, unknown>, required: string[], option
     && Object.keys(value).every((key) => allowed.has(key));
 }
 
-export function isManagedWorkspaceBackupPath(
-  path: string,
-  schemaVersion: WorkspaceBackupEnvelope["schemaVersion"] = WORKSPACE_BACKUP_SCHEMA_VERSION
-): boolean {
-  const shared = path === "applications.json"
-    || ROOT_BASE_RESUME_RE.test(path)
-    || LEGACY_BASE_RESUME_RE.test(path)
-    || HISTORY_BASE_RESUME_RE.test(path)
+export function isManagedWorkspaceBackupPath(path: string): boolean {
+  return path === "applications.json"
     || RESUME_RE.test(path)
-    || RESUME_HISTORY_RE.test(path);
-  if (shared) return true;
-  return schemaVersion === LEGACY_WORKSPACE_BACKUP_SCHEMA_VERSION
-    ? LEGACY_APPLICATION_DOCUMENT_RE.test(path)
-    : APPLICATION_DOCUMENT_RE.test(path) || APPLICATION_ATTACHMENT_RE.test(path);
+    || RESUME_HISTORY_RE.test(path)
+    || APPLICATION_DOCUMENT_RE.test(path)
+    || APPLICATION_ATTACHMENT_RE.test(path);
 }
 
 export function workspaceBackupEncodingForPath(path: string): "utf8" | "base64" {
@@ -175,9 +159,7 @@ export function parsePortableBrowserPreferences(value: unknown): PortableBrowser
   if (lastBaseResume.length > 200 ||
       (lastBaseResume
         && !BASE_RESUME_FILE_NAME_RE.test(lastBaseResume)
-        && !LEGACY_RESUME_FILE_NAME_RE.test(lastBaseResume)
-        && !ROOT_BASE_RESUME_RE.test(lastBaseResume)
-        && !LEGACY_BASE_RESUME_RE.test(lastBaseResume))) {
+        && !BASE_RESUME_TEXT_FILE_NAME_RE.test(lastBaseResume))) {
     throw new Error("The backup's selected base resume is invalid.");
   }
   return { settings, lastBaseResume };
@@ -189,12 +171,10 @@ export function parseWorkspaceBackupEnvelope(value: unknown): WorkspaceBackupEnv
   }
   if (
     value.format !== WORKSPACE_BACKUP_FORMAT ||
-    (value.schemaVersion !== LEGACY_WORKSPACE_BACKUP_SCHEMA_VERSION &&
-      value.schemaVersion !== WORKSPACE_BACKUP_SCHEMA_VERSION)
+    value.schemaVersion !== WORKSPACE_BACKUP_SCHEMA_VERSION
   ) {
     throw new Error("This RoleFit workspace backup uses an unsupported format version.");
   }
-  const schemaVersion = value.schemaVersion;
   if (typeof value.createdAt !== "string" || !Number.isFinite(Date.parse(value.createdAt))) {
     throw new Error("The backup creation date is invalid.");
   }
@@ -210,7 +190,7 @@ export function parseWorkspaceBackupEnvelope(value: unknown): WorkspaceBackupEnv
     }
     const path = typeof candidate.path === "string" ? candidate.path : "";
     if (
-      !isManagedWorkspaceBackupPath(path, schemaVersion) ||
+      !isManagedWorkspaceBackupPath(path) ||
       path.includes("\\") ||
       path.startsWith("/") ||
       path.split("/").includes("..")
@@ -249,7 +229,7 @@ export function parseWorkspaceBackupEnvelope(value: unknown): WorkspaceBackupEnv
 
   return {
     format: WORKSPACE_BACKUP_FORMAT,
-    schemaVersion,
+    schemaVersion: WORKSPACE_BACKUP_SCHEMA_VERSION,
     createdAt: value.createdAt,
     files,
     ...(value.browser === undefined ? {} : { browser: parsePortableBrowserPreferences(value.browser) })

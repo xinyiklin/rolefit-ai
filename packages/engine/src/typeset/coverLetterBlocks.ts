@@ -1,4 +1,4 @@
-import type { DocumentStyle } from "../lib/documentStyle.ts";
+import type { CoverLetterDocumentStyle } from "../lib/documentStyle.ts";
 import {
   alignmentFromInlineMarks,
   paragraphIndentFromInlineMarks,
@@ -8,7 +8,7 @@ import {
 import { documentFontFamily } from "./fontRegistry.ts";
 import {
   buildHeaderVerticalStream,
-  pageGeometry,
+  pageBox,
   paragraphLines,
   type VLine
 } from "./blocks.ts";
@@ -22,13 +22,13 @@ import type { TypesetSchema } from "./schema.ts";
 // correspondence-style margins, body size, leading, and paragraph spacing.
 export function buildCoverLetterVerticalStream(
   schema: TypesetSchema,
-  style: DocumentStyle
+  style: CoverLetterDocumentStyle
 ): VLine[] {
-  const geo = pageGeometry(style);
+  const geo = pageBox(style);
   const family = documentFontFamily(style.fontFamily);
   const size = style.baseFontSizePt;
-  const tracking = style.letterSpacingPt;
-  const paragraphGap = style.bulletGapPt;
+  // See buildVerticalStream: tracking is the font's own, never adjusted.
+  const tracking = 0;
   const bodyAlign = (
     ["justify", "center", "right"].includes(style.bodyAlign) ? style.bodyAlign : "left"
   ) as ParagraphAlign;
@@ -56,7 +56,7 @@ export function buildCoverLetterVerticalStream(
       leading,
       index === 0
         ? header.length ? leading + style.headerSectionGapPt + spaceBeforePt : spaceBeforePt
-        : leading + paragraphGap + previousSpaceAfterPt + spaceBeforePt,
+        : leading + previousSpaceAfterPt + spaceBeforePt,
       false,
       family,
       tracking,
@@ -71,7 +71,11 @@ export function buildCoverLetterVerticalStream(
         ? paragraphSpacing.lineHeight ?? undefined
         : undefined
     );
-    if (index > 0 && lines.length) lines[0].keepWithPrev = false;
+    if (lines.length) {
+      lines[0].paragraphSpaceBefore = spaceBeforePt;
+      lines[lines.length - 1].paragraphSpaceAfter = spaceAfterPt;
+      if (index > 0) lines[0].keepWithPrev = false;
+    }
     out.push(...lines);
     previousSpaceAfterPt = spaceAfterPt;
   });

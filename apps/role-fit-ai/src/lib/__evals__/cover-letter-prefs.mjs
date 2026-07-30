@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
+import { DOC_STYLE_DEFAULTS } from "@typeset/engine/lib/documentStyle.ts";
+
 const values = new Map();
 globalThis.localStorage = {
   getItem: (key) => values.get(key) ?? null,
@@ -11,7 +13,6 @@ globalThis.localStorage = {
 const {
   coverLetterStartupIsCurrent,
   loadLastCoverLetterName,
-  migrateStoredCoverLetterStyle,
   resolveCoverLetterStartup,
   saveLastCoverLetterName
 } = await import("../coverLetterPrefs.ts");
@@ -30,87 +31,6 @@ assert.equal(
   coverLetterStartupIsCurrent("initial", "initial", true),
   false,
   "an explicitly cancelled startup cannot replace the current document"
-);
-
-const legacyStyle = {
-  fontFamily: "carlito",
-  fontSizePt: 11,
-  lineHeight: 1.25,
-  paragraphGapPt: 10,
-  marginTopPt: 72,
-  marginRightPt: 72,
-  marginBottomPt: 72,
-  marginLeftPt: 72,
-  contactDivider: "|"
-};
-assert.deepEqual(
-  migrateStoredCoverLetterStyle(legacyStyle),
-  {
-    ...legacyStyle,
-    lineHeight: 2,
-    paragraphGapPt: 8,
-    marginTopPt: 36,
-    marginRightPt: 54,
-    marginBottomPt: 36,
-    marginLeftPt: 54
-  },
-  "the exact legacy default snapshot migrates to the current physical defaults"
-);
-const previousStyle = {
-  ...legacyStyle,
-  lineHeight: 2,
-  paragraphGapPt: 0,
-  marginTopPt: 54,
-  marginRightPt: 54,
-  marginBottomPt: 54,
-  marginLeftPt: 54
-};
-assert.deepEqual(
-  migrateStoredCoverLetterStyle(previousStyle),
-  {
-    ...previousStyle,
-    lineHeight: 2,
-    paragraphGapPt: 8,
-    marginTopPt: 36,
-    marginRightPt: 54,
-    marginBottomPt: 36,
-    marginLeftPt: 54
-  },
-  "the previous shipped default snapshot migrates to the current physical defaults"
-);
-const paragraphGapStyle = {
-  ...previousStyle,
-  lineHeight: 1.15,
-  paragraphGapPt: 8,
-  marginTopPt: 36,
-  marginBottomPt: 36
-};
-assert.deepEqual(
-  migrateStoredCoverLetterStyle(paragraphGapStyle),
-  {
-    ...paragraphGapStyle,
-    lineHeight: 2
-  },
-  "the locally applied paragraph-gap default migrates to double spacing"
-);
-const dateOnlyStyle = {
-  ...paragraphGapStyle,
-  lineHeight: 2,
-  paragraphGapPt: 0
-};
-assert.deepEqual(
-  migrateStoredCoverLetterStyle(dateOnlyStyle),
-  {
-    ...dateOnlyStyle,
-    paragraphGapPt: 8
-  },
-  "the locally applied date-only spacing default gains paragraph gaps"
-);
-const customizedStyle = { ...legacyStyle, marginLeftPt: 60 };
-assert.equal(
-  migrateStoredCoverLetterStyle(customizedStyle),
-  customizedStyle,
-  "a customized persisted style is preserved by identity"
 );
 
 assert.equal(loadLastCoverLetterName(), "", "a fresh browser has no remembered cover letter");
@@ -155,6 +75,10 @@ assert.deepEqual(
 );
 
 const hook = readFileSync(new URL("../../hooks/useCoverLetterEditor.ts", import.meta.url), "utf8");
+const coverLetter = readFileSync(
+  new URL("../../../../../packages/engine/src/lib/coverLetter.ts", import.meta.url),
+  "utf8"
+);
 assert.match(
   hook,
   /resolveCoverLetterStartup\([\s\S]*loadLastCoverLetterName\(\)/,
@@ -172,8 +96,32 @@ assert.match(
 );
 assert.match(
   hook,
-  /const COVER_LETTER_STARTER = `<space-before=8>\[Date\]<\/space-before>\r?\n\r?\nDear \[Hiring manager\],[\s\S]*\r?\n\r?\nSincerely,/,
-  "the starter adds paragraph spacing before the date only"
+  /const COVER_LETTER_STARTER = `\[Date\]\r?\n\r?\nDear \[Hiring manager\],[\s\S]*\r?\n\r?\nSincerely,/,
+  "the starter stays plain text so the shared parser applies the default to every paragraph"
+);
+
+// Spell-check is off until the writer asks for it, and stays however they left
+// it. It was previously forced on by the shared adapter's default view, which
+// also meant a reload undid turning it off.
+assert.match(
+  hook,
+  /SPELL_CHECK_STORAGE_KEY[\s\S]*localStorage\.getItem\(SPELL_CHECK_STORAGE_KEY\) === "on"/,
+  "the letter's spell-check preference is read back from storage on load"
+);
+assert.match(
+  hook,
+  /localStorage\.setItem\(\s*SPELL_CHECK_STORAGE_KEY,\s*style\.spellCheck \? "on" : "off"\s*\)/,
+  "toggling spell-check persists it rather than lasting only for the session"
+);
+assert.equal(
+  DOC_STYLE_DEFAULTS.spellCheck,
+  false,
+  "a document starts with spell-check off in both editors"
+);
+assert.doesNotMatch(
+  coverLetter,
+  /spellCheck: true/,
+  "no adapter default turns spell-check back on"
 );
 
 console.log("Cover-letter remembered-variant preferences passed");

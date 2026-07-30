@@ -47,8 +47,9 @@ import {
   type InlineFormatState,
   type TypesetEditorHandle
 } from "@typeset/editor/sections/editor/TypesetEditor.tsx";
+import { commitDocumentSaveBaseline } from "./documentSaveBaseline.ts";
 
-const AUTOSAVE_KEY = "typeset-resume.autosave.v1";
+const AUTOSAVE_KEY = "typeset-resume.autosave.v2";
 const DOCUMENT_TITLE_KEY = "typeset-resume.documentTitle.v1";
 const AUTOSAVE_DELAY_MS = 450;
 const UNTITLED_RESUME_TITLE = "Untitled resume";
@@ -167,10 +168,12 @@ export default function App() {
       });
     }
 
-    editor.seedData(initialData);
-    docStyle.replaceDocumentStyle(initialDocumentStyle);
+    commitDocumentSaveBaseline(
+      () => editor.seedData(initialData),
+      () => docStyle.replaceDocumentStyle(initialDocumentStyle)
+    );
     setDocumentTitle(initialTitle);
-  }, [editor.seedData]);
+  }, [docStyle.replaceDocumentStyle, editor.seedData]);
 
   // The editable source is continuously kept in this browser. Saving a file is
   // still a separate, explicit action so users can move or version a resume.
@@ -182,8 +185,7 @@ export default function App() {
       try {
         window.localStorage.setItem(AUTOSAVE_KEY, serializeResumeFile(resume, docStyle.style));
         window.localStorage.setItem(DOCUMENT_TITLE_KEY, documentTitle.trim() || UNTITLED_RESUME_TITLE);
-        editor.markClean();
-        docStyle.markClean();
+        commitDocumentSaveBaseline(editor.markClean, docStyle.markClean);
         setSaveStatus("saved");
       } catch {
         setSaveStatus({ state: "error", label: "Local save unavailable" });
@@ -209,8 +211,10 @@ export default function App() {
 
   const applyReplacement = useCallback(
     (replacement: Replacement) => {
-      editor.seedData(replacement.data);
-      docStyle.replaceDocumentStyle(replacement.documentStyle);
+      commitDocumentSaveBaseline(
+        () => editor.seedData(replacement.data),
+        () => docStyle.replaceDocumentStyle(replacement.documentStyle)
+      );
       setDocumentTitle(replacement.title);
       setPendingReplacement(null);
       setInlineFormat(EMPTY_INLINE_FORMAT);
@@ -219,7 +223,7 @@ export default function App() {
         message: replacement.kind === "open" ? `Opened ${replacement.title}.` : "Started a fresh resume."
       });
     },
-    [editor.seedData]
+    [docStyle.replaceDocumentStyle, editor.seedData]
   );
 
   const queueReplacement = useCallback(
@@ -281,14 +285,14 @@ export default function App() {
     setIsSavingFile(true);
     try {
       const fileName = downloadResumeFile(resume, docStyle.style, documentTitle);
-      editor.markClean();
+      commitDocumentSaveBaseline(editor.markClean, docStyle.markClean);
       setNotice({ tone: "info", message: `Saved ${fileName}.` });
     } catch (error) {
       setNotice({ tone: "error", message: readableError(error) });
     } finally {
       setIsSavingFile(false);
     }
-  }, [docStyle.style, documentTitle, editor.markClean, resume]);
+  }, [docStyle.markClean, docStyle.style, documentTitle, editor.markClean, resume]);
 
   const exportPdf = useCallback(async () => {
     if (!resume || isExporting) return;
@@ -306,7 +310,7 @@ export default function App() {
       const fontAssetBaseUrl = `${import.meta.env.BASE_URL.replace(/\/$/, "")}/fonts`;
       const fonts = await fetchFontBytes(doc, fontAssetBaseUrl);
       const bytes = await emitPdf(doc, fonts, {
-        title: schema.name ? `${schema.name} — Resume` : "Resume"
+        title: schema.header?.name ? `${schema.header.name} — Resume` : "Resume"
       });
       const fileName = `${resumeFileName(documentTitle).replace(/\.resume$/i, "")}.pdf`;
       downloadBlob(new Blob([bytes as BlobPart], { type: "application/pdf" }), fileName);
@@ -416,12 +420,23 @@ export default function App() {
         onSave={saveResumeFile}
         onExport={() => void exportPdf()}
         documentStructure={{
-          name: resume?.name ?? "",
-          contact: resume?.contact ?? [],
+          header: resume?.header ?? null,
           disabled: !resume,
-          onSetName: editor.actions.setName,
-          onUpdateContact: editor.actions.updateContact,
-          onAddContact: editor.actions.addContact,
+          onCreateHeader: () => {
+            if (editorRef.current) editorRef.current.createHeader();
+            else editor.actions.createHeader();
+          },
+          onSetHeaderVisible: editor.actions.setHeaderVisible,
+          onSetHeaderName: (nextText) => {
+            if (editorRef.current) editorRef.current.replaceHeaderNameText(nextText);
+            else editor.actions.setHeaderName(nextText);
+          },
+          onRemoveHeaderName: editor.actions.removeHeaderName,
+          onUpdateContact: (index, nextText) => {
+            if (editorRef.current) editorRef.current.replaceHeaderContactText(index, nextText);
+            else editor.actions.updateContact(index, nextText);
+          },
+          onInsertContact: editor.actions.insertContact,
           onRemoveContact: editor.actions.removeContact,
           onAddSection: (type, position) => editorRef.current?.addSection(type, position)
         }}

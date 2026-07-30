@@ -2,17 +2,17 @@
 //
 // Baseline rules used by the owned page builder:
 //   - First baseline of a page: margin + max(minimum inset, the row's own ink
-//     height) + any oversized-inline rise. Short rows use the common inset;
-//     tall display rows push down.
+//     height) + any oversized-inline rise + authored paragraph before-space.
+//     Short rows use the common inset; tall display rows push down.
 //   - Subsequent lines: previous baseline + the stream's junction distance.
 //   - A line whose baseline would exceed (page height − margin) moves to the
 //     next page, dragging its keep-with-previous chain along — the editor's
 //     keep-together policy keeps entry heads with their first bullet.
 
 import { fieldKey, type GlyphRun } from "./types.ts";
-import { buildVerticalStream, pageGeometry, type VLine } from "./blocks.ts";
+import { buildVerticalStream, pageBox, pageGeometry, type VLine } from "./blocks.ts";
 import { buildCoverLetterVerticalStream } from "./coverLetterBlocks.ts";
-import type { DocumentStyle } from "../lib/documentStyle.ts";
+import type { CoverLetterDocumentStyle, DocumentStyle } from "../lib/documentStyle.ts";
 import type { TypesetSchema } from "./schema.ts";
 
 export type PlacedLine = {
@@ -21,6 +21,8 @@ export type PlacedLine = {
   // The line spacing this line owns (see VLine.leading), for renderers that
   // need the line BOX rather than the ink box.
   leading?: number;
+  paragraphSpaceBefore?: number;
+  paragraphSpaceAfter?: number;
   rule?: { x: number; width: number; y: number; thickness: number };
 };
 
@@ -28,7 +30,9 @@ export type LayoutPage = { lines: PlacedLine[] };
 
 export type LayoutDocument = {
   pages: LayoutPage[];
-  geometry: ReturnType<typeof pageGeometry>;
+  // The page box both document kinds share. A resume's entry insets belong to
+  // building its stream, not to the placed result, and nothing reads them here.
+  geometry: ReturnType<typeof pageBox>;
 };
 
 // Baseline distance for one junction: the stream's calibrated distance plus the
@@ -41,7 +45,7 @@ function junctionDistance(previous: VLine, current: VLine): number {
 
 export function layoutVerticalStream(
   stream: VLine[],
-  geo: ReturnType<typeof pageGeometry>
+  geo: ReturnType<typeof pageBox>
 ): LayoutDocument {
   // Split into keep-chains: a chain starts at a line with keepWithPrev=false.
   const chains: VLine[][] = [];
@@ -56,7 +60,8 @@ export function layoutVerticalStream(
   const startPage = (first: VLine) =>
     geo.marginTop +
     Math.max(geo.firstBaselineMin - geo.marginTop, first.height) +
-    first.riseOverflow;
+    first.riseOverflow +
+    (first.paragraphSpaceBefore ?? 0);
   const contentBottom = (line: VLine, lineBaseline: number) =>
     lineBaseline +
     Math.max(
@@ -93,6 +98,8 @@ export function layoutVerticalStream(
         runs: line.runs.map((r) => ({ ...r, x: r.x + geo.marginLeft })),
         baseline: b,
         leading: line.leading,
+        paragraphSpaceBefore: line.paragraphSpaceBefore,
+        paragraphSpaceAfter: line.paragraphSpaceAfter,
         rule: line.rule
           ? { x: line.rule.x + geo.marginLeft, width: line.rule.width, y: b + line.rule.yOffset, thickness: line.rule.thickness }
           : undefined
@@ -151,7 +158,10 @@ export function layoutResume(schema: TypesetSchema, style: DocumentStyle): Layou
   return layoutVerticalStream(buildVerticalStream(schema, style), geo);
 }
 
-export function layoutCoverLetter(schema: TypesetSchema, style: DocumentStyle): LayoutDocument {
-  const geo = pageGeometry(style);
+export function layoutCoverLetter(
+  schema: TypesetSchema,
+  style: CoverLetterDocumentStyle
+): LayoutDocument {
+  const geo = pageBox(style);
   return layoutVerticalStream(buildCoverLetterVerticalStream(schema, style), geo);
 }

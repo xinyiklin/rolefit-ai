@@ -35,13 +35,10 @@ export type DocumentFontFamilyDefinition = Readonly<{
   id: DocumentFontFamily;
   label: string;
   cssFamily: string;
-  // Outline flavour of the family's PDF-embeddable siblings. The browser reads
-  // the woff2 assets, but a woff2 byte stream is not a valid PDF font program,
-  // so scripts/generate_pdf_fonts.py writes a decompressed sfnt beside each one —
-  // `.otf` for CFF outlines, `.ttf` for TrueType. Declared per family, next to
-  // the assets it describes, because a wrong guess makes the PDF export fetch a
-  // filename that was never written.
-  sfntExtension: "otf" | "ttf";
+  // Every PDF sibling is a TrueType sfnt. Latin Modern's webfont keeps its CFF
+  // outlines, while the generator derives metric-identical quadratic outlines
+  // so pdf-lib and PDF viewers agree on one CIDFontType2 contract.
+  sfntExtension: "ttf";
   faces: Readonly<Record<FaceName, DocumentFontFaceDefinition>>;
 }>;
 
@@ -65,7 +62,7 @@ function familyDefinition(
   id: DocumentFontFamily,
   label: string,
   cssFamily: string,
-  sfntExtension: "otf" | "ttf",
+  sfntExtension: "ttf",
   assets: Readonly<Record<FaceName, FaceAsset>>
 ): DocumentFontFamilyDefinition {
   const faces = {} as Record<FaceName, DocumentFontFaceDefinition>;
@@ -106,7 +103,7 @@ const CARLITO_BOLD: FaceAsset = { file: "Carlito-Bold", cssFamily: "Typeset Carl
 export const DOCUMENT_FONT_FAMILIES: Readonly<
   Record<DocumentFontFamily, DocumentFontFamilyDefinition>
 > = {
-  "latin-modern": familyDefinition("latin-modern", "Latin Modern", "Typeset Latin Modern", "otf", {
+  "latin-modern": familyDefinition("latin-modern", "Latin Modern", "Typeset Latin Modern", "ttf", {
     regular: { file: "LMRoman10-Regular", cssFamily: "Typeset LM Roman 10 Regular", weight: 400 },
     bold: { file: "LMRoman10-Bold", cssFamily: "Typeset LM Roman 10 Bold", weight: 700 },
     italic: {

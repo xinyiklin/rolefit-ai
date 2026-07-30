@@ -7,14 +7,14 @@ Typeset and RoleFit AI.
 ## Owns
 
 - `src/lib/`: `ResumeData`, document style/typography, inline marks and links,
-  strict `.resume` and `.cover` schema v2 validation/serialization with v1
-  read compatibility, and
-  download helpers.
+  the sole strict `.resume` schema v1, the sole strict `.cover` schema v1,
+  explicit optional document headers, and download helpers.
 - `src/typeset/`: schema adapter, measurement, line breaking, blocks,
   shared pagination, resume and plain-paragraph cover-letter composition,
   DOM/print rendering, and client-side PDF emission.
 - `fonts/` and `scripts/`: bundled faces, licenses, generated metrics, and
-  reproducible font tooling.
+  reproducible font tooling. Browser assets remain WOFF2; PDF siblings are
+  TrueType sfnt files, including metric-preserving Latin Modern conversions.
 
 The package exports raw TypeScript source through explicit subpaths. Consumers
 include the file extension, for example:

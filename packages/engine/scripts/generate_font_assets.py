@@ -2,8 +2,10 @@
 """Generate deterministic static webfonts and browser-typesetter metrics.
 
 The source URLs and SHA-256 digests below are the source-of-truth pins. Google
-Fonts URLs use immutable repository commits. CTAN's canonical mirror redirects
-are content-pinned by digest because CTAN does not expose immutable file URLs.
+Fonts URLs use immutable repository commits. Latin Modern uses a named CTAN
+mirror instead of the proximity redirector, whose selected mirror can vary
+between otherwise identical CI jobs; CTAN bytes remain content-pinned because
+the archive does not expose immutable file URLs.
 
 Reproducible toolchain:
   Python 3.9+
@@ -82,6 +84,7 @@ GOOGLE_SERIF_LICENSE_COMMIT = "01aa15d05749e35be9167f3f44e6a243f00cd2fc"
 GOOGLE_TINOS_COMMIT = "90d7886db9000c893b9559828bf028aaed5f9c10"
 GOOGLE_ARIMO_COMMIT = "903d46673260c1f4c7f7ef67f5190fb03eab5042"
 GOOGLE_CARLITO_COMMIT = "3dd78844021e948ceb633d1dcee3f7885561b5d9"
+CTAN_MIRROR = "https://ctan.math.illinois.edu"
 
 SOURCES: Mapping[str, SourceSpec] = {
     "source-serif-roman": SourceSpec(
@@ -120,37 +123,37 @@ SOURCES: Mapping[str, SourceSpec] = {
     ),
     "lm-regular": SourceSpec(
         "lmroman10-regular.otf",
-        "https://mirrors.ctan.org/fonts/lm/fonts/opentype/public/lm/lmroman10-regular.otf",
+        f"{CTAN_MIRROR}/fonts/lm/fonts/opentype/public/lm/lmroman10-regular.otf",
         "1aa18cfefa58132c52ce5de70db1fd1154201c19cd2b2cdaffba4906a33e6852",
     ),
     "lm-bold": SourceSpec(
         "lmroman10-bold.otf",
-        "https://mirrors.ctan.org/fonts/lm/fonts/opentype/public/lm/lmroman10-bold.otf",
+        f"{CTAN_MIRROR}/fonts/lm/fonts/opentype/public/lm/lmroman10-bold.otf",
         "102fe06c430a8b681b2bf6876b7cd967ae4d47b4b6b41d915eb7913b726d9fb1",
     ),
     "lm-italic": SourceSpec(
         "lmroman10-italic.otf",
-        "https://mirrors.ctan.org/fonts/lm/fonts/opentype/public/lm/lmroman10-italic.otf",
+        f"{CTAN_MIRROR}/fonts/lm/fonts/opentype/public/lm/lmroman10-italic.otf",
         "c1fce25075567bb8dbf2151658c3b442690041db17a2d49fc9e55905ea5b7169",
     ),
     "lm-bold-italic": SourceSpec(
         "lmroman10-bolditalic.otf",
-        "https://mirrors.ctan.org/fonts/lm/fonts/opentype/public/lm/lmroman10-bolditalic.otf",
+        f"{CTAN_MIRROR}/fonts/lm/fonts/opentype/public/lm/lmroman10-bolditalic.otf",
         "c37a28eed7a6e03f792b98b5e5f637b2fcda378bb4855f99284f1a88fe35f124",
     ),
     "lm-bold-display": SourceSpec(
         "lmroman12-bold.otf",
-        "https://mirrors.ctan.org/fonts/lm/fonts/opentype/public/lm/lmroman12-bold.otf",
+        f"{CTAN_MIRROR}/fonts/lm/fonts/opentype/public/lm/lmroman12-bold.otf",
         "28c8782ac2b6486958b5dc7610ada7800c53546ff7f36bc65909a876e1cd338e",
     ),
     "lm-caps": SourceSpec(
         "lmromancaps10-regular.otf",
-        "https://mirrors.ctan.org/fonts/lm/fonts/opentype/public/lm/lmromancaps10-regular.otf",
+        f"{CTAN_MIRROR}/fonts/lm/fonts/opentype/public/lm/lmromancaps10-regular.otf",
         "1ab40332a969892c7ed6cb010193b5276ccef1da6798bcbd1a465fee23d29334",
     ),
     "lm-license": SourceSpec(
         "LatinModern-GUST-FONT-LICENSE.txt",
-        "https://mirrors.ctan.org/fonts/lm/doc/fonts/lm/GUST-FONT-LICENSE.TXT",
+        f"{CTAN_MIRROR}/fonts/lm/doc/fonts/lm/GUST-FONT-LICENSE.TXT",
         "49ea6cb9257bbee0a3979c48a774cd221550ac1c20c95549efe45fc99cc18050",
     ),
     # Metric-compatible substitutes for the three families resumes are most often

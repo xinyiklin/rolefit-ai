@@ -255,7 +255,7 @@ assert.match(
 );
 assert.match(
   coverEditor,
-  /setPreTailorSnapshot\(\s*editor\.editedResume[\s\S]{0,240}?editor\.seedData\(data\)/,
+  /capturePreTailorSnapshot\(\s*editor\.editedResume[\s\S]{0,240}?editor\.seedData\(data\)/,
   "the exact pre-tailor .cover is captured before the replacement, not after",
 );
 assert.match(
@@ -699,6 +699,11 @@ const documentSync = readHook("useApplicationDocumentSync.ts");
 const applicationFiles = readHook("useApplicationFiles.ts");
 const applicationsHook = readHook("useApplications.ts");
 assert.match(
+  coverToolbar,
+  /coverLetterRecoveryDirty\(\{\s*documentDirty: editor\.dirty,\s*documentTitle: editor\.documentTitle,\s*persistedDocumentTitle: editor\.persistedDocumentTitle/,
+  "opening another cover letter treats a title-only edit as unsaved replacement state",
+);
+assert.match(
   applicationFiles,
   /application\.updatedAt,[\s\S]{0,100}?sourceOrigin/,
   "a document mutation carries the current application revision",
@@ -812,6 +817,16 @@ assert.match(
   /draftAutosaveState === "saved"\s*\?\s*\{ state: "saved", label: "Recovery draft saved" \}/,
   "the letter uses the resume's recovery vocabulary",
 );
+assert.match(
+  app,
+  /persistedDocumentTitle: coverLetterEditor\.persistedDocumentTitle,\s*dirty: coverLetterEditor\.dirty/,
+  "cover-letter recovery compares the live title with its durable baseline",
+);
+assert.doesNotMatch(
+  coverDraft,
+  /hasContent/,
+  "title-only and style-only cover-letter changes are not gated on body content",
+);
 // Undoing a tailor belongs to the result summary in the rail, beside what was
 // applied — not to a permanent toolbar button competing with Open and Save.
 assert.doesNotMatch(
@@ -836,8 +851,8 @@ assert.match(
 );
 assert.match(
   coverEditor,
-  /editor\.markClean\(\);\s*setPersistedFingerprint\(payload\);[\s\S]{0,200}?clearCoverLetterAutosaveDraft\(\)/,
-  "the recovery draft is cleared only once the letter itself is durable",
+  /editor\.markClean\(\);\s*commitPersistenceBaseline\(payload\);[\s\S]{0,200}?clearCoverLetterAutosaveDraft\(\)/,
+  "the recovery draft is cleared only once the letter and title baseline are durable",
 );
 assert.match(
   coverEditor,
@@ -851,7 +866,7 @@ assert.match(
 );
 assert.match(
   draftStorage,
-  /if \(ownerId !== "" && live\.has\(ownerId\)\) continue;/,
+  /if \(ownerId !== myId && live\.has\(ownerId\)\) continue;/,
   "one shared recovery rule protects a live sibling tab's draft for both editors",
 );
 assert.match(

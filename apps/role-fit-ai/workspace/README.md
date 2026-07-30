@@ -21,3 +21,9 @@ Local, ignored storage for the RoleFit AI app.
 - Do not store personal resumes or job-search artifacts in the repo root unless
   you intentionally want them tracked.
 - Files in this folder are intentionally ignored by git except this README.
+
+Before finalizing a pre-release document-shape change, audit the ignored
+workspace and convert every active, history, application, and
+application-trash source with a throwaway developer tool. Keep that tool and
+its timestamped backups outside the commit, then re-parse the complete
+workspace before continuing.

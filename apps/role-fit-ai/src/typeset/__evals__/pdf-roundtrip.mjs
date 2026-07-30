@@ -2,77 +2,25 @@
 // engine's layout. Round trip: layoutResume(fixture) → emitPdf → pdf.js text
 // extraction → every glyph run's {page, x, baseline} matches the layout within
 // 0.2bp, links carry annotations, and the text layer is searchable. The layout
-// itself is separately gated against Tectonic (vertical-parity), so passing
-// both means engine-PDF ≡ engine-layout ≡ TeX.
+// itself is separately gated by vertical-layout-snapshot.mjs, so passing both
+// means engine-PDF ≡ engine-layout ≡ the layout we intend.
 //
 //   node src/typeset/__evals__/pdf-roundtrip.mjs
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { DOC_STYLE_DEFAULTS } from "@typeset/engine/lib/documentStyle.ts";
+import { buildStarterResume } from "@typeset/engine/sampleResume.ts";
+import { toTypesetSchema } from "@typeset/engine/typeset/schema.ts";
 import { DOCUMENT_FONT_FAMILIES, sfntAssetFile } from "@typeset/engine/typeset/fontRegistry.ts";
 import { layoutResume } from "@typeset/engine/typeset/layout.ts";
 import { emitPdf } from "@typeset/engine/typeset/pdf/emit.ts";
 import { PDFDict, PDFDocument, PDFName, PDFRawStream } from "pdf-lib";
 
-const here = dirname(fileURLToPath(import.meta.url));
-const truth = JSON.parse(readFileSync(join(here, "vertical-truth.json"), "utf8"));
+// The engine's own starter document is the fixture: a real resume exercising
+// headings, entry heads with linked metas, skills rows, and wrapped bullets.
+const schema = toTypesetSchema(buildStarterResume());
 
-const TEX_PT = 72 / 72.27;
-const gap = (value) => value * 11 * TEX_PT;
-const legacyStyle = (style) => ({
-  ...DOC_STYLE_DEFAULTS,
-  lineHeight: style.lineHeight,
-  nameContactGapPt: (1 + (style.nameContactGap - 0.04) * 10) * TEX_PT,
-  contactGapPt: style.contactGap * 10 * TEX_PT,
-  headerSectionGapPt: (style.headerSectionGap - 1.19 + 0.85) * 11 * TEX_PT,
-  sectionGapPt: gap(style.sectionGap),
-  sectionEntryGapPt: gap(style.sectionEntryGap),
-  entryGapPt: gap(style.entryGap),
-  titleSubGapPt: gap(style.titleSubGap),
-  headBulletGapPt: gap(style.headBulletGap),
-  skillsRowGapPt: style.skillsRowGap * 10 * TEX_PT,
-  bulletGapPt: gap(style.bulletGap),
-  headingCase: style.headingCase,
-  sectionRule: style.sectionRule,
-  contactDivider: style.contactDivider,
-  headerAlign: style.headerAlign,
-  bodyAlign: style.bodyAlign,
-  headingAlign: style.headingAlign,
-  nameSize: style.nameSize
-});
-const entriesFor = (section, sectionIndex) => section.type === "skills"
-  ? section.items.flatMap((item, itemIndex) => item.bullets.map((row, rowIndex) => {
-      const split = row.indexOf(":");
-      return {
-        id: `skill-${sectionIndex}-${itemIndex}-${rowIndex}`,
-        titleLeft: split >= 0 ? row.slice(0, split).trim() : "",
-        titleRight: "",
-        subtitleLeft: split >= 0 ? row.slice(split + 1).trim() : row,
-        subtitleRight: "",
-        bullets: [],
-        bulletIds: []
-      };
-    }))
-  : section.items.map((item, itemIndex) => ({
-      id: item.id ?? `entry-${sectionIndex}-${itemIndex}`,
-      titleLeft: item.title ?? "",
-      titleRight: item.meta ?? "",
-      subtitleLeft: item.subtitle ?? "",
-      subtitleRight: item.location ?? "",
-      bullets: item.bullets,
-      bulletIds: item.bullets.map((_, bulletIndex) => `bullet-${sectionIndex}-${itemIndex}-${bulletIndex}`)
-    }));
-const typesetSchema = (schema) => ({
-  name: schema.name,
-  contact: schema.contact,
-  sections: schema.sections.map((section, sectionIndex) => ({
-    id: section.id ?? `section-${sectionIndex}`,
-    heading: section.heading,
-    type: section.type ?? "standard",
-    items: entriesFor(section, sectionIndex)
-  }))
-});
 
 // Node-side bytes from the engine package's exact sfnt siblings. The woff2 -> sfnt
 // filename is resolved by the registry's own `sfntAssetFile`, not re-derived here:
@@ -88,27 +36,31 @@ for (const [family, config] of Object.entries(DOCUMENT_FONT_FAMILIES)) {
   }
 }
 
-const layout = layoutResume(typesetSchema(truth.schema), legacyStyle(truth.docStyle));
+const layout = layoutResume(schema, DOC_STYLE_DEFAULTS);
 const bytes = await emitPdf(layout, fonts, { title: "roundtrip probe" });
 
-// pdf-lib 1.17.1 misidentifies OpenType/CFF as TrueType when paired with the
-// current @pdf-lib/fontkit public shape. The emitter corrects those PDF resource
-// declarations after drawing. Lock the actual serialized contract so a future
-// refactor cannot reintroduce Poppler's font-type mismatch warnings.
+// Every PDF face, including the metric-preserving Latin Modern conversion, is
+// a TrueType sfnt. Lock the serialized declaration: the former post-save CFF
+// rewrite produced a name-keyed/CID-keyed hybrid that Firefox PDF.js 6 rendered
+// as missing or remapped glyphs even though older parsers extracted its text.
 const emitted = await PDFDocument.load(bytes.slice());
 const name = (value) => PDFName.of(value);
 let latinModernFonts = 0;
 let invalidLatinModernDeclarations = 0;
 for (const [, object] of emitted.context.enumerateIndirectObjects()) {
   if (!(object instanceof PDFDict)) continue;
-  if (String(object.get(name("Subtype"))) !== "/CIDFontType0") continue;
+  if (String(object.get(name("Subtype"))) !== "/CIDFontType2") continue;
   if (!String(object.get(name("BaseFont"))).startsWith("/LM")) continue;
   latinModernFonts += 1;
   const descriptor = object.lookup(name("FontDescriptor"), PDFDict);
-  const fontFile = descriptor.get(name("FontFile3"));
+  const fontFile = descriptor.get(name("FontFile2"));
   const stream = fontFile ? emitted.context.lookup(fontFile, PDFRawStream) : null;
-  const subtype = stream?.dict.get(name("Subtype"));
-  if (!fontFile || String(subtype) !== "/OpenType" || descriptor.has(name("FontFile2"))) {
+  if (
+    !fontFile ||
+    !stream ||
+    descriptor.has(name("FontFile3")) ||
+    String(object.get(name("CIDToGIDMap"))) !== "/Identity"
+  ) {
     invalidLatinModernDeclarations += 1;
   }
 }
@@ -137,7 +89,7 @@ let checked = 0;
 let annots = 0;
 if (!latinModernFonts || invalidLatinModernDeclarations) {
   console.error(
-    `OpenType/CFF declarations: ${invalidLatinModernDeclarations} invalid across ${latinModernFonts} Latin Modern fonts`
+    `TrueType declarations: ${invalidLatinModernDeclarations} invalid across ${latinModernFonts} Latin Modern fonts`
   );
   failures += 1;
 }
@@ -180,7 +132,7 @@ if (annots !== expectedLinks) {
 // This fixture's contact info always yields at least one automatic link
 // (email/github), so expectedLinks > 0 and annots must be too.
 if (checked === 0) {
-  console.error("pdf-roundtrip: 0 runs checked — vertical-truth.json fixture is missing/corrupt or the layout produced no text runs");
+  console.error("pdf-roundtrip: 0 runs checked — the starter document produced no text runs");
   failures += 1;
 }
 if (expectedLinks === 0) {
@@ -201,8 +153,8 @@ if (expectedLinks === 0) {
 // one is emitted and re-extracted here.
 const familyFailures = [];
 for (const family of Object.keys(DOCUMENT_FONT_FAMILIES)) {
-  const familyLayout = layoutResume(typesetSchema(truth.schema), {
-    ...legacyStyle(truth.docStyle),
+  const familyLayout = layoutResume(schema, {
+    ...DOC_STYLE_DEFAULTS,
     fontFamily: family
   });
   const familyBytes = await emitPdf(familyLayout, fonts, { title: `roundtrip ${family}` });
