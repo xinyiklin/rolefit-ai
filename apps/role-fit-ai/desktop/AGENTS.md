@@ -187,8 +187,8 @@ Applies to `apps/role-fit-ai/desktop/` and `tsconfig.desktop.json`.
   settings data under operating-system `userData`. Never package `.env`, a
   personal workspace/vault, tests, source maps, unrelated workspace apps, or a
   `.resume` other than the bundled starter.
-- Run Forge through `run-forge.mjs` on Node 24 (the wrapper accepts Node 22-24;
-  Node 24 is verified) and a matching native host. Supported public targets are
+- Run Forge through `run-forge.mjs` on Node 24 and a matching native host; the
+  wrapper rejects every other host Node major. Supported public targets are
   macOS arm64/x64 DMG + ZIP and Windows x64 Squirrel; cross-compilation and
   Linux packages are rejected.
 - Treat the Windows installer as executable product output, not only a signed

@@ -26,6 +26,7 @@ import {
   installCompanionIpc,
   isTrustedCompanionRequest
 } from "../../dist-electron/desktop/ipc.cjs";
+import { ROLEFIT_DESKTOP_RUNTIME_CONTRACT } from "../runtime-versions.mjs";
 
 const companionUrl = "file:///tmp/rolefit-companion/companion.html";
 const trustedSenderId = 41;
@@ -58,7 +59,11 @@ const providerIds = Object.freeze([
   "openai",
   "anthropic"
 ]);
-const runtimeInfo = createRoleFitDesktopRuntimeInfo("darwin", "0.1.0", "43.1.1");
+const runtimeInfo = createRoleFitDesktopRuntimeInfo(
+  "darwin",
+  "0.1.0",
+  ROLEFIT_DESKTOP_RUNTIME_CONTRACT.electronVersion
+);
 const siteSettings = Object.freeze({
   schemaVersion: 1,
   localSitePort: 5_181,
@@ -182,10 +187,17 @@ assert.deepEqual(runtimeInfo, {
   runtime: "electron-companion",
   platform: "darwin",
   appVersion: "0.1.0",
-  electronVersion: "43.1.1"
+  electronVersion: ROLEFIT_DESKTOP_RUNTIME_CONTRACT.electronVersion
 });
 assert.equal(Object.isFrozen(runtimeInfo), true);
-assert.throws(() => createRoleFitDesktopRuntimeInfo("linux", " ", "43.1.1"), /cannot be empty/);
+assert.throws(
+  () => createRoleFitDesktopRuntimeInfo(
+    "linux",
+    " ",
+    ROLEFIT_DESKTOP_RUNTIME_CONTRACT.electronVersion
+  ),
+  /cannot be empty/
+);
 
 function requestEvent({
   senderId = trustedSenderId,

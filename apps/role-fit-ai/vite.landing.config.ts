@@ -21,6 +21,9 @@ export default defineConfig({
   publicDir: resolve(appRoot, "landing/public"),
   plugins: [dropCspInDev],
   build: {
+    // Keep the public site on the Vite 7 browser baseline instead of silently
+    // adopting Vite 8's newer Baseline Widely Available target.
+    target: ["chrome107", "edge107", "firefox104", "safari16", "ios16"],
     outDir: resolve(appRoot, "dist-landing"),
     emptyOutDir: true,
     manifest: true,

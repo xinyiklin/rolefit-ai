@@ -1,0 +1,97 @@
+version: 2
+
+# Dependabot itself never merges these PRs. The groups below reduce lockfile
+# churn while preserving the manual review and focused verification each
+# dependency family requires.
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: America/New_York
+    open-pull-requests-limit: 10
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      react-runtime:
+        patterns:
+          - react
+          - react-dom
+          - "@types/react"
+          - "@types/react-dom"
+      vite-toolchain:
+        # Minor and major changes require explicit bundler/browser review.
+        patterns:
+          - vite
+          - "@vitejs/plugin-react"
+      typescript-toolchain:
+        # Compiler majors require the full native-runner matrix.
+        patterns:
+          - typescript
+          - "@types/node"
+      electron-runtime:
+        # Every Electron update requires native preview artifacts.
+        patterns:
+          - electron
+      electron-packaging:
+        patterns:
+          - "@electron-forge/*"
+          - "@electron/fuses"
+          - electron-squirrel-startup
+          - "@types/electron-squirrel-startup"
+          - electron-winstaller
+      pdf-and-fonts:
+        # Changes require layout, font-parity, preview, and external-render QA.
+        patterns:
+          - react-pdf
+          - pdf-lib
+          - pdfjs-dist
+          - "@pdf-lib/fontkit"
+          - fontkit
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: America/New_York
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(ci)"
+    groups:
+      github-actions:
+        patterns:
+          - "*"
+
+  - package-ecosystem: docker
+    directory: /apps/typeset
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: America/New_York
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "chore(container)"
+    groups:
+      typeset-base-images:
+        patterns:
+          - "*"
+
+  - package-ecosystem: pip
+    directory: /packages/engine/scripts
+    schedule:
+      interval: monthly
+      time: "09:00"
+      timezone: America/New_York
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "chore(fonts)"
+    groups:
+      python-font-tooling:
+        # Updates require regenerated-asset diffs plus Linux/macOS font checks.
+        patterns:
+          - "*"

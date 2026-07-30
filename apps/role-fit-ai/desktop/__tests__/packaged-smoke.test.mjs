@@ -5,10 +5,12 @@ import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { delimiter, isAbsolute, join, resolve } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
+import { listPackage } from "@electron/asar";
 import { getCurrentFuseWire } from "@electron/fuses";
 import {
   ROLEFIT_DESKTOP_COMPATIBILITY_VERSION
 } from "../../dist-electron/server/health-contract.js";
+import { assertElectronRuntimeVersions } from "../runtime-versions.mjs";
 
 const appRoot = resolve(import.meta.dirname, "../..");
 
@@ -51,6 +53,13 @@ const executable = explicitExecutable || (platform === "darwin"
 const executableInfo = await lstat(executable);
 assert(executableInfo.isFile() && !executableInfo.isSymbolicLink(),
   "Packaged smoke executable must be a regular file.");
+const asarPath = platform === "darwin"
+  ? join(appBundle, "Contents", "Resources", "app.asar")
+  : join(packageDirectory, "resources", "app.asar");
+assert(
+  listPackage(asarPath).some((file) => /^\/dist\/assets\/pdf\.worker\.min-.*\.mjs$/.test(file)),
+  "Packaged ASAR must retain the bundled PDF.js worker."
+);
 if (platform === "darwin") {
   const signature = spawnSync(
     "/usr/bin/codesign",
@@ -232,6 +241,14 @@ try {
   const result = await waitForExit(child, 30_000);
   assert.equal(result.code, 0, `Packaged companion exited ${result.code ?? result.signal}.\n${output}`);
   assert.match(output, /ROLEFIT_DESKTOP_SMOKE_OK ownership=owned mode=production phase=companion/);
+  const runtimeMarker = output.match(
+    /ROLEFIT_DESKTOP_SMOKE_OK[^\r\n]* electron=(\S+) node=(\S+)/
+  );
+  assert(runtimeMarker, "Packaged companion must report its Electron and embedded Node versions.");
+  assertElectronRuntimeVersions({
+    electron: runtimeMarker[1],
+    node: runtimeMarker[2]
+  });
   assert.doesNotMatch(output, /Electron Security Warning/);
 
   await stat(join(userData, "workspace"));

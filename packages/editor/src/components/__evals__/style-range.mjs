@@ -1,22 +1,21 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 
 import React from "react";
-import ts from "typescript";
+import { createServer } from "vite";
 
-const sourceUrl = new URL("../toolbar/StyleRange.tsx", import.meta.url);
-const source = readFileSync(sourceUrl, "utf8").replace(
-  "export function StyleRange",
-  "function StyleRange"
-);
-const compiled = ts.transpileModule(source, {
-  compilerOptions: {
-    jsx: ts.JsxEmit.React,
-    module: ts.ModuleKind.None,
-    target: ts.ScriptTarget.ES2022
-  }
-}).outputText;
-const StyleRange = Function("React", `${compiled}\nreturn StyleRange;`)(React);
+const vite = await createServer({
+  root: fileURLToPath(new URL("../../..", import.meta.url)),
+  appType: "custom",
+  logLevel: "silent",
+  server: { middlewareMode: true }
+});
+let StyleRange;
+try {
+  ({ StyleRange } = await vite.ssrLoadModule("/src/components/toolbar/StyleRange.tsx"));
+} finally {
+  await vite.close();
+}
 
 const rendered = StyleRange({
   id: "header-gap",

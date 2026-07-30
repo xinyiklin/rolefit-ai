@@ -128,10 +128,9 @@ install is needed to use it. To work on it locally:
 
 Requirements:
 
-- Node.js 24 recommended (matches CI and the Docker build); 22.6 is the hard
-  floor, since the evals run TypeScript directly via
-  `--experimental-strip-types`
-- npm
+- Node.js 24.18 or newer in the Node 24 line (matches CI, Docker, and the
+  workspace runtime contract)
+- npm 11.16.0
 
 ```bash
 npm install
@@ -266,10 +265,11 @@ docker build -f apps/typeset/Dockerfile -t typeset .
 docker run --rm -p 127.0.0.1:5186:8080 typeset
 ```
 
-The multi-stage image builds with Node and serves only the compiled assets from
-unprivileged Nginx. It has no runtime environment variables or application API.
-Put the loopback-bound container behind an HTTPS reverse proxy when exposing it
-publicly.
+The multi-stage image builds with Node 24.18.0 and serves only the compiled
+assets from unprivileged Nginx. Both bases are pinned by multi-architecture
+digest and updated through dependency PRs. It has no runtime environment
+variables or application API. Put the loopback-bound container behind an HTTPS
+reverse proxy when exposing it publicly.
 
 Example Caddy site:
 
@@ -279,10 +279,11 @@ resume.example.com {
 }
 ```
 
-The GitHub workflow checks the engine, editor, and Typeset workspaces for
-matching pull requests. On configured pushes to `main`, it rebuilds and
-restarts the same static Nginx container on the EC2 host that serves
-[typeset.xinyiklin.com](https://typeset.xinyiklin.com).
+The GitHub workflow checks the engine, editor, and Typeset workspaces and
+separately builds and HTTP-probes the immutable container for matching pull
+requests. On configured pushes to `main`, both gates must pass before it
+rebuilds and restarts the same static Nginx container on the EC2 host that
+serves [typeset.xinyiklin.com](https://typeset.xinyiklin.com).
 
 ## Viewport support
 

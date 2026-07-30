@@ -5,11 +5,19 @@ workspace; there is no generic root `dev`, `build`, or `preview` script.
 
 ## Requirements
 
-- Node.js 22.18 minimum so the repository's direct `.ts` launchers run without
-  an experimental flag; Node 24 matches CI/Docker and is the recommended
-  runtime for Electron Forge packaging. The packaging wrapper accepts only the
-  Node 22-24 range; Node 24 is the verified packaging runtime.
-- npm with the root lockfile.
+- Node.js 24.18 or newer in the Node 24 line. `.node-version` pins 24.18.0,
+  matching CI and Electron's embedded runtime; direct `.ts` launchers use its
+  built-in type stripping.
+- npm 11.16.0, declared by the root `packageManager` field, with the root
+  lockfile. `npm run deps:check` validates both runtime versions and the
+  installed dependency contracts. The root `allowScripts` list pins the six
+  reviewed build/native-package lifecycle scripts, and `.npmrc` rejects any
+  newly introduced install script until it is reviewed.
+- TypeScript 7.0.2 is the root-owned workspace compiler. Its platform package
+  supplies the native `tsc` executable, so dependency CI must execute it on
+  every supported runner rather than treating one host's lockfile entries as
+  cross-platform proof. Electron Forge's nested TypeScript 5 compiler is
+  private implementation detail and is not a workspace compiler.
 - Python 3 only for engine font-generation/check scripts. Install their pinned
   dependencies from `packages/engine/scripts/requirements-fonts.txt` in an
   isolated environment; CI creates `.font-tools` and places it on `PATH`.
@@ -33,6 +41,8 @@ npm run make:rolefit:desktop           # native installer/archive artifacts
 
 npm run check             # every workspace check
 npm test                  # every workspace test/eval script
+npm run deps:check        # runtime and installed dependency contracts
+npm run types:check       # root probe plus every workspace/server/desktop config
 npm run test:editor:browser  # headless Chrome editor/lifecycle contracts
 ```
 
@@ -104,6 +114,38 @@ signed-distribution check.
 
 Package changes are not complete after one consumer builds. Verify every host
 whose public package contract changed.
+
+## TypeScript compiler contract
+
+The browser-facing root, engine, editor, RoleFit, and Typeset configs keep
+bundler resolution and their existing browser targets. RoleFit's server config
+is the Node-native syntax gate: ESNext/NodeNext, relative-import rewriting,
+erasable syntax, verbatim modules, and no emit. The desktop config separately
+emits CommonJS companion code. Run the root probe and all six child configs
+when compiler settings or versions change.
+
+Node 24 executes the source-owned `.ts` eval paths through native type
+stripping. Runtime probes must not import TypeScript's JavaScript compiler API
+just to load TSX; use the owning build/runtime boundary instead.
+
+Document CI runs the TypeScript 7 compiler and every explicit config on Linux
+x64/ARM64, macOS ARM64/x64, and Windows x64. Each matrix entry asserts its
+actual Node platform and architecture and verifies the matching
+`@typescript/typescript-*` native package before typechecking.
+
+## Dependency and image maintenance
+
+`.github/dependabot.yml` checks npm, SHA-pinned GitHub Actions, the Typeset
+Docker bases, and the exact Python font-tool requirements. Related packages are
+grouped by their verification contract. There is no dependency auto-merge
+workflow: Vite, TypeScript, Electron, PDF/font, Python, and generated-asset
+changes remain manual review decisions.
+
+All third-party Actions use immutable commit SHAs with readable release
+comments so Dependabot can advance both together. The Typeset Dockerfile pins
+Node 24.18.0 and unprivileged Nginx by multi-architecture digest. Its PR
+workflow builds that exact image and requires an HTTP response from the
+unprivileged static server before deployment can proceed.
 
 ## Ports
 

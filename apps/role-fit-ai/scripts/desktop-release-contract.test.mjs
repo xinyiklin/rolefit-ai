@@ -19,8 +19,35 @@ import {
   validateRolefitReleaseRef,
 } from "./desktop-release-contract.mjs";
 import { publishRelease } from "./publish-desktop-release.mjs";
+import {
+  ROLEFIT_DESKTOP_RUNTIME_CONTRACT,
+  assertElectronPackageVersion,
+  assertElectronRuntimeVersions,
+  assertForgeHostNodeVersion,
+} from "../desktop/runtime-versions.mjs";
 
 const VERSION = "0.1.0";
+
+test("desktop runtime tuple matches the release manifest and rejects drift", () => {
+  const manifest = JSON.parse(
+    readFileSync(new URL("../package.json", import.meta.url), "utf8"),
+  );
+  assertElectronPackageVersion(manifest.devDependencies.electron);
+  assertForgeHostNodeVersion("24.18.0");
+  assertElectronRuntimeVersions({
+    electron: ROLEFIT_DESKTOP_RUNTIME_CONTRACT.electronVersion,
+    node: ROLEFIT_DESKTOP_RUNTIME_CONTRACT.embeddedNodeVersion,
+  });
+  assert.throws(() => assertForgeHostNodeVersion("23.11.1"), /use Node 24/);
+  assert.throws(
+    () => assertElectronRuntimeVersions({ electron: "43.1.9", node: "24.18.0" }),
+    /does not match expected 43\.2\.x/,
+  );
+  assert.throws(
+    () => assertElectronRuntimeVersions({ electron: "43.2.0", node: "24.17.9" }),
+    /does not match expected 24\.18\.x/,
+  );
+});
 
 function runGit(root, args) {
   const result = spawnSync("git", args, {

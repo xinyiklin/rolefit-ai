@@ -5,8 +5,17 @@
     "apps/*",
     "packages/*"
   ],
+  "packageManager": "npm@11.16.0",
   "engines": {
-    "node": ">=22.18"
+    "node": ">=24.18 <25"
+  },
+  "allowScripts": {
+    "electron@43.2.0": true,
+    "electron-winstaller@5.4.4": true,
+    "esbuild@0.28.1": true,
+    "fs-xattr@0.3.1": true,
+    "fsevents@2.3.3": true,
+    "macos-alias@0.2.12": true
   },
   "scripts": {
     "dev:typeset": "npm run dev --workspace apps/typeset",
@@ -24,9 +33,22 @@
     "test:rolefit:desktop:packaged": "npm run test:desktop:packaged --workspace apps/role-fit-ai --",
     "test:rolefit:release": "npm run test:desktop:release --workspace apps/role-fit-ai",
     "test:rolefit:windows-runtime": "npm run test:desktop:windows-runtime --workspace apps/role-fit-ai",
+    "deps:check": "node scripts/check-dependency-contracts.mjs",
+    "deps:tree": "npm ls --all",
+    "deps:outdated": "npm outdated --workspaces --include-workspace-root",
+    "deps:audit:production": "npm audit --omit=dev",
+    "types:check": "tsc -p tsconfig.base.json --noEmit && tsc -p packages/engine/tsconfig.json --noEmit && tsc -p packages/editor/tsconfig.json --noEmit && tsc -p apps/role-fit-ai/tsconfig.json --noEmit && tsc -p apps/role-fit-ai/tsconfig.server.json --noEmit && tsc -p apps/role-fit-ai/tsconfig.desktop.json --noEmit && tsc -p apps/typeset/tsconfig.json --noEmit",
     "check:package-scripts": "node scripts/check-package-script-paths.mjs",
     "test:editor:browser": "node scripts/editor-browser-contracts.mjs",
-    "check": "npm run check:package-scripts && npm run check --workspaces --if-present",
+    "check": "npm run deps:check && npm run check:package-scripts && npm run check --workspaces --if-present",
     "test": "npm run test --workspaces --if-present"
+  },
+  "devDependencies": {
+    "@types/node": "24.13.3",
+    "@types/react": "19.2.17",
+    "@types/react-dom": "19.2.3",
+    "@vitejs/plugin-react": "6.0.4",
+    "typescript": "7.0.2",
+    "vite": "8.1.5"
   }
 }

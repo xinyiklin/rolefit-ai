@@ -1110,7 +1110,10 @@ async function inspectSmokeRenderer(
     await delay(50);
   }
   if (!providerPayloadMatches(providerPayload, ownership)) {
-    throw new Error("Electron companion provider snapshot did not match its owned/reused server boundary.");
+    throw new Error(
+      "Electron companion provider snapshot did not match its owned/reused server boundary"
+        + ` (${JSON.stringify(providerPayload)}).`
+    );
   }
 
   if (!(await verifyUntrustedBridgeRejected(companionUrl))) {
@@ -1126,7 +1129,10 @@ async function inspectSmokeRenderer(
     await writeFile(screenshotPath, image.toPNG());
   }
 
-  console.log(`ROLEFIT_DESKTOP_SMOKE_OK ownership=${ownership} mode=${activeMode} phase=companion`);
+  console.log(
+    `ROLEFIT_DESKTOP_SMOKE_OK ownership=${ownership} mode=${activeMode} phase=companion`
+      + ` electron=${process.versions.electron ?? "unknown"} node=${process.versions.node}`
+  );
   await shutdownAndExit(0);
 }
 

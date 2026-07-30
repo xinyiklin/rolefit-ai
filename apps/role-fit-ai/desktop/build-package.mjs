@@ -2,6 +2,10 @@ import { build } from "esbuild";
 import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  ROLEFIT_DESKTOP_RUNTIME_CONTRACT,
+  assertElectronPackageVersion,
+} from "./runtime-versions.mjs";
 
 const desktopRoot = dirname(fileURLToPath(import.meta.url));
 const appRoot = resolve(desktopRoot, "..");
@@ -18,6 +22,7 @@ const packageJson = JSON.parse(await readFile(join(appRoot, "package.json"), "ut
 if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(packageJson.version)) {
   throw new Error("RoleFit package version must be SemVer before desktop packaging.");
 }
+assertElectronPackageVersion(packageJson.devDependencies?.electron);
 
 await rm(stageRoot, { recursive: true, force: true });
 await mkdir(join(stageRoot, "dist-electron", "desktop"), { recursive: true });
@@ -45,7 +50,7 @@ const mainResult = await build({
   bundle: true,
   platform: "node",
   format: "cjs",
-  target: "node24.18",
+  target: ROLEFIT_DESKTOP_RUNTIME_CONTRACT.esbuildTarget,
   external: ["electron"],
   legalComments: "none",
   sourcemap: false,
@@ -58,7 +63,7 @@ const preloadResult = await build({
   bundle: true,
   platform: "node",
   format: "cjs",
-  target: "node24.18",
+  target: ROLEFIT_DESKTOP_RUNTIME_CONTRACT.esbuildTarget,
   external: ["electron"],
   legalComments: "none",
   sourcemap: false,
@@ -71,7 +76,7 @@ const serverResult = await build({
   bundle: true,
   platform: "node",
   format: "esm",
-  target: "node24.18",
+  target: ROLEFIT_DESKTOP_RUNTIME_CONTRACT.esbuildTarget,
   // cross-spawn is CommonJS and requires Node built-ins at runtime. The server
   // stays ESM for top-level await, so provide a scoped Node require instead of
   // leaving esbuild's dynamic-require shim unable to load child_process.

@@ -1,6 +1,11 @@
 import { createRequire } from "node:module";
+import { readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  assertElectronPackageVersion,
+  assertForgeHostNodeVersion,
+} from "./runtime-versions.mjs";
 
 const require = createRequire(import.meta.url);
 const desktopRoot = dirname(fileURLToPath(import.meta.url));
@@ -39,11 +44,14 @@ function parseTarget(argumentsList) {
 }
 
 async function main() {
-  const nodeMajor = Number(process.versions.node.split(".", 1)[0]);
-  if (!Number.isInteger(nodeMajor) || nodeMajor < 22 || nodeMajor > 24) {
-    fail(
-      `Node ${process.versions.node} is outside the accepted Forge range. Use Node 24 LTS (verified; Node 22-24 is accepted).`
+  try {
+    assertForgeHostNodeVersion(process.versions.node);
+    const stagedManifest = JSON.parse(
+      await readFile(resolve(stageRoot, "package.json"), "utf8"),
     );
+    assertElectronPackageVersion(stagedManifest.devDependencies?.electron);
+  } catch (error) {
+    fail(error instanceof Error ? error.message : String(error));
   }
 
   const [command, ...argumentsList] = process.argv.slice(2);

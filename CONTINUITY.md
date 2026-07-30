@@ -5,6 +5,74 @@ bounded; app-only operational detail belongs in the affected app documentation.
 
 ## 2026-07-29
 
+- [USER+CODE+TOOL] The final dependency-modernization tranche SHA-pins every
+  third-party GitHub Action, fixes workflow runners to named current images,
+  and executes TypeScript 7's native compiler plus all seven configs on Linux
+  x64/ARM64, macOS ARM64/x64, and Windows x64. Typeset's Node 24.18.0 and
+  unprivileged Nginx bases are multi-architecture digest-pinned; pull requests
+  build the image and require an HTTP response before deployment. Native
+  Dependabot now groups npm, Actions, Docker, and Python updates without an
+  auto-merge path, leaving Vite, TypeScript, Electron, PDF/font, Python, and
+  generated-asset changes under their documented manual gates.
+- [USER+CODE+TOOL] The PDF dependency audit retains `pdf-lib` 1.17.1,
+  `@pdf-lib/fontkit` 1.1.1, React-PDF 10.4.1, and its `pdfjs-dist` 5.4.296
+  transitive. RoleFit's unused direct `fontkit` 2.0.4 dev dependency and its
+  nine exclusive transitive lockfile records are removed: source search found
+  no import, the desktop bundle metafile retains no runtime import, and the
+  staged package remains 128 allowlisted files. The strengthened round-trip
+  fixture emits all six families and six faces with accents, ligatures,
+  kerning, links, and underlines plus a searchable two-page cover letter.
+  PDF.js exact-position/extraction checks, 1,266,912 shaping comparisons,
+  reproducible web/PDF font checks, both app builds, Poppler renders of every
+  retained artifact, and a real React-PDF Source Serif preview pass with no
+  browser errors or warnings. Python pins and generated font assets are
+  unchanged; the production npm audit remains zero.
+- [USER+CODE+TOOL] TypeScript 7.0.2 is the sole workspace compiler after an
+  explicit 6.0.3 bridge. The root probe and all six child configs pass without
+  diagnostics; browser configs retain their previous options, the Node-native
+  server gate alone uses ESNext/NodeNext with relative-import rewriting,
+  erasable syntax, verbatim modules, and no emit, and the desktop emit remains
+  separate. The editor component probe now loads its TSX through Vite rather
+  than TypeScript's removed JavaScript compiler API. On this macOS ARM64 host,
+  real wall-clock typechecks changed from 5.04s to 0.86s for RoleFit, 2.67s to
+  0.81s for Typeset, 1.98s to 0.46s for engine, and 2.74s to 0.66s for editor.
+  Node-native `.ts` evals and desktop `.cts` emit/probes pass. Other native
+  compiler platforms remain assigned to the PR CI tranche.
+- [USER+CODE+TOOL] Electron 43.2.0 now shares one desktop runtime contract for
+  its 43.2 major/minor, embedded Node 24.18, the `node24.18` esbuild target,
+  and Node 24-only Forge host. Build staging, Forge, release contracts, IPC
+  fixtures, package layout, and packaged smoke consume that owner; the exact
+  Electron installer is included in the reviewed lifecycle-script allowlist.
+  Source desktop probes, release tests, the real Electron owned/reused server
+  smoke, native macOS arm64 packaging, ASAR/PDF-worker presence, security
+  fuses, ad-hoc signature, and packaged startup pass. Native macOS x64 and
+  Windows x64 remain workflow-only verification on this ARM64 host.
+- [USER+CODE+TOOL] RoleFit now shares the root Vite 8.1.5 and React plugin
+  6.0.4 with Typeset, with the Vite 7 browser baseline retained explicitly for
+  the renderer and public landing page. Dependency checks, both app gates,
+  RoleFit/landing builds, lifecycle probes, Chromium lazy-panel/React-refresh
+  checks, and the built landing CSP smoke pass. Real saved-resume QA also found
+  and fixed a pre-existing CSP omission: `connect-src` now permits only the
+  in-memory `blob:` fetch PDF.js needs. The public starter resume, fonts,
+  PDF.js worker, and object URL all returned 200 with no browser errors.
+- [USER+CODE+TOOL] React and React DOM now resolve once at 19.2.8, and all
+  three Lucide consumers resolve once at 1.27.0. Shared-editor checks, the
+  Typeset app gate, RoleFit's production build, and the dependency contract
+  pass. No product UI code changed; visual QA remains deferred under the
+  flag-first policy until the Vite/browser tranche.
+- [USER+CODE+TOOL] Dependency-modernization tranche 1 pins the workspace to
+  Node 24.18+ below 25 (`.node-version`: 24.18.0) and npm 11.16.0, aligns CI
+  and Node types with that runtime, and makes shared TypeScript/Vite/React
+  tooling root-owned. A strict, version-pinned install-script allowlist and the
+  dependency-contract gate now protect clean installs. RoleFit's Vite 7/plugin
+  5 pair remains the sole explicit migration exception until its dedicated
+  Vite 8 tranche; Electron Forge's private TypeScript 5.4 compiler is not a
+  workspace compiler. Two clean `npm ci` runs preserved the lockfile hash;
+  production audit, full repository check, Chromium editor contracts, and
+  effective RoleFit tsconfig comparison passed under the pinned toolchain.
+  The production audit is zero; the separate full audit still reports 29 high
+  and 1 critical no-fix advisories, all in dev-only Electron Forge
+  packaging/rebuild transitives, for the Electron tranche to reassess.
 - [USER+CODE] Browser downloads now keep their hidden anchor and blob URL alive
   through Chromium's asynchronous handoff. Immediate cleanup could deliver the
   PDF bytes while losing the anchor's requested `.pdf` filename, leaving a
