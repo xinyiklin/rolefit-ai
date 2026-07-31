@@ -62,6 +62,16 @@ updates:
     ignore:
       - dependency-name: "@types/node"
         update-types: ["version-update:semver-major"]
+      # @electron/packager, @electron/universal, and electron-winstaller all
+      # require ^3, so a major here installs a second copy beside theirs rather
+      # than replacing it. It moves when the Forge packaging stack moves.
+      - dependency-name: "@electron/asar"
+        update-types: ["version-update:semver-major"]
+      # react-pdf pins pdfjs-dist to an exact version, so any standalone bump
+      # splits the API from the worker and breaks the preview at runtime. When
+      # a react-pdf release requires a new pdfjs-dist, move both by hand in one
+      # commit; deps:check fails loudly until they agree.
+      - dependency-name: "pdfjs-dist"
 
   - package-ecosystem: github-actions
     directory: /
