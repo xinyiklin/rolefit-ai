@@ -2,54 +2,45 @@ import type { ReactNode } from "react";
 
 type PreparedMaterialCardProps = {
   id: string;
-  icon: ReactNode;
   title: string;
+  state: string;
   included: boolean;
   onIncludedChange: (included: boolean) => void;
-  description: string;
   variantLabel: string;
   variantValue: string;
   variantOptions: Array<{ fileName: string; label: string }>;
   emptyVariantLabel: string;
   variantDisabled: boolean;
   onVariantChange: (fileName: string) => void;
-  variantStatus: string;
-  children?: ReactNode;
   actions: ReactNode;
-  status?: ReactNode;
+  children?: ReactNode;
 };
 
+// One stacked material group inside the Application rail: name and state beside
+// the Include decision, then the chosen variant and document actions. DOM and
+// visual order stay aligned so keyboard users encounter the controls where they
+// appear. The selector already names the variant, so state reports only state.
 export function PreparedMaterialCard({
   id,
-  icon,
   title,
+  state,
   included,
   onIncludedChange,
-  description,
   variantLabel,
   variantValue,
   variantOptions,
   emptyVariantLabel,
   variantDisabled,
   onVariantChange,
-  variantStatus,
-  children,
   actions,
-  status
+  children
 }: PreparedMaterialCardProps) {
   return (
-    <section
-      className={`prepare-sheet prepare-material-card${included ? "" : " is-excluded"}`}
-      aria-labelledby={`${id}-title`}
-    >
-      <div className="prepare-material-card__head">
-        <div className="prepare-material-card__mark" aria-hidden="true">
-          {icon}
-        </div>
-        <div className="prepare-material-card__identity">
-          <p className="prepare-page__eyebrow">Material</p>
-          <h3 id={`${id}-title`}>{title}</h3>
-          <p>{description}</p>
+    <section className={`prepare-material${included ? "" : " is-excluded"}`} aria-labelledby={`${id}-title`}>
+      <div className="prepare-material__row">
+        <div className="prepare-material__identity">
+          <h4 id={`${id}-title`}>{title}</h4>
+          <p>{state}</p>
         </div>
         <label className="prepare-include-toggle">
           <input
@@ -63,30 +54,26 @@ export function PreparedMaterialCard({
           </span>
           <span>Include</span>
         </label>
+        <select
+          aria-label={variantLabel}
+          className="prepare-material__variant"
+          value={variantValue}
+          onChange={(event) => onVariantChange(event.target.value)}
+          disabled={variantDisabled}
+        >
+          {!variantValue ? <option value="">{emptyVariantLabel}</option> : null}
+          {variantOptions.map((option) => (
+            <option key={option.fileName} value={option.fileName}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+        <div className="prepare-material__actions">{actions}</div>
       </div>
 
-      <div className="prepare-material-choice">
-        <label className="field">
-          <span>{variantLabel}</span>
-          <select
-            value={variantValue}
-            onChange={(event) => onVariantChange(event.target.value)}
-            disabled={variantDisabled}
-          >
-            {!variantValue ? <option value="">{emptyVariantLabel}</option> : null}
-            {variantOptions.map((option) => (
-              <option key={option.fileName} value={option.fileName}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <p>{variantStatus}</p>
-      </div>
-
-      {status}
+      {/* Rendered as direct grid children: an all-null fragment produces no DOM
+          node, so a row with nothing to disclose costs no extra line or gap. */}
       {children}
-      <div className="prepare-material-card__actions">{actions}</div>
     </section>
   );
 }

@@ -39,7 +39,6 @@ type ResumeTabProps = {
   // True only for the first workspace check. Manual Reload actions do not
   // replace the live editor with this arrival state.
   isWorkspaceBootstrapping: boolean;
-  resultSourceLabel: string;
   // JD lifestyle/logistical conditions for the pre-apply advisory (not fit).
   jobConstraints?: JobConstraint[];
   result: PolishedResume | null;
@@ -86,7 +85,6 @@ export function ResumeTab({
   dirty,
   draftAutosaveState,
   isWorkspaceBootstrapping,
-  resultSourceLabel,
   jobConstraints,
   result,
   resumeDiff,
@@ -148,10 +146,7 @@ export function ResumeTab({
   );
 
   const hasReview = Boolean(result?.strictReview || result?.suggestedChanges?.length);
-  const hasSuggestions = Boolean(result?.suggestedChanges?.length);
-  const sourceLabel = hasSuggestions ? "AI suggestions" : resultSourceLabel;
-  const jobTargetLabel = [jobTarget?.role, jobTarget?.company].filter(Boolean).join(" at ");
-  const documentContext = [sourceLabel, jobTargetLabel].filter(Boolean).join(" · ");
+  const documentContext = [jobTarget?.role, jobTarget?.company].filter(Boolean).join(" at ");
   return (
     <section className="studio-card studio-card--flush">
       <header

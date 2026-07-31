@@ -62,7 +62,6 @@ export function useResumeAnalysis({
   // the review rail, where its reason and evidence are available, rather than
   // being duplicated in the editor toolbar.
   const headlineScore = fitComparison?.tailored ?? null;
-  const resultSourceLabel = result?.source === "ai" ? "AI" : "";
 
   // Lifestyle/logistical conditions in the JD — surfaced as a pre-apply advisory,
   // deliberately NOT a fit input (the prompt rules keep the verdict about
@@ -74,7 +73,6 @@ export function useResumeAnalysis({
     resumeDiff,
     fitComparison,
     headlineScore,
-    jobConstraints,
-    resultSourceLabel
+    jobConstraints
   };
 }

@@ -64,7 +64,10 @@ editable documents.
   be resolved at all — a missing company or role, or a template that names a
   private detail such as a referral. Unsaved edits are kept in a
   recoverable draft and the letter is named like the resume
-  (`Name_Company_Cover_Letter`), so both editors behave the same way.
+  (`Name_Company_Cover_Letter`), so both editors behave the same way. Selecting
+  a saved cover-letter variant changes its contents without replacing that
+  application output name, and both editor headers use the same
+  `Role at Company` sublabel.
   A new letter starts in Carlito at 11 pt with double line spacing, 8 pt after
   each paragraph, an additional 8 pt before its date, 0.5 inch top/bottom
   margins, and 0.75 inch side margins — Calibri's metrics, the shape business
@@ -73,26 +76,30 @@ editable documents.
   only place a job enters the current session. It leads PREPARE / DRAFT / TRACK
   navigation while the masthead keeps only Sessions and Apply. The paired
   extension is the primary path; URL fetch and pasted text remain available
-  there as deliberate fallbacks. Prepare keeps receipt/distill progress,
-  source disclosure, and the complete editable job brief together: tracked job
-  facts, company context, responsibilities, required and preferred
-  qualifications, technical keywords, seniority and domain signals, benefits,
-  and any extraction or candidate-review gaps. Resume and Cover Letter use the
-  same material-card pattern, each with an **Include** toggle and its own named
-  variant selector. Resume starts included and Cover Letter starts excluded;
+  there as deliberate one-at-a-time fallbacks. Before preparation, the focused
+  Source panel shows only the selected URL or pasted-text method. Afterward it
+  collapses above the complete editable job brief—tracked job facts, company
+  context, responsibilities, required and preferred qualifications, technical
+  keywords, seniority and domain signals, benefits, and any extraction or
+  candidate-review gaps—while the Application rail keeps Resume, Cover Letter,
+  fit, readiness, and Apply together. Fit shows the current AI Review, a
+  matching saved review marked historical, or **Not reviewed** until Review
+  runs; RoleFit does not estimate it locally. Each material has an **Include** toggle and its
+  own named variant selector. Resume starts included and Cover Letter starts excluded;
   included material must be ready before Apply, while either or both can be
-  excluded. The captured posting remains unchanged behind **View source** and
+  excluded. The captured posting remains unchanged behind **View** and
   **Prepare again**; Apply stores the complete corrected brief, while resume
   tailoring continues to use the benefits-excluded projection. Candidate gaps
   from a reopened application are explicitly historical until Review runs
   against the current resume and prepared job.
-- **Evidence-based resume variant recommendation** — when multiple saved resume
-  variants exist, Prepare compares the actual strict `.resume` contents with
-  the prepared job. A clear high-confidence winner can be selected
-  automatically only while the editor is clean; ambiguous comparisons or
-  unsaved edits leave the choice with the user and pause automatic tailoring.
-  The recommendation does not add or persist a parallel variant-metadata
-  schema.
+- **Evidence-based variant recommendation** — when multiple saved variants
+  exist, Prepare compares the actual strict `.resume` and `.cover` contents with
+  weighted role, requirement, responsibility, and technology signals from the
+  prepared job. A meaningful unique winner is selected automatically for either
+  document while its editor is clean and not application-owned. A tie or
+  incomplete comparison keeps the current choice and makes no recommendation;
+  unsaved work is never replaced. Neither document persists parallel
+  variant metadata.
 - **Job-link preparation** — paste a posting URL on Prepare and pull the
   description in one click: Workday-aware through CXS JSON, Ashby-aware through
   its public posting API (including Handshake's branded wrapper), with
@@ -129,7 +136,7 @@ editable documents.
   caret or field moves, selections, formatting, structural edits, and pauses
   start a new group.
 - **Ordered AI workflow** — Distill, Tailor, and Review share one reusable progress surface with exact step counts, specific failure reasons, Retry/Stop behavior, and later stages marked not run after a failure.
-- **WYSIWYG editor + PDF export** — the editor *is* the preview: it and the exported PDF use the same shared Typeset layout engine, so visible line breaks and page flow match the export exactly. No external toolchain to install — typesetting and PDF generation run in the browser.
+- **WYSIWYG editor + PDF export** — the editor _is_ the preview: it and the exported PDF use the same shared Typeset layout engine, so visible line breaks and page flow match the export exactly. No external toolchain to install — typesetting and PDF generation run in the browser.
 - **`.resume` save/load** — download strict schema-v1 structured resume data,
   including explicit hidden/visible/absent header state, as a `.resume` file
   (lossless JSON, formatting preserved) and reload it later.
@@ -365,10 +372,10 @@ preparation and duplicate checking to the job board. On any posting, click the
   and distill progress while that tab prepares its structured brief with its own
   Distill provider. **Tailor resume after preparation** stays on Prepare and
   runs only after the brief and resume are ready. It never replaces a dirty
-  editor automatically. When multiple saved resume variants exist, RoleFit
-  ranks their actual document contents; only a clear high-confidence winner can
-  be selected automatically while the editor is clean. Otherwise Prepare shows
-  the recommendation and waits for the user. Turning **Prepare job details with
+  editor automatically. When multiple saved variants exist, RoleFit ranks their
+  actual contents against weighted prepared-job sections and selects a
+  meaningful unique winner. A tie keeps the current selection instead of
+  inventing a recommendation. Turning **Prepare job details with
   AI** off skips the provider call, prepares the local text deterministically,
   and retains deterministic tracking extraction.
 

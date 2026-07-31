@@ -1,3 +1,7 @@
+import { coverLetterPlainText, parseCoverLetterFile } from "@typeset/engine/lib/coverLetter.ts";
+
+import type { VariantCandidate } from "./variantRecommendation.ts";
+
 export type CoverLetterOption = { fileName: string; label: string };
 export type CoverLetterHistoryEntry = {
   key: string;
@@ -83,6 +87,32 @@ export function selectCoverLetterWorkspaceDocument(
     { fileName },
     "Cover letter version not found."
   );
+}
+
+// Ranking reads each saved letter through the same validated select route the
+// editor opens with, so a variant is compared by its real bytes rather than by
+// its filename. The select route is a pure read: it never changes which letter
+// the editor holds. A variant that fails to parse is skipped, not ranked as
+// empty, so one bad file cannot hand the recommendation to a weaker letter.
+export async function readCoverLetterVariantCandidates(
+  options: CoverLetterOption[]
+): Promise<VariantCandidate[]> {
+  const candidates = await Promise.all(
+    options.map(async (option): Promise<VariantCandidate | null> => {
+      try {
+        const document = await selectCoverLetterWorkspaceDocument(option.fileName);
+        const parsed = parseCoverLetterFile(document.text);
+        return {
+          fileName: option.fileName,
+          label: option.label,
+          text: coverLetterPlainText(parsed.data)
+        };
+      } catch {
+        return null;
+      }
+    })
+  );
+  return candidates.filter((candidate): candidate is VariantCandidate => candidate !== null);
 }
 
 export function restoreCoverLetterWorkspaceDocument(

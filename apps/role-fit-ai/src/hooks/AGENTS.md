@@ -113,12 +113,13 @@ browser-side effects; components render them and App composes them.
   signal, not semantic request input, so background readiness polls must not
   invalidate an already-running AI request.
 - Automatic extension tailoring remains on Prepare. It may not replace a dirty
-  editor without an explicit user action. When multiple saved resume variants
-  exist, compare their actual strict document contents with the prepared job
-  and auto-select only a clear high-confidence winner while the editor is
-  clean; otherwise surface the recommendation and pause. A successful
-  automatic run must not force the Resume tab; user-initiated Resume tailoring
-  retains its normal reveal behavior.
+  editor without an explicit user action. When multiple saved resume or
+  cover-letter variants exist, compare their actual strict document contents
+  with weighted prepared-job sections and auto-select a meaningful unique
+  winner while the editor is clean and not application-owned. A tie or
+  incomplete comparison keeps the current selection without inventing a
+  recommendation. A successful automatic run must not force the Resume tab;
+  user-initiated Resume tailoring retains its normal reveal behavior.
 - Distill stale-input guards cover only the job source and Distill-stage AI
   settings. Resume bootstrap and Tailor-mode reconciliation are downstream
   auto-Tailor inputs; they must not cancel an extension Distill that is already

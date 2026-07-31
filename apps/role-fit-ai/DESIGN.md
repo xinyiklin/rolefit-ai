@@ -380,29 +380,45 @@ interactive control shares the same focus treatment: 2px Forest Ink outline,
 - **Role:** the first/default studio page and the sole job-intake surface.
   Extension receipt is primary; URL fetch and pasted text are compact fallback
   controls on the same page, never masthead inputs or a second intake menu.
-- **Composition:** framed source and editable structured-brief sheets sit beside
-  a narrow progress/readiness rail. Collapse prepared source by default, while
-  keeping explicit View source, Replace source, and Prepare again paths. Keep
-  View source and Prepare again bound to the immutable captured posting, not
-  the compact brief as the user edits it. Keep role, company, location, type,
+- **Composition:** before a posting is prepared, one centered Source panel is
+  the whole task. URL and pasted text are two keyboard-navigable methods inside
+  that panel, and only the selected method is visible; empty Job brief,
+  Materials, and readiness scaffolds do not render. After preparation, Source
+  collapses into its head (captured size and origin), the editable Job brief
+  leads the main column, and one Application rail combines Resume and Cover
+  Letter choices, readiness, the saved-application summary, and Apply. Panels
+  keep a hairline-separated head — title, quiet meta, trailing actions — over
+  plain content; nothing on the page is a card inside a card, and no status
+  earns a tinted box or icon tile of its own. Keep explicit View, Replace, and
+  Prepare again paths. Keep View and Prepare again bound to the immutable
+  captured posting, not the compact brief as the user edits it. Keep role,
+  company, location, type,
   source, work authorization, compensation, and
-  role summary in one aligned form grid rather than a card per field. Continue
-  the brief with company context, responsibilities, required and preferred
+  role context in one aligned form grid rather than a card per field. Continue
+  the brief with responsibilities, required and preferred
   qualifications, technical keywords, seniority and domain signals, and
   benefits. Show extraction and candidate-review gaps beside the fields they
-  qualify; missing extraction is an edit invitation, not hidden uncertainty.
-  Label candidate gaps restored from an Apply snapshot as historical until
-  Review runs for the current resume and prepared job.
-  Below the brief, Resume and Cover Letter use the same material-card anatomy:
-  title, Include toggle, named-variant selector, status, and document-specific
-  actions. Neither card is labeled “optional.” Resume starts included and Cover
-  Letter starts excluded.
+  qualify, as flat columns; missing extraction is an edit invitation, not hidden
+  uncertainty. Label candidate gaps restored from an Apply snapshot as
+  historical until Review runs for the current resume and prepared job.
+  In the Application rail, Resume and Cover Letter are two divided groups
+  sharing the same anatomy: title and state beside Include, followed by the
+  named-variant selector and document-specific actions. The DOM and visual order
+  agree. The state line reports state only; the selector already names the
+  variant. Disclose at most one note under a group — the blocker while its
+  action is unavailable, its live status otherwise. Neither is labeled
+  “optional.” Resume starts included and Cover Letter starts excluded. A flat
+  Fit row follows the materials: show the current Review verdict first, a
+  matching saved verdict as historical, or "Not reviewed" with a route to
+  Review. Do not style it as a nested card or derive a local verdict.
 - **Automation:** extension receipt and Distill progress remain visible on
   Prepare. Automatic resume tailoring also completes there. Rank the actual
-  contents of saved resume variants against the prepared job; select a clear
-  high-confidence winner only while the editor is clean. A dirty editor is
-  never replaced automatically, and ambiguous comparisons remain visible as a
-  recommendation or pause for the user. This comparison needs no persisted
+  contents of saved resume and cover-letter variants against weighted
+  prepared-job sections. Either material may auto-select a meaningful unique
+  winner while its editor is clean and not application-owned. A tie or
+  incomplete read keeps the current selection and shows no recommendation.
+  The selector is the normal receipt; show one compact recommendation line only
+  when unsaved work blocks replacement. Neither comparison needs persisted
   variant metadata.
 - **Apply:** the page and masthead invoke the same Apply command and show the
   same readiness blockers. The current job must be prepared; each included
@@ -468,8 +484,9 @@ Calendar mode reuses the same query and lifecycle filter state.
 ### Page Anatomy: Sheets Center, Rail Right
 
 Working pages share one skeleton: content as paper sheets in the main
-column, one control surface docked right. Prepare = source, brief, and matching
-material cards + progress/readiness rail; Resume = one engine-painted
+column, one control surface docked right. Prepare intentionally begins as one
+centered Source task, then becomes collapsed source + brief beside one
+Application rail containing materials, readiness, and Apply; Resume = one engine-painted
 structured editing sheet + review rail; Cover letter = one engine-painted
 plain correspondence sheet + a compact rail that reports readiness before
 Tailor and the tailored result's length, provenance, and Restore after it;

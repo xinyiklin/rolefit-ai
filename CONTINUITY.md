@@ -89,6 +89,137 @@ bounded; app-only operational detail belongs in the affected app documentation.
 
 ## 2026-07-30
 
+- [USER+CODE+TOOL] **Prepare now exposes one concise Role context instead of
+  separate Role summary and Company / product context textareas.** Existing
+  prepared or restored jobs still combine and deduplicate the legacy split
+  values so no captured context disappears. Once the user edits the unified
+  field, its tracker-backed `roleDescription` becomes authoritative and the
+  hidden legacy `companyContext` value is cleared atomically, preventing stale
+  prose from reaching Tailor beside the edit. Extraction gaps now use the same
+  Role context label. The focused prepared-job eval, all 314 client workflow
+  guards, the RoleFit production build, and all 61 offline evaluations pass;
+  the suite's loopback probes required a non-sandboxed rerun after the sandbox
+  correctly rejected `server.listen` with `EPERM`. Browser QA was not run under
+  the flag-first policy; the unified textarea's rendered width at responsive
+  breakpoints remains unconfirmed.
+- [USER+CODE+TOOL] **Prepare's Resume and Cover Letter groups now use one
+  concise recommendation contract.** The screenshot showed the root failure:
+  equal raw keyword counts were broken alphabetically, so a tied source was
+  still called recommended; Resume then asked for confirmation while Cover
+  Letter required a separate Use action. `recommendVariant` now weights the
+  prepared job's title, required qualifications, declared technology,
+  responsibilities, seniority, domain, preferred qualifications, and context.
+  A tie, negligible edge, or incomplete candidate read returns no
+  recommendation. A meaningful unique winner is auto-selected for either
+  document through its existing guarded loader only while the editor is clean
+  and not application-owned. The normal UI now uses the selector as the receipt:
+  both groups say `Selecting best match…` while ranking and expose the same
+  Tailor/Open actions, with no counts, tie explanation, Use button, confirmation
+  step, or duplicate success receipt. A compact `Recommended: <label> · Select`
+  fallback appears only when safe replacement was blocked. This supersedes the
+  earlier same-day cover-letter recommend-only/high-confidence resume contract.
+  The weighted/tie/incomplete evals, all 312 client workflow guards, the RoleFit
+  production/landing/desktop builds and probes, and all 61 offline evaluations
+  pass. Browser QA was not run under the flag-first policy; rendered density in
+  the supplied rail layout remains unconfirmed.
+- [USER+CODE+TOOL] **Resume and cover-letter output identity now stays paired,
+  and Prepare reports fit without guessing.** Selecting a saved cover-letter
+  variant changes its content source but preserves the current application
+  title, matching resume selection and keeping exports on the
+  `Name_Company_Resume` / `Name_Company_Cover_Letter` contract. Both editor
+  toolbars now use only the same `Role at Company` sublabel instead of adding
+  AI-source text to Resume. After preparation, the flat Application rail shows
+  the matching current AI Review verdict and score, falls back to a matching
+  saved verdict explicitly labeled Historical Review, or says `Not reviewed`
+  with a route to Review; it never derives a local fit judgment. All 305 client
+  workflow guards, naming and fit-verdict focused checks, the RoleFit
+  production/landing/desktop builds and probes, and all 61 offline evaluations
+  pass. Browser QA was not run under the flag-first policy; the new compact Fit
+  row's rendered wrapping at rail breakpoints remains unconfirmed.
+- [USER+CODE] **Prepare now changes shape with the job lifecycle instead of
+  reserving a sparse readiness column.** Before preparation, a centered Source
+  panel is the whole task: URL and pasted text are APG-tabbed methods, only the
+  selected method renders, the URL action says what it does ("Prepare from
+  URL"), and the paste editor is capped at a compact working height. Empty Job
+  brief, Materials, and readiness scaffolds are absent. After preparation,
+  Source keeps its existing collapsed captured-posting paths, the editable brief
+  leads the main column, and one sticky Application rail combines the stacked
+  Resume/Cover Letter choices, readiness, saved-application summary, and Apply.
+  Material DOM order now matches the visible identity/Include/variant/actions
+  sequence; the existing preparation, recommendation, inclusion, and Apply
+  contracts are unchanged. The Impeccable layout detector is clean, all 296
+  client workflow guards and 61 offline evaluations pass, and the RoleFit
+  production build passes. Browser QA was not run under the flag-first policy;
+  rendered empty/prepared states and the 1080/860/720px transitions remain
+  unconfirmed.
+- [USER+CODE+TOOL] **The Include toggle's hidden checkbox had no containing
+  block.** `.prepare-include-toggle input` is `position: absolute` while its
+  label was `static`, so the input resolved against the INITIAL containing block
+  and did not move with the studio-body scroller. Measured in the running app at
+  1512x620, scrolled to the end: the label sat at y530 while its own checkbox was
+  stranded at y342, 188px away; adding `position: relative` to the label pins it
+  inside at every scroll offset (A/B run in one probe, both directions). This is
+  the failure mode already recorded on 2026-07-25 for popovers — an absolutely
+  positioned descendant extends its scroll container's scrollable area — and it
+  explains a blank band under the last material row after clicking Include,
+  which focuses that stranded input. `.prepare-main` is now positioned as a
+  backstop for the sr-only recommendation live region in the same column.
+  Chromium (the QA pane) clamps the visible symptom: sidebar, studio body, pane,
+  and shell all measured flush to the window bottom before and after, so **the
+  user's reported footer band is Firefox-observed and its disappearance is
+  UNCONFIRMED** — the stranding it comes from is fixed and guarded.
+- [USER+CODE+TOOL] **Prepare now recommends a cover letter too, and stops
+  calling a saved template "No draft."** `resumeVariantRecommendation.ts` became
+  `variantRecommendation.ts` (`recommendVariant`, `VariantCandidate`,
+  `VariantRecommendation`) with a per-caller usable-length floor: 80 characters
+  for a resume, 40 for a letter. `readCoverLetterVariantCandidates` reads each
+  saved `.cover` through the same validated select route the editor opens with —
+  verified in the running app to be a pure read that leaves the open letter
+  alone — parses it, and skips any variant that fails rather than ranking it
+  empty. A second App effect ranks them on the same debounced prepared job and
+  invalidates on a new `coverLetterCandidatesRevision`, which one
+  `adoptCoverWorkspaceSnapshot` owner now advances for every authoritative
+  cover-letter snapshot. **It never adopts its own winner**: a letter is short
+  enough that keyword coverage cannot honestly reach the confidence that
+  justifies replacing an open document, so both materials render one
+  `PreparedVariantRecommendation` note carrying a one-click "Use <label>".
+  Separately, `coverLetterReady` was right but its label lied: base letters are
+  templates, so a legitimately loaded variant with unresolved `[slots]` read as
+  "No draft". The state now says `Template · N placeholders to fill`, with
+  "Draft too short" and "No draft" as the other real reasons.
+  287 client workflow guards (9 new), 61 offline evals including cover-letter
+  ranking cases, client typecheck, and the production build pass. Live browser
+  checks: all five saved letters fetch and parse through the select route, and
+  the state line reads `Template · 6 placeholders to fill`. The recommendation
+  itself needs a prepared job, so its rendered form is **UNCONFIRMED** — no live
+  Distill was run.
+- [USER+CODE] **Prepare's page shape is now flat, dense, and tool-like**
+  (user: "more functional/compact/less ai"). Behavior, props, readiness, and the
+  Apply contract are unchanged; the chrome is not. Source, Job brief, and
+  Materials are hairline-headed panels — title, quiet meta, trailing actions —
+  and a prepared source collapses into its own head (captured size and origin)
+  with no body. The two material cards became two rows of one Materials panel;
+  their icon tiles, the `· Using <variant>` clause, and the `activeBaseResumeLabel`
+  / `activeCoverLetterLabel` props are gone because the variant selector already
+  names the variant. Every secondary line — blocked-action guidance, live
+  status, safety notes, the variant recommendation — is one `.prepare-note`
+  text treatment instead of four tinted panels, and each material shows at most
+  one: the blocker while its action is unavailable, its status otherwise
+  (the cover row previously showed both at once). The extraction/candidate gap
+  boxes are flat columns, ending a card-in-card the No Nested Container Rule
+  already forbade. The rail is one panel: preparation is a readiness check, so
+  its progress card appears only while work runs or a status is outstanding, and
+  each check is one line rather than a label over a sentence. Removed as
+  decoration: every Sparkles/ShieldCheck/FileText/Mail/ClipboardCheck mark, the
+  brief's two-sentence "correct missing details here" preamble, and the
+  duplicated role/company brief header. Verbose labels shortened (Tailor,
+  View/Replace, Fetch, Open/Review). All 278 client workflow guards, 61 offline
+  evals, the RoleFit client typecheck, and the production build pass; the
+  guard that pinned "no accent stripe" moved to `.prepare-note` and gained a
+  no-nested-card check for the gap columns. **Browser QA was not run** under the
+  flag-first policy — layout risk is real and unverified: the 3-column brief
+  grid, the 4-column material row, the collapsed-source bar, and the 1080/980/
+  860/720px breakpoints.
 - [USER+CODE+TOOL] Prepare is the first/default and sole job-intake surface. Its
   editable brief includes tracked job facts, company context,
   responsibilities, required/preferred qualifications, technical keywords,
@@ -338,7 +469,7 @@ bounded; app-only operational detail belongs in the affected app documentation.
   recipient comes from an authored `Dear <name>,` greeting or falls back to the
   company hiring team, and an unrecognized natural-language slot stays
   generative rather than becoming a blocker.
-- [CODE] 2026-07-28: Server validation collects *repairable violations* instead
+- [CODE] 2026-07-28: Server validation collects _repairable violations_ instead
   of throwing, then runs exactly one silent repair request carrying the
   violations and the rejected output. A second failure returns 422 and keeps the
   candidate's current letter. The normal path is one provider request.
@@ -700,8 +831,7 @@ bounded; app-only operational detail belongs in the affected app documentation.
   panel wraps to two rows at ~430px, and anchoring to the button would have left
   a first-row popover covering the second row. Forced right-aligned, which
   cannot overflow — the panel is pinned 12px from the edge and these surfaces
-  are at most `100vw - 24px` wide. Measured at 900px (panel 159–209, popover
-  213) and 430px with a wrapped panel (panel 159–247, popover 251).
+  are at most `100vw - 24px` wide. Measured at 900px (panel 159–209, popover 213) and 430px with a wrapped panel (panel 159–247, popover 251).
 - [USER] SMALL-CAPS HEADING WOBBLE is font overshoot plus pixel quantization at
   the rendered size, not a layout defect. Measured in LM Roman Caps 10: flat
   small caps have a cap height of 515.6/1000 em, round ones 531.3 — a 3%
@@ -1446,8 +1576,7 @@ bounded; app-only operational detail belongs in the affected app documentation.
   inline formatting, and one blank block at a nonzero spacing boundary; the
   absolutely positioned visual-line DOM no longer defines pasted paragraphs.
 - [TOOL] 2026-07-28: The isolated worktree dev process was started on canonical
-  port 5181 after a clean lockfile dependency install; the server returned HTTP
-  200. Both owner checks and both consumer production builds passed; the
+  port 5181 after a clean lockfile dependency install; the server returned HTTP 200. Both owner checks and both consumer production builds passed; the
   interface detector reported no findings.
 - [USER] 2026-07-28: Cover-letter default paragraph rhythm is explicit 8pt
   space-before on every paragraph, never the generic resume bullet gap. The
@@ -1579,3 +1708,19 @@ bounded; app-only operational detail belongs in the affected app documentation.
   official Illinois CTAN mirror instead of the proximity redirector while
   retaining exact source digests; the CA pin remains deterministic runner
   setup, not a fallback for an invalid upstream chain.
+- [USER+CODE] 2026-07-30: Prepare's brief was redesigned. Multi-item sections
+  (responsibilities, required/preferred qualifications, tech keywords,
+  seniority/domain signals, benefits) moved from eight stacked textareas into
+  one small tablist over per-item editable rows with add/remove; prose fields
+  stay inline. Resume and Cover Letter cards collapsed to a single row each.
+  Presentation only: `PreparedJobBrief` stays `string[]` per field and
+  `onJobBriefChange` keeps its newline-joined string contract. Per-item include
+  toggles and drag reordering were offered and declined for this pass.
+- [TOOL] 2026-07-30: Verified against the companion's built bundle at
+  localhost:5181 with a synthetic posting: edit, remove, and add each persist
+  through a tab round-trip, counts track, the new row takes focus, and the APG
+  arrow/Home/End/wrap model holds. `npm run check --workspace apps/role-fit-ai`
+  passed. Note for future browser QA: the QA pane runs unfocused
+  (`document.hasFocus()` false), so `element.blur()` emits no `focusout` and
+  React `onBlur` never fires — dispatch `focusout` explicitly or commit-on-blur
+  reads as a phantom data-loss bug.

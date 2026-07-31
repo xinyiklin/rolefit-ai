@@ -34,7 +34,7 @@ candidate-authored cover letter or base variant into honest, tailored
 application materials. Prepare is the first/default page and the sole job-intake
 surface: the paired browser extension is primary, with URL fetch and pasted text
 as deliberate fallbacks. Its complete editable brief exposes tracked job facts,
-company context, responsibilities, required and preferred qualifications,
+one role context, responsibilities, required and preferred qualifications,
 technical keywords, seniority and domain signals, benefits, and extraction or
 candidate-review gaps. Resume proposals remain constrained by server-side
 grounding and anti-fabrication checks, with a recruiter-style review for fit
@@ -63,7 +63,9 @@ including a cover letter changed only by title or style. Workspace adoption
 never deletes a live sibling tab's draft and notifies that tab that the saved
 workspace changed. A document is named
 `Name_Company_Resume` / `Name_Company_Cover_Letter` so
-one role's materials read as one application.
+one role's materials read as one application. Selecting a saved variant changes
+the document content, not that application output name, and both editor
+sublabels show the same `Role at Company` target.
 `.resume` and `.cover` are their separate reloadable formats. The product also
 includes application-question drafts and a lightweight application pipeline
 tracker. Prepare gives Resume and Cover Letter matching material cards, each
@@ -188,15 +190,21 @@ disappears into the task. Quiet competence, not salesmanship.
     each have an Include toggle; only included material must be ready, and both
     may be excluded. Resume defaults on and Cover Letter defaults off. A later
     re-Apply must preserve any previously saved artifact for an excluded slot.
+    Prepare may summarize a current matching AI Review or a matching historical
+    saved review; before either exists it says "Not reviewed" and never
+    substitutes a local fit estimate.
 11. Preserve safe extension automation: a claimed extension posting opens and
     progresses on Prepare. Automatic resume tailoring stays there and ranks
-    actual saved `.resume` contents against the prepared job. It may select only
-    a clear high-confidence winner while the editor is clean; otherwise it
-    recommends or pauses without replacing the editor. Do not add persisted
-    variant metadata or another document schema for this decision.
+    actual saved `.resume` contents against the prepared job. Resume and cover
+    letter use one rule: weight required qualifications, declared technology,
+    responsibilities, and role signals; auto-select a meaningful unique winner
+    only while the editor is clean and not restored from an application. A tie
+    or incomplete comparison makes no recommendation and keeps the current
+    selection. Do not add persisted variant metadata or another document schema
+    for this decision.
 12. Keep the complete prepared job correctable without another AI run. Along
     with role, company, location, type, source, work authorization,
-    compensation, and role summary, expose company context, responsibilities,
+    compensation, and one role context, expose responsibilities,
     required and preferred qualifications, technical keywords, seniority and
     domain signals, benefits, and extraction or candidate-review gaps. Preserve
     the captured posting separately, persist the complete corrected brief on

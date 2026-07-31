@@ -28,20 +28,70 @@ and `docs/engineering/ui-principles.md`.
   URL/paste fallbacks, receipt/Distill progress, collapsed source, editable
   full job brief and its extraction/candidate-review gaps, resume-variant
   recommendation, material selection, readiness, and the shared Apply callback;
-  it does not own their async state. Its brief includes tracked job facts,
-  company context, responsibilities, required/preferred qualifications,
+  it does not own their async state. Its brief includes tracked job facts and
+  one role context, responsibilities, required/preferred qualifications,
   technical keywords, seniority/domain signals, and benefits. Candidate gaps
   restored from a saved Apply snapshot are visibly historical until Review
   produces a matching current result.
+- Before preparation, Source is the only visible panel. URL and pasted text are
+  two APG-tabbed methods inside it, only the selected method renders, and the
+  intake column is centered instead of reserving an empty rail. A prepared
+  source collapses into its panel head — captured size and origin — rather than
+  repeating them in the body.
+- After preparation, the brief leads the main column and one Application rail
+  owns both material choices, a flat fit summary, readiness,
+  saved-application summary, and Apply. Fit prefers the matching current AI
+  Review, labels a matching saved review historical, and otherwise says "Not
+  reviewed"; never infer or recalculate a verdict on Prepare.
+  Preparation is one of those checks, so its progress line appears only while
+  work is in flight or a status message is outstanding, never as a standing
+  card.
+- The single Role context prose field stays inline and remains backed by the
+  tracker's `roleDescription` value. Every
+  multi-item brief section is a tab in one small tablist over a single panel,
+  declared by `PrepareTab`'s `BRIEF_SECTIONS` so the page owns which sections
+  exist. Tabs carry item counts so an empty section stays visible unselected,
+  and follow the same APG roving-tabindex model as the studio rail.
+- Inside a section each item is its own row: an editable input plus remove,
+  with Add item appending a focused blank row. Rows are transient text until
+  commit; normalization (dedupe, bullet stripping, empty-item removal) still
+  happens only on commit, so a blank row survives until it is typed into. This
+  is presentation only — the brief stays `string[]` per field and the change
+  callback keeps its newline-joined string contract. Do not add per-item
+  persisted state without changing the editable schema deliberately.
+- Prepare is built from flat panels: a hairline-separated head (title, quiet
+  meta, trailing actions) over plain content. Do not stack a card, tinted box,
+  or icon tile inside a panel — the extraction/candidate gap columns and the
+  material rows are dividers and columns, not nested cards. A panel whose head
+  is its only content renders as a bar with no empty body.
+- Every secondary line on the page — blocked-action guidance, live status,
+  safety notes, the variant recommendation — uses the one `.prepare-note`
+  treatment. Do not reintroduce per-status panels, accent stripes, or decorative
+  icons for them.
 - Resume and Cover Letter use the same Prepare card component and visual
-  hierarchy, each with an Include toggle and named-variant selector plus its
+  hierarchy as divided groups inside the Application rail. Each places identity
+  and state beside Include, followed by its named-variant selector and
   document-specific actions. Resume defaults included and Cover Letter defaults
   excluded. Do not label either card optional. Readiness gates only included
   materials, and either or both may be excluded.
-- Resume recommendations compare actual saved document contents. A clear
-  high-confidence winner may be selected automatically only when the editor is
-  clean; dirty or ambiguous state recommends/pauses for the user. Do not add
-  persisted variant metadata to support this UI.
+- Materials are a supporting choice on Prepare, not its subject. Each rail group
+  is identity/state, Include, variant, then actions in both DOM and visual order,
+  and discloses conditional detail underneath only when it applies. The state
+  line reports state only — the selector already names the variant, so do not
+  restate it. Show one note at a time: the blocker while an action is
+  unavailable, the live status otherwise. Keep note text wrapping rather than
+  ellipsed — the trailing clause is recovery guidance.
+- Both materials rank actual saved document contents with one weighted
+  prepared-job scorer and auto-select a meaningful unique winner while the
+  corresponding editor is clean and not application-owned. The selector is the
+  receipt; do not repeat counts or explanations underneath it. Only a blocked
+  automatic replacement gets the compact `PreparedVariantRecommendation`
+  fallback. A tie or incomplete comparison returns no recommendation and keeps
+  the current selection. Do not add persisted variant metadata to support this
+  UI.
+- A material's state line names the real reason it is not ready. A saved base
+  letter is a template holding real prose and unresolved `[slots]`; reporting
+  that as "No draft" contradicts the variant the selector is showing.
 - The masthead contains Sessions and the shared Apply command only. Do not
   reintroduce an Inputs group, `jobControl`, intake control, or parallel Apply
   gate.

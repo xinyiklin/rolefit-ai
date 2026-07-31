@@ -49,38 +49,59 @@ masthead into the first/default Prepare page on 2026-07-29):
   document-specific review rails
 
 Prepare treats the paired extension as the primary intake path, with URL fetch
-and pasted text as deliberate fallbacks on the same page. Extension receipt and
-Distill progress navigate to and remain visible on Prepare; once ready, source
-collapses behind explicit View source, Replace source, and Prepare again paths
-while the structured brief remains visible. A restored application returns to
+and pasted text as deliberate fallbacks on the same page. Before preparation,
+one centered Source panel is the whole task: URL and pasted text are two
+keyboard-navigable methods and only the selected method is visible. Empty Job
+brief, Materials, and readiness scaffolds stay out of the page. Extension
+receipt and Distill progress navigate to and remain visible on Prepare.
+
+Once ready, Source collapses to its head — captured size and origin — behind
+explicit View, Replace, and Prepare again paths. The structured brief leads the
+main column and one Application rail combines both material choices, readiness,
+the saved-application summary, a flat fit summary, and Apply. The fit summary
+prefers a current matching AI Review, labels a matching saved review historical,
+and otherwise says "Not reviewed"; it never estimates fit locally. Nothing on
+the page is a card inside a card, and no status earns its own tinted panel or
+icon tile. Preparation
+progress is already a readiness check, so it takes rail space only while work is
+running or a status message is outstanding. A restored application returns to
 Prepare after its job and documents pass their existing source validation and
 dirty-document replacement guards.
 
 Every extracted tracker field remains editable on Prepare: role, company,
 location, job type, source, work authorization, compensation range/currency/
-period, and role summary. Company context, responsibilities, required and
-preferred qualifications, technical keywords, seniority and domain signals,
-and benefits are editable in the same brief. Surface both extraction gaps and
+period, and one role context. Responsibilities, required and preferred
+qualifications, technical keywords, seniority and domain signals, and benefits
+are editable in the same brief. Surface both extraction gaps and
 candidate-review gaps so partial Distill output can be corrected without
 another AI run. Benefits remain visible preparation context rather than being
 silently folded into resume-tailoring evidence.
 
 Resume and Cover Letter share the same Prepare material-card structure and
-hierarchy while retaining their document-specific actions. Each card has an
-Include toggle and a named-variant selector; Resume starts included and Cover
-Letter starts excluded. Do not add “optional” labels, badges, or card-specific
-visual hierarchy. The Prepare and masthead Apply buttons invoke one handler and
+hierarchy while retaining their document-specific actions, as two divided
+groups inside the Application rail. Each group places its state beside Include,
+then the named-variant selector and actions in matching DOM and visual order. It
+shows at most one note underneath: the blocker while its action is unavailable,
+its live status otherwise. Resume starts included and Cover Letter starts
+excluded. Do not add “optional” labels, badges, or card-specific visual
+hierarchy. The Prepare and masthead Apply buttons invoke one handler and
 one readiness model: the current job must match a completed preparation, and
 only included materials must be ready while their preparation is idle. Either
 or both cards may be excluded. Re-Apply treats exclusion as non-destructive:
 any artifact already saved for that application remains untouched.
 
 Extension-triggered automatic resume tailoring remains on Prepare. Rank the
-actual contents of saved `.resume` variants against the prepared job. A clear
-high-confidence winner may be selected only while the editor is clean; dirty
-or ambiguous state shows the recommendation and pauses for the user. Do not
-persist parallel variant metadata or widen the strict document schema for this
-decision.
+actual contents of saved `.resume` and `.cover` variants against weighted
+prepared-job sections. For either document, auto-select a meaningful unique
+winner only while its editor is clean and not application-owned. A tie or
+incomplete read returns no recommendation and keeps the current selection.
+The selector is the normal receipt; reserve the shared compact recommendation
+line for a blocked replacement. Do not persist parallel variant metadata or
+widen the strict document schema for this decision.
+
+A material's state line reports the real reason it is not ready. A saved base
+letter is a template: real prose plus unresolved `[slots]` that Tailor fills.
+Say so — "No draft" beside a selected variant reads as a bug, not a state.
 
 Resume and cover letter share ONE Open menu (`DocumentOpenMenu`): the same
 component renders each page's start actions (bundled starter, blank, choose a
@@ -350,10 +371,12 @@ Never show:
   Re-measure the ladder in a browser when a control is added to that row. The
   overlay never consumes editor space; do not shrink type, add a horizontally
   cropped toolbar, or make an overflowing toolbar scroll.
-- The Resume tab's editable document title is the default PDF and `.resume`
-  name. A successfully prepared job sets the shared header/export base to
-  `Name_Company_Resume`, with `Name_Resume`, `Company_Resume`, and `Resume`
-  fallbacks when job or resume metadata is unavailable.
+- Each editor's editable document title is its default PDF and portable-source
+  name. A successfully prepared job sets the paired header/export bases to
+  `Name_Company_Resume` and `Name_Company_Cover_Letter`, with metadata-aware
+  fallbacks. Selecting a workspace variant changes the document source, not
+  that application output title; both toolbar sublabels use the same
+  `Role at Company` target.
 - The Sessions menu uses its label at normal widths and a familiar, evenly
   spaced icon at compact widths. The RoleFit wordmark and Apply icon-and-label
   button remain visible throughout the supported range. The masthead stays

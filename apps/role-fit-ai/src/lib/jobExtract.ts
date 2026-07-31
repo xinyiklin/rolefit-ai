@@ -2242,7 +2242,7 @@ export function manualReviewFields(result: ExtractedJobPosting): string[] {
   if (result.tailoringText.trim().length < 40 || allPlaceholders) fields.push("job description");
   if (!result.tracking.title && !result.tracking.role) fields.push("role title");
   if (!result.tracking.company) fields.push("company");
-  if (!result.roleDescription) fields.push("role summary");
+  if (!result.roleDescription) fields.push("role context");
   if (!result.tracking.location) fields.push("location");
   if (result.tracking.salaryMin == null && result.tracking.salaryMax == null) fields.push("compensation");
   if (/\[manual input needed: core responsibilities\]/i.test(tt)) fields.push("responsibilities");
@@ -2258,7 +2258,7 @@ export function extractJobPosting(raw: string, options: ExtractOptions = {}): Ex
       tailoringText: "",
       roleDescription: "",
       tracking: sourceFromUrl(options.url) ? { source: sourceFromUrl(options.url) } : {},
-      manualReviewFields: ["job description", "role title", "company", "role summary", "location", "compensation"],
+      manualReviewFields: ["job description", "role title", "company", "role context", "location", "compensation"],
       sourceTextLength: 0
     };
   }

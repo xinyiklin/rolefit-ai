@@ -6,6 +6,7 @@ import {
   buildPreparedJobBrief,
   extractBenefitsFromPosting,
   preparedJobBriefFieldFromText,
+  preparedJobRoleContext,
   reconcilePreparedJobManualReviewFields,
   removePreparedJobRoleSummary
 } from "../preparedJobBrief.ts";
@@ -88,7 +89,15 @@ assert.doesNotMatch(
 assert.match(
   rebuilt,
   /Company \/ Product Context:\nAcme builds developer infrastructure\.\nOwn reliable services\./,
-  "company context and a distinct role summary both reach tailoring"
+  "legacy split context reaches one model-facing role context"
+);
+assert.equal(
+  preparedJobRoleContext(
+    { roleDescription: "Own reliable services." },
+    brief
+  ),
+  "Acme builds developer infrastructure.\nOwn reliable services.",
+  "Prepare presents legacy company and role prose as one editable value"
 );
 
 const sharedContext = "Build reliable developer infrastructure.";
@@ -99,7 +108,7 @@ const rebuiltWithoutDuplicateContext = assemblePreparedJobTailoringText(
 assert.equal(
   rebuiltWithoutDuplicateContext.match(/Build reliable developer infrastructure\./g)?.length,
   1,
-  "equal company context and role summary are emitted only once"
+  "equal legacy context values are emitted only once"
 );
 
 const applicationText = assemblePreparedJobApplicationText(
@@ -146,7 +155,7 @@ assert.deepEqual(
 );
 
 const blankBrief = {
-  companyContext: "Company context does not stand in for the role summary.",
+  companyContext: "Existing legacy context still satisfies the unified field.",
   responsibilities: [],
   requiredQualifications: [],
   preferredQualifications: [],
@@ -178,7 +187,6 @@ assert.deepEqual(
     "location",
     "job type",
     "compensation",
-    "role summary",
     "responsibilities",
     "required qualifications",
     "tech stack keywords",
@@ -205,7 +213,7 @@ assert.deepEqual(
       "location",
       "job type",
       "compensation",
-      "role summary",
+      "role context",
       "responsibilities",
       "required qualifications",
       "tech stack keywords",

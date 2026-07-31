@@ -85,7 +85,7 @@ function presentTrackingFields(tracking: ExtractedJobTracking) {
     tracking.location ? "location" : "",
     tracking.jobType ? "job type" : "",
     tracking.salaryMin != null || tracking.salaryMax != null ? "compensation" : "",
-    tracking.roleDescription ? "role summary" : ""
+    tracking.roleDescription ? "role context" : ""
   ].filter(Boolean);
   if (!fields.length) return "no tracking fields";
   if (fields.length === 1) return fields[0];

@@ -198,8 +198,8 @@ export function preparedJobBriefFieldToText(value: PreparedJobBrief[PreparedJobB
   return Array.isArray(value) ? value.join("\n") : value;
 }
 
-export function assemblePreparedJobTailoringText(tracking: ExtractedJobTracking, brief: PreparedJobBrief): string {
-  const contextParts = [brief.companyContext, tracking.roleDescription]
+export function preparedJobRoleContext(tracking: ExtractedJobTracking, brief: PreparedJobBrief): string {
+  return [brief.companyContext, tracking.roleDescription]
     .map((value) =>
       String(value ?? "")
         .replace(/\s+/g, " ")
@@ -209,10 +209,14 @@ export function assemblePreparedJobTailoringText(tracking: ExtractedJobTracking,
     .filter(
       (value, index, values) =>
         values.findIndex((candidate) => candidate.toLowerCase() === value.toLowerCase()) === index
-    );
+    )
+    .join("\n");
+}
+
+export function assemblePreparedJobTailoringText(tracking: ExtractedJobTracking, brief: PreparedJobBrief): string {
   const parts: TailoringParts = {
     title: tracking.role || tracking.title || "",
-    context: contextParts.join("\n"),
+    context: preparedJobRoleContext(tracking, brief),
     responsibilities: brief.responsibilities,
     required: brief.requiredQualifications,
     preferred: brief.preferredQualifications,
@@ -249,7 +253,10 @@ const CANONICAL_MANUAL_REVIEW_FIELDS = [
     "compensation",
     (tracking: ExtractedJobTracking) => Number.isFinite(tracking.salaryMin) || Number.isFinite(tracking.salaryMax)
   ],
-  ["role summary", (tracking: ExtractedJobTracking) => Boolean(tracking.roleDescription?.trim())],
+  [
+    "role context",
+    (tracking: ExtractedJobTracking, brief: PreparedJobBrief) => Boolean(preparedJobRoleContext(tracking, brief))
+  ],
   [
     "responsibilities",
     (_tracking: ExtractedJobTracking, brief: PreparedJobBrief) =>
@@ -274,7 +281,8 @@ const CANONICAL_MANUAL_REVIEW_FIELDS = [
 >;
 
 function normalizeManualReviewField(field: string): string {
-  return field.replace(/\s+/g, " ").trim().toLowerCase();
+  const normalized = field.replace(/\s+/g, " ").trim().toLowerCase();
+  return normalized === "role summary" ? "role context" : normalized;
 }
 
 export function reconcilePreparedJobManualReviewFields(
@@ -303,6 +311,6 @@ export function preparedJobBriefGapLabel(field: PreparedJobBriefField): string |
   if (field === "requiredQualifications") return "required qualifications";
   if (field === "techKeywords") return "tech stack keywords";
   if (field === "benefits") return "benefits";
-  if (field === "companyContext") return "role summary";
+  if (field === "companyContext") return "role context";
   return null;
 }

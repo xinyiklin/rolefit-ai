@@ -24,7 +24,7 @@ import type { ConfirmOptions } from "./useDialog";
 import { loadLastBaseResumeName, saveLastBaseResumeName } from "../lib/baseResumePrefs.ts";
 import { serializeResumeData } from "../lib/resumeText.ts";
 import type { PolishedResume } from "../resumeEngine";
-import type { ResumeVariantCandidate } from "../lib/resumeVariantRecommendation";
+import type { VariantCandidate } from "../lib/variantRecommendation";
 
 export type WorkspaceBaseResume = {
   exists: boolean;
@@ -590,9 +590,9 @@ export function useWorkspaceResume({
   // Prepare uses this snapshot only for deterministic recommendation; the
   // existing guarded load path remains the sole document-replacement owner.
   const readBaseResumeCandidates = useCallback(
-    async (options: BaseResumeOption[]): Promise<ResumeVariantCandidate[]> => {
+    async (options: BaseResumeOption[]): Promise<VariantCandidate[]> => {
       const candidates = await Promise.all(
-        options.map(async (option): Promise<ResumeVariantCandidate | null> => {
+        options.map(async (option): Promise<VariantCandidate | null> => {
           try {
             const response = await fetch("/api/workspace/base-resume/select", {
               method: "POST",
@@ -621,7 +621,7 @@ export function useWorkspaceResume({
         })
       );
       return candidates.filter(
-        (candidate): candidate is ResumeVariantCandidate => candidate !== null
+        (candidate): candidate is VariantCandidate => candidate !== null
       );
     },
     []

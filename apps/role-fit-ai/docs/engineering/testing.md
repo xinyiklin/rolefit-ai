@@ -232,7 +232,7 @@ Good frontend verification covers:
   excluding a previously saved material on re-Apply preserves that artifact
 - every prepared JD field can be corrected locally on Prepare after partial or
   failed extraction without invalidating the matching prepared source snapshot:
-  tracked job facts, company context, responsibilities, required/preferred
+  tracked job facts through one role context, responsibilities, required/preferred
   qualifications, technical keywords, seniority/domain signals, and benefits.
   Extraction and candidate-review gaps remain visible until addressed; View
   source and Prepare again retain the captured posting, Apply stores the full

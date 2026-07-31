@@ -29,21 +29,26 @@ const preparedMaterialCard = readFileSync(
   new URL("../../sections/tabs/prepare/PreparedMaterialCard.tsx", import.meta.url),
   "utf8"
 );
-const preparedJobBriefField = readFileSync(
-  new URL("../../sections/tabs/prepare/PreparedJobBriefListField.tsx", import.meta.url),
+const preparedVariantRecommendation = readFileSync(
+  new URL("../../sections/tabs/prepare/PreparedVariantRecommendation.tsx", import.meta.url),
   "utf8"
 );
-const prepareReadinessRail = readFileSync(
-  new URL("../../sections/tabs/prepare/PrepareReadinessRail.tsx", import.meta.url),
+const preparedJobBriefRows = readFileSync(
+  new URL("../../sections/tabs/prepare/PreparedJobBriefRows.tsx", import.meta.url),
+  "utf8"
+);
+const prepareApplicationRail = readFileSync(
+  new URL("../../sections/tabs/prepare/PrepareApplicationRail.tsx", import.meta.url),
   "utf8"
 );
 const preparationReadiness = readFileSync(new URL("../../lib/preparationReadiness.ts", import.meta.url), "utf8");
 const preparedJobBrief = readFileSync(new URL("../../lib/preparedJobBrief.ts", import.meta.url), "utf8");
-const resumeVariantRecommendation = readFileSync(
-  new URL("../../lib/resumeVariantRecommendation.ts", import.meta.url),
+const variantRecommendation = readFileSync(new URL("../../lib/variantRecommendation.ts", import.meta.url), "utf8");
+const workspaceResume = readHook("useWorkspaceResume.ts");
+const coverLetterRepository = readFileSync(
+  new URL("../../lib/coverLetterWorkspaceRepository.ts", import.meta.url),
   "utf8"
 );
-const workspaceResume = readHook("useWorkspaceResume.ts");
 const masthead = readFileSync(new URL("../../sections/Masthead.tsx", import.meta.url), "utf8");
 const applicationModal = readFileSync(new URL("../../sections/ApplicationModal.tsx", import.meta.url), "utf8");
 const trackerTab = readFileSync(new URL("../../sections/tabs/TrackerTab.tsx", import.meta.url), "utf8");
@@ -57,6 +62,7 @@ const persistedSettings = readFileSync(new URL("../../lib/settings.ts", import.m
 const app = readFileSync(new URL("../../App.tsx", import.meta.url), "utf8");
 const coverEditor = readHook("useCoverLetterEditor.ts");
 const coverPreflight = readFileSync(new URL("../../lib/coverLetterPreflight.ts", import.meta.url), "utf8");
+const resumeTab = readFileSync(new URL("../../sections/tabs/ResumeTab.tsx", import.meta.url), "utf8");
 const coverTab = readFileSync(new URL("../../sections/tabs/CoverLetterTab.tsx", import.meta.url), "utf8");
 const coverReview = readFileSync(new URL("../../sections/cover-letter/CoverLetterReview.tsx", import.meta.url), "utf8");
 const coverToolbar = readFileSync(
@@ -427,7 +433,7 @@ assert.match(
 );
 assert.match(
   prepareTab,
-  /<textarea[\s\S]{0,180}?value=\{preparationSourceText\}[\s\S]{0,180}?onChange=\{\(event\) => onJobDescriptionChange\(event\.target\.value\)\}/,
+  /<textarea[\s\S]{0,320}?value=\{preparationSourceText\}[\s\S]{0,320}?onChange=\{\(event\) =>\s*onJobDescriptionChange\(event\.target\.value\)\s*\}/,
   "Prepare's source editor shows the full captured posting before replacement"
 );
 assert.equal(
@@ -437,7 +443,7 @@ assert.equal(
 );
 assert.match(
   prepareTab,
-  /<fieldset className="prepare-brief-fields" disabled=\{isPreparing\}>/,
+  /<fieldset\s+className="prepare-brief-fields"\s+disabled=\{isPreparing\}\s*>/,
   "the prepared brief cannot race an in-flight extraction"
 );
 assert.match(
@@ -463,7 +469,7 @@ assert.equal(
 assert.match(
   prepareTab,
   /disabled=\{!canFetch\}/,
-  "the visible Fetch posting button consumes the shared URL readiness gate"
+  "the visible URL preparation button consumes the shared readiness gate"
 );
 assert.equal(
   prepareTab.match(/disabled=\{!canPreparePaste\}/g)?.length,
@@ -476,23 +482,23 @@ assert.doesNotMatch(
   "Prepare uses the same plain page-header hierarchy as the other studio pages"
 );
 assert.match(
-  preparedJobBriefField,
-  /const \[draft, setDraft\] = useState\(persistedText\)/,
+  preparedJobBriefRows,
+  /const \[rows, setRows\] = useState<string\[\]>/,
   "prepared-brief fields retain transient typing separately from normalized domain values"
 );
 assert.match(
-  preparedJobBriefField,
-  /onChange=\{\(event\) => setDraft\(event\.target\.value\)\}[\s\S]{0,100}?onBlur=\{commitDraft\}/,
+  preparedJobBriefRows,
+  /onChange=\{\(event\) => updateRow\(index, event\.target\.value\)\}[\s\S]{0,100}?onBlur=\{\(\) => commitRows\(rows\)\}/,
   "prepared-brief normalization happens only when the user commits the field"
 );
 assert.match(
   prepareTab,
-  /className="sr-only" role="status" aria-live="polite" aria-atomic="true"/,
+  /className="sr-only"[\s\S]{0,120}?role="status"[\s\S]{0,120}?aria-live="polite"[\s\S]{0,120}?aria-atomic="true"/,
   "variant recommendation completion remains in one persistent polite live region"
 );
 assert.match(
   prepareTab,
-  /className="prepare-action-hint" id="prepare-fetch-action-hint"/,
+  /className="prepare-action-hint"[\s\S]{0,100}?id="prepare-fetch-action-hint"/,
   "disabled preparation actions expose visible recovery guidance"
 );
 assert.match(
@@ -501,19 +507,67 @@ assert.match(
   "masthead Apply describes the application-level package rather than promising a resume"
 );
 assert.match(
-  prepareReadinessRail,
+  prepareApplicationRail,
   /resumeArtifacts\?\.hasSource[\s\S]{0,100}?resumeArtifacts\?\.hasPdf[\s\S]{0,220}?coverLetterArtifacts\?\.hasSource[\s\S]{0,100}?coverLetterArtifacts\?\.hasPdf/,
   "saved-application readiness recognizes either strict source or PDF artifacts"
 );
 assert.match(
+  prepareTab,
+  /role="tablist"[\s\S]{0,100}?aria-label="Job source method"/,
+  "URL and pasted-text intake share one labelled method selector"
+);
+assert.equal(
+  prepareTab.match(/role="tabpanel"/g)?.length,
+  2,
+  "URL and pasted-text intake render as two views of one source task"
+);
+assert.match(
+  prepareTab,
+  /onKeyDown=\{handleSourceMethodKeyDown\}/,
+  "the source method tabs implement keyboard navigation"
+);
+assert.match(
+  prepareTab,
+  /className=\{`prepare-layout \$\{jobPrepared \? "is-prepared" : "is-intake"\}`\}/,
+  "Prepare changes topology explicitly between intake and prepared states"
+);
+assert.match(
   prepareStyles,
-  /\.prepare-include-toggle\s*\{[\s\S]{0,160}?min-height:\s*32px/,
+  /\.prepare-layout\.is-intake\s*\{[\s\S]{0,100}?grid-template-columns:\s*minmax\(0,\s*1fr\)/,
+  "unprepared intake does not reserve an empty rail column"
+);
+assert.match(
+  prepareStyles,
+  /\.prepare-layout\.is-intake \.prepare-job-brief\s*\{[\s\S]{0,80}?display:\s*none/,
+  "the unprepared state hides the empty job-brief scaffold"
+);
+assert.match(
+  prepareStyles,
+  /\.prepare-include-toggle\s*\{[\s\S]{0,600}?min-height:\s*32px/,
   "material Include toggles retain a usable pointer target"
 );
+// The visually hidden checkbox is absolutely positioned. Without a positioned
+// label it resolves against the initial containing block, strands itself outside
+// the scrolled content, and extends the scrollable area under the last row.
+assert.match(
+  prepareStyles,
+  /\.prepare-include-toggle\s*\{[\s\S]{0,600}?position:\s*relative/,
+  "the Include toggle contains its own visually hidden checkbox"
+);
+// One note treatment carries every secondary Prepare line (blocked-action
+// guidance, live status, safety notes, the variant recommendation), so it is the
+// single place a decorative stripe or tinted panel could reappear.
+const prepareNoteStyles = prepareStyles.match(/\.prepare-note\s*\{[\s\S]*?\n\}/)?.[0] ?? "";
+assert.notEqual(prepareNoteStyles, "", "Prepare keeps one shared treatment for its secondary status lines");
 assert.doesNotMatch(
-  prepareStyles.match(/\.prepare-recommendation\s*\{[\s\S]*?\.prepare-safety-note p\s*\{[\s\S]*?\}/)?.[0] ?? "",
-  /border-left:/,
-  "Prepare status treatments use complete borders rather than decorative accent stripes"
+  prepareNoteStyles,
+  /border-left:|background:/,
+  "Prepare status treatments stay plain text rather than decorative stripes or tinted panels"
+);
+assert.doesNotMatch(
+  prepareStyles,
+  /\.prepare-gaps > div\s*\{[^}]*background:/,
+  "extraction and candidate gaps stay flat columns instead of cards inside the brief panel"
 );
 for (const field of [
   "role",
@@ -535,7 +589,6 @@ for (const field of [
   );
 }
 for (const field of [
-  "companyContext",
   "responsibilities",
   "requiredQualifications",
   "preferredQualifications",
@@ -544,12 +597,29 @@ for (const field of [
   "domainSignals",
   "benefits"
 ]) {
+  // Multi-item sections are declared as BRIEF_SECTIONS descriptors (field: "x")
+  // and rendered as tabbed row lists.
   assert.match(
     prepareTab,
-    new RegExp(`(?:onJobBriefChange\\("${field}"|field="${field}")`),
+    new RegExp(`(?:onJobBriefChange\\("${field}"|field[:=]\\s*"${field}")`),
     `Prepare keeps extracted ${field} details manually editable`
   );
 }
+assert.match(
+  prepareTab,
+  /<span>Role context<\/span>[\s\S]{0,240}?value=\{preparedJobRoleContext\(tracking, brief\)\}/,
+  "Prepare exposes one unified role-context field"
+);
+assert.doesNotMatch(
+  prepareTab,
+  /Company \/ product context/,
+  "Prepare does not expose the legacy context as a second prose field"
+);
+assert.match(
+  app,
+  /field === "roleDescription"[\s\S]{0,120}?companyContext: ""/,
+  "editing the unified role context clears the hidden legacy split atomically"
+);
 assert.match(
   prepareTab,
   /Extraction gaps[\s\S]{0,700}?manualReviewFields/,
@@ -569,6 +639,11 @@ assert.match(
   preparedMaterialCard,
   /type="checkbox"[\s\S]{0,100}?aria-label=\{`Include \$\{title\.toLowerCase\(\)\}`\}[\s\S]{0,180}?onIncludedChange\(event\.target\.checked\)/,
   "the shared material card exposes one material-specific accessible Include toggle"
+);
+assert.match(
+  preparedMaterialCard,
+  /prepare-material__identity[\s\S]{0,500}?prepare-include-toggle[\s\S]{0,700}?prepare-material__variant[\s\S]{0,500}?prepare-material__actions/,
+  "material controls keep their DOM and visual reading order aligned in the rail"
 );
 for (const material of ["prepare-resume", "prepare-cover"]) {
   assert.match(
@@ -592,13 +667,41 @@ assert.match(
   /variantLabel="Cover-letter variant"[\s\S]{0,400}?variantOptions=\{coverLetterOptions\}/,
   "the cover-letter card exposes saved cover-letter variants"
 );
+assert.match(
+  prepareTab,
+  /variantDisabled=\{\s*isSelectingCoverLetter[\s\S]{0,180}?isRankingCoverLetterVariants/,
+  "the cover-letter selector follows the resume selector's ranking lock"
+);
 assert.doesNotMatch(
   prepareTab,
   /Optional document|A cover letter never blocks Apply|>\s*Optional\s*</,
   "neither material is labelled optional"
 );
 assert.match(
-  prepareReadinessRail,
+  prepareApplicationRail,
+  /<h3>Application<\/h3>[\s\S]{0,500}?\{children\}[\s\S]{0,1200}?prepare-fit[\s\S]{0,1200}?prepare-readiness/,
+  "the prepared rail combines material decisions with readiness instead of reserving a sparse status column"
+);
+assert.match(
+  prepareApplicationRail,
+  /<p className="prepare-page__eyebrow">Fit<\/p>[\s\S]{0,900}?Not reviewed[\s\S]{0,200}?Run Review/,
+  "Prepare names fit as unreviewed until a provider-backed Review exists"
+);
+assert.match(
+  app,
+  /const prepareFitAssessment =[\s\S]{0,900}?provenance: "current"[\s\S]{0,900}?provenance: "saved"/,
+  "Prepare prefers the current Review and otherwise labels a matching saved review as historical"
+);
+const prepareFitStyles = prepareStyles.match(/\.prepare-fit\s*\{[\s\S]*?\n\}/)?.[0] ?? "";
+assert.notEqual(prepareFitStyles, "", "Prepare gives the fit summary a dedicated flat rail row");
+assert.match(prepareFitStyles, /border-top:/, "the fit row uses the rail's divider hierarchy");
+assert.doesNotMatch(
+  prepareFitStyles,
+  /background:|box-shadow:|border-left:/,
+  "the fit row does not become a nested or tinted card"
+);
+assert.match(
+  prepareApplicationRail,
   /disabled=\{!readiness\.canApply \|\| isApplying\}/,
   "the Prepare Apply control consumes the shared readiness result"
 );
@@ -661,10 +764,10 @@ assert.match(
 );
 
 const autoTailorStart = app.indexOf("// Auto-tailor remains a Prepare workflow.");
-const autoTailorEnd = app.indexOf("const autoTailorNeedsVariantChoice", autoTailorStart);
+const autoTailorEnd = app.indexOf("const applicationPreparationActive", autoTailorStart);
 const autoTailorEffect = app.slice(autoTailorStart, autoTailorEnd);
 const dirtyPause = autoTailorEffect.indexOf("resumeDocumentDirty");
-const variantPause = autoTailorEffect.indexOf("baseResumeOptions.length > 1");
+const variantPause = autoTailorEffect.indexOf("resumeVariantRecommendation &&");
 const autoTailorRun = autoTailorEffect.indexOf("handlePolish({ revealResumeOnSuccess: false })");
 assert.ok(
   dirtyPause >= 0 && variantPause > dirtyPause && autoTailorRun > variantPause,
@@ -685,7 +788,7 @@ assert.match(
 );
 assert.match(
   variantRanking,
-  /recommendResumeVariant\(\s*rankingJobDescription,\s*candidates,\s*options\.length\s*\)/,
+  /recommendVariant\(\s*rankingJobDescription,\s*candidates,\s*options\.length\s*\)/,
   "variant recommendation ranks every expected candidate against the captured prepared job"
 );
 assert.match(
@@ -700,13 +803,13 @@ assert.match(
 );
 assert.match(
   variantRanking,
-  /recommendation\?\.confidence === "high"[\s\S]{0,350}?!current\.resumeDocumentDirty/,
-  "automatic variant adoption requires high confidence and a clean editor"
+  /recommendation !== null[\s\S]{0,350}?!current\.resumeDocumentDirty/,
+  "a unique resume recommendation is adopted only while the editor is clean"
 );
 assert.match(
   variantRanking,
   /await current\.loadBaseResumeVersion\(\s*recommendation\.fileName,[\s\S]{0,350}?latest\.preparedJobDescription !== rankingJobDescription/,
-  "a high-confidence winner is adopted through the guarded workspace loader"
+  "a unique resume winner is adopted through the guarded workspace loader"
 );
 assert.match(
   variantRanking,
@@ -719,9 +822,14 @@ assert.match(
   "an in-flight automatic variant load cannot replace a resume restored from an application of record"
 );
 assert.match(
-  resumeVariantRecommendation,
-  /ResumeVariantRecommendationConfidence = "high" \| "medium" \| "low"/,
-  "variant ranking exposes an explicit confidence contract"
+  variantRecommendation,
+  /SECTION_WEIGHTS[\s\S]{0,220}?"required qualifications", 5[\s\S]{0,220}?"tech stack \/ keywords", 4/,
+  "variant ranking gives required qualifications and the declared tech stack more weight than context"
+);
+assert.match(
+  variantRecommendation,
+  /if \(best\.score <= 0 \|\| lead < minimumLead\) return null/,
+  "a tie or negligible edge is not presented as a recommendation"
 );
 assert.match(
   workspaceResume,
@@ -733,20 +841,93 @@ assert.match(
   /function updateWorkspaceState[\s\S]{0,800}?setBaseResumeCandidatesRevision\(\(revision\) => revision \+ 1\)/,
   "authoritative workspace snapshots invalidate cached candidate-content rankings"
 );
+
+// Cover letters use the same safe auto-selection contract as resumes.
+const coverRankingStart = app.indexOf("// Cover letters follow the same rule as resumes");
+const coverRanking = app.slice(
+  coverRankingStart,
+  app.indexOf("// Auto-tailor remains a Prepare workflow.", coverRankingStart)
+);
+assert.ok(coverRankingStart >= 0, "Prepare ranks saved cover letters against the prepared job");
+assert.match(
+  coverRanking,
+  /readCoverLetterVariantCandidates\(options\)/,
+  "cover-letter recommendation compares the actual saved letters"
+);
+assert.match(
+  coverRanking,
+  /recommendVariant\(rankingJobDescription, candidates, options\.length, 40\)/,
+  "a cover letter is ranked against its own usable-length floor, not the resume's"
+);
+assert.match(
+  coverRanking,
+  /candidatesRevision: coverLetterEditor\.coverLetterCandidatesRevision/,
+  "cover-letter ranking invalidates when authoritative saved letters may have changed"
+);
+assert.match(
+  coverRanking,
+  /recommendation !== null[\s\S]{0,400}?!current\.dirty[\s\S]{0,240}?await current\.openWorkspaceCoverLetter\(\s*recommendation\.fileName,\s*"recommendation"/,
+  "a unique cover-letter winner is auto-selected only while the editor is clean"
+);
+assert.match(
+  coverRanking,
+  /latest\.applicationOfRecordId !== null[\s\S]{0,120}?latest\.dirty[\s\S]{0,120}?latest\.activeFileName !== startingFileName/,
+  "cover-letter auto-selection aborts if restored identity, edits, or the active source change"
+);
+assert.match(
+  coverLetterRepository,
+  /selectCoverLetterWorkspaceDocument\(option\.fileName\)[\s\S]{0,320}?catch\s*\{\s*return null;/,
+  "an unparseable saved letter is skipped rather than ranked as empty"
+);
+assert.match(
+  coverEditor,
+  /const adoptCoverWorkspaceSnapshot = useCallback[\s\S]{0,400}?setCoverLetterCandidatesRevision\(\(revision\) => revision \+ 1\)/,
+  "every authoritative cover-letter snapshot advances the candidate revision from one owner"
+);
+assert.match(
+  coverEditor,
+  /mode === true && cancelStartupOpenRef\.current/,
+  "recommendation loads use live replacement guards without inheriting the one-shot startup cancellation"
+);
+assert.match(
+  prepareTab,
+  /coverLetterPlaceholderCount > 0[\s\S]{0,220}?placeholder\$\{/,
+  "a saved template letter reports its unresolved placeholders instead of reading as no draft"
+);
+assert.equal(
+  prepareTab.match(/<PreparedVariantRecommendation/g)?.length,
+  2,
+  "both materials report their variant comparison through one component"
+);
+assert.match(
+  prepareTab,
+  /isRankingResumeVariants \|\| isSelectingResume[\s\S]{0,80}?"Selecting best match…"/,
+  "the resume names automatic variant selection concisely"
+);
+assert.match(
+  prepareTab,
+  /isRankingCoverLetterVariants \|\| isSelectingCoverLetter[\s\S]{0,80}?"Selecting best match…"/,
+  "the cover letter uses the same automatic-selection language"
+);
+assert.doesNotMatch(
+  preparedVariantRecommendation,
+  /Matches \d|prepared-job keywords|tied with|Best match for this role|Use \{recommendation\.label\}/,
+  "the visible recommendation fallback stays concise"
+);
 assert.equal(
   polish.match(/if \(revealResumeOnSuccess\) setActiveOutputTab\("resume"\);/g)?.length,
   2,
   "Tailor and Review reveal Resume only when the caller requests it"
 );
-assert.match(
+assert.doesNotMatch(
   prepareTab,
-  /autoTailorPending && autoTailorNeedsVariantChoice[\s\S]{0,350}?comparison did not produce a safe automatic selection/,
-  "Prepare explains why an ambiguous resume comparison needs explicit confirmation"
+  /Confirm and tailor|Confirm the resume choice|safe automatic selection|Waiting on your choice/,
+  "Prepare does not ask users to confirm the recommendation workflow"
 );
-assert.match(
+assert.doesNotMatch(
   prepareTab,
-  /autoTailorPending && resumeDirty[\s\S]{0,300}?Automatic tailoring is paused/,
-  "Prepare explains that unsaved resume work blocks automatic tailoring"
+  /autoTailorPending|resumeDirty|Automatic tailoring is paused|Unsaved changes kept/,
+  "Prepare leaves dirty-editor protection to the shared concise recommendation fallback"
 );
 
 const restoreStart = app.indexOf("async function handleLoadApplication(app: Application)");
@@ -863,10 +1044,8 @@ const openPreparationValidation = applicationModal.indexOf(
 );
 assert.ok(
   openPreparationValidation >= 0 &&
-    applicationModal.indexOf(
-      "disabled={isBusy || openPreparationBlocked}",
-      openPreparationValidation
-    ) > openPreparationValidation,
+    applicationModal.indexOf("disabled={isBusy || openPreparationBlocked}", openPreparationValidation) >
+      openPreparationValidation,
   "Open preparation cannot bypass the modal's validation when pending edits would be saved"
 );
 assert.match(
@@ -1018,6 +1197,11 @@ assert.match(
   /setActiveCoverFileName\(""\);[\s\S]{0,200}?setDocumentTitle\(fileBase \|\| "Cover letter"\)/,
   "opening an uploaded .cover clears the active workspace file"
 );
+assert.match(
+  coverEditor,
+  /const nextTitle = documentTitle\.trim\(\) \|\| \(label === "Default" \? "Cover letter" : label\)/,
+  "selecting a saved cover-letter variant preserves the application output title"
+);
 
 // `variant` is slugged by the server; `fileName` is not. Sending the active file
 // name as a variant mangled it into cover-letter-cover-letter-<x>-cover.cover.
@@ -1134,10 +1318,7 @@ assert.match(
   "restoring a tracked application links later document saves to it"
 );
 const importedSnapshotSetterStart = app.indexOf("const setImportedJobAndDocumentTitle");
-const importedSnapshotSetterEnd = app.indexOf(
-  "const handlePreparedJobTrackingChange",
-  importedSnapshotSetterStart
-);
+const importedSnapshotSetterEnd = app.indexOf("const handlePreparedJobTrackingChange", importedSnapshotSetterStart);
 const importedSnapshotSetter = app.slice(importedSnapshotSetterStart, importedSnapshotSetterEnd);
 assert.match(
   importedSnapshotSetter,
@@ -1168,7 +1349,7 @@ assert.match(
 );
 assert.match(
   app,
-  /recommendation\?\.confidence === "high"[\s\S]{0,320}?current\.applicationOfRecordId === null/,
+  /recommendation !== null[\s\S]{0,320}?current\.applicationOfRecordId === null/,
   "variant recommendation never replaces a resume restored from an application of record"
 );
 assert.match(
@@ -1316,6 +1497,21 @@ assert.match(
   app,
   /completeAutoDocumentTitle\("coverLetter", current, applicantName, company, COVER_LETTER_TITLE_PLACEHOLDERS\)/,
   "the letter is named on the same Name_Company_<kind> rule as the resume"
+);
+assert.match(
+  resumeTab,
+  /const documentContext = \[jobTarget\?\.role, jobTarget\?\.company\]\.filter\(Boolean\)\.join\(" at "\)/,
+  "the resume editor uses the same role-at-company sublabel as the cover-letter editor"
+);
+assert.doesNotMatch(
+  resumeTab,
+  /AI suggestions|resultSourceLabel/,
+  "the resume title sublabel does not mix source provenance into job-target context"
+);
+assert.match(
+  coverTab,
+  /const targetLine = \[jobTarget\?\.role, jobTarget\?\.company\]\.filter\(Boolean\)\.join\(" at "\)/,
+  "the cover-letter editor keeps the shared role-at-company sublabel"
 );
 for (const kind of ["resume", "coverLetter"]) {
   assert.equal(

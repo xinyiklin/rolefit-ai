@@ -94,7 +94,7 @@ import {
   removePreparedJobRoleSummary,
   type PreparedJobBriefField
 } from "./lib/preparedJobBrief";
-import { recommendResumeVariant, type ResumeVariantRecommendation } from "./lib/resumeVariantRecommendation";
+import { recommendVariant, type VariantRecommendation } from "./lib/variantRecommendation";
 import { coverLetterRecoveryDirty } from "./lib/coverLetterRecovery";
 import { applicationDocumentUrl, type ApplicationDocumentKind } from "./lib/applicationDocumentRequests";
 import { applicationDocumentPdfBlob } from "./lib/applicationDocumentPdf";
@@ -119,7 +119,11 @@ import type { TrackerView } from "./sections/tabs/TrackerTab";
 import type { OutputTab, OutputTabDescriptor } from "./sections/shared";
 import { providerLabel } from "./config/aiOptions";
 import { formatHistoryDate } from "./lib/historyDate";
-import type { ApplicationActivityFilter } from "./lib/applicationDisplay";
+import {
+  appFitVerdict,
+  fitScore,
+  type ApplicationActivityFilter
+} from "./lib/applicationDisplay";
 
 const PreviewOverlay = lazy(() => import("./sections/PreviewOverlay"));
 
@@ -346,12 +350,17 @@ function App() {
   // later import/paste/edit, or a toggle-OFF import, can never trigger a surprise
   // polish against the wrong posting.
   const [autoTailorJob, setAutoTailorJob] = useState<string | null>(null);
-  const [resumeVariantRecommendation, setResumeVariantRecommendation] = useState<ResumeVariantRecommendation | null>(
-    null
-  );
+  const [resumeVariantRecommendation, setResumeVariantRecommendation] = useState<VariantRecommendation | null>(null);
   const [isRankingResumeVariants, setIsRankingResumeVariants] = useState(false);
   const resumeVariantRecommendationKeyRef = useRef("");
   const resumeVariantRecommendationGenerationRef = useRef(0);
+  // Both document kinds use the same recommendation and safe auto-selection
+  // contract; dirty editors and restored applications are never replaced.
+  const [coverLetterVariantRecommendation, setCoverLetterVariantRecommendation] =
+    useState<VariantRecommendation | null>(null);
+  const [isRankingCoverLetterVariants, setIsRankingCoverLetterVariants] = useState(false);
+  const coverLetterVariantRecommendationKeyRef = useRef("");
+  const coverLetterVariantRecommendationGenerationRef = useRef(0);
   // Export and Apply report to their own local action surfaces instead of a
   // shared global toast.
   const [exportStatus, setExportStatus] = useState("");
@@ -664,6 +673,7 @@ function App() {
         setApplicationOfRecordId(null);
         setMaterialSelection(DEFAULT_MATERIAL_SELECTION);
         setResumeVariantRecommendation(null);
+        setCoverLetterVariantRecommendation(null);
       }
       if (!snapshot) return;
       const applicantName = resolveResumeApplicantName(editedResume?.header?.name, currentResumeText || resumeText);
@@ -686,14 +696,19 @@ function App() {
         ...importedJob.tracking,
         ...rolePatch
       });
-      const nextTailoringText = assemblePreparedJobTailoringText(nextTracking, importedJob.brief);
+      // Prepare exposes one Role context field. Once the user edits it, keep
+      // that value authoritative instead of retaining a hidden, stale context.
+      const nextBrief =
+        field === "roleDescription" ? { ...importedJob.brief, companyContext: "" } : importedJob.brief;
+      const nextTailoringText = assemblePreparedJobTailoringText(nextTracking, nextBrief);
       setImportedJob({
         ...importedJob,
+        brief: nextBrief,
         tailoringText: nextTailoringText,
         tracking: nextTracking,
         manualReviewFields: reconcilePreparedJobManualReviewFields(
           nextTracking,
-          importedJob.brief,
+          nextBrief,
           importedJob.manualReviewFields
         )
       });
@@ -1146,7 +1161,7 @@ function App() {
 
   // Every review-score/diff derivation the UI shows is pure (read-only) and lives
   // in useResumeAnalysis, so it stays decoupled from App's setters.
-  const { resumeDiff, fitComparison, headlineScore, jobConstraints, resultSourceLabel } = useResumeAnalysis({
+  const { resumeDiff, fitComparison, headlineScore, jobConstraints } = useResumeAnalysis({
     resumeText,
     jobDescription,
     debouncedCurrentResumeText,
@@ -1530,12 +1545,12 @@ function App() {
       ) {
         return;
       }
-      const recommendation = recommendResumeVariant(rankingJobDescription, candidates, options.length);
+      const recommendation = recommendVariant(rankingJobDescription, candidates, options.length);
       setResumeVariantRecommendation(recommendation);
 
       const current = resumeVariantSelectionStateRef.current;
       const canAdoptRecommendation =
-        recommendation?.confidence === "high" &&
+        recommendation !== null &&
         current.preparedJobDescription === rankingJobDescription &&
         recommendation.fileName !== current.baseResumeName &&
         current.baseResumeName === startingBaseResumeName &&
@@ -1566,9 +1581,110 @@ function App() {
     };
   }, [readBaseResumeCandidates, rankingJobDescription, resumeVariantRecommendationInputKey]);
 
-  // Auto-tailor remains a Prepare workflow. With multiple variants, Distill's
-  // content comparison may continue only after a clear winner has been loaded;
-  // an ambiguous result or dirty editor remains an explicit user decision.
+  // Cover letters follow the same rule as resumes: select a meaningful unique
+  // winner, but only while the current editor is clean and not application-owned.
+  const coverLetterVariantRecommendationInputKey =
+    jobPrepared &&
+    rankingJobDescription === jobDescription.trim() &&
+    coverLetterEditor.coverLetterOptions.length > 1
+      ? JSON.stringify({
+          job: rankingJobDescription,
+          variants: coverLetterEditor.coverLetterOptions.map((option) => option.fileName),
+          candidatesRevision: coverLetterEditor.coverLetterCandidatesRevision
+        })
+      : "";
+  const coverLetterVariantOptionsRef = useRef(coverLetterEditor.coverLetterOptions);
+  coverLetterVariantOptionsRef.current = coverLetterEditor.coverLetterOptions;
+  const readCoverLetterVariantCandidates = coverLetterEditor.readCoverLetterVariantCandidates;
+  const openWorkspaceCoverLetter = coverLetterEditor.openWorkspaceCoverLetter;
+  const coverLetterVariantSelectionStateRef = useRef({
+    activeFileName: coverLetterEditor.activeCoverFileName,
+    dirty: coverReplacementStateRef.current.dirty,
+    isSelecting: isSelectingCoverVariant,
+    applicationOfRecordId,
+    jobPrepared,
+    preparedJobDescription: jobDescription.trim(),
+    openWorkspaceCoverLetter
+  });
+  coverLetterVariantSelectionStateRef.current = {
+    activeFileName: coverLetterEditor.activeCoverFileName,
+    dirty: coverReplacementStateRef.current.dirty,
+    isSelecting: isSelectingCoverVariant,
+    applicationOfRecordId,
+    jobPrepared,
+    preparedJobDescription: jobDescription.trim(),
+    openWorkspaceCoverLetter
+  };
+
+  useEffect(() => {
+    if (!coverLetterVariantRecommendationInputKey) {
+      coverLetterVariantRecommendationKeyRef.current = "";
+      coverLetterVariantRecommendationGenerationRef.current += 1;
+      setCoverLetterVariantRecommendation(null);
+      setIsRankingCoverLetterVariants(false);
+      return;
+    }
+    if (coverLetterVariantRecommendationKeyRef.current === coverLetterVariantRecommendationInputKey) {
+      return;
+    }
+
+    coverLetterVariantRecommendationKeyRef.current = coverLetterVariantRecommendationInputKey;
+    const generation = coverLetterVariantRecommendationGenerationRef.current + 1;
+    coverLetterVariantRecommendationGenerationRef.current = generation;
+    const startingFileName = coverLetterVariantSelectionStateRef.current.activeFileName;
+    const options = coverLetterVariantOptionsRef.current;
+    setIsRankingCoverLetterVariants(true);
+    setCoverLetterVariantRecommendation(null);
+
+    void (async () => {
+      const candidates = await readCoverLetterVariantCandidates(options);
+      if (generation !== coverLetterVariantRecommendationGenerationRef.current) return;
+      // A cover letter's usable floor is its own: a real one-paragraph letter is
+      // shorter than the stub length that disqualifies a resume.
+      const recommendation = recommendVariant(rankingJobDescription, candidates, options.length, 40);
+      setCoverLetterVariantRecommendation(recommendation);
+
+      const current = coverLetterVariantSelectionStateRef.current;
+      const canAdoptRecommendation =
+        recommendation !== null &&
+        current.preparedJobDescription === rankingJobDescription &&
+        recommendation.fileName !== current.activeFileName &&
+        current.activeFileName === startingFileName &&
+        current.applicationOfRecordId === null &&
+        !current.dirty &&
+        !current.isSelecting;
+      if (canAdoptRecommendation) {
+        await current.openWorkspaceCoverLetter(recommendation.fileName, "recommendation", () => {
+          const latest = coverLetterVariantSelectionStateRef.current;
+          return (
+            generation !== coverLetterVariantRecommendationGenerationRef.current ||
+            !latest.jobPrepared ||
+            latest.preparedJobDescription !== rankingJobDescription ||
+            latest.applicationOfRecordId !== null ||
+            latest.dirty ||
+            latest.activeFileName !== startingFileName
+          );
+        });
+      }
+      if (generation === coverLetterVariantRecommendationGenerationRef.current) {
+        setIsRankingCoverLetterVariants(false);
+      }
+    })();
+
+    return () => {
+      if (generation === coverLetterVariantRecommendationGenerationRef.current) {
+        coverLetterVariantRecommendationGenerationRef.current += 1;
+      }
+    };
+  }, [
+    coverLetterVariantRecommendationInputKey,
+    rankingJobDescription,
+    readCoverLetterVariantCandidates
+  ]);
+
+  // Auto-tailor remains a Prepare workflow. Wait for ranking and any safe
+  // winner adoption; a tie keeps the current source and continues without
+  // inventing a recommendation. Dirty work still pauses replacement and Tailor.
   useEffect(() => {
     if (autoTailorJob === null) return;
     if (autoTailorJob !== jobDescription.trim()) {
@@ -1580,8 +1696,7 @@ function App() {
       isSavingBaseResume ||
       resumeDocumentDirty ||
       isRankingResumeVariants ||
-      (baseResumeOptions.length > 1 &&
-        (resumeVariantRecommendation?.confidence !== "high" || resumeVariantRecommendation.fileName !== baseResumeName))
+      (resumeVariantRecommendation && resumeVariantRecommendation.fileName !== baseResumeName)
     ) {
       return;
     }
@@ -1603,12 +1718,6 @@ function App() {
     resumeVariantRecommendation
   ]);
 
-  const autoTailorNeedsVariantChoice =
-    autoTailorJob !== null &&
-    baseResumeOptions.length > 1 &&
-    (isRankingResumeVariants ||
-      resumeVariantRecommendation?.confidence !== "high" ||
-      resumeVariantRecommendation.fileName !== baseResumeName);
   const applicationPreparationActive =
     jobPreparationActive ||
     (materialSelection.resume &&
@@ -1721,6 +1830,26 @@ function App() {
     : savedApplicationReviewAvailable
       ? "saved"
       : "none";
+  const savedApplicationFitVerdict =
+    savedApplicationReviewAvailable && preparedApplication
+      ? appFitVerdict(preparedApplication)
+      : null;
+  const prepareFitAssessment =
+    currentReviewAvailable && result?.strictReview
+      ? {
+          verdict: result.strictReview.verdict,
+          score: headlineScore,
+          reason: result.strictReview.verdictReason,
+          provenance: "current" as const
+        }
+      : savedApplicationReviewAvailable && preparedApplication && savedApplicationFitVerdict
+        ? {
+            verdict: savedApplicationFitVerdict.verdict,
+            score: fitScore(preparedApplication),
+            reason: preparedApplication.review?.verdictReason ?? "",
+            provenance: "saved" as const
+          }
+        : null;
 
   // The Apply flow (download-prompt state + commitApply/handleApply/
   // handleApplyDownloadPick/handleApplyOnly/saveAppliedDocumentArtifacts) lives in
@@ -2199,14 +2328,10 @@ function App() {
               distillProviderMessage={distillProviderMessage}
               onFetchPosting={handleExtractFromLink}
               onPreparePosting={handleDistillPaste}
-              autoTailorPending={autoTailorJob !== null}
-              autoTailorNeedsVariantChoice={autoTailorNeedsVariantChoice}
-              resumeDirty={resumeDocumentDirty}
               resumeReady={resumeReady}
               includeResume={materialSelection.resume}
               onIncludeResumeChange={(resume) => setMaterialSelection((current) => ({ ...current, resume }))}
               baseResumeName={baseResumeName}
-              activeBaseResumeLabel={activeBaseResumeLabel}
               baseResumeOptions={baseResumeOptions}
               onSelectBaseResume={loadBaseResumeVersion}
               resumeVariantRecommendation={resumeVariantRecommendation}
@@ -2224,9 +2349,12 @@ function App() {
                 setMaterialSelection((current) => ({ ...current, coverLetter }))
               }
               coverLetterReady={coverLetterReady}
+              coverLetterWordCount={coverLetterPreflight.authoredWordCount}
+              coverLetterPlaceholderCount={coverLetterPreflight.template.slots.length}
               coverLetterFileName={coverLetterEditor.activeCoverFileName}
-              activeCoverLetterLabel={coverLetterEditor.activeCoverLabel}
               coverLetterOptions={coverLetterEditor.coverLetterOptions}
+              coverLetterVariantRecommendation={coverLetterVariantRecommendation}
+              isRankingCoverLetterVariants={isRankingCoverLetterVariants}
               isSelectingCoverLetter={isSelectingCoverVariant}
               onSelectCoverLetter={handleSelectPreparedCoverLetter}
               canTailorCoverLetter={
@@ -2249,6 +2377,7 @@ function App() {
               onOpenCoverLetter={() => setActiveOutputTab("cover")}
               reviewGaps={prepareReviewGaps}
               reviewGapsProvenance={prepareReviewGapsProvenance}
+              fitAssessment={prepareFitAssessment}
               linkedApplication={preparedApplication}
               readiness={preparationReadiness}
               isApplying={isApplying}
@@ -2269,7 +2398,6 @@ function App() {
               dirty={resumeDocumentDirty}
               draftAutosaveState={draftAutosaveState}
               isWorkspaceBootstrapping={isWorkspaceBootstrapping}
-              resultSourceLabel={resultSourceLabel}
               jobConstraints={jobConstraints}
               result={result}
               resumeDiff={resumeDiff}

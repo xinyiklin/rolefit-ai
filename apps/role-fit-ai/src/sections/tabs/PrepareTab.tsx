@@ -1,16 +1,5 @@
-import { useEffect, useState } from "react";
-import {
-  ArrowRight,
-  Check,
-  Circle,
-  FileSearch,
-  FileText,
-  LoaderCircle,
-  Mail,
-  RotateCcw,
-  ShieldCheck,
-  Sparkles
-} from "lucide-react";
+import { useEffect, useState, type KeyboardEvent } from "react";
+import { ArrowRight, Check, Circle, LoaderCircle } from "lucide-react";
 
 import { APPLICATION_SOURCES, JOB_TYPES, type Application } from "../../hooks/useApplications";
 import type { BaseResumeOption } from "../../hooks/useWorkspaceResume";
@@ -18,18 +7,80 @@ import type { ImportedJobSnapshot } from "../../hooks/useJobIntake";
 import type { CoverLetterOption } from "../../lib/coverLetterWorkspaceRepository";
 import type { AiStageState, PolishProgressState } from "../../lib/aiWorkflow";
 import type { ExtractedJobTracking } from "../../lib/jobExtract";
-import type { PreparedJobBriefField } from "../../lib/preparedJobBrief";
+import { preparedJobRoleContext, type PreparedJobBriefField } from "../../lib/preparedJobBrief";
 import type { PreparationReadiness } from "../../lib/preparationReadiness";
-import type { ResumeVariantRecommendation } from "../../lib/resumeVariantRecommendation";
-import { PreparedJobBriefListField } from "./prepare/PreparedJobBriefListField";
+import type { VariantRecommendation } from "../../lib/variantRecommendation";
+import { PreparedJobBriefSections, type PreparedJobBriefSection } from "./prepare/PreparedJobBriefSections";
 import { PreparedMaterialCard } from "./prepare/PreparedMaterialCard";
-import { PrepareReadinessRail } from "./prepare/PrepareReadinessRail";
+import { PreparedVariantRecommendation } from "./prepare/PreparedVariantRecommendation";
+import {
+  PrepareApplicationRail,
+  type PrepareActivity,
+  type PrepareFitAssessment
+} from "./prepare/PrepareApplicationRail";
+
+type SourceMethod = "url" | "paste";
+
+const SOURCE_METHODS: readonly SourceMethod[] = ["url", "paste"];
+
+// Prepare owns which multi-item brief sections exist and how they read. Each one
+// becomes a tab over an individually editable row list.
+const BRIEF_SECTIONS: readonly PreparedJobBriefSection[] = [
+  {
+    field: "responsibilities",
+    label: "Responsibilities",
+    placeholder: "Build and maintain…"
+  },
+  {
+    field: "requiredQualifications",
+    label: "Required qualifications",
+    placeholder: "Required experience, skills, education, or credentials…"
+  },
+  {
+    field: "preferredQualifications",
+    label: "Preferred qualifications",
+    placeholder: "Nice-to-have experience or skills…"
+  },
+  {
+    field: "techKeywords",
+    label: "Tech stack / keywords",
+    placeholder: "TypeScript"
+  },
+  {
+    field: "senioritySignals",
+    label: "Seniority signals",
+    placeholder: "Leadership, ownership, or years-of-experience signals…"
+  },
+  {
+    field: "domainSignals",
+    label: "Domain signals",
+    placeholder: "Fintech"
+  },
+  {
+    field: "benefits",
+    label: "Benefits",
+    placeholder: "Health coverage"
+  }
+];
 
 type ReviewGap = {
   gap: string;
   severity: string;
   evidence?: string;
 };
+
+function variantRecommendationLiveText(
+  kind: string,
+  isRanking: boolean,
+  recommendation: VariantRecommendation | null,
+  selectedFileName: string
+): string {
+  if (isRanking) return `Selecting the best ${kind} match.`;
+  if (!recommendation) return "";
+  return recommendation.fileName === selectedFileName
+    ? `${recommendation.label} selected for ${kind}.`
+    : `${recommendation.label} recommended for ${kind}.`;
+}
 
 export type PrepareTabProps = {
   jobUrl: string;
@@ -49,18 +100,14 @@ export type PrepareTabProps = {
   distillProviderMessage: string;
   onFetchPosting: () => void | Promise<void>;
   onPreparePosting: (sourceOverride?: string) => void | Promise<void>;
-  autoTailorPending: boolean;
-  autoTailorNeedsVariantChoice: boolean;
-  resumeDirty: boolean;
   resumeReady: boolean;
   isSelectingResume: boolean;
   includeResume: boolean;
   onIncludeResumeChange: (included: boolean) => void;
   baseResumeName: string;
-  activeBaseResumeLabel: string;
   baseResumeOptions: BaseResumeOption[];
   onSelectBaseResume: (fileName: string) => void | Promise<unknown>;
-  resumeVariantRecommendation: ResumeVariantRecommendation | null;
+  resumeVariantRecommendation: VariantRecommendation | null;
   isRankingResumeVariants: boolean;
   canTailor: boolean;
   isPolishing: boolean;
@@ -72,9 +119,12 @@ export type PrepareTabProps = {
   includeCoverLetter: boolean;
   onIncludeCoverLetterChange: (included: boolean) => void;
   coverLetterReady: boolean;
+  coverLetterWordCount: number;
+  coverLetterPlaceholderCount: number;
   coverLetterFileName: string;
-  activeCoverLetterLabel: string;
   coverLetterOptions: CoverLetterOption[];
+  coverLetterVariantRecommendation: VariantRecommendation | null;
+  isRankingCoverLetterVariants: boolean;
   isSelectingCoverLetter: boolean;
   onSelectCoverLetter: (fileName: string) => void | Promise<unknown>;
   canTailorCoverLetter: boolean;
@@ -85,6 +135,7 @@ export type PrepareTabProps = {
   onOpenCoverLetter: () => void;
   reviewGaps: ReviewGap[];
   reviewGapsProvenance: "none" | "current" | "saved";
+  fitAssessment: PrepareFitAssessment | null;
   linkedApplication: Application | null;
   readiness: PreparationReadiness;
   isApplying: boolean;
@@ -109,15 +160,11 @@ export function PrepareTab({
   distillProviderMessage,
   onFetchPosting,
   onPreparePosting,
-  autoTailorPending,
-  autoTailorNeedsVariantChoice,
-  resumeDirty,
   resumeReady,
   isSelectingResume,
   includeResume,
   onIncludeResumeChange,
   baseResumeName,
-  activeBaseResumeLabel,
   baseResumeOptions,
   onSelectBaseResume,
   resumeVariantRecommendation,
@@ -132,9 +179,12 @@ export function PrepareTab({
   includeCoverLetter,
   onIncludeCoverLetterChange,
   coverLetterReady,
+  coverLetterWordCount,
+  coverLetterPlaceholderCount,
   coverLetterFileName,
-  activeCoverLetterLabel,
   coverLetterOptions,
+  coverLetterVariantRecommendation,
+  isRankingCoverLetterVariants,
   isSelectingCoverLetter,
   onSelectCoverLetter,
   canTailorCoverLetter,
@@ -145,12 +195,16 @@ export function PrepareTab({
   onOpenCoverLetter,
   reviewGaps,
   reviewGapsProvenance,
+  fitAssessment,
   linkedApplication,
   readiness,
   isApplying,
   onApply
 }: PrepareTabProps) {
   const [sourceMode, setSourceMode] = useState<"collapsed" | "view" | "replace">(jobPrepared ? "collapsed" : "replace");
+  const [sourceMethod, setSourceMethod] = useState<SourceMethod>(() =>
+    jobUrl.trim() || (!jobRawText.trim() && !jobDescription.trim()) ? "url" : "paste"
+  );
 
   useEffect(() => {
     setSourceMode(jobPrepared ? "collapsed" : "replace");
@@ -164,37 +218,55 @@ export function PrepareTab({
   const sourceLength = (jobRawText || jobDescription).trim().length;
   const isReceiving = extensionImportPhase === "receiving";
   const progressRunning = isPreparing || distillProgress.status === "running";
-  const preparationHeadline = isReceiving
-    ? "Receiving job from browser extension…"
+  const preparationStopped = distillProgress.status === "failed" || distillProgress.status === "stopped";
+  // Preparation has its own readiness check, so the rail reports it only while
+  // work is in flight or a message is outstanding.
+  const activity: PrepareActivity | null = isReceiving
+    ? { tone: "working", message: "Receiving the posting from the extension…" }
     : progressRunning
-      ? "Preparing application…"
-      : distillProgress.status === "failed" || distillProgress.status === "stopped"
-        ? distillProgress.errorHeadline || "Preparation stopped"
-        : jobPrepared
-          ? "Application prepared"
-          : "Waiting for a job posting";
-  const preparationDetail = isReceiving
-    ? "RoleFit is waiting for the extension to finish resolving the full posting."
-    : distillProgress.error ||
-      preparationStatus ||
-      (jobPrepared
-        ? `${sourceLength.toLocaleString()} source characters are ready for drafting.`
-        : "Use the browser extension, fetch a link, or paste the full description.");
+      ? {
+          tone: "working",
+          message: preparationStatus || "Preparing the posting…"
+        }
+      : preparationStopped
+        ? {
+            tone: "warn",
+            message: distillProgress.error || distillProgress.errorHeadline || "Preparation stopped."
+          }
+        : preparationStatus
+          ? { tone: "info", message: preparationStatus }
+          : null;
   const tailorDone = polishOutputCurrent && polishProgress.tailor.status === "done";
   const reviewDone = polishOutputCurrent && polishProgress.review.status === "done";
-  const tailoringHeadline = isPolishing
-    ? polishProgress.review.status === "running"
-      ? "Reviewing the tailored resume…"
-      : "Tailoring the selected resume…"
-    : reviewDone
-      ? "Resume tailored and reviewed"
-      : tailorDone
-        ? "Resume tailored"
-        : autoTailorPending
-          ? "Automatic tailoring is ready to continue"
-          : resumeReady
-            ? "Resume ready"
-            : "Resume needs a document";
+  const resumeState =
+    isRankingResumeVariants || isSelectingResume
+      ? "Selecting best match…"
+      : isPolishing
+        ? polishProgress.review.status === "running"
+          ? "Reviewing…"
+          : "Tailoring…"
+        : reviewDone
+          ? "Tailored · reviewed"
+          : tailorDone
+            ? "Tailored"
+            : resumeReady
+              ? "Ready"
+              : "No document";
+  // A saved base letter is a template: it holds real prose and unresolved slots
+  // like [Company]. Reporting that as "No draft" hid a document the user could
+  // see in the selector, so the state names the actual reason it is not ready.
+  const coverState =
+    isRankingCoverLetterVariants || isSelectingCoverLetter
+      ? "Selecting best match…"
+      : isTailoringCoverLetter
+        ? "Tailoring…"
+        : coverLetterReady
+          ? "Ready"
+          : coverLetterPlaceholderCount > 0
+            ? `Template · ${coverLetterPlaceholderCount} placeholder${coverLetterPlaceholderCount === 1 ? "" : "s"} to fill`
+            : coverLetterWordCount > 0
+              ? "Draft too short"
+              : "No draft";
   const canFetch = Boolean(jobUrl.trim()) && !isPreparing && distillProviderReady;
   // URL edits invalidate readiness but must not swap the controlled replacement
   // textarea from the captured posting back to the compact tailoring scaffold.
@@ -203,7 +275,7 @@ export function PrepareTab({
   const preparationSourceText = jobRawText || jobDescription;
   const canPreparePaste = preparationSourceText.trim().length >= 80 && !isPreparing && distillProviderReady;
   const fetchHint = !jobUrl.trim()
-    ? "Enter a job URL on Prepare first."
+    ? "Enter a job URL first."
     : isPreparing
       ? "Wait for the current preparation to finish."
       : !distillProviderReady
@@ -227,47 +299,66 @@ export function PrepareTab({
           ? polishStatus || "Finish the resume and AI setup before tailoring."
           : "";
   const canStartTailor = canTailor && !isPolishing && jobPrepared;
+  const resumeWorkflowNeedsAttention =
+    polishProgress.tailor.status === "failed" ||
+    polishProgress.tailor.status === "stopped" ||
+    polishProgress.review.status === "failed" ||
+    polishProgress.review.status === "stopped";
+  // Success receipts duplicate the state line. Keep only blockers and failures.
+  const resumeNote = !canStartTailor && tailorHint
+    ? tailorHint
+    : resumeWorkflowNeedsAttention
+      ? polishStatus
+      : "";
+  const coverNote = !canTailorCoverLetter && coverLetterTailorHint
+    ? coverLetterTailorHint
+    : coverLetterStatus === "Inputs changed. Tailor the letter again for this context."
+      ? "Inputs changed · tailor again."
+      : coverLetterStatus;
   const sourceValue = APPLICATION_SOURCES.includes(tracking.source as (typeof APPLICATION_SOURCES)[number])
     ? (tracking.source ?? "")
     : tracking.source
       ? "Other"
       : "";
   const jobTypeIsKnown = JOB_TYPES.includes(tracking.jobType as (typeof JOB_TYPES)[number]);
-  const recommendationSelected = resumeVariantRecommendation?.fileName === baseResumeName;
-  const recommendationLiveText = isRankingResumeVariants
-    ? "Comparing resume variants."
-    : resumeVariantRecommendation
-      ? `${resumeVariantRecommendation.label} recommended${
-          recommendationSelected ? " and selected" : ""
-        }. ${resumeVariantRecommendation.detail}`
-      : "";
-  const recommendationStatus = (
-    <>
-      <span className="sr-only" role="status" aria-live="polite" aria-atomic="true">
-        {recommendationLiveText}
-      </span>
-      {isRankingResumeVariants ? (
-        <div className="prepare-recommendation is-working">
-          <LoaderCircle className="spin" size={15} aria-hidden="true" />
-          <div>
-            <strong>Comparing resume variants</strong>
-            <p>RoleFit is checking each saved resume against the prepared job.</p>
-          </div>
-        </div>
-      ) : resumeVariantRecommendation ? (
-        <div className={`prepare-recommendation is-${resumeVariantRecommendation.confidence}`}>
-          <Sparkles size={15} aria-hidden="true" />
-          <div>
-            <strong>
-              {resumeVariantRecommendation.label} recommended
-              {recommendationSelected ? " · selected" : ""}
-            </strong>
-            <p>{resumeVariantRecommendation.detail}</p>
-          </div>
-        </div>
-      ) : null}
-    </>
+  const recommendationLiveText = [
+    variantRecommendationLiveText("resume", isRankingResumeVariants, resumeVariantRecommendation, baseResumeName),
+    variantRecommendationLiveText(
+      "cover letter",
+      isRankingCoverLetterVariants,
+      coverLetterVariantRecommendation,
+      coverLetterFileName
+    )
+  ]
+    .filter(Boolean)
+    .join(" ");
+  // One live region for both comparisons, rendered outside the material rows so
+  // it is always present for assistive tech without forcing an empty line onto a
+  // compact row.
+  const recommendationLiveRegion = (
+    <span className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+      {recommendationLiveText}
+    </span>
   );
+
+  function handleSourceMethodKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
+    const currentIndex = SOURCE_METHODS.indexOf(sourceMethod);
+    const nextIndex =
+      event.key === "Home"
+        ? 0
+        : event.key === "End"
+          ? SOURCE_METHODS.length - 1
+          : event.key === "ArrowRight"
+            ? (currentIndex + 1) % SOURCE_METHODS.length
+            : event.key === "ArrowLeft"
+              ? (currentIndex - 1 + SOURCE_METHODS.length) % SOURCE_METHODS.length
+              : -1;
+    if (nextIndex < 0) return;
+    event.preventDefault();
+    const nextMethod = SOURCE_METHODS[nextIndex];
+    setSourceMethod(nextMethod);
+    document.getElementById(`prepare-source-${nextMethod}-tab`)?.focus();
+  }
 
   return (
     <section className="workspace-page prepare-page">
@@ -279,26 +370,36 @@ export function PrepareTab({
         </span>
       </header>
 
-      <div className="prepare-layout">
+      <div className={`prepare-layout ${jobPrepared ? "is-prepared" : "is-intake"}`}>
         <div className="prepare-main">
-          <section className="prepare-sheet" aria-labelledby="prepare-source-title">
-            <div className="prepare-sheet__head">
-              <div>
-                <p className="prepare-page__eyebrow">Source</p>
-                <h3 id="prepare-source-title">{jobPrepared ? "Posting captured" : "Add a posting manually"}</h3>
-              </div>
+          <section className="prepare-panel" aria-labelledby="prepare-source-title">
+            <div className="prepare-panel__head">
+              <h3 id="prepare-source-title">Source</h3>
               {jobPrepared ? (
-                <div className="prepare-sheet__actions">
+                <span className="prepare-panel__meta">
+                  {sourceLength.toLocaleString()} characters · {jobUrl.trim() ? "linked posting" : "pasted text"}
+                </span>
+              ) : (
+                <span className="prepare-panel__meta">URL or pasted text</span>
+              )}
+              {jobPrepared ? (
+                <div className="prepare-panel__actions">
                   <button
                     className="ghost-button is-compact"
                     type="button"
                     onClick={() => setSourceMode((current) => (current === "view" ? "collapsed" : "view"))}
                   >
-                    <FileSearch size={13} aria-hidden="true" />
-                    {sourceMode === "view" ? "Hide source" : "View source"}
+                    {sourceMode === "view" ? "Hide" : "View"}
                   </button>
-                  <button className="ghost-button is-compact" type="button" onClick={() => setSourceMode("replace")}>
-                    Replace source
+                  <button
+                    className="ghost-button is-compact"
+                    type="button"
+                    onClick={() => {
+                      setSourceMethod(jobUrl.trim() ? "url" : "paste");
+                      setSourceMode("replace");
+                    }}
+                  >
+                    Replace
                   </button>
                   <button
                     className="secondary-button is-compact"
@@ -307,114 +408,149 @@ export function PrepareTab({
                     disabled={!canPreparePaste}
                     aria-describedby={!canPreparePaste ? "prepare-source-action-hint" : undefined}
                   >
-                    <RotateCcw size={13} aria-hidden="true" />
                     Prepare again
                   </button>
                 </div>
               ) : null}
             </div>
             {jobPrepared && !canPreparePaste && prepareHint ? (
-              <p className="prepare-action-hint" id="prepare-source-action-hint">
+              <p className="prepare-note" id="prepare-source-action-hint">
                 {prepareHint}
               </p>
             ) : null}
 
-            {sourceMode === "collapsed" && jobPrepared ? (
-              <p className="prepare-source-summary">
-                {sourceLength.toLocaleString()} characters captured
-                {jobUrl.trim() ? " from the linked posting" : " from pasted text"}.
-              </p>
-            ) : sourceMode === "view" && jobPrepared ? (
+            {sourceMode === "view" && jobPrepared ? (
               <pre className="prepare-source-preview">{jobRawText || jobDescription}</pre>
-            ) : (
+            ) : sourceMode === "collapsed" && jobPrepared ? null : (
               <div className="prepare-source-form">
-                <label className="field">
-                  <span>Job URL</span>
-                  <span className="prepare-input-action">
-                    <input
-                      className="text-input"
-                      type="url"
-                      value={jobUrl}
-                      onChange={(event) => onJobUrlChange(event.target.value)}
-                      placeholder="https://company.example/jobs/role"
+                <div className="prepare-source-methods" role="tablist" aria-label="Job source method">
+                  {SOURCE_METHODS.map((method) => {
+                    const selected = sourceMethod === method;
+                    return (
+                      <button
+                        id={`prepare-source-${method}-tab`}
+                        className="prepare-source-method"
+                        type="button"
+                        role="tab"
+                        aria-selected={selected}
+                        aria-controls={`prepare-source-${method}-panel`}
+                        tabIndex={selected ? 0 : -1}
+                        onClick={() => setSourceMethod(method)}
+                        onKeyDown={handleSourceMethodKeyDown}
+                        key={method}
+                      >
+                        {method === "url" ? "Job URL" : "Paste description"}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div
+                  id="prepare-source-url-panel"
+                  className="prepare-source-method-panel"
+                  role="tabpanel"
+                  aria-labelledby="prepare-source-url-tab"
+                  hidden={sourceMethod !== "url"}
+                >
+                  <label className="field">
+                    <span>Job URL</span>
+                    <span className="prepare-input-action">
+                      <input
+                        className="text-input"
+                        type="url"
+                        value={jobUrl}
+                        onChange={(event) => onJobUrlChange(event.target.value)}
+                        placeholder="https://company.example/jobs/role"
+                        disabled={isPreparing}
+                      />
+                      <button
+                        className="primary-button is-compact"
+                        type="button"
+                        onClick={() => void onFetchPosting()}
+                        disabled={!canFetch}
+                        aria-describedby={!canFetch && fetchHint ? "prepare-fetch-action-hint" : undefined}
+                      >
+                        {isPreparing ? <LoaderCircle className="spin" size={14} aria-hidden="true" /> : null}
+                        Prepare from URL
+                      </button>
+                    </span>
+                    {!canFetch && fetchHint ? (
+                      <span className="prepare-action-hint" id="prepare-fetch-action-hint">
+                        {fetchHint}
+                      </span>
+                    ) : null}
+                  </label>
+                </div>
+
+                <div
+                  id="prepare-source-paste-panel"
+                  className="prepare-source-method-panel"
+                  role="tabpanel"
+                  aria-labelledby="prepare-source-paste-tab"
+                  hidden={sourceMethod !== "paste"}
+                >
+                  <label className="field">
+                    <span>Job description</span>
+                    <textarea
+                      className="textarea prepare-source-textarea"
+                      value={preparationSourceText}
+                      onChange={(event) => onJobDescriptionChange(event.target.value)}
+                      placeholder="Paste the role description, qualifications, location, compensation, and benefits."
                       disabled={isPreparing}
                     />
-                    <button
-                      className="secondary-button"
-                      type="button"
-                      onClick={() => void onFetchPosting()}
-                      disabled={!canFetch}
-                      aria-describedby={!canFetch && fetchHint ? "prepare-fetch-action-hint" : undefined}
-                    >
-                      {isPreparing ? <LoaderCircle className="spin" size={14} aria-hidden="true" /> : null}
-                      Fetch posting
-                    </button>
-                  </span>
-                  {!canFetch && fetchHint ? (
-                    <span className="prepare-action-hint" id="prepare-fetch-action-hint">
-                      {fetchHint}
+                  </label>
+                  <div className="prepare-source-submit">
+                    <span>
+                      {preparationSourceText.trim().length.toLocaleString()} characters
+                      {preparationSourceText.trim().length > 0 && preparationSourceText.trim().length < 80
+                        ? " · add more of the posting"
+                        : ""}
                     </span>
+                    <button
+                      className="primary-button is-compact"
+                      type="button"
+                      onClick={() => void onPreparePosting(preparationSourceText)}
+                      disabled={!canPreparePaste}
+                      aria-describedby={
+                        !canPreparePaste
+                          ? jobPrepared
+                            ? "prepare-source-action-hint"
+                            : "prepare-paste-action-hint"
+                          : undefined
+                      }
+                    >
+                      Prepare posting
+                    </button>
+                  </div>
+                  {!jobPrepared && !canPreparePaste && prepareHint ? (
+                    <p className="prepare-note" id="prepare-paste-action-hint">
+                      {prepareHint}
+                    </p>
                   ) : null}
-                </label>
-                <label className="field">
-                  <span>Full job description</span>
-                  <textarea
-                    className="textarea prepare-source-textarea"
-                    value={preparationSourceText}
-                    onChange={(event) => onJobDescriptionChange(event.target.value)}
-                    placeholder="Paste the complete role description, qualifications, location, compensation, and benefits."
-                    disabled={isPreparing}
-                  />
-                </label>
-                <div className="prepare-source-submit">
-                  <span>
-                    {preparationSourceText.trim().length.toLocaleString()} characters
-                    {preparationSourceText.trim().length > 0 && preparationSourceText.trim().length < 80
-                      ? " · add more of the posting"
-                      : ""}
-                  </span>
-                  <button
-                    className="primary-button"
-                    type="button"
-                    onClick={() => void onPreparePosting(preparationSourceText)}
-                    disabled={!canPreparePaste}
-                    aria-describedby={
-                      !canPreparePaste
-                        ? jobPrepared
-                          ? "prepare-source-action-hint"
-                          : "prepare-paste-action-hint"
-                        : undefined
-                    }
-                  >
-                    <Sparkles size={14} aria-hidden="true" />
-                    Prepare application
-                  </button>
                 </div>
-                {!jobPrepared && !canPreparePaste && prepareHint ? (
-                  <p className="prepare-action-hint" id="prepare-paste-action-hint">
-                    {prepareHint}
+
+                {!jobPrepared && activity ? (
+                  <p className={`prepare-note is-${activity.tone}`} role="status">
+                    {activity.tone === "working" ? (
+                      <LoaderCircle className="spin" size={13} aria-hidden="true" />
+                    ) : null}
+                    {activity.message}
                   </p>
                 ) : null}
               </div>
             )}
           </section>
 
-          <section className="prepare-sheet" aria-labelledby="prepare-brief-title">
-            <div className="prepare-sheet__head">
-              <div>
-                <p className="prepare-page__eyebrow">Prepared brief</p>
-                <h3 id="prepare-brief-title">{role}</h3>
-                <p>{company}</p>
-              </div>
-              {jobPrepared ? <span className="prepare-chip">Ready</span> : null}
+          <section className="prepare-panel prepare-job-brief" aria-labelledby="prepare-brief-title">
+            <div className="prepare-panel__head">
+              <h3 id="prepare-brief-title">Job brief</h3>
+              <span className="prepare-panel__meta">
+                {jobPrepared ? "Edits apply to tailoring and Apply" : "Not prepared"}
+              </span>
             </div>
 
             {jobPrepared && brief ? (
               <>
-                <p className="prepare-detail-intro">
-                  Correct missing or inaccurate details here. These edits update the prepared job used by Tailor and
-                  Apply while the captured source stays unchanged.
-                </p>
                 <fieldset className="prepare-brief-fields" disabled={isPreparing}>
                   <div className="prepare-detail-grid">
                     <label className="field">
@@ -538,76 +674,17 @@ export function PrepareTab({
                     </label>
                   </fieldset>
 
-                  <div className="prepare-brief-grid">
-                    <label className="field prepare-role-summary">
-                      <span>Role summary</span>
-                      <textarea
-                        className="textarea"
-                        value={tracking.roleDescription || ""}
-                        onChange={(event) => onJobTrackingChange("roleDescription", event.target.value)}
-                        placeholder="Summarize the responsibilities and scope that matter for this application."
-                      />
-                    </label>
-                    <PreparedJobBriefListField
-                      label="Company / product context"
-                      field="companyContext"
-                      value={brief.companyContext}
-                      placeholder="What the company or product does and why this role exists."
-                      onChange={onJobBriefChange}
-                      className="prepare-role-summary"
-                      instruction={null}
+                  <label className="field prepare-role-context">
+                    <span>Role context</span>
+                    <textarea
+                      className="textarea"
+                      value={preparedJobRoleContext(tracking, brief)}
+                      onChange={(event) => onJobTrackingChange("roleDescription", event.target.value)}
+                      placeholder="What the role covers and why it matters."
                     />
-                    <PreparedJobBriefListField
-                      label="Core responsibilities"
-                      field="responsibilities"
-                      value={brief.responsibilities}
-                      placeholder="Build and maintain…"
-                      onChange={onJobBriefChange}
-                    />
-                    <PreparedJobBriefListField
-                      label="Required qualifications"
-                      field="requiredQualifications"
-                      value={brief.requiredQualifications}
-                      placeholder="Required experience, skills, education, or credentials…"
-                      onChange={onJobBriefChange}
-                    />
-                    <PreparedJobBriefListField
-                      label="Preferred qualifications"
-                      field="preferredQualifications"
-                      value={brief.preferredQualifications}
-                      placeholder="Nice-to-have experience or skills…"
-                      onChange={onJobBriefChange}
-                    />
-                    <PreparedJobBriefListField
-                      label="Tech stack / keywords"
-                      field="techKeywords"
-                      value={brief.techKeywords}
-                      placeholder="TypeScript&#10;AWS&#10;PostgreSQL"
-                      onChange={onJobBriefChange}
-                    />
-                    <PreparedJobBriefListField
-                      label="Seniority signals"
-                      field="senioritySignals"
-                      value={brief.senioritySignals}
-                      placeholder="Leadership, ownership, or years-of-experience signals…"
-                      onChange={onJobBriefChange}
-                    />
-                    <PreparedJobBriefListField
-                      label="Domain signals"
-                      field="domainSignals"
-                      value={brief.domainSignals}
-                      placeholder="Fintech&#10;Healthcare&#10;Developer tools"
-                      onChange={onJobBriefChange}
-                    />
-                    <PreparedJobBriefListField
-                      label="Benefits"
-                      field="benefits"
-                      value={brief.benefits}
-                      placeholder="Health coverage&#10;401(k) match&#10;Paid time off"
-                      onChange={onJobBriefChange}
-                      className="prepare-brief-list-field--wide"
-                    />
-                  </div>
+                  </label>
+
+                  <PreparedJobBriefSections sections={BRIEF_SECTIONS} brief={brief} onChange={onJobBriefChange} />
                 </fieldset>
 
                 <div className="prepare-gaps">
@@ -620,18 +697,13 @@ export function PrepareTab({
                         ))}
                       </ul>
                     ) : (
-                      <p>No extracted fields need review.</p>
+                      <p>None.</p>
                     )}
                   </div>
                   <div>
                     <p className="prepare-page__eyebrow">
-                      {reviewGapsProvenance === "saved" ? "Saved candidate gaps" : "Candidate gaps"}
+                      {reviewGapsProvenance === "saved" ? "Candidate gaps · historical" : "Candidate gaps"}
                     </p>
-                    {reviewGapsProvenance === "saved" ? (
-                      <p>
-                        Historical Apply snapshot. Rerun Review after changing or replacing the resume.
-                      </p>
-                    ) : null}
                     {reviewGaps.length ? (
                       <ul>
                         {reviewGaps.map((gap, index) => (
@@ -645,164 +717,131 @@ export function PrepareTab({
                     ) : reviewGapsProvenance === "current" ? (
                       <p>No candidate gaps identified by the current Review.</p>
                     ) : reviewGapsProvenance === "saved" ? (
-                      <p>No candidate gaps were recorded in the saved Apply review.</p>
+                      <p>None recorded in the saved Apply review.</p>
                     ) : (
-                      <p>Run resume Review to compare candidate evidence with the job.</p>
+                      <p>Run resume Review to compare your evidence with the job.</p>
                     )}
                   </div>
                 </div>
               </>
             ) : (
-              <p className="prepare-sheet__empty">
-                Role details, responsibilities, qualifications, skills, benefits, and detected gaps appear here after
-                preparation.
+              <p className="prepare-panel__empty">
+                Role facts, responsibilities, qualifications, keywords, benefits, and gaps appear here once a posting is
+                prepared.
               </p>
             )}
           </section>
 
-          <PreparedMaterialCard
-            id="prepare-resume"
-            icon={<FileText size={17} />}
-            title="Resume"
-            included={includeResume}
-            onIncludedChange={onIncludeResumeChange}
-            description={tailoringHeadline}
-            variantLabel="Resume variant"
-            variantValue={baseResumeName}
-            variantOptions={baseResumeOptions}
-            emptyVariantLabel={resumeReady ? "Current application draft" : "No saved resume variants"}
-            variantDisabled={
-              isSelectingResume || isPolishing || isRankingResumeVariants || baseResumeOptions.length === 0
-            }
-            onVariantChange={(fileName) => void onSelectBaseResume(fileName)}
-            variantStatus={
-              resumeReady
-                ? `Using ${activeBaseResumeLabel || "the resume in the editor"}.`
-                : "Choose or create a resume before including it."
-            }
-            status={recommendationStatus}
-            actions={
-              <>
-                <button
-                  className="secondary-button"
-                  type="button"
-                  onClick={() => void onTailorPreparedResume()}
-                  disabled={!canStartTailor}
-                  aria-describedby={!canStartTailor && tailorHint ? "prepare-resume-tailor-hint" : undefined}
-                >
-                  <Sparkles size={14} aria-hidden="true" />
-                  {autoTailorPending ? "Use and tailor this resume" : "Tailor prepared resume"}
-                </button>
-                {tailorDone || reviewDone ? (
-                  <button className="ghost-button" type="button" onClick={onReviewResume}>
-                    Review resume
-                    <ArrowRight size={13} aria-hidden="true" />
-                  </button>
-                ) : null}
-              </>
-            }
-          >
-            {autoTailorPending && autoTailorNeedsVariantChoice ? (
-              <div className="prepare-safety-note">
-                <ShieldCheck size={16} aria-hidden="true" />
-                <div>
-                  <strong>Confirm the resume choice.</strong>
-                  <p>The comparison did not produce a safe automatic selection.</p>
-                </div>
-              </div>
-            ) : null}
-            {autoTailorPending && resumeDirty ? (
-              <div className="prepare-safety-note">
-                <ShieldCheck size={16} aria-hidden="true" />
-                <div>
-                  <strong>Your unsaved resume is protected.</strong>
-                  <p>Automatic tailoring is paused. Review the current draft, then start tailoring explicitly.</p>
-                </div>
-              </div>
-            ) : null}
-            {!canStartTailor && tailorHint ? (
-              <p className="prepare-action-hint" id="prepare-resume-tailor-hint">
-                {tailorHint}
-              </p>
-            ) : null}
-            {polishStatus ? (
-              <p className="prepare-inline-status" role="status">
-                {polishStatus}
-              </p>
-            ) : null}
-          </PreparedMaterialCard>
-
-          <PreparedMaterialCard
-            id="prepare-cover"
-            icon={<Mail size={17} />}
-            title="Cover letter"
-            included={includeCoverLetter}
-            onIncludedChange={onIncludeCoverLetterChange}
-            description={
-              isTailoringCoverLetter
-                ? "Tailoring the selected cover letter…"
-                : coverLetterReady
-                  ? "Cover letter ready"
-                  : "Cover letter needs a completed draft"
-            }
-            variantLabel="Cover-letter variant"
-            variantValue={coverLetterFileName}
-            variantOptions={coverLetterOptions}
-            emptyVariantLabel={coverLetterReady ? "Current application draft" : "No saved cover-letter variants"}
-            variantDisabled={isSelectingCoverLetter || isTailoringCoverLetter || coverLetterOptions.length === 0}
-            onVariantChange={(fileName) => void onSelectCoverLetter(fileName)}
-            variantStatus={
-              coverLetterReady
-                ? `Using ${activeCoverLetterLabel || "the cover letter in the editor"}.`
-                : "Choose or draft a cover letter before including it."
-            }
-            actions={
-              <>
-                <button
-                  className="secondary-button"
-                  type="button"
-                  onClick={() => void onTailorCoverLetter()}
-                  disabled={!canTailorCoverLetter}
-                  aria-describedby={
-                    !canTailorCoverLetter && coverLetterTailorHint ? "prepare-cover-tailor-hint" : undefined
-                  }
-                >
-                  {isTailoringCoverLetter ? (
-                    <LoaderCircle className="spin" size={14} aria-hidden="true" />
-                  ) : (
-                    <Sparkles size={14} aria-hidden="true" />
-                  )}
-                  {isTailoringCoverLetter ? "Tailoring…" : "Tailor prepared cover letter"}
-                </button>
-                <button className="ghost-button" type="button" onClick={onOpenCoverLetter}>
-                  Review cover letter
-                  <ArrowRight size={13} aria-hidden="true" />
-                </button>
-              </>
-            }
-          >
-            {!canTailorCoverLetter && coverLetterTailorHint ? (
-              <p className="prepare-action-hint" id="prepare-cover-tailor-hint">
-                {coverLetterTailorHint}
-              </p>
-            ) : null}
-            {coverLetterStatus ? (
-              <p className="prepare-inline-status" role="status">
-                {coverLetterStatus}
-              </p>
-            ) : null}
-          </PreparedMaterialCard>
+          {recommendationLiveRegion}
         </div>
 
-        <PrepareReadinessRail
-          progressRunning={progressRunning}
-          preparationHeadline={preparationHeadline}
-          preparationDetail={preparationDetail}
-          linkedApplication={linkedApplication}
-          readiness={readiness}
-          isApplying={isApplying}
-          onApply={onApply}
-        />
+        {jobPrepared ? (
+          <PrepareApplicationRail
+            activity={activity}
+            fitAssessment={fitAssessment}
+            linkedApplication={linkedApplication}
+            readiness={readiness}
+            isApplying={isApplying}
+            onApply={onApply}
+          >
+            <PreparedMaterialCard
+              id="prepare-resume"
+              title="Resume"
+              state={resumeState}
+              included={includeResume}
+              onIncludedChange={onIncludeResumeChange}
+              variantLabel="Resume variant"
+              variantValue={baseResumeName}
+              variantOptions={baseResumeOptions}
+              emptyVariantLabel={resumeReady ? "Current draft" : "No saved variants"}
+              variantDisabled={
+                isSelectingResume || isPolishing || isRankingResumeVariants || baseResumeOptions.length === 0
+              }
+              onVariantChange={(fileName) => void onSelectBaseResume(fileName)}
+              actions={
+                <>
+                  <button
+                    className="secondary-button is-compact"
+                    type="button"
+                    onClick={() => void onTailorPreparedResume()}
+                    disabled={!canStartTailor}
+                    aria-describedby={!canStartTailor && tailorHint ? "prepare-resume-note" : undefined}
+                  >
+                    {isPolishing ? <LoaderCircle className="spin" size={13} aria-hidden="true" /> : null}
+                    Tailor
+                  </button>
+                  <button className="ghost-button is-compact" type="button" onClick={onReviewResume}>
+                    {tailorDone || reviewDone ? "Review" : "Open"}
+                    <ArrowRight size={12} aria-hidden="true" />
+                  </button>
+                </>
+              }
+            >
+              {resumeNote ? (
+                <p className="prepare-note" id="prepare-resume-note" role="status">
+                  {resumeNote}
+                </p>
+              ) : (
+                <PreparedVariantRecommendation
+                  isRanking={isRankingResumeVariants}
+                  recommendation={resumeVariantRecommendation}
+                  selectedFileName={baseResumeName}
+                  onUse={(fileName) => void onSelectBaseResume(fileName)}
+                />
+              )}
+            </PreparedMaterialCard>
+
+            <PreparedMaterialCard
+              id="prepare-cover"
+              title="Cover letter"
+              state={coverState}
+              included={includeCoverLetter}
+              onIncludedChange={onIncludeCoverLetterChange}
+              variantLabel="Cover-letter variant"
+              variantValue={coverLetterFileName}
+              variantOptions={coverLetterOptions}
+              emptyVariantLabel={coverLetterReady ? "Current draft" : "No saved variants"}
+              variantDisabled={
+                isSelectingCoverLetter ||
+                isTailoringCoverLetter ||
+                isRankingCoverLetterVariants ||
+                coverLetterOptions.length === 0
+              }
+              onVariantChange={(fileName) => void onSelectCoverLetter(fileName)}
+              actions={
+                <>
+                  <button
+                    className="secondary-button is-compact"
+                    type="button"
+                    onClick={() => void onTailorCoverLetter()}
+                    disabled={!canTailorCoverLetter}
+                    aria-describedby={!canTailorCoverLetter && coverLetterTailorHint ? "prepare-cover-note" : undefined}
+                  >
+                    {isTailoringCoverLetter ? <LoaderCircle className="spin" size={13} aria-hidden="true" /> : null}
+                    {isTailoringCoverLetter ? "Tailoring…" : "Tailor"}
+                  </button>
+                  <button className="ghost-button is-compact" type="button" onClick={onOpenCoverLetter}>
+                    Open
+                    <ArrowRight size={12} aria-hidden="true" />
+                  </button>
+                </>
+              }
+            >
+              {coverNote ? (
+                <p className="prepare-note" id="prepare-cover-note" role="status">
+                  {coverNote}
+                </p>
+              ) : (
+                <PreparedVariantRecommendation
+                  isRanking={isRankingCoverLetterVariants}
+                  recommendation={coverLetterVariantRecommendation}
+                  selectedFileName={coverLetterFileName}
+                  onUse={(fileName) => void onSelectCoverLetter(fileName)}
+                />
+              )}
+            </PreparedMaterialCard>
+          </PrepareApplicationRail>
+        ) : null}
       </div>
     </section>
   );

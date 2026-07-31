@@ -110,9 +110,13 @@ or workspace state, keep it here and expose the smallest host seam instead.
 - Prepare is the sole job-intake surface. Extension progress/delivery must
   select it before updating visible intake state; URL and pasted-text fallbacks
   remain there, never in masthead chrome or a second menu. Keep its complete
-  brief editable: tracked job facts, company context, responsibilities,
+  brief editable: tracked job facts through one role context, responsibilities,
   required and preferred qualifications, technical keywords, seniority and
   domain signals, benefits, plus extraction and candidate-review gaps.
+- Prepare is state-shaped: before preparation, one centered Source panel exposes
+  one URL-or-paste method at a time and no empty downstream scaffolds; afterward,
+  the editable brief leads beside one Application rail containing both material
+  choices, readiness, the saved-application summary, and Apply.
 - Resume and Cover Letter use one material-card contract on Prepare: Include
   toggle, variant selector, readiness, and document-specific actions. Resume
   defaults included and Cover Letter defaults excluded; do not label either
@@ -122,10 +126,12 @@ or workspace state, keep it here and expose the smallest host seam instead.
   while allowing either or both to be excluded. Re-Apply must not delete or
   replace a previously saved artifact whose card is excluded.
 - Automatic extension tailoring stays on Prepare and never replaces a dirty
-  editor automatically. Rank actual saved resume contents against the prepared
-  job; auto-select only a clear high-confidence winner while the editor is
-  clean, otherwise recommend or pause. Do not add persisted variant metadata
-  or another schema for this choice.
+  editor automatically. Rank actual saved resume and cover-letter contents
+  against weighted prepared-job sections, and auto-select a meaningful unique
+  winner for either document while its editor is clean and not application-owned.
+  A tie or incomplete comparison returns no recommendation and keeps the current
+  selection. Do not add persisted variant metadata or another schema for either
+  choice.
 - Reuse `AiWorkflowProgress` for ordered/retryable task stages and existing
   dialog/menu primitives for repeated interactions. Do not build parallel
   progress cards, modal shells, provider selectors, or status vocabularies.
