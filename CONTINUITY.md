@@ -5,6 +5,33 @@ bounded; app-only operational detail belongs in the affected app documentation.
 
 ## 2026-07-31
 
+- [USER+CODE+TOOL] CI ran the engine suite three times per push — once in
+  `Document workflow CI` and again inside each deploy workflow's verify job.
+  Only `generate_font_assets.py` reaches the network, and it refetches every
+  pinned upstream source on a cold runner with a 60s socket timeout and no
+  retry, so each duplicate run was an independent chance to fail. Observed on
+  `22b1fd1`: the engine job succeeded while `RoleFit verify` timed out against
+  the same sources minutes apart, and a re-run of the identical commit passed
+  with no code change. `Document workflow CI` is now the sole per-push owner of
+  the package suites; the deploy workflows build and ship only their own app
+  and no longer install Python at all. An app build still compiles both shared
+  packages from source, so type and integration breakage still fails a deploy —
+  but a deploy passing alone no longer proves the package suites passed, so
+  `Document workflow CI` is the gate that must stay green on `main`.
+- [CODE] Every job that runs `generate_font_assets.py` now caches
+  `/tmp/typeset-fonts`, keyed on that script plus `requirements-fonts.txt`,
+  which name the immutable pinned commits. Both release workflows carry the
+  same cache so a signed or preview release cannot fail on a slow mirror.
+  Retry was deliberately not added: caching removes the download on warm
+  runners rather than papering over a failure, and it is worth seeing whether
+  cold-runner misses still flake before adding backoff.
+- [CODE] Both deploy workflows exclude `**/*.md` and `packages/*/scripts/**`
+  from their triggers. `22b1fd1` changed only a Python wrapper, a package
+  script field, and docs, yet republished the RoleFit site and swapped the
+  Typeset container; neither path can change a built bundle. The existing
+  warning still applies: a skipped workflow never reports, so a deploy verify
+  job must not become a required status check.
+
 - [USER+CODE+TOOL] `npm run check` could not pass on Windows for
   `packages/engine`, for two independent reasons now fixed. The repository had
   no `.gitattributes`, so a Windows checkout under `core.autocrlf=true`

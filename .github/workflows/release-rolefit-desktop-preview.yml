@@ -45,6 +45,17 @@ jobs:
       - name: Install the locked workspace
         run: npm ci
 
+      # A preview release must not fail on a slow upstream mirror; the pinned
+      # sources are immutable, so the cache key tracks only the pinning scripts.
+      - name: Cache pinned upstream font sources
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: /tmp/typeset-fonts
+          key: >-
+            typeset-font-sources-${{ runner.os }}-${{
+              hashFiles('packages/engine/scripts/generate_font_assets.py',
+                        'packages/engine/scripts/requirements-fonts.txt') }}
+
       - name: Install deterministic font tooling
         run: |
           python3 -m venv .font-tools
