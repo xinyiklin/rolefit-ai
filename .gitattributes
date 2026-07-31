@@ -1,0 +1,18 @@
+# Normalize every text file to LF in the working tree on all platforms.
+#
+# The engine's font generators emit LF and verify committed assets by exact
+# byte comparison, so a CRLF checkout (Windows `core.autocrlf=true`) makes
+# `npm run fonts:check` report correct assets as stale. Every committed text
+# blob in this repository is already LF; `text=auto` still lets Git detect and
+# leave binaries (fonts, icons, screenshots) untouched.
+* text=auto eol=lf
+
+# Binary assets: never convert, never diff as text.
+*.ttf   binary
+*.otf   binary
+*.woff  binary
+*.woff2 binary
+*.png   binary
+*.ico   binary
+*.icns  binary
+*.pdf   binary
