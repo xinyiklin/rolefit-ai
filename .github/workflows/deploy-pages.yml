@@ -13,6 +13,10 @@ on:
       - "tsconfig.base.json"
       - ".github/workflows/deploy-pages.yml"
       - ".github/workflows/release-rolefit-desktop.yml"
+      # Republishing the site for a change that cannot reach it is wasted work.
+      # Later patterns win, so these must stay last.
+      - "!**/*.md"
+      - "!packages/*/scripts/**"
   push:
     branches: [main]
     paths:
@@ -23,6 +27,10 @@ on:
       - "tsconfig.base.json"
       - ".github/workflows/deploy-pages.yml"
       - ".github/workflows/release-rolefit-desktop.yml"
+      # Republishing the site for a change that cannot reach it is wasted work.
+      # Later patterns win, so these must stay last.
+      - "!**/*.md"
+      - "!packages/*/scripts/**"
   workflow_dispatch:
 
 permissions: {}
@@ -53,19 +61,11 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Install deterministic font tooling
-        run: |
-          python3 -m venv .font-tools
-          .font-tools/bin/pip install --requirement packages/engine/scripts/requirements-fonts.txt
-          echo "$GITHUB_WORKSPACE/.font-tools/bin" >> "$GITHUB_PATH"
-          echo "SSL_CERT_FILE=$("$GITHUB_WORKSPACE/.font-tools/bin/python" -m certifi)" >> "$GITHUB_ENV"
-
-      - name: Check shared engine
-        run: npm run check --workspace packages/engine
-
-      - name: Check shared editor
-        run: npm run check --workspace packages/editor
-
+      # Package correctness belongs to Document workflow CI, which runs on the
+      # same triggers. Re-running the engine suite here only duplicated its
+      # upstream font downloads, and each extra download is an independent
+      # chance to time out. The RoleFit build below still compiles both shared
+      # packages from source, so type and integration breakage is still caught.
       - name: Check RoleFit and build the isolated product site
         run: npm run check --workspace apps/role-fit-ai
 

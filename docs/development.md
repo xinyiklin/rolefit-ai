@@ -143,6 +143,33 @@ signed-distribution check.
 Package changes are not complete after one consumer builds. Verify every host
 whose public package contract changed.
 
+### Which workflow owns which check
+
+`Document workflow CI` (`document-workflows.yml`) is the correctness gate and
+the sole per-push owner of the package suites: it runs the dependency
+contracts, the six-platform TypeScript matrix, the engine codec/layout/PDF/font
+suite, the shared editor, both app checks, RoleFit server transactions, and the
+Chromium editor contracts.
+
+The two deploy workflows build and ship only their own app. They deliberately
+do **not** re-run the package suites: those run on the same triggers in
+Document workflow CI, and each duplicate run repeated the engine's upstream
+font downloads — an independent chance to fail on a socket timeout. An app
+build still compiles both shared packages from source, so type and integration
+breakage still fails the deploy. Treat `Document workflow CI` as the gate that
+must stay green on `main`; a deploy workflow passing alone does not prove the
+package suites passed.
+
+Only `generate_font_assets.py` reaches the network. Every job that runs it
+caches `/tmp/typeset-fonts`, keyed on the scripts that name the pinned upstream
+commits, so a warm runner performs no downloads at all.
+
+Both deploy workflows exclude `**/*.md` and `packages/*/scripts/**` from their
+triggers: those paths cannot change a built bundle, and redeploying for them
+costs a Pages publish or a container swap. Path exclusions mean a workflow can
+be skipped entirely, so never mark a deploy `verify` job a required status
+check — a PR that skips it would never report and would block forever.
+
 ## TypeScript compiler contract
 
 The browser-facing root, engine, editor, RoleFit, and Typeset configs keep

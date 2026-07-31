@@ -13,6 +13,10 @@ on:
       - "package-lock.json"
       - "tsconfig.base.json"
       - ".github/workflows/deploy-typeset.yml"
+      # Redeploying costs a container swap, so exclude paths that cannot change
+      # the built bundle. Later patterns win, so these must stay last.
+      - "!**/*.md"
+      - "!packages/*/scripts/**"
   push:
     branches: [main]
     paths:
@@ -22,6 +26,10 @@ on:
       - "package-lock.json"
       - "tsconfig.base.json"
       - ".github/workflows/deploy-typeset.yml"
+      # Redeploying costs a container swap, so exclude paths that cannot change
+      # the built bundle. Later patterns win, so these must stay last.
+      - "!**/*.md"
+      - "!packages/*/scripts/**"
   workflow_dispatch:
 
 permissions:
@@ -50,16 +58,12 @@ jobs:
 
       - run: npm ci
 
-      - run: |
-          python3 -m venv .font-tools
-          .font-tools/bin/pip install --requirement packages/engine/scripts/requirements-fonts.txt
-          echo "$GITHUB_WORKSPACE/.font-tools/bin" >> "$GITHUB_PATH"
-          echo "SSL_CERT_FILE=$("$GITHUB_WORKSPACE/.font-tools/bin/python" -m certifi)" >> "$GITHUB_ENV"
-
-      # Verify only this app's slice of the workspace: the app build plus both
-      # packages' typechecks and evals (codec, editor, PDF font parity).
-      - run: npm run check --workspace packages/engine
-      - run: npm run check --workspace packages/editor
+      # Build what this workflow deploys. Package correctness (codec, editor,
+      # PDF font parity) belongs to Document workflow CI, which runs on the
+      # same triggers; duplicating it here only repeated the engine's upstream
+      # font downloads, and each extra download is an independent chance to
+      # time out. The app build still compiles both packages from source, so
+      # type and integration breakage still fails this job.
       - run: npm run check --workspace apps/typeset
 
   container:

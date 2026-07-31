@@ -117,6 +117,19 @@ jobs:
           node-version: 24.18.0
           package-manager-cache: false
       - run: npm ci
+      # generate_font_assets.py --check refetches every pinned upstream source
+      # on a cold runner, so a slow CTAN or raw.githubusercontent response fails
+      # the job on a 60s socket timeout. Every source is pinned to an immutable
+      # commit or release, so the cache key only has to track the scripts that
+      # name those pins.
+      - name: Cache pinned upstream font sources
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: /tmp/typeset-fonts
+          key: >-
+            typeset-font-sources-${{ runner.os }}-${{
+              hashFiles('packages/engine/scripts/generate_font_assets.py',
+                        'packages/engine/scripts/requirements-fonts.txt') }}
       - run: |
           python3 -m venv .font-tools
           .font-tools/bin/pip install --requirement packages/engine/scripts/requirements-fonts.txt
