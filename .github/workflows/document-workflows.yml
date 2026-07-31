@@ -57,6 +57,10 @@ jobs:
           package-manager-cache: false
       - run: npm ci
       - run: npm run deps:check
+      # `npm ci` proves the manifests and lockfile agree; it does not prove the
+      # resolved tree is internally valid or free of production advisories.
+      - run: npm run deps:tree
+      - run: npm run deps:audit:production
 
   typescript-native:
     name: TypeScript 7 native (${{ matrix.label }})
