@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { builtinModules, createRequire } from "node:module";
-import { readFileSync, readdirSync } from "node:fs";
+import { readFileSync, readdirSync, statSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -34,6 +34,32 @@ const expectedInstallScriptPolicy = {
   "macos-alias@0.2.12": true,
 };
 const workspaceManifests = discoverWorkspaceManifests();
+
+// Hoisted installs let a file import a package no manifest declares, so the
+// scan resolves every specifier against its nearest owning package.json rather
+// than trusting that resolution happened to succeed at runtime.
+const scannedRoots = ["scripts", "apps", "packages"];
+const scannedExtensions = /\.(?:[cm]?js|[cm]?ts|tsx)$/;
+const skippedDirectories = new Set([
+  "node_modules",
+  "dist",
+  "dist-electron",
+  "dist-landing",
+  "build",
+  "out",
+  "coverage",
+  "fonts",
+  "workspace",
+  ".git",
+  ".vite",
+]);
+// Root owns the shared compiler/bundler toolchain, so workspace config files
+// import these without redeclaring them.
+const rootOwnedTooling = new Set(["typescript", "vite", "@vitejs/plugin-react"]);
+// Source scanning is textual, so escaped import statements inside regex
+// literals match too. Only report specifiers that are legal package names.
+const packageNamePattern =
+  /^(?:@[a-z0-9-~][a-z0-9-._~]*\/)?[a-z0-9-~][a-z0-9-._~]*$/i;
 
 const nodeVersion = process.versions.node;
 const npmVersion = detectNpmVersion();
@@ -192,10 +218,52 @@ check(
   `RoleFit must resolve Node 24 types; found ${nodeTypesVersion ?? "(missing)"}.`,
 );
 
-const undeclaredRootImports = findUndeclaredRootScriptImports();
+// react-pdf pins pdfjs-dist exactly; a drifting worker version fails at runtime
+// in the PDF preview rather than at build time, so pin and cross-check it.
+const reactPdfRequiredPdfjs = lockfileInstallations("react-pdf")
+  .map(({ path }) => packageLock.packages[path]?.dependencies?.["pdfjs-dist"])
+  .find(Boolean);
+const roleFitPdfjs = resolvedVersion("pdfjs-dist", "apps/role-fit-ai");
 check(
-  undeclaredRootImports.length === 0,
-  `Root scripts import undeclared packages: ${formatList(undeclaredRootImports)}.`,
+  Boolean(roleFitPackage.dependencies?.["pdfjs-dist"]),
+  "RoleFit must declare pdfjs-dist directly; it resolves the PDF.js worker by subpath.",
+);
+check(
+  roleFitPdfjs !== undefined && roleFitPdfjs === reactPdfRequiredPdfjs,
+  `RoleFit pdfjs-dist ${roleFitPdfjs ?? "(missing)"} must match the version react-pdf`
+    + ` requires (${reactPdfRequiredPdfjs ?? "(unknown)"}).`,
+);
+checkSingleMajor(lockfileInstallations("pdfjs-dist"), "pdfjs-dist");
+
+check(
+  Boolean(roleFitPackage.devDependencies?.["@electron/asar"]),
+  "RoleFit must declare @electron/asar directly; the packaged smoke test imports it.",
+);
+checkSingleMajor(lockfileInstallations("@electron/asar"), "@electron/asar");
+
+const undeclaredImports = findUndeclaredImports();
+check(
+  undeclaredImports.length === 0,
+  `Source files import undeclared packages: ${formatList(undeclaredImports)}.`,
+);
+
+// Several packages (lucide-react, react, pdf-lib) are declared by more than one
+// manifest and stay single-copy only because those specifiers agree. Drift
+// silently bundles two copies rather than failing, so compare them directly.
+const specifierDisagreements = findCrossManifestSpecifierDisagreements();
+check(
+  specifierDisagreements.length === 0,
+  `Packages declared by several manifests must share one specifier:`
+    + ` ${formatList(specifierDisagreements)}.`,
+);
+
+// The loopback server must not pull React in through the engine; only
+// typeset/render/dom.tsx is an intentional React boundary.
+const reactBearingServerImports = findReactBearingServerImports();
+check(
+  reactBearingServerImports.length === 0,
+  `RoleFit server modules must import React-free engine subpaths:`
+    + ` ${formatList(reactBearingServerImports)}.`,
 );
 
 for (const notice of notices) {
@@ -277,40 +345,210 @@ function resolvedVersion(packageName, workspacePath) {
   }
 }
 
-function findUndeclaredRootScriptImports() {
-  const declared = new Set([
-    ...Object.keys(rootPackage.dependencies ?? {}),
-    ...Object.keys(rootPackage.devDependencies ?? {}),
-    ...workspaceManifests.map(({ manifest }) => manifest.name).filter(Boolean),
-  ]);
+function findUndeclaredImports() {
   const builtins = new Set([
     ...builtinModules,
     ...builtinModules.map((moduleName) => `node:${moduleName}`),
   ]);
-  const imports = new Set();
-  const scriptsRoot = join(repositoryRoot, "scripts");
+  const workspaceNames = new Set(
+    workspaceManifests.map(({ manifest }) => manifest.name).filter(Boolean),
+  );
+  const ownerCache = new Map();
+  const findings = new Set();
 
-  for (const entry of readdirSync(scriptsRoot, { withFileTypes: true })) {
-    if (!entry.isFile() || !/\.(?:c|m)?js$/.test(entry.name)) continue;
-    const sourcePath = join(scriptsRoot, entry.name);
-    const source = readFileSync(sourcePath, "utf8");
-    for (const specifier of importedSpecifiers(source)) {
-      if (
-        specifier.startsWith(".")
-        || specifier.startsWith("/")
-        || specifier.startsWith("#")
-        || builtins.has(specifier)
-      ) {
-        continue;
-      }
-      const dependency = dependencyName(specifier);
-      if (!declared.has(dependency)) {
-        imports.add(`${dependency} (${relative(repositoryRoot, sourcePath)})`);
+  for (const scannedRoot of scannedRoots) {
+    for (const sourcePath of walkSourceFiles(join(repositoryRoot, scannedRoot))) {
+      const source = readFileSync(sourcePath, "utf8");
+      const specifiers = importedSpecifiers(source);
+      if (specifiers.length === 0) continue;
+
+      const owner = nearestOwner(dirname(sourcePath), ownerCache);
+      for (const specifier of specifiers) {
+        if (
+          specifier.startsWith(".")
+          || specifier.startsWith("/")
+          || specifier.startsWith("#")
+          || builtins.has(specifier)
+        ) {
+          continue;
+        }
+        const dependency = dependencyName(specifier);
+        if (
+          !packageNamePattern.test(dependency)
+          || workspaceNames.has(dependency)
+          || rootOwnedTooling.has(dependency)
+          || dependency.startsWith("@types/")
+          || ownerDeclares(owner, dependency)
+        ) {
+          continue;
+        }
+        findings.add(
+          `${dependency} (${relative(repositoryRoot, sourcePath).replaceAll("\\", "/")}`
+            + ` -> ${owner.path})`,
+        );
       }
     }
   }
 
-  return [...imports].sort();
+  return [...findings].sort();
+}
+
+function findCrossManifestSpecifierDisagreements() {
+  const specifiers = new Map();
+  const everyManifest = [{ path: "package.json", manifest: rootPackage }, ...workspaceManifests];
+  for (const { path, manifest } of everyManifest) {
+    for (const field of ["dependencies", "devDependencies"]) {
+      for (const [name, specifier] of Object.entries(manifest[field] ?? {})) {
+        // "*" is the workspace-link specifier, not a version claim.
+        if (specifier === "*") continue;
+        if (!specifiers.has(name)) specifiers.set(name, new Map());
+        specifiers.get(name).set(path, specifier);
+      }
+    }
+  }
+
+  const findings = [];
+  for (const [name, byManifest] of specifiers) {
+    if (new Set(byManifest.values()).size <= 1) continue;
+    const detail = [...byManifest].map(([path, specifier]) => `${path}=${specifier}`).join(", ");
+    findings.push(`${name} (${detail})`);
+  }
+  return findings.sort();
+}
+
+function findReactBearingServerImports() {
+  const enginePrefix = "@typeset/engine/";
+  const findings = new Set();
+  const reactReach = new Map();
+
+  for (const serverRoot of ["apps/role-fit-ai/server", "apps/role-fit-ai/server.ts"]) {
+    for (const sourcePath of walkSourceFiles(join(repositoryRoot, serverRoot))) {
+      const source = readFileSync(sourcePath, "utf8");
+      for (const specifier of importedSpecifiers(source)) {
+        if (!specifier.startsWith(enginePrefix)) continue;
+        const target = engineSourcePath(specifier.slice(enginePrefix.length));
+        if (!target || !reachesReact(target, reactReach, new Set())) continue;
+        findings.add(
+          `${relative(repositoryRoot, sourcePath).replaceAll("\\", "/")} -> ${specifier}`,
+        );
+      }
+    }
+  }
+  return [...findings].sort();
+}
+
+function engineSourcePath(subpath) {
+  // The engine exports map is `./fonts/* -> ./fonts/*` and `./* -> ./src/*`.
+  if (subpath.startsWith("fonts/")) return undefined;
+  return join(repositoryRoot, "packages/engine/src", subpath);
+}
+
+function reachesReact(sourcePath, cache, visiting) {
+  const key = sourcePath;
+  if (cache.has(key)) return cache.get(key);
+  if (visiting.has(key)) return false;
+  visiting.add(key);
+
+  let source;
+  try {
+    source = readFileSync(key, "utf8");
+  } catch {
+    cache.set(key, false);
+    return false;
+  }
+
+  let reaches = false;
+  for (const specifier of importedSpecifiers(source)) {
+    const dependency = dependencyName(specifier);
+    if (dependency === "react" || dependency === "react-dom") {
+      reaches = true;
+      break;
+    }
+    if (!specifier.startsWith(".")) continue;
+    const resolved = resolveRelativeSource(dirname(key), specifier);
+    if (resolved && reachesReact(resolved, cache, visiting)) {
+      reaches = true;
+      break;
+    }
+  }
+
+  visiting.delete(key);
+  cache.set(key, reaches);
+  return reaches;
+}
+
+function resolveRelativeSource(fromDirectory, specifier) {
+  const base = join(fromDirectory, specifier);
+  for (const candidate of [base, `${base}.ts`, `${base}.tsx`, join(base, "index.ts")]) {
+    try {
+      readFileSync(candidate, "utf8");
+      return candidate;
+    } catch {
+      // Try the next extension.
+    }
+  }
+  return undefined;
+}
+
+function* walkSourceFiles(directory) {
+  try {
+    if (statSync(directory).isFile()) {
+      if (scannedExtensions.test(directory)) yield directory;
+      return;
+    }
+  } catch {
+    return;
+  }
+  let entries;
+  try {
+    entries = readdirSync(directory, { withFileTypes: true });
+  } catch {
+    return;
+  }
+  for (const entry of entries) {
+    if (entry.name.startsWith(".") && entry.name !== ".github") continue;
+    const entryPath = join(directory, entry.name);
+    if (entry.isDirectory()) {
+      if (skippedDirectories.has(entry.name)) continue;
+      yield* walkSourceFiles(entryPath);
+    } else if (entry.isFile() && scannedExtensions.test(entry.name)) {
+      yield entryPath;
+    }
+  }
+}
+
+function nearestOwner(startDirectory, cache) {
+  if (cache.has(startDirectory)) return cache.get(startDirectory);
+  let directory = startDirectory;
+  while (true) {
+    const candidate = join(directory, "package.json");
+    try {
+      const manifest = JSON.parse(readFileSync(candidate, "utf8"));
+      const owner = {
+        path: relative(repositoryRoot, candidate).replaceAll("\\", "/") || "package.json",
+        manifest,
+      };
+      cache.set(startDirectory, owner);
+      return owner;
+    } catch {
+      const parent = dirname(directory);
+      if (parent === directory || !directory.startsWith(repositoryRoot)) {
+        const owner = { path: "package.json", manifest: rootPackage };
+        cache.set(startDirectory, owner);
+        return owner;
+      }
+      directory = parent;
+    }
+  }
+}
+
+function ownerDeclares(owner, packageName) {
+  return [
+    owner.manifest.dependencies,
+    owner.manifest.devDependencies,
+    owner.manifest.optionalDependencies,
+    owner.manifest.peerDependencies,
+  ].some((dependencies) => dependencies?.[packageName]);
 }
 
 function importedSpecifiers(source) {

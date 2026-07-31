@@ -16,11 +16,14 @@ updates:
       prefix: "chore(deps)"
     groups:
       react-runtime:
+        # lucide-react is declared by both apps and the shared editor; a bump
+        # must reach every manifest in one PR or the copies diverge.
         patterns:
           - react
           - react-dom
           - "@types/react"
           - "@types/react-dom"
+          - lucide-react
       vite-toolchain:
         # Minor and major changes require explicit bundler/browser review.
         patterns:
@@ -38,18 +41,27 @@ updates:
       electron-packaging:
         patterns:
           - "@electron-forge/*"
+          - "@electron/asar"
           - "@electron/fuses"
           - electron-squirrel-startup
           - "@types/electron-squirrel-startup"
-          - electron-winstaller
       pdf-and-fonts:
         # Changes require layout, font-parity, preview, and external-render QA.
+        # react-pdf pins pdfjs-dist exactly, so both must move in one PR or the
+        # API and worker versions diverge at runtime.
         patterns:
           - react-pdf
           - pdf-lib
           - pdfjs-dist
           - "@pdf-lib/fontkit"
-          - fontkit
+    # Electron's embedded Node fixes the runtime, so @types/node is downstream
+    # of an Electron upgrade rather than an independent choice. Majors only:
+    # in-line updates such as 24.13 -> 24.14 still arrive. `update-types`
+    # filters version updates only, so security advisories are unaffected.
+    # Revisit whenever Electron moves to a new embedded Node line.
+    ignore:
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: github-actions
     directory: /
@@ -80,6 +92,11 @@ updates:
       typeset-base-images:
         patterns:
           - "*"
+    # The Dockerfile asserts the exact node/npm versions the workspace pins, so
+    # a base-image bump fails the build until the whole toolchain moves.
+    ignore:
+      - dependency-name: "node"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
 
   - package-ecosystem: pip
     directory: /packages/engine/scripts
@@ -95,3 +112,9 @@ updates:
         # Updates require regenerated-asset diffs plus Linux/macOS font checks.
         patterns:
           - "*"
+    # generate_font_assets.py refuses to run on any version but the pinned one,
+    # so every bump fails until the generated assets are deliberately rebuilt
+    # and diffed. No `update-types` filter: patches fail the guard too.
+    ignore:
+      - dependency-name: "fonttools"
+      - dependency-name: "brotli"

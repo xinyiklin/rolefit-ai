@@ -9,10 +9,20 @@ workspace; there is no generic root `dev`, `build`, or `preview` script.
   matching CI and Electron's embedded runtime; direct `.ts` launchers use its
   built-in type stripping.
 - npm 11.16.0, declared by the root `packageManager` field, with the root
-  lockfile. `npm run deps:check` validates both runtime versions and the
-  installed dependency contracts. The root `allowScripts` list pins the six
-  reviewed build/native-package lifecycle scripts, and `.npmrc` rejects any
-  newly introduced install script until it is reviewed.
+  lockfile. The root `devEngines` block fails the runtime and package-manager
+  check before `install`, `ci`, or `run` proceeds, so a mismatched toolchain
+  stops earlier than the dependency gate. `npm run deps:check` validates both
+  runtime versions and the installed dependency contracts, including a
+  recursive scan that resolves every import in `scripts/`, `apps/*`, and
+  `packages/*` against its nearest owning `package.json`. A hoisted install can
+  otherwise satisfy an import no manifest declares. The root `allowScripts`
+  list pins the six reviewed build/native-package lifecycle scripts, and
+  `.npmrc` rejects any newly introduced install script until it is reviewed.
+- Dependency CI also runs `npm run deps:tree` and
+  `npm run deps:audit:production`. `npm ci` proves the manifests and lockfile
+  agree; it does not prove the resolved tree is internally valid or free of
+  production advisories. The development tree carries known no-fix Electron
+  Forge packaging advisories, so only the production audit gates.
 - TypeScript 7.0.2 is the root-owned workspace compiler. Its platform package
   supplies the native `tsc` executable, so dependency CI must execute it on
   every supported runner rather than treating one host's lockfile entries as
@@ -41,7 +51,9 @@ npm run make:rolefit:desktop           # native installer/archive artifacts
 
 npm run check             # every workspace check
 npm test                  # every workspace test/eval script
-npm run deps:check        # runtime and installed dependency contracts
+npm run deps:check        # runtime, dependency contracts, undeclared imports
+npm run deps:tree         # full resolved-tree validity
+npm run deps:audit:production  # production advisories (gates CI)
 npm run types:check       # root probe plus every workspace/server/desktop config
 npm run test:editor:browser  # headless Chrome editor/lifecycle contracts
 ```

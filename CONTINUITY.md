@@ -3,6 +3,40 @@
 Cross-workspace decisions and handoff state. Keep entries factual, dated, and
 bounded; app-only operational detail belongs in the affected app documentation.
 
+## 2026-07-31
+
+- [USER+CODE+TOOL] A dependency-ownership follow-up closes three phantom
+  dependencies that the default hoisted install was satisfying without any
+  manifest declaring them. RoleFit now declares `pdfjs-dist` 5.4.296 directly,
+  superseding the 2026-07-29 record of it as a React-PDF transitive: RoleFit
+  resolves the PDF.js worker by subpath in `PreviewOverlay`, and its PDF
+  round-trip eval imports the legacy build. A contract pins that version to
+  whatever React-PDF requires, because an API/worker split fails at runtime in
+  the preview rather than at build time. RoleFit also declares
+  `@electron/asar` 3.4.1, imported by the packaged smoke test, and the root
+  declares `react`/`react-dom` 19.2.8 for the root-owned browser-contract
+  fixture. The lockfile gained four manifest lines and no packages: every
+  version was already resolved at exactly these numbers.
+- [CODE] `check-dependency-contracts.mjs` now walks `scripts/`, `apps/*`, and
+  `packages/*` recursively across `.js/.mjs/.cjs/.ts/.tsx/.cts/.mts`, resolving
+  each import against its nearest owning `package.json` and allowing only that
+  manifest's dependencies, root-owned tooling, workspace packages, or Node
+  builtins. It previously scanned only immediate `.js/.mjs/.cjs` files under
+  `scripts/`, so it could not see any of the three. Textual scanning matches
+  escaped imports inside regex literals, so candidates must also parse as legal
+  npm package names. Dependency CI adds `deps:tree` and
+  `deps:audit:production`; the root gains a `devEngines` block that fails a
+  mismatched runtime or package manager before install.
+- [TOOL] Verified on this branch: `deps:check` passes and a negative test
+  (declarations removed) reproduces all three findings with file and owner
+  attribution; `deps:tree` exits clean; the production audit is zero while the
+  development tree keeps its 30 known no-fix Forge packaging advisories; engine
+  typecheck and evals including 1,266,912 PDF shaping comparisons, the editor
+  check, and both app checks pass with 57 RoleFit tests green. Engine
+  `fonts:check` was NOT run locally — this Windows host has no Python 3, so CI
+  is the first environment to exercise it. `devEngines` is accepted by npm
+  11.16.0 but its enforcement on a mismatched toolchain is UNCONFIRMED.
+
 ## 2026-07-29
 
 - [USER+CODE+TOOL] The final dependency-modernization tranche SHA-pins every
