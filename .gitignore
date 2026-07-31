@@ -17,6 +17,7 @@ output/playwright/
 tmp/
 .impeccable/
 .font-tools/
+__pycache__/
 
 # Generated: mirrored from packages/engine/fonts by the app sync-fonts script.
 apps/typeset/public/fonts/

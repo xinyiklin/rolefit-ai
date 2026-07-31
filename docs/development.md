@@ -69,6 +69,22 @@ SSL_CERT_FILE="$FONT_CERT_FILE" PATH="$PWD/.font-tools/bin:$PATH" \
   npm run check --workspace packages/engine
 ```
 
+On Windows the virtualenv puts its interpreter in `.font-tools\Scripts\` rather
+than `.font-tools/bin/`, and Python ships no `python3` executable:
+
+```bash
+python -m venv .font-tools
+.font-tools\Scripts\pip install --requirement packages/engine/scripts/requirements-fonts.txt
+npm run check --workspace packages/engine
+```
+
+No `PATH` export is needed on either platform: `fonts:check` runs through
+`packages/engine/scripts/run-python.mjs`, which prefers this virtualenv over any
+ambient interpreter so the generators always see the pinned fontTools and brotli
+versions they assert. The root `.gitattributes` checks every text file out as LF,
+which the generators require — they compare committed assets byte for byte, so a
+CRLF working tree reports correct assets as stale.
+
 Focused workspace commands:
 
 ```bash

@@ -5,6 +5,29 @@ bounded; app-only operational detail belongs in the affected app documentation.
 
 ## 2026-07-31
 
+- [USER+CODE+TOOL] `npm run check` could not pass on Windows for
+  `packages/engine`, for two independent reasons now fixed. The repository had
+  no `.gitattributes`, so a Windows checkout under `core.autocrlf=true`
+  rewrote the generated font assets to CRLF while the generators emit LF;
+  `generate_font_assets.py --check` compares byte for byte and therefore
+  reported correct committed assets as stale. Confirmed by measurement rather
+  than inference: `fonts/Arimo-OFL.txt` held 93 CR in the working tree and 0 in
+  its committed blob, and stripping CR made the working file hash-identical to
+  the blob. Every committed text blob in the repository was already LF, so
+  `* text=auto eol=lf` changes no blob; only Windows working trees renormalize
+  on re-checkout. Second, `fonts:check` invoked `python3`, which Windows
+  installs do not provide — they ship `python.exe`, `pythonw.exe`, and a `py`
+  launcher, and a bare `python` may resolve to the Microsoft Store alias stub.
+  It now runs through `packages/engine/scripts/run-python.mjs`, which prefers
+  the `.font-tools` virtualenv over any ambient interpreter and requires a real
+  "Python 3" banner. `__pycache__/` is now ignored.
+- [TOOL] Verified on Windows 11 with Python 3.12.10 and the pinned
+  fontTools 4.60.2 / brotli 1.2.0 virtualenv: `npm run fonts:check` passes both
+  generators ("Verified 40 generated files against pinned sources", "Verified
+  33 fonts, 11.80 MB total"), and the full `packages/engine` check passes for
+  the first time on this platform. CI behavior is unchanged — it already
+  checked out LF and had `python3` on PATH.
+
 - [USER+CODE+TOOL] A dependency-ownership follow-up closes three phantom
   dependencies that the default hoisted install was satisfying without any
   manifest declaring them. RoleFit now declares `pdfjs-dist` 5.4.296 directly,
