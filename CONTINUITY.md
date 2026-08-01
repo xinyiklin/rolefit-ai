@@ -3,6 +3,24 @@
 Cross-workspace decisions and handoff state. Keep entries factual, dated, and
 bounded; app-only operational detail belongs in the affected app documentation.
 
+## 2026-08-01
+
+- [USER+CODE+TOOL] A focused review of Apply's multi-document download change
+  closed three async-contract gaps and two dialog/name edge cases. The naming
+  dialog now remains mounted and busy until every selected PDF attempt settles,
+  preventing cover-letter edits from changing the style after its application
+  artifact was saved. A pure sequential export helper catches `false` and
+  rejected results per document, so a failed resume export cannot suppress the
+  cover-letter attempt. Manual resume selection owns a separate reactive busy
+  lifetime in addition to its synchronous ref guard, keeping Apply and Tailor
+  blocked when it overlaps an automatic recommendation load. Download-only
+  checkboxes now say so explicitly, retain a 24px label target, and expose a
+  polite in-dialog progress receipt. Dotted kind suffixes round-trip without
+  stacking (`Jane.Doe.Resume` -> `Jane.Doe.Cover.Letter`). The executable PDF
+  sequencing evaluator, 18 naming probes, 345 workflow guards, RoleFit build,
+  and all 64 offline evaluations pass. Browser QA of the changed dialog remains
+  UNCONFIRMED under the flag-first policy.
+
 ## 2026-07-31
 
 - [USER+CODE] **Apply's download prompt now covers every included, exportable

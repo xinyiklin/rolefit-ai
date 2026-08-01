@@ -812,6 +812,11 @@ assert.match(
 );
 assert.match(
   app,
+  /const \[isManuallySelectingResumeVariant, setIsManuallySelectingResumeVariant\] = useState\(false\);/,
+  "resume manual variant selection owns an independent reactive busy lifetime"
+);
+assert.match(
+  app,
   /const coverManualVariantSelectionInFlightRef = useRef\(false\);/,
   "cover-letter manual variant intent is claimed synchronously outside React state"
 );
@@ -821,19 +826,29 @@ const resumeManualSelection = app.slice(resumeManualSelectionStart, resumeManual
 const resumeManualClaim = resumeManualSelection.indexOf(
   "resumeManualVariantSelectionInFlightRef.current = true"
 );
+const resumeManualBusy = resumeManualSelection.indexOf(
+  "setIsManuallySelectingResumeVariant(true)",
+  resumeManualClaim
+);
 const resumeManualFirstAwait = resumeManualSelection.indexOf("await ");
 const resumeManualFinally = resumeManualSelection.indexOf("finally {");
 const resumeManualRelease = resumeManualSelection.indexOf(
   "resumeManualVariantSelectionInFlightRef.current = false",
   resumeManualFinally
 );
+const resumeManualBusyRelease = resumeManualSelection.indexOf(
+  "setIsManuallySelectingResumeVariant(false)",
+  resumeManualRelease
+);
 assert.ok(
   resumeManualSelectionStart >= 0 &&
     resumeManualClaim >= 0 &&
-    resumeManualClaim < resumeManualFirstAwait &&
+    resumeManualBusy > resumeManualClaim &&
+    resumeManualBusy < resumeManualFirstAwait &&
     resumeManualFinally > resumeManualFirstAwait &&
-    resumeManualRelease > resumeManualFinally,
-  "resume manual selection claims before its first await and always releases in finally"
+    resumeManualRelease > resumeManualFinally &&
+    resumeManualBusyRelease > resumeManualRelease,
+  "resume manual selection claims both synchronous and reactive ownership before its first await and releases both in finally"
 );
 assert.match(
   resumeManualSelection,
@@ -1157,18 +1172,18 @@ assert.match(
 );
 assert.match(
   app,
-  /isSelectingResume=\{isSavingBaseResume\}/,
-  "Prepare receives the workspace resume loader's busy state"
+  /isSelectingResume=\{isSavingBaseResume \|\| isManuallySelectingResumeVariant\}/,
+  "Prepare stays selecting until both shared loading and manual selection settle"
 );
 assert.match(
   app,
-  /function handleTailorPreparedResume\(\) \{\s*if \(!jobPrepared \|\| !canPolish \|\| isPolishing \|\| isSavingBaseResume \|\| isRankingResumeVariants\) return;/,
-  "the prepared-resume Tailor handler fails closed while variant ranking is active"
+  /function handleTailorPreparedResume\(\) \{\s*if \([\s\S]{0,240}?isSavingBaseResume \|\|[\s\S]{0,100}?isManuallySelectingResumeVariant \|\|[\s\S]{0,100}?isRankingResumeVariants[\s\S]{0,40}?\) return;/,
+  "the prepared-resume Tailor handler fails closed while manual selection or ranking is active"
 );
 assert.match(
   app,
-  /canTailor=\{canPolish && !isSavingBaseResume && !isRankingResumeVariants\}/,
-  "App disables Prepare resume Tailor during loading or variant ranking"
+  /canTailor=\{[\s\S]{0,180}?canPolish &&[\s\S]{0,80}?!isSavingBaseResume &&[\s\S]{0,80}?!isManuallySelectingResumeVariant &&[\s\S]{0,80}?!isRankingResumeVariants[\s\S]{0,20}?\}/,
+  "App disables Prepare resume Tailor during loading, manual selection, or variant ranking"
 );
 assert.match(
   prepareTab,
@@ -1177,8 +1192,8 @@ assert.match(
 );
 assert.match(
   app,
-  /materialSelection\.resume[\s\S]{0,180}?isSavingBaseResume[\s\S]{0,180}?materialSelection\.coverLetter[\s\S]{0,120}?isSelectingCoverVariant/,
-  "included variant loads block the shared Apply readiness gate"
+  /materialSelection\.resume[\s\S]{0,220}?isSavingBaseResume[\s\S]{0,100}?isManuallySelectingResumeVariant[\s\S]{0,180}?materialSelection\.coverLetter[\s\S]{0,120}?isSelectingCoverVariant/,
+  "included automatic or manual variant loads block the shared Apply readiness gate"
 );
 assert.match(
   app,

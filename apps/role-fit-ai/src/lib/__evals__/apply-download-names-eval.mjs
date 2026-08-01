@@ -22,6 +22,7 @@ function check(name, actual, expected) {
 check("underscore title swaps kind", swapDocumentTitleKind("Xinyi_Lin_Stripe_Resume", "coverLetter"), "Xinyi_Lin_Stripe_Cover_Letter");
 check("spaced name gains spaced kind", swapDocumentTitleKind("Stripe SWE", "coverLetter"), "Stripe SWE Cover Letter");
 check("hyphen-separated kind is replaced", swapDocumentTitleKind("Xinyi Lin - Resume", "coverLetter"), "Xinyi Lin - Cover Letter");
+check("dot-separated kind is replaced", swapDocumentTitleKind("Jane.Doe.Resume", "coverLetter"), "Jane.Doe.Cover.Letter");
 check("bare kind becomes the bare other kind", swapDocumentTitleKind("Resume", "coverLetter"), "Cover Letter");
 check("lowercase kind still matches", swapDocumentTitleKind("stripe_resume", "coverLetter"), "stripe_Cover_Letter");
 check("empty stays empty", swapDocumentTitleKind("", "coverLetter"), "");
@@ -29,10 +30,16 @@ check("whitespace-only stays empty", swapDocumentTitleKind("   ", "coverLetter")
 
 // Idempotent, and reversible — a second swap must not stack another suffix.
 check("swap is idempotent", swapDocumentTitleKind("Xinyi_Lin_Stripe_Cover_Letter", "coverLetter"), "Xinyi_Lin_Stripe_Cover_Letter");
+check("dot swap is idempotent", swapDocumentTitleKind("Jane.Doe.Cover.Letter", "coverLetter"), "Jane.Doe.Cover.Letter");
 check(
   "swap round-trips back to resume",
   swapDocumentTitleKind(swapDocumentTitleKind("Xinyi_Lin_Stripe_Resume", "coverLetter"), "resume"),
   "Xinyi_Lin_Stripe_Resume"
+);
+check(
+  "dot swap round-trips back to resume",
+  swapDocumentTitleKind(swapDocumentTitleKind("Jane.Doe.Resume", "coverLetter"), "resume"),
+  "Jane.Doe.Resume"
 );
 
 // --- the regression this pair exists to prevent -----------------------------

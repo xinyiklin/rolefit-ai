@@ -9,7 +9,8 @@ const compact = (source) =>
     .replace(/\s+\)/g, ")");
 const compactApplyFlow = compact(applyFlow);
 const downloadPickStart = applyFlow.indexOf("async function handleApplyDownloadPick(");
-const downloadPick = applyFlow.slice(downloadPickStart);
+const downloadPickEnd = applyFlow.indexOf("\n\n  async function handleApplyOnly()", downloadPickStart);
+const downloadPick = applyFlow.slice(downloadPickStart, downloadPickEnd);
 const compactDownloadPick = compact(downloadPick);
 const commitApplyStart = applyFlow.indexOf("async function commitApply(): Promise<boolean>");
 const commitApplyEnd = applyFlow.indexOf("\n  // Apply button handler:", commitApplyStart);
@@ -20,6 +21,7 @@ const handleApply = applyFlow.slice(handleApplyStart, handleApplyEnd);
 const compactHandleApply = compact(handleApply);
 
 assert.ok(downloadPickStart >= 0, "Apply exposes the post-commit download flow");
+assert.ok(downloadPickEnd > downloadPickStart, "the download-flow source probe is bounded to its function");
 assert.match(
   applyFlow,
   /const \[isResolvingApply, setIsResolvingApply\] = useState\(false\);/,
@@ -112,9 +114,17 @@ assert.ok(
   "download selection claims its outer busy phase before awaiting commit"
 );
 
-const resumeExport = compactDownloadPick.indexOf("await handleDownloadPdf(", commit);
-const coverExport = compactDownloadPick.indexOf("await handleDownloadCoverLetterPdf(", resumeExport);
-assert.ok(resumeExport > commit && coverExport > resumeExport, "selected PDFs remain sequential");
+const runExports = compactDownloadPick.indexOf("await runApplyPdfExports({", commit);
+const clearDownloadPrompt = compactDownloadPick.indexOf("setApplyDownloadPrompt(null);", runExports);
+assert.ok(
+  runExports > commit && clearDownloadPrompt > runExports,
+  "a successful commit keeps the prompt mounted until the export helper settles"
+);
+assert.doesNotMatch(
+  compactDownloadPick.slice(commit, runExports),
+  /setApplyDownloadPrompt\(null\)/,
+  "a failed commit returns with the naming prompt still open for retry"
+);
 
 const outerFinally = compactDownloadPick.indexOf("finally", commit);
 const clearOuterRef = compactDownloadPick.indexOf(

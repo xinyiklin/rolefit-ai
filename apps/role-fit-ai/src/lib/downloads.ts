@@ -59,11 +59,12 @@ export function swapDocumentTitleKind(base: string, kind: DocumentTitleKind): st
   if (!trimmed) return "";
   // The leading group is empty for a base that is nothing but a kind ("Resume"),
   // which then becomes the bare other kind rather than gaining a stray prefix.
-  const existing = trimmed.match(/(^|[\s_-])(resume|cover[\s_-]?letter)$/i);
+  const existing = trimmed.match(/(^|[\s_.-])(resume|cover[\s_.-]?letter)$/i);
   const separator = existing?.[1] || (trimmed.includes("_") ? "_" : " ");
   const stem = existing ? trimmed.slice(0, trimmed.length - existing[0].length) : trimmed;
   const suffix = DOCUMENT_TITLE_SUFFIX[kind];
-  const kindText = separator === "_" ? suffix : suffix.replace(/_/g, " ");
+  const kindText =
+    separator === "_" ? suffix : suffix.replace(/_/g, separator === "." ? "." : " ");
   return stem ? `${stem}${separator}${kindText}` : kindText;
 }
 

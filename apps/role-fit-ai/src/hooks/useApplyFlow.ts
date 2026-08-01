@@ -23,6 +23,7 @@ import type { FitComparison, OutputTab } from "../sections/shared";
 import { normalizeDocumentSnapshot } from "../lib/applicationDocuments";
 import type { DocumentUpload } from "../lib/applicationDocumentRequests";
 import { dedupeSourceUrls } from "../lib/jobIdentity";
+import { runApplyPdfExports } from "../lib/applyPdfExports";
 
 // Which of the offered PDFs the user kept checked in the download dialog, and
 // the base name (extension excluded) each one carries. Owned here with the rest
@@ -500,14 +501,13 @@ export function useApplyFlow({
     const label = applyDownloadPrompt?.label ?? "";
     try {
       if (!(await commitApply())) return;
-      setApplyDownloadPrompt(null);
-      const failed: string[] = [];
-      if (picks.resume && !(await handleDownloadPdf(names.resume || undefined))) {
-        failed.push("resume");
-      }
-      if (picks.coverLetter && !(await handleDownloadCoverLetterPdf(names.coverLetter || undefined))) {
-        failed.push("cover letter");
-      }
+      const exportResume = async () => await handleDownloadPdf(names.resume || undefined);
+      const exportCoverLetter = async () =>
+        await handleDownloadCoverLetterPdf(names.coverLetter || undefined);
+      const failed = await runApplyPdfExports({
+        resume: picks.resume ? exportResume : undefined,
+        coverLetter: picks.coverLetter ? exportCoverLetter : undefined
+      });
       if (failed.length) {
         const detail =
           `The ${failed.join(" and ")} PDF${failed.length > 1 ? "s" : ""} could not be exported.` +
@@ -518,6 +518,11 @@ export function useApplyFlow({
           current ? `${current} ${detail}` : `Applied${label ? ` "${label}"` : ""}. ${detail}`
         );
       }
+      // Keep the modal mounted and busy until every selected attempt settles.
+      // It is the lock that prevents edits between the saved artifact snapshot
+      // and a later sequential export. A failed commit returns above and keeps
+      // the same prompt open for retry.
+      setApplyDownloadPrompt(null);
     } finally {
       applyDownloadInFlightRef.current = false;
       setIsDownloadingApplyPdfs(false);

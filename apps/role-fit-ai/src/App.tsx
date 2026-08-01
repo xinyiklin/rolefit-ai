@@ -312,6 +312,7 @@ function App() {
     coverLetter: boolean;
   }>(DEFAULT_MATERIAL_SELECTION);
   const [isSelectingCoverVariant, setIsSelectingCoverVariant] = useState(false);
+  const [isManuallySelectingResumeVariant, setIsManuallySelectingResumeVariant] = useState(false);
   const resumeManualVariantSelectionInFlightRef = useRef(false);
   const coverManualVariantSelectionInFlightRef = useRef(false);
   // Tab-local document identity: independent tailoring sessions can name their
@@ -1471,10 +1472,12 @@ function App() {
         return;
       }
       resumeManualVariantSelectionInFlightRef.current = true;
+      setIsManuallySelectingResumeVariant(true);
       try {
         await loadBaseResumeVersion(fileName);
       } finally {
         resumeManualVariantSelectionInFlightRef.current = false;
+        setIsManuallySelectingResumeVariant(false);
       }
     },
     [baseResumeName, loadBaseResumeVersion]
@@ -1769,7 +1772,11 @@ function App() {
   const applicationPreparationActive =
     jobPreparationActive ||
     (materialSelection.resume &&
-      (isPolishing || isRankingResumeVariants || isSavingBaseResume || isWorkspaceBootstrapping)) ||
+      (isPolishing ||
+        isRankingResumeVariants ||
+        isSavingBaseResume ||
+        isManuallySelectingResumeVariant ||
+        isWorkspaceBootstrapping)) ||
     (materialSelection.coverLetter &&
       (isGeneratingCover || isRankingCoverLetterVariants || isSelectingCoverVariant));
   const preparationReadiness = getPreparationReadiness({
@@ -1781,7 +1788,14 @@ function App() {
     isPreparing: applicationPreparationActive
   });
   function handleTailorPreparedResume() {
-    if (!jobPrepared || !canPolish || isPolishing || isSavingBaseResume || isRankingResumeVariants) return;
+    if (
+      !jobPrepared ||
+      !canPolish ||
+      isPolishing ||
+      isSavingBaseResume ||
+      isManuallySelectingResumeVariant ||
+      isRankingResumeVariants
+    ) return;
     // This click is the confirmation missing from automatic mode. It tailors
     // exactly the resume currently shown; loading a different variant remains
     // protected by useWorkspaceResume's dirty-document confirmation.
@@ -2389,8 +2403,13 @@ function App() {
               onSelectBaseResume={handleSelectBaseResumeVariant}
               resumeVariantRecommendation={resumeVariantRecommendation}
               isRankingResumeVariants={isRankingResumeVariants}
-              isSelectingResume={isSavingBaseResume}
-              canTailor={canPolish && !isSavingBaseResume && !isRankingResumeVariants}
+              isSelectingResume={isSavingBaseResume || isManuallySelectingResumeVariant}
+              canTailor={
+                canPolish &&
+                !isSavingBaseResume &&
+                !isManuallySelectingResumeVariant &&
+                !isRankingResumeVariants
+              }
               isPolishing={isPolishing}
               polishProgress={polishProgress}
               polishOutputCurrent={polishOutputCurrent}

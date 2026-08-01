@@ -54,7 +54,9 @@ export function ApplyDownloadDialog({
   // its download — the Apply itself and its saved artifacts are unaffected.
   const [pickResume, setPickResume] = useState(canDownloadResume);
   const [pickCoverLetter, setPickCoverLetter] = useState(canDownloadCoverLetter);
+  const [submittedAction, setSubmittedAction] = useState<"apply" | "download" | null>(null);
   const fieldId = useId();
+  const downloadNoteId = `${fieldId}-download-note`;
   const firstInputRef = useRef<HTMLInputElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
   const handleModalKeyDown = useModalFocus({
@@ -72,10 +74,14 @@ export function ApplyDownloadDialog({
   const downloadCoverLetter = canDownloadCoverLetter && (!bothOffered || pickCoverLetter);
   const selectedCount = Number(downloadResume) + Number(downloadCoverLetter);
   const ext = EXPORT_META["pdf-engine"].ext;
+  const busyMessage =
+    submittedAction === "download"
+      ? `Applying and exporting ${selectedCount > 1 ? "both PDFs" : "the selected PDF"}…`
+      : "Applying and saving included materials…";
 
   const row = (
     kind: "resume" | "cover",
-    labelText: string,
+    documentLabel: string,
     value: string,
     setValue: (next: string) => void,
     checked: boolean,
@@ -84,23 +90,26 @@ export function ApplyDownloadDialog({
   ) => {
     const toggleId = `${fieldId}-${kind}-toggle`;
     const nameId = `${fieldId}-${kind}-name`;
+    const downloadLabel = kind === "resume" ? "Download resume PDF" : "Download cover-letter PDF";
     return (
       <div className="apply-download__pick" key={kind}>
         {bothOffered ? (
-          <input
-            type="checkbox"
-            id={toggleId}
-            checked={checked}
-            onChange={(event) => setChecked(event.target.checked)}
-            disabled={busy}
-          />
-        ) : null}
-        <label
-          className="apply-download__pick-kind"
-          htmlFor={bothOffered ? toggleId : nameId}
-        >
-          {labelText}
-        </label>
+          <label className="apply-download__pick-toggle" htmlFor={toggleId}>
+            <input
+              type="checkbox"
+              id={toggleId}
+              checked={checked}
+              onChange={(event) => setChecked(event.target.checked)}
+              aria-describedby={downloadNoteId}
+              disabled={busy}
+            />
+            <span>{downloadLabel}</span>
+          </label>
+        ) : (
+          <label className="apply-download__pick-kind" htmlFor={nameId}>
+            {documentLabel}
+          </label>
+        )}
         <span className="rename-dialog__input-wrap apply-download__pick-name">
           <input
             ref={first ? firstInputRef : undefined}
@@ -109,7 +118,7 @@ export function ApplyDownloadDialog({
             type="text"
             value={value}
             onChange={(event) => setValue(event.target.value)}
-            aria-label={`${labelText} file name, without extension`}
+            aria-label={`${documentLabel} file name, without extension`}
             spellCheck={false}
             disabled={busy || !checked}
           />
@@ -139,7 +148,8 @@ export function ApplyDownloadDialog({
         onSubmit={(event) => {
           event.preventDefault();
           if (!selectedCount) return;
-          onDownload(
+          setSubmittedAction("download");
+          void onDownload(
             {
               resume: resumeName.trim() || defaultFileBaseName,
               coverLetter: coverName.trim() || defaultCoverName
@@ -172,18 +182,44 @@ export function ApplyDownloadDialog({
             : null}
         </div>
         <p className="rename-dialog__hint apply-download__name-hint">
-          The extension is added for you.
+          {bothOffered ? (
+            <span id={downloadNoteId}>
+              Unchecking a PDF skips only its download; included materials are still saved to the application. The
+              extension is added for you.
+            </span>
+          ) : (
+            "Included materials are saved to the application. The extension is added for you."
+          )}
         </p>
+
+        {busy ? (
+          <p className="apply-download__busy" role="status" aria-live="polite" aria-atomic="true">
+            {busyMessage}
+          </p>
+        ) : null}
 
         {error ? <p className="rename-dialog__error" role="alert">{error}</p> : null}
 
         <footer className="rename-dialog__actions">
-          <button type="button" className="ghost-button is-compact" onClick={() => void onApplyOnly()} title="Apply without downloading" disabled={busy}>
-            {busy ? "Saving…" : "Apply only"}
+          <button
+            type="button"
+            className="ghost-button is-compact"
+            onClick={() => {
+              setSubmittedAction("apply");
+              void onApplyOnly();
+            }}
+            title="Apply without downloading"
+            disabled={busy}
+          >
+            {busy && submittedAction === "apply" ? "Applying…" : "Apply only"}
           </button>
           <button type="submit" className="primary-button is-compact" disabled={busy || !selectedCount}>
             <Download size={13} aria-hidden="true" />
-            {busy ? "Saving…" : selectedCount > 1 ? "Apply & download both" : "Apply & download"}
+            {busy && submittedAction === "download"
+              ? "Applying & exporting…"
+              : selectedCount > 1
+                ? "Apply & download both"
+                : "Apply & download"}
           </button>
         </footer>
       </form>
