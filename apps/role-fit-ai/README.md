@@ -16,7 +16,7 @@ storage remain owned by the local server.
 
 [Product site and companion downloads](https://rolefit.xinyiklin.com/)
 
-Current desktop source version: **0.5.0**.
+Current desktop source version: **0.6.0** (preview).
 
 > Built for an entry-level SDE job hunt: tight workflow loop, blunt recruiter-style audit before applying, and a local pipeline tracker so you never lose track of a role.
 

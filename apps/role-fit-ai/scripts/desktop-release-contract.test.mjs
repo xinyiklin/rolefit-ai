@@ -13,6 +13,7 @@ import {
   writeReleaseChecksums,
 } from "./desktop-release-assets.mjs";
 import {
+  assertRolefitReleaseVersion,
   parseRolefitPreviewTag,
   parseRolefitReleaseTag,
   validateRolefitPreviewRef,
@@ -27,6 +28,50 @@ import {
 } from "../desktop/runtime-versions.mjs";
 
 const VERSION = "0.1.0";
+const RELEASE_VERSION = "0.6.0";
+const EXTENSION_VERSION = "1.1.0";
+const DESKTOP_API_VERSION = 12;
+const PREVIEW_LABEL = "beta.1";
+const PREVIEW_TAG = `rolefit-preview-v${RELEASE_VERSION}-${PREVIEW_LABEL}`;
+
+function readJson(url) {
+  return JSON.parse(readFileSync(url, "utf8"));
+}
+
+function readDesktopApiVersion() {
+  const source = readFileSync(
+    new URL("../desktop/ipc-contract.cts", import.meta.url),
+    "utf8",
+  );
+  const match =
+    /export\s+const\s+ROLEFIT_DESKTOP_API_VERSION\s*=\s*(\d+)\s+as\s+const\s*;/.exec(source);
+  assert.ok(match, "desktop API version must remain an explicit contract constant");
+  return Number(match[1]);
+}
+
+test("0.6.0 beta.1 release tuple matches app, extension, desktop, and notes", () => {
+  const appPackage = readJson(new URL("../package.json", import.meta.url));
+  const extensionManifest = readJson(new URL("../extension/manifest.json", import.meta.url));
+  const releaseNotes = readFileSync(
+    new URL(`../docs/releases/${RELEASE_VERSION}-${PREVIEW_LABEL}.md`, import.meta.url),
+    "utf8",
+  );
+
+  assert.equal(assertRolefitReleaseVersion(appPackage.version), RELEASE_VERSION);
+  assert.equal(extensionManifest.version, EXTENSION_VERSION);
+  assert.equal(readDesktopApiVersion(), DESKTOP_API_VERSION);
+  assert.deepEqual(parseRolefitPreviewTag(PREVIEW_TAG), {
+    version: RELEASE_VERSION,
+    previewLabel: PREVIEW_LABEL,
+  });
+  assert.ok(releaseNotes.startsWith(`# RoleFit AI ${RELEASE_VERSION}:`));
+  assert.ok(
+    releaseNotes.replace(/\s+/g, " ").includes(
+      `includes browser extension **${EXTENSION_VERSION}** and desktop bridge API **${DESKTOP_API_VERSION}**`,
+    ),
+    "release notes must state the extension and desktop API mapping",
+  );
+});
 
 test("desktop runtime tuple matches the release manifest and rejects drift", () => {
   const manifest = JSON.parse(
