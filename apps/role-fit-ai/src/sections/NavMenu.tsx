@@ -11,11 +11,25 @@ type NavMenuProps = {
   // Controlled mode: when provided, the caller owns open state.
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
+  popoverPlacement?: "below" | "right";
 };
 
-// A dropdown: a pill trigger plus a popover, closing on outside click or
-// Escape. Shared by the masthead menus.
-export function NavMenu({ icon, label, ariaLabel, className, children, open: controlledOpen, onOpenChange }: NavMenuProps) {
+const VIEWPORT_INSET = 8;
+const POPOVER_GAP = 8;
+
+// A dropdown: a trigger plus a popover, closing on outside click or Escape.
+// Placement stays here because the trigger owns both the below and rail utility
+// geometry, including the fixed-position escape from clipped workspace shells.
+export function NavMenu({
+  icon,
+  label,
+  ariaLabel,
+  className,
+  children,
+  open: controlledOpen,
+  onOpenChange,
+  popoverPlacement = "below"
+}: NavMenuProps) {
   const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
   const isControlled = controlledOpen !== undefined;
   const open = isControlled ? controlledOpen : uncontrolledOpen;
@@ -42,21 +56,53 @@ export function NavMenu({ icon, label, ariaLabel, className, children, open: con
     return () => window.cancelAnimationFrame(frame);
   }, [open]);
 
-  // Panels anchor to their trigger's RIGHT edge (see shell.css), so a narrow
-  // window pushes one off the LEFT — the mirror of the old overflow case. The
-  // nudge must be `margin-right`: an absolutely positioned box offset by `right`
-  // has an auto `left`, which simply absorbs a `margin-left` and moves nothing.
-  // Negative margin-right moves the panel right; positive moves it left.
-  // (Transform is reserved for the entrance animation.)
+  // Below menus keep their existing right-edge anchoring and margin clamp. Rail
+  // menus become fixed so overflow-hidden studio ancestors cannot clip them;
+  // their lower edge tracks the trigger when the viewport has room.
   useLayoutEffect(() => {
     if (!open) return;
     const clamp = () => {
       const popover = popoverRef.current;
-      if (!popover) return;
+      const trigger = triggerRef.current;
+      if (!popover || !trigger) return;
+
+      if (popoverPlacement === "right") {
+        const triggerRect = trigger.getBoundingClientRect();
+        popover.style.position = "fixed";
+        popover.style.left = "0px";
+        popover.style.top = "0px";
+        popover.style.right = "auto";
+        popover.style.bottom = "auto";
+        popover.style.marginRight = "0px";
+        popover.style.transformOrigin = "bottom left";
+
+        const popoverWidth = popover.offsetWidth;
+        const popoverHeight = popover.offsetHeight;
+        const maxLeft = Math.max(VIEWPORT_INSET, window.innerWidth - popoverWidth - VIEWPORT_INSET);
+        const maxTop = Math.max(VIEWPORT_INSET, window.innerHeight - popoverHeight - VIEWPORT_INSET);
+        const left = Math.min(
+          Math.max(triggerRect.right + POPOVER_GAP, VIEWPORT_INSET),
+          maxLeft
+        );
+        const top = Math.min(
+          Math.max(triggerRect.bottom - popoverHeight, VIEWPORT_INSET),
+          maxTop
+        );
+        popover.style.left = `${left}px`;
+        popover.style.top = `${top}px`;
+        return;
+      }
+
+      popover.style.position = "";
+      popover.style.left = "";
+      popover.style.top = "";
+      popover.style.right = "";
+      popover.style.bottom = "";
+      popover.style.transformOrigin = "";
       popover.style.marginRight = "";
       const rect = popover.getBoundingClientRect();
-      const pastRight = rect.right - (window.innerWidth - 8);
-      const pastLeft = 8 - rect.left;
+      const pastRight = rect.right - (window.innerWidth - VIEWPORT_INSET);
+      const pastLeft = VIEWPORT_INSET - rect.left;
       // Right first: a panel wider than the window would otherwise be pushed
       // right by the left correction and clipped at the edge the user reads to.
       if (pastRight > 0) popover.style.marginRight = `${pastRight}px`;
@@ -64,8 +110,16 @@ export function NavMenu({ icon, label, ariaLabel, className, children, open: con
     };
     clamp();
     window.addEventListener("resize", clamp);
-    return () => window.removeEventListener("resize", clamp);
-  }, [open]);
+    let resizeObserver: ResizeObserver | null = null;
+    if (popoverPlacement === "right" && typeof ResizeObserver !== "undefined" && popoverRef.current) {
+      resizeObserver = new ResizeObserver(() => clamp());
+      resizeObserver.observe(popoverRef.current);
+    }
+    return () => {
+      window.removeEventListener("resize", clamp);
+      resizeObserver?.disconnect();
+    };
+  }, [open, popoverPlacement]);
 
   useEffect(() => {
     if (!open) return;
@@ -90,6 +144,7 @@ export function NavMenu({ icon, label, ariaLabel, className, children, open: con
   return (
     <div
       className={`nav-menu${className ? ` ${className}` : ""}`}
+      data-popover-placement={popoverPlacement}
       ref={ref}
       onBlur={(event) => {
         if (open && !event.currentTarget.contains(event.relatedTarget as Node | null)) setOpen(false);
@@ -111,7 +166,13 @@ export function NavMenu({ icon, label, ariaLabel, className, children, open: con
       </button>
       <span className="nav-menu__tooltip" aria-hidden="true">{ariaLabel}</span>
       {open ? (
-        <div className="nav-menu__popover" role="dialog" aria-label={ariaLabel} ref={popoverRef} tabIndex={-1}>
+        <div
+          className="nav-menu__popover"
+          role="dialog"
+          aria-label={ariaLabel}
+          ref={popoverRef}
+          tabIndex={-1}
+        >
           {children}
         </div>
       ) : null}

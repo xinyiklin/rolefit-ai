@@ -50,12 +50,19 @@ const coverLetterRepository = readFileSync(
   "utf8"
 );
 const masthead = readFileSync(new URL("../../sections/Masthead.tsx", import.meta.url), "utf8");
+const sessionsRail = readFileSync(new URL("../../sections/SessionsRail.tsx", import.meta.url), "utf8");
+const navMenu = readFileSync(new URL("../../sections/NavMenu.tsx", import.meta.url), "utf8");
+const studioPane = readFileSync(new URL("../../sections/StudioPane.tsx", import.meta.url), "utf8");
 const applicationModal = readFileSync(new URL("../../sections/ApplicationModal.tsx", import.meta.url), "utf8");
 const trackerTab = readFileSync(new URL("../../sections/tabs/TrackerTab.tsx", import.meta.url), "utf8");
 const settingsStage = readFileSync(new URL("../../sections/SettingsStage.tsx", import.meta.url), "utf8");
 const reviewRail = readFileSync(new URL("../../sections/ReviewRail.tsx", import.meta.url), "utf8");
 const appIndex = readFileSync(new URL("../../../index.html", import.meta.url), "utf8");
 const styleTokens = readFileSync(new URL("../../styles/tokens.css", import.meta.url), "utf8");
+const shellStyles = readFileSync(new URL("../../styles/shell.css", import.meta.url), "utf8");
+const studioStyles = readFileSync(new URL("../../styles/studio.css", import.meta.url), "utf8");
+const responsiveStyles = readFileSync(new URL("../../styles/responsive.css", import.meta.url), "utf8");
+const settingsStyles = readFileSync(new URL("../../styles/settings.css", import.meta.url), "utf8");
 const prepareStyles = readFileSync(new URL("../../styles/prepare.css", import.meta.url), "utf8");
 const aiSettings = readHook("useAiSettings.ts");
 const persistedSettings = readFileSync(new URL("../../lib/settings.ts", import.meta.url), "utf8");
@@ -72,6 +79,11 @@ const coverToolbar = readFileSync(
 const settingsDialog = readFileSync(new URL("../../sections/SettingsDialog.tsx", import.meta.url), "utf8");
 const candidateFacts = readFileSync(new URL("../../lib/candidateFacts.ts", import.meta.url), "utf8");
 const aiStages = readFileSync(new URL("../../config/aiStages.ts", import.meta.url), "utf8");
+const styleSources = `${shellStyles}\n${studioStyles}\n${responsiveStyles}\n${settingsStyles}`;
+const cssRuleBlocks = (source) =>
+  [...source.replace(/\/\*[\s\S]*?\*\//g, "").matchAll(/([^{}]+)\{([^{}]*)\}/g)].map(
+    ([, selector, body]) => ({ selector, body })
+  );
 const intakeFingerprintStart = intake.indexOf("const distillInputFingerprint = workflowInputFingerprint({");
 const intakeFingerprint = intake.slice(intakeFingerprintStart, intake.indexOf("});", intakeFingerprintStart) + 3);
 const polishFingerprintStart = polish.indexOf("const inputFingerprint = workflowInputFingerprint({");
@@ -766,7 +778,121 @@ assert.match(
   "the Prepare route renders the dedicated intake page"
 );
 assert.doesNotMatch(app, /\bjobControl\b/, "App no longer wires job controls into the masthead");
-assert.doesNotMatch(masthead, /\bjobControl\b/, "Masthead exposes Sessions and Apply without a hidden job-intake slot");
+assert.doesNotMatch(masthead, /\bjobControl\b/, "Masthead has no hidden job-intake slot");
+assert.doesNotMatch(masthead, /\bsessionsControl\b|masthead__menus/, "Masthead owns no Sessions control or menu wrapper");
+assert.doesNotMatch(
+  masthead,
+  /<SessionsMenu\b|role="group"[^>]*aria-label="Sessions"|aria-label="Sessions"[^>]*role="group"/,
+  "Masthead has no Sessions group"
+);
+
+// Sessions is a read-only rail utility, not a destination. Keep its placement
+// in App explicit so a future Settings refactor cannot move it into the tablist
+// or silently put it after the Settings trigger.
+assert.doesNotMatch(app, /\bsessionsControl\b/, "App no longer passes Sessions through Masthead");
+const sidebarUtilitiesStart = app.indexOf("sidebarUtilities={");
+const sidebarUtilitiesEnd = app.indexOf("overlay={", sidebarUtilitiesStart);
+const sidebarUtilities =
+  sidebarUtilitiesStart >= 0 && sidebarUtilitiesEnd > sidebarUtilitiesStart
+    ? app.slice(sidebarUtilitiesStart, sidebarUtilitiesEnd)
+    : "";
+assert.ok(
+  sidebarUtilitiesStart >= 0 && sidebarUtilitiesEnd > sidebarUtilitiesStart,
+  "App supplies a bounded sidebarUtilities prop to StudioPane"
+);
+assert.match(sidebarUtilities, /<SessionsMenu\b/, "sidebarUtilities contains SessionsMenu");
+const appSessionsPosition = sidebarUtilities.indexOf("<SessionsMenu");
+const appSettingsPosition = sidebarUtilities.indexOf('className="studio-settings-trigger"');
+assert.ok(
+  appSessionsPosition >= 0 && appSettingsPosition > appSessionsPosition,
+  "sidebarUtilities places SessionsMenu before the Settings trigger"
+);
+assert.doesNotMatch(sidebarUtilities, /role="tab"|aria-selected=/, "rail utilities do not add APG tab semantics");
+
+const studioTablistStart = studioPane.indexOf('role="tablist"');
+const studioTablistEnd = studioPane.indexOf("</nav>", studioTablistStart);
+const studioUtilitiesStart = studioPane.indexOf('className="studio-sidebar__utilities"');
+const studioMainStart = studioPane.indexOf('className="studio-main"');
+assert.match(studioPane, /sidebarUtilities\??:\s*ReactNode/, "StudioPane exposes the sidebarUtilities seam");
+assert.ok(
+  studioTablistStart >= 0 &&
+    studioTablistEnd > studioTablistStart &&
+    studioUtilitiesStart > studioTablistEnd &&
+    studioMainStart > studioUtilitiesStart,
+  "StudioPane renders the utility rail after the tablist and before the studio body"
+);
+const studioUtilityRegion = studioPane.slice(studioUtilitiesStart, studioMainStart);
+assert.match(
+  studioUtilityRegion,
+  /studio-sidebar__utilities[\s\S]{0,180}sidebarUtilities/,
+  "StudioPane renders sidebarUtilities inside the named utility rail"
+);
+assert.doesNotMatch(
+  studioUtilityRegion,
+  /role="tab"|aria-selected=/,
+  "the Sessions/Settings utility rail stays outside the APG tab sequence"
+);
+assert.doesNotMatch(outputTabs, /\bid:\s*["']sessions["']\b|label:\s*["']Sessions["']/, "OUTPUT_TABS has no Sessions entry");
+
+// NavMenu keeps the existing below placement as its default; Sessions opts into
+// the rightward placement explicitly because the studio shell clips overflow.
+assert.match(navMenu, /popoverPlacement\?:\s*["']below["']\s*\|\s*["']right["']/, "NavMenu declares below and right placements");
+assert.match(navMenu, /popoverPlacement\s*=\s*["']below["']/, "NavMenu defaults to below placement");
+assert.match(
+  sessionsRail,
+  /<NavMenu[\s\S]{0,700}popoverPlacement\s*=\s*["']right["']/,
+  "SessionsMenu requests NavMenu's rightward placement"
+);
+assert.doesNotMatch(
+  sessionsRail,
+  /\brole\s*=\s*["']tab["']|\baria-selected\s*=|\baria-controls\s*=/,
+  "SessionsMenu has no tab role or selection semantics"
+);
+assert.doesNotMatch(
+  sessionsRail,
+  /<button\b|<a\b|\bonClick\s*=|\bonChange\s*=|\bonSelect\s*=|\bnavigate\s*\(/,
+  "SessionsMenu remains read-only ambient awareness"
+);
+assert.doesNotMatch(sessionsRail, /ariaLabel\s*=\s*["']Tailoring sessions["']/, "Sessions label is not a static count-free name");
+assert.match(
+  sessionsRail,
+  /(?:const\s+\w*ariaLabel\w*\s*=\s*|ariaLabel\s*=\s*\{)[\s\S]{0,420}?(?:total[\s\S]{0,420}?activeCount|activeCount[\s\S]{0,420}?total)/,
+  "Sessions accessible label exposes both the total and working counts"
+);
+
+// The masthead-only menu rules must disappear with the old ownership. The rail
+// gets its own utility surface and a fixed rightward popover rule so the menu is
+// not clipped by .studio-sidebar or .workspace-grid overflow.
+assert.doesNotMatch(
+  `${shellStyles}\n${responsiveStyles}`.replace(/\/\*[\s\S]*?\*\//g, ""),
+  /\.masthead__menus|\.masthead\s+\.menu-group|\.masthead\s+\.nav-menu/,
+  "retired masthead-only Sessions selectors are absent"
+);
+assert.doesNotMatch(
+  `${studioStyles}\n${settingsStyles}`.replace(/\/\*[\s\S]*?\*\//g, ""),
+  /\.studio-sidebar__footer\b/,
+  "the single-purpose sidebar footer selector is retired"
+);
+assert.match(styleSources, /\.studio-sidebar__utilities\b/, "rail utility styling exists");
+assert.doesNotMatch(
+  responsiveStyles.replace(/\/\*[\s\S]*?\*\//g, ""),
+  /\.nav-menu__sub\s*\{\s*display:\s*none/,
+  "compact rail CSS does not hide the Sessions count indicator"
+);
+const rightPopoverRule = cssRuleBlocks(styleSources).find(
+  ({ selector }) => /nav-menu__popover/.test(selector) && /sessions-menu|right|rail|placement/i.test(selector)
+);
+assert.ok(rightPopoverRule, "a Sessions rail/right-placement popover selector exists");
+assert.match(
+  rightPopoverRule?.body ?? "",
+  /position:\s*fixed/,
+  "the Sessions right-placement popover uses fixed viewport anchoring"
+);
+assert.match(
+  navMenu,
+  /popoverPlacement\s*===\s*["']right["'][\s\S]{0,1200}?getBoundingClientRect\(\)[\s\S]{0,1200}?popover\.style\.left\s*=/,
+  "NavMenu computes viewport-safe left coordinates for right placement"
+);
 
 assert.match(
   app,

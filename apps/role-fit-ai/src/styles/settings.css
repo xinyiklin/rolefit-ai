@@ -414,13 +414,6 @@
 
 /* -------- Sidebar trigger -------- */
 
-.studio-sidebar__footer {
-  flex: 0 0 auto;
-  margin-top: auto;
-  padding: var(--s3);
-  border-top: 1px solid var(--hairline-soft);
-}
-
 /* Styled as a rail entry so it reads as part of the sidebar, but it is a dialog
    trigger, not a tab — it stays outside the tablist. */
 .studio-settings-trigger {
@@ -471,34 +464,6 @@
 .studio-settings-trigger:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
-}
-
-/* Matches the rail's own icon-strip breakpoint in responsive.css (1080px) and
-   its 36px square tab geometry — retune the two together. */
-@media (max-width: 1080px) {
-  .studio-sidebar__footer {
-    padding: var(--s2);
-  }
-
-  .studio-settings-trigger {
-    justify-content: center;
-    width: 36px;
-    min-width: 36px;
-    min-height: 36px;
-    margin-inline: auto;
-    padding: 0;
-  }
-
-  .studio-settings-trigger__label {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    margin: -1px;
-    padding: 0;
-    overflow: hidden;
-    clip-path: inset(50%);
-    white-space: nowrap;
-  }
 }
 
 @media (max-width: 720px) {
