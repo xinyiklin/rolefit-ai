@@ -210,8 +210,10 @@ Good frontend verification covers:
 - API error states show user-safe messaging (no raw provider bodies)
 - Prepare is the first/default tab in the PREPARE group and the only production
   job-intake surface: URL fetch and pasted text appear there, no `JobMenu` or
-  masthead `jobControl` remains, and the masthead contains only Sessions plus
-  the shared Apply command
+  masthead `jobControl` remains, and the masthead contains only the RoleFit
+  identity plus the shared Apply command. Read-only Sessions sits immediately
+  above Settings in the bottom studio-rail utilities group, outside
+  `OUTPUT_TABS` and the APG tablist
 - extension receipt and delivery select Prepare before updating visible intake
   state, progress stays there through Distill and automatic resume tailoring,
   AI-off preparation still yields the deterministic brief, and retry/stale
@@ -264,6 +266,10 @@ Good frontend verification covers:
 - at 720px and below, only precise Resume authoring is replaced by the width
   notice; Prepare, masthead/navigation, Cover letter, Materials, Applications,
   and Analytics remain reachable, including under high browser zoom
+- Sessions and Settings remain reachable in order in expanded and collapsed
+  rail states; the compact Sessions count/working indicator remains visible,
+  its popover opens rightward without viewport clipping, and it is absent from
+  output-tab arrow/Home/End navigation
 - job-import distiller changes prove the before/after shape without
   printing raw private text: the resulting structured brief should keep role
   intro / responsibilities / requirements while stripping empty bullets,
@@ -463,6 +469,9 @@ layout/theming risk, and let the user decide. When it runs, check:
 - for public landing changes, the complete desktop/390px page, release status,
   installer rows, and absence of horizontal overflow;
 - the affected control in the Prepare + studio workflow
+- Sessions/Settings reachability and ordering in the expanded and collapsed
+  studio rail, including the rightward viewport-bounded Sessions popover and
+  its exclusion from APG output-tab navigation
 - the typeset editor itself (its own WYSIWYG preview), rather than a legacy HTML
   editor or a separate compile-preview surface
 - tab open/close behavior in the output panel when tabs changed

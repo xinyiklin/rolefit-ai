@@ -30,10 +30,13 @@ Preserve the compact masthead + full-width studio workflow (document file
 actions moved into their editor bars on 2026-07-25; job intake moved from the
 masthead into the first/default Prepare page on 2026-07-29):
 
-- masthead (navbar): a standalone Sessions menu for concurrent job tabs first,
-  plus the global Apply action. Provider and guidance setup live in the
-  Settings dialog at the foot of the studio rail; no Inputs group or intake
-  control lives here
+- masthead (navbar): RoleFit identity plus the global Apply action. No Inputs
+  group or intake control lives here
+- studio utilities (bottom rail): read-only Sessions provides ambient awareness
+  immediately above Settings, outside `OUTPUT_TABS` and the APG tablist. Expanded
+  rails show Sessions + count; collapsed rails show an icon + compact
+  count/working state. Its popover opens rightward and is bounded by the
+  viewport. Provider and guidance setup live in the Settings dialog
 - studio (full width): PREPARE comes first and contains Prepare, the sole
   job-intake and application-readiness surface. DRAFT contains Resume (the
   engine-painted
@@ -268,8 +271,10 @@ Never show:
 - Every preference lives in ONE place: the Settings dialog, opened from the foot
   of the studio tab rail. Its three sections are AI stages, About you, and
   Guidance, with Reset pinned below them at the foot of the section rail. The
-  masthead keeps only Sessions and Apply. Do not add a second
-  control for a setting Settings already owns.
+  masthead keeps only the RoleFit identity and Apply. Read-only Sessions
+  belongs immediately above Settings in the bottom studio-rail utilities group,
+  outside the output tablist. Do not add a second control for a setting
+  Settings already owns.
 - A settings section must earn its nav entry. Reset was briefly a section of its
   own and rendered a near-empty panel holding one button. It belongs at the foot
   of the section rail — an action, not a section, reachable from whichever
@@ -339,10 +344,9 @@ Never show:
   chrome ends. A panel that runs past the window both clips and extends the
   scroll area of whatever contains it, which shifts the document behind it; the
   panel scrolls inside itself instead.
-- The Sessions masthead menu panel anchors to its trigger's right edge so it
-  opens inboard, under the control that owns it. The bar's controls sit at the
-  right of the window, so a left-anchored panel runs off it and ends up pressed
-  against the edge by the viewport clamp.
+- The Sessions studio-rail popover opens to the right of its trigger and clamps
+  to the viewport. It scrolls internally rather than extending or shifting the
+  studio shell's scroll area.
 - Keep keyboard access for changed controls.
 - Prefer existing select / segmented / toggle patterns over hand-rolled
   inline alternatives.
@@ -377,16 +381,17 @@ Never show:
   fallbacks. Selecting a workspace variant changes the document source, not
   that application output title; both toolbar sublabels use the same
   `Role at Company` target.
-- The Sessions menu uses its label at normal widths and a familiar, evenly
-  spaced icon at compact widths. The RoleFit wordmark and Apply icon-and-label
-  button remain visible throughout the supported range. The masthead stays
-  57px tall across disclosure states and meets the studio/sidebar through one
-  structural hairline; it never wraps or paints a false gap below itself. At
-  720px and below, only the Resume tab's precise authoring surface is replaced
-  by the non-dismissible width notice. Prepare, masthead/navigation, the simpler
-  Cover letter page, Materials, Applications, and Analytics remain usable,
-  including when browser zoom makes the effective viewport cross that
-  threshold.
+- The expanded Sessions utility uses its label plus total count; the collapsed
+  rail uses a familiar, evenly spaced icon plus a compact count/working state.
+  It remains immediately above Settings and outside output-tab navigation. The
+  RoleFit wordmark and Apply icon-and-label button remain visible throughout
+  the supported range. The masthead stays 57px tall across disclosure states
+  and meets the studio/sidebar through one structural hairline; it never wraps
+  or paints a false gap below itself. At 720px and below, only the Resume tab's
+  precise authoring surface is replaced by the non-dismissible width notice.
+  Prepare, masthead/navigation, the simpler Cover letter page, Materials,
+  Applications, and Analytics remain usable, including when browser zoom makes
+  the effective viewport cross that threshold.
 
 ## Visual QA
 

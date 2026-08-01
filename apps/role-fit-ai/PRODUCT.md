@@ -145,10 +145,13 @@ disappears into the task. Quiet competence, not salesmanship.
    ground proposals in provided evidence and surface gaps or placeholders for
    human review instead of hiding them.
 2. Preserve the compact masthead + full-width studio workflow: the masthead
-   carries Sessions plus the global Apply action, while the Settings dialog
-   stays at the foot of the studio rail. The rail starts with a PREPARE group
-   containing Prepare, followed by DRAFT and TRACK groups. Prepare is the
-   first/default and sole job-intake surface; tabbed
+   carries the brand plus the global Apply action. Read-only Sessions is
+   ambient awareness immediately above Settings in the bottom studio-rail
+   utilities group, outside `OUTPUT_TABS` and the APG tablist. Expanded it
+   reads Sessions + count; collapsed it becomes an icon + compact count/working
+   state, and its popover opens rightward within the viewport. The rail starts
+   with a PREPARE group containing Prepare, followed by DRAFT and TRACK groups.
+   Prepare is the first/default and sole job-intake surface; tabbed
    workspaces continue with Resume and its consistent Open/Save/Polish
    document action bar and a post-polish review rail, Cover letter with the
    matching document action bar, its plain editor and a compact rail that

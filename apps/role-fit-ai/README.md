@@ -74,9 +74,13 @@ editable documents.
   correspondence is usually written in — and any bundled family is a menu away.
 - **One Prepare workspace** — Prepare is the first/default studio page and the
   only place a job enters the current session. It leads PREPARE / DRAFT / TRACK
-  navigation while the masthead keeps only Sessions and Apply. The paired
-  extension is the primary path; URL fetch and pasted text remain available
-  there as deliberate one-at-a-time fallbacks. Before preparation, the focused
+  navigation while the masthead carries only the RoleFit identity and Apply.
+  The bottom studio rail places read-only Sessions immediately above Settings,
+  outside the output tablist; its label/count condenses to an icon plus compact
+  count/working state when the rail collapses, and its popover opens rightward
+  within the viewport. The paired extension is the primary path; URL fetch and
+  pasted text remain available there as deliberate one-at-a-time fallbacks.
+  Before preparation, the focused
   Source panel shows only the selected URL or pasted-text method. Afterward it
   collapses above the complete editable job brief—tracked job facts, company
   context, responsibilities, required and preferred qualifications, technical
@@ -396,8 +400,9 @@ API provider, or skips that provider call when **Prepare job details with AI**
 is off.
 Imports carry a short local claim token so the newly-opened tab receives its own
 posting and opens/progresses on Prepare, while other open tabs continue their
-current jobs; the app also shows
-a small read-only "other sessions" card when another tab is active. The
+current jobs; the app also shows read-only ambient Sessions in the bottom studio
+rail immediately above Settings, outside output-tab navigation, so concurrent
+tabs remain visible without becoming a control. The
 extension never reads the base resume or produces a fit judgment.
 
 The installed desktop companion includes an app-owned unpacked extension

@@ -74,9 +74,10 @@ RoleFit owns:
 - `server.ts` and `server/`: local HTTP/Vite composition, provider calls, safe
   job preparation, workspace/application persistence, and extension routes;
 - `src/hooks/`: RoleFit workflow state and effects;
-- `src/sections/`: Sessions/Apply masthead, first/default Prepare intake,
-  studio navigation and tabs, tracker, materials, review rail, reusable AI
-  workflow progress, dialogs, and host composition;
+- `src/sections/`: Apply-only masthead, read-only Sessions/Settings studio-rail
+  utilities, first/default Prepare intake, studio navigation and tabs, tracker,
+  materials, review rail, reusable AI workflow progress, dialogs, and host
+  composition;
 - `src/sections/editor/RoleFitEditorOverlay.tsx`: the section-scope and review
   overlay injected into the shared editor;
 - `src/lib/` and `src/resume/`: RoleFit-only job, workflow, evidence, and
