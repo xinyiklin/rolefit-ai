@@ -57,7 +57,9 @@ const asarPath = platform === "darwin"
   ? join(appBundle, "Contents", "Resources", "app.asar")
   : join(packageDirectory, "resources", "app.asar");
 assert(
-  listPackage(asarPath).some((file) => /^\/dist\/assets\/pdf\.worker\.min-.*\.mjs$/.test(file)),
+  listPackage(asarPath).some((file) =>
+    /^\/dist\/assets\/pdf\.worker\.min-.*\.mjs$/.test(file.replaceAll("\\", "/"))
+  ),
   "Packaged ASAR must retain the bundled PDF.js worker."
 );
 if (platform === "darwin") {

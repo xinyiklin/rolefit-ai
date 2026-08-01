@@ -189,11 +189,14 @@
                 <h2 id="extension-install-title">Get the extension</h2>
                 <p class="extension-install__supported">Chrome, Microsoft Edge, and Firefox.</p>
                 <p class="extension-install__source">Included with the desktop app. Load it unpacked; there is no store listing yet.</p>
-                <button class="extension-install__open" id="open-extension-directory" type="button">Open extension folder <span aria-hidden="true">&#8599;</span></button>
+                <div class="extension-install__actions">
+                  <button class="extension-install__open" id="open-extension-directory" type="button">Open extension folder <span aria-hidden="true">&#8599;</span></button>
+                  <button class="extension-install__copy extension-install__copy--path" id="copy-extension-directory" type="button" data-extension-copy-target="directory" data-copy-feedback="Copy path" aria-label="Copy extension folder path">Copy path</button>
+                </div>
                 <ol class="extension-steps">
                   <li><span>1</span><p><strong>Open the folder</strong><br />Use <em>Open extension folder</em> above and keep that folder in place.</p></li>
-                  <li><span>2</span><p><strong>Chrome or Edge</strong><br />Open <code>chrome://extensions</code> or <code>edge://extensions</code>, enable Developer mode, then choose <em>Load unpacked</em>.</p></li>
-                  <li><span>3</span><p><strong>Firefox</strong><br />Open <code>about:debugging#/runtime/this-firefox</code>, choose <em>Load Temporary Add-on&#8230;</em>, then select <code>manifest.json</code>.</p></li>
+                  <li><span>2</span><p><strong>Chrome or Edge</strong><br />Copy <button class="extension-install__copy extension-install__copy--inline" type="button" data-extension-copy-target="chrome" data-copy-feedback="Copy address" aria-label="Copy Chrome extensions address"><code>chrome://extensions</code></button> or <button class="extension-install__copy extension-install__copy--inline" type="button" data-extension-copy-target="edge" data-copy-feedback="Copy address" aria-label="Copy Edge extensions address"><code>edge://extensions</code></button>, paste it into your browser's address bar, enable Developer mode, then choose <em>Load unpacked</em>.</p></li>
+                  <li><span>3</span><p><strong>Firefox</strong><br />Copy <button class="extension-install__copy extension-install__copy--inline" type="button" data-extension-copy-target="firefox" data-copy-feedback="Copy address" aria-label="Copy Firefox debugging address"><code>about:debugging#/runtime/this-firefox</code></button>, paste it into Firefox's address bar, choose <em>Load Temporary Add-on&#8230;</em>, then select <code>manifest.json</code>.</p></li>
                 </ol>
                 <p class="extension-install__note">After changing ports, reload the unpacked extension once from your browser's Extensions page.</p>
               </section>
@@ -238,6 +241,7 @@
             </form>
           </section>
         </main>
+        <p class="visually-hidden" id="extension-setup-status" role="status" aria-live="polite"></p>
 
       </div>
     </div>

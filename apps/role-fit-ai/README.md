@@ -408,6 +408,14 @@ extension never reads the base resume or produces a fit judgment.
 The installed desktop companion includes an app-owned unpacked extension
 folder. In the companion, open **Browser extension** and choose **Open extension
 folder**; use that folder when your browser asks where to load the extension.
+The same section includes **Copy path** and click-to-copy controls for the exact
+Chrome (`chrome://extensions`), Edge (`edge://extensions`), and Firefox
+(`about:debugging#/runtime/this-firefox`) setup addresses. These bounded actions
+are part of desktop API 12: the Electron main process owns the materialized
+folder path and clipboard write, while the renderer sends only a fixed target id;
+no renderer path, arbitrary clipboard text, or clipboard permission is exposed.
+Visible feedback stays on the hovered or focused copy control, while a visually
+hidden polite announcement reports the same result to assistive technology.
 Keep the folder in place after loading it. Source contributors can instead use
 `apps/role-fit-ai/extension/`:
 

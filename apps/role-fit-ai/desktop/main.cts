@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, safeStorage, session, shell, utilityProcess } from "electron";
+import { app, BrowserWindow, clipboard, dialog, ipcMain, safeStorage, session, shell, utilityProcess } from "electron";
 import squirrelStartup from "electron-squirrel-startup";
 import { randomUUID } from "node:crypto";
 import type { Dirent } from "node:fs";
@@ -46,6 +46,7 @@ import {
   type RoleFitConnectionStatus,
   type RoleFitDesktopRuntimeInfo,
   type RoleFitDesktopSiteSettings,
+  type RoleFitExtensionSetupCopyTarget,
   type RoleFitExtensionPairingSettings,
   type RoleFitProviderConnection,
   type RoleFitProviderId,
@@ -56,6 +57,7 @@ import {
 import { installCompanionIpc } from "./ipc.cjs";
 import { readBoundedResponseText } from "./bounded-response.cjs";
 import { materializeRoleFitExtension } from "./extension-bundle.cjs";
+import { copyRoleFitExtensionSetupValue } from "./extension-setup-copy.cjs";
 import { resolveDesktopRuntimePaths } from "./runtime-paths.cjs";
 import {
   DesktopSitePortUnavailableError,
@@ -112,6 +114,10 @@ type SmokeResult = {
   visibleSection: string;
   workspaceControlsPresent: boolean;
   connectionControlsPresent: boolean;
+  extensionSetupCopyControlsPresent: boolean;
+  extensionSetupCopyEventsReset: boolean;
+  extensionSetupStatusOutsidePanels: boolean;
+  extensionSetupStatusPresent: boolean;
   panelCopyConcise: boolean;
   workspaceOverview: unknown;
   workspaceOverviewError: string | null;
@@ -954,6 +960,17 @@ async function inspectSmokeRenderer(
       } catch (error) {
         providerStatusError = error instanceof Error ? error.message : String(error);
       }
+      const extensionCopyButton = document.querySelector('[data-extension-copy-target="chrome"]');
+      let extensionSetupCopyEventsReset = false;
+      if (extensionCopyButton instanceof HTMLButtonElement) {
+        extensionCopyButton.dataset.copyState = 'settled';
+        extensionCopyButton.dispatchEvent(new Event('pointerleave'));
+        const pointerLeaveReset = !('copyState' in extensionCopyButton.dataset);
+        extensionCopyButton.dataset.copyState = 'settled';
+        extensionCopyButton.dispatchEvent(new Event('blur'));
+        const blurReset = !('copyState' in extensionCopyButton.dataset);
+        extensionSetupCopyEventsReset = pointerLeaveReset && blurReset;
+      }
       resolve({
         rootRendered: Boolean(document.querySelector('[data-companion-root]')),
         companionReady: document.querySelector('[data-companion-root]')?.getAttribute('data-status') === 'ready',
@@ -988,6 +1005,12 @@ async function inspectSmokeRenderer(
         workspaceControlsPresent: ['workspace-path', 'open-workspace-folder', 'backup-workspace', 'restore-workspace', 'workspace-status', 'stat-base-resume', 'stat-applications'].every((id) => Boolean(document.getElementById(id))) &&
           ['workspace-activity', 'stat-pdfs', 'stat-history'].every((id) => !document.getElementById(id)),
         connectionControlsPresent: ['connection-state', 'connection-state-text', 'connection-browser-tabs'].every((id) => Boolean(document.getElementById(id))),
+        extensionSetupCopyControlsPresent: ['directory', 'chrome', 'edge', 'firefox'].every((target) => Boolean(document.querySelector('[data-extension-copy-target="' + target + '"]'))) &&
+          [...document.querySelectorAll('[data-extension-copy-target]')].every((control) => control instanceof HTMLButtonElement && control.type === 'button') &&
+          document.querySelectorAll('[data-extension-copy-target]').length === 4,
+        extensionSetupCopyEventsReset,
+        extensionSetupStatusOutsidePanels: !document.querySelector('[data-companion-panel] #extension-setup-status'),
+        extensionSetupStatusPresent: Boolean(document.querySelector('#extension-setup-status[role="status"][aria-live="polite"]')),
         panelCopyConcise: [...document.querySelectorAll('main p')].every((paragraph) => (paragraph.textContent ?? '').trim().length <= 160),
         workspaceOverview,
         workspaceOverviewError,
@@ -1011,6 +1034,7 @@ async function inspectSmokeRenderer(
   const expectedBridgeKeys = [
     "applyLocalSitePort",
     "backupWorkspaceToFile",
+    "copyExtensionSetupValue",
     "getConnectionStatus",
     "getExtensionPairingSettings",
     "getLocalSiteSettings",
@@ -1069,6 +1093,10 @@ async function inspectSmokeRenderer(
       result.visibleSection === result.activeSection],
     ["workspace controls", result.workspaceControlsPresent],
     ["connection controls", result.connectionControlsPresent],
+    ["extension setup copy controls", result.extensionSetupCopyControlsPresent],
+    ["extension setup copy event resets", result.extensionSetupCopyEventsReset],
+    ["extension setup status outside panels", result.extensionSetupStatusOutsidePanels],
+    ["extension setup copy status", result.extensionSetupStatusPresent],
     ["concise panel copy", result.panelCopyConcise],
     ["workspace overview request", result.workspaceOverviewError === null],
     ["workspace overview contract", workspaceOverviewMatches(result.workspaceOverview, activeWorkspaceDir, ownership)],
@@ -1662,6 +1690,13 @@ async function startDesktop(): Promise<void> {
     openExtensionDirectory: async () => {
       const errorMessage = await shell.openPath(extensionDirectory);
       if (errorMessage) throw new Error("Could not open the RoleFit browser-extension folder.");
+    },
+    copyExtensionSetupValue: async (target: RoleFitExtensionSetupCopyTarget) => {
+      copyRoleFitExtensionSetupValue(
+        target,
+        extensionDirectory,
+        (value) => clipboard.writeText(value)
+      );
     },
     openBrowserApp: async () => {
       await shell.openExternal(browserOrigin);

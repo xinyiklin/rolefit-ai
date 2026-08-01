@@ -37,8 +37,32 @@ const PROVIDER_BY_ID = new Map(SUPPORTED_PROVIDERS.map((provider) => [provider.i
 const PROVIDER_VISIBLE_POLL_INTERVAL_MS = 5_000;
 const WORKSPACE_POLL_INTERVAL_MS = 5_000;
 const CONNECTION_POLL_INTERVAL_MS = 5_000;
+const EXTENSION_COPY_FEEDBACK_HOLD_MS = 1_100;
+const EXTENSION_COPY_FEEDBACK_FADE_MS = 120;
 const ACTIVE_TAB_STORAGE_KEY = "rolefit:desktop:active-tab";
 const bridge = window.roleFitDesktop;
+const EXTENSION_COPY_ACTIONS = Object.freeze({
+  directory: Object.freeze({
+    prompt: "Copy path",
+    success: "Copied extension folder path.",
+    error: "Could not copy the extension folder path. Try again."
+  }),
+  chrome: Object.freeze({
+    prompt: "Copy address",
+    success: "Copied Chrome extensions address.",
+    error: "Could not copy the Chrome extensions address. Try again."
+  }),
+  edge: Object.freeze({
+    prompt: "Copy address",
+    success: "Copied Edge extensions address.",
+    error: "Could not copy the Edge extensions address. Try again."
+  }),
+  firefox: Object.freeze({
+    prompt: "Copy address",
+    success: "Copied Firefox debugging address.",
+    error: "Could not copy the Firefox debugging address. Try again."
+  })
+});
 const requiredBridgeMethods = Object.freeze([
   "getRuntimeInfo",
   "getLocalSiteSettings",
@@ -53,6 +77,7 @@ const requiredBridgeMethods = Object.freeze([
   "openCliSignInTerminal",
   "openProviderInstallGuide",
   "openExtensionDirectory",
+  "copyExtensionSetupValue",
   "openBrowserApp",
   "getWorkspaceOverview",
   "backupWorkspaceToFile",
@@ -87,6 +112,8 @@ const elements = Object.freeze({
   extensionPairingStatus: document.getElementById("extension-pairing-status"),
   extensionSiteOrigin: document.getElementById("extension-site-origin"),
   openExtensionDirectory: document.getElementById("open-extension-directory"),
+  extensionCopyButtons: [...document.querySelectorAll("button[data-extension-copy-target]")],
+  extensionSetupStatus: document.getElementById("extension-setup-status"),
   overviewSiteOrigin: document.getElementById("overview-site-origin"),
   overviewProviderSummary: document.getElementById("overview-provider-summary"),
   overviewExtensionSummary: document.getElementById("overview-extension-summary"),
@@ -112,6 +139,8 @@ let sitePortApplyPending = false;
 let sitePortConfirmValue = null;
 let extensionPairingSettings = null;
 let extensionPairingPending = false;
+let extensionCopyPending = false;
+const extensionCopyFeedbackTimers = new WeakMap();
 let extensionPairingPopoverOpen = false;
 let activeTabId = "overview";
 let workspaceOverview = null;
@@ -225,6 +254,73 @@ function announce(message) {
   window.requestAnimationFrame(() => {
     elements.providerAnnouncement.textContent = message;
   });
+}
+
+function announceExtensionSetupCopy(message) {
+  elements.extensionSetupStatus.textContent = "";
+  window.requestAnimationFrame(() => {
+    elements.extensionSetupStatus.textContent = message;
+  });
+}
+
+function clearExtensionSetupCopyFeedbackTimer(button) {
+  const feedbackTimers = extensionCopyFeedbackTimers.get(button);
+  if (!feedbackTimers) return;
+  for (const feedbackTimer of feedbackTimers) window.clearTimeout(feedbackTimer);
+  extensionCopyFeedbackTimers.delete(button);
+}
+
+function resetExtensionSetupCopyFeedback(button) {
+  if (button.dataset.copyState !== "settled") return;
+  delete button.dataset.copyState;
+}
+
+function showTemporaryExtensionSetupCopyFeedback(button, action, feedback, state) {
+  clearExtensionSetupCopyFeedbackTimer(button);
+  button.dataset.copyFeedback = feedback;
+  button.dataset.copyState = state;
+  const dismissTimer = window.setTimeout(() => {
+    button.dataset.copyState = "dismissing";
+    const resetTimer = window.setTimeout(() => {
+      button.dataset.copyFeedback = action.prompt;
+      if (button.matches(":hover, :focus-visible")) {
+        button.dataset.copyState = "settled";
+      } else {
+        delete button.dataset.copyState;
+      }
+      extensionCopyFeedbackTimers.delete(button);
+    }, EXTENSION_COPY_FEEDBACK_FADE_MS);
+    extensionCopyFeedbackTimers.set(button, [dismissTimer, resetTimer]);
+  }, EXTENSION_COPY_FEEDBACK_HOLD_MS);
+  extensionCopyFeedbackTimers.set(button, [dismissTimer]);
+}
+
+async function copyExtensionSetupValue(button) {
+  const target = button.dataset.extensionCopyTarget;
+  const action = EXTENSION_COPY_ACTIONS[target];
+  if (!action || !hasUsableBridge()) return;
+  if (extensionCopyPending) {
+    showTemporaryExtensionSetupCopyFeedback(button, action, "Wait", "pending");
+    announceExtensionSetupCopy("Another copy is already in progress.");
+    return;
+  }
+
+  clearExtensionSetupCopyFeedbackTimer(button);
+  extensionCopyPending = true;
+  button.dataset.copyFeedback = "Copying...";
+  button.dataset.copyState = "pending";
+  button.setAttribute("aria-busy", "true");
+  try {
+    await bridge.copyExtensionSetupValue(target);
+    showTemporaryExtensionSetupCopyFeedback(button, action, "Copied", "success");
+    announceExtensionSetupCopy(action.success);
+  } catch {
+    showTemporaryExtensionSetupCopyFeedback(button, action, "Try again", "error");
+    announceExtensionSetupCopy(action.error);
+  } finally {
+    extensionCopyPending = false;
+    button.removeAttribute("aria-busy");
+  }
 }
 
 function parseLocalSitePortInput() {
@@ -920,6 +1016,7 @@ function initializeUnavailableState() {
   elements.companionRoot.dataset.status = "error";
   elements.openRoleFit.disabled = true;
   elements.refreshProviders.disabled = true;
+  for (const button of elements.extensionCopyButtons) button.disabled = true;
   elements.sitePortInput.disabled = true;
   elements.sitePortApply.disabled = true;
   elements.sitePortStatus.textContent = "Port setting unavailable.";
@@ -1171,6 +1268,18 @@ elements.openExtensionDirectory.addEventListener("click", async () => {
     elements.openExtensionDirectory.disabled = false;
   }
 });
+
+for (const button of elements.extensionCopyButtons) {
+  button.addEventListener("click", () => {
+    void copyExtensionSetupValue(button);
+  });
+  button.addEventListener("pointerleave", () => {
+    resetExtensionSetupCopyFeedback(button);
+  });
+  button.addEventListener("blur", () => {
+    resetExtensionSetupCopyFeedback(button);
+  });
+}
 
 renderCheckingProviders();
 activateTab(storedTab(), { persist: false, refresh: false });

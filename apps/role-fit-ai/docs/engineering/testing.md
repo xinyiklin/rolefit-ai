@@ -362,6 +362,12 @@ and does not own workspace/tracker files. Focused companion probes should cover:
 - exact trusted main-frame and exact `file:` URL validation for every IPC call,
   a frozen self-contained preload, fixed named methods, and rejection of unknown
   providers or extra arguments;
+- desktop API 12 extension setup copy probes for **Copy path**, the exact
+  Chrome/Edge/Firefox address targets, closed target validation, main-owned
+  clipboard writes, sanitized failures, and no returned renderer path or
+  renderer clipboard permission; companion UI coverage also verifies native
+  click-to-copy buttons, local hover/focus feedback, no panel-wide render call,
+  and one visually hidden polite status region;
 - extension bundle materialization after active-server resolution, strict
   generated-port validation, packaged inclusion of `runtime-config.js`, and
   read-only pairing controls whenever the current companion does not own the
@@ -414,6 +420,13 @@ and does not own workspace/tracker files. Focused companion probes should cover:
   live synchronization;
 - no live provider login, hosted-page CORS/pairing, or paid AI call during
   automated verification.
+
+Automated smoke must not replace the operator's current OS clipboard contents.
+Instead, executable helper and IPC probes cover every exact copied value and the
+main-owned writer callback, source inspection pins that callback to Electron's
+`clipboard.writeText`, and the real Electron smoke dispatches pointer-leave and
+blur through the installed renderer listeners. The final OS clipboard click is
+manual visual QA.
 
 The existing desktop script names remain the command entry points while the
 source layout converges on the companion contract. A smoke that still passes by

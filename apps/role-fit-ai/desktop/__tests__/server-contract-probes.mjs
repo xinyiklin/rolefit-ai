@@ -305,6 +305,11 @@ assert.match(
 );
 assert.match(
   mainSource,
+  /copyExtensionSetupValue:[\s\S]*copyRoleFitExtensionSetupValue\([\s\S]*target,[\s\S]*extensionDirectory,[\s\S]*clipboard\.writeText/,
+  "main resolves setup targets and writes the private value without returning it to the renderer"
+);
+assert.match(
+  mainSource,
   /desktopServer\?\.ownership !== "owned"[\s\S]*return extensionPairingSettings/,
   "a reused server cannot expose actionable extension pairing requests"
 );

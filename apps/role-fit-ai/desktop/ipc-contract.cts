@@ -1,4 +1,4 @@
-export const ROLEFIT_DESKTOP_API_VERSION = 11 as const;
+export const ROLEFIT_DESKTOP_API_VERSION = 12 as const;
 export const ROLEFIT_DESKTOP_SETTINGS_SCHEMA_VERSION = 1 as const;
 export const ROLEFIT_PROVIDER_GUIDANCE_MAX_LENGTH = 240 as const;
 export const ROLEFIT_API_KEY_MAX_BYTES = 16_384 as const;
@@ -45,6 +45,7 @@ export const enum RoleFitDesktopIpcChannel {
   OpenCliSignInTerminal = "rolefit:companion:open-cli-sign-in-terminal",
   OpenProviderInstallGuide = "rolefit:companion:open-provider-install-guide",
   OpenExtensionDirectory = "rolefit:companion:open-extension-directory",
+  CopyExtensionSetupValue = "rolefit:companion:copy-extension-setup-value",
   OpenBrowserApp = "rolefit:companion:open-browser-app",
   GetWorkspaceOverview = "rolefit:companion:get-workspace-overview",
   BackupWorkspaceToFile = "rolefit:companion:backup-workspace-to-file",
@@ -107,6 +108,25 @@ export const ROLEFIT_PROVIDER_IDS = Object.freeze([
 export type RoleFitCliProviderId = (typeof ROLEFIT_CLI_PROVIDER_IDS)[number];
 export type RoleFitApiProviderId = (typeof ROLEFIT_API_PROVIDER_IDS)[number];
 export type RoleFitProviderId = RoleFitCliProviderId | RoleFitApiProviderId;
+export type RoleFitExtensionSetupCopyTarget =
+  | "directory"
+  | "chrome"
+  | "edge"
+  | "firefox";
+export const ROLEFIT_EXTENSION_SETUP_COPY_TARGETS = Object.freeze([
+  "directory",
+  "chrome",
+  "edge",
+  "firefox"
+] as const);
+
+export function isRoleFitExtensionSetupCopyTarget(
+  value: unknown
+): value is RoleFitExtensionSetupCopyTarget {
+  return typeof value === "string" &&
+    ROLEFIT_EXTENSION_SETUP_COPY_TARGETS.some((target) => target === value);
+}
+
 export type RoleFitProviderKind = "cli" | "api";
 export type RoleFitProviderAuthState =
   | "signed-in"
@@ -231,6 +251,7 @@ export type RoleFitSetCliProviderEnabledRequest = readonly [RoleFitCliProviderId
 export type RoleFitOpenCliSignInTerminalRequest = readonly [RoleFitCliProviderId];
 export type RoleFitOpenProviderInstallGuideRequest = readonly [RoleFitCliProviderId];
 export type RoleFitOpenExtensionDirectoryRequest = readonly [];
+export type RoleFitCopyExtensionSetupValueRequest = readonly [RoleFitExtensionSetupCopyTarget];
 export type RoleFitOpenBrowserAppRequest = readonly [];
 export type RoleFitWorkspaceOverviewRequest = readonly [];
 export type RoleFitBackupWorkspaceToFileRequest = readonly [];
@@ -260,6 +281,7 @@ export type RoleFitDesktopApi = Readonly<{
   ): Promise<RoleFitCliTerminalSignInResult>;
   openProviderInstallGuide(provider: RoleFitCliProviderId): Promise<void>;
   openExtensionDirectory(): Promise<void>;
+  copyExtensionSetupValue(target: RoleFitExtensionSetupCopyTarget): Promise<void>;
   openBrowserApp(): Promise<void>;
   getWorkspaceOverview(): Promise<RoleFitWorkspaceOverview>;
   backupWorkspaceToFile(): Promise<RoleFitWorkspaceBackupResult>;

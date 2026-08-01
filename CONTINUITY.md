@@ -5,6 +5,20 @@ bounded; app-only operational detail belongs in the affected app documentation.
 
 ## 2026-08-01
 
+- [USER+CODE+TOOL] Desktop API 12 adds one bounded extension-setup copy
+  operation for `directory`, `chrome`, `edge`, and `firefox`. The companion
+  renderer sends only that fixed target; Electron main maps it to the private
+  materialized extension path or exact browser setup address and owns
+  `clipboard.writeText`, with no generic renderer clipboard/path capability.
+  The setup card uses quiet native buttons with control-local hover/focus,
+  pending, success, and error feedback; success holds for 1.1s and fades before
+  restoring its prompt, the panel never rerenders or shifts, and an always-
+  present visually hidden live region reports results across tab changes. The
+  user approved visual QA on port 5181. The full RoleFit gate (64 offline
+  evaluations), 129-file package-layout probe, source Electron smoke, unsigned
+  Windows x64 Forge package, and packaged smoke pass; packaged smoke now
+  normalizes ASAR separators across Windows and POSIX. The product/extension
+  release version remains unchanged for the separate release PR.
 - [USER+CODE+TOOL] Live browser-tab Sessions awareness moved from the masthead
   into the bottom studio-rail utilities group immediately above Settings. It
   remains read-only and outside `OUTPUT_TABS` and the APG tablist; the expanded

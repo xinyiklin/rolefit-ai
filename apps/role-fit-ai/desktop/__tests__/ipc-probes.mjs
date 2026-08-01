@@ -6,6 +6,7 @@ import {
   ROLEFIT_API_KEY_MAX_BYTES,
   ROLEFIT_DESKTOP_API_VERSION,
   ROLEFIT_DESKTOP_SETTINGS_SCHEMA_VERSION,
+  ROLEFIT_EXTENSION_SETUP_COPY_TARGETS,
   ROLEFIT_EXTENSION_ORIGIN_MAX_COUNT,
   ROLEFIT_PROVIDER_GUIDANCE_MAX_LENGTH,
   ROLEFIT_WORKSPACE_BACKUP_MAX_JSON_BYTES,
@@ -17,6 +18,7 @@ import {
   isRoleFitApiProviderId,
   isRoleFitCliProviderId,
   isRoleFitConnectionServerState,
+  isRoleFitExtensionSetupCopyTarget,
   isRoleFitProviderId,
   isRoleFitWorkspaceBackupFileName,
   normalizeRoleFitExtensionOrigin,
@@ -26,6 +28,10 @@ import {
   installCompanionIpc,
   isTrustedCompanionRequest
 } from "../../dist-electron/desktop/ipc.cjs";
+import {
+  copyRoleFitExtensionSetupValue,
+  resolveRoleFitExtensionSetupCopyValue
+} from "../../dist-electron/desktop/extension-setup-copy.cjs";
 import { ROLEFIT_DESKTOP_RUNTIME_CONTRACT } from "../runtime-versions.mjs";
 
 const companionUrl = "file:///tmp/rolefit-companion/companion.html";
@@ -45,6 +51,7 @@ const channels = Object.freeze({
   terminal: "rolefit:companion:open-cli-sign-in-terminal",
   installGuide: "rolefit:companion:open-provider-install-guide",
   extensionDirectory: "rolefit:companion:open-extension-directory",
+  extensionCopy: "rolefit:companion:copy-extension-setup-value",
   open: "rolefit:companion:open-browser-app",
   workspaceOverview: "rolefit:companion:get-workspace-overview",
   workspaceBackup: "rolefit:companion:backup-workspace-to-file",
@@ -132,7 +139,7 @@ const providerConnections = Object.freeze([
   })
 ]);
 
-assert.equal(ROLEFIT_DESKTOP_API_VERSION, 11);
+assert.equal(ROLEFIT_DESKTOP_API_VERSION, 12);
 assert.equal(ROLEFIT_DESKTOP_SETTINGS_SCHEMA_VERSION, 1);
 assert.equal(ROLEFIT_EXTENSION_ORIGIN_MAX_COUNT, 4);
 assert.equal(ROLEFIT_API_KEY_MAX_BYTES, 16_384);
@@ -180,10 +187,49 @@ assert.equal(isRoleFitApiProviderId("openai"), true);
 assert.equal(isRoleFitApiProviderId("claude-cli"), false);
 assert.equal(isRoleFitProviderId("anthropic"), true);
 assert.equal(isRoleFitProviderId("shell"), false);
+assert.deepEqual([...ROLEFIT_EXTENSION_SETUP_COPY_TARGETS], [
+  "directory",
+  "chrome",
+  "edge",
+  "firefox"
+]);
+for (const target of ROLEFIT_EXTENSION_SETUP_COPY_TARGETS) {
+  assert.equal(isRoleFitExtensionSetupCopyTarget(target), true);
+}
+assert.equal(isRoleFitExtensionSetupCopyTarget("https://example.com"), false);
+assert.equal(isRoleFitExtensionSetupCopyTarget("C:\\private\\extension"), false);
+for (const target of [null, undefined, 42, {}, []]) {
+  assert.equal(isRoleFitExtensionSetupCopyTarget(target), false);
+}
+const privateExtensionDirectory = "C:\\private\\rolefit-extension";
+assert.equal(
+  resolveRoleFitExtensionSetupCopyValue("directory", privateExtensionDirectory),
+  privateExtensionDirectory
+);
+assert.equal(resolveRoleFitExtensionSetupCopyValue("chrome", privateExtensionDirectory), "chrome://extensions");
+assert.equal(resolveRoleFitExtensionSetupCopyValue("edge", privateExtensionDirectory), "edge://extensions");
+assert.equal(
+  resolveRoleFitExtensionSetupCopyValue("firefox", privateExtensionDirectory),
+  "about:debugging#/runtime/this-firefox"
+);
+const expectedExtensionSetupCopyValues = Object.freeze({
+  directory: privateExtensionDirectory,
+  chrome: "chrome://extensions",
+  edge: "edge://extensions",
+  firefox: "about:debugging#/runtime/this-firefox"
+});
+for (const target of ROLEFIT_EXTENSION_SETUP_COPY_TARGETS) {
+  const writes = [];
+  assert.equal(
+    copyRoleFitExtensionSetupValue(target, privateExtensionDirectory, (value) => writes.push(value)),
+    undefined
+  );
+  assert.deepEqual(writes, [expectedExtensionSetupCopyValues[target]]);
+}
 assert.equal(normalizeRoleFitExtensionOrigin(`${firefoxOrigin}/`), firefoxOrigin);
 assert.equal(normalizeRoleFitExtensionOrigin("https://example.com"), "");
 assert.deepEqual(runtimeInfo, {
-  apiVersion: 11,
+  apiVersion: 12,
   runtime: "electron-companion",
   platform: "darwin",
   appVersion: "0.1.0",
@@ -257,6 +303,8 @@ let configuredCli = null;
 let openedTerminalProvider = null;
 let openedInstallGuide = null;
 let extensionDirectoryOpens = 0;
+let extensionSetupCopyTargets = [];
+let extensionSetupCopyFailure = null;
 let browserOpenCount = 0;
 let appliedLocalSitePort = null;
 let savedExtensionOrigin = null;
@@ -367,6 +415,10 @@ const options = {
   openExtensionDirectory: async () => {
     extensionDirectoryOpens += 1;
   },
+  copyExtensionSetupValue: async (target) => {
+    extensionSetupCopyTargets.push(target);
+    if (extensionSetupCopyFailure) throw extensionSetupCopyFailure;
+  },
   openBrowserApp: async () => {
     browserOpenCount += 1;
   },
@@ -470,6 +522,13 @@ await installedHandlers.get(channels.installGuide)(requestEvent(), "antigravity-
 assert.equal(openedInstallGuide, "antigravity-cli");
 await installedHandlers.get(channels.extensionDirectory)(requestEvent());
 assert.equal(extensionDirectoryOpens, 1);
+for (const target of ROLEFIT_EXTENSION_SETUP_COPY_TARGETS) {
+  assert.equal(
+    await installedHandlers.get(channels.extensionCopy)(requestEvent(), target),
+    undefined
+  );
+}
+assert.deepEqual(extensionSetupCopyTargets, [...ROLEFIT_EXTENSION_SETUP_COPY_TARGETS]);
 await installedHandlers.get(channels.open)(requestEvent());
 assert.equal(browserOpenCount, 1);
 
@@ -758,6 +817,55 @@ await assert.rejects(
   /does not accept arguments/
 );
 await assert.rejects(
+  installedHandlers.get(channels.extensionCopy)(requestEvent()),
+  /requires one target/
+);
+await assert.rejects(
+  installedHandlers.get(channels.extensionCopy)(requestEvent(), "chrome", "extra"),
+  /requires one target/
+);
+for (const target of [
+  "https://example.com",
+  "C:\\private\\extension",
+  "arbitrary",
+  null,
+  undefined,
+  42,
+  {},
+  []
+]) {
+  await assert.rejects(
+    installedHandlers.get(channels.extensionCopy)(requestEvent(), target),
+    /Invalid extension setup copy target/
+  );
+}
+const extensionCopyCountBeforeUntrusted = extensionSetupCopyTargets.length;
+await assert.rejects(
+  installedHandlers.get(channels.extensionCopy)(requestEvent({ senderId: 99 }), "chrome"),
+  /Untrusted/
+);
+await assert.rejects(
+  installedHandlers.get(channels.extensionCopy)(requestEvent({ mainFrameMatches: false }), "chrome"),
+  /Untrusted/
+);
+await assert.rejects(
+  installedHandlers.get(channels.extensionCopy)(
+    requestEvent({ url: "file:///tmp/untrusted/companion.html" }),
+    "chrome"
+  ),
+  /Untrusted/
+);
+assert.equal(extensionSetupCopyTargets.length, extensionCopyCountBeforeUntrusted);
+extensionSetupCopyFailure = new Error("private clipboard diagnostic");
+try {
+  await installedHandlers.get(channels.extensionCopy)(requestEvent(), "chrome");
+  assert.fail("A failing extension setup copy did not reject.");
+} catch (error) {
+  assert.match(error.message, /extension setup value could not be copied/);
+  assert.doesNotMatch(error.message, /private clipboard diagnostic/);
+}
+extensionSetupCopyFailure = null;
+await assert.rejects(
   installedHandlers.get(channels.open)(requestEvent(), "extra"),
   /does not accept arguments/
 );
@@ -924,6 +1032,8 @@ const companionRendererSource = await readFile(
   resolve(appRoot, "desktop/companion-renderer.js"),
   "utf8"
 );
+const companionHtmlSource = await readFile(resolve(appRoot, "desktop/companion.html"), "utf8");
+const companionCssSource = await readFile(resolve(appRoot, "desktop/companion.css"), "utf8");
 const requiredModules = [...preload.matchAll(/require\(["']([^"']+)["']\)/g)]
   .map((match) => match[1]);
 assert.deepEqual([...new Set(requiredModules)], ["electron"]);
@@ -945,6 +1055,7 @@ assert.match(preloadSource, /RoleFitDesktopIpcChannel\.SetCliProviderEnabled/);
 assert.match(preloadSource, /RoleFitDesktopIpcChannel\.OpenCliSignInTerminal/);
 assert.match(preloadSource, /RoleFitDesktopIpcChannel\.OpenProviderInstallGuide/);
 assert.match(preloadSource, /RoleFitDesktopIpcChannel\.OpenExtensionDirectory/);
+assert.match(preloadSource, /RoleFitDesktopIpcChannel\.CopyExtensionSetupValue/);
 assert.match(preloadSource, /RoleFitDesktopIpcChannel\.OpenBrowserApp/);
 assert.match(preloadSource, /RoleFitDesktopIpcChannel\.GetWorkspaceOverview/);
 assert.match(preloadSource, /RoleFitDesktopIpcChannel\.BackupWorkspaceToFile/);
@@ -1044,6 +1155,195 @@ assert.doesNotMatch(
   /beginCliSignIn|cancelCliSignIn|Sign in in terminal/,
   "the renderer never exposes an in-app credential flow or inconsistent terminal label"
 );
+const copyExtensionSetupValueSource = companionRendererSource.slice(
+  companionRendererSource.indexOf("function announceExtensionSetupCopy"),
+  companionRendererSource.indexOf("function parseLocalSitePortInput")
+);
+assert.match(copyExtensionSetupValueSource, /extensionCopyPending[\s\S]*bridge\.copyExtensionSetupValue\(target\)/);
+const extensionCopyCalls = [];
+let settlePendingExtensionCopy = null;
+let extensionCopyOutcome = "pending";
+let extensionFeedbackTimerId = 0;
+const extensionFeedbackTimers = new Map();
+const extensionSetupStatus = { textContent: "" };
+const rendererCopyRenderCalls = [];
+const rendererCopyRenderSpies = Object.fromEntries(
+  [...new Set(
+    [...companionRendererSource.matchAll(/function (render[A-Za-z0-9_]*)/g)]
+      .map((match) => match[1])
+  )].map((name) => [name, () => rendererCopyRenderCalls.push(name)])
+);
+const rendererCopyHarness = vm.runInNewContext(
+  `
+    let extensionCopyPending = false;
+    const extensionCopyFeedbackTimers = new WeakMap();
+    ${copyExtensionSetupValueSource}
+    ({ copyExtensionSetupValue, resetExtensionSetupCopyFeedback });
+  `,
+  {
+    EXTENSION_COPY_FEEDBACK_HOLD_MS: 1_100,
+    EXTENSION_COPY_FEEDBACK_FADE_MS: 120,
+    EXTENSION_COPY_ACTIONS: {
+      directory: { prompt: "Copy path", success: "Copied extension folder path.", error: "Could not copy the extension folder path. Try again." },
+      chrome: { prompt: "Copy address", success: "Copied Chrome extensions address.", error: "Could not copy the Chrome extensions address. Try again." },
+      edge: { prompt: "Copy address", success: "Copied Edge extensions address.", error: "Could not copy the Edge extensions address. Try again." },
+      firefox: { prompt: "Copy address", success: "Copied Firefox debugging address.", error: "Could not copy the Firefox debugging address. Try again." }
+    },
+    bridge: {
+      copyExtensionSetupValue(target) {
+        extensionCopyCalls.push(target);
+        if (extensionCopyOutcome === "resolve") return Promise.resolve();
+        if (extensionCopyOutcome === "reject") return Promise.reject(new Error("private clipboard failure"));
+        return new Promise((resolvePromise) => {
+          settlePendingExtensionCopy = resolvePromise;
+        });
+      }
+    },
+    elements: { extensionSetupStatus },
+    hasUsableBridge: () => true,
+    render: () => rendererCopyRenderCalls.push("render"),
+    ...rendererCopyRenderSpies,
+    window: {
+      requestAnimationFrame(callback) {
+        callback();
+        return 1;
+      },
+      setTimeout(callback, delay) {
+        extensionFeedbackTimerId += 1;
+        extensionFeedbackTimers.set(extensionFeedbackTimerId, { callback, delay });
+        return extensionFeedbackTimerId;
+      },
+      clearTimeout(timerId) {
+        extensionFeedbackTimers.delete(timerId);
+      }
+    }
+  }
+);
+function copyButton(target, prompt) {
+  const attributes = new Map();
+  return {
+    attributes,
+    interactionActive: false,
+    dataset: { extensionCopyTarget: target, copyFeedback: prompt },
+    matches(selector) {
+      assert.equal(selector, ":hover, :focus-visible");
+      return this.interactionActive;
+    },
+    setAttribute(name, value) {
+      attributes.set(name, value);
+    },
+    removeAttribute(name) {
+      attributes.delete(name);
+    }
+  };
+}
+function runExtensionFeedbackTimer(timerId) {
+  const timer = extensionFeedbackTimers.get(timerId);
+  assert.equal(typeof timer?.callback, "function");
+  extensionFeedbackTimers.delete(timerId);
+  timer.callback();
+}
+const chromeCopyButton = copyButton("chrome", "Copy address");
+const edgeCopyButton = copyButton("edge", "Copy address");
+const directoryCopyButton = copyButton("directory", "Copy path");
+const untouchedDirectoryState = JSON.stringify({
+  dataset: directoryCopyButton.dataset,
+  attributes: [...directoryCopyButton.attributes]
+});
+const pendingChromeCopy = rendererCopyHarness.copyExtensionSetupValue(chromeCopyButton);
+assert.deepEqual(extensionCopyCalls, ["chrome"]);
+assert.equal(chromeCopyButton.dataset.copyFeedback, "Copying...");
+assert.equal(chromeCopyButton.dataset.copyState, "pending");
+assert.equal(chromeCopyButton.attributes.get("aria-busy"), "true");
+assert.equal(edgeCopyButton.dataset.copyFeedback, "Copy address");
+assert.equal(JSON.stringify({
+  dataset: directoryCopyButton.dataset,
+  attributes: [...directoryCopyButton.attributes]
+}), untouchedDirectoryState);
+await rendererCopyHarness.copyExtensionSetupValue(edgeCopyButton);
+assert.deepEqual(extensionCopyCalls, ["chrome"]);
+assert.equal(edgeCopyButton.dataset.copyFeedback, "Wait");
+assert.equal(edgeCopyButton.dataset.copyState, "pending");
+assert.equal(extensionSetupStatus.textContent, "Another copy is already in progress.");
+settlePendingExtensionCopy();
+await pendingChromeCopy;
+assert.equal(chromeCopyButton.dataset.copyFeedback, "Copied");
+assert.equal(chromeCopyButton.dataset.copyState, "success");
+assert.equal(chromeCopyButton.attributes.has("aria-busy"), false);
+assert.equal(extensionSetupStatus.textContent, "Copied Chrome extensions address.");
+chromeCopyButton.interactionActive = true;
+const chromeFeedbackTimerId = Math.max(...extensionFeedbackTimers.keys());
+assert.equal(extensionFeedbackTimers.get(chromeFeedbackTimerId).delay, 1_100);
+runExtensionFeedbackTimer(chromeFeedbackTimerId);
+assert.equal(chromeCopyButton.dataset.copyFeedback, "Copied");
+assert.equal(chromeCopyButton.dataset.copyState, "dismissing");
+const chromeFadeTimerId = Math.max(...extensionFeedbackTimers.keys());
+assert.equal(extensionFeedbackTimers.get(chromeFadeTimerId).delay, 120);
+runExtensionFeedbackTimer(chromeFadeTimerId);
+assert.equal(chromeCopyButton.dataset.copyFeedback, "Copy address");
+assert.equal(chromeCopyButton.dataset.copyState, "settled");
+chromeCopyButton.interactionActive = false;
+rendererCopyHarness.resetExtensionSetupCopyFeedback(chromeCopyButton);
+assert.equal("copyState" in chromeCopyButton.dataset, false);
+for (const timerId of [...extensionFeedbackTimers.keys()]) runExtensionFeedbackTimer(timerId);
+for (const timerId of [...extensionFeedbackTimers.keys()]) runExtensionFeedbackTimer(timerId);
+assert.equal(edgeCopyButton.dataset.copyFeedback, "Copy address");
+extensionCopyOutcome = "resolve";
+await rendererCopyHarness.copyExtensionSetupValue(chromeCopyButton);
+const staleFeedbackTimerId = Math.max(...extensionFeedbackTimers.keys());
+await rendererCopyHarness.copyExtensionSetupValue(chromeCopyButton);
+assert.equal(extensionFeedbackTimers.has(staleFeedbackTimerId), false);
+assert.equal(extensionFeedbackTimers.size, 1);
+runExtensionFeedbackTimer(Math.max(...extensionFeedbackTimers.keys()));
+runExtensionFeedbackTimer(Math.max(...extensionFeedbackTimers.keys()));
+assert.equal(chromeCopyButton.dataset.copyFeedback, "Copy address");
+extensionCopyOutcome = "reject";
+await rendererCopyHarness.copyExtensionSetupValue(edgeCopyButton);
+assert.equal(edgeCopyButton.dataset.copyFeedback, "Try again");
+assert.equal(edgeCopyButton.dataset.copyState, "error");
+assert.equal(edgeCopyButton.attributes.has("aria-busy"), false);
+assert.equal(extensionSetupStatus.textContent, "Could not copy the Edge extensions address. Try again.");
+const errorFeedbackTimerId = Math.max(...extensionFeedbackTimers.keys());
+runExtensionFeedbackTimer(errorFeedbackTimerId);
+runExtensionFeedbackTimer(Math.max(...extensionFeedbackTimers.keys()));
+assert.equal(extensionFeedbackTimers.has(errorFeedbackTimerId), false);
+assert.equal(edgeCopyButton.dataset.copyFeedback, "Copy address");
+assert.equal("copyState" in edgeCopyButton.dataset, false);
+extensionCopyOutcome = "resolve";
+await rendererCopyHarness.copyExtensionSetupValue(chromeCopyButton);
+assert.deepEqual(extensionCopyCalls, ["chrome", "chrome", "chrome", "edge", "chrome"]);
+assert.equal(JSON.stringify({
+  dataset: directoryCopyButton.dataset,
+  attributes: [...directoryCopyButton.attributes]
+}), untouchedDirectoryState);
+assert.deepEqual(rendererCopyRenderCalls, []);
+assert.match(companionRendererSource, /Copied Chrome extensions address\./);
+assert.doesNotMatch(companionRendererSource, /navigator\.clipboard|clipboard\.writeText/);
+for (const target of ROLEFIT_EXTENSION_SETUP_COPY_TARGETS) {
+  assert.match(
+    companionHtmlSource,
+    new RegExp(`data-extension-copy-target=["']${target}["']`)
+  );
+}
+assert.match(
+  companionHtmlSource,
+  /<\/main>\s*<p class="visually-hidden"[^>]*id="extension-setup-status"[^>]*role="status"[^>]*aria-live="polite"/
+);
+assert.doesNotMatch(companionHtmlSource, /extension-install__status/);
+assert.match(companionCssSource, /\.extension-install__copy::after[\s\S]*content:\s*attr\(data-copy-feedback\)/);
+assert.match(
+  companionCssSource,
+  /\.extension-install__copy:hover:not\(:disabled\):not\(\[data-copy-state\]\)::after[\s\S]*\.extension-install__copy:focus-visible:not\(\[data-copy-state\]\)::after/
+);
+assert.match(companionRendererSource, /pointerleave[\s\S]*resetExtensionSetupCopyFeedback[\s\S]*blur[\s\S]*resetExtensionSetupCopyFeedback/);
+assert.match(
+  companionCssSource,
+  /@media \(prefers-reduced-motion: reduce\)[\s\S]*transition-duration:\s*\.01ms\s*!important/
+);
+assert.match(
+  companionCssSource,
+  /@media \(forced-colors: active\)[\s\S]*\.extension-install__copy::after[\s\S]*CanvasText/
+);
 
 let exposedKey = null;
 let exposedApi = null;
@@ -1111,6 +1411,7 @@ assert.deepEqual(
   [
     "applyLocalSitePort",
     "backupWorkspaceToFile",
+    "copyExtensionSetupValue",
     "getConnectionStatus",
     "getExtensionPairingSettings",
     "getLocalSiteSettings",
@@ -1147,6 +1448,7 @@ await exposedApi.setCliProviderEnabled("codex-cli", true);
 await exposedApi.openCliSignInTerminal("codex-cli");
 await exposedApi.openProviderInstallGuide("antigravity-cli");
 await exposedApi.openExtensionDirectory();
+await exposedApi.copyExtensionSetupValue("firefox");
 await exposedApi.openBrowserApp();
 await exposedApi.getWorkspaceOverview();
 await exposedApi.backupWorkspaceToFile();
@@ -1167,6 +1469,7 @@ assert.deepEqual(invocations, [
   { channel: channels.terminal, args: ["codex-cli"] },
   { channel: channels.installGuide, args: ["antigravity-cli"] },
   { channel: channels.extensionDirectory, args: [] },
+  { channel: channels.extensionCopy, args: ["firefox"] },
   { channel: channels.open, args: [] },
   { channel: channels.workspaceOverview, args: [] },
   { channel: channels.workspaceBackup, args: [] },
