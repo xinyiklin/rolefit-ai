@@ -13,6 +13,7 @@ import {
   isRoleFitApiProviderId,
   isRoleFitCliProviderId,
   isRoleFitConnectionServerState,
+  isRoleFitExtensionSetupCopyTarget,
   isRoleFitProviderId,
   isRoleFitWorkspaceBackupFileName,
   normalizeRoleFitExtensionOrigin,
@@ -41,6 +42,8 @@ import {
   type RoleFitBackupWorkspaceToFileRequest,
   type RoleFitConnectionStatus,
   type RoleFitConnectionStatusRequest,
+  type RoleFitCopyExtensionSetupValueRequest,
+  type RoleFitExtensionSetupCopyTarget,
   type RoleFitOpenWorkspaceFolderRequest,
   type RoleFitRestoreWorkspaceFromFileRequest,
   type RoleFitWorkspaceBackupResult,
@@ -77,6 +80,7 @@ export type CompanionIpcOptions = {
   ): Promise<RoleFitCliTerminalSignInResult>;
   openProviderInstallGuide(provider: RoleFitCliProviderId): Promise<void>;
   openExtensionDirectory(): Promise<void>;
+  copyExtensionSetupValue(target: RoleFitExtensionSetupCopyTarget): Promise<void>;
   openBrowserApp(): Promise<void>;
   getWorkspaceOverview(): Promise<RoleFitWorkspaceOverview>;
   backupWorkspaceToFile(): Promise<RoleFitWorkspaceBackupResult>;
@@ -154,6 +158,15 @@ function requireExtensionOrigin(value: unknown): string {
   const origin = normalizeRoleFitExtensionOrigin(value);
   if (!origin) throw new Error("Invalid browser-extension origin.");
   return origin;
+}
+
+function requireExtensionSetupCopyTarget(
+  value: unknown
+): RoleFitExtensionSetupCopyTarget {
+  if (!isRoleFitExtensionSetupCopyTarget(value)) {
+    throw new Error("Invalid extension setup copy target.");
+  }
+  return value;
 }
 
 function copySiteSettings(settings: RoleFitDesktopSiteSettings): RoleFitDesktopSiteSettings {
@@ -436,6 +449,7 @@ export function installCompanionIpc(options: CompanionIpcOptions): () => void {
     RoleFitDesktopIpcChannel.OpenCliSignInTerminal,
     RoleFitDesktopIpcChannel.OpenProviderInstallGuide,
     RoleFitDesktopIpcChannel.OpenExtensionDirectory,
+    RoleFitDesktopIpcChannel.CopyExtensionSetupValue,
     RoleFitDesktopIpcChannel.OpenBrowserApp,
     RoleFitDesktopIpcChannel.GetWorkspaceOverview,
     RoleFitDesktopIpcChannel.BackupWorkspaceToFile,
@@ -591,6 +605,21 @@ export function installCompanionIpc(options: CompanionIpcOptions): () => void {
         requireTrustedRequest(event, options);
         requireNoArguments(args, "Open-extension-directory");
         await options.openExtensionDirectory();
+      }
+    );
+    options.ipc.handle(
+      RoleFitDesktopIpcChannel.CopyExtensionSetupValue,
+      async (event: IpcMainInvokeEvent, ...args: RoleFitCopyExtensionSetupValueRequest) => {
+        requireTrustedRequest(event, options);
+        if (args.length !== 1) {
+          throw new Error("Copy-extension-setup-value IPC requires one target.");
+        }
+        const target = requireExtensionSetupCopyTarget(args[0]);
+        try {
+          await options.copyExtensionSetupValue(target);
+        } catch {
+          throw new Error("The extension setup value could not be copied. Try again.");
+        }
       }
     );
     options.ipc.handle(

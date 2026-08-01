@@ -458,9 +458,28 @@ p { margin-top: 0; }
 .extension-install h2 { margin: 0; color: var(--ink-strong); font-family: var(--serif); font-size: 18px; font-weight: 600; }
 .extension-install__supported { margin: 8px 0 0; color: var(--ink-soft); font-size: 12px; line-height: 1.5; }
 .extension-install__source { margin: 8px 0 0; color: var(--ink-faint); font-size: 11px; line-height: 1.45; }
-.extension-install__open { margin-top: 12px; min-height: 32px; padding: 0 10px; border: 1px solid var(--forest); border-radius: 5px; background: var(--forest); color: #f7fbf8; cursor: pointer; font: inherit; font-size: 11px; font-weight: 750; }
+.extension-install__actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.extension-install__open,
+.extension-install__copy--path { min-height: 32px; padding: 0 10px; border: 1px solid var(--line-strong); border-radius: 5px; font: inherit; font-size: 11px; font-weight: 750; }
+.extension-install__open { border-color: var(--forest); background: var(--forest); color: #f7fbf8; cursor: pointer; }
+.extension-install__copy { position: relative; display: inline-flex; align-items: center; justify-content: center; cursor: copy; }
+.extension-install__copy--path { background: var(--card); color: var(--forest-deep); }
+.extension-install__copy--inline { min-height: 24px; padding: 1px 4px; border: 1px solid transparent; border-radius: 3px; background: #edf0eb; color: var(--forest-deep); font-family: var(--mono); font-size: 10px; font-weight: 600; line-height: 1.45; vertical-align: baseline; }
+.extension-install__copy:focus-visible { outline: 2px solid var(--forest-deep); outline-offset: 2px; }
 .extension-install__open:hover:not(:disabled) { border-color: var(--forest-deep); background: var(--forest-deep); color: #fff; }
-.extension-install__open:disabled { border-color: var(--line); background: #edf0eb; color: var(--ink-faint); cursor: wait; }
+.extension-install__copy--path:hover:not(:disabled) { border-color: var(--forest); background: var(--forest-pale); }
+.extension-install__copy--inline:hover:not(:disabled) { border-color: var(--line-strong); background: var(--forest-pale); }
+.extension-install__open:disabled,
+.extension-install__copy:disabled { border-color: var(--line); background: #edf0eb; color: var(--ink-faint); cursor: not-allowed; }
+.extension-install__copy code { min-width: 0; padding: 0; overflow-wrap: anywhere; background: transparent; color: inherit; font-size: 10px; white-space: normal; }
+.extension-install__copy::after { position: absolute; z-index: 4; bottom: calc(100% + 5px); left: 50%; padding: 3px 6px; border-radius: 4px; background: var(--ink-strong); color: var(--paper); content: attr(data-copy-feedback); font-family: Geist, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 10px; font-weight: 650; line-height: 1.4; opacity: 0; pointer-events: none; transform: translate(-50%, 2px); transition: opacity 120ms cubic-bezier(.2, .6, .2, 1), transform 120ms cubic-bezier(.2, .6, .2, 1); white-space: nowrap; }
+.extension-install__copy:hover:not(:disabled):not([data-copy-state])::after,
+.extension-install__copy:focus-visible:not([data-copy-state])::after,
+.extension-install__copy[data-copy-state="pending"]::after,
+.extension-install__copy[data-copy-state="success"]::after,
+.extension-install__copy[data-copy-state="error"]::after { opacity: 1; transform: translate(-50%, 0); }
+.extension-install__copy[data-copy-state="success"]::after { background: var(--forest-deep); }
+.extension-install__copy[data-copy-state="error"]::after { background: var(--red); }
 
 .extension-steps { display: grid; gap: 13px; margin: 18px 0 0; padding: 0; list-style: none; }
 .extension-steps li { display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 9px; }
@@ -693,4 +712,8 @@ code { padding: 1px 3px; border-radius: 3px; background: #edf0eb; color: var(--f
 @media (forced-colors: active) {
   .brand__mark, .provider-card__state::before { forced-color-adjust: none; }
   .overview-card, .provider-card, .extension-install, .extension-pairing-popover, .site-port-form, .workspace-card, .connection-state-block { background: Canvas; }
+  .extension-install__copy { border-color: ButtonText; background: ButtonFace; color: ButtonText; }
+  .extension-install__copy:hover:not(:disabled) { border-color: Highlight; background: Highlight; color: HighlightText; }
+  .extension-install__copy:focus-visible { outline-color: Highlight; }
+  .extension-install__copy::after { border: 1px solid CanvasText; background: CanvasText; color: Canvas; }
 }

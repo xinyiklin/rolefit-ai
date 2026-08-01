@@ -6,6 +6,7 @@ import type {
   RoleFitDesktopApi,
   RoleFitDesktopRuntimeInfo,
   RoleFitDesktopSiteSettings,
+  RoleFitExtensionSetupCopyTarget,
   RoleFitExtensionPairingSettings,
   RoleFitProviderConnection,
   RoleFitProviderId,
@@ -80,6 +81,11 @@ const desktopApi: RoleFitDesktopApi = Object.freeze({
     ) as Promise<void>,
   openExtensionDirectory: () =>
     ipcRenderer.invoke(RoleFitDesktopIpcChannel.OpenExtensionDirectory) as Promise<void>,
+  copyExtensionSetupValue: (target: RoleFitExtensionSetupCopyTarget) =>
+    ipcRenderer.invoke(
+      RoleFitDesktopIpcChannel.CopyExtensionSetupValue,
+      target
+    ) as Promise<void>,
   openBrowserApp: () =>
     ipcRenderer.invoke(RoleFitDesktopIpcChannel.OpenBrowserApp) as Promise<void>,
   getWorkspaceOverview: () =>
