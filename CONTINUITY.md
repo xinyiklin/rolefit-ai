@@ -5,21 +5,35 @@ bounded; app-only operational detail belongs in the affected app documentation.
 
 ## 2026-08-01
 
+- [USER+CODE+TOOL] The standalone Typeset app and the private
+  `@typeset/engine` and `@typeset/editor` workspace packages establish a 0.2.0
+  document-platform milestone together. This is metadata-only: workspace link
+  ranges remain `*`; RoleFit remains 0.6.0; runtime code and UI are untouched;
+  and no exported package contract, portable-file schema, or browser-storage
+  schema changed.
+  npm 11.16.0 regenerated exactly the three owning workspace-version entries
+  in the root lockfile, and a clean install passed with a task-scoped cache
+  after the running RoleFit companion released its native-module handle. The
+  matching publication mechanism is the existing Typeset static-container
+  deployment from `main`, not a Git tag, GitHub Release, or npm publication;
+  PR checks, merge, the `Typeset CI and Deploy` main run, and the live-site
+  receipt remain UNCONFIRMED.
 - [USER+CODE+TOOL] The frozen RoleFit milestone is prepared as source version
   0.6.0 with browser extension 1.1.0 and the existing desktop bridge API 12;
-  Typeset, shared-package, manifest-format, backup, document, settings, and
-  runtime-config schema versions remain unchanged. Preview identity stays in
-  the intended `rolefit-preview-v0.6.0-beta.1` tag rather than the package
-  version, and the curated note records the exact extension/API mapping. The
+  within that RoleFit release, Typeset, shared-package, manifest-format,
+  backup, document, settings, and runtime-config schema versions remained
+  unchanged. Preview identity stays in the
+  `rolefit-preview-v0.6.0-beta.1` tag rather than the package version, and the
+  curated note records the exact extension/API mapping. The
   release-tuple regression check has a red/green proof and all 12 desktop
   release-contract tests pass. The full RoleFit build/landing/desktop gate and
   all 64 offline evaluations pass outside the managed esbuild filesystem
   boundary; source Electron smoke, the 129-file allowlisted package layout, and
   unpacked Windows x64 packaged smoke also pass. A local Squirrel installer
   make is UNCONFIRMED because this execution account cannot create Electron's
-  `AppData\Local\SquirrelTemp`; the public preview remains UNCONFIRMED until
-  user QA, merge to `main`, the immutable tag push, and every native publication
-  job complete successfully.
+  `AppData\Local\SquirrelTemp`; the authoritative native workflow superseded
+  that host limitation after user QA and merge commit `e4c67ea`: run
+  `30717428328` published the six-asset unsigned GitHub prerelease successfully.
 - [USER+CODE+TOOL] Desktop API 12 adds one bounded extension-setup copy
   operation for `directory`, `chrome`, `edge`, and `firefox`. The companion
   renderer sends only that fixed target; Electron main maps it to the private

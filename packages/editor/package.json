@@ -1,6 +1,6 @@
 {
   "name": "@typeset/editor",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "description": "The Typeset editing surface: the direct-edit contenteditable page, formatting controls, history/style hooks, and styles, over @typeset/engine.",
