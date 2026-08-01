@@ -27,9 +27,13 @@ Applies to `apps/role-fit-ai/desktop/` and `tsconfig.desktop.json`.
   signal to an arbitrary process.
 - `companion.html` owns the local-file CSP; `security.cts` owns permissions,
   navigation, external-window, and webview policy.
-- `ipc-contract.cts` owns the fixed serializable companion methods;
-  `ipc.cts` validates the exact companion main frame and `file:` URL and tears
-  handlers down; `preload.cts` exposes only the frozen named API.
+- `ipc-contract.cts` owns the fixed serializable companion methods, including
+  desktop API 12's `copyExtensionSetupValue` target IDs (`directory`, `chrome`,
+  `edge`, and `firefox`); `ipc.cts` validates the exact companion main frame
+  and `file:` URL and tears handlers down; `preload.cts` exposes only the
+  frozen named API. Main maps those IDs to the materialized extension folder
+  or the exact browser setup addresses and performs the clipboard write; the
+  renderer receives neither the path nor a generic clipboard capability.
 - The provider vault owns async `safeStorage` encryption and one atomic,
   versioned document beneath Electron `userData`. Encrypted API ciphertext and
   the distinct non-secret enabled-provider field share that document; saved
@@ -102,8 +106,10 @@ Applies to `apps/role-fit-ai/desktop/` and `tsconfig.desktop.json`.
 
 - Keep `nodeIntegration: false`, `contextIsolation: true`, `sandbox: true`,
   `webSecurity: true`, and `webviewTag: false`. Deny every renderer permission;
-  the compact companion needs no clipboard, filesystem, device, notification,
-  camera, microphone, or geolocation access.
+  the compact companion needs no renderer clipboard, filesystem, device,
+  notification, camera, microphone, or geolocation access. Desktop API 12's
+  copy action is a fixed main-owned operation, not a renderer permission or
+  generic clipboard bridge.
 - Keep the RoleFit server bind numeric-loopback-only. Port `5181` is the saved
   default; the companion may use a validated user-selected port or a locked
   `ROLEFIT_DESKTOP_PORT` override. A compatible listener must produce an
@@ -151,12 +157,14 @@ Applies to `apps/role-fit-ai/desktop/` and `tsconfig.desktop.json`.
   Fail closed on unavailable encryption or Linux `basic_text`; never silently
   downgrade to plaintext.
 - Expose no generic command, shell, filesystem, workspace, tracker, environment,
-  raw stdout/stderr, or raw IPC capability. Accept only known provider IDs and
-  fixed main-owned save/remove/status/external-terminal-sign-in/
-  install-and-sign-in-guide actions. Official install/sign-in-guide URLs are
-  allowlisted and main-owned; never accept an external URL from the renderer,
-  run package managers or elevated commands, or accept renderer-supplied shell
-  text.
+  clipboard, raw stdout/stderr, or raw IPC capability. Accept only known
+  provider IDs, the closed desktop API 12 copy targets, and fixed main-owned
+  save/remove/status/external-terminal-sign-in/install-and-sign-in-guide
+  actions. `copyExtensionSetupValue` accepts only `directory`, `chrome`,
+  `edge`, or `firefox`, returns no path or clipboard contents, and maps each
+  value in main. Official install/sign-in-guide URLs are allowlisted and
+  main-owned; never accept an external URL from the renderer, run package
+  managers or elevated commands, or accept renderer-supplied shell text.
 - Keep external-terminal sign-in equally closed: the renderer supplies only a
   known CLI provider id, Electron main maps it to one fixed command/argv pair,
   and platform launchers receive no renderer-authored executable, command,

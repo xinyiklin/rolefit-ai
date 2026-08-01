@@ -140,6 +140,20 @@ materialized extension folder. The extension accepts only that validated
 localhost port and never scans or accepts a page-selected origin. After a
 port-changing restart, the user reloads the unpacked extension once.
 
+## Extension setup copy contract
+
+Desktop IPC API 12 exposes one bounded copy operation for the companion's
+**Browser extension** section. The renderer may send only one of the closed
+targets `directory`, `chrome`, `edge`, or `firefox`; Electron main maps those
+targets to the already-materialized extension directory or the exact setup
+addresses `chrome://extensions`, `edge://extensions`, and
+`about:debugging#/runtime/this-firefox`, then writes the selected value to the
+clipboard. The UI presents **Copy path** and exact browser-address
+click-to-copy controls. Hover/focus feedback updates only the invoked control;
+the result also reaches a visually hidden polite status region without adding a
+visible receipt or shifting the panel. No renderer-supplied path or arbitrary
+text is accepted or returned, and the renderer receives no clipboard permission.
+
 ## Provider state contract
 
 One provider has two independent state dimensions:

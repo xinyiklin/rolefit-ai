@@ -28,8 +28,16 @@ details with AI** is off. Start the app
 select **Open extension folder**. The companion materializes its allowlisted
 extension files inside app data and writes the resolved local port into that
 copy so Chrome, Edge, and Firefox can load it outside Electron's packaged
-archive. Keep that folder in place after loading it. There is no browser-store
-package yet.
+archive. **Copy path** copies that app-owned folder path. The section also has
+click-to-copy controls for the exact Chrome (`chrome://extensions`), Edge
+(`edge://extensions`), and Firefox
+(`about:debugging#/runtime/this-firefox`) setup addresses. These are fixed
+desktop API 12 targets: Electron main performs the clipboard write, the
+renderer sends only a target id, no filesystem path or arbitrary text is
+accepted from the renderer, and no renderer clipboard permission is needed.
+Each action keeps visible feedback on its hovered or focused control and uses a
+visually hidden polite announcement for assistive technology. Keep that folder
+in place after loading it. There is no browser-store package yet.
 
 **Source development:** Load this repository's `extension/` folder directly;
 the browser-specific steps below apply to either folder.
