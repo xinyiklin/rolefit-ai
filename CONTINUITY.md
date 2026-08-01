@@ -5,6 +5,21 @@ bounded; app-only operational detail belongs in the affected app documentation.
 
 ## 2026-08-01
 
+- [USER+CODE+TOOL] The frozen RoleFit milestone is prepared as source version
+  0.6.0 with browser extension 1.1.0 and the existing desktop bridge API 12;
+  Typeset, shared-package, manifest-format, backup, document, settings, and
+  runtime-config schema versions remain unchanged. Preview identity stays in
+  the intended `rolefit-preview-v0.6.0-beta.1` tag rather than the package
+  version, and the curated note records the exact extension/API mapping. The
+  release-tuple regression check has a red/green proof and all 12 desktop
+  release-contract tests pass. The full RoleFit build/landing/desktop gate and
+  all 64 offline evaluations pass outside the managed esbuild filesystem
+  boundary; source Electron smoke, the 129-file allowlisted package layout, and
+  unpacked Windows x64 packaged smoke also pass. A local Squirrel installer
+  make is UNCONFIRMED because this execution account cannot create Electron's
+  `AppData\Local\SquirrelTemp`; the public preview remains UNCONFIRMED until
+  user QA, merge to `main`, the immutable tag push, and every native publication
+  job complete successfully.
 - [USER+CODE+TOOL] Desktop API 12 adds one bounded extension-setup copy
   operation for `directory`, `chrome`, `edge`, and `firefox`. The companion
   renderer sends only that fixed target; Electron main maps it to the private
