@@ -7,8 +7,7 @@
   background: var(--paper);
 }
 
-/* Left rail column: the stable tab axis. Session awareness lives in the app
-   masthead, so the rail remains focused on workspace navigation. */
+/* Left rail column: the stable tab axis plus bottom workspace utilities. */
 .studio-sidebar {
   display: flex;
   flex-direction: column;
@@ -17,6 +16,60 @@
   border-right: 1px solid var(--hairline);
   background: var(--card-soft);
   overflow: hidden;
+}
+
+/* Sessions and Settings share one utility group below the APG tablist. Keep the
+   rail's generous flex gap above this group, but make the two controls a tight
+   pair with one shared hairline. */
+.studio-sidebar__utilities {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  gap: var(--s1);
+  min-width: 0;
+  margin-top: auto;
+  padding: var(--s3);
+  border-top: 1px solid var(--hairline-soft);
+}
+
+.studio-sidebar__utilities .nav-menu {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+}
+
+.studio-sidebar__utilities .nav-menu__trigger {
+  justify-content: flex-start;
+  width: 100%;
+  height: 34px;
+  min-height: 34px;
+  padding-inline: var(--s2);
+}
+
+/* The total remains stable in the expanded rail. Active work adds only a
+   compact dot cue; the accessible label remains the complete state channel. */
+.studio-sidebar__utilities .sessions-menu .nav-menu__sub.sessions-menu__summary {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  gap: var(--s1);
+  margin-left: auto;
+  max-width: none;
+  min-width: 0;
+  overflow: visible;
+  color: var(--ink-faint);
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.studio-sidebar__utilities .sessions-menu .nav-menu__sub.sessions-menu__summary::before {
+  display: none;
+}
+
+.studio-sidebar__utilities .sessions-menu .nav-menu__sub.sessions-menu__summary.is-ready::before {
+  display: block;
 }
 
 /* -------- Sessions menu (concurrent tabs) -------- */
@@ -156,12 +209,22 @@
 /* Icon-led entries grouped by DRAFT / TRACK under small-caps mono eyebrows. */
 .studio-tabs {
   display: flex;
+  flex: 1 1 auto;
   flex-direction: column;
   align-items: stretch;
   gap: 0;
   min-width: 0;
   min-height: 0;
+  overflow-y: auto;
   padding: var(--s4) var(--s3);
+  scrollbar-width: thin;
+  scrollbar-color: var(--hairline-strong) transparent;
+}
+
+.studio-tabs::-webkit-scrollbar { width: 8px; }
+.studio-tabs::-webkit-scrollbar-thumb {
+  background: var(--hairline-strong);
+  border-radius: var(--r-pill);
 }
 
 /* Group eyebrow — mono small-caps label above each entry group, hairline above. */

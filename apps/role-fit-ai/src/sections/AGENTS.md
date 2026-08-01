@@ -92,9 +92,13 @@ and `docs/engineering/ui-principles.md`.
 - A material's state line names the real reason it is not ready. A saved base
   letter is a template holding real prose and unresolved `[slots]`; reporting
   that as "No draft" contradicts the variant the selector is showing.
-- The masthead contains Sessions and the shared Apply command only. Do not
-  reintroduce an Inputs group, `jobControl`, intake control, or parallel Apply
-  gate.
+- The masthead contains the RoleFit identity and shared Apply command only.
+  Read-only Sessions is ambient awareness immediately above Settings in the
+  bottom studio-rail utilities group, outside `OUTPUT_TABS` and the APG tablist.
+  Expanded it shows Sessions + count; collapsed it becomes an icon + compact
+  count/working state, and its popover opens rightward within the viewport. Do
+  not reintroduce an Inputs group, `jobControl`, intake control, or parallel
+  Apply gate.
 - Restored applications return to Prepare through **Open preparation** after
   the host validates their posting and document sources.
 - Keep feature-specific composition near its tab/menu. Extract a shared section
@@ -124,8 +128,9 @@ and `docs/engineering/ui-principles.md`.
 
 ## UX rules
 
-- Preserve the Sessions/Apply masthead + vertical PREPARE / DRAFT / TRACK
-  navigation + tabbed workspace. Prepare is first and selected by default.
+- Preserve the Apply-only masthead plus Sessions/Settings studio-rail utilities
+  + vertical PREPARE / DRAFT / TRACK navigation + tabbed workspace. Prepare is
+  first and selected by default.
 - Use app tokens/classes for host chrome and package styles for shared editor
   behavior. Document intentional overrides.
 - Keep errors local, specific, and recoverable. Async stage UI must show exact

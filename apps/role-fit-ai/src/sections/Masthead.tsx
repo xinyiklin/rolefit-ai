@@ -1,4 +1,3 @@
-import type { ReactNode } from "react";
 import { ClipboardCheck, X } from "lucide-react";
 
 type MastheadProps = {
@@ -12,7 +11,6 @@ type MastheadProps = {
   applyStatus?: string;
   applyStatusIsError?: boolean;
   onDismissApplyStatus?: () => void;
-  sessionsControl?: ReactNode;
 };
 
 export function Masthead({
@@ -21,8 +19,7 @@ export function Masthead({
   applyHint,
   applyStatus,
   applyStatusIsError = false,
-  onDismissApplyStatus,
-  sessionsControl
+  onDismissApplyStatus
 }: MastheadProps) {
   return (
     <header className="masthead" aria-label="Workspace header">
@@ -31,11 +28,6 @@ export function Masthead({
           R
         </span>
         <h1>RoleFit AI</h1>
-      </div>
-      <div className="masthead__menus">
-        <div className="menu-group" role="group" aria-label="Sessions">
-          {sessionsControl}
-        </div>
       </div>
       <div className="masthead__actions">
         <span className="masthead-action">

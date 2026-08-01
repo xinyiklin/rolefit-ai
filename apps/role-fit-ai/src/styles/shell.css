@@ -13,7 +13,7 @@
 
 /* -------- Masthead -------- */
 
-/* Newspaper-style masthead: brand wordmark · typographic menu row · actions.
+/* Newspaper-style masthead: brand wordmark · global action.
    One structural hairline joins it directly to the sidebar and workspace. */
 .masthead {
   display: flex;
@@ -125,30 +125,12 @@
   color: var(--ink-strong);
 }
 
-.masthead__menus {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: nowrap;
-  /* Responsive disclosure removes secondary text before this row can wrap. */
-  min-width: 0;
-}
-
-/* Whitespace groups the menu families. Repeated vertical rules made both the
-   labelled and compact states look like a segmented control. */
-.masthead__menus > .menu-group + .menu-group {
-  margin-left: 0;
-  padding-left: 0;
-  border-left: 0;
-}
-
 .masthead__actions {
   position: relative;
   display: flex;
   align-items: center;
   gap: var(--s2);
-  /* A little whitespace separates the action pair from the menu row without
-     restoring the former ladder of vertical rules. */
+  /* Keep global actions visually distinct from the wordmark. */
   padding-left: var(--s2);
   border-left: 0;
 }
@@ -293,30 +275,7 @@
   overflow: hidden;
 }
 
-/* -------- Navbar dropdown menus -------- */
-
-/* Typographic menu groups: no box, no pills — quiet inline items separated by
-   hairline verticals (handled on .masthead__menus level). */
-.menu-group {
-  display: inline-flex;
-  align-items: stretch;
-  gap: 2px;
-  /* Removed: border, border-radius, background — the pill box is gone. */
-}
-
-/* Sibling menus group by a compact whitespace gap, not segmented dividers. */
-.menu-group > .nav-menu + .nav-menu {
-  margin-left: 0;
-  padding-left: 0;
-  border-left: 0;
-}
-
-/* Clear the old radius overrides — triggers are no longer clipped to a pill. */
-.menu-group .nav-menu:first-child .nav-menu__trigger,
-.menu-group .nav-menu:last-child .nav-menu__trigger,
-.menu-group .nav-menu:only-child .nav-menu__trigger {
-  border-radius: var(--r-sm);
-}
+/* -------- Dropdown menus -------- */
 
 .nav-menu { position: relative; display: inline-flex; }
 
@@ -356,40 +315,21 @@
   background: var(--card-soft);
 }
 
-/* Subtle ink underline on hover (1px, not a thick stripe).
-   Scoped to masthead so in-studio menus (Format) are unaffected. */
-.masthead .nav-menu__trigger::after {
-  content: "";
-  position: absolute;
-  bottom: 4px;
-  left: var(--s2);
-  right: var(--s2);
-  height: 1px;
-  background: var(--ink-strong);
-  opacity: 0;
-  transition: opacity 150ms var(--ease);
-}
-
-.masthead .nav-menu__trigger:hover::after { opacity: 0.18; }
-.masthead .nav-menu__trigger[aria-expanded="true"]::after { opacity: 0.35; }
-
-/* Trigger icons are reserved for the compact state; there they become accent
-   colored on hover/open. */
-.masthead .nav-menu__trigger > svg:first-child {
-  display: none;
+/* Trigger icons stay visible in the studio rail and inherit the menu's quiet
+   ink treatment until the control is engaged. */
+.nav-menu__trigger > svg:first-child {
   color: var(--ink-faint);
   flex: none;
   transition: color 150ms var(--ease);
 }
 
-/* The global Apply action retains both icon and label at every supported
-   width; masthead menu triggers disclose to icon-only controls. */
+/* The global Apply action retains both icon and label at every supported width. */
 .masthead__actions button > svg {
   display: block;
 }
 
-.masthead .nav-menu__trigger:hover > svg:first-child,
-.masthead .nav-menu__trigger[aria-expanded="true"] > svg:first-child {
+.nav-menu__trigger:hover > svg:first-child,
+.nav-menu__trigger[aria-expanded="true"] > svg:first-child {
   color: var(--accent);
 }
 
@@ -460,12 +400,20 @@
   animation: nav-menu-in 150ms var(--ease) both;
 }
 
-/* Masthead menu popovers anchor to their own trigger's right edge so they open
-   inboard beneath the control that owns them. */
-.masthead .menu-group { position: relative; }
-
-.sessions-menu .nav-menu__popover {
-  width: min(300px, 92vw);
+/* A rail menu opens to the right of its trigger. NavMenu supplies viewport-safe
+   inline top/left coordinates; fixed positioning lets the panel escape the
+   clipped studio shell and remain above the progress dock. */
+.nav-menu[data-popover-placement="right"] > .nav-menu__popover {
+  position: fixed;
+  top: auto;
+  right: auto;
+  bottom: auto;
+  width: min(300px, calc(100vw - 16px));
+  max-height: min(640px, calc(100vh - 16px));
+  max-height: min(640px, calc(100dvh - 16px));
+  z-index: 70;
+  transform-origin: bottom left;
+  animation: nav-menu-in-right 150ms var(--ease) both;
 }
 
 /* Subtle scrollbar styling for WebKit so long popovers read clean. */
@@ -485,6 +433,11 @@
 @keyframes nav-menu-in {
   from { opacity: 0.01; transform: translateY(-6px) scale(0.985); }
   to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes nav-menu-in-right {
+  from { opacity: 0.01; transform: translateX(-6px) scale(0.985); }
+  to { opacity: 1; transform: translateX(0) scale(1); }
 }
 
 /* -------- Progress cards (polish stages + job distill) -------- */

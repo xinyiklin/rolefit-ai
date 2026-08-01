@@ -19,7 +19,7 @@ const ACTIVE_PHASES = new Set<PresencePhase>(["distilling", "tailoring", "review
 
 type SessionRow = { key: string; label: string; phase: PresencePhase; isSelf: boolean };
 
-// Session-awareness menu in the app masthead. Each browser tab remains an
+// Session-awareness utility in the studio rail. Each browser tab remains an
 // independent job/draft/review workspace; this is read-only ambient awareness
 // because browsers cannot reliably focus another tab.
 // Each browser tab is an INDEPENDENT tailoring session (own job, draft, review);
@@ -48,6 +48,7 @@ export function SessionsMenu({
 
   const total = rows.length;
   const activeCount = rows.filter((r) => ACTIVE_PHASES.has(r.phase)).length;
+  const ariaLabel = `Tailoring sessions: ${total} open, ${activeCount} working`;
 
   return (
     <NavMenu
@@ -56,12 +57,11 @@ export function SessionsMenu({
       label={(
         <>
           <span className="nav-menu__label">Sessions</span>
-          <span className={`nav-menu__sub ${activeCount > 0 ? "is-ready" : ""}`}>
-            {activeCount > 0 ? `${activeCount} working` : total}
-          </span>
+          <span className={`nav-menu__sub sessions-menu__summary${activeCount > 0 ? " is-ready" : ""}`}>{total}</span>
         </>
       )}
-      ariaLabel="Tailoring sessions"
+      ariaLabel={ariaLabel}
+      popoverPlacement="right"
     >
       {/* role="group" (not status/aria-live): presence is ambient, not an alert. */}
       <section className="sessions-rail" role="group" aria-label="Open tailoring sessions">

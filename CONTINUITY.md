@@ -5,6 +5,18 @@ bounded; app-only operational detail belongs in the affected app documentation.
 
 ## 2026-08-01
 
+- [USER+CODE+TOOL] Live browser-tab Sessions awareness moved from the masthead
+  into the bottom studio-rail utilities group immediately above Settings. It
+  remains read-only and outside `OUTPUT_TABS` and the APG tablist; the expanded
+  rail shows a stable total, the collapsed rail preserves a compact count and
+  working cue, and the menu uses a viewport-clamped rightward popover that
+  escapes the clipped studio shell. The masthead now owns only RoleFit identity
+  and Apply. Product, design, engineering, testing, and scoped ownership docs
+  now describe the same boundary. The RoleFit production build, 371 workflow
+  guards, and all 64 offline evaluations pass; the seven esbuild evaluations
+  that cannot traverse the managed Windows filesystem sandbox were rerun
+  successfully outside it. Desktop visual QA on port 5181 remains UNCONFIRMED
+  pending the user's pre-merge review.
 - [USER+CODE+TOOL] A focused review of Apply's multi-document download change
   closed three async-contract gaps and two dialog/name edge cases. The naming
   dialog now remains mounted and busy until every selected PDF attempt settles,

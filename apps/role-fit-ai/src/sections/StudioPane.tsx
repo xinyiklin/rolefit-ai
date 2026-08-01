@@ -20,10 +20,9 @@ type StudioPaneProps = {
   children: ReactNode;
   footer?: ReactNode;
   overlay?: ReactNode;
-  // Pinned to the bottom of the rail, below the tab groups. Not a tab: it opens
-  // the Settings dialog rather than swapping the studio body, so it stays out of
-  // the tablist and its roving-tabindex keyboard model.
-  sidebarFooter?: ReactNode;
+  // Pinned to the bottom of the rail, below the tab groups. These are utilities,
+  // not tabs: they stay out of the tablist and its roving-tabindex model.
+  sidebarUtilities?: ReactNode;
   // Optional intent signal fired when a tab is hovered or focused but not yet
   // selected. The host decides what (if anything) that warms; the rail only
   // reports the intent.
@@ -37,7 +36,7 @@ export function StudioPane({
   children,
   footer,
   overlay,
-  sidebarFooter,
+  sidebarUtilities,
   onPrefetchOutputTab
 }: StudioPaneProps) {
   // APG tabs keyboard model: roving tabindex + arrow/Home/End move selection and
@@ -113,7 +112,15 @@ export function StudioPane({
           </div>
         ))}
       </nav>
-      {sidebarFooter ? <div className="studio-sidebar__footer">{sidebarFooter}</div> : null}
+      {sidebarUtilities ? (
+        <div
+          className="studio-sidebar__utilities"
+          role="group"
+          aria-label="Workspace utilities"
+        >
+          {sidebarUtilities}
+        </div>
+      ) : null}
       </div>
 
       <section className="studio-main" aria-label="Selected output">

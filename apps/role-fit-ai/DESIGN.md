@@ -135,9 +135,10 @@ shimmer, decorative motion, and nested card-in-card containers. Status is
 stated quietly (a small dot beside a word), never shouted (filled pills,
 banners, badges everywhere).
 
-Layout is structural and predictable: a masthead with Sessions plus the global
+Layout is structural and predictable: a masthead with the brand plus the global
 Apply action, a full-width studio whose rail moves through PREPARE, DRAFT, and
-TRACK, Settings pinned at the foot of that rail, matched
+TRACK, a bottom utility group with read-only Sessions immediately above Settings
+outside `OUTPUT_TABS` and the APG tablist, matched
 resume and cover-letter document action bars, and document-specific review
 rails. Breakpoints (1280/1180/1080/900/820/760
 px) collapse structure; they never fluidly rescale type. Desktop ~1440px is
@@ -432,13 +433,15 @@ interactive control shares the same focus treatment: 2px Forest Ink outline,
 
 - **Masthead:** newspaper-style: a 26px Forest-Ink seal tile with the serif
   initial beside the serif wordmark (the one place the accent is identity,
-  not action), then the typographic Sessions menu trigger and the global Apply
-  action separated by a hairline. The trigger has no box or pill and leads with
-  a small icon (`--ink-faint`, accent on hover/open); hover shows a 1px ink
-  underline at 18% opacity (35% when open) and a `--card-soft` tint. Its
-  popover is a 14px-radius raised sheet with `--shadow-lift`, entering with a
-  140ms 4px slide-fade. Apply carries the shared readiness state; no job input
-  or Inputs group lives in this bar.
+  not action), then the global Apply action separated by a hairline. Apply
+  carries the shared readiness state; no job input or Inputs group lives in
+  this bar.
+- **Studio utilities:** at the foot of the vertical rail, a bottom utilities
+  group places read-only Sessions immediately above Settings, outside
+  `OUTPUT_TABS` and the APG tablist. Expanded Sessions shows its label and
+  count; the collapsed rail shows an icon plus a compact count/working state.
+  Its 14px-radius raised popover opens rightward, clamps to the viewport, and
+  enters with a 150ms 6px slide-fade.
 - **Applications:** its new-work action returns to Prepare. The application
   detail modal edits committed tracker records and never becomes a second job
   intake surface.

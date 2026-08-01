@@ -2304,9 +2304,6 @@ function App() {
         applyStatus={applyStatus}
         applyStatusIsError={applyStatusIsError}
         onDismissApplyStatus={() => setApplyStatus("")}
-        sessionsControl={
-          <SessionsMenu self={{ jobLabel: _autosaveJobLabel, phase: _myPhase }} others={otherSessions} />
-        }
       />
 
       {polishProgressVisible ||
@@ -2345,20 +2342,23 @@ function App() {
           setActiveOutputTab={setActiveOutputTab}
           outputTabs={OUTPUT_TABS}
           onPrefetchOutputTab={prefetchOutputTab}
-          sidebarFooter={
-            <button
-              type="button"
-              className="studio-settings-trigger"
-              aria-haspopup="dialog"
-              aria-expanded={settingsSection !== null}
-              onClick={() => setSettingsSection((current) => (current === null ? "stages" : null))}
-              title="Settings"
-            >
-              <span className="studio-settings-trigger__icon" aria-hidden="true">
-                <Settings size={15} />
-              </span>
-              <span className="studio-settings-trigger__label">Settings</span>
-            </button>
+          sidebarUtilities={
+            <>
+              <SessionsMenu self={{ jobLabel: _autosaveJobLabel, phase: _myPhase }} others={otherSessions} />
+              <button
+                type="button"
+                className="studio-settings-trigger"
+                aria-haspopup="dialog"
+                aria-expanded={settingsSection !== null}
+                onClick={() => setSettingsSection((current) => (current === null ? "stages" : null))}
+                title="Settings"
+              >
+                <span className="studio-settings-trigger__icon" aria-hidden="true">
+                  <Settings size={15} />
+                </span>
+                <span className="studio-settings-trigger__label">Settings</span>
+              </button>
+            </>
           }
           overlay={
             resumePreview ? (
