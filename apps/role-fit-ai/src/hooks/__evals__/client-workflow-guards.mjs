@@ -162,6 +162,32 @@ assert.match(
   "excluding a material on re-Apply is explicitly non-destructive"
 );
 
+// Apply's post-commit download step. The PDFs are a side effect of an already
+// committed application, so their ordering and failure handling must not be
+// able to drift back into "download first" or "replace the status".
+const downloadPickStart = applyFlow.indexOf("async function handleApplyDownloadPick(");
+const downloadPickCommit = applyFlow.indexOf("if (!(await commitApply())) return;", downloadPickStart);
+const downloadResumePdf = applyFlow.indexOf("await handleDownloadPdf(", downloadPickStart);
+const downloadCoverPdf = applyFlow.indexOf("await handleDownloadCoverLetterPdf(", downloadPickStart);
+assert.ok(
+  downloadPickStart >= 0 && downloadPickCommit > downloadPickStart && downloadResumePdf > downloadPickCommit,
+  "Apply starts a download only after the application itself is committed"
+);
+assert.ok(
+  downloadCoverPdf > downloadResumePdf,
+  "Apply exports the resume and cover-letter PDFs sequentially, not concurrently"
+);
+assert.match(
+  applyFlow,
+  /if \(!canDownloadResume && !canDownloadCoverLetter\) \{[\s\S]{0,60}?await commitApply\(\)/,
+  "the Apply download prompt is skipped only when NEITHER included material can export"
+);
+assert.match(
+  applyFlow,
+  /setApplyStatus\(\(current\) =>[\s\S]{0,60}?current \? `\$\{current\} \$\{detail\}`/,
+  "a failed Apply export appends to the status instead of erasing the artifact-save result"
+);
+
 for (const [name, source] of [
   ["answers", answers],
   ["cover", cover],
@@ -778,6 +804,77 @@ assert.doesNotMatch(
   /loadBaseResumeVersion/,
   "the tailoring effect never replaces a resume; selection belongs to the guarded recommendation effect"
 );
+
+assert.match(
+  app,
+  /const resumeManualVariantSelectionInFlightRef = useRef\(false\);/,
+  "resume manual variant intent is claimed synchronously outside React state"
+);
+assert.match(
+  app,
+  /const coverManualVariantSelectionInFlightRef = useRef\(false\);/,
+  "cover-letter manual variant intent is claimed synchronously outside React state"
+);
+const resumeManualSelectionStart = app.indexOf("const handleSelectBaseResumeVariant = useCallback(");
+const resumeManualSelectionEnd = app.indexOf("const workspaceRestoreAdoptionHandlerRef", resumeManualSelectionStart);
+const resumeManualSelection = app.slice(resumeManualSelectionStart, resumeManualSelectionEnd);
+const resumeManualClaim = resumeManualSelection.indexOf(
+  "resumeManualVariantSelectionInFlightRef.current = true"
+);
+const resumeManualFirstAwait = resumeManualSelection.indexOf("await ");
+const resumeManualFinally = resumeManualSelection.indexOf("finally {");
+const resumeManualRelease = resumeManualSelection.indexOf(
+  "resumeManualVariantSelectionInFlightRef.current = false",
+  resumeManualFinally
+);
+assert.ok(
+  resumeManualSelectionStart >= 0 &&
+    resumeManualClaim >= 0 &&
+    resumeManualClaim < resumeManualFirstAwait &&
+    resumeManualFinally > resumeManualFirstAwait &&
+    resumeManualRelease > resumeManualFinally,
+  "resume manual selection claims before its first await and always releases in finally"
+);
+assert.match(
+  resumeManualSelection,
+  /!fileName\s*\|\|\s*fileName === baseResumeName\s*\|\|\s*resumeManualVariantSelectionInFlightRef\.current/,
+  "resume manual selection ignores empty, current, and synchronous reentry requests"
+);
+const coverManualSelectionStart = app.indexOf("const handleSelectPreparedCoverLetter = useCallback(");
+const coverManualSelectionEnd = app.indexOf("\n\n  useEffect(", coverManualSelectionStart);
+const coverManualSelection = app.slice(coverManualSelectionStart, coverManualSelectionEnd);
+const coverManualClaim = coverManualSelection.indexOf(
+  "coverManualVariantSelectionInFlightRef.current = true"
+);
+const coverManualFirstAwait = coverManualSelection.indexOf("await ");
+const coverManualFinally = coverManualSelection.indexOf("finally {");
+const coverManualRelease = coverManualSelection.indexOf(
+  "coverManualVariantSelectionInFlightRef.current = false",
+  coverManualFinally
+);
+assert.ok(
+  coverManualSelectionStart >= 0 &&
+    coverManualClaim >= 0 &&
+    coverManualClaim < coverManualFirstAwait &&
+    coverManualFinally > coverManualFirstAwait &&
+    coverManualRelease > coverManualFinally,
+  "cover-letter manual selection claims before confirmation and always releases in finally"
+);
+assert.match(
+  coverManualSelection,
+  /!fileName\s*\|\|[\s\S]{0,120}?coverManualVariantSelectionInFlightRef\.current/,
+  "cover-letter manual selection rejects empty, current, and synchronous reentry requests"
+);
+assert.match(
+  app,
+  /onSelectBaseResume=\{handleSelectBaseResumeVariant\}/,
+  "Prepare routes manual resume selection through the synchronous wrapper"
+);
+assert.match(
+  app,
+  /onOpen: \(\) => void handleSelectBaseResumeVariant\(option\.fileName\)/,
+  "the resume Open menu routes saved variants through the synchronous wrapper"
+);
 const variantRankingStart = app.indexOf("const rankingJobDescription");
 const variantRankingEnd = app.indexOf("// Auto-tailor remains a Prepare workflow.", variantRankingStart);
 const variantRanking = app.slice(variantRankingStart, variantRankingEnd);
@@ -808,8 +905,38 @@ assert.match(
 );
 assert.match(
   variantRanking,
-  /await current\.loadBaseResumeVersion\(\s*recommendation\.fileName,[\s\S]{0,350}?latest\.preparedJobDescription !== rankingJobDescription/,
+  /const resumeVariantSelectionStateRef = useRef\(\{[\s\S]{0,260}?documentVersion: resumeReplacementStateRef\.current\.version/,
+  "resume variant selection mirrors the live editor document version"
+);
+assert.match(
+  variantRanking,
+  /const startingDocumentVersion = startState\.documentVersion/,
+  "resume ranking captures the starting document version before loading candidates"
+);
+assert.match(
+  variantRanking,
+  /const canAdoptRecommendation =[\s\S]{0,650}?current\.documentVersion === startingDocumentVersion/,
+  "resume adoption requires the document version to remain current before loading"
+);
+assert.match(
+  variantRanking,
+  /const canAdoptRecommendation =[\s\S]{0,800}?!resumeManualVariantSelectionInFlightRef\.current[\s\S]{0,260}?await current\.loadBaseResumeVersion/,
+  "resume recommendation yields to synchronous manual selection before automatic loading"
+);
+assert.match(
+  variantRanking,
+  /await current\.loadBaseResumeVersion\(\s*recommendation\.fileName,[\s\S]{0,650}?latest\.documentVersion !== startingDocumentVersion/,
   "a unique resume winner is adopted through the guarded workspace loader"
+);
+assert.match(
+  variantRanking,
+  /await current\.loadBaseResumeVersion\([\s\S]{0,800}?resumeManualVariantSelectionInFlightRef\.current/,
+  "an in-flight automatic resume load cancels when manual selection begins"
+);
+assert.match(
+  variantRanking,
+  /latest\.resumeDocumentDirty[\s\S]{0,180}?latest\.baseResumeName !== startingBaseResumeName/,
+  "resume loading cancels when the editor becomes dirty or the selected base changes"
 );
 assert.match(
   variantRanking,
@@ -868,6 +995,36 @@ assert.match(
   coverRanking,
   /recommendation !== null[\s\S]{0,400}?!current\.dirty[\s\S]{0,240}?await current\.openWorkspaceCoverLetter\(\s*recommendation\.fileName,\s*"recommendation"/,
   "a unique cover-letter winner is auto-selected only while the editor is clean"
+);
+assert.match(
+  coverRanking,
+  /const coverLetterVariantSelectionStateRef = useRef\(\{[\s\S]{0,240}?documentVersion: coverReplacementStateRef\.current\.version/,
+  "cover-letter variant selection mirrors the live editor document version"
+);
+assert.match(
+  coverRanking,
+  /const startingDocumentVersion = coverLetterVariantSelectionStateRef\.current\.documentVersion/,
+  "cover-letter ranking captures the starting document version before loading candidates"
+);
+assert.match(
+  coverRanking,
+  /const canAdoptRecommendation =[\s\S]{0,600}?current\.documentVersion === startingDocumentVersion/,
+  "cover-letter adoption requires the document version to remain current before loading"
+);
+assert.match(
+  coverRanking,
+  /const canAdoptRecommendation =[\s\S]{0,760}?!coverManualVariantSelectionInFlightRef\.current[\s\S]{0,260}?await current\.openWorkspaceCoverLetter/,
+  "cover-letter recommendation yields to synchronous manual selection before automatic loading"
+);
+assert.match(
+  coverRanking,
+  /openWorkspaceCoverLetter\([\s\S]{0,600}?latest\.documentVersion !== startingDocumentVersion/,
+  "cover-letter loading cancels when the editor document version changes"
+);
+assert.match(
+  coverRanking,
+  /openWorkspaceCoverLetter\([\s\S]{0,760}?coverManualVariantSelectionInFlightRef\.current/,
+  "an in-flight automatic cover-letter load cancels when manual selection begins"
 );
 assert.match(
   coverRanking,
@@ -1005,8 +1162,38 @@ assert.match(
 );
 assert.match(
   app,
+  /function handleTailorPreparedResume\(\) \{\s*if \(!jobPrepared \|\| !canPolish \|\| isPolishing \|\| isSavingBaseResume \|\| isRankingResumeVariants\) return;/,
+  "the prepared-resume Tailor handler fails closed while variant ranking is active"
+);
+assert.match(
+  app,
+  /canTailor=\{canPolish && !isSavingBaseResume && !isRankingResumeVariants\}/,
+  "App disables Prepare resume Tailor during loading or variant ranking"
+);
+assert.match(
+  prepareTab,
+  /const tailorHint =[\s\S]{0,420}?isSelectingResume \|\| isRankingResumeVariants[\s\S]{0,120}?"Wait for the resume variant selection to finish\."[\s\S]{0,120}?!canTailor/,
+  "Prepare explains that resume Tailor is waiting for variant selection before generic blockers"
+);
+assert.match(
+  app,
   /materialSelection\.resume[\s\S]{0,180}?isSavingBaseResume[\s\S]{0,180}?materialSelection\.coverLetter[\s\S]{0,120}?isSelectingCoverVariant/,
   "included variant loads block the shared Apply readiness gate"
+);
+assert.match(
+  app,
+  /materialSelection\.coverLetter[\s\S]{0,180}?isRankingCoverLetterVariants[\s\S]{0,120}?isSelectingCoverVariant/,
+  "included cover-letter ranking blocks the shared Apply readiness gate"
+);
+assert.match(
+  app,
+  /canTailorCoverLetter=\{[\s\S]{0,280}?!isGeneratingCover[\s\S]{0,80}?!isSelectingCoverVariant[\s\S]{0,80}?!isRankingCoverLetterVariants\s*\}/,
+  "Prepare disables cover-letter Tailor during manual or automatic variant selection"
+);
+assert.match(
+  app,
+  /isSelectingCoverVariant \|\| isRankingCoverLetterVariants[\s\S]{0,120}?"Wait for the cover-letter variant selection to finish\."/,
+  "Prepare explains that cover-letter Tailor is waiting for variant selection"
 );
 assert.match(
   preparationReadiness,

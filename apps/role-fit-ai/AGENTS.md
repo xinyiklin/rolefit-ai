@@ -125,10 +125,25 @@ or workspace state, keep it here and expose the smallest host seam instead.
   Require the current prepared job and readiness only for included materials,
   while allowing either or both to be excluded. Re-Apply must not delete or
   replace a previously saved artifact whose card is excluded.
+- The Apply download prompt covers every included, exportable material, not the
+  resume alone. Resume and cover letter stay two separate PDFs — ATS uploads are
+  per-document and a merged file breaks resume parsing. Each document owns one
+  row carrying its own checkbox and its own editable name; the letter's name is
+  seeded from the resume's through `swapDocumentTitleKind`, so the pair matches
+  by default and never stacks a second kind suffix, and stays independently
+  editable. Downloads run sequentially. A failed export never undoes the applied
+  state or the other download; because Apply has already navigated away from
+  each editor's status surface, the export helpers report success back and the
+  Apply status names which PDF failed. Apply is synchronously single-flight from
+  duplicate resolution through a direct commit and again through every selected
+  post-commit export; the pre-commit naming prompt remains interactive.
 - Automatic extension tailoring stays on Prepare and never replaces a dirty
   editor automatically. Rank actual saved resume and cover-letter contents
   against weighted prepared-job sections, and auto-select a meaningful unique
   winner for either document while its editor is clean and not application-owned.
+  An explicit manual variant choice synchronously preempts recommendation work;
+  while an included variant is ranking or loading, preparation remains busy and
+  Apply or another Tailor action cannot start.
   A tie or incomplete comparison returns no recommendation and keeps the current
   selection. Do not add persisted variant metadata or another schema for either
   choice.

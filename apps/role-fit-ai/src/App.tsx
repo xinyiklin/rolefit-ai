@@ -312,6 +312,8 @@ function App() {
     coverLetter: boolean;
   }>(DEFAULT_MATERIAL_SELECTION);
   const [isSelectingCoverVariant, setIsSelectingCoverVariant] = useState(false);
+  const resumeManualVariantSelectionInFlightRef = useRef(false);
+  const coverManualVariantSelectionInFlightRef = useRef(false);
   // Tab-local document identity: independent tailoring sessions can name their
   // drafts independently, and the same title becomes the default PDF/.resume
   // file name. Successful imports/distills replace it with the new job target.
@@ -620,13 +622,20 @@ function App() {
 
   const handleSelectPreparedCoverLetter = useCallback(
     async (fileName: string) => {
-      if (!fileName || fileName === coverLetterEditor.activeCoverFileName) return;
-      if (coverReplacementStateRef.current.dirty && !(await confirmReplaceCoverLetter())) {
+      if (
+        !fileName ||
+        fileName === coverLetterEditor.activeCoverFileName ||
+        coverManualVariantSelectionInFlightRef.current
+      ) {
         return;
       }
-      const approvedVersion = coverReplacementStateRef.current.version;
+      coverManualVariantSelectionInFlightRef.current = true;
       setIsSelectingCoverVariant(true);
       try {
+        if (coverReplacementStateRef.current.dirty && !(await confirmReplaceCoverLetter())) {
+          return;
+        }
+        const approvedVersion = coverReplacementStateRef.current.version;
         const opened = await coverLetterEditor.openWorkspaceCoverLetter(
           fileName,
           false,
@@ -638,6 +647,7 @@ function App() {
           );
         }
       } finally {
+        coverManualVariantSelectionInFlightRef.current = false;
         setIsSelectingCoverVariant(false);
       }
     },
@@ -1183,6 +1193,9 @@ function App() {
   // compile preview), so they unlock as soon as a resume is loaded — not only
   // after an AI polish.
   const canExportResume = Boolean(result || editedResume);
+  // Same rule for the letter: exportable as soon as it has content. Apply's own
+  // readiness gate (coverLetterReady) still governs whether it can be included.
+  const canExportCoverLetter = Boolean(coverLetterEditor.text.trim());
   // Name what is actually blocking Polish at its two owning surfaces.
   const polishGateHint = canPolish
     ? ""
@@ -1448,6 +1461,25 @@ function App() {
     docStyle
   });
 
+  const handleSelectBaseResumeVariant = useCallback(
+    async (fileName: string) => {
+      if (
+        !fileName ||
+        fileName === baseResumeName ||
+        resumeManualVariantSelectionInFlightRef.current
+      ) {
+        return;
+      }
+      resumeManualVariantSelectionInFlightRef.current = true;
+      try {
+        await loadBaseResumeVersion(fileName);
+      } finally {
+        resumeManualVariantSelectionInFlightRef.current = false;
+      }
+    },
+    [baseResumeName, loadBaseResumeVersion]
+  );
+
   const workspaceRestoreAdoptionHandlerRef = useRef<() => void>(() => undefined);
   workspaceRestoreAdoptionHandlerRef.current = () => {
     if (resumeDocumentDirty) {
@@ -1495,6 +1527,7 @@ function App() {
   const resumeVariantSelectionStateRef = useRef({
     baseResumeName,
     resumeDocumentDirty,
+    documentVersion: resumeReplacementStateRef.current.version,
     isWorkspaceBootstrapping,
     isSavingBaseResume,
     applicationOfRecordId,
@@ -1506,6 +1539,7 @@ function App() {
   resumeVariantSelectionStateRef.current = {
     baseResumeName,
     resumeDocumentDirty,
+    documentVersion: resumeReplacementStateRef.current.version,
     isWorkspaceBootstrapping,
     isSavingBaseResume,
     applicationOfRecordId,
@@ -1532,6 +1566,7 @@ function App() {
     resumeVariantRecommendationGenerationRef.current = generation;
     const startState = resumeVariantSelectionStateRef.current;
     const startingBaseResumeName = startState.baseResumeName;
+    const startingDocumentVersion = startState.documentVersion;
     const options = startState.options;
     setIsRankingResumeVariants(true);
     setResumeVariantRecommendation(null);
@@ -1554,8 +1589,10 @@ function App() {
         current.preparedJobDescription === rankingJobDescription &&
         recommendation.fileName !== current.baseResumeName &&
         current.baseResumeName === startingBaseResumeName &&
+        current.documentVersion === startingDocumentVersion &&
         current.applicationOfRecordId === null &&
         !current.resumeDocumentDirty &&
+        !resumeManualVariantSelectionInFlightRef.current &&
         !current.isWorkspaceBootstrapping &&
         !current.isSavingBaseResume;
       if (canAdoptRecommendation) {
@@ -1565,7 +1602,11 @@ function App() {
             generation !== resumeVariantRecommendationGenerationRef.current ||
             !latest.jobPrepared ||
             latest.preparedJobDescription !== rankingJobDescription ||
-            latest.applicationOfRecordId !== null
+            latest.applicationOfRecordId !== null ||
+            latest.documentVersion !== startingDocumentVersion ||
+            latest.resumeDocumentDirty ||
+            latest.baseResumeName !== startingBaseResumeName ||
+            resumeManualVariantSelectionInFlightRef.current
           );
         });
       }
@@ -1600,6 +1641,7 @@ function App() {
   const coverLetterVariantSelectionStateRef = useRef({
     activeFileName: coverLetterEditor.activeCoverFileName,
     dirty: coverReplacementStateRef.current.dirty,
+    documentVersion: coverReplacementStateRef.current.version,
     isSelecting: isSelectingCoverVariant,
     applicationOfRecordId,
     jobPrepared,
@@ -1609,6 +1651,7 @@ function App() {
   coverLetterVariantSelectionStateRef.current = {
     activeFileName: coverLetterEditor.activeCoverFileName,
     dirty: coverReplacementStateRef.current.dirty,
+    documentVersion: coverReplacementStateRef.current.version,
     isSelecting: isSelectingCoverVariant,
     applicationOfRecordId,
     jobPrepared,
@@ -1632,6 +1675,7 @@ function App() {
     const generation = coverLetterVariantRecommendationGenerationRef.current + 1;
     coverLetterVariantRecommendationGenerationRef.current = generation;
     const startingFileName = coverLetterVariantSelectionStateRef.current.activeFileName;
+    const startingDocumentVersion = coverLetterVariantSelectionStateRef.current.documentVersion;
     const options = coverLetterVariantOptionsRef.current;
     setIsRankingCoverLetterVariants(true);
     setCoverLetterVariantRecommendation(null);
@@ -1650,8 +1694,10 @@ function App() {
         current.preparedJobDescription === rankingJobDescription &&
         recommendation.fileName !== current.activeFileName &&
         current.activeFileName === startingFileName &&
+        current.documentVersion === startingDocumentVersion &&
         current.applicationOfRecordId === null &&
         !current.dirty &&
+        !coverManualVariantSelectionInFlightRef.current &&
         !current.isSelecting;
       if (canAdoptRecommendation) {
         await current.openWorkspaceCoverLetter(recommendation.fileName, "recommendation", () => {
@@ -1662,7 +1708,9 @@ function App() {
             latest.preparedJobDescription !== rankingJobDescription ||
             latest.applicationOfRecordId !== null ||
             latest.dirty ||
-            latest.activeFileName !== startingFileName
+            latest.activeFileName !== startingFileName ||
+            latest.documentVersion !== startingDocumentVersion ||
+            coverManualVariantSelectionInFlightRef.current
           );
         });
       }
@@ -1722,7 +1770,8 @@ function App() {
     jobPreparationActive ||
     (materialSelection.resume &&
       (isPolishing || isRankingResumeVariants || isSavingBaseResume || isWorkspaceBootstrapping)) ||
-    (materialSelection.coverLetter && (isGeneratingCover || isSelectingCoverVariant));
+    (materialSelection.coverLetter &&
+      (isGeneratingCover || isRankingCoverLetterVariants || isSelectingCoverVariant));
   const preparationReadiness = getPreparationReadiness({
     jobPrepared,
     includeResume: materialSelection.resume,
@@ -1732,7 +1781,7 @@ function App() {
     isPreparing: applicationPreparationActive
   });
   function handleTailorPreparedResume() {
-    if (!jobPrepared || !canPolish || isPolishing || isSavingBaseResume) return;
+    if (!jobPrepared || !canPolish || isPolishing || isSavingBaseResume || isRankingResumeVariants) return;
     // This click is the confirmation missing from automatic mode. It tailors
     // exactly the resume currently shown; loading a different variant remains
     // protected by useWorkspaceResume's dirty-document confirmation.
@@ -1887,8 +1936,12 @@ function App() {
     linkApplication: linkPreparedApplication,
     currentJobTracking,
     resolveApplyDuplicate: duplicateGuard.resolveApplyDuplicate,
-    canExportResume,
+    // Stricter than canExportResume: the engine typesets the structured model
+    // only, so a text-only polish result has nothing to put in the PDF prompt.
+    canExportResumePdf: Boolean(editedResume),
+    canExportCoverLetter,
     handleDownloadPdf,
+    handleDownloadCoverLetterPdf: coverLetterEditor.downloadPdf,
     getResumeArtifacts,
     getCoverLetterArtifacts: coverLetterEditor.getArtifacts,
     resumeDocumentVersion: resumeReplacementStateRef.current.version,
@@ -2333,11 +2386,11 @@ function App() {
               onIncludeResumeChange={(resume) => setMaterialSelection((current) => ({ ...current, resume }))}
               baseResumeName={baseResumeName}
               baseResumeOptions={baseResumeOptions}
-              onSelectBaseResume={loadBaseResumeVersion}
+              onSelectBaseResume={handleSelectBaseResumeVariant}
               resumeVariantRecommendation={resumeVariantRecommendation}
               isRankingResumeVariants={isRankingResumeVariants}
               isSelectingResume={isSavingBaseResume}
-              canTailor={canPolish && !isSavingBaseResume}
+              canTailor={canPolish && !isSavingBaseResume && !isRankingResumeVariants}
               isPolishing={isPolishing}
               polishProgress={polishProgress}
               polishOutputCurrent={polishOutputCurrent}
@@ -2358,7 +2411,13 @@ function App() {
               isSelectingCoverLetter={isSelectingCoverVariant}
               onSelectCoverLetter={handleSelectPreparedCoverLetter}
               canTailorCoverLetter={
-                coverLetterPreflight.canTailor && resumeReady && jobReady && coverProviderReady && !isGeneratingCover
+                coverLetterPreflight.canTailor &&
+                resumeReady &&
+                jobReady &&
+                coverProviderReady &&
+                !isGeneratingCover &&
+                !isSelectingCoverVariant &&
+                !isRankingCoverLetterVariants
               }
               coverLetterTailorHint={
                 !resumeReady && !jobReady
@@ -2367,6 +2426,8 @@ function App() {
                     ? "Add a resume first."
                     : !jobReady
                       ? "Prepare the job first."
+                      : isSelectingCoverVariant || isRankingCoverLetterVariants
+                        ? "Wait for the cover-letter variant selection to finish."
                       : !coverProviderReady
                         ? coverProviderMessage
                         : (coverLetterPreflight.blockers[0] ?? "")
@@ -2616,7 +2677,7 @@ function App() {
                             title: option.label,
                             meta: option.fileName,
                             active: option.fileName === baseResumeName,
-                            onOpen: () => loadBaseResumeVersion(option.fileName)
+                            onOpen: () => void handleSelectBaseResumeVariant(option.fileName)
                           }))
                         },
                         ...baseResumeHistory.map((group) => ({
@@ -2935,6 +2996,8 @@ function App() {
         <ApplyDownloadDialog
           label={applyDownloadPrompt.label}
           defaultFileBaseName={resumeDownloadName("pdf").replace(/\.pdf$/i, "")}
+          canDownloadResume={applyDownloadPrompt.canDownloadResume}
+          canDownloadCoverLetter={applyDownloadPrompt.canDownloadCoverLetter}
           busy={isApplying}
           error={applySaveError}
           onDownload={handleApplyDownloadPick}

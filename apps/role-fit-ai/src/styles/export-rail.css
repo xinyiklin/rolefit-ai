@@ -375,6 +375,12 @@
   color: var(--ink);
 }
 
+/* The intro is the only text that reaches the absolutely positioned close
+   button; without clearance it wraps straight under the ✕ on narrow cards. */
+.apply-download > .rename-dialog__hint {
+  padding-right: var(--s5);
+}
+
 /* Small section eyebrow above the file-name field. */
 .apply-download__field-label {
   margin-top: 2px;
@@ -391,6 +397,51 @@
 
 .apply-download__name-hint {
   margin-top: 2px;
+}
+
+/* One row per downloadable document: [checkbox] Kind [ name ].pdf */
+.apply-download__picks {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  min-width: 0;
+}
+
+/* Checkbox + kind on the first line, the name field spanning the second. An
+   inline label column looked tidier but clipped the end of every realistic
+   name — and the end is the only part that differs between the two files. */
+.apply-download__pick {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: var(--s2);
+  row-gap: 2px;
+  min-width: 0;
+}
+
+/* An explicit size is required, not optional: the global `input { width: 100% }`
+   in sources.css otherwise stretches the box to the whole row and collapses the
+   name field beside it to zero width. Same shape as `.plan-row`'s checkbox. */
+.apply-download__pick input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.apply-download__pick-kind {
+  flex: 1 1 auto;
+  font-size: 0.78rem;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+/* Full-width second line: the flex basis forces the wrap. The shared
+   input-wrap supplies the border and the .pdf suffix. */
+.apply-download__pick-name {
+  flex: 1 0 100%;
+  min-width: 0;
 }
 
 /* The primary Download button in this dialog is in-row, not full-width. */

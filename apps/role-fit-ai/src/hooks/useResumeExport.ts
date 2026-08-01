@@ -130,12 +130,15 @@ export function useResumeExport({
   }
 
   // "PDF": typeset by the shared engine, serialized client-side (D014).
-  async function handleDownloadPdf(overrideBase?: string) {
+  // Reports success so a caller whose own status surface is showing — the Apply
+  // flow, which has already navigated away from this rail — can say the export
+  // failed instead of leaving the user with no file and no explanation.
+  async function handleDownloadPdf(overrideBase?: string): Promise<boolean> {
     // The engine typesets the structured model only; say so rather than
     // no-opping (canExport also allows a text-only polish result).
     if (!editedResume) {
       setExportStatus("Load a resume into the editor to export a PDF.");
-      return;
+      return false;
     }
     setIsRenderingPdf(true);
     setExportStatus("Typesetting PDF…");
@@ -144,8 +147,10 @@ export function useResumeExport({
       const fileName = resumeDownloadName("pdf", overrideBase);
       downloadBlob(new Blob([bytes as BlobPart], { type: "application/pdf" }), fileName);
       setExportStatus(`Downloaded ${fileName}.`);
+      return true;
     } catch (error) {
       setExportStatus(pdfExportFailureMessage(error));
+      return false;
     } finally {
       setIsRenderingPdf(false);
     }

@@ -27,8 +27,10 @@ type ExportMenuProps = {
   statusIsError?: boolean;
   onDismissStatus?: () => void;
   // The download handlers accept the user's chosen base name (extension
-  // excluded); when omitted they fall back to the system name.
-  onDownloadPdf: (fileBaseName?: string) => void | Promise<void>;
+  // excluded); when omitted they fall back to the system name. A handler may
+  // resolve with a success flag for callers that report failures themselves —
+  // the rail ignores it and shows its own status.
+  onDownloadPdf: (fileBaseName?: string) => void | Promise<unknown>;
 };
 
 export function ExportMenu({

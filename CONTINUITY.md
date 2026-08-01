@@ -5,6 +5,32 @@ bounded; app-only operational detail belongs in the affected app documentation.
 
 ## 2026-07-31
 
+- [USER+CODE] **Apply's download prompt now covers every included, exportable
+  material instead of the resume alone.** A cover-letter-only Apply prompts, and
+  an Apply with both gives each document its own row: checkbox plus its own
+  editable name field, replacing the single shared "File name" input. The two
+  documents stay two PDFs because ATS uploads are per-document and a merged file
+  breaks resume parsing. The letter's field is seeded with
+  `swapDocumentTitleKind` (`Name_Company_Resume` -> `Name_Company_Cover_Letter`),
+  reusing the existing document-title convention rather than stacking a second
+  suffix onto a base that already carries a kind, and remains independently
+  editable. Downloads run sequentially,
+  and both PDF export helpers now resolve a success flag so Apply's own status
+  names a failed export instead of losing it to an editor status the user has
+  navigated away from; that message appends to the artifact-save result rather
+  than replacing it. Apply is synchronously single-flight from duplicate
+  resolution through a direct commit and through the selected post-commit PDF
+  exports; the pre-commit naming prompt remains interactive. Explicit manual
+  resume or cover-letter selection now preempts in-flight recommendation work,
+  and included cover-letter ranking keeps Apply and Cover Tailor blocked until
+  selection settles. The prompt gates the resume on the structured model, not
+  the looser export-rail flag, so a text-only polish result no longer offers a
+  PDF that cannot be typeset. The 15-case `apply-download-names-eval` plus
+  the focused `apply-download-lifecycle.mjs` evaluator pin the naming, ordering,
+  and outer busy lifecycle. The workflow guards now pass 344 checks. The
+  RoleFit
+  check, `deps:check`, the server TypeScript gate, and all 63 offline
+  evaluations pass. Browser QA of the dialog is UNCONFIRMED.
 - [USER+CODE+TOOL] CI ran the engine suite three times per push — once in
   `Document workflow CI` and again inside each deploy workflow's verify job.
   Only `generate_font_assets.py` reaches the network, and it refetches every

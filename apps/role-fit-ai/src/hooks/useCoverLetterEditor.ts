@@ -693,11 +693,14 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
 
   // `overrideBase` is the name the rename prompt collected, matching the resume
   // export. Omitted, it falls back to the document title as before.
+  // Returns success so the Apply flow — whose status surface has replaced this
+  // editor's by the time a download runs — can report a failed export rather
+  // than leaving the user with no file and no explanation.
   const downloadPdf = useCallback(
-    async (overrideBase?: string) => {
+    async (overrideBase?: string): Promise<boolean> => {
       if (!editor.editedResume) {
         setStatus("Open or start a cover letter before exporting.");
-        return;
+        return false;
       }
       setIsRenderingPdf(true);
       setStatus("Typesetting cover-letter PDF…");
@@ -709,8 +712,10 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
         );
         downloadBlob(new Blob([bytes as BlobPart], { type: "application/pdf" }), fileName);
         setStatus(`Downloaded ${fileName}.`);
+        return true;
       } catch (error) {
         setStatus(coverLetterPdfFailureMessage(error));
+        return false;
       } finally {
         setIsRenderingPdf(false);
       }

@@ -293,11 +293,13 @@ export function PrepareTab({
     ? "Prepare the job posting first."
     : !resumeReady
       ? "Add a resume before tailoring."
-      : isPolishing
-        ? "Wait for the current tailoring run to finish."
-        : !canTailor
-          ? polishStatus || "Finish the resume and AI setup before tailoring."
-          : "";
+      : isSelectingResume || isRankingResumeVariants
+        ? "Wait for the resume variant selection to finish."
+        : isPolishing
+          ? "Wait for the current tailoring run to finish."
+          : !canTailor
+            ? polishStatus || "Finish the resume and AI setup before tailoring."
+            : "";
   const canStartTailor = canTailor && !isPolishing && jobPrepared;
   const resumeWorkflowNeedsAttention =
     polishProgress.tailor.status === "failed" ||

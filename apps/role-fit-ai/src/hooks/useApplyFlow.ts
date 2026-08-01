@@ -13,7 +13,7 @@
  * resolution) stays owned by App and arrives via args, mirroring
  * usePolishPipeline's pattern.
  */
-import { useRef, useState } from "react";
+import { useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { makeApplicationDraft, type Application, type ApplicationStatus } from "./useApplications";
 import type { ApplyDuplicateResolution } from "./useDuplicateGuard";
 import type { ExtractedJobTracking } from "../lib/jobExtract";
@@ -23,6 +23,14 @@ import type { FitComparison, OutputTab } from "../sections/shared";
 import { normalizeDocumentSnapshot } from "../lib/applicationDocuments";
 import type { DocumentUpload } from "../lib/applicationDocumentRequests";
 import { dedupeSourceUrls } from "../lib/jobIdentity";
+
+// Which of the offered PDFs the user kept checked in the download dialog, and
+// the base name (extension excluded) each one carries. Owned here with the rest
+// of the Apply contract; the dialog imports both. The dialog seeds the cover
+// letter's name from the resume's so the pair matches, then lets the user edit
+// either — so by the time they arrive here each name is already final.
+export type ApplyDownloadPicks = { resume: boolean; coverLetter: boolean };
+export type ApplyDownloadNames = { resume: string; coverLetter: string };
 
 type UseApplyFlowArgs = {
   canApply: boolean;
@@ -52,15 +60,24 @@ type UseApplyFlowArgs = {
   linkApplication: (id: string | null) => void;
   currentJobTracking: () => ExtractedJobTracking;
   resolveApplyDuplicate: () => Promise<ApplyDuplicateResolution>;
-  canExportResume: boolean;
-  handleDownloadPdf: (overrideBase?: string) => void | Promise<void>;
+  // Whether each PDF can actually be TYPESET, which is stricter than the export
+  // rail's enabled-state: the engine needs the structured model, so a text-only
+  // polish result must not put a resume checkbox in the download prompt.
+  canExportResumePdf: boolean;
+  canExportCoverLetter: boolean;
+  // Both resolve false when the export fails; the Apply flow owns the message
+  // because each editor's own status surface is no longer on screen by then.
+  handleDownloadPdf: (overrideBase?: string) => Promise<boolean>;
+  handleDownloadCoverLetterPdf: (overrideBase?: string) => Promise<boolean>;
   getResumeArtifacts: () => Promise<DocumentUpload | null>;
   getCoverLetterArtifacts: () => Promise<DocumentUpload | null>;
   resumeDocumentVersion: string;
   coverLetterDocumentVersion: string;
   onResumeSaved: () => void;
   onCoverLetterSaved: () => void;
-  setApplyStatus: (value: string) => void;
+  // Accepts an updater so a late failure can APPEND to the status commitApply
+  // already set, instead of erasing an artifact-save warning the user needs.
+  setApplyStatus: Dispatch<SetStateAction<string>>;
   setActiveOutputTab: (tab: OutputTab) => void;
   setExpandedApplicationId: (id: string | null) => void;
 };
@@ -86,8 +103,10 @@ export function useApplyFlow({
   linkApplication,
   currentJobTracking,
   resolveApplyDuplicate,
-  canExportResume,
+  canExportResumePdf,
+  canExportCoverLetter,
   handleDownloadPdf,
+  handleDownloadCoverLetterPdf,
   getResumeArtifacts,
   getCoverLetterArtifacts,
   resumeDocumentVersion,
@@ -116,13 +135,22 @@ export function useApplyFlow({
     resume: includeResume,
     coverLetter: includeCoverLetter
   };
-  // Post-Apply download prompt: holds the just-applied role's label while open.
+  // Post-Apply download prompt: holds the just-applied role's label and which
+  // included materials this Apply can actually export, so the dialog offers a
+  // cover-letter PDF whenever the letter is part of the application.
   const [applyDownloadPrompt, setApplyDownloadPrompt] = useState<{
     label: string;
+    canDownloadResume: boolean;
+    canDownloadCoverLetter: boolean;
   } | null>(null);
-  const [isApplying, setIsApplying] = useState(false);
+  const [isResolvingApply, setIsResolvingApply] = useState(false);
+  const [isCommittingApply, setIsCommittingApply] = useState(false);
+  const [isDownloadingApplyPdfs, setIsDownloadingApplyPdfs] = useState(false);
   const [applySaveError, setApplySaveError] = useState("");
+  const applyResolutionInFlightRef = useRef(false);
   const applyCommitInFlightRef = useRef(false);
+  const applyDownloadInFlightRef = useRef(false);
+  const isApplying = isResolvingApply || isCommittingApply || isDownloadingApplyPdfs;
   const latestDocumentVersionsRef = useRef({
     resume: resumeDocumentVersion,
     coverLetter: coverLetterDocumentVersion
@@ -222,7 +250,7 @@ export function useApplyFlow({
     // flight, the older artifact must not be saved or mark the newer draft
     // clean.
     const expectedDocumentVersions = { ...latestDocumentVersionsRef.current };
-    setIsApplying(true);
+    setIsCommittingApply(true);
     setApplySaveError("");
     const sr = result?.strictReview;
     const hasStructuredSuggestions = Boolean(result?.suggestedChanges?.length);
@@ -353,7 +381,7 @@ export function useApplyFlow({
       setApplySaveError(message);
       setApplyStatus(message);
       applyCommitInFlightRef.current = false;
-      setIsApplying(false);
+      setIsCommittingApply(false);
       return false;
     }
     applyMergeTargetRef.current = null;
@@ -392,7 +420,7 @@ export function useApplyFlow({
     } finally {
       applyMaterialSelectionRef.current = null;
       applyCommitInFlightRef.current = false;
-      setIsApplying(false);
+      setIsCommittingApply(false);
     }
   }
 
@@ -400,42 +428,108 @@ export function useApplyFlow({
   // as needed — see findDuplicatesForTarget), then either commits immediately
   // (no download dialog) or shows the pre-apply dialog for the file name.
   async function handleApply() {
+    if (
+      applyResolutionInFlightRef.current ||
+      applyCommitInFlightRef.current ||
+      applyDownloadInFlightRef.current
+    ) return;
     if (!canApply) {
       setApplyStatus(applyBlocker || "Finish preparing this application before applying.");
       return;
     }
-    setApplyStatus("");
-    applyMaterialSelectionRef.current = {
-      ...currentMaterialSelectionRef.current
-    };
-    // Reset before evaluating so a prior call's stale target can never leak
-    // into an unrelated apply. The dialogs, acknowledgment, and merge-target
-    // decision live in useDuplicateGuard; commitApply consumes the ref.
-    applyMergeTargetRef.current = null;
-    const resolution = await resolveApplyDuplicate();
-    if (!resolution.proceed) {
-      applyMaterialSelectionRef.current = null;
-      return;
-    }
-    applyMergeTargetRef.current = resolution.mergeTargetId;
+    applyResolutionInFlightRef.current = true;
+    setIsResolvingApply(true);
+    try {
+      setApplyStatus("");
+      applyMaterialSelectionRef.current = {
+        ...currentMaterialSelectionRef.current
+      };
+      // Reset before evaluating so a prior call's stale target can never leak
+      // into an unrelated apply. The dialogs, acknowledgment, and merge-target
+      // decision live in useDuplicateGuard; commitApply consumes the ref.
+      applyMergeTargetRef.current = null;
+      let resolution: ApplyDuplicateResolution;
+      try {
+        resolution = await resolveApplyDuplicate();
+      } catch {
+        applyMaterialSelectionRef.current = null;
+        applyMergeTargetRef.current = null;
+        setApplyStatus("Duplicate checking failed, so the application was not saved. Retry Apply.");
+        return;
+      }
+      if (!resolution.proceed) {
+        applyMaterialSelectionRef.current = null;
+        return;
+      }
+      applyMergeTargetRef.current = resolution.mergeTargetId;
 
-    if (!applyMaterialSelectionRef.current.resume || !canExportResume) {
-      await commitApply();
-      return;
+      const canDownloadResume = applyMaterialSelectionRef.current.resume && canExportResumePdf;
+      const canDownloadCoverLetter =
+        applyMaterialSelectionRef.current.coverLetter && canExportCoverLetter;
+      if (!canDownloadResume && !canDownloadCoverLetter) {
+        await commitApply();
+        return;
+      }
+      const existing = findForTarget(jobUrl, preparedJobDescription);
+      const draft = makeApplicationDraft(jobUrl, preparedJobDescription, currentJobTracking());
+      setApplySaveError("");
+      setApplyDownloadPrompt({
+        label: existing?.title || draft.title,
+        canDownloadResume,
+        canDownloadCoverLetter
+      });
+    } finally {
+      applyResolutionInFlightRef.current = false;
+      setIsResolvingApply(false);
     }
-    const existing = findForTarget(jobUrl, preparedJobDescription);
-    const draft = makeApplicationDraft(jobUrl, preparedJobDescription, currentJobTracking());
-    setApplySaveError("");
-    setApplyDownloadPrompt({ label: existing?.title || draft.title });
   }
 
-  async function handleApplyDownloadPick(fileBaseName: string) {
-    if (!(await commitApply())) return;
-    setApplyDownloadPrompt(null);
-    await handleDownloadPdf(fileBaseName || undefined);
+  // Downloads run sequentially: two near-simultaneous programmatic downloads
+  // trip the browser's multiple-download prompt, and a failed second render
+  // must not look like the first one failed. A failed export never undoes the
+  // apply — it only appends to the status, because the application and its
+  // saved artifacts are already committed by this point.
+  async function handleApplyDownloadPick(names: ApplyDownloadNames, picks: ApplyDownloadPicks) {
+    if (
+      applyResolutionInFlightRef.current ||
+      applyDownloadInFlightRef.current ||
+      applyCommitInFlightRef.current
+    ) return;
+    applyDownloadInFlightRef.current = true;
+    setIsDownloadingApplyPdfs(true);
+    const label = applyDownloadPrompt?.label ?? "";
+    try {
+      if (!(await commitApply())) return;
+      setApplyDownloadPrompt(null);
+      const failed: string[] = [];
+      if (picks.resume && !(await handleDownloadPdf(names.resume || undefined))) {
+        failed.push("resume");
+      }
+      if (picks.coverLetter && !(await handleDownloadCoverLetterPdf(names.coverLetter || undefined))) {
+        failed.push("cover letter");
+      }
+      if (failed.length) {
+        const detail =
+          `The ${failed.join(" and ")} PDF${failed.length > 1 ? "s" : ""} could not be exported.` +
+          ` Retry from ${failed.length > 1 ? "each" : "that"} document's own export menu.`;
+        // commitApply has already reported the apply and any artifact-save
+        // problem; keep that and add this rather than replacing it.
+        setApplyStatus((current) =>
+          current ? `${current} ${detail}` : `Applied${label ? ` "${label}"` : ""}. ${detail}`
+        );
+      }
+    } finally {
+      applyDownloadInFlightRef.current = false;
+      setIsDownloadingApplyPdfs(false);
+    }
   }
 
   async function handleApplyOnly() {
+    if (
+      applyResolutionInFlightRef.current ||
+      applyCommitInFlightRef.current ||
+      applyDownloadInFlightRef.current
+    ) return;
     if (!(await commitApply())) return;
     setApplyDownloadPrompt(null);
   }

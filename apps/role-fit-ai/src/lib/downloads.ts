@@ -49,6 +49,24 @@ export function buildDocumentTitle(kind: DocumentTitleKind, name: string, compan
   return parts.join("_");
 }
 
+// Retarget an existing base name at another document kind
+// (Name_Company_Resume -> Name_Company_Cover_Letter), so a pair of downloads
+// named from ONE base keeps this convention instead of stacking a second kind
+// suffix on a name that already carries one. A user-typed name with no kind
+// suffix gains one in its own separator style.
+export function swapDocumentTitleKind(base: string, kind: DocumentTitleKind): string {
+  const trimmed = base.trim();
+  if (!trimmed) return "";
+  // The leading group is empty for a base that is nothing but a kind ("Resume"),
+  // which then becomes the bare other kind rather than gaining a stray prefix.
+  const existing = trimmed.match(/(^|[\s_-])(resume|cover[\s_-]?letter)$/i);
+  const separator = existing?.[1] || (trimmed.includes("_") ? "_" : " ");
+  const stem = existing ? trimmed.slice(0, trimmed.length - existing[0].length) : trimmed;
+  const suffix = DOCUMENT_TITLE_SUFFIX[kind];
+  const kindText = separator === "_" ? suffix : suffix.replace(/_/g, " ");
+  return stem ? `${stem}${separator}${kindText}` : kindText;
+}
+
 export function buildResumeDocumentTitle(name: string, company: string): string {
   return buildDocumentTitle("resume", name, company);
 }
