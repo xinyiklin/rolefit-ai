@@ -18,6 +18,7 @@
 import { useCallback, useRef, useState } from "react";
 import type { ChangeEvent } from "react";
 import type { ResumeData } from "@typeset/engine/lib/resumeData.ts";
+import { DOC_STYLE_DEFAULTS, toDocumentStyle } from "@typeset/engine/lib/documentStyle.ts";
 import { parseResumeFile, serializeResumeFile } from "@typeset/engine/lib/resumeFile.ts";
 import type { DocStyleControls } from "@typeset/editor/hooks/useDocStyle.ts";
 import type { ConfirmOptions } from "./useDialog";
@@ -25,6 +26,7 @@ import { loadLastBaseResumeName, saveLastBaseResumeName } from "../lib/baseResum
 import { serializeResumeData } from "../lib/resumeText.ts";
 import type { PolishedResume } from "../resumeEngine";
 import type { VariantCandidate } from "../lib/variantRecommendation";
+import { createBlankResumeData } from "../lib/blankResume.ts";
 
 export type WorkspaceBaseResume = {
   exists: boolean;
@@ -119,6 +121,7 @@ type UseWorkspaceResumeArgs = {
   fileName: string;
   setResumeText: (text: string) => void;
   setFileName: (name: string) => void;
+  setDocumentTitle: (title: string) => void;
   setResult: (updater: PolishedResume | null | ((prev: PolishedResume | null) => PolishedResume | null)) => void;
   resetCoverWorkflow: () => void;
   setFileError: (value: string) => void;
@@ -129,10 +132,10 @@ type UseWorkspaceResumeArgs = {
   // Seeds the structured editor directly from a ResumeData object (bypasses
   // the plain-text parser) — used when loading a `.resume` file, whose
   // content is already the structured model.
-  seedResumeData: (data: ResumeData | null) => void;
+  seedResumeData: (data: ResumeData) => void;
   currentResumeText: string;
   resumeText: string;
-  editedResume: ResumeData | null;
+  editedResume: ResumeData;
   docStyle: DocStyleControls;
 };
 
@@ -143,6 +146,7 @@ export function useWorkspaceResume({
   fileName,
   setResumeText,
   setFileName,
+  setDocumentTitle,
   setResult,
   resetCoverWorkflow,
   setFileError,
@@ -375,6 +379,35 @@ export function useWorkspaceResume({
     }
   }
 
+  async function startBlankResume() {
+    const approvedVersion = await approveCurrentReplacement();
+    if (approvedVersion === null) return;
+    if (
+      replacementGuard.isDirtyNow() &&
+      replacementGuard.currentVersion() !== approvedVersion
+    ) {
+      return;
+    }
+
+    // Every state change happens at one await-free commit boundary. Saved
+    // workspace files are deliberately untouched.
+    replacementGuard.onReplacementCommitted();
+    detachBaseResumeIdentity();
+    setFileName("");
+    setDocumentTitle("Resume");
+    setResumeText("");
+    setResult(null);
+    resetCoverWorkflow();
+    setFileError("");
+    setFileStatus("");
+    setWorkspaceStatus("");
+    setPolishStatus("");
+    resetExportStatuses();
+    setExportStatus("");
+    seedResumeData(createBlankResumeData());
+    docStyle.replaceDocumentStyle(toDocumentStyle(DOC_STYLE_DEFAULTS));
+  }
+
   async function saveBaseResume(payload: { fileName: string; fileBase64?: string; text?: string }) {
     setIsSavingBaseResume(true);
     setWorkspaceStatus("Saving base resume to the local workspace…");
@@ -513,22 +546,13 @@ export function useWorkspaceResume({
   }
 
   async function saveCurrentAsBaseResume(targetFileName?: string) {
-    let targetName = targetFileName || baseResumeName || fileName || "default.txt";
-    // A `.resume`-named base saves the lossless structured JSON. If we only have
-    // plain text (no structured model yet — e.g. a text-only polish result),
-    // retarget to `.txt` so we never write non-JSON into a `.resume` file, which
-    // would fail to parse on reload.
-    let text: string;
-    if (/\.resume$/i.test(targetName)) {
-      if (editedResume) {
-        text = serializeResumeFile(editedResume, docStyle.style);
-      } else {
-        targetName = targetName.replace(/\.resume$/i, ".txt");
-        text = currentResumeText || resumeText;
-      }
-    } else {
-      text = currentResumeText || resumeText;
-    }
+    if (isWorkspaceBootstrapping) return;
+    const targetName = targetFileName || baseResumeName || fileName || "default.resume";
+    // RoleFit always has a structured model, so a detached document defaults to
+    // the strict editable format. Explicit text-file identities stay text.
+    const text = /\.resume$/i.test(targetName)
+      ? serializeResumeFile(editedResume, docStyle.style)
+      : currentResumeText || resumeText;
 
     await saveBaseResume({ fileName: targetName, text });
   }
@@ -698,6 +722,7 @@ export function useWorkspaceResume({
     isWorkspaceBootstrapping,
     loadWorkspace,
     loadStarterTemplate,
+    startBlankResume,
     removeBaseResume,
     restoreBaseResume,
     saveCurrentAsBaseResume,

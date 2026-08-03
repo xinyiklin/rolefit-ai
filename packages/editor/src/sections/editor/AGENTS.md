@@ -71,6 +71,21 @@ typesetting guide when a change affects painted output or layout provenance.
   italic faces usually share vertical metrics, so arming italic moves nothing in
   the box and an equality check over position alone would keep the upright
   caret.
+- The overlay is the only caret while the model owns editing.
+  `.tsd-doc--editable` suppresses the native one even when no model field
+  resolves, because a document with no fields accepts typing nowhere yet the
+  browser still parks a caret in the page's top-left corner. IME composition is
+  the deliberate exception: while the browser owns its uncommitted DOM value,
+  `.is-composing` restores the native caret and hides the stale overlay until
+  `compositionend` commits the value. A range selection paints no edge caret;
+  the selection band is its own feedback.
+- An empty field's hint (currently only the blank structural name) is ghost text
+  of what will be typed, not UI chrome: it inherits the run's own font so it
+  agrees with the caret, which is drawn at the field's display size. A zero-width
+  run IS its own alignment anchor, so the renderer publishes
+  `--tsd-empty-hint-shift` — how far along the column that anchor sits — and the
+  hint slides back by that share of its width instead of spilling off the page
+  from a centred header's midpoint.
 - Caret placement a HOST asks for has two entry points, both consumed by the
   post-paint restore effect because a caret can only be placed once its field is
   painted. `focusDocumentStart()` is for the moment a document is OPENED: it

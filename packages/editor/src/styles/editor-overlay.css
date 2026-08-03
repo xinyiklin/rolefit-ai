@@ -4,10 +4,6 @@
   position: relative;
 }
 
-.typeset-editor.has-typeset-caret .tsd-doc--editable {
-  caret-color: transparent;
-}
-
 .typeset-caret {
   position: absolute;
   z-index: 8;

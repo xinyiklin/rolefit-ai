@@ -3,6 +3,7 @@
 // Run: node --experimental-strip-types src/sections/editor/__evals__/typeset-editing.mjs
 
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 
 import {
   autoLinkSuppressionForSelection,
@@ -1597,6 +1598,29 @@ for (const isALink of ["example.com", "sub.example.co.uk", "example.io/resume.pd
   if (originalWindow === undefined) delete globalThis.window;
   else globalThis.window = originalWindow;
 }
+
+const inputEventsSource = readFileSync(new URL("../useTypesetInputEvents.ts", import.meta.url), "utf8");
+const editorCss = readFileSync(new URL("../../../styles/resume-document.css", import.meta.url), "utf8");
+assert.match(
+  inputEventsSource,
+  /onCompositionStart[\s\S]{0,240}?classList\.add\("is-composing"\)/,
+  "composition exposes the browser-managed caret state"
+);
+assert.match(
+  inputEventsSource,
+  /onCompositionEnd[\s\S]{0,240}?classList\.remove\("is-composing"\)/,
+  "composition restores overlay-only caret ownership when it ends"
+);
+assert.match(
+  editorCss,
+  /\.tsd-doc--editable\.is-composing\s*\{[^}]*caret-color:\s*#000/,
+  "the native caret is visible while the browser owns IME composition"
+);
+assert.match(
+  editorCss,
+  /\.tsd-doc--editable\.is-composing\s*~\s*\.typeset-caret\s*\{[^}]*visibility:\s*hidden/,
+  "the stale overlay caret is hidden during IME composition"
+);
 
 console.log(
   `typeset editing: whitespace, rich clipboard, bounded typography, indentation stops, drag hit-area, selection-boundary resolution, ${FONT_FAMILY_OPTIONS.length}-family tag round-trip, and hyperlink-editing checks passed`

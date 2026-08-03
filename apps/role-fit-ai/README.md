@@ -156,6 +156,9 @@ editable documents.
   destructively. Both editors use the same Open and Save menus: Open lists the
   starter, a blank, a file picker, and everything already saved; Save updates the
   active copy, adds a variant, or takes a `.resume`/`.cover`/`.txt`/PDF away.
+  Resume always keeps a real editable page mounted: when no saved source exists,
+  it starts as a clean blank `.resume` document, while PDF, Polish, and Apply
+  remain unavailable until the document has meaningful content.
   Each editor automatically reopens its last active saved variant on that
   browser origin, falling back to Default when no remembered variant remains.
   Recovery includes title-only and style-only cover-letter edits. Drafts are

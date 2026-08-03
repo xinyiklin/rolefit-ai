@@ -255,7 +255,14 @@
    rounds a glyph's advance and its cap height to whole pixels independently,
    which is what makes a small-caps heading's letters look like they sit at
    different heights at 16px. This is a paint hint only — it changes no
-   geometry, and the PDF is emitted from the same layout either way. */
+   geometry, and the PDF is emitted from the same layout either way.
+
+   What survives this rule is anti-aliasing, not misalignment, and it is not a
+   bug to chase: the caps faces measure uniform (Latin Modern's small caps span
+   0.508–0.531 em, with the round letters and A carrying ordinary overshoot), so
+   at a ~6px small-cap height A's apex and T's crossbar simply hold too little
+   ink to render a solid top row. Verified against the embedded .ttf outlines and
+   the PDF at 400%, where every letter reads level. */
 .tsd-doc {
   text-rendering: geometricPrecision;
 }
@@ -272,11 +279,26 @@
 }
 
 /* Typeset editor: the painted page is one contenteditable host with a quiet
-   keyboard focus ring, text cursor, and ink caret. Links remain text while
-   editing, so a pointer cursor would lie. */
+   keyboard focus ring and text cursor. Links remain text while editing, so a
+   pointer cursor would lie.
+
+   The overlay caret is the only caret while the model owns editing. The native
+   one is suppressed even when the overlay cannot resolve a model field, because
+   a document with no fields cannot accept typing yet the browser parks a caret
+   in the page's top-left corner as if it could. IME composition is the one
+   exception: the browser temporarily owns an uncommitted DOM value and needs
+   its live caret until compositionend commits that value to the model. */
 .tsd-doc--editable {
   outline: none;
+  caret-color: transparent;
+}
+
+.tsd-doc--editable.is-composing {
   caret-color: #000;
+}
+
+.tsd-doc--editable.is-composing ~ .typeset-caret {
+  visibility: hidden;
 }
 
 .tsd-doc--editable .tsd-page {
@@ -317,20 +339,26 @@
 
 /* A blank structural name remains a real zero-width field. This hint is
    screen-only generated content: it is absent from value space, selection,
-   copy, layout measurement, print, and PDF output. */
+   copy, layout measurement, print, and PDF output.
+
+   It inherits the run's own font — family, point size scaled by zoom, and face
+   — so it is ghost text of the name about to be typed rather than UI chrome:
+   at a fixed rem size it disagreed with the caret, which is correctly drawn at
+   the name's display size. The run's line-height is exactly its face box, so
+   half-leading is zero and `top: 0` puts both baselines in the same place.
+   `--tsd-empty-hint-shift` (published by the renderer) slides the hint back by
+   its share of the column so a centred header's hint stays centred instead of
+   spilling right from the midpoint. */
 .tsd-doc--editable [data-tsdf="name"][data-tsde="1"]::after {
   position: absolute;
   inset-inline-start: 0;
-  top: 50%;
+  top: 0;
   width: max-content;
-  transform: translateY(-50%);
+  transform: translateX(var(--tsd-empty-hint-shift, 0));
   color: var(--ink-faint);
   content: "Type your name";
-  font-family: var(--font-ui);
-  font-size: 0.72rem;
-  font-style: normal;
-  font-weight: 500;
-  line-height: 1;
+  font: inherit;
+  line-height: inherit;
   pointer-events: none;
   user-select: none;
 }

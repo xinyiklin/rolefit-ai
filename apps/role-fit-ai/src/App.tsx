@@ -3,6 +3,7 @@ import {
   Check,
   Download,
   FileDown,
+  FilePlus2,
   FolderOpen,
   LayoutTemplate,
   Layers,
@@ -27,7 +28,7 @@ import {
   type TypesetCaret,
   type TypesetEditorHandle
 } from "@typeset/editor/sections/editor/TypesetEditor.tsx";
-import { DOC_PAGE_WIDTH_PX, DOC_STYLE_BOUNDS, toDocumentStyle } from "@typeset/engine/lib/documentStyle.ts";
+import { DOC_PAGE_WIDTH_PX, DOC_STYLE_BOUNDS } from "@typeset/engine/lib/documentStyle.ts";
 import {
   STYLE_FIELD_MARK_DEFAULTS,
   globalAlignmentState,
@@ -76,6 +77,7 @@ import { serializeResumeData } from "./lib/resumeText";
 import type { ResumeData } from "@typeset/engine/lib/resumeData.ts";
 import { parseResumeFile } from "@typeset/engine/lib/resumeFile.ts";
 import { defaultTailorModes, type TailorMode } from "./lib/tailorScope";
+import { resumeDocumentVersion as resumeDocumentVersionFor } from "./lib/resumeDocumentVersion";
 import type { StageAiUsage } from "./lib/aiUsage";
 import { useDuplicateGuard } from "./hooks/useDuplicateGuard";
 import { useJobIntake, type ImportedJobSnapshot } from "./hooks/useJobIntake";
@@ -571,7 +573,7 @@ function App() {
   // no open site has to remember to do this: `seedData`/`seed` are the editor
   // hook's only load paths.
   const seedResumeData = useCallback(
-    (data: ResumeData | null) => {
+    (data: ResumeData) => {
       seedResumeDataDocument(data);
       resumeCaretRef.current = null;
       resumeScrollTopRef.current = 0;
@@ -771,13 +773,17 @@ function App() {
   // strict .resume file; zoom and spellcheck remain local view preferences.
   const docStyle = useDocStyle(resumeHistoryClock);
   const resumeDocumentDirty = resumeEdited || docStyle.dirty;
+  const resumeDocumentVersion = useMemo(
+    () => resumeDocumentVersionFor(editedResume, docStyle.style),
+    [docStyle.style, editedResume]
+  );
   const resumeReplacementStateRef = useRef({
     dirty: resumeDocumentDirty,
-    version: ""
+    version: resumeDocumentVersion
   });
   resumeReplacementStateRef.current = {
     dirty: resumeDocumentDirty,
-    version: `${serializedResume}\u0000${JSON.stringify(toDocumentStyle(docStyle.style))}`
+    version: resumeDocumentVersion
   };
   const resumeReplacementGuard = useMemo(
     () => ({
@@ -1133,7 +1139,8 @@ function App() {
   // The job link has its own field now: the description textarea holds the text
   // we tailor against, while `jobUrl` is optional metadata saved with the
   // application for pipeline tracking only — it is never sent to the model.
-  const resumeReady = Boolean(editedResume && (currentResumeText || resumeText).trim().length > 80);
+  const resumeHasContent = Boolean((currentResumeText || resumeText).trim().length > 0);
+  const resumeReady = Boolean((currentResumeText || resumeText).trim().length > 80);
   const coverLetterReady =
     coverLetterPreflight.authoredWordCount >= 40 && coverLetterPreflight.template.slots.length === 0;
   // A usable application starts with a completed intake snapshot. Nonempty
@@ -1187,7 +1194,7 @@ function App() {
   // Exports work from the structured editor model (the same faithful path as the
   // compile preview), so they unlock as soon as a resume is loaded — not only
   // after an AI polish.
-  const canExportResume = Boolean(result || editedResume);
+  const canExportResume = resumeHasContent;
   // Same rule for the letter: exportable as soon as it has content. Apply's own
   // readiness gate (coverLetterReady) still governs whether it can be included.
   const canExportCoverLetter = Boolean(coverLetterEditor.text.trim());
@@ -1425,6 +1432,7 @@ function App() {
     isWorkspaceBootstrapping,
     loadWorkspace,
     loadStarterTemplate,
+    startBlankResume,
     restoreBaseResume,
     saveCurrentAsBaseResume,
     loadBaseResumeVersion,
@@ -1438,6 +1446,7 @@ function App() {
     fileName,
     setResumeText,
     setFileName,
+    setDocumentTitle,
     setResult,
     resetCoverWorkflow,
     setFileError,
@@ -2430,7 +2439,6 @@ function App() {
               contentRedoSequence={resumeRedoSequence}
               dirty={resumeDocumentDirty}
               draftAutosaveState={draftAutosaveState}
-              isWorkspaceBootstrapping={isWorkspaceBootstrapping}
               jobConstraints={jobConstraints}
               result={result}
               resumeDiff={resumeDiff}
@@ -2447,7 +2455,7 @@ function App() {
                   }}
                   canUndo={canUndoResume || docStyle.canUndo}
                   canRedo={canRedoResume || docStyle.canRedo}
-                  formattingDisabled={!editedResume}
+                  formattingDisabled={false}
                   inlineFormatting={{
                     onRequestEditorFocus: () => typesetEditorRef.current?.focusSelection(),
                     fontFamily: {
@@ -2546,9 +2554,9 @@ function App() {
                   onFitZoom={fitResumePage}
                   documentStructureTools={
                     <DocumentStructureControls
-                      header={editedResume?.header ?? null}
+                      header={editedResume.header}
                       contactDivider={docStyle.style.contactDivider}
-                      disabled={!editedResume}
+                      disabled={false}
                       onCreateHeader={() => {
                         if (typesetEditorRef.current) {
                           typesetEditorRef.current.createHeader();
@@ -2629,6 +2637,14 @@ function App() {
                         onSelect: () => void loadStarterTemplate()
                       },
                       {
+                        key: "blank",
+                        icon: <FilePlus2 size={15} aria-hidden="true" />,
+                        title: "Blank document",
+                        description: "Start with an empty resume.",
+                        disabled: isSavingBaseResume,
+                        onSelect: () => void startBlankResume()
+                      },
+                      {
                         key: "file",
                         icon: <Upload size={15} aria-hidden="true" />,
                         title: "Choose a file",
@@ -2692,7 +2708,7 @@ function App() {
                   <DocumentSaveMenu
                     tooltip="Save the resume"
                     icon={<Save size={16} />}
-                    disabled={!editedResume}
+                    disabled={false}
                     title="Save resume"
                     description="Keep a workspace base or take a file away."
                     primary={{
@@ -2700,7 +2716,7 @@ function App() {
                       description: baseResumeName
                         ? "The version it replaces goes to history."
                         : "Opens automatically next time.",
-                      disabled: !editedResume || isSavingBaseResume,
+                      disabled: isWorkspaceBootstrapping || isSavingBaseResume,
                       onSelect: () => saveCurrentAsBaseResume()
                     }}
                     variant={{
@@ -2709,7 +2725,7 @@ function App() {
                       placeholder: "e.g. Full stack",
                       fileNameFor: resumeVariantFileName,
                       existingNames: baseResumeOptions.map((option) => option.fileName),
-                      disabled: !editedResume || isSavingBaseResume,
+                      disabled: isWorkspaceBootstrapping || isSavingBaseResume,
                       onSave: (fileName) => saveCurrentAsBaseResume(fileName)
                     }}
                     applicationSync={resumeApplicationSync}
@@ -2718,7 +2734,7 @@ function App() {
                         key: "resume",
                         icon: <Download size={15} aria-hidden="true" />,
                         title: "Download .resume",
-                        disabled: !editedResume,
+                        disabled: false,
                         onSelect: () => void handleDownloadResume()
                       },
                       {
@@ -2985,7 +3001,7 @@ function App() {
         />
       ) : null}
 
-      {editedResume ? <ResumePrintLayer resume={editedResume} docStyle={docStyle.style} /> : null}
+      <ResumePrintLayer resume={editedResume} docStyle={docStyle.style} />
     </div>
   );
 }

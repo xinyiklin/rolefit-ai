@@ -258,15 +258,28 @@ type RuleBox = (yAbs: number, thickness: number, lineTop: number) => { top: stri
 // length zero.
 export const EMPTY_EDITABLE_PLACEHOLDER = "\uFEFF";
 
+// A zero-width run IS its own alignment anchor: an empty centred field sits at
+// the column's midpoint, an empty right-aligned one at its trailing edge. A host
+// hint painted from that point would run off the page, so publish how far along
+// the column the insertion point sits and let the hint shift by that share of
+// its own width. Purely presentational — no layout, print, or PDF path reads it.
+function emptyRunHintShift(x: number, geometry: LayoutDocument["geometry"]): string | undefined {
+  if (geometry.textWidth <= 0) return undefined;
+  const fraction = Math.min(1, Math.max(0, (x - geometry.marginLeft) / geometry.textWidth));
+  const percent = Math.round(fraction * 10000) / 100;
+  return percent === 0 ? "0%" : `-${percent}%`;
+}
 
 function PageLines({
   page,
+  geometry,
   separators,
   unit,
   ruleBox,
   highlightFieldKey
 }: {
   page: LayoutPage;
+  geometry: LayoutDocument["geometry"];
   separators: readonly string[];
   unit: Unit;
   ruleBox: RuleBox;
@@ -320,7 +333,7 @@ function PageLines({
               const key = seg.src ? fieldKey(seg.src) : undefined;
               const highlighted = Boolean(key && key === highlightFieldKey && !seg.marker);
               const previousEnd = si > 0 ? segs[si - 1].end : 0;
-              const style: React.CSSProperties = {
+              const style = {
                 display: "inline-block",
                 verticalAlign: "baseline",
                 marginLeft: unit(seg.x - previousEnd),
@@ -333,8 +346,11 @@ function PageLines({
                 whiteSpace: "pre",
                 letterSpacing: seg.tracking ? unit(seg.tracking) : 0,
                 wordSpacing: seg.wordSpacing ? unit(seg.wordSpacing) : undefined,
-                color: "#000"
-              };
+                color: "#000",
+                ...(seg.text || !key
+                  ? {}
+                  : { "--tsd-empty-hint-shift": emptyRunHintShift(seg.x, geometry) })
+              } as React.CSSProperties;
               if (seg.href) {
                 return (
                   <a
@@ -543,6 +559,7 @@ export function TypesetDomPages({
         >
           <PageLines
             page={page}
+            geometry={doc.geometry}
             separators={separators[i] ?? []}
             unit={unit}
             ruleBox={ruleBox}

@@ -76,6 +76,28 @@ const starterCommit = starterLoad.indexOf("await applyWorkspaceBaseResume(", sta
 assert.ok(starterResponse >= 0 && starterCommit > starterResponse, "starter replacement uses the central current-state guard after a successful response");
 assert.match(starterLoad, /setBaseResumeName\(""\)/, "starter remains detached from the active saved base");
 
+const blankLoad = functionSlice("startBlankResume", "saveBaseResume");
+const blankApproval = blankLoad.indexOf("await approveCurrentReplacement()");
+const blankVersionCheck = blankLoad.indexOf("replacementGuard.currentVersion()", blankApproval);
+const blankRecovery = blankLoad.indexOf("replacementGuard.onReplacementCommitted()", blankVersionCheck);
+const blankIdentity = blankLoad.indexOf("detachBaseResumeIdentity()", blankRecovery);
+const blankSeed = blankLoad.indexOf("seedResumeData(createBlankResumeData())", blankIdentity);
+assert.ok(blankApproval >= 0, "Blank uses the current dirty-document replacement guard");
+assert.ok(blankVersionCheck > blankApproval, "Blank re-checks the approved document version before commit");
+assert.ok(blankRecovery > blankVersionCheck, "Blank clears recovery only at the validated commit boundary");
+assert.ok(blankIdentity > blankRecovery, "Blank detaches saved-variant identity only inside the commit");
+assert.ok(blankSeed > blankIdentity, "Blank seeds a fresh canonical document after identity is detached");
+assert.match(blankLoad, /setDocumentTitle\("Resume"\)/, "Blank resets the visible document title");
+assert.match(blankLoad, /setWorkspaceStatus\(""\)/, "Blank clears stale workspace save feedback");
+assert.match(blankLoad, /docStyle\.replaceDocumentStyle\(toDocumentStyle\(DOC_STYLE_DEFAULTS\)\)/, "Blank resets persisted document style");
+assert.match(blankLoad, /setResult\(null\)/, "Blank clears prior Resume tailoring output");
+assert.match(blankLoad, /resetCoverWorkflow\(\)/, "Blank invalidates the Cover Letter evidence workflow");
+assert.doesNotMatch(blankLoad, /fetch\(|DELETE|removeBaseResume|saveBaseResume\(/, "Blank never mutates saved Resume files");
+
+const saveCurrent = functionSlice("saveCurrentAsBaseResume", "loadBaseResumeVersion");
+assert.match(saveCurrent, /\|\| "default\.resume"/, "a detached blank document saves through the strict editable format");
+assert.match(saveCurrent, /serializeResumeFile\(editedResume, docStyle\.style\)/, "blank structure and style remain representable on save");
+
 const restore = functionSlice("restoreBaseResume", "saveCurrentAsBaseResume");
 const restoreApproval = restore.indexOf("await approveCurrentReplacement()");
 const restoreResponse = restore.indexOf("if (!response.ok");
@@ -106,9 +128,30 @@ assert.ok(uploadIdentity > uploadRecovery, "upload identity changes only at comm
 
 assert.match(
   appSource,
-  /dirty:\s*resumeDocumentDirty[\s\S]*?version:\s*`\$\{serializedResume\}\\u0000\$\{JSON\.stringify\(toDocumentStyle\(docStyle\.style\)\)\}`/,
-  "the replacement guard's live state includes resume content and persisted style state"
+  /const resumeDocumentVersion = useMemo\([\s\S]{0,180}?resumeDocumentVersionFor\(editedResume, docStyle\.style\)/,
+  "the replacement guard uses a render-safe structured document version"
 );
+assert.match(
+  appSource,
+  /title: baseResumeName[\s\S]{0,520}?disabled: isWorkspaceBootstrapping \|\| isSavingBaseResume/,
+  "default workspace save stays disabled until workspace identity is known"
+);
+assert.match(
+  appSource,
+  /fieldId: "resume-variant-name"[\s\S]{0,520}?disabled: isWorkspaceBootstrapping \|\| isSavingBaseResume/,
+  "named workspace save stays disabled until workspace identity is known"
+);
+assert.match(
+  saveCurrent,
+  /if \(isWorkspaceBootstrapping\) return;/,
+  "workspace save also rejects bootstrap races at the state-owner boundary"
+);
+const starterAction = appSource.indexOf('key: "starter"');
+const blankAction = appSource.indexOf('key: "blank"', starterAction);
+const fileAction = appSource.indexOf('key: "file"', blankAction);
+assert.ok(starterAction >= 0 && blankAction > starterAction && fileAction > blankAction, "Open orders Starter, Blank, then File");
+assert.match(appSource, /const resumeHasContent = Boolean\([\s\S]{0,120}?\.trim\(\)\.length > 0\)/, "blank document existence is separate from content readiness");
+assert.match(appSource, /const canExportResume = resumeHasContent/, "blank Resume content does not enable PDF export");
 assert.match(
   appSource,
   /subscribeWorkspaceRestoreAdoption[\s\S]*?void loadWorkspace\(false\)/,

@@ -490,7 +490,9 @@ Working pages share one skeleton: content as paper sheets in the main
 column, one control surface docked right. Prepare intentionally begins as one
 centered Source task, then becomes collapsed source + brief beside one
 Application rail containing materials, readiness, and Apply; Resume = one engine-painted
-structured editing sheet + review rail; Cover letter = one engine-painted
+structured editing sheet + review rail. That sheet is always mounted, using a
+clean blank document when no source exists; content readiness gates PDF, Polish,
+and Apply without replacing the editor with an empty-state panel. Cover letter = one engine-painted
 plain correspondence sheet + a compact rail that reports readiness before
 Tailor and the tailored result's length, provenance, and Restore after it;
 Materials = draft sheets; Applications = view surface + inspector. The rail is a single sheet

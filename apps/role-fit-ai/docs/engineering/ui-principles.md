@@ -117,6 +117,13 @@ downloads. PDF is a download, so it lives there too rather than as its own
 toolbar button — both bars are Open/Save/Polish — and it opens the same rename
 prompt for both documents.
 
+The Resume editor is always mounted over a real `ResumeData` document. With no
+saved or opened source, RoleFit seeds a clean blank document whose empty name is
+still caret-bearing and whose sections are empty. Blank resets persisted document
+style, detaches saved-variant identity, and never mutates the saved variant it
+replaced. Document existence enables editing and strict `.resume` save; meaningful
+content separately gates PDF, Polish, and Apply.
+
 A menu row carries a description only when its title is not enough. "Download
 .resume" and "Download PDF" need none; "Download .txt" does, because it has to be
 told apart from .cover. Ambient instructions do not belong at the bottom of a menu
