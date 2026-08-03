@@ -135,20 +135,22 @@ A port is part of a browser origin. Changing it creates a different
 port do not automatically appear at the new one. Changing the port never moves
 the current workspace or provider vault; packaged runs keep both beneath their
 operating-system `userData` locations. After resolving the active server, the
-companion writes its numeric port into the runtime config in the app-owned
-materialized extension folder. The extension accepts only that validated
-localhost port and never scans or accepts a page-selected origin. After a
-port-changing restart, the user reloads the unpacked extension once.
+companion writes its numeric port into the app-owned materialized extension's
+runtime config as a first-install seed. The extension's versioned
+`chrome.storage.local` record owns its current port; the companion shows and
+copies the active numeric port for the popup Settings view. The extension never
+scans or accepts a page-selected origin, and a port change needs no reload.
 
 ## Extension setup copy contract
 
-Desktop IPC API 12 exposes one bounded copy operation for the companion's
+Desktop IPC API 13 exposes one bounded copy operation for the companion's
 **Browser extension** section. The renderer may send only one of the closed
-targets `directory`, `chrome`, `edge`, or `firefox`; Electron main maps those
+targets `directory`, `chrome`, `edge`, `firefox`, or `port`; Electron main maps those
 targets to the already-materialized extension directory or the exact setup
 addresses `chrome://extensions`, `edge://extensions`, and
-`about:debugging#/runtime/this-firefox`, then writes the selected value to the
-clipboard. The UI presents **Copy path** and exact browser-address
+`about:debugging#/runtime/this-firefox`, or to the active validated port's
+digits, then writes the selected value to the clipboard. The UI presents
+**Copy path**, **Copy port**, and exact browser-address
 click-to-copy controls. Hover/focus feedback updates only the invoked control;
 the result also reaches a visually hidden polite status region without adding a
 visible receipt or shifting the panel. No renderer-supplied path or arbitrary
@@ -374,10 +376,11 @@ The extension remains a client only of validated `http://localhost:<port>`
 extension routes. An import opens a fresh browser RoleFit tab with its claim
 token. It does not discover, install, configure, or authenticate providers and
 never receives provider credentials. After resolving the active server, main
-writes its numeric port into the runtime config in the app-owned materialized
-extension folder. It never scans localhost or accepts a renderer/page-selected
-origin. A port-changing restart requires one browser extension reload; live
-native synchronization is deferred.
+writes its numeric port into the app-owned materialized extension's runtime
+config as a first-install seed. The extension's saved browser setting remains
+authoritative; the companion shows/copies the active port for manual correction
+in popup Settings. It never scans localhost, adds another listener, accepts a
+renderer/page-selected origin, or requires a reload after a port change.
 
 The desktop package stages the extension's allowlisted source files. On launch, the
 main process materializes them into its app-owned `userData` extension folder

@@ -341,9 +341,10 @@ export async function startRoleFitServer(options: RoleFitServerOptions): Promise
       return;
     }
 
-    // The extension's analyze/import routes are handled BEFORE the localhost
-    // CSRF guard and enforce their own extension-origin contract.
-    if (pathname === "/api/extension/analyze" ||
+    // The extension's CORS routes are handled BEFORE the localhost CSRF guard
+    // and enforce their own extension-origin contract.
+    if (pathname === "/api/extension/status" ||
+        pathname === "/api/extension/analyze" ||
         pathname === "/api/extension/import" ||
         pathname === "/api/extension/pairing-request") {
       void handleExtensionRoutes(req, res, pathname, workspaceDir);

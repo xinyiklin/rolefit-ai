@@ -106,11 +106,17 @@ npm run test:desktop:security --workspace apps/role-fit-ai
 npm run test:desktop:contracts --workspace apps/role-fit-ai
 npm run test:desktop:cli --workspace apps/role-fit-ai
 npm run test:desktop:settings --workspace apps/role-fit-ai
+npm run test:desktop:extension-bundle --workspace apps/role-fit-ai
 npm run test:desktop:ipc --workspace apps/role-fit-ai
 npm run test:rolefit:desktop  # explicit companion process smoke
 npm run test:desktop:package-layout --workspace apps/role-fit-ai
 npm run test:rolefit:desktop:packaged
 npm run test:rolefit:release
+
+node apps/role-fit-ai/__evals__/extension-popup-contract.mjs
+node apps/role-fit-ai/__evals__/extension-settings-contract.mjs
+node apps/role-fit-ai/server/extension/__evals__/origin-policy-probes.mjs
+node apps/role-fit-ai/server/extension/__evals__/inbox-probes.mjs
 
 # Live-provider evals: drive a real AI provider; manual-only, never part of
 # `check`/`test`, run only when explicitly authorized.
@@ -136,6 +142,7 @@ signed-distribution check.
 | RoleFit UI | RoleFit build and focused offline eval | RoleFit check; browser QA under its scoped policy |
 | RoleFit public landing | landing build boundary + release-catalog probe | desktop/390px browser QA, current unavailable state, mocked complete release, and request inspection |
 | RoleFit server / AI | server TypeScript gate, `test:document-workflows`, and affected probe; explicit lifecycle test for listener changes | RoleFit check; route smoke where relevant |
+| RoleFit browser extension | popup/settings source contracts, origin/status and inbox probes, desktop extension-bundle + IPC probes | RoleFit check; manual Chrome/Edge/Firefox popup, pairing, both shortcuts (popup and direct import), wrong-service, and repeated-port matrix |
 | RoleFit provider manager | desktop emit + vault/file-renderer/IPC/CLI/settings/provider-registry/process probes | explicit companion GUI smoke, ordinary-browser regression, then root check/test for lockfile changes |
 | RoleFit native package | staged-layout probe + matching-native packaged smoke | native make/signature checks, installed Squirrel smoke on Windows, and offline release-contract tests; signed publication only in protected CI |
 | Documentation only | path/link/command validation, scoped diff check | no runtime build unless docs expose a discovered code mismatch |
@@ -211,14 +218,19 @@ unprivileged static server before deployment can proceed.
   port from `1` through `65535` under Electron `userData`. `Apply & restart`
   checks loopback availability and relaunches through clean server shutdown;
   `ROLEFIT_DESKTOP_PORT` is a locked per-launch override.
-- Source extension development defaults to `5181`. The companion materializes
+- Source extension development seeds port `5181`. The companion materializes
   its packaged extension only after resolving the active server and writes that
-  numeric localhost port into the extension runtime config. After a
-  port-changing restart, reload the unpacked extension once in the browser.
-  Changing ports also creates separate origin-scoped `localStorage`; it does
-  not migrate browser drafts/preferences. The active workspace and provider
-  data remain in place; packaged runs keep them beneath operating-system
-  `userData`.
+  numeric localhost port into `runtime-config.js` as a validated first-install
+  seed. The extension owns its current port in one versioned
+  `chrome.storage.local` record; saved storage always wins. After a companion
+  port change, copy the active port and save it in the popup's **Settings**
+  view. Saving reconnects in place without reloading the extension. That view
+  also lists the browser's currently assigned import/popup shortcuts and links
+  to the browser's own shortcut editor; the extension never stores a keybinding
+  itself. Changing
+  ports still creates separate origin-scoped app `localStorage`; it does not
+  migrate browser drafts/preferences. The active workspace and provider data
+  remain in place beneath operating-system `userData`.
 
 A bound standalone canonical port normally means the correct app is already
 running. Inspect and reuse it rather than silently selecting another port. The

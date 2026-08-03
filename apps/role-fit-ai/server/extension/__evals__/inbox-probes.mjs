@@ -58,9 +58,9 @@ let handleExtensionRoutes;
 let handleExtensionInbox;
 let cleanExtensionClaimToken;
 
-async function importPosting({ text, url, claimToken } = {}) {
+async function importPosting({ text, url, claimToken, ...legacy } = {}) {
   const res = new FakeResponse();
-  const req = Readable.from([JSON.stringify({ text, url, claimToken })]);
+  const req = Readable.from([JSON.stringify({ text, url, claimToken, ...legacy })]);
   req.method = "POST";
   req.headers = { origin: chromeOrigin };
   await handleExtensionRoutes(req, res, "/api/extension/import");
@@ -138,13 +138,19 @@ try {
   fakeNow = 4_000_000_000_000;
   const handoffText = "Handoff role body with enough length to be a real posting padding";
   const handoffUrl = "http://127.0.0.1/jobs/handoff";
-  await importPosting({ text: handoffText, url: handoffUrl });
+  await importPosting({
+    text: handoffText,
+    url: handoffUrl,
+    fields: { title: "legacy" },
+    autoTailor: true,
+    distillAi: false
+  });
 
   const handoff = await poll("tab-A", "");
   assert.ok(handoff && typeof handoff === "object", "a claiming tab receives the token-less posting");
   assert.equal(handoff.text, handoffText, "the hand-off carries the prepared posting text");
   assert.equal(handoff.url, handoffUrl, "the hand-off carries the posting url");
-  assert.equal(handoff.fields, null, "the server hands off with fields:null so the tab distills client-side");
+  assert.deepEqual(Object.keys(handoff).sort(), ["text", "url"], "legacy mode fields never cross the inbox hand-off");
   assert.equal(await poll("tab-A", ""), null, "the entry is drained after a single hand-off");
 
   console.log("extension inbox probes: PASS");

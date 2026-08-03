@@ -1,7 +1,7 @@
 /**
  * useJobIntake — the job-brief distill/import flows, extracted from App.tsx:
- * Extract-from-link, Distill-paste, the browser-extension inbox import (both
- * the AI-off raw path and the AI-distill path), each entry point's Retry, and
+ * Extract-from-link, Distill-paste, the browser-extension inbox import, each
+ * entry point's Retry, and
  * the manual-edit handler — every distill-provenance write (pipelineAiUsage.
  * distill + jobRawText) lives in this one module.
  *
@@ -13,7 +13,7 @@
  * interface small without leaking control back to App.
  *
  * jobUrl/jobDescription/importedJob/result/pipelineAiUsage/jobRawText/
- * autoTailorJob/polishStatus stay in App (it seeds/derives from them well
+ * polishStatus stay in App (it seeds/derives from them well
  * beyond this flow — jobTracking, autosave, presence, canPolish, etc.), so
  * their setters arrive via the args object.
  */
@@ -22,8 +22,6 @@ import type { ExtractedJobTracking } from "../lib/jobExtract";
 import { extractJobPosting } from "../lib/jobExtract";
 import {
   distillJobPosting,
-  extractedFromAiOrLocal,
-  type AiDistillFields,
   type DistillResult
 } from "../lib/aiDistill";
 import { classifyFailure } from "../lib/failures";
@@ -31,13 +29,10 @@ import { useExtensionInbox, type ExtensionImport } from "./useExtensionInbox";
 import {
   workflowInputFingerprint,
   workflowRequestIsCurrent,
-  workflowStageCanAdvance,
   type AiStageState as StageState
 } from "../lib/aiWorkflow";
 import type { StageAiUsage } from "../lib/aiUsage";
-import type { TailorMode } from "../lib/tailorScope";
 import type { PolishedResume } from "../resumeEngine";
-import type { ResumeData } from "@typeset/engine/lib/resumeData.ts";
 import type { ProviderReadiness } from "./useAvailableProviders";
 import {
   buildPreparedJobBrief,
@@ -109,7 +104,6 @@ type UseJobIntakeArgs = {
   resetCoverWorkflow: () => void;
   setPipelineAiUsage: (updater: (prev: Record<string, StageAiUsage>) => Record<string, StageAiUsage>) => void;
   setJobRawText: (value: string) => void;
-  setAutoTailorJob: (value: string | null) => void;
   setPolishStatus: (value: string) => void;
   setLinkStatus: (value: string) => void;
   confirmDuplicateBeforeDistill: (
@@ -127,8 +121,6 @@ type UseJobIntakeArgs = {
   extensionImportsReady: boolean;
   onExtensionPrepareStarted: () => void;
   onExtensionJobReceived: () => void;
-  tailorModes: Record<string, TailorMode>;
-  editedResume: ResumeData | null;
 };
 
 export function useJobIntake({
@@ -141,7 +133,6 @@ export function useJobIntake({
   resetCoverWorkflow,
   setPipelineAiUsage,
   setJobRawText,
-  setAutoTailorJob,
   setPolishStatus,
   setLinkStatus,
   confirmDuplicateBeforeDistill,
@@ -150,9 +141,7 @@ export function useJobIntake({
   ensureProviderReady,
   extensionImportsReady,
   onExtensionPrepareStarted,
-  onExtensionJobReceived,
-  tailorModes,
-  editedResume
+  onExtensionJobReceived
 }: UseJobIntakeArgs) {
   const [isExtractingLink, setIsExtractingLink] = useState(false);
   const [extensionImportPhase, setExtensionImportPhase] = useState<"receiving" | "preparing" | null>(null);
@@ -161,7 +150,6 @@ export function useJobIntake({
   // reports whether the brief came from the AI or the local fallback.
   const [distillProgress, setDistillProgress] = useState<StageState>({ status: "idle" });
   const [distillProgressVisible, setDistillProgressVisible] = useState(false);
-  const [distillContinuesToPolish, setDistillContinuesToPolish] = useState(false);
   // Which distill action the card's Retry should re-run (link, paste, or a
   // re-distill of an extension import). Stored as a tag, not a captured closure,
   // so Retry dispatches to the LIVE handler and picks up the current URL / paste
@@ -174,8 +162,6 @@ export function useJobIntake({
   const distillImportRef = useRef<{
     text: string;
     url: string;
-    distillAi: boolean;
-    autoTailor: boolean;
   } | null>(null);
   // A once-only extension delivery cannot be put back into the server inbox,
   // so serialize every distill in memory. User actions reject while busy;
@@ -188,9 +174,7 @@ export function useJobIntake({
   // Distill consumes only the job source and its stage-local AI settings.
   // Resume/workspace bootstrap and Tailor-mode reconciliation may finish after
   // a fresh extension tab claims its import; neither changes the in-flight
-  // Distill request, so neither belongs in its stale-input guard. The latest
-  // resume and modes are read only after Distill when deciding whether an
-  // automatic Tailor can begin.
+  // Distill request, so neither belongs in its stale-input guard.
   const distillInputFingerprint = workflowInputFingerprint({
     jobUrl,
     jobDescription,
@@ -228,7 +212,6 @@ export function useJobIntake({
     distillGenerationRef.current += 1;
     distillAbortRef.current.abort();
     distillAbortRef.current = null;
-    setAutoTailorJob(null);
     setDistillProgress({
       status: "stopped",
       errorHeadline: "Inputs changed",
@@ -236,7 +219,7 @@ export function useJobIntake({
     });
     setDistillProgressVisible(true);
     setLinkStatus("Job inputs changed. Prepare the current posting again.");
-  }, [distillInputFingerprint, setAutoTailorJob, setLinkStatus]);
+  }, [distillInputFingerprint, setLinkStatus]);
 
   useEffect(() => () => {
     distillGenerationRef.current += 1;
@@ -292,7 +275,6 @@ export function useJobIntake({
 
   function dismissDistillProgress() {
     setDistillProgressVisible(false);
-    setDistillContinuesToPolish(false);
   }
 
   // Prepare's direct-typing path (manual edits to the description textarea) —
@@ -349,7 +331,6 @@ export function useJobIntake({
     const request = startDistillRequest();
     setIsExtractingLink(true);
     setDistillRetrySource("link");
-    setDistillContinuesToPolish(false);
     setDistillProgress({ status: "running" });
     setDistillProgressVisible(true);
     setLinkStatus("Fetching the posting…");
@@ -484,7 +465,6 @@ export function useJobIntake({
     const request = startDistillRequest();
     setIsExtractingLink(true);
     setDistillRetrySource("paste");
-    setDistillContinuesToPolish(false);
     setDistillProgress({ status: "running" });
     setDistillProgressVisible(true);
     setLinkStatus("Preparing the pasted posting…");
@@ -555,12 +535,9 @@ export function useJobIntake({
     }
   }
 
-  // Shared by the extension-import AI-off branch and its Retry: use the RAW
-  // resolved text as the working job description (no AI request — the user
-  // turned AI distillation off in the extension), with tracking metadata from
-  // the deterministic engine only. Keep the captured source separately even
-  // when it initially equals the working description: later brief edits must
-  // not rewrite View source.
+  // Preserve the captured source when a duplicate gate stops before Distill.
+  // Normal extension intake always goes through provider-backed AI Distill;
+  // this raw snapshot is only the pre-analysis duplicate-stop view.
   function applyRawImportedJob(rawTrimmed: string, trimmedUrl: string) {
     const localExtracted = extractJobPosting(rawTrimmed, { url: trimmedUrl || undefined });
     setJobUrl(trimmedUrl);
@@ -572,64 +549,49 @@ export function useJobIntake({
     setJobRawText(rawTrimmed);
     setDistillProgress({
       status: "done",
-      note: "AI distillation off · Raw description imported",
+      note: "Raw description retained for duplicate review",
       noteTone: "info"
     });
   }
 
-  // Retry an extension-import distill by re-distilling its stored raw text
-  // through the CLIENT /api/distill path — the extension import is event-driven
-  // with nothing to re-run otherwise, so this gives its card a working Retry.
-  // Imports made with AI distillation off re-run the deterministic raw-text
-  // path instead: Retry must never fire an AI call the user opted out of.
+  // Retry an extension-import Distill by re-running provider-backed AI Distill
+  // against its stored raw text. The extension import is event-driven, so this
+  // gives its card a working retry after a provider or request failure.
   async function retryImportDistill() {
     const payload = distillImportRef.current;
     if (!payload) return;
-    if (payload.distillAi) {
-      const readiness = await ensureProviderReady();
-      if (!readiness.ready) {
-        setDistillProgress({ status: "failed", errorHeadline: "Provider unavailable", error: readiness.message });
-        setDistillProgressVisible(true);
-        return;
-      }
+    const readiness = await ensureProviderReady();
+    if (!readiness.ready) {
+      setDistillRetrySource("import");
+      setDistillProgress({ status: "failed", errorHeadline: "Provider unavailable", error: readiness.message });
+      setDistillProgressVisible(true);
+      setPolishStatus(`The extension posting could not be prepared: ${readiness.message}`);
+      return;
     }
     const releaseDistillRun = tryClaimDistillRun();
     if (!releaseDistillRun) return;
     const request = startDistillRequest();
     setIsExtractingLink(true);
-    setDistillContinuesToPolish(payload.autoTailor);
+    setDistillRetrySource("import");
     setDistillProgress({ status: "running" });
     setDistillProgressVisible(true);
     try {
-      if (!payload.distillAi) {
-        const rawTrimmed = payload.text.trim();
-        if (rawTrimmed.length < 40) {
-          setDistillProgress({
-            status: "failed",
-            errorHeadline: "Missing input",
-            error: "The imported posting had too little job text. Paste it manually."
-          });
-          return;
-        }
-        const localExtracted = extractJobPosting(rawTrimmed, { url: payload.url || undefined });
-        const duplicate = await confirmDuplicateBeforeDistill(payload.url, rawTrimmed, localExtracted.tracking);
-        if (!request.isCurrent()) return;
-        applyRawImportedJob(rawTrimmed, payload.url);
-        if (!duplicate.proceed) {
-          setAutoTailorJob(null);
-          setDistillProgress(duplicateStoppedState("before"));
-          return;
-        }
-        setAutoTailorJob(payload.autoTailor ? rawTrimmed : null);
+      const rawTrimmed = payload.text.trim();
+      if (rawTrimmed.length < 40) {
+        setDistillProgress({
+          status: "failed",
+          errorHeadline: "Missing input",
+          error: "The imported posting had too little job text. Paste it manually."
+        });
         return;
       }
       const localExtracted = extractJobPosting(payload.text, { url: payload.url || undefined });
       const duplicateBefore = await confirmDuplicateBeforeDistill(payload.url, payload.text, localExtracted.tracking);
       if (!request.isCurrent()) return;
       if (!duplicateBefore.proceed) {
-        applyRawImportedJob(payload.text.trim(), payload.url);
-        setAutoTailorJob(null);
+        applyRawImportedJob(rawTrimmed, payload.url);
         setDistillProgress(duplicateStoppedState("before"));
+        setPolishStatus("Preparation stopped because this application is already tracked.");
         return;
       }
       const result = await distillJobPosting(payload.text, {
@@ -663,17 +625,19 @@ export function useJobIntake({
       setPipelineAiUsage(freshDistillUsage(usage));
       setJobRawText(payload.text);
       if (!duplicateAfter.proceed) {
-        setAutoTailorJob(null);
         setDistillProgress(duplicateStoppedState("after"));
+        setPolishStatus("Job details were prepared, then the workflow stopped because this application is already tracked.");
         return;
       }
-      const terminalState = distillTerminalState(result, duplicateAfter.note);
-      setAutoTailorJob(payload.autoTailor && workflowStageCanAdvance(terminalState) ? relevant.trim() : null);
-      setDistillProgress(terminalState);
+      setDistillProgress(distillTerminalState(result, duplicateAfter.note));
+      setPolishStatus(result.failure
+        ? `${result.failure.headline}: ${result.failure.detail}. A local brief was loaded; Tailor and Review were not run.`
+        : "Application prepared from the browser extension.");
     } catch (error) {
       if (!request.isCurrent()) return;
       const f = classifyFailure(error);
       setDistillProgress({ status: "failed", errorHeadline: f.headline, error: f.detail });
+      setPolishStatus(`The extension posting could not be prepared: ${f.detail}. Retry from the workflow card.`);
     } finally {
       finishDistillRequest(request.controller);
       setIsExtractingLink(false);
@@ -681,102 +645,49 @@ export function useJobIntake({
     }
   }
 
-  // Auto-fill the job description from the browser extension inbox. The AI distill
-  // runs HERE (client-side) with this tab's selected Distill provider; the
-  // deterministic engine is the fallback.
+  // Auto-fill the job description from the browser extension inbox. Provider
+  // readiness is required before the tab runs AI Distill; its deterministic
+  // brief is retained only when that AI request fails.
   useExtensionInbox(
     async (item: ExtensionImport) => {
       onExtensionJobReceived();
       setExtensionImportPhase("preparing");
-      const { text, url, fields, autoTailor, distillAi } = item;
-      const readiness = distillAi ? await ensureProviderReady() : null;
+      const { text, url } = item;
+      const trimmedUrl = url.trim();
+      const rawTrimmed = text.trim();
+      distillImportRef.current = { text, url: trimmedUrl };
+      setDistillRetrySource("import");
+      const readiness = await ensureProviderReady();
+      if (!readiness.ready) {
+        setDistillProgress({ status: "failed", errorHeadline: "Provider unavailable", error: readiness.message });
+        setDistillProgressVisible(true);
+        setPolishStatus(`The extension posting could not be prepared: ${readiness.message}`);
+        setExtensionImportPhase(null);
+        return;
+      }
       const releaseDistillRun = await waitAndClaimDistillRun();
       const request = startDistillRequest();
       setIsExtractingLink(true);
       try {
-      // The server only PREPARED the raw text in the background (the hook polled
-      // through the "distilling" state until it was ready); it deliberately did not
-      // AI-distill, because the background pass can't read this tab's localStorage AI
-      // settings and would otherwise use the env-default provider. So distill here
-      // with distillRequestFields() to honor the tab's Distill selection. `fields`
-      // arrives null from the current server; the extractedFromAiOrLocal branch is
-      // kept only as defensive back-compat (an older server that still sends fields).
-      // Remember the raw import (incl. its distillAi choice, so Retry can never
-      // fire an AI call the user opted out of) for the card's Retry below.
-      // Store the URL trimmed so a retry keeps importedJob.url === jobUrl.trim()
-      // and the jobTracking memo uses the AI tracking, not a deterministic re-parse.
-      const trimmedUrl = (url || "").trim();
-      const rawTrimmed = text.trim();
-      distillImportRef.current = { text, url: trimmedUrl, distillAi, autoTailor };
-      setDistillContinuesToPolish(autoTailor);
-
-      const localExtracted = extractJobPosting(rawTrimmed, { url: trimmedUrl || undefined });
-      const duplicateBefore = await confirmDuplicateBeforeDistill(trimmedUrl, rawTrimmed, localExtracted.tracking);
-      if (!request.isCurrent()) return;
-      if (!duplicateBefore.proceed) {
-        if (rawTrimmed.length >= 40) applyRawImportedJob(rawTrimmed, trimmedUrl);
-        setAutoTailorJob(null);
-        setDistillRetrySource("import");
-        setDistillProgress(duplicateStoppedState("before"));
-        setDistillProgressVisible(true);
-        setPolishStatus("Preparation stopped because this application is already tracked.");
-        return;
-      }
-
-      // The user turned off AI distillation for this import (extension setting):
-      // skip the AI request entirely and use the raw resolved text as the working
-      // description, with tracking metadata from the deterministic engine only —
-      // extractJobPosting is not an AI call.
-      if (!distillAi) {
-        if (rawTrimmed.length < 40) {
-          setPolishStatus("The extension posting had too little job text. Paste it manually.");
-          setDistillRetrySource("import");
-          setDistillProgress({
-            status: "failed",
-            errorHeadline: "Missing input",
-            error: "The imported posting had too little job text. Paste it manually."
-          });
+        const localExtracted = extractJobPosting(rawTrimmed, { url: trimmedUrl || undefined });
+        const duplicateBefore = await confirmDuplicateBeforeDistill(trimmedUrl, rawTrimmed, localExtracted.tracking);
+        if (!request.isCurrent()) return;
+        if (!duplicateBefore.proceed) {
+          if (rawTrimmed.length >= 40) applyRawImportedJob(rawTrimmed, trimmedUrl);
+          setDistillProgress(duplicateStoppedState("before"));
           setDistillProgressVisible(true);
+          setPolishStatus("Preparation stopped because this application is already tracked.");
           return;
         }
-        applyRawImportedJob(rawTrimmed, trimmedUrl);
-        setAutoTailorJob(autoTailor ? rawTrimmed : null);
-        setDistillRetrySource("import");
-        setDistillProgressVisible(true);
-        const readyToTailorRaw =
-          Boolean(editedResume) && Object.values(tailorModes).some((mode) => mode === "tailor");
-        setPolishStatus(
-          autoTailor && !readyToTailorRaw
-            ? `Application prepared from the browser extension. ${
-                editedResume ? "set a section to Tailor" : "load a resume"
-              } and automatic tailoring can continue.`
-            : "Application prepared from the browser extension."
-        );
-        return;
-      }
 
-      if (readiness && !readiness.ready) {
-        if (rawTrimmed.length >= 40) applyRawImportedJob(rawTrimmed, trimmedUrl);
-        setAutoTailorJob(null);
-        setDistillRetrySource("import");
-        setDistillProgress({ status: "failed", errorHeadline: "Provider unavailable", error: readiness.message });
-        setDistillProgressVisible(true);
-        setPolishStatus(`Application prepared without AI job-detail extraction. ${readiness.message}`);
-        return;
-      }
-
-        // The client distill takes real time now (it always runs), so show the running
-        // card while it works — otherwise the import lands with no visible progress.
-        // (retrySource is set in each terminal branch below, before any card with Retry.)
         setDistillProgress({ status: "running" });
         setDistillProgressVisible(true);
-        const result = fields
-          ? extractedFromAiOrLocal(fields as Partial<AiDistillFields>, text, url || undefined, distillRequestFields())
-          : await distillJobPosting(text, {
-              url: url || undefined,
-              aiRequest: distillRequestFields(),
-              signal: request.signal
-            });
+        const result = await distillJobPosting(text, {
+          url: trimmedUrl || undefined,
+          aiRequest: distillRequestFields(),
+          localExtracted,
+          signal: request.signal
+        });
         if (!request.isCurrent()) return;
         const { extracted, usage } = result;
         const relevant = extracted.tailoringText;
@@ -803,38 +714,24 @@ export function useJobIntake({
         setPipelineAiUsage(freshDistillUsage(usage));
         setJobRawText(text);
         if (!duplicateAfter.proceed) {
-          setAutoTailorJob(null);
           setDistillRetrySource("import");
           setDistillProgress(duplicateStoppedState("after"));
           setDistillProgressVisible(true);
           setPolishStatus("Job details were prepared, then the workflow stopped because this application is already tracked.");
           return;
         }
-        // Auto-tailor only when Distill itself succeeded. A local fallback is
-        // still loaded for inspection, but cannot silently advance the workflow.
+        // A successful or locally-fallback Distill stops here. Tailor remains an
+        // explicit action in Prepare.
         const terminalState = distillTerminalState(result, duplicateAfter.note);
-        setAutoTailorJob(autoTailor && workflowStageCanAdvance(terminalState) ? relevant.trim() : null);
-        // The distill card now carries the AI-vs-local signal, so the status line just
-        // covers import/auto-tailor context. The imported JD satisfies the
-        // description-length gate; the only thing that can still defer the auto-polish
-        // is a missing resume / Tailor section — say so rather than appearing to do nothing.
-        // "import" keeps a Retry on the card that re-distills through the client path.
         setDistillRetrySource("import");
         setDistillProgress(terminalState);
         setDistillProgressVisible(true);
-        const readyToTailor =
-          Boolean(editedResume) && Object.values(tailorModes).some((mode) => mode === "tailor");
         setPolishStatus(result.failure
           ? `${result.failure.headline}: ${result.failure.detail}. A local brief was loaded; Tailor and Review were not run.`
-          : autoTailor && !readyToTailor
-            ? `Application prepared from the browser extension. ${
-                editedResume ? "set a section to Tailor" : "load a resume"
-              } and automatic tailoring can continue.`
-            : "Application prepared from the browser extension.");
+          : "Application prepared from the browser extension.");
       } catch (error) {
         if (!request.isCurrent()) return;
         const failure = classifyFailure(error);
-        setAutoTailorJob(null);
         setDistillRetrySource("import");
         setDistillProgress({ status: "failed", errorHeadline: failure.headline, error: failure.detail });
         setDistillProgressVisible(true);
@@ -849,9 +746,9 @@ export function useJobIntake({
     () => {
       onExtensionPrepareStarted();
       setExtensionImportPhase("receiving");
-      // Background server-side distill still running — surface it on the same card
-      // the link/paste flows use (no Retry: an extension import has nothing to
-      // re-run). Guard the running state so repeated polls don't churn renders.
+      // Background server-side preparation is still running — surface it on the
+      // same card the link/paste flows use. Guard the running state so repeated
+      // polls don't churn renders.
       if (distillBusyRef.current) return;
       setDistillRetrySource(null);
       setDistillProgress((prev) => (prev.status === "running" ? prev : { status: "running" }));
@@ -876,7 +773,6 @@ export function useJobIntake({
     extensionImportPhase,
     distillProgress,
     distillProgressVisible,
-    distillContinuesToPolish,
     dismissDistillProgress,
     distillRetry,
     handleManualJobDescriptionChange,

@@ -41,14 +41,22 @@ for provider, prompt, sanitizer, and review work.
 ## Rules
 
 - Bind loopback by default; preserve Host/CSRF checks for `localhost`,
-  `127.0.0.1`, and `[::1]`. Cross-origin extension analyze/import routes must
-  match an exact, explicitly configured `EXTENSION_ALLOWED_ORIGINS` entry and
-  reflect only that Origin. An extension scheme is not an identity; an
-  unset/invalid allowlist rejects every analyze/import request. A syntactically
-  valid extension origin may enqueue only a bounded, expiring pairing request;
-  that route exposes no tracker/import data and requires explicit companion
-  approval before the origin enters the allowlist. Never admit another installed
-  extension, arbitrary web Origins, an absent/malformed Origin, or wildcard CORS.
+  `127.0.0.1`, and `[::1]`. When an extension route carries `Origin`, accept
+  only a syntactically valid exact extension Origin and reflect only that
+  Origin; analyze/import additionally require an exact configured
+  `EXTENSION_ALLOWED_ORIGINS` entry. Status is the content-free same-port service
+  marker. Privileged extension-page GETs may omit `Origin`; only that absent-
+  Origin GET may read the marker with `paired: false`, while an explicit invalid
+  Origin and an origin-less preflight stay rejected. A valid extension Origin
+  may read its paired boolean, and status must never enqueue pairing. The exact-
+  Origin pairing POST remains authoritative before analyze/import. An extension
+  scheme is not an identity; an unset/invalid allowlist rejects every
+  analyze/import request. A syntactically valid extension origin may enqueue
+  only a bounded, expiring pairing request; that route exposes no tracker/import
+  data and requires explicit companion approval before the origin enters the
+  allowlist. Never admit another installed extension, arbitrary web Origins, a
+  malformed Origin, an absent Origin beyond the content-free status GET
+  exception, or wildcard CORS.
 - The ordinary `/api/*` Host/Origin guard is a browser CSRF/DNS-rebinding
   boundary, not authentication for native clients. Do not add broad web CORS,
   bearer handling, or public Electron-management routes to this runtime. The

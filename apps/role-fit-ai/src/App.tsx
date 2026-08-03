@@ -347,12 +347,6 @@ function App() {
   // Surfaces polish-flow feedback beside the Polish action.
   const [polishStatus, setPolishStatus] = useState("");
   const polishStatusIsError = /failed|stopped|too little|already tracked|no review attempt|changed/i.test(polishStatus);
-  // Holds the imported job's text when an extension import arrives with the "Tailor
-  // automatically" toggle on, so the app jumps straight to polish once a resume is
-  // ready (no manual click). Scoping to the specific job — not a bare flag — means a
-  // later import/paste/edit, or a toggle-OFF import, can never trigger a surprise
-  // polish against the wrong posting.
-  const [autoTailorJob, setAutoTailorJob] = useState<string | null>(null);
   const [resumeVariantRecommendation, setResumeVariantRecommendation] = useState<VariantRecommendation | null>(null);
   const [isRankingResumeVariants, setIsRankingResumeVariants] = useState(false);
   const resumeVariantRecommendationKeyRef = useRef("");
@@ -1248,8 +1242,8 @@ function App() {
   });
 
   // ----- Job intake (distill/import flows) -----
-  // Extract-from-link, Distill-paste, the browser-extension inbox import (both
-  // AI-off and AI-distill paths), and each entry point's Retry — extracted to
+  // Extract-from-link, Distill-paste, the browser-extension inbox import, and
+  // each entry point's Retry — extracted to
   // src/hooks/useJobIntake.ts. isExtractingLink/distillProgress/
   // distillProgressVisible/distillRetry are owned by the hook; App only reads
   // them below for render + the presence phase + the before-unload guard.
@@ -1258,7 +1252,6 @@ function App() {
     extensionImportPhase,
     distillProgress,
     distillProgressVisible,
-    distillContinuesToPolish,
     dismissDistillProgress,
     distillRetry,
     handleManualJobDescriptionChange,
@@ -1274,7 +1267,6 @@ function App() {
     resetCoverWorkflow,
     setPipelineAiUsage,
     setJobRawText,
-    setAutoTailorJob,
     setPolishStatus,
     setLinkStatus,
     onExtensionPrepareStarted: () => setActiveOutputTab("prepare"),
@@ -1284,8 +1276,6 @@ function App() {
     distillRequestFields,
     ensureProviderReady: ensureDistillProvider,
     extensionImportsReady: hasLoadedApplications,
-    tailorModes,
-    editedResume
   });
   const jobPreparationActive =
     isExtractingLink || extensionImportPhase !== null || distillProgress.status === "running";
@@ -1362,7 +1352,7 @@ function App() {
       onRetry: distillRetry
     });
   }
-  if (polishProgressVisible || (distillProgressVisible && distillContinuesToPolish)) {
+  if (polishProgressVisible) {
     if (polishStages !== "review") {
       aiWorkflowStages.push({
         key: "tailor",
@@ -1733,42 +1723,6 @@ function App() {
     readCoverLetterVariantCandidates
   ]);
 
-  // Auto-tailor remains a Prepare workflow. Wait for ranking and any safe
-  // winner adoption; a tie keeps the current source and continues without
-  // inventing a recommendation. Dirty work still pauses replacement and Tailor.
-  useEffect(() => {
-    if (autoTailorJob === null) return;
-    if (autoTailorJob !== jobDescription.trim()) {
-      setAutoTailorJob(null);
-      return;
-    }
-    if (
-      isWorkspaceBootstrapping ||
-      isSavingBaseResume ||
-      resumeDocumentDirty ||
-      isRankingResumeVariants ||
-      (resumeVariantRecommendation && resumeVariantRecommendation.fileName !== baseResumeName)
-    ) {
-      return;
-    }
-    if (canPolish && !isPolishing) {
-      setAutoTailorJob(null);
-      void handlePolish({ revealResumeOnSuccess: false });
-    }
-  }, [
-    autoTailorJob,
-    jobDescription,
-    canPolish,
-    isPolishing,
-    isWorkspaceBootstrapping,
-    isSavingBaseResume,
-    resumeDocumentDirty,
-    isRankingResumeVariants,
-    baseResumeOptions.length,
-    baseResumeName,
-    resumeVariantRecommendation
-  ]);
-
   const applicationPreparationActive =
     jobPreparationActive ||
     (materialSelection.resume &&
@@ -1796,10 +1750,9 @@ function App() {
       isManuallySelectingResumeVariant ||
       isRankingResumeVariants
     ) return;
-    // This click is the confirmation missing from automatic mode. It tailors
-    // exactly the resume currently shown; loading a different variant remains
-    // protected by useWorkspaceResume's dirty-document confirmation.
-    setAutoTailorJob(null);
+    // This click is explicit: it tailors exactly the resume currently shown;
+    // loading a different variant remains protected by useWorkspaceResume's
+    // dirty-document confirmation.
     void handlePolish({ revealResumeOnSuccess: false });
   }
 

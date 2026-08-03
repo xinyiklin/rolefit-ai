@@ -110,11 +110,12 @@ a paid replacement silently.
 The companion defaults to local port `5181` and may persist another available
 port after explicit confirmation and restart. Browser-local state is scoped by
 origin, so a different port has separate draft/preferences storage. Workspace
-and provider data keep their operating-system-local locations, and extension
-preparation follows the companion's resolved numeric localhost port through a
-generated extension runtime config. A port-changing restart tells the user to
-reload the unpacked extension once; there is no live native synchronization or
-localhost scanning. Health identifies a compatible server as
+and provider data keep their operating-system-local locations. The extension
+owns one saved numeric localhost port in versioned browser storage; its runtime
+config is only the validated first-install seed. The companion shows and copies
+the active port, and a user saves that value in the popup's inline Settings
+view after an app port change. The extension does not scan localhost, use a
+locator, open a second listener, or require a reload. Health identifies a compatible server as
 companion-launched or standalone without treating that public response as proof
 of ownership; only the current private utility-process handle proves that this
 companion started it. Startup may connect to or gracefully stop a standalone
@@ -196,15 +197,15 @@ disappears into the task. Quiet competence, not salesmanship.
     Prepare may summarize a current matching AI Review or a matching historical
     saved review; before either exists it says "Not reviewed" and never
     substitutes a local fit estimate.
-11. Preserve safe extension automation: a claimed extension posting opens and
-    progresses on Prepare. Automatic resume tailoring stays there and ranks
-    actual saved `.resume` contents against the prepared job. Resume and cover
-    letter use one rule: weight required qualifications, declared technology,
-    responsibilities, and role signals; auto-select a meaningful unique winner
-    only while the editor is clean and not restored from an application. A tie
-    or incomplete comparison makes no recommendation and keeps the current
-    selection. Do not add persisted variant metadata or another document schema
-    for this decision.
+11. Preserve safe extension intake: a claimed extension posting always runs AI
+    Distill and stops on Prepare; it never auto-launches Tailor or Review. A
+    failed AI Distill may leave the deterministic brief visible for inspection,
+    but it remains failed. The ordinary Prepare workflow may rank actual saved
+    resume and cover-letter contents against the prepared job and auto-select a
+    meaningful unique winner while the editor is clean and not application-
+    owned; that selection is not tailoring. A tie or incomplete comparison keeps
+    the current selection. Do not add persisted variant metadata or another
+    document schema for this decision.
 12. Keep the complete prepared job correctable without another AI run. Along
     with role, company, location, type, source, work authorization,
     compensation, and one role context, expose responsibilities,

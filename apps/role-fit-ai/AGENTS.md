@@ -138,10 +138,11 @@ or workspace state, keep it here and expose the smallest host seam instead.
   Apply status names which PDF failed. Apply is synchronously single-flight from
   duplicate resolution through a direct commit and again through every selected
   post-commit export; the pre-commit naming prompt remains interactive.
-- Automatic extension tailoring stays on Prepare and never replaces a dirty
-  editor automatically. Rank actual saved resume and cover-letter contents
-  against weighted prepared-job sections, and auto-select a meaningful unique
-  winner for either document while its editor is clean and not application-owned.
+- Extension intake always requires AI Distill and stops on Prepare; it never
+  auto-launches Tailor or Review. The ordinary app may still rank actual saved
+  resume and cover-letter contents against weighted prepared-job sections and
+  auto-select a meaningful unique winner while its editor is clean and not
+  application-owned, but that selection is not automatic tailoring.
   An explicit manual variant choice synchronously preempts recommendation work;
   while an included variant is ranking or loading, preparation remains busy and
   Apply or another Tailor action cannot start.
@@ -195,11 +196,12 @@ npx tsc -p apps/role-fit-ai/tsconfig.server.json --noEmit
 
 Standalone source development defaults to canonical port 5181. The installed
 product is launched through the companion, which may persist another
-numeric-loopback port; after resolving the active server, it regenerates the
-app-owned extension runtime config for that same port. A port change creates
-separate browser-origin storage and requires one browser extension reload after
-the companion restarts. Reuse a compatible bound listener rather than starting
-a second server.
+numeric-loopback port. The materialized extension runtime config is only the
+validated first-install seed; the extension's versioned `chrome.storage.local`
+record owns the current port and saved storage wins. The companion shows and
+copies the active numeric port so the user can save it in the popup's Settings
+view after an app port change, with no extension reload. Reuse a compatible
+bound listener rather than starting a second server.
 
 - Client/type changes: RoleFit build, plus focused evals.
 - Server/AI changes: server TypeScript gate, affected route/eval, and full app

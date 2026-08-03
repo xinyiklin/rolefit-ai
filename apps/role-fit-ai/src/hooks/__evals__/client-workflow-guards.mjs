@@ -260,9 +260,29 @@ assert.equal(
   "every AI Distill entry point awaits the shared initial provider discovery"
 );
 assert.ok(
-  intake.indexOf("const readiness = distillAi ? await ensureProviderReady()") <
+  intake.indexOf("const readiness = await ensureProviderReady()") <
     intake.indexOf("const releaseDistillRun = await waitAndClaimDistillRun()"),
   "extension imports settle provider discovery before claiming and fingerprinting their Distill run"
+);
+assert.match(
+  intake,
+  /const result = await distillJobPosting\(text,\s*\{/,
+  "extension delivery always runs the selected provider-backed Distill request"
+);
+assert.doesNotMatch(
+  intake,
+  /autoTailor|distillAi|extractedFromAiOrLocal|item\.fields/,
+  "extension intake has no retired mode flags or pre-extracted-field bypass"
+);
+assert.doesNotMatch(
+  inbox,
+  /autoTailor|distillAi|fields/,
+  "the client inbox wire type exposes only raw text and URL"
+);
+assert.doesNotMatch(
+  app,
+  /autoTailorJob|setAutoTailorJob|distillContinuesToPolish/,
+  "App has no automatic tailoring state or continuation signal"
 );
 assert.doesNotMatch(
   intakeFingerprint,
@@ -915,20 +935,15 @@ assert.match(
   "the extension progress callback selects Prepare before reporting progress"
 );
 
-const autoTailorStart = app.indexOf("// Auto-tailor remains a Prepare workflow.");
-const autoTailorEnd = app.indexOf("const applicationPreparationActive", autoTailorStart);
-const autoTailorEffect = app.slice(autoTailorStart, autoTailorEnd);
-const dirtyPause = autoTailorEffect.indexOf("resumeDocumentDirty");
-const variantPause = autoTailorEffect.indexOf("resumeVariantRecommendation &&");
-const autoTailorRun = autoTailorEffect.indexOf("handlePolish({ revealResumeOnSuccess: false })");
-assert.ok(
-  dirtyPause >= 0 && variantPause > dirtyPause && autoTailorRun > variantPause,
-  "automatic tailoring pauses for a dirty editor or an unresolved variant comparison before it can run"
+assert.match(
+  app,
+  /function handleTailorPreparedResume()[\s\S]{0,600}?void handlePolish\(\{ revealResumeOnSuccess: false \}\);/,
+  "the prepared-job Tailor action remains an explicit manual action"
 );
 assert.doesNotMatch(
-  autoTailorEffect,
-  /loadBaseResumeVersion/,
-  "the tailoring effect never replaces a resume; selection belongs to the guarded recommendation effect"
+  app,
+  /const applicationPreparationActive[\s\S]{0,1000}?handlePolish\(\{ revealResumeOnSuccess: false \}\)/,
+  "extension preparation cannot automatically start Tailor"
 );
 
 assert.match(
@@ -1017,7 +1032,7 @@ assert.match(
   "the resume Open menu routes saved variants through the synchronous wrapper"
 );
 const variantRankingStart = app.indexOf("const rankingJobDescription");
-const variantRankingEnd = app.indexOf("// Auto-tailor remains a Prepare workflow.", variantRankingStart);
+const variantRankingEnd = app.indexOf("const applicationPreparationActive", variantRankingStart);
 const variantRanking = app.slice(variantRankingStart, variantRankingEnd);
 assert.match(
   variantRanking,
@@ -1114,7 +1129,7 @@ assert.match(
 const coverRankingStart = app.indexOf("// Cover letters follow the same rule as resumes");
 const coverRanking = app.slice(
   coverRankingStart,
-  app.indexOf("// Auto-tailor remains a Prepare workflow.", coverRankingStart)
+  app.indexOf("const applicationPreparationActive", coverRankingStart)
 );
 assert.ok(coverRankingStart >= 0, "Prepare ranks saved cover letters against the prepared job");
 assert.match(

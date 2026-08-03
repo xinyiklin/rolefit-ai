@@ -139,7 +139,7 @@ const providerConnections = Object.freeze([
   })
 ]);
 
-assert.equal(ROLEFIT_DESKTOP_API_VERSION, 12);
+assert.equal(ROLEFIT_DESKTOP_API_VERSION, 13);
 assert.equal(ROLEFIT_DESKTOP_SETTINGS_SCHEMA_VERSION, 1);
 assert.equal(ROLEFIT_EXTENSION_ORIGIN_MAX_COUNT, 4);
 assert.equal(ROLEFIT_API_KEY_MAX_BYTES, 16_384);
@@ -191,7 +191,8 @@ assert.deepEqual([...ROLEFIT_EXTENSION_SETUP_COPY_TARGETS], [
   "directory",
   "chrome",
   "edge",
-  "firefox"
+  "firefox",
+  "port"
 ]);
 for (const target of ROLEFIT_EXTENSION_SETUP_COPY_TARGETS) {
   assert.equal(isRoleFitExtensionSetupCopyTarget(target), true);
@@ -203,25 +204,31 @@ for (const target of [null, undefined, 42, {}, []]) {
 }
 const privateExtensionDirectory = "C:\\private\\rolefit-extension";
 assert.equal(
-  resolveRoleFitExtensionSetupCopyValue("directory", privateExtensionDirectory),
+  resolveRoleFitExtensionSetupCopyValue("directory", privateExtensionDirectory, 5_183),
   privateExtensionDirectory
 );
-assert.equal(resolveRoleFitExtensionSetupCopyValue("chrome", privateExtensionDirectory), "chrome://extensions");
-assert.equal(resolveRoleFitExtensionSetupCopyValue("edge", privateExtensionDirectory), "edge://extensions");
+assert.equal(resolveRoleFitExtensionSetupCopyValue("chrome", privateExtensionDirectory, 5_183), "chrome://extensions");
+assert.equal(resolveRoleFitExtensionSetupCopyValue("edge", privateExtensionDirectory, 5_183), "edge://extensions");
 assert.equal(
-  resolveRoleFitExtensionSetupCopyValue("firefox", privateExtensionDirectory),
+  resolveRoleFitExtensionSetupCopyValue("firefox", privateExtensionDirectory, 5_183),
   "about:debugging#/runtime/this-firefox"
+);
+assert.equal(resolveRoleFitExtensionSetupCopyValue("port", privateExtensionDirectory, 5_183), "5183");
+assert.throws(
+  () => resolveRoleFitExtensionSetupCopyValue("port", privateExtensionDirectory, 0),
+  /integer from 1 through 65535/
 );
 const expectedExtensionSetupCopyValues = Object.freeze({
   directory: privateExtensionDirectory,
   chrome: "chrome://extensions",
   edge: "edge://extensions",
-  firefox: "about:debugging#/runtime/this-firefox"
+  firefox: "about:debugging#/runtime/this-firefox",
+  port: "5183"
 });
 for (const target of ROLEFIT_EXTENSION_SETUP_COPY_TARGETS) {
   const writes = [];
   assert.equal(
-    copyRoleFitExtensionSetupValue(target, privateExtensionDirectory, (value) => writes.push(value)),
+    copyRoleFitExtensionSetupValue(target, privateExtensionDirectory, 5_183, (value) => writes.push(value)),
     undefined
   );
   assert.deepEqual(writes, [expectedExtensionSetupCopyValues[target]]);
@@ -229,7 +236,7 @@ for (const target of ROLEFIT_EXTENSION_SETUP_COPY_TARGETS) {
 assert.equal(normalizeRoleFitExtensionOrigin(`${firefoxOrigin}/`), firefoxOrigin);
 assert.equal(normalizeRoleFitExtensionOrigin("https://example.com"), "");
 assert.deepEqual(runtimeInfo, {
-  apiVersion: 12,
+  apiVersion: 13,
   runtime: "electron-companion",
   platform: "darwin",
   appVersion: "0.1.0",
@@ -1028,6 +1035,7 @@ removeReinstalledHandlers();
 const appRoot = resolve(import.meta.dirname, "../..");
 const preload = await readFile(resolve(appRoot, "dist-electron/desktop/preload.cjs"), "utf8");
 const preloadSource = await readFile(resolve(appRoot, "desktop/preload.cts"), "utf8");
+const mainSource = await readFile(resolve(appRoot, "desktop/main.cts"), "utf8");
 const companionRendererSource = await readFile(
   resolve(appRoot, "desktop/companion-renderer.js"),
   "utf8"
@@ -1063,6 +1071,14 @@ assert.match(preloadSource, /RoleFitDesktopIpcChannel\.RestoreWorkspaceFromFile/
 assert.match(preloadSource, /RoleFitDesktopIpcChannel\.OpenWorkspaceFolder/);
 assert.match(preloadSource, /RoleFitDesktopIpcChannel\.GetConnectionStatus/);
 for (const channel of Object.values(channels)) assert.doesNotMatch(preloadSource, new RegExp(channel));
+assert.match(
+  mainSource,
+  /function getActiveDesktopServerPort\(server: DesktopServerHandle\)[\s\S]*127\\\.0\\\.0\\\.1[\s\S]*active local service reported an invalid port/
+);
+assert.match(
+  mainSource,
+  /const activePort = getActiveDesktopServerPort\(desktopServer\)[\s\S]*localSitePort: activePort/
+);
 assert.match(companionRendererSource, /PROVIDER_VISIBLE_POLL_INTERVAL_MS = 5_000/);
 assert.match(
   companionRendererSource,
@@ -1122,8 +1138,8 @@ assert.match(
 );
 assert.match(
   companionRendererSource,
-  /Reload the unpacked extension after RoleFit restarts/,
-  "port-change confirmation names the required browser extension reload"
+  /Update the browser extension port to \$\{port\} after restart/,
+  "port-change confirmation names the extension-owned setting without requiring a reload"
 );
 assert.match(
   companionRendererSource,
@@ -1187,7 +1203,8 @@ const rendererCopyHarness = vm.runInNewContext(
       directory: { prompt: "Copy path", success: "Copied extension folder path.", error: "Could not copy the extension folder path. Try again." },
       chrome: { prompt: "Copy address", success: "Copied Chrome extensions address.", error: "Could not copy the Chrome extensions address. Try again." },
       edge: { prompt: "Copy address", success: "Copied Edge extensions address.", error: "Could not copy the Edge extensions address. Try again." },
-      firefox: { prompt: "Copy address", success: "Copied Firefox debugging address.", error: "Could not copy the Firefox debugging address. Try again." }
+      firefox: { prompt: "Copy address", success: "Copied Firefox debugging address.", error: "Could not copy the Firefox debugging address. Try again." },
+      port: { prompt: "Copy port", success: "Copied active RoleFit port.", error: "Could not copy the active RoleFit port. Try again." }
     },
     bridge: {
       copyExtensionSetupValue(target) {
@@ -1200,6 +1217,8 @@ const rendererCopyHarness = vm.runInNewContext(
       }
     },
     elements: { extensionSetupStatus },
+    liveConnectionStatus: { port: 5_183 },
+    siteSettings: { localSitePort: 5_183 },
     hasUsableBridge: () => true,
     render: () => rendererCopyRenderCalls.push("render"),
     ...rendererCopyRenderSpies,
@@ -1246,6 +1265,7 @@ function runExtensionFeedbackTimer(timerId) {
 const chromeCopyButton = copyButton("chrome", "Copy address");
 const edgeCopyButton = copyButton("edge", "Copy address");
 const directoryCopyButton = copyButton("directory", "Copy path");
+const portCopyButton = copyButton("port", "Copy port");
 const untouchedDirectoryState = JSON.stringify({
   dataset: directoryCopyButton.dataset,
   attributes: [...directoryCopyButton.attributes]
@@ -1312,10 +1332,22 @@ assert.equal("copyState" in edgeCopyButton.dataset, false);
 extensionCopyOutcome = "resolve";
 await rendererCopyHarness.copyExtensionSetupValue(chromeCopyButton);
 assert.deepEqual(extensionCopyCalls, ["chrome", "chrome", "chrome", "edge", "chrome"]);
+await rendererCopyHarness.copyExtensionSetupValue(directoryCopyButton);
+assert.equal(extensionSetupStatus.textContent, "Copied extension folder for localhost:5183.");
+assert.equal(directoryCopyButton.dataset.copyFeedback, "Copied");
+assert.equal(directoryCopyButton.dataset.copyState, "success");
+assert.equal(directoryCopyButton.attributes.has("aria-busy"), false);
+for (const timerId of [...extensionFeedbackTimers.keys()]) runExtensionFeedbackTimer(timerId);
+for (const timerId of [...extensionFeedbackTimers.keys()]) runExtensionFeedbackTimer(timerId);
 assert.equal(JSON.stringify({
   dataset: directoryCopyButton.dataset,
   attributes: [...directoryCopyButton.attributes]
 }), untouchedDirectoryState);
+assert.deepEqual(extensionCopyCalls, ["chrome", "chrome", "chrome", "edge", "chrome", "directory"]);
+await rendererCopyHarness.copyExtensionSetupValue(portCopyButton);
+assert.equal(extensionSetupStatus.textContent, "Copied active RoleFit port.");
+assert.equal(portCopyButton.dataset.copyFeedback, "Copied");
+assert.deepEqual(extensionCopyCalls, ["chrome", "chrome", "chrome", "edge", "chrome", "directory", "port"]);
 assert.deepEqual(rendererCopyRenderCalls, []);
 assert.match(companionRendererSource, /Copied Chrome extensions address\./);
 assert.doesNotMatch(companionRendererSource, /navigator\.clipboard|clipboard\.writeText/);

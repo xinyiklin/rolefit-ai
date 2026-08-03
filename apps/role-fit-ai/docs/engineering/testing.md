@@ -215,15 +215,13 @@ Good frontend verification covers:
   above Settings in the bottom studio-rail utilities group, outside
   `OUTPUT_TABS` and the APG tablist
 - extension receipt and delivery select Prepare before updating visible intake
-  state, progress stays there through Distill and automatic resume tailoring,
-  AI-off preparation still yields the deterministic brief, and retry/stale
-  guards cannot apply an earlier posting to the current session
-- extension-triggered automatic tailoring never replaces a dirty editor;
-  multiple saved resume variants are ranked from their actual strict document
-  contents, only a clear high-confidence winner can be selected automatically
-  while the editor is clean, ambiguous or dirty state recommends/pauses, no
-  variant metadata is persisted, and success does not navigate away from
-  Prepare
+  state, every delivered posting and Retry require provider readiness and AI
+  Distill, a failed run may retain only the deterministic inspection brief, and
+  retry/stale guards cannot apply an earlier posting to the current session
+- extension intake never launches Tailor or Review; multiple saved resume
+  variants may still be ranked from their actual strict document contents and
+  a clear high-confidence winner selected while the editor is clean, but that
+  is source selection, not tailoring, and no variant metadata is persisted
 - Resume and Cover Letter render the same material-card structure with separate
   variant selectors and Include toggles, neither is labeled optional, and a
   fresh prepared job starts with Resume included and Cover Letter excluded
@@ -362,14 +360,15 @@ and does not own workspace/tracker files. Focused companion probes should cover:
 - exact trusted main-frame and exact `file:` URL validation for every IPC call,
   a frozen self-contained preload, fixed named methods, and rejection of unknown
   providers or extra arguments;
-- desktop API 12 extension setup copy probes for **Copy path**, the exact
-  Chrome/Edge/Firefox address targets, closed target validation, main-owned
+- desktop API 13 extension setup copy probes for **Copy path**, **Copy port**,
+  the exact Chrome/Edge/Firefox address targets, closed target validation, main-owned
   clipboard writes, sanitized failures, and no returned renderer path or
   renderer clipboard permission; companion UI coverage also verifies native
   click-to-copy buttons, local hover/focus feedback, no panel-wide render call,
   and one visually hidden polite status region;
 - extension bundle materialization after active-server resolution, strict
-  generated-port validation, packaged inclusion of `runtime-config.js`, and
+  first-install-seed validation, packaged inclusion of `settings.js` and
+  `runtime-config.js`, and
   read-only pairing controls whenever the current companion does not own the
   service;
 - fake-encryption/file-adapter cases for API-key save/remove, atomic versioned
@@ -398,7 +397,7 @@ and does not own workspace/tracker files. Focused companion probes should cover:
   main-owned refresh after the setup renderer closes;
 - browser selectors showing only configured providers, preserving unready
   selections without a paid fallback, disabling only AI when none exist, and
-  awaiting initial discovery for automatic extension Distill instead of
+  awaiting initial discovery for extension Distill instead of
   recording a transient loading state as failure;
 - browser autosave/editor/tracker behavior remaining independent of Electron,
   plus the existing `npm run dev:rolefit` and extension contract staying green;
@@ -407,17 +406,48 @@ and does not own workspace/tracker files. Focused companion probes should cover:
   valid unapproved origins to enqueue only a bounded short-lived pairing
   request, and rejecting near-match, path-bearing, absent, malformed, and
   oversized identities without CORS;
-- extension preparation preserving the internal `autoTailor`, `distillAi`,
-  `extensionImport`, `claimToken`, `tabId`, and `"distilling"` wire contract;
+- extension preparation omitting retired `autoTailor`, `distillAi`, and
+  pre-extracted `fields`, while preserving `extensionImport`, `claimToken`,
+  `tabId`, and the `"distilling"` progress contract;
   sending the same claim token in the import body and fresh-tab query; claiming
   a reserved inbox entry only from its intended tab; opening an independent tab
   in the current Firefox container when available with the ordinary fresh-tab
-  fallback elsewhere; and keeping duplicate, AI-off, retry, and stale-response
+  fallback elsewhere; and keeping duplicate, required-AI, retry, and stale-response
   guards intact;
-- changing ports being reported as a new browser-storage origin, the resolved
-  port being written into the materialized extension runtime config, and the
-  UI truthfully requiring one unpacked-extension reload rather than claiming
-  live synchronization;
+- same-port status rejecting a wrong service before any posting text is sent,
+  returning only the marker plus `paired:false` for a privileged origin-less
+  GET, rejecting invalid explicit origins and origin-less preflights, separating
+  unavailable from unpaired state, and never enqueuing pairing;
+- changing app ports being reported as a new browser-storage origin, the
+  materialized runtime config remaining only an install seed, saved extension
+  storage winning, and popup Settings reconnecting without an extension reload;
+- both extension entry points — the popup button and the `import-job` keyboard
+  command — clearing the same `confirmPairedService` gate before any page text
+  is sent, opening no request path of their own, and adding no permission
+  beyond the popup's `activeTab`/`scripting`/`storage`/`cookies` set;
+- the keyboard command declaring a Chrome service worker and a Firefox event
+  page over one module, guarding against a held-key burst of duplicate imports,
+  and recording a bounded, TTL-expiring one-shot failure notice that the popup
+  shows and clears without ever blocking the port record from loading;
+- every local extension request carrying an abort timeout, with a timed-out
+  request reported differently from an unreachable port, verified end to end
+  against a stub that rejects on abort exactly as `fetch` does;
+- each extension failure reaching the recovery that fits it: only a failed
+  status handshake offers the port form, a slow analyze offers retry, and an
+  unanswered pairing request reports approval as unconfirmed rather than missing;
+- an import failure remaining visible after a successful reconnect, and a
+  completed import reaching a terminal labeled state instead of a permanent
+  "Preparing" — both exercised against a stub that fails only the import call;
+- the popup's live region persisting outside the re-rendered root and carrying
+  progress text, and keyboard focus surviving a render: restored to the same
+  control on a same-view rebuild, parked on the new view when the control is
+  gone, and never taken on first paint. The browser-QA pane runs unfocused, so
+  `.focus()` there sets `activeElement` without firing `focusin`; dispatch the
+  event explicitly or the focus tracker looks broken when it is not;
+- the loadable extension directory containing no reserved `_` name, nothing
+  beyond the shipped set defined once in `desktop/extension-bundle.cts` plus its
+  two guides, and no missing shipped file — while tolerating dotfiles the
+  browser ignores;
 - no live provider login, hosted-page CORS/pairing, or paid AI call during
   automated verification.
 

@@ -61,6 +61,11 @@ const EXTENSION_COPY_ACTIONS = Object.freeze({
     prompt: "Copy address",
     success: "Copied Firefox debugging address.",
     error: "Could not copy the Firefox debugging address. Try again."
+  }),
+  port: Object.freeze({
+    prompt: "Copy port",
+    success: "Copied active RoleFit port.",
+    error: "Could not copy the active RoleFit port. Try again."
   })
 });
 const requiredBridgeMethods = Object.freeze([
@@ -263,6 +268,30 @@ function announceExtensionSetupCopy(message) {
   });
 }
 
+function activeExtensionPort() {
+  if (Number.isInteger(liveConnectionStatus?.port)) return liveConnectionStatus.port;
+  return Number.isInteger(siteSettings?.localSitePort) ? siteSettings.localSitePort : null;
+}
+
+function activeExtensionPortLabel() {
+  const port = activeExtensionPort();
+  return port !== null
+    ? `localhost:${port}`
+    : "the active local service";
+}
+
+function renderActiveExtensionPort() {
+  const port = activeExtensionPort();
+  elements.extensionSiteOrigin.textContent = port === null ? "localhost:—" : `localhost:${port}`;
+}
+
+function extensionFolderFeedback(verb) {
+  const port = activeExtensionPortLabel();
+  return verb === "success"
+    ? `Copied extension folder for ${port}.`
+    : `Could not copy the extension folder for ${port}. Try again.`;
+}
+
 function clearExtensionSetupCopyFeedbackTimer(button) {
   const feedbackTimers = extensionCopyFeedbackTimers.get(button);
   if (!feedbackTimers) return;
@@ -313,10 +342,10 @@ async function copyExtensionSetupValue(button) {
   try {
     await bridge.copyExtensionSetupValue(target);
     showTemporaryExtensionSetupCopyFeedback(button, action, "Copied", "success");
-    announceExtensionSetupCopy(action.success);
+    announceExtensionSetupCopy(target === "directory" ? extensionFolderFeedback("success") : action.success);
   } catch {
     showTemporaryExtensionSetupCopyFeedback(button, action, "Try again", "error");
-    announceExtensionSetupCopy(action.error);
+    announceExtensionSetupCopy(target === "directory" ? extensionFolderFeedback("error") : action.error);
   } finally {
     extensionCopyPending = false;
     button.removeAttribute("aria-busy");
@@ -332,7 +361,7 @@ function parseLocalSitePortInput() {
 
 function currentPortStatus(settings) {
   if (settings.locked) {
-    return `Locked by ROLEFIT_DESKTOP_PORT. The bundled extension folder targets localhost:${settings.localSitePort}.`;
+    return `Locked by ROLEFIT_DESKTOP_PORT. Set the browser extension to port ${settings.localSitePort}.`;
   }
   if (settings.warning === "saved-settings-invalid") {
     return `Saved setting was invalid. Using ${settings.localSitePort}; apply to replace it.`;
@@ -340,7 +369,7 @@ function currentPortStatus(settings) {
   if (settings.warning === "saved-settings-unreadable") {
     return `Saved setting could not be read. Using ${settings.localSitePort}; apply to replace it.`;
   }
-  return `RoleFit opens at localhost:${settings.localSitePort}. The bundled extension folder targets the same port.`;
+  return `RoleFit opens at localhost:${settings.localSitePort}. Set the same port in the browser extension Settings menu.`;
 }
 
 function updateSitePortControls({ preserveStatus = false } = {}) {
@@ -362,7 +391,7 @@ function updateSitePortControls({ preserveStatus = false } = {}) {
   }
   if (siteSettings) {
     elements.overviewSiteOrigin.textContent = `localhost:${siteSettings.localSitePort}`;
-    elements.extensionSiteOrigin.textContent = `localhost:${siteSettings.localSitePort}`;
+    renderActiveExtensionPort();
   }
 }
 
@@ -876,6 +905,7 @@ async function refreshWorkspaceOverview() {
 function renderConnectionStatus() {
   const status = liveConnectionStatus;
   if (!status) {
+    renderActiveExtensionPort();
     elements.connectionState.dataset.state = connectionStatusLoaded ? "error" : "unknown";
     elements.connectionStateText.textContent = connectionStatusLoaded ? "Status unavailable" : "Checking…";
     elements.connectionBrowserTabs.textContent = "—";
@@ -905,6 +935,7 @@ function renderConnectionStatus() {
     summary = "Local service not responding.";
   }
   elements.connectionState.dataset.state = state;
+  renderActiveExtensionPort();
   elements.connectionStateText.textContent = text;
   elements.connectionSummary.textContent = summary;
   const tabs = typeof status.activeBrowserTabs === "number" &&
@@ -1159,7 +1190,7 @@ elements.sitePortInput.addEventListener("input", () => {
     ? "Enter a whole number from 1 to 65535."
     : port === siteSettings.localSitePort && siteSettings.warning === null
       ? currentPortStatus(siteSettings)
-      : `Apply to restart RoleFit at localhost:${port}.`;
+      : `RoleFit will restart on localhost:${port}. Update the browser extension port to ${port} after restart.`;
 });
 
 elements.extensionRequestList.addEventListener("click", async (event) => {
@@ -1218,7 +1249,7 @@ elements.sitePortForm.addEventListener("submit", async (event) => {
     sitePortConfirmValue = port;
     updateSitePortControls({ preserveStatus: true });
     elements.sitePortStatus.textContent =
-      "Changing ports uses separate browser storage. Reload the unpacked extension after RoleFit restarts.";
+      `RoleFit will restart on localhost:${port}. Update the browser extension port to ${port} after restart.`;
     return;
   }
 
@@ -1232,7 +1263,7 @@ elements.sitePortForm.addEventListener("submit", async (event) => {
     elements.sitePortInput.disabled = true;
     elements.sitePortApply.disabled = true;
     elements.sitePortStatus.textContent =
-      `Saved. Restarting at localhost:${port}… Reload the unpacked extension afterward.`;
+      `Saved. Restarting at localhost:${port}… Update the browser extension port to ${port} after restart.`;
     updateExtensionPairingControls();
   } catch (error) {
     sitePortApplyPending = false;
@@ -1261,9 +1292,9 @@ elements.openExtensionDirectory.addEventListener("click", async () => {
   elements.openExtensionDirectory.disabled = true;
   try {
     await bridge.openExtensionDirectory();
-    announce("Opened the bundled browser-extension folder.");
+    announce(`Opened the bundled browser-extension folder for ${activeExtensionPortLabel()}.`);
   } catch {
-    announce("The browser-extension folder could not be opened. Restart RoleFit and try again.");
+    announce(`The browser-extension folder for ${activeExtensionPortLabel()} could not be opened. Restart RoleFit and try again.`);
   } finally {
     elements.openExtensionDirectory.disabled = false;
   }

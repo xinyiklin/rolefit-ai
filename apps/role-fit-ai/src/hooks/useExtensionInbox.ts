@@ -2,21 +2,13 @@ import { useEffect, useRef } from "react";
 import { getTabId } from "../lib/tabPresence";
 
 /**
- * One pending browser-extension import. The server only PREPARES `text` (resolving
- * the raw capture, e.g. fetching the full JD for a Greenhouse link) — it no longer
- * AI-distills, so the receiving tab distills `text` client-side with its own
- * selected Distill provider. `fields` is therefore null in the current protocol
- * and kept only as legacy back-compat (an older server that still sends distilled
- * structured output); the consumer handles both.
+ * One pending browser-extension import. The server only prepares `text`
+ * (resolving the raw capture, e.g. fetching the full JD for a Greenhouse link).
+ * The receiving tab owns provider-backed AI Distill with its selected settings.
  */
 export type ExtensionImport = {
   text: string;
   url: string;
-  fields: Record<string, unknown> | null;
-  autoTailor: boolean;
-  // Whether the receiving tab should AI-distill this import. Absent from an
-  // older server response → treated as true (AI distill on, the prior default).
-  distillAi: boolean;
 };
 
 const EXTENSION_IMPORT_PARAM = "extensionImport";
@@ -47,12 +39,11 @@ function clearExtensionImportParam(): void {
 /**
  * Polls /api/extension/inbox once enabled, then on window focus and tab
  * visibility.
- * The server PREPARES an import's text in the BACKGROUND (resolving the raw
+ * The server prepares an import's text in the BACKGROUND (resolving the raw
  * capture, no AI call), so the inbox reports `{status:"distilling"}` first; this
  * hook keeps polling (and calls `onDistilling` for a progress affordance) until
- * the text is ready, then calls `onImport({text, url, fields})` — where `fields`
- * is null and the receiving tab runs the distill client-side with its own
- * provider. The background prepare is independent of the popup, so closing it /
+ * the text is ready, then calls `onImport({text, url})`. The receiving tab runs
+ * provider-backed Distill. The background prepare is independent of the popup, so closing it /
  * switching tabs never strands an import.
  *
  * Callback refs keep the latest closures without re-subscribing the listeners
@@ -108,7 +99,7 @@ export function useExtensionInbox(
       // Hidden tabs stay hands-off for NEW, unclaimed imports so a backgrounded
       // tab never claims one meant for the visible tab. But a tab that already
       // owns an in-flight import KEEPS polling while hidden: otherwise the
-      // background distill settles server-side yet the tab only notices when the
+      // background preparation settles server-side yet the tab only notices when the
       // user switches back, stranding the tailoring until the tab is refocused.
       // "Owns an in-flight import" = the server already reported "distilling" to
       // us, or this is a fresh extension tab whose (not-yet-delivered) claim-token
@@ -159,9 +150,6 @@ export function useExtensionInbox(
           status?: unknown;
           text?: unknown;
           url?: unknown;
-          fields?: unknown;
-          autoTailor?: unknown;
-          distillAi?: unknown;
         };
         // "distilling" = the background prepare hasn't finished. Treat ANY other
         // status string without delivered text the same way (keep polling): a
@@ -176,18 +164,9 @@ export function useExtensionInbox(
         }
         if (typeof obj.text === "string" && typeof obj.url === "string") {
           distilling = false;
-          const fields =
-            obj.fields !== null && typeof obj.fields === "object"
-              ? (obj.fields as Record<string, unknown>)
-              : null;
           await onImportRef.current({
             text: obj.text,
-            url: obj.url,
-            fields,
-            autoTailor: obj.autoTailor === true,
-            // Absent → true (the prior, only behavior); only an explicit
-            // `false` turns off client-side AI distillation for this import.
-            distillAi: obj.distillAi !== false
+            url: obj.url
           });
           // Delivered once — this tab no longer owns an in-flight import, so the
           // hidden-tab hands-off guard is restored; also drop the claim token from

@@ -128,11 +128,12 @@ locked per-launch override and is never written to the settings document.
 Changing the port changes the browser origin. Browser `localStorage` from the
 old port is not migrated or merged with the new origin; personal workspace and
 provider data remain under the same operating-system `userData` directory. The
-companion writes the resolved active port into the runtime config in its
-app-owned materialized extension folder. The extension validates that numeric
-localhost port and never scans for a service or accepts a page-selected origin.
-A port-changing restart explicitly requires one unpacked-extension reload;
-native live synchronization remains a separate future distribution decision.
+companion writes the resolved active port into the app-owned materialized
+extension's runtime config as a first-install seed. The extension's versioned
+browser setting owns the current numeric localhost port; the companion
+shows/copies the active value for popup Settings. The extension never scans for
+a service, accepts a page-selected origin, or requires a reload after a port
+change.
 
 ## Artifact matrix
 

@@ -1,4 +1,4 @@
-export const ROLEFIT_DESKTOP_API_VERSION = 12 as const;
+export const ROLEFIT_DESKTOP_API_VERSION = 13 as const;
 export const ROLEFIT_DESKTOP_SETTINGS_SCHEMA_VERSION = 1 as const;
 export const ROLEFIT_PROVIDER_GUIDANCE_MAX_LENGTH = 240 as const;
 export const ROLEFIT_API_KEY_MAX_BYTES = 16_384 as const;
@@ -112,12 +112,14 @@ export type RoleFitExtensionSetupCopyTarget =
   | "directory"
   | "chrome"
   | "edge"
-  | "firefox";
+  | "firefox"
+  | "port";
 export const ROLEFIT_EXTENSION_SETUP_COPY_TARGETS = Object.freeze([
   "directory",
   "chrome",
   "edge",
-  "firefox"
+  "firefox",
+  "port"
 ] as const);
 
 export function isRoleFitExtensionSetupCopyTarget(
