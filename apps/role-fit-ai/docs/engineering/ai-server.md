@@ -32,13 +32,14 @@ separate from standalone `PORT`. The companion opens the active
 `http://localhost:<port>` origin in the system browser, whose API calls remain
 relative and same-origin.
 
-Source extension development defaults to port `5181`. The companion writes the
-resolved active server port into the runtime config in its materialized
-extension folder; after a port-changing restart, the browser must reload that
-unpacked extension once. The extension does not scan localhost. A port change
+Source extension development seeds port `5181`. The companion writes the
+resolved active server port into the materialized extension's runtime config as
+a first-install default; the versioned `chrome.storage.local` settings record
+is authoritative afterward. The companion shows and copies the active port so
+the user can update the popup setting without reloading the extension. The
+extension does not scan localhost or use another listener. An app-port change
 also changes the browser origin: origin-scoped `localStorage` is separate at
-the new port. The port change never relocates the active workspace or provider
-state; packaged runs keep those under `userData`.
+the new port, while the workspace and provider state remain under `userData`.
 This service is not a general cross-origin desktop bridge. Do not add blanket
 CORS or turn the hosted product/download page into a client of the local server.
 
@@ -248,7 +249,14 @@ owns:
   (never `apiKey`) plus `attempts` (dispatch count, ≥1) so the
   client can record which model produced the brief.
 - browser-extension API (`/api/extension/*`, helpers in
-  `server/extension/index.ts`): `analyze` (POST) extracts posting identity and
+  `server/extension/index.ts`): `status` (GET) is the content-free same-port
+  service marker. For a syntactically valid extension Origin it returns the
+  exact RoleFit marker, schema, `status:"ok"`, and whether that Origin is paired,
+  with `Cache-Control: no-store`. Privileged extension-page GETs may omit
+  `Origin`; only that absent-Origin GET may receive the same marker with
+  `paired:false`, after which the origin-bearing pairing POST confirms or
+  requests approval. Explicit invalid origins and origin-less preflights fail
+  closed, and checking status never queues pairing. `analyze` (POST) extracts posting identity and
   performs a LAYERED duplicate lookup of any matching tracked
   application (`findMatchingApplication` now delegates to the shared
   `findDuplicateApplications` in `src/lib/jobIdentity.ts`: ATS posting id /
@@ -266,46 +274,38 @@ owns:
   The response keeps the
   existing `previousApp` shape (built from the best match) and adds
   `match: { level, confidence, evidence }` (evidence capped at 3 strings), or
-  `previousApp`/`match` null when nothing matches; `import` (POST) stores the
-  page text and returns immediately, then a BACKGROUND server pass only
+  `previousApp`/`match` null when nothing matches. `import` (POST) accepts only
+  the posting `text`, `url`, and the bounded `claimToken`, stores the page text,
+  and returns immediately; a background server pass only
   RESOLVES the raw job text (e.g. fetching the full Workday, Ashby, or Greenhouse posting body) —
   it makes no AI call, because the server cannot read the receiving tab's
   provider settings. The background pass survives the popup closing on focus
-  loss, and a burst of imports is serialized to one in-flight resolve; `inbox`
-  (GET) reports `{status:"distilling"}` while that prepare runs, then hands
-  the resolved raw text (`fields: null`) to the claiming app tab once before
-  clearing it, and the tab distills client-side through `/api/distill` with
-  its own Distill provider — or skips the AI request entirely when the
-  import's `distillAi` flag is off. Extension imports include a short
+  loss, and a burst of imports is serialized to one in-flight resolve. `inbox`
+  (GET) reports `{status:"distilling"}` while preparation runs, then hands only
+  `{text, url}` to the claiming app tab once before clearing it. The tab always
+  runs provider-backed AI Distill with its selected provider; if that request
+  fails, the deterministic brief may remain visible for inspection while the
+  stage stays failed. Extension imports include a short
   `claimToken` and open a fresh app tab with that token and its own `tabId`, so
   a new posting starts a new independent preparation session instead of
   replacing an existing tab's job. The first progress or delivered-posting
-  callback selects Prepare before updating intake state, so receipt, Distill,
-  and any follow-on tailoring remain visible on the sole job-intake surface.
-  The import also carries an optional internal `autoTailor` flag from the
-  popup's "Tailor resume after preparation" toggle, so the app can tailor once
-  the brief and a base resume are ready, plus an optional internal `distillAi`
-  flag from the popup's "Prepare job details with AI" toggle
-  (`body.distillAi === false` → false, anything else → true, so older extension
-  builds that omit it keep distilling); both flags are stored on the inbox entry
-  and returned in the `inbox` delivery payload so the claiming tab knows whether
-  to run the AI distiller or fall straight to the deterministic parser.
-  Those internal transport names, `extensionImport`, and the
-  `"distilling"` inbox status remain stable even though visible copy says
-  preparation. Automatic tailoring never changes tabs on success or replaces a
-  dirty editor automatically. When multiple resume variants exist, the client
-  ranks their actual strict document contents against the prepared job and may
-  auto-select only a clear high-confidence winner while the editor is clean;
-  otherwise it recommends or pauses. This is a session decision, not persisted
-  variant metadata or a schema extension.
-  `analyze` / `import` are reachable cross-origin from the extension popup and
-  require its exact, explicitly configured `EXTENSION_ALLOWED_ORIGINS` identity
-  (`chrome-extension://`, `moz-extension://`, or
-  `safari-web-extension://`). The validated exact Origin is reflected back —
-  never a wildcard, scheme-only match, path-bearing value, or absent Origin.
-  When the allowlist is unset, invalid, or does not contain the caller, the
-  routes return `403`. A valid unapproved extension may call only the bounded
-  `/api/extension/pairing-request` route; the trusted companion reads the
+  callback selects Prepare before updating intake state, and extension intake
+  stops there after Distill and the duplicate gates. `extensionImport`,
+  `claimToken`, `tabId`, and the `"distilling"` progress token remain stable;
+  the retired `autoTailor`, `distillAi`, and pre-extracted `fields` values are
+  ignored and never cross the inbox handoff. Ordinary Prepare may still rank
+  strict saved variants and select a clear winner, but that is source selection,
+  not automatic tailoring or a persisted schema extension.
+  `status` / `analyze` / `import` are reachable cross-origin from the extension
+  popup. `analyze` and `import` require the popup's exact, explicitly configured
+  `EXTENSION_ALLOWED_ORIGINS` identity (`chrome-extension://`,
+  `moz-extension://`, or `safari-web-extension://`). Whenever `Origin` is
+  present, only the validated exact value is reflected back — never a wildcard,
+  scheme-only match, path-bearing value, or malformed Origin. When the allowlist
+  is unset, invalid, or does not contain the caller, `analyze` and `import`
+  return `403`. A valid unapproved extension may call only the content-free
+  status handshake and bounded
+  `/api/extension/pairing-request`; the trusted companion reads the
   short-lived pending origin and requires explicit approval before persisting
   it and restarting the owned server. Manifest host permission provides
   connectivity only and cannot authorize the caller.

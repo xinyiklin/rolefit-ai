@@ -86,6 +86,98 @@ class FakeResponse {
 const previousAllowedOrigins = process.env.EXTENSION_ALLOWED_ORIGINS;
 try {
   delete process.env.EXTENSION_ALLOWED_ORIGINS;
+  const pendingBeforeStatus = [...listPendingExtensionPairingOrigins()];
+  const unpairedStatus = new FakeResponse();
+  await handleExtensionRoutes(
+    { method: "GET", headers: { origin: firefoxOrigin } },
+    unpairedStatus,
+    "/api/extension/status"
+  );
+  assert.equal(unpairedStatus.status, 200);
+  assert.deepEqual(JSON.parse(unpairedStatus.body), {
+    service: "rolefit-ai-extension",
+    schemaVersion: 1,
+    status: "ok",
+    paired: false
+  });
+  assert.equal(unpairedStatus.headers.get("access-control-allow-origin"), firefoxOrigin);
+  assert.equal(unpairedStatus.headers.get("vary"), "Origin");
+  assert.equal(unpairedStatus.headers.get("cache-control"), "no-store");
+  assert.deepEqual(
+    listPendingExtensionPairingOrigins(),
+    pendingBeforeStatus,
+    "status must not enqueue an unpaired origin"
+  );
+
+  const statusOptions = new FakeResponse();
+  await handleExtensionRoutes(
+    { method: "OPTIONS", headers: { origin: firefoxOrigin } },
+    statusOptions,
+    "/api/extension/status"
+  );
+  assert.equal(statusOptions.status, 204);
+  assert.equal(statusOptions.headers.get("access-control-allow-origin"), firefoxOrigin);
+  assert.equal(statusOptions.headers.get("vary"), "Origin");
+  assert.equal(statusOptions.headers.get("cache-control"), "no-store");
+  assert.equal(statusOptions.headers.get("access-control-allow-methods"), "GET, OPTIONS");
+  assert.equal(statusOptions.headers.has("access-control-allow-headers"), false);
+
+  const statusMethod = new FakeResponse();
+  await handleExtensionRoutes(
+    { method: "POST", headers: { origin: firefoxOrigin } },
+    statusMethod,
+    "/api/extension/status"
+  );
+  assert.equal(statusMethod.status, 405);
+  assert.deepEqual(JSON.parse(statusMethod.body), { error: "Use GET." });
+  assert.equal(statusMethod.headers.get("access-control-allow-origin"), firefoxOrigin);
+  assert.equal(statusMethod.headers.get("cache-control"), "no-store");
+
+  const originlessStatus = new FakeResponse();
+  await handleExtensionRoutes(
+    { method: "GET", headers: {} },
+    originlessStatus,
+    "/api/extension/status"
+  );
+  assert.equal(originlessStatus.status, 200);
+  assert.deepEqual(JSON.parse(originlessStatus.body), {
+    service: "rolefit-ai-extension",
+    schemaVersion: 1,
+    status: "ok",
+    paired: false
+  });
+  assert.equal(originlessStatus.headers.has("access-control-allow-origin"), false);
+  assert.equal(originlessStatus.headers.get("cache-control"), "no-store");
+  assert.deepEqual(
+    listPendingExtensionPairingOrigins(),
+    pendingBeforeStatus,
+    "an originless status probe must not enqueue a pairing request"
+  );
+
+  for (const headers of [
+    { origin: "null" },
+    { origin: `${firefoxOrigin}.attacker` }
+  ]) {
+    const invalidStatus = new FakeResponse();
+    await handleExtensionRoutes(
+      { method: "GET", headers },
+      invalidStatus,
+      "/api/extension/status"
+    );
+    assert.equal(invalidStatus.status, 403);
+    assert.equal(invalidStatus.headers.has("access-control-allow-origin"), false);
+    assert.equal(invalidStatus.headers.get("cache-control"), "no-store");
+  }
+
+  const originlessStatusOptions = new FakeResponse();
+  await handleExtensionRoutes(
+    { method: "OPTIONS", headers: {} },
+    originlessStatusOptions,
+    "/api/extension/status"
+  );
+  assert.equal(originlessStatusOptions.status, 403);
+  assert.equal(originlessStatusOptions.headers.has("access-control-allow-origin"), false);
+
   const denied = new FakeResponse();
   await handleExtensionRoutes(
     { method: "OPTIONS", headers: { origin: chromeOrigin } },
@@ -115,6 +207,23 @@ try {
   assert.deepEqual(JSON.parse(pending.body), { origins: [chromeOrigin] });
 
   process.env.EXTENSION_ALLOWED_ORIGINS = chromeOrigin;
+  const pairedStatus = new FakeResponse();
+  await handleExtensionRoutes(
+    { method: "GET", headers: { origin: chromeOrigin } },
+    pairedStatus,
+    "/api/extension/status"
+  );
+  assert.equal(pairedStatus.status, 200);
+  assert.deepEqual(JSON.parse(pairedStatus.body), {
+    service: "rolefit-ai-extension",
+    schemaVersion: 1,
+    status: "ok",
+    paired: true
+  });
+  assert.equal(pairedStatus.headers.get("access-control-allow-origin"), chromeOrigin);
+  assert.equal(pairedStatus.headers.get("vary"), "Origin");
+  assert.equal(pairedStatus.headers.get("cache-control"), "no-store");
+
   const allowed = new FakeResponse();
   await handleExtensionRoutes(
     { method: "OPTIONS", headers: { origin: chromeOrigin } },

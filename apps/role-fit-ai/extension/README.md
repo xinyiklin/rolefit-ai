@@ -5,36 +5,62 @@ RoleFit AI. Click the toolbar icon to see whether you've already tracked or
 applied to that posting and open it in a fresh Prepare tab. Fit score, coverage,
 and verdict are produced only by AI Review in the main app.
 
-It sends requests **only** to your local RoleFit AI server at a validated
-`http://localhost:<port>` origin. Source development defaults to `5181`. The
-desktop companion writes its resolved active port into `runtime-config.js`
-inside the materialized extension folder. The manifest grants
-`http://localhost/*` because Chrome and Firefox host match patterns cannot
-safely pin one localhost port; the popup never scans ports or accepts an
-arbitrary origin.
+Two ways to import the posting you are reading:
+
+- **The popup** — the toolbar icon (or `Ctrl+Shift+Y` / `⌘⇧Y`) shows the role,
+  where it was captured from, and its tracker status, then **Prepare in
+  RoleFit**.
+- **The keyboard** — `Ctrl+Shift+U` / `⌘⇧U` imports the current page straight
+  into a fresh RoleFit tab without opening the popup. If it cannot finish, the
+  toolbar icon shows a badge and the popup explains why the next time you open
+  it.
+
+Both shortcuts are editable in your browser's extension-shortcut settings; the
+popup's **Settings** view shows the keys currently assigned and links there. If
+that view says the shortcuts are **unavailable**, the browser has no commands
+registered for this install — reload the extension (Firefox reads
+`manifest.json` only when the add-on is loaded, while it re-reads the popup
+files every time you open them, so an add-on loaded before this change shows
+the new UI with no shortcuts).
+Both paths do exactly the same thing: import the posting and stop on Prepare
+after AI Distill. Neither one tailors or polishes anything automatically.
+
+It sends requests **only** to your local RoleFit AI server at the validated
+`http://localhost:<port>` origin stored in one versioned
+`chrome.storage.local` record: `{schemaVersion: 1, localSitePort}`. Source
+development and first installation default to `5181`; `runtime-config.js` is
+only the validated first-install seed, and saved browser storage wins. The
+popup never scans localhost ports, uses a locator, opens a second listener, or
+accepts a page-selected API origin. The manifest grants `http://localhost/*`
+because Chrome and Firefox host match patterns cannot safely pin one localhost
+port.
 The server also requires this installed extension's exact Origin. A manifest
 host permission permits the request but does not prove which extension sent it.
-On first use, the popup sends a short-lived local access request; approve that
-exact origin once in the companion before analysis/preparation becomes
-available. For preparation handoffs, the server prepares the raw posting text;
-the receiving RoleFit tab then runs its own Distill-stage CLI or native API
-provider, or falls straight to the deterministic parser when **Prepare job
-details with AI** is off. Start the app
+Before it sends job text, the popup calls the same-port `GET
+/api/extension/status` endpoint and requires the exact RoleFit service marker
+and schema. Privileged extension-page GETs may omit `Origin`; that content-free
+response reports `paired: false`, then the popup uses the origin-bearing pairing
+POST to confirm an existing approval or request a short-lived one. Approve that
+exact origin once in the companion before analysis or import becomes available.
+For preparation handoffs, the server resolves the
+captured posting text; the receiving RoleFit tab then always runs its selected
+provider-backed AI Distill. Start the app
 (`npm run dev:rolefit` from the repository root) before using it.
 
 ## Install (unpacked)
 
 **Desktop release:** In the RoleFit companion, open **Browser extension** and
 select **Open extension folder**. The companion materializes its allowlisted
-extension files inside app data and writes the resolved local port into that
-copy so Chrome, Edge, and Firefox can load it outside Electron's packaged
-archive. **Copy path** copies that app-owned folder path. The section also has
-click-to-copy controls for the exact Chrome (`chrome://extensions`), Edge
-(`edge://extensions`), and Firefox
-(`about:debugging#/runtime/this-firefox`) setup addresses. These are fixed
-desktop API 12 targets: Electron main performs the clipboard write, the
-renderer sends only a target id, no filesystem path or arbitrary text is
-accepted from the renderer, and no renderer clipboard permission is needed.
+extension files inside app data and writes the resolved local port into
+`runtime-config.js` as the first-install seed so Chrome, Edge, and Firefox can
+load it outside Electron's packaged archive. **Copy path** copies that
+app-owned folder path. The section also has click-to-copy controls for the
+exact Chrome (`chrome://extensions`), Edge (`edge://extensions`), and Firefox
+(`about:debugging#/runtime/this-firefox`) setup addresses, plus **Copy port**
+for the active numeric port. These are fixed desktop API 13 targets:
+Electron main performs the clipboard write, the renderer sends only a target
+id, no filesystem path or arbitrary text is accepted from the renderer, and no
+renderer clipboard permission is needed.
 Each action keeps visible feedback on its hovered or focused control and uses a
 visually hidden polite announcement for assistive technology. Keep that folder
 in place after loading it. There is no browser-store package yet.
@@ -52,9 +78,10 @@ After loading the extension, start the RoleFit companion and open the popup on
 a job page. The first request is intentionally blocked and appears in the
 companion under **Browser extension**. Select **Approve** once, allow the
 companion to restart its local service, and reopen the popup. If you later
-change RoleFit's port, reload the unpacked extension once from the browser's
-Extensions page after the companion restarts. Remove the paired origin from the
-companion to revoke access. Unpacked Chrome ids can change if the extension is
+change RoleFit's port, copy the active port from the companion and save it in
+the popup's inline **Settings** view; it reconnects without an extension reload.
+Remove the paired origin from the companion to revoke access. Unpacked Chrome
+ids can change if the extension is
 moved or reloaded under a different identity; Firefox origins are
 browser/profile-specific, so each distinct installation requires its own
 one-time approval.
@@ -64,9 +91,15 @@ one-time approval.
 | File | Role |
 | --- | --- |
 | `manifest.json` | MV3 manifest: `activeTab` + `scripting` + `storage` + `cookies` (the last so imports can open in the source tab's Firefox container), with `http://localhost/*` connectivity; host permission is not server authorization |
-| `runtime-config.js` | validated localhost port; defaults to `5181` in source and is regenerated in the companion-owned materialized copy |
+| `runtime-config.js` | validated first-install localhost-port seed; defaults to `5181` in source and is regenerated in the companion-owned materialized copy |
+| `settings.js` | versioned `chrome.storage.local` port record, validation, migration, reset-to-`5181`, and the one-shot keyboard-import notice |
+| `bridge.js` | the only client of the local RoleFit routes and the only page-capture path, shared by the popup and the keyboard command |
+| `background.js` | the `import-job` keyboard command; captures and imports with no popup open, reporting through the toolbar badge and a stored notice |
 | `popup.html` / `popup.css` / `popup.js` | the popup UI (vanilla ESM, no build step) |
 | `icons/icon.svg` | toolbar icon |
+
+Firefox 128+ is required (`strict_min_version`), because the event page behind
+the keyboard command is an ES module.
 
 ## How it works
 
@@ -77,37 +110,38 @@ one-time approval.
    identity and checks the application tracker with a layered
    duplicate match (ATS posting id / normalized URL / requisition id in the
    posting / no-id company + title + description overlap), then renders the
-   tracked-status banner. Shared posting or requisition ids are exact; a
+   tracked-status row. Shared posting or requisition ids are exact; a
    normalized URL is exact unless explicit ids conflict. Different explicit ids
    default to separate postings; only an exceptionally strong
    company/title/location/content match raises a review-only warning for a
-   likely id input error. When a tracked application matches, the banner also
+   likely id input error. When a tracked application matches, the popup also
    shows a compact evidence line (e.g. "Same LinkedIn posting (#123)"),
-   prefixed "Possible duplicate:" for a non-exact match. No-id fuzzy matching
+   prefixed "Possible duplicate ·" for a non-exact match. No-id fuzzy matching
    requires substantial descriptions with aligned metadata plus strong lexical
    and ordered-phrase overlap; small amounts of shared boilerplate do not
    produce a warning.
-3. **Prepare in RoleFit AI** POSTs the page text to the existing
-   `POST /api/extension/import` route and opens a fresh app tab with a short
-   claim token. The server prepares the raw posting
-   text in the BACKGROUND (e.g. fetching the full description for a Greenhouse
-   link), so it survives the popup closing on focus loss; the app polls
-   `GET /api/extension/inbox?tabId=...&claimToken=...`, which reports progress
-   until the text is ready. The receiving tab then runs the AI distill itself
-   with its own selected Distill provider and loads the brief into that tab's
-   Prepare page. If AI Distill was selected and fails, the deterministic brief
-   may remain visible for inspection, but the stage is failed and automatic
-   tailoring stops. The deterministic parser is a successful path only when
-   **Prepare job details with AI** is off.
-4. A **Tailor resume after preparation** toggle (a checkbox in the popup,
-   persisted via `chrome.storage.local`) makes the app continue from Prepare
-   into tailoring once the brief and base resume are ready — no second click
-   needed. Its existing inbox field remains `autoTailor`.
-5. A **Prepare job details with AI** toggle (also persisted via
-   `chrome.storage.local`, default **on**) controls whether the receiving tab
-   runs the AI distiller on the prepared posting or falls straight to the
-   deterministic parser. Turn it off to skip the provider call. The unchanged
-   `distillAi` field travels through the import and inbox payloads.
+3. **Prepare in RoleFit** sends exactly `{text, url, claimToken}` to
+   `POST /api/extension/import` and opens a fresh app tab with that short claim
+   token. The server resolves the raw posting text in the background (for
+   example, fetching the full description for a Greenhouse link), so it
+   survives popup focus loss. The app polls
+   `GET /api/extension/inbox?tabId=...&claimToken=...`; progress is reported
+   while that resolve runs, and the delivered inbox payload contains only
+   `{text, url}`. The receiving tab always runs provider-backed AI Distill and
+   loads the brief into that tab's Prepare page. If AI Distill fails, a
+   deterministic brief may remain available for inspection, but the stage is
+   failed and Tailor/Review do not start automatically.
+4. The `Ctrl+Shift+U` / `⌘⇧U` command runs steps 1 and 3 with no popup open,
+   through the same shared bridge and the same status/approval handshake. It
+   skips the tracker preview in step 2 — the app still runs its own duplicate
+   gates on arrival. A failure leaves a badge on the toolbar icon and a single
+   short explanation the popup shows and clears the next time you open it.
+5. The popup has no extension AI/deterministic or automatic-tailor toggles.
+   Neither entry point has one. The handoff stops on Prepare after the
+   duplicate gates and AI Distill stage.
+   The claim token keeps the new posting out of older visible tabs, and the
+   extension preserves the source tab's Firefox container when the browser
+   accepts that option, with a normal fresh-tab fallback elsewhere.
 
 Each preparation handoff is its own independent RoleFit tab. The claim token
 keeps the new posting out of older visible tabs while still allowing a

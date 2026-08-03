@@ -184,6 +184,15 @@ function getLocalSiteSettings(): RoleFitDesktopSiteSettings {
   return localSiteSettings;
 }
 
+function getActiveDesktopServerPort(server: DesktopServerHandle): number {
+  const match = /^http:\/\/127\.0\.0\.1:(\d{1,5})$/.exec(server.origin);
+  const port = match ? Number(match[1]) : NaN;
+  if (!Number.isInteger(port) || port < 1 || port > 65_535 || String(port) !== match?.[1]) {
+    throw new Error("The active local service reported an invalid port.");
+  }
+  return port;
+}
+
 async function getExtensionPairingSettings(): Promise<RoleFitExtensionPairingSettings> {
   if (!extensionPairingSettings) throw new Error("Extension pairing settings are unavailable.");
   if (desktopServer?.ownership !== "owned") {
@@ -349,6 +358,7 @@ async function getWorkspaceOverview(): Promise<RoleFitWorkspaceOverview> {
 async function getConnectionStatus(): Promise<RoleFitConnectionStatus> {
   const settings = getLocalSiteSettings();
   const server = desktopServer;
+  const activePort = server ? getActiveDesktopServerPort(server) : settings.localSitePort;
   const siteUrl = server
     ? canonicalBrowserOrigin(server.origin)
     : `http://localhost:${settings.localSitePort}`;
@@ -359,7 +369,7 @@ async function getConnectionStatus(): Promise<RoleFitConnectionStatus> {
       ? await probeDesktopServerLaunchKind({
           host: DEFAULT_HOST,
           mode: activeMode,
-          port: settings.localSitePort,
+          port: activePort,
           workspaceDir: activeWorkspaceDir
         })
       : null;
@@ -373,7 +383,7 @@ async function getConnectionStatus(): Promise<RoleFitConnectionStatus> {
     if (liveLaunchKind) activeBrowserTabs = await readWorkspaceActivity(server.origin);
   }
   return Object.freeze({
-    port: settings.localSitePort,
+    port: activePort,
     siteUrl,
     serverState,
     activeBrowserTabs
@@ -1005,9 +1015,9 @@ async function inspectSmokeRenderer(
         workspaceControlsPresent: ['workspace-path', 'open-workspace-folder', 'backup-workspace', 'restore-workspace', 'workspace-status', 'stat-base-resume', 'stat-applications'].every((id) => Boolean(document.getElementById(id))) &&
           ['workspace-activity', 'stat-pdfs', 'stat-history'].every((id) => !document.getElementById(id)),
         connectionControlsPresent: ['connection-state', 'connection-state-text', 'connection-browser-tabs'].every((id) => Boolean(document.getElementById(id))),
-        extensionSetupCopyControlsPresent: ['directory', 'chrome', 'edge', 'firefox'].every((target) => Boolean(document.querySelector('[data-extension-copy-target="' + target + '"]'))) &&
+        extensionSetupCopyControlsPresent: ['directory', 'chrome', 'edge', 'firefox', 'port'].every((target) => Boolean(document.querySelector('[data-extension-copy-target="' + target + '"]'))) &&
           [...document.querySelectorAll('[data-extension-copy-target]')].every((control) => control instanceof HTMLButtonElement && control.type === 'button') &&
-          document.querySelectorAll('[data-extension-copy-target]').length === 4,
+          document.querySelectorAll('[data-extension-copy-target]').length === 5,
         extensionSetupCopyEventsReset,
         extensionSetupStatusOutsidePanels: !document.querySelector('[data-companion-panel] #extension-setup-status'),
         extensionSetupStatusPresent: Boolean(document.querySelector('#extension-setup-status[role="status"][aria-live="polite"]')),
@@ -1599,10 +1609,11 @@ async function startDesktop(): Promise<void> {
     await shutdownAndExit(0);
     return;
   }
+  const activePort = getActiveDesktopServerPort(desktopServer);
   const extensionDirectory = await materializeRoleFitExtension({
     sourceDirectory: join(paths.appRoot, "extension"),
     userDataDirectory: app.getPath("userData"),
-    localSitePort: localSiteSettings.localSitePort
+    localSitePort: activePort
   });
 
   const smokePidFile = process.env.ROLEFIT_DESKTOP_SMOKE_SERVER_PID_FILE;
@@ -1695,6 +1706,7 @@ async function startDesktop(): Promise<void> {
       copyRoleFitExtensionSetupValue(
         target,
         extensionDirectory,
+        activePort,
         (value) => clipboard.writeText(value)
       );
     },

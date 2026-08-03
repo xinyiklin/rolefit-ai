@@ -37,6 +37,9 @@ assert(files.includes("extension/manifest.json"));
 assert(files.includes("extension/popup.html"));
 assert(files.includes("extension/popup.css"));
 assert(files.includes("extension/popup.js"));
+assert(files.includes("extension/background.js"));
+assert(files.includes("extension/bridge.js"));
+assert(files.includes("extension/settings.js"));
 assert(files.includes("extension/runtime-config.js"));
 assert(files.includes("extension/icons/icon.svg"));
 

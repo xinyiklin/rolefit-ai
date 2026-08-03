@@ -93,14 +93,15 @@ only included materials must be ready while their preparation is idle. Either
 or both cards may be excluded. Re-Apply treats exclusion as non-destructive:
 any artifact already saved for that application remains untouched.
 
-Extension-triggered automatic resume tailoring remains on Prepare. Rank the
-actual contents of saved `.resume` and `.cover` variants against weighted
-prepared-job sections. For either document, auto-select a meaningful unique
-winner only while its editor is clean and not application-owned. A tie or
-incomplete read returns no recommendation and keeps the current selection.
-The selector is the normal receipt; reserve the shared compact recommendation
-line for a blocked replacement. Do not persist parallel variant metadata or
-widen the strict document schema for this decision.
+Extension intake always runs AI Distill and stops on Prepare; it never launches
+Tailor or Review. Independently, Prepare may rank the actual contents of saved
+`.resume` and `.cover` variants against weighted prepared-job sections. For
+either document, auto-select a meaningful unique winner only while its editor
+is clean and not application-owned. A tie or incomplete read keeps the current
+selection. This is source selection, not automatic tailoring. The selector is
+the normal receipt; reserve the shared compact recommendation line for a blocked
+replacement. Do not persist parallel variant metadata or widen the strict
+document schema for this decision.
 
 A material's state line reports the real reason it is not ready. A saved base
 letter is a template: real prose plus unresolved `[slots]` that Tailor fills.

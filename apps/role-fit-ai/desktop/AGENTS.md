@@ -28,8 +28,8 @@ Applies to `apps/role-fit-ai/desktop/` and `tsconfig.desktop.json`.
 - `companion.html` owns the local-file CSP; `security.cts` owns permissions,
   navigation, external-window, and webview policy.
 - `ipc-contract.cts` owns the fixed serializable companion methods, including
-  desktop API 12's `copyExtensionSetupValue` target IDs (`directory`, `chrome`,
-  `edge`, and `firefox`); `ipc.cts` validates the exact companion main frame
+  desktop API 13's `copyExtensionSetupValue` target IDs (`directory`, `chrome`,
+  `edge`, `firefox`, and `port`); `ipc.cts` validates the exact companion main frame
   and `file:` URL and tears handlers down; `preload.cts` exposes only the
   frozen named API. Main maps those IDs to the materialized extension folder
   or the exact browser setup addresses and performs the clipboard write; the
@@ -107,7 +107,7 @@ Applies to `apps/role-fit-ai/desktop/` and `tsconfig.desktop.json`.
 - Keep `nodeIntegration: false`, `contextIsolation: true`, `sandbox: true`,
   `webSecurity: true`, and `webviewTag: false`. Deny every renderer permission;
   the compact companion needs no renderer clipboard, filesystem, device,
-  notification, camera, microphone, or geolocation access. Desktop API 12's
+  notification, camera, microphone, or geolocation access. Desktop API 13's
   copy action is a fixed main-owned operation, not a renderer permission or
   generic clipboard bridge.
 - Keep the RoleFit server bind numeric-loopback-only. Port `5181` is the saved
@@ -128,12 +128,20 @@ Applies to `apps/role-fit-ai/desktop/` and `tsconfig.desktop.json`.
   A port change creates a different origin and therefore separate browser
   `localStorage`; it does not migrate browser state. Materialize the app-owned
   extension only after resolving the active server, write its validated
-  localhost port into the fixed runtime config, and tell users to reload the
-  unpacked extension after a port-changing restart. Do not scan ports or accept
+  localhost port into the fixed runtime config as a first-install seed, and
+  let the extension's saved `chrome.storage.local` port remain authoritative.
+  The companion shows/copies the active numeric port for popup Settings
+  recovery; a port change needs no extension reload. Do not scan ports or accept
   renderer/page-selected origins. Deny every renderer `window.open`; only typed
   IPC may reach main-owned external targets: the selected browser origin, the
   exact official CLI installation URLs, and the fixed app-owned unpacked
   browser-extension directory.
+- Materialization is a full refresh of a fixed allowlist, not an overlay: after
+  copying, prune every file in that directory that is no longer on the list. A
+  browser loads the directory itself, so a retired module left behind keeps
+  being served. When the allowlist grows, a companion still running the previous
+  compiled bundle writes an incomplete folder whose popup cannot load — restart
+  the companion after changing the file set.
 - Validate every IPC call against the exact companion `webContents`, main frame,
   and local `file:` URL. Expose fixed methods only; never expose `ipcRenderer`,
   generic channel names, generic send/invoke/listener methods, or renderer-
@@ -158,11 +166,11 @@ Applies to `apps/role-fit-ai/desktop/` and `tsconfig.desktop.json`.
   downgrade to plaintext.
 - Expose no generic command, shell, filesystem, workspace, tracker, environment,
   clipboard, raw stdout/stderr, or raw IPC capability. Accept only known
-  provider IDs, the closed desktop API 12 copy targets, and fixed main-owned
+  provider IDs, the closed desktop API 13 copy targets, and fixed main-owned
   save/remove/status/external-terminal-sign-in/install-and-sign-in-guide
   actions. `copyExtensionSetupValue` accepts only `directory`, `chrome`,
-  `edge`, or `firefox`, returns no path or clipboard contents, and maps each
-  value in main. Official install/sign-in-guide URLs are allowlisted and
+  `edge`, `firefox`, or `port`, returns no path or clipboard contents, and maps
+  each value in main. Official install/sign-in-guide URLs are allowlisted and
   main-owned; never accept an external URL from the renderer, run package
   managers or elevated commands, or accept renderer-supplied shell text.
 - Keep external-terminal sign-in equally closed: the renderer supplies only a
@@ -185,8 +193,9 @@ Applies to `apps/role-fit-ai/desktop/` and `tsconfig.desktop.json`.
   claim tokens remain browser inbox-routing values. A valid unapproved
   extension origin may enqueue only a bounded short-lived access request; the
   exact origin becomes active only after explicit approval in the trusted
-  companion. Never imply that the saved companion port rewrites extension
-  configuration or import routes.
+  companion. The saved companion port does not rewrite the extension's current
+  browser-storage record or import payloads; it is shown/copied for Settings
+  recovery.
 - Treat companion process tests as explicit integration tests. They use isolated
   ports/state and fake CLI binaries and prove exact-sender rejection, bounded
   status-probe and external-terminal sign-in behavior, and clean shutdown with

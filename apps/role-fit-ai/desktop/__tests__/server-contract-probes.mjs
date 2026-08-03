@@ -300,13 +300,13 @@ assert.ok(
 );
 assert.match(
   mainSource,
-  /materializeRoleFitExtension\(\{[\s\S]*localSitePort: localSiteSettings\.localSitePort/,
-  "the materialized extension receives the resolved local-site port"
+  /const activePort = getActiveDesktopServerPort\(desktopServer\)[\s\S]*materializeRoleFitExtension\(\{[\s\S]*localSitePort: activePort/,
+  "the materialized extension receives the active validated server port as its install seed"
 );
 assert.match(
   mainSource,
-  /copyExtensionSetupValue:[\s\S]*copyRoleFitExtensionSetupValue\([\s\S]*target,[\s\S]*extensionDirectory,[\s\S]*clipboard\.writeText/,
-  "main resolves setup targets and writes the private value without returning it to the renderer"
+  /copyExtensionSetupValue:[\s\S]*copyRoleFitExtensionSetupValue\([\s\S]*target,[\s\S]*extensionDirectory,[\s\S]*activePort,[\s\S]*clipboard\.writeText/,
+  "main resolves setup targets from the active port and writes the private value without returning it to the renderer"
 );
 assert.match(
   mainSource,

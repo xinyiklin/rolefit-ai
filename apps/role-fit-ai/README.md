@@ -223,9 +223,12 @@ local server owns workspace and tracker files. Changing the port also changes
 the browser origin, so browser-local draft and preference storage is separate
 on the new port. Packaged workspace files and provider configuration stay in
 the same operating-system `userData` directory.
-After resolving the active server, the companion writes that same port into its
-materialized browser-extension folder. Reload the unpacked extension once after
-a port-changing restart.
+After resolving the active server, the companion writes that port into the
+materialized extension's `runtime-config.js` as a validated first-install seed.
+The extension's saved browser setting remains authoritative. The companion's
+Browser extension section shows and copies the active numeric port; after an app
+port change, save that value in the popup's **Settings** view. The popup
+reconnects immediately without an extension reload.
 
 If a compatible RoleFit server already uses the selected port, its versioned
 health response identifies it as a standalone development server or a service
@@ -346,12 +349,13 @@ resume/job text exclusively on stdin while the subprocess is running.
 
 > **Provider support:** RoleFit intentionally exposes only the three subscription CLIs plus the native OpenAI Responses and Claude Messages APIs. Other adapters were removed until they have current contracts and live verification. CLI entitlements and API model access still depend on the signed-in account.
 
-When **Prepare job details with AI** is off, deterministic job extraction is an
-intentional local-only success path. When AI Distill was requested but fails,
-RoleFit may load the deterministic brief for inspection while leaving Distill
-failed and blocking Tailor/Review. Tailor, Review, Cover Letter, and
-application-answer generation fail plainly; no local draft, score, or verdict
-silently stands in.
+For ordinary in-app URL or pasted-text intake, turning **Prepare job details
+with AI** off keeps deterministic extraction as an intentional local-only
+success path. Extension imports always require AI Distill. When requested AI
+Distill fails, RoleFit may load the deterministic brief for inspection while
+leaving Distill failed and blocking Tailor/Review. Tailor, Review, Cover Letter,
+and application-answer generation fail plainly; no local draft, score, or
+verdict silently stands in.
 
 ## Browser extension
 
@@ -371,49 +375,62 @@ preparation and duplicate checking to the job board. On any posting, click the
   RoleFit requires substantial company/title/location-aligned description and
   phrase overlap. Tracker review can merge a group or mark it **Not duplicates**
   so that pair stays out of future duplicate review, and
-- a one-click **Prepare in RoleFit AI** that opens a fresh independent RoleFit
-  tab on Prepare, lets the server resolve the raw page text, then shows receipt
-  and distill progress while that tab prepares its structured brief with its own
-  Distill provider. **Tailor resume after preparation** stays on Prepare and
-  runs only after the brief and resume are ready. It never replaces a dirty
-  editor automatically. When multiple saved variants exist, RoleFit ranks their
-  actual contents against weighted prepared-job sections and selects a
-  meaningful unique winner. A tie keeps the current selection instead of
-  inventing a recommendation. Turning **Prepare job details with
-  AI** off skips the provider call, prepares the local text deterministically,
-  and retains deterministic tracking extraction.
+- a one-click **Prepare in RoleFit** that opens a fresh independent RoleFit
+  tab on Prepare, lets the server resolve the raw page text, and always runs AI
+  Distill with that tab's selected provider. The extension handoff stops on
+  Prepare; it never auto-launches Tailor or Review. If AI Distill fails, the
+  deterministic brief may remain available for inspection, but Distill stays
+  failed. The popup has no AI/deterministic or automatic-tailor toggle.
+
+A keyboard shortcut (`Ctrl+Shift+U` / `⌘⇧U` by default) imports the current page
+without opening the popup at all, through the same approval handshake and with
+the same stop on Prepare. `Ctrl+Shift+Y` / `⌘⇧Y` opens the popup. Both are
+editable in the browser's own extension-shortcut settings, and the popup's
+**Settings** view lists the assigned keys beside the localhost port and links
+there. A keyboard import that cannot finish badges the toolbar icon and explains
+itself once, the next time the popup opens.
 
 It is Manifest V3 and sends requests **only** to the validated
-`http://localhost:<port>` configured for the local server. Source development
-defaults to `5181`; the companion writes its resolved active port into the
-materialized extension runtime config. The manifest grants
-`http://localhost/*` because Chrome and Firefox host match patterns cannot
-safely pin one localhost port. The popup never scans ports or accepts an
-arbitrary API origin. The routes it calls require the exact installed popup
-Origin approved in the companion and reflect only that non-wildcard Origin.
-Unapproved callers may only enqueue a short-lived pairing request; they cannot
-analyze or import a posting. The
-inbox the app reads is same-origin and CSRF-guarded. The server-side import step prepares the captured posting text
-(for example, resolving a fuller board description when possible); the
-receiving tab then runs the app's Distill stage with its selected CLI or native
-API provider, or skips that provider call when **Prepare job details with AI**
-is off.
+`http://localhost:<port>` stored in one versioned `chrome.storage.local` record:
+`{schemaVersion: 1, localSitePort}`. Saved storage always wins;
+`runtime-config.js` supplies only the validated first-install seed. The manifest
+grants `http://localhost/*` because Chrome and Firefox host match patterns
+cannot safely pin one localhost port. The popup never scans ports, uses a
+locator, opens a second listener, or accepts an arbitrary API origin. Before it
+sends posting text, it calls same-port `GET /api/extension/status` and requires
+the exact RoleFit marker. Privileged extension-page GETs may omit `Origin`, so
+that content-free response reports `paired: false`; the popup then confirms or
+requests approval through the existing origin-bearing pairing POST before it
+analyzes or imports a posting. When status carries a valid extension Origin it
+may report that Origin's paired state directly. The extension routes reflect
+only the exact installed popup Origin approved in the companion. The inbox the
+app reads is same-origin and
+CSRF-guarded. The server-side import step prepares captured posting text (for
+example, resolving a fuller board description when possible); the receiving
+tab then always runs the app's AI Distill stage with its selected provider.
 Imports carry a short local claim token so the newly-opened tab receives its own
 posting and opens/progresses on Prepare, while other open tabs continue their
 current jobs; the app also shows read-only ambient Sessions in the bottom studio
 rail immediately above Settings, outside output-tab navigation, so concurrent
 tabs remain visible without becoming a control. The
-extension never reads the base resume or produces a fit judgment.
+extension never reads the base resume or produces a fit judgment. Its inline
+Settings view validates and saves the port, checks connection/pairing state,
+resets to `5181`, shows the current action shortcut, and links to the browser's
+shortcut manager. **Open RoleFit** remains available from recovery and job
+states. There is no options page. The manifest's `_execute_action` command gives
+the popup a suggested Cmd/Ctrl+Shift+Y shortcut; browser shortcut settings stay
+authoritative.
 
 The installed desktop companion includes an app-owned unpacked extension
 folder. In the companion, open **Browser extension** and choose **Open extension
 folder**; use that folder when your browser asks where to load the extension.
 The same section includes **Copy path** and click-to-copy controls for the exact
 Chrome (`chrome://extensions`), Edge (`edge://extensions`), and Firefox
-(`about:debugging#/runtime/this-firefox`) setup addresses. These bounded actions
-are part of desktop API 12: the Electron main process owns the materialized
-folder path and clipboard write, while the renderer sends only a fixed target id;
-no renderer path, arbitrary clipboard text, or clipboard permission is exposed.
+(`about:debugging#/runtime/this-firefox`) setup addresses, plus **Copy port** for
+the active validated numeric port. These bounded actions are part of desktop
+API 13: the Electron main process owns every mapped value and clipboard write,
+while the renderer sends only a fixed target id; no renderer path, arbitrary
+clipboard text, or clipboard permission is exposed.
 Visible feedback stays on the hovered or focused copy control, while a visually
 hidden polite announcement reports the same result to assistive technology.
 Keep the folder in place after loading it. Source contributors can instead use
@@ -423,8 +440,9 @@ Keep the folder in place after loading it. Source contributors can instead use
 - **Firefox** — open `about:debugging#/runtime/this-firefox`, click **Load Temporary Add-on…**, and select `extension/manifest.json`.
 
 Start the companion, open the extension on a job page, approve the pending
-request in the companion, and reopen the popup. After changing ports, reload
-the unpacked extension once from the browser's Extensions page. See
+request in the companion, and reopen the popup. After changing the app port,
+copy the active port from the companion and save it in the popup's **Settings**
+view; no extension reload is needed. See
 [`extension/README.md`](extension/README.md) for the complete flow.
 
 ## Install and local data
@@ -512,6 +530,8 @@ gitignored as a privacy guard.
 ## Project layout
 
 ```
+__evals__/                      # contracts for artifacts that cannot host their own tests
+                                #   (the extension folder is loaded by the browser as-is)
 server.ts                       # thin local web-server launcher
 server/
   runtime.ts                    # reusable HTTP/Vite lifecycle + route composition

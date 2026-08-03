@@ -1,363 +1,441 @@
-/* ── Custom properties — mirrors the app's drafting-desk tokens ─────────── */
-/* Values copied from src/styles/tokens.css so the popup reads as the same
-   green-tinted near-white paper surface as the app (not a warmer cream). */
+/* RoleFit AI extension popup — the Drafting Desk at 344px.
+   Paper tones, hairline structure, ledger rows with dotted leaders, one forest
+   accent for action, and dot-plus-word status. No banners, pills, or cards. */
+
 :root {
-  --bg:           oklch(0.956 0.006 150);
-  --surface:      oklch(0.992 0.002 150);
-  --surface-2:    oklch(0.934 0.008 150);
-  --fg:           oklch(0.25 0.012 160);
-  --fg-muted:     oklch(0.41 0.014 160);
-  --fg-dim:       oklch(0.51 0.012 160);
-  --border:       oklch(0.885 0.008 150);
-  --border-soft:  oklch(0.925 0.006 150);
-
-  --brand:        oklch(0.46 0.085 165);
-  --brand-hover:  oklch(0.36 0.075 168);
-  --on-accent:    oklch(0.975 0.008 150);
-  --ring-track:   oklch(0.9 0.007 150);
-
-  --score-strong:  oklch(0.46 0.085 165);
-  --score-good:    oklch(0.45 0.06 250);
-  --score-stretch: oklch(0.52 0.1 75);
-  --score-poor:    oklch(0.45 0.12 30);
-
-  /* Tinted fills/inks for banners + chips, derived from the brand/signal hues */
-  --match-ink:   oklch(0.36 0.075 168);
-  --match-veil:  oklch(0.46 0.085 165 / 0.12);
-  --match-fill:  oklch(0.46 0.085 165 / 0.18);
-  --match-line:  oklch(0.46 0.085 165 / 0.34);
-  --gap-ink:     oklch(0.42 0.1 72);
-  --gap-veil:    oklch(0.52 0.1 75 / 0.12);
-  --gap-fill:    oklch(0.52 0.1 75 / 0.18);
-  --gap-line:    oklch(0.52 0.1 75 / 0.32);
-  --danger-ink:  oklch(0.4 0.12 30);
-  --danger-veil: oklch(0.45 0.12 30 / 0.08);
-  --danger-fill: oklch(0.45 0.12 30 / 0.14);
-  --danger-line: oklch(0.45 0.12 30 / 0.28);
-
-  --font-serif: "Charter", "Bitstream Charter", "Iowan Old Style", Georgia, "Times New Roman", serif;
-
-  --radius:      10px;
-  --radius-sm:   7px;
-  --radius-pill: 999px;
+  --paper: oklch(0.956 0.006 150);
+  --card: oklch(0.992 0.002 150);
+  --card-soft: oklch(0.963 0.005 150);
+  --card-elev: oklch(0.997 0.001 150);
+  --ink-strong: oklch(0.18 0.014 160);
+  --ink: oklch(0.25 0.012 160);
+  --ink-muted: oklch(0.41 0.014 160);
+  --ink-soft: oklch(0.5 0.014 160);
+  --ink-faint: oklch(0.51 0.012 160);
+  --hairline: oklch(0.885 0.008 150);
+  --hairline-soft: oklch(0.925 0.006 150);
+  --hairline-strong: oklch(0.81 0.01 150);
+  --accent: oklch(0.46 0.085 165);
+  --accent-deep: oklch(0.36 0.075 168);
+  --accent-soft: oklch(0.945 0.024 162);
+  --accent-glow: oklch(0.46 0.085 165 / 0.2);
+  --on-accent: oklch(0.975 0.008 150);
+  --warm: oklch(0.52 0.1 75);
+  --warm-soft: oklch(0.92 0.05 85);
+  --cool: oklch(0.45 0.06 250);
+  --danger: oklch(0.45 0.12 30);
+  --serif: "Charter", "Bitstream Charter", "Iowan Old Style", Georgia, Cambria, "Times New Roman", serif;
+  --sans: "Geist", -apple-system, BlinkMacSystemFont, "Helvetica Neue", "Segoe UI", sans-serif;
+  --mono: "JetBrains Mono", "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  --ease: cubic-bezier(0.2, 0.6, 0.2, 1);
 }
 
-/* ── Reset / base ──────────────────────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 body {
-  width: 340px;
-  min-height: 130px;
-  max-height: 520px;
+  width: 344px;
+  min-height: 148px;
+  max-height: 560px;
   overflow-y: auto;
-  background: var(--bg);
-  color: var(--fg);
-  font-family: "Geist", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--sans);
   font-size: 13px;
-  line-height: 1.45;
+  line-height: 1.5;
   -webkit-font-smoothing: antialiased;
 }
 
-/* ── Masthead ──────────────────────────────────────────────────────────── */
+button, input { font: inherit; color: inherit; }
+.mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+
+:where(button, input, a):focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--accent-glow);
+  border-radius: 4px;
+}
+
+/* Forced-colors mode drops box-shadow, so the ring has to become a real outline
+   or keyboard focus disappears entirely. */
+@media (forced-colors: active) {
+  :where(button, input, a):focus-visible {
+    outline: 2px solid;
+    outline-offset: 2px;
+  }
+}
+
+/* ── Masthead ─────────────────────────────────────────────────────────── */
+
 .masthead {
   display: flex;
   align-items: center;
-  gap: 9px;
-  padding: 11px 15px 10px;
-  border-bottom: 1px solid var(--border);
+  gap: 10px;
+  height: 46px;
+  padding: 0 8px 0 14px;
+  background: var(--card);
+  border-bottom: 1px solid var(--hairline);
 }
 
-.brand-mark {
-  width: 21px;
-  height: 21px;
-  flex-shrink: 0;
-  border-radius: 6px;
-  background: var(--brand);
-  border: 1px solid var(--brand-hover);
+.wordmark {
+  margin-right: auto;
+  font: 600 16px/1 var(--serif);
+  letter-spacing: -0.005em;
+  color: var(--ink-strong);
+}
+
+.port-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+.port-status .mono { font-size: 11px; color: var(--ink-muted); }
+
+.icon-button {
   display: grid;
   place-items: center;
-  color: var(--on-accent);
-  font-weight: 700;
-  font-size: 12px;
-  font-family: var(--font-serif);
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink-soft);
+  cursor: pointer;
+  transition: color 140ms var(--ease), background-color 140ms var(--ease);
+}
+.icon-button:hover { background: var(--accent-soft); color: var(--accent-deep); }
+.icon-button[aria-expanded="true"] { color: var(--accent-deep); }
+
+/* The one moment of motion: a press-rule that runs only while a request is in
+   flight. Reserved height keeps every view from shifting when it appears. */
+.working-rule {
+  position: relative;
+  height: 2px;
+  margin-top: -1px;
+  overflow: hidden;
+  background: transparent;
+}
+.working-rule.is-active::after {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 38%;
+  background: var(--accent);
+  animation: sweep 1.05s var(--ease) infinite;
+}
+@keyframes sweep {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(363%); }
 }
 
-.brand-name {
-  font-family: var(--font-serif);
-  font-size: 14.5px;
-  font-weight: 600;
-  letter-spacing: 0.01em;
-  color: var(--fg);
-}
+/* ── Views ────────────────────────────────────────────────────────────── */
 
-.brand-tag {
-  margin-left: auto;
-  font-size: 10px;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: var(--fg-dim);
-}
+/* Focus lands here when an action's own control disappears; it is a parking
+   spot for the keyboard, not a control, so it shows no ring. */
+.view:focus { outline: none; }
 
-/* ── Loading ───────────────────────────────────────────────────────────── */
-.state-loading {
+.view {
   display: flex;
   flex-direction: column;
+  gap: 14px;
+  padding: 16px 14px 15px;
+  animation: view-in 140ms var(--ease) both;
+}
+@keyframes view-in {
+  from { opacity: 0; transform: translateY(2px); }
+  to { opacity: 1; transform: none; }
+}
+
+.view-loading { min-height: 96px; justify-content: center; }
+
+/* ── Status vocabulary: a dot beside a word, never a filled badge ─────── */
+
+.dot {
+  width: 6px;
+  height: 6px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--hairline-strong);
+}
+.dot-connected, .dot-active { background: var(--accent); }
+.dot-checking, .dot-watch { background: var(--warm); }
+.dot-approval { background: var(--warm); }
+.dot-unavailable, .dot-closed { background: var(--danger); }
+.dot-filed { background: var(--cool); }
+.dot-idle { background: transparent; box-shadow: inset 0 0 0 1px var(--hairline-strong); }
+
+.value-status {
+  display: inline-flex;
   align-items: center;
-  justify-content: center;
-  gap: 12px;
-  padding: 34px 15px;
-  color: var(--fg-muted);
-  font-size: 12px;
+  gap: 7px;
+  color: var(--ink);
+  font-size: 12.5px;
 }
+.value-pending { color: var(--ink-faint); font-style: italic; }
 
-.spinner {
-  width: 26px;
-  height: 26px;
-  border: 2.5px solid var(--ring-track);
-  border-top-color: var(--score-strong);
-  border-radius: 50%;
-  animation: spin 0.7s linear infinite;
-}
+/* ── Job capture ──────────────────────────────────────────────────────── */
 
-@keyframes spin { to { transform: rotate(360deg); } }
-
-@media (prefers-reduced-motion: reduce) {
-  .spinner { animation: none; }
-}
-
-/* ── Error ─────────────────────────────────────────────────────────────── */
-.state-error { padding: 16px 15px; }
-
-.error-card {
-  display: flex;
-  gap: 10px;
-  background: var(--danger-veil);
-  border: 1px solid var(--danger-line);
-  border-radius: var(--radius);
-  padding: 13px 14px;
-}
-
-.error-body {
-  min-width: 0;
-  flex: 1;
-}
-
-.error-mark {
-  flex-shrink: 0;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  background: var(--danger-fill);
-  color: var(--score-poor);
-  display: grid;
-  place-items: center;
-  font-size: 13px;
-  font-weight: 700;
-  margin-top: 1px;
-}
-
-.error-title {
-  font-size: 13px;
+.capture { display: flex; flex-direction: column; gap: 3px; }
+.job-title {
+  font-size: 16.5px;
   font-weight: 600;
-  color: var(--danger-ink);
-  margin-bottom: 3px;
+  line-height: 1.25;
+  letter-spacing: -0.002em;
+  color: var(--ink-strong);
+  overflow-wrap: anywhere;
+}
+.job-company { font-size: 12.5px; color: var(--ink-muted); overflow-wrap: anywhere; }
+
+/* Ledger rows: label, dotted leader, value — the app's fact vocabulary. */
+.ledger { display: flex; flex-direction: column; gap: 7px; }
+.ledger-row { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.ledger-row dt {
+  flex: 0 0 auto;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+/* Sentence-length labels read as shouting in the tracked-uppercase style. */
+.ledger-row-plain dt {
+  font-size: 12.5px;
+  font-weight: 400;
+  letter-spacing: normal;
+  text-transform: none;
+  color: var(--ink-muted);
 }
 
-.error-msg {
-  font-size: 12px;
-  color: var(--fg-muted);
-  line-height: 1.5;
+.ledger-row .leader {
+  flex: 1 1 auto;
+  min-width: 12px;
+  height: 0;
+  border-bottom: 1px dotted var(--hairline);
+  transform: translateY(-3px);
+}
+.ledger-row dd {
+  flex: 0 1 auto;
+  min-width: 0;
+  text-align: right;
+  font-size: 12.5px;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+.ledger-row dd .mono { font-size: 11.5px; color: var(--ink-muted); }
+
+.evidence {
+  margin-top: -4px;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--ink-faint);
   overflow-wrap: anywhere;
 }
 
-/* ── Result ────────────────────────────────────────────────────────────── */
-.state-result {
-  padding: 13px 15px 15px;
-  display: flex;
-  flex-direction: column;
-  gap: 13px;
+/* ── Notices ──────────────────────────────────────────────────────────── */
+
+.notice-title {
+  font: 600 15.5px/1.25 var(--sans);
+  letter-spacing: -0.002em;
+  color: var(--ink-strong);
 }
-
-/* Job meta */
-.job-meta { display: flex; flex-direction: column; gap: 3px; }
-
-.job-title {
-  font-family: var(--font-serif);
-  font-size: 15.5px;
-  font-weight: 600;
-  color: var(--fg);
-  line-height: 1.3;
-}
-
-.job-company {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 12px;
-  color: var(--fg-muted);
-}
-
-.job-company::before {
-  content: "";
-  width: 5px;
-  height: 5px;
-  border-radius: 1px;
-  background: var(--fg-dim);
-}
-
-/* Application banner */
-.applied-banner {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  border-radius: var(--radius);
-  padding: 9px 12px;
-  border: 1px solid var(--border);
-  background: var(--surface);
-}
-
-.applied-icon {
-  flex-shrink: 0;
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  font-size: 12px;
-  font-weight: 700;
-  background: var(--surface-2);
-  color: var(--fg-muted);
-}
-
-.applied-body { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
-.applied-label { font-size: 12.5px; font-weight: 600; color: var(--fg); }
-.applied-sub { font-size: 11px; color: var(--fg-muted); }
-.applied-evidence { font-size: 10.5px; color: var(--fg-dim); line-height: 1.35; margin-top: 2px; }
-
-.applied-banner.tone-applied {
-  background: var(--match-veil);
-  border-color: var(--match-line);
-}
-.tone-applied .applied-icon { background: var(--match-fill); color: var(--score-strong); }
-.tone-applied .applied-label { color: var(--match-ink); }
-
-.applied-banner.tone-offer {
-  background: var(--gap-veil);
-  border-color: var(--gap-line);
-}
-.tone-offer .applied-icon { background: var(--gap-fill); color: var(--score-stretch); }
-.tone-offer .applied-label { color: var(--gap-ink); }
-
-.applied-banner.tone-rejected {
-  background: var(--danger-veil);
-  border-color: var(--danger-line);
-}
-.tone-rejected .applied-icon { background: var(--danger-fill); color: var(--score-poor); }
-
-.applied-banner.tone-tracking { background: var(--surface); }
-.tone-tracking .applied-icon { color: var(--score-good); }
-
-.applied-banner.tone-idle {
-  background: transparent;
-  border-style: dashed;
-  border-color: var(--border);
-}
-.tone-idle .applied-label { color: var(--fg-muted); font-weight: 500; }
-
-/* No-resume notice */
-.no-resume {
-  display: flex;
-  gap: 10px;
-  align-items: flex-start;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 12px 14px;
-  font-size: 12px;
-  color: var(--fg-muted);
+.notice-copy {
+  margin-top: -8px;
+  font-size: 12.5px;
   line-height: 1.5;
+  color: var(--ink-muted);
+  overflow-wrap: anywhere;
 }
-.no-resume-mark {
-  flex-shrink: 0;
-  width: 26px;
-  height: 18px;
-  border-radius: 999px;
-  background: var(--surface-2);
-  color: var(--fg-dim);
-  display: grid;
-  place-items: center;
-  font-size: 12px;
-  font-weight: 700;
-  margin-top: 1px;
+.view-notice.is-danger .notice-title { color: var(--danger); }
+.view-notice.is-warn .notice-title { color: var(--warm); }
+
+/* One short line above the current view: a keyboard import that failed with no
+   popup open, or an import that failed here and then reconnected cleanly. */
+.inline-notice {
+  padding: 8px 10px;
+  border: 1px solid var(--hairline);
+  border-radius: 6px;
+  background: var(--warm-soft);
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--ink-strong);
+  overflow-wrap: anywhere;
 }
 
-/* Import button */
-.btn-import {
-  width: 100%;
-  height: 44px;
-  margin-top: 1px;
+/* ── Controls ─────────────────────────────────────────────────────────── */
+
+.actions { display: flex; flex-direction: column; gap: 8px; }
+
+.btn-primary {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
-  background: var(--brand);
+  width: 100%;
+  height: 38px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--accent);
   color: var(--on-accent);
-  border: none;
-  border-radius: var(--radius);
   font-size: 13px;
   font-weight: 600;
-  letter-spacing: 0.01em;
   cursor: pointer;
-  transition: background 0.15s ease, transform 0.08s ease;
+  transition: background-color 140ms var(--ease);
 }
-.btn-import:hover:not(:disabled) { background: var(--brand-hover); }
-.btn-import:active:not(:disabled) { transform: scale(0.99); }
-.btn-import:focus-visible,
-.auto-tailor__input:focus-visible {
-  outline: 2px solid var(--brand-hover);
-  outline-offset: 2px;
+.btn-primary:hover:not(:disabled) { background: var(--accent-deep); }
+
+.btn-quiet {
+  width: 100%;
+  height: 32px;
+  border: 1px solid var(--hairline);
+  border-radius: 6px;
+  background: var(--card-elev);
+  color: var(--ink-strong);
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 140ms var(--ease), color 140ms var(--ease), border-color 140ms var(--ease);
 }
-.btn-import:disabled {
-  background: var(--surface-2);
-  color: var(--fg-muted);
+.btn-quiet:hover:not(:disabled) {
+  border-color: var(--accent-soft);
+  background: var(--accent-soft);
+  color: var(--accent-deep);
+}
+
+.btn-quiet-sm {
+  align-self: flex-start;
+  border: 0;
+  background: transparent;
+  color: var(--accent-deep);
+  font-size: 11.5px;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 2px 0;
+}
+.btn-quiet-sm:hover:not(:disabled) { text-decoration: underline; text-underline-offset: 2px; }
+
+.btn-inline {
+  height: 30px;
+  padding: 0 11px;
+  border: 1px solid var(--hairline);
+  border-radius: 6px;
+  background: var(--card-elev);
+  color: var(--ink-strong);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 140ms var(--ease), color 140ms var(--ease);
+}
+.btn-inline:hover:not(:disabled) { background: var(--accent-soft); color: var(--accent-deep); }
+
+button:disabled {
+  border-color: var(--hairline-soft);
+  background: var(--card-soft);
+  color: var(--ink-faint);
   cursor: default;
 }
-.btn-import .btn-arrow { font-size: 15px; line-height: 1; }
+/* A completed action is disabled but finished, not unavailable. */
+.btn-primary:disabled .dot-active { background: var(--accent); }
 
-/* Auto-tailor toggle */
-.auto-tailor {
+.kbd {
+  padding: 2px 5px;
+  border: 1px solid oklch(0.975 0.008 150 / 0.34);
+  border-radius: 4px;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  line-height: 1.4;
+  letter-spacing: 0.02em;
+  color: inherit;
+  opacity: 0.85;
+}
+/* Only ever seen when the popup's modules failed to load. */
+.boot-error {
+  padding: 18px 14px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--danger);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.ledger-row .kbd {
+  border-color: var(--hairline);
+  background: var(--card-elev);
+  color: var(--ink-muted);
+  opacity: 1;
+}
+
+/* ── Settings ─────────────────────────────────────────────────────────── */
+
+.section-label {
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--hairline);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+.view-settings { gap: 11px; }
+.view-settings .section-label:not(:first-child) { margin-top: 6px; }
+
+.port-form { display: flex; align-items: center; gap: 8px; }
+.field-label {
+  flex: 0 0 auto;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+.port-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 30px;
+  padding: 0 9px;
+  border: 1px solid var(--hairline);
+  border-radius: 6px;
+  background: var(--card-elev);
+  color: var(--ink-strong);
+  font-size: 13px;
+}
+.port-input:hover { border-color: var(--hairline-strong); }
+.port-input:focus { border-color: var(--accent); }
+
+.settings-row {
   display: flex;
   align-items: center;
-  gap: 7px;
-  margin-top: -1px;
-  min-height: 28px;
-  padding: 4px 2px;
-  cursor: pointer;
-  user-select: none;
+  justify-content: space-between;
+  gap: 12px;
 }
-.auto-tailor__input {
-  width: 13px;
-  height: 13px;
-  margin: 0;
-  accent-color: var(--brand);
-  cursor: pointer;
-}
-.auto-tailor__label {
-  font-size: 11.5px;
-  color: var(--fg-muted);
-  line-height: 1.3;
-}
+.field-help { font-size: 11px; line-height: 1.45; color: var(--ink-faint); }
+.field-error:empty { display: none; }
+.field-error { font-size: 11px; line-height: 1.45; color: var(--danger); }
+.version { font-size: 10.5px; color: var(--ink-faint); }
 
-/* Foot note */
-.foot {
-  font-size: 10.5px;
-  color: var(--fg-dim);
-  line-height: 1.45;
-  text-align: center;
-  padding: 0 4px;
-}
+.view-notice .port-form { margin-top: 2px; }
 
-/* Scrollbar */
-::-webkit-scrollbar { width: 5px; }
+/* ── Scrollbar and motion ─────────────────────────────────────────────── */
+
+::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb { background: var(--hairline); border-radius: 3px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .view { animation: none; }
+  .working-rule.is-active::after {
+    width: 100%;
+    animation: none;
+    opacity: 0.4;
+  }
+  *, *::before, *::after { transition-duration: 0.01ms !important; }
+}

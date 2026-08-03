@@ -13,6 +13,26 @@
       "128": "icons/icon.svg"
     }
   },
+  "background": {
+    "service_worker": "background.js",
+    "scripts": ["background.js"],
+    "type": "module"
+  },
+  "commands": {
+    "import-job": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+U",
+        "mac": "Command+Shift+U"
+      },
+      "description": "Import this job posting into RoleFit AI"
+    },
+    "_execute_action": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+Y",
+        "mac": "Command+Shift+Y"
+      }
+    }
+  },
   "icons": {
     "16": "icons/icon.svg",
     "32": "icons/icon.svg",
@@ -31,7 +51,7 @@
   "browser_specific_settings": {
     "gecko": {
       "id": "role-fit-ai@localhost",
-      "strict_min_version": "109.0"
+      "strict_min_version": "128.0"
     }
   }
 }

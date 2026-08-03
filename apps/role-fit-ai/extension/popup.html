@@ -7,7 +7,16 @@
   <link rel="stylesheet" href="popup.css" />
 </head>
 <body>
-  <div id="root"></div>
+  <!-- Replaced by the first render. It stays visible only when popup.js never
+       executes — an incomplete install missing one of its ES modules — which
+       would otherwise open as a blank popup with no explanation. -->
+  <div id="root">
+    <p class="boot-error">RoleFit AI could not start. Reload the extension in your browser.</p>
+  </div>
+  <!-- Outside #root on purpose: every render replaces #root wholesale, and a
+       live region that is destroyed and recreated does not reliably announce.
+       This one persists, so only its text changes. -->
+  <p id="announcer" class="sr-only" role="status" aria-live="polite"></p>
   <script src="runtime-config.js"></script>
   <script src="popup.js" type="module"></script>
 </body>
