@@ -28,7 +28,7 @@ import { ViewportGate } from "../ViewportGate";
 type ResumeTabProps = {
   documentTitle: string;
   onDocumentTitleChange: (title: string) => void;
-  editedResume: ResumeData | null;
+  editedResume: ResumeData;
   actions: ResumeEditorActions;
   canUndo: boolean;
   canRedo: boolean;
@@ -36,9 +36,6 @@ type ResumeTabProps = {
   contentRedoSequence: number | null;
   dirty: boolean;
   draftAutosaveState: DraftAutosaveState;
-  // True only for the first workspace check. Manual Reload actions do not
-  // replace the live editor with this arrival state.
-  isWorkspaceBootstrapping: boolean;
   // JD lifestyle/logistical conditions for the pre-apply advisory (not fit).
   jobConstraints?: JobConstraint[];
   result: PolishedResume | null;
@@ -84,7 +81,6 @@ export function ResumeTab({
   contentRedoSequence,
   dirty,
   draftAutosaveState,
-  isWorkspaceBootstrapping,
   jobConstraints,
   result,
   resumeDiff,
@@ -131,7 +127,7 @@ export function ResumeTab({
   }, [docStyle]);
 
   const [highlightTarget, setHighlightTarget] = useState<TailorChangeTarget | null>(null);
-  const highlightedFieldKey = editedResume ? fieldKeyForReviewTarget(editedResume, highlightTarget) : null;
+  const highlightedFieldKey = fieldKeyForReviewTarget(editedResume, highlightTarget);
   const renderOverlay = useCallback(
     (context: TypesetEditorOverlayContext) => (
       <RoleFitEditorOverlay
@@ -196,33 +192,22 @@ export function ResumeTab({
           }}
         >
           <ViewportGate>
-            {editedResume ? (
-              <TypesetEditor
-                ref={editorRef}
-                data={editedResume}
-                actions={actions}
-                canUndo={canUndo}
-                canRedo={canRedo}
-                contentUndoSequence={contentUndoSequence}
-                contentRedoSequence={contentRedoSequence}
-                docStyle={docStyle}
-                initialCaret={initialCaret}
-                onCaretExit={onCaretExit}
-                onInlineFormatStateChange={onInlineFormatStateChange}
-                onRequestLinkEditor={onRequestLinkEditor}
-                overlay={renderOverlay}
-                highlightFieldKey={highlightedFieldKey}
-              />
-            ) : isWorkspaceBootstrapping ? (
-              <p className="resume-doc__boot" role="status" aria-live="polite">
-                Opening workspace…
-              </p>
-            ) : (
-              <div className="resume-doc__empty">
-                <strong>Bring a resume to the desk</strong>
-                <span>Open Resume above to upload a source file.</span>
-              </div>
-            )}
+            <TypesetEditor
+              ref={editorRef}
+              data={editedResume}
+              actions={actions}
+              canUndo={canUndo}
+              canRedo={canRedo}
+              contentUndoSequence={contentUndoSequence}
+              contentRedoSequence={contentRedoSequence}
+              docStyle={docStyle}
+              initialCaret={initialCaret}
+              onCaretExit={onCaretExit}
+              onInlineFormatStateChange={onInlineFormatStateChange}
+              onRequestLinkEditor={onRequestLinkEditor}
+              overlay={renderOverlay}
+              highlightFieldKey={highlightedFieldKey}
+            />
           </ViewportGate>
         </div>
 

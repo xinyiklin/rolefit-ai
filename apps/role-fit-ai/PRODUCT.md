@@ -66,8 +66,12 @@ workspace changed. A document is named
 one role's materials read as one application. Selecting a saved variant changes
 the document content, not that application output name, and both editor
 sublabels show the same `Role at Company` target.
-`.resume` and `.cover` are their separate reloadable formats. The product also
-includes application-question drafts and a lightweight application pipeline
+`.resume` and `.cover` are their separate reloadable formats. Resume always
+owns a real structured editor document: without a saved or opened source it is
+a clean blank page with an editable header anchor, not an empty-state substitute.
+That blank remains valid for editing and strict `.resume` save, but does not
+qualify for PDF export, Polish, or Apply until it contains meaningful evidence.
+The product also includes application-question drafts and a lightweight application pipeline
 tracker. Prepare gives Resume and Cover Letter matching material cards, each
 with its own named-variant selector and Include toggle. Resume starts included
 and Cover Letter starts excluded. Apply creates the tracked application once the

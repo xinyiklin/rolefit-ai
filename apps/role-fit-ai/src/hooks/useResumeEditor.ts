@@ -4,6 +4,8 @@ import type { HistoryClock } from "@typeset/editor/hooks/historyClock.ts";
 import { useResumeEditor as useTypesetResumeEditor } from "@typeset/editor/hooks/useResumeEditor.ts";
 import type { TextEditOptions } from "@typeset/editor/hooks/useResumeEditor.ts";
 import type { EntryTextField } from "@typeset/engine/lib/styleFieldFormatting.ts";
+import type { ResumeData } from "@typeset/engine/lib/resumeData.ts";
+import { createBlankResumeData } from "../lib/blankResume.ts";
 import { parseResumeData, serializeResumeData } from "../lib/resumeText.ts";
 
 // RoleFit's thin adapter over the shared Typeset editor state. The package owns
@@ -12,7 +14,8 @@ import { parseResumeData, serializeResumeData } from "../lib/resumeText.ts";
 // provenance bit that distinguishes a user's free-form edit from accepting a
 // reviewed suggestion.
 export function useResumeEditor(historyClock?: HistoryClock) {
-  const editor = useTypesetResumeEditor(null, historyClock);
+  const initialResume = useMemo(createBlankResumeData, []);
+  const editor = useTypesetResumeEditor(initialResume, historyClock);
   const [manualEdited, setManualEdited] = useState(false);
 
   // A wrapped mutator below fires BEFORE the shared reducer has actually
@@ -27,7 +30,7 @@ export function useResumeEditor(historyClock?: HistoryClock) {
   const pendingManualRef = useRef(false);
 
   const seedData = useCallback(
-    (data: Parameters<typeof editor.seedData>[0]) => {
+    (data: ResumeData) => {
       pendingManualRef.current = false;
       setManualEdited(false);
       editor.seedData(data);
@@ -38,7 +41,7 @@ export function useResumeEditor(historyClock?: HistoryClock) {
   const seed = useCallback(
     (text: string, sourceText?: string) => {
       const trimmed = text?.trim();
-      seedData(trimmed ? parseResumeData(text, sourceText) : null);
+      seedData(trimmed ? parseResumeData(text, sourceText) : createBlankResumeData());
     },
     [seedData]
   );
@@ -196,13 +199,12 @@ export function useResumeEditor(historyClock?: HistoryClock) {
     };
   }, [editor.actions]);
 
-  const serializedResume = useMemo(
-    () => (editor.editedResume ? serializeResumeData(editor.editedResume) : ""),
-    [editor.editedResume]
-  );
+  const editedResume = editor.editedResume ?? initialResume;
+  const serializedResume = useMemo(() => serializeResumeData(editedResume), [editedResume]);
 
   return {
     ...editor,
+    editedResume,
     manualEdited,
     serializedResume,
     seed,
