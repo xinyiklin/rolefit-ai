@@ -10,7 +10,11 @@ import { dirname, join, resolve } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 
-import { computeWorkspaceFingerprint } from "../health-contract.ts";
+import {
+  ROLEFIT_DESKTOP_COMPATIBILITY_VERSION,
+  ROLEFIT_HEALTH_API_VERSION,
+  computeWorkspaceFingerprint
+} from "../health-contract.ts";
 import { startRoleFitServer } from "../runtime.ts";
 
 const sourceAppRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
@@ -100,8 +104,8 @@ try {
   assert.deepEqual(JSON.parse(health.body), {
     service: "role-fit-ai",
     status: "ok",
-    apiVersion: 2,
-    desktopCompatibilityVersion: 3,
+    apiVersion: ROLEFIT_HEALTH_API_VERSION,
+    desktopCompatibilityVersion: ROLEFIT_DESKTOP_COMPATIBILITY_VERSION,
     mode: "production",
     launchKind: "standalone",
     workspaceFingerprint: computeWorkspaceFingerprint(workspaceDir)
