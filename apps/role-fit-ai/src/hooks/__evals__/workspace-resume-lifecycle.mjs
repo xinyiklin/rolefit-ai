@@ -88,6 +88,7 @@ assert.ok(blankRecovery > blankVersionCheck, "Blank clears recovery only at the 
 assert.ok(blankIdentity > blankRecovery, "Blank detaches saved-variant identity only inside the commit");
 assert.ok(blankSeed > blankIdentity, "Blank seeds a fresh canonical document after identity is detached");
 assert.match(blankLoad, /setDocumentTitle\("Resume"\)/, "Blank resets the visible document title");
+assert.match(blankLoad, /setWorkspaceStatus\(""\)/, "Blank clears stale workspace save feedback");
 assert.match(blankLoad, /docStyle\.replaceDocumentStyle\(toDocumentStyle\(DOC_STYLE_DEFAULTS\)\)/, "Blank resets persisted document style");
 assert.match(blankLoad, /setResult\(null\)/, "Blank clears prior Resume tailoring output");
 assert.match(blankLoad, /resetCoverWorkflow\(\)/, "Blank invalidates the Cover Letter evidence workflow");
@@ -127,8 +128,23 @@ assert.ok(uploadIdentity > uploadRecovery, "upload identity changes only at comm
 
 assert.match(
   appSource,
-  /const resumeDocumentVersion = useMemo\([\s\S]{0,180}?serializeResumeFile\(editedResume, docStyle\.style\)/,
-  "the replacement guard fingerprints the strict structured .resume representation"
+  /const resumeDocumentVersion = useMemo\([\s\S]{0,180}?resumeDocumentVersionFor\(editedResume, docStyle\.style\)/,
+  "the replacement guard uses a render-safe structured document version"
+);
+assert.match(
+  appSource,
+  /title: baseResumeName[\s\S]{0,520}?disabled: isWorkspaceBootstrapping \|\| isSavingBaseResume/,
+  "default workspace save stays disabled until workspace identity is known"
+);
+assert.match(
+  appSource,
+  /fieldId: "resume-variant-name"[\s\S]{0,520}?disabled: isWorkspaceBootstrapping \|\| isSavingBaseResume/,
+  "named workspace save stays disabled until workspace identity is known"
+);
+assert.match(
+  saveCurrent,
+  /if \(isWorkspaceBootstrapping\) return;/,
+  "workspace save also rejects bootstrap races at the state-owner boundary"
 );
 const starterAction = appSource.indexOf('key: "starter"');
 const blankAction = appSource.indexOf('key: "blank"', starterAction);

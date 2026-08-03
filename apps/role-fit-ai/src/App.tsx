@@ -75,8 +75,9 @@ import { buildCandidateFactsContext, mergeHonestContext } from "./lib/candidateF
 import { extractJobPosting, type ExtractedJobTracking } from "./lib/jobExtract";
 import { serializeResumeData } from "./lib/resumeText";
 import type { ResumeData } from "@typeset/engine/lib/resumeData.ts";
-import { parseResumeFile, serializeResumeFile } from "@typeset/engine/lib/resumeFile.ts";
+import { parseResumeFile } from "@typeset/engine/lib/resumeFile.ts";
 import { defaultTailorModes, type TailorMode } from "./lib/tailorScope";
+import { resumeDocumentVersion as resumeDocumentVersionFor } from "./lib/resumeDocumentVersion";
 import type { StageAiUsage } from "./lib/aiUsage";
 import { useDuplicateGuard } from "./hooks/useDuplicateGuard";
 import { useJobIntake, type ImportedJobSnapshot } from "./hooks/useJobIntake";
@@ -773,7 +774,7 @@ function App() {
   const docStyle = useDocStyle(resumeHistoryClock);
   const resumeDocumentDirty = resumeEdited || docStyle.dirty;
   const resumeDocumentVersion = useMemo(
-    () => serializeResumeFile(editedResume, docStyle.style),
+    () => resumeDocumentVersionFor(editedResume, docStyle.style),
     [docStyle.style, editedResume]
   );
   const resumeReplacementStateRef = useRef({
@@ -2715,7 +2716,7 @@ function App() {
                       description: baseResumeName
                         ? "The version it replaces goes to history."
                         : "Opens automatically next time.",
-                      disabled: isSavingBaseResume,
+                      disabled: isWorkspaceBootstrapping || isSavingBaseResume,
                       onSelect: () => saveCurrentAsBaseResume()
                     }}
                     variant={{
@@ -2724,7 +2725,7 @@ function App() {
                       placeholder: "e.g. Full stack",
                       fileNameFor: resumeVariantFileName,
                       existingNames: baseResumeOptions.map((option) => option.fileName),
-                      disabled: isSavingBaseResume,
+                      disabled: isWorkspaceBootstrapping || isSavingBaseResume,
                       onSave: (fileName) => saveCurrentAsBaseResume(fileName)
                     }}
                     applicationSync={resumeApplicationSync}

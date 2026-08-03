@@ -1830,15 +1830,19 @@ bounded; app-only operational detail belongs in the affected app documentation.
   through the App/ResumeTab/workspace chain. Open gained a Blank action ordered
   Starter, Blank, File. Document existence enables editing and strict `.resume`
   save; `resumeHasContent` separately gates PDF export, Polish, and Apply. The
-  replacement guard now fingerprints `serializeResumeFile(editedResume,
-  docStyle.style)` instead of serialized text plus stringified style, and a
-  detached save defaults to `default.resume` rather than `default.txt`.
-- [USER+CODE] 2026-08-03: The overlay caret is the only caret.
-  `.tsd-doc--editable` sets `caret-color: transparent` unconditionally and the
-  `has-typeset-caret` class is gone, because a document with no fields at all (a
-  removed header and no sections) parked a native caret in the page's top-left
-  corner outside the margin as though it could accept typing. A range selection
-  therefore paints no edge caret either; the selection band is its own feedback.
+  replacement guard fingerprints the structural document plus normalized style
+  without applying save-time codec limits during React render. Workspace Save
+  stays disabled through bootstrap and the state owner rejects bootstrap races;
+  starting Blank also clears prior workspace-save feedback. A detached save
+  defaults to `default.resume` rather than `default.txt`.
+- [USER+CODE] 2026-08-03: The overlay caret owns model-driven editing.
+  `.tsd-doc--editable` sets `caret-color: transparent` when the model owns the
+  value, because a document with no fields at all (a removed header and no
+  sections) otherwise parks a native caret in the page's top-left corner outside
+  the margin as though it could accept typing. IME composition is the deliberate
+  exception: `.is-composing` restores the browser caret while its DOM value is
+  uncommitted and hides the stale overlay until `compositionend`. A range
+  selection paints no edge caret; the selection band is its own feedback.
   The blank name's "Type your name" hint became document typography rather than
   UI chrome — `font: inherit` from the run, baseline-aligned by `top: 0` — so it
   agrees with the caret, which is drawn at the field's display size. The DOM
@@ -1854,9 +1858,10 @@ bounded; app-only operational detail belongs in the affected app documentation.
   small-cap height, where A's apex and T's crossbar hold too little ink for a
   solid top row; `text-rendering: geometricPrecision` already removes the
   hinting half of it. No code change beyond recording the rationale.
-- [TOOL] 2026-08-03: `npm run check` passes for `packages/engine`,
-  `packages/editor`, `apps/typeset`, and `apps/role-fit-ai`. Browser QA of the
-  caret and hint change was NOT run — flag-first policy, offered and not yet
-  taken. Unverified in a browser: hint baseline/size against the caret across
-  zoom levels, hint centring for centred versus left-aligned headers, and caret
-  presence everywhere now that the native fallback is gone.
+- [TOOL] 2026-08-03: After review remediation, `npm run check` passes for
+  `packages/engine`, `packages/editor`, `apps/typeset`, and `apps/role-fit-ai`;
+  the RoleFit gate needed host access for its expected loopback server probe.
+  Browser QA of the caret and hint change was NOT run under the flag-first
+  policy. Unverified in a real browser: hint baseline/size across zoom levels,
+  hint centring for centred versus left-aligned headers, and the native-to-overlay
+  caret handoff during a physical IME composition session.

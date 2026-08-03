@@ -71,13 +71,13 @@ typesetting guide when a change affects painted output or layout provenance.
   italic faces usually share vertical metrics, so arming italic moves nothing in
   the box and an equality check over position alone would keep the upright
   caret.
-- The overlay is the ONLY caret. `.tsd-doc--editable` suppresses the native one
-  unconditionally rather than while the overlay happens to paint, because the
-  states where no overlay exists are exactly the states where the native caret
-  lies: a document with no fields at all (a removed header and no sections)
-  accepts typing nowhere, yet the browser still parks a caret in the page's
-  top-left corner, outside the margin, as if it could. No resolvable insertion
-  point means no caret. A range selection therefore paints no edge caret either;
+- The overlay is the only caret while the model owns editing.
+  `.tsd-doc--editable` suppresses the native one even when no model field
+  resolves, because a document with no fields accepts typing nowhere yet the
+  browser still parks a caret in the page's top-left corner. IME composition is
+  the deliberate exception: while the browser owns its uncommitted DOM value,
+  `.is-composing` restores the native caret and hides the stale overlay until
+  `compositionend` commits the value. A range selection paints no edge caret;
   the selection band is its own feedback.
 - An empty field's hint (currently only the blank structural name) is ghost text
   of what will be typed, not UI chrome: it inherits the run's own font so it

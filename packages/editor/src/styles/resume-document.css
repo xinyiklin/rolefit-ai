@@ -282,15 +282,23 @@
    keyboard focus ring and text cursor. Links remain text while editing, so a
    pointer cursor would lie.
 
-   The overlay caret is the only caret. The native one is suppressed
-   unconditionally — not merely while the overlay paints — because the states
-   where the overlay is absent are exactly the states where the native caret
-   lies: a document with no fields (a removed header and no sections) cannot
-   accept typing anywhere, yet the browser still parks a caret in the page's
-   top-left corner as if it could. */
+   The overlay caret is the only caret while the model owns editing. The native
+   one is suppressed even when the overlay cannot resolve a model field, because
+   a document with no fields cannot accept typing yet the browser parks a caret
+   in the page's top-left corner as if it could. IME composition is the one
+   exception: the browser temporarily owns an uncommitted DOM value and needs
+   its live caret until compositionend commits that value to the model. */
 .tsd-doc--editable {
   outline: none;
   caret-color: transparent;
+}
+
+.tsd-doc--editable.is-composing {
+  caret-color: #000;
+}
+
+.tsd-doc--editable.is-composing ~ .typeset-caret {
+  visibility: hidden;
 }
 
 .tsd-doc--editable .tsd-page {

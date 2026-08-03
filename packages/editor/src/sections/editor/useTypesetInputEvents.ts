@@ -822,10 +822,12 @@ export function useTypesetInputEvents({
     const blockDrag = (event: Event) => event.preventDefault();
     const onCompositionStart = () => {
       composingRef.current = true;
+      host.classList.add("is-composing");
       compositionSelectionRef.current = readSelection();
     };
     const onCompositionEnd = (event: CompositionEvent) => {
       composingRef.current = false;
+      host.classList.remove("is-composing");
       const selection = compositionSelectionRef.current;
       compositionSelectionRef.current = null;
       setNonce((current) => current + 1);
@@ -859,6 +861,7 @@ export function useTypesetInputEvents({
     host.addEventListener("compositionstart", onCompositionStart);
     host.addEventListener("compositionend", onCompositionEnd);
     return () => {
+      host.classList.remove("is-composing");
       host.removeEventListener("beforeinput", onBeforeInput);
       host.removeEventListener("keydown", onKeyDown);
       host.removeEventListener("mousedown", onMouseDown);

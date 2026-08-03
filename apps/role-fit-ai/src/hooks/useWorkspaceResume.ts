@@ -400,6 +400,7 @@ export function useWorkspaceResume({
     resetCoverWorkflow();
     setFileError("");
     setFileStatus("");
+    setWorkspaceStatus("");
     setPolishStatus("");
     resetExportStatuses();
     setExportStatus("");
@@ -545,6 +546,7 @@ export function useWorkspaceResume({
   }
 
   async function saveCurrentAsBaseResume(targetFileName?: string) {
+    if (isWorkspaceBootstrapping) return;
     const targetName = targetFileName || baseResumeName || fileName || "default.resume";
     // RoleFit always has a structured model, so a detached document defaults to
     // the strict editable format. Explicit text-file identities stay text.
