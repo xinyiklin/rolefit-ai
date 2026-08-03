@@ -3380,7 +3380,7 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
 
   return (
     <div
-      className={`typeset-editor${drag ? " is-dragging" : ""}${caretOverlay ? " has-typeset-caret" : ""}`}
+      className={`typeset-editor${drag ? " is-dragging" : ""}`}
       ref={wrapRef}
       onMouseMove={onMouseMove}
       onMouseLeave={clearHover}

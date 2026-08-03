@@ -1823,3 +1823,40 @@ bounded; app-only operational detail belongs in the affected app documentation.
   (`document.hasFocus()` false), so `element.blur()` emits no `focusout` and
   React `onBlur` never fires — dispatch `focusout` explicitly or commit-on-blur
   reads as a phantom data-loss bug.
+- [USER+CODE] 2026-08-03: RoleFit's Resume tab always mounts a real editor
+  document. `createBlankResumeData()` (`src/lib/blankResume.ts`) seeds an
+  explicit `{visible, name: "", contact: []}` header over no sections, so the
+  empty-state and bootstrapping panels are gone and `editedResume` is non-null
+  through the App/ResumeTab/workspace chain. Open gained a Blank action ordered
+  Starter, Blank, File. Document existence enables editing and strict `.resume`
+  save; `resumeHasContent` separately gates PDF export, Polish, and Apply. The
+  replacement guard now fingerprints `serializeResumeFile(editedResume,
+  docStyle.style)` instead of serialized text plus stringified style, and a
+  detached save defaults to `default.resume` rather than `default.txt`.
+- [USER+CODE] 2026-08-03: The overlay caret is the only caret.
+  `.tsd-doc--editable` sets `caret-color: transparent` unconditionally and the
+  `has-typeset-caret` class is gone, because a document with no fields at all (a
+  removed header and no sections) parked a native caret in the page's top-left
+  corner outside the margin as though it could accept typing. A range selection
+  therefore paints no edge caret either; the selection band is its own feedback.
+  The blank name's "Type your name" hint became document typography rather than
+  UI chrome — `font: inherit` from the run, baseline-aligned by `top: 0` — so it
+  agrees with the caret, which is drawn at the field's display size. The DOM
+  renderer publishes `--tsd-empty-hint-shift` (how far along the column a
+  zero-width run's anchor sits) so a centred header's hint centres on the
+  insertion point instead of spilling right from the midpoint.
+- [TOOL] 2026-08-03: Small-caps heading letters that look like they sit at
+  different heights on screen were measured, not adjusted. The caps faces are
+  uniform (Latin Modern's small caps span 0.508-0.531 em, with the round letters
+  and A carrying ordinary overshoot, and T 1.2% under the flat-topped letters),
+  `pdf/emit.ts` embeds those same `.ttf` files at the same baselines, and the
+  PDF at 400% reads level. The residual at 100% is anti-aliasing at a ~6px
+  small-cap height, where A's apex and T's crossbar hold too little ink for a
+  solid top row; `text-rendering: geometricPrecision` already removes the
+  hinting half of it. No code change beyond recording the rationale.
+- [TOOL] 2026-08-03: `npm run check` passes for `packages/engine`,
+  `packages/editor`, `apps/typeset`, and `apps/role-fit-ai`. Browser QA of the
+  caret and hint change was NOT run — flag-first policy, offered and not yet
+  taken. Unverified in a browser: hint baseline/size against the caret across
+  zoom levels, hint centring for centred versus left-aligned headers, and caret
+  presence everywhere now that the native fallback is gone.
