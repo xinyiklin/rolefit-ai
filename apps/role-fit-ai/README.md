@@ -58,9 +58,12 @@ editable documents.
   sign-off itself, and the model picks which of your experiences and personal
   notes this posting actually warrants. Bracketed text is treated as an
   instruction to the writer, never as something you wrote about yourself.
-  Grounding and placeholder checks run on the server, the finished letter loads
-  straight into the editor, and **Restore previous** puts back the exact document
-  it replaced until you edit it. You are only asked something when a fact cannot
+  Grounding and placeholder checks run on the server, then the finished letter
+  appears beside the unchanged editor as a whole-document proposal. **Use
+  proposal** applies it atomically and enables **Restore previous** until the
+  next edit; **Keep current** performs no document mutation. Validation blockers
+  identify what needs correction without exposing rejected provider output. You
+  are only asked something when a fact cannot
   be resolved at all — a missing company or role, or a template that names a
   private detail such as a referral. Unsaved edits are kept in a
   recoverable draft and the letter is named like the resume
@@ -125,13 +128,16 @@ editable documents.
   estimate fit locally; score and verdict come from AI Review in the app. See
   [Browser extension](#browser-extension).
 - **Explicit five-provider setup** — the companion can add **Claude Code CLI**, **Codex CLI**, **Antigravity CLI**, **OpenAI API**, and **Claude API**. CLI paths use their provider-owned account sessions and API paths use a locally encrypted key. Settings > AI stages shows only providers the user explicitly added, keeps configured-but-unready providers visible with reconnect guidance, and never silently switches a stage to a paid provider.
-- **AI-owned fit review** — the selected Review model judges the complete requirement set and returns the coverage table, base/tailored scores, verdict, explanation, gaps, and recommendation. RoleFit validates the response contract but does not recalculate or replace that judgment locally.
-- **Strict recruiter review mode** — audit the current edited draft as-is, or audit the sanitized proposal produced moments earlier in **Both**, for a verdict (STRONG FIT / REASONABLE FIT / STRETCH / DON'T APPLY), AI fit scores, gap severity, targeted bullet rewrites, interview risk flags, ready / edits-pending / missing-evidence status, and a cover-letter angle.
+- **AI-owned fit audit** — the selected Recruiter audit model judges the complete requirement set and returns the coverage table, base/tailored scores, verdict, explanation, gaps, and recommendation. RoleFit validates the response contract but does not recalculate or replace that judgment locally.
+- **Strict recruiter audit** — audit the current edited draft as-is, or audit the sanitized proposal produced moments earlier in **Polish resume**, for a verdict (STRONG FIT / REASONABLE FIT / STRETCH / DON'T APPLY), AI fit scores, gap severity, targeted bullet rewrites, interview risk flags, ready / edits-pending / missing-evidence status, and a cover-letter angle.
 - **One typeset editing surface** — direct text editing, inline emphasis, undo/redo, keyboard caret movement, structural add/remove/reorder controls, per-section Tailor/Include/Off scope, and review-field highlighting all operate on the exported page layout.
-- **One document workbench rail** — Resume review and Cover Letter tailoring
-  share the same collapsible desktop rail and narrow accordion behavior while
-  keeping their own workflow state. Each document remembers its own expanded or
-  collapsed preference, and hidden review inputs remain intact when reopened.
+- **One document workbench rail** — Resume and Cover Letter share the same
+  always-present lifecycle hierarchy, readiness order, failure placement,
+  collapsible desktop rail, and narrow accordion behavior while keeping their
+  own workflow state. Resume's primary **Polish resume** action runs Tailor then
+  Recruiter audit; Cover Letter stages an explicit proposal. Each document
+  remembers its own expanded or collapsed preference, and hidden workflow state
+  remains intact when reopened.
 - **Word-processor editing behavior** — Resume Tab/Shift+Tab moves between
   complete header and section fields (including wrapped fields); the cover
   letter uses that navigation in its optional header, and its body paragraphs

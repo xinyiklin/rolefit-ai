@@ -28,9 +28,11 @@ sanitizer code is executable product behavior and anti-fabrication-critical.
   that come back, and reports provenance. Do not reintroduce a preparation plan,
   a use/skip classification pass, or a selected-evidence request field.
 - Validation collects repairable violations and runs exactly one silent repair
-  request carrying them plus the rejected output. A second failure fails closed
-  and keeps the candidate's existing letter. Never route a model-authored slip
-  into a candidate-facing planning step.
+  request carrying them plus the rejected output. A second failure fails closed,
+  returns only deterministic user-safe blocker records, and keeps the candidate's
+  existing letter; never return the rejected provider output. Proposal acceptance
+  remains a client-side boundary, not another server stage. Never route a
+  model-authored slip into a candidate-facing planning step.
 - Bracketed slot text is a drafting instruction, never candidate evidence and
   never voice. Only a slot naming a private fact (a referral, a prior personal
   relationship) may ask the candidate; every other slot is generative, and the

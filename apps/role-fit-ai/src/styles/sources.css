@@ -485,6 +485,12 @@ select,
   display: inline-flex;
 }
 
+.document-primary-action--split {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
 .document-action-feedback {
   position: absolute;
   top: calc(100% + var(--s2));

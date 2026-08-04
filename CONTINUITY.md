@@ -1894,3 +1894,13 @@ bounded; app-only operational detail belongs in the affected app documentation.
   regression failed first with a saved offset of 0 instead of 180, then passed
   through narrow unmount/remount; the full RoleFit check passed 67 evals and the
   UI detector returned no findings.
+- [USER+CODE+TOOL] 2026-08-04: Resume and Cover Letter now share one always-present
+  workflow-rail hierarchy while retaining separate orchestration. Resume's
+  primary **Polish resume** action runs Tailor then Recruiter audit, with
+  one-stage actions secondary and proposal decisions marking the audit stale.
+  Cover Letter stages a fingerprinted whole-document proposal; only **Use
+  proposal** applies atomically and creates Restore, **Keep current** performs no
+  mutation, changed semantic inputs disable acceptance, and deterministic `422`
+  blockers omit rejected provider output. Production build, document-workflow
+  round trips, focused contracts, and all 67 offline evals passed; real-browser
+  visual QA was not run under the flag-first policy.

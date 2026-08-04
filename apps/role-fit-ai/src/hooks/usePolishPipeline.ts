@@ -207,7 +207,7 @@ export function usePolishPipeline({
         ? { status: "stopped", errorHeadline: "Inputs changed", error: "Tailor was cancelled before it could update this draft." }
         : prev.tailor,
       review: prev.review.status === "running"
-        ? { status: "stopped", errorHeadline: "Inputs changed", error: "Review was cancelled before it could update this draft." }
+        ? { status: "stopped", errorHeadline: "Inputs changed", error: "Recruiter audit was cancelled before it could update this draft." }
         : prev.review
     }));
     setPolishProgressVisible(true);
@@ -468,7 +468,7 @@ export function usePolishPipeline({
       if (data.reviewStatus === "failed") {
         const reviewError = typeof data.reviewError === "string"
           ? data.reviewError
-          : "The reviewer returned no usable score and evidence. Retry, or switch the Review provider.";
+          : "The recruiter audit returned no usable score and evidence. Retry, or switch the Audit provider.";
         const reviewErrorStatus = typeof data.reviewErrorStatus === "number"
           ? data.reviewErrorStatus
           : 502;
@@ -507,7 +507,7 @@ export function usePolishPipeline({
         return mergeReviewIntoResult(prev, data, reviewedBy);
       });
       if (revealResumeOnSuccess) setActiveOutputTab("resume");
-      setPolishProgress((prev) => ({ ...prev, review: { status: "done", note: "Reviewed with AI", noteTone: "ok" } }));
+      setPolishProgress((prev) => ({ ...prev, review: { status: "done", note: "Recruiter audit complete", noteTone: "ok" } }));
       const reviewProvider = (data.auditProvider ?? data.provider) as string | undefined;
       const reviewModel = (data.auditModel ?? data.model) as string | undefined;
       setPipelineAiUsage((prev) => ({
@@ -558,10 +558,10 @@ export function usePolishPipeline({
   function handlePolishStopped() {
     setPolishProgress((prev) => ({
       tailor: prev.tailor.status === "running"
-        ? { status: "stopped", errorHeadline: "Stopped by user", error: "Tailor was cancelled. Review was not run." }
+        ? { status: "stopped", errorHeadline: "Stopped by user", error: "Tailor was cancelled. Recruiter audit was not run." }
         : prev.tailor,
       review: prev.review.status === "running"
-        ? { status: "stopped", errorHeadline: "Stopped by user", error: "Review was cancelled." }
+        ? { status: "stopped", errorHeadline: "Stopped by user", error: "Recruiter audit was cancelled." }
         : prev.review
     }));
     setPolishProgressVisible(true);
@@ -611,7 +611,7 @@ export function usePolishPipeline({
         [firstStage]: {
           status: "stopped",
           errorHeadline: "Duplicate application found",
-          error: `Pipeline stopped before ${firstStage === "review" ? "Review" : "Tailor"}. No AI request was made.`
+          error: `Pipeline stopped before ${firstStage === "review" ? "Recruiter audit" : "Tailor"}. No AI request was made.`
         }
       });
       setPolishProgressVisible(true);
@@ -710,7 +710,7 @@ export function usePolishPipeline({
     }
     const reviewSnapshot = stage === "review" ? reviewSnapshotRef.current : null;
     if (stage === "review" && !reviewSnapshot) {
-      setPolishStatus("There is no review attempt to retry. Start a new Review instead.");
+      setPolishStatus("There is no audit attempt to retry. Start a new recruiter audit instead.");
       polishRunLockRef.current = false;
       return;
     }
@@ -721,13 +721,13 @@ export function usePolishPipeline({
     }
     if (reviewSnapshot && reviewSnapshot.fingerprint !== ctx.reviewFingerprint) {
       reviewSnapshotRef.current = null;
-      setPolishStatus("The resume or review inputs changed. Start a new Review instead of retrying the stale proposal.");
+      setPolishStatus("The resume or audit inputs changed. Start a new recruiter audit instead of retrying the stale proposal.");
       setPolishProgress((prev) => ({
         ...prev,
         review: {
           status: "failed",
           errorHeadline: "Inputs changed",
-          error: "Start a new Review so it audits the current resume and job inputs."
+          error: "Start a new recruiter audit for the current resume and job inputs."
         }
       }));
       polishRunLockRef.current = false;

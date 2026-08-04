@@ -1,8 +1,9 @@
 // Cover-letter AI is one request. The model sees the whole evidence corpus and
 // decides what to use; the server resolves correspondence deterministically,
-// validates the result, and repairs once in silence before giving up. Nothing
-// here pauses for candidate approval. The legacy grounded reviser below still
-// serves the older optional /api/polish cover leg, which the browser never uses.
+// validates the result, and repairs once in silence before giving up. The
+// server has no approval stage; the browser stages a valid response as a
+// proposal. The legacy grounded reviser below still serves the older optional
+// /api/polish cover leg, which the browser never uses.
 
 import type { IncomingMessage, ServerResponse } from "node:http";
 import {
@@ -47,10 +48,24 @@ import {
   analyzeCoverLetterTemplate,
   type CoverLetterSourceContext
 } from "../../src/lib/coverLetterTemplate.ts";
+import {
+  coverLetterBlockersFromViolations,
+  type CoverLetterBlocker
+} from "../../src/lib/coverLetterFailure.ts";
 
 // Optional dispatch-attempt collector (same additive pattern as the sanitizer's
 // drop-stats): callConfiguredProvider bumps `attempts` once per dispatch attempt.
 type AttemptStats = { attempts?: number };
+
+class CoverLetterBlockedError extends UserSafeAiError {
+  blockers: CoverLetterBlocker[];
+
+  constructor(blockers: CoverLetterBlocker[]) {
+    super("The proposal did not pass RoleFit's evidence checks.", 422);
+    this.name = "CoverLetterBlockedError";
+    this.blockers = blockers;
+  }
+}
 
 // A public employer fact plus where it came from. Populated by an app-owned
 // research step; absent employer context never blocks or delays tailoring.
@@ -304,9 +319,10 @@ export async function tailorCoverLetter(
     run = await attempt({ violations: run.violations, rejectedOutput: run.parsed });
   }
   if (!run.validation.output || run.violations.length > 0) {
-    throw new UserSafeAiError(
-      "The tailored letter did not pass RoleFit's evidence checks, so your current letter was kept. Try again, or add the missing detail to your resume or personal context.",
-      422
+    throw new CoverLetterBlockedError(
+      coverLetterBlockersFromViolations(run.violations.length > 0
+        ? run.violations
+        : ["The response contained no usable body paragraphs."])
     );
   }
 
@@ -455,6 +471,14 @@ export async function handleCoverLetter(
     });
   } catch (error) {
     if (isRequestAborted(error, req, res)) return;
+    if (error instanceof CoverLetterBlockedError) {
+      sendJson(res, error.status, {
+        status: "blocked",
+        error: error.message,
+        blockers: error.blockers
+      });
+      return;
+    }
     if (error instanceof UserSafeAiError) {
       sendJson(res, error.status, { error: error.message });
       return;

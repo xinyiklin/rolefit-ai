@@ -114,18 +114,21 @@ and `docs/engineering/ui-principles.md`.
   `FormattingToolbar`, and direct editor with the cover-letter layout and
   structure editing disabled. It replaces only the toolbar's resume style-menu
   slot with a RoleFit-owned line-height control plus the shared page control;
-  its file lifecycle and deterministic review rail remain RoleFit-owned. The
+  its file lifecycle, workflow rail, and deterministic resume proposal review
+  remain RoleFit-owned. The
   editor is always mounted: without an opened or restored source, it starts as
   one empty editable paragraph.
-- The Cover letter page has exactly one workflow action. `CoverLetterReview`
-  reports readiness before Tailor and length, provenance, warnings, and Restore
-  after it; it never gates the action behind a review step, and its enabled
-  state depends only on real readiness, never on the presence of an
-  intermediate object.
+- `DocumentWorkflowRail` owns the single named complementary landmark and the
+  shared state/target/readiness/failure/body/footer hierarchy for both document
+  tabs. Resume's ordinary **Polish resume** action runs Tailor then Recruiter
+  audit; Tailor-only and Audit-current remain secondary specialist actions.
+  Cover letter keeps one Tailor request but stages its result as a whole-document
+  proposal: **Use proposal** applies it atomically, **Keep current** performs no
+  mutation, stale inputs disable acceptance, and Restore appears only after use.
 - `DocumentWorkbench` owns the two document tabs' shared rail placement,
   disclosure, and responsive scroll boundary. Its wrapper stays semantically
-  neutral because `ReviewRail` and `CoverLetterReview` own their named
-  complementary landmarks. At the stacked breakpoint its layout is the scroll
+  neutral because `DocumentWorkflowRail` owns the one named complementary
+  landmark. At the stacked breakpoint its layout is the scroll
   owner inside the clipped studio host, and Resume gives the shared Fit control
   its editor-pane ref so rail transitions cannot leave Fit stale. Both document
   tabs also give `useRestoredScroll` the layout and editor refs so tab switches

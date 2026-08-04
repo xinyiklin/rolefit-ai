@@ -90,7 +90,7 @@ const polishFingerprintStart = polish.indexOf("const inputFingerprint = workflow
 const polishFingerprint = polish.slice(polishFingerprintStart, polish.indexOf("});", polishFingerprintStart) + 3);
 const answersFingerprintStart = answers.indexOf("const inputFingerprint = workflowInputFingerprint({");
 const answersFingerprint = answers.slice(answersFingerprintStart, answers.indexOf("});", answersFingerprintStart) + 3);
-const coverFingerprintStart = cover.indexOf("const inputFingerprint = workflowInputFingerprint({");
+const coverFingerprintStart = cover.indexOf("const proposalInputFingerprint = workflowInputFingerprint({");
 const coverFingerprint = cover.slice(coverFingerprintStart, cover.indexOf("});", coverFingerprintStart) + 3);
 
 assert.match(
@@ -225,7 +225,8 @@ assert.doesNotMatch(
   "authored word count is a voice signal, never a tailoring gate"
 );
 assert.doesNotMatch(coverReview, /Â/, "cover-letter readiness copy contains no mojibake");
-// One click, one request: no prepare/draft split and nothing to approve first.
+// One click, one request: no prepare/draft split. The returned document is
+// staged behind one whole-letter acceptance boundary.
 assert.equal(
   cover.match(/await fetch\("\/api\/cover-letter"/g)?.length,
   1,
@@ -233,13 +234,23 @@ assert.equal(
 );
 assert.doesNotMatch(
   cover,
-  /pendingProposal|acceptProposal|evidenceOverrides|selectedEvidence|clarification/i,
-  "no preparation plan, evidence override, or proposal acceptance survives"
+  /evidenceOverrides|selectedEvidence|clarification/i,
+  "no preparation plan or evidence-selection override survives"
 );
 assert.match(
   cover,
-  /onApplyTailored\(result\.coverLetterText\)[\s\S]{0,200}?setCoverProgress\(\{\s*status: "done"/,
-  "a valid letter enters the editor directly, then reports"
+  /setPendingProposal\(\{[\s\S]{0,160}?sourceFingerprint: proposalInputFingerprint/,
+  "a valid letter is staged against the semantic inputs that produced it"
+);
+assert.match(
+  cover,
+  /const acceptProposal[\s\S]{0,600}?onApplyTailored\(proposal\.result\.coverLetterText\)/,
+  "only Use proposal enters the letter into the editor"
+);
+assert.doesNotMatch(
+  cover.match(/async function handleTailorCoverLetter[\s\S]*?const acceptProposal/)?.[0] ?? "",
+  /onApplyTailored\(/,
+  "request completion does not mutate the live letter"
 );
 assert.match(
   coverEditor,
@@ -251,7 +262,7 @@ assert.match(
   /const restorePreTailor[\s\S]{0,400}?parseCoverLetterFile\(preTailorSnapshot\)/,
   "Restore replays the structured document, not its plain text"
 );
-assert.match(cover, /if \(!tailorApplied\) setLastResult\(null\)/, "the result summary and Restore share one lifetime");
+assert.match(cover, /if \(!tailorApplied\) setLastAppliedResult\(null\)/, "the applied summary and Restore share one lifetime");
 assert.doesNotMatch(answersFingerprint, /providerReady/, "provider polling cannot invalidate active answer generation");
 assert.doesNotMatch(coverFingerprint, /providerReady/, "provider polling cannot invalidate active cover generation");
 assert.equal(
@@ -742,13 +753,13 @@ assert.match(
 );
 assert.match(
   prepareApplicationRail,
-  /<p className="prepare-page__eyebrow">Fit<\/p>[\s\S]{0,900}?Not reviewed[\s\S]{0,200}?Run Review/,
-  "Prepare names fit as unreviewed until a provider-backed Review exists"
+  /<p className="prepare-page__eyebrow">Fit<\/p>[\s\S]{0,900}?Not audited[\s\S]{0,200}?Run Recruiter audit/,
+  "Prepare names fit as unaudited until a provider-backed recruiter audit exists"
 );
 assert.match(
   app,
   /const prepareFitAssessment =[\s\S]{0,900}?provenance: "current"[\s\S]{0,900}?provenance: "saved"/,
-  "Prepare prefers the current Review and otherwise labels a matching saved review as historical"
+  "Prepare prefers the current recruiter audit and otherwise labels a matching saved audit as historical"
 );
 const prepareFitStyles = prepareStyles.match(/\.prepare-fit\s*\{[\s\S]*?\n\}/)?.[0] ?? "";
 assert.notEqual(prepareFitStyles, "", "Prepare gives the fit summary a dedicated flat rail row");
@@ -1742,12 +1753,12 @@ assert.match(
 assert.match(
   app,
   /const prepareReviewGapsProvenance = currentReviewAvailable[\s\S]{0,180}?"saved"[\s\S]{0,100}?"none"/,
-  "Prepare distinguishes a current Review from an explicitly historical saved snapshot"
+  "Prepare distinguishes a current recruiter audit from an explicitly historical saved snapshot"
 );
 assert.match(
   prepareTab,
-  /reviewGapsProvenance === "current"[\s\S]{0,120}?No candidate gaps identified by the current Review/,
-  "a current Review with zero gaps is not presented as if Review never ran"
+  /reviewGapsProvenance === "current"[\s\S]{0,140}?No candidate gaps identified by the current recruiter audit/,
+  "a current recruiter audit with zero gaps is not presented as if no audit ran"
 );
 assert.match(
   app,

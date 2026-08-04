@@ -6,7 +6,7 @@ import {
   FilePlus2,
   FolderOpen,
   LayoutTemplate,
-  Layers,
+  MoreHorizontal,
   Save,
   ScanSearch,
   Settings,
@@ -22,6 +22,7 @@ import { useDebouncedValue } from "./hooks/useDebouncedValue";
 import { useDocStyle } from "@typeset/editor/hooks/useDocStyle.ts";
 import { createHistoryClock } from "@typeset/editor/hooks/historyClock.ts";
 import { FormattingToolbar } from "@typeset/editor/components/toolbar/FormattingToolbar.tsx";
+import { ToolbarButton } from "@typeset/editor/components/toolbar/ToolbarButton.tsx";
 import { DocumentStructureControls } from "@typeset/editor/components/toolbar/DocumentStructureControls.tsx";
 import {
   type InlineFormatState,
@@ -189,21 +190,14 @@ function resumeVariantFileName(label: string): string {
   return slug ? slug + ".resume" : "";
 }
 
-// What the resume Polish action asks before it spends an AI run. This is the only
-// place the three stage selections are named for the user; the value is the
-// persisted `polishStages` setting, so picking one here also sets the default.
+// Specialist Resume actions stay available without competing with the ordinary
+// one-click Tailor -> Recruiter audit path.
 const POLISH_STAGE_ACTIONS: {
   value: "tailor" | "review" | "both";
   title: string;
   description: string;
   Icon: LucideIcon;
 }[] = [
-  {
-    value: "both",
-    title: "Tailor and review",
-    description: "Rewrite against the job, then audit the proposal as a recruiter would.",
-    Icon: Layers
-  },
   {
     value: "tailor",
     title: "Tailor only",
@@ -212,7 +206,7 @@ const POLISH_STAGE_ACTIONS: {
   },
   {
     value: "review",
-    title: "Review only",
+    title: "Audit current resume",
     description: "Audit the current draft as it stands. Nothing is rewritten.",
     Icon: ScanSearch
   }
@@ -530,8 +524,8 @@ function App() {
   const [pendingAutosaveDraft, setPendingAutosaveDraft] = useState<AutosavedDraft | null>(null);
   // The cover letter's own recovery draft — the two editors recover the same way.
   const [pendingCoverDraft, setPendingCoverDraft] = useState<CoverLetterAutosavedDraft | null>(null);
-  // Track whether the JD has changed since the last polish result. When true,
-  // show a quiet "review is stale" notice in the ReviewRail.
+  // Track whether the resume proposal or job changed since the last audit.
+  // When true, show a quiet stale notice in the proposal review.
   const [reviewStale, setReviewStale] = useState(false);
 
   // ----- Structured resume editor -----
@@ -1009,9 +1003,9 @@ function App() {
     findForTarget
   });
 
-  // One Tailor click writes the letter. Its dedicated editor remains the single
-  // owner for applied text, direct edits, file lifecycle, the pre-tailor
-  // snapshot behind Restore, and application save.
+  // Cover tailoring stages a whole-document proposal. The dedicated editor
+  // remains the single owner for accepted text, direct edits, file lifecycle,
+  // the pre-acceptance Restore snapshot, and application save.
   const {
     coverLetterText,
     resetCoverWorkflow,
@@ -1025,7 +1019,11 @@ function App() {
     updateDetail: updateCoverLetterDetail,
     slotAnswers: coverLetterSlotAnswers,
     updateSlotAnswer: updateCoverLetterSlotAnswer,
-    lastResult: coverLetterResult
+    proposal: coverLetterProposal,
+    acceptProposal: acceptCoverLetterProposal,
+    discardProposal: discardCoverLetterProposal,
+    lastAppliedResult: appliedCoverLetterResult,
+    failure: coverLetterFailure
   } = useCoverLetter({
     currentCoverLetterText: coverLetterEditor.text,
     currentResumeText,
@@ -2609,6 +2607,18 @@ function App() {
               onRestoreAutosaveDraft={handleRestoreAutosaveDraft}
               onDismissAutosaveDraft={handleDismissAutosaveDraft}
               reviewStale={reviewStale}
+              resumeReady={resumeReady}
+              jobReady={jobReady}
+              tailorProviderReady={tailorProviderReady}
+              auditProviderReady={reviewProviderReady}
+              isPolishing={isPolishing}
+              polishProgress={polishProgress}
+              polishStatus={polishStatus}
+              onPolish={() => startPolish("both")}
+              onRetryTailor={() => void retryStage("tailor")}
+              onRetryAudit={() => void retryStage("review")}
+              onStopPolish={stopPolish}
+              onProposalChange={() => setReviewStale(true)}
               jobTarget={materialsJobTarget}
               documentActions={
                 <>
@@ -2761,20 +2771,33 @@ function App() {
                     onDismissStatus={() => setExportStatus("")}
                     onDownloadPdf={handleDownloadPdf}
                   />
-                  <span className="document-primary-action">
+                  <span className="document-primary-action document-primary-action--split">
+                    <ToolbarButton
+                      label={isPolishing ? "Working…" : "Polish resume"}
+                      tooltip={
+                        polishInputsReady && polishStageReady.both
+                          ? "Tailor selected sections, then run the recruiter audit"
+                          : polishGateHint || polishStageBlocker("both")
+                      }
+                      icon={<Sparkles size={16} />}
+                      showLabel
+                      tone="primary"
+                      disabled={!polishInputsReady || !polishStageReady.both || isPolishing}
+                      onClick={() => startPolish("both")}
+                    />
                     <DocumentActionMenu
                       label={isPolishing ? "Working…" : "Polish"}
-                      ariaLabel="Polish stages"
-                      tooltip={polishInputsReady ? "Choose which AI stages to run" : polishGateHint}
-                      icon={<Sparkles size={16} />}
-                      tone="primary"
+                      ariaLabel="More polish actions"
+                      tooltip="Tailor only or audit the current resume"
+                      icon={<MoreHorizontal size={16} />}
+                      showLabel={false}
                       disabled={!polishInputsReady || isPolishing}
                     >
                       {({ close }) => (
                         <div className="document-action-panel polish-stage-menu">
                           <div className="document-action-panel__head">
-                            <strong>Polish this resume</strong>
-                            <span>Choose which AI stages to run. Your choice becomes the default.</span>
+                            <strong>Specialist actions</strong>
+                            <span>Run one stage without the ordinary Tailor-then-audit workflow.</span>
                           </div>
                           {POLISH_STAGE_ACTIONS.map(({ value, title, description, Icon }) => (
                             <button
@@ -2847,10 +2870,15 @@ function App() {
               providerMessage={coverProviderMessage}
               jobTarget={materialsJobTarget}
               preflight={coverLetterPreflight}
-              result={coverLetterResult}
+              proposal={coverLetterProposal}
+              appliedResult={appliedCoverLetterResult}
+              failure={coverLetterFailure}
               slotAnswers={coverLetterSlotAnswers}
               onDetailChange={updateCoverLetterDetail}
               onSlotAnswerChange={updateCoverLetterSlotAnswer}
+              onAcceptProposal={acceptCoverLetterProposal}
+              onDiscardProposal={discardCoverLetterProposal}
+              onAddHonestContext={handleAddHonestContext}
               onRestorePreTailor={() => {
                 coverLetterEditor.restorePreTailor();
               }}

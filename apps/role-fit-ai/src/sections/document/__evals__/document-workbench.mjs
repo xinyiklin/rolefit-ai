@@ -10,6 +10,7 @@ import {
 const sourceUrl = (path) => new URL(path, import.meta.url);
 const requiredFiles = [
   "../DocumentWorkbench.tsx",
+  "../DocumentWorkflowRail.tsx",
   "../../../hooks/useDocumentRailPreference.ts",
   "../../../styles/document-workbench.css"
 ];
@@ -19,6 +20,7 @@ for (const path of requiredFiles) {
 }
 
 const workbench = readFileSync(sourceUrl("../DocumentWorkbench.tsx"), "utf8");
+const workflowRail = readFileSync(sourceUrl("../DocumentWorkflowRail.tsx"), "utf8");
 const preference = readFileSync(
   sourceUrl("../../../hooks/useDocumentRailPreference.ts"),
   "utf8"
@@ -26,6 +28,7 @@ const preference = readFileSync(
 const styles = readFileSync(sourceUrl("../../../styles/document-workbench.css"), "utf8");
 const resumeTab = readFileSync(sourceUrl("../../tabs/ResumeTab.tsx"), "utf8");
 const coverTab = readFileSync(sourceUrl("../../tabs/CoverLetterTab.tsx"), "utf8");
+const reviewRail = readFileSync(sourceUrl("../../ReviewRail.tsx"), "utf8");
 const app = readFileSync(sourceUrl("../../../App.tsx"), "utf8");
 
 const values = new Map();
@@ -90,6 +93,16 @@ assert.doesNotMatch(
   workbench,
   /<aside[\s\S]{0,120}?className="document-workbench__rail"/,
   "the structural rail does not duplicate its feature child's complementary landmark"
+);
+assert.match(
+  workflowRail,
+  /<aside className=\{`workflow-rail/,
+  "the shared workflow rail owns the complementary landmark"
+);
+assert.doesNotMatch(
+  reviewRail,
+  /<aside/,
+  "Resume-specific review content does not create a nested complementary landmark"
 );
 assert.match(
   workbench,
@@ -170,13 +183,18 @@ for (const [name, source] of [
 }
 assert.match(
   resumeTab,
-  /content:\s*hasReview[\s\S]{0,160}?<ReviewRail/,
-  "Resume omits the rail until review content exists"
+  /content:\s*\([\s\S]{0,160}?<ResumeWorkflowRail/,
+  "Resume keeps workflow content available before a result exists"
 );
 assert.match(
   coverTab,
   /content:\s*<CoverLetterReview/,
   "Cover Letter keeps its readiness rail available before tailoring"
+);
+assert.match(
+  workflowRail,
+  /PHASE_LABELS[\s\S]*proposal:\s*"Proposal ready"/,
+  "both documents share the workflow state vocabulary"
 );
 assert.match(app, /const pane = resumeFitViewportRef\.current/, "Fit targets the shared editor pane ref");
 assert.equal(

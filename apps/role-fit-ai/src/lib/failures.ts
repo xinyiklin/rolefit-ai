@@ -46,7 +46,7 @@ const HEADLINES: Record<FailureKind, string> = {
   "too-large": "Request too large",
   truncated: "Response cut off",
   parse: "Parsing error",
-  validation: "Missing input",
+  validation: "Validation blocked",
   network: "Network error",
   api: "API error"
 };
@@ -104,6 +104,9 @@ export function classifyFailure(error: unknown): ClassifiedFailure {
 
   // 7. 400s: split provider/model/base-url/reasoning-effort misconfiguration
   // from plain missing-input validation errors.
+  if (httpStatus === 422) {
+    return classifiedFrom("validation", detail);
+  }
   if (httpStatus === 400) {
     if (/base url|provider|model|reasoning effort/i.test(message)) {
       return classifiedFrom("config", detail);
@@ -129,5 +132,5 @@ export function classifyFailure(error: unknown): ClassifiedFailure {
 // unrelated problems when it's really one "the AI isn't producing right now".
 // The specific detail, when useful, lives in the inline status line, not here.
 // (classifyFailure stays for genuinely different, non-AI-outage cases: bad
-// input → "Missing input", a failed link fetch → "Network error", etc.)
+// input/validation → "Validation blocked", a failed link fetch → "Network error", etc.)
 export const AI_UNAVAILABLE = "AI unavailable";

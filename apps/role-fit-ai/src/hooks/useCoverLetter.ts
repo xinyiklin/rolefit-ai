@@ -18,6 +18,10 @@ import {
   type CoverLetterDetailValues,
   type CoverLetterPreflight,
 } from "../lib/coverLetterPreflight";
+import {
+  parseCoverLetterBlockers,
+  type CoverLetterBlocker,
+} from "../lib/coverLetterFailure";
 
 type UseCoverLetterArgs = {
   currentCoverLetterText: string;
@@ -50,6 +54,28 @@ export type PolishCoverResult = {
   attempts?: number;
 };
 
+export type CoverLetterProposal = {
+  result: CoverLetterTailorResult;
+  sourceFingerprint: string;
+  stale: boolean;
+};
+
+export type CoverLetterFailure = {
+  headline: string;
+  detail: string;
+  blockers: CoverLetterBlocker[];
+};
+
+class CoverLetterRequestError extends ApiError {
+  blockers: CoverLetterBlocker[];
+
+  constructor(message: string, httpStatus: number, blockers: CoverLetterBlocker[]) {
+    super(message, httpStatus);
+    this.name = "CoverLetterRequestError";
+    this.blockers = blockers;
+  }
+}
+
 function tailorResponse(value: unknown): CoverLetterTailorResult | null {
   if (!value || typeof value !== "object") return null;
   const candidate = value as Partial<CoverLetterTailorResult>;
@@ -66,9 +92,8 @@ function tailorResponse(value: unknown): CoverLetterTailorResult | null {
 }
 
 // Owns the whole cover-letter AI workflow: deterministic preflight, the single
-// tailoring request, stale-request cancellation, and the result summary. There
-// is no plan to approve and no proposal to accept — a valid letter goes straight
-// into the editor, and the editor keeps the exact document it replaced.
+// tailoring request, stale-request cancellation, and one whole-letter proposal.
+// Only explicit acceptance invokes the editor's atomic replacement boundary.
 export function useCoverLetter({
   currentCoverLetterText,
   currentResumeText,
@@ -96,9 +121,11 @@ export function useCoverLetter({
   const [detailValues, setDetailValues] =
     useState<CoverLetterDetailValues>({});
   const [slotAnswers, setSlotAnswers] = useState<Record<string, string>>({});
-  const [lastResult, setLastResult] = useState<CoverLetterTailorResult | null>(
+  const [lastAppliedResult, setLastAppliedResult] = useState<CoverLetterTailorResult | null>(
     null,
   );
+  const [pendingProposal, setPendingProposal] = useState<Omit<CoverLetterProposal, "stale"> | null>(null);
+  const [failure, setFailure] = useState<CoverLetterFailure | null>(null);
   const requestGenerationRef = useRef(0);
   const requestAbortRef = useRef<AbortController | null>(null);
 
@@ -141,18 +168,30 @@ export function useCoverLetter({
       }),
     [honestContext, resumeData, slotAnswers, slotLabels],
   );
-  const inputFingerprint = workflowInputFingerprint({
+  const proposalInputFingerprint = workflowInputFingerprint({
     currentCoverLetterText,
     currentResumeText,
     resumeText,
     jobText,
     customInstructions,
-    aiRequest: buildStageRequestFields(aiRequest),
     resolved: preflight.resolved,
     evidenceItems,
   });
-  const requestInputFingerprintRef = useRef(inputFingerprint);
-  requestInputFingerprintRef.current = inputFingerprint;
+  const requestInputFingerprint = workflowInputFingerprint({
+    proposalInputFingerprint,
+    aiRequest: buildStageRequestFields(aiRequest),
+  });
+  const requestInputFingerprintRef = useRef(requestInputFingerprint);
+  requestInputFingerprintRef.current = requestInputFingerprint;
+  const proposal = useMemo<CoverLetterProposal | null>(
+    () => pendingProposal
+      ? {
+          ...pendingProposal,
+          stale: pendingProposal.sourceFingerprint !== proposalInputFingerprint,
+        }
+      : null,
+    [pendingProposal, proposalInputFingerprint],
+  );
 
   const invalidateCoverRequest = useCallback(() => {
     requestGenerationRef.current += 1;
@@ -169,7 +208,7 @@ export function useCoverLetter({
   // The summary and Restore share one lifetime: they last exactly as long as the
   // tailored letter is still the untouched live document.
   useEffect(() => {
-    if (!tailorApplied) setLastResult(null);
+    if (!tailorApplied) setLastAppliedResult(null);
   }, [tailorApplied]);
 
   useEffect(() => {
@@ -186,7 +225,7 @@ export function useCoverLetter({
           "The previous cover-letter request was cancelled before it produced a letter.",
       });
     }
-  }, [inputFingerprint, invalidateCoverRequest]);
+  }, [requestInputFingerprint, invalidateCoverRequest]);
 
   useEffect(
     () => () => {
@@ -201,6 +240,7 @@ export function useCoverLetter({
     (text: string) => {
       invalidateCoverRequest();
       onApplyExternal(text);
+      setLastAppliedResult(null);
       setCoverStatus("");
       setCoverProgress({ status: "idle" });
     },
@@ -210,6 +250,7 @@ export function useCoverLetter({
   const resetCoverWorkflow = useCallback(() => {
     invalidateCoverRequest();
     setSlotAnswers({});
+    setFailure(null);
     setCoverStatus("Inputs changed. Tailor the letter again for this context.");
     setCoverProgress({ status: "idle" });
   }, [invalidateCoverRequest]);
@@ -221,6 +262,7 @@ export function useCoverLetter({
     (result: PolishCoverResult) => {
       if (result.status === "off") return;
       invalidateCoverRequest();
+      setFailure(null);
       setCoverStatus(
         result.status === "ok"
           ? "A legacy cover-letter result was not applied. Use Tailor on the Cover letter page."
@@ -299,6 +341,8 @@ export function useCoverLetter({
     }
 
     const { controller, isCurrent } = beginRequest();
+    setPendingProposal(null);
+    setFailure(null);
     setCoverStatus("Tailoring this letter…");
     setCoverProgress({
       status: "running",
@@ -324,23 +368,26 @@ export function useCoverLetter({
       const raw = await response.json();
       if (!isCurrent()) return;
       if (!response.ok) {
-        throw new ApiError(
+        throw new CoverLetterRequestError(
           raw.error ?? raw.reasons?.[0] ?? "Could not tailor the cover letter.",
           response.status,
+          parseCoverLetterBlockers(raw.blockers),
         );
       }
       const result = tailorResponse(raw);
       if (!result) {
         throw new ApiError("The tailored cover letter could not be read.", 502);
       }
-      setLastResult(result);
-      onApplyTailored(result.coverLetterText);
+      setPendingProposal({
+        result,
+        sourceFingerprint: proposalInputFingerprint,
+      });
       setCoverStatus(
-        `Tailored for ${preflight.resolved.role} at ${preflight.resolved.company}.`,
+        `Proposal ready for ${preflight.resolved.role} at ${preflight.resolved.company}.`,
       );
       setCoverProgress({
         status: "done",
-        note: "Letter tailored",
+        note: "Proposal ready",
         noteTone: "ok",
       });
       onUsage?.({
@@ -355,12 +402,14 @@ export function useCoverLetter({
       });
     } catch (error) {
       if (!isCurrent()) return;
-      const failure = classifyFailure(error);
-      setCoverStatus(`Cover letter not replaced: ${failure.detail}`);
+      const classified = classifyFailure(error);
+      const blockers = error instanceof CoverLetterRequestError ? error.blockers : [];
+      setFailure({ headline: classified.headline, detail: classified.detail, blockers });
+      setCoverStatus("No changes were applied. Your current letter is unchanged.");
       setCoverProgress({
         status: "failed",
-        errorHeadline: failure.headline,
-        error: failure.detail,
+        errorHeadline: classified.headline,
+        error: classified.detail,
       });
       onUsage?.({
         source: "none",
@@ -375,6 +424,30 @@ export function useCoverLetter({
       }
     }
   }
+
+  const acceptProposal = useCallback(() => {
+    if (!proposal) return;
+    if (proposal.stale) {
+      setCoverStatus(
+        "The letter, resume, job, or tailoring instructions changed. Tailor again for the current inputs.",
+      );
+      return;
+    }
+    setPendingProposal(null);
+    setFailure(null);
+    setLastAppliedResult(proposal.result);
+    onApplyTailored(proposal.result.coverLetterText);
+    setCoverStatus("Proposal applied. Restore previous is available until the next edit.");
+    setCoverProgress({ status: "done", note: "Proposal applied", noteTone: "ok" });
+  }, [onApplyTailored, proposal]);
+
+  const discardProposal = useCallback(() => {
+    if (!proposal) return;
+    setPendingProposal(null);
+    setFailure(null);
+    setCoverStatus("Proposal discarded. Your current letter is unchanged.");
+    setCoverProgress({ status: "idle" });
+  }, [proposal]);
 
   return {
     coverLetterText: currentCoverLetterText,
@@ -392,6 +465,10 @@ export function useCoverLetter({
     slotAnswers,
     updateSlotAnswer,
     evidenceItems,
-    lastResult,
+    proposal,
+    acceptProposal,
+    discardProposal,
+    lastAppliedResult,
+    failure,
   };
 }

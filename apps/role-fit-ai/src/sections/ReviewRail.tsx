@@ -20,10 +20,11 @@ type ReviewRailProps = {
   // Lifestyle/logistical conditions in the JD — shown as a pre-apply advisory,
   // separate from fit (they never move the verdict).
   jobConstraints?: JobConstraint[];
-  // True when the JD changed since this review was generated — the verdict and
-  // gaps describe an older posting. Does NOT discard the review; just flags it.
+  // True when the resume proposal or prepared job changed after the audit.
+  // Does not discard the audit; it only marks the verdict and gaps as stale.
   reviewStale?: boolean;
   onHighlight?: (target: TailorChangeTarget | null) => void;
+  onProposalChange?: () => void;
   // Called when the user clicks "Add evidence" on a gap or missing-skill row.
   // Opens the Options menu so they can fill in honest context and re-run Polish.
   onAddHonestContext?: (keyword: string) => void;
@@ -154,7 +155,7 @@ function reviewActionStatus(result: PolishedResume, pendingEdits: number): Revie
 // bullet rewrite as an actionable card — accept it, modify it before applying,
 // undo it, or apply everything that still matches. A card goes stale when its
 // bullet was hand-edited away (apply manually via Copy in that case).
-export function ReviewRail({ result, resume, actions, resumeDiff, jobConstraints, reviewStale, onHighlight, onAddHonestContext }: ReviewRailProps) {
+export function ReviewRail({ result, resume, actions, resumeDiff, jobConstraints, reviewStale, onHighlight, onProposalChange, onAddHonestContext }: ReviewRailProps) {
   const sr = result.strictReview;
   const suggestions = result.suggestedChanges ?? [];
   // Text applied per rewrite index (Accept stores the suggestion, Apply after
@@ -210,6 +211,7 @@ export function ReviewRail({ result, resume, actions, resumeDiff, jobConstraints
     const value = text.trim();
     if (!value) return;
     applySuggestionTarget(actions, suggestion, value);
+    onProposalChange?.();
     setAppliedTexts((current) => ({ ...current, [key]: value }));
     setDiscardedSuggestions((current) => {
       const next = { ...current };
@@ -224,6 +226,7 @@ export function ReviewRail({ result, resume, actions, resumeDiff, jobConstraints
     if (!suggestion) return;
     const key = suggestionKey(suggestion, index);
     applySuggestionTarget(actions, suggestion, suggestion.currentText);
+    onProposalChange?.();
     setAppliedTexts((current) => {
       const next = { ...current };
       delete next[key];
@@ -236,6 +239,7 @@ export function ReviewRail({ result, resume, actions, resumeDiff, jobConstraints
     if (!suggestion) return;
     const key = suggestionKey(suggestion, index);
     setDiscardedSuggestions((current) => ({ ...current, [key]: true }));
+    onProposalChange?.();
     setEditingKey(null);
   }
 
@@ -248,6 +252,7 @@ export function ReviewRail({ result, resume, actions, resumeDiff, jobConstraints
       delete next[key];
       return next;
     });
+    onProposalChange?.();
   }
 
   function statusFor(rewrite: StrictReviewRewrite, index: number): EditStatus {
@@ -275,6 +280,7 @@ export function ReviewRail({ result, resume, actions, resumeDiff, jobConstraints
   // target-resolution and editingKey handling — this is just the apply itself.
   function applyResolvedRewrite(index: number, target: BulletTarget, value: string) {
     actions.updateBullet(target.sectionId, target.entryId, target.bulletId, value, true);
+    onProposalChange?.();
     setAppliedTexts((current) => ({ ...current, [`rewrite-${index}`]: value }));
   }
 
@@ -293,6 +299,7 @@ export function ReviewRail({ result, resume, actions, resumeDiff, jobConstraints
     const target = findBullet(resume, status.appliedText);
     if (!target) return;
     actions.updateBullet(target.sectionId, target.entryId, target.bulletId, rewrites[index].original, true);
+    onProposalChange?.();
     setAppliedTexts((current) => {
       const next = { ...current };
       delete next[`rewrite-${index}`];
@@ -345,10 +352,10 @@ export function ReviewRail({ result, resume, actions, resumeDiff, jobConstraints
   }
 
   return (
-    <aside className="review-rail" aria-label="Recruiter review">
+    <div className="review-rail">
       {reviewStale ? (
         <p className="rr-stale-notice" role="status">
-          This review reflects a previous job description. Polish again to refresh it.
+          This audit no longer reflects the current resume or prepared job. Polish again to refresh it.
         </p>
       ) : null}
       {sr ? (
@@ -867,6 +874,6 @@ export function ReviewRail({ result, resume, actions, resumeDiff, jobConstraints
           <p className="rr-gap__line">{sr.recommendation.coverLetterAngle}</p>
         </section>
       ) : null}
-    </aside>
+    </div>
   );
 }

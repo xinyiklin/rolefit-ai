@@ -182,8 +182,8 @@ the cover letter selects the plain-paragraph layout, keeps header structure
 controls, and disables resume section/entry/bullet controls. It uses the same two-row document/formatting toolbar, replacing only
 the resume style-menu group with a focused line-height control and the shared
 page-margin control. Shared zoom, selection typography, emphasis, alignment,
-links, and spell-check remain in place. Its file actions and deterministic
-review rail remain RoleFit-owned. Do not fork shared editing or layout code for
+links, and spell-check remain in place. Its file actions, workflow rail, and
+deterministic resume proposal review remain RoleFit-owned. Do not fork shared editing or layout code for
 a RoleFit-only tweak; add a narrow host seam and verify affected consumers.
 
 `packages/editor/src/styles/` owns shared editor/tooling behavior. RoleFit's
@@ -490,16 +490,20 @@ Working pages share one skeleton: content as paper sheets in the main
 column, one control surface docked right. Prepare intentionally begins as one
 centered Source task, then becomes collapsed source + brief beside one
 Application rail containing materials, readiness, and Apply; Resume = one engine-painted
-structured editing sheet + review rail. That sheet is always mounted, using a
+structured editing sheet + workflow rail. That sheet is always mounted, using a
 clean blank document when no source exists; content readiness gates PDF, Polish,
 and Apply without replacing the editor with an empty-state panel. Cover letter = one engine-painted
-plain correspondence sheet + a compact rail that reports readiness before
-Tailor and the tailored result's length, provenance, and Restore after it;
+plain correspondence sheet + the same workflow-rail hierarchy. Both rails remain
+visible from idle through blocked, working, proposal, stale, and applied states.
+Resume's primary Polish action runs Tailor and then Recruiter audit; its rail
+retains the granular proposal review. Cover letter keeps the editor unchanged
+while showing a whole-document proposal with explicit Use proposal and Keep
+current actions; Restore appears only after acceptance.
 Materials = draft sheets; Applications = view surface + inspector. The rail is a single sheet
 (`--card`, hairline, rest shadow);
 the main column sits directly on the desk. Resume and Cover letter use the same
-rail width, divider, and labelled header while retaining their separate review
-content. Each document remembers its own disclosure preference; collapsing hides
+rail width, divider, labelled header, readiness order, failure placement, and
+sticky action footer while retaining document-specific content. Each document remembers its own disclosure preference; collapsing hides
 content without unmounting it or resetting inputs, and new results do not force
 it open. Collapse reserves no gutter: the rail's track animates shut and the
 document takes the space, leaving only the panel icon as a tab on the document's

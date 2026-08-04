@@ -237,7 +237,7 @@ export function validateCoverLetterTailorOutput({
   };
 }
 
-// Advisory notes attached to a letter that already reached the editor.
+// Advisory notes attached to a valid proposal returned to the client.
 export function coverLetterLengthWarnings(coverLetterText: string): string[] {
   const words = coverLetterWordCount(coverLetterText);
   if (words < COVER_LETTER_TARGET_WORDS.min) {

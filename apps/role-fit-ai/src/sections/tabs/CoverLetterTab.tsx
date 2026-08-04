@@ -10,6 +10,10 @@ import type { ApplicationDocumentSync } from "../../hooks/useApplicationDocument
 import type { DraftAutosaveState } from "../../hooks/useAutosaveDraft";
 import type { CoverLetterAutosavedDraft } from "../../hooks/useCoverLetterAutosaveDraft";
 import type { CoverLetterEditorState } from "../../hooks/useCoverLetterEditor";
+import type {
+  CoverLetterFailure,
+  CoverLetterProposal
+} from "../../hooks/useCoverLetter";
 import type { CoverLetterTailorResult } from "../../lib/coverLetterEvidence";
 import type {
   CoverLetterDetailKey,
@@ -54,10 +58,15 @@ type CoverLetterTabProps = {
   providerMessage: string;
   jobTarget?: { role?: string; company?: string };
   preflight: CoverLetterPreflight;
-  result: CoverLetterTailorResult | null;
+  proposal: CoverLetterProposal | null;
+  appliedResult: CoverLetterTailorResult | null;
+  failure: CoverLetterFailure | null;
   slotAnswers: Record<string, string>;
   onDetailChange: (key: CoverLetterDetailKey, value: string) => void;
   onSlotAnswerChange: (slotId: string, value: string) => void;
+  onAcceptProposal: () => void;
+  onDiscardProposal: () => void;
+  onAddHonestContext?: (keyword: string) => void;
   onRestorePreTailor: () => void;
 };
 
@@ -88,10 +97,15 @@ export function CoverLetterTab({
   providerMessage,
   jobTarget,
   preflight,
-  result,
+  proposal,
+  appliedResult,
+  failure,
   slotAnswers,
   onDetailChange,
   onSlotAnswerChange,
+  onAcceptProposal,
+  onDiscardProposal,
+  onAddHonestContext,
   onRestorePreTailor
 }: CoverLetterTabProps) {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -131,7 +145,7 @@ export function CoverLetterTab({
         hasLetter={hasLetter}
         canTailor={canTailor}
         tailorHint={readinessHint}
-        actionLabel={result ? "Retry" : "Tailor"}
+        actionLabel={proposal || appliedResult ? "Tailor again" : "Tailor"}
         isTailoring={isTailoring}
         targetLine={targetLine}
         onTailor={onTailor}
@@ -152,21 +166,28 @@ export function CoverLetterTab({
         ) : null}
         rail={{
           id: "cover-tailoring",
-          label: "Tailoring",
+          label: "Workflow",
           preferenceKey: "cover-tailoring",
           content: <CoverLetterReview
             words={wordCount(editor.text)}
             pageCount={pageCount}
             preflight={preflight}
-            result={result}
+            proposal={proposal}
+            appliedResult={appliedResult}
+            failure={failure}
             canRestore={editor.canRestorePreTailor}
+            isTailoring={isTailoring}
             resumeReady={resumeReady}
             jobReady={jobReady}
             providerReady={providerReady}
             slotAnswers={slotAnswers}
             onDetailChange={onDetailChange}
             onSlotAnswerChange={onSlotAnswerChange}
+            onTailor={onTailor}
+            onAcceptProposal={onAcceptProposal}
+            onDiscardProposal={onDiscardProposal}
             onRestore={onRestorePreTailor}
+            onAddHonestContext={onAddHonestContext}
             status={tailorStatus || readinessHint || editor.status}
           />
         }}

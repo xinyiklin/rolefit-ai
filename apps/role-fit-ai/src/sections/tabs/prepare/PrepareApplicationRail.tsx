@@ -69,15 +69,15 @@ export function PrepareApplicationRail({
                 </strong>
                 <span>
                   {fitAssessment.score === null ? "" : `${fitAssessment.score}/100 · `}
-                  {fitAssessment.provenance === "current" ? "Current Review" : "Historical Review"}
+                  {fitAssessment.provenance === "current" ? "Current audit" : "Historical audit"}
                 </span>
               </div>
               {fitAssessment.reason ? <p>{displayVerdictReason(fitAssessment.reason)}</p> : null}
             </>
           ) : (
             <>
-              <strong className="prepare-fit__empty">Not reviewed</strong>
-              <p>Run Review to compare your resume evidence with this role.</p>
+              <strong className="prepare-fit__empty">Not audited</strong>
+              <p>Run Recruiter audit to compare your resume evidence with this role.</p>
             </>
           )}
         </div>

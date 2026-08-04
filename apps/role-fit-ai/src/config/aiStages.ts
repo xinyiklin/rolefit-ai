@@ -40,8 +40,8 @@ export const AI_STAGES: readonly AiStageDescriptor[] = [
   },
   {
     id: "review",
-    label: "Review",
-    title: "Resume review",
+    label: "Audit",
+    title: "Recruiter audit",
     blurb: "Audits your draft like a recruiter and scores the fit.",
     settingsPrefix: "audit"
   },

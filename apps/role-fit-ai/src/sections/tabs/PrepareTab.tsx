@@ -243,10 +243,10 @@ export function PrepareTab({
       ? "Selecting best match…"
       : isPolishing
         ? polishProgress.review.status === "running"
-          ? "Reviewing…"
+          ? "Auditing…"
           : "Tailoring…"
         : reviewDone
-          ? "Tailored · reviewed"
+          ? "Tailored · audited"
           : tailorDone
             ? "Tailored"
             : resumeReady
@@ -717,11 +717,11 @@ export function PrepareTab({
                         ))}
                       </ul>
                     ) : reviewGapsProvenance === "current" ? (
-                      <p>No candidate gaps identified by the current Review.</p>
+                      <p>No candidate gaps identified by the current recruiter audit.</p>
                     ) : reviewGapsProvenance === "saved" ? (
                       <p>None recorded in the saved Apply review.</p>
                     ) : (
-                      <p>Run resume Review to compare your evidence with the job.</p>
+                      <p>Run Recruiter audit to compare your evidence with the job.</p>
                     )}
                   </div>
                 </div>
@@ -773,7 +773,7 @@ export function PrepareTab({
                     Tailor
                   </button>
                   <button className="ghost-button is-compact" type="button" onClick={onReviewResume}>
-                    {tailorDone || reviewDone ? "Review" : "Open"}
+                    Open
                     <ArrowRight size={12} aria-hidden="true" />
                   </button>
                 </>

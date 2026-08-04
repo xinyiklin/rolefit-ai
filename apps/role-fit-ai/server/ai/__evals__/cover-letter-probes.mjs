@@ -15,6 +15,7 @@ import {
 } from "../coverLetterContracts.ts";
 import { buildCoverLetterTailorPrompts } from "../prompts.ts";
 import { buildCoverLetterPreflight } from "../../../src/lib/coverLetterPreflight.ts";
+import { coverLetterBlockersFromViolations } from "../../../src/lib/coverLetterFailure.ts";
 
 class FakeReq extends EventEmitter {
   constructor(method) {
@@ -125,6 +126,26 @@ const evidence = [
     text: "I enjoy close collaboration with product and design partners.",
   },
 ];
+
+assert.deepEqual(
+  coverLetterBlockersFromViolations([
+    'The letter claims "Kubernetes" for the candidate, but no supplied evidence supports it.',
+    "The letter states a number, scale, or duration that no supplied evidence contains.",
+  ]).map((blocker) => [blocker.code, blocker.recovery, blocker.excerpt]),
+  [
+    ["unsupported-claim", "add-evidence", "Kubernetes"],
+    ["unsupported-number", "add-evidence", undefined],
+  ],
+  "deterministic validation findings become bounded actionable blockers",
+);
+const internalReference = coverLetterBlockersFromViolations([
+  'Paragraph 1 references unknown evidence id "resume:private-internal-id".',
+]);
+assert.doesNotMatch(
+  internalReference[0].detail,
+  /private-internal-id/,
+  "user-facing blocker detail never exposes internal evidence ids",
+);
 
 // ----- request parsing -----
 
@@ -436,7 +457,7 @@ try {
   await assertUserSafeError(
     tailorCoverLetter(common),
     422,
-    /your current letter was kept/,
+    /evidence checks/,
     "an unrepairable draft never reaches the editor",
   );
   assert.equal(providerCalls, 2, "failure costs at most two requests");
@@ -620,6 +641,30 @@ try {
   );
   assert.equal(answered.status, 200, "the answered private fact unblocks the route");
 
+  resetProvider([
+    {
+      bodyParagraphs: [
+        {
+          text: `I am applying for the Software Engineer role at Acme. I have run Kubernetes clusters in production.`,
+          evidenceIds: [evidence[0].id],
+          slotIds: [],
+        },
+        { text: secondBody, evidenceIds: [evidence[0].id], slotIds: [] },
+      ],
+    },
+  ]);
+  const blocked = await runHandler(
+    "POST",
+    routeBody({
+      jobText: "Acme needs Kubernetes platform experience for its Software Engineer role.",
+    }),
+  );
+  assert.equal(blocked.status, 422);
+  assert.equal(blocked.payload.status, "blocked");
+  assert.equal(blocked.payload.blockers[0].code, "unsupported-claim");
+  assert.equal(blocked.payload.blockers[0].excerpt.toLowerCase(), "kubernetes");
+  assert.equal("coverLetterText" in blocked.payload, false, "a rejected provider draft never enters the response");
+
   assert.equal((await runHandler("POST", routeBody({ jobText: "Short." }))).status, 400);
   assert.equal(
     (await runHandler("POST", routeBody({ evidenceItems: [evidence[1]] }))).status,
@@ -652,21 +697,39 @@ assert.match(
   /canTailor =\s*preflight\.canTailor && resumeReady && jawReady|canTailor =\s*preflight\.canTailor && resumeReady && jobReady && providerReady && !isTailoring/,
   "the action's enabled state depends only on real readiness",
 );
-assert.doesNotMatch(
-  coverTab,
-  /preparation|proposal/i,
-  "the tab has no preparation or proposal state left",
-);
-assert.doesNotMatch(
-  coverReview,
-  /Continue to draft|Use this draft|Guide a draft|Polish my letter/,
-  "no evidence-plan approval, mode picker, or proposal acceptance survives",
+assert.match(
+  clientHook,
+  /setPendingProposal\(\{[\s\S]{0,160}?sourceFingerprint: proposalInputFingerprint/,
+  "a valid letter becomes a proposal bound to its semantic inputs",
 );
 assert.match(
   clientHook,
-  /onApplyTailored\(result\.coverLetterText\)/,
-  "a valid letter enters the editor directly",
+  /stale: pendingProposal\.sourceFingerprint !== proposalInputFingerprint/,
+  "changed letter, resume, job, or instruction inputs mark a proposal stale",
 );
+assert.match(
+  clientHook,
+  /const acceptProposal[\s\S]{0,600}?onApplyTailored\(proposal\.result\.coverLetterText\)/,
+  "only explicit proposal acceptance replaces the live letter",
+);
+assert.doesNotMatch(
+  clientHook.match(/async function handleTailorCoverLetter[\s\S]*?const acceptProposal/)?.[0] ?? "",
+  /onApplyTailored\(/,
+  "request success never mutates the live letter",
+);
+assert.doesNotMatch(
+  clientHook.match(/const discardProposal[\s\S]*?return \{/)?.[0] ?? "",
+  /onApplyTailored|onApplyExternal/,
+  "Keep current performs no document mutation",
+);
+assert.match(coverReview, /Use proposal/, "the proposal has one explicit commit action");
+assert.match(coverReview, /Keep current/, "the proposal has one explicit discard action");
+assert.match(
+  coverReview,
+  /proposal\.result\.coverLetterText/,
+  "the complete proposed replacement is visible before acceptance",
+);
+assert.match(coverReview, /disabled=\{proposal\.stale\}/, "a stale proposal cannot be accepted");
 assert.doesNotMatch(
   clientHook,
   /mode: "(?:prepare|draft)"/,

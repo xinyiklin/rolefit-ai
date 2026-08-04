@@ -66,20 +66,23 @@ browser-side effects; components render them and App composes them.
   state to `useCoverLetterDocumentIdentity`, and the exact one-snapshot
   lifecycle to `useCoverLetterPreTailorSnapshot`. History, editing, layout, and
   PDF primitives remain in the shared packages. `useCoverLetter` owns deterministic
-  preflight inputs, the single tailoring request, stale-input invalidation, and
-  the result summary — it never holds the document. A valid letter is applied
-  directly; there is no pending proposal to accept. Keep that request-generation
-  boundary in one coordinator: splitting its abort refs and stale-response checks
-  across hooks would weaken the atomic transition; extract pure contracts into
-  `lib/`. Restore and the result summary share one lifetime (`tailorApplied`),
-  so the rail cannot advertise an undo the editor can no longer perform.
+  preflight inputs, the single tailoring request, stale-response invalidation,
+  and one fingerprinted whole-document proposal — it never holds the live
+  document. Only `acceptProposal` crosses into the editor and creates the exact
+  pre-tailor snapshot; discarding a proposal performs no editor mutation, and a
+  semantic input change marks it stale without conflating provider selection
+  with document content. Keep that request/proposal boundary in one coordinator:
+  splitting its abort refs, fingerprints, and transitions across hooks would
+  weaken the atomic transition; extract pure contracts into `lib/`. Restore and
+  the applied-result summary share one lifetime (`tailorApplied`), so the rail
+  cannot advertise an undo the editor can no longer perform.
 - Both editors recover unsaved work the same way: `useAutosaveDraft` and
   `useCoverLetterAutosaveDraft` each own one document's debounced draft, over
   the shared per-tab rules in `lib/autosaveDraftStorage.ts` (tab scoping, live
   siblings, orphan migration, expiry). A draft is cleared only where its own
   document becomes durable, and a restore seeds CLEAN so a crash right after it
-  still has something to recover. Cover-letter Tailor also keeps one exact
-  in-memory pre-tailor `.cover` snapshot because the AI reseed clears editor
+  still has something to recover. Accepting a cover-letter proposal also keeps
+  one exact in-memory pre-tailor `.cover` snapshot because the AI reseed clears editor
   history; its Restore expires on the next edit, open, or Tailor and does not
   replace crash recovery or workspace variants/history.
 - `useRestoredScroll` preserves each document tab's reading position across its

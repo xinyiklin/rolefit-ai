@@ -191,10 +191,16 @@ owns:
   inside the body, a missing role or company, a second greeting, generic
   brochure phrasing, and ungrounded candidate terms, numbers, or outcomes. Any
   violation triggers exactly **one silent repair request** carrying the
-  violations and the rejected output. A second failure returns `422` and the
-  candidate's existing letter is kept; the flow never escalates into asking the
-  candidate to plan evidence. Length is advisory — outside 180-420 words the
-  letter still returns, with a warning attached. Employer-subject sentences are
+  violations and the rejected output. A second failure returns `422` with
+  `status: "blocked"`, a user-safe error, and deterministic blocker records
+  (`code`, `detail`, `recovery`, and an optional bounded excerpt); it never
+  returns the rejected provider text. The client keeps the current letter
+  unchanged and offers recovery near the workflow heading. A valid response is
+  also staged client-side as a fingerprinted proposal: only **Use proposal**
+  applies it, **Keep current** does not touch the editor, and changed semantic
+  inputs disable acceptance until Tailor runs again. The flow never escalates
+  into asking the candidate to plan evidence. Length is advisory — outside
+  180-420 words the letter still returns, with a warning attached. Employer-subject sentences are
   excluded from the candidate-claim surface, so a posting fact never widens
   candidate evidence. It and `/api/application-answers` echo the resolved
   `provider` / `model` / `reasoningEffort`.
