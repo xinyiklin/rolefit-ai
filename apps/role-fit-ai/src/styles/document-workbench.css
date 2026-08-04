@@ -1,0 +1,236 @@
+/* Resume and Cover Letter share this structural workbench. Their review
+   children retain all feature logic; this shell owns only placement,
+   disclosure, scrolling, and the docked rail surface. */
+.document-workbench {
+  --document-rail-width: clamp(320px, 27vw, 380px);
+
+  position: relative;
+  flex: 1 1 0;
+  min-height: 0;
+  background: var(--paper-deep);
+  container-name: document-workbench;
+  container-type: inline-size;
+}
+
+.document-workbench__layout {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  height: 100%;
+  min-height: 0;
+  align-items: stretch;
+}
+
+.document-workbench__layout.has-rail {
+  grid-template-columns: minmax(0, 1fr) var(--document-rail-width);
+  transition: grid-template-columns 200ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+/* Collapsed gives every pixel back to the document; the edge tab is the only
+   thing left of the rail. */
+.document-workbench__layout.is-collapsed {
+  grid-template-columns: minmax(0, 1fr) 0;
+}
+
+.document-workbench__editor {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  padding: var(--s4) var(--s5);
+  scrollbar-color: var(--hairline-strong) transparent;
+  scrollbar-width: thin;
+  container-type: inline-size;
+}
+
+.document-workbench__editor::-webkit-scrollbar,
+.document-workbench__rail-content::-webkit-scrollbar {
+  width: 8px;
+}
+
+.document-workbench__editor::-webkit-scrollbar-thumb,
+.document-workbench__rail-content::-webkit-scrollbar-thumb {
+  border-radius: var(--r-pill);
+  background: var(--hairline-strong);
+}
+
+/* The panel clips its own contents: they keep the full rail width while the
+   track closes, so a collapsing rail slides out instead of reflowing. */
+.document-workbench__rail {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+  border-left: 1px solid var(--hairline);
+  background: var(--card);
+}
+
+/* Nothing of the rail survives the collapse — not even its divider hairline. */
+.document-workbench__rail[data-state="collapsed"] {
+  border-left: 0;
+  pointer-events: none;
+}
+
+/* Minus the divider: the rail's border-box fills the track, so contents sized to
+   the full track width would push their right edge (and scrollbar) under the
+   clip. */
+.document-workbench__rail-header {
+  display: flex;
+  width: calc(var(--document-rail-width) - 1px);
+  min-height: 44px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s2);
+  padding: 0 var(--s2) 0 var(--s4);
+  border-bottom: 1px solid var(--hairline);
+}
+
+.document-workbench__rail-label {
+  overflow: hidden;
+  color: var(--ink-soft);
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.document-workbench__rail-toggle {
+  display: inline-grid;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+  place-items: center;
+  border: 0;
+  border-radius: var(--r-md);
+  background: transparent;
+  color: var(--ink-muted);
+  cursor: pointer;
+}
+
+.document-workbench__rail-toggle:hover {
+  background: var(--card-hover);
+  color: var(--ink-strong);
+}
+
+.document-workbench__rail-toggle:focus-visible {
+  outline: 3px solid var(--accent-glow);
+  outline-offset: -3px;
+}
+
+.document-workbench__rail-content {
+  width: calc(var(--document-rail-width) - 1px);
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: var(--s4);
+  scrollbar-color: var(--hairline-strong) transparent;
+  scrollbar-width: thin;
+}
+
+/* The collapsed rail's only remaining surface: the same panel icon, now a tab on
+   the document's right edge instead of a reserved gutter. Its accessible name
+   carries the panel it reopens. */
+.document-workbench__rail-tab {
+  position: absolute;
+  z-index: 2;
+  top: var(--s3);
+  right: 0;
+  display: inline-grid;
+  width: 34px;
+  height: 32px;
+  place-items: center;
+  border: 1px solid var(--hairline);
+  border-right: 0;
+  border-radius: var(--r-pill) 0 0 var(--r-pill);
+  background: var(--card);
+  box-shadow: var(--shadow-rest);
+  color: var(--ink-muted);
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease, box-shadow 120ms ease;
+}
+
+.document-workbench__rail-tab:hover {
+  background: var(--card-hover);
+  box-shadow: var(--shadow-lift);
+  color: var(--ink-strong);
+}
+
+.document-workbench__rail-tab:focus-visible {
+  outline: 3px solid var(--accent-glow);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .document-workbench__layout.has-rail,
+  .document-workbench__rail-tab {
+    transition: none;
+  }
+}
+
+@container document-workbench (max-width: 1080px) {
+  .document-workbench__layout {
+    overflow-x: hidden;
+    overflow-y: auto;
+    scrollbar-color: var(--hairline-strong) transparent;
+    scrollbar-width: thin;
+  }
+
+  .document-workbench__layout::-webkit-scrollbar {
+    width: 8px;
+  }
+
+  .document-workbench__layout::-webkit-scrollbar-thumb {
+    border-radius: var(--r-pill);
+    background: var(--hairline-strong);
+  }
+
+  .document-workbench__layout.has-rail,
+  .document-workbench__layout.is-collapsed {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: none;
+    grid-auto-rows: max-content;
+    transition: none;
+  }
+
+  .document-workbench__editor {
+    height: auto;
+    overflow: visible;
+  }
+
+  .document-workbench__rail {
+    border-top: 1px solid var(--hairline);
+    border-left: 0;
+  }
+
+  .document-workbench__rail-header,
+  .document-workbench__rail-content {
+    width: auto;
+  }
+
+  /* Stacked, there is no column to slide out of: the collapsed rail leaves and
+     the tab takes its place as a full-width disclosure bar. */
+  .document-workbench__layout.is-collapsed .document-workbench__rail {
+    display: none;
+  }
+
+  /* Stacked there is no right edge to hang a tab on: the same icon becomes the
+     full-width bar standing where the rail would be. */
+  .document-workbench__rail-tab {
+    position: static;
+    width: 100%;
+    height: 44px;
+    border: 0;
+    border-top: 1px solid var(--hairline);
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  .document-workbench__rail-content {
+    max-height: none;
+    overflow: visible;
+  }
+}

@@ -744,6 +744,261 @@ async function runWorkspaceResumeContracts() {
   await win.destroy();
 }
 
+async function runDocumentWorkbenchContracts() {
+  const win = await makeWindow();
+  await win.loadURL(`${baseUrl}#document-workbench`);
+  await waitFor(
+    win,
+    "window.__documentWorkbenchContract",
+    "document workbench fixture"
+  );
+  await win.webContents.executeJavaScript(`(() => {
+    localStorage.removeItem("rolefit:document-rail:resume-review");
+    localStorage.removeItem("rolefit:document-rail:cover-tailoring");
+  })()`);
+  await win.loadURL(`${baseUrl}#document-workbench`);
+  await waitFor(
+    win,
+    'document.querySelector(\'button[aria-label="Hide Tailoring panel"]\')',
+    "default expanded document rail"
+  );
+
+  const expandedGeometry = await win.webContents.executeJavaScript(`(() => {
+    const editor = document.querySelector(".document-workbench__editor");
+    const rail = document.querySelector(".document-workbench__rail");
+    const content = document.querySelector(".document-workbench__rail-content");
+    return {
+      editorWidth: editor.getBoundingClientRect().width,
+      railWidth: rail.getBoundingClientRect().width,
+      railTagName: rail.tagName,
+      asideCount: document.querySelectorAll("aside").length,
+      editorOverflow: getComputedStyle(editor).overflow,
+      railOverflow: getComputedStyle(content).overflowY,
+      controlled: document.querySelector('button[aria-label="Hide Tailoring panel"]')
+        .getAttribute("aria-controls") === content.id
+    };
+  })()`);
+  assert.ok(
+    expandedGeometry.railWidth >= 320 && expandedGeometry.railWidth <= 380,
+    "expanded desktop rail must stay within its shared readable width"
+  );
+  assert.equal(expandedGeometry.editorOverflow, "auto", "desktop editor scrolls independently");
+  assert.equal(expandedGeometry.railOverflow, "auto", "desktop rail scrolls independently");
+  assert.equal(expandedGeometry.controlled, true, "toggle aria-controls resolves to the rail content");
+  assert.equal(expandedGeometry.railTagName, "DIV", "the structural rail wrapper is not a second landmark");
+  assert.equal(expandedGeometry.asideCount, 1, "the feature content owns the only complementary landmark");
+
+  await click(win, 'input[aria-label="Page zoom"]');
+  await waitFor(
+    win,
+    'document.querySelector(\'.zoom-control__menu button[role="option"]\')',
+    "document workbench Fit option"
+  );
+  await click(win, '.zoom-control__menu button[role="option"]');
+  await waitFor(
+    win,
+    "window.__documentWorkbenchContract.fitSnapshot().calls === 1",
+    "initial document workbench Fit"
+  );
+  const fitBeforeCollapse = await win.webContents.executeJavaScript(
+    "window.__documentWorkbenchContract.fitSnapshot()"
+  );
+
+  await setInput(win, 'input[aria-label="Tailoring detail"]', "Keep this answer");
+  await win.webContents.executeJavaScript(`(() => {
+    document.querySelector('input[aria-label="Tailoring detail"]').focus();
+    document.querySelector('button[aria-label="Hide Tailoring panel"]').click();
+  })()`);
+  await waitFor(
+    win,
+    'document.querySelector(\'button[aria-label="Show Tailoring panel"]\')',
+    "collapsed document rail"
+  );
+  assert.equal(
+    await win.webContents.executeJavaScript(
+      'document.activeElement === document.querySelector(".document-workbench__rail-tab")'
+    ),
+    true,
+    "collapsing focused content moves focus to the edge tab that replaced the toggle"
+  );
+  assert.equal(
+    await win.webContents.executeJavaScript(
+      'document.querySelectorAll(".document-workbench__rail-tab").length'
+    ),
+    1,
+    "a collapsed rail exposes exactly one reopen control"
+  );
+  // The collapse animates the rail track shut; measure after it settles.
+  await waitFor(
+    win,
+    'document.querySelector(".document-workbench__rail").getBoundingClientRect().width <= 1',
+    "rail track finished closing"
+  );
+  await waitFor(
+    win,
+    `window.__documentWorkbenchContract.fitSnapshot().calls > ${fitBeforeCollapse.calls}`,
+    "Fit refit after the document rail changed width"
+  );
+  const fitAfterCollapse = await win.webContents.executeJavaScript(
+    "window.__documentWorkbenchContract.fitSnapshot()"
+  );
+  assert.ok(
+    fitAfterCollapse.zoom > fitBeforeCollapse.zoom,
+    "Fit expands the page after the collapsed rail returns width to the editor"
+  );
+  const collapsedGeometry = await win.webContents.executeJavaScript(`(() => {
+    const editor = document.querySelector(".document-workbench__editor");
+    const layout = document.querySelector(".document-workbench__layout");
+    const rail = document.querySelector(".document-workbench__rail");
+    const tab = document.querySelector(".document-workbench__rail-tab");
+    const input = document.querySelector('input[aria-label="Tailoring detail"]');
+    return {
+      editorWidth: editor.getBoundingClientRect().width,
+      layoutWidth: layout.getBoundingClientRect().width,
+      railInert: rail.inert,
+      tabControls: tab.getAttribute("aria-controls") ===
+        document.querySelector(".document-workbench__rail-content").id,
+      noOverflow: layout.scrollWidth <= layout.clientWidth,
+      inputConnected: input.isConnected,
+      value: input.value,
+      stored: localStorage.getItem("rolefit:document-rail:cover-tailoring")
+    };
+  })()`);
+  assert.ok(
+    collapsedGeometry.layoutWidth - collapsedGeometry.editorWidth <= 1,
+    "the collapsed rail returns its entire track to the editor"
+  );
+  assert.ok(
+    collapsedGeometry.editorWidth > expandedGeometry.editorWidth,
+    "collapsing the rail returns width to the editor"
+  );
+  assert.equal(collapsedGeometry.noOverflow, true, "the departed rail never widens the workbench");
+  assert.equal(collapsedGeometry.railInert, true, "collapsed content leaves the accessibility tree");
+  assert.equal(collapsedGeometry.tabControls, true, "the edge tab owns the rail content region");
+  assert.equal(collapsedGeometry.inputConnected, true, "collapsed feature content remains mounted");
+  assert.equal(collapsedGeometry.value, "Keep this answer", "collapsed inputs retain their value");
+  assert.equal(collapsedGeometry.stored, "collapsed", "collapse persists under the document key");
+
+  await win.webContents.executeJavaScript(
+    "window.__documentWorkbenchContract.setResultVersion(2)"
+  );
+  await waitFor(
+    win,
+    'document.querySelector(\'[data-testid="document-workbench-result"]\')?.textContent === "Result 2"',
+    "new hidden review result"
+  );
+  assert.equal(
+    await win.webContents.executeJavaScript(
+      'Boolean(document.querySelector(\'button[aria-label="Show Tailoring panel"]\'))'
+    ),
+    true,
+    "a new result does not override an explicit collapsed preference"
+  );
+
+  await win.loadURL(`${baseUrl}#document-workbench`);
+  await waitFor(
+    win,
+    'document.querySelector(\'button[aria-label="Show Tailoring panel"]\')',
+    "persisted collapsed rail after reload"
+  );
+  await click(win, 'button[aria-label="Show Tailoring panel"]');
+  await waitFor(
+    win,
+    'document.querySelector(\'button[aria-label="Hide Tailoring panel"]\')',
+    "reopened rail"
+  );
+
+  await win.webContents.executeJavaScript(
+    "window.__documentWorkbenchContract.setWidth(700)"
+  );
+  await waitFor(
+    win,
+    'document.querySelector(\'[data-testid="document-workbench-host"]\')?.getBoundingClientRect().width === 700',
+    "narrow workbench width"
+  );
+  const narrowGeometry = await win.webContents.executeJavaScript(`(() => {
+    const host = document.querySelector('[data-testid="document-workbench-host"]');
+    const layout = document.querySelector(".document-workbench__layout");
+    const editor = document.querySelector(".document-workbench__editor");
+    const rail = document.querySelector(".document-workbench__rail");
+    return {
+      noOverflow: host.scrollWidth <= host.clientWidth,
+      stacked: rail.getBoundingClientRect().top >= editor.getBoundingClientRect().bottom,
+      editorOverflow: getComputedStyle(editor).overflow,
+      layoutOverflowY: getComputedStyle(layout).overflowY,
+      layoutScrollable: layout.scrollHeight > layout.clientHeight
+    };
+  })()`);
+  assert.equal(narrowGeometry.noOverflow, true, "narrow workbench has no horizontal overflow");
+  assert.equal(narrowGeometry.stacked, true, "narrow rail stacks below the editor");
+  assert.equal(narrowGeometry.editorOverflow, "visible", "narrow editor removes desktop overflow");
+  assert.equal(narrowGeometry.layoutOverflowY, "auto", "the stacked layout owns vertical scrolling");
+  assert.equal(narrowGeometry.layoutScrollable, true, "stacked content remains reachable inside the clipped host");
+
+  await win.webContents.executeJavaScript(`(() => {
+    document.querySelector(".document-workbench__layout").scrollTop = 180;
+    window.__documentWorkbenchContract.setWorkbenchMounted(false);
+  })()`);
+  await waitFor(
+    win,
+    '!document.querySelector(".document-workbench__layout")',
+    "narrow workbench unmount"
+  );
+  assert.equal(
+    await win.webContents.executeJavaScript(
+      "window.__documentWorkbenchContract.savedScrollTop()"
+    ),
+    180,
+    "the narrow workbench saves the active layout scroll offset"
+  );
+  await win.webContents.executeJavaScript(
+    "window.__documentWorkbenchContract.setWorkbenchMounted(true)"
+  );
+  await waitFor(
+    win,
+    'document.querySelector(".document-workbench__layout")?.scrollTop === 180',
+    "narrow workbench scroll restoration"
+  );
+
+  await click(win, 'button[aria-label="Hide Tailoring panel"]');
+  await waitFor(
+    win,
+    'document.querySelector(".document-workbench__rail-tab")',
+    "narrow collapsed rail"
+  );
+  const narrowCollapsed = await win.webContents.executeJavaScript(`(() => {
+    const layout = document.querySelector(".document-workbench__layout");
+    const rail = document.querySelector(".document-workbench__rail");
+    const tab = document.querySelector(".document-workbench__rail-tab");
+    const editor = document.querySelector(".document-workbench__editor");
+    layout.scrollTop = layout.scrollHeight;
+    const layoutRect = layout.getBoundingClientRect();
+    const tabRect = tab.getBoundingClientRect();
+    return {
+      railHidden: getComputedStyle(rail).display === "none",
+      tabPosition: getComputedStyle(tab).position,
+      fullWidth:
+        Math.round(tab.getBoundingClientRect().width) ===
+        Math.round(layout.clientWidth),
+      belowEditor: tabRect.top >= editor.getBoundingClientRect().bottom,
+      reopenVisible:
+        tabRect.top >= layoutRect.top &&
+        tabRect.bottom <= layoutRect.bottom
+    };
+  })()`);
+  assert.equal(narrowCollapsed.railHidden, true, "the stacked collapsed rail leaves the flow");
+  assert.equal(
+    narrowCollapsed.tabPosition,
+    "static",
+    "the stacked reopen control is a bar in the flow, not a floating edge tab"
+  );
+  assert.equal(narrowCollapsed.fullWidth, true, "the stacked reopen bar spans the workbench");
+  assert.equal(narrowCollapsed.belowEditor, true, "the stacked reopen bar sits below the document");
+  assert.equal(narrowCollapsed.reopenVisible, true, "the stacked reopen bar can be scrolled into view");
+
+  await win.destroy();
+}
+
 let chromium;
 try {
   console.log("Chromium contracts: starting headless Chrome");
@@ -760,9 +1015,11 @@ try {
   await runRecoveryContracts();
   console.log("Chromium contracts: workspace replacement races");
   await runWorkspaceResumeContracts();
+  console.log("Chromium contracts: shared document workbench rail");
+  await runDocumentWorkbenchContracts();
   assert.deepEqual(pageErrors, [], "browser pages must not report console/load errors");
   console.log(
-    "editor Chromium contracts passed: header marks/link undo, disabled controls, focus, rich paste, Typeset dirty baseline, deduplicated two-tab restore, live resume replacement guards"
+    "editor Chromium contracts passed: header marks/link undo, disabled controls, focus, rich paste, Typeset dirty baseline, deduplicated two-tab restore, live resume replacement guards, shared document rail disclosure/layout/persistence/Fit/landmarks/scroll restoration"
   );
 } catch (error) {
   console.error(error);

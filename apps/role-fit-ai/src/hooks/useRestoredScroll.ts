@@ -1,18 +1,31 @@
 import { useLayoutEffect, useRef } from "react";
 
+function activeScrollOwner(
+  elements: ReadonlyArray<HTMLDivElement | null>
+): HTMLDivElement | null {
+  const overflowOwner = elements.find((element) => {
+    if (!element) return false;
+    const overflowY = window.getComputedStyle(element).overflowY;
+    return overflowY === "auto" || overflowY === "scroll" || overflowY === "overlay";
+  });
+  return overflowOwner ?? elements.find((element) => element !== null) ?? null;
+}
+
 /**
  * Keeps a document scroller's offset across the unmount a studio tab switch
  * causes, so returning to Resume or Cover letter shows the part of the page the
  * user was reading rather than the top.
  *
- * Two details make this less trivial than assigning `scrollTop`:
+ * Three details make this less trivial than assigning `scrollTop`:
  *
  * 1. The offset cannot be applied on the first commit. The engine paints the
  *    document after layout, so the scroller has no scrollable height yet and the
  *    assignment silently clamps to 0. The layout effect below therefore runs on
  *    every render and retries until the content is tall enough, then stops.
- * 2. It is read in a LAYOUT cleanup, from the element captured at mount. React
- *    runs those before it detaches the node, so the value is still real; a
+ * 2. The desktop editor and narrow stacked layout are separate candidates; the
+ *    element whose computed overflow owns scrolling is selected at each boundary.
+ * 3. Both candidates are captured at mount and read in a LAYOUT cleanup. React
+ *    runs that cleanup before detaching the nodes, so the value is still real; a
  *    passive cleanup can see a detached element, whose `scrollTop` reads 0. A
  *    scroll listener would be the obvious alternative and is deliberately not
  *    used — it adds a handler on a hot path to learn something the element
@@ -20,13 +33,17 @@ import { useLayoutEffect, useRef } from "react";
  *    which would make this unverifiable there.
  */
 export function useRestoredScroll(initialTop: number, onExit: (top: number) => void) {
-  const ref = useRef<HTMLDivElement>(null);
+  const editorScrollerRef = useRef<HTMLDivElement>(null);
+  const layoutScrollerRef = useRef<HTMLDivElement>(null);
   const pendingRef = useRef(initialTop);
   const onExitRef = useRef(onExit);
   onExitRef.current = onExit;
 
   useLayoutEffect(() => {
-    const el = ref.current;
+    const el = activeScrollOwner([
+      layoutScrollerRef.current,
+      editorScrollerRef.current
+    ]);
     const target = pendingRef.current;
     if (!el || target <= 0) return;
     // Strictly: wait for the offset to be reachable rather than clamping to
@@ -41,9 +58,9 @@ export function useRestoredScroll(initialTop: number, onExit: (top: number) => v
   });
 
   useLayoutEffect(() => {
-    const el = ref.current;
-    return () => onExitRef.current(el?.scrollTop ?? 0);
+    const elements = [layoutScrollerRef.current, editorScrollerRef.current];
+    return () => onExitRef.current(activeScrollOwner(elements)?.scrollTop ?? 0);
   }, []);
 
-  return ref;
+  return { editorScrollerRef, layoutScrollerRef };
 }

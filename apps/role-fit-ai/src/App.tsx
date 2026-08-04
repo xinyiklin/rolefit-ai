@@ -557,6 +557,7 @@ function App() {
     actions: resumeEditorActions
   } = useResumeEditor(resumeHistoryClock);
   const typesetEditorRef = useRef<TypesetEditorHandle>(null);
+  const resumeFitViewportRef = useRef<HTMLDivElement>(null);
   const [inlineFormat, setInlineFormat] = useState<InlineFormatState>(EMPTY_INLINE_FORMAT);
   // The caret each editor was left at, held across the tab switch that unmounts
   // it. Refs, not state: nothing renders from them, and they are read once by
@@ -827,7 +828,7 @@ function App() {
     [docStyle.style.baseFontSizePt, editedResume]
   );
   const fitResumePage = useCallback(() => {
-    const pane = document.querySelector<HTMLElement>(".resume-workbench__editor");
+    const pane = resumeFitViewportRef.current;
     if (!pane) return;
     const styles = window.getComputedStyle(pane);
     const contentWidth = pane.clientWidth - parseFloat(styles.paddingLeft) - parseFloat(styles.paddingRight);
@@ -2552,6 +2553,7 @@ function App() {
                     );
                   }}
                   onFitZoom={fitResumePage}
+                  fitViewportRef={resumeFitViewportRef}
                   documentStructureTools={
                     <DocumentStructureControls
                       header={editedResume.header}
@@ -2589,6 +2591,7 @@ function App() {
                 />
               }
               editorRef={typesetEditorRef}
+              fitViewportRef={resumeFitViewportRef}
               initialCaret={resumeCaretRef.current}
               onCaretExit={(caret) => {
                 resumeCaretRef.current = caret;

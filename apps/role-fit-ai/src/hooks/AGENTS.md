@@ -82,6 +82,10 @@ browser-side effects; components render them and App composes them.
   in-memory pre-tailor `.cover` snapshot because the AI reseed clears editor
   history; its Restore expires on the next edit, open, or Tailor and does not
   replace crash recovery or workspace variants/history.
+- `useRestoredScroll` preserves each document tab's reading position across its
+  unmount. It receives both the desktop editor scroller and the narrow stacked
+  workbench scroller, then resolves the active owner from computed overflow at
+  restore and cleanup; do not assume one element owns scrolling at every width.
 - Every user-initiated load in that hook goes through its own `openDocument`
   rather than the shared `seedData`, so no open path can forget to fire
   `onOpenDocument` (the host's "put the caret in the new letter"). Applying a

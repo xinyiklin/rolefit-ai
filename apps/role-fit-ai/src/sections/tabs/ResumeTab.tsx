@@ -21,6 +21,10 @@ import type { DraftAutosaveState } from "../../hooks/useAutosaveDraft";
 import { fieldKeyForReviewTarget } from "../../lib/reviewTarget.ts";
 import { useRestoredScroll } from "../../hooks/useRestoredScroll";
 import { DraftRestoreBar } from "../DraftRestoreBar";
+import {
+  DocumentWorkbench,
+  DocumentWorkbenchEditorPane
+} from "../document/DocumentWorkbench";
 import { RoleFitEditorOverlay } from "../editor/RoleFitEditorOverlay.tsx";
 import { ReviewRail } from "../ReviewRail";
 import { ViewportGate } from "../ViewportGate";
@@ -43,6 +47,7 @@ type ResumeTabProps = {
   docStyle: DocStyleControls;
   formattingToolbar: ReactNode;
   editorRef: RefObject<TypesetEditorHandle | null>;
+  fitViewportRef: RefObject<HTMLDivElement | null>;
   // Held by the host across the tab switch that unmounts this editor.
   initialCaret: TypesetCaret | null;
   onCaretExit: (caret: TypesetCaret | null) => void;
@@ -87,6 +92,7 @@ export function ResumeTab({
   docStyle,
   formattingToolbar,
   editorRef,
+  fitViewportRef,
   initialCaret,
   onCaretExit,
   initialScrollTop,
@@ -103,7 +109,14 @@ export function ResumeTab({
   onDismissAutosaveDraft,
   reviewStale
 }: ResumeTabProps) {
-  const scrollerRef = useRestoredScroll(initialScrollTop, onScrollExit);
+  const { editorScrollerRef, layoutScrollerRef } = useRestoredScroll(
+    initialScrollTop,
+    onScrollExit
+  );
+  const setEditorPaneRef = useCallback((node: HTMLDivElement | null) => {
+    editorScrollerRef.current = node;
+    fitViewportRef.current = node;
+  }, [editorScrollerRef, fitViewportRef]);
   // Intercept Ctrl/Cmd +/-/0 to control editor zoom instead of browser zoom.
   // Deliberately unconditional (no focus/modal gating) — matches the deleted
   // hook's original scope, including its incidental double-fire with
@@ -173,8 +186,9 @@ export function ResumeTab({
         {formattingToolbar}
       </header>
 
-      <div className={`resume-workbench${hasReview ? " has-rail" : ""}`}>
-        {pendingAutosaveDraft && onRestoreAutosaveDraft && onDismissAutosaveDraft ? (
+      <DocumentWorkbench
+        layoutRef={layoutScrollerRef}
+        notice={pendingAutosaveDraft && onRestoreAutosaveDraft && onDismissAutosaveDraft ? (
           <DraftRestoreBar
             label="Unsaved draft found"
             jobLabel={pendingAutosaveDraft.jobLabel}
@@ -183,10 +197,26 @@ export function ResumeTab({
             onDismiss={onDismissAutosaveDraft}
           />
         ) : null}
-
-        <div
-          className="resume-workbench__editor"
-          ref={scrollerRef}
+        rail={{
+          id: "resume-review",
+          label: "Review",
+          preferenceKey: "resume-review",
+          content: hasReview && result ? (
+            <ReviewRail
+              result={result}
+              resume={editedResume}
+              actions={actions}
+              resumeDiff={resumeDiff}
+              jobConstraints={jobConstraints}
+              reviewStale={reviewStale}
+              onHighlight={setHighlightTarget}
+              onAddHonestContext={onAddHonestContext}
+            />
+          ) : null
+        }}
+      >
+        <DocumentWorkbenchEditorPane
+          ref={setEditorPaneRef}
           onDragStart={(e) => {
             if (!(e.target as HTMLElement).closest?.(".resume-doc")) e.preventDefault();
           }}
@@ -209,23 +239,8 @@ export function ResumeTab({
               highlightFieldKey={highlightedFieldKey}
             />
           </ViewportGate>
-        </div>
-
-        {hasReview && result ? (
-          <div className="resume-workbench__rail">
-            <ReviewRail
-              result={result}
-              resume={editedResume}
-              actions={actions}
-              resumeDiff={resumeDiff}
-              jobConstraints={jobConstraints}
-              reviewStale={reviewStale}
-              onHighlight={setHighlightTarget}
-              onAddHonestContext={onAddHonestContext}
-            />
-          </div>
-        ) : null}
-      </div>
+        </DocumentWorkbenchEditorPane>
+      </DocumentWorkbench>
     </section>
   );
 }

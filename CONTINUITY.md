@@ -1865,3 +1865,32 @@ bounded; app-only operational detail belongs in the affected app documentation.
   policy. Unverified in a real browser: hint baseline/size across zoom levels,
   hint centring for centred versus left-aligned headers, and the native-to-overlay
   caret handoff during a physical IME composition session.
+- [USER+CODE+TOOL] 2026-08-03: Resume review and Cover Letter tailoring now use
+  one collapsible `DocumentWorkbench`; separate preferences persist, hidden
+  children stay mounted, and the rail stacks below 1080px. Type/build/app tests
+  and the automated Chromium disclosure/layout contract passed.
+- [USER+CODE+TOOL] 2026-08-03: Supersedes the 44px collapsed handle above. The
+  user rejected that collapse; the rail now closes its whole track to zero and
+  is reopened from an icon-only edge tab (full-width bar when stacked); [USER]
+  chose the icon over a labelled tab with a count, so no badge API exists.
+  Collapsed rails are `inert` rather than `hidden` and focus follows the control
+  that replaced the one clicked. RoleFit check (67 evals) and the Chromium workbench contract —
+  extended for focus handoff, single control per state, full track return, and
+  the stacked bar — passed. Browser QA not run: unverified in a real browser are
+  the collapse animation's feel and the edge tab against a scrolled document.
+- [CODE+TOOL] 2026-08-03: Workbench review remediation makes the stacked layout
+  its vertical scroll owner so editor content and the reopen bar remain
+  reachable in the host's clipped tab pane. Fit zoom now observes the exact
+  editor pane through an explicit ref and recalculates after rail-width
+  transitions, while the structural rail wrapper is neutral so its named child
+  review rail remains the sole complementary landmark. The editor package
+  check, Typeset build, RoleFit check (67 evals), focused contract probe,
+  Chromium workbench regressions, UI detector, and diff check passed. Real-app
+  visual QA was not run under the flag-first policy.
+- [CODE+TOOL] 2026-08-03: Follow-up review fixed narrow document-tab scroll
+  restoration without changing the workbench layout. `useRestoredScroll` now
+  receives the desktop editor and stacked layout refs and resolves the active
+  owner from computed overflow during restore and layout cleanup. The Chromium
+  regression failed first with a saved offset of 0 instead of 180, then passed
+  through narrow unmount/remount; the full RoleFit check passed 67 evals and the
+  UI detector returned no findings.

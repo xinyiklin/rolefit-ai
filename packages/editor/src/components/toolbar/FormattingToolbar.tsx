@@ -22,7 +22,7 @@ import {
   Underline,
   Undo2
 } from "lucide-react";
-import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode, type RefObject } from "react";
 
 import type { DocStyleControls } from "../../hooks/useDocStyle";
 import { type BodyAlign, type FontFamily } from "@typeset/engine/lib/documentStyle.ts";
@@ -102,6 +102,8 @@ export type FormattingToolbarProps = {
   onStyleFieldSizeChange?: (field: StyleTextField, sizePt: number) => void;
   onResetStyleFormatting?: () => void;
   onFitZoom?: () => void;
+  // Observe a host pane whose width can change without a window resize.
+  fitViewportRef?: RefObject<HTMLElement | null>;
   // Embedded hosts may place document-structure controls with the style menus.
   // The standalone TopToolbar keeps them in DocumentToolbar.
   documentStructureTools?: ReactNode;
@@ -249,6 +251,7 @@ export function FormattingToolbar({
   onStyleFieldSizeChange,
   onResetStyleFormatting,
   onFitZoom,
+  fitViewportRef,
   documentStructureTools,
   documentStyleTools
 }: FormattingToolbarProps) {
@@ -314,7 +317,11 @@ export function FormattingToolbar({
 
         <span className="top-toolbar__divider" role="separator" aria-orientation="vertical" />
 
-        <ZoomControl docStyle={docStyle} onFitZoom={onFitZoom} />
+        <ZoomControl
+          docStyle={docStyle}
+          onFitZoom={onFitZoom}
+          fitViewportRef={fitViewportRef}
+        />
 
         <span className="top-toolbar__divider" role="separator" aria-orientation="vertical" />
 
