@@ -3,6 +3,7 @@ import {
   useId,
   useRef,
   type ComponentPropsWithoutRef,
+  type CSSProperties,
   type ReactNode,
   type Ref
 } from "react";
@@ -25,6 +26,9 @@ type DocumentWorkbenchProps = {
   layoutRef?: Ref<HTMLDivElement>;
   notice?: ReactNode;
   rail: DocumentWorkbenchRail;
+  // Rendered page width in CSS px (DOC_PAGE_WIDTH_PX × zoom). The pane biases
+  // the page against the rail's track, and only the host knows the zoom.
+  pageWidthPx: number;
 };
 
 type DocumentWorkbenchEditorPaneProps = ComponentPropsWithoutRef<"div"> & {
@@ -40,7 +44,13 @@ export function DocumentWorkbenchEditorPane({
   return <div {...props} className={classes} ref={ref} />;
 }
 
-export function DocumentWorkbench({ children, layoutRef, notice, rail }: DocumentWorkbenchProps) {
+export function DocumentWorkbench({
+  children,
+  layoutRef,
+  notice,
+  rail,
+  pageWidthPx
+}: DocumentWorkbenchProps) {
   const generatedId = useId();
   const contentId = `${rail.id}-${generatedId}`;
   const hasRail = rail.content !== null;
@@ -58,7 +68,10 @@ export function DocumentWorkbench({ children, layoutRef, notice, rail }: Documen
     const target = pendingFocusRef.current;
     if (!target) return;
     pendingFocusRef.current = null;
-    (target === "rail" ? hideButtonRef : showButtonRef).current?.focus();
+    // The control we hand focus to is still outside the box while the track
+    // animates, so a scrolling focus would drag the whole workspace sideways to
+    // "reveal" it. It settles into view on its own; never scroll to it.
+    (target === "rail" ? hideButtonRef : showButtonRef).current?.focus({ preventScroll: true });
   }, [isExpanded]);
 
   function setExpanded(next: boolean) {
@@ -67,7 +80,10 @@ export function DocumentWorkbench({ children, layoutRef, notice, rail }: Documen
   }
 
   return (
-    <div className="document-workbench">
+    <div
+      className="document-workbench"
+      style={{ "--document-page-width": `${pageWidthPx}px` } as CSSProperties}
+    >
       {notice}
       <div
         ref={layoutRef}

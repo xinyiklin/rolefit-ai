@@ -19,6 +19,7 @@ import type {
   CoverLetterDetailKey,
   CoverLetterPreflight
 } from "../../lib/coverLetterPreflight";
+import { DOC_PAGE_WIDTH_PX } from "@typeset/engine/lib/documentStyle.ts";
 import { useRestoredScroll } from "../../hooks/useRestoredScroll";
 import { CoverLetterReview } from "../cover-letter/CoverLetterReview";
 import { DraftRestoreBar } from "../DraftRestoreBar";
@@ -154,6 +155,7 @@ export function CoverLetterTab({
       />
 
       <DocumentWorkbench
+        pageWidthPx={DOC_PAGE_WIDTH_PX * editor.docStyle.style.zoom}
         layoutRef={layoutScrollerRef}
         notice={pendingAutosaveDraft ? (
           <DraftRestoreBar

@@ -6,7 +6,7 @@ import type { TailorMode } from "../../lib/tailorScope";
 import type { ResumeEditorActions } from "../../hooks/useResumeEditor";
 import type { TailorChangeTarget } from "../../resume/types";
 import type { DocStyleControls } from "@typeset/editor/hooks/useDocStyle.ts";
-import { nextZoomOption } from "@typeset/engine/lib/documentStyle.ts";
+import { DOC_PAGE_WIDTH_PX, nextZoomOption } from "@typeset/engine/lib/documentStyle.ts";
 import { DocumentToolbar } from "@typeset/editor/components/toolbar/DocumentToolbar.tsx";
 import {
   TypesetEditor,
@@ -213,6 +213,7 @@ export function ResumeTab({
       </header>
 
       <DocumentWorkbench
+        pageWidthPx={DOC_PAGE_WIDTH_PX * docStyle.style.zoom}
         layoutRef={layoutScrollerRef}
         notice={pendingAutosaveDraft && onRestoreAutosaveDraft && onDismissAutosaveDraft ? (
           <DraftRestoreBar

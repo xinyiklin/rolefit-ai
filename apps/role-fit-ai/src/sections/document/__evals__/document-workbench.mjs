@@ -26,6 +26,7 @@ const preference = readFileSync(
   "utf8"
 );
 const styles = readFileSync(sourceUrl("../../../styles/document-workbench.css"), "utf8");
+const studioStyles = readFileSync(sourceUrl("../../../styles/studio.css"), "utf8");
 const resumeTab = readFileSync(sourceUrl("../../tabs/ResumeTab.tsx"), "utf8");
 const coverTab = readFileSync(sourceUrl("../../tabs/CoverLetterTab.tsx"), "utf8");
 const reviewRail = readFileSync(sourceUrl("../../ReviewRail.tsx"), "utf8");
@@ -116,8 +117,8 @@ assert.match(
 );
 assert.match(
   workbench,
-  /\(target === "rail" \? hideButtonRef : showButtonRef\)\.current\?\.focus\(\)/,
-  "the replacement control is focused after the disclosure re-renders"
+  /\(target === "rail" \? hideButtonRef : showButtonRef\)\.current\?\.focus\(\{ preventScroll: true \}\)/,
+  "the replacement control is focused after the disclosure re-renders, without scrolling: it sits outside the box until the track settles, and a scrolling focus drags the whole workspace sideways to reveal it"
 );
 assert.match(
   workbench,
@@ -137,8 +138,8 @@ assert.match(
 
 assert.match(
   styles,
-  /--document-rail-width:\s*clamp\(320px,\s*27vw,\s*380px\)/,
-  "expanded desktop rails share the specified readable width"
+  /--document-rail-width:\s*[\d.]+rem\s*;/,
+  "the rail is sized in rem so it tracks its own rem-based type and the reader's font-size, not the viewport — the space it divides grows linearly, so a proportional rail bites hardest where least is spare"
 );
 assert.match(
   styles,
@@ -162,10 +163,44 @@ assert.match(
 );
 assert.match(
   styles,
-  /prefers-reduced-motion[\s\S]{0,200}?transition:\s*none/,
+  /prefers-reduced-motion[\s\S]{0,240}?transition:\s*none/,
   "the collapse animation respects reduced-motion"
 );
+assert.match(
+  styles,
+  /--document-rail-motion:\s*\d+ms\s+cubic-bezier\([^)]*\)/,
+  "the disclosure's timing is one token, so its two halves cannot drift apart"
+);
+for (const property of ["grid-template-columns", "padding-inline-start"]) {
+  assert.match(
+    styles,
+    new RegExp(`transition:\\s*${property}\\s+var\\(--document-rail-motion\\)`),
+    `${property} animates on the shared rail clock — the page holds still only while the pane's start padding gains exactly what the rail's track loses, so a step change in either throws the document sideways mid-transition and snaps back`
+  );
+}
+assert.match(
+  studioStyles,
+  /\.studio-body\[data-tab="resume"\],\s*\.studio-body\[data-tab="cover"\]\s*\{[\s\S]{0,700}?overflow:\s*clip/,
+  "the document tabs' host is unscrollable, not merely clipped: `overflow: hidden` leaves it a scroll container, and a focus that reveals its horizontal popover overflow shifts the toolbar and editor sideways"
+);
+assert.match(
+  styles,
+  /has-rail:not\(\.is-collapsed\)\s+\.document-workbench__editor\s*\{[\s\S]{0,320}?padding-inline-start:\s*max\([\s\S]{0,240}?var\(--document-rail-width\)[\s\S]{0,160}?var\(--document-page-width/,
+  "the rail's track is paid out of the desk margin first: biasing the pane's start padding by the rail width keeps the page where it sat, rather than re-centring it and spending whitespace the rail already stands in"
+);
+for (const [name, source] of [["Resume", resumeTab], ["Cover Letter", coverTab]]) {
+  assert.match(
+    source,
+    /pageWidthPx=\{DOC_PAGE_WIDTH_PX \* [\w.]*docStyle\.style\.zoom\}/,
+    `${name} reports the rendered page width, so the bias tracks zoom instead of assuming 100%`
+  );
+}
 assert.match(styles, /@container\s+document-workbench/, "the shared shell owns narrow host adaptation");
+assert.match(
+  styles,
+  /@container\s+document-workbench\s+\(max-width:\s*1080px\)[\s\S]*?has-rail:not\(\.is-collapsed\)\s+\.document-workbench__editor\s*\{[\s\S]{0,320}?padding-inline-start:\s*var\(--s5\)/,
+  "stacked, the rail sits below and claims no horizontal space, so the page keeps its centred padding instead of the docked bias"
+);
 assert.match(
   styles,
   /@container\s+document-workbench[\s\S]*?\.document-workbench__layout\s*\{[\s\S]{0,180}?overflow-y:\s*auto/,

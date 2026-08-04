@@ -134,6 +134,28 @@ so local inputs and review interaction state survive collapse. A new result does
 not override an explicit preference; Resume simply omits the rail until review
 content exists, while Cover Letter always exposes pre-Tailor readiness.
 
+Opening the rail moves the rail, not the workspace. Two rules hold that:
+
+- The document tabs' `.studio-body` is `overflow: clip`, never `hidden`.
+  `hidden` still makes it a scroll container, and it carries horizontal overflow
+  from closed toolbar popovers, so focus landing on a rail control mid-transition
+  scrolled the toolbar, title, and editor sideways as one. The rail toggle also
+  focuses with `preventScroll`, since its target sits outside the box until the
+  track settles.
+- The track is paid out of the desk margin before the page moves. The pane
+  biases its start padding by the rail's width — clamped flush against the end
+  padding once the margin runs out — so the page holds its position while there
+  is whitespace to spend and slides only as far as it must. The bias uses the
+  rendered page width (`DOC_PAGE_WIDTH_PX × zoom`), not the 816px logical page.
+  Both the bias and the track animate on one token, `--document-rail-motion`:
+  the page stays still only because the padding gains exactly what the track
+  loses, so a step change in either throws the document sideways and back.
+
+The rail is sized in `rem`, not `vw`. Its own type is rem-based, so the width
+tracks what it holds and follows the reader's font-size; the space it divides is
+`viewport - sidebar - page`, which grows linearly rather than proportionally, so
+a viewport-proportional rail took its largest bite where least was spare.
+
 Collapsing is total: the rail's grid track animates to zero and gives every
 pixel back to the document rather than leaving a reserved icon gutter. What
 remains is the panel icon alone, as a tab over the document's top-right corner

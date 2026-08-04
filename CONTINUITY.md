@@ -1904,3 +1904,19 @@ bounded; app-only operational detail belongs in the affected app documentation.
   blockers omit rejected provider output. Production build, document-workflow
   round trips, focused contracts, and all 67 offline evals passed; real-browser
   visual QA was not run under the flag-first policy.
+- [USER+CODE+TOOL] 2026-08-04: Opening a document workflow rail no longer moves
+  the workspace. `.studio-body` on the document tabs is `overflow: clip` rather
+  than `hidden` — `hidden` left it a scroll container holding ~69px of
+  horizontal overflow from closed toolbar popovers, and the rail toggle's focus
+  (whose target is outside the box until the track settles) scrolled toolbar,
+  title, and editor sideways together; the toggle now focuses with
+  `preventScroll`. The rail's track is also paid out of the desk margin before
+  the page moves: the pane biases its start padding by the rail width, using the
+  rendered page width (`DOC_PAGE_WIDTH_PX × zoom`) threaded through as
+  `pageWidthPx`, and both halves animate on one `--document-rail-motion` token
+  because the page holds still only while padding gains what the track loses.
+  Rail width moved from `clamp(320px, 27vw, 380px)` to `18rem`. Measured page
+  shift on open: 0px at 1920, 63px at 1600, 109px at 1365; transition scrubbed
+  frame-by-frame with pane width + padding invariant at 1756 throughout. All 67
+  offline evals passed. Browser QA ran in the paint-gated pane, so end states and
+  scrubbed timelines are verified but real animation frames are not.

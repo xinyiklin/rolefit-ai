@@ -2,7 +2,18 @@
    children retain all feature logic; this shell owns only placement,
    disclosure, scrolling, and the docked rail surface. */
 .document-workbench {
-  --document-rail-width: clamp(320px, 27vw, 380px);
+  /* rem, not vw: the rail's own type is rem-based, so its width tracks what it
+     holds and follows the reader's font-size setting. A viewport-proportional
+     rail is the wrong shape here — the space it divides is
+     `viewport - sidebar - page`, which grows linearly rather than
+     proportionally, so vw bit hardest exactly where least was spare. The value
+     is set by the description's line measure (~37ch); the check rows reflow
+     identically well below this. */
+  --document-rail-width: 18rem;
+  /* One token for both halves of the disclosure. The page holds still only
+     while the pane's start padding gains exactly what the rail's track loses,
+     so these two must never animate on different clocks. */
+  --document-rail-motion: 200ms cubic-bezier(0.32, 0.72, 0, 1);
 
   position: relative;
   flex: 1 1 0;
@@ -24,7 +35,7 @@
 
 .document-workbench__layout.has-rail {
   grid-template-columns: minmax(0, 1fr) var(--document-rail-width);
-  transition: grid-template-columns 200ms cubic-bezier(0.32, 0.72, 0, 1);
+  transition: grid-template-columns var(--document-rail-motion);
 }
 
 /* Collapsed gives every pixel back to the document; the edge tab is the only
@@ -41,6 +52,24 @@
   scrollbar-color: var(--hairline-strong) transparent;
   scrollbar-width: thin;
   container-type: inline-size;
+  /* Same clock as the rail's track. Without it the padding is a step change —
+     it lands at full width while the track is still open, throwing the page
+     sideways by the rail's width before it slides back. */
+  transition: padding-inline-start var(--document-rail-motion);
+}
+
+/* The rail's track is paid out of the desk margin before the page moves: this
+   bias lands the page where it sat with the rail shut, min() clamps it flush
+   against the end padding once the margin runs out, and max() falls back to
+   plain centring when the page is too wide to fit at all. */
+.document-workbench__layout.has-rail:not(.is-collapsed) .document-workbench__editor {
+  padding-inline-start: max(
+    var(--s5),
+    min(
+      calc(var(--s5) + var(--document-rail-width)),
+      calc(100% - var(--s5) - var(--document-page-width, 816px))
+    )
+  );
 }
 
 .document-workbench__editor::-webkit-scrollbar,
@@ -166,6 +195,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .document-workbench__layout.has-rail,
+  .document-workbench__editor,
   .document-workbench__rail-tab {
     transition: none;
   }
@@ -196,9 +226,13 @@
     transition: none;
   }
 
-  .document-workbench__editor {
+  .document-workbench__editor,
+  .document-workbench__layout.has-rail:not(.is-collapsed) .document-workbench__editor {
     height: auto;
     overflow: visible;
+    /* Stacked, the rail sits below and claims no horizontal space, so there is
+       no track to bias the page against — it stays centred. */
+    padding-inline-start: var(--s5);
   }
 
   .document-workbench__rail {
