@@ -979,7 +979,7 @@ async function runDocumentWorkbenchContracts() {
       tabPosition: getComputedStyle(tab).position,
       fullWidth:
         Math.round(tab.getBoundingClientRect().width) ===
-        Math.round(layout.getBoundingClientRect().width),
+        Math.round(layout.clientWidth),
       belowEditor: tabRect.top >= editor.getBoundingClientRect().bottom,
       reopenVisible:
         tabRect.top >= layoutRect.top &&
