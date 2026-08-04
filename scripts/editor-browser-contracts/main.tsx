@@ -4,14 +4,18 @@ import {
   useMemo,
   useRef,
   useState,
-  type ChangeEvent
+  type ChangeEvent,
+  type RefObject
 } from "react";
 import { createRoot } from "react-dom/client";
 
 import TypesetApp from "../../apps/typeset/src/App.tsx";
 import "../../packages/editor/src/styles/index.css";
 import "../../apps/typeset/src/styles/app.css";
+import "../../apps/role-fit-ai/src/styles/tokens.css";
+import "../../apps/role-fit-ai/src/styles/document-workbench.css";
 import { DocumentStructureControls } from "../../packages/editor/src/components/toolbar/DocumentStructureControls.tsx";
+import { ZoomControl } from "../../packages/editor/src/components/toolbar/ZoomControl.tsx";
 import { createHistoryClock } from "../../packages/editor/src/hooks/historyClock.ts";
 import { useDocStyle } from "../../packages/editor/src/hooks/useDocStyle.ts";
 import { useResumeEditor } from "../../packages/editor/src/hooks/useResumeEditor.ts";
@@ -32,6 +36,11 @@ import {
   subscribeWorkspaceRestoreAdoption
 } from "../../apps/role-fit-ai/src/lib/tabPresence.ts";
 import { useWorkspaceResume } from "../../apps/role-fit-ai/src/hooks/useWorkspaceResume.ts";
+import { useRestoredScroll } from "../../apps/role-fit-ai/src/hooks/useRestoredScroll.ts";
+import {
+  DocumentWorkbench,
+  DocumentWorkbenchEditorPane
+} from "../../apps/role-fit-ai/src/sections/document/DocumentWorkbench.tsx";
 import { toDocumentStyle } from "../../packages/engine/src/lib/documentStyle.ts";
 
 type EditorContract = {
@@ -79,6 +88,13 @@ declare global {
         baseResumeName: string;
         uploadInputValue: string;
       };
+    };
+    __documentWorkbenchContract?: {
+      setWidth(value: number): void;
+      setResultVersion(value: number): void;
+      setWorkbenchMounted(value: boolean): void;
+      savedScrollTop(): number;
+      fitSnapshot(): { calls: number; zoom: number };
     };
   }
 }
@@ -370,6 +386,121 @@ function WorkspaceResumeContractApp() {
   return <p>Workspace resume hook browser contract</p>;
 }
 
+type DocumentWorkbenchContractSurfaceProps = {
+  draft: string;
+  fitViewportRef: RefObject<HTMLDivElement | null>;
+  initialScrollTop: number;
+  onDraftChange(value: string): void;
+  onScrollExit(top: number): void;
+  resultVersion: number;
+};
+
+function DocumentWorkbenchContractSurface({
+  draft,
+  fitViewportRef,
+  initialScrollTop,
+  onDraftChange,
+  onScrollExit,
+  resultVersion
+}: DocumentWorkbenchContractSurfaceProps) {
+  const { editorScrollerRef, layoutScrollerRef } = useRestoredScroll(
+    initialScrollTop,
+    onScrollExit
+  );
+
+  return (
+    <DocumentWorkbench
+      layoutRef={layoutScrollerRef}
+      rail={{
+        id: "cover-tailoring-contract",
+        label: "Tailoring",
+        preferenceKey: "cover-tailoring",
+        content: (
+          <aside aria-label="Tailoring contract content">
+            <label htmlFor="document-workbench-draft">Tailoring detail</label>
+            <input
+              id="document-workbench-draft"
+              aria-label="Tailoring detail"
+              value={draft}
+              onChange={(event) => onDraftChange(event.target.value)}
+            />
+            <p data-testid="document-workbench-result">Result {resultVersion}</p>
+          </aside>
+        )
+      }}
+    >
+      <DocumentWorkbenchEditorPane
+        ref={(node) => {
+          editorScrollerRef.current = node;
+          fitViewportRef.current = node;
+        }}
+      >
+        <div data-testid="document-workbench-page" style={{ minHeight: 720 }}>
+          Editor page
+        </div>
+      </DocumentWorkbenchEditorPane>
+    </DocumentWorkbench>
+  );
+}
+
+function DocumentWorkbenchContractApp() {
+  const [width, setWidth] = useState(1_200);
+  const [resultVersion, setResultVersion] = useState(1);
+  const [draft, setDraft] = useState("");
+  const [workbenchMounted, setWorkbenchMounted] = useState(true);
+  const historyClock = useMemo(createHistoryClock, []);
+  const docStyle = useDocStyle(historyClock);
+  const fitViewportRef = useRef<HTMLDivElement>(null);
+  const fitCallsRef = useRef(0);
+  const fitZoomRef = useRef(docStyle.style.zoom);
+  const savedScrollTopRef = useRef(0);
+  fitZoomRef.current = docStyle.style.zoom;
+
+  const fitPage = () => {
+    const pane = fitViewportRef.current;
+    if (!pane) return;
+    fitCallsRef.current += 1;
+    docStyle.set("zoom", pane.clientWidth / 1_000);
+  };
+
+  useEffect(() => {
+    window.__documentWorkbenchContract = {
+      setWidth,
+      setResultVersion,
+      setWorkbenchMounted,
+      savedScrollTop: () => savedScrollTopRef.current,
+      fitSnapshot: () => ({ calls: fitCallsRef.current, zoom: fitZoomRef.current })
+    };
+  }, []);
+
+  return (
+    <>
+      <ZoomControl
+        docStyle={docStyle}
+        onFitZoom={fitPage}
+        fitViewportRef={fitViewportRef}
+      />
+      <div
+        data-testid="document-workbench-host"
+        style={{ display: "flex", width, height: 520, overflow: "hidden" }}
+      >
+        {workbenchMounted ? (
+          <DocumentWorkbenchContractSurface
+            draft={draft}
+            fitViewportRef={fitViewportRef}
+            initialScrollTop={savedScrollTopRef.current}
+            onDraftChange={setDraft}
+            onScrollExit={(top) => {
+              savedScrollTopRef.current = top;
+            }}
+            resultVersion={resultVersion}
+          />
+        ) : null}
+      </div>
+    </>
+  );
+}
+
 const hash = window.location.hash;
 const app =
   hash === "#typeset" ? (
@@ -378,6 +509,8 @@ const app =
     <RecoveryContractApp />
   ) : hash === "#workspace-resume" ? (
     <WorkspaceResumeContractApp />
+  ) : hash === "#document-workbench" ? (
+    <DocumentWorkbenchContractApp />
   ) : (
     <EditorContractApp />
   );

@@ -122,6 +122,14 @@ and `docs/engineering/ui-principles.md`.
   after it; it never gates the action behind a review step, and its enabled
   state depends only on real readiness, never on the presence of an
   intermediate object.
+- `DocumentWorkbench` owns the two document tabs' shared rail placement,
+  disclosure, and responsive scroll boundary. Its wrapper stays semantically
+  neutral because `ReviewRail` and `CoverLetterReview` own their named
+  complementary landmarks. At the stacked breakpoint its layout is the scroll
+  owner inside the clipped studio host, and Resume gives the shared Fit control
+  its editor-pane ref so rail transitions cannot leave Fit stale. Both document
+  tabs also give `useRestoredScroll` the layout and editor refs so tab switches
+  preserve the offset of whichever element owns scrolling at that width.
 - Never fork shared editor markup or layout CSS for a host tweak. Add a narrow
   package seam and verify both apps.
 - Structure controls stay outside editable DOM and must not affect PDF layout.

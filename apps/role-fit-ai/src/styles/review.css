@@ -529,18 +529,6 @@
   font-size: 0.78rem;
 }
 
-/* At <=1180px the rail wraps below the editor and can stack many cards;
-   give it a contained scroll so the page doesn't become an unbounded list. */
-@media (max-width: 1180px) {
-  .resume-workbench__rail .review-rail {
-    max-height: 600px;
-    overflow-y: auto;
-    padding-right: var(--s2);
-    scrollbar-width: thin;
-    scrollbar-color: var(--hairline-strong) transparent;
-  }
-}
-
 /* Stale-review notice: quiet inline text at the top of the rail when the JD
    has changed since the last polish. Does not discard the review. */
 .rr-stale-notice {

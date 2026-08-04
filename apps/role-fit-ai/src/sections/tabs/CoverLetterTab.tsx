@@ -19,6 +19,10 @@ import { useRestoredScroll } from "../../hooks/useRestoredScroll";
 import { CoverLetterReview } from "../cover-letter/CoverLetterReview";
 import { DraftRestoreBar } from "../DraftRestoreBar";
 import { CoverLetterToolbar } from "../cover-letter/CoverLetterToolbar";
+import {
+  DocumentWorkbench,
+  DocumentWorkbenchEditorPane
+} from "../document/DocumentWorkbench";
 
 const COVER_LETTER_STRUCTURE_CAPABILITIES = {
   header: true,
@@ -91,7 +95,10 @@ export function CoverLetterTab({
   onRestorePreTailor
 }: CoverLetterTabProps) {
   const inputRef = useRef<HTMLInputElement>(null);
-  const scrollerRef = useRestoredScroll(initialScrollTop, onScrollExit);
+  const { editorScrollerRef, layoutScrollerRef } = useRestoredScroll(
+    initialScrollTop,
+    onScrollExit
+  );
   const [pageCount, setPageCount] = useState(0);
   // Held here, not in the toolbar, so the editor's right-click menu and link card
   // can open the same link popover the toolbar button opens.
@@ -132,8 +139,9 @@ export function CoverLetterTab({
         draftAutosaveState={draftAutosaveState}
       />
 
-      <div className="cover-letter-workbench">
-        {pendingAutosaveDraft ? (
+      <DocumentWorkbench
+        layoutRef={layoutScrollerRef}
+        notice={pendingAutosaveDraft ? (
           <DraftRestoreBar
             label="Unsaved cover letter found"
             jobLabel={pendingAutosaveDraft.jobLabel}
@@ -142,8 +150,31 @@ export function CoverLetterTab({
             onDismiss={onDismissAutosaveDraft}
           />
         ) : null}
-
-        <div className="cover-letter-workbench__editor" ref={scrollerRef}>
+        rail={{
+          id: "cover-tailoring",
+          label: "Tailoring",
+          preferenceKey: "cover-tailoring",
+          content: <CoverLetterReview
+            words={wordCount(editor.text)}
+            pageCount={pageCount}
+            preflight={preflight}
+            result={result}
+            canRestore={editor.canRestorePreTailor}
+            resumeReady={resumeReady}
+            jobReady={jobReady}
+            providerReady={providerReady}
+            slotAnswers={slotAnswers}
+            onDetailChange={onDetailChange}
+            onSlotAnswerChange={onSlotAnswerChange}
+            onRestore={onRestorePreTailor}
+            status={tailorStatus || readinessHint || editor.status}
+          />
+        }}
+      >
+        <DocumentWorkbenchEditorPane
+          className="document-workbench__editor--cover-letter"
+          ref={editorScrollerRef}
+        >
           <TypesetEditor
             ref={editorRef}
             data={editor.data}
@@ -161,24 +192,8 @@ export function CoverLetterTab({
             onInlineFormatStateChange={onInlineFormatStateChange}
             onPageCount={setPageCount}
           />
-        </div>
-
-        <CoverLetterReview
-          words={wordCount(editor.text)}
-          pageCount={pageCount}
-          preflight={preflight}
-          result={result}
-          canRestore={editor.canRestorePreTailor}
-          resumeReady={resumeReady}
-          jobReady={jobReady}
-          providerReady={providerReady}
-          slotAnswers={slotAnswers}
-          onDetailChange={onDetailChange}
-          onSlotAnswerChange={onSlotAnswerChange}
-          onRestore={onRestorePreTailor}
-          status={tailorStatus || readinessHint || editor.status}
-        />
-      </div>
+        </DocumentWorkbenchEditorPane>
+      </DocumentWorkbench>
     </section>
   );
 }

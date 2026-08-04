@@ -497,9 +497,16 @@ plain correspondence sheet + a compact rail that reports readiness before
 Tailor and the tailored result's length, provenance, and Restore after it;
 Materials = draft sheets; Applications = view surface + inspector. The rail is a single sheet
 (`--card`, hairline, rest shadow);
-the main column sits directly on the desk. Below ~1080px the rail drops
-under the content. New pages reuse this skeleton rather than inventing a
-new arrangement. Resume and Cover letter share the same two-row editor chrome:
+the main column sits directly on the desk. Resume and Cover letter use the same
+rail width, divider, and labelled header while retaining their separate review
+content. Each document remembers its own disclosure preference; collapsing hides
+content without unmounting it or resetting inputs, and new results do not force
+it open. Collapse reserves no gutter: the rail's track animates shut and the
+document takes the space, leaving only the panel icon as a tab on the document's
+right edge. Below ~1080px the rail becomes a full-width
+accordion below the editor without desktop overflow. New pages reuse this
+skeleton rather than inventing a new arrangement. Resume and Cover letter share
+the same two-row editor chrome:
 the first row is the document action bar, and the second is the formatting
 toolbar. File menus reuse one anchored action-menu component; document-specific
 content stays with its owning workflow. Resume Header and Section controls sit

@@ -124,6 +124,38 @@ style, detaches saved-variant identity, and never mutates the saved variant it
 replaced. Document existence enables editing and strict `.resume` save; meaningful
 content separately gates PDF, Polish, and Apply.
 
+Resume and Cover Letter compose their separate `ReviewRail` and
+`CoverLetterReview` content through `DocumentWorkbench`. The shared shell owns
+only the editor/rail grid, labelled disclosure, independent scrolling,
+container-query stacking, and the two origin-scoped preferences
+`rolefit:document-rail:resume-review` and
+`rolefit:document-rail:cover-tailoring`. Rail children stay mounted while hidden
+so local inputs and review interaction state survive collapse. A new result does
+not override an explicit preference; Resume simply omits the rail until review
+content exists, while Cover Letter always exposes pre-Tailor readiness.
+
+Collapsing is total: the rail's grid track animates to zero and gives every
+pixel back to the document rather than leaving a reserved icon gutter. What
+remains is the panel icon alone, as a tab over the document's top-right corner
+and, once stacked below 1080px, as a full-width bar in the rail's place. It
+carries no visible label — its accessible name and tooltip name the panel it
+reopens, and no count rides along. Exactly one disclosure control
+exists per state: the panel keeps its own Hide button, the collapsed rail goes
+`inert` (mounted, so review state survives) and its replacement tab takes focus,
+so a keyboard user never lands on `<body>` and a screen reader never hears two
+controls for one panel. The panel's contents hold the full rail width while the
+track closes, so it slides out instead of reflowing on the way.
+
+The stacked layout owns vertical scrolling inside the document tabs' clipped
+studio host; the editor and rail can then participate as full-width rows without
+losing content below the viewport. Tab-to-tab scroll restoration receives both
+the layout and editor refs and resolves the active owner from computed overflow,
+so the breakpoint does not reset the reading position. Resume also passes its
+editor pane to the shared Fit control, whose `ResizeObserver` refits after rail
+transitions that do not emit a window resize. The workbench wrapper stays
+semantically neutral so each feature's existing named `aside` remains the only
+complementary landmark.
+
 A menu row carries a description only when its title is not enough. "Download
 .resume" and "Download PDF" need none; "Download .txt" does, because it has to be
 told apart from .cover. Ambient instructions do not belong at the bottom of a menu

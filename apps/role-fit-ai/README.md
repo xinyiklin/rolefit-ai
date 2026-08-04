@@ -128,6 +128,10 @@ editable documents.
 - **AI-owned fit review** — the selected Review model judges the complete requirement set and returns the coverage table, base/tailored scores, verdict, explanation, gaps, and recommendation. RoleFit validates the response contract but does not recalculate or replace that judgment locally.
 - **Strict recruiter review mode** — audit the current edited draft as-is, or audit the sanitized proposal produced moments earlier in **Both**, for a verdict (STRONG FIT / REASONABLE FIT / STRETCH / DON'T APPLY), AI fit scores, gap severity, targeted bullet rewrites, interview risk flags, ready / edits-pending / missing-evidence status, and a cover-letter angle.
 - **One typeset editing surface** — direct text editing, inline emphasis, undo/redo, keyboard caret movement, structural add/remove/reorder controls, per-section Tailor/Include/Off scope, and review-field highlighting all operate on the exported page layout.
+- **One document workbench rail** — Resume review and Cover Letter tailoring
+  share the same collapsible desktop rail and narrow accordion behavior while
+  keeping their own workflow state. Each document remembers its own expanded or
+  collapsed preference, and hidden review inputs remain intact when reopened.
 - **Word-processor editing behavior** — Resume Tab/Shift+Tab moves between
   complete header and section fields (including wrapped fields); the cover
   letter uses that navigation in its optional header, and its body paragraphs

@@ -13,6 +13,7 @@
 @import "@typeset/editor/styles/popovers.css";
 @import "@typeset/editor/styles/modal.css";
 @import "./resume-document.css";
+@import "./document-workbench.css";
 @import "./resume-editor.css";
 @import "./cover-letter.css";
 @import "./review.css";

@@ -106,7 +106,9 @@ paints).
   own units and precision; there is deliberately no shared draft-input hook.
 - Zoom's Fit option is a real display state: the compact control reads `Fit`
   until a typed/preset percentage replaces it, and refits after viewport
-  changes settle.
+  changes settle. A host whose editor pane can resize without a window resize
+  passes that pane through `fitViewportRef`; the control observes its actual
+  width instead of encoding host layout knowledge.
 
 ## Verification
 

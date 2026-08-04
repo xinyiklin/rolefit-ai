@@ -1,5 +1,5 @@
 import { ChevronDown } from "lucide-react";
-import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState, type RefObject } from "react";
 import { createPortal } from "react-dom";
 
 import type { DocStyleControls } from "../../hooks/useDocStyle";
@@ -8,6 +8,8 @@ import { DOC_STYLE_BOUNDS, DOC_ZOOM_OPTIONS } from "@typeset/engine/lib/document
 export type ZoomControlProps = {
   docStyle: DocStyleControls;
   onFitZoom?: () => void;
+  // Optional because standalone hosts may only resize with the window.
+  fitViewportRef?: RefObject<HTMLElement | null>;
 };
 
 const MIN_ZOOM_PERCENT = DOC_STYLE_BOUNDS.zoom.min * 100;
@@ -17,10 +19,13 @@ function displayZoom(zoom: number) {
   return `${Number((zoom * 100).toFixed(1))}%`;
 }
 
-export function ZoomControl({ docStyle, onFitZoom }: ZoomControlProps) {
+export function ZoomControl({ docStyle, onFitZoom, fitViewportRef }: ZoomControlProps) {
   const menuId = `zoom-options-${useId().replace(/:/g, "")}`;
   const rootRef = useRef<HTMLDivElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
+  const onFitZoomRef = useRef(onFitZoom);
+  onFitZoomRef.current = onFitZoom;
+  const fitAvailable = Boolean(onFitZoom);
   const [fitSelected, setFitSelected] = useState(false);
   const [draft, setDraft] = useState(displayZoom(docStyle.style.zoom));
   const [open, setOpen] = useState(false);
@@ -37,22 +42,34 @@ export function ZoomControl({ docStyle, onFitZoom }: ZoomControlProps) {
     // draft must not let the previous numeric zoom overwrite the first key.
   }, [docStyle.style.zoom]);
 
-  // A viewport change can alter the available page width (for example, a
-  // host sidebar animating open or closed). Re-run Fit after that transition
-  // settles so the control's visible Fit state stays truthful.
+  // A window resize or host-owned pane transition can alter the page width.
+  // Re-run Fit after the geometry settles so the visible Fit state stays true.
   useEffect(() => {
-    if (!fitSelected || !onFitZoom) return;
+    if (!fitSelected || !fitAvailable) return;
     let timer: ReturnType<typeof setTimeout> | null = null;
     const refit = () => {
       if (timer !== null) clearTimeout(timer);
-      timer = setTimeout(onFitZoom, 260);
+      timer = setTimeout(() => onFitZoomRef.current?.(), 260);
     };
+    const fitViewport = fitViewportRef?.current ?? null;
+    let viewportWidth = fitViewport?.clientWidth ?? null;
+    const resizeObserver =
+      fitViewport && typeof ResizeObserver !== "undefined"
+        ? new ResizeObserver(() => {
+            const nextWidth = fitViewport.clientWidth;
+            if (viewportWidth !== null && Math.abs(nextWidth - viewportWidth) < 1) return;
+            viewportWidth = nextWidth;
+            refit();
+          })
+        : null;
+    if (fitViewport && resizeObserver) resizeObserver.observe(fitViewport);
     window.addEventListener("resize", refit);
     return () => {
+      resizeObserver?.disconnect();
       window.removeEventListener("resize", refit);
       if (timer !== null) clearTimeout(timer);
     };
-  }, [fitSelected, onFitZoom]);
+  }, [fitAvailable, fitSelected, fitViewportRef]);
 
   useLayoutEffect(() => {
     if (!open) {

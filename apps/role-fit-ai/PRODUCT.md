@@ -160,8 +160,11 @@ disappears into the task. Quiet competence, not salesmanship.
    workspaces continue with Resume and its consistent Open/Save/Polish
    document action bar and a post-polish review rail, Cover letter with the
    matching document action bar, its plain editor and a compact rail that
-   reports readiness before Tailor and provenance after it, Materials, the
-   Applications tracker, and Analytics. The engine-painted page remains the
+   reports readiness before Tailor and provenance after it. Those document
+   rails share one collapsible shell and remember their disclosure separately;
+   their Resume-review and Cover-tailoring workflows remain independent. The
+   remaining workspaces are Materials, the Applications tracker, and Analytics.
+   The engine-painted page remains the
    sole editor, the review rail
    navigates back to exact fields, and the editor itself remains the live
    preview. Saved-application PDF preview is a tracker detail, not a second live
