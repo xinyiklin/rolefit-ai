@@ -41,7 +41,7 @@ grounding and anti-fabrication checks, with a recruiter audit for fit scoring
 and gap analysis. Candidate gaps restored from a saved Apply record are labeled
 historical until an audit runs against the current materials.
 
-The cover letter is **one Tailor click**. RoleFit resolves the date, candidate
+The cover letter is **one Polish click**. RoleFit resolves the date, candidate
 name, role, company, greeting, and sign-off itself, sends the whole candidate
 evidence corpus with the source letter, and lets the model choose which
 experiences and honest-context notes this particular posting warrants. Bracketed
@@ -162,10 +162,11 @@ disappears into the task. Quiet competence, not salesmanship.
    state, and its popover opens rightward within the viewport. The rail starts
    with a PREPARE group containing Prepare, followed by DRAFT and TRACK groups.
    Prepare is the first/default and sole job-intake surface; tabbed
-   workspaces continue with Resume and its consistent Open/Save/Polish
-   document action bar, Cover letter with the matching document action bar,
-   and one always-present workflow-rail hierarchy for both documents. Resume's
-   default **Polish resume** action runs Tailor and then Recruiter audit while
+   workspaces continue with Resume and its consistent Open/Save document chrome,
+   Cover letter with the matching document chrome, and one always-present
+   workflow-rail hierarchy for both documents. Each document's primary **Polish**
+   action lives in that rail and has a floating counterpart when the rail is
+   collapsed. Resume's default **Polish resume** action runs Tailor and then Recruiter audit while
    retaining specialist Tailor-only and Audit-current actions. Cover letter
    stages a whole-document proposal for explicit acceptance. The document rails
    remember their disclosure separately while their orchestration remains

@@ -135,7 +135,17 @@ assert.equal(
 assert.match(workbench, /aria-label=\{showRailLabel\}/, "the collapsed control exposes that full label");
 assert.match(
   workbench,
-  /\{!isExpanded \? \([\s\S]{0,200}?document-workbench__rail-tab/,
+  /collapsedAction\?: ReactNode/,
+  "the workbench rail contract can supply a primary action for the collapsed state"
+);
+assert.match(
+  workbench,
+  /document-workbench__collapsed-action[\s\S]{0,140}?rail\.collapsedAction/,
+  "the collapsed rail keeps its primary action outside the inert workflow content"
+);
+assert.match(
+  workbench,
+  /\{!isExpanded \? \([\s\S]{0,520}?document-workbench__rail-tab/,
   "the edge tab exists only while the rail is collapsed, so one control is exposed per state"
 );
 assert.match(
@@ -168,6 +178,11 @@ assert.match(
   styles,
   /\.document-workbench__rail-tab\s*\{[\s\S]{0,400}?position:\s*absolute/,
   "the collapsed rail is reopened from an edge tab over the document, not a reserved gutter"
+);
+assert.match(
+  styles,
+  /\.document-workbench__collapsed-action\s*\{[\s\S]{0,260}?position:\s*absolute/,
+  "the collapsed primary action floats beside the edge tab"
 );
 assert.match(
   styles,
@@ -207,6 +222,7 @@ for (const [name, source] of [["Resume", resumeTab], ["Cover Letter", coverTab]]
     /pageWidthPx=\{DOC_PAGE_WIDTH_PX \* [\w.]*docStyle\.style\.zoom\}/,
     `${name} reports the rendered page width, so the bias tracks zoom instead of assuming 100%`
   );
+  assert.match(source, /collapsedAction:/, `${name} supplies the collapsed Polish action to the shared workbench`);
 }
 assert.match(styles, /@container\s+document-workbench/, "the shared shell owns narrow host adaptation");
 assert.match(

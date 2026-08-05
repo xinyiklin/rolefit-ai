@@ -43,9 +43,10 @@ masthead into the first/default Prepare page on 2026-07-29):
   page is the sole editor, so what you see is exactly what exports — it is its
   own live preview, so there is no separate compile-preview; its margin
   controls own add/remove/reorder, section type, and per-section tailor scope;
-  Open/Save/Polish share one document action bar, and the
+  Open/Save share one document bar; the primary Polish action lives in the
+  workflow rail and floats at the editor edge when that rail is collapsed, and the
   suggestion/recruiter-review rail docks beside it post-polish), Cover
-  letter (a separate plain-paragraph editor with one Tailor action and a rail
+  letter (a separate plain-paragraph editor with one Polish action and a rail
   that reports readiness before it and the result's provenance after it),
   Materials (application questions and role descriptions); TRACK contains
   Applications (table / calendar tracker views) and Analytics — plus the

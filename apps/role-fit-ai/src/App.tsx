@@ -12,7 +12,6 @@ import {
   Settings,
   Sparkles,
   Upload,
-  X,
   type LucideIcon
 } from "lucide-react";
 
@@ -22,7 +21,6 @@ import { useDebouncedValue } from "./hooks/useDebouncedValue";
 import { useDocStyle } from "@typeset/editor/hooks/useDocStyle.ts";
 import { createHistoryClock } from "@typeset/editor/hooks/historyClock.ts";
 import { FormattingToolbar } from "@typeset/editor/components/toolbar/FormattingToolbar.tsx";
-import { ToolbarButton } from "@typeset/editor/components/toolbar/ToolbarButton.tsx";
 import { DocumentStructureControls } from "@typeset/editor/components/toolbar/DocumentStructureControls.tsx";
 import {
   type InlineFormatState,
@@ -340,9 +338,8 @@ function App() {
   const [fileError, setFileError] = useState("");
   const [fileStatus, setFileStatus] = useState("");
   const [linkStatus, setLinkStatus] = useState("");
-  // Surfaces polish-flow feedback beside the Polish action.
+  // Surfaces polish-flow feedback in the workflow rail.
   const [polishStatus, setPolishStatus] = useState("");
-  const polishStatusIsError = /failed|stopped|too little|already tracked|no review attempt|changed/i.test(polishStatus);
   const [resumeVariantRecommendation, setResumeVariantRecommendation] = useState<VariantRecommendation | null>(null);
   const [isRankingResumeVariants, setIsRankingResumeVariants] = useState(false);
   const resumeVariantRecommendationKeyRef = useRef("");
@@ -443,12 +440,6 @@ function App() {
   );
   const selectedPolishProvidersReady =
     (polishStages === "review" || tailorProviderReady) && (polishStages === "tailor" || reviewProviderReady);
-  const polishProviderMessage =
-    polishStages !== "review" && !tailorProviderReady
-      ? tailorProviderMessage
-      : polishStages !== "tailor" && !reviewProviderReady
-        ? reviewProviderMessage
-        : "";
   const candidateFactsContext = buildCandidateFactsContext({
     citizenshipStatus,
     legallyAuthorizedToWork,
@@ -1197,18 +1188,6 @@ function App() {
   // Same rule for the letter: exportable as soon as it has content. Apply's own
   // readiness gate (coverLetterReady) still governs whether it can be included.
   const canExportCoverLetter = Boolean(coverLetterEditor.text.trim());
-  // Name what is actually blocking Polish at its two owning surfaces.
-  const polishGateHint = canPolish
-    ? ""
-    : !resumeReady && !jobReady
-      ? "Add a resume in Draft and prepare the job description in Prepare."
-      : !jobReady
-        ? "Prepare the job description before polishing."
-        : !editedResume || !Object.values(tailorModes).some((mode) => mode === "tailor")
-          ? "Load a resume and set at least one section to Tailor."
-          : !selectedPolishProvidersReady
-            ? polishProviderMessage
-            : "Add more resume text in the Resume menu (a few lines at least).";
   // Per-stage readiness for the Polish chooser: a stage the user can pick must
   // have its own provider, and a blocked row says which one and why.
   const polishStageReady: Record<"tailor" | "review" | "both", boolean> = {
@@ -2771,28 +2750,14 @@ function App() {
                     onDismissStatus={() => setExportStatus("")}
                     onDownloadPdf={handleDownloadPdf}
                   />
-                  <span className="document-primary-action document-primary-action--split">
-                    <ToolbarButton
-                      label={isPolishing ? "Working…" : "Polish resume"}
-                      tooltip={
-                        polishInputsReady && polishStageReady.both
-                          ? "Tailor selected sections, then run the recruiter audit"
-                          : polishGateHint || polishStageBlocker("both")
-                      }
-                      icon={<Sparkles size={16} />}
-                      showLabel
-                      tone="primary"
-                      disabled={!polishInputsReady || !polishStageReady.both || isPolishing}
-                      onClick={() => startPolish("both")}
-                    />
-                    <DocumentActionMenu
-                      label={isPolishing ? "Working…" : "Polish"}
-                      ariaLabel="More polish actions"
-                      tooltip="Tailor only or audit the current resume"
-                      icon={<MoreHorizontal size={16} />}
-                      showLabel={false}
-                      disabled={!polishInputsReady || isPolishing}
-                    >
+                  <DocumentActionMenu
+                    label="More"
+                    ariaLabel="More resume actions"
+                    tooltip="Tailor only or audit the current resume"
+                    icon={<MoreHorizontal size={16} />}
+                    showLabel={false}
+                    disabled={!polishInputsReady || isPolishing}
+                  >
                       {({ close }) => (
                         <div className="document-action-panel polish-stage-menu">
                           <div className="document-action-panel__head">
@@ -2824,19 +2789,6 @@ function App() {
                         </div>
                       )}
                     </DocumentActionMenu>
-                    {polishStatus ? (
-                      <span
-                        className={`document-action-feedback${polishStatusIsError ? " document-action-feedback--error" : ""}`}
-                        role={polishStatusIsError ? "alert" : "status"}
-                        aria-live={polishStatusIsError ? "assertive" : "polite"}
-                      >
-                        <span>{polishStatus}</span>
-                        <button type="button" onClick={() => setPolishStatus("")} aria-label="Dismiss Polish message">
-                          <X size={13} aria-hidden="true" />
-                        </button>
-                      </span>
-                    ) : null}
-                  </span>
                 </>
               }
             />

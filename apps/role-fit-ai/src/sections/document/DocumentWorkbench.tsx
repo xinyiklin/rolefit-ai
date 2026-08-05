@@ -19,6 +19,7 @@ type DocumentWorkbenchRail = {
   label: string;
   preferenceKey: DocumentRailPreferenceKey;
   content: ReactNode | null;
+  collapsedAction?: ReactNode;
   attention?: { count: number; label: string };
 };
 
@@ -125,23 +126,30 @@ export function DocumentWorkbench({
               </div>
             </div>
             {!isExpanded ? (
-              <button
-                ref={showButtonRef}
-                type="button"
-                className="document-workbench__rail-tab"
-                aria-expanded={false}
-                aria-controls={contentId}
-                aria-label={showRailLabel}
-                title={showRailLabel}
-                onClick={() => setExpanded(true)}
-              >
-                <PanelRightOpen size={16} aria-hidden="true" />
-                {attention ? (
-                  <span className="document-workbench__rail-attention" aria-hidden="true">
-                    {attention.count}
-                  </span>
+              <>
+                {rail.collapsedAction ? (
+                  <div className="document-workbench__collapsed-action">
+                    {rail.collapsedAction}
+                  </div>
                 ) : null}
-              </button>
+                <button
+                  ref={showButtonRef}
+                  type="button"
+                  className="document-workbench__rail-tab"
+                  aria-expanded={false}
+                  aria-controls={contentId}
+                  aria-label={showRailLabel}
+                  title={showRailLabel}
+                  onClick={() => setExpanded(true)}
+                >
+                  <PanelRightOpen size={16} aria-hidden="true" />
+                  {attention ? (
+                    <span className="document-workbench__rail-attention" aria-hidden="true">
+                      {attention.count}
+                    </span>
+                  ) : null}
+                </button>
+              </>
             ) : null}
           </>
         ) : null}

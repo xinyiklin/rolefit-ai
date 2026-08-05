@@ -1946,3 +1946,9 @@ bounded; app-only operational detail belongs in the affected app documentation.
   new unresolved issue; its remaining layout-transition warning is the documented
   synchronized padding/track motion that prevents the workspace-shift regression.
   Live provider evaluation and real-app visual QA were not run.
+- [USER+CODE+TOOL] 2026-08-04: The primary document action now has one visible owner:
+  the workflow rail. Resume and Cover Letter both call it **Polish**; the
+  editor header retains file/edit controls (plus Resume's secondary More menu),
+  and a state-matched Polish button floats beside the edge tab when the rail is
+  collapsed. Full RoleFit checks, the workbench contract, and live browser QA
+  passed for both expanded and collapsed document rails.

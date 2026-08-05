@@ -139,7 +139,7 @@ Layout is structural and predictable: a masthead with the brand plus the global
 Apply action, a full-width studio whose rail moves through PREPARE, DRAFT, and
 TRACK, a bottom utility group with read-only Sessions immediately above Settings
 outside `OUTPUT_TABS` and the APG tablist, matched
-resume and cover-letter document action bars, and document-specific review
+resume and cover-letter document chrome with rail-owned primary actions, and document-specific review
 rails. Breakpoints (1280/1180/1080/900/820/760
 px) collapse structure; they never fluidly rescale type. Desktop ~1440px is
 the primary canvas; content wraps rather than clips below it.
@@ -326,8 +326,8 @@ interactive control shares the same focus treatment: 2px Forest Ink outline,
   secondary, 28px ghost), 120–160ms transitions, 1px translateY on press.
 - **Primary:** Forest Ink fill, paper text, `--accent-deep` border, inset
   highlight plus a faint accent glow; hover deepens to `--accent-deep`. One
-  per document view (Polish in the resume action bar, Tailor in the matching
-  cover-letter position; compact `.is-compact` variant in title rows).
+  per document view (Polish in the workflow rail, with a floating counterpart
+  when collapsed; compact `.is-compact` variant in rail actions).
 - **Secondary:** raised sheet (`--card-elev`) with `--hairline-strong`
   border; hover tints toward the accent (`--accent-soft` fill,
   `--accent-deep` text).
@@ -516,8 +516,8 @@ attention). Below ~1080px the rail becomes a full-width
 accordion below the editor without desktop overflow. New pages reuse this
 skeleton rather than inventing a new arrangement. Resume and Cover letter share
 the same two-row editor chrome:
-the first row is the document action bar, and the second is the formatting
-toolbar. File menus reuse one anchored action-menu component; document-specific
+the first row is the document/file bar, and the second is the formatting
+toolbar. Primary Polish actions live in the workflow rail; file menus reuse one anchored action-menu component; document-specific
 content stays with its owning workflow. Resume Header and Section controls sit
 immediately before Spacing in the formatting row. Every menu in that row is
 icon-only at every width — the row shares its container with the action bar and

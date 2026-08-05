@@ -120,9 +120,10 @@ and `docs/engineering/ui-principles.md`.
   one empty editable paragraph.
 - `DocumentWorkflowRail` owns the single named complementary landmark and the
   shared state/target/readiness/failure/body/footer hierarchy for both document
-  tabs. Resume's ordinary **Polish resume** action runs Tailor then Recruiter
+  tabs. Each document's primary **Polish** action lives in that rail and has a
+  floating counterpart when the rail is collapsed. Resume's ordinary **Polish resume** action runs Tailor then Recruiter
   audit; Tailor-only and Audit-current remain secondary specialist actions.
-  Cover letter keeps one Tailor request but stages its result as a whole-document
+  Cover letter keeps one Polish request but stages its result as a whole-document
   proposal: **Use proposal** applies it atomically, **Keep current** performs no
   mutation, stale inputs disable acceptance, and Restore appears only after use.
   Typed post-draft issues render as one flat failure list with recovery beside

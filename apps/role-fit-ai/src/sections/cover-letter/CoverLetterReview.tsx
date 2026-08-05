@@ -69,12 +69,12 @@ function proposalEvidence(result: CoverLetterTailorResult, evidenceIds: string[]
 
 function issueRecovery(issue: CoverLetterIssue): string {
   if (issue.recovery === "add_evidence") {
-    return "Add factual experience in Settings > Guidance, then Tailor again.";
+    return "Add factual experience in Settings > Guidance, then Polish again.";
   }
   if (issue.recovery === "edit_source") {
-    return "Edit the source letter, then Tailor again.";
+    return "Edit the source letter, then Polish again.";
   }
-  return "Retry Tailor. If it repeats, switch the model or provider.";
+  return "Retry Polish. If it repeats, switch the model or provider.";
 }
 
 export function CoverLetterReview({
@@ -105,23 +105,23 @@ export function CoverLetterReview({
   const checks = [
     check("Resume", resumeReady, "Add your resume"),
     check("Prepared job", jobReady, "Prepare the job"),
-    check("Tailor provider", providerReady, "Check AI settings"),
+    check("Polish provider", providerReady, "Check AI settings"),
     check("Template details", preflight.canTailor, preflight.blockers[0] ?? "Complete the fields")
   ];
 
   let phase: DocumentWorkflowPhase = ready ? "ready" : "blocked";
   let description = ready
-    ? "Tailor creates a reviewable proposal from your current letter, resume evidence, and prepared job."
-    : "Complete the blocked rows before tailoring.";
+    ? "Polish creates a reviewable proposal from your current letter, resume evidence, and prepared job."
+    : "Complete the blocked rows before polishing.";
   if (isTailoring) {
     phase = "working";
-    description = "Tailoring and checking every candidate claim against your evidence.";
+    description = "Polishing and checking every candidate claim against your evidence.";
   } else if (failure) {
     phase = "blocked";
     description = "No changes were applied. Your current letter is unchanged.";
   } else if (proposal?.stale) {
     phase = "stale";
-    description = "The inputs changed after this proposal was created. Tailor again before using it.";
+    description = "The inputs changed after this proposal was created. Polish again before using it.";
   } else if (proposal) {
     phase = "proposal";
     description = "Compare this replacement with the current editable letter before deciding.";
@@ -171,13 +171,13 @@ export function CoverLetterReview({
       </button>
       {proposal.stale ? (
         <button type="button" className="ghost-button is-compact" onClick={onTailor}>
-          Tailor again
+          Polish again
         </button>
       ) : null}
     </>
   ) : failure ? (
     <button type="button" className="primary-button is-compact" onClick={onTailor}>
-      Retry
+      Retry Polish
     </button>
   ) : appliedResult && canRestore ? (
     <button type="button" className="secondary-button is-compact" onClick={onRestore}>
@@ -190,7 +190,7 @@ export function CoverLetterReview({
       disabled={!ready || isTailoring}
       onClick={onTailor}
     >
-      Tailor
+      Polish
     </button>
   );
 
@@ -202,13 +202,13 @@ export function CoverLetterReview({
       description={description}
       checks={proposal || appliedResult ? [] : checks}
       failure={failure ? {
-        title: blockedFailure ? "Evidence check failed" : (errorFailure?.headline ?? "Tailoring failed"),
+        title: blockedFailure ? "Evidence check failed" : (errorFailure?.headline ?? "Polish failed"),
         message: blockedFailure
           ? `RoleFit rejected ${blockedFailure.issues.length} ${blockedFailure.issues.length === 1 ? "draft issue" : "draft issues"}${blockedFailure.repairAttempted ? " after one repair attempt" : ""}. Your current letter is unchanged.`
           : "No changes were applied. Your current letter is unchanged.",
         ...(blockedFailure
           ? { details: failureDetails }
-          : { items: [errorFailure?.detail ?? "Try Tailor again."] })
+          : { items: [errorFailure?.detail ?? "Try Polish again."] })
       } : null}
       footer={footer}
       status={status}
@@ -224,7 +224,7 @@ export function CoverLetterReview({
           ))}
           {proposal.stale ? (
             <p className="cover-letter-proposal__stale" role="status">
-              The letter, resume, job, or tailoring instructions changed. Tailor again for the current inputs.
+              The letter, resume, job, or polishing instructions changed. Polish again for the current inputs.
             </p>
           ) : null}
           <div className="cover-letter-proposal__document">

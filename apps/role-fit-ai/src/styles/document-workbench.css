@@ -160,6 +160,22 @@
   scrollbar-width: thin;
 }
 
+.document-workbench__collapsed-action {
+  position: absolute;
+  z-index: 3;
+  top: var(--s3);
+  right: calc(34px + var(--s3));
+  display: flex;
+  align-items: center;
+  max-width: calc(100% - 34px - var(--s3) * 2);
+}
+
+.document-workbench__collapsed-action > * {
+  max-width: 100%;
+  box-shadow: var(--shadow-rest);
+  white-space: nowrap;
+}
+
 /* The collapsed rail's only remaining surface: the same panel icon, now a tab on
    the document's right edge instead of a reserved gutter. Its accessible name
    carries the panel it reopens. */

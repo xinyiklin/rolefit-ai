@@ -145,12 +145,7 @@ export function CoverLetterTab({
         inputRef={inputRef}
         inlineFormat={inlineFormat}
         hasLetter={hasLetter}
-        canTailor={canTailor}
-        tailorHint={readinessHint}
-        actionLabel={proposal || appliedResult ? "Tailor again" : "Tailor"}
-        isTailoring={isTailoring}
         targetLine={targetLine}
-        onTailor={onTailor}
         applicationSync={applicationSync}
         draftAutosaveState={draftAutosaveState}
       />
@@ -171,6 +166,17 @@ export function CoverLetterTab({
           id: "cover-tailoring",
           label: "Workflow",
           preferenceKey: "cover-tailoring",
+          collapsedAction: (
+            <button
+              type="button"
+              className="primary-button is-compact"
+              disabled={!canTailor}
+              aria-busy={isTailoring}
+              onClick={onTailor}
+            >
+              {isTailoring ? "Working…" : proposal || appliedResult ? "Polish again" : "Polish"}
+            </button>
+          ),
           ...(issueCount > 0
             ? {
                 attention: {

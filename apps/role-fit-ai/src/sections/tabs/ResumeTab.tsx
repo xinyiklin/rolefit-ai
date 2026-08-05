@@ -181,7 +181,19 @@ export function ResumeTab({
 
   const selectedSectionCount = Object.values(tailorModes).filter((mode) => mode !== "off").length;
   const tailorSectionCount = Object.values(tailorModes).filter((mode) => mode === "tailor").length;
+  const canPolish = resumeReady && jobReady && tailorProviderReady && auditProviderReady && tailorSectionCount > 0;
   const documentContext = [jobTarget?.role, jobTarget?.company].filter(Boolean).join(" at ");
+  const collapsedPolishAction = (
+    <button
+      type="button"
+      className="primary-button is-compact"
+      disabled={!canPolish || isPolishing}
+      aria-busy={isPolishing}
+      onClick={onPolish}
+    >
+      {isPolishing ? "Working…" : result ? "Polish again" : "Polish resume"}
+    </button>
+  );
   return (
     <section className="studio-card studio-card--flush">
       <header
@@ -228,6 +240,7 @@ export function ResumeTab({
           id: "resume-review",
           label: "Workflow",
           preferenceKey: "resume-review",
+          collapsedAction: collapsedPolishAction,
           content: (
             <ResumeWorkflowRail
               result={result}

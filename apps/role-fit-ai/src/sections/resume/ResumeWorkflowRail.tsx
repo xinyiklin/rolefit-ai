@@ -109,7 +109,7 @@ export function ResumeWorkflowRail({
   const checks = [
     readiness("Resume", resumeReady, "Add resume evidence"),
     readiness("Prepared job", jobReady, "Prepare the job"),
-    readiness("Tailor provider", tailorProviderReady, "Check AI settings"),
+    readiness("Polish provider", tailorProviderReady, "Check AI settings"),
     readiness("Audit provider", auditProviderReady, "Check AI settings"),
     readiness(
       "Sections selected",
