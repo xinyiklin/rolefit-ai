@@ -499,6 +499,10 @@ Resume's primary Polish action runs Tailor and then Recruiter audit; its rail
 retains the granular proposal review. Cover letter keeps the editor unchanged
 while showing a whole-document proposal with explicit Use proposal and Keep
 current actions; Restore appears only after acceptance.
+If that draft fails the evidence checks after repair, the rail shows one flat
+issue list with the exact bounded claim and its recovery action. A collapsed
+Cover letter rail adds the bounded issue count to the icon tab and accessible
+label; it does not badge ordinary readiness gaps or provider errors.
 Materials = draft sheets; Applications = view surface + inspector. The rail is a single sheet
 (`--card`, hairline, rest shadow);
 the main column sits directly on the desk. Resume and Cover letter use the same
@@ -507,7 +511,8 @@ sticky action footer while retaining document-specific content. Each document re
 content without unmounting it or resetting inputs, and new results do not force
 it open. Collapse reserves no gutter: the rail's track animates shut and the
 document takes the space, leaving only the panel icon as a tab on the document's
-right edge. Below ~1080px the rail becomes a full-width
+right edge (plus the issue count only when a blocked cover-letter draft needs
+attention). Below ~1080px the rail becomes a full-width
 accordion below the editor without desktop overflow. New pages reuse this
 skeleton rather than inventing a new arrangement. Resume and Cover letter share
 the same two-row editor chrome:

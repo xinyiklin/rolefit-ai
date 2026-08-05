@@ -15,7 +15,9 @@ import {
 } from "../coverLetterContracts.ts";
 import { buildCoverLetterTailorPrompts } from "../prompts.ts";
 import { buildCoverLetterPreflight } from "../../../src/lib/coverLetterPreflight.ts";
-import { coverLetterBlockersFromViolations } from "../../../src/lib/coverLetterFailure.ts";
+import { parseCoverLetterBlockedFailure } from "../../../src/lib/coverLetterFailure.ts";
+import { publicCoverLetterIssues } from "../coverLetterIssues.ts";
+import { hasUngroundedNumericClaim } from "../sanitize.ts";
 
 class FakeReq extends EventEmitter {
   constructor(method) {
@@ -61,10 +63,11 @@ async function runHandler(method, body) {
   };
 }
 
-function assertUserSafeError(promise, status, message, label) {
+function assertUserSafeError(promise, status, message, label, inspect) {
   return assert.rejects(promise, (error) => {
     assert.equal(error?.status, status, label);
     assert.match(error?.message ?? "", message, label);
+    inspect?.(error);
     return true;
   });
 }
@@ -128,23 +131,80 @@ const evidence = [
 ];
 
 assert.deepEqual(
-  coverLetterBlockersFromViolations([
-    'The letter claims "Kubernetes" for the candidate, but no supplied evidence supports it.',
-    "The letter states a number, scale, or duration that no supplied evidence contains.",
-  ]).map((blocker) => [blocker.code, blocker.recovery, blocker.excerpt]),
+  publicCoverLetterIssues([
+    {
+      code: "unsupported_job_term",
+      category: "evidence",
+      detail: "Kubernetes is not present in the resume or personal context.",
+      recovery: "add_evidence",
+      repairMessage: 'The letter claims "Kubernetes" for the candidate.',
+      claim: "I have run Kubernetes clusters in production.",
+      unsupportedValue: "Kubernetes",
+    },
+    {
+      code: "unsupported_number",
+      category: "evidence",
+      detail: "three years is not present in the resume or personal context.",
+      recovery: "add_evidence",
+      repairMessage: "Remove the unsupported duration.",
+      unsupportedValue: "three years",
+    },
+  ]).map((issue) => [issue.code, issue.recovery, issue.unsupportedValue]),
   [
-    ["unsupported-claim", "add-evidence", "Kubernetes"],
-    ["unsupported-number", "add-evidence", undefined],
+    ["unsupported_job_term", "add_evidence", "Kubernetes"],
+    ["unsupported_number", "add_evidence", "three years"],
   ],
-  "deterministic validation findings become bounded actionable blockers",
+  "typed validation findings become bounded actionable issues",
 );
-const internalReference = coverLetterBlockersFromViolations([
-  'Paragraph 1 references unknown evidence id "resume:private-internal-id".',
-]);
+const internalReference = publicCoverLetterIssues([{
+  code: "unknown_evidence_reference",
+  category: "evidence",
+  detail: "This paragraph cited evidence outside the supplied candidate corpus.",
+  recovery: "retry",
+  repairMessage: 'Paragraph 1 references unknown evidence id "resume:private-internal-id".',
+}]);
 assert.doesNotMatch(
   internalReference[0].detail,
   /private-internal-id/,
-  "user-facing blocker detail never exposes internal evidence ids",
+  "user-facing issue detail never exposes internal evidence ids",
+);
+const parsedBlocked = parseCoverLetterBlockedFailure({
+  status: "blocked",
+  reason: "evidence_checks",
+  repairAttempted: true,
+  issues: new Array(10).fill(null).map((_, index) => ({
+    code: "unsupported_job_term",
+    category: "evidence",
+    detail: `Kubernetes ${index}\u0000needs real evidence.`,
+    recovery: "add_evidence",
+    unsupportedValue: "Kubernetes",
+  })),
+});
+assert.equal(parsedBlocked.issues.length, 8, "the client accepts at most eight safe issues");
+assert.equal(parsedBlocked.repairAttempted, true);
+assert.doesNotMatch(parsedBlocked.issues[0].detail, /\u0000/, "control characters are removed");
+assert.equal(
+  parseCoverLetterBlockedFailure({
+    status: "blocked",
+    reason: "evidence_checks",
+    issues: [{
+      code: "unsupported_job_term",
+      category: "quality",
+      detail: "Mismatched wire shape.",
+      recovery: "add_evidence",
+    }],
+  }),
+  null,
+  "the client rejects a code/category/recovery mismatch",
+);
+assert.equal(
+  parseCoverLetterBlockedFailure({
+    status: "needs_input",
+    reason: "evidence_checks",
+    issues: parsedBlocked.issues,
+  }),
+  null,
+  "a preflight response cannot masquerade as a post-draft blocker",
 );
 
 // ----- request parsing -----
@@ -170,6 +230,37 @@ assert.throws(
   /unique and stable/,
   "the reserved source_letter id cannot be smuggled in as candidate evidence",
 );
+assert.deepEqual(
+  parseCoverLetterEvidenceItems([
+    { id: "resume:a", source: "resume", text: "Shipped a reliable service." },
+    {
+      id: "context:kubernetes",
+      source: "honest_context",
+      text: "Kubernetes: [describe your exact experience: what you did, where, and when]",
+    },
+  ]),
+  [{ id: "resume:a", source: "resume", text: "Shipped a reliable service." }],
+  "the server independently refuses to promote unfinished Guidance text",
+);
+
+assert.equal(
+  hasUngroundedNumericClaim(
+    "I have used Kubernetes for three years.",
+    "I have used Kubernetes in production.",
+  ),
+  true,
+  "a spelled-out duration is still a numeric claim",
+);
+assert.equal(
+  hasUngroundedNumericClaim("I have used Kubernetes for three years.", "3 years of Kubernetes"),
+  false,
+  "equivalent word and digit durations ground each other",
+);
+assert.equal(
+  hasUngroundedNumericClaim("I have used Kubernetes for 3 years.", "three years of Kubernetes"),
+  false,
+  "duration normalization works in both directions",
+);
 
 // ----- output validation -----
 
@@ -192,7 +283,7 @@ const good = validate({
   ],
   warnings: [],
 });
-assert.deepEqual(good.violations, [], "a grounded two-paragraph letter validates clean");
+assert.deepEqual(good.issues, [], "a grounded two-paragraph letter validates clean");
 assert.equal(good.coverLetterText.startsWith("July 28, 2026\n\nDear Acme Hiring Team,"), true);
 assert.equal(good.coverLetterText.endsWith("Sincerely,\nJordan Lee"), true);
 
@@ -204,7 +295,7 @@ assert.deepEqual(
       { text: groundedBody, evidenceIds: ["source_letter"], slotIds: [] },
       { text: secondBody, evidenceIds: [evidence[0].id], slotIds: [] },
     ],
-  }).violations,
+  }).issues,
   [],
   "omitting a generative slot is allowed",
 );
@@ -216,7 +307,8 @@ const unknownId = validate({
     { text: secondBody, evidenceIds: [evidence[0].id], slotIds: [] },
   ],
 });
-assert.match(unknownId.violations.join(" "), /not in the supplied corpus/);
+assert.equal(unknownId.issues[0].code, "unknown_evidence_reference");
+assert.match(unknownId.issues.map((issue) => issue.repairMessage).join(" "), /not in the supplied corpus/);
 
 assert.match(
   validate({
@@ -224,7 +316,7 @@ assert.match(
       { text: groundedBody, evidenceIds: [], slotIds: [] },
       { text: secondBody, evidenceIds: [evidence[0].id], slotIds: [] },
     ],
-  }).violations.join(" "),
+  }).issues.map((issue) => issue.repairMessage).join(" "),
   /cite at least one evidence id/,
 );
 assert.match(
@@ -237,7 +329,7 @@ assert.match(
       },
       { text: secondBody, evidenceIds: [evidence[0].id], slotIds: [] },
     ],
-  }).violations.join(" "),
+  }).issues.map((issue) => issue.repairMessage).join(" "),
   /bracketed or template token/,
   "no placeholder can reach the editor",
 );
@@ -247,7 +339,7 @@ assert.match(
       { text: `Dear Acme Hiring Team,\n\n${groundedBody}`, evidenceIds: ["source_letter"], slotIds: [] },
       { text: secondBody, evidenceIds: [evidence[0].id], slotIds: [] },
     ],
-  }).violations.join(" "),
+  }).issues.map((issue) => issue.repairMessage).join(" "),
   /exactly one greeting|owns the greeting/,
 );
 assert.match(
@@ -256,7 +348,7 @@ assert.match(
       { text: `${authoredSentence}`, evidenceIds: ["source_letter"], slotIds: [] },
       { text: `${authoredSentence}`, evidenceIds: [evidence[0].id], slotIds: [] },
     ],
-  }).violations.join(" "),
+  }).issues.map((issue) => issue.repairMessage).join(" "),
   /Name the exact role/,
 );
 assert.match(
@@ -269,7 +361,7 @@ assert.match(
       },
       { text: secondBody, evidenceIds: [evidence[0].id], slotIds: [] },
     ],
-  }).violations.join(" "),
+  }).issues.map((issue) => issue.repairMessage).join(" "),
   /generic brochure phrasing/,
 );
 assert.equal(
@@ -459,6 +551,11 @@ try {
     422,
     /evidence checks/,
     "an unrepairable draft never reaches the editor",
+    (error) => {
+      assert.equal(error.repairAttempted, true);
+      assert.equal(error.issues[0].code, "unknown_evidence_reference");
+      assert.doesNotMatch(JSON.stringify(error.issues), /resume:invented/);
+    },
   );
   assert.equal(providerCalls, 2, "failure costs at most two requests");
 
@@ -483,6 +580,11 @@ try {
     422,
     /evidence checks/,
     "an ungrounded JD skill claim fails closed",
+    (error) => {
+      assert.equal(error.repairAttempted, true);
+      assert.equal(error.issues.some((issue) => issue.code === "unsupported_job_term"), true);
+      assert.equal(error.issues.some((issue) => issue.code === "unsupported_number"), true);
+    },
   );
 
   // Public employer research may support facts about the company, but it must
@@ -661,8 +763,11 @@ try {
   );
   assert.equal(blocked.status, 422);
   assert.equal(blocked.payload.status, "blocked");
-  assert.equal(blocked.payload.blockers[0].code, "unsupported-claim");
-  assert.equal(blocked.payload.blockers[0].excerpt.toLowerCase(), "kubernetes");
+  assert.equal(blocked.payload.reason, "evidence_checks");
+  assert.equal(blocked.payload.repairAttempted, true);
+  assert.equal(blocked.payload.issues[0].code, "unsupported_job_term");
+  assert.equal(blocked.payload.issues[0].unsupportedValue.toLowerCase(), "kubernetes");
+  assert.doesNotMatch(JSON.stringify(blocked.payload.issues), /repairMessage|evidenceIds/);
   assert.equal("coverLetterText" in blocked.payload, false, "a rejected provider draft never enters the response");
 
   assert.equal((await runHandler("POST", routeBody({ jobText: "Short." }))).status, 400);
@@ -737,13 +842,19 @@ assert.doesNotMatch(
 );
 assert.match(
   clientHook,
-  /if \(!isCurrent\(\)\) return;[\s\S]{0,400}classifyFailure/,
-  "a stale response cannot report a failure over fresher inputs",
+  /if \(!isCurrent\(\)\) return;[\s\S]{0,320}parseCoverLetterBlockedFailure/,
+  "a stale response cannot report a blocker over fresher inputs",
 );
-assert.doesNotMatch(
+assert.match(
   clientHook,
-  /classifyFailure[\s\S]{0,300}onApplyTailored/,
-  "a failed request never replaces the letter",
+  /setFailure\(blocked\)[\s\S]{0,300}Your current letter was kept/,
+  "a typed blocked response becomes expected recoverable state",
 );
+assert.match(
+  coverTab,
+  /const issueCount = failure\?\.kind === "blocked" \? failure\.issues\.length : 0;/,
+  "only a typed post-draft failure adds a collapsed-rail attention count",
+);
+assert.match(coverTab, /issueCount > 0[\s\S]{0,180}?attention:/);
 
 console.log("cover-letter tailoring probes: PASS");

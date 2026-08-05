@@ -770,6 +770,7 @@ async function runDocumentWorkbenchContracts() {
     return {
       editorWidth: editor.getBoundingClientRect().width,
       railWidth: rail.getBoundingClientRect().width,
+      rootFontSize: parseFloat(getComputedStyle(document.documentElement).fontSize),
       railTagName: rail.tagName,
       asideCount: document.querySelectorAll("aside").length,
       editorOverflow: getComputedStyle(editor).overflow,
@@ -779,8 +780,8 @@ async function runDocumentWorkbenchContracts() {
     };
   })()`);
   assert.ok(
-    expandedGeometry.railWidth >= 320 && expandedGeometry.railWidth <= 380,
-    "expanded desktop rail must stay within its shared readable width"
+    Math.abs(expandedGeometry.railWidth - expandedGeometry.rootFontSize * 18) <= 1,
+    "expanded desktop rail resolves the shared 18rem readable width"
   );
   assert.equal(expandedGeometry.editorOverflow, "auto", "desktop editor scrolls independently");
   assert.equal(expandedGeometry.railOverflow, "auto", "desktop rail scrolls independently");
@@ -811,7 +812,7 @@ async function runDocumentWorkbenchContracts() {
   })()`);
   await waitFor(
     win,
-    'document.querySelector(\'button[aria-label="Show Tailoring panel"]\')',
+    'document.querySelector(\'button[aria-label="Show Tailoring panel, 2 issues"]\')',
     "collapsed document rail"
   );
   assert.equal(
@@ -860,6 +861,8 @@ async function runDocumentWorkbenchContracts() {
         document.querySelector(".document-workbench__rail-content").id,
       noOverflow: layout.scrollWidth <= layout.clientWidth,
       inputConnected: input.isConnected,
+      attentionText: tab.querySelector(".document-workbench__rail-attention")?.textContent,
+      attentionHidden: tab.querySelector(".document-workbench__rail-attention")?.getAttribute("aria-hidden"),
       value: input.value,
       stored: localStorage.getItem("rolefit:document-rail:cover-tailoring")
     };
@@ -876,6 +879,8 @@ async function runDocumentWorkbenchContracts() {
   assert.equal(collapsedGeometry.railInert, true, "collapsed content leaves the accessibility tree");
   assert.equal(collapsedGeometry.tabControls, true, "the edge tab owns the rail content region");
   assert.equal(collapsedGeometry.inputConnected, true, "collapsed feature content remains mounted");
+  assert.equal(collapsedGeometry.attentionText, "2", "the closed tab keeps the bounded issue count visible");
+  assert.equal(collapsedGeometry.attentionHidden, "true", "the visible count does not duplicate the button label");
   assert.equal(collapsedGeometry.value, "Keep this answer", "collapsed inputs retain their value");
   assert.equal(collapsedGeometry.stored, "collapsed", "collapse persists under the document key");
 
@@ -889,7 +894,7 @@ async function runDocumentWorkbenchContracts() {
   );
   assert.equal(
     await win.webContents.executeJavaScript(
-      'Boolean(document.querySelector(\'button[aria-label="Show Tailoring panel"]\'))'
+      'Boolean(document.querySelector(\'button[aria-label="Show Tailoring panel, 2 issues"]\'))'
     ),
     true,
     "a new result does not override an explicit collapsed preference"
@@ -898,10 +903,10 @@ async function runDocumentWorkbenchContracts() {
   await win.loadURL(`${baseUrl}#document-workbench`);
   await waitFor(
     win,
-    'document.querySelector(\'button[aria-label="Show Tailoring panel"]\')',
+    'document.querySelector(\'button[aria-label="Show Tailoring panel, 2 issues"]\')',
     "persisted collapsed rail after reload"
   );
-  await click(win, 'button[aria-label="Show Tailoring panel"]');
+  await click(win, 'button[aria-label="Show Tailoring panel, 2 issues"]');
   await waitFor(
     win,
     'document.querySelector(\'button[aria-label="Hide Tailoring panel"]\')',
@@ -989,8 +994,8 @@ async function runDocumentWorkbenchContracts() {
   assert.equal(narrowCollapsed.railHidden, true, "the stacked collapsed rail leaves the flow");
   assert.equal(
     narrowCollapsed.tabPosition,
-    "static",
-    "the stacked reopen control is a bar in the flow, not a floating edge tab"
+    "relative",
+    "the stacked reopen control stays in flow while positioning its issue count"
   );
   assert.equal(narrowCollapsed.fullWidth, true, "the stacked reopen bar spans the workbench");
   assert.equal(narrowCollapsed.belowEditor, true, "the stacked reopen bar sits below the document");

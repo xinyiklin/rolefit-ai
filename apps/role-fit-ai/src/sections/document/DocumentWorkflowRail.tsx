@@ -18,6 +18,7 @@ export type DocumentWorkflowCheck = {
 export type DocumentWorkflowFailure = {
   title: string;
   message: string;
+  details?: ReactNode;
   items?: string[];
 };
 
@@ -66,6 +67,7 @@ export function DocumentWorkflowRail({
         <section className="workflow-rail__failure" aria-label={failure.title} role="alert">
           <strong>{failure.title}</strong>
           <p>{failure.message}</p>
+          {failure.details}
           {failure.items?.length ? (
             <ul>
               {failure.items.map((item, index) => <li key={`${index}-${item}`}>{item}</li>)}

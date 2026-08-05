@@ -67,8 +67,10 @@ browser-side effects; components render them and App composes them.
   lifecycle to `useCoverLetterPreTailorSnapshot`. History, editing, layout, and
   PDF primitives remain in the shared packages. `useCoverLetter` owns deterministic
   preflight inputs, the single tailoring request, stale-response invalidation,
-  and one fingerprinted whole-document proposal — it never holds the live
-  document. Only `acceptProposal` crosses into the editor and creates the exact
+  one typed blocked-failure state, and one fingerprinted whole-document proposal
+  — it never holds the live document. Validate blocked payloads at the loopback
+  boundary; a semantic input change clears stale failure state, and only
+  `acceptProposal` crosses into the editor and creates the exact
   pre-tailor snapshot; discarding a proposal performs no editor mutation, and a
   semantic input change marks it stale without conflating provider selection
   with document content. Keep that request/proposal boundary in one coordinator:

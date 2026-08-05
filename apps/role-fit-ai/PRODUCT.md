@@ -51,7 +51,10 @@ server. A valid result becomes a whole-letter proposal beside the unchanged
 editor; only **Use proposal** replaces the live document and creates the exact
 one-click Restore baseline. **Keep current** performs no document mutation. A
 letter that still fails after repair is discarded with the current one kept,
-and deterministic validation blockers are shown without exposing provider output.
+and bounded typed validation issues identify the rejected claim and recovery
+without exposing provider output, repair instructions, or internal evidence ids.
+An unfinished Guidance prompt never counts as evidence, and spelled-out
+durations receive the same grounding check as digit forms.
 
 The letter asks a question only when a fact genuinely cannot be resolved — a
 missing company, role title, or candidate name, or a template that names a

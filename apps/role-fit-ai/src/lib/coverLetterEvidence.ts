@@ -1,5 +1,7 @@
 import type { ResumeData, ResumeEntry } from "@typeset/engine/lib/resumeData.ts";
 
+import { templateHasUnresolvedSlots } from "./coverLetterTemplate.ts";
+
 export type CoverLetterEvidenceSource = "resume" | "honest_context" | "user_answer";
 
 export type CoverLetterEvidenceItem = {
@@ -93,7 +95,11 @@ export function splitHonestContextEvidence(honestContext: string): string[] {
   const items: string[] = [];
   for (const rawLine of lines) {
     const line = rawLine.trim();
-    if (!line || /^[A-Za-z][A-Za-z ]{1,40}:$/.test(line)) continue;
+    if (
+      !line ||
+      /^[A-Za-z][A-Za-z ]{1,40}:$/.test(line) ||
+      templateHasUnresolvedSlots(line)
+    ) continue;
     items.push(line.replace(/^[-*•]\s+/, "").trim());
   }
   return items.filter(Boolean);

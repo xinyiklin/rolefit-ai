@@ -182,19 +182,27 @@ owns:
   role, or company, or an unanswered private template slot. Generative template
   slots never block. A recipient named in the source greeting is preserved;
   otherwise the company hiring team is the fallback.
-  The model receives the full corpus and chooses what to use — that selection is
-  its job, not the candidate's. It returns body paragraphs with the evidence ids
-  it actually used and the generative slot ids it resolved; the server assembles
-  date, greeting, body, and sign-off. Server validation collects **repairable
-  violations** rather than failing outright: unknown evidence or slot ids, a
+  The model receives the full completed corpus and chooses what to use — that
+  selection is its job, not the candidate's. Unresolved bracketed Guidance
+  prompts are filtered by the browser corpus builder and again by the server
+  request parser, so a recovery prompt cannot become candidate evidence. The
+  model returns body paragraphs with the evidence ids it actually used and the
+  generative slot ids it resolved; the server assembles date, greeting, body,
+  and sign-off. Server validation collects typed **repairable issues** rather
+  than failing outright: unknown evidence or slot ids, a
   paragraph citing nothing, a residual template token, a greeting/sign-off/date
   inside the body, a missing role or company, a second greeting, generic
-  brochure phrasing, and ungrounded candidate terms, numbers, or outcomes. Any
-  violation triggers exactly **one silent repair request** carrying the
-  violations and the rejected output. A second failure returns `422` with
-  `status: "blocked"`, a user-safe error, and deterministic blocker records
-  (`code`, `detail`, `recovery`, and an optional bounded excerpt); it never
-  returns the rejected provider text. The client keeps the current letter
+  brochure phrasing, and ungrounded candidate terms, numbers, or outcomes.
+  Numeric grounding treats equivalent word/digit durations alike while still
+  requiring the candidate corpus to contain that duration. Any issue triggers
+  exactly **one silent repair request** carrying internal repair instructions
+  and the rejected output. A second failure returns `422` with `status:
+  "blocked"`, `reason: "evidence_checks"`, `repairAttempted`, a user-safe error,
+  and at most eight deterministic issue records (`code`, `category`, `detail`,
+  `recovery`, and optional bounded `claim` / `unsupportedValue`); it never
+  returns repair instructions, internal evidence ids, or rejected provider
+  text. The client validates the fixed code/category/recovery relationships and
+  keeps the current letter
   unchanged and offers recovery near the workflow heading. A valid response is
   also staged client-side as a fingerprinted proposal: only **Use proposal**
   applies it, **Keep current** does not touch the editor, and changed semantic

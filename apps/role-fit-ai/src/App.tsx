@@ -869,13 +869,13 @@ function App() {
   }, [jobTracking.company, jobTracking.role]);
 
   // The job and workspace resume load independently. If job intake initially
-  // produced Company_Resume, complete it when the structured applicant name
-  // becomes available. Only known automatic fallbacks are eligible, so a title
-  // the user edited remains untouched.
+  // produced a partial automatic title, complete it when either side of the
+  // structured identity becomes available. Only known automatic fallbacks are
+  // eligible, so a title the user edited remains untouched.
   useEffect(() => {
     const applicantName = resolveResumeApplicantName(editedResume?.header?.name, resumeText);
     const company = (jobTracking.company ?? "").trim();
-    if (!applicantName || !company) return;
+    if (!applicantName && !company) return;
     setDocumentTitle((current) =>
       completeAutoDocumentTitle("resume", current, applicantName, company, [DEFAULT_DOCUMENT_TITLE])
     );
@@ -1764,7 +1764,7 @@ function App() {
     void handlePolish({ revealResumeOnSuccess: false });
   }
 
-  // Called from the ReviewRail "Add evidence" button on gaps/missing-skills rows.
+  // Called from the document review rails when a candidate claim needs evidence.
   // Appends a template line to honestContext (unless the keyword is already there),
   // then opens Settings on Guidance so the user can fill it in and re-run Polish.
   function handleAddHonestContext(keyword: string) {

@@ -19,6 +19,7 @@ type DocumentWorkbenchRail = {
   label: string;
   preferenceKey: DocumentRailPreferenceKey;
   content: ReactNode | null;
+  attention?: { count: number; label: string };
 };
 
 type DocumentWorkbenchProps = {
@@ -54,6 +55,8 @@ export function DocumentWorkbench({
   const generatedId = useId();
   const contentId = `${rail.id}-${generatedId}`;
   const hasRail = rail.content !== null;
+  const attention = rail.attention && rail.attention.count > 0 ? rail.attention : null;
+  const showRailLabel = `Show ${rail.label} panel${attention ? `, ${attention.label}` : ""}`;
   const { isExpanded, setIsExpanded } = useDocumentRailPreference(
     rail.preferenceKey,
     true
@@ -128,11 +131,16 @@ export function DocumentWorkbench({
                 className="document-workbench__rail-tab"
                 aria-expanded={false}
                 aria-controls={contentId}
-                aria-label={`Show ${rail.label} panel`}
-                title={`Show ${rail.label} panel`}
+                aria-label={showRailLabel}
+                title={showRailLabel}
                 onClick={() => setExpanded(true)}
               >
                 <PanelRightOpen size={16} aria-hidden="true" />
+                {attention ? (
+                  <span className="document-workbench__rail-attention" aria-hidden="true">
+                    {attention.count}
+                  </span>
+                ) : null}
               </button>
             ) : null}
           </>

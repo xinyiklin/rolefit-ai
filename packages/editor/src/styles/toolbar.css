@@ -723,6 +723,14 @@
   opacity: 0.48;
 }
 
+.toolbar-button--primary:disabled {
+  color: var(--ink-faint);
+  background: var(--card-soft);
+  border-color: var(--hairline);
+  box-shadow: none;
+  opacity: 1;
+}
+
 .popover.is-open > .toolbar-tooltip .toolbar-button__trailing {
   rotate: 180deg;
 }

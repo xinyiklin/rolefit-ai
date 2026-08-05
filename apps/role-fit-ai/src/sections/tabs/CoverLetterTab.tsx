@@ -124,6 +124,7 @@ export function CoverLetterTab({
   const canTailor =
     preflight.canTailor && resumeReady && jobReady && providerReady && !isTailoring;
   const targetLine = [jobTarget?.role, jobTarget?.company].filter(Boolean).join(" at ");
+  const issueCount = failure?.kind === "blocked" ? failure.issues.length : 0;
   const readinessHint = !resumeReady && !jobReady
     ? "Add a resume and prepare the job on Prepare."
     : !resumeReady
@@ -170,6 +171,14 @@ export function CoverLetterTab({
           id: "cover-tailoring",
           label: "Workflow",
           preferenceKey: "cover-tailoring",
+          ...(issueCount > 0
+            ? {
+                attention: {
+                  count: issueCount,
+                  label: `${issueCount} ${issueCount === 1 ? "issue" : "issues"}`
+                }
+              }
+            : {}),
           content: <CoverLetterReview
             words={wordCount(editor.text)}
             pageCount={pageCount}

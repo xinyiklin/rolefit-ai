@@ -125,6 +125,10 @@ and `docs/engineering/ui-principles.md`.
   Cover letter keeps one Tailor request but stages its result as a whole-document
   proposal: **Use proposal** applies it atomically, **Keep current** performs no
   mutation, stale inputs disable acceptance, and Restore appears only after use.
+  Typed post-draft issues render as one flat failure list with recovery beside
+  each claim. When that rail is collapsed, its edge tab may show only the
+  bounded issue count; readiness blockers and generic provider failures do not
+  earn a badge.
 - `DocumentWorkbench` owns the two document tabs' shared rail placement,
   disclosure, and responsive scroll boundary. Its wrapper stays semantically
   neutral because `DocumentWorkflowRail` owns the one named complementary

@@ -19,8 +19,8 @@ import {
   type CoverLetterPreflight,
 } from "../lib/coverLetterPreflight";
 import {
-  parseCoverLetterBlockers,
-  type CoverLetterBlocker,
+  parseCoverLetterBlockedFailure,
+  type CoverLetterBlockedFailure,
 } from "../lib/coverLetterFailure";
 
 type UseCoverLetterArgs = {
@@ -60,21 +60,9 @@ export type CoverLetterProposal = {
   stale: boolean;
 };
 
-export type CoverLetterFailure = {
-  headline: string;
-  detail: string;
-  blockers: CoverLetterBlocker[];
-};
-
-class CoverLetterRequestError extends ApiError {
-  blockers: CoverLetterBlocker[];
-
-  constructor(message: string, httpStatus: number, blockers: CoverLetterBlocker[]) {
-    super(message, httpStatus);
-    this.name = "CoverLetterRequestError";
-    this.blockers = blockers;
-  }
-}
+export type CoverLetterFailure =
+  | CoverLetterBlockedFailure
+  | { kind: "error"; headline: string; detail: string };
 
 function tailorResponse(value: unknown): CoverLetterTailorResult | null {
   if (!value || typeof value !== "object") return null;
@@ -126,6 +114,8 @@ export function useCoverLetter({
   );
   const [pendingProposal, setPendingProposal] = useState<Omit<CoverLetterProposal, "stale"> | null>(null);
   const [failure, setFailure] = useState<CoverLetterFailure | null>(null);
+  const failureRef = useRef<CoverLetterFailure | null>(failure);
+  failureRef.current = failure;
   const requestGenerationRef = useRef(0);
   const requestAbortRef = useRef<AbortController | null>(null);
 
@@ -183,6 +173,7 @@ export function useCoverLetter({
   });
   const requestInputFingerprintRef = useRef(requestInputFingerprint);
   requestInputFingerprintRef.current = requestInputFingerprint;
+  const previousRequestInputFingerprintRef = useRef(requestInputFingerprint);
   const proposal = useMemo<CoverLetterProposal | null>(
     () => pendingProposal
       ? {
@@ -212,9 +203,12 @@ export function useCoverLetter({
   }, [tailorApplied]);
 
   useEffect(() => {
+    const inputsChanged = previousRequestInputFingerprintRef.current !== requestInputFingerprint;
+    previousRequestInputFingerprintRef.current = requestInputFingerprint;
     const hadActiveRequest = requestAbortRef.current !== null;
     invalidateCoverRequest();
     if (hadActiveRequest) {
+      setFailure(null);
       setCoverStatus(
         "The letter, resume, job, or AI settings changed. Run Tailor again.",
       );
@@ -224,6 +218,10 @@ export function useCoverLetter({
         error:
           "The previous cover-letter request was cancelled before it produced a letter.",
       });
+    } else if (inputsChanged && failureRef.current) {
+      setFailure(null);
+      setCoverStatus("Inputs changed. Tailor the letter again for this context.");
+      setCoverProgress({ status: "idle" });
     }
   }, [requestInputFingerprint, invalidateCoverRequest]);
 
@@ -240,6 +238,8 @@ export function useCoverLetter({
     (text: string) => {
       invalidateCoverRequest();
       onApplyExternal(text);
+      setPendingProposal(null);
+      setFailure(null);
       setLastAppliedResult(null);
       setCoverStatus("");
       setCoverProgress({ status: "idle" });
@@ -250,6 +250,7 @@ export function useCoverLetter({
   const resetCoverWorkflow = useCallback(() => {
     invalidateCoverRequest();
     setSlotAnswers({});
+    setPendingProposal(null);
     setFailure(null);
     setCoverStatus("Inputs changed. Tailor the letter again for this context.");
     setCoverProgress({ status: "idle" });
@@ -262,7 +263,11 @@ export function useCoverLetter({
     (result: PolishCoverResult) => {
       if (result.status === "off") return;
       invalidateCoverRequest();
-      setFailure(null);
+      setFailure({
+        kind: "error",
+        headline: AI_UNAVAILABLE,
+        detail: "The existing cover letter was not replaced.",
+      });
       setCoverStatus(
         result.status === "ok"
           ? "A legacy cover-letter result was not applied. Use Tailor on the Cover letter page."
@@ -331,6 +336,11 @@ export function useCoverLetter({
       return;
     }
     if (!providerReady) {
+      setFailure({
+        kind: "error",
+        headline: "Provider unavailable",
+        detail: providerMessage,
+      });
       setCoverStatus(providerMessage);
       setCoverProgress({
         status: "failed",
@@ -368,10 +378,29 @@ export function useCoverLetter({
       const raw = await response.json();
       if (!isCurrent()) return;
       if (!response.ok) {
-        throw new CoverLetterRequestError(
+        const blocked = parseCoverLetterBlockedFailure(raw);
+        if (blocked) {
+          const count = blocked.issues.length;
+          setFailure(blocked);
+          setCoverStatus(
+            `Tailoring blocked. Review ${count} ${count === 1 ? "issue" : "issues"} in the Tailoring panel.`,
+          );
+          setCoverProgress({
+            status: "failed",
+            errorHeadline: "Tailoring blocked",
+            error: `Your current letter was kept. Review ${count} ${count === 1 ? "issue" : "issues"} in the Tailoring panel.`,
+          });
+          onUsage?.({
+            source: "none",
+            requestedProvider: aiRequest.provider,
+            requestedModel: aiRequest.selectedModel,
+            completedAt: new Date().toISOString(),
+          });
+          return;
+        }
+        throw new ApiError(
           raw.error ?? raw.reasons?.[0] ?? "Could not tailor the cover letter.",
           response.status,
-          parseCoverLetterBlockers(raw.blockers),
         );
       }
       const result = tailorResponse(raw);
@@ -403,8 +432,7 @@ export function useCoverLetter({
     } catch (error) {
       if (!isCurrent()) return;
       const classified = classifyFailure(error);
-      const blockers = error instanceof CoverLetterRequestError ? error.blockers : [];
-      setFailure({ headline: classified.headline, detail: classified.detail, blockers });
+      setFailure({ kind: "error", headline: classified.headline, detail: classified.detail });
       setCoverStatus("No changes were applied. Your current letter is unchanged.");
       setCoverProgress({
         status: "failed",

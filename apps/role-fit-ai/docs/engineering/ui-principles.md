@@ -161,7 +161,9 @@ pixel back to the document rather than leaving a reserved icon gutter. What
 remains is the panel icon alone, as a tab over the document's top-right corner
 and, once stacked below 1080px, as a full-width bar in the rail's place. It
 carries no visible label — its accessible name and tooltip name the panel it
-reopens, and no count rides along. Exactly one disclosure control
+reopens. The one exception is a bounded count for typed post-draft Cover Letter
+issues; that count and its label preserve a recoverable failure while the rail
+is closed, and ordinary readiness/provider failures never receive it. Exactly one disclosure control
 exists per state: the panel keeps its own Hide button, the collapsed rail goes
 `inert` (mounted, so review state survives) and its replacement tab takes focus,
 so a keyboard user never lands on `<body>` and a screen reader never hears two

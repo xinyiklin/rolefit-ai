@@ -1,169 +1,111 @@
-export type CoverLetterBlockerCode =
-  | "unsupported-claim"
-  | "unsupported-number"
-  | "unsupported-outcome"
-  | "missing-evidence-reference"
-  | "unresolved-template"
-  | "invalid-structure"
-  | "generic-language"
-  | "length";
+export type CoverLetterIssueCode =
+  | "unsupported_job_term"
+  | "unsupported_number"
+  | "unsupported_outcome"
+  | "unknown_evidence_reference"
+  | "missing_evidence_reference"
+  | "unresolved_template"
+  | "invalid_structure"
+  | "quality_contract";
 
-export type CoverLetterBlockerRecovery = "retry" | "add-evidence" | "edit-template";
+export type CoverLetterIssueCategory =
+  | "evidence"
+  | "template"
+  | "structure"
+  | "quality";
 
-export type CoverLetterBlocker = {
-  code: CoverLetterBlockerCode;
-  summary: string;
+export type CoverLetterIssueRecovery = "add_evidence" | "edit_source" | "retry";
+
+export type CoverLetterIssue = {
+  code: CoverLetterIssueCode;
+  category: CoverLetterIssueCategory;
+  claim?: string;
+  unsupportedValue?: string;
   detail: string;
-  excerpt?: string;
-  recovery: CoverLetterBlockerRecovery;
+  recovery: CoverLetterIssueRecovery;
 };
 
-export type CoverLetterFailureResponse = {
-  status: "blocked";
-  error: string;
-  blockers: CoverLetterBlocker[];
+export type CoverLetterBlockedFailure = {
+  kind: "blocked";
+  issues: CoverLetterIssue[];
+  repairAttempted: boolean;
 };
 
-const BLOCKER_CODES = new Set<CoverLetterBlockerCode>([
-  "unsupported-claim",
-  "unsupported-number",
-  "unsupported-outcome",
-  "missing-evidence-reference",
-  "unresolved-template",
-  "invalid-structure",
-  "generic-language",
-  "length"
-]);
-const RECOVERIES = new Set<CoverLetterBlockerRecovery>([
-  "retry",
-  "add-evidence",
-  "edit-template"
-]);
+const ISSUE_SHAPES: Record<
+  CoverLetterIssueCode,
+  { category: CoverLetterIssueCategory; recovery: CoverLetterIssueRecovery }
+> = {
+  unsupported_job_term: { category: "evidence", recovery: "add_evidence" },
+  unsupported_number: { category: "evidence", recovery: "add_evidence" },
+  unsupported_outcome: { category: "evidence", recovery: "add_evidence" },
+  unknown_evidence_reference: { category: "evidence", recovery: "retry" },
+  missing_evidence_reference: { category: "evidence", recovery: "retry" },
+  unresolved_template: { category: "template", recovery: "edit_source" },
+  invalid_structure: { category: "structure", recovery: "retry" },
+  quality_contract: { category: "quality", recovery: "retry" }
+};
 
-function safeText(value: unknown, maxLength: number): string {
-  if (typeof value !== "string") return "";
-  return value.replace(/[\u0000-\u001f\u007f]+/g, " ").replace(/\s+/g, " ").trim().slice(0, maxLength);
+function object(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
 }
 
-function quotedExcerpt(value: string): string | undefined {
-  const match = value.match(/["“]([^"”]{1,160})["”]/);
-  const excerpt = safeText(match?.[1], 160);
-  return excerpt || undefined;
+function displayText(value: unknown, maxLength: number): string {
+  return typeof value === "string"
+    ? value
+        .replace(/[\u0000-\u001f\u007f]/g, " ")
+        .replace(/\s+/g, " ")
+        .trim()
+        .slice(0, maxLength)
+    : "";
 }
 
-function blockerShape(violation: string): Omit<CoverLetterBlocker, "detail" | "excerpt"> {
-  if (/claims? an? outcome/i.test(violation)) {
-    return {
-      code: "unsupported-outcome",
-      summary: "Outcome was not supported",
-      recovery: "add-evidence"
-    };
+function parseIssue(value: unknown): CoverLetterIssue | null {
+  const candidate = object(value);
+  if (!candidate) return null;
+  const code = candidate.code as CoverLetterIssueCode;
+  const category = candidate.category as CoverLetterIssueCategory;
+  const recovery = candidate.recovery as CoverLetterIssueRecovery;
+  const detail = displayText(candidate.detail, 300);
+  const expectedShape = ISSUE_SHAPES[code];
+  if (
+    !expectedShape ||
+    expectedShape.category !== category ||
+    expectedShape.recovery !== recovery ||
+    !detail
+  ) {
+    return null;
   }
-  if (/number, scale, or duration/i.test(violation)) {
-    return {
-      code: "unsupported-number",
-      summary: "Number was not supported",
-      recovery: "add-evidence"
-    };
-  }
-  if (/claims? ["“]|no supplied evidence supports/i.test(violation)) {
-    return {
-      code: "unsupported-claim",
-      summary: "Candidate claim was not supported",
-      recovery: "add-evidence"
-    };
-  }
-  if (/evidence id|cite at least one evidence/i.test(violation)) {
-    return {
-      code: "missing-evidence-reference",
-      summary: "Evidence reference was missing",
-      recovery: "retry"
-    };
-  }
-  if (/template token|bracketed/i.test(violation)) {
-    return {
-      code: "unresolved-template",
-      summary: "Template detail was unresolved",
-      recovery: "edit-template"
-    };
-  }
-  if (/generic brochure|filler enthusiasm/i.test(violation)) {
-    return {
-      code: "generic-language",
-      summary: "Draft language was too generic",
-      recovery: "retry"
-    };
-  }
-  if (/longer than one page|tighten it substantially/i.test(violation)) {
-    return {
-      code: "length",
-      summary: "Draft was too long",
-      recovery: "retry"
-    };
-  }
+  const claim = displayText(candidate.claim, 280);
+  const unsupportedValue = displayText(candidate.unsupportedValue, 120);
   return {
-    code: "invalid-structure",
-    summary: "Draft structure was invalid",
-    recovery: "retry"
+    code,
+    category,
+    detail,
+    recovery,
+    ...(claim ? { claim } : {}),
+    ...(unsupportedValue ? { unsupportedValue } : {})
   };
 }
 
-function blockerDetail(
-  shape: Omit<CoverLetterBlocker, "detail" | "excerpt">,
-  excerpt?: string
-): string {
-  switch (shape.code) {
-    case "unsupported-claim":
-      return excerpt
-        ? `“${excerpt}” was not found in your resume or personal context.`
-        : "The proposal included a candidate claim that was not found in your evidence.";
-    case "unsupported-number":
-      return "The proposal included a number, scale, or duration that was not found in your evidence.";
-    case "unsupported-outcome":
-      return excerpt
-        ? `“${excerpt}” describes an outcome that was not found in your evidence.`
-        : "The proposal described an outcome that was not found in your evidence.";
-    case "missing-evidence-reference":
-      return "The AI response omitted a valid evidence reference RoleFit requires. Retry the request.";
-    case "unresolved-template":
-      return "The proposal left a template detail unresolved. Update the template and tailor again.";
-    case "generic-language":
-      return "The proposal relied on generic cover-letter language. Retry for a more specific draft.";
-    case "length":
-      return "The proposal exceeded the safe cover-letter length limit. Retry for a shorter draft.";
-    default:
-      return "The AI response did not follow RoleFit's required cover-letter structure. Retry the request.";
-  }
-}
-
-// Validator findings are deterministic but may contain internal evidence ids.
-// Map them to fixed user-facing details and expose only a bounded claim excerpt.
-export function coverLetterBlockersFromViolations(
-  violations: readonly string[]
-): CoverLetterBlocker[] {
-  return violations.slice(0, 8).map((rawViolation) => {
-    const violation = safeText(rawViolation, 320) || "The proposal did not meet the cover-letter contract.";
-    const shape = blockerShape(violation);
-    const excerpt = quotedExcerpt(violation);
-    return { ...shape, detail: blockerDetail(shape, excerpt), ...(excerpt ? { excerpt } : {}) };
-  });
-}
-
-// Network responses are untrusted even on loopback. Keep only the closed
-// blocker vocabulary and bounded strings before anything reaches UI chrome.
-export function parseCoverLetterBlockers(value: unknown): CoverLetterBlocker[] {
-  if (!Array.isArray(value)) return [];
-  const blockers: CoverLetterBlocker[] = [];
-  for (const raw of value.slice(0, 8)) {
-    if (!raw || typeof raw !== "object" || Array.isArray(raw)) continue;
-    const candidate = raw as Record<string, unknown>;
-    const code = candidate.code as CoverLetterBlockerCode;
-    const recovery = candidate.recovery as CoverLetterBlockerRecovery;
-    const summary = safeText(candidate.summary, 120);
-    const detail = safeText(candidate.detail, 320);
-    const excerpt = safeText(candidate.excerpt, 160);
-    if (!BLOCKER_CODES.has(code) || !RECOVERIES.has(recovery) || !summary || !detail) continue;
-    blockers.push({ code, recovery, summary, detail, ...(excerpt ? { excerpt } : {}) });
-  }
-  return blockers;
+// Loopback remains a network boundary. Validate every issue and its fixed
+// code/category/recovery relationship before rendering it in browser chrome.
+export function parseCoverLetterBlockedFailure(value: unknown): CoverLetterBlockedFailure | null {
+  const candidate = object(value);
+  if (
+    candidate?.status !== "blocked" ||
+    candidate.reason !== "evidence_checks" ||
+    !Array.isArray(candidate.issues)
+  ) return null;
+  const issues = candidate.issues
+    .slice(0, 8)
+    .map(parseIssue)
+    .filter((issue) => issue !== null);
+  if (issues.length === 0) return null;
+  return {
+    kind: "blocked",
+    issues,
+    repairAttempted: candidate.repairAttempted === true
+  };
 }

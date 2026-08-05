@@ -3,6 +3,7 @@ import type {
   CoverLetterProposal
 } from "../../hooks/useCoverLetter";
 import type { CoverLetterTailorResult } from "../../lib/coverLetterEvidence";
+import type { CoverLetterIssue } from "../../lib/coverLetterFailure";
 import type {
   CoverLetterDetailKey,
   CoverLetterPreflight
@@ -66,6 +67,16 @@ function proposalEvidence(result: CoverLetterTailorResult, evidenceIds: string[]
     .join(" · ");
 }
 
+function issueRecovery(issue: CoverLetterIssue): string {
+  if (issue.recovery === "add_evidence") {
+    return "Add factual experience in Settings > Guidance, then Tailor again.";
+  }
+  if (issue.recovery === "edit_source") {
+    return "Edit the source letter, then Tailor again.";
+  }
+  return "Retry Tailor. If it repeats, switch the model or provider.";
+}
+
 export function CoverLetterReview({
   words,
   pageCount,
@@ -100,7 +111,7 @@ export function CoverLetterReview({
 
   let phase: DocumentWorkflowPhase = ready ? "ready" : "blocked";
   let description = ready
-    ? "Tailor against your current letter, resume evidence, and prepared job."
+    ? "Tailor creates a reviewable proposal from your current letter, resume evidence, and prepared job."
     : "Complete the blocked rows before tailoring.";
   if (isTailoring) {
     phase = "working";
@@ -119,8 +130,31 @@ export function CoverLetterReview({
     description = "The accepted proposal is now the live document.";
   }
 
-  const failureItems = failure?.blockers.map((blocker) => blocker.detail) ?? [];
-  const needsEvidence = failure?.blockers.some((blocker) => blocker.recovery === "add-evidence") ?? false;
+  const blockedFailure = failure?.kind === "blocked" ? failure : null;
+  const errorFailure = failure?.kind === "error" ? failure : null;
+  const failureDetails = blockedFailure ? (
+    <ul className="cover-letter-review__issues">
+      {blockedFailure.issues.map((issue, index) => (
+        <li key={`${issue.code}-${index}`}>
+          {issue.claim ? (
+            <p className="cover-letter-review__claim">“{issue.claim}”</p>
+          ) : null}
+          <p className="cover-letter-review__issue-detail">{issue.detail}</p>
+          {issue.recovery === "add_evidence" && issue.unsupportedValue && onAddHonestContext ? (
+            <button
+              type="button"
+              className="secondary-button is-compact cover-letter-review__issue-action"
+              onClick={() => onAddHonestContext(issue.unsupportedValue!)}
+            >
+              Add evidence
+            </button>
+          ) : (
+            <p className="cover-letter-review__issue-recovery">{issueRecovery(issue)}</p>
+          )}
+        </li>
+      ))}
+    </ul>
+  ) : null;
 
   const footer = proposal ? (
     <>
@@ -142,20 +176,9 @@ export function CoverLetterReview({
       ) : null}
     </>
   ) : failure ? (
-    <>
-      <button type="button" className="primary-button is-compact" onClick={onTailor}>
-        Retry
-      </button>
-      {needsEvidence && onAddHonestContext ? (
-        <button
-          type="button"
-          className="secondary-button is-compact"
-          onClick={() => onAddHonestContext(failure.blockers.find((item) => item.excerpt)?.excerpt ?? "")}
-        >
-          Open personal context
-        </button>
-      ) : null}
-    </>
+    <button type="button" className="primary-button is-compact" onClick={onTailor}>
+      Retry
+    </button>
   ) : appliedResult && canRestore ? (
     <button type="button" className="secondary-button is-compact" onClick={onRestore}>
       Restore previous
@@ -179,9 +202,13 @@ export function CoverLetterReview({
       description={description}
       checks={proposal || appliedResult ? [] : checks}
       failure={failure ? {
-        title: failure.blockers.length ? "Evidence check failed" : failure.headline,
-        message: "No changes were applied. Your current letter is unchanged.",
-        items: failureItems.length ? failureItems : [failure.detail]
+        title: blockedFailure ? "Evidence check failed" : (errorFailure?.headline ?? "Tailoring failed"),
+        message: blockedFailure
+          ? `RoleFit rejected ${blockedFailure.issues.length} ${blockedFailure.issues.length === 1 ? "draft issue" : "draft issues"}${blockedFailure.repairAttempted ? " after one repair attempt" : ""}. Your current letter is unchanged.`
+          : "No changes were applied. Your current letter is unchanged.",
+        ...(blockedFailure
+          ? { details: failureDetails }
+          : { items: [errorFailure?.detail ?? "Try Tailor again."] })
       } : null}
       footer={footer}
       status={status}

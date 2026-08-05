@@ -74,7 +74,7 @@ export function ResumeWorkflowRail({
   onProposalChange,
   onAddHonestContext
 }: ResumeWorkflowRailProps) {
-  const target = [jobTarget?.role, jobTarget?.company].filter(Boolean).join(" at ") || "Resume workflow";
+  const target = [jobTarget?.role, jobTarget?.company].filter(Boolean).join(" at ") || "Resume";
   const ready = resumeReady && jobReady && tailorProviderReady && auditProviderReady && tailorSectionCount > 0;
   const tailorFailed = progress.tailor.status === "failed" || progress.tailor.status === "stopped";
   const auditFailed = progress.review.status === "failed" || progress.review.status === "stopped";
@@ -82,7 +82,7 @@ export function ResumeWorkflowRail({
 
   let phase: DocumentWorkflowPhase = ready ? "ready" : "blocked";
   let description = ready
-    ? "One click tailors selected sections, then audits the complete proposal."
+    ? "Polish runs Tailor on selected sections, then audits the complete proposal."
     : "Complete the blocked rows before polishing.";
   if (isPolishing) {
     phase = "working";

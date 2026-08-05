@@ -193,6 +193,23 @@
   outline-offset: 2px;
 }
 
+.document-workbench__rail-attention {
+  position: absolute;
+  top: -7px;
+  inset-inline-end: 2px;
+  display: inline-grid;
+  min-width: 17px;
+  height: 17px;
+  place-items: center;
+  border: 2px solid var(--card);
+  border-radius: var(--r-pill);
+  padding: 0 3px;
+  background: var(--danger);
+  color: var(--card-elev);
+  font: 600 0.6rem/1 var(--font-data);
+  font-variant-numeric: tabular-nums;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .document-workbench__layout.has-rail,
   .document-workbench__editor,
@@ -254,13 +271,19 @@
   /* Stacked there is no right edge to hang a tab on: the same icon becomes the
      full-width bar standing where the rail would be. */
   .document-workbench__rail-tab {
-    position: static;
+    position: relative;
     width: 100%;
     height: 44px;
     border: 0;
     border-top: 1px solid var(--hairline);
     border-radius: 0;
     box-shadow: none;
+  }
+
+  .document-workbench__rail-attention {
+    top: 50%;
+    inset-inline-end: var(--s4);
+    transform: translateY(-50%);
   }
 
   .document-workbench__rail-content {

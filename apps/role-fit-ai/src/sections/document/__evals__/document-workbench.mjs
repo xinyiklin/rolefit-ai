@@ -125,15 +125,23 @@ assert.match(
   /aria-label=\{`Hide \$\{rail\.label\} panel`\}/,
   "the expanded rail names its own hide control"
 );
-assert.match(
-  workbench,
-  /className="document-workbench__rail-tab"[\s\S]{0,400}?aria-label=\{`Show \$\{rail\.label\} panel`\}/,
-  "the icon-only edge tab names the panel it reopens for assistive technology"
+assert.equal(
+  workbench.includes(
+    'const showRailLabel = `Show ${rail.label} panel${attention ? `, ${attention.label}` : ""}`;'
+  ),
+  true,
+  "the icon-only edge tab names the panel and any collapsed attention count for assistive technology"
 );
+assert.match(workbench, /aria-label=\{showRailLabel\}/, "the collapsed control exposes that full label");
 assert.match(
   workbench,
   /\{!isExpanded \? \([\s\S]{0,200}?document-workbench__rail-tab/,
   "the edge tab exists only while the rail is collapsed, so one control is exposed per state"
+);
+assert.match(
+  workbench,
+  /\{attention \? \([\s\S]{0,180}?document-workbench__rail-attention[\s\S]{0,100}?attention\.count/,
+  "a collapsed rail renders only its bounded attention count, not a duplicate failure panel"
 );
 
 assert.match(
@@ -160,6 +168,11 @@ assert.match(
   styles,
   /\.document-workbench__rail-tab\s*\{[\s\S]{0,400}?position:\s*absolute/,
   "the collapsed rail is reopened from an edge tab over the document, not a reserved gutter"
+);
+assert.match(
+  styles,
+  /\.document-workbench__rail-attention\s*\{[\s\S]{0,300}?background:\s*var\(--danger\)/,
+  "the collapsed attention count uses the existing semantic danger token"
 );
 assert.match(
   styles,
@@ -226,6 +239,12 @@ assert.match(
   /content:\s*<CoverLetterReview/,
   "Cover Letter keeps its readiness rail available before tailoring"
 );
+assert.match(
+  coverTab,
+  /const issueCount = failure\?\.kind === "blocked" \? failure\.issues\.length : 0;/,
+  "only a typed post-draft blocker adds a collapsed Cover Letter rail count"
+);
+assert.match(coverTab, /issueCount > 0[\s\S]{0,180}?attention:/);
 assert.match(
   workflowRail,
   /PHASE_LABELS[\s\S]*proposal:\s*"Proposal ready"/,

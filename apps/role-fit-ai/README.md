@@ -62,7 +62,11 @@ editable documents.
   appears beside the unchanged editor as a whole-document proposal. **Use
   proposal** applies it atomically and enables **Restore previous** until the
   next edit; **Keep current** performs no document mutation. Validation blockers
-  identify what needs correction without exposing rejected provider output. You
+  identify the rejected claim and whether to add evidence, edit the source, or
+  retry without exposing rejected provider output or internal evidence ids. An
+  unfinished Guidance prompt is ignored until completed, and worded durations
+  such as “three years” are grounded like `3 years`. If the workflow rail is
+  collapsed, its icon shows the bounded issue count. You
   are only asked something when a fact cannot
   be resolved at all — a missing company or role, or a template that names a
   private detail such as a referral. Unsaved edits are kept in a

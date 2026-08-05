@@ -1920,3 +1920,29 @@ bounded; app-only operational detail belongs in the affected app documentation.
   frame-by-frame with pane width + padding invariant at 1756 throughout. All 67
   offline evals passed. Browser QA ran in the paint-gated pane, so end states and
   scrubbed timelines are verified but real animation frames are not.
+- [USER+CODE] 2026-08-04: Supersedes only the earlier "no badge API exists"
+  decision for collapsed document rails. The user approved integrating the
+  typed cover-letter evidence failure work with the latest workbench branch.
+  `DocumentWorkbench` now accepts a generic optional attention count, but RoleFit
+  supplies it only for a validated post-draft Cover Letter `blocked` response;
+  readiness gaps and generic provider failures remain unbadged. The closed icon
+  and accessible label carry the bounded count while the detailed flat issue
+  list stays in the existing mounted workflow rail.
+- [CODE] 2026-08-04: Cover-letter validation issues now have fixed typed
+  code/category/recovery relationships, separate internal repair instructions
+  from bounded display-safe fields, and expose at most eight public records after
+  the single repair fails. The loopback client validates that wire shape before
+  rendering it, semantic input changes clear stale failure state, and proposal
+  acceptance remains the only editor replacement boundary. Unfinished Guidance
+  prompts are filtered by both corpus boundaries, and numeric grounding treats
+  equivalent digit and word durations alike without letting an unrelated number
+  support a duration.
+- [TOOL] 2026-08-04: The RoleFit production/server build, full app check
+  (including desktop contracts), all 67 offline evals, and the headless Chromium
+  editor/workbench suite passed. The browser contract now asserts the branch's
+  documented `18rem` rail width instead of its stale pre-branch 320-380px range
+  and verifies the collapsed issue count, accessible label, persistence,
+  desktop disclosure, and stacked in-flow placement. The UI detector found no
+  new unresolved issue; its remaining layout-transition warning is the documented
+  synchronized padding/track motion that prevents the workspace-shift regression.
+  Live provider evaluation and real-app visual QA were not run.
