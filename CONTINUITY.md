@@ -5,6 +5,23 @@ bounded; app-only operational detail belongs in the affected app documentation.
 
 ## 2026-08-06
 
+- [USER+CODE] **AI Review remains the sole owner of the application
+  recommendation.** The new four-level fit vocabulary in
+  `apps/role-fit-ai/shared/fitAssessmentContract.ts` types
+  `ApplicationRecommendation` for validation but derives nothing: a
+  deterministic precedence helper was written, reviewed, and removed, and the
+  offline eval now asserts its absence. A future Initial fit endpoint must
+  therefore VALIDATE the model's action against the returned fit and
+  eligibility — rejecting a strong fit paired with "not recommended" and no
+  eligibility blocker — rather than computing the action from them. This keeps
+  the existing trust contract intact, so no product or engineering contract
+  changed; a rejection rule gives the same guarantee the precedence ladder
+  would have.
+- [CODE] `assertUniqueRequirementIds` throws from the three derived requirement
+  views only because no validation boundary exists yet. It must move to the
+  requirement ledger or the server's assessment validation before any surface
+  renders those views, so a duplicate id from a model response fails at ingest
+  instead of crashing a render.
 - [TOOL] `job-analysis-rename-contract.mjs` now takes its file list from
   `git ls-files --cached --others --exclude-standard` instead of a directory
   walk. Git reports POSIX separators, so its ledger keys matched only on Linux

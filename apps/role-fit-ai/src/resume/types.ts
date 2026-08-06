@@ -1,3 +1,5 @@
+import type { LegacyFitVerdict } from "../../shared/fitAssessmentContract.ts";
+
 // AI-judged fit on a 0-100 scale, scoring the
 // original (base) resume and the tailored rewrite against one job in a single
 // call so the lift between them is directly comparable. Populated only when an
@@ -25,7 +27,11 @@ export type SavedFitComparison = {
   tailored: number;
 };
 
-export type StrictReviewVerdict = "STRONG FIT" | "REASONABLE FIT" | "STRETCH" | "DON'T APPLY";
+// The retired four-string vocabulary, still what the strict-review model emits
+// and what saved records hold. It is an alias so the exact strings have one
+// definition; the current vocabulary is FitVerdict in
+// shared/fitAssessmentContract.ts, where "DON'T APPLY" is LIMITED_FIT.
+export type StrictReviewVerdict = LegacyFitVerdict;
 export type StrictReviewStatus = "covered" | "missing" | "adjacent";
 export type StrictReviewSeverity = "BLOCKER" | "HIGH" | "MEDIUM" | "LOW";
 

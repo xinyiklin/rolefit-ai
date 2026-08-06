@@ -1,15 +1,19 @@
-// Single source of truth for the FIT VERDICT vocabulary, shared by every
-// surface that shows fit (resume header band, review rail pill, application
-// tracker). Before this, the tracker re-derived a separate "match" vocabulary
-// (fitLabel: Strong/Good/Stretch/Weak match) from the stored score while the
-// review pane showed the strict-review verdict (Strong fit / Reasonable fit /
-// Stretch / Don't apply) — same band, different words, read as a mismatch.
+// LEGACY fit-verdict surface: the four stored strings that saved records hold
+// and the strict-review model still emits. The current vocabulary is FitVerdict
+// in shared/fitAssessmentContract.ts, where "DON'T APPLY" is LIMITED_FIT. This
+// module stays on the legacy strings until the display and persistence
+// migrations land.
 //
-// Rule: prefer a real stored/AI verdict; otherwise derive the verdict from the
-// score using thresholds that MIRROR the server's verdictForScore (and the
-// fitTone bands in applicationDisplay.ts). Label AND tone always come from the
-// SAME verdict so they can never disagree within one surface.
+// It exists because the tracker once re-derived its own vocabulary (fitLabel:
+// Strong/Good/Stretch/Weak match) from the stored score while the review pane
+// showed the strict-review verdict — same band, different words, read as a
+// mismatch. Label AND tone therefore always come from the SAME verdict, and
+// a real stored/AI verdict is preferred over anything derived from a score.
 
+import {
+  LEGACY_VERDICT_TOKEN,
+  fitVerdictFromLegacyScore
+} from "../../shared/fitAssessmentContract.ts";
 import type { StrictReviewVerdict } from "../resume/types";
 
 export const VERDICT_LABEL: Record<StrictReviewVerdict, string> = {
@@ -27,16 +31,14 @@ export const VERDICT_TONE: Record<StrictReviewVerdict, "strong" | "good" | "stre
   "DON'T APPLY": "weak"
 };
 
-// Score → verdict. Thresholds MIRROR server/ai/sanitize.ts verdictForScore
-// (STRONG FIT >=85, REASONABLE FIT >=70, STRETCH >=46, DON'T APPLY <46) and the
-// fitLabel/fitTone bands. Keep all three in sync — the server and client
-// modules can't import each other.
+// Score → verdict for records saved before the vocabulary change. The bands
+// (>=85, >=70, >=46) come from fitVerdictFromLegacyScore, but four hardcoded
+// copies still exist and must stay in step until they read the shared floors:
+// sanitize.ts's band check, fitTone and priorityFor in applicationDisplay.ts,
+// and the reason bands in verdictReason.ts.
 export function verdictFromScore(score: number | null | undefined): StrictReviewVerdict | null {
-  if (typeof score !== "number") return null;
-  if (score >= 85) return "STRONG FIT";
-  if (score >= 70) return "REASONABLE FIT";
-  if (score >= 46) return "STRETCH";
-  return "DON'T APPLY";
+  const verdict = fitVerdictFromLegacyScore(score);
+  return verdict ? LEGACY_VERDICT_TOKEN[verdict] : null;
 }
 
 // CSS modifier for the rail/header verdict-pill, built from the verdict string
