@@ -3,6 +3,16 @@
 Cross-workspace decisions and handoff state. Keep entries factual, dated, and
 bounded; app-only operational detail belongs in the affected app documentation.
 
+## 2026-08-06
+
+- [TOOL] `job-analysis-rename-contract.mjs` now takes its file list from
+  `git ls-files --cached --others --exclude-standard` instead of a directory
+  walk. Git reports POSIX separators, so its ledger keys matched only on Linux
+  CI and the check could never pass on Windows; git's ignore rules also keep an
+  ignored personal workspace out of the scan and out of test output. The
+  ledger's 20 entries and exact counts are unchanged, and the full RoleFit gate
+  passes on Windows for the first time with all 69 offline evaluations green.
+
 ## 2026-08-01
 
 - [USER+CODE+TOOL] The standalone Typeset app and the private
