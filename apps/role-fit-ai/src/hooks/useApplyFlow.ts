@@ -17,7 +17,7 @@ import { useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { makeApplicationDraft, type Application, type ApplicationStatus } from "./useApplications";
 import type { ApplyDuplicateResolution } from "./useDuplicateGuard";
 import type { ExtractedJobTracking } from "../lib/jobExtract";
-import type { StageAiUsage } from "../lib/aiUsage";
+import { canonicalizeAiUsageStageKeys, type StageAiUsage } from "../lib/aiUsage";
 import type { PolishedResume } from "../resumeEngine";
 import type { FitComparison, OutputTab } from "../sections/shared";
 import { normalizeDocumentSnapshot } from "../lib/applicationDocuments";
@@ -275,10 +275,8 @@ export function useApplyFlow({
       existing && existing.status && existing.status !== "interested" ? existing.status : "applied";
     const tracking = currentJobTracking();
     const draft = makeApplicationDraft(jobUrl, preparedJobDescription, tracking);
-    const aiUsage: Record<string, StageAiUsage> = {
-      ...(existing?.aiUsage ?? {}),
-      distill: pipelineAiUsage.distill ?? { source: "none" }
-    };
+    const aiUsage: Record<string, StageAiUsage> = canonicalizeAiUsageStageKeys(existing?.aiUsage);
+    aiUsage["job-analysis"] = pipelineAiUsage["job-analysis"] ?? { source: "none" };
     if (materialSelection.resume) {
       aiUsage.tailor = pipelineAiUsage.tailor ?? { source: "none" };
       aiUsage.review = pipelineAiUsage.review ?? { source: "none" };

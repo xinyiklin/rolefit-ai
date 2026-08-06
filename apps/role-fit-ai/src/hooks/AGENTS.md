@@ -5,7 +5,7 @@ browser-side effects; components render them and App composes them.
 
 ## Ownership
 
-- `useJobIntake` owns Prepare's link/paste/extension intake, Distill
+- `useJobIntake` owns Prepare's link/paste/extension intake, Job analysis
   progress/retry, and automatic-tailor intent. Its extension progress callback
   and first delivered-posting callback select Prepare before visible intake
   state changes; claim tokens and fresh-tab ownership remain transport
@@ -129,9 +129,9 @@ browser-side effects; components render them and App composes them.
   incomplete comparison keeps the current selection without inventing a
   recommendation. A successful automatic run must not force the Resume tab;
   user-initiated Resume tailoring retains its normal reveal behavior.
-- Distill stale-input guards cover only the job source and Distill-stage AI
+- Job analysis stale-input guards cover only the job source and that stage's AI
   settings. Resume bootstrap and Tailor-mode reconciliation are downstream
-  auto-Tailor inputs; they must not cancel an extension Distill that is already
-  running.
+  auto-Tailor inputs; they must not cancel extension job analysis that is
+  already running.
 - Add a focused eval for durable sequencing, identity, or state-transition
   rules that can be tested without React/browser orchestration.

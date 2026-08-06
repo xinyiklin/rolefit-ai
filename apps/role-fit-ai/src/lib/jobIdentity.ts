@@ -46,7 +46,7 @@ export type DuplicateConfidence = "exact" | "high" | "possible";
 
 export type DuplicateTarget = {
   jobUrl?: string;
-  /** Job description text — raw posting text preferred over a distilled brief. */
+  /** Job description text — raw posting text preferred over a prepared brief. */
   jobText?: string;
   company?: string;
   role?: string;
@@ -446,8 +446,8 @@ function roleFromTitle(title: string | undefined | null): string {
 
 function candidateText(app: SignatureInput): string {
   const raw = typeof app.rawJobDescription === "string" ? app.rawJobDescription : "";
-  const distilled = typeof app.jobDescription === "string" ? app.jobDescription : "";
-  return raw.trim() ? raw : distilled;
+  const prepared = typeof app.jobDescription === "string" ? app.jobDescription : "";
+  return raw.trim() ? raw : prepared;
 }
 
 /** Strongest first. Exported so callers rank edges by the same order. */

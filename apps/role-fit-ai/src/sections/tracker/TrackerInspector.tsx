@@ -14,10 +14,11 @@ import {
   nextAction
 } from "../../lib/applicationDisplay";
 import { describeProviderModel } from "../../config/aiOptions";
+import { canonicalizeAiUsageStageKeys } from "../../lib/aiUsage";
 import { displayVerdictReason } from "../../lib/verdictReason";
 
 const AI_USAGE_STAGES: { key: string; label: string }[] = [
-  { key: "distill", label: "Distill" },
+  { key: "job-analysis", label: "Job analysis" },
   { key: "tailor", label: "Tailor" },
   { key: "review", label: "Review" },
   { key: "cover", label: "Cover" }
@@ -66,6 +67,7 @@ export function TrackerInspector({
     ? "Estimated"
     : "Not scored";
   const safeJobUrl = /^https?:\/\//i.test(selected.jobUrl.trim()) ? selected.jobUrl.trim() : "";
+  const displayedAiUsage = canonicalizeAiUsageStageKeys(selected.aiUsage);
 
   // Other members of the selected app's duplicate group, each paired with the
   // edge (evidence) that connects it to the selected app.
@@ -247,8 +249,8 @@ export function TrackerInspector({
           <div className="inspector-divider" aria-hidden="true" />
           <p className="inspector-sent__eyebrow">AI usage</p>
           <dl className="ledger-rows inspector-facts">
-            {AI_USAGE_STAGES.filter(({ key }) => selected.aiUsage?.[key]).map(({ key, label }) => {
-              const usage = selected.aiUsage![key];
+            {AI_USAGE_STAGES.filter(({ key }) => displayedAiUsage[key]).map(({ key, label }) => {
+              const usage = displayedAiUsage[key];
               return (
                 <div className="ledger-row" key={key}>
                   <dt>{label}</dt>

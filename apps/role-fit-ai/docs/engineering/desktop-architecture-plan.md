@@ -41,7 +41,7 @@ configured and ready, AI actions stop with an actionable “Add a provider in
 RoleFit Companion” state rather than silently selecting a default or a paid
 provider.
 
-Distill, Tailor, and Review retain independent provider/model/effort choices in
+Job analysis, Tailor, and Review retain independent provider/model/effort choices in
 browser preferences. One stored API credential is shared by the local server
 for all stages using that provider; keys are not duplicated per stage.
 
@@ -538,7 +538,7 @@ Manual verification:
 5. Confirm no provider disables AI but leaves editing/tracker/export usable.
 6. Confirm reused-server mode refuses managed vault injection.
 7. Confirm extension imports still claim fresh browser tabs and await initial
-   provider discovery instead of recording `loading` as a failed Distill.
+   provider discovery instead of recording `loading` as a failed Job analysis.
 8. Close the setup window, change a fake CLI auth result, and confirm the owned
    server snapshot refreshes without renderer IPC.
 9. Confirm shutdown leaves no owned server or owned child process and clears

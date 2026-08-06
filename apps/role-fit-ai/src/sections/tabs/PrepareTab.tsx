@@ -94,10 +94,10 @@ export type PrepareTabProps = {
   jobPrepared: boolean;
   isPreparing: boolean;
   extensionImportPhase: "receiving" | "preparing" | null;
-  distillProgress: AiStageState;
+  jobAnalysisProgress: AiStageState;
   preparationStatus: string;
-  distillProviderReady: boolean;
-  distillProviderMessage: string;
+  jobAnalysisProviderReady: boolean;
+  jobAnalysisProviderMessage: string;
   onFetchPosting: () => void | Promise<void>;
   onPreparePosting: (sourceOverride?: string) => void | Promise<void>;
   resumeReady: boolean;
@@ -154,10 +154,10 @@ export function PrepareTab({
   jobPrepared,
   isPreparing,
   extensionImportPhase,
-  distillProgress,
+  jobAnalysisProgress,
   preparationStatus,
-  distillProviderReady,
-  distillProviderMessage,
+  jobAnalysisProviderReady,
+  jobAnalysisProviderMessage,
   onFetchPosting,
   onPreparePosting,
   resumeReady,
@@ -217,8 +217,8 @@ export function PrepareTab({
   const manualReviewFields = jobPrepared ? (importedJob?.manualReviewFields ?? []) : [];
   const sourceLength = (jobRawText || jobDescription).trim().length;
   const isReceiving = extensionImportPhase === "receiving";
-  const progressRunning = isPreparing || distillProgress.status === "running";
-  const preparationStopped = distillProgress.status === "failed" || distillProgress.status === "stopped";
+  const progressRunning = isPreparing || jobAnalysisProgress.status === "running";
+  const preparationStopped = jobAnalysisProgress.status === "failed" || jobAnalysisProgress.status === "stopped";
   // Preparation has its own readiness check, so the rail reports it only while
   // work is in flight or a message is outstanding.
   const activity: PrepareActivity | null = isReceiving
@@ -231,7 +231,7 @@ export function PrepareTab({
       : preparationStopped
         ? {
             tone: "warn",
-            message: distillProgress.error || distillProgress.errorHeadline || "Preparation stopped."
+            message: jobAnalysisProgress.error || jobAnalysisProgress.errorHeadline || "Preparation stopped."
           }
         : preparationStatus
           ? { tone: "info", message: preparationStatus }
@@ -269,27 +269,27 @@ export function PrepareTab({
             : coverLetterWordCount > 0
               ? "Draft too short"
               : "No draft";
-  const canFetch = Boolean(jobUrl.trim()) && !isPreparing && distillProviderReady;
+  const canFetch = Boolean(jobUrl.trim()) && !isPreparing && jobAnalysisProviderReady;
   // URL edits invalidate readiness but must not swap the controlled replacement
   // textarea from the captured posting back to the compact tailoring scaffold.
   // Direct textarea edits clear jobRawText in useJobIntake, so this still hands
   // control to the user's replacement on the first keystroke.
   const preparationSourceText = jobRawText || jobDescription;
-  const canPreparePaste = preparationSourceText.trim().length >= 80 && !isPreparing && distillProviderReady;
+  const canPreparePaste = preparationSourceText.trim().length >= 80 && !isPreparing && jobAnalysisProviderReady;
   const fetchHint = !jobUrl.trim()
     ? "Enter a job URL first."
     : isPreparing
       ? "Wait for the current preparation to finish."
-      : !distillProviderReady
-        ? distillProviderMessage
+      : !jobAnalysisProviderReady
+        ? jobAnalysisProviderMessage
         : "";
   const prepareHint =
     preparationSourceText.trim().length < 80
       ? "Paste at least 80 characters from the job posting."
       : isPreparing
         ? "Wait for the current preparation to finish."
-        : !distillProviderReady
-          ? distillProviderMessage
+        : !jobAnalysisProviderReady
+          ? jobAnalysisProviderMessage
           : "";
   const tailorHint = !jobPrepared
     ? "Prepare the job first."

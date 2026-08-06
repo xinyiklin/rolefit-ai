@@ -1,4 +1,4 @@
-import { normalizeSettings } from "./settings.ts";
+import { migrateSettings, normalizeSettings } from "./settings.ts";
 
 export const WORKSPACE_BACKUP_FORMAT = "rolefit-workspace-backup" as const;
 export const WORKSPACE_BACKUP_SCHEMA_VERSION = 2 as const;
@@ -146,12 +146,13 @@ export function parsePortableBrowserPreferences(value: unknown): PortableBrowser
   if (new TextEncoder().encode(settingsJson).byteLength > 100_000) {
     throw new Error("The backup's settings are too large.");
   }
-  const settings = normalizeSettings(inputSettings);
-  const inputKeys = Object.keys(inputSettings);
+  const migratedInputSettings = migrateSettings(inputSettings);
+  const settings = normalizeSettings(migratedInputSettings);
+  const inputKeys = Object.keys(migratedInputSettings);
   const normalizedKeys = Object.keys(settings);
   if (inputKeys.length !== normalizedKeys.length || inputKeys.some((key) =>
     !Object.prototype.hasOwnProperty.call(settings, key) ||
-    JSON.stringify(inputSettings[key]) !== JSON.stringify((settings as Record<string, unknown>)[key])
+    JSON.stringify(migratedInputSettings[key]) !== JSON.stringify((settings as Record<string, unknown>)[key])
   )) {
     throw new Error("The backup's settings contain unsupported or invalid values.");
   }

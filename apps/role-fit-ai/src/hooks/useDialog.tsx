@@ -62,7 +62,7 @@ type PendingDialog = {
 
 export function DialogProvider({ children }: { children: ReactNode }) {
   // FIFO queue, one dialog visible at a time. A single resolver slot would let
-  // a second confirm()/alert() raised while one is open (e.g. the post-distill
+  // a second confirm()/alert() raised while one is open (e.g. the post-analysis
   // duplicate gate firing ~30s after click) replace the visible dialog and
   // strand the first caller's promise forever — its awaiting workflow would
   // silently never continue.

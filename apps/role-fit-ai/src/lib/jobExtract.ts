@@ -1,4 +1,4 @@
-// Local, dependency-free distiller for imported job postings.
+// Local, dependency-free analyzer for imported job postings.
 //
 // The server hands back tag-stripped text from a job page (or a known ATS JSON
 // description). This helper produces two related outputs:
@@ -2037,9 +2037,9 @@ function extractQualifications(lines: string[]) {
   };
 }
 
-// Shared, conservative technology recognizer for distilled job metadata and
+// Shared, conservative technology recognizer for analyzed job metadata and
 // the AI review's exact-term cross-check. Keeping one catalog prevents the
-// distiller, reviewer prompt, and coverage backstop from disagreeing about
+// analyzer, reviewer prompt, and coverage backstop from disagreeing about
 // whether a concrete technology name is present.
 export function extractKnownTechKeywords(source: unknown): string[] {
   const text = String(source ?? "");
@@ -2173,8 +2173,8 @@ function extractDomainSignals(
   return DOMAIN_SIGNALS.filter(([, re]) => re.test(source)).map(([label]) => label).slice(0, 8);
 }
 
-// Structured parts of a distilled posting. Shared by the deterministic engine and
-// the AI distiller so both emit the EXACT same tailoringText scaffold (which the
+// Structured parts of an analyzed posting. Shared by the deterministic engine and
+// the AI analyzer so both emit the EXACT same tailoringText scaffold (which the
 // polish/review path and the keyword scorer parse by these literal headings).
 export type TailoringParts = {
   title?: string;
@@ -2190,7 +2190,7 @@ export type TailoringParts = {
 // THE single source of truth for the tailoringText scaffold. Empty sections get
 // the same "[manual input needed: …]" / "Not specified" placeholders the engine
 // has always emitted, so manualReviewFields() and the scorer behave identically
-// regardless of which distiller produced the parts.
+// regardless of which analyzer produced the parts.
 export function assembleTailoringText(parts: TailoringParts, maxChars = 9_000): string {
   const sections = [
     `Job Title:\n${parts.title || "[manual input needed: job title]"}`,

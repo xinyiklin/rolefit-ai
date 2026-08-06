@@ -41,7 +41,7 @@ type UseAutosaveDraftArgs = {
   // A short label for the current job target (role + company) — stored as
   // context only, never the full JD body.
   jobLabel: string;
-  // Current per-stage AI usage + raw pre-distill JD text, saved ALONGSIDE the
+  // Current per-stage AI usage + raw pre-analysis JD text, saved ALONGSIDE the
   // resume draft (not a separate trigger — the effect still only fires off
   // dirty/editedResume changes, so these just ride along with whichever
   // resume-edit write already happens).
@@ -59,7 +59,7 @@ export type { DraftAutosaveState };
 
 export function useAutosaveDraft({ editedResume, docStyle, dirty, jobLabel, pipelineAiUsage, jobRawText, getJobKeyHash }: UseAutosaveDraftArgs): DraftAutosaveState {
   // Latest usage/raw-text read inside the debounced write without re-triggering
-  // the effect (and its debounce reset) on every distill/tailor/review tick —
+  // the effect (and its debounce reset) on every job-analysis/tailor/review tick —
   // only dirty/editedResume/jobLabel changes should reschedule the write.
   const latestExtras = useRef({ pipelineAiUsage, jobRawText, getJobKeyHash });
   latestExtras.current = { pipelineAiUsage, jobRawText, getJobKeyHash };

@@ -320,12 +320,12 @@ export function findUngroundedClaimTerm(proposedText: unknown, grounding: unknow
 }
 
 // Curated-only companion to findUngroundedClaimTerm. Extraction surfaces such
-// as Distill legitimately paraphrase ordinary prose, so treating every new
+// as Job analysis legitimately paraphrase ordinary prose, so treating every new
 // capitalized word as a factual claim would false-drop useful duties. Concrete
 // technology concepts, branded tools, and distinctive short tech tokens are a
 // narrower class: if one appears in model-authored extraction prose, it must be
 // present in the source posting. Keeping this helper beside the owning lexicons
-// avoids a second, inevitably drifting technology list in distill.ts.
+// avoids a second, inevitably drifting technology list in jobAnalysis.ts.
 export function findUngroundedCuratedClaimTerm(proposedText: unknown, grounding: unknown): string | null {
   const groundingLower = String(grounding ?? "").toLowerCase();
   const groundingTokens = tokenize(groundingLower);

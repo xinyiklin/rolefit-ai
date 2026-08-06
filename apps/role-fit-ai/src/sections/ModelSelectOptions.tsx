@@ -4,8 +4,7 @@ import type { ModelOption } from "../config/aiOptions";
 // Renders a model list as <option>s, wrapping any contiguous run that shares a
 // `group` in a labeled <optgroup> (e.g. the Claude CLI "More models" set).
 // Returns a fragment meant to sit directly inside a <select>; used by every
-// ProviderSection (Distill / Tailor / Review) so grouped model lists render
-// identically across the three stages.
+// settings stage so grouped model lists render identically across the workflow.
 export function ModelSelectOptions({ options }: { options: readonly ModelOption[] }) {
   return (
     <>

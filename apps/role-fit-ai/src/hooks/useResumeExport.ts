@@ -26,9 +26,9 @@ type UseResumeExportArgs = {
   documentTitle: string;
   jobUrl: string;
   // Resolver for the employer name used in download file names. Returns the
-  // distilled/tracked company (the same value the application is saved with) so
+  // analyzed/tracked company (the same value the application is saved with) so
   // the file name matches the application; falls back to the URL-derived guess
-  // only when this is empty. A thunk so the distiller runs lazily at save time.
+  // only when this is empty. A thunk keeps the value current at save time.
   resolveJobCompany?: () => string;
   resumeText: string;
   // The shared formatting toolbar's document values. The engine consumes them
@@ -118,7 +118,7 @@ export function useResumeExport({
       return `${sanitizeFileBase(overrideBase)}.${ext}`;
     }
     if (documentTitle.trim()) return `${sanitizeFileBase(documentTitle)}.${ext}`;
-    // Compatibility fallback for a missing title: prefer the distilled/tracked
+    // Compatibility fallback for a missing title: prefer the analyzed/tracked
     // company (matches the saved application), then the URL-derived guess.
     const company = (resolveJobCompany?.() || "").trim() || inferCompanyFromUrl(jobUrl);
     // Prefer the structured model's name; fall back to scanning the serialized

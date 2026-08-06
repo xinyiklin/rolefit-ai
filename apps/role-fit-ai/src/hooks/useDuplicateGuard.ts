@@ -3,7 +3,7 @@
  * job target, extracted from App.tsx so the acknowledgment state and the two
  * blocking dialogs live behind one boundary:
  *
- *   1. confirmDuplicateBeforeDistill — blocking gate before Distill
+ *   1. confirmDuplicateBeforeJobAnalysis — blocking gate before Job analysis
  *   2. confirmDuplicateBeforePolish — blocking gate before Tailor / Review
  *   3. resolveApplyDuplicate — Apply-time confirm + merge-target resolution
  *
@@ -122,7 +122,7 @@ export function useDuplicateGuard({
     return `${STATUS_LABEL[match.application.status]} · ${formatCompactDate(when)}: ${match.evidence[0] ?? "duplicate application"}`;
   }
 
-  async function confirmDuplicateGate(target: DuplicateTarget, nextStage: "Distill" | "Tailor / Review"): Promise<DuplicateGateResult> {
+  async function confirmDuplicateGate(target: DuplicateTarget, nextStage: "Job analysis" | "Tailor / Review"): Promise<DuplicateGateResult> {
     const match = findDuplicatesForTarget(target)[0];
     if (!match || match.application.status === "interested") return { proceed: true, note: null };
 
@@ -156,7 +156,7 @@ export function useDuplicateGuard({
     };
   }
 
-  async function confirmDuplicateBeforeDistill(
+  async function confirmDuplicateBeforeJobAnalysis(
     url: string,
     text: string,
     facts: TrackingFacts
@@ -167,10 +167,10 @@ export function useDuplicateGuard({
       company: facts.company,
       role: facts.role,
       location: facts.location
-    }, "Distill");
+    }, "Job analysis");
   }
 
-  async function confirmDuplicateAfterDistill(
+  async function confirmDuplicateAfterJobAnalysis(
     url: string,
     text: string,
     facts: TrackingFacts
@@ -244,8 +244,8 @@ export function useDuplicateGuard({
 
   return {
     currentJobKeyHash,
-    confirmDuplicateBeforeDistill,
-    confirmDuplicateAfterDistill,
+    confirmDuplicateBeforeJobAnalysis,
+    confirmDuplicateAfterJobAnalysis,
     confirmDuplicateBeforePolish,
     resolveApplyDuplicate,
     ackApplication

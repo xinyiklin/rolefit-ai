@@ -23,7 +23,7 @@ function fromCharRef(code: number): string {
 }
 
 // Convert posting HTML to readable text while keeping paragraph/bullet breaks
-// (the front-end distiller and the description box both read better with them).
+// (the front-end job analyzer and the description box both read better with them).
 function htmlToText(html: unknown): string {
   return String(html || "")
     .replace(/<script[\s\S]*?<\/script>/gi, " ")

@@ -440,9 +440,9 @@
   to { opacity: 1; transform: translateX(0) scale(1); }
 }
 
-/* -------- Progress cards (polish stages + job distill) -------- */
+/* -------- Progress cards (polish stages + job analysis) -------- */
 
-/* Shared fixed dock so the polish stack and the distill card share one
+/* Shared fixed dock so the polish stack and the job-analysis card share one
    top-centered column and stack vertically instead of overlapping when both are
    on screen at once. pointer-events pass through the gaps.
    Draggable via useDraggableDock (src/hooks/useDraggableDock.ts): that hook
@@ -462,7 +462,7 @@
   pointer-events: none;
 }
 
-/* One workflow sheet owns Distill, Tailor, and Review. Rows share a single
+/* One workflow sheet owns Job analysis, Tailor, and Review. Rows share a single
    outline so the sequence reads as a process, not a stack of unrelated toasts. */
 .ai-workflow {
   width: 100%;

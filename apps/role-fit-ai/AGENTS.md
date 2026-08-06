@@ -53,10 +53,10 @@ own a second resume model, editor, layout engine, or PDF implementation.
 - AI Review is the sole owner of fit score, coverage, verdict, reason, gaps,
   and recommendation. The server validates the response contract and
   anti-fabrication-sensitive edits; it does not calculate a replacement review.
-- A failed Distill/Tailor/Review stage stops the selected pipeline. Distill may
-  retain a deterministic local brief for inspection, but a failed AI Distill
-  cannot auto-launch Tailor or Review.
-- Duplicate checks gate the pipeline before and after Distill. Stop means no
+- A failed Job analysis, Tailor, or Review stage stops the selected pipeline.
+  Job analysis may retain a deterministic local brief for inspection, but a
+  failed AI-backed analysis cannot auto-launch Tailor or Review.
+- Duplicate checks gate the pipeline before and after Job analysis. Stop means no
   downstream request; Continue is acknowledged for that job target.
 - Keep the server loopback-only by default. `HOST=0.0.0.0` exposes an
   unauthenticated local tool to the LAN and is never acceptable on an untrusted
@@ -138,7 +138,7 @@ or workspace state, keep it here and expose the smallest host seam instead.
   Apply status names which PDF failed. Apply is synchronously single-flight from
   duplicate resolution through a direct commit and again through every selected
   post-commit export; the pre-commit naming prompt remains interactive.
-- Extension intake always requires AI Distill and stops on Prepare; it never
+- Extension intake always requires AI-backed job analysis and stops on Prepare; it never
   auto-launches Tailor or Review. The ordinary app may still rank actual saved
   resume and cover-letter contents against weighted prepared-job sections and
   auto-select a meaningful unique winner while its editor is clean and not

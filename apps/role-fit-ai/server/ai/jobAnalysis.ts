@@ -1,4 +1,4 @@
-// /api/distill route handler. An AI-based job-description distiller: it sends the
+// /api/job-analysis route handler. An AI-based job-description analyzer: it sends the
 // raw (tag-stripped) posting text to the configured provider and gets back the
 // SAME structured fields the deterministic engine (src/lib/jobExtract.ts) emits,
 // but resolved semantically — so novel ATS layouts, inline-prose duties, and
@@ -9,7 +9,7 @@
 // returns (title, company, location, salary numbers, tech keywords) is dropped
 // unless it is grounded in the source text. The client falls back to the
 // deterministic engine on any non-200, so a missing key / timeout / bad model
-// reply never breaks distillation.
+// reply never breaks job analysis.
 
 import type { IncomingMessage, ServerResponse } from "node:http";
 import {
@@ -33,7 +33,7 @@ type StrListOptions = { maxItems: number; maxLen?: number; minLen?: number };
 
 const JOB_TEXT_CHAR_LIMIT = 24_000;
 
-export function buildDistillPrompts({ jobText }: { jobText: unknown }): { systemPrompt: string; userPrompt: string } {
+export function buildJobAnalysisPrompts({ jobText }: { jobText: unknown }): { systemPrompt: string; userPrompt: string } {
   const systemPrompt = `You are a precise job-posting parser. You read one job posting and return ONLY a structured JSON object of facts that are EXPLICITLY present in it.
 
 ${inputFirewallRule()}
@@ -247,7 +247,7 @@ function groundedTech(tech: unknown, sourceText: string): boolean {
 
 // workAuth is an ELIGIBILITY-BLOCKER fact — it can force a DON'T APPLY verdict and
 // persists into the application tracker — so it gets the same anti-fabrication
-// discipline as every other distilled field (the old code passed it through
+// discipline as every other analyzed field (the old code passed it through
 // ungrounded). Keep it only when the SPECIFIC authorization class the model named
 // (clearance / citizenship / visa / sponsorship / work authorization / …) actually
 // appears in the posting: an invented "active security clearance required" for a
@@ -374,7 +374,7 @@ function groundedAmount(value: unknown, sourceText: string): number | null {
   return null;
 }
 
-export function sanitizeDistill(parsed: unknown, sourceText: string) {
+export function sanitizeJobAnalysis(parsed: unknown, sourceText: string) {
   // Model output: read fields defensively off a record view (never validated).
   const obj = (parsed && typeof parsed === "object" ? parsed : {}) as Record<string, unknown>;
   const sourceNorm = norm(sourceText);
@@ -432,13 +432,13 @@ export function sanitizeDistill(parsed: unknown, sourceText: string) {
 
 // Resolve provider from `body` (default provider when none given), call the model,
 // and return grounded fields plus the RESOLVED provider/model/reasoningEffort and
-// the dispatch attempt count. Used by the /api/distill route (extension imports
-// also distill through that route, client-side from the receiving tab — the
+// the dispatch attempt count. Used by the /api/job-analysis route (extension imports
+// also analyze through that route, client-side from the receiving tab — the
 // server-side import pass only resolves the raw page text). Throws on
 // no-provider / timeout / unreadable output so callers can decide how to degrade.
 // apiKey is intentionally NOT returned — the route echoes only the
 // non-secret resolved config.
-export async function distillToFields({
+export async function analyzeJobToFields({
   jobText,
   body = {},
   signal
@@ -448,14 +448,14 @@ export async function distillToFields({
   signal?: AbortSignal;
 }) {
   const { provider, apiKey, model, reasoningEffort } = resolveProviderRequest(body);
-  const { systemPrompt, userPrompt } = buildDistillPrompts({ jobText });
+  const { systemPrompt, userPrompt } = buildJobAnalysisPrompts({ jobText });
   const stats: AttemptStats = {};
   const parsed = await callConfiguredProvider(
     { provider, model, reasoningEffort, apiKey, systemPrompt, userPrompt, signal },
     stats
   );
   return {
-    fields: sanitizeDistill(parsed, jobText),
+    fields: sanitizeJobAnalysis(parsed, jobText),
     provider,
     model,
     reasoningEffort,
@@ -463,7 +463,7 @@ export async function distillToFields({
   };
 }
 
-export async function handleDistill(req: IncomingMessage, res: ServerResponse): Promise<void> {
+export async function handleJobAnalysis(req: IncomingMessage, res: ServerResponse): Promise<void> {
   if (req.method !== "POST") {
     sendJson(res, 405, { error: "Use POST." });
     return;
@@ -475,12 +475,12 @@ export async function handleDistill(req: IncomingMessage, res: ServerResponse): 
     const body = await readAiJsonBody(req, 2_000_000);
     const jobText = String(body.text ?? "");
     if (jobText.trim().length < 40) {
-      sendJson(res, 400, { error: "Provide the job posting text to distill (at least a short description)." });
+      sendJson(res, 400, { error: "Provide the job posting text to analyze (at least a short description)." });
       return;
     }
-    // Resolve once for the error label / key validation, then distill.
+    // Resolve once for the error label / key validation, then analyze.
     provider = resolveProviderRequest(body).provider;
-    const result = await distillToFields({ jobText, body, signal: request.signal });
+    const result = await analyzeJobToFields({ jobText, body, signal: request.signal });
     // Echo the RESOLVED provider/model/reasoningEffort (never the API key)
     // plus the dispatch attempt count so the client can record which model actually
     // produced the brief.
@@ -511,7 +511,7 @@ export async function handleDistill(req: IncomingMessage, res: ServerResponse): 
       sendJson(res, 400, { error: configMessage });
       return;
     }
-    sendJson(res, 500, { error: "Could not distill the job posting with AI." });
+    sendJson(res, 500, { error: "Could not analyze the job posting with AI." });
   } finally {
     request.dispose();
   }

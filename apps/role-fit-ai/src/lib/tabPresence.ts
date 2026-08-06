@@ -42,6 +42,8 @@ export const HIDDEN_STALE_MS = 60000;
 export type PresencePhase =
   | "idle"
   | "editing"
+  | "analyzing-job"
+  // A simultaneously open tab from the previous preview may still publish it.
   | "distilling"
   | "tailoring"
   | "reviewing"

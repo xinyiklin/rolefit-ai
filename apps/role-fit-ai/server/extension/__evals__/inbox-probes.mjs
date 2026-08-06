@@ -22,7 +22,7 @@
 // captured text with NO network and settles the entry to "done" within a
 // microtask. Because an entry always settles to "done" before a poll can read
 // it here, a poll that SELECTS an entry also drains it; the releaseStaleClaims
-// clearing branch only fires for a still-"distilling" (undelivered) entry, which
+// clearing branch only fires for a still-"preparing" (undelivered) entry, which
 // cannot be held open offline without a network-backed prepare. Its
 // security-relevant guarantee — that a stale release never hands a token-reserved
 // entry to another tab regardless of elapsed time — IS locked below.

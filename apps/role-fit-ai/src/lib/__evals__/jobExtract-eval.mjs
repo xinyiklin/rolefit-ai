@@ -159,7 +159,7 @@ assert.equal(perks.tracking.salaryMax, undefined);
 assert(perks.manualReviewFields.includes("compensation"));
 assert.equal(perks.tracking.title, "Software Engineer"); // prose role still recovered
 
-// --- JD-test regression fixtures (distilled from 5 real SWE postings) ---------
+// --- JD-test regression fixtures (derived from 5 real SWE postings) ---------
 
 // (1a) An explicit early-career body must SUPPRESS a comp-band "Senior <X>"
 // title (New York Life "Senior Associate" is a pay grade, not senior IC).

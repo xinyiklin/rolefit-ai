@@ -186,7 +186,7 @@ disappears into the task. Quiet competence, not salesmanship.
 5. Restraint over systems: no global toast/banner/loading frameworks; reuse
    the per-surface CSS classes in `src/styles/`, shared editor primitives from
    `@typeset/editor`, and each owner's tokens rather than forking controls.
-6. Make workflow state truthful: Distill, Tailor, and Recruiter audit show their exact
+6. Make workflow state truthful: Job analysis, Tailor, and Recruiter audit show their exact
    ordered step, stop after failure/user cancellation, identify the cause, and
    never present a deterministic brief as a successful AI run.
 7. Preserve product boundaries: RoleFit owns job/AI/tracker orchestration and
@@ -214,9 +214,9 @@ disappears into the task. Quiet competence, not salesmanship.
     Prepare may summarize a current matching Recruiter audit or a matching
     historical saved audit; before either exists it says "Not audited" and never
     substitutes a local fit estimate.
-11. Preserve safe extension intake: a claimed extension posting always runs AI
-    Distill and stops on Prepare; it never starts resume Polish. A
-    failed AI Distill may leave the deterministic brief visible for inspection,
+11. Preserve safe extension intake: a claimed extension posting always runs
+    AI-backed job analysis and stops on Prepare; it never starts resume Polish.
+    A failed analysis may leave the deterministic brief visible for inspection,
     but it remains failed. The ordinary Prepare workflow may rank actual saved
     resume and cover-letter contents against the prepared job and auto-select a
     meaningful unique winner while the editor is clean and not application-

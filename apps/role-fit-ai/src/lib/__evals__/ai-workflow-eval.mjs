@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 
 import {
+  AI_STAGE_COPY,
   workflowCurrentIndex,
   workflowInputFingerprint,
   workflowRequestIsCurrent,
@@ -8,16 +9,17 @@ import {
   workflowStageIsBlocked,
   workflowStepLabel
 } from "../aiWorkflow.ts";
+import { canonicalizeAiUsageStageKeys } from "../aiUsage.ts";
 import { ApiError, classifyFailure } from "../failures.ts";
 
-const threeStages = (distill, tailor, review) => [
-  { key: "distill", state: { status: distill } },
+const threeStages = (jobAnalysis, tailor, review) => [
+  { key: "job-analysis", state: { status: jobAnalysis } },
   { key: "tailor", state: { status: tailor } },
   { key: "review", state: { status: review } }
 ];
 
 assert.equal(workflowStepLabel(1, 3), "Step 1 of 3", "the workflow exposes the first step count");
-assert.equal(workflowCurrentIndex(threeStages("running", "idle", "idle")), 0, "Distill is step 1");
+assert.equal(workflowCurrentIndex(threeStages("running", "idle", "idle")), 0, "Job analysis is step 1");
 assert.equal(workflowCurrentIndex(threeStages("done", "running", "idle")), 1, "Tailor is step 2");
 assert.equal(workflowCurrentIndex(threeStages("done", "done", "running")), 2, "Review is step 3");
 
@@ -27,8 +29,33 @@ assert.equal(workflowStageIsBlocked(failedTailor, 2), true, "a failed Tailor blo
 assert.equal(workflowStageCanAdvance({ status: "done" }), true, "only a completed stage may advance");
 assert.equal(workflowStageCanAdvance({ status: "failed" }), false, "a failed stage cannot advance");
 assert.equal(workflowStageCanAdvance({ status: "stopped" }), false, "a stopped stage cannot advance");
+assert.equal(AI_STAGE_COPY["job-analysis"].running, "Analyzing job", "progress uses Job analysis vocabulary");
 
-const unusable = classifyFailure(new ApiError("The distiller returned no usable job requirements", 502));
+const legacyUsage = {
+  distill: { source: "ai", provider: "anthropic", model: "legacy-model" },
+  tailor: { source: "none" }
+};
+assert.deepEqual(
+  canonicalizeAiUsageStageKeys(legacyUsage),
+  {
+    "job-analysis": { source: "ai", provider: "anthropic", model: "legacy-model" },
+    tailor: { source: "none" }
+  },
+  "historical Distill provenance is read as Job analysis"
+);
+assert.deepEqual(
+  canonicalizeAiUsageStageKeys({
+    ...legacyUsage,
+    "job-analysis": { source: "ai", provider: "openai", model: "canonical-model" }
+  }),
+  {
+    "job-analysis": { source: "ai", provider: "openai", model: "canonical-model" },
+    tailor: { source: "none" }
+  },
+  "canonical Job analysis provenance wins when both generations exist"
+);
+
+const unusable = classifyFailure(new ApiError("The job analyzer returned no usable job requirements", 502));
 assert.equal(unusable.kind, "parse", "an unusable model response identifies the parsing failure");
 assert.equal(unusable.headline, "Parsing error", "the parsing failure has a specific headline");
 

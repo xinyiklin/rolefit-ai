@@ -13,10 +13,12 @@ import assert from "node:assert/strict";
 
 import { AI_STAGE_IDS } from "../../config/aiStages.ts";
 import { seedStage, seedStages, stageFieldsToPersist, STAGES_INHERITING_TAILOR } from "../stageSettings.ts";
-import { normalizeSettings } from "../settings.ts";
+import { migrateSettings, normalizeSettings } from "../settings.ts";
 
 // ── A fresh install: every stage gets the account-backed CLI default ─────────
 const fresh = seedStages({});
+assert.equal(AI_STAGE_IDS.includes("job-analysis"), true, "Job analysis is the canonical configurable stage id");
+assert.equal(AI_STAGE_IDS.includes("distill"), false, "the retired Distill stage id is not configured");
 assert.deepEqual(
   Object.keys(fresh).sort(),
   [...AI_STAGE_IDS].sort(),
@@ -32,14 +34,14 @@ const preSplit = {
   aiProvider: "openai",
   selectedModel: "gpt-5.6-terra",
   cliReasoningEffort: "medium",
-  distillProvider: "anthropic",
-  distillSelectedModel: "claude-opus-4-8",
+  jobAnalysisProvider: "anthropic",
+  jobAnalysisSelectedModel: "claude-opus-4-8",
   auditProvider: "codex-cli",
   auditSelectedModel: "gpt-5.6-terra"
 };
 const seeded = seedStages(preSplit);
 assert.equal(seeded.tailor.provider, "openai", "Tailor keeps its own persisted provider");
-assert.equal(seeded.distill.provider, "anthropic", "Distill keeps its own persisted provider");
+assert.equal(seeded["job-analysis"].provider, "anthropic", "Job analysis keeps its own persisted provider");
 assert.equal(seeded.review.provider, "codex-cli", "Review keeps its own persisted provider");
 for (const stage of ["cover", "answers"]) {
   assert.equal(
@@ -64,6 +66,64 @@ assert.deepEqual(
   "only the two stages that previously shared Tailor's config inherit it"
 );
 
+// The Distill -> Job analysis rename is a real pre-normalization migration.
+// Existing localStorage and restored backups must retain the whole stage config
+// and its stage-specific instructions, then write only canonical keys.
+const legacyDistill = {
+  distillProvider: "anthropic",
+  distillSelectedModel: "claude-opus-4-8",
+  distillCliReasoningEffort: "high",
+  stageCustomInstructions: {
+    distill: "Keep the posting language precise.",
+    tailor: "Keep edits concise."
+  }
+};
+assert.deepEqual(
+  migrateSettings(legacyDistill),
+  {
+    jobAnalysisProvider: "anthropic",
+    jobAnalysisSelectedModel: "claude-opus-4-8",
+    jobAnalysisCliReasoningEffort: "high",
+    stageCustomInstructions: {
+      "job-analysis": "Keep the posting language precise.",
+      tailor: "Keep edits concise."
+    }
+  },
+  "legacy Distill settings migrate before strict normalization"
+);
+assert.deepEqual(
+  migrateSettings({
+    ...legacyDistill,
+    jobAnalysisProvider: "openai",
+    stageCustomInstructions: {
+      distill: "legacy",
+      "job-analysis": "canonical"
+    }
+  }),
+  {
+    jobAnalysisProvider: "openai",
+    jobAnalysisSelectedModel: "claude-opus-4-8",
+    jobAnalysisCliReasoningEffort: "high",
+    stageCustomInstructions: { "job-analysis": "canonical" }
+  },
+  "canonical Job analysis values win when both generations are present"
+);
+const normalizedLegacyDistill = normalizeSettings(legacyDistill);
+assert.equal(normalizedLegacyDistill.jobAnalysisProvider, "anthropic", "legacy provider survives normalization");
+assert.equal(normalizedLegacyDistill.jobAnalysisSelectedModel, "claude-opus-4-8", "legacy model survives normalization");
+assert.equal(normalizedLegacyDistill.jobAnalysisCliReasoningEffort, "high", "legacy effort survives normalization");
+assert.equal(
+  normalizedLegacyDistill.stageCustomInstructions?.["job-analysis"],
+  "Keep the posting language precise.",
+  "legacy stage instructions survive normalization"
+);
+assert.equal("distillProvider" in normalizedLegacyDistill, false, "normalization writes no legacy provider key");
+assert.equal(
+  "distill" in (normalizedLegacyDistill.stageCustomInstructions ?? {}),
+  false,
+  "normalization writes no legacy instruction key"
+);
+
 // ── Once a stage has its own config, it stops inheriting ────────────────────
 const diverged = seedStages({
   ...preSplit,
@@ -85,11 +145,12 @@ assert.equal(
 );
 
 // ── The round trip is lossless and non-additive ─────────────────────────────
-// normalizeSettings must never ADD a stage key: workspaceBackupContract accepts a
-// restored settings bag only if it round-trips through normalizeSettings
-// unchanged, so an additive migration there rejects every older backup. Seeding
-// is where inheritance belongs, and it is proven above.
+// normalizeSettings never SEEDS an absent stage. Key migrations preserve an
+// existing value under its canonical name; cover/answers inheritance remains a
+// separate seeding concern, as proven above.
 const flattened = stageFieldsToPersist(seeded);
+assert.equal(flattened.jobAnalysisProvider, "anthropic", "new settings writes use the Job analysis provider key");
+assert.equal("distillProvider" in flattened, false, "new settings writes omit the legacy Distill provider key");
 assert.deepEqual(
   normalizeSettings(flattened),
   flattened,

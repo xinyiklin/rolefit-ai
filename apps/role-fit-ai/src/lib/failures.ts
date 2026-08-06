@@ -124,11 +124,10 @@ export function classifyFailure(error: unknown): ClassifiedFailure {
 }
 
 // The single, uniform reason shown as the bold headline on EVERY card where an
-// AI step didn't produce a usable result — Distill, Tailor, Review, cover. A
+// AI step didn't produce a usable result — Job analysis, Tailor, Review, cover. A
 // config error, timeout, auth failure, and a thin/absent reply all read the
 // same here on purpose: those cards appear together in one flow, and each step
-// can hit a different sub-cause (or a different provider — the extension distill
-// uses the server default), so a per-card classified reason reads as three
+// can hit a different sub-cause or provider, so a per-card classified reason reads as three
 // unrelated problems when it's really one "the AI isn't producing right now".
 // The specific detail, when useful, lives in the inline status line, not here.
 // (classifyFailure stays for genuinely different, non-AI-outage cases: bad

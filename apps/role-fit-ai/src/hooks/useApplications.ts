@@ -4,7 +4,7 @@ import { inferApplicationTitle, inferCompanyFromUrl } from "../lib/jobTarget";
 import { sourceFromUrl, type ExtractedJobTracking } from "../lib/jobExtract";
 import { dedupeSourceUrls, normalizeJobUrl, findDuplicateApplications } from "../lib/jobIdentity";
 import type { DuplicateTarget } from "../lib/jobIdentity";
-import type { ApplicationAiUsage } from "../lib/aiUsage";
+import { canonicalizeAiUsageStageKeys, type ApplicationAiUsage } from "../lib/aiUsage";
 import { applicationMatchesJobTarget } from "../lib/applicationDocuments";
 import {
   applicationMutationRecords,
@@ -112,9 +112,9 @@ export type Application = {
   sourceUrls?: { url: string; source?: string; addedAt: string }[];
   // Immutable captured posting text. Keep it even when it initially matches
   // jobDescription so later prepared-brief edits cannot rewrite View source or
-  // change what "Prepare again" distills.
+  // change what "Prepare again" analyzes.
   rawJobDescription?: string;
-  // Per-stage AI usage snapshot (distill/tailor/review/cover), captured at Apply
+  // Per-stage AI usage snapshot (job analysis/tailor/review/cover), captured at Apply
   // time. Whole-map-replace on upsert — an incoming snapshot always wins, no
   // deep per-stage merge.
   aiUsage?: ApplicationAiUsage;
@@ -166,6 +166,14 @@ export type Application = {
   // application. Either side of a pair may carry the decision.
   duplicateDismissedIds?: string[];
 };
+
+// Historical tracker rows can still carry the preview-era `distill` stage key.
+// Normalize as records enter the client so every later mutation writes only the
+// canonical key, even when the user edits an unrelated tracker field.
+function canonicalizeApplicationAiUsage(application: Application): Application {
+  if (!application.aiUsage || !("distill" in application.aiUsage)) return application;
+  return { ...application, aiUsage: canonicalizeAiUsageStageKeys(application.aiUsage) };
+}
 
 // Build the common skeleton for a new pipeline entry from the current job
 // target. Both the "Apply" and "Save answers" paths start here and
@@ -305,7 +313,7 @@ class ApplicationConflictError extends Error {
   constructor(message: string, applications: Application[]) {
     super(message);
     this.name = "ApplicationConflictError";
-    this.applications = applications;
+    this.applications = applications.map(canonicalizeApplicationAiUsage);
   }
 }
 
@@ -351,7 +359,9 @@ export function useApplications() {
         // write/rollback is now authoritative; never replace it with this older
         // read snapshot.
         if (loadVersion !== persistVersion.current) return;
-        const loaded = Array.isArray(data.applications) ? data.applications : [];
+        const loaded = Array.isArray(data.applications)
+          ? data.applications.map(canonicalizeApplicationAiUsage)
+          : [];
         confirmedApplications.current = loaded;
         applicationsRef.current = loaded;
         setApplications(loaded);
@@ -413,7 +423,7 @@ export function useApplications() {
       const data = await write;
       const confirmed = reconcileApplicationWriteResponse(
         confirmedApplications.current,
-        data.applications
+        data.applications.map(canonicalizeApplicationAiUsage)
       );
       confirmedApplications.current = confirmed;
       setHasLoadedApplications(true);
@@ -725,7 +735,9 @@ export function useApplications() {
       // rollback) owns state; this GET may have observed the pre-mutation disk
       // snapshot and must not overwrite it.
       if (refreshVersion !== persistVersion.current) return false;
-      const loaded = Array.isArray(data.applications) ? data.applications : [];
+      const loaded = Array.isArray(data.applications)
+        ? data.applications.map(canonicalizeApplicationAiUsage)
+        : [];
       confirmedApplications.current = loaded;
       applicationsRef.current = loaded;
       setApplications(loaded);

@@ -113,9 +113,9 @@ editable documents.
   description: Workday-aware through CXS JSON, Ashby-aware through
   its public posting API (including Handshake's branded wrapper), with
   Greenhouse-wrapper resolution and a generic HTML→text fallback for other
-  boards. The configured Distill provider runs before the server's grounding
+  boards. The configured Job analysis provider runs before the server's grounding
   and sanitization checks.
-  A deterministic parser can preserve a local brief for inspection if Distill
+  A deterministic parser can preserve a local brief for inspection if Job analysis
   fails, but the failed stage stays failed and never starts resume Polish. The compact
   job brief keeps role context, responsibilities,
   requirements, preferred qualifications, and technical/domain signals while
@@ -154,7 +154,7 @@ editable documents.
   typing and held Backspace/Delete bursts undo as groups; direction changes,
   caret or field moves, selections, formatting, structural edits, and pauses
   start a new group.
-- **Ordered AI workflow** — Distill, Tailor, and Recruiter audit share one progress surface with exact step counts, specific failure reasons, Retry/Stop behavior, and later stages marked not run after a failure.
+- **Ordered AI workflow** — Job analysis, Tailor, and Recruiter audit share one progress surface with exact step counts, specific failure reasons, Retry/Stop behavior, and later stages marked not run after a failure.
 - **WYSIWYG editor + PDF export** — the editor _is_ the preview: it and the exported PDF use the same shared Typeset layout engine, so visible line breaks and page flow match the export exactly. No external toolchain to install — typesetting and PDF generation run in the browser.
 - **`.resume` save/load** — download strict schema-v1 structured resume data,
   including explicit hidden/visible/absent header state, as a `.resume` file
@@ -289,7 +289,7 @@ providers and their models in **Settings > AI stages**, opened from the foot of
 the studio tab rail. Every stage section stays expanded together; there is no
 per-section collapse control:
 
-- **Distill** — job-link, paste, and import distillation into a compact job brief.
+- **Job analysis** — job-link, paste, and import analysis into a compact job brief.
 - **Tailor** — evidence-grounded resume suggestions.
 - **Recruiter audit** — strict fit audit of the current edited draft.
 - **Cover letter** — one grounded revision pass over your own letter, run from
@@ -367,9 +367,9 @@ resume/job text exclusively on stdin while the subprocess is running.
 
 > **Provider support:** RoleFit intentionally exposes only the three subscription CLIs plus the native OpenAI Responses and Claude Messages APIs. Other adapters were removed until they have current contracts and live verification. CLI entitlements and API model access still depend on the signed-in account.
 
-URL, pasted-text, and extension intake require AI Distill. When Distill fails,
+URL, pasted-text, and extension intake require AI-backed job analysis. When Job analysis fails,
 RoleFit may load the deterministic brief for inspection while
-leaving Distill failed and blocking resume Polish. Tailor, Recruiter audit, Cover Letter,
+leaving Job analysis failed and blocking resume Polish. Tailor, Recruiter audit, Cover Letter,
 and application-answer generation fail plainly; no local draft, score, or
 verdict silently stands in.
 
@@ -392,10 +392,10 @@ preparation and duplicate checking to the job board. On any posting, click the
   phrase overlap. Tracker review can merge a group or mark it **Not duplicates**
   so that pair stays out of future duplicate review, and
 - a one-click **Prepare in RoleFit** that opens a fresh independent RoleFit
-  tab on Prepare, lets the server resolve the raw page text, and always runs AI
-  Distill with that tab's selected provider. The extension handoff stops on
-  Prepare; it never starts resume Polish. If AI Distill fails, the
-  deterministic brief may remain available for inspection, but Distill stays
+  tab on Prepare, lets the server resolve the raw page text, and always runs
+  AI-backed job analysis with that tab's selected provider. The extension
+  handoff stops on Prepare; it never starts resume Polish. If the analysis fails, the
+  deterministic brief may remain available for inspection, but Job analysis stays
   failed. The popup has no AI/deterministic or automatic-tailor toggle.
 
 A keyboard shortcut (`Ctrl+Shift+U` / `⌘⇧U` by default) imports the current page
@@ -423,7 +423,7 @@ only the exact installed popup Origin approved in the companion. The inbox the
 app reads is same-origin and
 CSRF-guarded. The server-side import step prepares captured posting text (for
 example, resolving a fuller board description when possible); the receiving
-tab then always runs the app's AI Distill stage with its selected provider.
+tab then always runs the app's Job analysis stage with its selected provider.
 Imports carry a short local claim token so the newly-opened tab receives its own
 posting and opens/progresses on Prepare, while other open tabs continue their
 current jobs; the app also shows read-only ambient Sessions in the bottom studio
@@ -551,7 +551,7 @@ __evals__/                      # contracts for artifacts that cannot host their
 server.ts                       # thin local web-server launcher
 server/
   runtime.ts                    # reusable HTTP/Vite lifecycle + route composition
-  ai/                            # /api/polish + /api/distill: routes, providers,
+  ai/                            # /api/polish + /api/job-analysis: routes, providers,
                                  #   clients, prompts, sanitize, grounding, eligibilityLexicon,
                                  #   json, errors, coverLetter + applicationAnswers
   ai-cli/index.ts               # Claude Code / Codex / Antigravity CLI shell-out
@@ -569,7 +569,7 @@ src/
   config/aiOptions.ts            # provider/model/reasoning options
   hooks/                          # applications, workspace resume, apply flow, polish pipeline,
                                   #   job intake, per-tab autosave/presence, resume export/analysis, AI settings
-  lib/                           # downloads, job extraction/distilling, AI text adapters + review-target mapping
+  lib/                           # downloads, job extraction/analysis, AI text adapters + review-target mapping
   sections/                      # masthead, studio navigation, tabs, workflow progress, saved-PDF preview, review rail
   sections/editor/               # RoleFit-only AI-scope + review-target overlay
   sections/tabs/                 # Prepare / Resume / Cover letter / Materials / Applications / Analytics

@@ -19,17 +19,17 @@ import { jobWorkspaceDir } from "../workspace.ts";
 import { resolveImportedJobText } from "../jobImport.ts";
 import { findMatchingApplication, extractJobMeta } from "./index.ts";
 
-// Pending browser-extension import. `status` is "distilling" while the server
+// Pending browser-extension import. `status` is "preparing" while the server
 // prepares the raw captured text in the background (resolving the full JD for a
 // Greenhouse link, for example), then "done". The receiving app tab owns the
-// provider-backed Distill request so it uses that tab's selected settings.
+// provider-backed Job analysis request so it uses that tab's selected settings.
 // `id` guards against a newer import landing while an older prepare is still in
 // flight.
 // QUEUE of pending imports, not a single slot. Each browser tab is an
 // independent session, so imports must not clobber one another and one tab's
 // import must not surface in another tab. Each entry is CLAIMED by the first
 // tab to poll it (by the tab's session id); only that tab then sees its
-// "distilling" → "done" lifecycle, so an import in one tab never pops the card
+// "preparing" → "done" lifecycle, so an import in one tab never pops the card
 // in another. A claim is refreshed on every poll (lastSeenAt) and released when
 // the owning tab goes quiet, so a claimed-then-closed import isn't stranded.
 // Entry: { id, text, url, status, claimedBy, claimToken, createdAt, lastSeenAt }.
@@ -37,7 +37,7 @@ type InboxEntry = {
   id: number;
   text: string;
   url: string;
-  status: "distilling" | "done";
+  status: "preparing" | "done";
   claimedBy: string | null;
   claimToken: string | null;
   createdAt: number;
@@ -51,7 +51,7 @@ let extensionPreparing = false;
 const EXTENSION_IMPORT_TTL_MS = 10 * 60 * 1000;
 const EXTENSION_INBOX_MAX = 8;
 // A claiming tab refreshes its claim on every poll (the client polls ~1.5s while
-// an import is distilling). If a claim isn't refreshed within this window the
+// an import is preparing). If a claim isn't refreshed within this window the
 // owning tab is gone (closed/crashed), so the claim is released for re-acquisition
 // — otherwise a claimed-then-closed import would strand until the 10-min TTL.
 const EXTENSION_CLAIM_STALE_MS = 8 * 1000;
@@ -65,12 +65,12 @@ function pruneExtensionInbox(now: number): void {
   extensionInbox = extensionInbox.filter((e) => now - e.createdAt < EXTENSION_IMPORT_TTL_MS);
   if (extensionInbox.length > EXTENSION_INBOX_MAX) {
     // Over the cap: drop the OLDEST entries first, but never an in-flight prepare.
-    // Evicting a "distilling" entry would lose its resolved text — runExtensionPrepare
+    // Evicting a "preparing" entry would lose its resolved text — runExtensionPrepare
     // can no longer find its id, so the entry is silently dropped and the owning
-    // tab polls forever. Keep every "distilling" entry plus the newest settled ones.
+    // tab polls forever. Keep every "preparing" entry plus the newest settled ones.
     let overflow = extensionInbox.length - EXTENSION_INBOX_MAX;
     extensionInbox = extensionInbox.filter((e) => {
-      if (overflow > 0 && e.status !== "distilling") {
+      if (overflow > 0 && e.status !== "preparing") {
         overflow -= 1;
         return false;
       }
@@ -96,9 +96,9 @@ function releaseStaleExtensionClaims(now: number): void {
 // job text worth tailoring (e.g. fetch the full JD for a Greenhouse link — a
 // server-side step the browser can't do), store it, and settle the entry to
 // "done". SERIALIZED so a burst of imports can't fan out parallel fetches. The
-// provider-backed AI Distill remains in the receiving app tab.
+// provider-backed AI job-analysis request remains in the receiving app tab.
 // Always settles to "done" (even on a resolve failure) so the owning tab never
-// polls forever; the tab then distills whatever raw text was captured.
+// polls forever; the tab then analyzes whatever raw text was captured.
 async function runExtensionPrepare(importId: number, text: string, url: string): Promise<void> {
   extensionPreparing = true;
   try {
@@ -110,12 +110,12 @@ async function runExtensionPrepare(importId: number, text: string, url: string):
     }
   } catch {
     const failed = extensionInbox.find((e) => e.id === importId);
-    if (failed) failed.status = "done"; // keep the raw captured text → the tab distills it
+    if (failed) failed.status = "done"; // keep the raw captured text → the tab analyzes it
   } finally {
     extensionPreparing = false;
     // Chain to the next un-prepared import (the one we just finished is now
     // "done", so it won't be re-selected).
-    const next = extensionInbox.find((e) => e.status === "distilling");
+    const next = extensionInbox.find((e) => e.status === "preparing");
     if (next) void runExtensionPrepare(next.id, next.text, next.url);
   }
 }
@@ -128,7 +128,7 @@ async function runExtensionPrepare(importId: number, text: string, url: string):
 // The analyze route is a read-only keyword triage; the import route appends a
 // captured job page to a claimable inbox queue AND kicks off a background PREPARE
 // step (serialized via runExtensionPrepare) that only resolves the raw text. The
-// receiving app tab then owns provider-backed AI Distill.
+// receiving app tab then owns the provider-backed AI job-analysis request.
 const EXTENSION_ORIGIN_PROTOCOLS = new Set([
   "chrome-extension:",
   "moz-extension:",
@@ -426,22 +426,22 @@ export async function handleExtensionRoutes(
       sendJson(res, 400, { error: "A job page text and url are required." });
       return;
     }
-    // Store a "distilling" placeholder and return IMMEDIATELY so the popup can
+    // Store a "preparing" placeholder and return IMMEDIATELY so the popup can
     // redirect without blocking (extension popups close on focus loss, which would
     // otherwise abort an awaited fetch). A BACKGROUND prepare step then resolves
     // the raw text (e.g. the full Greenhouse JD), server-side, independent of any
     // client connection; the app polls the inbox and, once status flips to "done",
     // The handoff carries only the raw resolved text and URL. The receiving tab
-    // owns the provider-backed Distill request and its deterministic fallback.
+    // owns the provider-backed job-analysis request and its deterministic fallback.
     const importId = (extensionImportSeq += 1);
     const now = Date.now();
     // Append (never overwrite) so a second import can't interrupt an in-flight
-    // distill — each import is its own claimable entry.
+    // job analysis — each import is its own claimable entry.
     extensionInbox.push({
       id: importId,
       text,
       url,
-      status: "distilling",
+      status: "preparing",
       claimedBy: null,
       claimToken: claimToken || null,
       createdAt: now,
@@ -461,8 +461,8 @@ export async function handleExtensionRoutes(
 // Polled same-origin by the app (useExtensionInbox), with the polling tab's
 // session id in `tabId`. Returns at most ONE import per tab: the entry this tab
 // already claimed, else the oldest unclaimed entry (which it then claims). Only
-// the claiming tab sees that import's "distilling" → "done" lifecycle, so a
-// distill started in one tab never pops the card in another. Drains the entry on
+// the claiming tab sees that import's "preparing" → "done" lifecycle, so a
+// analysis started in one tab never pops the card in another. Drains the entry on
 // hand-off. Stays behind the localhost CSRF/Host guard (dispatched after it) and
 // sends no CORS header, so a foreign page can neither reach nor read it.
 export async function handleExtensionInbox(req: IncomingMessage, res: ServerResponse, tabId: string, claimToken: string): Promise<void> {
@@ -509,9 +509,9 @@ export async function handleExtensionInbox(req: IncomingMessage, res: ServerResp
   if (tabId && entry.claimedBy === tabId) entry.lastSeenAt = now;
   // Still preparing in the background (resolving the raw text) — report progress
   // WITHOUT draining so the owning tab keeps polling until the text is ready. The
-  // "distilling" is the wire progress value the client polls on.
-  if (entry.status === "distilling") {
-    sendJson(res, 200, { status: "distilling" });
+  // "preparing" is the wire progress value the client polls on.
+  if (entry.status === "preparing") {
+    sendJson(res, 200, { status: "preparing" });
     return;
   }
   // Done — hand over the brief once and remove it from the queue.

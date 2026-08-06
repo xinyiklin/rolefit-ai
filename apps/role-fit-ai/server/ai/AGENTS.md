@@ -14,7 +14,7 @@ sanitizer code is executable product behavior and anti-fabrication-critical.
   recalculate a replacement judgment.
 - `polish.ts` orchestrates Tailor and Review; its optional cover leg is retained
   only for compatibility with older clients.
-- `distill.ts`, `coverLetter.ts`, and `applicationAnswers.ts` own their routes.
+- `jobAnalysis.ts`, `coverLetter.ts`, and `applicationAnswers.ts` own their routes.
   Cover-letter tailoring is **one call**. It requires the candidate's source
   letter and the evidence corpus derived from their own resume, notes, and
   answers; it never generates from resume/job inputs alone. The route shares
@@ -62,7 +62,7 @@ sanitizer code is executable product behavior and anti-fabrication-critical.
   Never import JD-only skills or fabricate claims.
 - Review-only audits the current edited draft. The Review leg of Both receives
   only sanitized suggestions from that same Tailor run.
-- A failed stage fails plainly and stops downstream work. Distill may return a
+- A failed stage fails plainly and stops downstream work. Job analysis may return a
   deterministic local brief to the client for inspection, but that does not
   convert the failed AI stage into success.
 - Propagate request cancellation into native API fetches and CLI subprocesses.
