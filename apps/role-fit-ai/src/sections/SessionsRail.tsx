@@ -7,7 +7,8 @@ import { NavMenu } from "./NavMenu";
 const PHASE_LABEL: Record<PresencePhase, string> = {
   idle: "idle",
   editing: "editing",
-  distilling: "distilling job",
+  "analyzing-job": "analyzing job",
+  distilling: "analyzing job",
   tailoring: "tailoring",
   reviewing: "reviewing",
   "tailoring+reviewing": "tailoring + reviewing"
@@ -15,7 +16,7 @@ const PHASE_LABEL: Record<PresencePhase, string> = {
 
 // Phases that represent live work — rendered with a spinner so the user can see
 // at a glance which tabs are actually busy versus just open.
-const ACTIVE_PHASES = new Set<PresencePhase>(["distilling", "tailoring", "reviewing", "tailoring+reviewing"]);
+const ACTIVE_PHASES = new Set<PresencePhase>(["analyzing-job", "distilling", "tailoring", "reviewing", "tailoring+reviewing"]);
 
 type SessionRow = { key: string; label: string; phase: PresencePhase; isSelf: boolean };
 

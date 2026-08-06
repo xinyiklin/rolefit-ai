@@ -72,7 +72,7 @@ import type { ResumeData } from "@typeset/engine/lib/resumeData.ts";
 import { parseResumeFile } from "@typeset/engine/lib/resumeFile.ts";
 import { defaultTailorModes, type TailorMode } from "./lib/tailorScope";
 import { resumeDocumentVersion as resumeDocumentVersionFor } from "./lib/resumeDocumentVersion";
-import type { StageAiUsage } from "./lib/aiUsage";
+import { canonicalizeAiUsageStageKeys, type StageAiUsage } from "./lib/aiUsage";
 import { useDuplicateGuard } from "./hooks/useDuplicateGuard";
 import { useJobIntake, type ImportedJobSnapshot } from "./hooks/useJobIntake";
 import { usePolishPipeline } from "./hooks/usePolishPipeline";
@@ -243,7 +243,7 @@ function App() {
   // ----- Dialog system -----
   const { alert, confirm } = useDialog();
 
-  // Draggable progress dock (Tailor/Review/Distill/Cover/Answers task cards) —
+  // Draggable progress dock (Tailor/Review/Job analysis/Cover/Answers task cards) —
   // lets the user drag the fixed-position stack out of the way of whatever
   // studio content it would otherwise sit over.
   const dock = useDraggableDock();
@@ -283,7 +283,7 @@ function App() {
   const coverManualVariantSelectionInFlightRef = useRef(false);
   // Tab-local document identity: independent tailoring sessions can name their
   // drafts independently, and the same title becomes the default PDF/.resume
-  // file name. Successful imports/distills replace it with the new job target.
+  // file name. Successful imports/analyses replace it with the new job target.
   const [documentTitle, setDocumentTitle] = useState(() => {
     try {
       const stored = sessionStorage.getItem(DOCUMENT_TITLE_STORAGE_KEY)?.trim();
@@ -292,14 +292,14 @@ function App() {
       return DEFAULT_DOCUMENT_TITLE;
     }
   });
-  // Per-stage AI usage snapshot (distill/tailor/review/cover), captured across
+  // Per-stage AI usage snapshot (job analysis/tailor/review/cover), captured across
   // the pipeline and snapshotted onto the Application at Apply time. Keys are
   // deleted (not set to "none") when a fresh polish run starts, so a stale
   // provider attribution can never linger from a prior run into the new one.
   const [pipelineAiUsage, setPipelineAiUsage] = useState<Record<string, StageAiUsage>>({});
   // Immutable captured posting text. It remains separate even when it initially
   // matches jobDescription so prepared-brief edits and "Prepare again" never
-  // rewrite or accidentally re-distill the compact tailoring scaffold.
+  // rewrite or accidentally reanalyze the compact tailoring scaffold.
   const [jobRawText, setJobRawText] = useState("");
   // Starts empty; the mount effect (loadWorkspace) auto-loads a workspace
   // base-resume when one exists, otherwise the editor stays blank.
@@ -389,16 +389,16 @@ function App() {
     ]
   );
   const jobAnalysisStage = stages["job-analysis"];
-  const distillProviderReady = providerReady(jobAnalysisStage.provider);
+  const jobAnalysisProviderReady = providerReady(jobAnalysisStage.provider);
   const tailorProviderReady = providerReady(stages.tailor.provider);
   const reviewProviderReady = providerReady(stages.review.provider);
   const coverProviderReady = providerReady(stages.cover.provider);
   const answersProviderReady = providerReady(stages.answers.provider);
-  const distillProviderMessage = providerRecoveryMessage(jobAnalysisStage.provider);
+  const jobAnalysisProviderMessage = providerRecoveryMessage(jobAnalysisStage.provider);
   const tailorProviderMessage = providerRecoveryMessage(stages.tailor.provider);
   const coverProviderMessage = providerRecoveryMessage(stages.cover.provider);
   const answersProviderMessage = providerRecoveryMessage(stages.answers.provider);
-  const ensureDistillProvider = useCallback(
+  const ensureJobAnalysisProvider = useCallback(
     () => providerAvailability.ensureProvider(jobAnalysisStage.provider),
     [jobAnalysisStage.provider, providerAvailability.ensureProvider]
   );
@@ -420,10 +420,10 @@ function App() {
     major
   });
   const requestHonestContext = mergeHonestContext(honestContext, candidateFactsContext);
-  // Distill runs on its own concrete provider config (synced to other stages via
-  // the copy buttons, not a live link). Shared by every distill entry point
+  // Job analysis runs on its own concrete provider config (synced to other stages via
+  // the copy buttons, not a live link). Shared by every job analysis entry point
   // (link, paste, extension import, and their retries).
-  const distillRequestFields = () => buildStageRequestFields(jobAnalysisStage);
+  const jobAnalysisRequestFields = () => buildStageRequestFields(jobAnalysisStage);
   const [activeOutputTab, setActiveOutputTab] = useState<OutputTab>("prepare");
   const [statusFilter, setStatusFilter] = useState<ApplicationActivityFilter>("all");
   const [trackerView, setTrackerView] = useState<TrackerView>("table");
@@ -800,7 +800,7 @@ function App() {
     docStyle.set("zoom", Math.floor(fit * 100) / 100);
   }, [docStyle]);
 
-  // Distill the job once per (description, url, import) instead of on every
+  // Analyze the job once per (description, url, import) instead of on every
   // render. The full extractJobPosting parser is ~1500 LOC; running it in the
   // component body (the cover letter, materialsJobTarget, presence label, and the
   // apply/export callers below) re-parsed the JD on every keystroke-driven
@@ -811,9 +811,9 @@ function App() {
       importedJob && importedJob.url === jobUrl.trim() && importedJob.tailoringText === jobDescription.trim()
         ? importedJob.tracking
         : null;
-    // The import (AI or deterministic) is the authoritative distill output. Don't
+    // The import (AI or deterministic) is the authoritative job analysis output. Don't
     // re-parse the compact scaffold and merge — that would let a stray number or
-    // label in a bullet resurrect a field the distiller deliberately left empty
+    // label in a bullet resurrect a field the job analyzer deliberately left empty
     // (e.g. a $5M budget figure becoming the salary). Only re-parse when there is
     // no matching import (user typed a raw JD straight into the box).
     return imported
@@ -822,7 +822,7 @@ function App() {
   }, [jobDescription, jobUrl, importedJob]);
 
   // Keep browser tabs distinguishable when several applications are open.
-  // The shared distilled metadata is authoritative, so imported and manually
+  // The shared analyzed metadata is authoritative, so imported and manually
   // entered jobs use the same Company - Role - RoleFit AI format.
   useEffect(() => {
     document.title = browserTabTitle(jobTracking);
@@ -858,7 +858,7 @@ function App() {
 
   // Derive a short job-label for the autosave + cross-tab presence context (role
   // + company only — never the full JD body). Uses the shared `jobTracking` so
-  // the label matches the AI-distilled role/company shown elsewhere in the app,
+  // the label matches the AI-analyzed role/company shown elsewhere in the app,
   // rather than a weaker deterministic re-parse of the raw text.
   const _autosaveJobLabel = useMemo(() => {
     if (!jobDescription.trim()) return "";
@@ -1175,7 +1175,7 @@ function App() {
     documentTitle,
     jobUrl,
     // Name downloads after the same company the application is saved with
-    // (distilled from the posting), not just a URL guess. Thunk: currentJobTracking
+    // (analyzed from the posting), not just a URL guess. Thunk: currentJobTracking
     // is a hoisted declaration, evaluated lazily at save time.
     resolveJobCompany: () => currentJobTracking().company ?? "",
     coverLetterText,
@@ -1184,22 +1184,22 @@ function App() {
     setExportStatus
   });
 
-  // ----- Job intake (distill/import flows) -----
-  // Extract-from-link, Distill-paste, the browser-extension inbox import, and
+  // ----- Job intake (job analysis/import flows) -----
+  // Link analysis, pasted-posting analysis, the browser-extension inbox import, and
   // each entry point's Retry — extracted to
-  // src/hooks/useJobIntake.ts. isExtractingLink/distillProgress/
-  // distillProgressVisible/distillRetry are owned by the hook; App only reads
+  // src/hooks/useJobIntake.ts. isExtractingLink/jobAnalysisProgress/
+  // jobAnalysisProgressVisible/jobAnalysisRetry are owned by the hook; App only reads
   // them below for render + the presence phase + the before-unload guard.
   const {
     isExtractingLink,
     extensionImportPhase,
-    distillProgress,
-    distillProgressVisible,
-    dismissDistillProgress,
-    distillRetry,
+    jobAnalysisProgress,
+    jobAnalysisProgressVisible,
+    dismissJobAnalysisProgress,
+    jobAnalysisRetry,
     handleManualJobDescriptionChange,
     handleExtractFromLink,
-    handleDistillPaste
+    handleAnalyzePaste
   } = useJobIntake({
     jobUrl,
     setJobUrl,
@@ -1214,14 +1214,14 @@ function App() {
     setLinkStatus,
     onExtensionPrepareStarted: () => setActiveOutputTab("prepare"),
     onExtensionJobReceived: () => setActiveOutputTab("prepare"),
-    confirmDuplicateBeforeDistill: duplicateGuard.confirmDuplicateBeforeDistill,
-    confirmDuplicateAfterDistill: duplicateGuard.confirmDuplicateAfterDistill,
-    distillRequestFields,
-    ensureProviderReady: ensureDistillProvider,
+    confirmDuplicateBeforeJobAnalysis: duplicateGuard.confirmDuplicateBeforeJobAnalysis,
+    confirmDuplicateAfterJobAnalysis: duplicateGuard.confirmDuplicateAfterJobAnalysis,
+    jobAnalysisRequestFields,
+    ensureProviderReady: ensureJobAnalysisProvider,
     extensionImportsReady: hasLoadedApplications,
   });
   const jobPreparationActive =
-    isExtractingLink || extensionImportPhase !== null || distillProgress.status === "running";
+    isExtractingLink || extensionImportPhase !== null || jobAnalysisProgress.status === "running";
 
   // ----- Polish pipeline (Tailor -> Review) -----
   // buildPolishContext, the reviewer-attribution + merge helpers, the two
@@ -1260,11 +1260,11 @@ function App() {
     confirmDuplicateBeforePolish: duplicateGuard.confirmDuplicateBeforePolish
   });
   const aiWorkflowStages: AiWorkflowStage[] = [];
-  if (distillProgressVisible) {
+  if (jobAnalysisProgressVisible) {
     aiWorkflowStages.push({
-      key: "distill",
-      state: distillProgress,
-      onRetry: distillRetry
+      key: "job-analysis",
+      state: jobAnalysisProgress,
+      onRetry: jobAnalysisRetry
     });
   }
   if (polishProgressVisible) {
@@ -1287,7 +1287,7 @@ function App() {
   }
 
   function dismissAiWorkflow() {
-    dismissDistillProgress();
+    dismissJobAnalysisProgress();
     setPolishProgressVisible(false);
   }
 
@@ -1297,8 +1297,8 @@ function App() {
   // the shared in-progress card. Privacy: only the role · company label leaves
   // the tab, never JD/resume text.
   const _myPhase: PresencePhase =
-    distillProgress.status === "running"
-      ? "distilling"
+    jobAnalysisProgress.status === "running"
+      ? "analyzing-job"
       : isPolishing
         ? polishStages === "review"
           ? "reviewing"
@@ -1313,7 +1313,7 @@ function App() {
     phase: _myPhase
   });
 
-  // Warn before close/reload when there are unsaved edits OR a distill/tailor/
+  // Warn before close/reload when there are unsaved edits OR a job analysis/tailor/
   // review is mid-flight (losing an in-progress run is as costly as losing edits).
   // Apply marks each included document clean only after its source persists.
   useBeforeUnloadGuard(
@@ -1321,7 +1321,7 @@ function App() {
       coverLetterEditor.dirty ||
       isGeneratingCover ||
       isPolishing ||
-      distillProgress.status === "running" ||
+      jobAnalysisProgress.status === "running" ||
       pendingApplicationWrites > 0
   );
 
@@ -1705,7 +1705,7 @@ function App() {
     if (confirmed) resetSettings();
   }
 
-  // Reads the memoized distillation above (apply/export callers run at click time,
+  // Reads the memoized job analysis above (apply/export callers run at click time,
   // so the value is always current); kept as a function for call-site stability.
   function currentJobTracking(): ExtractedJobTracking {
     return jobTracking;
@@ -1972,7 +1972,9 @@ function App() {
       // Restore a consistent AI-usage/raw-text pair regardless of which branch
       // below runs — a tracker-restore must not carry over the PREVIOUS working
       // job's provider attribution or raw text.
-      setPipelineAiUsage(app.aiUsage ?? { distill: { source: "none" } });
+      setPipelineAiUsage(
+        canonicalizeAiUsageStageKeys(app.aiUsage ?? { "job-analysis": { source: "none" } })
+      );
       setJobRawText(restoredSourceText);
       // Include controls describe the NEXT Apply package, not which historical
       // artifacts happen to exist. Reopen with the documented defaults; retained
@@ -2068,7 +2070,9 @@ function App() {
       ? draft.jobKeyHash === duplicateGuard.currentJobKeyHash()
       : Boolean(draft.jobLabel && draft.jobLabel === _autosaveJobLabel);
     if (provenanceApplies) {
-      if (draft.pipelineAiUsage) setPipelineAiUsage(draft.pipelineAiUsage);
+      if (draft.pipelineAiUsage) {
+        setPipelineAiUsage(canonicalizeAiUsageStageKeys(draft.pipelineAiUsage));
+      }
       if (draft.jobRawText) setJobRawText(draft.jobRawText);
     }
     setPendingAutosaveDraft(null);
@@ -2177,7 +2181,7 @@ function App() {
       />
 
       {polishProgressVisible ||
-      distillProgressVisible ||
+      jobAnalysisProgressVisible ||
       coverProgress.status !== "idle" ||
       answersProgress.status !== "idle" ? (
         <div
@@ -2259,12 +2263,12 @@ function App() {
               jobPrepared={jobPrepared}
               isPreparing={jobPreparationActive}
               extensionImportPhase={extensionImportPhase}
-              distillProgress={distillProgress}
+              jobAnalysisProgress={jobAnalysisProgress}
               preparationStatus={linkStatus}
-              distillProviderReady={distillProviderReady}
-              distillProviderMessage={distillProviderMessage}
+              jobAnalysisProviderReady={jobAnalysisProviderReady}
+              jobAnalysisProviderMessage={jobAnalysisProviderMessage}
               onFetchPosting={handleExtractFromLink}
-              onPreparePosting={handleDistillPaste}
+              onPreparePosting={handleAnalyzePaste}
               resumeReady={resumeReady}
               includeResume={materialSelection.resume}
               onIncludeResumeChange={(resume) => setMaterialSelection((current) => ({ ...current, resume }))}

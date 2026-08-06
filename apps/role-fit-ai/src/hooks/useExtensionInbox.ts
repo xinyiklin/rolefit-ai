@@ -4,7 +4,7 @@ import { getTabId } from "../lib/tabPresence";
 /**
  * One pending browser-extension import. The server only prepares `text`
  * (resolving the raw capture, e.g. fetching the full JD for a Greenhouse link).
- * The receiving tab owns provider-backed AI Distill with its selected settings.
+ * The receiving tab owns provider-backed AI job analysis with its selected settings.
  */
 export type ExtensionImport = {
   text: string;
@@ -40,24 +40,24 @@ function clearExtensionImportParam(): void {
  * Polls /api/extension/inbox once enabled, then on window focus and tab
  * visibility.
  * The server prepares an import's text in the BACKGROUND (resolving the raw
- * capture, no AI call), so the inbox reports `{status:"distilling"}` first; this
- * hook keeps polling (and calls `onDistilling` for a progress affordance) until
+ * capture, no AI call), so the inbox reports `{status:"preparing"}` first; this
+ * hook keeps polling (and calls `onPreparing` for a progress affordance) until
  * the text is ready, then calls `onImport({text, url})`. The receiving tab runs
- * provider-backed Distill. The background prepare is independent of the popup, so closing it /
- * switching tabs never strands an import.
+ * provider-backed job analysis. The background prepare is independent of the
+ * popup, so closing it or switching tabs never strands an import.
  *
  * Callback refs keep the latest closures without re-subscribing the listeners
  * for callback identity changes.
  */
 export function useExtensionInbox(
   onImport: (item: ExtensionImport) => void | Promise<void>,
-  onDistilling?: () => void,
+  onPreparing?: () => void,
   enabled = true
 ): void {
   const onImportRef = useRef(onImport);
   onImportRef.current = onImport;
-  const onDistillingRef = useRef(onDistilling);
-  onDistillingRef.current = onDistilling;
+  const onPreparingRef = useRef(onPreparing);
+  onPreparingRef.current = onPreparing;
 
   useEffect(() => {
     // A successful poll drains this one-shot import. Wait until local preflights
@@ -67,10 +67,10 @@ export function useExtensionInbox(
 
     const claimToken = readExtensionImportClaimToken();
     let timer: ReturnType<typeof setTimeout> | null = null;
-    let distilling = false;
+    let preparing = false;
     // A fresh extension tab (one carrying a claim token) owns an in-flight import
     // until that import is delivered OR the server reports it gone (TTL-pruned
-    // while still "distilling", etc). Tracked as a MUTABLE flag, not `claimToken`
+    // while still "preparing", etc). Tracked as a MUTABLE flag, not `claimToken`
     // directly, so it resets on delivery or on a null/no-entry response: once the
     // reservation is drained or no longer exists server-side, this tab must revert
     // to the hidden-tab hands-off rule instead of staying permitted to poll (and
@@ -84,7 +84,7 @@ export function useExtensionInbox(
       if (!cancelled) timer = setTimeout(() => void checkInbox(), ms);
     };
     const scheduleTransientRetry = () => {
-      if (distilling || claimActive || transientRetries < 3) {
+      if (preparing || claimActive || transientRetries < 3) {
         transientRetries += 1;
         schedule(Math.min(4_000, 1_000 * transientRetries));
       }
@@ -101,14 +101,14 @@ export function useExtensionInbox(
       // owns an in-flight import KEEPS polling while hidden: otherwise the
       // background preparation settles server-side yet the tab only notices when the
       // user switches back, stranding the tailoring until the tab is refocused.
-      // "Owns an in-flight import" = the server already reported "distilling" to
+      // "Owns an in-flight import" = the server already reported "preparing" to
       // us, or this is a fresh extension tab whose (not-yet-delivered) claim-token
       // import is reserved server-side for this exact tab and can never divert to
       // another session — so polling while hidden can't steal anyone else's import.
       // Both flags are reset the moment that ownership ends (delivery, or the
       // server reporting the reservation is gone) — see the null-response branch
       // below — so a tab can't stay permitted to poll-while-hidden indefinitely.
-      const ownsInFlightImport = distilling || claimActive;
+      const ownsInFlightImport = preparing || claimActive;
       if (
         typeof document !== "undefined" &&
         document.visibilityState === "hidden" &&
@@ -134,10 +134,10 @@ export function useExtensionInbox(
         }
         transientRetries = 0;
         if (data === null || typeof data !== "object") {
-          distilling = false;
+          preparing = false;
           // A poll that carried a claim token but got back null/no-entry means
           // the reserved import no longer exists server-side (e.g. TTL-pruned
-          // while still "distilling"). This tab no longer owns an in-flight
+          // while still "preparing"). This tab no longer owns an in-flight
           // import, so drop back to the hidden-tab hands-off rule — otherwise
           // claimActive would stay true forever and a later hidden poll could
           // be handed an unrelated tokenless import via the server's oldest-
@@ -151,19 +151,19 @@ export function useExtensionInbox(
           text?: unknown;
           url?: unknown;
         };
-        // "distilling" = the background prepare hasn't finished. Treat ANY other
+        // "preparing" = the background prepare hasn't finished. Treat ANY other
         // status string without delivered text the same way (keep polling): a
         // newer server may rename or add progress tokens, and an unknown status
         // must never strand an import by falling through without a reschedule.
-        // (Forward-compat half of the planned "distilling"→"preparing" rename.)
+        // This also keeps older/newer progress-token generations compatible.
         if (typeof obj.status === "string" && typeof obj.text !== "string") {
-          distilling = true;
-          onDistillingRef.current?.();
+          preparing = true;
+          onPreparingRef.current?.();
           schedule(1500); // keep polling until the background prepare finishes
           return;
         }
         if (typeof obj.text === "string" && typeof obj.url === "string") {
-          distilling = false;
+          preparing = false;
           await onImportRef.current({
             text: obj.text,
             url: obj.url

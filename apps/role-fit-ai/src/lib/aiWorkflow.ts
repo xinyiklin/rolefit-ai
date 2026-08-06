@@ -1,4 +1,4 @@
-export type AiStageKey = "distill" | "tailor" | "review" | "cover" | "answers";
+export type AiStageKey = "job-analysis" | "tailor" | "review" | "cover" | "answers";
 
 export type AiStageStatus = "idle" | "running" | "done" | "failed" | "stopped";
 
@@ -23,7 +23,7 @@ export type AiWorkflowStage = {
 };
 
 export const AI_STAGE_COPY: Record<AiStageKey, Record<"idle" | "running" | "done" | "failed" | "stopped", string>> = {
-  distill: { idle: "Distill", running: "Distilling", done: "Distilled", failed: "Distill failed", stopped: "Distill stopped" },
+  "job-analysis": { idle: "Job analysis", running: "Analyzing job", done: "Job analyzed", failed: "Job analysis failed", stopped: "Job analysis stopped" },
   tailor: { idle: "Tailor", running: "Tailoring", done: "Tailored", failed: "Tailor failed", stopped: "Tailor stopped" },
   review: { idle: "Recruiter audit", running: "Auditing", done: "Audited", failed: "Audit failed", stopped: "Audit stopped" },
   cover: { idle: "Cover letter", running: "Drafting cover letter", done: "Cover letter ready", failed: "Cover letter failed", stopped: "Cover letter stopped" },

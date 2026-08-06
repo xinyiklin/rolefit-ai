@@ -88,7 +88,7 @@ const cssRuleBlocks = (source) =>
   [...source.replace(/\/\*[\s\S]*?\*\//g, "").matchAll(/([^{}]+)\{([^{}]*)\}/g)].map(
     ([, selector, body]) => ({ selector, body })
   );
-const intakeFingerprintStart = intake.indexOf("const distillInputFingerprint = workflowInputFingerprint({");
+const intakeFingerprintStart = intake.indexOf("const jobAnalysisInputFingerprint = workflowInputFingerprint({");
 const intakeFingerprint = intake.slice(intakeFingerprintStart, intake.indexOf("});", intakeFingerprintStart) + 3);
 const polishFingerprintStart = polish.indexOf("const inputFingerprint = workflowInputFingerprint({");
 const polishFingerprint = polish.slice(polishFingerprintStart, polish.indexOf("});", polishFingerprintStart) + 3);
@@ -103,6 +103,21 @@ assert.match(
   "application writes send only explicit upsert records with their mutations"
 );
 assert.doesNotMatch(applications, /deleteIds/, "the obsolete deleteIds contract cannot return");
+assert.match(
+  applications,
+  /import \{ canonicalizeAiUsageStageKeys, type ApplicationAiUsage \} from "\.\.\/lib\/aiUsage";/,
+  "the tracker owns one historical AI-usage read adapter"
+);
+assert.equal(
+  applications.match(/data\.applications\.map\(canonicalizeApplicationAiUsage\)/g)?.length,
+  3,
+  "initial, refreshed, and post-write tracker reads canonicalize historical AI-usage stage keys"
+);
+assert.match(
+  applications,
+  /this\.applications = applications\.map\(canonicalizeApplicationAiUsage\)/,
+  "conflict snapshots canonicalize historical AI-usage stage keys"
+);
 assert.match(
   applications,
   /res\.status === 409[\s\S]*ApplicationConflictError/,
@@ -272,17 +287,17 @@ assert.doesNotMatch(coverFingerprint, /providerReady/, "provider polling cannot 
 assert.equal(
   intake.match(/await ensureProviderReady\(\)/g)?.length,
   4,
-  "every AI Distill entry point awaits the shared initial provider discovery"
+  "every AI Job analysis entry point awaits the shared initial provider discovery"
 );
 assert.ok(
   intake.indexOf("const readiness = await ensureProviderReady()") <
-    intake.indexOf("const releaseDistillRun = await waitAndClaimDistillRun()"),
-  "extension imports settle provider discovery before claiming and fingerprinting their Distill run"
+    intake.indexOf("const releaseJobAnalysisRun = await waitAndClaimJobAnalysisRun()"),
+  "extension imports settle provider discovery before claiming and fingerprinting their Job analysis run"
 );
 assert.match(
   intake,
-  /const result = await distillJobPosting\(text,\s*\{/,
-  "extension delivery always runs the selected provider-backed Distill request"
+  /const result = await analyzeJobPosting\(text,\s*\{/,
+  "extension delivery always runs the selected provider-backed Job analysis request"
 );
 assert.doesNotMatch(
   intake,
@@ -302,16 +317,16 @@ assert.doesNotMatch(
 assert.doesNotMatch(
   intakeFingerprint,
   /providerReady/,
-  "advisory provider polling cannot invalidate an active Distill request"
+  "advisory provider polling cannot invalidate an active Job analysis request"
 );
 assert.doesNotMatch(
   intakeFingerprint,
   /editedResume|tailorModes/,
-  "resume bootstrap and Tailor-mode reconciliation cannot invalidate an active Distill request"
+  "resume bootstrap and Tailor-mode reconciliation cannot invalidate an active Job analysis request"
 );
-assert.match(intakeFingerprint, /jobUrl/, "Distill still guards the live job URL");
-assert.match(intakeFingerprint, /jobDescription/, "Distill still guards the live job description");
-assert.match(intakeFingerprint, /aiRequest/, "Distill still guards its provider, model, and effort settings");
+assert.match(intakeFingerprint, /jobUrl/, "Job analysis still guards the live job URL");
+assert.match(intakeFingerprint, /jobDescription/, "Job analysis still guards the live job description");
+assert.match(intakeFingerprint, /aiRequest/, "Job analysis still guards its provider, model, and effort settings");
 assert.match(
   polish,
   /const results = await Promise\.all\(checks\)/,
@@ -487,42 +502,42 @@ assert.ok(responseGuard >= 0 && deliveryBranch > responseGuard, "inbox rejects n
 assert.match(inbox, /scheduleTransientRetry\(\)/, "transient inbox failures are retried");
 assert.match(inbox, /await onImportRef\.current/, "the inbox awaits the once-only client handoff");
 
-assert.match(intake, /async function waitAndClaimDistillRun/, "extension imports can wait for the active distill");
+assert.match(intake, /async function waitAndClaimJobAnalysisRun/, "extension imports can wait for the active job analysis");
 assert.match(
   intake,
-  /const releaseDistillRun = await waitAndClaimDistillRun\(\)/,
-  "a delivered extension payload enters the serialized distill handoff"
+  /const releaseJobAnalysisRun = await waitAndClaimJobAnalysisRun\(\)/,
+  "a delivered extension payload enters the serialized job analysis handoff"
 );
-assert.match(intake, /const releaseDistillRun = tryClaimDistillRun\(\)/, "user distills share the same lock");
+assert.match(intake, /const releaseJobAnalysisRun = tryClaimJobAnalysisRun\(\)/, "user analyses share the same lock");
 assert.match(
   intake,
-  /const distillInputFingerprint = workflowInputFingerprint\(/,
-  "Distill snapshots its job and provider inputs"
+  /const jobAnalysisInputFingerprint = workflowInputFingerprint\(/,
+  "Job analysis snapshots its job and provider inputs"
 );
-assert.match(intake, /distillGenerationRef/, "Distill invalidates superseded request generations");
+assert.match(intake, /jobAnalysisGenerationRef/, "Job analysis invalidates superseded request generations");
 assert.equal(
-  intake.match(/const readinessInputFingerprint = distillInputFingerprintRef\.current;/g)?.length,
+  intake.match(/const readinessInputFingerprint = jobAnalysisInputFingerprintRef\.current;/g)?.length,
   2,
   "link and paste preparation bind provider readiness to the inputs that requested it"
 );
 assert.equal(
-  intake.match(/readinessInputFingerprint !== distillInputFingerprintRef\.current/g)?.length,
+  intake.match(/readinessInputFingerprint !== jobAnalysisInputFingerprintRef\.current/g)?.length,
   2,
   "link and paste preparation reject input changes that occur during provider readiness"
 );
 assert.equal(
-  intake.match(/const request = startDistillRequest\(\)/g)?.length,
+  intake.match(/const request = startJobAnalysisRequest\(\)/g)?.length,
   4,
-  "every link, paste, retry, and extension Distill owns a guarded request"
+  "every link, paste, retry, and extension Job analysis owns a guarded request"
 );
 assert.equal(
   intake.match(/signal: request\.signal/g)?.length,
   5,
-  "every Distill fetch receives the active abort signal"
+  "every Job analysis fetch receives the active abort signal"
 );
 assert.ok(
   (intake.match(/if \(!request\.isCurrent\(\)\) return;/g)?.length ?? 0) >= 16,
-  "Distill checks request currency after every asynchronous boundary"
+  "Job analysis checks request currency after every asynchronous boundary"
 );
 
 assert.equal(
@@ -567,7 +582,7 @@ assert.match(
 );
 assert.match(
   prepareTab,
-  /const canFetch\s*=\s*Boolean\(jobUrl\.trim\(\)\)\s*&&\s*!isPreparing\s*&&\s*distillProviderReady/,
+  /const canFetch\s*=\s*Boolean\(jobUrl\.trim\(\)\)\s*&&\s*!isPreparing\s*&&\s*jobAnalysisProviderReady/,
   "Prepare's URL action requires input, an idle workflow, and an available provider"
 );
 assert.match(
@@ -578,7 +593,7 @@ assert.match(
 assert.match(
   prepareTab,
   /onClick=\{\(\) => void onPreparePosting\(preparationSourceText\)\}/,
-  "Prepare actions re-distill the captured or edited posting rather than the compact prepared brief"
+  "Prepare actions reanalyze the captured or edited posting rather than the compact prepared brief"
 );
 assert.equal(
   prepareTab.match(/onPreparePosting\(preparationSourceText\)/g)?.length,
@@ -742,7 +757,7 @@ assert.match(
 assert.match(
   prepareTab,
   /Extraction gaps[\s\S]{0,700}?manualReviewFields/,
-  "Prepare exposes the structured fields Distill could not extract"
+  "Prepare exposes the structured fields Job analysis could not extract"
 );
 assert.match(
   prepareTab,

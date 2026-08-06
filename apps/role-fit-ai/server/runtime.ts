@@ -3,7 +3,7 @@ import type { IncomingMessage, Server, ServerResponse } from "node:http";
 import { readFile } from "node:fs/promises";
 import { extname, join, resolve, sep } from "node:path";
 import { handlePolish } from "./ai/polish.ts";
-import { handleDistill } from "./ai/distill.ts";
+import { handleJobAnalysis } from "./ai/jobAnalysis.ts";
 import { getDefaultModel, getDefaultProvider } from "./ai/providers.ts";
 import { handleApplicationAnswers } from "./ai/applicationAnswers.ts";
 import { handleCoverLetter } from "./ai/coverLetter.ts";
@@ -412,8 +412,15 @@ export async function startRoleFitServer(options: RoleFitServerOptions): Promise
       return;
     }
 
+    if (pathname === "/api/job-analysis") {
+      void handleJobAnalysis(req, res);
+      return;
+    }
+
+    // Temporary one-preview compatibility alias for a tab running the previous
+    // browser bundle against a newly restarted local server.
     if (pathname === "/api/distill") {
-      void handleDistill(req, res);
+      void handleJobAnalysis(req, res);
       return;
     }
 
