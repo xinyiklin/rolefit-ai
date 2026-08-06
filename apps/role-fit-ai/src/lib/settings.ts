@@ -20,11 +20,11 @@ export type PersistedSettings = {
   auditProvider?: AiProviderValue;
   auditSelectedModel?: string;
   auditCliReasoningEffort?: string;
-  // Independent distiller for the /api/distill pass — its own concrete provider
+  // Independent analyzer for the /api/job-analysis pass — its own concrete provider
   // config (synced to other stages via the copy buttons, not a live link).
-  distillProvider?: AiProviderValue;
-  distillSelectedModel?: string;
-  distillCliReasoningEffort?: string;
+  jobAnalysisProvider?: AiProviderValue;
+  jobAnalysisSelectedModel?: string;
+  jobAnalysisCliReasoningEffort?: string;
   // Cover-letter tailor and application Q&A. Both ran on the Tailor stage's
   // config before they were configurable; absent keys migrate from Tailor on
   // load so an existing install keeps the provider it was already using.
@@ -55,6 +55,42 @@ export type PersistedSettings = {
 const KEY = "rolefit:settings";
 
 const validProviders = new Set<string>(providerOptions.map((option) => option.value));
+
+const LEGACY_JOB_ANALYSIS_SETTINGS = [
+  ["distillProvider", "jobAnalysisProvider"],
+  ["distillSelectedModel", "jobAnalysisSelectedModel"],
+  ["distillCliReasoningEffort", "jobAnalysisCliReasoningEffort"]
+] as const;
+
+function hasOwn(value: Record<string, unknown>, key: string): boolean {
+  return Object.prototype.hasOwnProperty.call(value, key);
+}
+
+// Rename persisted Distill settings before the strict allowlist/normalizer sees
+// them. This is shared by localStorage, the workspace mirror, and portable
+// backups so all three retain the user's exact provider configuration. When a
+// hand-edited bag contains both generations, the canonical value wins.
+export function migrateSettings(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  const migrated = { ...(value as Record<string, unknown>) };
+  for (const [legacyKey, canonicalKey] of LEGACY_JOB_ANALYSIS_SETTINGS) {
+    if (!hasOwn(migrated, canonicalKey) && hasOwn(migrated, legacyKey)) {
+      migrated[canonicalKey] = migrated[legacyKey];
+    }
+    delete migrated[legacyKey];
+  }
+
+  const rawInstructions = migrated.stageCustomInstructions;
+  if (rawInstructions && typeof rawInstructions === "object" && !Array.isArray(rawInstructions)) {
+    const instructions = { ...(rawInstructions as Record<string, unknown>) };
+    if (!hasOwn(instructions, "job-analysis") && hasOwn(instructions, "distill")) {
+      instructions["job-analysis"] = instructions.distill;
+    }
+    delete instructions.distill;
+    migrated.stageCustomInstructions = instructions;
+  }
+  return migrated;
+}
 
 // Every stage's [provider, model, effort] key triple, derived from the stage
 // list so a new stage cannot be added to the UI without being reconciled here.
@@ -94,9 +130,7 @@ const PERSISTED_SETTING_KEYS = [
 // (not truthiness) so a saved "" still reconciles to the provider default; no
 // provider now ships a blank-value model or effort option.
 export function normalizeSettings(value: unknown): PersistedSettings {
-  const source = value && typeof value === "object" && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : {};
+  const source = migrateSettings(value);
   const allowed: Record<string, unknown> = {};
   for (const key of PERSISTED_SETTING_KEYS) {
     if (Object.prototype.hasOwnProperty.call(source, key)) allowed[key] = source[key];
@@ -106,10 +140,10 @@ export function normalizeSettings(value: unknown): PersistedSettings {
   // (or undefined), so indexing through the strongly-typed PersistedSettings
   // would fight the compiler for no safety benefit.
   const bag = settings as unknown as Record<string, string | undefined>;
-  // This function only ever REMOVES or repairs a key in place; it must not add
-  // one. `workspaceBackupContract.ts` accepts a restored settings bag only if it
-  // round-trips through here unchanged, so an additive migration would reject
-  // every backup written before that key existed. The cover/answers stages
+  // After the key migration above, normalization only removes or repairs values;
+  // it does not seed missing stage configuration. `workspaceBackupContract.ts`
+  // compares against the migrated input so old backups remain valid while
+  // unsupported keys still fail closed. The cover/answers stages
   // inherit Tailor's config in useAiSettings' seeder instead, and the one
   // pre-existing additive migration (strictReview -> polishStages) is already
   // documented there as an intentional restore rejection.

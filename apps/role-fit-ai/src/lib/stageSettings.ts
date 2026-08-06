@@ -17,10 +17,9 @@ const TAILOR_KEYS = stageSettingsKeys(AI_STAGES.find((entry) => entry.id === "ta
 // An install that predates the split inherits Tailor's provider so its behavior is
 // identical across the upgrade rather than silently switching provider.
 //
-// The inheritance lives HERE, not in normalizeSettings: that function must never
-// add a key, because workspaceBackupContract only accepts a restored settings bag
-// that round-trips through it unchanged, so an additive migration there would
-// reject every backup written before the key existed.
+// The inheritance lives HERE, not in normalizeSettings: settings-key migrations
+// may rename existing values, but must never seed a stage that had no persisted
+// configuration of its own.
 export const STAGES_INHERITING_TAILOR = new Set<StageId>(["cover", "answers"]);
 
 export function seedStage(stage: StageId, saved: PersistedSettings): StageConfig {

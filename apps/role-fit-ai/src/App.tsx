@@ -388,18 +388,19 @@ function App() {
       providerAvailability.status
     ]
   );
-  const distillProviderReady = providerReady(stages.distill.provider);
+  const jobAnalysisStage = stages["job-analysis"];
+  const distillProviderReady = providerReady(jobAnalysisStage.provider);
   const tailorProviderReady = providerReady(stages.tailor.provider);
   const reviewProviderReady = providerReady(stages.review.provider);
   const coverProviderReady = providerReady(stages.cover.provider);
   const answersProviderReady = providerReady(stages.answers.provider);
-  const distillProviderMessage = providerRecoveryMessage(stages.distill.provider);
+  const distillProviderMessage = providerRecoveryMessage(jobAnalysisStage.provider);
   const tailorProviderMessage = providerRecoveryMessage(stages.tailor.provider);
   const coverProviderMessage = providerRecoveryMessage(stages.cover.provider);
   const answersProviderMessage = providerRecoveryMessage(stages.answers.provider);
   const ensureDistillProvider = useCallback(
-    () => providerAvailability.ensureProvider(stages.distill.provider),
-    [providerAvailability.ensureProvider, stages.distill.provider]
+    () => providerAvailability.ensureProvider(jobAnalysisStage.provider),
+    [jobAnalysisStage.provider, providerAvailability.ensureProvider]
   );
   const ensureTailorProvider = useCallback(
     () => providerAvailability.ensureProvider(stages.tailor.provider),
@@ -422,7 +423,7 @@ function App() {
   // Distill runs on its own concrete provider config (synced to other stages via
   // the copy buttons, not a live link). Shared by every distill entry point
   // (link, paste, extension import, and their retries).
-  const distillRequestFields = () => buildStageRequestFields(stages.distill);
+  const distillRequestFields = () => buildStageRequestFields(jobAnalysisStage);
   const [activeOutputTab, setActiveOutputTab] = useState<OutputTab>("prepare");
   const [statusFilter, setStatusFilter] = useState<ApplicationActivityFilter>("all");
   const [trackerView, setTrackerView] = useState<TrackerView>("table");

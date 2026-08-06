@@ -412,7 +412,7 @@ assert.ok(
 // another stage's provider still works, so nothing surfaces the mistake. Both
 // cover and answers shipped in exactly that state.
 assert.match(aiStages, /export const AI_STAGES/, "the stage list is declared in config/aiStages.ts");
-for (const stage of ["distill", "tailor", "review", "cover", "answers"]) {
+for (const stage of ["job-analysis", "tailor", "review", "cover", "answers"]) {
   assert.match(aiStages, new RegExp(`id: "${stage}"`), `aiStages declares the ${stage} stage`);
 }
 assert.match(app, /aiRequest: stages\.cover,/, "the cover-letter flow runs on its own stage config, not Tailor's");
@@ -427,10 +427,9 @@ assert.doesNotMatch(
   "persisted stage key groups are derived from the stage list, not hand-listed"
 );
 // The cover/answers stages inherit Tailor's config when they have none of their
-// own. That inheritance MUST live in the seeder: workspaceBackupContract only
-// accepts a restored settings bag that round-trips through normalizeSettings
-// unchanged, so adding a key there rejects every backup written before that key
-// existed — which is exactly what happened when this was tried in settings.ts.
+// own. That inheritance MUST live in the seeder: key migration may rename an
+// existing persisted value, but normalization must not seed a stage that was
+// absent from a portable backup.
 // Seeding is a pure module so it has a test seam without React; the behavior
 // itself is covered by src/lib/__evals__/stage-settings-eval.mjs.
 assert.match(

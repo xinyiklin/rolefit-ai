@@ -11,7 +11,7 @@
 // is `audit` for back-compat with the original single-stage settings shape; do
 // not "tidy" those without a migration.
 
-export type AiStageId = "distill" | "tailor" | "review" | "cover" | "answers";
+export type AiStageId = "job-analysis" | "tailor" | "review" | "cover" | "answers";
 
 export type AiStageDescriptor = {
   readonly id: AiStageId;
@@ -20,16 +20,16 @@ export type AiStageDescriptor = {
   /** Settings-dialog heading: names the work, not the pipeline position. */
   readonly title: string;
   readonly blurb: string;
-  readonly settingsPrefix: "" | "audit" | "distill" | "cover" | "answers";
+  readonly settingsPrefix: "" | "audit" | "jobAnalysis" | "cover" | "answers";
 };
 
 export const AI_STAGES: readonly AiStageDescriptor[] = [
   {
-    id: "distill",
-    label: "Distill",
-    title: "Job distill",
+    id: "job-analysis",
+    label: "Job analysis",
+    title: "Job analysis",
     blurb: "Turns a job posting into a structured brief.",
-    settingsPrefix: "distill"
+    settingsPrefix: "jobAnalysis"
   },
   {
     id: "tailor",
