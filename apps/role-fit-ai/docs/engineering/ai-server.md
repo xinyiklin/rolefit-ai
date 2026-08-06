@@ -204,13 +204,14 @@ owns:
   text. The client validates the fixed code/category/recovery relationships and
   keeps the current letter
   unchanged and offers recovery near the workflow heading. A valid response is
-  also staged client-side as a fingerprinted proposal: only **Use proposal**
-  applies it, **Keep current** does not touch the editor, and changed semantic
+  also staged client-side as a fingerprinted proposal: only **Accept proposal**
+  applies it, **Discard proposal** does not touch the editor, and changed semantic
   inputs disable acceptance until Tailor runs again. The flow never escalates
   into asking the candidate to plan evidence. Length is advisory — outside
-  180-420 words the letter still returns, with a warning attached. Employer-subject sentences are
-  excluded from the candidate-claim surface, so a posting fact never widens
-  candidate evidence. It and `/api/application-answers` echo the resolved
+  180-420 words the letter still returns, with a warning attached. Pure employer
+  facts are excluded from the candidate-claim surface, but employer-led sentences
+  with explicit or implied candidate experience or comparison cues remain inside
+  every grounding gate. It and `/api/application-answers` echo the resolved
   `provider` / `model` / `reasoningEffort`.
 - resume import into the structured editor: a `.txt` / `.md` / `.csv` (or pasted)
   resume is parsed once into `ResumeData`, the source of truth thereafter (no DOCX
@@ -224,9 +225,9 @@ owns:
   validated board slug in their HTML, LinkedIn visible job body + criteria
   rows when present, otherwise a generic HTML→text scrape — behind SSRF
   guards that re-validate the host and resolved IP on every redirect hop
-  and reject private / loopback / link-local targets. Distilling is
-  AI-first (`/api/distill`, below) with the deterministic
-  `src/lib/jobExtract.ts` engine as the deterministic non-AI path; it then splits the result
+  and reject private / loopback / link-local targets. Distilling calls
+  `/api/distill` (below); the deterministic `src/lib/jobExtract.ts` engine
+  supplies the local parsing baseline and the inspectable failure brief. RoleFit then splits the result
   into compact model-facing tailoring text and tracking-only facts (role
   summary, company, location, job type, work-auth note, compensation). The
   model-facing job-description field is a structured brief with Job Title,
@@ -251,11 +252,10 @@ owns:
   ground them. This reduces unsupported output but does not replace human
   review. The source URL is never sent to the model
   (it can carry private ATS tokens, so only the posting text is forwarded).
-  The client (`src/lib/aiDistill.ts`) is AI-first. When AI Distill is disabled,
-  the deterministic `jobExtract.ts` path completes without a provider call.
-  When AI Distill is selected but the request fails, a deterministic brief may
+  The client (`src/lib/aiDistill.ts`) always calls the configured Distill
+  provider. When the request fails, a deterministic brief may
   remain available for inspection, but the stage stays failed and cannot
-  auto-launch Tailor or Review. The
+  start resume Polish. The
   route sits behind the localhost CSRF/Host guard. `.env` keys stay server-side;
   a menu-entered key reaches the route only in that transient request and is
   never returned. The

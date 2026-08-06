@@ -120,12 +120,13 @@ and `docs/engineering/ui-principles.md`.
   one empty editable paragraph.
 - `DocumentWorkflowRail` owns the single named complementary landmark and the
   shared state/target/readiness/failure/body/footer hierarchy for both document
-  tabs. Each document's primary **Polish** action lives in that rail and has a
-  floating counterpart when the rail is collapsed. Resume's ordinary **Polish resume** action runs Tailor then Recruiter
-  audit; Tailor-only and Audit-current remain secondary specialist actions.
+  tabs. The shell places each document's one primary **Polish** action beside the
+  rail disclosure control in whichever open or collapsed state is visible.
+  Resume dispatches the Settings-owned Tailor / Recruiter audit / Both choice
+  from both its document action and Prepare; no document-local stage menu exists.
   Cover letter keeps one Polish request but stages its result as a whole-document
-  proposal: **Use proposal** applies it atomically, **Keep current** performs no
-  mutation, stale inputs disable acceptance, and Restore appears only after use.
+  proposal: **Accept proposal** applies it atomically, **Discard proposal** performs no
+  mutation, stale inputs disable acceptance, and Restore appears only after acceptance.
   Typed post-draft issues render as one flat failure list with recovery beside
   each claim. When that rail is collapsed, its edge tab may show only the
   bounded issue count; readiness blockers and generic provider failures do not

@@ -587,6 +587,71 @@ try {
     },
   );
 
+  // An employer-led sentence can still make an implied claim about the
+  // candidate. The company subject must not exempt its experience predicate
+  // from the same grounding gates as an explicit first-person claim.
+  resetProvider([
+    {
+      bodyParagraphs: [
+        {
+          text:
+            `I am applying for the Software Engineer role at Acme. ` +
+            `Acme's Kubernetes environment aligns with extensive hands-on production experience. ${authoredSentence}`,
+          evidenceIds: [evidence[0].id],
+          slotIds: [],
+        },
+        { text: secondBody, evidenceIds: [evidence[0].id], slotIds: [] },
+      ],
+    },
+  ]);
+  await assertUserSafeError(
+    tailorCoverLetter({
+      ...common,
+      jobText: "Acme needs Kubernetes platform experience for its Software Engineer role.",
+    }),
+    422,
+    /evidence checks/,
+    "an employer-led sentence cannot hide an implied candidate skill claim",
+    (error) => {
+      assert.equal(error.issues.some((issue) => issue.code === "unsupported_job_term"), true);
+    },
+  );
+
+  // The grounding boundary must fail closed for employer-led paraphrases, not
+  // only for a finite list of comparison verbs. Each sentence still assigns
+  // unsupported Kubernetes production experience to the candidate.
+  for (const impliedCandidateClaim of [
+    "Acme's Kubernetes environment is a natural fit for extensive production experience.",
+    "Acme's Kubernetes platform would be strengthened by deep production experience.",
+  ]) {
+    resetProvider([
+      {
+        bodyParagraphs: [
+          {
+            text:
+              `I am applying for the Software Engineer role at Acme. ` +
+              `${impliedCandidateClaim} ${authoredSentence}`,
+            evidenceIds: [evidence[0].id],
+            slotIds: [],
+          },
+          { text: secondBody, evidenceIds: [evidence[0].id], slotIds: [] },
+        ],
+      },
+    ]);
+    await assertUserSafeError(
+      tailorCoverLetter({
+        ...common,
+        jobText: "Acme needs Kubernetes platform experience for its Software Engineer role.",
+      }),
+      422,
+      /evidence checks/,
+      "an unfamiliar employer-led paraphrase cannot bypass candidate grounding",
+      (error) => {
+        assert.equal(error.issues.some((issue) => issue.code === "unsupported_job_term"), true);
+      },
+    );
+  }
+
   // Public employer research may support facts about the company, but it must
   // never make the same technology look like candidate evidence.
   resetProvider([
@@ -825,10 +890,10 @@ assert.doesNotMatch(
 assert.doesNotMatch(
   clientHook.match(/const discardProposal[\s\S]*?return \{/)?.[0] ?? "",
   /onApplyTailored|onApplyExternal/,
-  "Keep current performs no document mutation",
+  "Discard proposal performs no document mutation",
 );
-assert.match(coverReview, /Use proposal/, "the proposal has one explicit commit action");
-assert.match(coverReview, /Keep current/, "the proposal has one explicit discard action");
+assert.match(coverReview, /Accept proposal/, "the proposal has one explicit commit action");
+assert.match(coverReview, /Discard proposal/, "the proposal has one explicit discard action");
 assert.match(
   coverReview,
   /proposal\.result\.coverLetterText/,

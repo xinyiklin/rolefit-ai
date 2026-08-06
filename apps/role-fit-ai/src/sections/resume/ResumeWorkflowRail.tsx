@@ -24,12 +24,12 @@ type ResumeWorkflowRailProps = {
   jobReady: boolean;
   tailorProviderReady: boolean;
   auditProviderReady: boolean;
+  polishStages: "tailor" | "review" | "both";
   selectedSectionCount: number;
   tailorSectionCount: number;
   isPolishing: boolean;
   progress: PolishProgressState;
   status?: string;
-  onPolish: () => void;
   onRetryTailor: () => void;
   onRetryAudit: () => void;
   onStop: () => void;
@@ -61,12 +61,12 @@ export function ResumeWorkflowRail({
   jobReady,
   tailorProviderReady,
   auditProviderReady,
+  polishStages,
   selectedSectionCount,
   tailorSectionCount,
   isPolishing,
   progress,
   status,
-  onPolish,
   onRetryTailor,
   onRetryAudit,
   onStop,
@@ -75,23 +75,39 @@ export function ResumeWorkflowRail({
   onAddHonestContext
 }: ResumeWorkflowRailProps) {
   const target = [jobTarget?.role, jobTarget?.company].filter(Boolean).join(" at ") || "Resume";
-  const ready = resumeReady && jobReady && tailorProviderReady && auditProviderReady && tailorSectionCount > 0;
-  const tailorFailed = progress.tailor.status === "failed" || progress.tailor.status === "stopped";
-  const auditFailed = progress.review.status === "failed" || progress.review.status === "stopped";
+  const needsTailor = polishStages !== "review";
+  const needsAudit = polishStages !== "tailor";
+  const ready =
+    resumeReady &&
+    jobReady &&
+    (!needsTailor || tailorProviderReady) &&
+    (!needsAudit || auditProviderReady) &&
+    (!needsTailor || tailorSectionCount > 0);
+  const tailorFailed =
+    needsTailor && (progress.tailor.status === "failed" || progress.tailor.status === "stopped");
+  const auditFailed =
+    needsAudit && (progress.review.status === "failed" || progress.review.status === "stopped");
   const auditedCurrentResume = progress.tailor.status === "idle" && progress.review.status === "done";
+  const readyDescription =
+    polishStages === "tailor"
+      ? "Polish creates evidence-grounded edits for the selected sections."
+      : polishStages === "review"
+        ? "Polish audits the current resume without creating tailoring edits."
+        : "Polish runs Tailor on selected sections, then audits the complete proposal.";
 
   let phase: DocumentWorkflowPhase = ready ? "ready" : "blocked";
-  let description = ready
-    ? "Polish runs Tailor on selected sections, then audits the complete proposal."
-    : "Complete the blocked rows before polishing.";
+  let description = ready ? readyDescription : "Complete the blocked rows before polishing.";
   if (isPolishing) {
     phase = "working";
-    description = progress.review.status === "running"
-      ? "Tailoring finished. Recruiter audit is evaluating the complete proposal."
-      : "Creating evidence-grounded edits before the recruiter audit.";
+    description =
+      polishStages === "review"
+        ? "Recruiter audit is evaluating the current resume."
+        : progress.review.status === "running"
+          ? "Tailoring finished. Recruiter audit is evaluating the complete proposal."
+          : "Creating evidence-grounded edits before the recruiter audit.";
   } else if (result && reviewStale) {
     phase = "stale";
-    description = "The resume or prepared job changed. Audit again for a current verdict.";
+    description = "The resume or prepared job changed. Polish again for a current verdict.";
   } else if (tailorFailed || auditFailed) {
     phase = "blocked";
     description = tailorFailed
@@ -106,19 +122,26 @@ export function ResumeWorkflowRail({
         : "Grounded edits are ready for your decision. This proposal has not been audited.";
   }
 
+  // Every row is a real gate on Polish — what the workflow does with them is the
+  // description's job, so nothing here is an always-ready explanation.
   const checks = [
-    readiness("Resume", resumeReady, "Add resume evidence"),
+    readiness("Resume", resumeReady, "Add your resume"),
     readiness("Prepared job", jobReady, "Prepare the job"),
-    readiness("Polish provider", tailorProviderReady, "Check AI settings"),
-    readiness("Audit provider", auditProviderReady, "Check AI settings"),
-    readiness(
-      "Sections selected",
-      tailorSectionCount > 0,
-      selectedSectionCount > 0
-        ? `${selectedSectionCount} included · ${tailorSectionCount} tailored`
-        : "Choose Tailor or Include"
-    ),
-    { label: "Workflow", state: "ready", detail: "Tailor, then audit" } satisfies DocumentWorkflowCheck
+    ...(needsTailor
+      ? [readiness("Polish provider", tailorProviderReady, "Check AI settings")]
+      : []),
+    ...(needsAudit
+      ? [readiness("Audit provider", auditProviderReady, "Check AI settings")]
+      : []),
+    ...(needsTailor
+      ? [readiness(
+          "Sections selected",
+          tailorSectionCount > 0,
+          selectedSectionCount > 0
+            ? `${selectedSectionCount} included · ${tailorSectionCount} tailored`
+            : "Mark at least one section Tailor"
+        )]
+      : [])
   ];
 
   const failedStage = tailorFailed ? progress.tailor : auditFailed ? progress.review : null;
@@ -130,17 +153,16 @@ export function ResumeWorkflowRail({
     items: failedStage.error ? [failedStage.error] : undefined
   } : null;
 
+  // Polish itself lives beside the rail's disclosure control, in the header. The
+  // footer carries only what a run's outcome adds: stopping it, or retrying the
+  // stage that failed.
   const footer = isPolishing ? (
     <button type="button" className="secondary-button is-compact" onClick={onStop}>Stop</button>
   ) : tailorFailed ? (
-    <button type="button" className="primary-button is-compact" onClick={onRetryTailor}>Retry Tailor</button>
+    <button type="button" className="primary-button is-compact" onClick={onRetryTailor}>Retry tailor</button>
   ) : auditFailed ? (
     <button type="button" className="primary-button is-compact" onClick={onRetryAudit}>Retry audit</button>
-  ) : (
-    <button type="button" className="primary-button is-compact" disabled={!ready} onClick={onPolish}>
-      {result ? "Polish again" : "Polish resume"}
-    </button>
-  );
+  ) : null;
 
   return (
     <DocumentWorkflowRail
@@ -153,16 +175,22 @@ export function ResumeWorkflowRail({
       footer={footer}
       status={status}
     >
-      {isPolishing || progress.tailor.status !== "idle" || progress.review.status !== "idle" ? (
+      {isPolishing ||
+      (needsTailor && progress.tailor.status !== "idle") ||
+      (needsAudit && progress.review.status !== "idle") ? (
         <ol className="resume-workflow__steps" aria-label="Polish resume progress">
-          <li className={stepClass(progress.tailor.status)}>
-            <span>Tailor selected sections</span>
-            <small>{progress.tailor.status === "idle" && tailorFailed ? "Not run" : progress.tailor.status}</small>
-          </li>
-          <li className={stepClass(progress.review.status)}>
-            <span>Recruiter audit</span>
-            <small>{tailorFailed && progress.review.status === "idle" ? "Not run" : progress.review.status}</small>
-          </li>
+          {needsTailor ? (
+            <li className={stepClass(progress.tailor.status)}>
+              <span>Tailor selected sections</span>
+              <small>{progress.tailor.status}</small>
+            </li>
+          ) : null}
+          {needsAudit ? (
+            <li className={stepClass(progress.review.status)}>
+              <span>Recruiter audit</span>
+              <small>{tailorFailed && progress.review.status === "idle" ? "Not run" : progress.review.status}</small>
+            </li>
+          ) : null}
         </ol>
       ) : null}
 

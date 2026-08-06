@@ -326,8 +326,9 @@ interactive control shares the same focus treatment: 2px Forest Ink outline,
   secondary, 28px ghost), 120–160ms transitions, 1px translateY on press.
 - **Primary:** Forest Ink fill, paper text, `--accent-deep` border, inset
   highlight plus a faint accent glow; hover deepens to `--accent-deep`. One
-  per document view (Polish in the workflow rail, with a floating counterpart
-  when collapsed; compact `.is-compact` variant in rail actions).
+  per document view (Polish beside the workflow rail's disclosure control, in the
+  header while open and on the document's edge while collapsed; compact
+  `.is-compact` variant in rail actions).
 - **Secondary:** raised sheet (`--card-elev`) with `--hairline-strong`
   border; hover tints toward the accent (`--accent-soft` fill,
   `--accent-deep` text).
@@ -401,7 +402,7 @@ interactive control shares the same focus treatment: 2px Forest Ink outline,
   benefits. Show extraction and candidate-review gaps beside the fields they
   qualify, as flat columns; missing extraction is an edit invitation, not hidden
   uncertainty. Label candidate gaps restored from an Apply snapshot as
-  historical until Review runs for the current resume and prepared job.
+  historical until Recruiter audit runs for the current resume and prepared job.
   In the Application rail, Resume and Cover Letter are two divided groups
   sharing the same anatomy: title and state beside Include, followed by the
   named-variant selector and document-specific actions. The DOM and visual order
@@ -409,11 +410,11 @@ interactive control shares the same focus treatment: 2px Forest Ink outline,
   variant. Disclose at most one note under a group — the blocker while its
   action is unavailable, its live status otherwise. Neither is labeled
   “optional.” Resume starts included and Cover Letter starts excluded. A flat
-  Fit row follows the materials: show the current Review verdict first, a
-  matching saved verdict as historical, or "Not reviewed" with a route to
-  Review. Do not style it as a nested card or derive a local verdict.
+  Fit row follows the materials: show the current Recruiter audit verdict first,
+  a matching saved verdict as historical, or "Not audited" with a route to
+  Recruiter audit. Do not style it as a nested card or derive a local verdict.
 - **Automation:** extension receipt and Distill progress remain visible on
-  Prepare. Automatic resume tailoring also completes there. Rank the actual
+  Prepare. Resume Polish started from Prepare also completes there. Rank the actual
   contents of saved resume and cover-letter variants against weighted
   prepared-job sections. Either material may auto-select a meaningful unique
   winner while its editor is clean and not application-owned. A tie or
@@ -495,10 +496,11 @@ clean blank document when no source exists; content readiness gates PDF, Polish,
 and Apply without replacing the editor with an empty-state panel. Cover letter = one engine-painted
 plain correspondence sheet + the same workflow-rail hierarchy. Both rails remain
 visible from idle through blocked, working, proposal, stale, and applied states.
-Resume's primary Polish action runs Tailor and then Recruiter audit; its rail
-retains the granular proposal review. Cover letter keeps the editor unchanged
-while showing a whole-document proposal with explicit Use proposal and Keep
-current actions; Restore appears only after acceptance.
+Resume's primary Polish action runs the Tailor, Recruiter audit, or combined
+workflow remembered in Settings; the same choice applies when Polish starts in
+Prepare, and the rail retains the granular proposal review. Cover letter keeps
+the editor unchanged while showing a whole-document proposal with explicit
+Accept proposal and Discard proposal actions; Restore appears only after acceptance.
 If that draft fails the evidence checks after repair, the rail shows one flat
 issue list with the exact bounded claim and its recovery action. A collapsed
 Cover letter rail adds the bounded issue count to the icon tab and accessible

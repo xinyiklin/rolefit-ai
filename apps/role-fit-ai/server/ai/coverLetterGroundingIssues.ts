@@ -11,6 +11,15 @@ function claimSurfaceValue(claim: string, normalizedValue: string): string {
   return claim.match(new RegExp(escapeRegex(normalizedValue), "i"))?.[0] ?? normalizedValue;
 }
 
+// Employer-led prose is excluded only when its predicate is demonstrably a
+// company or posting fact. Unknown or evaluative phrasing stays in the
+// candidate claim surface so a paraphrase cannot bypass grounding by avoiding
+// a finite list of comparison words.
+const DIRECT_EMPLOYER_FACT =
+  /^(?:uses?|builds?|runs?|operates?|develops?|maintains?|offers?|provides?|serves?|seeks?|needs?|requires?|values?|prioritizes?|includes?|has\b|focuses? on|works? on|(?:is|are) (?:hiring|looking for|seeking|building|developing|operating|focused on|based (?:in|on)|located in|remote|hybrid|onsite|part of|responsible for))\b/i;
+const POSSESSIVE_EMPLOYER_FACT =
+  /^(?![^.!?]*\b(?:experience|expertise|background|track record|skills?|abilities|knowledge|proficiency|familiarity)\b)[^.!?]{1,120}\b(?:uses?|builds?|runs?|operates?|develops?|maintains?|offers?|provides?|serves?|needs?|requires?|values?|prioritizes?|includes?|has\b|focuses? on|works? on|is (?:built|based) on)\b/i;
+
 // Employer/job statements may use posting facts, but they must never widen the
 // candidate corpus. Mixed employer/candidate sentences stay in every gate.
 function candidateClaimSentences(
@@ -19,12 +28,12 @@ function candidateClaimSentences(
 ): string[] {
   const company = resolved.company.trim();
   const candidateName = resolved.candidateName.trim();
-  const employerSubject = company
+  const employerStatement = company
     ? new RegExp(
-        `^(?:${escapeRegex(company)}(?:['’]s)?(?=\\s|[,:;.!?]|$)|The company\\b|The team\\b|This role\\b|The posting\\b)`,
+        `^(?:${escapeRegex(company)}(?<possessive>['’]s)?|(?:The company|The team|This role|The posting))\\s*(?:[,:;]\\s*)?(?<predicate>.+)$`,
         "i"
       )
-    : /^(?:The company|The team|This role|The posting)\b/i;
+    : /^(?:The company|The team|This role|The posting)\s*(?:[,:;]\s*)?(?<predicate>.+)$/i;
   const candidateReferences = [candidateName, candidateName.split(/\s+/)[0] ?? ""]
     .filter((value, index, values) => value.length >= 2 && values.indexOf(value) === index)
     .map(escapeRegex);
@@ -37,10 +46,17 @@ function candidateClaimSentences(
   return [...new Intl.Segmenter("en", { granularity: "sentence" }).segment(text)]
     .flatMap(({ segment }) => segment.split(/[\r\n]+/))
     .map((sentence) => sentence.trim())
-    .filter(
-      (sentence) =>
-        sentence && (!employerSubject.test(sentence) || candidateReference.test(sentence))
-    );
+    .filter((sentence) => {
+      if (!sentence) return false;
+      if (candidateReference.test(sentence)) return true;
+      const match = sentence.match(employerStatement);
+      if (!match) return true;
+      const predicate = match.groups?.predicate?.trim() ?? "";
+      const factPattern = match.groups?.possessive
+        ? POSSESSIVE_EMPLOYER_FACT
+        : DIRECT_EMPLOYER_FACT;
+      return !factPattern.test(predicate);
+    });
 }
 
 export function coverLetterGroundingIssues({

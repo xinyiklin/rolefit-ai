@@ -74,6 +74,7 @@ type ResumeTabProps = {
   jobReady: boolean;
   tailorProviderReady: boolean;
   auditProviderReady: boolean;
+  polishStages: "tailor" | "review" | "both";
   isPolishing: boolean;
   polishProgress: PolishProgressState;
   polishStatus?: string;
@@ -125,6 +126,7 @@ export function ResumeTab({
   jobReady,
   tailorProviderReady,
   auditProviderReady,
+  polishStages,
   isPolishing,
   polishProgress,
   polishStatus,
@@ -181,9 +183,18 @@ export function ResumeTab({
 
   const selectedSectionCount = Object.values(tailorModes).filter((mode) => mode !== "off").length;
   const tailorSectionCount = Object.values(tailorModes).filter((mode) => mode === "tailor").length;
-  const canPolish = resumeReady && jobReady && tailorProviderReady && auditProviderReady && tailorSectionCount > 0;
+  const needsTailor = polishStages !== "review";
+  const needsAudit = polishStages !== "tailor";
+  const canPolish =
+    resumeReady &&
+    jobReady &&
+    (!needsTailor || tailorProviderReady) &&
+    (!needsAudit || auditProviderReady) &&
+    tailorSectionCount > 0;
   const documentContext = [jobTarget?.role, jobTarget?.company].filter(Boolean).join(" at ");
-  const collapsedPolishAction = (
+  // The rail's one primary action, handed to the shell so it sits beside the
+  // disclosure control whether the rail is open or closed.
+  const polishAction = (
     <button
       type="button"
       className="primary-button is-compact"
@@ -191,7 +202,7 @@ export function ResumeTab({
       aria-busy={isPolishing}
       onClick={onPolish}
     >
-      {isPolishing ? "Working…" : result ? "Polish again" : "Polish resume"}
+      {isPolishing ? "Polishing…" : result ? "Polish again" : "Polish"}
     </button>
   );
   return (
@@ -240,7 +251,7 @@ export function ResumeTab({
           id: "resume-review",
           label: "Workflow",
           preferenceKey: "resume-review",
-          collapsedAction: collapsedPolishAction,
+          action: polishAction,
           content: (
             <ResumeWorkflowRail
               result={result}
@@ -254,12 +265,12 @@ export function ResumeTab({
               jobReady={jobReady}
               tailorProviderReady={tailorProviderReady}
               auditProviderReady={auditProviderReady}
+              polishStages={polishStages}
               selectedSectionCount={selectedSectionCount}
               tailorSectionCount={tailorSectionCount}
               isPolishing={isPolishing}
               progress={polishProgress}
               status={polishStatus}
-              onPolish={onPolish}
               onRetryTailor={onRetryTailor}
               onRetryAudit={onRetryAudit}
               onStop={onStopPolish}

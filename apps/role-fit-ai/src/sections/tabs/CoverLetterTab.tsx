@@ -56,7 +56,6 @@ type CoverLetterTabProps = {
   resumeReady: boolean;
   jobReady: boolean;
   providerReady: boolean;
-  providerMessage: string;
   jobTarget?: { role?: string; company?: string };
   preflight: CoverLetterPreflight;
   proposal: CoverLetterProposal | null;
@@ -95,7 +94,6 @@ export function CoverLetterTab({
   resumeReady,
   jobReady,
   providerReady,
-  providerMessage,
   jobTarget,
   preflight,
   proposal,
@@ -125,15 +123,11 @@ export function CoverLetterTab({
     preflight.canTailor && resumeReady && jobReady && providerReady && !isTailoring;
   const targetLine = [jobTarget?.role, jobTarget?.company].filter(Boolean).join(" at ");
   const issueCount = failure?.kind === "blocked" ? failure.issues.length : 0;
-  const readinessHint = !resumeReady && !jobReady
-    ? "Add a resume and prepare the job on Prepare."
-    : !resumeReady
-      ? "Add your resume first."
-      : !jobReady
-        ? "Prepare the job on Prepare first."
-        : !providerReady
-          ? providerMessage
-          : (preflight.blockers[0] ?? "");
+  // Idle, the rail's phase, description, and checks already carry the workflow
+  // message; repeating it under the action was this letter's one extra line the
+  // resume never had. The editor's own receipts (save, PDF) still surface here.
+  const workflowActive = isTailoring || Boolean(failure) || Boolean(proposal) || Boolean(appliedResult);
+  const railStatus = (workflowActive ? tailorStatus : "") || editor.status;
 
   return (
     <section className="studio-card studio-card--flush cover-letter-page">
@@ -166,7 +160,9 @@ export function CoverLetterTab({
           id: "cover-tailoring",
           label: "Workflow",
           preferenceKey: "cover-tailoring",
-          collapsedAction: (
+          // The rail's one primary action, handed to the shell so it sits beside
+          // the disclosure control whether the rail is open or closed.
+          action: (
             <button
               type="button"
               className="primary-button is-compact"
@@ -174,7 +170,7 @@ export function CoverLetterTab({
               aria-busy={isTailoring}
               onClick={onTailor}
             >
-              {isTailoring ? "Working…" : proposal || appliedResult ? "Polish again" : "Polish"}
+              {isTailoring ? "Polishing…" : proposal || appliedResult ? "Polish again" : "Polish"}
             </button>
           ),
           ...(issueCount > 0
@@ -205,7 +201,7 @@ export function CoverLetterTab({
             onDiscardProposal={onDiscardProposal}
             onRestore={onRestorePreTailor}
             onAddHonestContext={onAddHonestContext}
-            status={tailorStatus || readinessHint || editor.status}
+            status={railStatus}
           />
         }}
       >

@@ -1,18 +1,13 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Check,
   Download,
   FileDown,
   FilePlus2,
   FolderOpen,
   LayoutTemplate,
-  MoreHorizontal,
   Save,
-  ScanSearch,
   Settings,
-  Sparkles,
-  Upload,
-  type LucideIcon
+  Upload
 } from "lucide-react";
 
 import { analyzeResumeText, type PolishedResume } from "./resumeEngine";
@@ -105,7 +100,6 @@ import { AiWorkflowProgress, TaskProgress } from "./sections/AiWorkflowProgress"
 import type { AiWorkflowStage } from "./lib/aiWorkflow";
 import { SessionsMenu } from "./sections/SessionsRail";
 import { DocumentOpenMenu } from "./sections/document/DocumentOpenMenu";
-import { DocumentActionMenu } from "./sections/document/DocumentActionMenu";
 import { DocumentSaveMenu } from "./sections/document/DocumentSaveMenu";
 import { StudioPane } from "./sections/StudioPane";
 import { SettingsDialog, type SettingsSection } from "./sections/SettingsDialog";
@@ -187,28 +181,6 @@ function resumeVariantFileName(label: string): string {
     .slice(0, 60);
   return slug ? slug + ".resume" : "";
 }
-
-// Specialist Resume actions stay available without competing with the ordinary
-// one-click Tailor -> Recruiter audit path.
-const POLISH_STAGE_ACTIONS: {
-  value: "tailor" | "review" | "both";
-  title: string;
-  description: string;
-  Icon: LucideIcon;
-}[] = [
-  {
-    value: "tailor",
-    title: "Tailor only",
-    description: "Rewrite the Tailor sections against the job. No review pass.",
-    Icon: Sparkles
-  },
-  {
-    value: "review",
-    title: "Audit current resume",
-    description: "Audit the current draft as it stands. Nothing is rewritten.",
-    Icon: ScanSearch
-  }
-];
 
 const EMPTY_INLINE_FORMAT: InlineFormatState = {
   canFormat: false,
@@ -423,7 +395,6 @@ function App() {
   const answersProviderReady = providerReady(stages.answers.provider);
   const distillProviderMessage = providerRecoveryMessage(stages.distill.provider);
   const tailorProviderMessage = providerRecoveryMessage(stages.tailor.provider);
-  const reviewProviderMessage = providerRecoveryMessage(stages.review.provider);
   const coverProviderMessage = providerRecoveryMessage(stages.cover.provider);
   const answersProviderMessage = providerRecoveryMessage(stages.answers.provider);
   const ensureDistillProvider = useCallback(
@@ -1143,8 +1114,8 @@ function App() {
   );
   // Everything except provider readiness. Every stage selection needs these —
   // buildPolishContext requires an editable Tailor scope even for Review only —
-  // so this gates the Polish trigger, and each stage row in its menu adds its own
-  // provider check.
+  // so this gates the Polish trigger while selectedPolishProvidersReady gates
+  // only the providers that the remembered workflow will call.
   const polishInputsReady = useMemo(() => {
     return Boolean(
       jobPrepared &&
@@ -1188,20 +1159,6 @@ function App() {
   // Same rule for the letter: exportable as soon as it has content. Apply's own
   // readiness gate (coverLetterReady) still governs whether it can be included.
   const canExportCoverLetter = Boolean(coverLetterEditor.text.trim());
-  // Per-stage readiness for the Polish chooser: a stage the user can pick must
-  // have its own provider, and a blocked row says which one and why.
-  const polishStageReady: Record<"tailor" | "review" | "both", boolean> = {
-    tailor: tailorProviderReady,
-    review: reviewProviderReady,
-    both: tailorProviderReady && reviewProviderReady
-  };
-  const polishStageBlocker = (stage: "tailor" | "review" | "both") =>
-    stage !== "review" && !tailorProviderReady
-      ? tailorProviderMessage
-      : stage !== "tailor" && !reviewProviderReady
-        ? reviewProviderMessage
-        : "";
-
   // ----- Resume export (engine PDF / .resume save) -----
   const {
     isRenderingPdf,
@@ -1301,34 +1258,6 @@ function App() {
     setExportStatus,
     confirmDuplicateBeforePolish: duplicateGuard.confirmDuplicateBeforePolish
   });
-  // Polish asks which stages to run, then runs them. `polishStages` stays the one
-  // owner of that choice (it is a persisted AI setting, and the progress card,
-  // retryStage, and the presence phase all read it), so the chooser SETS it and
-  // the run starts on the next render rather than taking an override argument.
-  //
-  // The two-step is required, not stylistic: `polishStages` is part of the
-  // pipeline's input fingerprint, and the fingerprint effect aborts any run that
-  // is already in flight when it changes. Starting the run in the same tick as
-  // the setState would abort the run we just started; letting the setState commit
-  // first means that effect sees nothing in flight and returns early.
-  const runPolishOnStagesCommitRef = useRef(false);
-  function startPolish(nextStages: "tailor" | "review" | "both") {
-    if (nextStages === polishStages) {
-      void handlePolish();
-      return;
-    }
-    runPolishOnStagesCommitRef.current = true;
-    setPolishStages(nextStages);
-  }
-  useEffect(() => {
-    if (!runPolishOnStagesCommitRef.current) return;
-    runPolishOnStagesCommitRef.current = false;
-    void handlePolish();
-    // handlePolish is re-created every render; this must fire only on a committed
-    // stage change, so it is deliberately keyed on polishStages alone.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [polishStages]);
-
   const aiWorkflowStages: AiWorkflowStage[] = [];
   if (distillProgressVisible) {
     aiWorkflowStages.push({
@@ -2380,9 +2309,9 @@ function App() {
               }
               coverLetterTailorHint={
                 !resumeReady && !jobReady
-                  ? "Add a resume and prepare the job first."
+                  ? "Add your resume and prepare the job first."
                   : !resumeReady
-                    ? "Add a resume first."
+                    ? "Add your resume first."
                     : !jobReady
                       ? "Prepare the job first."
                       : isSelectingCoverVariant || isRankingCoverLetterVariants
@@ -2590,10 +2519,11 @@ function App() {
               jobReady={jobReady}
               tailorProviderReady={tailorProviderReady}
               auditProviderReady={reviewProviderReady}
+              polishStages={polishStages}
               isPolishing={isPolishing}
               polishProgress={polishProgress}
               polishStatus={polishStatus}
-              onPolish={() => startPolish("both")}
+              onPolish={() => void handlePolish()}
               onRetryTailor={() => void retryStage("tailor")}
               onRetryAudit={() => void retryStage("review")}
               onStopPolish={stopPolish}
@@ -2750,45 +2680,6 @@ function App() {
                     onDismissStatus={() => setExportStatus("")}
                     onDownloadPdf={handleDownloadPdf}
                   />
-                  <DocumentActionMenu
-                    label="More"
-                    ariaLabel="More resume actions"
-                    tooltip="Tailor only or audit the current resume"
-                    icon={<MoreHorizontal size={16} />}
-                    showLabel={false}
-                    disabled={!polishInputsReady || isPolishing}
-                  >
-                      {({ close }) => (
-                        <div className="document-action-panel polish-stage-menu">
-                          <div className="document-action-panel__head">
-                            <strong>Specialist actions</strong>
-                            <span>Run one stage without the ordinary Tailor-then-audit workflow.</span>
-                          </div>
-                          {POLISH_STAGE_ACTIONS.map(({ value, title, description, Icon }) => (
-                            <button
-                              key={value}
-                              type="button"
-                              className="document-action-row"
-                              disabled={!polishStageReady[value]}
-                              aria-current={polishStages === value || undefined}
-                              onClick={() => {
-                                startPolish(value);
-                                close();
-                              }}
-                            >
-                              <Icon size={15} aria-hidden="true" />
-                              <span>
-                                <strong>{title}</strong>
-                                <small>{polishStageReady[value] ? description : polishStageBlocker(value)}</small>
-                              </span>
-                              {polishStages === value ? (
-                                <Check className="polish-stage-menu__current" size={14} aria-hidden="true" />
-                              ) : null}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </DocumentActionMenu>
                 </>
               }
             />
@@ -2819,7 +2710,6 @@ function App() {
               resumeReady={resumeReady}
               jobReady={jobReady}
               providerReady={coverProviderReady}
-              providerMessage={coverProviderMessage}
               jobTarget={materialsJobTarget}
               preflight={coverLetterPreflight}
               proposal={coverLetterProposal}

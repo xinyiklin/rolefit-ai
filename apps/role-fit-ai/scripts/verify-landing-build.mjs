@@ -11,12 +11,13 @@ function fail(message) {
 
 const indexHtml = await readFile(join(outputRoot, "index.html"), "utf8").catch(() => null);
 if (!indexHtml) fail("dist-landing/index.html is missing");
+const normalizedIndexText = indexHtml.replace(/\s+/g, " ");
 if (!indexHtml.includes("data-rolefit-public-landing")) {
   fail("the public landing marker is missing");
 }
 if (
-  !indexHtml.includes("Your workspace stays on this machine.") ||
-  !indexHtml.includes("goes directly to the provider")
+  !normalizedIndexText.includes("Your workspace stays on this machine.") ||
+  !normalizedIndexText.includes("goes directly to the provider")
 ) {
   fail("the public landing must disclose both local workspace storage and direct provider input");
 }

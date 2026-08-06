@@ -41,6 +41,10 @@ sanitizer code is executable product behavior and anti-fabrication-critical.
   boundary. Numeric grounding normalizes equivalent digit and word durations
   (for example, `3 years` and `three years`) while still rejecting a duration
   absent from candidate evidence.
+- A pure employer fact may stay outside the candidate-claim surface, but an
+  employer-led sentence that compares the employer with candidate experience or
+  implies a candidate background remains inside every grounding gate. Grammatical
+  subject alone is not an evidence exemption.
 - Bracketed slot text is a drafting instruction, never candidate evidence and
   never voice. Only a slot naming a private fact (a referral, a prior personal
   relationship) may ask the candidate; every other slot is generative, and the

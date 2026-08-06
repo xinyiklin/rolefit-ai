@@ -70,6 +70,10 @@ const app = readFileSync(new URL("../../App.tsx", import.meta.url), "utf8");
 const coverEditor = readHook("useCoverLetterEditor.ts");
 const coverPreflight = readFileSync(new URL("../../lib/coverLetterPreflight.ts", import.meta.url), "utf8");
 const resumeTab = readFileSync(new URL("../../sections/tabs/ResumeTab.tsx", import.meta.url), "utf8");
+const resumeWorkflowRail = readFileSync(
+  new URL("../../sections/resume/ResumeWorkflowRail.tsx", import.meta.url),
+  "utf8"
+);
 const coverTab = readFileSync(new URL("../../sections/tabs/CoverLetterTab.tsx", import.meta.url), "utf8");
 const coverReview = readFileSync(new URL("../../sections/cover-letter/CoverLetterReview.tsx", import.meta.url), "utf8");
 const coverToolbar = readFileSync(
@@ -245,7 +249,7 @@ assert.match(
 assert.match(
   cover,
   /const acceptProposal[\s\S]{0,600}?onApplyTailored\(proposal\.result\.coverLetterText\)/,
-  "only Use proposal enters the letter into the editor"
+  "only Accept proposal enters the letter into the editor"
 );
 assert.doesNotMatch(
   cover.match(/async function handleTailorCoverLetter[\s\S]*?const acceptProposal/)?.[0] ?? "",
@@ -326,30 +330,77 @@ assert.doesNotMatch(
 assert.match(polish, /polishRunLockRef/, "Polish has a synchronous double-run lock");
 assert.match(polish, /inputFingerprintRef\.current = inputFingerprint/, "Polish tracks live semantic inputs");
 
-// The resume Polish action asks which stages to run. Because `polishStages` is
-// part of the pipeline's input fingerprint, and the fingerprint effect aborts a
-// run that is in flight when it changes, the chooser MUST set the stage and let
-// that commit before starting the run. Starting it in the same tick as the
-// setState aborts the run it just started, which is silent and hard to spot.
+// Settings owns one persisted Resume workflow choice. Every visible Polish
+// action must run that same selection; no document-local override may silently
+// rewrite it before dispatch.
 assert.match(polishFingerprint, /polishStages/, "the polish fingerprint still guards the selected stages");
+assert.doesNotMatch(
+  app,
+  /runPolishOnStagesCommitRef|function startPolish\(/,
+  "the retired per-run chooser cannot override the Settings-owned stage selection"
+);
 assert.match(
   app,
-  /runPolishOnStagesCommitRef\.current = true;\s*setPolishStages\(nextStages\);/,
-  "the Polish chooser records the intent to run, then commits the stage selection"
+  /onPolish=\{\(\) => void handlePolish\(\)\}/,
+  "the Resume document action dispatches the current Settings-owned workflow"
+);
+assert.doesNotMatch(
+  app,
+  /startPolish\("both"\)/,
+  "the Resume document action cannot force both stages over the stored selection"
 );
 assert.match(
-  app,
-  /if \(!runPolishOnStagesCommitRef\.current\) return;\s*runPolishOnStagesCommitRef\.current = false;\s*void handlePolish\(\);/,
-  "the deferred Polish run fires from the committed polishStages, never in the same tick"
+  resumeTab,
+  /polishStages=\{polishStages\}|polishStages:\s*"tailor" \| "review" \| "both"/,
+  "the Resume workbench receives the selected stages for truthful readiness"
 );
-assert.ok(
-  app.indexOf("} = usePolishPipeline({") < app.indexOf("runPolishOnStagesCommitRef.current = false"),
-  "the deferred-run effect is registered after usePolishPipeline's fingerprint effect, so that effect sees no run in flight"
+assert.match(
+  resumeWorkflowRail,
+  /polishStages !== "review"[\s\S]{0,160}?polishStages !== "tailor"/,
+  "the workflow rail gates only the providers the selected run will call"
 );
-// Settings owns the DEFAULT stage selection and the Polish action owns the
-// per-run pick; both write the one persisted `polishStages` value. The retired
-// masthead Options menu must not come back as a third control.
+assert.match(
+  resumeWorkflowRail,
+  /\(!needsTailor \|\| tailorSectionCount > 0\)/,
+  "a review-only run does not require sections marked Tailor"
+);
+assert.match(
+  resumeWorkflowRail,
+  /\.\.\.\(needsTailor[\s\S]{0,420}?Sections selected[\s\S]{0,420}?: \[\]\)/,
+  "the section-selection readiness row only appears when Tailor will run"
+);
+assert.match(
+  resumeWorkflowRail,
+  /\{needsTailor \? \([\s\S]{0,420}?Tailor selected sections[\s\S]{0,420}?\) : null\}/,
+  "the workflow rail only renders the Tailor row when that stage was selected"
+);
+assert.match(
+  resumeWorkflowRail,
+  /\{needsAudit \? \([\s\S]{0,420}?Recruiter audit[\s\S]{0,420}?\) : null\}/,
+  "the workflow rail only renders the audit row when that stage was selected"
+);
+assert.doesNotMatch(
+  resumeWorkflowRail,
+  /Choose Tailor or Include/,
+  "section recovery cannot recommend Include when only Tailor clears the gate"
+);
+assert.match(
+  prepareTab,
+  /reviewDone\s*\?\s*tailorDone\s*\?\s*"Tailored · audited"\s*:\s*"Audited"/,
+  "Prepare reports a review-only run as audited instead of claiming it tailored the resume"
+);
+assert.match(
+  prepareTab,
+  /isTailoringCoverLetter\s*\?\s*"Polishing…"/,
+  "Prepare uses the Cover Letter action's Polish vocabulary while work is running"
+);
+// The retired masthead Options menu must not return as another setting owner.
 assert.match(settingsDialog, /onPolishStagesChange/, "Settings exposes the default Polish stage selection");
+assert.match(
+  settingsDialog,
+  /Polish uses this stage choice everywhere\./,
+  "Settings explains that the one stage selection applies to every Polish entry point"
+);
 assert.ok(
   !existsSync(new URL("../../sections/PolishMenu.tsx", import.meta.url)) &&
     !existsSync(new URL("../../sections/AiMenu.tsx", import.meta.url)),

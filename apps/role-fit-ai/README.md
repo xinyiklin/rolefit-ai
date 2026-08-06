@@ -1,33 +1,31 @@
 # RoleFit AI
 
-A **companion-launched, browser-primary, local-first** application-materials
-tailoring
-workbench backed by a loopback Node server. Prepare a job posting from the
-browser extension, a pasted link, or pasted text; tailor your base resume;
-tailor your cover letter against the
-same job evidence in one click, score the resume draft against the job description, and
-export either document to PDF or its reloadable editable format —
-without storing your personal data in a hosted app. The installed Electron
-companion starts the local service, manages the five supported local
-providers, portable workspace backups, browser-extension pairing, and the local
-connection before opening RoleFit in the default browser. It is not a second
-Drafting Desk. Resume editing stays in the browser, while tracker and workspace
-storage remain owned by the local server.
+RoleFit AI is a local-first workspace for preparing job applications. Import a
+posting from the browser extension, a URL, or pasted text; choose a resume and
+cover-letter variant; run the selected resume stages; review grounded document
+proposals; export the final files; and save the application record.
+
+The desktop companion starts the loopback Node server, manages the five
+supported providers, pairs the browser extension, and backs up the saved
+workspace. Editing happens in the browser, while documents, tracker records,
+and provider settings stay on this computer. RoleFit has no hosted account or
+application-data service.
 
 [Product site and companion downloads](https://rolefit.xinyiklin.com/)
 
 Current desktop source version: **0.6.0** (preview).
 
-> Built for an entry-level SDE job hunt: tight workflow loop, blunt recruiter-style audit before applying, and a local pipeline tracker so you never lose track of a role.
+The main workflow is Prepare → Resume and Cover Letter → Apply → Applications.
 
 ![RoleFit AI resume workspace](docs/screenshot.png)
 
-The dedicated **cover-letter editor** keeps the candidate's own writing,
-job evidence, review guidance, named variants, and final export page together:
+The **cover-letter editor** keeps the source letter, job evidence, named
+variants, proposal review, and final export page together:
 
 ![RoleFit AI cover-letter workspace](docs/cover-letter.png)
 
-The on-disk **application tracker** — a sortable, paginated table with right-click quick actions, plus a calendar of submissions and follow-ups:
+The on-disk **application tracker** includes a sortable, paginated table,
+right-click actions, and a calendar for submissions and follow-ups:
 
 <table>
 <tr>
@@ -52,16 +50,16 @@ editable documents.
 ## Highlights
 
 - **Resume input** — ingest a `.txt`, `.md`, or `.csv` resume (or paste text) into the typeset editor as a one-time conversion into the structured model, or load a previously saved `.resume` file directly; paste extracted PDF text when the original is only available as PDF.
-- **One-click cover letters** — open a `.cover`, `.txt`, or `.md` letter (or your
-  own base variant full of bracketed prompts) and press **Tailor** once. RoleFit
+- **Cover-letter workflow** — open a `.cover`, `.txt`, or `.md` letter (or your
+  own base variant full of bracketed prompts) and press **Polish** once. RoleFit
   resolves the date, your name, the role, the company, the greeting, and the
   sign-off itself, and the model picks which of your experiences and personal
   notes this posting actually warrants. Bracketed text is treated as an
   instruction to the writer, never as something you wrote about yourself.
   Grounding and placeholder checks run on the server, then the finished letter
-  appears beside the unchanged editor as a whole-document proposal. **Use
+  appears beside the unchanged editor as a whole-document proposal. **Accept
   proposal** applies it atomically and enables **Restore previous** until the
-  next edit; **Keep current** performs no document mutation. Validation blockers
+  next edit; **Discard proposal** performs no document mutation. Validation blockers
   identify the rejected claim and whether to add evidence, edit the source, or
   retry without exposing rejected provider output or internal evidence ids. An
   unfinished Guidance prompt is ignored until completed, and worded durations
@@ -93,15 +91,15 @@ editable documents.
   context, responsibilities, required and preferred qualifications, technical
   keywords, seniority and domain signals, benefits, and any extraction or
   candidate-review gaps—while the Application rail keeps Resume, Cover Letter,
-  fit, readiness, and Apply together. Fit shows the current AI Review, a
-  matching saved review marked historical, or **Not reviewed** until Review
+  fit, readiness, and Apply together. Fit shows the current Recruiter audit, a
+  matching saved audit marked historical, or **Not audited** until that stage
   runs; RoleFit does not estimate it locally. Each material has an **Include** toggle and its
   own named variant selector. Resume starts included and Cover Letter starts excluded;
   included material must be ready before Apply, while either or both can be
   excluded. The captured posting remains unchanged behind **View** and
   **Prepare again**; Apply stores the complete corrected brief, while resume
-  tailoring continues to use the benefits-excluded projection. Candidate gaps
-  from a reopened application are explicitly historical until Review runs
+  polishing continues to use the benefits-excluded projection. Candidate gaps
+  from a reopened application are explicitly historical until Recruiter audit runs
   against the current resume and prepared job.
 - **Evidence-based variant recommendation** — when multiple saved variants
   exist, Prepare compares the actual strict `.resume` and `.cover` contents with
@@ -111,37 +109,40 @@ editable documents.
   incomplete comparison keeps the current choice and makes no recommendation;
   unsaved work is never replaced. Neither document persists parallel
   variant metadata.
-- **Job-link preparation** — paste a posting URL on Prepare and pull the
-  description in one click: Workday-aware through CXS JSON, Ashby-aware through
+- **Job-link preparation** — paste a posting URL on Prepare and fetch the
+  description: Workday-aware through CXS JSON, Ashby-aware through
   its public posting API (including Handshake's branded wrapper), with
   Greenhouse-wrapper resolution and a generic HTML→text fallback for other
-  boards. The posting is distilled before tailoring — **AI-first** via the
-  configured provider, with server-side grounding/sanitization checks and a
-  deterministic parser that can preserve a local brief for inspection when AI
-  fails. A failed AI Distill remains failed and cannot auto-launch Tailor or
-  Review. The compact tailoring brief keeps role context, responsibilities,
+  boards. The configured Distill provider runs before the server's grounding
+  and sanitization checks.
+  A deterministic parser can preserve a local brief for inspection if Distill
+  fails, but the failed stage stays failed and never starts resume Polish. The compact
+  job brief keeps role context, responsibilities,
   requirements, preferred qualifications, and technical/domain signals while
   dropping ATS/navigation/marketing/legal furniture. Prepare separately keeps
-  extracted benefits visible and editable for human review instead of widening
+  extracted benefits visible and editable without widening
   the resume-tailoring prompt. The link itself is kept only for pipeline
   tracking and is **never sent to the model**.
 - **Paired browser extension (Chrome/Firefox)** — the unpacked extension can
   check whether a posting is already tracked and open it on Prepare in a fresh
   RoleFit tab. On first use it sends a bounded local access request; approve
   that exact browser origin once in the companion. The extension does not
-  estimate fit locally; score and verdict come from AI Review in the app. See
+  estimate fit locally; score and verdict come from Recruiter audit in the app. See
   [Browser extension](#browser-extension).
 - **Explicit five-provider setup** — the companion can add **Claude Code CLI**, **Codex CLI**, **Antigravity CLI**, **OpenAI API**, and **Claude API**. CLI paths use their provider-owned account sessions and API paths use a locally encrypted key. Settings > AI stages shows only providers the user explicitly added, keeps configured-but-unready providers visible with reconnect guidance, and never silently switches a stage to a paid provider.
-- **AI-owned fit audit** — the selected Recruiter audit model judges the complete requirement set and returns the coverage table, base/tailored scores, verdict, explanation, gaps, and recommendation. RoleFit validates the response contract but does not recalculate or replace that judgment locally.
-- **Strict recruiter audit** — audit the current edited draft as-is, or audit the sanitized proposal produced moments earlier in **Polish resume**, for a verdict (STRONG FIT / REASONABLE FIT / STRETCH / DON'T APPLY), AI fit scores, gap severity, targeted bullet rewrites, interview risk flags, ready / edits-pending / missing-evidence status, and a cover-letter angle.
+- **Provider-run fit audit** — the selected Recruiter audit model judges the complete requirement set and returns the coverage table, base/tailored scores, verdict, explanation, gaps, and recommendation. RoleFit validates the response contract but does not recalculate or replace that judgment locally.
+- **Strict recruiter audit** — audit the current edited draft as-is, or audit the sanitized proposal produced moments earlier in **Polish**, for a verdict (STRONG FIT / REASONABLE FIT / STRETCH / DON'T APPLY), AI fit scores, gap severity, targeted bullet rewrites, interview risk flags, ready / edits-pending / missing-evidence status, and a cover-letter angle.
 - **One typeset editing surface** — direct text editing, inline emphasis, undo/redo, keyboard caret movement, structural add/remove/reorder controls, per-section Tailor/Include/Off scope, and review-field highlighting all operate on the exported page layout.
 - **One document workbench rail** — Resume and Cover Letter share the same
   always-present lifecycle hierarchy, readiness order, failure placement,
   collapsible desktop rail, and narrow accordion behavior while keeping their
-  own workflow state. Resume's primary **Polish resume** action runs Tailor then
-  Recruiter audit; Cover Letter stages an explicit proposal. Each document
-  remembers its own expanded or collapsed preference, and hidden workflow state
-  remains intact when reopened.
+  own workflow state. Both spell the run **Polish**; Resume's Polish runs the
+  Tailor, Recruiter audit, or combined workflow remembered in Settings from both
+  Resume and Prepare, while Cover Letter stages an explicit proposal. Polish sits beside
+  the rail's disclosure control in both states, so collapsing moves the pair to
+  the document's edge rather than relocating the action. Each
+  document remembers its own expanded or collapsed preference, and hidden
+  workflow state remains intact when reopened.
 - **Word-processor editing behavior** — Resume Tab/Shift+Tab moves between
   complete header and section fields (including wrapped fields); the cover
   letter uses that navigation in its optional header, and its body paragraphs
@@ -153,7 +154,7 @@ editable documents.
   typing and held Backspace/Delete bursts undo as groups; direction changes,
   caret or field moves, selections, formatting, structural edits, and pauses
   start a new group.
-- **Ordered AI workflow** — Distill, Tailor, and Review share one reusable progress surface with exact step counts, specific failure reasons, Retry/Stop behavior, and later stages marked not run after a failure.
+- **Ordered AI workflow** — Distill, Tailor, and Recruiter audit share one progress surface with exact step counts, specific failure reasons, Retry/Stop behavior, and later stages marked not run after a failure.
 - **WYSIWYG editor + PDF export** — the editor _is_ the preview: it and the exported PDF use the same shared Typeset layout engine, so visible line breaks and page flow match the export exactly. No external toolchain to install — typesetting and PDF generation run in the browser.
 - **`.resume` save/load** — download strict schema-v1 structured resume data,
   including explicit hidden/visible/absent header state, as a `.resume` file
@@ -290,9 +291,9 @@ per-section collapse control:
 
 - **Distill** — job-link, paste, and import distillation into a compact job brief.
 - **Tailor** — evidence-grounded resume suggestions.
-- **Review** — strict recruiter-style audit of the current edited draft.
-- **Cover letter** — one grounded tailoring pass over your own letter, run from
-  the Cover letter page's Tailor action.
+- **Recruiter audit** — strict fit audit of the current edited draft.
+- **Cover letter** — one grounded revision pass over your own letter, run from
+  the Cover Letter page's **Polish** action.
 - **Application questions** — drafts for an application's free-text questions.
 
 Each stage has its own provider/model/effort settings and an optional instruction
@@ -366,11 +367,9 @@ resume/job text exclusively on stdin while the subprocess is running.
 
 > **Provider support:** RoleFit intentionally exposes only the three subscription CLIs plus the native OpenAI Responses and Claude Messages APIs. Other adapters were removed until they have current contracts and live verification. CLI entitlements and API model access still depend on the signed-in account.
 
-For ordinary in-app URL or pasted-text intake, turning **Prepare job details
-with AI** off keeps deterministic extraction as an intentional local-only
-success path. Extension imports always require AI Distill. When requested AI
-Distill fails, RoleFit may load the deterministic brief for inspection while
-leaving Distill failed and blocking Tailor/Review. Tailor, Review, Cover Letter,
+URL, pasted-text, and extension intake require AI Distill. When Distill fails,
+RoleFit may load the deterministic brief for inspection while
+leaving Distill failed and blocking resume Polish. Tailor, Recruiter audit, Cover Letter,
 and application-answer generation fail plainly; no local draft, score, or
 verdict silently stands in.
 
@@ -395,7 +394,7 @@ preparation and duplicate checking to the job board. On any posting, click the
 - a one-click **Prepare in RoleFit** that opens a fresh independent RoleFit
   tab on Prepare, lets the server resolve the raw page text, and always runs AI
   Distill with that tab's selected provider. The extension handoff stops on
-  Prepare; it never auto-launches Tailor or Review. If AI Distill fails, the
+  Prepare; it never starts resume Polish. If AI Distill fails, the
   deterministic brief may remain available for inspection, but Distill stays
   failed. The popup has no AI/deterministic or automatic-tailor toggle.
 

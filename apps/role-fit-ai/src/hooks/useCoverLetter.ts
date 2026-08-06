@@ -210,7 +210,7 @@ export function useCoverLetter({
     if (hadActiveRequest) {
       setFailure(null);
       setCoverStatus(
-        "The letter, resume, job, or AI settings changed. Run Tailor again.",
+        "The letter, resume, job, or AI settings changed. Polish again.",
       );
       setCoverProgress({
         status: "stopped",
@@ -220,7 +220,7 @@ export function useCoverLetter({
       });
     } else if (inputsChanged && failureRef.current) {
       setFailure(null);
-      setCoverStatus("Inputs changed. Tailor the letter again for this context.");
+      setCoverStatus("Inputs changed. Polish the letter again for this context.");
       setCoverProgress({ status: "idle" });
     }
   }, [requestInputFingerprint, invalidateCoverRequest]);
@@ -252,7 +252,7 @@ export function useCoverLetter({
     setSlotAnswers({});
     setPendingProposal(null);
     setFailure(null);
-    setCoverStatus("Inputs changed. Tailor the letter again for this context.");
+    setCoverStatus("Inputs changed. Polish the letter again for this context.");
     setCoverProgress({ status: "idle" });
   }, [invalidateCoverRequest]);
 
@@ -270,7 +270,7 @@ export function useCoverLetter({
       });
       setCoverStatus(
         result.status === "ok"
-          ? "A legacy cover-letter result was not applied. Use Tailor on the Cover letter page."
+          ? "A legacy cover-letter result was not applied. Use Polish on the Cover letter page."
           : "The legacy cover-letter step failed. The existing letter was kept.",
       );
       setCoverProgress({
@@ -353,7 +353,7 @@ export function useCoverLetter({
     const { controller, isCurrent } = beginRequest();
     setPendingProposal(null);
     setFailure(null);
-    setCoverStatus("Tailoring this letter…");
+    setCoverStatus("Polishing this letter…");
     setCoverProgress({
       status: "running",
       note: "Writing from your evidence",
@@ -383,12 +383,12 @@ export function useCoverLetter({
           const count = blocked.issues.length;
           setFailure(blocked);
           setCoverStatus(
-            `Tailoring blocked. Review ${count} ${count === 1 ? "issue" : "issues"} in the Tailoring panel.`,
+            `Polish blocked. Review ${count} ${count === 1 ? "issue" : "issues"} in the Workflow panel.`,
           );
           setCoverProgress({
             status: "failed",
-            errorHeadline: "Tailoring blocked",
-            error: `Your current letter was kept. Review ${count} ${count === 1 ? "issue" : "issues"} in the Tailoring panel.`,
+            errorHeadline: "Polish blocked",
+            error: `Your current letter was kept. Review ${count} ${count === 1 ? "issue" : "issues"} in the Workflow panel.`,
           });
           onUsage?.({
             source: "none",
@@ -457,7 +457,7 @@ export function useCoverLetter({
     if (!proposal) return;
     if (proposal.stale) {
       setCoverStatus(
-        "The letter, resume, job, or tailoring instructions changed. Tailor again for the current inputs.",
+        "The letter, resume, job, or polishing instructions changed. Polish again for the current inputs.",
       );
       return;
     }

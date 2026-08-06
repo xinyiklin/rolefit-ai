@@ -186,8 +186,8 @@ export function SettingsDialog({
 
                 <div className="settings-default-stages">
                   <div className="settings-default-stages__label" id="settings-polish-stages-label">
-                    <strong>Automatic Resume workflow</strong>
-                    <small>Manual Polish always tailors then audits; automatic runs use this preference.</small>
+                    <strong>Resume workflow</strong>
+                    <small>Polish uses this stage choice everywhere.</small>
                   </div>
                   <div
                     className="segmented-control"

@@ -789,6 +789,114 @@ async function runDocumentWorkbenchContracts() {
   assert.equal(expandedGeometry.railTagName, "DIV", "the structural rail wrapper is not a second landmark");
   assert.equal(expandedGeometry.asideCount, 1, "the feature content owns the only complementary landmark");
 
+  // Resizing the rail: a pointer drag from its divider, bounded, persisted, and
+  // shared by both documents. Each sequence uses its own pointer id — Chrome
+  // rejects capture for an id it no longer considers active.
+  const resizeGeometry = await win.webContents.executeJavaScript(`(() => {
+    const handle = document.querySelector(".document-workbench__rail-resize");
+    const rail = document.querySelector(".document-workbench__rail");
+    const workbench = document.querySelector(".document-workbench");
+    const layout = document.querySelector(".document-workbench__layout");
+    const rem = parseFloat(getComputedStyle(document.documentElement).fontSize);
+    const railWidth = () => Math.round(rail.getBoundingClientRect().width);
+    const drag = (pointerId, offset, type) => {
+      const box = handle.getBoundingClientRect();
+      handle.dispatchEvent(new PointerEvent(type, {
+        bubbles: true,
+        cancelable: true,
+        pointerId,
+        button: 0,
+        buttons: type === "pointerup" ? 0 : 1,
+        clientX: Math.round(box.left + 3) + offset,
+        clientY: Math.round(box.top + 40)
+      }));
+    };
+    drag(11, 0, "pointerdown");
+    drag(11, -90, "pointermove");
+    const duringDrag = {
+      width: railWidth(),
+      resizing: workbench.dataset.resizing === "true",
+      transition: getComputedStyle(layout).transitionProperty
+    };
+    drag(11, -90, "pointerup");
+    const afterDrag = { width: railWidth(), resizing: workbench.dataset.resizing };
+    // A pull far past the ceiling stops at the bound rather than eating the page.
+    drag(12, 0, "pointerdown");
+    drag(12, -400, "pointermove");
+    drag(12, -400, "pointerup");
+    return {
+      rem,
+      duringDrag,
+      afterDrag,
+      atCeiling: railWidth(),
+      stored: Number.parseFloat(localStorage.getItem("rolefit:document-rail:width")),
+      role: handle.getAttribute("role"),
+      valueNow: Number.parseFloat(handle.getAttribute("aria-valuenow")),
+      valueMax: Number.parseFloat(handle.getAttribute("aria-valuemax"))
+    };
+  })()`);
+  const floorPx = Math.round(resizeGeometry.rem * 18);
+  const ceilingPx = Math.round(resizeGeometry.rem * 28);
+  assert.equal(
+    resizeGeometry.duringDrag.width,
+    floorPx + 90,
+    "dragging the divider outward widens the rail by exactly the distance dragged"
+  );
+  assert.equal(resizeGeometry.duringDrag.resizing, true, "the workbench marks itself resizing for the duration of the drag");
+  assert.equal(
+    resizeGeometry.duringDrag.transition,
+    "none",
+    "which suspends the disclosure clock, so the rail cannot trail the cursor"
+  );
+  assert.equal(resizeGeometry.afterDrag.width, floorPx + 90, "release keeps the width the drag arrived at");
+  assert.equal(resizeGeometry.afterDrag.resizing, undefined, "and clears the resizing mark");
+  assert.equal(resizeGeometry.atCeiling, ceilingPx, "a longer pull stops at the shared 28rem ceiling");
+  assert.equal(
+    resizeGeometry.stored,
+    ceilingPx,
+    "the resized width persists under one shared key for both documents"
+  );
+  assert.equal(resizeGeometry.role, "separator", "the affordance is a separator");
+  // The width lands on the element during the drag; the separator's reported
+  // value follows on the commit, so wait for the render rather than the frame.
+  await waitFor(
+    win,
+    `document.querySelector(".document-workbench__rail-resize").getAttribute("aria-valuenow") === "${ceilingPx}"`,
+    "separator reports the width it settled on"
+  );
+  const separatorBounds = await win.webContents.executeJavaScript(`(() => {
+    const handle = document.querySelector(".document-workbench__rail-resize");
+    return {
+      valueMin: Number.parseFloat(handle.getAttribute("aria-valuemin")),
+      valueMax: Number.parseFloat(handle.getAttribute("aria-valuemax")),
+      orientation: handle.getAttribute("aria-orientation"),
+      focusable: handle.tabIndex
+    };
+  })()`);
+  assert.equal(separatorBounds.valueMin, floorPx, "and its floor");
+  assert.equal(separatorBounds.valueMax, ceilingPx, "and its ceiling");
+  assert.equal(separatorBounds.orientation, "vertical", "as a vertical splitter");
+  assert.equal(separatorBounds.focusable, 0, "reachable by keyboard");
+
+  // Keyboard parity, and the floor.
+  await win.webContents.executeJavaScript(`(() => {
+    const handle = document.querySelector(".document-workbench__rail-resize");
+    handle.focus();
+    handle.dispatchEvent(new KeyboardEvent("keydown", { key: "Home", bubbles: true }));
+  })()`);
+  await waitFor(
+    win,
+    `Math.round(document.querySelector(".document-workbench__rail").getBoundingClientRect().width) === ${floorPx}`,
+    "Home returns the rail to its 18rem floor from the keyboard"
+  );
+  assert.equal(
+    await win.webContents.executeJavaScript(
+      'Number.parseFloat(localStorage.getItem("rolefit:document-rail:width"))'
+    ),
+    floorPx,
+    "and the keyboard resize persists like the drag"
+  );
+
   await click(win, 'input[aria-label="Page zoom"]');
   await waitFor(
     win,
@@ -884,6 +992,61 @@ async function runDocumentWorkbenchContracts() {
   assert.equal(collapsedGeometry.value, "Keep this answer", "collapsed inputs retain their value");
   assert.equal(collapsedGeometry.stored, "collapsed", "collapse persists under the document key");
 
+  // What is left of the collapsed rail must read as one docked object, not as a
+  // loose action floating beside a loose tab.
+  const dockGeometry = await win.webContents.executeJavaScript(`(() => {
+    const layout = document.querySelector(".document-workbench__layout");
+    const dock = document.querySelector(".document-workbench__rail-dock");
+    const action = dock.querySelector(":scope > :not(.document-workbench__rail-tab)");
+    const tab = document.querySelector(".document-workbench__rail-tab");
+    const dockRect = dock.getBoundingClientRect();
+    const actionRect = action.getBoundingClientRect();
+    const tabRect = tab.getBoundingClientRect();
+    const layoutRect = layout.getBoundingClientRect();
+    return {
+      dockPosition: getComputedStyle(dock).position,
+      dockSurface: getComputedStyle(dock).backgroundColor,
+      actionSurface: getComputedStyle(action).backgroundColor,
+      actionText: action.textContent.trim(),
+      tabSurface: getComputedStyle(tab).backgroundColor,
+      actionInsideDock:
+        actionRect.left >= dockRect.left - 0.5 && actionRect.right <= dockRect.right + 0.5,
+      tabInsideDock:
+        tabRect.left >= dockRect.left - 0.5 && tabRect.right <= dockRect.right + 0.5,
+      actionLeadsTab: actionRect.right <= tabRect.left + 0.5,
+      insetFromEdge: layoutRect.right - dockRect.right,
+      floatingActionCount: document.querySelectorAll(".document-workbench__collapsed-action").length
+    };
+  })()`);
+  assert.equal(dockGeometry.dockPosition, "absolute", "the collapsed pair hangs on the document's edge");
+  assert.equal(dockGeometry.actionInsideDock, true, "the collapsed action sits in the pair");
+  assert.equal(dockGeometry.tabInsideDock, true, "so does the reopen tab");
+  assert.equal(dockGeometry.actionLeadsTab, true, "the action leads and the disclosure closes the pair");
+  assert.ok(
+    dockGeometry.insetFromEdge >= 0 && dockGeometry.insetFromEdge <= 24,
+    "the pair stays in the document's top-right corner"
+  );
+  assert.equal(
+    dockGeometry.dockSurface,
+    "rgba(0, 0, 0, 0)",
+    "no card wraps the pair — the dock is placement only"
+  );
+  assert.notEqual(
+    dockGeometry.tabSurface,
+    "rgba(0, 0, 0, 0)",
+    "off the panel, the tab carries its own sheet"
+  );
+  assert.match(
+    dockGeometry.actionText,
+    /^Polish/,
+    "the collapsed action keeps its label — it is the same button the open header shows"
+  );
+  assert.equal(
+    dockGeometry.floatingActionCount,
+    0,
+    "no free-floating collapsed action survives beside the pair"
+  );
+
   await win.webContents.executeJavaScript(
     "window.__documentWorkbenchContract.setResultVersion(2)"
   );
@@ -974,18 +1137,20 @@ async function runDocumentWorkbenchContracts() {
   const narrowCollapsed = await win.webContents.executeJavaScript(`(() => {
     const layout = document.querySelector(".document-workbench__layout");
     const rail = document.querySelector(".document-workbench__rail");
+    const dock = document.querySelector(".document-workbench__rail-dock");
     const tab = document.querySelector(".document-workbench__rail-tab");
     const editor = document.querySelector(".document-workbench__editor");
     layout.scrollTop = layout.scrollHeight;
     const layoutRect = layout.getBoundingClientRect();
+    const dockRect = dock.getBoundingClientRect();
     const tabRect = tab.getBoundingClientRect();
     return {
       railHidden: getComputedStyle(rail).display === "none",
-      tabPosition: getComputedStyle(tab).position,
-      fullWidth:
-        Math.round(tab.getBoundingClientRect().width) ===
-        Math.round(layout.clientWidth),
-      belowEditor: tabRect.top >= editor.getBoundingClientRect().bottom,
+      dockPosition: getComputedStyle(dock).position,
+      fullWidth: Math.round(dockRect.width) === Math.round(layout.clientWidth),
+      tabTrailing: tabRect.right <= dockRect.right + 0.5 &&
+        tabRect.left > dockRect.left + dockRect.width / 2,
+      belowEditor: dockRect.top >= editor.getBoundingClientRect().bottom,
       reopenVisible:
         tabRect.top >= layoutRect.top &&
         tabRect.bottom <= layoutRect.bottom
@@ -993,11 +1158,12 @@ async function runDocumentWorkbenchContracts() {
   })()`);
   assert.equal(narrowCollapsed.railHidden, true, "the stacked collapsed rail leaves the flow");
   assert.equal(
-    narrowCollapsed.tabPosition,
+    narrowCollapsed.dockPosition,
     "relative",
-    "the stacked reopen control stays in flow while positioning its issue count"
+    "the stacked dock stays in flow while positioning its issue count"
   );
-  assert.equal(narrowCollapsed.fullWidth, true, "the stacked reopen bar spans the workbench");
+  assert.equal(narrowCollapsed.fullWidth, true, "the stacked dock spans the workbench as one bar");
+  assert.equal(narrowCollapsed.tabTrailing, true, "the stacked bar keeps its disclosure at the end");
   assert.equal(narrowCollapsed.belowEditor, true, "the stacked reopen bar sits below the document");
   assert.equal(narrowCollapsed.reopenVisible, true, "the stacked reopen bar can be scrolled into view");
 

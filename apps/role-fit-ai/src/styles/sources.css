@@ -221,22 +221,6 @@ select,
   font-weight: 630;
 }
 
-/* Polish stage chooser: the same action rows plus a trailing check marking the
-   remembered default. The third column is reserved on every row so the two
-   unchecked titles do not shift when the default moves. */
-.polish-stage-menu .document-action-row {
-  grid-template-columns: 18px minmax(0, 1fr) 16px;
-}
-
-/* Specific enough to beat `.document-action-row > svg`, which top-aligns the
-   leading icon against a two-line title. */
-.polish-stage-menu .document-action-row > .polish-stage-menu__current {
-  align-self: center;
-  justify-self: center;
-  margin-top: 0;
-  color: var(--accent-deep);
-}
-
 /* -------- Open menu (shared by resume and cover letter) -------- */
 
 /* The saved-documents list sits under the start actions, divided from them by a

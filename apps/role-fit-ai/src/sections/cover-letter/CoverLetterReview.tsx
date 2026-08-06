@@ -102,11 +102,18 @@ export function CoverLetterReview({
   const { resolved } = preflight;
   const target = [resolved.role, resolved.company].filter(Boolean).join(" at ") || "Cover letter";
   const ready = preflight.canTailor && resumeReady && jobReady && providerReady;
+  // The missing fields render right below this row with their own reasons, so it
+  // counts them instead of repeating the first reason verbatim. Template slot
+  // questions have no inline field, so those still speak for themselves.
+  const fieldCount = preflight.missingFields.length;
+  const slotBlocker = preflight.blockers[fieldCount];
+  const detailsBlocked = slotBlocker
+    ?? (fieldCount > 0 ? `${fieldCount} ${fieldCount === 1 ? "field" : "fields"} below` : "Complete the fields");
   const checks = [
     check("Resume", resumeReady, "Add your resume"),
     check("Prepared job", jobReady, "Prepare the job"),
     check("Polish provider", providerReady, "Check AI settings"),
-    check("Template details", preflight.canTailor, preflight.blockers[0] ?? "Complete the fields")
+    check("Template details", preflight.canTailor, detailsBlocked)
   ];
 
   let phase: DocumentWorkflowPhase = ready ? "ready" : "blocked";
@@ -156,6 +163,8 @@ export function CoverLetterReview({
     </ul>
   ) : null;
 
+  // Polish itself lives beside the rail's disclosure control, in the header. The
+  // footer carries only the decisions an outcome adds.
   const footer = proposal ? (
     <>
       <button
@@ -164,35 +173,23 @@ export function CoverLetterReview({
         disabled={proposal.stale}
         onClick={onAcceptProposal}
       >
-        Use proposal
+        Accept proposal
       </button>
+      {/* Accept/Discard is the verb pair the resume's review rail already uses
+          for a proposed change; only the unit differs. */}
       <button type="button" className="secondary-button is-compact" onClick={onDiscardProposal}>
-        Keep current
+        Discard proposal
       </button>
-      {proposal.stale ? (
-        <button type="button" className="ghost-button is-compact" onClick={onTailor}>
-          Polish again
-        </button>
-      ) : null}
     </>
   ) : failure ? (
     <button type="button" className="primary-button is-compact" onClick={onTailor}>
-      Retry Polish
+      Retry polish
     </button>
   ) : appliedResult && canRestore ? (
     <button type="button" className="secondary-button is-compact" onClick={onRestore}>
       Restore previous
     </button>
-  ) : (
-    <button
-      type="button"
-      className="primary-button is-compact"
-      disabled={!ready || isTailoring}
-      onClick={onTailor}
-    >
-      Polish
-    </button>
-  );
+  ) : null;
 
   return (
     <DocumentWorkflowRail

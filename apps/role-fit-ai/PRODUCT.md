@@ -48,8 +48,8 @@ experiences and honest-context notes this particular posting warrants. Bracketed
 text in a base variant is a drafting instruction, never candidate evidence.
 Grounding, placeholder rejection, and a single silent repair pass all run on the
 server. A valid result becomes a whole-letter proposal beside the unchanged
-editor; only **Use proposal** replaces the live document and creates the exact
-one-click Restore baseline. **Keep current** performs no document mutation. A
+editor; only **Accept proposal** replaces the live document and creates the exact
+one-click Restore baseline. **Discard proposal** performs no document mutation. A
 letter that still fails after repair is discarded with the current one kept,
 and bounded typed validation issues identify the rejected claim and recovery
 without exposing provider output, repair instructions, or internal evidence ids.
@@ -165,9 +165,13 @@ disappears into the task. Quiet competence, not salesmanship.
    workspaces continue with Resume and its consistent Open/Save document chrome,
    Cover letter with the matching document chrome, and one always-present
    workflow-rail hierarchy for both documents. Each document's primary **Polish**
-   action lives in that rail and has a floating counterpart when the rail is
-   collapsed. Resume's default **Polish resume** action runs Tailor and then Recruiter audit while
-   retaining specialist Tailor-only and Audit-current actions. Cover letter
+   action sits beside that rail's disclosure control — in the rail header while
+   it is open, and on the document's edge while it is collapsed.
+   Polish is the one name for starting a run, in either document and on the
+   Prepare cards that launch the same runs; Tailor and Audit survive only as the
+   names of the resume pipeline's own stages. Resume's Polish runs the workflow
+   remembered in Settings — Tailor, Recruiter audit, or both — from either the
+   document or Prepare; there is no second menu in the document header. Cover letter
    stages a whole-document proposal for explicit acceptance. The document rails
    remember their disclosure separately while their orchestration remains
    document-specific. The remaining workspaces are Materials, the Applications
@@ -207,11 +211,11 @@ disappears into the task. Quiet competence, not salesmanship.
     each have an Include toggle; only included material must be ready, and both
     may be excluded. Resume defaults on and Cover Letter defaults off. A later
     re-Apply must preserve any previously saved artifact for an excluded slot.
-    Prepare may summarize a current matching AI Review or a matching historical
-    saved review; before either exists it says "Not reviewed" and never
+    Prepare may summarize a current matching Recruiter audit or a matching
+    historical saved audit; before either exists it says "Not audited" and never
     substitutes a local fit estimate.
 11. Preserve safe extension intake: a claimed extension posting always runs AI
-    Distill and stops on Prepare; it never auto-launches Tailor or Review. A
+    Distill and stops on Prepare; it never starts resume Polish. A
     failed AI Distill may leave the deterministic brief visible for inspection,
     but it remains failed. The ordinary Prepare workflow may rank actual saved
     resume and cover-letter contents against the prepared job and auto-select a
