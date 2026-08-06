@@ -54,7 +54,7 @@ export function inferCompanyFromUrl(url: string) {
     const host = u.hostname.replace(/^www\./, "").toLowerCase();
     const segments = u.pathname.split("/").filter(Boolean);
 
-    // Job boards never encode the employer in the URL — leave it to the distiller
+    // Job boards never encode the employer in the URL — leave it to job analysis
     // (the posting text) or manual review rather than guessing the board's name.
     if (JOB_BOARD_HOSTS.test(host)) return "";
 

@@ -291,7 +291,7 @@ bounded; app-only operational detail belongs in the affected app documentation.
   checks: all five saved letters fetch and parse through the select route, and
   the state line reads `Template · 6 placeholders to fill`. The recommendation
   itself needs a prepared job, so its rendered form is **UNCONFIRMED** — no live
-  Distill was run.
+  provider-backed job analysis was run.
 - [USER+CODE] **Prepare's page shape is now flat, dense, and tool-like**
   (user: "more functional/compact/less ai"). Behavior, props, readiness, and the
   Apply contract are unchanged; the chrome is not. Source, Job brief, and
@@ -1236,7 +1236,7 @@ bounded; app-only operational detail belongs in the affected app documentation.
   "Edit instructions".
 - [USER] Stage copy is shorter and free of internal jargon — "Owns the fit score,
   gaps, and verdict" became "Audits your draft like a recruiter and scores the
-  fit", and the awkward "Instructions for job distill" interpolation is gone. The
+  fit", and the awkward stage-instruction interpolation is gone. The
   cover stage is titled "Cover letter", not "Cover letter tailor".
 - [CODE] Settings' reset clears stored preferences and reseeds in-memory state
   from defaults behind a danger confirm. The debounced auto-save then rewrites the
@@ -2021,3 +2021,12 @@ bounded; app-only operational detail belongs in the affected app documentation.
   and the rendered Chromium workbench contract passed. Isolated fictitious-data
   browser QA covered the current Resume and Cover Letter workspaces plus the
   landing page at 1440px and 390px. No live provider evaluation ran.
+- [USER+CODE+TOOL] 2026-08-06: PR 1 renames the configurable Distill stage to
+  **Job analysis** across settings, runtime identifiers, progress copy, current
+  docs, and the canonical `/api/job-analysis` route. Settings and portable
+  backups migrate the legacy provider/model/effort/instruction keys before
+  strict normalization; historical tracker provenance is read under the new
+  label and subsequent writes use only `job-analysis`. `/api/distill` remains a
+  one-preview compatibility alias, extension cleanup still recognizes
+  `distillAi`, and historical release notes remain unchanged. No initial-fit
+  audit behavior is included in this PR.

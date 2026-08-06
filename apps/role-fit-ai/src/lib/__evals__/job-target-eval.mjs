@@ -1,6 +1,6 @@
 // Probes for src/lib/jobTarget.ts — inferApplicationTitle() (the tracker's
 // fallback application title) and inferCompanyFromUrl() (the fallback company
-// name before/without an AI distill pass). Mirrors the job-identity-eval style:
+// name before/without an AI job-analysis pass). Mirrors the job-identity-eval style:
 // a plain `check(name, actual, expected)` array. Both functions must never
 // invent a company/title from ambiguous input — job boards and unknown hosts
 // resolve to "" / "Untitled role" rather than guessing.

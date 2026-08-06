@@ -287,7 +287,7 @@ assert.doesNotMatch(coverFingerprint, /providerReady/, "provider polling cannot 
 assert.equal(
   intake.match(/await ensureProviderReady\(\)/g)?.length,
   4,
-  "every AI Job analysis entry point awaits the shared initial provider discovery"
+  "every AI-backed job-analysis entry point awaits the shared initial provider discovery"
 );
 assert.ok(
   intake.indexOf("const readiness = await ensureProviderReady()") <

@@ -68,11 +68,11 @@ const SALARY_PERIODS = ["yr", "mo", "hr"] as const;
 const REVIEW_GAP_SEVERITIES = ["BLOCKER", "HIGH", "MEDIUM", "LOW"] as const;
 const REVIEW_VERDICTS = ["STRONG FIT", "REASONABLE FIT", "STRETCH", "DON'T APPLY"] as const;
 // Per-stage AI-usage provenance: which model produced each pipeline stage's
-// output (distill / tailor / review / cover / answers). `source` is required and
+// output (job-analysis / tailor / review / cover / answers). `source` is required and
 // enumerated; a stage whose source is not one of these is dropped entirely so a
 // malformed entry can never persist a half-recorded provenance row.
 const AI_USAGE_SOURCES = ["ai", "local", "none"] as const;
-// A stage key is a short lowercase slug (e.g. "distill", "tailor", "review",
+// A stage key is a short lowercase slug (e.g. "job-analysis", "tailor", "review",
 // "cover", "answers"). Keep the shape narrow so the map can't be used as an
 // arbitrary key/value store.
 const AI_USAGE_STAGE_RE = /^[a-z][a-z0-9-]{0,23}$/;

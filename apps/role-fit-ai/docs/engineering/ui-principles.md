@@ -57,7 +57,7 @@ and pasted text as deliberate fallbacks on the same page. Before preparation,
 one centered Source panel is the whole task: URL and pasted text are two
 keyboard-navigable methods and only the selected method is visible. Empty Job
 brief, Materials, and readiness scaffolds stay out of the page. Extension
-receipt and Distill progress navigate to and remain visible on Prepare.
+receipt and Job analysis progress navigate to and remain visible on Prepare.
 
 Once ready, Source collapses to its head — captured size and origin — behind
 explicit View, Replace, and Prepare again paths. The structured brief leads the
@@ -77,7 +77,7 @@ location, job type, source, work authorization, compensation range/currency/
 period, and one role context. Responsibilities, required and preferred
 qualifications, technical keywords, seniority and domain signals, and benefits
 are editable in the same brief. Surface both extraction gaps and
-candidate-review gaps so partial Distill output can be corrected without
+candidate-review gaps so partial analysis output can be corrected without
 another AI run. Benefits remain visible preparation context rather than being
 silently folded into resume-tailoring evidence.
 
@@ -94,7 +94,7 @@ only included materials must be ready while their preparation is idle. Either
 or both cards may be excluded. Re-Apply treats exclusion as non-destructive:
 any artifact already saved for that application remains untouched.
 
-Extension intake always runs AI Distill and stops on Prepare; it never starts
+Extension intake always runs AI-backed job analysis and stops on Prepare; it never starts
 resume Polish. Independently, Prepare may rank the actual contents of saved
 `.resume` and `.cover` variants against weighted prepared-job sections. For
 either document, auto-select a meaningful unique winner only while its editor
@@ -388,7 +388,7 @@ Never show:
   they belong in RoleFit Companion, not in a browser settings panel. Per-stage
   readiness is not listed separately either — a blocked stage says so in its own
   row, beside the control that fixes it.
-- Settings > AI stages carries one section per configurable stage (Job distill,
+- Settings > AI stages carries one section per configurable stage (Job analysis,
   Resume tailor, Resume review, Cover letter tailor, Application questions). Each
   owns a concrete provider/model/effort config plus an optional instruction
   override; **Copy settings** is a one-shot sync between stages, not a live link.
@@ -406,12 +406,12 @@ Never show:
 - `polishStages` has one stored value in Settings > AI stages. Resume's document
   action and Prepare card both dispatch that choice; neither owns a per-run
   override or silently rewrites it.
-- Distill, Tailor, and Review share one ordered workflow indicator. It shows
+- Job analysis, Tailor, and Review share one ordered workflow indicator. It shows
   every selected stage and its real `Step n of total` position; a failed or
   user-stopped stage leaves later stages visible as not run and never advances
   automatically.
 - Duplicate detection is an explicit pipeline gate. Before an AI request, and
-  again after Distill when richer tracking facts become available, the user
+  again after Job analysis when richer tracking facts become available, the user
   chooses **Continue pipeline** or **Stop here**. Continuing acknowledges that
   job target for the rest of the run; stopping makes no downstream request.
 - Each Model control changes with its section's selected provider and exposes

@@ -370,7 +370,7 @@ interactive control shares the same focus treatment: 2px Forest Ink outline,
   radios keep native controls. Editor font-family choices use the shared custom
   dropdown so the toolbar and Styles matrix have the same visual and keyboard
   behavior in every browser.
-- **AI setup** keeps Distill, Tailor, and Review expanded together with no
+- **AI setup** keeps Job analysis, Tailor, and Review expanded together with no
   per-section collapse affordance. Each stage retains its own concrete
   provider/model/effort controls and **Copy from** action. Provider rows come
   from the local companion's explicitly added registry; added-but-unready rows
@@ -413,7 +413,7 @@ interactive control shares the same focus treatment: 2px Forest Ink outline,
   Fit row follows the materials: show the current Recruiter audit verdict first,
   a matching saved verdict as historical, or "Not audited" with a route to
   Recruiter audit. Do not style it as a nested card or derive a local verdict.
-- **Automation:** extension receipt and Distill progress remain visible on
+- **Automation:** extension receipt and Job analysis progress remain visible on
   Prepare. Resume Polish started from Prepare also completes there. Rank the actual
   contents of saved resume and cover-letter variants against weighted
   prepared-job sections. Either material may auto-select a meaningful unique

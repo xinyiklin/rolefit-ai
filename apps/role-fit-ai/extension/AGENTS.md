@@ -112,7 +112,7 @@ V3 client of the local RoleFit server.
 - The popup has no AI/deterministic or automatic-tailor toggles. Extension
   intake sends only `text`, `url`, and `claimToken` to import; the same-origin
   inbox delivers only `text` and `url`. The app always owns provider-backed AI
-  Distill, duplicate gates, the deterministic brief used only for failed-run
+  job analysis, duplicate gates, the deterministic brief used only for failed-run
   inspection, and the stop on Prepare. Claim-token routing and Firefox
   container preservation remain part of the handoff. This holds for the
   keyboard command exactly as it does for the popup button.

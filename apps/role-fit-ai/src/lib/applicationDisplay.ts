@@ -145,7 +145,7 @@ export function formatSalary(
   const hasMax = typeof salaryMax === "number";
   if (!hasMin && !hasMax) return "";
   const currency = (salaryCurrency || "").trim().toUpperCase();
-  // The distiller can now emit non-USD currencies, so render their native symbol
+  // Job analysis can emit non-USD currencies, so render their native symbol
   // (falls back to an ISO-code prefix for anything unmapped).
   const CURRENCY_SYMBOL: Record<string, string> = {
     USD: "$", GBP: "£", EUR: "€", JPY: "¥", CAD: "C$", AUD: "A$"

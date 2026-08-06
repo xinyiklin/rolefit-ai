@@ -25,7 +25,7 @@ export type CoverLetterAutosavedDraft = {
   // recovered draft keeps its name.
   documentTitle: string;
   savedAt: string;
-  // Light label for the job target — only the distilled role/company strings,
+  // Light label for the job target — only the analyzed role/company strings,
   // never the full JD body.
   jobLabel: string;
 };

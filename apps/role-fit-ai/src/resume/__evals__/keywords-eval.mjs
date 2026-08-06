@@ -73,7 +73,7 @@ const checks = [
   ["narrow alias: 'graduating spring 2024' !~ spring boot", !includesKeyword("graduating spring 2024", "spring boot")],
   ["narrow alias: 'please express interest' !~ express", !includesKeyword("please express interest", "express")],
 
-  // --- scaffold stopwords: the jobExtract distiller's own section labels are no
+  // --- scaffold stopwords: the jobExtract analyzer's own section labels are no
   // longer surfaced as required keywords (they are template furniture, not skills).
   ["scaffold dropped: 'domain signals' not extracted", !extractKeywords("Domain Signals: fintech and payments domain").includes("domain")],
   ["scaffold dropped: bare 'stack' not extracted", !extractKeywords("Tech Stack Keywords listed in the stack").includes("stack")],

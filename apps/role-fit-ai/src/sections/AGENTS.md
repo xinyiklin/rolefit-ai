@@ -25,7 +25,7 @@ and `docs/engineering/ui-principles.md`.
 - Keep components declarative. Network, storage, cross-tab, and pipeline state
   belong in hooks; components receive values and callbacks.
 - `PrepareTab` is the first/default and sole job-intake page. It composes the
-  URL/paste fallbacks, receipt/Distill progress, collapsed source, editable
+  URL/paste fallbacks, receipt/Job analysis progress, collapsed source, editable
   full job brief and its extraction/candidate-review gaps, resume-variant
   recommendation, material selection, readiness, and the shared Apply callback;
   it does not own their async state. Its brief includes tracked job facts and

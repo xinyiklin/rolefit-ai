@@ -113,20 +113,23 @@ Good server verification covers:
   payloads, extract each emitted JSON fragment (`tailor_scope`,
   `context_sections`, `proposed_changes`, or equivalent), and parse it again;
   serialized JSON must never be truncated by raw character count
-- distill-grounding changes must cover `roleDescription` and `jobType`
+- job-analysis grounding changes must cover `roleDescription` and `jobType`
   alongside title/company/location, including negated, benefits-only, and
   qualification-only wording that must not false-ground tracking metadata
+- the Job analysis rename contract must keep current code and docs free of the
+  retired term except for the temporary route alias, settings/backup/provenance
+  readers, extension cleanup keys, compatibility tests, and historical release notes
 - tailor-quality changes can grade live consistency on the real resume:
   `node apps/role-fit-ai/server/ai/__evals__/tailor-quality-eval.mjs apps/role-fit-ai/workspace/tailor-eval/samples/<jd>.json 3`
   (metrics-only output; full responses land in gitignored
   `workspace/tailor-eval/`); a matched JD should produce
   evidence-backed suggestions with a small honest lift, a bad-fit JD a
   stable DON'T APPLY
-- when an AI Distill/Tailor/Review call fails, the shared workflow identifies
+- when an AI call for Job analysis, Tailor, or Review fails, the shared workflow identifies
   the classified cause, keeps the failed step current, and leaves later steps
-  as not run; Distill may retain a deterministic local brief for inspection,
+  as not run; Job analysis may retain a deterministic local brief for inspection,
   but that failed run cannot auto-launch Tailor or Review
-- duplicate warnings before or after Distill must offer Continue/Stop; Stop
+- duplicate warnings before or after Job analysis must offer Continue/Stop; Stop
   prevents the current and every downstream AI request, while Continue is
   acknowledged for the same job target so the pipeline does not prompt twice
 - cover-letter tailoring and application-answer generation have no local
@@ -216,7 +219,7 @@ Good frontend verification covers:
   `OUTPUT_TABS` and the APG tablist
 - extension receipt and delivery select Prepare before updating visible intake
   state, every delivered posting and Retry require provider readiness and AI
-  Distill, a failed run may retain only the deterministic inspection brief, and
+  Job analysis, a failed run may retain only the deterministic inspection brief, and
   retry/stale guards cannot apply an earlier posting to the current session
 - extension intake never launches Tailor or Review; multiple saved resume
   variants may still be ranked from their actual strict document contents and
@@ -259,7 +262,7 @@ Good frontend verification covers:
   `ApplicationModal` in lazy chunks, and opening each surface loads cleanly
 - components reuse shared CSS classes and tokens from `src/styles/` instead of
   one-off styles
-- AI setup renders Distill, Tailor, and Review expanded together with no
+- AI setup renders Job analysis, Tailor, and Review expanded together with no
   per-section collapse control or persisted collapse state; only explicitly
   configured providers appear, configured-but-unready selections stay visible
   and disabled, and no API key appears in DOM, browser storage, or HTTP requests
@@ -270,7 +273,7 @@ Good frontend verification covers:
   rail states; the compact Sessions count/working indicator remains visible,
   its popover opens rightward without viewport clipping, and it is absent from
   output-tab arrow/Home/End navigation
-- job-import distiller changes prove the before/after shape without
+- job-import analyzer changes prove the before/after shape without
   printing raw private text: the resulting structured brief should keep role
   intro / responsibilities / requirements while stripping empty bullets,
   apply/navigation furniture, duplicated titles, low-value Workday
@@ -399,7 +402,7 @@ and does not own workspace/tracker files. Focused companion probes should cover:
   main-owned refresh after the setup renderer closes;
 - browser selectors showing only configured providers, preserving unready
   selections without a paid fallback, disabling only AI when none exist, and
-  awaiting initial discovery for extension Distill instead of
+  awaiting initial discovery for extension Job analysis instead of
   recording a transient loading state as failure;
 - browser autosave/editor/tracker behavior remaining independent of Electron,
   plus the existing `npm run dev:rolefit` and extension contract staying green;
@@ -410,7 +413,7 @@ and does not own workspace/tracker files. Focused companion probes should cover:
   oversized identities without CORS;
 - extension preparation omitting retired `autoTailor`, `distillAi`, and
   pre-extracted `fields`, while preserving `extensionImport`, `claimToken`,
-  `tabId`, and the `"distilling"` progress contract;
+  `tabId`, and the `"preparing"` progress contract;
   sending the same claim token in the import body and fresh-tab query; claiming
   a reserved inbox entry only from its intended tab; opening an independent tab
   in the current Firefox container when available with the ordinary fresh-tab
@@ -536,7 +539,7 @@ Good refactor verification proves behavior parity:
 - no new imports of deprecated paths
 - affected call sites still use the intended public interface
 - the AI polish path still works, and a failed AI call surfaces a specific,
-  retryable failed step without running any later selected step; Distill may
+  retryable failed step without running any later selected step; Job analysis may
   keep its deterministic brief, but the failure remains a failure
 
 Avoid drive-by refactors. Refactor only when the current task requires

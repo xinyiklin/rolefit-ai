@@ -252,7 +252,7 @@ export async function analyzePosting(apiBase, pageData) {
 /**
  * Queue the posting for one fresh app tab. The body carries only the captured
  * text, its URL, and the claim token that routes it to that tab; the app owns
- * AI Distill and stops on Prepare.
+ * AI-backed job analysis and stops on Prepare.
  */
 export async function importPosting(apiBase, pageData, claimToken) {
   let response;

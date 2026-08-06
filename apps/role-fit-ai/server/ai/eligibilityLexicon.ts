@@ -1,9 +1,9 @@
-// Work-authorization lexicon used only to ground the AI distiller's workAuth
+// Work-authorization lexicon used only to ground the AI job analyzer's workAuth
 // field against source job text. Fit scoring and eligibility verdicts belong to
 // AI Review; there is no local blocker or seniority-bucket judge here.
 
-// Work-auth stems the distiller may keep in a grounded workAuth field. Consumed
-// by groundedWorkAuth (distill.ts): the model's value must name one of these AND
+// Work-auth stems the analyzer may keep in a grounded workAuth field. Consumed
+// by groundedWorkAuth (jobAnalysis.ts): the model's value must name one of these AND
 // the same stem must appear in the source posting, else the field is dropped as
 // invented.
 export const AUTH_STEMS = [

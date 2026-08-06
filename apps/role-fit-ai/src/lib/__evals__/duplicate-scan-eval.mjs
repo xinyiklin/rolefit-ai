@@ -136,7 +136,7 @@ for (const [name, patch] of [
   ["location", { location: "Austin, TX" }],
   ["jobDescription", { jobDescription: `${JD_BODY} Additional duties apply.` }],
   // Must differ from jobDescription: the key (like the matcher) reads raw text
-  // in preference to the distilled brief, so identical raw text is correctly
+  // in preference to the prepared brief, so identical raw text is correctly
   // not a change at all.
   ["rawJobDescription", { rawJobDescription: `${JD_BODY} Posted directly by the hiring team.` }],
   ["sourceUrls", { sourceUrls: [{ url: "https://jobs.example.com/x", addedAt: "2026-01-05T00:00:00.000Z" }] }],
@@ -152,19 +152,19 @@ for (const [name, patch] of [
   const whitespaceRaw = app({ id: "key-whitespace", rawJobDescription: " \n\t " });
   const withoutRaw = { ...whitespaceRaw, rawJobDescription: undefined };
   check(
-    "whitespace-only raw text selects the distilled description",
+    "whitespace-only raw text selects the prepared description",
     duplicateScanIdentity([whitespaceRaw]),
     duplicateScanIdentity([withoutRaw])
   );
   check(
-    "distilled edits invalidate when raw text is whitespace-only",
+    "prepared-description edits invalidate when raw text is whitespace-only",
     duplicateScanIdentity([{ ...whitespaceRaw, jobDescription: OTHER_BODY }]) !==
       duplicateScanIdentity([whitespaceRaw]),
     true
   );
   const preferredRaw = app({ id: "key-raw", rawJobDescription: JD_BODY });
   check(
-    "distilled edits do not invalidate when nonempty raw text owns matching",
+    "prepared-description edits do not invalidate when nonempty raw text owns matching",
     duplicateScanIdentity([{ ...preferredRaw, jobDescription: OTHER_BODY }]),
     duplicateScanIdentity([preferredRaw])
   );

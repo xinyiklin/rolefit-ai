@@ -225,8 +225,8 @@ owns:
   validated board slug in their HTML, LinkedIn visible job body + criteria
   rows when present, otherwise a generic HTML→text scrape — behind SSRF
   guards that re-validate the host and resolved IP on every redirect hop
-  and reject private / loopback / link-local targets. Distilling calls
-  `/api/distill` (below); the deterministic `src/lib/jobExtract.ts` engine
+  and reject private / loopback / link-local targets. Job-analysis calls use
+  `/api/job-analysis` (below); the deterministic `src/lib/jobExtract.ts` engine
   supplies the local parsing baseline and the inspectable failure brief. RoleFit then splits the result
   into compact model-facing tailoring text and tracking-only facts (role
   summary, company, location, job type, work-auth note, compensation). The
@@ -240,8 +240,8 @@ owns:
   immutable captured posting separately; reopening reconstructs the same
   editable/model-facing projections. The link itself is kept only for pipeline
   tracking and is never sent to the AI.
-- AI job distiller (`/api/distill`, `server/ai/distill.ts`): sends the
-  raw (tag-stripped) posting text to the Distill-stage provider and returns
+- AI job analysis (`/api/job-analysis`, `server/ai/jobAnalysis.ts`): sends the
+  raw (tag-stripped) posting text to the Job analysis provider and returns
   the SAME structured fields the deterministic engine emits, resolved
   semantically so novel ATS layouts, inline-prose duties, and unusual
   headings parse where the regex heading tables can't. Server-side grounding
@@ -252,7 +252,7 @@ owns:
   ground them. This reduces unsupported output but does not replace human
   review. The source URL is never sent to the model
   (it can carry private ATS tokens, so only the posting text is forwarded).
-  The client (`src/lib/aiDistill.ts`) always calls the configured Distill
+  The client (`src/lib/aiJobAnalysis.ts`) always calls the configured Job analysis
   provider. When the request fails, a deterministic brief may
   remain available for inspection, but the stage stays failed and cannot
   start resume Polish. The
@@ -262,6 +262,9 @@ owns:
   success response echoes the RESOLVED `provider` / `model` / `reasoningEffort`
   (never `apiKey`) plus `attempts` (dispatch count, ≥1) so the
   client can record which model produced the brief.
+  For one preview release, `/api/distill` remains a server-only alias to this
+  handler so an already-open previous-preview browser bundle survives a local
+  server restart. Current clients call only `/api/job-analysis`.
 - browser-extension API (`/api/extension/*`, helpers in
   `server/extension/index.ts`): `status` (GET) is the content-free same-port
   service marker. For a syntactically valid extension Origin it returns the
@@ -295,17 +298,17 @@ owns:
   it makes no AI call, because the server cannot read the receiving tab's
   provider settings. The background pass survives the popup closing on focus
   loss, and a burst of imports is serialized to one in-flight resolve. `inbox`
-  (GET) reports `{status:"distilling"}` while preparation runs, then hands only
+  (GET) reports `{status:"preparing"}` while preparation runs, then hands only
   `{text, url}` to the claiming app tab once before clearing it. The tab always
-  runs provider-backed AI Distill with its selected provider; if that request
+  runs provider-backed job analysis with its selected provider; if that request
   fails, the deterministic brief may remain visible for inspection while the
   stage stays failed. Extension imports include a short
   `claimToken` and open a fresh app tab with that token and its own `tabId`, so
   a new posting starts a new independent preparation session instead of
   replacing an existing tab's job. The first progress or delivered-posting
   callback selects Prepare before updating intake state, and extension intake
-  stops there after Distill and the duplicate gates. `extensionImport`,
-  `claimToken`, `tabId`, and the `"distilling"` progress token remain stable;
+  stops there after Job analysis and the duplicate gates. `extensionImport`,
+  `claimToken`, `tabId`, and the `"preparing"` progress token remain stable;
   the retired `autoTailor`, `distillAi`, and pre-extracted `fields` values are
   ignored and never cross the inbox handoff. Ordinary Prepare may still rank
   strict saved variants and select a clear winner, but that is source selection,
@@ -390,7 +393,7 @@ modules under `server/ai/` so no single file carries the whole pipeline:
   repaired into a different judgment. Suggestion and rewrite evidence still
   passes the existing anti-fabrication sanitizers before reaching the editor.
 - `eligibilityLexicon.ts` — work-authorization and credential stems used only
-  to ground facts extracted by the job distiller. Eligibility judgment belongs
+  to ground facts extracted by the job analyzer. Eligibility judgment belongs
   to AI Review; this module does not gate, score, or select a verdict.
 - Candidate facts reach the model only through `honestContext`. The client's
   `buildCandidateFactsContext` (`src/lib/candidateFacts.ts`) prepends declared
@@ -438,7 +441,7 @@ modules under `server/ai/` so no single file carries the whole pipeline:
 
 The provider is chosen per request from the companion-managed configured
 registry. Settings > AI stages holds a separate config per stage and shows only
-providers the user explicitly added: `/api/distill` receives the Distill config,
+providers the user explicitly added: `/api/job-analysis` receives the Job analysis config,
 `/api/polish` receives the Tailor config as `provider` / `model` /
 `reasoningEffort`, the strict-review pass receives the Review config as `audit*`
 fields, `/api/cover-letter` receives the Cover config, and
@@ -446,6 +449,13 @@ fields, `/api/cover-letter` receives the Cover config, and
 the Tailor config before they became separately configurable; an install that
 predates the split migrates them from Tailor on load, so its behavior does not
 change across the upgrade.
+
+Settings and workspace-backup loads migrate `distillProvider`,
+`distillSelectedModel`, `distillCliReasoningEffort`, and
+`stageCustomInstructions.distill` before strict normalization. A canonical Job
+analysis value wins if both generations are present. Historical tracker
+`aiUsage.distill` is read and displayed as Job analysis, while every new or
+subsequent tracker write emits only `aiUsage["job-analysis"]`.
 
 `customInstructions` is resolved PER STAGE in the browser before the request is
 sent: a stage with its own non-blank override sends that text, otherwise it sends
@@ -567,10 +577,10 @@ These are prompt-quality inputs, not permission to fabricate. The shared
 truthfulness, source-attribution, grounding, and sanitization rules remain
 authoritative.
 
-The only deterministic non-AI alternative is the job distiller
+The only deterministic non-AI alternative is the job analyzer
 (`src/lib/jobExtract.ts`). It is a successful path only when the user has AI
-Distill turned off. If a requested AI Distill call fails, the local brief may be
-retained for inspection but the selected stage remains failed. Tailor, Review,
+disabled for Job analysis. If an AI-backed Job analysis request fails, the
+local brief may be retained for inspection but the selected stage remains failed. Tailor, Review,
 cover-letter tailoring, and application-answer failures have no local
 substitutes. No
 locally generated draft, score, review, or verdict stands in.
@@ -583,7 +593,7 @@ Keep the import pipeline split by responsibility:
   Greenhouse, LinkedIn, or generic HTML extraction. `server/network.ts` performs
   each public fetch, enforces timeouts, and applies SSRF checks on the original
   URL and every redirect hop.
-- `src/lib/jobExtract.ts` is the dependency-free distiller. It should keep
+- `src/lib/jobExtract.ts` is the dependency-free analyzer. It should keep
   résumé-tailoring content (role intro, seniority/employment metadata,
   responsibilities, requirements, preferred qualifications) in a compact
   structured prompt payload and remove scrape artifacts or non-tailoring page
@@ -598,7 +608,7 @@ Keep the import pipeline split by responsibility:
   Prepare's editable human-review brief, but it must not put that material back
   into the model-facing tailoring text.
 
-Distilling should stay conservative: do not cut trailing boilerplate until
+Job analysis should stay conservative: do not cut trailing boilerplate until
 meaningful role content has already been seen, and keep uncertain text
 rather than risking removal of real requirements. If role title, company,
 role summary, location, compensation, or the job description itself cannot

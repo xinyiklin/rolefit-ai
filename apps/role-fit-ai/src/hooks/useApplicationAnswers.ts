@@ -54,8 +54,8 @@ export function useApplicationAnswers({
   const [answersResult, setAnswersResult] = useState<ApplicationAnswersResult>(null);
   const [answersStatus, setAnswersStatus] = useState("");
   const [isGeneratingAnswers, setIsGeneratingAnswers] = useState(false);
-  // Dock card mirroring the polish/distill progress cards. Unlike the cover
-  // letter and distill flows, there is NO local fallback for answers — a
+  // Dock card mirroring the polish/job-analysis progress cards. Unlike the cover
+  // letter and job-analysis flows, there is NO local fallback for answers — a
   // failed generation stays "failed" (with Retry) rather than being
   // re-presented as a done-with-warning card.
   const [answersProgress, setAnswersProgress] = useState<StageState>({ status: "idle" });

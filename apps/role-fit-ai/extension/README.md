@@ -23,7 +23,8 @@ registered for this install — reload the extension (Firefox reads
 files every time you open them, so an add-on loaded before this change shows
 the new UI with no shortcuts).
 Both paths do exactly the same thing: import the posting and stop on Prepare
-after AI Distill. Neither one tailors or polishes anything automatically.
+after AI-backed job analysis. Neither one tailors or polishes anything
+automatically.
 
 It sends requests **only** to your local RoleFit AI server at the validated
 `http://localhost:<port>` origin stored in one versioned
@@ -44,7 +45,7 @@ POST to confirm an existing approval or request a short-lived one. Approve that
 exact origin once in the companion before analysis or import becomes available.
 For preparation handoffs, the server resolves the
 captured posting text; the receiving RoleFit tab then always runs its selected
-provider-backed AI Distill. Start the app
+provider-backed job analysis. Start the app
 (`npm run dev:rolefit` from the repository root) before using it.
 
 ## Install (unpacked)
@@ -127,8 +128,8 @@ the keyboard command is an ES module.
    survives popup focus loss. The app polls
    `GET /api/extension/inbox?tabId=...&claimToken=...`; progress is reported
    while that resolve runs, and the delivered inbox payload contains only
-   `{text, url}`. The receiving tab always runs provider-backed AI Distill and
-   loads the brief into that tab's Prepare page. If AI Distill fails, a
+   `{text, url}`. The receiving tab always runs provider-backed job analysis and
+   loads the brief into that tab's Prepare page. If the analysis fails, a
    deterministic brief may remain available for inspection, but the stage is
    failed and Tailor/Review do not start automatically.
 4. The `Ctrl+Shift+U` / `⌘⇧U` command runs steps 1 and 3 with no popup open,
@@ -138,7 +139,7 @@ the keyboard command is an ES module.
    short explanation the popup shows and clears the next time you open it.
 5. The popup has no extension AI/deterministic or automatic-tailor toggles.
    Neither entry point has one. The handoff stops on Prepare after the
-   duplicate gates and AI Distill stage.
+   duplicate gates and the Job analysis stage.
    The claim token keeps the new posting out of older visible tabs, and the
    extension preserves the source tab's Firefox container when the browser
    accepts that option, with a normal fresh-tab fallback elsewhere.
@@ -149,7 +150,7 @@ no-strand fallback if the new tab never opens or closes before draining the
 import inbox entry.
 
 Duplicate detection is a workflow gate, not a score. A warning found before or
-after Distill asks the user to continue the current pipeline or stop; stopping
+after Job analysis asks the user to continue the current pipeline or stop; stopping
 prevents all later selected AI stages.
 
 The extension does not read the workspace base resume or calculate a local fit

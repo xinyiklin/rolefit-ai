@@ -205,7 +205,7 @@ const STOP_WORDS = new Set([
   "team",
   "teams",
   "within",
-  // The stored/scored job text is this app's OWN jobExtract distiller output
+  // The stored/scored job text is this app's OWN jobExtract analysis output
   // (src/lib/jobExtract.ts), not raw prose: 66/67 saved JDs literally contain the
   // section headers "Tech Stack / Keywords:", "Seniority Signals:", "Domain
   // Signals:", and "Company / Product Context:". Those scaffold tokens are NOT
@@ -217,7 +217,7 @@ const STOP_WORDS = new Set([
   "context",
   "domain",
   "keywords",
-  // "product" is part of the distiller's "Company / Product Context:" scaffold label
+  // "product" is part of the analyzer's "Company / Product Context:" scaffold label
   // emitted on essentially every JD, so leaving it un-stopworded makes it a SYSTEMATIC
   // phantom missing-keyword hint on every resume lacking the word. That systematic
   // noise outweighs losing it as a (weak, generic) keyword on the
