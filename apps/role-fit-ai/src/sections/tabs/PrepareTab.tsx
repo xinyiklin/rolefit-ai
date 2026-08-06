@@ -243,10 +243,12 @@ export function PrepareTab({
       ? "Selecting best match…"
       : isPolishing
         ? polishProgress.review.status === "running"
-          ? "Reviewing…"
+          ? "Auditing…"
           : "Tailoring…"
         : reviewDone
-          ? "Tailored · reviewed"
+          ? tailorDone
+            ? "Tailored · audited"
+            : "Audited"
           : tailorDone
             ? "Tailored"
             : resumeReady
@@ -259,7 +261,7 @@ export function PrepareTab({
     isRankingCoverLetterVariants || isSelectingCoverLetter
       ? "Selecting best match…"
       : isTailoringCoverLetter
-        ? "Tailoring…"
+        ? "Polishing…"
         : coverLetterReady
           ? "Ready"
           : coverLetterPlaceholderCount > 0
@@ -290,15 +292,15 @@ export function PrepareTab({
           ? distillProviderMessage
           : "";
   const tailorHint = !jobPrepared
-    ? "Prepare the job posting first."
+    ? "Prepare the job first."
     : !resumeReady
-      ? "Add a resume before tailoring."
+      ? "Add your resume first."
       : isSelectingResume || isRankingResumeVariants
         ? "Wait for the resume variant selection to finish."
         : isPolishing
-          ? "Wait for the current tailoring run to finish."
+          ? "Wait for the current polish to finish."
           : !canTailor
-            ? polishStatus || "Finish the resume and AI setup before tailoring."
+            ? polishStatus || "Finish the resume and AI setup before polishing."
             : "";
   const canStartTailor = canTailor && !isPolishing && jobPrepared;
   const resumeWorkflowNeedsAttention =
@@ -314,8 +316,8 @@ export function PrepareTab({
       : "";
   const coverNote = !canTailorCoverLetter && coverLetterTailorHint
     ? coverLetterTailorHint
-    : coverLetterStatus === "Inputs changed. Tailor the letter again for this context."
-      ? "Inputs changed · tailor again."
+    : coverLetterStatus === "Inputs changed. Polish the letter again for this context."
+      ? "Inputs changed · polish again."
       : coverLetterStatus;
   const sourceValue = APPLICATION_SOURCES.includes(tracking.source as (typeof APPLICATION_SOURCES)[number])
     ? (tracking.source ?? "")
@@ -717,11 +719,11 @@ export function PrepareTab({
                         ))}
                       </ul>
                     ) : reviewGapsProvenance === "current" ? (
-                      <p>No candidate gaps identified by the current Review.</p>
+                      <p>No candidate gaps identified by the current recruiter audit.</p>
                     ) : reviewGapsProvenance === "saved" ? (
                       <p>None recorded in the saved Apply review.</p>
                     ) : (
-                      <p>Run resume Review to compare your evidence with the job.</p>
+                      <p>Run Recruiter audit to compare your evidence with the job.</p>
                     )}
                   </div>
                 </div>
@@ -770,10 +772,10 @@ export function PrepareTab({
                     aria-describedby={!canStartTailor && tailorHint ? "prepare-resume-note" : undefined}
                   >
                     {isPolishing ? <LoaderCircle className="spin" size={13} aria-hidden="true" /> : null}
-                    Tailor
+                    {isPolishing ? "Polishing…" : "Polish"}
                   </button>
                   <button className="ghost-button is-compact" type="button" onClick={onReviewResume}>
-                    {tailorDone || reviewDone ? "Review" : "Open"}
+                    Open
                     <ArrowRight size={12} aria-hidden="true" />
                   </button>
                 </>
@@ -820,7 +822,7 @@ export function PrepareTab({
                     aria-describedby={!canTailorCoverLetter && coverLetterTailorHint ? "prepare-cover-note" : undefined}
                   >
                     {isTailoringCoverLetter ? <LoaderCircle className="spin" size={13} aria-hidden="true" /> : null}
-                    {isTailoringCoverLetter ? "Tailoring…" : "Tailor"}
+                    {isTailoringCoverLetter ? "Polishing…" : "Polish"}
                   </button>
                   <button className="ghost-button is-compact" type="button" onClick={onOpenCoverLetter}>
                     Open

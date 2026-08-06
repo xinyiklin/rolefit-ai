@@ -37,19 +37,24 @@ as deliberate fallbacks. Its complete editable brief exposes tracked job facts,
 one role context, responsibilities, required and preferred qualifications,
 technical keywords, seniority and domain signals, benefits, and extraction or
 candidate-review gaps. Resume proposals remain constrained by server-side
-grounding and anti-fabrication checks, with a recruiter-style review for fit
-scoring and gap analysis. Candidate gaps restored from a saved Apply record are
-labeled historical until Review runs against the current materials.
+grounding and anti-fabrication checks, with a recruiter audit for fit scoring
+and gap analysis. Candidate gaps restored from a saved Apply record are labeled
+historical until an audit runs against the current materials.
 
-The cover letter is **one Tailor click**. RoleFit resolves the date, candidate
+The cover letter is **one Polish click**. RoleFit resolves the date, candidate
 name, role, company, greeting, and sign-off itself, sends the whole candidate
 evidence corpus with the source letter, and lets the model choose which
 experiences and honest-context notes this particular posting warrants. Bracketed
 text in a base variant is a drafting instruction, never candidate evidence.
 Grounding, placeholder rejection, and a single silent repair pass all run on the
-server; a valid letter goes straight into the editor with an exact one-click
-Restore of the document it replaced, and a letter that still fails after repair
-is discarded with the current one kept.
+server. A valid result becomes a whole-letter proposal beside the unchanged
+editor; only **Accept proposal** replaces the live document and creates the exact
+one-click Restore baseline. **Discard proposal** performs no document mutation. A
+letter that still fails after repair is discarded with the current one kept,
+and bounded typed validation issues identify the rejected claim and recovery
+without exposing provider output, repair instructions, or internal evidence ids.
+An unfinished Guidance prompt never counts as evidence, and spelled-out
+durations receive the same grounding check as digit forms.
 
 The letter asks a question only when a fact genuinely cannot be resolved — a
 missing company, role title, or candidate name, or a template that names a
@@ -157,16 +162,21 @@ disappears into the task. Quiet competence, not salesmanship.
    state, and its popover opens rightward within the viewport. The rail starts
    with a PREPARE group containing Prepare, followed by DRAFT and TRACK groups.
    Prepare is the first/default and sole job-intake surface; tabbed
-   workspaces continue with Resume and its consistent Open/Save/Polish
-   document action bar and a post-polish review rail, Cover letter with the
-   matching document action bar, its plain editor and a compact rail that
-   reports readiness before Tailor and provenance after it. Those document
-   rails share one collapsible shell and remember their disclosure separately;
-   their Resume-review and Cover-tailoring workflows remain independent. The
-   remaining workspaces are Materials, the Applications tracker, and Analytics.
-   The engine-painted page remains the
-   sole editor, the review rail
-   navigates back to exact fields, and the editor itself remains the live
+   workspaces continue with Resume and its consistent Open/Save document chrome,
+   Cover letter with the matching document chrome, and one always-present
+   workflow-rail hierarchy for both documents. Each document's primary **Polish**
+   action sits beside that rail's disclosure control — in the rail header while
+   it is open, and on the document's edge while it is collapsed.
+   Polish is the one name for starting a run, in either document and on the
+   Prepare cards that launch the same runs; Tailor and Audit survive only as the
+   names of the resume pipeline's own stages. Resume's Polish runs the workflow
+   remembered in Settings — Tailor, Recruiter audit, or both — from either the
+   document or Prepare; there is no second menu in the document header. Cover letter
+   stages a whole-document proposal for explicit acceptance. The document rails
+   remember their disclosure separately while their orchestration remains
+   document-specific. The remaining workspaces are Materials, the Applications
+   tracker, and Analytics. The engine-painted page remains the sole editor; the
+   resume proposal review navigates back to exact fields, and the editor itself remains the live
    preview. Saved-application PDF preview is a tracker detail, not a second live
    editing/compile surface. Changes refine this workflow, never reshape it.
 3. Density with calm: restrained contrast, compact spacing, short labels,
@@ -176,7 +186,7 @@ disappears into the task. Quiet competence, not salesmanship.
 5. Restraint over systems: no global toast/banner/loading frameworks; reuse
    the per-surface CSS classes in `src/styles/`, shared editor primitives from
    `@typeset/editor`, and each owner's tokens rather than forking controls.
-6. Make workflow state truthful: Distill, Tailor, and Review show their exact
+6. Make workflow state truthful: Distill, Tailor, and Recruiter audit show their exact
    ordered step, stop after failure/user cancellation, identify the cause, and
    never present a deterministic brief as a successful AI run.
 7. Preserve product boundaries: RoleFit owns job/AI/tracker orchestration and
@@ -201,11 +211,11 @@ disappears into the task. Quiet competence, not salesmanship.
     each have an Include toggle; only included material must be ready, and both
     may be excluded. Resume defaults on and Cover Letter defaults off. A later
     re-Apply must preserve any previously saved artifact for an excluded slot.
-    Prepare may summarize a current matching AI Review or a matching historical
-    saved review; before either exists it says "Not reviewed" and never
+    Prepare may summarize a current matching Recruiter audit or a matching
+    historical saved audit; before either exists it says "Not audited" and never
     substitutes a local fit estimate.
 11. Preserve safe extension intake: a claimed extension posting always runs AI
-    Distill and stops on Prepare; it never auto-launches Tailor or Review. A
+    Distill and stops on Prepare; it never starts resume Polish. A
     failed AI Distill may leave the deterministic brief visible for inspection,
     but it remains failed. The ordinary Prepare workflow may rank actual saved
     resume and cover-letter contents against the prepared job and auto-select a

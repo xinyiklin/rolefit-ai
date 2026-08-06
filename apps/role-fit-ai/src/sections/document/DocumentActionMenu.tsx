@@ -19,6 +19,7 @@ type DocumentActionMenuProps = {
   disabled?: boolean;
   tone?: ToolbarButtonTone;
   align?: PopoverAlign;
+  showLabel?: boolean;
 };
 
 // Shared action-bar disclosure for RoleFit-owned file workflows. Resume and
@@ -32,7 +33,8 @@ export function DocumentActionMenu({
   children,
   disabled = false,
   tone = "default",
-  align = "end"
+  align = "end",
+  showLabel = true
 }: DocumentActionMenuProps) {
   return (
     <Popover
@@ -46,7 +48,7 @@ export function DocumentActionMenu({
           label={label}
           tooltip={tooltip}
           icon={icon}
-          showLabel
+          showLabel={showLabel}
           tone={tone}
           className={open ? "is-active" : ""}
           disabled={disabled}

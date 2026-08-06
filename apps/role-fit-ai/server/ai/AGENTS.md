@@ -27,10 +27,24 @@ sanitizer code is executable product behavior and anti-fabrication-critical.
   prompt-enforced count. The server sends the whole corpus, verifies the ids
   that come back, and reports provenance. Do not reintroduce a preparation plan,
   a use/skip classification pass, or a selected-evidence request field.
-- Validation collects repairable violations and runs exactly one silent repair
-  request carrying them plus the rejected output. A second failure fails closed
-  and keeps the candidate's existing letter. Never route a model-authored slip
-  into a candidate-facing planning step.
+- Validation collects typed issues with separate internal repair instructions
+  and runs exactly one silent repair request carrying those instructions plus
+  the rejected output. A second failure fails closed, returns at most eight
+  deterministic user-safe issue records (`code`, `category`, `detail`,
+  `recovery`, and optional bounded claim/value fields), and keeps the
+  candidate's existing letter; never return the repair instruction, internal
+  evidence ids, or rejected provider output. Proposal acceptance remains a
+  client-side boundary, not another server stage. Never route a model-authored
+  slip into a candidate-facing planning step.
+- Unfinished Guidance prompts are not evidence. Filter unresolved bracketed
+  context in the browser corpus builder and independently at the server request
+  boundary. Numeric grounding normalizes equivalent digit and word durations
+  (for example, `3 years` and `three years`) while still rejecting a duration
+  absent from candidate evidence.
+- A pure employer fact may stay outside the candidate-claim surface, but an
+  employer-led sentence that compares the employer with candidate experience or
+  implies a candidate background remains inside every grounding gate. Grammatical
+  subject alone is not an evidence exemption.
 - Bracketed slot text is a drafting instruction, never candidate evidence and
   never voice. Only a slot naming a private fact (a referral, a prior personal
   relationship) may ask the candidate; every other slot is generative, and the

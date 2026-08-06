@@ -23,8 +23,11 @@ Applies to `apps/role-fit-ai/src/lib/`.
   keep `canTailor` limited to facts nothing can resolve.
 - `coverLetterEvidence.ts` owns atomic resume/context/answer extraction, stable
   content-derived ids, and the tailoring result shape. It offers the whole
-  corpus and ranks nothing — selection is the model's job. It stays
-  deterministic and browser/server safe.
+  corpus and ranks nothing — selection is the model's job. Unresolved Guidance
+  prompts are filtered rather than promoted as facts. It stays deterministic
+  and browser/server safe. `coverLetterFailure.ts` owns the display-safe typed
+  `422 blocked` parser and validates each fixed code/category/recovery shape at
+  the loopback boundary before any issue reaches browser chrome.
 - `applicationMutation.ts` owns sparse tracker request selection and
   reference-preserving own-write response reconciliation. It does not own
   persistence, queueing, conflicts, or React state.

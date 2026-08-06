@@ -6,7 +6,7 @@ import type { TailorMode } from "../../lib/tailorScope";
 import type { ResumeEditorActions } from "../../hooks/useResumeEditor";
 import type { TailorChangeTarget } from "../../resume/types";
 import type { DocStyleControls } from "@typeset/editor/hooks/useDocStyle.ts";
-import { nextZoomOption } from "@typeset/engine/lib/documentStyle.ts";
+import { DOC_PAGE_WIDTH_PX, nextZoomOption } from "@typeset/engine/lib/documentStyle.ts";
 import { DocumentToolbar } from "@typeset/editor/components/toolbar/DocumentToolbar.tsx";
 import {
   TypesetEditor,
@@ -16,6 +16,7 @@ import {
   type TypesetEditorOverlayContext
 } from "@typeset/editor/sections/editor/TypesetEditor.tsx";
 import type { JobConstraint } from "../../lib/jobConstraints";
+import type { PolishProgressState } from "../../lib/aiWorkflow";
 import type { AutosavedDraft } from "../../hooks/useAutosaveDraft";
 import type { DraftAutosaveState } from "../../hooks/useAutosaveDraft";
 import { fieldKeyForReviewTarget } from "../../lib/reviewTarget.ts";
@@ -26,7 +27,7 @@ import {
   DocumentWorkbenchEditorPane
 } from "../document/DocumentWorkbench";
 import { RoleFitEditorOverlay } from "../editor/RoleFitEditorOverlay.tsx";
-import { ReviewRail } from "../ReviewRail";
+import { ResumeWorkflowRail } from "../resume/ResumeWorkflowRail";
 import { ViewportGate } from "../ViewportGate";
 
 type ResumeTabProps = {
@@ -69,6 +70,19 @@ type ResumeTabProps = {
   // True when the JD changed since the last polish — the review describes an
   // old posting and should be flagged as stale.
   reviewStale?: boolean;
+  resumeReady: boolean;
+  jobReady: boolean;
+  tailorProviderReady: boolean;
+  auditProviderReady: boolean;
+  polishStages: "tailor" | "review" | "both";
+  isPolishing: boolean;
+  polishProgress: PolishProgressState;
+  polishStatus?: string;
+  onPolish: () => void;
+  onRetryTailor: () => void;
+  onRetryAudit: () => void;
+  onStopPolish: () => void;
+  onProposalChange: () => void;
 };
 
 // The resume surface is edit-and-check: the owned typeset page is the editor
@@ -107,7 +121,20 @@ export function ResumeTab({
   pendingAutosaveDraft,
   onRestoreAutosaveDraft,
   onDismissAutosaveDraft,
-  reviewStale
+  reviewStale,
+  resumeReady,
+  jobReady,
+  tailorProviderReady,
+  auditProviderReady,
+  polishStages,
+  isPolishing,
+  polishProgress,
+  polishStatus,
+  onPolish,
+  onRetryTailor,
+  onRetryAudit,
+  onStopPolish,
+  onProposalChange
 }: ResumeTabProps) {
   const { editorScrollerRef, layoutScrollerRef } = useRestoredScroll(
     initialScrollTop,
@@ -154,8 +181,30 @@ export function ResumeTab({
     [actions, highlightTarget, onSetTailorMode, tailorModes]
   );
 
-  const hasReview = Boolean(result?.strictReview || result?.suggestedChanges?.length);
+  const selectedSectionCount = Object.values(tailorModes).filter((mode) => mode !== "off").length;
+  const tailorSectionCount = Object.values(tailorModes).filter((mode) => mode === "tailor").length;
+  const needsTailor = polishStages !== "review";
+  const needsAudit = polishStages !== "tailor";
+  const canPolish =
+    resumeReady &&
+    jobReady &&
+    (!needsTailor || tailorProviderReady) &&
+    (!needsAudit || auditProviderReady) &&
+    tailorSectionCount > 0;
   const documentContext = [jobTarget?.role, jobTarget?.company].filter(Boolean).join(" at ");
+  // The rail's one primary action, handed to the shell so it sits beside the
+  // disclosure control whether the rail is open or closed.
+  const polishAction = (
+    <button
+      type="button"
+      className="primary-button is-compact"
+      disabled={!canPolish || isPolishing}
+      aria-busy={isPolishing}
+      onClick={onPolish}
+    >
+      {isPolishing ? "Polishing…" : result ? "Polish again" : "Polish"}
+    </button>
+  );
   return (
     <section className="studio-card studio-card--flush">
       <header
@@ -187,6 +236,7 @@ export function ResumeTab({
       </header>
 
       <DocumentWorkbench
+        pageWidthPx={DOC_PAGE_WIDTH_PX * docStyle.style.zoom}
         layoutRef={layoutScrollerRef}
         notice={pendingAutosaveDraft && onRestoreAutosaveDraft && onDismissAutosaveDraft ? (
           <DraftRestoreBar
@@ -199,20 +249,36 @@ export function ResumeTab({
         ) : null}
         rail={{
           id: "resume-review",
-          label: "Review",
+          label: "Workflow",
           preferenceKey: "resume-review",
-          content: hasReview && result ? (
-            <ReviewRail
+          action: polishAction,
+          content: (
+            <ResumeWorkflowRail
               result={result}
               resume={editedResume}
               actions={actions}
               resumeDiff={resumeDiff}
               jobConstraints={jobConstraints}
               reviewStale={reviewStale}
+              jobTarget={jobTarget}
+              resumeReady={resumeReady}
+              jobReady={jobReady}
+              tailorProviderReady={tailorProviderReady}
+              auditProviderReady={auditProviderReady}
+              polishStages={polishStages}
+              selectedSectionCount={selectedSectionCount}
+              tailorSectionCount={tailorSectionCount}
+              isPolishing={isPolishing}
+              progress={polishProgress}
+              status={polishStatus}
+              onRetryTailor={onRetryTailor}
+              onRetryAudit={onRetryAudit}
+              onStop={onStopPolish}
               onHighlight={setHighlightTarget}
+              onProposalChange={onProposalChange}
               onAddHonestContext={onAddHonestContext}
             />
-          ) : null
+          )
         }}
       >
         <DocumentWorkbenchEditorPane

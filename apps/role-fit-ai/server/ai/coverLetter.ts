@@ -1,8 +1,9 @@
 // Cover-letter AI is one request. The model sees the whole evidence corpus and
 // decides what to use; the server resolves correspondence deterministically,
-// validates the result, and repairs once in silence before giving up. Nothing
-// here pauses for candidate approval. The legacy grounded reviser below still
-// serves the older optional /api/polish cover leg, which the browser never uses.
+// validates the result, and repairs once in silence before giving up. The
+// server has no approval stage; the browser stages a valid response as a
+// proposal. The legacy grounded reviser below still serves the older optional
+// /api/polish cover leg, which the browser never uses.
 
 import type { IncomingMessage, ServerResponse } from "node:http";
 import {
@@ -47,6 +48,11 @@ import {
   analyzeCoverLetterTemplate,
   type CoverLetterSourceContext
 } from "../../src/lib/coverLetterTemplate.ts";
+import {
+  CoverLetterBlockedError,
+  repairMessagesForCoverLetterIssues
+} from "./coverLetterIssues.ts";
+import { coverLetterGroundingIssues } from "./coverLetterGroundingIssues.ts";
 
 // Optional dispatch-attempt collector (same additive pattern as the sanitizer's
 // drop-stats): callConfiguredProvider bumps `attempts` once per dispatch attempt.
@@ -55,47 +61,6 @@ type AttemptStats = { attempts?: number };
 // A public employer fact plus where it came from. Populated by an app-owned
 // research step; absent employer context never blocks or delays tailoring.
 export type CoverLetterEmployerFact = { fact: string; source: string };
-
-function escapeRegex(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-// Employer/job statements may use facts from the posting, but they must not
-// widen the candidate-evidence corpus. Remove sentences whose grammatical
-// subject is clearly the resolved employer, team, role, or posting only when
-// they contain no candidate reference. Mixed employer/candidate sentences remain
-// visible to the JD-term candidate-claim gate.
-function candidateClaimSurface(text: string, resolved: ResolvedCoverLetterContext): string {
-  const company = resolved.company.trim();
-  const candidateName = resolved.candidateName.trim();
-  const employerSubject = company
-    ? new RegExp(
-        `^(?:${escapeRegex(company)}(?:['’]s)?(?=\\s|[,:;.!?]|$)|The company\\b|The team\\b|This role\\b|The posting\\b)`,
-        "i"
-      )
-    : /^(?:The company|The team|This role|The posting)\b/i;
-  const candidateReferences = [candidateName, candidateName.split(/\s+/)[0] ?? ""]
-    .filter((value, index, values) => value.length >= 2 && values.indexOf(value) === index)
-    .map(escapeRegex);
-  const candidateReference = new RegExp(
-    `\\b(?:I|me|my|mine|we|us|our|ours|candidate|applicant${
-      candidateReferences.length > 0 ? `|${candidateReferences.join("|")}` : ""
-    })\\b`,
-    "i"
-  );
-  // The server's supported Node runtime includes sentence segmentation. It
-  // preserves abbreviations in employer names such as "Acme, Inc."; a raw
-  // punctuation split would turn that valid employer-only fact into fragments.
-  const sentences = [
-    ...new Intl.Segmenter("en", { granularity: "sentence" }).segment(text)
-  ].flatMap(({ segment }) => segment.split(/[\r\n]+/));
-  return sentences
-    .filter((sentence) => {
-      const trimmed = sentence.trim();
-      return !employerSubject.test(trimmed) || candidateReference.test(trimmed);
-    })
-    .join(" ");
-}
 
 // The resolved provider config + grounding inputs the legacy reviser needs.
 type CoverLetterArgs = {
@@ -192,46 +157,6 @@ type TailorCoverLetterArgs = {
   signal?: AbortSignal;
 };
 
-// Candidate-claim grounding, expressed as repairable violations rather than a
-// single opaque rejection so the repair pass knows what to fix.
-function groundingViolations({
-  coverLetterText,
-  jobText,
-  grounding,
-  resolved
-}: {
-  coverLetterText: string;
-  jobText: string;
-  grounding: string;
-  resolved: ResolvedCoverLetterContext;
-}): string[] {
-  const claims = candidateClaimSurface(coverLetterText, resolved);
-  const violations: string[] = [];
-  const ungroundedTerm = findUngroundedJdTerm(
-    claims,
-    jobText.toLowerCase(),
-    grounding.toLowerCase(),
-    { proseMode: true }
-  );
-  if (ungroundedTerm) {
-    violations.push(
-      `The letter claims "${ungroundedTerm}" for the candidate, but no supplied evidence supports it. Remove the claim or ground it in real evidence.`
-    );
-  }
-  if (hasUngroundedNumericClaim(claims, grounding)) {
-    violations.push(
-      "The letter states a number, scale, or duration that no supplied evidence contains. Remove it or use a figure the evidence states."
-    );
-  }
-  const outcome = findUngroundedOutcomeClaim(claims, grounding, { candidateProse: true });
-  if (outcome) {
-    violations.push(
-      `The letter claims an outcome no evidence supports: "${outcome}". Describe only what the evidence records.`
-    );
-  }
-  return violations;
-}
-
 export async function tailorCoverLetter(
   {
     provider,
@@ -281,10 +206,10 @@ export async function tailorCoverLetter(
       sourceContext,
       resolved: resolvedContext
     });
-    const violations = [
-      ...validation.violations,
+    const issues = [
+      ...validation.issues,
       ...(validation.output
-        ? groundingViolations({
+        ? coverLetterGroundingIssues({
             coverLetterText: validation.coverLetterText,
             jobText,
             grounding,
@@ -292,22 +217,22 @@ export async function tailorCoverLetter(
           })
         : [])
     ];
-    return { parsed, validation, violations };
+    return { parsed, validation, issues };
   };
 
   let run = await attempt();
   let repaired = false;
-  if (run.violations.length > 0) {
+  if (run.issues.length > 0) {
     // One silent repair. A model that omits an id or reaches for a stock phrase
     // is a drafting slip, not a reason to hand the candidate a planning task.
     repaired = true;
-    run = await attempt({ violations: run.violations, rejectedOutput: run.parsed });
+    run = await attempt({
+      violations: repairMessagesForCoverLetterIssues(run.issues),
+      rejectedOutput: run.parsed
+    });
   }
-  if (!run.validation.output || run.violations.length > 0) {
-    throw new UserSafeAiError(
-      "The tailored letter did not pass RoleFit's evidence checks, so your current letter was kept. Try again, or add the missing detail to your resume or personal context.",
-      422
-    );
+  if (!run.validation.output || run.issues.length > 0) {
+    throw new CoverLetterBlockedError(run.issues, repaired);
   }
 
   const { output } = run.validation;
@@ -455,6 +380,16 @@ export async function handleCoverLetter(
     });
   } catch (error) {
     if (isRequestAborted(error, req, res)) return;
+    if (error instanceof CoverLetterBlockedError) {
+      sendJson(res, error.status, {
+        status: "blocked",
+        reason: "evidence_checks",
+        error: error.message,
+        issues: error.issues,
+        repairAttempted: error.repairAttempted
+      });
+      return;
+    }
     if (error instanceof UserSafeAiError) {
       sendJson(res, error.status, { error: error.message });
       return;

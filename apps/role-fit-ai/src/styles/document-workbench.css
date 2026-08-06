@@ -2,7 +2,21 @@
    children retain all feature logic; this shell owns only placement,
    disclosure, scrolling, and the docked rail surface. */
 .document-workbench {
-  --document-rail-width: clamp(320px, 27vw, 380px);
+  /* rem, not vw: the rail's own type is rem-based, so its width tracks what it
+     holds and follows the reader's font-size setting. A viewport-proportional
+     rail is the wrong shape here — the space it divides is
+     `viewport - sidebar - page`, which grows linearly rather than
+     proportionally, so vw bit hardest exactly where least was spare. The value
+     is set by the description's line measure (~37ch); the check rows reflow
+     identically well below this. */
+  /* The floor, and the fallback until the host writes the saved width. The rail
+     is adjustable from 18rem to 28rem; both bounds stay in rem so they follow
+     the reader's font size, which is why this width is not a viewport fraction. */
+  --document-rail-width: 18rem;
+  /* One token for both halves of the disclosure. The page holds still only
+     while the pane's start padding gains exactly what the rail's track loses,
+     so these two must never animate on different clocks. */
+  --document-rail-motion: 200ms cubic-bezier(0.32, 0.72, 0, 1);
 
   position: relative;
   flex: 1 1 0;
@@ -24,7 +38,7 @@
 
 .document-workbench__layout.has-rail {
   grid-template-columns: minmax(0, 1fr) var(--document-rail-width);
-  transition: grid-template-columns 200ms cubic-bezier(0.32, 0.72, 0, 1);
+  transition: grid-template-columns var(--document-rail-motion);
 }
 
 /* Collapsed gives every pixel back to the document; the edge tab is the only
@@ -41,6 +55,24 @@
   scrollbar-color: var(--hairline-strong) transparent;
   scrollbar-width: thin;
   container-type: inline-size;
+  /* Same clock as the rail's track. Without it the padding is a step change —
+     it lands at full width while the track is still open, throwing the page
+     sideways by the rail's width before it slides back. */
+  transition: padding-inline-start var(--document-rail-motion);
+}
+
+/* The rail's track is paid out of the desk margin before the page moves: this
+   bias lands the page where it sat with the rail shut, min() clamps it flush
+   against the end padding once the margin runs out, and max() falls back to
+   plain centring when the page is too wide to fit at all. */
+.document-workbench__layout.has-rail:not(.is-collapsed) .document-workbench__editor {
+  padding-inline-start: max(
+    var(--s5),
+    min(
+      calc(var(--s5) + var(--document-rail-width)),
+      calc(100% - var(--s5) - var(--document-page-width, 816px))
+    )
+  );
 }
 
 .document-workbench__editor::-webkit-scrollbar,
@@ -57,6 +89,7 @@
 /* The panel clips its own contents: they keep the full rail width while the
    track closes, so a collapsing rail slides out instead of reflowing. */
 .document-workbench__rail {
+  position: relative;
   display: flex;
   min-width: 0;
   min-height: 0;
@@ -72,6 +105,50 @@
   pointer-events: none;
 }
 
+/* The rail is resized from its own divider: a 7px target straddling the hairline
+   so the pointer does not have to find a 1px line. */
+.document-workbench__rail-resize {
+  position: absolute;
+  z-index: 1;
+  inset-block: 0;
+  inset-inline-start: -3px;
+  width: 7px;
+  cursor: col-resize;
+  /* Without this a touch drag scrolls the workspace instead of moving the rail. */
+  touch-action: none;
+}
+
+.document-workbench__rail-resize::after {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 3px;
+  width: 1px;
+  background: transparent;
+  content: "";
+  transition: background 120ms ease;
+}
+
+.document-workbench__rail-resize:hover::after,
+.document-workbench__rail-resize:focus-visible::after {
+  background: var(--accent);
+}
+
+.document-workbench__rail-resize:focus-visible {
+  outline: 3px solid var(--accent-glow);
+  outline-offset: -3px;
+}
+
+/* While dragging, the disclosure's clock would make the rail trail the cursor,
+   and a drag across the document would select its text. */
+.document-workbench[data-resizing] {
+  user-select: none;
+}
+
+.document-workbench[data-resizing] .document-workbench__layout.has-rail,
+.document-workbench[data-resizing] .document-workbench__editor {
+  transition: none;
+}
+
 /* Minus the divider: the rail's border-box fills the track, so contents sized to
    the full track width would push their right edge (and scrollbar) under the
    clip. */
@@ -81,14 +158,16 @@
   min-height: 44px;
   flex: 0 0 auto;
   align-items: center;
-  justify-content: space-between;
   gap: var(--s2);
-  padding: 0 var(--s2) 0 var(--s4);
+  padding: 0 var(--s3) 0 var(--s4);
   border-bottom: 1px solid var(--hairline);
 }
 
+/* The label takes the slack so the action and the disclosure stay paired at the
+   end, in the same order the collapsed dock keeps them. */
 .document-workbench__rail-label {
   overflow: hidden;
+  margin-inline-end: auto;
   color: var(--ink-soft);
   font-size: 0.68rem;
   font-weight: 600;
@@ -98,27 +177,37 @@
   white-space: nowrap;
 }
 
-.document-workbench__rail-toggle {
+/* The disclosure control is one shape in both states — open in the header, closed
+   on the document's edge — sized to the compact button it stands beside so the
+   pair never changes proportion when the rail does. */
+.document-workbench__rail-toggle,
+.document-workbench__rail-tab {
   display: inline-grid;
-  width: 36px;
-  height: 36px;
-  flex: 0 0 36px;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
   place-items: center;
-  border: 0;
+  border: 1px solid var(--hairline);
   border-radius: var(--r-md);
-  background: transparent;
+  padding: 0;
+  background: var(--card);
+  box-shadow: var(--shadow-rest);
   color: var(--ink-muted);
   cursor: pointer;
+  transition: background 120ms ease, color 120ms ease, box-shadow 120ms ease;
 }
 
-.document-workbench__rail-toggle:hover {
+.document-workbench__rail-toggle:hover,
+.document-workbench__rail-tab:hover {
   background: var(--card-hover);
+  box-shadow: var(--shadow-lift);
   color: var(--ink-strong);
 }
 
-.document-workbench__rail-toggle:focus-visible {
+.document-workbench__rail-toggle:focus-visible,
+.document-workbench__rail-tab:focus-visible {
   outline: 3px solid var(--accent-glow);
-  outline-offset: -3px;
+  outline-offset: 2px;
 }
 
 .document-workbench__rail-content {
@@ -131,41 +220,50 @@
   scrollbar-width: thin;
 }
 
-/* The collapsed rail's only remaining surface: the same panel icon, now a tab on
-   the document's right edge instead of a reserved gutter. Its accessible name
-   carries the panel it reopens. */
-.document-workbench__rail-tab {
+/* Collapsed, the action and the reopen tab stand side by side on the document's
+   edge in the order they held in the header. Placement only: no card wraps the
+   pair, so each control keeps its own chrome. */
+.document-workbench__rail-dock {
   position: absolute;
   z-index: 2;
   top: var(--s3);
-  right: 0;
+  right: var(--s3);
+  display: flex;
+  max-width: calc(100% - var(--s3) * 2);
+  align-items: center;
+  gap: var(--s2);
+}
+
+.document-workbench__rail-dock > * {
+  max-width: 100%;
+  white-space: nowrap;
+}
+
+/* Only the tab needs a positioning context, for its attention count. */
+.document-workbench__rail-tab {
+  position: relative;
+}
+
+.document-workbench__rail-attention {
+  position: absolute;
+  top: -8px;
+  inset-inline-end: 0;
   display: inline-grid;
-  width: 34px;
-  height: 32px;
+  min-width: 17px;
+  height: 17px;
   place-items: center;
-  border: 1px solid var(--hairline);
-  border-right: 0;
-  border-radius: var(--r-pill) 0 0 var(--r-pill);
-  background: var(--card);
-  box-shadow: var(--shadow-rest);
-  color: var(--ink-muted);
-  cursor: pointer;
-  transition: background 120ms ease, color 120ms ease, box-shadow 120ms ease;
-}
-
-.document-workbench__rail-tab:hover {
-  background: var(--card-hover);
-  box-shadow: var(--shadow-lift);
-  color: var(--ink-strong);
-}
-
-.document-workbench__rail-tab:focus-visible {
-  outline: 3px solid var(--accent-glow);
-  outline-offset: 2px;
+  border: 2px solid var(--card);
+  border-radius: var(--r-pill);
+  padding: 0 3px;
+  background: var(--danger);
+  color: var(--card-elev);
+  font: 600 0.6rem/1 var(--font-data);
+  font-variant-numeric: tabular-nums;
 }
 
 @media (prefers-reduced-motion: reduce) {
   .document-workbench__layout.has-rail,
+  .document-workbench__editor,
   .document-workbench__rail-tab {
     transition: none;
   }
@@ -196,9 +294,13 @@
     transition: none;
   }
 
-  .document-workbench__editor {
+  .document-workbench__editor,
+  .document-workbench__layout.has-rail:not(.is-collapsed) .document-workbench__editor {
     height: auto;
     overflow: visible;
+    /* Stacked, the rail sits below and claims no horizontal space, so there is
+       no track to bias the page against — it stays centred. */
+    padding-inline-start: var(--s5);
   }
 
   .document-workbench__rail {
@@ -211,22 +313,32 @@
     width: auto;
   }
 
+  /* Stacked, the rail owns the full row — there is no track left to resize. */
+  .document-workbench__rail-resize {
+    display: none;
+  }
+
   /* Stacked, there is no column to slide out of: the collapsed rail leaves and
      the tab takes its place as a full-width disclosure bar. */
   .document-workbench__layout.is-collapsed .document-workbench__rail {
     display: none;
   }
 
-  /* Stacked there is no right edge to hang a tab on: the same icon becomes the
-     full-width bar standing where the rail would be. */
-  .document-workbench__rail-tab {
-    position: static;
+  /* Stacked, the pair stands in flow where the rail would be, at the end of a
+     row that keeps the rail's separating hairline. */
+  .document-workbench__rail-dock {
+    position: relative;
+    top: auto;
+    right: auto;
     width: 100%;
-    height: 44px;
-    border: 0;
+    max-width: none;
+    justify-content: flex-end;
+    padding: var(--s2) var(--s3);
     border-top: 1px solid var(--hairline);
-    border-radius: 0;
-    box-shadow: none;
+  }
+
+  .document-workbench__rail-attention {
+    top: -4px;
   }
 
   .document-workbench__rail-content {

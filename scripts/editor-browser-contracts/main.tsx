@@ -415,6 +415,12 @@ function DocumentWorkbenchContractSurface({
         id: "cover-tailoring-contract",
         label: "Tailoring",
         preferenceKey: "cover-tailoring",
+        attention: { count: 2, label: "2 issues" },
+        action: (
+          <button type="button" className="primary-button is-compact">
+            Polish
+          </button>
+        ),
         content: (
           <aside aria-label="Tailoring contract content">
             <label htmlFor="document-workbench-draft">Tailoring detail</label>

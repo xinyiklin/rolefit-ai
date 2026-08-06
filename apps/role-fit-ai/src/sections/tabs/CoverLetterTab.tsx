@@ -10,11 +10,16 @@ import type { ApplicationDocumentSync } from "../../hooks/useApplicationDocument
 import type { DraftAutosaveState } from "../../hooks/useAutosaveDraft";
 import type { CoverLetterAutosavedDraft } from "../../hooks/useCoverLetterAutosaveDraft";
 import type { CoverLetterEditorState } from "../../hooks/useCoverLetterEditor";
+import type {
+  CoverLetterFailure,
+  CoverLetterProposal
+} from "../../hooks/useCoverLetter";
 import type { CoverLetterTailorResult } from "../../lib/coverLetterEvidence";
 import type {
   CoverLetterDetailKey,
   CoverLetterPreflight
 } from "../../lib/coverLetterPreflight";
+import { DOC_PAGE_WIDTH_PX } from "@typeset/engine/lib/documentStyle.ts";
 import { useRestoredScroll } from "../../hooks/useRestoredScroll";
 import { CoverLetterReview } from "../cover-letter/CoverLetterReview";
 import { DraftRestoreBar } from "../DraftRestoreBar";
@@ -51,13 +56,17 @@ type CoverLetterTabProps = {
   resumeReady: boolean;
   jobReady: boolean;
   providerReady: boolean;
-  providerMessage: string;
   jobTarget?: { role?: string; company?: string };
   preflight: CoverLetterPreflight;
-  result: CoverLetterTailorResult | null;
+  proposal: CoverLetterProposal | null;
+  appliedResult: CoverLetterTailorResult | null;
+  failure: CoverLetterFailure | null;
   slotAnswers: Record<string, string>;
   onDetailChange: (key: CoverLetterDetailKey, value: string) => void;
   onSlotAnswerChange: (slotId: string, value: string) => void;
+  onAcceptProposal: () => void;
+  onDiscardProposal: () => void;
+  onAddHonestContext?: (keyword: string) => void;
   onRestorePreTailor: () => void;
 };
 
@@ -85,13 +94,17 @@ export function CoverLetterTab({
   resumeReady,
   jobReady,
   providerReady,
-  providerMessage,
   jobTarget,
   preflight,
-  result,
+  proposal,
+  appliedResult,
+  failure,
   slotAnswers,
   onDetailChange,
   onSlotAnswerChange,
+  onAcceptProposal,
+  onDiscardProposal,
+  onAddHonestContext,
   onRestorePreTailor
 }: CoverLetterTabProps) {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -109,15 +122,12 @@ export function CoverLetterTab({
   const canTailor =
     preflight.canTailor && resumeReady && jobReady && providerReady && !isTailoring;
   const targetLine = [jobTarget?.role, jobTarget?.company].filter(Boolean).join(" at ");
-  const readinessHint = !resumeReady && !jobReady
-    ? "Add a resume and prepare the job on Prepare."
-    : !resumeReady
-      ? "Add your resume first."
-      : !jobReady
-        ? "Prepare the job on Prepare first."
-        : !providerReady
-          ? providerMessage
-          : (preflight.blockers[0] ?? "");
+  const issueCount = failure?.kind === "blocked" ? failure.issues.length : 0;
+  // Idle, the rail's phase, description, and checks already carry the workflow
+  // message; repeating it under the action was this letter's one extra line the
+  // resume never had. The editor's own receipts (save, PDF) still surface here.
+  const workflowActive = isTailoring || Boolean(failure) || Boolean(proposal) || Boolean(appliedResult);
+  const railStatus = (workflowActive ? tailorStatus : "") || editor.status;
 
   return (
     <section className="studio-card studio-card--flush cover-letter-page">
@@ -129,17 +139,13 @@ export function CoverLetterTab({
         inputRef={inputRef}
         inlineFormat={inlineFormat}
         hasLetter={hasLetter}
-        canTailor={canTailor}
-        tailorHint={readinessHint}
-        actionLabel={result ? "Retry" : "Tailor"}
-        isTailoring={isTailoring}
         targetLine={targetLine}
-        onTailor={onTailor}
         applicationSync={applicationSync}
         draftAutosaveState={draftAutosaveState}
       />
 
       <DocumentWorkbench
+        pageWidthPx={DOC_PAGE_WIDTH_PX * editor.docStyle.style.zoom}
         layoutRef={layoutScrollerRef}
         notice={pendingAutosaveDraft ? (
           <DraftRestoreBar
@@ -152,22 +158,50 @@ export function CoverLetterTab({
         ) : null}
         rail={{
           id: "cover-tailoring",
-          label: "Tailoring",
+          label: "Workflow",
           preferenceKey: "cover-tailoring",
+          // The rail's one primary action, handed to the shell so it sits beside
+          // the disclosure control whether the rail is open or closed.
+          action: (
+            <button
+              type="button"
+              className="primary-button is-compact"
+              disabled={!canTailor}
+              aria-busy={isTailoring}
+              onClick={onTailor}
+            >
+              {isTailoring ? "Polishing…" : proposal || appliedResult ? "Polish again" : "Polish"}
+            </button>
+          ),
+          ...(issueCount > 0
+            ? {
+                attention: {
+                  count: issueCount,
+                  label: `${issueCount} ${issueCount === 1 ? "issue" : "issues"}`
+                }
+              }
+            : {}),
           content: <CoverLetterReview
             words={wordCount(editor.text)}
             pageCount={pageCount}
             preflight={preflight}
-            result={result}
+            proposal={proposal}
+            appliedResult={appliedResult}
+            failure={failure}
             canRestore={editor.canRestorePreTailor}
+            isTailoring={isTailoring}
             resumeReady={resumeReady}
             jobReady={jobReady}
             providerReady={providerReady}
             slotAnswers={slotAnswers}
             onDetailChange={onDetailChange}
             onSlotAnswerChange={onSlotAnswerChange}
+            onTailor={onTailor}
+            onAcceptProposal={onAcceptProposal}
+            onDiscardProposal={onDiscardProposal}
             onRestore={onRestorePreTailor}
-            status={tailorStatus || readinessHint || editor.status}
+            onAddHonestContext={onAddHonestContext}
+            status={railStatus}
           />
         }}
       >

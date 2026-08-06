@@ -6,8 +6,7 @@ import {
   FolderOpen,
   FileText,
   LayoutTemplate,
-  Save,
-  Sparkles
+  Save
 } from "lucide-react";
 
 import { coverLetterFileName } from "@typeset/engine/lib/coverLetter.ts";
@@ -16,7 +15,6 @@ import { DocumentStructureControls } from "@typeset/editor/components/toolbar/Do
 import { FormattingToolbar } from "@typeset/editor/components/toolbar/FormattingToolbar.tsx";
 import { LineSpacingPopover } from "@typeset/editor/components/toolbar/LineSpacingPopover.tsx";
 import { PageStylePopover } from "@typeset/editor/components/toolbar/PageStylePopover.tsx";
-import { ToolbarButton } from "@typeset/editor/components/toolbar/ToolbarButton.tsx";
 import type {
   InlineFormatState,
   TypesetEditorHandle
@@ -37,12 +35,7 @@ type CoverLetterToolbarProps = {
   inputRef: RefObject<HTMLInputElement | null>;
   inlineFormat: InlineFormatState;
   hasLetter: boolean;
-  canTailor: boolean;
-  tailorHint: string;
-  actionLabel: string;
-  isTailoring: boolean;
   targetLine: string;
-  onTailor: () => void;
   // Recovery-draft state for this letter, shown beside the title exactly as the
   // resume shows its own.
   draftAutosaveState: DraftAutosaveState;
@@ -80,12 +73,7 @@ export function CoverLetterToolbar({
   inputRef,
   inlineFormat,
   hasLetter,
-  canTailor,
-  tailorHint,
-  actionLabel,
-  isTailoring,
   targetLine,
-  onTailor,
   draftAutosaveState,
   applicationSync,
   linkEditorOpen,
@@ -298,18 +286,6 @@ export function CoverLetterToolbar({
               promptOpen={pdfPromptOpen}
               onPromptOpenChange={setPdfPromptOpen}
               onDownloadPdf={(base) => void editor.downloadPdf(base)}
-            />
-            {/* One action writes the letter. The rail reports what happened
-                afterwards; it never gates the click behind a review step. */}
-            <ToolbarButton
-              label={isTailoring ? "Tailoring…" : actionLabel}
-              tooltip={tailorHint || "Tailor this letter for the job target"}
-              icon={<Sparkles size={16} />}
-              showLabel
-              tone="primary"
-              disabled={!canTailor}
-              aria-busy={isTailoring}
-              onClick={onTailor}
             />
           </div>
         )}

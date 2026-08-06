@@ -70,6 +70,10 @@ const app = readFileSync(new URL("../../App.tsx", import.meta.url), "utf8");
 const coverEditor = readHook("useCoverLetterEditor.ts");
 const coverPreflight = readFileSync(new URL("../../lib/coverLetterPreflight.ts", import.meta.url), "utf8");
 const resumeTab = readFileSync(new URL("../../sections/tabs/ResumeTab.tsx", import.meta.url), "utf8");
+const resumeWorkflowRail = readFileSync(
+  new URL("../../sections/resume/ResumeWorkflowRail.tsx", import.meta.url),
+  "utf8"
+);
 const coverTab = readFileSync(new URL("../../sections/tabs/CoverLetterTab.tsx", import.meta.url), "utf8");
 const coverReview = readFileSync(new URL("../../sections/cover-letter/CoverLetterReview.tsx", import.meta.url), "utf8");
 const coverToolbar = readFileSync(
@@ -90,7 +94,7 @@ const polishFingerprintStart = polish.indexOf("const inputFingerprint = workflow
 const polishFingerprint = polish.slice(polishFingerprintStart, polish.indexOf("});", polishFingerprintStart) + 3);
 const answersFingerprintStart = answers.indexOf("const inputFingerprint = workflowInputFingerprint({");
 const answersFingerprint = answers.slice(answersFingerprintStart, answers.indexOf("});", answersFingerprintStart) + 3);
-const coverFingerprintStart = cover.indexOf("const inputFingerprint = workflowInputFingerprint({");
+const coverFingerprintStart = cover.indexOf("const proposalInputFingerprint = workflowInputFingerprint({");
 const coverFingerprint = cover.slice(coverFingerprintStart, cover.indexOf("});", coverFingerprintStart) + 3);
 
 assert.match(
@@ -225,7 +229,8 @@ assert.doesNotMatch(
   "authored word count is a voice signal, never a tailoring gate"
 );
 assert.doesNotMatch(coverReview, /Â/, "cover-letter readiness copy contains no mojibake");
-// One click, one request: no prepare/draft split and nothing to approve first.
+// One click, one request: no prepare/draft split. The returned document is
+// staged behind one whole-letter acceptance boundary.
 assert.equal(
   cover.match(/await fetch\("\/api\/cover-letter"/g)?.length,
   1,
@@ -233,13 +238,23 @@ assert.equal(
 );
 assert.doesNotMatch(
   cover,
-  /pendingProposal|acceptProposal|evidenceOverrides|selectedEvidence|clarification/i,
-  "no preparation plan, evidence override, or proposal acceptance survives"
+  /evidenceOverrides|selectedEvidence|clarification/i,
+  "no preparation plan or evidence-selection override survives"
 );
 assert.match(
   cover,
-  /onApplyTailored\(result\.coverLetterText\)[\s\S]{0,200}?setCoverProgress\(\{\s*status: "done"/,
-  "a valid letter enters the editor directly, then reports"
+  /setPendingProposal\(\{[\s\S]{0,160}?sourceFingerprint: proposalInputFingerprint/,
+  "a valid letter is staged against the semantic inputs that produced it"
+);
+assert.match(
+  cover,
+  /const acceptProposal[\s\S]{0,600}?onApplyTailored\(proposal\.result\.coverLetterText\)/,
+  "only Accept proposal enters the letter into the editor"
+);
+assert.doesNotMatch(
+  cover.match(/async function handleTailorCoverLetter[\s\S]*?const acceptProposal/)?.[0] ?? "",
+  /onApplyTailored\(/,
+  "request completion does not mutate the live letter"
 );
 assert.match(
   coverEditor,
@@ -251,7 +266,7 @@ assert.match(
   /const restorePreTailor[\s\S]{0,400}?parseCoverLetterFile\(preTailorSnapshot\)/,
   "Restore replays the structured document, not its plain text"
 );
-assert.match(cover, /if \(!tailorApplied\) setLastResult\(null\)/, "the result summary and Restore share one lifetime");
+assert.match(cover, /if \(!tailorApplied\) setLastAppliedResult\(null\)/, "the applied summary and Restore share one lifetime");
 assert.doesNotMatch(answersFingerprint, /providerReady/, "provider polling cannot invalidate active answer generation");
 assert.doesNotMatch(coverFingerprint, /providerReady/, "provider polling cannot invalidate active cover generation");
 assert.equal(
@@ -315,30 +330,77 @@ assert.doesNotMatch(
 assert.match(polish, /polishRunLockRef/, "Polish has a synchronous double-run lock");
 assert.match(polish, /inputFingerprintRef\.current = inputFingerprint/, "Polish tracks live semantic inputs");
 
-// The resume Polish action asks which stages to run. Because `polishStages` is
-// part of the pipeline's input fingerprint, and the fingerprint effect aborts a
-// run that is in flight when it changes, the chooser MUST set the stage and let
-// that commit before starting the run. Starting it in the same tick as the
-// setState aborts the run it just started, which is silent and hard to spot.
+// Settings owns one persisted Resume workflow choice. Every visible Polish
+// action must run that same selection; no document-local override may silently
+// rewrite it before dispatch.
 assert.match(polishFingerprint, /polishStages/, "the polish fingerprint still guards the selected stages");
+assert.doesNotMatch(
+  app,
+  /runPolishOnStagesCommitRef|function startPolish\(/,
+  "the retired per-run chooser cannot override the Settings-owned stage selection"
+);
 assert.match(
   app,
-  /runPolishOnStagesCommitRef\.current = true;\s*setPolishStages\(nextStages\);/,
-  "the Polish chooser records the intent to run, then commits the stage selection"
+  /onPolish=\{\(\) => void handlePolish\(\)\}/,
+  "the Resume document action dispatches the current Settings-owned workflow"
+);
+assert.doesNotMatch(
+  app,
+  /startPolish\("both"\)/,
+  "the Resume document action cannot force both stages over the stored selection"
 );
 assert.match(
-  app,
-  /if \(!runPolishOnStagesCommitRef\.current\) return;\s*runPolishOnStagesCommitRef\.current = false;\s*void handlePolish\(\);/,
-  "the deferred Polish run fires from the committed polishStages, never in the same tick"
+  resumeTab,
+  /polishStages=\{polishStages\}|polishStages:\s*"tailor" \| "review" \| "both"/,
+  "the Resume workbench receives the selected stages for truthful readiness"
 );
-assert.ok(
-  app.indexOf("} = usePolishPipeline({") < app.indexOf("runPolishOnStagesCommitRef.current = false"),
-  "the deferred-run effect is registered after usePolishPipeline's fingerprint effect, so that effect sees no run in flight"
+assert.match(
+  resumeWorkflowRail,
+  /polishStages !== "review"[\s\S]{0,160}?polishStages !== "tailor"/,
+  "the workflow rail gates only the providers the selected run will call"
 );
-// Settings owns the DEFAULT stage selection and the Polish action owns the
-// per-run pick; both write the one persisted `polishStages` value. The retired
-// masthead Options menu must not come back as a third control.
+assert.match(
+  resumeWorkflowRail,
+  /\(!needsTailor \|\| tailorSectionCount > 0\)/,
+  "a review-only run does not require sections marked Tailor"
+);
+assert.match(
+  resumeWorkflowRail,
+  /\.\.\.\(needsTailor[\s\S]{0,420}?Sections selected[\s\S]{0,420}?: \[\]\)/,
+  "the section-selection readiness row only appears when Tailor will run"
+);
+assert.match(
+  resumeWorkflowRail,
+  /\{needsTailor \? \([\s\S]{0,420}?Tailor selected sections[\s\S]{0,420}?\) : null\}/,
+  "the workflow rail only renders the Tailor row when that stage was selected"
+);
+assert.match(
+  resumeWorkflowRail,
+  /\{needsAudit \? \([\s\S]{0,420}?Recruiter audit[\s\S]{0,420}?\) : null\}/,
+  "the workflow rail only renders the audit row when that stage was selected"
+);
+assert.doesNotMatch(
+  resumeWorkflowRail,
+  /Choose Tailor or Include/,
+  "section recovery cannot recommend Include when only Tailor clears the gate"
+);
+assert.match(
+  prepareTab,
+  /reviewDone\s*\?\s*tailorDone\s*\?\s*"Tailored · audited"\s*:\s*"Audited"/,
+  "Prepare reports a review-only run as audited instead of claiming it tailored the resume"
+);
+assert.match(
+  prepareTab,
+  /isTailoringCoverLetter\s*\?\s*"Polishing…"/,
+  "Prepare uses the Cover Letter action's Polish vocabulary while work is running"
+);
+// The retired masthead Options menu must not return as another setting owner.
 assert.match(settingsDialog, /onPolishStagesChange/, "Settings exposes the default Polish stage selection");
+assert.match(
+  settingsDialog,
+  /Polish uses this stage choice everywhere\./,
+  "Settings explains that the one stage selection applies to every Polish entry point"
+);
 assert.ok(
   !existsSync(new URL("../../sections/PolishMenu.tsx", import.meta.url)) &&
     !existsSync(new URL("../../sections/AiMenu.tsx", import.meta.url)),
@@ -742,13 +804,13 @@ assert.match(
 );
 assert.match(
   prepareApplicationRail,
-  /<p className="prepare-page__eyebrow">Fit<\/p>[\s\S]{0,900}?Not reviewed[\s\S]{0,200}?Run Review/,
-  "Prepare names fit as unreviewed until a provider-backed Review exists"
+  /<p className="prepare-page__eyebrow">Fit<\/p>[\s\S]{0,900}?Not audited[\s\S]{0,200}?Run Recruiter audit/,
+  "Prepare names fit as unaudited until a provider-backed recruiter audit exists"
 );
 assert.match(
   app,
   /const prepareFitAssessment =[\s\S]{0,900}?provenance: "current"[\s\S]{0,900}?provenance: "saved"/,
-  "Prepare prefers the current Review and otherwise labels a matching saved review as historical"
+  "Prepare prefers the current recruiter audit and otherwise labels a matching saved audit as historical"
 );
 const prepareFitStyles = prepareStyles.match(/\.prepare-fit\s*\{[\s\S]*?\n\}/)?.[0] ?? "";
 assert.notEqual(prepareFitStyles, "", "Prepare gives the fit summary a dedicated flat rail row");
@@ -1742,12 +1804,12 @@ assert.match(
 assert.match(
   app,
   /const prepareReviewGapsProvenance = currentReviewAvailable[\s\S]{0,180}?"saved"[\s\S]{0,100}?"none"/,
-  "Prepare distinguishes a current Review from an explicitly historical saved snapshot"
+  "Prepare distinguishes a current recruiter audit from an explicitly historical saved snapshot"
 );
 assert.match(
   prepareTab,
-  /reviewGapsProvenance === "current"[\s\S]{0,120}?No candidate gaps identified by the current Review/,
-  "a current Review with zero gaps is not presented as if Review never ran"
+  /reviewGapsProvenance === "current"[\s\S]{0,140}?No candidate gaps identified by the current recruiter audit/,
+  "a current recruiter audit with zero gaps is not presented as if no audit ran"
 );
 assert.match(
   app,

@@ -40,6 +40,10 @@ const rateLimited = classifyFailure(new ApiError("OpenAI rate limit or quota was
 assert.equal(rateLimited.kind, "rate-limit", "provider quota gets its own actionable failure kind");
 assert.equal(rateLimited.headline, "Rate limit reached");
 
+const evidenceBlocked = classifyFailure(new ApiError("The proposal did not pass evidence checks.", 422));
+assert.equal(evidenceBlocked.kind, "validation", "HTTP 422 is an evidence or validation failure");
+assert.equal(evidenceBlocked.headline, "Validation blocked");
+
 const requestFingerprint = workflowInputFingerprint({ resume: "A", job: "B" });
 assert.equal(
   requestFingerprint,
@@ -74,4 +78,4 @@ assert.equal(
   "an aborted request cannot commit"
 );
 
-console.log("AI workflow eval: 21/21 checks passed");
+console.log("AI workflow eval: 23/23 checks passed");

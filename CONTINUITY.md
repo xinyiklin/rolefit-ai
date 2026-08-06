@@ -1894,3 +1894,130 @@ bounded; app-only operational detail belongs in the affected app documentation.
   regression failed first with a saved offset of 0 instead of 180, then passed
   through narrow unmount/remount; the full RoleFit check passed 67 evals and the
   UI detector returned no findings.
+- [USER+CODE+TOOL] 2026-08-04: Resume and Cover Letter now share one always-present
+  workflow-rail hierarchy while retaining separate orchestration. Resume's
+  primary **Polish resume** action runs Tailor then Recruiter audit, with
+  one-stage actions secondary and proposal decisions marking the audit stale.
+  Cover Letter stages a fingerprinted whole-document proposal; only **Use
+  proposal** applies atomically and creates Restore, **Keep current** performs no
+  mutation, changed semantic inputs disable acceptance, and deterministic `422`
+  blockers omit rejected provider output. Production build, document-workflow
+  round trips, focused contracts, and all 67 offline evals passed; real-browser
+  visual QA was not run under the flag-first policy.
+- [USER+CODE+TOOL] 2026-08-04: Opening a document workflow rail no longer moves
+  the workspace. `.studio-body` on the document tabs is `overflow: clip` rather
+  than `hidden` — `hidden` left it a scroll container holding ~69px of
+  horizontal overflow from closed toolbar popovers, and the rail toggle's focus
+  (whose target is outside the box until the track settles) scrolled toolbar,
+  title, and editor sideways together; the toggle now focuses with
+  `preventScroll`. The rail's track is also paid out of the desk margin before
+  the page moves: the pane biases its start padding by the rail width, using the
+  rendered page width (`DOC_PAGE_WIDTH_PX × zoom`) threaded through as
+  `pageWidthPx`, and both halves animate on one `--document-rail-motion` token
+  because the page holds still only while padding gains what the track loses.
+  Rail width moved from `clamp(320px, 27vw, 380px)` to `18rem`. Measured page
+  shift on open: 0px at 1920, 63px at 1600, 109px at 1365; transition scrubbed
+  frame-by-frame with pane width + padding invariant at 1756 throughout. All 67
+  offline evals passed. Browser QA ran in the paint-gated pane, so end states and
+  scrubbed timelines are verified but real animation frames are not.
+- [USER+CODE] 2026-08-04: Supersedes only the earlier "no badge API exists"
+  decision for collapsed document rails. The user approved integrating the
+  typed cover-letter evidence failure work with the latest workbench branch.
+  `DocumentWorkbench` now accepts a generic optional attention count, but RoleFit
+  supplies it only for a validated post-draft Cover Letter `blocked` response;
+  readiness gaps and generic provider failures remain unbadged. The closed icon
+  and accessible label carry the bounded count while the detailed flat issue
+  list stays in the existing mounted workflow rail.
+- [CODE] 2026-08-04: Cover-letter validation issues now have fixed typed
+  code/category/recovery relationships, separate internal repair instructions
+  from bounded display-safe fields, and expose at most eight public records after
+  the single repair fails. The loopback client validates that wire shape before
+  rendering it, semantic input changes clear stale failure state, and proposal
+  acceptance remains the only editor replacement boundary. Unfinished Guidance
+  prompts are filtered by both corpus boundaries, and numeric grounding treats
+  equivalent digit and word durations alike without letting an unrelated number
+  support a duration.
+- [TOOL] 2026-08-04: The RoleFit production/server build, full app check
+  (including desktop contracts), all 67 offline evals, and the headless Chromium
+  editor/workbench suite passed. The browser contract now asserts the branch's
+  documented `18rem` rail width instead of its stale pre-branch 320-380px range
+  and verifies the collapsed issue count, accessible label, persistence,
+  desktop disclosure, and stacked in-flow placement. The UI detector found no
+  new unresolved issue; its remaining layout-transition warning is the documented
+  synchronized padding/track motion that prevents the workspace-shift regression.
+  Live provider evaluation and real-app visual QA were not run.
+- [USER+CODE+TOOL] 2026-08-04: The primary document action now has one visible owner:
+  the workflow rail. Resume and Cover Letter both call it **Polish**; the
+  editor header retains file/edit controls (plus Resume's secondary More menu),
+  and a state-matched Polish button floats beside the edge tab when the rail is
+  collapsed. Full RoleFit checks, the workbench contract, and live browser QA
+  passed for both expanded and collapsed document rails.
+- [USER+CODE] 2026-08-04: Supersedes the floating collapsed Polish button above.
+  The collapsed rail is now one edge dock — action plus reopen tab on a single
+  card, a full-width bar when stacked — and both document workspaces share one
+  vocabulary: **Polish** / `Polishing…` / `Polish again` everywhere a run
+  starts, including the Prepare material cards that previously said `Tailor`;
+  `Tailor` and `Audit` remain stage names only. Cover Letter's proposal now uses
+  the resume's `Accept` / `Discard` verbs, its status strings stopped naming a
+  `Tailoring panel` the UI never shows, the resume dropped its always-ready
+  `Workflow` readiness row, and both rails phrase shared gates identically.
+  RoleFit check (67 evals) and the Chromium workbench contract — extended for
+  the dock's single surface, ordering, edge flushness, and stacked bar — passed.
+  Real-app visual QA was not run.
+- [USER+CODE] 2026-08-04: Three follow-ups on the collapsed dock and document
+  chrome. (1) The docked action lost its own button box — the dock is the single
+  surface, so a filled/disabled button inside it no longer reads as a card in a
+  card; the shell styles whatever action a host docks there. (2) The Resume
+  header's More menu (specialist Tailor-only / Audit-current stage runs) is
+  removed at [USER] request; that choice still exists as the remembered Settings
+  stage default, and `POLISH_STAGE_ACTIONS`, `polishStageReady`,
+  `polishStageBlocker`, `reviewProviderMessage`, and the `.polish-stage-menu`
+  rules went with it. (3) The Cover Letter rail no longer restates its workflow
+  message under the action while idle — the phase, description, and checks
+  already carry it, and the editor's own save/PDF receipts still show; the
+  duplicate readiness hint and its `providerMessage` prop are gone. Prepare's
+  compact "Inputs changed · polish again." note is unaffected. RoleFit check
+  (67 evals) and the Chromium workbench contract passed; real-app visual QA not
+  run.
+- [USER+CODE] 2026-08-04: Supersedes the collapsed-dock entry above. Polish is
+  now one rail action placed by the shell (`rail.action`, not `collapsedAction`):
+  it sits at the end of the rail header while the rail is open and on the
+  document's edge beside the reopen tab while it is closed, rendered in exactly
+  one of the two at a time. No card wraps the collapsed pair, the disclosure
+  control is a single 30px shape in both states matched to the compact button
+  beside it, and the header's end padding matches the collapsed inset. The rails'
+  footers no longer duplicate Polish — they carry only Stop, Retry tailor/audit,
+  Accept/Discard proposal, and Restore previous. An intermediate icon-only
+  collapsed action was tried and reverted at [USER] request. RoleFit check
+  (67 evals) and the Chromium workbench contract passed; real-app visual QA not
+  run.
+- [USER+CODE] 2026-08-04: The shared document rail is resizable. [USER] set the
+  range brief; the chosen contract is 18rem (today's default) as both floor and
+  default, 28rem ceiling, one shared width for Resume and Cover Letter under
+  `rolefit:document-rail:width` — disclosure stays per-document, width does not,
+  because a per-document width would shift the page on every tab switch. Bounds
+  are rem-derived and re-clamped on read against the live root font size; the
+  dragged value is px. The affordance is a `role="separator"` on the rail's
+  divider with pointer drag plus ArrowLeft/Right (Shift for a coarse step), Home,
+  End, and double-click to reset; it is hidden once the rail stacks below 1080px.
+  Drags write the CSS variable directly and commit once on release, and set
+  `data-resizing` to suspend the disclosure transition. RoleFit check (67 evals)
+  and the Chromium contract — extended for drag distance, ceiling clamp,
+  persistence, the suspended clock, and keyboard parity — passed. Real-app visual
+  QA not run.
+- [USER+CODE+TOOL] 2026-08-05: Review remediation closed the document-workflow
+  and grounding gaps before publication. Cover-letter validation now excludes
+  only demonstrably employer-only predicates from the candidate evidence gates;
+  the original comparison bypass, two unfamiliar employer-led paraphrases, and
+  pure employer facts have end-to-end probes. Resume and Prepare dispatch the
+  same Settings-owned Tailor / Recruiter audit / Both workflow, readiness checks
+  only the selected providers and Tailor scope, and progress/state labels show
+  only stages that actually ran. Visitor, product, engineering, and scoped-agent
+  docs now use the shipped Polish and Accept/Discard vocabulary. The README,
+  landing page, resume/cover-letter screenshots, and social preview describe and
+  show the current workflow with direct functional copy. The complete repository
+  `npm run check` passed with loopback access — including app and landing builds,
+  desktop contracts, shared packages, and 67/67 RoleFit offline evaluations —
+  and the rendered Chromium workbench contract passed. Isolated fictitious-data
+  browser QA covered the current Resume and Cover Letter workspaces plus the
+  landing page at 1440px and 390px. No live provider evaluation ran.

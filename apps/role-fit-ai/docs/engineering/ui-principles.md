@@ -43,9 +43,10 @@ masthead into the first/default Prepare page on 2026-07-29):
   page is the sole editor, so what you see is exactly what exports — it is its
   own live preview, so there is no separate compile-preview; its margin
   controls own add/remove/reorder, section type, and per-section tailor scope;
-  Open/Save/Polish share one document action bar, and the
+  Open/Save share one document bar; the primary Polish action rides beside the
+  workflow rail's disclosure control in either state, and the
   suggestion/recruiter-review rail docks beside it post-polish), Cover
-  letter (a separate plain-paragraph editor with one Tailor action and a rail
+  letter (a separate plain-paragraph editor with one Polish action and a rail
   that reports readiness before it and the result's provenance after it),
   Materials (application questions and role descriptions); TRACK contains
   Applications (table / calendar tracker views) and Analytics — plus the
@@ -61,9 +62,9 @@ receipt and Distill progress navigate to and remain visible on Prepare.
 Once ready, Source collapses to its head — captured size and origin — behind
 explicit View, Replace, and Prepare again paths. The structured brief leads the
 main column and one Application rail combines both material choices, readiness,
-the saved-application summary, a flat fit summary, and Apply. The fit summary
-prefers a current matching AI Review, labels a matching saved review historical,
-and otherwise says "Not reviewed"; it never estimates fit locally. Nothing on
+  the saved-application summary, a flat fit summary, and Apply. The fit summary
+  prefers a current matching Recruiter audit, labels a matching saved audit historical,
+  and otherwise says "Not audited"; it never estimates fit locally. Nothing on
 the page is a card inside a card, and no status earns its own tinted panel or
 icon tile. Preparation
 progress is already a readiness check, so it takes rail space only while work is
@@ -93,8 +94,8 @@ only included materials must be ready while their preparation is idle. Either
 or both cards may be excluded. Re-Apply treats exclusion as non-destructive:
 any artifact already saved for that application remains untouched.
 
-Extension intake always runs AI Distill and stops on Prepare; it never launches
-Tailor or Review. Independently, Prepare may rank the actual contents of saved
+Extension intake always runs AI Distill and stops on Prepare; it never starts
+resume Polish. Independently, Prepare may rank the actual contents of saved
 `.resume` and `.cover` variants against weighted prepared-job sections. For
 either document, auto-select a meaningful unique winner only while its editor
 is clean and not application-owned. A tie or incomplete read keeps the current
@@ -104,7 +105,7 @@ replacement. Do not persist parallel variant metadata or widen the strict
 document schema for this decision.
 
 A material's state line reports the real reason it is not ready. A saved base
-letter is a template: real prose plus unresolved `[slots]` that Tailor fills.
+letter is a template: real prose plus unresolved `[slots]` that Polish fills.
 Say so — "No draft" beside a selected variant reads as a bug, not a state.
 
 Resume and cover letter share ONE Open menu (`DocumentOpenMenu`): the same
@@ -114,7 +115,8 @@ reopening a saved one are the same decision, so they are not split across a
 separate Starter button. Save is likewise ONE component (`DocumentSaveMenu`):
 update the active workspace copy, save a named variant beside it, then the
 downloads. PDF is a download, so it lives there too rather than as its own
-toolbar button — both bars are Open/Save/Polish — and it opens the same rename
+toolbar button — both bars are Open/Save, with Polish owned by the workflow
+rail — and it opens the same rename
 prompt for both documents.
 
 The Resume editor is always mounted over a real `ResumeData` document. With no
@@ -134,17 +136,76 @@ so local inputs and review interaction state survive collapse. A new result does
 not override an explicit preference; Resume simply omits the rail until review
 content exists, while Cover Letter always exposes pre-Tailor readiness.
 
+Opening the rail moves the rail, not the workspace. Two rules hold that:
+
+- The document tabs' `.studio-body` is `overflow: clip`, never `hidden`.
+  `hidden` still makes it a scroll container, and it carries horizontal overflow
+  from closed toolbar popovers, so focus landing on a rail control mid-transition
+  scrolled the toolbar, title, and editor sideways as one. The rail toggle also
+  focuses with `preventScroll`, since its target sits outside the box until the
+  track settles.
+- The track is paid out of the desk margin before the page moves. The pane
+  biases its start padding by the rail's width — clamped flush against the end
+  padding once the margin runs out — so the page holds its position while there
+  is whitespace to spend and slides only as far as it must. The bias uses the
+  rendered page width (`DOC_PAGE_WIDTH_PX × zoom`), not the 816px logical page.
+  Both the bias and the track animate on one token, `--document-rail-motion`:
+  the page stays still only because the padding gains exactly what the track
+  loses, so a step change in either throws the document sideways and back.
+
+The rail is sized in `rem`, not `vw`. Its own type is rem-based, so the width
+tracks what it holds and follows the reader's font-size; the space it divides is
+`viewport - sidebar - page`, which grows linearly rather than proportionally, so
+a viewport-proportional rail took its largest bite where least was spare.
+
+That width is adjustable, and one preference serves both documents: disclosure is
+workflow state a document owns, but how much screen a rail gets is a workspace
+decision, and a per-document width would move the page on every tab switch. It is
+dragged from the rail's own divider — a 7px `role="separator"` target that also
+resizes with the arrow keys, Home, and End — between 18rem (the default, and the
+floor) and 28rem. The bounds stay in `rem` for the reason above; the dragged
+value is stored in px under `rolefit:document-rail:width` and re-clamped against
+the live root font size on read, so a width saved at one font size never opens
+unusable at another. A drag writes the width variable straight onto the element
+and commits to state once, on release: re-rendering the rail's review content on
+every pointer frame is what makes a resize feel like it is dragging the
+workspace. The drag also suspends the shared rail clock — left running, every
+frame starts a new 200ms catch-up and the rail trails the cursor.
+
 Collapsing is total: the rail's grid track animates to zero and gives every
-pixel back to the document rather than leaving a reserved icon gutter. What
-remains is the panel icon alone, as a tab over the document's top-right corner
-and, once stacked below 1080px, as a full-width bar in the rail's place. It
-carries no visible label — its accessible name and tooltip name the panel it
-reopens, and no count rides along. Exactly one disclosure control
+pixel back to the document rather than leaving a reserved icon gutter. The rail's
+primary action and its disclosure control travel together and keep their order:
+open, they sit at the end of the rail header with the label taking the slack;
+closed, the same pair stands on the document's top-right edge, and stacked below
+1080px in flow where the rail would be. Both are placement only — no card wraps
+the pair — and the disclosure is one 30px shape in either state, matched to the
+compact button beside it, so the pair never changes proportion when the rail
+does. Because the action lives beside the disclosure, a rail's own footer carries
+only what an outcome adds: stopping a run, retrying the stage that failed,
+accepting or discarding a proposal, restoring the previous letter. The reopen
+control carries no visible label — its accessible name and tooltip name the
+panel it reopens. The one exception is a bounded count for typed post-draft Cover Letter
+issues; that count and its label preserve a recoverable failure while the rail
+is closed, and ordinary readiness/provider failures never receive it. Exactly one disclosure control
 exists per state: the panel keeps its own Hide button, the collapsed rail goes
 `inert` (mounted, so review state survives) and its replacement tab takes focus,
 so a keyboard user never lands on `<body>` and a screen reader never hears two
 controls for one panel. The panel's contents hold the full rail width while the
 track closes, so it slides out instead of reflowing on the way.
+
+Both workspaces spell the run **Polish** — beside the rail's disclosure control
+in either state, and on the Prepare cards that start the same runs — with `Polishing…`
+while it is in flight and `Polish again` once an outcome exists. `Tailor` and
+`Audit` are stage names, legitimate only where the interface reports which half
+of a run is happening (the resume's progress steps, the Settings stage default,
+a material card's state). The Settings-owned Tailor / Recruiter audit / Both
+choice applies to every Resume Polish entry point, and readiness shows only the
+providers that selected workflow will call. A rail's readiness rows hold gates only: what the
+workflow does with them belongs to the description, and a row that is always
+ready is not a check. The two rails share their gate phrasing (`Add your
+resume`, `Prepare the job`, `Check AI settings`) and their decision verbs
+(`Accept` / `Discard` a proposal) while their content stays document-specific; a
+row never repeats a reason that the field directly below it already carries.
 
 The stacked layout owns vertical scrolling inside the document tabs' clipped
 studio host; the editor and rail can then participate as full-width rows without
@@ -342,9 +403,9 @@ Never show:
   the model is never told a fact the user did not declare. Citizenship gates the
   work-authorization lines and education level gates the field of study; neither
   block gates the other.
-- `polishStages` has exactly two entry points and one stored value: the resume
-  Polish action asks per run, and Settings > AI stages holds the default. A
-  per-run pick updates that default.
+- `polishStages` has one stored value in Settings > AI stages. Resume's document
+  action and Prepare card both dispatch that choice; neither owns a per-run
+  override or silently rewrites it.
 - Distill, Tailor, and Review share one ordered workflow indicator. It shows
   every selected stage and its real `Step n of total` position; a failed or
   user-stopped stage leaves later stages visible as not run and never advances

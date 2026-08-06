@@ -1,6 +1,7 @@
 // Deterministic validation for the single cover-letter tailoring call. Nothing
-// here asks the candidate anything: a violation is collected so the server can
-// run one silent repair pass, and only a second failure surfaces as an error.
+// here asks the candidate anything: typed issues retain an internal repair
+// instruction while exposing only bounded, display-safe fields after a second
+// failure.
 
 import { UserSafeAiError } from "./errors.ts";
 import type {
@@ -13,6 +14,8 @@ import {
   type ResolvedCoverLetterContext
 } from "../../src/lib/coverLetterPreflight.ts";
 import type { CoverLetterSourceContext } from "../../src/lib/coverLetterTemplate.ts";
+import { templateHasUnresolvedSlots } from "../../src/lib/coverLetterTemplate.ts";
+import type { CoverLetterValidationIssue } from "./coverLetterIssues.ts";
 
 const EVIDENCE_ID = /^[A-Za-z0-9:_-]{1,140}$/;
 const EVIDENCE_SOURCES = new Set<CoverLetterEvidenceSource>([
@@ -71,6 +74,7 @@ export function parseCoverLetterEvidenceItems(value: unknown): CoverLetterEviden
       );
     }
     ids.add(id);
+    if (source !== "resume" && templateHasUnresolvedSlots(evidenceText)) continue;
     items.push({
       id,
       source,
@@ -78,6 +82,9 @@ export function parseCoverLetterEvidenceItems(value: unknown): CoverLetterEviden
       ...(text(candidate.section, 200) ? { section: text(candidate.section, 200) } : {}),
       ...(text(candidate.entry, 300) ? { entry: text(candidate.entry, 300) } : {})
     });
+  }
+  if (items.length === 0) {
+    requestContractError("Cover-letter evidence must contain at least one completed item.");
   }
   return items;
 }
@@ -91,7 +98,7 @@ export type CoverLetterTailorValidation = {
   // Null when the response was too malformed to assemble at all.
   output: CoverLetterTailorOutput | null;
   coverLetterText: string;
-  violations: string[];
+  issues: CoverLetterValidationIssue[];
 };
 
 export function assembleCoverLetterText(
@@ -123,18 +130,30 @@ export function validateCoverLetterTailorOutput({
   sourceContext: CoverLetterSourceContext;
   resolved: ResolvedCoverLetterContext;
 }): CoverLetterTailorValidation {
-  const violations: string[] = [];
+  const issues: CoverLetterValidationIssue[] = [];
   const parsed = object(value);
   const rawParagraphs = parsed?.bodyParagraphs;
   if (!parsed || !Array.isArray(rawParagraphs) || rawParagraphs.length === 0) {
     return {
       output: null,
       coverLetterText: "",
-      violations: ["The response contained no body paragraphs."]
+      issues: [{
+        code: "invalid_structure",
+        category: "structure",
+        detail: "The provider response did not contain usable body paragraphs.",
+        recovery: "retry",
+        repairMessage: "The response contained no body paragraphs."
+      }]
     };
   }
   if (rawParagraphs.length < 2 || rawParagraphs.length > 5) {
-    violations.push("Return between 2 and 5 body paragraphs.");
+    issues.push({
+      code: "invalid_structure",
+      category: "structure",
+      detail: "The draft did not contain between two and five body paragraphs.",
+      recovery: "retry",
+      repairMessage: "Return between 2 and 5 body paragraphs."
+    });
   }
 
   const allowedIds = new Set(evidence.map((item) => item.id));
@@ -146,11 +165,18 @@ export function validateCoverLetterTailorOutput({
   );
 
   const bodyParagraphs: CoverLetterBodyParagraph[] = [];
-  for (const raw of rawParagraphs) {
+  for (const [paragraphIndex, raw] of rawParagraphs.entries()) {
     const paragraph = object(raw);
     const paragraphText = text(paragraph?.text, 3_000);
     if (!paragraphText) {
-      violations.push("A body paragraph had no usable text.");
+      issues.push({
+        code: "invalid_structure",
+        category: "structure",
+        detail: "A body paragraph contained no usable text.",
+        recovery: "retry",
+        repairMessage: "A body paragraph had no usable text.",
+        paragraphIndex
+      });
       continue;
     }
     const evidenceIds = Array.isArray(paragraph?.evidenceIds)
@@ -161,30 +187,84 @@ export function validateCoverLetterTailorOutput({
       : [];
     const unknownEvidence = evidenceIds.filter((id) => !allowedIds.has(id));
     if (unknownEvidence.length > 0) {
-      violations.push(
-        `A paragraph cited evidence ids that are not in the supplied corpus: ${unknownEvidence.join(", ")}.`
-      );
+      issues.push({
+        code: "unknown_evidence_reference",
+        category: "evidence",
+        claim: paragraphText,
+        detail: "This paragraph cited evidence that was not in the supplied candidate corpus.",
+        recovery: "retry",
+        repairMessage:
+          `A paragraph cited evidence ids that are not in the supplied corpus: ${unknownEvidence.join(", ")}.`,
+        paragraphIndex
+      });
     }
     if (evidenceIds.length === 0) {
-      violations.push("Every body paragraph must cite at least one evidence id it used.");
+      issues.push({
+        code: "missing_evidence_reference",
+        category: "evidence",
+        claim: paragraphText,
+        detail: "This paragraph did not identify any candidate evidence.",
+        recovery: "retry",
+        repairMessage: "Every body paragraph must cite at least one evidence id it used.",
+        paragraphIndex
+      });
     }
     const unknownSlots = slotIds.filter((id) => !generativeSlotIds.has(id));
     if (unknownSlots.length > 0) {
-      violations.push(
-        `A paragraph cited template slot ids that are not generative source slots: ${unknownSlots.join(", ")}.`
-      );
+      issues.push({
+        code: "unresolved_template",
+        category: "template",
+        claim: paragraphText,
+        detail: "This paragraph referenced a template instruction that was not available.",
+        recovery: "edit_source",
+        repairMessage:
+          `A paragraph cited template slot ids that are not generative source slots: ${unknownSlots.join(", ")}.`,
+        paragraphIndex
+      });
     }
     if (hasUnresolvedCoverLetterTokens(paragraphText)) {
-      violations.push("A paragraph still contains a bracketed or template token.");
+      issues.push({
+        code: "unresolved_template",
+        category: "template",
+        claim: paragraphText,
+        detail: "This paragraph still contains an unresolved template instruction.",
+        recovery: "edit_source",
+        repairMessage: "A paragraph still contains a bracketed or template token.",
+        paragraphIndex
+      });
     }
     if (/^\s*Dear\b/im.test(paragraphText)) {
-      violations.push("A paragraph includes a greeting. The server owns the greeting.");
+      issues.push({
+        code: "invalid_structure",
+        category: "structure",
+        claim: paragraphText,
+        detail: "A body paragraph repeated the letter greeting.",
+        recovery: "retry",
+        repairMessage: "A paragraph includes a greeting. The server owns the greeting.",
+        paragraphIndex
+      });
     }
     if (/^\s*(?:Sincerely|Regards|Best regards|Respectfully),?\s*$/im.test(paragraphText)) {
-      violations.push("A paragraph includes a sign-off. The server owns the sign-off.");
+      issues.push({
+        code: "invalid_structure",
+        category: "structure",
+        claim: paragraphText,
+        detail: "A body paragraph repeated the letter sign-off.",
+        recovery: "retry",
+        repairMessage: "A paragraph includes a sign-off. The server owns the sign-off.",
+        paragraphIndex
+      });
     }
     if (resolved.date && paragraphText.includes(resolved.date)) {
-      violations.push("A paragraph includes the correspondence date. The server owns the date.");
+      issues.push({
+        code: "invalid_structure",
+        category: "structure",
+        claim: paragraphText,
+        detail: "A body paragraph repeated the correspondence date.",
+        recovery: "retry",
+        repairMessage: "A paragraph includes the correspondence date. The server owns the date.",
+        paragraphIndex
+      });
     }
     bodyParagraphs.push({
       text: paragraphText,
@@ -197,34 +277,76 @@ export function validateCoverLetterTailorOutput({
     return {
       output: null,
       coverLetterText: "",
-      violations: violations.length > 0 ? violations : ["The response contained no usable prose."]
+      issues: issues.length > 0 ? issues : [{
+        code: "invalid_structure",
+        category: "structure",
+        detail: "The provider response contained no usable prose.",
+        recovery: "retry",
+        repairMessage: "The response contained no usable prose."
+      }]
     };
   }
 
   const bodyText = bodyParagraphs.map((paragraph) => paragraph.text).join("\n\n");
   const lowerBody = bodyText.toLowerCase();
   if (resolved.role && !lowerBody.includes(resolved.role.toLowerCase())) {
-    violations.push(`Name the exact role "${resolved.role}" in the body.`);
+    issues.push({
+      code: "quality_contract",
+      category: "quality",
+      detail: "The draft did not name the exact prepared role.",
+      recovery: "retry",
+      repairMessage: `Name the exact role "${resolved.role}" in the body.`
+    });
   }
   if (resolved.company && !lowerBody.includes(resolved.company.toLowerCase())) {
-    violations.push(`Name the company "${resolved.company}" in the body.`);
+    issues.push({
+      code: "quality_contract",
+      category: "quality",
+      detail: "The draft did not name the prepared company.",
+      recovery: "retry",
+      repairMessage: `Name the company "${resolved.company}" in the body.`
+    });
   }
   if (GENERIC_DRAFT_LANGUAGE.test(bodyText)) {
-    violations.push("Remove generic brochure phrasing and filler enthusiasm.");
+    issues.push({
+      code: "quality_contract",
+      category: "quality",
+      detail: "The draft relied on generic brochure language instead of specific evidence.",
+      recovery: "retry",
+      repairMessage: "Remove generic brochure phrasing and filler enthusiasm."
+    });
   }
 
   const coverLetterText = assembleCoverLetterText(bodyParagraphs, resolved);
   if (hasUnresolvedCoverLetterTokens(coverLetterText)) {
-    violations.push("The assembled letter still contains a template token.");
+    issues.push({
+      code: "unresolved_template",
+      category: "template",
+      detail: "The assembled letter still contained an unresolved template instruction.",
+      recovery: "edit_source",
+      repairMessage: "The assembled letter still contains a template token."
+    });
   }
   if (coverLetterText.length > COVER_LETTER_CHAR_LIMIT) {
-    violations.push("The letter is far longer than one page. Tighten it substantially.");
+    issues.push({
+      code: "quality_contract",
+      category: "quality",
+      detail: "The generated letter exceeded RoleFit's safe document length.",
+      recovery: "retry",
+      repairMessage: "The letter is far longer than one page. Tighten it substantially."
+    });
   }
   const greetings = coverLetterText
     .split("\n")
     .filter((line) => /^\s*Dear\b/i.test(line)).length;
   if (greetings !== 1) {
-    violations.push("The assembled letter must contain exactly one greeting.");
+    issues.push({
+      code: "invalid_structure",
+      category: "structure",
+      detail: "The assembled letter did not contain exactly one greeting.",
+      recovery: "retry",
+      repairMessage: "The assembled letter must contain exactly one greeting."
+    });
   }
 
   return {
@@ -233,11 +355,11 @@ export function validateCoverLetterTailorOutput({
       warnings: stringArray(parsed.warnings, 6, 300)
     },
     coverLetterText,
-    violations
+    issues
   };
 }
 
-// Advisory notes attached to a letter that already reached the editor.
+// Advisory notes attached to a valid proposal returned to the client.
 export function coverLetterLengthWarnings(coverLetterText: string): string[] {
   const words = coverLetterWordCount(coverLetterText);
   if (words < COVER_LETTER_TARGET_WORDS.min) {

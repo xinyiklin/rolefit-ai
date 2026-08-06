@@ -139,7 +139,7 @@ Layout is structural and predictable: a masthead with the brand plus the global
 Apply action, a full-width studio whose rail moves through PREPARE, DRAFT, and
 TRACK, a bottom utility group with read-only Sessions immediately above Settings
 outside `OUTPUT_TABS` and the APG tablist, matched
-resume and cover-letter document action bars, and document-specific review
+resume and cover-letter document chrome with rail-owned primary actions, and document-specific review
 rails. Breakpoints (1280/1180/1080/900/820/760
 px) collapse structure; they never fluidly rescale type. Desktop ~1440px is
 the primary canvas; content wraps rather than clips below it.
@@ -182,8 +182,8 @@ the cover letter selects the plain-paragraph layout, keeps header structure
 controls, and disables resume section/entry/bullet controls. It uses the same two-row document/formatting toolbar, replacing only
 the resume style-menu group with a focused line-height control and the shared
 page-margin control. Shared zoom, selection typography, emphasis, alignment,
-links, and spell-check remain in place. Its file actions and deterministic
-review rail remain RoleFit-owned. Do not fork shared editing or layout code for
+links, and spell-check remain in place. Its file actions, workflow rail, and
+deterministic resume proposal review remain RoleFit-owned. Do not fork shared editing or layout code for
 a RoleFit-only tweak; add a narrow host seam and verify affected consumers.
 
 `packages/editor/src/styles/` owns shared editor/tooling behavior. RoleFit's
@@ -326,8 +326,9 @@ interactive control shares the same focus treatment: 2px Forest Ink outline,
   secondary, 28px ghost), 120–160ms transitions, 1px translateY on press.
 - **Primary:** Forest Ink fill, paper text, `--accent-deep` border, inset
   highlight plus a faint accent glow; hover deepens to `--accent-deep`. One
-  per document view (Polish in the resume action bar, Tailor in the matching
-  cover-letter position; compact `.is-compact` variant in title rows).
+  per document view (Polish beside the workflow rail's disclosure control, in the
+  header while open and on the document's edge while collapsed; compact
+  `.is-compact` variant in rail actions).
 - **Secondary:** raised sheet (`--card-elev`) with `--hairline-strong`
   border; hover tints toward the accent (`--accent-soft` fill,
   `--accent-deep` text).
@@ -401,7 +402,7 @@ interactive control shares the same focus treatment: 2px Forest Ink outline,
   benefits. Show extraction and candidate-review gaps beside the fields they
   qualify, as flat columns; missing extraction is an edit invitation, not hidden
   uncertainty. Label candidate gaps restored from an Apply snapshot as
-  historical until Review runs for the current resume and prepared job.
+  historical until Recruiter audit runs for the current resume and prepared job.
   In the Application rail, Resume and Cover Letter are two divided groups
   sharing the same anatomy: title and state beside Include, followed by the
   named-variant selector and document-specific actions. The DOM and visual order
@@ -409,11 +410,11 @@ interactive control shares the same focus treatment: 2px Forest Ink outline,
   variant. Disclose at most one note under a group — the blocker while its
   action is unavailable, its live status otherwise. Neither is labeled
   “optional.” Resume starts included and Cover Letter starts excluded. A flat
-  Fit row follows the materials: show the current Review verdict first, a
-  matching saved verdict as historical, or "Not reviewed" with a route to
-  Review. Do not style it as a nested card or derive a local verdict.
+  Fit row follows the materials: show the current Recruiter audit verdict first,
+  a matching saved verdict as historical, or "Not audited" with a route to
+  Recruiter audit. Do not style it as a nested card or derive a local verdict.
 - **Automation:** extension receipt and Distill progress remain visible on
-  Prepare. Automatic resume tailoring also completes there. Rank the actual
+  Prepare. Resume Polish started from Prepare also completes there. Rank the actual
   contents of saved resume and cover-letter variants against weighted
   prepared-job sections. Either material may auto-select a meaningful unique
   winner while its editor is clean and not application-owned. A tie or
@@ -490,25 +491,35 @@ Working pages share one skeleton: content as paper sheets in the main
 column, one control surface docked right. Prepare intentionally begins as one
 centered Source task, then becomes collapsed source + brief beside one
 Application rail containing materials, readiness, and Apply; Resume = one engine-painted
-structured editing sheet + review rail. That sheet is always mounted, using a
+structured editing sheet + workflow rail. That sheet is always mounted, using a
 clean blank document when no source exists; content readiness gates PDF, Polish,
 and Apply without replacing the editor with an empty-state panel. Cover letter = one engine-painted
-plain correspondence sheet + a compact rail that reports readiness before
-Tailor and the tailored result's length, provenance, and Restore after it;
+plain correspondence sheet + the same workflow-rail hierarchy. Both rails remain
+visible from idle through blocked, working, proposal, stale, and applied states.
+Resume's primary Polish action runs the Tailor, Recruiter audit, or combined
+workflow remembered in Settings; the same choice applies when Polish starts in
+Prepare, and the rail retains the granular proposal review. Cover letter keeps
+the editor unchanged while showing a whole-document proposal with explicit
+Accept proposal and Discard proposal actions; Restore appears only after acceptance.
+If that draft fails the evidence checks after repair, the rail shows one flat
+issue list with the exact bounded claim and its recovery action. A collapsed
+Cover letter rail adds the bounded issue count to the icon tab and accessible
+label; it does not badge ordinary readiness gaps or provider errors.
 Materials = draft sheets; Applications = view surface + inspector. The rail is a single sheet
 (`--card`, hairline, rest shadow);
 the main column sits directly on the desk. Resume and Cover letter use the same
-rail width, divider, and labelled header while retaining their separate review
-content. Each document remembers its own disclosure preference; collapsing hides
+rail width, divider, labelled header, readiness order, failure placement, and
+sticky action footer while retaining document-specific content. Each document remembers its own disclosure preference; collapsing hides
 content without unmounting it or resetting inputs, and new results do not force
 it open. Collapse reserves no gutter: the rail's track animates shut and the
 document takes the space, leaving only the panel icon as a tab on the document's
-right edge. Below ~1080px the rail becomes a full-width
+right edge (plus the issue count only when a blocked cover-letter draft needs
+attention). Below ~1080px the rail becomes a full-width
 accordion below the editor without desktop overflow. New pages reuse this
 skeleton rather than inventing a new arrangement. Resume and Cover letter share
 the same two-row editor chrome:
-the first row is the document action bar, and the second is the formatting
-toolbar. File menus reuse one anchored action-menu component; document-specific
+the first row is the document/file bar, and the second is the formatting
+toolbar. Primary Polish actions live in the workflow rail; file menus reuse one anchored action-menu component; document-specific
 content stays with its owning workflow. Resume Header and Section controls sit
 immediately before Spacing in the formatting row. Every menu in that row is
 icon-only at every width — the row shares its container with the action bar and

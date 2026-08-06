@@ -114,22 +114,48 @@ and `docs/engineering/ui-principles.md`.
   `FormattingToolbar`, and direct editor with the cover-letter layout and
   structure editing disabled. It replaces only the toolbar's resume style-menu
   slot with a RoleFit-owned line-height control plus the shared page control;
-  its file lifecycle and deterministic review rail remain RoleFit-owned. The
+  its file lifecycle, workflow rail, and deterministic resume proposal review
+  remain RoleFit-owned. The
   editor is always mounted: without an opened or restored source, it starts as
   one empty editable paragraph.
-- The Cover letter page has exactly one workflow action. `CoverLetterReview`
-  reports readiness before Tailor and length, provenance, warnings, and Restore
-  after it; it never gates the action behind a review step, and its enabled
-  state depends only on real readiness, never on the presence of an
-  intermediate object.
+- `DocumentWorkflowRail` owns the single named complementary landmark and the
+  shared state/target/readiness/failure/body/footer hierarchy for both document
+  tabs. The shell places each document's one primary **Polish** action beside the
+  rail disclosure control in whichever open or collapsed state is visible.
+  Resume dispatches the Settings-owned Tailor / Recruiter audit / Both choice
+  from both its document action and Prepare; no document-local stage menu exists.
+  Cover letter keeps one Polish request but stages its result as a whole-document
+  proposal: **Accept proposal** applies it atomically, **Discard proposal** performs no
+  mutation, stale inputs disable acceptance, and Restore appears only after acceptance.
+  Typed post-draft issues render as one flat failure list with recovery beside
+  each claim. When that rail is collapsed, its edge tab may show only the
+  bounded issue count; readiness blockers and generic provider failures do not
+  earn a badge.
 - `DocumentWorkbench` owns the two document tabs' shared rail placement,
   disclosure, and responsive scroll boundary. Its wrapper stays semantically
-  neutral because `ReviewRail` and `CoverLetterReview` own their named
-  complementary landmarks. At the stacked breakpoint its layout is the scroll
+  neutral because `DocumentWorkflowRail` owns the one named complementary
+  landmark. At the stacked breakpoint its layout is the scroll
   owner inside the clipped studio host, and Resume gives the shared Fit control
   its editor-pane ref so rail transitions cannot leave Fit stale. Both document
   tabs also give `useRestoredScroll` the layout and editor refs so tab switches
   preserve the offset of whichever element owns scrolling at that width.
+- Opening the rail spends desk margin before it moves the page. Centring the
+  page in the shrunken pane wastes half the remaining whitespace on a right
+  gutter the rail already stands in, so the docked pane biases its start padding
+  by the rail's width: the page holds its position until the margin runs out,
+  then goes flush against the pane's end padding. The bias needs the rendered
+  page width (`DOC_PAGE_WIDTH_PX × zoom`, passed in as `pageWidthPx`), not the
+  816px logical page — zoom scales the real box. Stacked, the rail claims no
+  horizontal space, so the page stays plainly centred.
+- That bias and the rail's track must animate on one clock
+  (`--document-rail-motion`). The page holds still only because the padding
+  gains exactly what the track loses; leaving the padding a step change lands it
+  at full width while the track is still open, throwing the document sideways by
+  the rail's width before it slides back.
+- These tabs' host must be `overflow: clip`, never `hidden`. `hidden` leaves it
+  a scroll container holding horizontal overflow from closed toolbar popovers,
+  and focus landing on a rail control mid-transition scrolled the toolbar,
+  title, and editor sideways together.
 - Never fork shared editor markup or layout CSS for a host tweak. Add a narrow
   package seam and verify both apps.
 - Structure controls stay outside editable DOM and must not affect PDF layout.

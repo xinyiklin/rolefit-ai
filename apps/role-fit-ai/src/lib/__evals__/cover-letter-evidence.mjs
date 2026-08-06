@@ -59,6 +59,15 @@ assert.deepEqual(
   "legacy honest context splits conservatively by authored lines"
 );
 
+assert.deepEqual(
+  splitHonestContextEvidence(
+    "Kubernetes: [describe your exact experience: what you did, where, and when]\n" +
+      "Kubernetes: Operated a small production cluster for Acme."
+  ),
+  ["Kubernetes: Operated a small production cluster for Acme."],
+  "unfinished Guidance prompts never become candidate evidence"
+);
+
 const evidence = buildCoverLetterEvidence({ resumeData, honestContext });
 assert.equal(
   evidence.length,

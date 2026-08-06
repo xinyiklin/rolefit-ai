@@ -245,10 +245,12 @@ Good frontend verification covers:
 - Applications routes its new-work action to Prepare, while its modal edits
   existing committed records and exposes no independent job-intake controls
 - a failed cover-letter request stays local to its page with safe retry copy and
-  never replaces the letter; a successful one loads directly into the editor
-  with an exact one-click Restore, and that Restore plus its result summary
-  disappear together the moment the user edits, opens another document, or
-  runs Tailor again
+  typed bounded issues, never replaces the letter, and filters unfinished
+  Guidance prompts at both evidence boundaries; a successful one stages a
+  fingerprinted whole-letter proposal, only explicit acceptance loads it into
+  the editor with an exact one-click Restore, and that Restore plus its result
+  summary disappear together the moment the user edits, opens another document,
+  or runs Tailor again. Duration grounding covers equivalent word and digit forms
 - the owned typeset page stays the sole editor and live preview; the tracker may
   render or open a saved application document as PDF, `ReviewRail` docks only after polish
   produces review output, and a

@@ -388,7 +388,13 @@
    the white sheets (editor page, preview pages) read as paper on the desk. */
 .studio-body[data-tab="resume"],
 .studio-body[data-tab="cover"] {
-  overflow: hidden;
+  /* `clip`, not `hidden`: `hidden` still makes this a scroll container, and
+     these tabs carry ~69px of horizontal overflow from closed, absolutely
+     positioned toolbar popovers. Focusing the rail's toggle while its track was
+     still animating — the control sits outside the box until it settles — let
+     the browser scroll that overflow into view and drag the toolbar, title, and
+     editor left with it. This pane must never scroll, so make it unscrollable. */
+  overflow: clip;
   display: flex;
   flex-direction: column;
   padding: 0;

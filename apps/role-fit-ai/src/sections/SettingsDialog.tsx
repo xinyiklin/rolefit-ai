@@ -27,9 +27,9 @@ export const SETTINGS_SECTIONS: { id: SettingsSection; label: string }[] = [
 ];
 
 const POLISH_STAGE_DEFAULTS: { value: "tailor" | "review" | "both"; label: string }[] = [
-  { value: "both", label: "Tailor and review" },
+  { value: "both", label: "Polish resume" },
   { value: "tailor", label: "Tailor only" },
-  { value: "review", label: "Review only" }
+  { value: "review", label: "Audit current" }
 ];
 
 type SettingsDialogProps = {
@@ -186,8 +186,8 @@ export function SettingsDialog({
 
                 <div className="settings-default-stages">
                   <div className="settings-default-stages__label" id="settings-polish-stages-label">
-                    <strong>Default Polish stages</strong>
-                    <small>Pre-selected when you click Polish on the resume. Choosing another there updates this.</small>
+                    <strong>Resume workflow</strong>
+                    <small>Polish uses this stage choice everywhere.</small>
                   </div>
                   <div
                     className="segmented-control"
