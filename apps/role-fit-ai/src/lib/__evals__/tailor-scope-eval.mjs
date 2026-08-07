@@ -12,7 +12,7 @@
 
 import assert from "node:assert/strict";
 
-import { buildTailorScope, defaultTailorMode, defaultTailorModes, tailorScopeToText } from "../tailorScope.ts";
+import { buildTailorScope, defaultTailorMode, defaultTailorModes, fullResumeEvidenceText, tailorScopeToText } from "../tailorScope.ts";
 
 function section(id, heading, type, items) {
   return { id, heading, type, items };
@@ -140,5 +140,12 @@ assert.ok(skillsText.includes("Docker, Kubernetes") && !skillsText.includes(": D
 assert.equal(tailorScopeToText(scopeEmpty), "", "an empty scope serializes to an empty string");
 assert.equal(tailorScopeToText(scopeAllOff), "", "every-section-off (nothing tailored or included) serializes to an empty string, even though headings exist in locked.omittedSections");
 assert.equal(tailorScopeToText(scopeAllOff, true), "", "every-section-off stays empty under editableOnly too");
+
+const initialFitEvidence = fullResumeEvidenceText(resume);
+assert.ok(initialFitEvidence.includes("SUMMARY"), "Initial Fit includes Summary evidence");
+assert.ok(initialFitEvidence.includes("EXPERIENCE"), "Initial Fit includes Experience evidence");
+assert.ok(initialFitEvidence.includes("EDUCATION"), "Initial Fit includes read-only Education evidence");
+assert.ok(initialFitEvidence.includes("AWARDS") && initialFitEvidence.includes("HOBBIES"), "Initial Fit includes sections that Tailor mode would leave Off");
+assert.ok(!initialFitEvidence.includes("Jordan Lee") && !initialFitEvidence.includes("jordan@example.com"), "Initial Fit still excludes identity and contact details");
 
 console.log("tailor-scope probes passed");
