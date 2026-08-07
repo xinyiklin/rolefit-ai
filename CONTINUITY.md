@@ -20,13 +20,14 @@ bounded; app-only operational detail belongs in the affected app documentation.
   proposal workflow even when Include is off and still runs if Resume skips,
   stops, or fails. Neither path accepts a proposal or changes the Apply package.
 - [USER+CODE+TOOL] Prepare's flat Application rail now shows selection/audit
-  progression, Initial Fit score/verdict/reason, concise strengths and gaps,
+  progression, Initial Fit score/verdict/reason, concise strengths, blockers,
+  and lower-severity gaps,
   selected-resume/provider provenance, Retry/Stop/Re-audit, and separate
   automation receipts plus manual overrides. A later Recruiter Audit is labeled
   Proposal fit. Apply persists a compact `initialFitAudit` and `initial-fit`
   usage independently from final review/base/tailored fields; reopening shows
-  the baseline as historical without replaying automation. Focused Initial Fit,
-  threshold/orchestration, persistence sanitizer, and 400 workflow guards pass;
+  only a matching baseline as historical without replaying automation. Focused
+  Initial Fit, threshold/orchestration, persistence sanitizer, and 400 workflow guards pass;
   the full RoleFit build/landing/desktop gate and all 75 offline evaluations are
   green. The UI detector reported only existing/range-valid type-ramp advisories,
   with no structural or interaction finding. Browser QA remains UNCONFIRMED

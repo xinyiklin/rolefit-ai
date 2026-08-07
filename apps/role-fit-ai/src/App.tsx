@@ -1976,6 +1976,10 @@ function App() {
             provenance: "saved" as const
           }
         : null;
+  const savedInitialFitMatchesApplication = Boolean(
+    preparedApplication?.initialFitAudit &&
+      (preparedApplication.jobDescription ?? "").trim() === preparedApplicationJobDescription.trim()
+  );
   const currentInitialFitForApplication =
     readyInitialFitAudit
       ? {
@@ -1985,11 +1989,9 @@ function App() {
           resumeFileName: readyInitialFitAudit.resumeFileName,
           completedAt: readyInitialFitAudit.completedAt
         }
-      : (preparedApplication?.initialFitAudit ?? null);
-  const savedInitialFitMatchesApplication = Boolean(
-    preparedApplication?.initialFitAudit &&
-      (preparedApplication.jobDescription ?? "").trim() === preparedApplicationJobDescription.trim()
-  );
+      : savedInitialFitMatchesApplication
+        ? (preparedApplication?.initialFitAudit ?? null)
+        : null;
   const liveInitialFitResult =
     readyInitialFitAudit
       ? readyInitialFitAudit
@@ -2008,7 +2010,12 @@ function App() {
           .filter((entry) => entry.status === "covered")
           .slice(0, 3)
           .map((entry) => entry.where ? `${entry.keyword} · ${entry.where}` : entry.keyword),
+        blockers: liveInitialFitResult.review.gaps
+          .filter((gap) => gap.severity === "BLOCKER")
+          .slice(0, 3)
+          .map((gap) => gap.gap),
         gaps: liveInitialFitResult.review.gaps
+          .filter((gap) => gap.severity !== "BLOCKER")
           .slice(0, 3)
           .map((gap) => `${gap.gap} · ${gap.severity.toLowerCase()}`),
         resumeFileName: liveInitialFitResult.resumeFileName,

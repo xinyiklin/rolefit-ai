@@ -336,7 +336,10 @@ export function useApplyFlow({
       status,
       appliedAt: existing?.appliedAt ?? now,
       aiUsage,
-      initialFitAudit: initialFitAudit ?? existing?.initialFitAudit,
+      // App supplies the saved audit only when it still matches this prepared
+      // job. An explicit absence must clear an older baseline instead of
+      // retaining it without the matching initial-fit provenance above.
+      initialFitAudit: initialFitAudit ?? undefined,
       ...(materialSelection.resume
         ? {
             fitScore: headlineScore,

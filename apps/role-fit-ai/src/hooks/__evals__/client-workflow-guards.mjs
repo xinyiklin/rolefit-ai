@@ -196,6 +196,16 @@ assert.match(
   /Excluding a[\s\S]{0,180}?never deletes an older tracker artifact/,
   "excluding a material on re-Apply is explicitly non-destructive"
 );
+assert.match(
+  applyFlow,
+  /initialFitAudit: initialFitAudit \?\? undefined/,
+  "Apply clears an unmatched historical Initial Fit instead of retaining it without provenance"
+);
+assert.doesNotMatch(
+  applyFlow,
+  /initialFitAudit: initialFitAudit \?\? existing\?\.initialFitAudit/,
+  "Apply never restores an Initial Fit after App has rejected it as belonging to another prepared job"
+);
 
 // Apply's post-commit download step. The PDFs are a side effect of an already
 // committed application, so their ordering and failure handling must not be
@@ -835,8 +845,28 @@ assert.match(
 );
 assert.match(
   prepareDecisionCheckpoint,
-  /id="prepare-initial-fit-title">Initial Fit<\/p>[\s\S]{0,2200}?initialFit\.message[\s\S]{0,1000}?onStopInitialFit[\s\S]{0,900}?Re-audit fit/,
+  /id="prepare-initial-fit-title">Initial Fit<\/p>[\s\S]{0,3600}?initialFit\.message[\s\S]{0,1000}?onStopInitialFit[\s\S]{0,900}?Re-audit fit/,
   "Prepare renders Initial Fit as the required automatic decision checkpoint with progress and recovery"
+);
+assert.match(
+  prepareDecisionCheckpoint,
+  /initialFit\.strengths[\s\S]{0,900}?<strong>Blockers<\/strong>[\s\S]{0,900}?initialFit\.gaps/,
+  "Initial Fit distinguishes hard blockers from strengths and lower-severity gaps"
+);
+assert.match(
+  app,
+  /blockers: liveInitialFitResult\.review\.gaps[\s\S]{0,180}?gap\.severity === "BLOCKER"[\s\S]{0,260}?gap\.severity !== "BLOCKER"/,
+  "the decision checkpoint derives blockers and general gaps from disjoint severity groups"
+);
+assert.ok(
+  app.indexOf("const savedInitialFitMatchesApplication =") <
+    app.indexOf("const currentInitialFitForApplication ="),
+  "Apply decides whether saved Initial Fit still matches before selecting its persistence value"
+);
+assert.match(
+  app,
+  /: savedInitialFitMatchesApplication\s*\? \(preparedApplication\?\.initialFitAudit \?\? null\)\s*: null/,
+  "only a saved Initial Fit for the current prepared job may survive without a fresh audit"
 );
 assert.match(
   prepareDecisionCheckpoint,

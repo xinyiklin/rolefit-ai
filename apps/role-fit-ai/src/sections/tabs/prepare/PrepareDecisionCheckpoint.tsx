@@ -12,6 +12,7 @@ export type PrepareInitialFitView = {
   verdict?: StrictReviewVerdict;
   reason?: string;
   strengths?: string[];
+  blockers?: string[];
   gaps?: string[];
   message?: string;
   resumeFileName?: string;
@@ -133,12 +134,18 @@ export function PrepareDecisionCheckpoint({
             {initialFit.status === "stale" ? (
               <p className="prepare-note is-warn" role="status">{initialFit.message}</p>
             ) : null}
-            {initialFit.strengths?.length || initialFit.gaps?.length ? (
+            {initialFit.strengths?.length || initialFit.blockers?.length || initialFit.gaps?.length ? (
               <div className="prepare-fit-evidence">
                 {initialFit.strengths?.length ? (
                   <div>
                     <strong>Strengths</strong>
                     <ul>{initialFit.strengths.map((strength, index) => <li key={`${index}:${strength}`}>{strength}</li>)}</ul>
+                  </div>
+                ) : null}
+                {initialFit.blockers?.length ? (
+                  <div>
+                    <strong>Blockers</strong>
+                    <ul>{initialFit.blockers.map((blocker, index) => <li key={`${index}:${blocker}`}>{blocker}</li>)}</ul>
                   </div>
                 ) : null}
                 {initialFit.gaps?.length ? (
