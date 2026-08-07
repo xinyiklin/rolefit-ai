@@ -1,17 +1,16 @@
 import assert from "node:assert/strict";
-import { readdirSync, readFileSync } from "node:fs";
-import { extname, relative, resolve } from "node:path";
+import { execFileSync } from "node:child_process";
+import { existsSync, readFileSync } from "node:fs";
+import { extname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repoRoot = fileURLToPath(new URL("../../../../../", import.meta.url));
-const appRoot = resolve(repoRoot, "apps/role-fit-ai");
 const retiredTerm = ["dis", "till"].join("");
 const retiredPattern = new RegExp(retiredTerm, "gi");
 const textExtensions = new Set([
   ".cjs", ".css", ".html", ".js", ".json", ".jsx", ".md", ".mjs",
   ".ts", ".tsx", ".txt", ".yaml", ".yml"
 ]);
-const skippedDirectories = new Set([".forge", ".git", ".trash", "dist", "node_modules", "workspace"]);
 
 // Exact counts make this an intentional compatibility ledger, not a broad
 // file-level exemption. Adding even one stale mention requires a reviewed edit
@@ -39,26 +38,40 @@ const expectedCounts = new Map([
   ["apps/role-fit-ai/src/sections/SessionsRail.tsx", 2]
 ]);
 
-function collectTextFiles(directory, files = []) {
-  for (const entry of readdirSync(directory, { withFileTypes: true })) {
-    if (entry.isDirectory()) {
-      if (!skippedDirectories.has(entry.name)) collectTextFiles(resolve(directory, entry.name), files);
-      continue;
-    }
-    if (textExtensions.has(extname(entry.name))) files.push(resolve(directory, entry.name));
+// Driven by git rather than a directory walk: git reports POSIX separators, so
+// the ledger keys below match on Windows as well as Linux CI, and git's ignore
+// rules define the scope instead of a hardcoded skip list — finer-grained, so an
+// un-ignored file inside an otherwise ignored directory is still scanned.
+// `--exclude-standard` filters untracked files only: a force-added personal file
+// would still be read, and the exact counts fail on it rather than leak it
+// quietly. `--others` keeps a new source file in scope before it is staged.
+function scannedTextFiles() {
+  let listed;
+  try {
+    listed = execFileSync(
+      "git",
+      ["ls-files", "-z", "--cached", "--others", "--exclude-standard", "--", "CONTINUITY.md", "apps/role-fit-ai"],
+      { cwd: repoRoot, encoding: "utf8", maxBuffer: 32 * 1024 * 1024 }
+    );
+  } catch (cause) {
+    throw new Error(
+      "this contract reads its file list from git: `git ls-files` failed. Is git on PATH and is this a repository?",
+      { cause }
+    );
   }
-  return files;
+  const files = listed.split("\0").filter(Boolean);
+  // An empty list would satisfy the ledger vacuously instead of failing.
+  assert.ok(files.length, "git listed no files to scan");
+  return files.filter((file) => textExtensions.has(extname(file)));
 }
 
-const files = [resolve(repoRoot, "CONTINUITY.md"), ...collectTextFiles(appRoot)]
-  // This ignored operational archive preserves old handoff receipts; the tracked
-  // root continuity file carries the current rename contract.
-  .filter((file) => file !== resolve(appRoot, "CONTINUITY.md"));
-
 const actualCounts = new Map();
-for (const file of files) {
-  const count = readFileSync(file, "utf8").match(retiredPattern)?.length ?? 0;
-  if (count > 0) actualCounts.set(relative(repoRoot, file), count);
+for (const file of scannedTextFiles()) {
+  const absolute = resolve(repoRoot, file);
+  // Tracked but deleted in the working tree: there is nothing to scan.
+  if (!existsSync(absolute)) continue;
+  const count = readFileSync(absolute, "utf8").match(retiredPattern)?.length ?? 0;
+  if (count > 0) actualCounts.set(file, count);
 }
 
 assert.deepEqual(
