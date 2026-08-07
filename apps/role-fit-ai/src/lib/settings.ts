@@ -8,6 +8,10 @@ import {
   type CitizenshipStatus,
   type EducationLevel
 } from "./candidateFacts.ts";
+import {
+  isAutoPolishThreshold,
+  type AutoPolishThreshold
+} from "./prepareAutomation.ts";
 
 // Auto-saved browser UI preferences (localStorage). Credentials are absent by
 // construction: supported API keys live only in the local provider companion.
@@ -41,6 +45,8 @@ export type PersistedSettings = {
   stageCustomInstructions?: Partial<Record<AiStageId, string>>;
   strictReview?: boolean;
   polishStages?: "tailor" | "review" | "both";
+  resumeAutoPolishThreshold?: AutoPolishThreshold;
+  coverAutoPolishThreshold?: AutoPolishThreshold;
   citizenshipStatus?: CitizenshipStatus;
   legallyAuthorizedToWork?: boolean;
   requiresSponsorship?: boolean;
@@ -111,6 +117,8 @@ const PERSISTED_SETTING_KEYS = [
   "stageCustomInstructions",
   "strictReview",
   "polishStages",
+  "resumeAutoPolishThreshold",
+  "coverAutoPolishThreshold",
   "citizenshipStatus",
   "legallyAuthorizedToWork",
   "requiresSponsorship",
@@ -185,6 +193,18 @@ export function normalizeSettings(value: unknown): PersistedSettings {
   // Migrate legacy strictReview → polishStages when polishStages is absent.
   if (settings.polishStages === undefined && typeof settings.strictReview === "boolean") {
     settings.polishStages = settings.strictReview ? "both" : "tailor";
+  }
+  if (
+    settings.resumeAutoPolishThreshold !== undefined &&
+    !isAutoPolishThreshold(settings.resumeAutoPolishThreshold)
+  ) {
+    delete settings.resumeAutoPolishThreshold;
+  }
+  if (
+    settings.coverAutoPolishThreshold !== undefined &&
+    !isAutoPolishThreshold(settings.coverAutoPolishThreshold)
+  ) {
+    delete settings.coverAutoPolishThreshold;
   }
   // "unspecified" is the neutral default (not a selectable option), so add it
   // explicitly — the option lists carry only the concrete values.

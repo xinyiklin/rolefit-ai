@@ -23,6 +23,7 @@ export type PrepareFitAssessment = {
 
 type PrepareApplicationRailProps = {
   activity: PrepareActivity | null;
+  decisionCheckpoint: ReactNode;
   fitAssessment: PrepareFitAssessment | null;
   linkedApplication: Application | null;
   readiness: PreparationReadiness;
@@ -33,6 +34,7 @@ type PrepareApplicationRailProps = {
 
 export function PrepareApplicationRail({
   activity,
+  decisionCheckpoint,
   fitAssessment,
   linkedApplication,
   readiness,
@@ -59,28 +61,23 @@ export function PrepareApplicationRail({
           {children}
         </div>
 
-        <div className="prepare-fit">
-          <p className="prepare-page__eyebrow">Fit</p>
-          {fitAssessment ? (
-            <>
-              <div className="prepare-fit__summary">
-                <strong className={`verdict-pill ${verdictPillClass(fitAssessment.verdict)}`}>
-                  {VERDICT_LABEL[fitAssessment.verdict]}
-                </strong>
-                <span>
-                  {fitAssessment.score === null ? "" : `${fitAssessment.score}/100 · `}
-                  {fitAssessment.provenance === "current" ? "Current audit" : "Historical audit"}
-                </span>
-              </div>
-              {fitAssessment.reason ? <p>{displayVerdictReason(fitAssessment.reason)}</p> : null}
-            </>
-          ) : (
-            <>
-              <strong className="prepare-fit__empty">Not audited</strong>
-              <p>Run Recruiter audit to compare your resume evidence with this role.</p>
-            </>
-          )}
-        </div>
+        {decisionCheckpoint}
+
+        {fitAssessment ? (
+          <div className="prepare-fit">
+            <p className="prepare-page__eyebrow">Proposal fit</p>
+            <div className="prepare-fit__summary">
+              <strong className={`verdict-pill ${verdictPillClass(fitAssessment.verdict)}`}>
+                {VERDICT_LABEL[fitAssessment.verdict]}
+              </strong>
+              <span>
+                {fitAssessment.score === null ? "" : `${fitAssessment.score}/100 · `}
+                {fitAssessment.provenance === "current" ? "Current final audit" : "Historical final audit"}
+              </span>
+            </div>
+            {fitAssessment.reason ? <p>{displayVerdictReason(fitAssessment.reason)}</p> : null}
+          </div>
+        ) : null}
 
         <div className="prepare-readiness">
           <p className="prepare-page__eyebrow">Readiness</p>

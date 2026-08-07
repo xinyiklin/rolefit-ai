@@ -10,6 +10,7 @@ import type { AiProviderValue } from "../config/aiOptions";
 import { seedStages, stageFieldsToPersist } from "../lib/stageSettings";
 import type { StageConfig, StageId } from "../lib/aiRequest";
 import type { CitizenshipStatus, EducationLevel } from "../lib/candidateFacts";
+import type { AutoPolishThreshold } from "../lib/prepareAutomation";
 
 // Owns every auto-saved AI preference: each stage's provider/model/reasoning-effort
 // config, the shared and per-stage guidance, the candidate facts, and the default
@@ -29,6 +30,12 @@ export function useAiSettings() {
   // Default "tailor" (no review) — preserve the user's choice once they opt in.
   // Legacy strictReview boolean is migrated to polishStages in settings.ts coerce().
   const [polishStages, setPolishStages] = useState<"tailor" | "review" | "both">(saved.polishStages ?? "both");
+  const [resumeAutoPolishThreshold, setResumeAutoPolishThreshold] = useState<AutoPolishThreshold>(
+    saved.resumeAutoPolishThreshold ?? "off"
+  );
+  const [coverAutoPolishThreshold, setCoverAutoPolishThreshold] = useState<AutoPolishThreshold>(
+    saved.coverAutoPolishThreshold ?? "off"
+  );
   const [citizenshipStatus, setCitizenshipStatus] = useState<CitizenshipStatus>(saved.citizenshipStatus ?? "unspecified");
   const [legallyAuthorizedToWork, setLegallyAuthorizedToWork] = useState(saved.legallyAuthorizedToWork ?? true);
   const [requiresSponsorship, setRequiresSponsorship] = useState(saved.requiresSponsorship ?? false);
@@ -46,6 +53,8 @@ export function useAiSettings() {
         customInstructions,
         stageCustomInstructions,
         polishStages,
+        resumeAutoPolishThreshold,
+        coverAutoPolishThreshold,
         citizenshipStatus,
         legallyAuthorizedToWork,
         requiresSponsorship,
@@ -60,6 +69,8 @@ export function useAiSettings() {
     customInstructions,
     stageCustomInstructions,
     polishStages,
+    resumeAutoPolishThreshold,
+    coverAutoPolishThreshold,
     citizenshipStatus,
     legallyAuthorizedToWork,
     requiresSponsorship,
@@ -148,6 +159,8 @@ export function useAiSettings() {
     setCustomInstructions("");
     setStageCustomInstructions({});
     setPolishStages("both");
+    setResumeAutoPolishThreshold("off");
+    setCoverAutoPolishThreshold("off");
     setCitizenshipStatus("unspecified");
     setLegallyAuthorizedToWork(true);
     setRequiresSponsorship(false);
@@ -164,6 +177,10 @@ export function useAiSettings() {
     setHonestContext,
     polishStages,
     setPolishStages,
+    resumeAutoPolishThreshold,
+    setResumeAutoPolishThreshold,
+    coverAutoPolishThreshold,
+    setCoverAutoPolishThreshold,
     citizenshipStatus,
     setCitizenshipStatus,
     legallyAuthorizedToWork,

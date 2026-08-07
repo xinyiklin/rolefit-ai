@@ -30,6 +30,13 @@ try {
           { gap: "PostgreSQL", severity: "HIGH", evidenceType: "exact", canHonestlyAdd: "false" }
         ]
       },
+      initialFitAudit: {
+        score: 77,
+        verdict: "REASONABLE FIT",
+        verdictReason: "Relevant product engineering evidence with a few direct ownership gaps.",
+        resumeFileName: "full-stack.resume",
+        completedAt: "2026-07-28T14:30:00.000Z"
+      },
       // sourceUrls: one dupe of the own jobUrl via a tracking-param variant (must
       // collapse), one dupe of another entry, one distinct URL, one empty (dropped).
       sourceUrls: [
@@ -107,6 +114,31 @@ try {
     failures.push("invalid review severity was normalized into a fabricated judgment");
   }
   if (valid?.review?.gaps?.[0]?.canHonestlyAdd !== false) failures.push("string review boolean became an affirmative judgment");
+  if (
+    valid?.initialFitAudit?.score !== 77 ||
+    valid.initialFitAudit.verdict !== "REASONABLE FIT" ||
+    valid.initialFitAudit.resumeFileName !== "full-stack.resume"
+  ) {
+    failures.push("Initial Fit audit did not roundtrip independently from the final review");
+  }
+  const malformedInitialFit = sanitizeApplications([
+    {
+      id: "bad-initial-fit",
+      title: "Bad Initial Fit",
+      createdAt: "2026-07-01T00:00:00.000Z",
+      updatedAt: "2026-07-29T10:00:00.000Z",
+      initialFitAudit: {
+        score: 42,
+        verdict: "STRONG FIT",
+        verdictReason: "Contradictory band.",
+        resumeFileName: "../escape.resume",
+        completedAt: "2026-07-28T14:30:00.000Z"
+      }
+    }
+  ])[0];
+  if (!malformedInitialFit || malformedInitialFit.initialFitAudit !== undefined) {
+    failures.push("a contradictory or unsafe Initial Fit audit survived sanitization");
+  }
   const canonicalCreatedAt = "2026-07-01T00:00:00.000Z";
   const canonicalUpdatedAt = "2026-07-29T10:00:00.000Z";
   const noncanonicalHeaders = sanitizeApplications([

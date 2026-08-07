@@ -468,7 +468,7 @@ Strict rules:
 - If the resume is genuinely wrong for the role, set verdict to "DON'T APPLY" and applyAsIs to false.
 - You own the complete fit judgment: calculate aiScore.base and aiScore.tailored, choose the verdict, and write verdictReason. The app validates the JSON and score range but does not recompute, cap, or replace your judgment.
 - Make aiScore.tailored and verdict consistent: DON'T APPLY = 0-45, STRETCH = 46-69, REASONABLE FIT = 70-84, STRONG FIT = 85-100. Never use a low score merely because the resume wording differs from the JD; credit exact skills, adjacent technologies, transferable engineering evidence, and the role's stated 0-6 year range appropriately.
-- Score the original resume in aiScore.base and the polished result in aiScore.tailored. With no proposed changes, the two scores should normally be equal. A score lift must come only from real evidence surfaced by the proposed changes, never keyword insertion.
+- Score the original resume in aiScore.base and the polished result in aiScore.tailored. With no proposed changes, the two scores MUST be equal because there is only one unchanged resume. A score lift must come only from real evidence surfaced by the proposed changes, never keyword insertion.
 - Keep coverage, gaps, recommendation, score, verdict, and verdictReason mutually consistent. Never add a gap for a row marked covered or adjacent. A genuine unmet eligibility blocker still requires DON'T APPLY.
 
 ${aiFitScoringPrompt()}

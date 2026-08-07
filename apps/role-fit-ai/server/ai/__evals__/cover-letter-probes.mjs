@@ -907,7 +907,7 @@ assert.doesNotMatch(
 );
 assert.match(
   clientHook,
-  /if \(!isCurrent\(\)\) return;[\s\S]{0,320}parseCoverLetterBlockedFailure/,
+  /if \(!isCurrent\(\)\) return \{ status: "stopped" \};[\s\S]{0,320}parseCoverLetterBlockedFailure/,
   "a stale response cannot report a blocker over fresher inputs",
 );
 assert.match(

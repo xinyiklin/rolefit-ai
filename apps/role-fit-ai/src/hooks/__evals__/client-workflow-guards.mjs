@@ -41,6 +41,10 @@ const prepareApplicationRail = readFileSync(
   new URL("../../sections/tabs/prepare/PrepareApplicationRail.tsx", import.meta.url),
   "utf8"
 );
+const prepareDecisionCheckpoint = readFileSync(
+  new URL("../../sections/tabs/prepare/PrepareDecisionCheckpoint.tsx", import.meta.url),
+  "utf8"
+);
 const preparationReadiness = readFileSync(new URL("../../lib/preparationReadiness.ts", import.meta.url), "utf8");
 const preparedJobBrief = readFileSync(new URL("../../lib/preparedJobBrief.ts", import.meta.url), "utf8");
 const variantRecommendation = readFileSync(new URL("../../lib/variantRecommendation.ts", import.meta.url), "utf8");
@@ -191,6 +195,16 @@ assert.match(
   applyFlow,
   /Excluding a[\s\S]{0,180}?never deletes an older tracker artifact/,
   "excluding a material on re-Apply is explicitly non-destructive"
+);
+assert.match(
+  applyFlow,
+  /initialFitAudit: initialFitAudit \?\? undefined/,
+  "Apply clears an unmatched historical Initial Fit instead of retaining it without provenance"
+);
+assert.doesNotMatch(
+  applyFlow,
+  /initialFitAudit: initialFitAudit \?\? existing\?\.initialFitAudit/,
+  "Apply never restores an Initial Fit after App has rejected it as belonging to another prepared job"
 );
 
 // Apply's post-commit download step. The PDFs are a side effect of an already
@@ -415,6 +429,19 @@ assert.match(
   settingsDialog,
   /Polish uses this stage choice everywhere\./,
   "Settings explains that the one stage selection applies to every Polish entry point"
+);
+assert.match(settingsDialog, /id: "automation", label: "Automation"/, "Settings gives Prepare automation one owner");
+assert.match(settingsDialog, /Initial fit audit[\s\S]*Always on/, "Initial Fit is required rather than user-toggleable");
+assert.doesNotMatch(settingsDialog, /runInitialAudit|Run initial audit automatically/, "Settings exposes no Initial Fit on\/off preference");
+assert.match(
+  app,
+  /const initialFitPreparationRef = useRef\(initialFitPreparationId\);[\s\S]{0,350}?initialFitAudit\.reset\(\);/,
+  "a new preparation clears the previous audit lifecycle before its own selection and audit"
+);
+assert.match(
+  settingsDialog,
+  /Resume auto-polish[\s\S]*resumeAutoPolishThreshold[\s\S]*Cover letter auto-polish[\s\S]*coverAutoPolishThreshold/,
+  "resume and cover automation expose separate threshold controls"
 );
 assert.ok(
   !existsSync(new URL("../../sections/PolishMenu.tsx", import.meta.url)) &&
@@ -813,13 +840,43 @@ assert.doesNotMatch(
 );
 assert.match(
   prepareApplicationRail,
-  /<h3>Application<\/h3>[\s\S]{0,500}?\{children\}[\s\S]{0,1200}?prepare-fit[\s\S]{0,1200}?prepare-readiness/,
+  /<h3>Application<\/h3>[\s\S]{0,500}?\{children\}[\s\S]{0,200}?\{decisionCheckpoint\}[\s\S]{0,1200}?prepare-readiness/,
   "the prepared rail combines material decisions with readiness instead of reserving a sparse status column"
 );
 assert.match(
+  prepareDecisionCheckpoint,
+  /id="prepare-initial-fit-title">Initial Fit<\/p>[\s\S]{0,3600}?initialFit\.message[\s\S]{0,1000}?onStopInitialFit[\s\S]{0,900}?Re-audit fit/,
+  "Prepare renders Initial Fit as the required automatic decision checkpoint with progress and recovery"
+);
+assert.match(
+  prepareDecisionCheckpoint,
+  /initialFit\.strengths[\s\S]{0,900}?<strong>Blockers<\/strong>[\s\S]{0,900}?initialFit\.gaps/,
+  "Initial Fit distinguishes hard blockers from strengths and lower-severity gaps"
+);
+assert.match(
+  app,
+  /blockers: liveInitialFitResult\.review\.gaps[\s\S]{0,180}?gap\.severity === "BLOCKER"[\s\S]{0,260}?gap\.severity !== "BLOCKER"/,
+  "the decision checkpoint derives blockers and general gaps from disjoint severity groups"
+);
+assert.ok(
+  app.indexOf("const savedInitialFitMatchesApplication =") <
+    app.indexOf("const currentInitialFitForApplication ="),
+  "Apply decides whether saved Initial Fit still matches before selecting its persistence value"
+);
+assert.match(
+  app,
+  /: savedInitialFitMatchesApplication\s*\? \(preparedApplication\?\.initialFitAudit \?\? null\)\s*: null/,
+  "only a saved Initial Fit for the current prepared job may survive without a fresh audit"
+);
+assert.match(
+  prepareDecisionCheckpoint,
+  /id="prepare-automation-title">Automation<\/p>[\s\S]{0,800}?Resume polish[\s\S]{0,500}?Cover letter polish[\s\S]{0,1500}?Polish resume anyway[\s\S]{0,500}?Polish cover letter anyway/,
+  "Prepare reports both independent automation decisions and keeps manual overrides"
+);
+assert.match(
   prepareApplicationRail,
-  /<p className="prepare-page__eyebrow">Fit<\/p>[\s\S]{0,900}?Not audited[\s\S]{0,200}?Run Recruiter audit/,
-  "Prepare names fit as unaudited until a provider-backed recruiter audit exists"
+  /\{fitAssessment \? \([\s\S]{0,300}?Proposal fit[\s\S]{0,800}?Current final audit[\s\S]{0,200}?Historical final audit/,
+  "Prepare keeps the post-polish recruiter judgment separate as optional Proposal fit"
 );
 assert.match(
   app,
@@ -833,6 +890,14 @@ assert.doesNotMatch(
   prepareFitStyles,
   /background:|box-shadow:|border-left:/,
   "the fit row does not become a nested or tinted card"
+);
+const prepareDecisionStyles = prepareStyles.match(/\.prepare-decision\s*\{[\s\S]*?\n\}/)?.[0] ?? "";
+assert.notEqual(prepareDecisionStyles, "", "Prepare gives Initial Fit and Automation one flat decision region");
+assert.match(prepareDecisionStyles, /border-top:/, "the decision checkpoint uses the rail divider hierarchy");
+assert.doesNotMatch(
+  prepareDecisionStyles,
+  /background:|box-shadow:|border-left:/,
+  "the decision checkpoint does not become a nested or tinted card"
 );
 assert.match(
   prepareApplicationRail,
@@ -1394,18 +1459,18 @@ assert.match(
 );
 assert.match(
   app,
-  /function handleTailorPreparedResume\(\) \{\s*if \([\s\S]{0,240}?isSavingBaseResume \|\|[\s\S]{0,100}?isManuallySelectingResumeVariant \|\|[\s\S]{0,100}?isRankingResumeVariants[\s\S]{0,40}?\) return;/,
-  "the prepared-resume Tailor handler fails closed while manual selection or ranking is active"
+  /function handleTailorPreparedResume\(\) \{\s*if \([\s\S]{0,240}?isSavingBaseResume \|\|[\s\S]{0,100}?isManuallySelectingResumeVariant \|\|[\s\S]{0,100}?isRankingResumeVariants \|\|[\s\S]{0,80}?prepareAutomationActive[\s\S]{0,40}?\) return;/,
+  "the prepared-resume Tailor handler fails closed while selection or Prepare automation is active"
 );
 assert.match(
   app,
-  /canTailor=\{[\s\S]{0,180}?canPolish &&[\s\S]{0,80}?!isSavingBaseResume &&[\s\S]{0,80}?!isManuallySelectingResumeVariant &&[\s\S]{0,80}?!isRankingResumeVariants[\s\S]{0,20}?\}/,
-  "App disables Prepare resume Tailor during loading, manual selection, or variant ranking"
+  /canTailor=\{[\s\S]{0,180}?canPolish &&[\s\S]{0,80}?!isSavingBaseResume &&[\s\S]{0,80}?!isManuallySelectingResumeVariant &&[\s\S]{0,80}?!isRankingResumeVariants &&[\s\S]{0,80}?!prepareAutomationActive[\s\S]{0,20}?\}/,
+  "App disables Prepare resume Tailor during selection or automatic orchestration"
 );
 assert.match(
   prepareTab,
-  /const tailorHint =[\s\S]{0,420}?isSelectingResume \|\| isRankingResumeVariants[\s\S]{0,120}?"Wait for the resume variant selection to finish\."[\s\S]{0,120}?!canTailor/,
-  "Prepare explains that resume Tailor is waiting for variant selection before generic blockers"
+  /const tailorHint =[\s\S]{0,420}?isSelectingResume \|\| isRankingResumeVariants[\s\S]{0,120}?"Wait for the resume variant selection to finish\."[\s\S]{0,180}?prepareAutomationBusy[\s\S]{0,120}?"Wait for Prepare automation to finish\."[\s\S]{0,120}?!canTailor/,
+  "Prepare explains selection and automatic orchestration blockers before generic Resume blockers"
 );
 assert.match(
   app,
@@ -1419,8 +1484,8 @@ assert.match(
 );
 assert.match(
   app,
-  /canTailorCoverLetter=\{[\s\S]{0,280}?!isGeneratingCover[\s\S]{0,80}?!isSelectingCoverVariant[\s\S]{0,80}?!isRankingCoverLetterVariants\s*\}/,
-  "Prepare disables cover-letter Tailor during manual or automatic variant selection"
+  /canTailorCoverLetter=\{[\s\S]{0,280}?!isGeneratingCover[\s\S]{0,80}?!isSelectingCoverVariant[\s\S]{0,80}?!isRankingCoverLetterVariants &&[\s\S]{0,80}?!prepareAutomationActive\s*\}/,
+  "Prepare disables cover-letter Tailor during selection or automatic orchestration"
 );
 assert.match(
   app,

@@ -221,10 +221,20 @@ Good frontend verification covers:
   state, every delivered posting and Retry require provider readiness and AI
   Job analysis, a failed run may retain only the deterministic inspection brief, and
   retry/stale guards cannot apply an earlier posting to the current session
-- extension intake never launches Tailor or Review; multiple saved resume
-  variants may still be ranked from their actual strict document contents and
-  a clear high-confidence winner selected while the editor is clean, but that
-  is source selection, not tailoring, and no variant metadata is persisted
+- extension intake supplies no Tailor command or threshold override; after a
+  successful receiving-tab Job analysis, ordinary Prepare safely settles the
+  exact resume selection, automatically runs one-score Initial Fit, and
+  independently evaluates Resume and Cover Letter thresholds. Multiple saved
+  variants are ranked from their strict document contents while the editor is
+  clean, with no persisted variant metadata
+- Initial Fit waits for selection to settle, uses the whole visible non-identity
+  resume as evidence, rejects stale/mismatched fingerprints and malformed or
+  band-inconsistent results, exposes Retry/Stop/Re-audit, and never falls back
+  to a local score. Manual resume changes rerun once after loading; free edits
+  mark stale without per-keystroke reruns
+- the two threshold decisions are inclusive and independent: Cover can run when
+  Resume skips or fails, Cover does not require Include, automatic Resume always
+  includes Tailor, and neither workflow accepts a proposal or changes Include
 - Resume and Cover Letter render the same material-card structure with separate
   variant selectors and Include toggles, neither is labeled optional, and a
   fresh prepared job starts with Resume included and Cover Letter excluded
@@ -244,7 +254,9 @@ Good frontend verification covers:
   historical until a matching Review replaces them
 - opening a stored application validates its job and strict document sources,
   preserves the dirty-document confirmation, restores the session, and lands
-  on Prepare through the visible **Open preparation** action
+  on Prepare through the visible **Open preparation** action. Its saved Initial
+  Fit baseline and `initial-fit` usage provenance restore separately from the
+  final Recruiter review and base/tailored score pair; automation is not replayed
 - Applications routes its new-work action to Prepare, while its modal edits
   existing committed records and exposes no independent job-intake controls
 - a failed cover-letter request stays local to its page with safe retry copy and

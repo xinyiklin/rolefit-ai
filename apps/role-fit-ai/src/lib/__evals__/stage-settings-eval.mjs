@@ -167,4 +167,27 @@ assert.deepEqual(
   "seeding is idempotent through a persist/normalize/seed cycle"
 );
 
+// Prepare automation thresholds are independent persisted preferences. The
+// required Initial Fit audit has no on/off setting of its own.
+assert.deepEqual(
+  normalizeSettings({
+    resumeAutoPolishThreshold: "STRETCH",
+    coverAutoPolishThreshold: "STRONG FIT"
+  }),
+  {
+    resumeAutoPolishThreshold: "STRETCH",
+    coverAutoPolishThreshold: "STRONG FIT"
+  },
+  "independent automation thresholds round-trip"
+);
+assert.deepEqual(
+  normalizeSettings({
+    resumeAutoPolishThreshold: "DON'T APPLY",
+    coverAutoPolishThreshold: "sometimes",
+    runInitialAudit: false
+  }),
+  {},
+  "invalid thresholds and the forbidden Initial Fit toggle are dropped"
+);
+
 console.log("stage-settings probes passed");

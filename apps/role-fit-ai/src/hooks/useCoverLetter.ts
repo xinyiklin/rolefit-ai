@@ -64,6 +64,13 @@ export type CoverLetterFailure =
   | CoverLetterBlockedFailure
   | { kind: "error"; headline: string; detail: string };
 
+export type CoverLetterRunOutcome =
+  | { status: "completed"; proposal: CoverLetterTailorResult }
+  | { status: "blocked"; reason: string }
+  | { status: "failed"; reason: string }
+  | { status: "stopped" }
+  | { status: "busy" };
+
 function tailorResponse(value: unknown): CoverLetterTailorResult | null {
   if (!value || typeof value !== "object") return null;
   const candidate = value as Partial<CoverLetterTailorResult>;
@@ -316,24 +323,23 @@ export function useCoverLetter({
     return { controller, isCurrent };
   }, [invalidateCoverRequest]);
 
-  async function handleTailorCoverLetter() {
+  async function handleTailorCoverLetter(): Promise<CoverLetterRunOutcome> {
+    if (requestAbortRef.current) return { status: "busy" };
     if (!preflight.canTailor) {
-      setCoverStatus(
-        preflight.blockers[0] ?? "Complete the missing detail first.",
-      );
-      return;
+      const reason = preflight.blockers[0] ?? "Complete the missing detail first.";
+      setCoverStatus(reason);
+      return { status: "blocked", reason };
     }
     const hasResumeEvidence = evidenceItems.some((item) => item.source === "resume");
     const hasPreparedJob = jobText.trim().length >= 40;
     if (!hasResumeEvidence || !hasPreparedJob) {
-      setCoverStatus(
-        !hasResumeEvidence && !hasPreparedJob
+      const reason = !hasResumeEvidence && !hasPreparedJob
           ? "Add your resume and prepare the job on Prepare."
           : !hasResumeEvidence
             ? "Add your resume first."
-            : "Prepare the job on Prepare first."
-      );
-      return;
+            : "Prepare the job on Prepare first.";
+      setCoverStatus(reason);
+      return { status: "blocked", reason };
     }
     if (!providerReady) {
       setFailure({
@@ -347,7 +353,7 @@ export function useCoverLetter({
         errorHeadline: "Provider unavailable",
         error: providerMessage,
       });
-      return;
+      return { status: "failed", reason: providerMessage };
     }
 
     const { controller, isCurrent } = beginRequest();
@@ -376,7 +382,7 @@ export function useCoverLetter({
         signal: controller.signal,
       });
       const raw = await response.json();
-      if (!isCurrent()) return;
+      if (!isCurrent()) return { status: "stopped" };
       if (!response.ok) {
         const blocked = parseCoverLetterBlockedFailure(raw);
         if (blocked) {
@@ -396,7 +402,10 @@ export function useCoverLetter({
             requestedModel: aiRequest.selectedModel,
             completedAt: new Date().toISOString(),
           });
-          return;
+          return {
+            status: "blocked",
+            reason: blocked.issues[0]?.detail ?? "Cover-letter evidence review blocked the proposal."
+          };
         }
         throw new ApiError(
           raw.error ?? raw.reasons?.[0] ?? "Could not tailor the cover letter.",
@@ -429,8 +438,9 @@ export function useCoverLetter({
         ...(result.attempts ? { attempts: result.attempts } : {}),
         completedAt: new Date().toISOString(),
       });
+      return { status: "completed", proposal: result };
     } catch (error) {
-      if (!isCurrent()) return;
+      if (!isCurrent()) return { status: "stopped" };
       const classified = classifyFailure(error);
       setFailure({ kind: "error", headline: classified.headline, detail: classified.detail });
       setCoverStatus("No changes were applied. Your current letter is unchanged.");
@@ -445,6 +455,7 @@ export function useCoverLetter({
         requestedModel: aiRequest.selectedModel,
         completedAt: new Date().toISOString(),
       });
+      return { status: "failed", reason: classified.detail };
     } finally {
       if (isCurrent()) {
         requestAbortRef.current = null;

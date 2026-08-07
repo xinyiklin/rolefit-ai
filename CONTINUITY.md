@@ -3,6 +3,36 @@
 Cross-workspace decisions and handoff state. Keep entries factual, dated, and
 bounded; app-only operational detail belongs in the affected app documentation.
 
+## 2026-08-07
+
+- [USER+CODE+TOOL] Prepare no longer stops at Job analysis. Every successful
+  fresh preparation has a unique identity, safely settles the selected resume
+  variant, and automatically runs one-score Initial Fit against that exact
+  document version and the whole visible non-identity resume. Initial Fit reuses
+  Recruiter Audit configuration and validation, carries generation/abort/stale
+  guards, and never substitutes a local score. Resume edits mark the result
+  stale without per-keystroke reruns; a completed manual variant load triggers
+  one new audit.
+- [USER+CODE+TOOL] Settings now owns independent inclusive Resume and Cover
+  Letter automation thresholds, each defaulting to Off. One Initial Fit verdict
+  evaluates both policies separately. Automatic Resume always includes Tailor
+  and may append the configured final audit; automatic Cover uses the dedicated
+  proposal workflow even when Include is off and still runs if Resume skips,
+  stops, or fails. Neither path accepts a proposal or changes the Apply package.
+- [USER+CODE+TOOL] Prepare's flat Application rail now shows selection/audit
+  progression, Initial Fit score/verdict/reason, concise strengths, blockers,
+  and lower-severity gaps,
+  selected-resume/provider provenance, Retry/Stop/Re-audit, and separate
+  automation receipts plus manual overrides. A later Recruiter Audit is labeled
+  Proposal fit. Apply persists a compact `initialFitAudit` and `initial-fit`
+  usage independently from final review/base/tailored fields; reopening shows
+  only a matching baseline as historical without replaying automation. Focused
+  Initial Fit, threshold/orchestration, persistence sanitizer, and 400 workflow guards pass;
+  the full RoleFit build/landing/desktop gate and all 75 offline evaluations are
+  green. The UI detector reported only existing/range-valid type-ramp advisories,
+  with no structural or interaction finding. Browser QA remains UNCONFIRMED
+  under the flag-first policy.
+
 ## 2026-08-06
 
 - [TOOL] `job-analysis-rename-contract.mjs` now takes its file list from

@@ -68,11 +68,11 @@ const SALARY_PERIODS = ["yr", "mo", "hr"] as const;
 const REVIEW_GAP_SEVERITIES = ["BLOCKER", "HIGH", "MEDIUM", "LOW"] as const;
 const REVIEW_VERDICTS = ["STRONG FIT", "REASONABLE FIT", "STRETCH", "DON'T APPLY"] as const;
 // Per-stage AI-usage provenance: which model produced each pipeline stage's
-// output (job-analysis / tailor / review / cover / answers). `source` is required and
+// output (job-analysis / initial-fit / tailor / review / cover / answers). `source` is required and
 // enumerated; a stage whose source is not one of these is dropped entirely so a
 // malformed entry can never persist a half-recorded provenance row.
 const AI_USAGE_SOURCES = ["ai", "local", "none"] as const;
-// A stage key is a short lowercase slug (e.g. "job-analysis", "tailor", "review",
+// A stage key is a short lowercase slug (e.g. "job-analysis", "initial-fit", "tailor", "review",
 // "cover", "answers"). Keep the shape narrow so the map can't be used as an
 // arbitrary key/value store.
 const AI_USAGE_STAGE_RE = /^[a-z][a-z0-9-]{0,23}$/;
@@ -370,6 +370,42 @@ function sanitizeAiUsage(raw: unknown) {
   return count ? out : undefined;
 }
 
+function sanitizeInitialFitAudit(raw: unknown) {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined;
+  const r = raw as Record<string, unknown>;
+  if (typeof r.score !== "number" || !Number.isInteger(r.score) || r.score < 0 || r.score > 100) {
+    return undefined;
+  }
+  const score = sanitizeScore(r.score);
+  if (
+    score === null ||
+    !inList(REVIEW_VERDICTS, r.verdict) ||
+    !isCanonicalApplicationTimestamp(r.completedAt)
+  ) return undefined;
+  const expectedVerdict = score >= 85
+    ? "STRONG FIT"
+    : score >= 70
+      ? "REASONABLE FIT"
+      : score >= 46
+        ? "STRETCH"
+        : "DON'T APPLY";
+  if (r.verdict !== expectedVerdict) return undefined;
+  const verdictReason = sanitizeString(r.verdictReason, 1_000).trim();
+  const resumeFileName = sanitizeString(r.resumeFileName, 240).trim();
+  if (
+    !verdictReason ||
+    !resumeFileName ||
+    /[\u0000-\u001f\u007f/\\]/.test(resumeFileName)
+  ) return undefined;
+  return {
+    score,
+    verdict: r.verdict,
+    verdictReason,
+    resumeFileName,
+    completedAt: r.completedAt
+  };
+}
+
 function sanitizeApplication(raw: unknown) {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
   const r = raw as Record<string, unknown>;
@@ -430,6 +466,7 @@ function sanitizeApplication(raw: unknown) {
     baseFitScore: sanitizeScore(r.baseFitScore),
     tailoredFitScore: sanitizeScore(r.tailoredFitScore),
     fitScoreSource: r.fitScoreSource === "ai" ? r.fitScoreSource : null,
+    initialFitAudit: sanitizeInitialFitAudit(r.initialFitAudit),
     templateId: typeof r.templateId === "string" ? r.templateId.slice(0, 80) : "",
     review: sanitizeReview(r.review),
     missingRequiredSkills: sanitizeMissingRequiredSkills(r.missingRequiredSkills),

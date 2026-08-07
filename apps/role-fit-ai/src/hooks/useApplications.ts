@@ -12,6 +12,7 @@ import {
   type ApplicationMutation
 } from "../lib/applicationMutation";
 import type { ApplicationDocumentArtifacts } from "../../shared/applicationDocumentContract.ts";
+import type { InitialFitAudit } from "../lib/initialFitAudit";
 
 export type { ApplicationAiUsage, StageAiUsage } from "../lib/aiUsage";
 
@@ -56,6 +57,15 @@ export type ApplicationReview = {
   gaps: ApplicationReviewGap[];
   recommendation: { applyAsIs: boolean; reason: string; coverLetterAngle: string; topEdits: string[] };
 };
+
+// Historical decision checkpoint captured separately from the later
+// post-polish comparison. The full live review stays in Prepare; the tracker
+// keeps the decision, selected source, and timestamp without conflating it with
+// Application.review or the base/tailored score pair.
+export type ApplicationInitialFitAudit = Pick<
+  InitialFitAudit,
+  "score" | "verdict" | "verdictReason" | "resumeFileName" | "completedAt"
+>;
 
 // A drafted application-question answer (or per-role description) the user chose
 // to save with this application from the Application Questions tab.
@@ -114,7 +124,7 @@ export type Application = {
   // jobDescription so later prepared-brief edits cannot rewrite View source or
   // change what "Prepare again" analyzes.
   rawJobDescription?: string;
-  // Per-stage AI usage snapshot (job analysis/tailor/review/cover), captured at Apply
+  // Per-stage AI usage snapshot (job analysis/initial fit/tailor/review/cover), captured at Apply
   // time. Whole-map-replace on upsert — an incoming snapshot always wins, no
   // deep per-stage merge.
   aiUsage?: ApplicationAiUsage;
@@ -149,6 +159,7 @@ export type Application = {
   tailoredFitScore?: number | null;
   // A fit comparison is persisted only when AI Review produced it.
   fitScoreSource?: "ai" | null;
+  initialFitAudit?: ApplicationInitialFitAudit;
   templateId?: string;
   review?: ApplicationReview;
   missingRequiredSkills?: MissingRequiredSkill[];
@@ -619,7 +630,7 @@ export function useApplications() {
 
   // Merge a duplicate group into one canonical record: keep the canonical's
   // fields, absorb every other member's discovered URLs as sourceUrls, adopt the
-  // earliest createdAt, backfill rawJobDescription/aiUsage only when the canonical
+  // earliest createdAt, backfill rawJobDescription/aiUsage/Initial Fit only when the canonical
   // lacks them, then delete the other members. Destructive (removes rows) — the
   // caller confirms first. No-ops on an unknown canonicalId or a <2 member set,
   // so a stale group (already merged in another tab) can't drop data.
@@ -661,6 +672,8 @@ export function useApplications() {
         sourceUrls,
         rawJobDescription: canonical.rawJobDescription || others.find((m) => m.rawJobDescription)?.rawJobDescription,
         aiUsage: canonical.aiUsage ?? others.find((m) => m.aiUsage)?.aiUsage,
+        initialFitAudit:
+          canonical.initialFitAudit ?? others.find((m) => m.initialFitAudit)?.initialFitAudit,
         duplicateDismissedIds: inheritedDismissals.length ? inheritedDismissals : undefined,
         createdAt: earliestCreatedAt,
         updatedAt: nextApplicationRevision(canonical.updatedAt)
