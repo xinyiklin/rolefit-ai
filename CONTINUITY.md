@@ -31,9 +31,11 @@ bounded; app-only operational detail belongs in the affected app documentation.
   eligibility and capability rows are disjoint, and all 40 requirement-derived
   rows survive the shared parser. Initial Fit `MISSING` requires explicit
   adverse evidence or an anchored lower-bound years mismatch; sponsorship
-  polarity is clause-aware. Submission visibility separately permits `MISSING`
-  with exact honest-context evidence only when non-adverse, relevant evidence
-  positively proves the qualification can be surfaced. Only unresolved
+  polarity is clause-aware after contraction/adverb and alphanumeric-modifier
+  normalization, and duration anchors use exact tokens rather than prefixes.
+  Submission visibility separately permits `MISSING` with exact honest-context
+  evidence only when common equivalent negative forms have been rejected and
+  relevant evidence positively proves the qualification can be surfaced. Only unresolved
   eligibility may recommend confirmation, and eligibility never alters the fit
   verdict. User-facing summaries and ledger explanations derive from canonical
   rows, while remaining Review advice passes technology, proper-claim, numeric,

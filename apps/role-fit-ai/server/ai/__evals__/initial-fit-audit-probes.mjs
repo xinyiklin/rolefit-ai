@@ -159,7 +159,11 @@ for (const positiveContext of [
   "No future sponsorship required.",
   "No employment sponsorship is needed.",
   "Work visa sponsorship is not required.",
-  "No sponsorship now or in the future is required."
+  "No sponsorship now or in the future is required.",
+  "I don't need sponsorship.",
+  "I won't require sponsorship.",
+  "I do not currently need sponsorship.",
+  "No H-1B sponsorship is required."
 ]) {
   const satisfied = resolveInitialFitAuditOutcome({
     fitAssessment: {
@@ -183,7 +187,8 @@ for (const adverseContext of [
   "I need work visa sponsorship.",
   "I will require future sponsorship.",
   "I seek employment sponsorship.",
-  "Work visa sponsorship is required."
+  "Work visa sponsorship is required.",
+  "I require H-1B sponsorship."
 ]) {
   const notSatisfied = resolveInitialFitAuditOutcome({
     fitAssessment: {
@@ -366,6 +371,16 @@ assert.equal(
   missingYearsOutcome("Candidates need 3 years of Python experience.", "I have 2 years of Java experience."),
   null,
   "a lone duration without a requirement anchor remains uncertain"
+);
+assert.equal(
+  missingYearsOutcome("Candidates need at least 3 years of Java experience.", "I have 2 years of JavaScript experience."),
+  null,
+  "JavaScript duration evidence cannot manufacture a Java mismatch"
+);
+assert.equal(
+  missingYearsOutcome("Candidates need at least 3 years of JavaScript experience.", "I have 2 years of Java experience."),
+  null,
+  "Java duration evidence cannot manufacture a JavaScript mismatch"
 );
 
 const mixedSponsorshipContext = "I do not require sponsorship now, but I will require future sponsorship.";

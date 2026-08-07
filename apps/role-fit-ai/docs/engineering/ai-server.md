@@ -394,11 +394,13 @@ modules under `server/ai/` so no single file carries the whole pipeline:
   independent advice lists remain capped at 16.
   Initial Fit `MISSING` requires explicit adverse evidence or a minimum-years
   mismatch whose candidate duration is anchored to the same qualification;
-  ranges use their lower bound, and ambiguity remains `UNCERTAIN`. Sponsorship
-  polarity is resolved per clause, including modifier phrases such as visa,
-  future, and employment sponsorship. Submission visibility uses a separate
-  rule: `MISSING` may keep exact `HONEST_CONTEXT` evidence only when non-adverse,
-  relevant evidence positively establishes the qualification and
+  ranges use their lower bound, duration anchors match whole tokens rather than
+  prefixes, and ambiguity remains `UNCERTAIN`. Sponsorship polarity is resolved
+  per clause after normalizing common contractions, bounded adverbs, and
+  alphanumeric modifiers such as H-1B. Submission visibility uses a separate
+  rule: `MISSING` may keep exact `HONEST_CONTEXT` evidence only when common
+  contracted, possessive, experiential, and adjectival negative forms have been
+  rejected and relevant evidence positively establishes the qualification and
   `canSurfaceInResume=true`. Eligibility never changes the fit verdict, and
   `CONFIRM_ELIGIBILITY` is valid only while eligibility is unresolved.
   Summary, reason, explanation, strength, concern, and missing-evidence prose

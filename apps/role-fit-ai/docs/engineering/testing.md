@@ -234,14 +234,16 @@ Good frontend verification covers:
   mark stale without per-keystroke reruns
 - Initial Fit adversarial probes cover normalized exact job/evidence excerpts,
   duplicate and cross-ledger source requirements, one-token technology
-  insertion, clause-level sponsorship polarity with modifier phrases,
-  `cannot relocate`, anchored lower-bound years mismatches, explicit `MISSING`
+  insertion, clause-level sponsorship polarity with contractions, adverbs, and
+  H-1B modifiers, `cannot relocate`, token-anchored lower-bound years mismatches
+  including Java/JavaScript false-friends, explicit `MISSING`
   versus evidence-free `UNCERTAIN`, the eligibility/recommendation matrix,
   source-derived display labels, Strong Fit with failed eligibility, and
   all-covered pessimistic verdicts. Contract and server-to-client round-trip
   probes cover 17 covered rows, 17 adjacent rows, 17 missing-evidence rows, and
   a 40-row split ledger. Submission probes require relevant, positive,
-  non-adverse honest-context evidence for `canSurfaceInResume=true` and reject
+  non-adverse honest-context evidence for `canSurfaceInResume=true`, cover
+  common contracted and equivalent negative wording, and reject
   fabricated technology, metrics, proper claims, or outcomes in user-facing advice
 - the two threshold decisions are inclusive and independent: Cover can run when
   Resume skips or fails, Cover does not require Include, automatic Resume always

@@ -95,6 +95,14 @@ sanitizeTailorSuggestions(
   scope, evasionStats, "", JD
 );
 
+const negativeQualificationContexts = [
+  "I don't have production Kubernetes experience.",
+  "I have no production Kubernetes experience.",
+  "I am not proficient in Kubernetes.",
+  "I have never used Kubernetes.",
+  "I haven't used Kubernetes in production."
+];
+
 const checks = [
   ["string booleans cannot mark missing-skill evidence honestly addable", (() => {
     const items = sanitizeMissingRequiredSkills(
@@ -485,21 +493,23 @@ const checks = [
     } }, "Python is required.", "Technical Skills: TypeScript.", "");
     return result.submissionAssessment === null;
   })()],
-  ["negative honest context cannot authorize surfacing a missing qualification", (() => {
-    const honestContext = "I do not have production Kubernetes experience.";
-    const result = resolveReviewOutcome({ submissionAssessment: {
-      readiness: "REVISIONS_RECOMMENDED", summary: "Review needed.",
-      requirementVisibility: [{
-        id: "kubernetes", requirement: "Production Kubernetes experience",
-        sourceRequirement: "Production Kubernetes experience is required.",
-        importance: "CORE", coverage: "MISSING",
-        evidence: [{ source: "HONEST_CONTEXT", excerpt: honestContext }],
-        explanation: "Not visible.", canSurfaceInResume: true
-      }],
-      unsupportedClaims: [], missingEvidence: [], presentationIssues: [], topEdits: []
-    } }, "Production Kubernetes experience is required.", "Technical Skills: Python.", honestContext);
-    return result.submissionAssessment === null;
-  })()],
+  ...negativeQualificationContexts.map((honestContext) => [
+    `negative honest context cannot authorize surfacing: ${honestContext}`,
+    (() => {
+      const result = resolveReviewOutcome({ submissionAssessment: {
+        readiness: "REVISIONS_RECOMMENDED", summary: "Review needed.",
+        requirementVisibility: [{
+          id: "kubernetes", requirement: "Production Kubernetes experience",
+          sourceRequirement: "Production Kubernetes experience is required.",
+          importance: "CORE", coverage: "MISSING",
+          evidence: [{ source: "HONEST_CONTEXT", excerpt: honestContext }],
+          explanation: "Not visible.", canSurfaceInResume: true
+        }],
+        unsupportedClaims: [], missingEvidence: [], presentationIssues: [], topEdits: []
+      } }, "Production Kubernetes experience is required.", "Technical Skills: Python.", honestContext);
+      return result.submissionAssessment === null;
+    })()
+  ]),
   ["positive relevant honest context can authorize surfacing a missing qualification", (() => {
     const honestContext = "I operate production Kubernetes services.";
     const result = resolveReviewOutcome({ submissionAssessment: {

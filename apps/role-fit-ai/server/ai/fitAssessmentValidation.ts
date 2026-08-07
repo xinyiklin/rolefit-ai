@@ -59,11 +59,11 @@ function requirementSourceIsGrounded(
   return sourceExcerptIsGrounded(requirement.sourceRequirement, jobText);
 }
 
-const SPONSORSHIP_WORDS = String.raw`(?:[a-z]+\s+){0,8}sponsorship`;
+const SPONSORSHIP_WORDS = String.raw`(?:[a-z0-9]+\s+){0,8}sponsorship`;
 const SPONSORSHIP_POSITIVE_PATTERNS = [
   new RegExp(String.raw`\bwithout\s+${SPONSORSHIP_WORDS}\b`, "i"),
   new RegExp(String.raw`\bno\s+${SPONSORSHIP_WORDS}(?:\s+[a-z]+){0,8}\s+(?:needed|required)\b`, "i"),
-  new RegExp(String.raw`\b(?:do|does|did|will)\s+not\s+(?:need|require)\s+${SPONSORSHIP_WORDS}\b`, "i"),
+  new RegExp(String.raw`\b(?:do|does|did|will)\s+not\s+(?:[a-z]+\s+){0,3}(?:need|require)\s+${SPONSORSHIP_WORDS}\b`, "i"),
   new RegExp(String.raw`\b${SPONSORSHIP_WORDS}(?:\s+[a-z]+){0,3}\s+not\s+(?:needed|required)\b`, "i")
 ];
 const SPONSORSHIP_ADVERSE_PATTERNS = [
@@ -76,7 +76,7 @@ function sponsorshipPolarity(text: string): "POSITIVE" | "ADVERSE" | null {
     .normalize("NFKC")
     .toLowerCase()
     .split(/(?:[.;!?]+|\bbut\b|\bhowever\b|\balthough\b)/)
-    .map((clause) => normalizedSourceExcerpt(clause))
+    .map((clause) => normalizedCandidateStatement(clause))
     .filter((clause) => clause.includes("sponsorship"));
   let polarity: "POSITIVE" | "ADVERSE" | null = null;
   for (const clause of clauses) {
@@ -89,11 +89,31 @@ function sponsorshipPolarity(text: string): "POSITIVE" | "ADVERSE" | null {
   return polarity;
 }
 
+function normalizedCandidateStatement(value: unknown): string {
+  return normalizedSourceExcerpt(value)
+    .replace(/\bdon't\b/g, "do not")
+    .replace(/\bdoesn't\b/g, "does not")
+    .replace(/\bdidn't\b/g, "did not")
+    .replace(/\bhaven't\b/g, "have not")
+    .replace(/\bhasn't\b/g, "has not")
+    .replace(/\bhadn't\b/g, "had not")
+    .replace(/\bwon't\b/g, "will not")
+    .replace(/\bisn't\b/g, "is not")
+    .replace(/\baren't\b/g, "are not")
+    .replace(/\bwasn't\b/g, "was not")
+    .replace(/\bweren't\b/g, "were not")
+    .replace(/\bcan't\b/g, "cannot");
+}
+
 function candidateEvidenceIsAdverse(value: unknown): boolean {
-  const text = normalizedSourceExcerpt(value);
+  const text = normalizedCandidateStatement(value);
   if (!text) return false;
   const adverseCondition = /\b(?:not authorized|not eligible|cannot|can't|unable|not willing|unwilling)\b/i.test(text)
     || /\b(?:do|does|did) not (?:have|hold|meet|satisfy|possess|qualify)\b/i.test(text)
+    || /\b(?:have|has|had) not (?:used|worked)\b/i.test(text)
+    || /\b(?:have|has|had) no\b/i.test(text)
+    || /\bnever (?:used|worked)\b/i.test(text)
+    || /\bnot (?:proficient|experienced|qualified)\b/i.test(text)
     || /\b(?:lack|lacks|lacking)\b/i.test(text)
     || /\bno (?:active |valid )?(?:security )?(?:clearance|license|licence|certification|degree|authorization|citizenship|experience)\b/i.test(text)
     || /\bexpired\b/i.test(text);
@@ -148,6 +168,15 @@ function durationAnchors(value: unknown): string[] {
     .filter((token) => !DURATION_ANCHOR_STOPWORDS.has(token) && !/^\d+$/.test(token));
 }
 
+function tokenAnchorPositions(text: string, anchor: string): number[] {
+  const positions: number[] = [];
+  for (const match of text.matchAll(/[a-z0-9.#+]+/g)) {
+    const token = match[0].replace(/^\.+|\.+$/g, "");
+    if (token === anchor) positions.push((match.index ?? 0) + match[0].indexOf(token));
+  }
+  return positions;
+}
+
 function relevantCandidateYears(requirement: RequirementAssessment): number | null {
   const anchors = durationAnchors(requirement.sourceRequirement);
   if (anchors.length === 0) return null;
@@ -157,15 +186,13 @@ function relevantCandidateYears(requirement: RequirementAssessment): number | nu
     const matches = [...text.matchAll(new RegExp(String.raw`\b(${YEAR_NUMBER})\s+years?\b`, "gi"))];
     const relevantIndexes = new Set<number>();
     for (const anchor of anchors) {
-      let anchorIndex = text.indexOf(anchor);
-      while (anchorIndex >= 0) {
+      for (const anchorIndex of tokenAnchorPositions(text, anchor)) {
         const distances = matches.map((match) => Math.abs((match.index ?? 0) - anchorIndex));
         const nearestDistance = Math.min(...distances);
         const nearest = distances
           .map((distance, index) => ({ distance, index }))
           .filter(({ distance }) => distance === nearestDistance);
         if (nearest.length === 1) relevantIndexes.add(nearest[0].index);
-        anchorIndex = text.indexOf(anchor, anchorIndex + anchor.length);
       }
     }
     for (const index of relevantIndexes) {
