@@ -48,6 +48,7 @@ const assessment = {
   requirements: [{
     id: "req-backend",
     requirement: "Python and PostgreSQL",
+    sourceRequirement: "Python and PostgreSQL are required.",
     importance: "CORE",
     coverage: "COVERED",
     evidence: [{ source: "RESUME", excerpt: "Python, PostgreSQL" }],

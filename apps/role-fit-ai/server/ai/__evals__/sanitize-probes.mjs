@@ -448,14 +448,17 @@ const checks = [
       readiness: "REVISIONS_RECOMMENDED",
       summary: "The resume shows Python clearly but should foreground deployment scope.",
       requirementVisibility: [{
-        id: "python", requirement: "Python", importance: "CORE", coverage: "COVERED",
+        id: "python", requirement: "Python", sourceRequirement: "Python", importance: "CORE", coverage: "COVERED",
         evidence: [{ source: "RESUME", excerpt: "Python" }],
         explanation: "Python appears in Technical Skills.", canSurfaceInResume: false
       }],
       unsupportedClaims: [], missingEvidence: [], presentationIssues: ["Deployment detail is buried."],
       topEdits: ["Move the deployment bullet higher."]
     } }, "Python and deployment experience are required.", "Technical Skills: Python. Deployed APIs.", "");
-    return result.submissionAssessment?.readiness === "REVISIONS_RECOMMENDED";
+    return result.submissionAssessment?.readiness === "REVISIONS_RECOMMENDED"
+      && /^revisions recommended:/i.test(result.submissionAssessment.summary)
+      && /resume directly presents trusted evidence/i.test(result.submissionAssessment.requirementVisibility[0].explanation)
+      && result.submissionAssessment.topEdits[0] === "Move the deployment bullet higher.";
   })()],
   ["old score-shaped review output is invalidated without conversion", (() => {
     const result = resolveReviewOutcome({ strictReview: { verdict: "STRONG FIT" }, aiScore: { base: 70, tailored: 90 } }, "Python required.", "Python", "");
@@ -468,9 +471,29 @@ const checks = [
   ["submission assessment rejects a requirement absent from the job", (() => {
     const result = resolveReviewOutcome({ submissionAssessment: {
       readiness: "REVISIONS_RECOMMENDED", summary: "Review needed.",
-      requirementVisibility: [{ id: "rust", requirement: "Rust", importance: "CORE", coverage: "MISSING", evidence: [], explanation: "Not visible.", canSurfaceInResume: false }],
+      requirementVisibility: [{ id: "rust", requirement: "Rust", sourceRequirement: "Rust", importance: "CORE", coverage: "MISSING", evidence: [], explanation: "Not visible.", canSurfaceInResume: false }],
       unsupportedClaims: [], missingEvidence: ["Rust"], presentationIssues: [], topEdits: []
     } }, "Python required.", "Python", "");
+    return result.submissionAssessment === null;
+  })()],
+  ["resume visibility cannot claim surfacing is safe without honest-context evidence", (() => {
+    const result = resolveReviewOutcome({ submissionAssessment: {
+      readiness: "REVISIONS_RECOMMENDED", summary: "Review needed.",
+      requirementVisibility: [{ id: "python", requirement: "Python", sourceRequirement: "Python", importance: "CORE", coverage: "MISSING", evidence: [], explanation: "Not visible.", canSurfaceInResume: true }],
+      unsupportedClaims: [], missingEvidence: ["Python"], presentationIssues: [], topEdits: []
+    } }, "Python is required.", "Technical Skills: TypeScript.", "");
+    return result.submissionAssessment === null;
+  })()],
+  ["submission assessment rejects a fabricated technology and metric in top edits", (() => {
+    const result = resolveReviewOutcome({ submissionAssessment: {
+      readiness: "REVISIONS_RECOMMENDED", summary: "Review needed.",
+      requirementVisibility: [{
+        id: "python", requirement: "Python", sourceRequirement: "Python", importance: "CORE", coverage: "COVERED",
+        evidence: [{ source: "RESUME", excerpt: "Python" }], explanation: "Python is visible.", canSurfaceInResume: false
+      }],
+      unsupportedClaims: [], missingEvidence: [], presentationIssues: [],
+      topEdits: ["Add Kubernetes cluster operations and quantify the 30% latency reduction."]
+    } }, "Python is required.", "Technical Skills: Python.", "");
     return result.submissionAssessment === null;
   })()],
   ["review failures preserve actionable safe classifications", (() => {

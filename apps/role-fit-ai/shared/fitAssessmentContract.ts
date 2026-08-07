@@ -39,6 +39,7 @@ export type EvidenceReference = {
 export type RequirementAssessment = {
   id: string;
   requirement: string;
+  sourceRequirement: string;
   importance: RequirementImportance;
   coverage: RequirementCoverage;
   evidence: EvidenceReference[];
@@ -49,6 +50,7 @@ export type RequirementAssessment = {
 export type EligibilityItem = {
   id: string;
   requirement: string;
+  sourceRequirement: string;
   status: EligibilityStatus;
   evidence: EvidenceReference[];
   explanation: string;
@@ -170,12 +172,14 @@ function parseEvidenceReferences(
 
 function parseRequirement(
   value: unknown,
-  maxEvidencePerItem: number
+  maxEvidencePerItem: number,
+  mode: "FIT" | "VISIBILITY"
 ): RequirementAssessment | null {
   const source = record(value);
   if (!hasExactKeys(source, [
     "id",
     "requirement",
+    "sourceRequirement",
     "importance",
     "coverage",
     "evidence",
@@ -184,6 +188,7 @@ function parseRequirement(
   ])) return null;
   const id = text(source?.id, 120);
   const requirement = text(source?.requirement, 600);
+  const sourceRequirement = text(source?.sourceRequirement, 800);
   const importance = exactEnum(source?.importance, REQUIREMENT_IMPORTANCES);
   const coverage = exactEnum(source?.coverage, REQUIREMENT_COVERAGES);
   const evidence = parseEvidenceReferences(source?.evidence, maxEvidencePerItem);
@@ -191,17 +196,31 @@ function parseRequirement(
   if (
     !id ||
     !requirement ||
+    !sourceRequirement ||
     !importance ||
     !coverage ||
     !evidence ||
     !explanation ||
     typeof source?.canSurfaceInResume !== "boolean"
   ) return null;
-  if ((coverage === "COVERED" || coverage === "ADJACENT") && evidence.length === 0) return null;
-  if ((coverage === "MISSING" || coverage === "UNCERTAIN") && evidence.length > 0) return null;
+  const hasHonestContextEvidence = evidence.some((item) => item.source === "HONEST_CONTEXT");
+  if (mode === "FIT") {
+    if (coverage !== "UNCERTAIN" && evidence.length === 0) return null;
+    if (coverage === "UNCERTAIN" && (evidence.length > 0 || source?.canSurfaceInResume === true)) return null;
+    if (coverage === "MISSING" && source?.canSurfaceInResume === true) return null;
+    if (source?.canSurfaceInResume === true && !hasHonestContextEvidence) return null;
+  } else {
+    if ((coverage === "COVERED" || coverage === "ADJACENT") && evidence.length === 0) return null;
+    if ((coverage === "COVERED" || coverage === "ADJACENT") && evidence.some((item) => item.source !== "RESUME")) return null;
+    if (coverage === "UNCERTAIN" && (evidence.length > 0 || source?.canSurfaceInResume === true)) return null;
+    if (coverage === "MISSING" && evidence.some((item) => item.source !== "HONEST_CONTEXT")) return null;
+    if (source?.canSurfaceInResume === true && !hasHonestContextEvidence) return null;
+    if (hasHonestContextEvidence && source?.canSurfaceInResume !== true) return null;
+  }
   return {
     id,
     requirement,
+    sourceRequirement,
     importance,
     coverage,
     evidence,
@@ -217,11 +236,12 @@ function uniqueIds(items: { id: string }[]): boolean {
 function parseRequirements(
   value: unknown,
   limits: Required<ParseLimits>,
-  allowEmpty: boolean
+  allowEmpty: boolean,
+  mode: "FIT" | "VISIBILITY"
 ): RequirementAssessment[] | null {
   if (!Array.isArray(value) || value.length > limits.maxRequirements) return null;
   if (!allowEmpty && value.length === 0) return null;
-  const requirements = value.map((item) => parseRequirement(item, limits.maxEvidencePerItem));
+  const requirements = value.map((item) => parseRequirement(item, limits.maxEvidencePerItem, mode));
   if (!requirements.every((item): item is RequirementAssessment => item !== null)) return null;
   return uniqueIds(requirements) ? requirements : null;
 }
@@ -231,16 +251,17 @@ function parseEligibilityItem(
   maxEvidencePerItem: number
 ): EligibilityItem | null {
   const source = record(value);
-  if (!hasExactKeys(source, ["id", "requirement", "status", "evidence", "explanation"])) return null;
+  if (!hasExactKeys(source, ["id", "requirement", "sourceRequirement", "status", "evidence", "explanation"])) return null;
   const id = text(source?.id, 120);
   const requirement = text(source?.requirement, 600);
+  const sourceRequirement = text(source?.sourceRequirement, 800);
   const status = exactEnum(source?.status, ELIGIBILITY_STATUSES);
   const evidence = parseEvidenceReferences(source?.evidence, maxEvidencePerItem);
   const explanation = text(source?.explanation, 1_200);
-  if (!id || !requirement || !status || !evidence || !explanation) return null;
+  if (!id || !requirement || !sourceRequirement || !status || !evidence || !explanation) return null;
   if ((status === "SATISFIED" || status === "NOT_SATISFIED") && evidence.length === 0) return null;
   if (status === "UNCERTAIN" && evidence.length > 0) return null;
-  return { id, requirement, status, evidence, explanation };
+  return { id, requirement, sourceRequirement, status, evidence, explanation };
 }
 
 function expectedEligibilityStatus(items: EligibilityItem[]): EligibilityStatus {
@@ -286,7 +307,7 @@ export function parseFitAssessment(
   const summary = text(source?.summary, 1_200);
   const verdictReason = text(source?.verdictReason, 1_200);
   const eligibility = parseEligibility(source?.eligibility, limits);
-  const requirements = parseRequirements(source?.requirements, limits, false);
+  const requirements = parseRequirements(source?.requirements, limits, false, "FIT");
   const strengths = stringList(source?.strengths, limits.maxListItems);
   const concerns = stringList(source?.concerns, limits.maxListItems);
   const recommendationSource = record(source?.recommendation);
@@ -335,7 +356,7 @@ export function parseSubmissionAssessment(
   ])) return null;
   const readiness = exactEnum(source?.readiness, SUBMISSION_READINESSES);
   const summary = text(source?.summary, 1_200);
-  const requirementVisibility = parseRequirements(source?.requirementVisibility, limits, true);
+  const requirementVisibility = parseRequirements(source?.requirementVisibility, limits, true, "VISIBILITY");
   const unsupportedClaims = stringList(source?.unsupportedClaims, limits.maxListItems);
   const missingEvidence = stringList(source?.missingEvidence, limits.maxListItems);
   const presentationIssues = stringList(source?.presentationIssues, limits.maxListItems);

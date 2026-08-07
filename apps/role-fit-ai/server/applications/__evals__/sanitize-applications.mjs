@@ -33,6 +33,7 @@ try {
           requirements: [{
             id: "python",
             requirement: "Python",
+            sourceRequirement: "Python is required.",
             importance: "CORE",
             coverage: "COVERED",
             evidence: [{ source: "RESUME", excerpt: "Python" }],

@@ -60,6 +60,16 @@ sanitizer code is executable product behavior and anti-fabrication-critical.
   owns only post-polish document readiness. Validate exact shape, enums,
   evidence references, and semantic consistency; reject invalid output instead
   of synthesizing a replacement.
+- Every normalized requirement carries an exact `sourceRequirement` excerpt
+  from the posting, and every candidate evidence excerpt must be a normalized
+  exact source quotation. Initial Fit `MISSING` requires explicit mismatch
+  evidence while `UNCERTAIN` has none; submission visibility may retain
+  `HONEST_CONTEXT` evidence for a `MISSING` row only when it proves the
+  qualification can be surfaced honestly. Eligibility polarity is validated in
+  context and never changes the fit verdict.
+- User-facing assessment prose derives from the validated ledger wherever
+  possible. Remaining Review advice must pass technology, proper-claim,
+  numeric, and outcome grounding before it can be returned.
 - Tailor emits targeted suggestions grounded in submitted resume/honest context.
   Never import JD-only skills or fabricate claims.
 - Review-only audits the current edited draft. The Review leg of Both receives

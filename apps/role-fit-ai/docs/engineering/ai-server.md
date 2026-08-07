@@ -385,8 +385,18 @@ modules under `server/ai/` so no single file carries the whole pipeline:
   canonical requirement evidence, and an advisory recommendation. Review
   returns a separate `SubmissionAssessment` for requirement visibility,
   unsupported claims, missing evidence, presentation issues, and readiness.
-  Invalid output fails its stage; neither path manufactures a fallback, and
-  document review never overwrites candidate fit.
+  Each normalized requirement retains an exact `sourceRequirement` excerpt
+  from the posting; candidate evidence is accepted only as a normalized exact
+  source quotation, so an inserted token or polarity inversion fails closed.
+  Initial Fit `MISSING` requires explicit mismatch evidence and `UNCERTAIN`
+  carries none. Submission visibility uses a separate rule: `MISSING` may keep
+  exact `HONEST_CONTEXT` evidence only when `canSurfaceInResume=true`, while
+  that surfacing flag can never survive without such evidence. Eligibility
+  polarity is validated in context but never changes the fit verdict.
+  Summary, reason, explanation, strength, concern, and missing-evidence prose
+  is derived from the validated ledger; remaining presentation advice passes
+  the existing technology, proper-claim, numeric, and outcome gates. Invalid
+  output fails its stage, and document review never overwrites candidate fit.
 - `eligibilityLexicon.ts` — work-authorization and credential stems used only
   to ground facts extracted by the job analyzer. Eligibility judgment belongs
   to Initial Fit; this module does not gate or select a verdict.
@@ -532,10 +542,12 @@ The AI must:
   suggestions, and the editor remains the final source of truth
 - keep candidate fit and document readiness separate. Initial Fit distinguishes
   absent, uncertain, adjacent, and covered requirements and treats acceptable
-  alternatives or ranges as one requirement. Post-polish Review evaluates only
-  whether the document visibly and defensibly communicates existing evidence;
-  it returns categorical readiness and prioritized issues, never a second fit
-  verdict or before/after comparison
+  alternatives or ranges as one requirement. Authorization, citizenship,
+  clearance, and other eligibility conditions independently affect automation
+  and recommendation, never the capability verdict. Post-polish Review
+  evaluates only whether the document visibly and defensibly communicates
+  existing evidence; it returns categorical readiness and grounded prioritized
+  issues, never a second fit verdict or before/after comparison
 - write bullets as engineering accomplishments in plain language — no
   brochure vocabulary, no claims the candidate could not defend in an
   interview, and proposed text stays close to the current field's length

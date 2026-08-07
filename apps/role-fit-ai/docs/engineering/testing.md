@@ -232,6 +232,13 @@ Good frontend verification covers:
   semantically inconsistent results, exposes Retry/Stop/Re-audit, and never
   falls back to a local judgment. Manual resume changes rerun once after loading; free edits
   mark stale without per-keystroke reruns
+- Initial Fit adversarial probes cover normalized exact job/evidence excerpts,
+  one-token technology insertion, eligibility polarity inversion,
+  `without sponsorship` / `no sponsorship required`, `cannot relocate`,
+  explicit `MISSING` versus evidence-free `UNCERTAIN`, Strong Fit with failed
+  eligibility, and all-covered pessimistic verdicts. Submission probes require
+  honest-context evidence for `canSurfaceInResume=true` and reject fabricated
+  technology, metrics, proper claims, or outcomes in user-facing advice
 - the two threshold decisions are inclusive and independent: Cover can run when
   Resume skips or fails, Cover does not require Include, automatic Resume always
   includes Tailor, and neither workflow accepts a proposal or changes Include

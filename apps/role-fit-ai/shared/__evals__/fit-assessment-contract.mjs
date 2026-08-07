@@ -9,6 +9,7 @@ const evidence = [{ source: "RESUME", excerpt: "Built and operated Kubernetes se
 const requirement = {
   id: "req-kubernetes",
   requirement: "Production Kubernetes experience",
+  sourceRequirement: "Production Kubernetes experience is required.",
   importance: "CORE",
   coverage: "COVERED",
   evidence,
@@ -18,6 +19,7 @@ const requirement = {
 const eligibilityItem = {
   id: "eligibility-work-auth",
   requirement: "Authorized to work in the United States",
+  sourceRequirement: "Candidates must be authorized to work in the United States.",
   status: "SATISFIED",
   evidence: [{ source: "HONEST_CONTEXT", excerpt: "Authorized to work in the United States." }],
   explanation: "The candidate explicitly supplied this fact."
@@ -41,7 +43,11 @@ assert.equal(parseFitAssessment({ ...assessment, requirements: [] }), null);
 assert.equal(parseFitAssessment({ ...assessment, requirements: [requirement, requirement] }), null);
 assert.equal(parseFitAssessment({
   ...assessment,
-  requirements: [{ ...requirement, coverage: "MISSING", evidence }]
+  requirements: [{ ...requirement, coverage: "MISSING", evidence: [] }]
+}), null);
+assert.equal(parseFitAssessment({
+  ...assessment,
+  requirements: [{ ...requirement, coverage: "UNCERTAIN", evidence }]
 }), null);
 assert.equal(parseFitAssessment({
   ...assessment,
@@ -68,5 +74,21 @@ assert.deepEqual(parseSubmissionAssessment(submission), submission);
 assert.equal(parseSubmissionAssessment({ ...submission, tailoredScore: 92 }), null);
 assert.equal(parseSubmissionAssessment({ ...submission, readiness: "READY", unsupportedClaims: ["Invented metric"] }), null);
 assert.equal(parseSubmissionAssessment({ ...submission, requirementVisibility: [requirement, requirement] }), null);
+assert.equal(parseSubmissionAssessment({
+  ...submission,
+  readiness: "REVISIONS_RECOMMENDED",
+  requirementVisibility: [{ ...requirement, coverage: "MISSING", evidence: [], canSurfaceInResume: true }]
+}), null);
+const surfaceableVisibility = {
+  ...requirement,
+  coverage: "MISSING",
+  evidence: [{ source: "HONEST_CONTEXT", excerpt: "I operate production Kubernetes services." }],
+  canSurfaceInResume: true
+};
+assert.deepEqual(parseSubmissionAssessment({
+  ...submission,
+  readiness: "REVISIONS_RECOMMENDED",
+  requirementVisibility: [surfaceableVisibility]
+})?.requirementVisibility[0], surfaceableVisibility);
 
 console.log("Fit assessment contract probes passed.");
