@@ -131,7 +131,7 @@ export type PrepareTabProps = {
   coverLetterTailorHint: string;
   isTailoringCoverLetter: boolean;
   coverLetterStatus: string;
-  onTailorCoverLetter: () => void | Promise<void>;
+  onTailorCoverLetter: () => void | Promise<unknown>;
   onOpenCoverLetter: () => void;
   reviewGaps: ReviewGap[];
   reviewGapsProvenance: "none" | "current" | "saved";

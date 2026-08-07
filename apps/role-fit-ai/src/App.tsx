@@ -80,6 +80,7 @@ import { usePolishPipeline } from "./hooks/usePolishPipeline";
 import { useWorkspaceResume } from "./hooks/useWorkspaceResume";
 import { useInitialFitAudit } from "./hooks/useInitialFitAudit";
 import { usePreparedResumeSelection } from "./hooks/usePreparedResumeSelection";
+import { usePrepareAutomation } from "./hooks/usePrepareAutomation";
 import { useApplyFlow } from "./hooks/useApplyFlow";
 import { useApplicationDocumentSync } from "./hooks/useApplicationDocumentSync";
 import { useApplicationFiles } from "./hooks/useApplicationFiles";
@@ -1320,18 +1321,6 @@ function App() {
     phase: _myPhase
   });
 
-  // Warn before close/reload when there are unsaved edits OR a job analysis/tailor/
-  // review is mid-flight (losing an in-progress run is as costly as losing edits).
-  // Apply marks each included document clean only after its source persists.
-  useBeforeUnloadGuard(
-    resumeDocumentDirty ||
-      coverLetterEditor.dirty ||
-      isGeneratingCover ||
-      isPolishing ||
-      jobAnalysisProgress.status === "running" ||
-      pendingApplicationWrites > 0
-  );
-
   // ----- Handlers -----
 
   // The workspace / base-resume cluster (state + handlers) lives in
@@ -1664,6 +1653,7 @@ function App() {
     rankingJobDescription === jobDescription.trim() &&
     coverLetterEditor.coverLetterOptions.length > 1
       ? JSON.stringify({
+          preparationId: initialFitPreparationId,
           job: rankingJobDescription,
           variants: coverLetterEditor.coverLetterOptions.map((option) => option.fileName),
           candidatesRevision: coverLetterEditor.coverLetterCandidatesRevision
@@ -1765,8 +1755,52 @@ function App() {
     readCoverLetterVariantCandidates
   ]);
 
+  const coverVariantSelectionSettled =
+    !isSelectingCoverVariant &&
+    !isRankingCoverLetterVariants &&
+    (coverLetterEditor.coverLetterOptions.length <= 1 ||
+      (Boolean(coverLetterVariantRecommendationInputKey) &&
+        coverLetterVariantRecommendationKeyRef.current === coverLetterVariantRecommendationInputKey));
+  const prepareAutomation = usePrepareAutomation({
+    audit: initialFitAudit.state.status === "ready" ? initialFitAudit.state.result : null,
+    resumeThreshold: resumeAutoPolishThreshold,
+    coverThreshold: coverAutoPolishThreshold,
+    polishStages,
+    coverSelectionSettled: coverVariantSelectionSettled,
+    runResume: (stagesOverride) => handlePolish({
+      revealResumeOnSuccess: false,
+      stagesOverride
+    }),
+    runCoverLetter: handleTailorCoverLetter
+  });
+  const currentInitialFitFingerprint =
+    initialFitAudit.state.status === "ready" ? initialFitAudit.state.result.fingerprint : "";
+  const prepareAutomationActive =
+    Boolean(currentInitialFitFingerprint) &&
+    (prepareAutomation.auditFingerprint !== currentInitialFitFingerprint ||
+      prepareAutomation.resume.status === "waiting" ||
+      prepareAutomation.resume.status === "running" ||
+      prepareAutomation.coverLetter.status === "waiting" ||
+      prepareAutomation.coverLetter.status === "running");
+
+  // Warn before close/reload when there are unsaved edits OR any Prepare AI
+  // lifecycle is active. Apply marks each included document clean only after
+  // its source persists.
+  useBeforeUnloadGuard(
+    resumeDocumentDirty ||
+      coverLetterEditor.dirty ||
+      isGeneratingCover ||
+      isPolishing ||
+      initialFitAudit.isRunning ||
+      prepareAutomationActive ||
+      jobAnalysisProgress.status === "running" ||
+      pendingApplicationWrites > 0
+  );
+
   const applicationPreparationActive =
     jobPreparationActive ||
+    initialFitAudit.isRunning ||
+    prepareAutomationActive ||
     (materialSelection.resume &&
       (isPolishing ||
         isRankingResumeVariants ||
