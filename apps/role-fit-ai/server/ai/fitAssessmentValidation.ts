@@ -7,6 +7,13 @@ import {
   type RequirementAssessment,
   type SubmissionAssessment
 } from "../../shared/fitAssessmentContract.ts";
+import type {
+  AssessmentIssueCode,
+  AssessmentIssuePhase,
+  AssessmentResult,
+  ModelFitAssessment,
+  ModelSubmissionAssessment
+} from "./assessmentModelOutput.ts";
 import {
   findUngroundedClaimTerm,
   findUngroundedCuratedClaimTerm,
@@ -15,6 +22,18 @@ import {
   proseHasUngroundedTerm
 } from "./grounding.ts";
 import { hasUngroundedNumericClaim } from "./sanitize.ts";
+
+function success<T>(value: T): AssessmentResult<T> {
+  return { ok: true, value };
+}
+
+function failure(
+  phase: AssessmentIssuePhase,
+  code: AssessmentIssueCode,
+  path: string
+): AssessmentResult<never> {
+  return { ok: false, issue: { phase, code, path } };
+}
 
 function evidenceSourceText(
   reference: EvidenceReference,
@@ -40,16 +59,24 @@ function sourceExcerptIsGrounded(excerpt: unknown, source: unknown): boolean {
   return Boolean(normalizedExcerpt) && normalizedSource.includes(normalizedExcerpt);
 }
 
-function evidenceReferencesAreGrounded(
+function validateEvidenceGrounding(
   references: EvidenceReference[],
   resumeText: string,
-  honestContext: string
-): boolean {
-  return references.every((reference) => {
+  honestContext: string,
+  path: string
+): AssessmentResult<true> {
+  for (let index = 0; index < references.length; index += 1) {
+    const reference = references[index];
     const source = evidenceSourceText(reference, resumeText, honestContext);
-    return sourceExcerptIsGrounded(reference.excerpt, source)
-      && !hasUngroundedNumericClaim(reference.excerpt, source);
-  });
+    const excerptPath = `${path}[${index}].excerpt`;
+    if (!sourceExcerptIsGrounded(reference.excerpt, source)) {
+      return failure("grounding", "EVIDENCE_NOT_IN_SOURCE", excerptPath);
+    }
+    if (hasUngroundedNumericClaim(reference.excerpt, source)) {
+      return failure("grounding", "UNGROUNDED_NUMERIC_CLAIM", excerptPath);
+    }
+  }
+  return success(true);
 }
 
 function requirementSourceIsGrounded(
@@ -178,7 +205,9 @@ function tokenAnchorPositions(text: string, anchor: string): number[] {
   return positions;
 }
 
-function relevantCandidateYears(requirement: RequirementAssessment): number | null {
+function relevantCandidateYears(
+  requirement: Pick<RequirementAssessment, "sourceRequirement" | "evidence">
+): number | null {
   const anchors = durationAnchors(requirement.sourceRequirement);
   if (anchors.length === 0) return null;
   const relevant: number[] = [];
@@ -204,14 +233,18 @@ function relevantCandidateYears(requirement: RequirementAssessment): number | nu
   return relevant.length === 1 ? relevant[0] : null;
 }
 
-function mismatchEvidenceIsExplicit(requirement: RequirementAssessment): boolean {
+function mismatchEvidenceIsExplicit(
+  requirement: Pick<RequirementAssessment, "sourceRequirement" | "evidence">
+): boolean {
   if (requirement.evidence.some((reference) => candidateEvidenceIsAdverse(reference.excerpt))) return true;
   const requiredYears = requiredMinimumYears(requirement.sourceRequirement);
   const candidateYears = relevantCandidateYears(requirement);
   return requiredYears !== null && candidateYears !== null && candidateYears < requiredYears;
 }
 
-function eligibilityEvidenceMatchesStatus(item: EligibilityItem): boolean {
+function eligibilityEvidenceMatchesStatus(
+  item: Pick<EligibilityItem, "status" | "evidence">
+): boolean {
   if (item.status === "UNCERTAIN") return item.evidence.length === 0;
   const adverseEvidence = item.evidence.filter((reference) => candidateEvidenceIsAdverse(reference.excerpt));
   return item.status === "NOT_SATISFIED"
@@ -219,7 +252,9 @@ function eligibilityEvidenceMatchesStatus(item: EligibilityItem): boolean {
     : adverseEvidence.length === 0;
 }
 
-function categoricalVerdictIsConsistent(assessment: FitAssessment): boolean {
+function categoricalVerdictIsConsistent(
+  assessment: Pick<ModelFitAssessment, "verdict" | "requirements">
+): boolean {
   const core = assessment.requirements.filter((requirement) => requirement.importance === "CORE");
   const missingCore = core.filter((requirement) => requirement.coverage === "MISSING").length;
   const uncertainCore = core.filter((requirement) => requirement.coverage === "UNCERTAIN").length;
@@ -236,11 +271,14 @@ function categoricalVerdictIsConsistent(assessment: FitAssessment): boolean {
   return true;
 }
 
-function recommendationIsConsistent(assessment: FitAssessment): boolean {
+function recommendationIsConsistent(
+  assessment: Pick<ModelFitAssessment, "verdict" | "recommendation">,
+  eligibilityStatus: EligibilityItem["status"]
+): boolean {
   const { action } = assessment.recommendation;
-  if (action === "CONFIRM_ELIGIBILITY" && assessment.eligibility.status !== "UNCERTAIN") return false;
-  if (assessment.eligibility.status === "NOT_SATISFIED") return action === "NOT_RECOMMENDED";
-  if (assessment.eligibility.status === "UNCERTAIN") {
+  if (action === "CONFIRM_ELIGIBILITY" && eligibilityStatus !== "UNCERTAIN") return false;
+  if (eligibilityStatus === "NOT_SATISFIED") return action === "NOT_RECOMMENDED";
+  if (eligibilityStatus === "UNCERTAIN") {
     return action === "CONFIRM_ELIGIBILITY" || action === "NOT_RECOMMENDED";
   }
   if (assessment.verdict === "STRONG_FIT" && action === "NOT_RECOMMENDED") return false;
@@ -250,14 +288,34 @@ function recommendationIsConsistent(assessment: FitAssessment): boolean {
   return true;
 }
 
-function fitSummary(assessment: FitAssessment): string {
+function expectedEligibilityStatus(
+  items: ModelFitAssessment["eligibility"]["items"]
+): EligibilityItem["status"] {
+  if (items.some((item) => item.status === "NOT_SATISFIED")) return "NOT_SATISFIED";
+  if (items.some((item) => item.status === "UNCERTAIN")) return "UNCERTAIN";
+  return "SATISFIED";
+}
+
+function assessmentItemId(prefix: "req" | "elig", sourceRequirement: string): string {
+  const source = normalizedSourceExcerpt(sourceRequirement);
+  let first = 0x811c9dc5;
+  let second = 0x9e3779b9;
+  for (let index = 0; index < source.length; index += 1) {
+    const code = source.charCodeAt(index);
+    first = Math.imul(first ^ code, 0x01000193);
+    second = Math.imul(second ^ (code + index), 0x85ebca6b);
+  }
+  return `${prefix}-${source.length.toString(36)}-${(first >>> 0).toString(36)}-${(second >>> 0).toString(36)}`;
+}
+
+function fitSummary(assessment: Pick<FitAssessment, "verdict" | "requirements">): string {
   const counts = { COVERED: 0, ADJACENT: 0, MISSING: 0, UNCERTAIN: 0 };
   for (const requirement of assessment.requirements) counts[requirement.coverage] += 1;
   const verdict = assessment.verdict.replace(/_/g, " ").toLowerCase();
   return `${verdict}: ${counts.COVERED} covered, ${counts.ADJACENT} adjacent, ${counts.MISSING} missing, and ${counts.UNCERTAIN} uncertain requirements.`;
 }
 
-function verdictReason(assessment: FitAssessment): string {
+function verdictReason(assessment: Pick<FitAssessment, "requirements">): string {
   const core = assessment.requirements.filter((requirement) => requirement.importance === "CORE");
   const count = (coverage: RequirementAssessment["coverage"]) => core.filter((item) => item.coverage === coverage).length;
   return `Core requirements: ${count("COVERED")} covered, ${count("ADJACENT")} adjacent, ${count("MISSING")} missing, and ${count("UNCERTAIN")} uncertain.`;
@@ -276,7 +334,9 @@ function eligibilityExplanation(item: EligibilityItem): string {
   return "Trusted candidate evidence does not establish whether this eligibility condition is met.";
 }
 
-function recommendationReason(assessment: FitAssessment): string {
+function recommendationReason(
+  assessment: Pick<FitAssessment, "eligibility" | "recommendation">
+): string {
   if (assessment.eligibility.status === "NOT_SATISFIED") return "A mandatory eligibility condition is not satisfied.";
   if (assessment.eligibility.status === "UNCERTAIN") return "Confirm the unresolved eligibility condition before applying.";
   if (assessment.recommendation.action === "APPLY") return "The requirement ledger supports applying with the current evidence.";
@@ -285,23 +345,47 @@ function recommendationReason(assessment: FitAssessment): string {
   return "The requirement ledger contains material gaps that make this application a low priority.";
 }
 
-function canonicalFitAssessment(assessment: FitAssessment): FitAssessment {
-  const requirements = assessment.requirements.map((requirement) => ({
-    ...requirement,
-    requirement: requirement.sourceRequirement,
-    explanation: requirementExplanation(requirement)
-  }));
-  const eligibilityItems = assessment.eligibility.items.map((item) => ({
-    ...item,
-    requirement: item.sourceRequirement,
-    explanation: eligibilityExplanation(item)
-  }));
-  return {
-    ...assessment,
-    summary: fitSummary(assessment),
-    verdictReason: verdictReason(assessment),
-    eligibility: { ...assessment.eligibility, items: eligibilityItems },
+function canonicalFitAssessment(
+  assessment: ModelFitAssessment,
+  eligibilityStatus: EligibilityItem["status"]
+): FitAssessment {
+  const requirements: RequirementAssessment[] = assessment.requirements.map((requirement) => {
+    const canonical: RequirementAssessment = {
+      id: assessmentItemId("req", requirement.sourceRequirement),
+      requirement: requirement.sourceRequirement,
+      sourceRequirement: requirement.sourceRequirement,
+      importance: requirement.importance,
+      coverage: requirement.coverage,
+      evidence: requirement.evidence,
+      explanation: "",
+      canSurfaceInResume:
+        (requirement.coverage === "COVERED" || requirement.coverage === "ADJACENT")
+        && positiveHonestContextSupportsQualification(requirement)
+    };
+    return { ...canonical, explanation: requirementExplanation(canonical) };
+  });
+  const eligibilityItems: EligibilityItem[] = assessment.eligibility.items.map((item) => {
+    const canonical: EligibilityItem = {
+      id: assessmentItemId("elig", item.sourceRequirement),
+      requirement: item.sourceRequirement,
+      sourceRequirement: item.sourceRequirement,
+      status: item.status,
+      evidence: item.evidence,
+      explanation: ""
+    };
+    return { ...canonical, explanation: eligibilityExplanation(canonical) };
+  });
+  const base = {
+    verdict: assessment.verdict,
+    confidence: assessment.confidence,
+    eligibility: { status: eligibilityStatus, items: eligibilityItems },
     requirements,
+    recommendation: { action: assessment.recommendation.action, reason: "" }
+  };
+  return {
+    ...base,
+    summary: fitSummary(base),
+    verdictReason: verdictReason(base),
     strengths: requirements
       .filter((requirement) => requirement.coverage === "COVERED")
       .map((requirement) => `Covered: ${requirement.requirement}`),
@@ -310,7 +394,7 @@ function canonicalFitAssessment(assessment: FitAssessment): FitAssessment {
       .map((requirement) => `${requirement.coverage === "ADJACENT" ? "Adjacent" : requirement.coverage === "MISSING" ? "Missing" : "Uncertain"}: ${requirement.requirement}`),
     recommendation: {
       action: assessment.recommendation.action,
-      reason: recommendationReason(assessment)
+      reason: recommendationReason(base)
     }
   };
 }
@@ -341,7 +425,12 @@ function submissionRequirementExplanation(requirement: RequirementAssessment): s
   return "The available evidence does not establish whether the resume can support this requirement.";
 }
 
-function submissionSummary(assessment: SubmissionAssessment): string {
+function submissionSummary(
+  assessment: Pick<
+    SubmissionAssessment,
+    "readiness" | "requirementVisibility" | "unsupportedClaims" | "presentationIssues"
+  >
+): string {
   const hidden = assessment.requirementVisibility.filter((item) => item.coverage === "MISSING" || item.coverage === "UNCERTAIN").length;
   const readiness = assessment.readiness.replace(/_/g, " ").toLowerCase();
   return `${readiness}: ${hidden} requirements are missing or unclear, with ${assessment.unsupportedClaims.length} unsupported claims and ${assessment.presentationIssues.length} presentation issues.`;
@@ -349,87 +438,167 @@ function submissionSummary(assessment: SubmissionAssessment): string {
 
 const POSITIVE_QUALIFICATION_PATTERN = /\b(?:authorized|eligible|certified|licensed|qualified|proficient|skilled|experienced|experience|have|has|hold|holds|possess|possesses|use|uses|used|built|build|operate|operates|operated|manage|manages|managed|work|worked|can|able)\b/i;
 
-function visibilityEvidenceSupportsSurfacing(requirement: RequirementAssessment): boolean {
-  const evidenceText = requirement.evidence.map((reference) => reference.excerpt).join("\n");
-  if (!evidenceText || requirement.evidence.some((reference) => candidateEvidenceIsAdverse(reference.excerpt))) {
+function positiveHonestContextSupportsQualification(
+  requirement: Pick<RequirementAssessment, "sourceRequirement" | "evidence">
+): boolean {
+  const honestEvidence = requirement.evidence.filter((reference) => reference.source === "HONEST_CONTEXT");
+  const evidenceText = honestEvidence.map((reference) => reference.excerpt).join("\n");
+  if (!evidenceText || honestEvidence.some((reference) => candidateEvidenceIsAdverse(reference.excerpt))) {
     return false;
   }
   const positiveQualification = sponsorshipPolarity(evidenceText) === "POSITIVE"
     || POSITIVE_QUALIFICATION_PATTERN.test(evidenceText);
   if (!positiveQualification) return false;
-  if (findUngroundedClaimTerm(requirement.requirement, evidenceText)) return false;
+  if (findUngroundedClaimTerm(requirement.sourceRequirement, evidenceText)) return false;
   if (hasUngroundedNumericClaim(requirement.sourceRequirement, evidenceText)) return false;
   const anchors = durationAnchors(requirement.sourceRequirement);
   return anchors.length === 0 || anchors.some((anchor) => normalizedSourceExcerpt(evidenceText).includes(anchor));
 }
 
 export function validateFitAssessment(
-  raw: unknown,
+  assessment: ModelFitAssessment,
   jobText: string,
   resumeText: string,
   honestContext: string
-): FitAssessment | null {
-  const assessment = parseFitAssessment(raw);
-  if (
-    !assessment
-    || !categoricalVerdictIsConsistent(assessment)
-    || !recommendationIsConsistent(assessment)
-  ) return null;
-
-  for (const requirement of assessment.requirements) {
-    if (!requirementSourceIsGrounded(requirement, jobText)) return null;
-    if (!evidenceReferencesAreGrounded(requirement.evidence, resumeText, honestContext)) return null;
-    if (requirement.coverage === "MISSING" && !mismatchEvidenceIsExplicit(requirement)) return null;
+): AssessmentResult<FitAssessment> {
+  const eligibilityStatus = expectedEligibilityStatus(assessment.eligibility.items);
+  if (!categoricalVerdictIsConsistent(assessment)) {
+    return failure("consistency", "INCONSISTENT_VERDICT", "fitAssessment.verdict");
+  }
+  if (!recommendationIsConsistent(assessment, eligibilityStatus)) {
+    return failure("consistency", "INCONSISTENT_RECOMMENDATION", "fitAssessment.recommendation.action");
   }
 
-  for (const item of assessment.eligibility.items) {
-    if (!requirementSourceIsGrounded(item, jobText)) return null;
-    if (!evidenceReferencesAreGrounded(item.evidence, resumeText, honestContext)) return null;
-    if (!eligibilityEvidenceMatchesStatus(item)) return null;
+  for (let index = 0; index < assessment.requirements.length; index += 1) {
+    const requirement = assessment.requirements[index];
+    const path = `fitAssessment.requirements[${index}]`;
+    if (!requirementSourceIsGrounded(requirement, jobText)) {
+      return failure("grounding", "SOURCE_REQUIREMENT_NOT_IN_JOB", `${path}.sourceRequirement`);
+    }
+    const evidence = validateEvidenceGrounding(
+      requirement.evidence,
+      resumeText,
+      honestContext,
+      `${path}.evidence`
+    );
+    if (!evidence.ok) return evidence;
+    if (requirement.coverage === "MISSING" && !mismatchEvidenceIsExplicit(requirement)) {
+      return failure("consistency", "MISSING_MISMATCH_EVIDENCE", `${path}.evidence`);
+    }
   }
 
-  return canonicalFitAssessment(assessment);
+  for (let index = 0; index < assessment.eligibility.items.length; index += 1) {
+    const item = assessment.eligibility.items[index];
+    const path = `fitAssessment.eligibility.items[${index}]`;
+    if (!requirementSourceIsGrounded(item, jobText)) {
+      return failure("grounding", "SOURCE_REQUIREMENT_NOT_IN_JOB", `${path}.sourceRequirement`);
+    }
+    const evidence = validateEvidenceGrounding(
+      item.evidence,
+      resumeText,
+      honestContext,
+      `${path}.evidence`
+    );
+    if (!evidence.ok) return evidence;
+    if (!eligibilityEvidenceMatchesStatus(item)) {
+      return failure("consistency", "INVALID_ELIGIBILITY_POLARITY", `${path}.evidence`);
+    }
+  }
+
+  const canonical = canonicalFitAssessment(assessment, eligibilityStatus);
+  const verified = parseFitAssessment(canonical);
+  return verified
+    ? success(verified)
+    : failure("consistency", "CANONICALIZATION_FAILED", "fitAssessment");
 }
 
 export function validateSubmissionAssessment(
-  raw: unknown,
+  assessment: ModelSubmissionAssessment,
   jobText: string,
   resumeText: string,
   honestContext: string
-): SubmissionAssessment | null {
-  const assessment = parseSubmissionAssessment(raw);
-  if (!assessment || assessment.requirementVisibility.length === 0) return null;
-
-  for (const requirement of assessment.requirementVisibility) {
-    if (!requirementSourceIsGrounded(requirement, jobText)) return null;
-    if (!evidenceReferencesAreGrounded(requirement.evidence, resumeText, honestContext)) return null;
-    if (requirement.canSurfaceInResume && !visibilityEvidenceSupportsSurfacing(requirement)) return null;
+): AssessmentResult<SubmissionAssessment> {
+  for (let index = 0; index < assessment.requirementVisibility.length; index += 1) {
+    const requirement = assessment.requirementVisibility[index];
+    const path = `submissionAssessment.requirementVisibility[${index}]`;
+    if (!requirementSourceIsGrounded(requirement, jobText)) {
+      return failure("grounding", "SOURCE_REQUIREMENT_NOT_IN_JOB", `${path}.sourceRequirement`);
+    }
+    const evidence = validateEvidenceGrounding(
+      requirement.evidence,
+      resumeText,
+      honestContext,
+      `${path}.evidence`
+    );
+    if (!evidence.ok) return evidence;
+    if (
+      requirement.coverage === "MISSING"
+      && requirement.evidence.length > 0
+      && !positiveHonestContextSupportsQualification(requirement)
+    ) {
+      return failure("consistency", "INVALID_COVERAGE_EVIDENCE", `${path}.evidence`);
+    }
   }
-  if (assessment.unsupportedClaims.some((claim) => !sourceExcerptIsGrounded(claim, resumeText))) return null;
-  if (assessment.presentationIssues.some((issue) => !advisoryProseIsGrounded(issue, jobText, resumeText, honestContext))) return null;
-  if (assessment.topEdits.some((edit) => !advisoryProseIsGrounded(edit, jobText, resumeText, honestContext))) return null;
+  for (let index = 0; index < assessment.unsupportedClaims.length; index += 1) {
+    if (!sourceExcerptIsGrounded(assessment.unsupportedClaims[index], resumeText)) {
+      return failure(
+        "grounding",
+        "UNSUPPORTED_CLAIM_NOT_IN_RESUME",
+        `submissionAssessment.unsupportedClaims[${index}]`
+      );
+    }
+  }
+  for (let index = 0; index < assessment.presentationIssues.length; index += 1) {
+    if (!advisoryProseIsGrounded(assessment.presentationIssues[index], jobText, resumeText, honestContext)) {
+      return failure("grounding", "UNGROUNDED_ADVICE", `submissionAssessment.presentationIssues[${index}]`);
+    }
+  }
+  for (let index = 0; index < assessment.topEdits.length; index += 1) {
+    if (!advisoryProseIsGrounded(assessment.topEdits[index], jobText, resumeText, honestContext)) {
+      return failure("grounding", "UNGROUNDED_ADVICE", `submissionAssessment.topEdits[${index}]`);
+    }
+  }
 
-  const requirementVisibility = assessment.requirementVisibility.map((requirement) => ({
-    ...requirement,
-    requirement: requirement.sourceRequirement,
-    explanation: submissionRequirementExplanation(requirement)
-  }));
+  const requirementVisibility: RequirementAssessment[] = assessment.requirementVisibility.map((requirement) => {
+    const canonical: RequirementAssessment = {
+      id: assessmentItemId("req", requirement.sourceRequirement),
+      requirement: requirement.sourceRequirement,
+      sourceRequirement: requirement.sourceRequirement,
+      importance: requirement.importance,
+      coverage: requirement.coverage,
+      evidence: requirement.evidence,
+      explanation: "",
+      canSurfaceInResume:
+        requirement.coverage === "MISSING"
+        && positiveHonestContextSupportsQualification(requirement)
+    };
+    return { ...canonical, explanation: submissionRequirementExplanation(canonical) };
+  });
   const missingEvidence = requirementVisibility
     .filter((requirement) => requirement.coverage === "MISSING" || requirement.coverage === "UNCERTAIN")
     .map((requirement) => requirement.requirement);
-  const canonical = {
-    ...assessment,
+  const base = {
+    readiness: assessment.readiness,
     requirementVisibility,
-    missingEvidence
+    unsupportedClaims: assessment.unsupportedClaims,
+    missingEvidence,
+    presentationIssues: assessment.presentationIssues,
+    topEdits: assessment.topEdits
   };
-  if (canonical.readiness === "READY" && (canonical.unsupportedClaims.length > 0 || canonical.missingEvidence.length > 0)) {
-    return null;
+  if (base.readiness === "READY" && (base.unsupportedClaims.length > 0 || base.missingEvidence.length > 0)) {
+    return failure("consistency", "INCONSISTENT_READINESS", "submissionAssessment.readiness");
   }
   if (
-    canonical.readiness === "EVIDENCE_NEEDED"
-    && canonical.unsupportedClaims.length === 0
-    && canonical.missingEvidence.length === 0
-  ) return null;
+    base.readiness === "EVIDENCE_NEEDED"
+    && base.unsupportedClaims.length === 0
+    && base.missingEvidence.length === 0
+  ) {
+    return failure("consistency", "INCONSISTENT_READINESS", "submissionAssessment.readiness");
+  }
 
-  return { ...canonical, summary: submissionSummary(canonical) };
+  const canonical: SubmissionAssessment = { ...base, summary: submissionSummary(base) };
+  const verified = parseSubmissionAssessment(canonical);
+  return verified
+    ? success(verified)
+    : failure("consistency", "CANONICALIZATION_FAILED", "submissionAssessment");
 }

@@ -460,9 +460,9 @@ export async function handlePolish(req: IncomingMessage, res: ServerResponse): P
     // or blank cover returns "" + coverStatus:"failed".
     const [reviewSettled, coverSettled] = await Promise.allSettled([reviewPromise, coverPromise]);
     if (request.signal.aborted) throw new RequestAbortedError();
-    let reviewOutcome: RecruiterAuditOutcome = { submissionAssessment: null };
+    let reviewOutcome: RecruiterAuditOutcome | null = null;
     if (reviewSettled.status === "fulfilled") {
-      if (reviewSettled.value) reviewOutcome = reviewSettled.value;
+      reviewOutcome = reviewSettled.value;
     } else {
       console.warn("[ai] submission review pass failed; returning primary rewrite without it", {
         provider: audit.provider,
@@ -480,7 +480,9 @@ export async function handlePolish(req: IncomingMessage, res: ServerResponse): P
         errorName: coverSettled.reason instanceof Error ? coverSettled.reason.name : typeof coverSettled.reason
       });
     }
-    const { submissionAssessment } = reviewOutcome;
+    const submissionAssessment = reviewOutcome?.status === "ok"
+      ? reviewOutcome.assessment
+      : null;
 
     // reviewStatus lets the client distinguish a review that was never requested
     // from one that ran but produced nothing usable. "off" = review not run;

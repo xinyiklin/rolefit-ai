@@ -23,12 +23,19 @@ import { findUngroundedJdTerm } from "../grounding.ts";
 import { buildPolishPrompts, buildSubmissionAssessmentPrompts, serializeJsonForPrompt } from "../prompts.ts";
 import {
   normalizeTailorScope,
-  resolveReviewOutcome,
+  resolveReviewOutcome as resolveReviewOutcomeResult,
   reviewFailureFromReason,
   stripStructuralInlineMarks
 } from "../polish.ts";
 import { UserSafeAiError } from "../errors.ts";
 import { parseSubmissionAssessment } from "../../../shared/fitAssessmentContract.ts";
+
+function resolveReviewOutcome(...args) {
+  const result = resolveReviewOutcomeResult(...args);
+  return {
+    submissionAssessment: result.status === "ok" ? result.assessment : null
+  };
+}
 
 const scope = {
   sections: [
@@ -485,13 +492,13 @@ const checks = [
     } }, "Python required.", "Python", "");
     return result.submissionAssessment === null;
   })()],
-  ["resume visibility cannot claim surfacing is safe without honest-context evidence", (() => {
+  ["model surfacing metadata cannot override the server's evidence decision", (() => {
     const result = resolveReviewOutcome({ submissionAssessment: {
       readiness: "REVISIONS_RECOMMENDED", summary: "Review needed.",
       requirementVisibility: [{ id: "python", requirement: "Python", sourceRequirement: "Python", importance: "CORE", coverage: "MISSING", evidence: [], explanation: "Not visible.", canSurfaceInResume: true }],
       unsupportedClaims: [], missingEvidence: ["Python"], presentationIssues: [], topEdits: []
     } }, "Python is required.", "Technical Skills: TypeScript.", "");
-    return result.submissionAssessment === null;
+    return result.submissionAssessment?.requirementVisibility[0]?.canSurfaceInResume === false;
   })()],
   ...negativeQualificationContexts.map((honestContext) => [
     `negative honest context cannot authorize surfacing: ${honestContext}`,

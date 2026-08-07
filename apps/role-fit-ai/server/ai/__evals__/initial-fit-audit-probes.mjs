@@ -1,9 +1,14 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
-import { resolveInitialFitAuditOutcome } from "../recruiterAudit.ts";
+import { resolveInitialFitAuditOutcome as resolveInitialFitAuditResult } from "../recruiterAudit.ts";
 import { buildFitAssessmentPrompts } from "../prompts.ts";
 import { parseFitAssessment } from "../../../shared/fitAssessmentContract.ts";
+
+function resolveInitialFitAuditOutcome(...args) {
+  const result = resolveInitialFitAuditResult(...args);
+  return result.status === "ok" ? result.assessment : null;
+}
 
 const jobText = [
   "Python and PostgreSQL are required for production backend services.",
@@ -54,6 +59,42 @@ assert.doesNotMatch(valid?.verdictReason ?? "", /central technologies/i, "verdic
 assert.doesNotMatch(valid?.requirements[0]?.explanation ?? "", /names both/i, "requirement explanations are derived from validated coverage");
 assert.doesNotMatch(valid?.eligibility.items[0]?.explanation ?? "", /explicitly confirmed/i, "eligibility explanations are derived from validated status");
 assert.notEqual(valid?.recommendation.reason, fitAssessment.recommendation.reason, "recommendation reasons are derived from validated action and eligibility");
+assert.match(valid?.requirements[0]?.id ?? "", /^req-[a-z0-9-]+$/, "requirement ids are derived from the source requirement");
+assert.match(valid?.eligibility.items[0]?.id ?? "", /^elig-[a-z0-9-]+$/, "eligibility ids are derived from the source requirement");
+
+const ignoredAggregate = resolveInitialFitAuditOutcome({
+  fitAssessment: {
+    ...fitAssessment,
+    eligibility: { status: "NOT_SATISFIED", items: [eligibilityItem] }
+  }
+}, jobText, resumeText, honestContext);
+assert.equal(ignoredAggregate?.eligibility.status, "SATISFIED", "aggregate eligibility is derived from item decisions");
+
+const honestKubernetesContext = "I operate production Kubernetes services.";
+const surfacedQualification = resolveInitialFitAuditOutcome({
+  fitAssessment: {
+    ...fitAssessment,
+    eligibility: { status: "SATISFIED", items: [] },
+    requirements: [{
+      ...requirement,
+      id: "model-owned-id",
+      sourceRequirement: "Production Kubernetes experience is required.",
+      importance: "CORE",
+      coverage: "COVERED",
+      evidence: [{ source: "HONEST_CONTEXT", excerpt: honestKubernetesContext }],
+      canSurfaceInResume: false
+    }]
+  }
+}, "Production Kubernetes experience is required.", resumeText, honestKubernetesContext);
+assert.equal(surfacedQualification?.requirements[0]?.canSurfaceInResume, true, "positive honest context derives resume surfacing permission");
+
+const ignoredModelSurfacing = resolveInitialFitAuditOutcome({
+  fitAssessment: {
+    ...fitAssessment,
+    requirements: [{ ...requirement, canSurfaceInResume: true }]
+  }
+}, jobText, resumeText, honestContext);
+assert.equal(ignoredModelSurfacing?.requirements[0]?.canSurfaceInResume, false, "model surfacing metadata cannot override resume-only evidence");
 
 assert.equal(resolveInitialFitAuditOutcome({ fitAssessment, score: 92 }, jobText, resumeText, honestContext), null, "score-shaped provider envelopes fail closed");
 

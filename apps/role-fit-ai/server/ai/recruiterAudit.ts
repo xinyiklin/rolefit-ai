@@ -3,6 +3,12 @@ import { UserSafeAiError, safeConfigErrorMessage } from "./errors.ts";
 import { callConfiguredProvider } from "./clients.ts";
 import { providerLabel, type ResolvedProviderConfig } from "./providers.ts";
 import {
+  parseModelFitAssessmentEnvelope,
+  parseModelSubmissionAssessmentEnvelope,
+  type AssessmentIssue,
+  type AssessmentResult
+} from "./assessmentModelOutput.ts";
+import {
   buildFitAssessmentPrompts,
   buildSubmissionAssessmentPrompts,
   ASSESSMENT_JOB_CHAR_LIMIT,
@@ -20,22 +26,20 @@ import type {
 
 export type AttemptStats = { attempts?: number };
 
-export type RecruiterAuditOutcome = {
-  submissionAssessment: SubmissionAssessment | null;
-};
+export type AssessmentRunResult<T> =
+  | { status: "ok"; assessment: T }
+  | { status: "invalid"; issue: AssessmentIssue };
 
-export type InitialFitAuditOutcome = FitAssessment | null;
+export type RecruiterAuditOutcome = AssessmentRunResult<SubmissionAssessment>;
+
+export type InitialFitAuditOutcome = AssessmentRunResult<FitAssessment>;
 
 type ReviewFailure = { message: string; status: number };
 
-function exactAssessmentEnvelope(
-  value: unknown,
-  key: "fitAssessment" | "submissionAssessment"
-): Record<string, unknown> | null {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-  const source = value as Record<string, unknown>;
-  const keys = Object.keys(source);
-  return keys.length === 1 && keys[0] === key ? source : null;
+function assessmentRunResult<T>(result: AssessmentResult<T>): AssessmentRunResult<T> {
+  return result.ok
+    ? { status: "ok", assessment: result.value }
+    : { status: "invalid", issue: result.issue };
 }
 
 /** Preserve actionable provider failures without exposing raw provider bodies. */
@@ -58,30 +62,35 @@ export function reviewFailureFromReason(reason: unknown, provider: string): Revi
 }
 
 export function resolveReviewOutcome(
-  parsed: { submissionAssessment?: unknown } | null,
+  parsed: unknown,
   jobText: string,
   resumeText: string,
   honestContext: string
 ): RecruiterAuditOutcome {
-  const envelope = exactAssessmentEnvelope(parsed, "submissionAssessment");
-  return {
-    submissionAssessment: validateSubmissionAssessment(
-      envelope?.submissionAssessment,
-      jobText,
-      resumeText,
-      honestContext
-    )
-  };
+  const modelOutput = parseModelSubmissionAssessmentEnvelope(parsed);
+  if (!modelOutput.ok) return { status: "invalid", issue: modelOutput.issue };
+  return assessmentRunResult(validateSubmissionAssessment(
+    modelOutput.value,
+    jobText,
+    resumeText,
+    honestContext
+  ));
 }
 
 export function resolveInitialFitAuditOutcome(
-  parsed: { fitAssessment?: unknown } | null,
+  parsed: unknown,
   jobText: string,
   resumeText: string,
   honestContext: string
 ): InitialFitAuditOutcome {
-  const envelope = exactAssessmentEnvelope(parsed, "fitAssessment");
-  return validateFitAssessment(envelope?.fitAssessment, jobText, resumeText, honestContext);
+  const modelOutput = parseModelFitAssessmentEnvelope(parsed);
+  if (!modelOutput.ok) return { status: "invalid", issue: modelOutput.issue };
+  return assessmentRunResult(validateFitAssessment(
+    modelOutput.value,
+    jobText,
+    resumeText,
+    honestContext
+  ));
 }
 
 type RecruiterAuditRequest = {
@@ -115,7 +124,7 @@ export async function runRecruiterAudit(
   const prompts = request.mode === "initial"
     ? buildFitAssessmentPrompts(promptInput)
     : buildSubmissionAssessmentPrompts(promptInput);
-  const parsed = await callConfiguredProvider({
+  const parsed: unknown = await callConfiguredProvider({
     provider: request.provider.provider,
     model: request.provider.model,
     reasoningEffort: request.provider.reasoningEffort,
@@ -123,7 +132,7 @@ export async function runRecruiterAudit(
     systemPrompt: prompts.systemPrompt,
     userPrompt: prompts.userPrompt,
     signal: request.signal
-  }, stats) as { fitAssessment?: unknown; submissionAssessment?: unknown } | null;
+  }, stats);
 
   return request.mode === "initial"
     ? resolveInitialFitAuditOutcome(parsed, request.jobText, request.resumeText, request.honestContext)

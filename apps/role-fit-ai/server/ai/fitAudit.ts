@@ -88,7 +88,7 @@ export async function handleFitAudit(req: IncomingMessage, res: ServerResponse):
       customInstructions,
       signal: request.signal
     }, stats);
-    if (!outcome) {
+    if (outcome.status === "invalid") {
       sendJson(res, 502, {
         error: `${providerLabel(provider)} returned an invalid Initial Fit audit. Retry, or switch providers.`
       });
@@ -101,7 +101,7 @@ export async function handleFitAudit(req: IncomingMessage, res: ServerResponse):
       fingerprint,
       resumeFileName,
       resumeDocumentVersion,
-      assessment: outcome,
+      assessment: outcome.assessment,
       completedAt,
       usage: {
         source: "ai",
