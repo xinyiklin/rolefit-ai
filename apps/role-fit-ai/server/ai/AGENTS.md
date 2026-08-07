@@ -53,11 +53,13 @@ sanitizer code is executable product behavior and anti-fabrication-critical.
   verbatim-source-phrase acceptance check: both reject genuinely better letters.
 - `json.ts` and `errors.ts` own response parsing and user-safe failure mapping.
 
-## Trust and scoring contract
+## Trust and assessment contract
 
-- The selected Review model owns coverage, scores, verdict, reason, gaps, and
-  recommendation. Validate exact shape, enums, bounds, and score/verdict band
-  consistency; reject invalid output instead of recomputing it.
+- Initial Fit owns the categorical candidate-fit verdict, confidence,
+  requirement ledger, eligibility result, and advisory recommendation. Review
+  owns only post-polish document readiness. Validate exact shape, enums,
+  evidence references, and semantic consistency; reject invalid output instead
+  of synthesizing a replacement.
 - Tailor emits targeted suggestions grounded in submitted resume/honest context.
   Never import JD-only skills or fabricate claims.
 - Review-only audits the current edited draft. The Review leg of Both receives

@@ -92,12 +92,12 @@ editable documents.
   keywords, seniority and domain signals, benefits, and any extraction or
   candidate-review gaps—while the Application rail keeps Resume, Cover Letter,
   Initial Fit, independent automation receipts, readiness, and Apply together.
-  After safe resume selection settles, Initial Fit always audits that exact base
-  document with the configured Recruiter Audit provider. It shows one score,
-  verdict, reason, strengths, gaps, selected resume, and provenance; a reopened
-  application shows its saved baseline as historical. A separate Proposal fit
-  row appears only after the later Recruiter audit. RoleFit never substitutes a
-  local fit estimate. Each material has an **Include** toggle and its
+  After safe resume selection settles, Initial Fit always assesses that exact
+  document with the configured Recruiter Audit provider. It shows a categorical
+  verdict, confidence, eligibility, requirement evidence, recommendation,
+  selected resume, and provenance; a reopened application shows its saved
+  baseline as historical. A later Review produces separate resume submission
+  readiness and never changes Initial Fit. Each material has an **Include** toggle and its
   own named variant selector. Resume starts included and Cover Letter starts excluded;
   included material must be ready before Apply, while either or both can be
   excluded. The captured posting remains unchanged behind **View** and
@@ -139,11 +139,11 @@ editable documents.
   check whether a posting is already tracked and open it on Prepare in a fresh
   RoleFit tab. On first use it sends a bounded local access request; approve
   that exact browser origin once in the companion. The extension does not
-  estimate fit locally; score and verdict come from Recruiter audit in the app. See
+  assess fit locally; Initial Fit runs in the app after resume selection. See
   [Browser extension](#browser-extension).
 - **Explicit five-provider setup** — the companion can add **Claude Code CLI**, **Codex CLI**, **Antigravity CLI**, **OpenAI API**, and **Claude API**. CLI paths use their provider-owned account sessions and API paths use a locally encrypted key. Settings > AI stages shows only providers the user explicitly added, keeps configured-but-unready providers visible with reconnect guidance, and never silently switches a stage to a paid provider.
-- **Provider-run fit audit** — the selected Recruiter audit model judges the complete requirement set and returns the coverage table, base/tailored scores, verdict, explanation, gaps, and recommendation. RoleFit validates the response contract but does not recalculate or replace that judgment locally.
-- **Strict recruiter audit** — audit the current edited draft as-is, or audit the sanitized proposal produced moments earlier in **Polish**, for a verdict (STRONG FIT / REASONABLE FIT / STRETCH / DON'T APPLY), AI fit scores, gap severity, targeted bullet rewrites, interview risk flags, ready / edits-pending / missing-evidence status, and a cover-letter angle.
+- **Provider-run Initial Fit** — the selected Recruiter audit model returns one grounded categorical assessment: `STRONG_FIT`, `REASONABLE_FIT`, `STRETCH`, or `LIMITED_FIT`, with confidence, eligibility, a canonical requirement ledger, and an advisory recommendation. RoleFit validates the response and deterministic app policy decides automation.
+- **Separate submission review** — audit the current edited draft as-is, or review the sanitized proposal produced moments earlier in **Polish**, for requirement visibility, unsupported claims, missing evidence, presentation issues, prioritized edits, and `READY` / `REVISIONS_RECOMMENDED` / `EVIDENCE_NEEDED` / `NOT_READY` status. It never rewrites candidate fit.
 - **One typeset editing surface** — direct text editing, inline emphasis, undo/redo, keyboard caret movement, structural add/remove/reorder controls, per-section Tailor/Include/Off scope, and review-field highlighting all operate on the exported page layout.
 - **One document workbench rail** — Resume and Cover Letter share the same
   always-present lifecycle hierarchy, readiness order, failure placement,
@@ -382,8 +382,7 @@ resume/job text exclusively on stdin while the subprocess is running.
 URL, pasted-text, and extension intake require AI-backed job analysis. When Job analysis fails,
 RoleFit may load the deterministic brief for inspection while
 leaving Job analysis failed and blocking resume Polish. Tailor, Recruiter audit, Cover Letter,
-and application-answer generation fail plainly; no local draft, score, or
-verdict silently stands in.
+and application-answer generation fail plainly; no local AI result silently stands in.
 
 ## Browser extension
 
