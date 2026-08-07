@@ -69,8 +69,10 @@ sanitizer code is executable product behavior and anti-fabrication-critical.
 - Initial Fit `MISSING` requires explicit adverse evidence or a deterministically
   anchored minimum-years mismatch while `UNCERTAIN` has none. Sponsorship
   polarity is evaluated around each sponsorship clause after normalizing common
-  contractions and alphanumeric modifiers. Duration anchors are exact tokens,
-  never prefixes. Submission visibility may retain `HONEST_CONTEXT` evidence
+  contractions and alphanumeric modifiers; `no need for sponsorship` is
+  positive, so generic `have no` detection is limited to named qualification
+  absences. Duration anchors are exact tokens, never prefixes. Submission
+  visibility may retain `HONEST_CONTEXT` evidence
   for a `MISSING` row only when non-adverse, relevant evidence positively proves
   the qualification can be surfaced; common contracted and adjectival negative
   forms remain adverse before positive verbs are considered.

@@ -32,13 +32,15 @@ bounded; app-only operational detail belongs in the affected app documentation.
   rows survive the shared parser. Initial Fit `MISSING` requires explicit
   adverse evidence or an anchored lower-bound years mismatch; sponsorship
   polarity is clause-aware after contraction/adverb and alphanumeric-modifier
-  normalization, and duration anchors use exact tokens rather than prefixes.
+  normalization, treats `no need for sponsorship` as positive, and narrows
+  generic `have no` negatives to explicit qualification absences. Duration
+  anchors use exact tokens rather than prefixes.
   Submission visibility separately permits `MISSING` with exact honest-context
   evidence only when common equivalent negative forms have been rejected and
-  relevant evidence positively proves the qualification can be surfaced. Only unresolved
-  eligibility may recommend confirmation, and eligibility never alters the fit
-  verdict. User-facing summaries and ledger explanations derive from canonical
-  rows, while remaining Review advice passes technology, proper-claim, numeric,
+  relevant evidence positively proves the qualification can be surfaced. Only
+  unresolved eligibility may recommend confirmation, and eligibility never
+  alters the fit verdict. User-facing summaries and ledger explanations derive
+  from canonical rows, while remaining Review advice passes technology, proper-claim, numeric,
   and outcome grounding gates.
 - [TOOL] The RoleFit production/landing/desktop gate and all 76 offline
   evaluations pass. Root dependency and package-script checks, engine typecheck

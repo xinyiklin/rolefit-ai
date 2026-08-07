@@ -234,8 +234,9 @@ Good frontend verification covers:
   mark stale without per-keystroke reruns
 - Initial Fit adversarial probes cover normalized exact job/evidence excerpts,
   duplicate and cross-ledger source requirements, one-token technology
-  insertion, clause-level sponsorship polarity with contractions, adverbs, and
-  H-1B modifiers, `cannot relocate`, token-anchored lower-bound years mismatches
+  insertion, clause-level sponsorship polarity with contractions, adverbs,
+  H-1B modifiers, and `no need for sponsorship` forms, `cannot relocate`,
+  token-anchored lower-bound years mismatches
   including Java/JavaScript false-friends, explicit `MISSING`
   versus evidence-free `UNCERTAIN`, the eligibility/recommendation matrix,
   source-derived display labels, Strong Fit with failed eligibility, and

@@ -397,7 +397,9 @@ modules under `server/ai/` so no single file carries the whole pipeline:
   ranges use their lower bound, duration anchors match whole tokens rather than
   prefixes, and ambiguity remains `UNCERTAIN`. Sponsorship polarity is resolved
   per clause after normalizing common contractions, bounded adverbs, and
-  alphanumeric modifiers such as H-1B. Submission visibility uses a separate
+  alphanumeric modifiers such as H-1B. `No need for [modifier] sponsorship`
+  is positive; generic `have no` detection applies only to explicit
+  qualification-absence nouns. Submission visibility uses a separate
   rule: `MISSING` may keep exact `HONEST_CONTEXT` evidence only when common
   contracted, possessive, experiential, and adjectival negative forms have been
   rejected and relevant evidence positively establishes the qualification and

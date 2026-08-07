@@ -62,6 +62,7 @@ function requirementSourceIsGrounded(
 const SPONSORSHIP_WORDS = String.raw`(?:[a-z0-9]+\s+){0,8}sponsorship`;
 const SPONSORSHIP_POSITIVE_PATTERNS = [
   new RegExp(String.raw`\bwithout\s+${SPONSORSHIP_WORDS}\b`, "i"),
+  new RegExp(String.raw`\bno\s+need\s+for\s+${SPONSORSHIP_WORDS}\b`, "i"),
   new RegExp(String.raw`\bno\s+${SPONSORSHIP_WORDS}(?:\s+[a-z]+){0,8}\s+(?:needed|required)\b`, "i"),
   new RegExp(String.raw`\b(?:do|does|did|will)\s+not\s+(?:[a-z]+\s+){0,3}(?:need|require)\s+${SPONSORSHIP_WORDS}\b`, "i"),
   new RegExp(String.raw`\b${SPONSORSHIP_WORDS}(?:\s+[a-z]+){0,3}\s+not\s+(?:needed|required)\b`, "i")
@@ -111,7 +112,7 @@ function candidateEvidenceIsAdverse(value: unknown): boolean {
   const adverseCondition = /\b(?:not authorized|not eligible|cannot|can't|unable|not willing|unwilling)\b/i.test(text)
     || /\b(?:do|does|did) not (?:have|hold|meet|satisfy|possess|qualify)\b/i.test(text)
     || /\b(?:have|has|had) not (?:used|worked)\b/i.test(text)
-    || /\b(?:have|has|had) no\b/i.test(text)
+    || /\b(?:have|has|had) no (?:[a-z0-9.+#]+\s+){0,6}(?:experience|proficiency|clearance|license|licence|certification|degree|authorization|citizenship|qualification|qualifications)\b/i.test(text)
     || /\bnever (?:used|worked)\b/i.test(text)
     || /\bnot (?:proficient|experienced|qualified)\b/i.test(text)
     || /\b(?:lack|lacks|lacking)\b/i.test(text)

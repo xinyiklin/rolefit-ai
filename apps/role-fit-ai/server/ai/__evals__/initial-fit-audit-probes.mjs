@@ -163,7 +163,10 @@ for (const positiveContext of [
   "I don't need sponsorship.",
   "I won't require sponsorship.",
   "I do not currently need sponsorship.",
-  "No H-1B sponsorship is required."
+  "No H-1B sponsorship is required.",
+  "No need for sponsorship.",
+  "I have no need for sponsorship.",
+  "I have no need for visa sponsorship."
 ]) {
   const satisfied = resolveInitialFitAuditOutcome({
     fitAssessment: {
