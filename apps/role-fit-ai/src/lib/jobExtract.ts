@@ -972,7 +972,7 @@ function extractSalary(lines: string[]): Pick<
     period?: ExtractedSalaryPeriod;
     currency: string;
     isUpTo: boolean;
-    score: number;
+    rank: number;
   }> = [];
   // Currency tokens recognized adjacent to an amount. Multi-char tokens precede
   // bare "$" so "US$"/"CA$" aren't truncated to "$"; group 1 captures the symbol
@@ -1074,16 +1074,16 @@ function extractSalary(lines: string[]): Pick<
       const hourly = period === "hr" && min >= 8 && min <= 500;
       if (!highValue && !hourly) continue;
 
-      let score = 0;
-      if (compContext) score += 5;
-      if (range) score += 4;
-      if (period) score += 2;
-      if (highValue || hourly) score += 1;
-      candidates.push({ min, max, period, currency: currencyFromSymbol(sym), isUpTo, score });
+      let rank = 0;
+      if (compContext) rank += 5;
+      if (range) rank += 4;
+      if (period) rank += 2;
+      if (highValue || hourly) rank += 1;
+      candidates.push({ min, max, period, currency: currencyFromSymbol(sym), isUpTo, rank });
     }
   }
 
-  const best = candidates.sort((a, b) => b.score - a.score || (b.max ?? b.min) - (a.max ?? a.min))[0];
+  const best = candidates.sort((a, b) => b.rank - a.rank || (b.max ?? b.min) - (a.max ?? a.min))[0];
   if (!best) return {};
 
   // "up to $X": report the figure as the ceiling, leaving the floor open.
@@ -2175,7 +2175,7 @@ function extractDomainSignals(
 
 // Structured parts of an analyzed posting. Shared by the deterministic engine and
 // the AI analyzer so both emit the EXACT same tailoringText scaffold (which the
-// polish/review path and the keyword scorer parse by these literal headings).
+// polish/review path and the keyword matcher parse by these literal headings).
 export type TailoringParts = {
   title?: string;
   context?: string;
@@ -2189,7 +2189,7 @@ export type TailoringParts = {
 
 // THE single source of truth for the tailoringText scaffold. Empty sections get
 // the same "[manual input needed: …]" / "Not specified" placeholders the engine
-// has always emitted, so manualReviewFields() and the scorer behave identically
+// has always emitted, so manualReviewFields() and the matcher behave identically
 // regardless of which analyzer produced the parts.
 export function assembleTailoringText(parts: TailoringParts, maxChars = 9_000): string {
   const sections = [

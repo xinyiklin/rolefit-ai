@@ -28,9 +28,8 @@ import {
 import type { ApplicationDocumentKind } from "../lib/applicationDocumentRequests";
 import type { DocumentUpload } from "../lib/applicationDocumentRequests";
 import { ApplicationDocumentsTab } from "./application/ApplicationDocumentsTab";
-import { STATUS_LABEL, fitTone, formatSalary } from "../lib/applicationDisplay";
-import { VERDICT_LABEL, verdictFromScore } from "../lib/fitVerdict";
-import { displayVerdictReason } from "../lib/verdictReason";
+import { STATUS_LABEL, formatSalary } from "../lib/applicationDisplay";
+import { VERDICT_LABEL } from "../lib/fitVerdict";
 import { useModalFocus } from "@typeset/editor/hooks/useModalFocus.ts";
 
 type ApplicationModalProps = {
@@ -82,7 +81,6 @@ type FormState = {
   salaryMax: string;
   salaryCurrency: string;
   salaryPeriod: SalaryPeriod;
-  fitScore: string;
   interviewTips: string;
   notes: string;
   contacts: ApplicationContact[];
@@ -125,7 +123,6 @@ function formFromApplication(application: Application | null): FormState {
       salaryMax: "",
       salaryCurrency: "USD",
       salaryPeriod: "yr",
-      fitScore: "",
       interviewTips: "",
       notes: "",
       contacts: [],
@@ -151,12 +148,6 @@ function formFromApplication(application: Application | null): FormState {
     salaryMax: typeof application.salaryMax === "number" ? String(application.salaryMax) : "",
     salaryCurrency: application.salaryCurrency ?? "USD",
     salaryPeriod: application.salaryPeriod ?? "yr",
-    fitScore:
-      typeof application.fitScore === "number"
-        ? String(application.fitScore)
-        : typeof application.tailoredFitScore === "number"
-        ? String(application.tailoredFitScore)
-        : "",
     interviewTips: application.interviewTips ?? "",
     notes: application.notes ?? "",
     contacts: application.contacts?.length ? application.contacts.map((c) => ({ ...c })) : [],
@@ -223,11 +214,6 @@ export function ApplicationModal({
     onClose: requestClose
   });
 
-  const fitNumber = useMemo(() => {
-    if (!form.fitScore.trim()) return null;
-    const value = Number(form.fitScore);
-    return Number.isFinite(value) ? Math.max(0, Math.min(100, Math.round(value))) : null;
-  }, [form.fitScore]);
   const formHasUnsavedChanges = useMemo(
     () =>
       Boolean(application) &&
@@ -315,11 +301,6 @@ export function ApplicationModal({
       notes: form.notes.trim(),
       contacts: cleanContacts.length ? cleanContacts : undefined,
       applicationAnswers: cleanAnswers.length ? cleanAnswers : undefined,
-      fitScore: fitNumber,
-      // A manually entered tracker number is not an AI Review result. Keep it as
-      // the standalone fitScore only; comparison/provenance require AI Review.
-      tailoredFitScore: base.tailoredFitScore ?? null,
-      fitScoreSource: base.fitScoreSource ?? null,
       updatedAt: now
     };
   }
@@ -375,12 +356,11 @@ export function ApplicationModal({
   const canSave =
     form.company.trim().length > 1 || form.role.trim().length > 1 || form.jobUrl.trim().length > 6;
   const openPreparationBlocked = formHasUnsavedChanges && !canSave;
-  // New scores arrive only from AI Review and are read-only here.
-  const displayedFitNumber = fitNumber;
-  const ringTone = fitTone(displayedFitNumber);
-  const fitVerdictDerived = verdictFromScore(displayedFitNumber);
-  const review = application?.review;
-  const gaps = application?.missingRequiredSkills ?? [];
+  const fitAssessment = application.initialFitAudit?.assessment;
+  const submissionAssessment = application.submissionAssessment;
+  const gaps = fitAssessment?.requirements.filter(
+    (item) => item.importance === "CORE" && item.coverage !== "COVERED"
+  ) ?? [];
   const headerName = [form.company.trim(), form.role.trim()].filter(Boolean).join(" · ") || "New application";
   const downloadBase = (form.company.trim() || form.role.trim() || "Resume").replace(/[^A-Za-z0-9_-]+/g, "_");
   const compPreview = formatSalary({
@@ -574,32 +554,30 @@ export function ApplicationModal({
 
               <aside className="application-match-card">
                 <span className="application-match-card__eyebrow">
-                  <Sparkles size={14} aria-hidden="true" /> AI match & insights
+                  <Sparkles size={14} aria-hidden="true" /> Initial Fit
                 </span>
-                <div className="figures-strip figures-strip--compact" aria-label="Fit score">
+                <div className="figures-strip figures-strip--compact" aria-label="Initial Fit assessment">
                   <span className="figures-strip__item">
-                    <em>Fit score</em>
-                    <strong className={`application-fit application-fit--${ringTone}`}>{displayedFitNumber === null ? "--" : `${displayedFitNumber}%`}</strong>
+                    <em>Verdict</em>
+                    <strong className="is-prose">{fitAssessment ? VERDICT_LABEL[fitAssessment.verdict] : "Not assessed"}</strong>
                   </span>
-                  {displayedFitNumber !== null ? (
+                  {fitAssessment ? (
                     <>
                       <span className="figures-strip__divider" aria-hidden="true" />
                       <span className="figures-strip__item">
-                        <em>Verdict</em>
-                        <strong className="is-prose">{fitVerdictDerived ? VERDICT_LABEL[fitVerdictDerived] : "Not scored"}</strong>
+                        <em>Confidence</em>
+                        <strong className="is-prose">{fitAssessment.confidence.toLowerCase()}</strong>
                       </span>
                     </>
                   ) : null}
                 </div>
-                {review?.verdictReason
-                  ? <p>{displayVerdictReason(review.verdictReason)}</p>
-                  : <p>Run Polish to replace this with an AI-reviewed fit, gaps, and interview risks.</p>}
+                <p>{fitAssessment?.summary ?? "Run Initial Fit to assess the role against your selected resume."}</p>
                 {gaps.length ? (
                   <div className="application-match-card__gaps">
-                    <strong>Top gaps</strong>
+                    <strong>Core requirements to review</strong>
                     <div className="application-chip-list">
                       {gaps.slice(0, 5).map((gap) => (
-                        <span key={gap.keyword}>{gap.keyword}</span>
+                        <span key={gap.id}>{gap.requirement}</span>
                       ))}
                     </div>
                   </div>
@@ -644,41 +622,29 @@ export function ApplicationModal({
                 )}
               </div>
 
-              {review ? (
+              {submissionAssessment ? (
                 <div className="application-review">
-                  <h4><AlertTriangle size={14} aria-hidden="true" /> AI-flagged interview risks</h4>
-                  {review.verdict ? (
-                    <p className="application-review__verdict">
-                      <strong>{review.verdict}</strong>
-                      {review.verdictReason ? `. ${displayVerdictReason(review.verdictReason)}` : ""}
-                    </p>
-                  ) : null}
-                  {review.riskFlags?.length ? (
+                  <h4><AlertTriangle size={14} aria-hidden="true" /> Submission readiness</h4>
+                  <p className="application-review__verdict">
+                    <strong>{submissionAssessment.readiness.replace(/_/g, " ").toLowerCase()}</strong>
+                    {`. ${submissionAssessment.summary}`}
+                  </p>
+                  {submissionAssessment.unsupportedClaims.length ? (
                     <ul className="application-review__list">
-                      {review.riskFlags.map((flag, index) => (
-                        <li key={index}>
-                          <strong>{flag.risk}</strong>
-                          {flag.suggestion ? <span>{flag.suggestion}</span> : null}
-                        </li>
-                      ))}
+                      {submissionAssessment.unsupportedClaims.map((claim) => <li key={claim}><strong>Unsupported claim</strong><span>{claim}</span></li>)}
                     </ul>
                   ) : null}
-                  {review.recommendation?.coverLetterAngle ? (
-                    <p className="application-muted"><strong>Angle:</strong> {review.recommendation.coverLetterAngle}</p>
-                  ) : null}
-                  {review.recommendation?.topEdits?.length ? (
+                  {submissionAssessment.topEdits.length ? (
                     <div className="application-review__edits">
                       <strong>Top edits before applying</strong>
                       <ul>
-                        {review.recommendation.topEdits.map((edit, index) => (
-                          <li key={index}>{edit}</li>
-                        ))}
+                        {submissionAssessment.topEdits.map((edit) => <li key={edit}>{edit}</li>)}
                       </ul>
                     </div>
                   ) : null}
                 </div>
               ) : (
-                <p className="application-muted">No AI review snapshot yet. Apply after a Polish run to capture interview risks and recommended edits here.</p>
+                <p className="application-muted">No submission assessment was saved for this application.</p>
               )}
             </section>
           ) : null}

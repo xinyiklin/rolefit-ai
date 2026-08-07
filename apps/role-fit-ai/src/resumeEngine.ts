@@ -3,19 +3,8 @@
 // API so existing importers keep working unchanged.
 
 export type {
-  AiFitScore,
   EvidenceType,
   MissingRequiredSkill,
-  SavedFitComparison,
-  StrictReviewVerdict,
-  StrictReviewStatus,
-  StrictReviewSeverity,
-  StrictReviewCoverage,
-  StrictReviewGap,
-  StrictReviewRewrite,
-  StrictReviewRiskFlag,
-  StrictReviewRecommendation,
-  StrictReview,
   TailorChangeField,
   TailorChangeRisk,
   TailorChangeTarget,

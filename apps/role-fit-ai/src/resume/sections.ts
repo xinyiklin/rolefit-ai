@@ -1,11 +1,11 @@
 // Single source of truth for resume SECTION vocabulary + classification, shared by
-// the client scorer (src/resume/text.ts, scoring.ts) and the shared Typeset
+// the client text analyzer (`src/resume/text.ts`) and the shared Typeset
 // document parser (@typeset/engine/lib/resumeData.ts).
 //
 // It's a plain .ts module, kept dependency-free, so both Node (native TypeScript
 // type stripping) and the bundler can import it directly. Before this, the same
 // vocabulary lived in several hand-synced copies that repeatedly drifted apart (a
-// client scorer list and a client parser regex among them) — the root cause of
+// client analyzer list and a client parser regex among them) — the root cause of
 // several section-classification bugs.
 //
 // The model is NESTING-AWARE. A heading has a level:
@@ -13,7 +13,7 @@
 //   - SUB-SECTION: coursework / awards / honors / publications / activities / … which
 //     are usually nested under Education or Experience.
 // The PARSER recognizes BOTH levels (to split each into its own editor section), but
-// the scorer's education date-shield only clears on a TOP-LEVEL NON-education section
+// the analyzer's education date-shield only clears on a TOP-LEVEL NON-education section
 // — so a dated "Coursework" line under Education never leaks degree years into
 // years-of-experience (the inflation bug that recurred whenever these lists drifted).
 
@@ -22,12 +22,12 @@
 // one definition.
 const stripTrim = (line: string): string => String(line ?? "").trim().replace(/:$/, "");
 // The section-name key for exact matches (also exported as `sectionName` from
-// text.ts, so the scorer/rewrite label-matching and boundary detection can't drift).
+// text.ts, so analyzer/rewrite label-matching and boundary detection can't drift).
 export const normalize = (line: string): string => stripTrim(line).toLowerCase();
 
 // ── Bullet glyphs ─────────────────────────────────────────────────────────────
 // The copy-paste bullet glyphs Word/Docs/PDF exports produce. "·" (U+00B7) is
-// deliberately excluded — it is the contact/heading separator. The scorer matches
+// deliberately excluded — it is the contact/heading separator. The analyzer matches
 // exactly these; the parsers additionally accept numbered lists ("1." / "1)").
 export const BULLET_GLYPHS = "-*•◦▪▫■□●○‣⁃∙";
 
@@ -50,7 +50,7 @@ export function isSectionHeader(line: string): boolean {
   return ALL_CAPS_HEADER_RE.test(trimmed) || SECTION_TITLE_RE.test(trimmed);
 }
 
-// ── Top-level section names (the SCORER/REWRITE boundary detector) ──────────────
+// ── Top-level section names (the ANALYZER/REWRITE boundary detector) ────────────
 // Exact-name match. This is intentionally NARROWER than isSectionHeader: it excludes
 // sub-sections (awards/coursework/…) so the education shield and the polisher's
 // section-removal walk treat only genuine top-level sections as boundaries.
@@ -95,7 +95,7 @@ export function isSummaryHeading(heading: string): boolean {
   return SUMMARY_HEADING_RE.test(trimmed) && !SKILLS_HEADING_RE.test(trimmed);
 }
 
-// ── Education heading (the scorer's date-shield trigger) ─────────────────────────
+// ── Education heading (the analyzer's date-shield trigger) ───────────────────────
 // "Education" plus common variants ("Academic Background", "Education & Training").
 // Full-match anchored + a pipe/year guard so a JOB entry like "Academic Advisor |
 // 2020-2022" is never mistaken for the education header. The "education & X" arm is

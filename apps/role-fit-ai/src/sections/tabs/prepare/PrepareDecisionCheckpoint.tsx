@@ -1,19 +1,13 @@
 import { AlertCircle, Check, Circle, LoaderCircle, Minus, RefreshCcw, Square } from "lucide-react";
 
+import type { FitAssessment, RequirementCoverage } from "../../../../shared/fitAssessmentContract.ts";
 import type { PrepareAutomationActionState, PrepareAutomationState } from "../../../hooks/usePrepareAutomation";
 import type { AutoPolishThreshold } from "../../../lib/prepareAutomation";
 import { VERDICT_LABEL, verdictPillClass } from "../../../lib/fitVerdict";
-import { displayVerdictReason } from "../../../lib/verdictReason";
-import type { StrictReviewVerdict } from "../../../resume/types";
 
 export type PrepareInitialFitView = {
   status: "waiting" | "selecting" | "running" | "ready" | "saved" | "stale" | "failed" | "stopped";
-  score?: number;
-  verdict?: StrictReviewVerdict;
-  reason?: string;
-  strengths?: string[];
-  blockers?: string[];
-  gaps?: string[];
+  assessment?: FitAssessment;
   message?: string;
   resumeFileName?: string;
   provenance?: string;
@@ -33,11 +27,24 @@ type PrepareDecisionCheckpointProps = {
 };
 
 const THRESHOLD_LABEL: Record<AutoPolishThreshold, string> = {
-  off: "Off",
+  OFF: "Off",
   STRETCH: "Stretch or better",
-  "REASONABLE FIT": "Reasonable fit or better",
-  "STRONG FIT": "Strong fit"
+  REASONABLE_FIT: "Reasonable fit or better",
+  STRONG_FIT: "Strong fit"
 };
+
+const COVERAGE_LABEL: Record<RequirementCoverage, string> = {
+  COVERED: "Covered",
+  ADJACENT: "Adjacent",
+  MISSING: "Missing",
+  UNCERTAIN: "Uncertain"
+};
+
+const ELIGIBILITY_LABEL = {
+  SATISFIED: "Eligibility satisfied",
+  UNCERTAIN: "Eligibility needs confirmation",
+  NOT_SATISFIED: "Eligibility condition not satisfied"
+} as const;
 
 function automationCopy(
   action: PrepareAutomationActionState,
@@ -96,6 +103,117 @@ function AutomationRow({
   );
 }
 
+function RequirementSummary({ assessment }: { assessment: FitAssessment }) {
+  const counts: Record<RequirementCoverage, number> = {
+    COVERED: 0,
+    ADJACENT: 0,
+    MISSING: 0,
+    UNCERTAIN: 0
+  };
+  for (const requirement of assessment.requirements) {
+    if (requirement.importance === "CORE") counts[requirement.coverage] += 1;
+  }
+  return (
+    <p className="prepare-fit__requirement-summary">
+      {counts.COVERED} core covered
+      <span aria-hidden="true"> · </span>
+      {counts.ADJACENT} adjacent
+      <span aria-hidden="true"> · </span>
+      {counts.MISSING} missing
+      {counts.UNCERTAIN ? <><span aria-hidden="true"> · </span>{counts.UNCERTAIN} uncertain</> : null}
+    </p>
+  );
+}
+
+function FitAssessmentDetails({ assessment }: { assessment: FitAssessment }) {
+  const coreGaps = assessment.requirements.filter(
+    (requirement) => requirement.importance === "CORE" && requirement.coverage !== "COVERED"
+  );
+  const eligibilityQuestions = assessment.eligibility.items.filter((item) => item.status !== "SATISFIED");
+
+  return (
+    <>
+      <div className="prepare-fit__summary">
+        <strong className={`verdict-pill ${verdictPillClass(assessment.verdict)}`}>
+          {VERDICT_LABEL[assessment.verdict]}
+        </strong>
+        <span>{assessment.confidence.toLowerCase()} confidence</span>
+      </div>
+      <p className={`prepare-fit__eligibility is-${assessment.eligibility.status.toLowerCase().replace("_", "-")}`}>
+        {ELIGIBILITY_LABEL[assessment.eligibility.status]}
+      </p>
+      <RequirementSummary assessment={assessment} />
+      <p className="prepare-fit__reason">{assessment.summary}</p>
+      <p className="prepare-fit__verdict-reason">{assessment.verdictReason}</p>
+
+      {assessment.strengths.length || assessment.concerns.length || coreGaps.length || eligibilityQuestions.length ? (
+        <div className="prepare-fit-evidence">
+          {assessment.strengths.length ? (
+            <div>
+              <strong>Strengths</strong>
+              <ul>{assessment.strengths.map((strength) => <li key={strength}>{strength}</li>)}</ul>
+            </div>
+          ) : null}
+          {assessment.concerns.length ? (
+            <div>
+              <strong>Concerns</strong>
+              <ul>{assessment.concerns.map((concern) => <li key={concern}>{concern}</li>)}</ul>
+            </div>
+          ) : null}
+          {coreGaps.length ? (
+            <div>
+              <strong>Core gaps</strong>
+              <ul>
+                {coreGaps.map((requirement) => (
+                  <li key={requirement.id}>{requirement.requirement} · {COVERAGE_LABEL[requirement.coverage]}</li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+          {eligibilityQuestions.length ? (
+            <div>
+              <strong>Eligibility</strong>
+              <ul>{eligibilityQuestions.map((item) => <li key={item.id}>{item.requirement} · {item.explanation}</li>)}</ul>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
+      <details className="prepare-fit-ledger">
+        <summary>Requirement evidence</summary>
+        <ol>
+          {assessment.requirements.map((requirement) => (
+            <li key={requirement.id}>
+              <div className="prepare-fit-ledger__head">
+                <strong>{requirement.requirement}</strong>
+                <span>{requirement.importance === "CORE" ? "Core" : "Supporting"} · {COVERAGE_LABEL[requirement.coverage]}</span>
+              </div>
+              <p>{requirement.explanation}</p>
+              {requirement.evidence.length ? (
+                <ul className="prepare-fit-ledger__evidence">
+                  {requirement.evidence.map((evidence, index) => (
+                    <li key={`${requirement.id}:${evidence.source}:${index}`}>
+                      <span>{evidence.source === "RESUME" ? "Resume" : "About you"}</span>
+                      <q>{evidence.excerpt}</q>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+              {requirement.canSurfaceInResume ? <small>Can be surfaced more clearly in the resume.</small> : null}
+            </li>
+          ))}
+        </ol>
+      </details>
+
+      <div className="prepare-fit__recommendation">
+        <strong>Recommendation</strong>
+        <span>{assessment.recommendation.action.replace(/_/g, " ").toLowerCase()}</span>
+        <p>{assessment.recommendation.reason}</p>
+      </div>
+    </>
+  );
+}
+
 export function PrepareDecisionCheckpoint({
   initialFit,
   automation,
@@ -108,7 +226,7 @@ export function PrepareDecisionCheckpoint({
   onPolishResume,
   onPolishCoverLetter
 }: PrepareDecisionCheckpointProps) {
-  const hasResult = Boolean(initialFit.verdict && initialFit.score !== undefined);
+  const hasResult = Boolean(initialFit.assessment);
   const auditInFlight = initialFit.status === "selecting" || initialFit.status === "running";
   const canRetry = initialFit.status === "failed" || initialFit.status === "stopped" || initialFit.status === "stale";
   const automationBusy = [automation.resume.status, automation.coverLetter.status]
@@ -122,39 +240,11 @@ export function PrepareDecisionCheckpoint({
           {initialFit.status === "saved" ? <span>Historical</span> : null}
         </div>
 
-        {hasResult && initialFit.verdict ? (
+        {initialFit.assessment ? (
           <>
-            <div className="prepare-fit__summary">
-              <strong className={`verdict-pill ${verdictPillClass(initialFit.verdict)}`}>
-                {VERDICT_LABEL[initialFit.verdict]}
-              </strong>
-              <span>{initialFit.score}/100</span>
-            </div>
-            {initialFit.reason ? <p>{displayVerdictReason(initialFit.reason)}</p> : null}
+            <FitAssessmentDetails assessment={initialFit.assessment} />
             {initialFit.status === "stale" ? (
               <p className="prepare-note is-warn" role="status">{initialFit.message}</p>
-            ) : null}
-            {initialFit.strengths?.length || initialFit.blockers?.length || initialFit.gaps?.length ? (
-              <div className="prepare-fit-evidence">
-                {initialFit.strengths?.length ? (
-                  <div>
-                    <strong>Strengths</strong>
-                    <ul>{initialFit.strengths.map((strength, index) => <li key={`${index}:${strength}`}>{strength}</li>)}</ul>
-                  </div>
-                ) : null}
-                {initialFit.blockers?.length ? (
-                  <div>
-                    <strong>Blockers</strong>
-                    <ul>{initialFit.blockers.map((blocker, index) => <li key={`${index}:${blocker}`}>{blocker}</li>)}</ul>
-                  </div>
-                ) : null}
-                {initialFit.gaps?.length ? (
-                  <div>
-                    <strong>Largest gaps</strong>
-                    <ul>{initialFit.gaps.map((gap, index) => <li key={`${index}:${gap}`}>{gap}</li>)}</ul>
-                  </div>
-                ) : null}
-              </div>
             ) : null}
             {initialFit.resumeFileName || initialFit.provenance ? (
               <p className="prepare-fit__provenance">

@@ -144,10 +144,9 @@ function appendScopeSectionLines(lines: string[], section: TailorScopeSection): 
   lines.push("");
 }
 
-// Serializes BOTH editable and read-only context sections so the base fit score
-// reflects the whole resume the user is keeping (e.g. Education counts), matching
-// what the server scores. `editableOnly` (for the polish-gate length check)
-// limits it to the tailored sections.
+// Serializes both editable and read-only context sections so assessment and
+// tailoring can consider the whole resume. `editableOnly` limits the polish
+// gate to sections that can actually change.
 export function tailorScopeToText(scope: TailorScope, editableOnly = false): string {
   const lines: string[] = [];
   for (const section of scope.sections) appendScopeSectionLines(lines, section);

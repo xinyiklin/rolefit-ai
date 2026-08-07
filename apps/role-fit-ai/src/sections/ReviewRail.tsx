@@ -1,72 +1,24 @@
 import { useState } from "react";
-import { AlertCircle, Check, CheckCheck, Clipboard, PlusCircle, Pencil, RotateCcw, X } from "lucide-react";
-import type { PolishedResume, ResumeDiff, StrictReviewRewrite, TailorSuggestion } from "../resumeEngine";
+import { AlertCircle, Check, CheckCheck, Clipboard, Pencil, PlusCircle, RotateCcw, X } from "lucide-react";
 import type { ResumeData, ResumeEntry } from "@typeset/engine/lib/resumeData.ts";
+
+import type { PolishedResume, ResumeDiff, TailorSuggestion } from "../resumeEngine";
 import { renderInlineMarks, stripInlineMarks } from "../lib/inlineMarks";
 import type { ResumeEditorActions } from "../hooks/useResumeEditor";
 import type { TailorChangeTarget } from "../resume/types";
 import type { JobConstraint } from "../lib/jobConstraints";
-import { displayVerdictReason } from "../lib/verdictReason";
-import { verdictPillClass } from "../lib/fitVerdict";
-
-type BulletTarget = { sectionId: string; entryId: string; bulletId: string };
 
 type ReviewRailProps = {
   result: PolishedResume;
   resume: ResumeData | null;
   actions: ResumeEditorActions;
-  // Whole-resume original-vs-tailored diff — the anti-fabrication read-through.
   resumeDiff: ResumeDiff | null;
-  // Lifestyle/logistical conditions in the JD — shown as a pre-apply advisory,
-  // separate from fit (they never move the verdict).
   jobConstraints?: JobConstraint[];
-  // True when the resume proposal or prepared job changed after the audit.
-  // Does not discard the audit; it only marks the verdict and gaps as stale.
   reviewStale?: boolean;
   onHighlight?: (target: TailorChangeTarget | null) => void;
   onProposalChange?: () => void;
-  // Called when the user clicks "Add evidence" on a gap or missing-skill row.
-  // Opens the Options menu so they can fill in honest context and re-run Polish.
   onAddHonestContext?: (keyword: string) => void;
 };
-
-function evidenceLabel(evidenceType: string | undefined) {
-  return (
-    {
-      exact: "Exact evidence",
-      adjacent: "Adjacent evidence",
-      none: "No evidence"
-    }[evidenceType ?? ""] ?? "Evidence"
-  );
-}
-
-// Whitespace- and formatting-insensitive: a bullet the user bolded/italicized
-// still matches the review's plain-text original.
-const normalize = (text: string) => stripInlineMarks(text).replace(/\s+/g, " ").trim().toLowerCase();
-
-// Locate the editor bullet whose text matches `text` (whitespace-insensitive).
-// First match wins; duplicate bullets are rare enough that this is acceptable
-// for display. Batch apply passes `exclude` so duplicates resolve to distinct
-// bullets instead of all landing on the first match.
-function findBullet(resume: ResumeData | null, text: string, exclude?: ReadonlySet<string>): BulletTarget | null {
-  const wanted = normalize(text);
-  if (!resume || !wanted) return null;
-  for (const section of resume.sections) {
-    for (const entry of section.items) {
-      for (const bullet of entry.bullets) {
-        if (normalize(bullet.text) === wanted && !exclude?.has(bullet.id)) {
-          return { sectionId: section.id, entryId: entry.id, bulletId: bullet.id };
-        }
-      }
-    }
-  }
-  return null;
-}
-
-type EditStatus =
-  | { kind: "pending"; target: BulletTarget }
-  | { kind: "applied"; appliedText: string }
-  | { kind: "stale" };
 
 type SuggestionStatus =
   | { kind: "pending"; currentText: string }
@@ -74,11 +26,15 @@ type SuggestionStatus =
   | { kind: "discarded" }
   | { kind: "stale"; currentText: string };
 
-type ReviewActionStatus = {
-  label: string;
-  tone: "ready" | "edits" | "evidence";
-  title: string;
-};
+function evidenceLabel(evidenceType: string | undefined) {
+  return ({
+    exact: "Exact evidence",
+    adjacent: "Adjacent evidence",
+    none: "No evidence"
+  }[evidenceType ?? ""] ?? "Evidence");
+}
+
+const normalize = (text: string) => stripInlineMarks(text).replace(/\s+/g, " ").trim().toLowerCase();
 
 function findEntry(resume: ResumeData | null, sectionId: string, entryId?: string): ResumeEntry | null {
   if (!resume || !entryId) return null;
@@ -90,21 +46,17 @@ function readSuggestionTarget(resume: ResumeData | null, suggestion: TailorSugge
   const entry = findEntry(resume, suggestion.target.sectionId, suggestion.target.entryId);
   if (!entry) return null;
   if (suggestion.target.field === "bullet") {
-    const bullet = entry.bullets.find((item) => item.id === suggestion.target.bulletId);
-    return bullet?.text ?? null;
+    return entry.bullets.find((item) => item.id === suggestion.target.bulletId)?.text ?? null;
   }
   if (suggestion.target.field === "skill") return entry.subtitleLeft;
   return entry[suggestion.target.field] ?? null;
 }
 
 function applySuggestionTarget(actions: ResumeEditorActions, suggestion: TailorSuggestion, value: string) {
-  const sectionId = suggestion.target.sectionId;
-  const entryId = suggestion.target.entryId;
+  const { sectionId, entryId } = suggestion.target;
   if (!entryId) return;
   if (suggestion.target.field === "bullet") {
     if (!suggestion.target.bulletId) return;
-    // viaSuggestion: applying a reviewed suggestion must not downgrade the AI
-    // fit verdict to "Estimated" (only free-form hand-edits do).
     actions.updateBullet(sectionId, entryId, suggestion.target.bulletId, value, true);
     return;
   }
@@ -112,54 +64,26 @@ function applySuggestionTarget(actions: ResumeEditorActions, suggestion: TailorS
   actions.updateEntry(sectionId, entryId, field, value, true);
 }
 
-function reviewActionStatus(result: PolishedResume, pendingEdits: number): ReviewActionStatus | null {
-  const sr = result.strictReview;
-  if (!sr) return null;
-  // The verdict pill already says "don't apply". A second action pill with the
-  // same instruction adds no information and produced a visible duplicate.
-  if (sr.verdict === "DON'T APPLY") return null;
+const READINESS_COPY = {
+  READY: { label: "Ready", tone: "ready" },
+  REVISIONS_RECOMMENDED: { label: "Revisions recommended", tone: "edits" },
+  EVIDENCE_NEEDED: { label: "Evidence needed", tone: "evidence" },
+  NOT_READY: { label: "Not ready", tone: "evidence" }
+} as const;
 
-  const missingEvidence =
-    sr.gaps.some((gap) => !gap.canHonestlyAdd && (gap.severity === "BLOCKER" || gap.severity === "HIGH")) ||
-    Boolean(result.missingRequiredSkills?.some((item) => !item.canHonestlyAdd));
-  if (missingEvidence) {
-    return {
-      label: "missing evidence",
-      tone: "evidence",
-      title: "The reviewer found requirements the AI cannot safely add without more honest context."
-    };
-  }
-
-  // pendingEdits blends Tailor + Reviewer pending cards, so the copy stays neutral
-  // ("edits", not "reviewer edits", which would misdirect when only Tailor edits
-  // are pending). topEdits is advisory prose shown in its own section — it must
-  // NOT drive an "edits ready" pill when nothing in the rail is actually applyable.
-  if (!sr.recommendation.applyAsIs || pendingEdits > 0) {
-    return {
-      label: pendingEdits > 0 ? "edits ready" : "edit first",
-      tone: "edits",
-      title: pendingEdits > 0
-        ? "Apply the pending edits in the rail before exporting."
-        : "The reviewer recommends another pass before applying."
-    };
-  }
-
-  return {
-    label: "ready to apply",
-    tone: "ready",
-    title: sr.recommendation.reason || "The tailored draft passed the recruiter-style review."
-  };
-}
-
-// The recruiter review beside the editor: the verdict plus each suggested
-// bullet rewrite as an actionable card — accept it, modify it before applying,
-// undo it, or apply everything that still matches. A card goes stale when its
-// bullet was hand-edited away (apply manually via Copy in that case).
-export function ReviewRail({ result, resume, actions, resumeDiff, jobConstraints, reviewStale, onHighlight, onProposalChange, onAddHonestContext }: ReviewRailProps) {
-  const sr = result.strictReview;
+export function ReviewRail({
+  result,
+  resume,
+  actions,
+  resumeDiff,
+  jobConstraints,
+  reviewStale,
+  onHighlight,
+  onProposalChange,
+  onAddHonestContext
+}: ReviewRailProps) {
+  const assessment = result.submissionAssessment;
   const suggestions = result.suggestedChanges ?? [];
-  // Text applied per rewrite index (Accept stores the suggestion, Apply after
-  // Edit stores the modified text) so "applied" survives later unrelated edits.
   const [appliedTexts, setAppliedTexts] = useState<Record<string, string>>({});
   const [discardedSuggestions, setDiscardedSuggestions] = useState<Record<string, boolean>>({});
   const [editingKey, setEditingKey] = useState<string | null>(null);
@@ -169,17 +93,9 @@ export function ReviewRail({ result, resume, actions, resumeDiff, jobConstraints
   const unsupportedDropCount = result.droppedSuggestions?.unsupported ?? 0;
   const invalidDropCount = Math.max(0, (result.droppedSuggestions?.total ?? 0) - unsupportedDropCount);
 
-  // A provider response whose every edit was rejected is still an important
-  // result. Keep the rail mounted so the user sees why nothing was offered.
-  if (!sr && !suggestions.length && unsupportedDropCount === 0 && invalidDropCount === 0) return null;
-  const rewrites = sr?.rewrites ?? [];
+  if (!assessment && !suggestions.length && unsupportedDropCount === 0 && invalidDropCount === 0) return null;
 
   function suggestionKey(suggestion: TailorSuggestion, index: number) {
-    // Namespace the suggestion keyspace: suggestion.id is model-supplied and only
-    // length-clipped server-side, so it could equal a reviewer rewrite's
-    // "rewrite-<n>" key. Both sections share appliedTexts/editingKey/copiedKey, so
-    // a bare collision would cross-wire their apply/edit/copy state. The `sugg:`
-    // prefix keeps the two keyspaces disjoint.
     const raw = suggestion.id || `${suggestion.target.sectionId}:${suggestion.target.entryId ?? ""}:${suggestion.target.bulletId ?? ""}:${suggestion.target.field}:${index}`;
     return `sugg:${raw}`;
   }
@@ -196,20 +112,16 @@ export function ReviewRail({ result, resume, actions, resumeDiff, jobConstraints
     if (normalize(currentText) === normalize(suggestion.proposedText)) {
       return { kind: "applied", appliedText: suggestion.proposedText };
     }
-    if (normalize(currentText) === normalize(suggestion.currentText)) {
-      return { kind: "pending", currentText };
-    }
+    if (normalize(currentText) === normalize(suggestion.currentText)) return { kind: "pending", currentText };
     return { kind: "stale", currentText };
   }
 
   function applySuggestion(index: number, text: string) {
     const suggestion = suggestions[index];
-    if (!suggestion) return;
-    const key = suggestionKey(suggestion, index);
-    const status = suggestionStatus(suggestion, index);
-    if (status.kind !== "pending") return;
+    if (!suggestion || suggestionStatus(suggestion, index).kind !== "pending") return;
     const value = text.trim();
     if (!value) return;
+    const key = suggestionKey(suggestion, index);
     applySuggestionTarget(actions, suggestion, value);
     onProposalChange?.();
     setAppliedTexts((current) => ({ ...current, [key]: value }));
@@ -255,146 +167,55 @@ export function ReviewRail({ result, resume, actions, resumeDiff, jobConstraints
     onProposalChange?.();
   }
 
-  function statusFor(rewrite: StrictReviewRewrite, index: number): EditStatus {
-    const appliedText = appliedTexts[`rewrite-${index}`];
-    if (appliedText !== undefined && findBullet(resume, appliedText)) {
-      return { kind: "applied", appliedText };
-    }
-    const pendingTarget = findBullet(resume, rewrite.original);
-    if (pendingTarget) return { kind: "pending", target: pendingTarget };
-    // The draft may already contain the suggestion (snapshot restore, or the
-    // AI baked it into the polished text) — treat that as applied.
-    if (findBullet(resume, rewrite.rewrite)) return { kind: "applied", appliedText: rewrite.rewrite };
-    return { kind: "stale" };
-  }
-
-  const statuses = rewrites.map((rewrite, index) => statusFor(rewrite, index));
-  const suggestionStatuses = suggestions.map((suggestion, index) => suggestionStatus(suggestion, index));
-  const pendingSuggestionCount = suggestionStatuses.filter((status) => status.kind === "pending").length;
-  const pendingRewriteCount = statuses.filter((status) => status.kind === "pending").length;
-  const actionStatus = reviewActionStatus(result, pendingSuggestionCount + pendingRewriteCount);
-
-  // Shared two-line mutation contract for accepting a reviewer rewrite: write
-  // the bullet, then record it as applied under this rewrite's index so the
-  // card's status survives later unrelated edits. Callers keep their own
-  // target-resolution and editingKey handling — this is just the apply itself.
-  function applyResolvedRewrite(index: number, target: BulletTarget, value: string) {
-    actions.updateBullet(target.sectionId, target.entryId, target.bulletId, value, true);
-    onProposalChange?.();
-    setAppliedTexts((current) => ({ ...current, [`rewrite-${index}`]: value }));
-  }
-
-  function applyEdit(index: number, text: string) {
-    const status = statuses[index];
-    if (status.kind !== "pending") return;
-    const value = text.trim();
-    if (!value) return;
-    applyResolvedRewrite(index, status.target, value);
-    setEditingKey(null);
-  }
-
-  function undoEdit(index: number) {
-    const status = statuses[index];
-    if (status.kind !== "applied") return;
-    const target = findBullet(resume, status.appliedText);
-    if (!target) return;
-    actions.updateBullet(target.sectionId, target.entryId, target.bulletId, rewrites[index].original, true);
-    onProposalChange?.();
-    setAppliedTexts((current) => {
-      const next = { ...current };
-      delete next[`rewrite-${index}`];
-      return next;
-    });
-  }
-
   function applyAllSuggestions() {
     suggestions.forEach((suggestion, index) => {
       if (suggestionStatus(suggestion, index).kind === "pending") applySuggestion(index, suggestion.proposedText);
     });
   }
 
-  function applyAllRewrites() {
-    // `statuses` is a render-time snapshot and findBullet is first-match-wins,
-    // so two rewrites whose `original` normalizes identically (duplicate
-    // bullets across entries) would both resolve to the SAME bullet — the
-    // second dispatch overwriting the first while the real second bullet is
-    // never edited. Track consumed bullets and re-resolve duplicates against
-    // the remaining ones so each rewrite lands on its own bullet.
-    const used = new Set<string>();
-    rewrites.forEach((rewrite, index) => {
-      const status = statuses[index];
-      if (status.kind !== "pending") return;
-      let target = status.target;
-      if (used.has(target.bulletId)) {
-        const fresh = findBullet(resume, rewrite.original, used);
-        if (!fresh) return;
-        target = fresh;
-      }
-      used.add(target.bulletId);
-      const value = rewrite.rewrite.trim();
-      if (!value) return;
-      applyResolvedRewrite(index, target, value);
-    });
-    setEditingKey(null);
-  }
-
-  async function copyText(key: string, text: string) {
+  async function copyText(key: string, value: string) {
     try {
-      await navigator.clipboard.writeText(text);
+      await navigator.clipboard.writeText(value);
       setCopiedKey(key);
-      window.setTimeout(() => setCopiedKey((current) => (current === key ? null : current)), 1500);
+      window.setTimeout(() => setCopiedKey((current) => current === key ? null : current), 1500);
     } catch {
-      // Clipboard unavailable — flag the failure so the user knows nothing was
-      // copied (the suggestion text stays visible on the card to copy manually).
       setCopyFailedKey(key);
-      window.setTimeout(() => setCopyFailedKey((current) => (current === key ? null : current)), 2500);
+      window.setTimeout(() => setCopyFailedKey((current) => current === key ? null : current), 2500);
     }
   }
+
+  const suggestionStatuses = suggestions.map((suggestion, index) => suggestionStatus(suggestion, index));
+  const pendingSuggestionCount = suggestionStatuses.filter((status) => status.kind === "pending").length;
+  const readiness = assessment ? READINESS_COPY[assessment.readiness] : null;
 
   return (
     <div className="review-rail">
       {reviewStale ? (
         <p className="rr-stale-notice" role="status">
-          This audit no longer reflects the current resume or prepared job. Polish again to refresh it.
+          This review no longer reflects the current resume or prepared job. Polish again to refresh it.
         </p>
       ) : null}
-      {sr ? (
-        <>
-          <div className={`review-rail__verdict${reviewStale ? " review-rail__verdict--stale" : ""}`}>
-            <strong className={`verdict-pill ${verdictPillClass(sr.verdict)}`}>
-              {sr.verdict}
-            </strong>
-            {actionStatus ? (
-              <span className={`rec-pill rec-pill--${actionStatus.tone}`} title={actionStatus.title}>
-                {actionStatus.label}
-              </span>
-            ) : null}
-          </div>
-          <p className="review-rail__reason">{displayVerdictReason(sr.verdictReason)}</p>
-        </>
-      ) : (
-        <div className={`review-rail__verdict${reviewStale ? " review-rail__verdict--stale" : ""}`}>
-          <strong className="verdict-pill verdict-pill--reasonable-fit">Tailor suggestions</strong>
-        </div>
-      )}
+
+      <div className={`review-rail__verdict${reviewStale ? " review-rail__verdict--stale" : ""}`}>
+        <strong className="verdict-pill">{readiness?.label ?? "Tailor suggestions"}</strong>
+        {pendingSuggestionCount > 0 ? (
+          <span className="rec-pill rec-pill--edits">{pendingSuggestionCount} {pendingSuggestionCount === 1 ? "edit" : "edits"} ready</span>
+        ) : readiness ? (
+          <span className={`rec-pill rec-pill--${readiness.tone}`}>Submission review</span>
+        ) : null}
+      </div>
+      {assessment ? <p className="review-rail__reason">{assessment.summary}</p> : null}
       {result.reviewedBy ? <p className="review-rail__byline">Reviewed by {result.reviewedBy}</p> : null}
 
       {jobConstraints?.length ? (
         <section className="review-rail__section rr-advisory" aria-label="Before you apply">
-          <header className="review-rail__head">
-            <h3>Before you apply</h3>
-          </header>
-          <p className="rr-advisory__note">
-            These are the job's conditions, not fit factors. Check that they work for you.
-          </p>
+          <header className="review-rail__head"><h3>Before you apply</h3></header>
+          <p className="rr-advisory__note">These are job conditions, separate from candidate fit and document readiness.</p>
           <ul className="rr-advisory__list">
-            {jobConstraints.map((c) => (
-              <li key={c.kind} className="rr-advisory__item">
+            {jobConstraints.map((constraint) => (
+              <li key={constraint.kind} className="rr-advisory__item">
                 <AlertCircle size={13} aria-hidden="true" />
-                <span>
-                  <strong>{c.label}</strong>
-                  <span className="rr-advisory__detail">{c.detail}</span>
-                </span>
+                <span><strong>{constraint.label}</strong><span className="rr-advisory__detail">{constraint.detail}</span></span>
               </li>
             ))}
           </ul>
@@ -403,29 +224,21 @@ export function ReviewRail({ result, resume, actions, resumeDiff, jobConstraints
 
       {result.changeSummary?.length ? (
         <section className="review-rail__section review-rail__change-summary" aria-label="What changed">
-          <header className="review-rail__head">
-            <h3>What changed</h3>
-          </header>
+          <header className="review-rail__head"><h3>What changed</h3></header>
           <ul className="rr-change-list">
-            {result.changeSummary.map((bullet, index) => (
-              <li key={index}>{renderInlineMarks(bullet)}</li>
-            ))}
+            {result.changeSummary.map((bullet, index) => <li key={index}>{renderInlineMarks(bullet)}</li>)}
           </ul>
         </section>
       ) : null}
 
-      {/* Hoisted above both edit sections so an all-drop response cannot look
-          identical to a clean "nothing to suggest" pass. Evidence failures and
-          invalid response shapes are reported separately: only the former should
-          be described as unsupported resume wording. */}
       {unsupportedDropCount > 0 ? (
         <p className="review-rail__note review-rail__note--withheld" role="status">
-          {unsupportedDropCount} AI {unsupportedDropCount === 1 ? "edit was" : "edits were"} withheld because the wording wasn’t supported by your resume or honest context. Nothing unverified reached your draft.
+          {unsupportedDropCount} AI {unsupportedDropCount === 1 ? "edit was" : "edits were"} withheld because the wording was not supported by your resume or honest context.
         </p>
       ) : null}
       {invalidDropCount > 0 ? (
         <p className="review-rail__note review-rail__note--withheld" role="status">
-          {invalidDropCount} {unsupportedDropCount > 0 ? "additional AI " : "AI "}{invalidDropCount === 1 ? "edit could" : "edits could"} not be applied safely because {invalidDropCount === 1 ? "it was" : "they were"} malformed, redundant, unchanged, or did not match an editable field.
+          {invalidDropCount} AI {invalidDropCount === 1 ? "edit could" : "edits could"} not be applied safely because {invalidDropCount === 1 ? "it was" : "they were"} malformed, redundant, unchanged, or unmatched.
         </p>
       ) : null}
 
@@ -435,8 +248,7 @@ export function ReviewRail({ result, resume, actions, resumeDiff, jobConstraints
             <h3>Tailor edits · {suggestions.length}</h3>
             {pendingSuggestionCount > 1 ? (
               <button type="button" className="secondary-button is-compact" onClick={applyAllSuggestions}>
-                <CheckCheck size={12} aria-hidden="true" />
-                Apply all ({pendingSuggestionCount})
+                <CheckCheck size={12} aria-hidden="true" /> Apply all ({pendingSuggestionCount})
               </button>
             ) : null}
           </header>
@@ -452,11 +264,11 @@ export function ReviewRail({ result, resume, actions, resumeDiff, jobConstraints
                 onMouseEnter={() => onHighlight?.(suggestion.target)}
                 onMouseLeave={() => onHighlight?.(null)}
                 onFocus={() => onHighlight?.(suggestion.target)}
-                onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) onHighlight?.(null); }}
+                onBlur={(event) => {
+                  if (!event.currentTarget.contains(event.relatedTarget as Node | null)) onHighlight?.(null);
+                }}
               >
-                {status.kind === "stale" ? (
-                  <span className="rr-edit__stale-badge" aria-label="Suggestion is stale">stale</span>
-                ) : null}
+                {status.kind === "stale" ? <span className="rr-edit__stale-badge">stale</span> : null}
                 <p className="rr-edit__original">{renderInlineMarks(suggestion.currentText)}</p>
                 {isEditing ? (
                   <textarea
@@ -467,106 +279,39 @@ export function ReviewRail({ result, resume, actions, resumeDiff, jobConstraints
                     onChange={(event) => setDraft(event.target.value)}
                   />
                 ) : (
-                  <p className="rr-edit__rewrite">
-                    {renderInlineMarks(status.kind === "applied" ? status.appliedText : suggestion.proposedText)}
-                  </p>
+                  <p className="rr-edit__rewrite">{renderInlineMarks(status.kind === "applied" ? status.appliedText : suggestion.proposedText)}</p>
                 )}
                 {!isEditing ? (
                   <div className="mini-chip-list">
                     <span className="mini-chip mini-chip--covered">{suggestion.sectionHeading}</span>
                     <span className="mini-chip mini-chip--covered">{evidenceLabel(suggestion.evidenceType)}</span>
-                    <span className={`mini-chip mini-chip--${suggestion.risk === "high" ? "missing" : "covered"}`}>
-                      {suggestion.risk} risk
-                    </span>
-                    {suggestion.hits.map((hit) => (
-                      <span className="mini-chip mini-chip--covered" key={hit}>
-                        {hit}
-                      </span>
-                    ))}
+                    <span className={`mini-chip mini-chip--${suggestion.risk === "high" ? "missing" : "covered"}`}>{suggestion.risk} risk</span>
+                    {suggestion.hits.map((hit) => <span className="mini-chip mini-chip--covered" key={hit}>{hit}</span>)}
                   </div>
                 ) : null}
                 {suggestion.reason && !isEditing ? <p className="rr-edit__note">{renderInlineMarks(suggestion.reason)}</p> : null}
                 <footer className="rr-edit__actions">
                   {status.kind === "pending" && !isEditing ? (
                     <>
-                      <button
-                        type="button"
-                        className="secondary-button is-compact"
-                        onClick={() => applySuggestion(index, suggestion.proposedText)}
-                      >
-                        <Check size={12} aria-hidden="true" />
-                        Accept
-                      </button>
-                      <button
-                        type="button"
-                        className="ghost-button is-compact"
-                        onClick={() => {
-                          setEditingKey(key);
-                          setDraft(suggestion.proposedText);
-                        }}
-                      >
-                        <Pencil size={12} aria-hidden="true" />
-                        Edit
-                      </button>
-                      <button type="button" className="ghost-button is-compact" onClick={() => discardSuggestion(index)}>
-                        <X size={12} aria-hidden="true" />
-                        Discard
-                      </button>
+                      <button type="button" className="secondary-button is-compact" onClick={() => applySuggestion(index, suggestion.proposedText)}><Check size={12} aria-hidden="true" /> Accept</button>
+                      <button type="button" className="ghost-button is-compact" onClick={() => { setEditingKey(key); setDraft(suggestion.proposedText); }}><Pencil size={12} aria-hidden="true" /> Edit</button>
+                      <button type="button" className="ghost-button is-compact" onClick={() => discardSuggestion(index)}><X size={12} aria-hidden="true" /> Discard</button>
                     </>
                   ) : null}
                   {isEditing ? (
                     <>
-                      <button
-                        type="button"
-                        className="secondary-button is-compact"
-                        disabled={!draft.trim()}
-                        onClick={() => applySuggestion(index, draft)}
-                      >
-                        <Check size={12} aria-hidden="true" />
-                        Apply
-                      </button>
-                      <button type="button" className="ghost-button is-compact" onClick={() => setEditingKey(null)}>
-                        <X size={12} aria-hidden="true" />
-                        Cancel
-                      </button>
+                      <button type="button" className="secondary-button is-compact" disabled={!draft.trim()} onClick={() => applySuggestion(index, draft)}><Check size={12} aria-hidden="true" /> Apply</button>
+                      <button type="button" className="ghost-button is-compact" onClick={() => setEditingKey(null)}><X size={12} aria-hidden="true" /> Cancel</button>
                     </>
                   ) : null}
                   {status.kind === "applied" ? (
-                    <>
-                      <span className="rr-edit__state rr-edit__state--applied">
-                        <Check size={12} aria-hidden="true" />
-                        Applied
-                      </span>
-                      <button type="button" className="ghost-button is-compact" onClick={() => undoSuggestion(index)}>
-                        <RotateCcw size={12} aria-hidden="true" />
-                        Undo
-                      </button>
-                    </>
+                    <><span className="rr-edit__state rr-edit__state--applied"><Check size={12} aria-hidden="true" /> Applied</span><button type="button" className="ghost-button is-compact" onClick={() => undoSuggestion(index)}><RotateCcw size={12} aria-hidden="true" /> Undo</button></>
                   ) : null}
                   {status.kind === "discarded" ? (
-                    <>
-                      <span className="rr-edit__state">Discarded</span>
-                      <button type="button" className="ghost-button is-compact" onClick={() => restoreSuggestion(index)}>
-                        <RotateCcw size={12} aria-hidden="true" />
-                        Restore
-                      </button>
-                    </>
+                    <><span className="rr-edit__state">Discarded</span><button type="button" className="ghost-button is-compact" onClick={() => restoreSuggestion(index)}><RotateCcw size={12} aria-hidden="true" /> Restore</button></>
                   ) : null}
                   {status.kind === "stale" && !isEditing ? (
-                    <>
-                      <span className="rr-edit__state rr-edit__state--stale">
-                        <AlertCircle size={12} aria-hidden="true" />
-                        Target changed
-                      </span>
-                      <button
-                        type="button"
-                        className="ghost-button is-compact"
-                        onClick={() => copyText(key, suggestion.proposedText)}
-                      >
-                        <Clipboard size={12} aria-hidden="true" />
-                        {copiedKey === key ? "Copied" : copyFailedKey === key ? "Copy failed" : "Copy"}
-                      </button>
-                    </>
+                    <><span className="rr-edit__state rr-edit__state--stale"><AlertCircle size={12} aria-hidden="true" /> Target changed</span><button type="button" className="ghost-button is-compact" onClick={() => copyText(key, suggestion.proposedText)}><Clipboard size={12} aria-hidden="true" /> {copiedKey === key ? "Copied" : copyFailedKey === key ? "Copy failed" : "Copy"}</button></>
                   ) : null}
                 </footer>
               </article>
@@ -575,253 +320,52 @@ export function ReviewRail({ result, resume, actions, resumeDiff, jobConstraints
         </section>
       ) : null}
 
-      {sr ? (
-        <section className="review-rail__section" aria-label="Reviewer edits">
-          <header className="review-rail__head">
-            <h3>
-              Reviewer edits
-              {rewrites.length ? ` · ${rewrites.length}` : ""}
-            </h3>
-            {pendingRewriteCount > 1 ? (
-              <button type="button" className="secondary-button is-compact" onClick={applyAllRewrites}>
-                <CheckCheck size={12} aria-hidden="true" />
-                Apply all ({pendingRewriteCount})
-              </button>
-            ) : null}
-          </header>
-
-          {rewrites.length === 0 ? (
-            <p className="review-rail__empty">No second-pass rewrites suggested for this draft.</p>
-          ) : (
-            rewrites.map((rewrite, index) => {
-              const status = statuses[index];
-              const rewriteKey = `rewrite-${index}`;
-              const isEditing = editingKey === rewriteKey;
-              const rewriteTarget =
-                status.kind === "pending"
-                  ? status.target
-                  : status.kind === "applied"
-                    ? findBullet(resume, status.appliedText)
-                    : null;
-              const highlightTarget: TailorChangeTarget | null = rewriteTarget
-                ? { ...rewriteTarget, field: "bullet" }
-                : null;
-              return (
-                <article
-                  className={`rr-edit rr-edit--${status.kind}`}
-                  key={index}
-                  onMouseEnter={() => onHighlight?.(highlightTarget)}
-                  onMouseLeave={() => onHighlight?.(null)}
-                  onFocus={() => onHighlight?.(highlightTarget)}
-                  onBlur={(event) => {
-                    if (!event.currentTarget.contains(event.relatedTarget as Node | null)) onHighlight?.(null);
-                  }}
-                >
-                  {status.kind === "stale" ? (
-                    <span className="rr-edit__stale-badge" aria-label="Suggestion is stale">stale</span>
-                  ) : null}
-                  <p className="rr-edit__original">{renderInlineMarks(rewrite.original)}</p>
-                  {isEditing ? (
-                    <textarea
-                      className="textarea rr-edit__draft"
-                      value={draft}
-                      rows={3}
-                      aria-label="Modify the suggested rewrite"
-                      onChange={(event) => setDraft(event.target.value)}
-                    />
-                  ) : (
-                    <p className="rr-edit__rewrite">
-                      {renderInlineMarks(status.kind === "applied" ? status.appliedText : rewrite.rewrite)}
-                    </p>
-                  )}
-                  {rewrite.hits.length && !isEditing ? (
-                    <div className="mini-chip-list">
-                      {rewrite.hits.map((hit) => (
-                        <span className="mini-chip mini-chip--covered" key={hit}>
-                          ✓ {hit}
-                        </span>
-                      ))}
-                    </div>
-                  ) : null}
-                  <footer className="rr-edit__actions">
-                    {status.kind === "pending" && !isEditing ? (
-                      <>
-                        <button
-                          type="button"
-                          className="secondary-button is-compact"
-                          onClick={() => applyEdit(index, rewrite.rewrite)}
-                        >
-                          <Check size={12} aria-hidden="true" />
-                          Accept
-                        </button>
-                        <button
-                          type="button"
-                          className="ghost-button is-compact"
-                          onClick={() => {
-                            setEditingKey(rewriteKey);
-                            setDraft(rewrite.rewrite);
-                          }}
-                        >
-                          <Pencil size={12} aria-hidden="true" />
-                          Edit
-                        </button>
-                      </>
-                    ) : null}
-                    {isEditing ? (
-                      <>
-                        <button
-                          type="button"
-                          className="secondary-button is-compact"
-                          disabled={!draft.trim()}
-                          onClick={() => applyEdit(index, draft)}
-                        >
-                          <Check size={12} aria-hidden="true" />
-                          Apply
-                        </button>
-                        <button
-                          type="button"
-                          className="ghost-button is-compact"
-                          onClick={() => setEditingKey(null)}
-                        >
-                          <X size={12} aria-hidden="true" />
-                          Cancel
-                        </button>
-                      </>
-                    ) : null}
-                    {status.kind === "applied" ? (
-                      <>
-                        <span className="rr-edit__state rr-edit__state--applied">
-                          <Check size={12} aria-hidden="true" />
-                          Applied
-                        </span>
-                        <button type="button" className="ghost-button is-compact" onClick={() => undoEdit(index)}>
-                          <RotateCcw size={12} aria-hidden="true" />
-                          Undo
-                        </button>
-                      </>
-                    ) : null}
-                    {status.kind === "stale" ? (
-                      <>
-                        <span className="rr-edit__state rr-edit__state--stale">
-                          <AlertCircle size={12} aria-hidden="true" />
-                          Bullet changed. Apply manually.
-                        </span>
-                        <button
-                          type="button"
-                          className="ghost-button is-compact"
-                          onClick={() => copyText(rewriteKey, rewrite.rewrite)}
-                        >
-                          <Clipboard size={12} aria-hidden="true" />
-                          {copiedKey === rewriteKey ? "Copied" : copyFailedKey === rewriteKey ? "Copy failed" : "Copy"}
-                        </button>
-                      </>
-                    ) : null}
-                  </footer>
-                </article>
-              );
-            })
-          )}
+      {assessment?.unsupportedClaims.length ? (
+        <section className="review-rail__section" aria-label="Unsupported claims">
+          <header className="review-rail__head"><h3>Unsupported claims · {assessment.unsupportedClaims.length}</h3></header>
+          <ul className="review-rail__list">{assessment.unsupportedClaims.map((claim) => <li key={claim}>{claim}</li>)}</ul>
         </section>
       ) : null}
 
-      {sr?.gaps.length ? (
-        <section className="review-rail__section" aria-label="Gaps">
-          <header className="review-rail__head">
-            <h3>Gaps · {sr.gaps.length}</h3>
-          </header>
-          {sr.gaps.map((gap, index) => (
-            <article className="rr-gap" key={index}>
-              <p className="rr-gap__head">
-                <span className={`severity-tag severity-tag--${gap.severity.toLowerCase()}`}>{gap.severity}</span>
-                <strong>{gap.gap}</strong>
-              </p>
-              <p className="rr-gap__line">
-                <em>{gap.canHonestlyAdd ? "✓ Can honestly add" : "✗ Cannot add"}</em>
-                {gap.suggestedEdit ? `. ${gap.suggestedEdit}` : ""}
-              </p>
-              {!gap.canHonestlyAdd && onAddHonestContext ? (
-                <button
-                  type="button"
-                  className="ghost-button is-compact rr-gap__evidence-btn"
-                  onClick={() => onAddHonestContext(gap.gap)}
-                >
-                  <PlusCircle size={11} aria-hidden="true" />
-                  Add evidence
-                </button>
-              ) : null}
-            </article>
-          ))}
-        </section>
-      ) : null}
-
-      {sr?.riskFlags.length ? (
-        <section className="review-rail__section" aria-label="Interview risks">
-          <header className="review-rail__head">
-            <h3>Interview risks · {sr.riskFlags.length}</h3>
-          </header>
-          {sr.riskFlags.map((flag, index) => (
-            <article className="rr-gap" key={index}>
-              <p className="rr-gap__head">
-                <strong>{flag.risk}</strong>
-              </p>
-              {flag.suggestion ? <p className="rr-gap__line">{flag.suggestion}</p> : null}
-            </article>
-          ))}
-        </section>
-      ) : null}
-
-      {sr?.recommendation.topEdits.length ? (
-        <section className="review-rail__section" aria-label="Top edits">
-          <header className="review-rail__head">
-            <h3>Top edits</h3>
-          </header>
-          <ol className="review-rail__list">
-            {sr.recommendation.topEdits.map((edit, index) => (
-              <li key={index}>{edit}</li>
-            ))}
-          </ol>
-        </section>
-      ) : null}
-
-      {result.missingRequiredSkills?.length ? (
-        <details className="review-rail__details">
-          <summary>Still missing · {result.missingRequiredSkills.length}</summary>
-          {result.missingRequiredSkills.map((item, index) => (
-            <article className="rr-gap" key={`${item.keyword}-${index}`}>
-              <p className="rr-gap__head">
-                <strong>{item.keyword}</strong>
-                <span className={`mini-chip mini-chip--${item.canHonestlyAdd ? "covered" : "missing"}`}>
-                  {item.canHonestlyAdd ? "Exact evidence" : "Leave as gap"}
-                </span>
-              </p>
-              <p className="rr-gap__line">
-                <em>{evidenceLabel(item.evidenceType)}</em>
-                {item.reason ? `. ${item.reason}` : ""}
-              </p>
+      {assessment?.missingEvidence.length ? (
+        <section className="review-rail__section" aria-label="Missing evidence">
+          <header className="review-rail__head"><h3>Missing evidence · {assessment.missingEvidence.length}</h3></header>
+          {assessment.missingEvidence.map((item) => (
+            <article className="rr-gap" key={item}>
+              <p className="rr-gap__head"><strong>{item}</strong></p>
               {onAddHonestContext ? (
-                <button
-                  type="button"
-                  className="ghost-button is-compact rr-gap__evidence-btn"
-                  onClick={() => onAddHonestContext(item.keyword)}
-                >
-                  <PlusCircle size={11} aria-hidden="true" />
-                  Add evidence
+                <button type="button" className="ghost-button is-compact rr-gap__evidence-btn" onClick={() => onAddHonestContext(item)}>
+                  <PlusCircle size={11} aria-hidden="true" /> Add evidence
                 </button>
               ) : null}
             </article>
           ))}
-        </details>
+        </section>
       ) : null}
 
-      {sr?.coverage.length ? (
+      {assessment?.presentationIssues.length ? (
+        <section className="review-rail__section" aria-label="Presentation issues">
+          <header className="review-rail__head"><h3>Presentation issues</h3></header>
+          <ul className="review-rail__list">{assessment.presentationIssues.map((issue) => <li key={issue}>{issue}</li>)}</ul>
+        </section>
+      ) : null}
+
+      {assessment?.topEdits.length ? (
+        <section className="review-rail__section" aria-label="Top edits">
+          <header className="review-rail__head"><h3>Top edits</h3></header>
+          <ol className="review-rail__list">{assessment.topEdits.map((edit) => <li key={edit}>{edit}</li>)}</ol>
+        </section>
+      ) : null}
+
+      {assessment?.requirementVisibility.length ? (
         <details className="review-rail__details">
-          <summary>Coverage · {sr.coverage.length}</summary>
-          {sr.coverage.map((row, index) => (
-            <p className={`rr-cov rr-cov--${row.status}`} key={`${row.category}-${row.keyword}-${index}`}>
-              <em aria-hidden="true">{row.status === "covered" ? "✓" : row.status === "missing" ? "✗" : "⚠"}</em>
-              <strong>{row.keyword}</strong>
-              <span>{row.where}</span>
-            </p>
+          <summary>Requirement visibility · {assessment.requirementVisibility.length}</summary>
+          {assessment.requirementVisibility.map((row) => (
+            <div className={`rr-cov rr-cov--${row.coverage.toLowerCase()}`} key={row.id}>
+              <em aria-hidden="true">{row.coverage === "COVERED" ? "✓" : row.coverage === "MISSING" ? "✗" : "⚠"}</em>
+              <strong>{row.requirement}</strong>
+              <span>{row.explanation}</span>
+            </div>
           ))}
         </details>
       ) : null}
@@ -835,44 +379,16 @@ export function ReviewRail({ result, resume, actions, resumeDiff, jobConstraints
             <span>Read every change before exporting. Added claims are yours to defend.</span>
           </p>
           <div className="diff-inline" role="region" aria-label="Full resume diff, original versus tailored">
-            {resumeDiff.segments.length ? (
-              resumeDiff.segments.map((seg, index) =>
-                seg.type === "equal" ? (
-                  <span key={index}>{seg.text}</span>
-                ) : (
-                  <span
-                    key={index}
-                    className={`diff-seg diff-seg--${seg.type}`}
-                    title={seg.type === "added" ? "Added by tailoring" : "Removed by tailoring"}
-                  >
-                    {seg.text}
-                  </span>
-                )
-              )
+            {resumeDiff.segments.length ? resumeDiff.segments.map((segment, index) => segment.type === "equal" ? (
+              <span key={index}>{segment.text}</span>
             ) : (
-              <span className="diff-empty">No changes between the original and tailored resume.</span>
-            )}
+              <span key={index} className={`diff-seg diff-seg--${segment.type}`}>{segment.text}</span>
+            )) : <span className="diff-empty">No changes between the original and tailored resume.</span>}
           </div>
           {resumeDiff.metricPrompts.length ? (
-            <div className="metric-prompts">
-              <h3>Metric prompts to resolve</h3>
-              <ul>
-                {resumeDiff.metricPrompts.map((item, index) => (
-                  <li key={`${index}-${item}`}>{item}</li>
-                ))}
-              </ul>
-            </div>
+            <div className="metric-prompts"><h3>Metric prompts to resolve</h3><ul>{resumeDiff.metricPrompts.map((item) => <li key={item}>{item}</li>)}</ul></div>
           ) : null}
         </details>
-      ) : null}
-
-      {sr?.recommendation.coverLetterAngle ? (
-        <section className="review-rail__section" aria-label="Cover letter angle">
-          <header className="review-rail__head">
-            <h3>Cover letter angle</h3>
-          </header>
-          <p className="rr-gap__line">{sr.recommendation.coverLetterAngle}</p>
-        </section>
       ) : null}
     </div>
   );

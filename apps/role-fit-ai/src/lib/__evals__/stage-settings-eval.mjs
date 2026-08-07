@@ -172,17 +172,17 @@ assert.deepEqual(
 assert.deepEqual(
   normalizeSettings({
     resumeAutoPolishThreshold: "STRETCH",
-    coverAutoPolishThreshold: "STRONG FIT"
+    coverAutoPolishThreshold: "STRONG_FIT"
   }),
   {
     resumeAutoPolishThreshold: "STRETCH",
-    coverAutoPolishThreshold: "STRONG FIT"
+    coverAutoPolishThreshold: "STRONG_FIT"
   },
   "independent automation thresholds round-trip"
 );
 assert.deepEqual(
   normalizeSettings({
-    resumeAutoPolishThreshold: "DON'T APPLY",
+    resumeAutoPolishThreshold: "LIMITED_FIT",
     coverAutoPolishThreshold: "sometimes",
     runInitialAudit: false
   }),

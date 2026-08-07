@@ -7,15 +7,16 @@ import {
   STATUS_LABEL,
   activityGroupForFilter,
   activityCount,
+  appFitVerdict,
   displayCompany,
   displayRole,
-  fitScore,
   matchesActivityFilter,
   nextAction,
   priorityFor,
   type ApplicationActivityFilter,
   type ApplicationActivityGroup
 } from "../../lib/applicationDisplay";
+import { FIT_VERDICT_RANK } from "../../lib/fitVerdict";
 import { useDuplicateScan } from "../../hooks/useDuplicateScan";
 import { TrackerTableView } from "../tracker/TrackerTableView";
 import { TrackerCalendarView } from "../tracker/TrackerCalendarView";
@@ -86,9 +87,10 @@ function compareBy(key: SortKey, a: Application, b: Application): number {
     case "nextAction":
       return nextAction(a).localeCompare(nextAction(b));
     case "fit": {
-      // Unknown fit sorts to the bottom of a descending list (the useful default).
-      const fa = fitScore(a) ?? -Infinity;
-      const fb = fitScore(b) ?? -Infinity;
+      const aVerdict = appFitVerdict(a)?.verdict;
+      const bVerdict = appFitVerdict(b)?.verdict;
+      const fa = aVerdict ? FIT_VERDICT_RANK[aVerdict] : -Infinity;
+      const fb = bVerdict ? FIT_VERDICT_RANK[bVerdict] : -Infinity;
       return fa - fb;
     }
   }

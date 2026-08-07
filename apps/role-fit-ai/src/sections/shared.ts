@@ -43,7 +43,8 @@ export type ApplicationAnswersResult = {
 } | null;
 
 // Before/after fit numbers for the original (base) vs. tailored resume against
-// one job. AI Review scores both in one call; there is no local fallback.
+// one job. Initial Fit and submission readiness are separate AI assessments;
+// there is no local fallback.
 export type FitComparison = {
   source: "ai";
   base: number;
