@@ -48,6 +48,35 @@ export { resolveReviewOutcome, reviewFailureFromReason } from "./recruiterAudit.
 // Optional dispatch-attempt collector: callConfiguredProvider bumps `attempts`.
 type AttemptStats = { attempts?: number };
 
+// Convert a parseable Tailor reply whose every edit failed sanitization into a
+// safe provider-output failure. Counts select only a broad recovery category;
+// no suggestion text, target id, evidence excerpt, or model-authored id reaches
+// either the error or its diagnostics.
+export function tailorOutputValidationFailure(
+  provider: string,
+  rawSuggestionCount: number,
+  acceptedSuggestionCount: number,
+  dropStats: unknown
+): UserSafeAiError | null {
+  if (rawSuggestionCount <= 0 || acceptedSuggestionCount > 0) return null;
+  const dropped = summarizeDroppedSuggestions(dropStats);
+  const editLabel = rawSuggestionCount === 1 ? "edit" : "edits";
+  const reason = dropped && dropped.unsupported === dropped.total
+    ? rawSuggestionCount === 1
+      ? "it was not supported by the resume or honest context"
+      : "they were not supported by the resume or honest context"
+    : dropped && dropped.unsupported > 0
+      ? "their targets or response fields were invalid, or their claims were not supported by the resume or honest context"
+      : rawSuggestionCount === 1
+        ? "its target or response fields were invalid"
+        : "their targets or response fields were invalid";
+  return new UserSafeAiError(
+    `${providerLabel(provider)} returned ${rawSuggestionCount} Tailor ${editLabel}, but ${reason}. Retry, or switch models.`,
+    502,
+    "output-validation"
+  );
+}
+
 // The server-normalized tailor scope (built by normalizeTailorScope from the
 // untrusted request body) and the shapes its serializer consumes.
 type ScopeBullet = { id: string; text: string };
@@ -357,7 +386,10 @@ export async function handlePolish(req: IncomingMessage, res: ServerResponse): P
     const suggestionDropStats = {};
     const suggestedChanges = sanitizeTailorSuggestions(parsedObj.suggestedChanges, tailorScope, suggestionDropStats, honestContext, jobText);
     const rawSuggestionCount = Array.isArray(parsedObj.suggestedChanges) ? parsedObj.suggestedChanges.length : 0;
-    if (runTailor && rawSuggestionCount > 0 && suggestedChanges.length === 0) {
+    const tailorOutputFailure = runTailor
+      ? tailorOutputValidationFailure(provider, rawSuggestionCount, suggestedChanges.length, suggestionDropStats)
+      : null;
+    if (tailorOutputFailure) {
       // Counts only, never suggestion text or model-supplied identifiers. An all-drop reaching
       // the user as "no suggestions" is indistinguishable from a clean pass
       // without this. IDs are untrusted model output and may contain copied
@@ -367,6 +399,7 @@ export async function handlePolish(req: IncomingMessage, res: ServerResponse): P
         rawSuggestionCount,
         ...suggestionDropStats
       });
+      throw tailorOutputFailure;
     }
     // Surface the anti-fabrication catches: a silent all-drop otherwise looks
     // identical to a clean "nothing to suggest" pass (counts by reason only, no
@@ -582,7 +615,10 @@ export async function handlePolish(req: IncomingMessage, res: ServerResponse): P
   } catch (error) {
     if (isRequestAborted(error, req, res)) return;
     if (error instanceof UserSafeAiError) {
-      sendJson(res, error.status, { error: error.message });
+      sendJson(res, error.status, {
+        error: error.message,
+        ...(error.failureKind ? { failureKind: error.failureKind } : {})
+      });
       return;
     }
     if (error instanceof FetchTimeoutError || (error instanceof Error && /timed out|timeout/i.test(error.message))) {

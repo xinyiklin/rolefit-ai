@@ -342,8 +342,17 @@ export function usePolishPipeline({
       });
       const data = await readAiResponse(response, "tailor");
       if (!runCanCommit(generation, ctx, signal)) return null;
-      if (!response.ok) throw new ApiError((data.error as string) ?? "AI tailor failed.", response.status);
+      if (!response.ok) {
+        throw new ApiError(
+          (data.error as string) ?? "AI tailor failed.",
+          response.status,
+          data.failureKind === "output-validation" ? "output-validation" : undefined
+        );
+      }
       const suggestedChanges: ReviewSuggestions = Array.isArray(data.suggestedChanges) ? data.suggestedChanges : [];
+      const missingRequiredSkills = Array.isArray(data.missingRequiredSkills) && data.missingRequiredSkills.length
+        ? data.missingRequiredSkills as PolishedResume["missingRequiredSkills"]
+        : undefined;
       if (!data.polishedText && !suggestedChanges.length) {
         throw new ApiError("The tailor returned no usable resume suggestions", 502);
       }
@@ -370,12 +379,10 @@ export function usePolishPipeline({
         ...analysis,
         polishedText: suggestedChanges.length ? currentResumeText || scopedPolishedText : scopedPolishedText,
         source: "ai",
-        tailored: true,
+        tailored: suggestedChanges.length > 0,
         coverLetterText: coverText,
         changeSummary: Array.isArray(data.changeSummary) && data.changeSummary.length ? data.changeSummary as string[] : undefined,
-        missingRequiredSkills: Array.isArray(data.missingRequiredSkills) && data.missingRequiredSkills.length
-          ? data.missingRequiredSkills as PolishedResume["missingRequiredSkills"]
-          : undefined,
+        missingRequiredSkills,
         suggestedChanges,
         droppedSuggestions: (data.droppedSuggestions as PolishedResume["droppedSuggestions"]) ?? null,
         // Tailor-only: no AI review fields — useResumeAnalysis must see these
@@ -397,7 +404,14 @@ export function usePolishPipeline({
         ...(typeof data.reasoningEffort === "string" && data.reasoningEffort ? { reasoningEffort: data.reasoningEffort } : {})
       });
       if (revealResumeOnSuccess) setActiveOutputTab("resume");
-      setPolishProgress((prev) => ({ ...prev, tailor: { status: "done", note: "Tailored with AI", noteTone: "ok" } }));
+      setPolishProgress((prev) => ({
+        ...prev,
+        tailor: {
+          status: "done",
+          note: suggestedChanges.length ? "Tailored with AI" : "No edits applied · gaps identified",
+          noteTone: "ok"
+        }
+      }));
       const tailorUsage: StageAiUsage = {
         source: "ai",
         ...(typeof data.provider === "string" && data.provider ? { provider: data.provider } : {}),

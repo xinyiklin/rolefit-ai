@@ -2,10 +2,13 @@
 
 export class UserSafeAiError extends Error {
   status: number;
-  constructor(message: string, status = 500) {
+  failureKind?: "output-validation";
+
+  constructor(message: string, status = 500, failureKind?: "output-validation") {
     super(message);
     this.name = "UserSafeAiError";
     this.status = status;
+    this.failureKind = failureKind;
   }
 }
 
