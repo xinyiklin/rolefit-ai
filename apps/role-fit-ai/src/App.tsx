@@ -34,7 +34,7 @@ import {
 import { useAiSettings } from "./hooks/useAiSettings";
 import { useAvailableProviders } from "./hooks/useAvailableProviders";
 import { useApplicationAnswers } from "./hooks/useApplicationAnswers";
-import { useApplications, missingRequiredSkillsFromApplication, type Application } from "./hooks/useApplications";
+import { useApplications, type Application } from "./hooks/useApplications";
 import { useResumeAnalysis } from "./hooks/useResumeAnalysis";
 import { useResumeEditor } from "./hooks/useResumeEditor";
 import { useResumeExport } from "./hooks/useResumeExport";
@@ -119,11 +119,7 @@ import type { TrackerView } from "./sections/tabs/TrackerTab";
 import type { OutputTab, OutputTabDescriptor } from "./sections/shared";
 import { providerLabel } from "./config/aiOptions";
 import { formatHistoryDate } from "./lib/historyDate";
-import {
-  appFitVerdict,
-  fitScore,
-  type ApplicationActivityFilter
-} from "./lib/applicationDisplay";
+import { type ApplicationActivityFilter } from "./lib/applicationDisplay";
 
 const PreviewOverlay = lazy(() => import("./sections/PreviewOverlay"));
 
@@ -504,13 +500,13 @@ function App() {
   // editedResume is the canonical editable model; it seeds at discrete events
   // (a fresh polish, a loaded base resume, a restored snapshot). `currentResumeText`
   // is its serialization (falling back to the raw polish output) — the bridge every
-  // text consumer (scoring, diff, exports, print, application snapshots) reads.
+  // text consumer (assessment, diff, exports, print, application snapshots) reads.
   const {
     editedResume,
     dirty: resumeEdited,
     // Free-form hand-edits only (NOT accepting/undoing a reviewed suggestion).
-    // Gates fit provenance so applying reviewed suggestions keeps the AI score;
-    // arbitrary typing makes it stale until AI Review runs again.
+    // Gates readiness provenance so applying reviewed suggestions keeps the
+    // reviewed assessment; arbitrary typing makes it stale until Review runs again.
     manualEdited: resumeManuallyEdited,
     canUndo: canUndoResume,
     canRedo: canRedoResume,
@@ -1088,18 +1084,16 @@ function App() {
   }, [result]);
   useEffect(() => {
     // Any AI result is bound to its job input, even when Tailor correctly found
-    // zero suggestions and there is no strict Review payload.
+    // zero suggestions and there is no submission Review payload.
     if (!result) return;
     if (result.source !== "ai") return;
     setReviewStale(jobDescription !== lastPolishedJobRef.current);
   }, [jobDescription, result]);
   useEffect(() => {
-    // Resume FREELY edited after a review completed — mark stale so the user
-    // understands why the AI fit numbers are hidden (useResumeAnalysis gates
-    // them behind !isEdited). Accepting a reviewed suggestion is not a free edit
-    // (the verdict still describes that proposal), so it does not mark stale.
+    // Resume freely edited after a review completed — mark the submission
+    // assessment stale. Accepting a reviewed suggestion is not a free edit.
     // Only fires when there is an AI review to flag.
-    if (!result?.strictReview) return;
+    if (!result?.submissionAssessment) return;
     if (resumeManuallyEdited) setReviewStale(true);
     // We deliberately do NOT reset on !resumeManuallyEdited — the stale flag
     // should clear only when a new polish result lands (the result effect above).
@@ -1142,15 +1136,12 @@ function App() {
   const debouncedCurrentResumeText = useDebouncedValue(currentResumeText);
   const debouncedPreparedJobDescription = useDebouncedValue(jobDescription);
 
-  // Every review-score/diff derivation the UI shows is pure (read-only) and lives
+  // Review diff and job-condition derivation is pure (read-only) and lives
   // in useResumeAnalysis, so it stays decoupled from App's setters.
-  const { resumeDiff, fitComparison, headlineScore, jobConstraints } = useResumeAnalysis({
+  const { resumeDiff, jobConstraints } = useResumeAnalysis({
     resumeText,
     jobDescription,
     debouncedCurrentResumeText,
-    // Gate AI fit provenance on FREE edits only. Accepting reviewed suggestions
-    // keeps the score attached to the proposal the reviewer judged.
-    isEdited: resumeManuallyEdited,
     result
   });
 
@@ -1268,6 +1259,7 @@ function App() {
     setExportStatus,
     confirmDuplicateBeforePolish: duplicateGuard.confirmDuplicateBeforePolish
   });
+  const lastResumePolishModeRef = useRef<"automatic" | "manual" | null>(null);
   const aiWorkflowStages: AiWorkflowStage[] = [];
   if (jobAnalysisProgressVisible) {
     aiWorkflowStages.push({
@@ -1281,7 +1273,10 @@ function App() {
       aiWorkflowStages.push({
         key: "tailor",
         state: polishProgress.tailor,
-        onRetry: () => void retryStage("tailor"),
+        onRetry: () => {
+          lastResumePolishModeRef.current = "manual";
+          void retryStage("tailor");
+        },
         onStop: stopPolish
       });
     }
@@ -1289,7 +1284,10 @@ function App() {
       aiWorkflowStages.push({
         key: "review",
         state: polishProgress.review,
-        onRetry: () => void retryStage("review"),
+        onRetry: () => {
+          lastResumePolishModeRef.current = "manual";
+          void retryStage("review");
+        },
         onStop: stopPolish
       });
     }
@@ -1406,6 +1404,9 @@ function App() {
     jobPrepared && jobAnalysisProgress.status === "done" && importedJob
       ? importedJob.preparationId
       : "";
+  useEffect(() => {
+    lastResumePolishModeRef.current = null;
+  }, [initialFitPreparationId]);
   const preparedResumeSelection = usePreparedResumeSelection({
     preparationId: initialFitPreparationId,
     currentFileName: activeResumeFileName,
@@ -1800,10 +1801,13 @@ function App() {
     coverThreshold: coverAutoPolishThreshold,
     polishStages,
     coverSelectionSettled: coverVariantSelectionSettled,
-    runResume: (stagesOverride) => handlePolish({
-      revealResumeOnSuccess: false,
-      stagesOverride
-    }),
+    runResume: (stagesOverride) => {
+      lastResumePolishModeRef.current = "automatic";
+      return handlePolish({
+        revealResumeOnSuccess: false,
+        stagesOverride
+      });
+    },
     runCoverLetter: handleTailorCoverLetter
   });
   const currentInitialFitFingerprint =
@@ -1863,6 +1867,7 @@ function App() {
     // This click is explicit: it tailors exactly the resume currently shown;
     // loading a different variant remains protected by useWorkspaceResume's
     // dirty-document confirmation.
+    lastResumePolishModeRef.current = "manual";
     void handlePolish({ revealResumeOnSuccess: false });
   }
 
@@ -1938,41 +1943,22 @@ function App() {
     [linkApplication]
   );
   const polishOutputCurrent = result?.source === "ai" && !reviewStale && !resumeManuallyEdited;
-  const currentReviewAvailable = polishOutputCurrent && Boolean(result?.strictReview);
+  const currentReviewAvailable = polishOutputCurrent && Boolean(result?.submissionAssessment);
   const savedApplicationReviewAvailable = Boolean(
     jobPrepared &&
-      preparedApplication?.review &&
+      preparedApplication?.submissionAssessment &&
       (preparedApplication.jobDescription ?? "").trim() ===
         preparedApplicationJobDescription.trim()
   );
-  const prepareReviewGaps =
-    currentReviewAvailable && result?.strictReview
-      ? result.strictReview.gaps
-      : savedApplicationReviewAvailable
-        ? preparedApplication?.review?.gaps ?? []
-        : [];
-  const prepareReviewGapsProvenance = currentReviewAvailable
-    ? "current"
-    : savedApplicationReviewAvailable
-      ? "saved"
-      : "none";
-  const savedApplicationFitVerdict =
-    savedApplicationReviewAvailable && preparedApplication
-      ? appFitVerdict(preparedApplication)
-      : null;
-  const prepareFitAssessment =
-    currentReviewAvailable && result?.strictReview
+  const prepareSubmissionAssessment =
+    currentReviewAvailable && result?.submissionAssessment
       ? {
-          verdict: result.strictReview.verdict,
-          score: headlineScore,
-          reason: result.strictReview.verdictReason,
+          assessment: result.submissionAssessment,
           provenance: "current" as const
         }
-      : savedApplicationReviewAvailable && preparedApplication && savedApplicationFitVerdict
+      : savedApplicationReviewAvailable && preparedApplication?.submissionAssessment
         ? {
-            verdict: savedApplicationFitVerdict.verdict,
-            score: fitScore(preparedApplication),
-            reason: preparedApplication.review?.verdictReason ?? "",
+            assessment: preparedApplication.submissionAssessment,
             provenance: "saved" as const
           }
         : null;
@@ -1983,9 +1969,7 @@ function App() {
   const currentInitialFitForApplication =
     readyInitialFitAudit
       ? {
-          score: readyInitialFitAudit.score,
-          verdict: readyInitialFitAudit.verdict,
-          verdictReason: readyInitialFitAudit.verdictReason,
+          assessment: readyInitialFitAudit.assessment,
           resumeFileName: readyInitialFitAudit.resumeFileName,
           completedAt: readyInitialFitAudit.completedAt
         }
@@ -2003,21 +1987,7 @@ function App() {
         : undefined;
   const initialFitResultView = liveInitialFitResult
     ? {
-        score: liveInitialFitResult.score,
-        verdict: liveInitialFitResult.verdict,
-        reason: liveInitialFitResult.verdictReason,
-        strengths: liveInitialFitResult.review.coverage
-          .filter((entry) => entry.status === "covered")
-          .slice(0, 3)
-          .map((entry) => entry.where ? `${entry.keyword} · ${entry.where}` : entry.keyword),
-        blockers: liveInitialFitResult.review.gaps
-          .filter((gap) => gap.severity === "BLOCKER")
-          .slice(0, 3)
-          .map((gap) => gap.gap),
-        gaps: liveInitialFitResult.review.gaps
-          .filter((gap) => gap.severity !== "BLOCKER")
-          .slice(0, 3)
-          .map((gap) => `${gap.gap} · ${gap.severity.toLowerCase()}`),
+        assessment: liveInitialFitResult.assessment,
         resumeFileName: liveInitialFitResult.resumeFileName,
         provenance: [
           providerLabel(liveInitialFitResult.usage.provider ?? ""),
@@ -2068,9 +2038,7 @@ function App() {
     const savedUsage = preparedApplication.aiUsage?.["initial-fit"];
     prepareInitialFit = {
       status: "saved",
-      score: preparedApplication.initialFitAudit.score,
-      verdict: preparedApplication.initialFitAudit.verdict,
-      reason: preparedApplication.initialFitAudit.verdictReason,
+      assessment: preparedApplication.initialFitAudit.assessment,
       resumeFileName: preparedApplication.initialFitAudit.resumeFileName,
       provenance: [
         savedUsage?.provider ? providerLabel(savedUsage.provider) : "",
@@ -2120,10 +2088,11 @@ function App() {
     jobRawText,
     result,
     currentResumeText,
-    headlineScore,
-    fitComparison,
     pipelineAiUsage: applyPipelineAiUsage,
     initialFitAudit: currentInitialFitForApplication,
+    resumePolishMode: result?.source === "ai"
+      ? lastResumePolishModeRef.current ?? undefined
+      : undefined,
     applications,
     linkedApplicationId: applicationOfRecordId,
     findForTarget,
@@ -2311,19 +2280,8 @@ function App() {
         setResult({
           ...restoredAnalysis,
           polishedText: restoredResume,
-          // Restore only a saved AI comparison. Legacy deterministic estimates
-          // are intentionally ignored and require a fresh AI Review.
-          savedFit:
-            app.fitScoreSource === "ai" &&
-            typeof app.baseFitScore === "number" &&
-            typeof app.tailoredFitScore === "number"
-              ? {
-                  source: "ai",
-                  base: app.baseFitScore,
-                  tailored: app.tailoredFitScore
-                }
-              : undefined,
-          missingRequiredSkills: missingRequiredSkillsFromApplication(app)
+          tailored: app.resumeUsed === "tailored",
+          submissionAssessment: app.submissionAssessment
         });
         if (restoredResumeData) {
           seedResumeData(restoredResumeData);
@@ -2653,9 +2611,7 @@ function App() {
               coverAutoPolishThreshold={coverAutoPolishThreshold}
               onRetryInitialFit={initialFitAudit.retry}
               onStopInitialFit={initialFitAudit.stop}
-              reviewGaps={prepareReviewGaps}
-              reviewGapsProvenance={prepareReviewGapsProvenance}
-              fitAssessment={prepareFitAssessment}
+              submissionAssessment={prepareSubmissionAssessment}
               linkedApplication={preparedApplication}
               readiness={preparationReadiness}
               isApplying={isApplying}
@@ -2852,9 +2808,18 @@ function App() {
               isPolishing={isPolishing}
               polishProgress={polishProgress}
               polishStatus={polishStatus}
-              onPolish={() => void handlePolish()}
-              onRetryTailor={() => void retryStage("tailor")}
-              onRetryAudit={() => void retryStage("review")}
+              onPolish={() => {
+                lastResumePolishModeRef.current = "manual";
+                void handlePolish();
+              }}
+              onRetryTailor={() => {
+                lastResumePolishModeRef.current = "manual";
+                void retryStage("tailor");
+              }}
+              onRetryAudit={() => {
+                lastResumePolishModeRef.current = "manual";
+                void retryStage("review");
+              }}
               onStopPolish={stopPolish}
               onProposalChange={() => setReviewStale(true)}
               jobTarget={materialsJobTarget}

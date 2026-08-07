@@ -1,5 +1,3 @@
-export const INITIAL_FIT_AUDIT_CONTRACT_VERSION = 1;
-
 export type InitialFitAuditFingerprintInput = {
   preparationId: string;
   jobText: string;
@@ -20,7 +18,6 @@ export function buildInitialFitAuditFingerprint(
   input: InitialFitAuditFingerprintInput
 ): string {
   const source = JSON.stringify([
-    INITIAL_FIT_AUDIT_CONTRACT_VERSION,
     input.preparationId,
     input.jobText,
     input.resumeFileName,
@@ -39,5 +36,5 @@ export function buildInitialFitAuditFingerprint(
     first = Math.imul(first ^ code, 0x01000193);
     second = Math.imul(second ^ (code + index), 0x85ebca6b);
   }
-  return `initial-fit-v${INITIAL_FIT_AUDIT_CONTRACT_VERSION}-${source.length.toString(36)}-${(first >>> 0).toString(36)}-${(second >>> 0).toString(36)}`;
+  return `initial-fit-${source.length.toString(36)}-${(first >>> 0).toString(36)}-${(second >>> 0).toString(36)}`;
 }

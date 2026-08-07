@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { EvidenceType, MissingRequiredSkill, StrictReviewSeverity } from "../resumeEngine";
 import { inferApplicationTitle, inferCompanyFromUrl } from "../lib/jobTarget";
 import { sourceFromUrl, type ExtractedJobTracking } from "../lib/jobExtract";
 import { dedupeSourceUrls, normalizeJobUrl, findDuplicateApplications } from "../lib/jobIdentity";
@@ -13,6 +12,7 @@ import {
 } from "../lib/applicationMutation";
 import type { ApplicationDocumentArtifacts } from "../../shared/applicationDocumentContract.ts";
 import type { InitialFitAudit } from "../lib/initialFitAudit";
+import type { SubmissionAssessment } from "../../shared/fitAssessmentContract.ts";
 
 export type { ApplicationAiUsage, StageAiUsage } from "../lib/aiUsage";
 
@@ -39,32 +39,13 @@ export const APPLICATION_SOURCES: ApplicationSource[] = [
   "Other"
 ];
 
-// Snapshot of the recruiter (strict) review captured when a role is applied, so
-// the pipeline remembers the verdict, interview risks, and gaps per application.
-export type ApplicationReviewGap = {
-  gap: string;
-  severity: StrictReviewSeverity | string;
-  evidenceType?: EvidenceType;
-  canHonestlyAdd?: boolean;
-  evidence?: string;
-  suggestedEdit?: string;
-};
-
-export type ApplicationReview = {
-  verdict: string;
-  verdictReason: string;
-  riskFlags: { risk: string; suggestion: string }[];
-  gaps: ApplicationReviewGap[];
-  recommendation: { applyAsIs: boolean; reason: string; coverLetterAngle: string; topEdits: string[] };
-};
-
 // Historical decision checkpoint captured separately from the later
-// post-polish comparison. The full live review stays in Prepare; the tracker
-// keeps the decision, selected source, and timestamp without conflating it with
-// Application.review or the base/tailored score pair.
+// post-polish readiness assessment. The full live review stays in Prepare; the
+// tracker keeps the decision, selected source, and timestamp without conflating
+// candidate fit with document readiness.
 export type ApplicationInitialFitAudit = Pick<
   InitialFitAudit,
-  "score" | "verdict" | "verdictReason" | "resumeFileName" | "completedAt"
+  "assessment" | "resumeFileName" | "completedAt"
 >;
 
 // A drafted application-question answer (or per-role description) the user chose
@@ -152,17 +133,12 @@ export type Application = {
   // below supplies the AI-derived risks/gaps that complement these notes).
   interviewTips?: string;
   contacts?: ApplicationContact[];
-  fitScore?: number | null;
-  // Before/after fit captured at Apply time: the original (base) resume vs. the
-  // tailored draft, so the pipeline can show the lift tailoring produced.
-  baseFitScore?: number | null;
-  tailoredFitScore?: number | null;
-  // A fit comparison is persisted only when AI Review produced it.
-  fitScoreSource?: "ai" | null;
   initialFitAudit?: ApplicationInitialFitAudit;
+  submissionAssessment?: SubmissionAssessment;
+  // How the tailored resume workflow was started. This supports categorical
+  // workflow analytics without storing a fit number or automation heuristic.
+  resumePolishMode?: "automatic" | "manual";
   templateId?: string;
-  review?: ApplicationReview;
-  missingRequiredSkills?: MissingRequiredSkill[];
   // Which resume actually went out — the AI-tailored draft or the original/base
   // (the AI may judge the base already a strong fit). Captured at Apply time.
   resumeUsed?: "tailored" | "base";
@@ -188,7 +164,7 @@ function canonicalizeApplicationAiUsage(application: Application): Application {
 
 // Build the common skeleton for a new pipeline entry from the current job
 // target. Both the "Apply" and "Save answers" paths start here and
-// then add their own fields (fit scores / review, or saved answers), so the
+// then add their own fields (fit/readiness assessments, or saved answers), so the
 // shared shape — id, inferred title/company, trimmed job target, default
 // status, timestamps — lives in one place and cannot drift between them.
 // crypto.randomUUID exists only in secure contexts (https / localhost). Served
@@ -255,25 +231,6 @@ export function makeApplicationDraft(
   if (metadata.salaryCurrency) draft.salaryCurrency = cleanDraftString(metadata.salaryCurrency, 8);
   if (metadata.salaryPeriod) draft.salaryPeriod = metadata.salaryPeriod;
   return draft;
-}
-
-// Derive a missing-required-skills list for a saved application: prefer the
-// explicitly stored list, else reconstruct it from the snapshotted review gaps
-// (treating an exact, addable gap as "exact" evidence and the rest as "none").
-export function missingRequiredSkillsFromApplication(app: Application): MissingRequiredSkill[] | undefined {
-  if (app.missingRequiredSkills?.length) return app.missingRequiredSkills;
-  const derived = app.review?.gaps
-    ?.filter((gap) => gap.gap)
-    .map((gap) => {
-      const evidenceType = gap.evidenceType ?? (gap.canHonestlyAdd ? "exact" : "none");
-      return {
-        keyword: gap.gap,
-        evidenceType,
-        canHonestlyAdd: evidenceType === "exact" && Boolean(gap.canHonestlyAdd),
-        reason: gap.evidence || gap.suggestedEdit || (gap.severity ? `${gap.severity} gap` : "")
-      };
-    });
-  return derived?.length ? derived : undefined;
 }
 
 // EXACT-tier only: these two drive SILENT merges (Apply + Save answers), so

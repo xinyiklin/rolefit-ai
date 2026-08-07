@@ -8,7 +8,7 @@
 //
 // This is deliberately separate from eligibility BLOCKERS (clearance, license,
 // citizenship, work authorization) — those make the candidate unable to do the
-// job and legitimately drive the fit verdict to DON'T APPLY. Preferences do not.
+// job and legitimately drive eligibility to NOT_SATISFIED. Preferences do not.
 //
 // Best-effort and conservative: a curated pattern set over the JD text. False
 // negatives (a constraint phrased unusually) are acceptable for an advisory; the

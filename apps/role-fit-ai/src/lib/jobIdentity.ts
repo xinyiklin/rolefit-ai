@@ -387,8 +387,8 @@ function jdTokens(text: string | undefined | null): string[] {
 
 // Compact content fingerprint of a job description: the set of distinct
 // substantial tokens. Set-of-tokens (vs shingles) is deliberately loose so a
-// repost with shuffled sections still scores high, while different roles at
-// the same company (different duties/stack) score low. Bare numbers are
+// repost with shuffled sections still has high similarity, while different roles at
+// the same company (different duties/stack) have low similarity. Bare numbers are
 // excluded — dates and salary figures churn between reposts of the same job.
 export function jdFingerprint(text: string | undefined | null): Set<string> {
   return fingerprintOf(jdTokens(text));

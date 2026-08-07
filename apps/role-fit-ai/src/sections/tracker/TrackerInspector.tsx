@@ -15,7 +15,6 @@ import {
 } from "../../lib/applicationDisplay";
 import { describeProviderModel } from "../../config/aiOptions";
 import { canonicalizeAiUsageStageKeys } from "../../lib/aiUsage";
-import { displayVerdictReason } from "../../lib/verdictReason";
 
 const AI_USAGE_STAGES: { key: string; label: string }[] = [
   { key: "job-analysis", label: "Job analysis" },
@@ -61,11 +60,9 @@ export function TrackerInspector({
   }
 
   const verdict = appFitVerdict(selected);
-  const verdictSource = selected.review?.verdict
-    ? "AI-judged"
-    : verdict
-    ? "Estimated"
-    : "Not scored";
+  const fitAssessment = selected.initialFitAudit?.assessment;
+  const submissionAssessment = selected.submissionAssessment;
+  const verdictSource = fitAssessment ? "Initial Fit" : "Not assessed";
   const safeJobUrl = /^https?:\/\//i.test(selected.jobUrl.trim()) ? selected.jobUrl.trim() : "";
   const displayedAiUsage = canonicalizeAiUsageStageKeys(selected.aiUsage);
 
@@ -103,12 +100,12 @@ export function TrackerInspector({
         </div>
       </header>
 
-      <div className="application-detail-score application-detail-score--inline">
+      <div className="application-detail-fit application-detail-fit--inline">
         <div className="figures-strip figures-strip--compact">
           <span className="figures-strip__item">
             <em>Fit</em>
             <strong className={`application-fit application-fit--${verdict?.tone ?? "neutral"}`}>
-              {verdict ? verdict.label : "Not scored"}
+              {verdict ? verdict.label : "Not assessed"}
             </strong>
           </span>
           <span className="figures-strip__divider" aria-hidden="true" />
@@ -117,10 +114,8 @@ export function TrackerInspector({
             <strong className="is-prose">{verdictSource}</strong>
           </span>
         </div>
-        <p className="application-detail-score__reason">
-          {selected.review?.verdictReason
-            ? displayVerdictReason(selected.review.verdictReason)
-            : "Use Polish to refresh fit, gaps, and interview risks."}
+        <p className="application-detail-fit__reason">
+          {fitAssessment?.summary ?? "Run Initial Fit to assess the role against your selected resume."}
         </p>
       </div>
 
@@ -324,14 +319,21 @@ export function TrackerInspector({
         </section>
       ) : null}
 
-      {selected.missingRequiredSkills?.length ? (
+      {fitAssessment?.requirements.some((item) => item.importance === "CORE" && item.coverage !== "COVERED") ? (
         <section className="side-section">
-          <p className="side-section__label"><ClipboardCheck size={12} aria-hidden="true" /> Required gaps</p>
+          <p className="side-section__label"><ClipboardCheck size={12} aria-hidden="true" /> Core requirements to review</p>
           <div className="application-chip-list">
-            {selected.missingRequiredSkills.slice(0, 5).map((gap) => (
-              <span key={gap.keyword}>{gap.keyword}</span>
+            {fitAssessment.requirements.filter((item) => item.importance === "CORE" && item.coverage !== "COVERED").slice(0, 5).map((item) => (
+              <span key={item.id}>{item.requirement}</span>
             ))}
           </div>
+        </section>
+      ) : null}
+
+      {submissionAssessment ? (
+        <section className="side-section">
+          <p className="side-section__label"><ClipboardCheck size={12} aria-hidden="true" /> Submission readiness</p>
+          <p className="side-section__value">{submissionAssessment.readiness.replace(/_/g, " ").toLowerCase()} · {submissionAssessment.summary}</p>
         </section>
       ) : null}
 

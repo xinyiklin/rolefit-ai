@@ -227,11 +227,11 @@ quiet semantic signals; nothing is ever pure white or pure black.
 ### Signal
 
 - **Warm amber** (`--warm`, oklch(0.52 0.1 75)): attention without alarm;
-  empty-input dots, stretch-fit scores, high priority.
+  empty-input dots, stretch verdicts, high priority.
 - **Archival blue** (`--cool`, oklch(0.45 0.06 250)): the "applied" stage and
   low-priority marks; filed, not active.
 - **Brick** (`--danger`, oklch(0.45 0.12 30)): errors, rejected stage,
-  weak-fit scores. Soft tints (`--warm-soft`, `--danger-soft`) back inline
+  limited-fit verdicts. Soft tints (`--warm-soft`, `--danger-soft`) back inline
   notices only.
 
 ### Named Rules
@@ -274,7 +274,7 @@ stacks resolve to system fonts.
   0.06–0.18em): `.eyebrow`, `.table-eyebrow`, field labels. The widest
   tracking (0.18em) belongs to the masthead eyebrow only.
 - **Data** (mono, 500–600, 0.64–0.92rem, tabular-nums): ledger values,
-  figures-strip numbers, dates, fit scores, model identifiers.
+  figures-strip numbers, dates, counts, model identifiers.
 
 ### Named Rules
 
@@ -411,14 +411,14 @@ interactive control shares the same focus treatment: 2px Forest Ink outline,
   action is unavailable, its live status otherwise. Neither is labeled
   “optional.” Resume starts included and Cover Letter starts excluded. A flat
   Initial Fit checkpoint follows the materials: first show resume selection,
-  then the automatic audit, then score/verdict/reason plus concise strengths,
-  gaps, selected resume, and provider provenance. Its Retry, Stop, and Re-audit
+  then the automatic audit, then categorical verdict, confidence, eligibility,
+  requirement evidence, recommendation, selected resume, and provider provenance. Its Retry, Stop, and Re-audit
   controls stay local. A reopened saved checkpoint is explicitly historical.
   Under it, two flat Automation rows explain independently why Resume and Cover
   Letter Polish started, waited, skipped, stopped, or failed; manual overrides
-  use the same document commands. A separate Proposal fit row renders only when
-  the later Recruiter audit exists. Do not style any of these as nested cards or
-  derive a local verdict.
+  use the same document commands. Separate resume submission readiness renders
+  only when the later Review exists. Do not style any of these as nested cards,
+  derive a local verdict, or present readiness as candidate fit.
 - **Automation:** extension receipt and Job analysis progress remain visible on
   Prepare. A successful preparation always continues through settled resume
   selection and Initial Fit. The same result evaluates the two categorical
@@ -553,7 +553,7 @@ The table reads as a logbook register, not a CRM grid.
   if a value has no owning token, it does not ship.
 - **Do** state status as a small dot beside plain sentence-case text
   (`.stage-dot`, `.nav-menu__sub`, `.studio-card__meta`).
-- **Do** set numbers, dates, scores, and indices in JetBrains Mono with
+- **Do** set numbers, dates, counts, and indices in JetBrains Mono with
   `tabular-nums` (The Mono Means Data Rule).
 - **Do** keep errors inline, localized, and user-safe, near the affected
   workflow; surface gaps and bracketed placeholders for human review.

@@ -98,15 +98,15 @@ Good server verification covers:
   Kubernetes-required JD
 - live prompt-eval changes can use
   `EVAL_MODE=both node apps/role-fit-ai/server/ai/__evals__/fabrication-eval.mjs` to check
-  strict-review and regular-polish modes, including one exact-evidence
+  submission-review and regular-tailor modes, including one exact-evidence
   positive case from honest context and an inferred-evidence OS case
 - sanitizer or AI-review contract changes must keep
   `node apps/role-fit-ai/server/ai/__evals__/sanitize-probes.mjs` green — it is offline,
   deterministic, and replays every live fabrication/evasion found during
   the 2026-06-11 hardening (editor `<b>` tokens, ungrounded JD terms,
-  and placeholder evidence). Lock the AI-owned score/verdict contract: valid
-  model output must pass through unchanged; malformed, out-of-range, or
-  band-inconsistent output must be rejected rather than recomputed. Also lock
+  and placeholder evidence). Lock both AI-owned assessment contracts: valid
+  model output must pass through unchanged; malformed enums, inconsistent
+  requirement references, or ungrounded evidence must be rejected. Also lock
   semantic-boundary guidance such as treating alternatives like
   "Bachelor's or Master's" as alternatives rather than conjunctions
 - prompt-budget changes must add probes that build oversized structured
@@ -123,8 +123,8 @@ Good server verification covers:
   `node apps/role-fit-ai/server/ai/__evals__/tailor-quality-eval.mjs apps/role-fit-ai/workspace/tailor-eval/samples/<jd>.json 3`
   (metrics-only output; full responses land in gitignored
   `workspace/tailor-eval/`); a matched JD should produce
-  evidence-backed suggestions with a small honest lift, a bad-fit JD a
-  stable DON'T APPLY
+  evidence-backed suggestions and a defensible readiness assessment; a bad-fit
+  JD must remain candid about missing evidence
 - when an AI call for Job analysis, Tailor, or Review fails, the shared workflow identifies
   the classified cause, keeps the failed step current, and leaves later steps
   as not run; Job analysis may retain a deterministic local brief for inspection,
@@ -223,15 +223,29 @@ Good frontend verification covers:
   retry/stale guards cannot apply an earlier posting to the current session
 - extension intake supplies no Tailor command or threshold override; after a
   successful receiving-tab Job analysis, ordinary Prepare safely settles the
-  exact resume selection, automatically runs one-score Initial Fit, and
+  exact resume selection, automatically runs one categorical Initial Fit assessment, and
   independently evaluates Resume and Cover Letter thresholds. Multiple saved
   variants are ranked from their strict document contents while the editor is
   clean, with no persisted variant metadata
 - Initial Fit waits for selection to settle, uses the whole visible non-identity
   resume as evidence, rejects stale/mismatched fingerprints and malformed or
-  band-inconsistent results, exposes Retry/Stop/Re-audit, and never falls back
-  to a local score. Manual resume changes rerun once after loading; free edits
+  semantically inconsistent results, exposes Retry/Stop/Re-audit, and never
+  falls back to a local judgment. Manual resume changes rerun once after loading; free edits
   mark stale without per-keystroke reruns
+- Initial Fit adversarial probes cover normalized exact job/evidence excerpts,
+  duplicate and cross-ledger source requirements, one-token technology
+  insertion, clause-level sponsorship polarity with contractions, adverbs,
+  H-1B modifiers, and `no need for sponsorship` forms, `cannot relocate`,
+  token-anchored lower-bound years mismatches
+  including Java/JavaScript false-friends, explicit `MISSING`
+  versus evidence-free `UNCERTAIN`, the eligibility/recommendation matrix,
+  source-derived display labels, Strong Fit with failed eligibility, and
+  all-covered pessimistic verdicts. Contract and server-to-client round-trip
+  probes cover 17 covered rows, 17 adjacent rows, 17 missing-evidence rows, and
+  a 40-row split ledger. Submission probes require relevant, positive,
+  non-adverse honest-context evidence for `canSurfaceInResume=true`, cover
+  common contracted and equivalent negative wording, and reject
+  fabricated technology, metrics, proper claims, or outcomes in user-facing advice
 - the two threshold decisions are inclusive and independent: Cover can run when
   Resume skips or fails, Cover does not require Include, automatic Resume always
   includes Tailor, and neither workflow accepts a proposal or changes Include
@@ -256,7 +270,7 @@ Good frontend verification covers:
   preserves the dirty-document confirmation, restores the session, and lands
   on Prepare through the visible **Open preparation** action. Its saved Initial
   Fit baseline and `initial-fit` usage provenance restore separately from the
-  final Recruiter review and base/tailored score pair; automation is not replayed
+  final submission-readiness assessment; automation is not replayed
 - Applications routes its new-work action to Prepare, while its modal edits
   existing committed records and exposes no independent job-intake controls
 - a failed cover-letter request stays local to its page with safe retry copy and

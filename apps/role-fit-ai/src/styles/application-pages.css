@@ -341,8 +341,7 @@
   font-feature-settings: "tnum";
 }
 
-/* Now a fit VERDICT word (Reasonable fit / Don't apply), not a "76%" figure —
-   so it uses the UI font, not mono ("Mono Means Data" is for numbers). */
+/* Categorical fit verdicts use the UI font rather than tabular display type. */
 .application-fit {
   display: inline-flex;
   justify-content: center;
@@ -431,9 +430,9 @@
   flex: none;
 }
 
-/* Side-panel inline score row (replaces donut ring). Doubled class beats the
-   later .application-detail-score base rule in the cascade. */
-.application-detail-score.application-detail-score--inline {
+/* Side-panel inline fit summary. Doubled class beats the later base rule in
+   the cascade. */
+.application-detail-fit.application-detail-fit--inline {
   display: grid;
   grid-template-columns: 1fr;
   gap: var(--s2);
@@ -443,7 +442,7 @@
   padding: 0;
 }
 
-.application-detail-score__reason {
+.application-detail-fit__reason {
   margin: 0;
   color: var(--ink-soft);
   font-size: 0.72rem;
@@ -1083,7 +1082,7 @@ button.table-sort svg {
   white-space: nowrap;
 }
 
-.application-detail-score {
+.application-detail-fit {
   display: grid;
   grid-template-columns: auto 1fr;
   align-items: center;
@@ -1094,13 +1093,13 @@ button.table-sort svg {
   background: var(--card-soft);
 }
 
-.application-detail-score strong {
+.application-detail-fit strong {
   display: block;
   color: var(--accent-deep);
   font-size: 0.82rem;
 }
 
-.application-detail-score p {
+.application-detail-fit p {
   margin-top: 3px;
   color: var(--ink-soft);
   font-size: 0.72rem;
@@ -1693,12 +1692,6 @@ button.table-sort svg {
   color: var(--ink-soft);
   font-size: 0.72rem;
   font-style: normal;
-}
-
-.analytics-best-score {
-  font-size: 1.4rem;
-  min-width: 56px;
-  display: block;
 }
 
 .analytics-funnel {

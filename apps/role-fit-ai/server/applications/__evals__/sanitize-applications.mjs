@@ -23,19 +23,38 @@ try {
       updatedAt: "2026-07-29T10:00:00.000Z",
       jobUrl: "https://example.com/job",
       status: "applied",
-      review: {
-        verdict: "STRETCH",
-        gaps: [
-          { gap: "Active Secret clearance", severity: "CRITICAL", evidenceType: "none" },
-          { gap: "PostgreSQL", severity: "HIGH", evidenceType: "exact", canHonestlyAdd: "false" }
-        ]
-      },
       initialFitAudit: {
-        score: 77,
-        verdict: "REASONABLE FIT",
-        verdictReason: "Relevant product engineering evidence with a few direct ownership gaps.",
+        assessment: {
+          verdict: "REASONABLE_FIT",
+          confidence: "HIGH",
+          summary: "Relevant product engineering evidence with one adjacent core requirement.",
+          verdictReason: "Most core requirements have direct or adjacent evidence.",
+          eligibility: { status: "SATISFIED", items: [] },
+          requirements: [{
+            id: "python",
+            requirement: "Python",
+            sourceRequirement: "Python is required.",
+            importance: "CORE",
+            coverage: "COVERED",
+            evidence: [{ source: "RESUME", excerpt: "Python" }],
+            explanation: "Python is listed in Technical Skills.",
+            canSurfaceInResume: false
+          }],
+          strengths: ["Python evidence is direct."],
+          concerns: [],
+          recommendation: { action: "APPLY", reason: "The important requirements are supported." }
+        },
         resumeFileName: "full-stack.resume",
         completedAt: "2026-07-28T14:30:00.000Z"
+      },
+      submissionAssessment: {
+        readiness: "READY",
+        summary: "The resume is ready to submit.",
+        requirementVisibility: [],
+        unsupportedClaims: [],
+        missingEvidence: [],
+        presentationIssues: [],
+        topEdits: []
       },
       // sourceUrls: one dupe of the own jobUrl via a tracking-param variant (must
       // collapse), one dupe of another entry, one distinct URL, one empty (dropped).
@@ -110,16 +129,14 @@ try {
 
   if (written.length !== 2 || read.length !== 2) failures.push("invalid ids are not dropped");
   if (valid?.id !== "app_valid-123") failures.push("valid id did not persist");
-  if (valid?.review?.gaps?.length !== 1 || valid.review.gaps[0]?.severity !== "HIGH") {
-    failures.push("invalid review severity was normalized into a fabricated judgment");
-  }
-  if (valid?.review?.gaps?.[0]?.canHonestlyAdd !== false) failures.push("string review boolean became an affirmative judgment");
   if (
-    valid?.initialFitAudit?.score !== 77 ||
-    valid.initialFitAudit.verdict !== "REASONABLE FIT" ||
+    valid?.initialFitAudit?.assessment.verdict !== "REASONABLE_FIT" ||
     valid.initialFitAudit.resumeFileName !== "full-stack.resume"
   ) {
-    failures.push("Initial Fit audit did not roundtrip independently from the final review");
+    failures.push("categorical Initial Fit assessment did not roundtrip");
+  }
+  if (valid?.submissionAssessment?.readiness !== "READY") {
+    failures.push("submission assessment did not roundtrip independently from Initial Fit");
   }
   const malformedInitialFit = sanitizeApplications([
     {
@@ -130,7 +147,6 @@ try {
       initialFitAudit: {
         score: 42,
         verdict: "STRONG FIT",
-        verdictReason: "Contradictory band.",
         resumeFileName: "../escape.resume",
         completedAt: "2026-07-28T14:30:00.000Z"
       }

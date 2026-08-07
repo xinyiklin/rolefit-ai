@@ -5,33 +5,51 @@ bounded; app-only operational detail belongs in the affected app documentation.
 
 ## 2026-08-07
 
-- [USER+CODE+TOOL] Prepare no longer stops at Job analysis. Every successful
-  fresh preparation has a unique identity, safely settles the selected resume
-  variant, and automatically runs one-score Initial Fit against that exact
-  document version and the whole visible non-identity resume. Initial Fit reuses
-  Recruiter Audit configuration and validation, carries generation/abort/stale
-  guards, and never substitutes a local score. Resume edits mark the result
-  stale without per-keystroke reruns; a completed manual variant load triggers
-  one new audit.
-- [USER+CODE+TOOL] Settings now owns independent inclusive Resume and Cover
-  Letter automation thresholds, each defaulting to Off. One Initial Fit verdict
-  evaluates both policies separately. Automatic Resume always includes Tailor
-  and may append the configured final audit; automatic Cover uses the dedicated
-  proposal workflow even when Include is off and still runs if Resume skips,
-  stops, or fails. Neither path accepts a proposal or changes the Apply package.
-- [USER+CODE+TOOL] Prepare's flat Application rail now shows selection/audit
-  progression, Initial Fit score/verdict/reason, concise strengths, blockers,
-  and lower-severity gaps,
-  selected-resume/provider provenance, Retry/Stop/Re-audit, and separate
-  automation receipts plus manual overrides. A later Recruiter Audit is labeled
-  Proposal fit. Apply persists a compact `initialFitAudit` and `initial-fit`
-  usage independently from final review/base/tailored fields; reopening shows
-  only a matching baseline as historical without replaying automation. Focused
-  Initial Fit, threshold/orchestration, persistence sanitizer, and 400 workflow guards pass;
-  the full RoleFit build/landing/desktop gate and all 75 offline evaluations are
-  green. The UI detector reported only existing/range-valid type-ramp advisories,
-  with no structural or interaction finding. Browser QA remains UNCONFIRMED
-  under the flag-first policy.
+- [USER+CODE] Fit Assessment directly replaces the preview numerical contract.
+  `FitAssessment` owns categorical verdict, confidence, eligibility, a unique
+  evidence-linked requirement ledger, and an advisory recommendation;
+  `SubmissionAssessment` separately owns post-polish document readiness. There
+  is no versioned, dual-read, score-conversion, or hidden numerical fit path.
+  Old generated assessment shapes fail strict parsing and become no assessment
+  while the enclosing application and its documents remain available.
+- [USER+CODE] Prepare still binds automatic Initial Fit to the exact prepared
+  job, settled resume variant, document revision, provider configuration, and
+  trusted evidence. Retry, cancellation, provenance, and stale-result guards are
+  preserved. Resume and Cover Letter policies remain independent categorical
+  thresholds; low confidence waits, failed eligibility skips, and unresolved
+  eligibility waits for confirmation. Policy changes reevaluate the existing
+  current assessment without dispatching another AI request.
+- [USER+CODE] Prepare now presents verdict, confidence, eligibility, requirement
+  coverage, evidence, recommendation, and explicit automation reasons. Review
+  presents submission readiness, unsupported claims, missing evidence,
+  presentation issues, and prioritized edits without changing Initial Fit.
+  Tracker and Analytics use categorical fit/readiness distributions, outcome
+  progression, recurring requirement gaps, and automatic/manual polish starts.
+- [USER+CODE] Assessment grounding retains and displays the exact posting
+  excerpt for every requirement and accepts candidate evidence only as a
+  normalized exact source quotation. Source excerpts are unique within ledgers,
+  eligibility and capability rows are disjoint, and all 40 requirement-derived
+  rows survive the shared parser. Initial Fit `MISSING` requires explicit
+  adverse evidence or an anchored lower-bound years mismatch; sponsorship
+  polarity is clause-aware after contraction/adverb and alphanumeric-modifier
+  normalization, treats `no need for sponsorship` as positive, and narrows
+  generic `have no` negatives to explicit qualification absences. Duration
+  anchors use exact tokens rather than prefixes.
+  Submission visibility separately permits `MISSING` with exact honest-context
+  evidence only when common equivalent negative forms have been rejected and
+  relevant evidence positively proves the qualification can be surfaced. Only
+  unresolved eligibility may recommend confirmation, and eligibility never
+  alters the fit verdict. User-facing summaries and ledger explanations derive
+  from canonical rows, while remaining Review advice passes technology, proper-claim, numeric,
+  and outcome grounding gates.
+- [TOOL] The RoleFit production/landing/desktop gate and all 76 offline
+  evaluations pass. Root dependency and package-script checks, engine typecheck
+  and deterministic evaluations, editor check, and Typeset check also pass.
+  The unchanged engine font-regeneration check is UNCONFIRMED because its
+  pinned upstream download stalled on this host; live browser QA is likewise
+  UNCONFIRMED because the in-app browser webview did not attach after its
+  documented retry. Static UI review reported advisories only, and the new
+  ledger typography was reconciled with the documented type roles.
 
 ## 2026-08-06
 
@@ -268,9 +286,10 @@ bounded; app-only operational detail belongs in the affected app documentation.
   `Name_Company_Resume` / `Name_Company_Cover_Letter` contract. Both editor
   toolbars now use only the same `Role at Company` sublabel instead of adding
   AI-source text to Resume. After preparation, the flat Application rail shows
-  the matching current AI Review verdict and score, falls back to a matching
-  saved verdict explicitly labeled Historical Review, or says `Not reviewed`
-  with a route to Review; it never derives a local fit judgment. All 305 client
+  the matching current AI Review judgment, falls back to a matching saved
+  judgment explicitly labeled Historical Review, or says `Not reviewed` with a
+  route to Review. This earlier presentation is superseded by the 2026-08-07
+  canonical Initial Fit and submission-readiness separation. All 305 client
   workflow guards, naming and fit-verdict focused checks, the RoleFit
   production/landing/desktop builds and probes, and all 61 offline evaluations
   pass. Browser QA was not run under the flag-first policy; the new compact Fit
@@ -1274,9 +1293,9 @@ bounded; app-only operational detail belongs in the affected app documentation.
   preview. Guidance that is actually being sent to a provider must never be
   invisible; the disclose label also switches from "Add instructions" to
   "Edit instructions".
-- [USER] Stage copy is shorter and free of internal jargon — "Owns the fit score,
-  gaps, and verdict" became "Audits your draft like a recruiter and scores the
-  fit", and the awkward stage-instruction interpolation is gone. The
+- [USER] Stage copy is shorter and free of internal jargon. The Review stage now
+  says it audits whether the draft communicates its evidence clearly, and the
+  awkward stage-instruction interpolation is gone. The
   cover stage is titled "Cover letter", not "Cover letter tailor".
 - [CODE] Settings' reset clears stored preferences and reseeds in-memory state
   from defaults behind a danger confirm. The debounced auto-save then rewrites the

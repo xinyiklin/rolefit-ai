@@ -30,9 +30,7 @@
   border-color: var(--warm-soft);
 }
 
-/* Producers derive this class from the verdict text via verdictPillClass():
-   "DON'T APPLY" -> don-t-apply (apostrophe and space each become a dash). */
-.verdict-pill--don-t-apply {
+.verdict-pill--limited-fit {
   background: var(--danger-soft);
   color: var(--danger);
   border-color: var(--danger-line);

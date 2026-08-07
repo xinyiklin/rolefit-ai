@@ -35,10 +35,10 @@ const POLISH_STAGE_DEFAULTS: { value: "tailor" | "review" | "both"; label: strin
 ];
 
 const AUTO_POLISH_THRESHOLD_OPTIONS: { value: AutoPolishThreshold; label: string }[] = [
-  { value: "off", label: "Off" },
+  { value: "OFF", label: "Off" },
   { value: "STRETCH", label: "Stretch or better" },
-  { value: "REASONABLE FIT", label: "Reasonable fit or better" },
-  { value: "STRONG FIT", label: "Strong fit" }
+  { value: "REASONABLE_FIT", label: "Reasonable fit or better" },
+  { value: "STRONG_FIT", label: "Strong fit" }
 ];
 
 type SettingsDialogProps = {

@@ -27,6 +27,7 @@ import { buildAuditRequestFields, buildStageRequestFields, type StageConfig, typ
 import { ApiError, classifyFailure } from "../lib/failures";
 import { buildTailorScope, defaultTailorModes, tailorScopeToText, type TailorMode } from "../lib/tailorScope";
 import type { StageAiUsage } from "../lib/aiUsage";
+import { parseSubmissionAssessment } from "../../shared/fitAssessmentContract.ts";
 import type { ResumeData } from "@typeset/engine/lib/resumeData.ts";
 import {
   workflowInputFingerprint,
@@ -250,7 +251,7 @@ export function usePolishPipeline({
     const contextIds = Object.keys(modes).filter((id) => modes[id] === "include");
     const tailorScope = buildTailorScope(editedResume, tailorIds, contextIds);
     // Context-inclusive text (read-only Include sections appended) — used by the
-    // AI-path polished/fit/cover derivations so those sections count and can be
+    // AI-path polished/readiness/cover derivations so those sections count and can be
     // cited. The editable-only variant powers the too-short gate below.
     const scopedResumeText = tailorScopeToText(tailorScope);
     const editableResumeText = tailorScopeToText(tailorScope, true);
@@ -299,7 +300,7 @@ export function usePolishPipeline({
     return "";
   }
 
-  // Merge review data (aiScore, strictReview, reviewedBy, reviewStatus) from a
+  // Merge submission-readiness data and reviewer provenance from a
   // server response into the given base result, preferring any missing-skills
   // the base already held. Callers always supply a concrete base (the prior
   // result, or a synthesized review-only base).
@@ -310,10 +311,10 @@ export function usePolishPipeline({
   ): PolishedResume {
     const prevMissing = base.missingRequiredSkills;
     const dataMissing = Array.isArray(data.missingRequiredSkills) ? data.missingRequiredSkills : undefined;
+    const submissionAssessment = parseSubmissionAssessment(data.submissionAssessment);
     return {
       ...base,
-      aiScore: (data.aiScore as PolishedResume["aiScore"]) ?? undefined,
-      strictReview: (data.strictReview as PolishedResume["strictReview"]) ?? undefined,
+      submissionAssessment: submissionAssessment ?? undefined,
       reviewedBy: reviewedBy || undefined,
       reviewStatus: (data.reviewStatus as PolishedResume["reviewStatus"]) ?? undefined,
       missingRequiredSkills: (prevMissing?.length ? prevMissing : dataMissing) ?? undefined
@@ -321,8 +322,7 @@ export function usePolishPipeline({
   }
 
   // Stage runner: Tailor. Sets progress.tailor=running, posts to /api/polish
-  // with stages:"tailor", and builds a result WITHOUT aiScore/strictReview.
-  // A Tailor-only run has no fit judgment until AI Review succeeds. Returns the
+  // with stages:"tailor", and builds a result without a submission review.
   // server-sanitized suggestedChanges array on success, null on failure.
   async function runTailorStage(
     ctx: PolishContext,
@@ -370,6 +370,7 @@ export function usePolishPipeline({
         ...analysis,
         polishedText: suggestedChanges.length ? currentResumeText || scopedPolishedText : scopedPolishedText,
         source: "ai",
+        tailored: true,
         coverLetterText: coverText,
         changeSummary: Array.isArray(data.changeSummary) && data.changeSummary.length ? data.changeSummary as string[] : undefined,
         missingRequiredSkills: Array.isArray(data.missingRequiredSkills) && data.missingRequiredSkills.length
@@ -378,11 +379,10 @@ export function usePolishPipeline({
         suggestedChanges,
         droppedSuggestions: (data.droppedSuggestions as PolishedResume["droppedSuggestions"]) ?? null,
         // Tailor-only: no AI review fields — useResumeAnalysis must see these
-        // as undefined so it does not display a stale or invented fit judgment.
+        // as undefined so it does not display a stale readiness judgment.
         // reviewStatus resets too, so a stale "failed" from a prior review doesn't
         // linger on a fresh tailor result that hasn't been reviewed yet.
-        aiScore: undefined,
-        strictReview: undefined,
+        submissionAssessment: undefined,
         reviewedBy: undefined,
         reviewStatus: undefined
       });
@@ -465,25 +465,23 @@ export function usePolishPipeline({
           ...commonBody,
           stages: "review",
           customInstructions: customInstructionsFor("review"),
-          suggestedChanges: snapshot.suggestions
+          reviewTarget: snapshot.target,
+          suggestedChanges: snapshot.target === "proposal" ? snapshot.suggestions : []
         }),
         signal
       });
       const data = await readAiResponse(response, "review");
       if (!runCanCommit(generation, ctx, signal)) return false;
       if (!response.ok) throw new ApiError((data.error as string) ?? "AI review failed.", response.status);
-      // The request itself succeeded (200 OK), but the server's strict-review
+      // The request itself succeeded (200 OK), but the server's submission-review
       // pass may still have produced nothing usable — reviewStatus distinguishes
       // that from "review not requested" (see server/ai/polish.ts). In that case
-      // strictReview/aiScore come back null, so merging would wipe any PRIOR
-      // successful review already sitting in the result. Skip the merge and mark
-      // the stage failed (no local review stands in — D011); the result,
-      // including any prior successful review, is left untouched, and the fit
-      // readout keeps only a prior successful AI review, if one exists.
+      // An invalid response must not wipe a prior successful review. Skip the
+      // merge and fail the stage plainly; no local readiness judgment stands in.
       if (data.reviewStatus === "failed") {
         const reviewError = typeof data.reviewError === "string"
           ? data.reviewError
-          : "The recruiter audit returned no usable score and evidence. Retry, or switch the Audit provider.";
+          : "The recruiter audit returned no usable submission assessment. Retry, or switch the Audit provider.";
         const reviewErrorStatus = typeof data.reviewErrorStatus === "number"
           ? data.reviewErrorStatus
           : 502;
@@ -503,6 +501,9 @@ export function usePolishPipeline({
         }));
         return false;
       }
+      if (!parseSubmissionAssessment(data.submissionAssessment)) {
+        throw new ApiError("The recruiter audit returned an invalid submission assessment. Retry, or switch providers.", 502);
+      }
       const reviewedBy = computePolishReviewedBy(data);
       setResult((prev) => {
         if (!runCanCommit(generation, ctx, signal)) return prev;
@@ -515,6 +516,7 @@ export function usePolishPipeline({
             ...baseAnalysis,
             polishedText: currentResumeText || scopedResumeText,
             source: "ai",
+            tailored: false,
             suggestedChanges: []
           };
           return mergeReviewIntoResult(baseResult, data, reviewedBy);
@@ -549,8 +551,8 @@ export function usePolishPipeline({
       if (!runIdentityMatches(generation, ctx)) return false;
       // No local review stands in (D011): the stage fails plainly with a
       // classified reason and Retry. The existing result is kept — a successful
-      // tailor result is never clobbered, and the fit readout keeps whatever
-      // estimate it already showed.
+      // tailor result is never clobbered, and a prior readiness assessment is
+      // never replaced by a local fallback.
       const f = classifyFailure(error);
       setPolishProgress((prev) => ({
         ...prev,

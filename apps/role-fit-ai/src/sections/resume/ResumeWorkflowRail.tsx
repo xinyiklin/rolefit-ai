@@ -117,8 +117,8 @@ export function ResumeWorkflowRail({
     phase = auditedCurrentResume ? "audit" : "proposal";
     description = auditedCurrentResume
       ? "Recruiter audit of the current edited resume. No tailoring changes were proposed."
-      : result.strictReview
-        ? "Audit of complete proposal. Accept, edit, or discard each proposed change."
+      : result.submissionAssessment
+        ? "Submission review of the current proposal. Accept, edit, or discard each proposed change."
         : "Grounded edits are ready for your decision. This proposal has not been audited.";
   }
 

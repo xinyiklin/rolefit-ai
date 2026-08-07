@@ -87,7 +87,7 @@ function ApplicationRow({
     `applied ${appliedLabel}`,
     `${priorityFor(app)} priority`,
     nextAction(app),
-    verdict ? `fit ${verdict.label}` : "fit not scored"
+    verdict ? `fit ${verdict.label}` : "fit not assessed"
   ].join(", ");
   return (
     <button

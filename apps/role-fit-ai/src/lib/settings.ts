@@ -43,7 +43,6 @@ export type PersistedSettings = {
   customInstructions?: string;
   // Per-stage overrides. A missing or blank entry inherits customInstructions.
   stageCustomInstructions?: Partial<Record<AiStageId, string>>;
-  strictReview?: boolean;
   polishStages?: "tailor" | "review" | "both";
   resumeAutoPolishThreshold?: AutoPolishThreshold;
   coverAutoPolishThreshold?: AutoPolishThreshold;
@@ -115,7 +114,6 @@ const PERSISTED_SETTING_KEYS = [
   "honestContext",
   "customInstructions",
   "stageCustomInstructions",
-  "strictReview",
   "polishStages",
   "resumeAutoPolishThreshold",
   "coverAutoPolishThreshold",
@@ -151,10 +149,8 @@ export function normalizeSettings(value: unknown): PersistedSettings {
   // After the key migration above, normalization only removes or repairs values;
   // it does not seed missing stage configuration. `workspaceBackupContract.ts`
   // compares against the migrated input so old backups remain valid while
-  // unsupported keys still fail closed. The cover/answers stages
-  // inherit Tailor's config in useAiSettings' seeder instead, and the one
-  // pre-existing additive migration (strictReview -> polishStages) is already
-  // documented there as an intentional restore rejection.
+  // unsupported keys still fail closed. The cover/answers stages inherit
+  // Tailor's config in useAiSettings' seeder instead.
   for (const [providerKey, modelKey, effortKey] of STAGE_FIELD_GROUPS) {
     if (bag[providerKey] && !validProviders.has(bag[providerKey] as string)) {
       delete bag[providerKey];
@@ -182,17 +178,10 @@ export function normalizeSettings(value: unknown): PersistedSettings {
   // The AI stage sections are permanently visible. Drop the retired accordion
   // preference from older browser storage on the next normal save.
   delete (settings as unknown as Record<string, unknown>).sectionOpen;
-  if (settings.strictReview !== undefined && typeof settings.strictReview !== "boolean") {
-    delete settings.strictReview;
-  }
   // Validate polishStages — only the 3 literal values are valid.
   const validStages = new Set(["tailor", "review", "both"]);
   if (settings.polishStages !== undefined && !validStages.has(settings.polishStages)) {
     delete settings.polishStages;
-  }
-  // Migrate legacy strictReview → polishStages when polishStages is absent.
-  if (settings.polishStages === undefined && typeof settings.strictReview === "boolean") {
-    settings.polishStages = settings.strictReview ? "both" : "tailor";
   }
   if (
     settings.resumeAutoPolishThreshold !== undefined &&

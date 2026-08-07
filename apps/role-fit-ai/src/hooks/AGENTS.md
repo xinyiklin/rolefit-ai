@@ -13,7 +13,7 @@ browser-side effects; components render them and App composes them.
   including benefits and extraction gaps, alongside the exact model-facing
   tailoring text; candidate-review gaps remain owned by the Review result.
 - `usePreparedResumeSelection` owns the settled resume token for a preparation;
-  `useInitialFitAudit` owns its one-score request/cache/abort/stale lifecycle;
+  `useInitialFitAudit` owns its one-assessment request/cache/abort/stale lifecycle;
   and `usePrepareAutomation` consumes only a current completed audit to evaluate
   Resume and Cover Letter thresholds independently. Automatic Resume always
   includes Tailor. Automatic Cover uses the dedicated proposal workflow, does

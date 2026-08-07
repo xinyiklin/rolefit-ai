@@ -3,29 +3,40 @@ import { UserSafeAiError, safeConfigErrorMessage } from "./errors.ts";
 import { callConfiguredProvider } from "./clients.ts";
 import { providerLabel, type ResolvedProviderConfig } from "./providers.ts";
 import {
-  STRICT_REVIEW_JOB_CHAR_LIMIT,
-  STRICT_REVIEW_RESUME_CHAR_LIMIT,
-  buildStrictReviewPrompts,
+  buildFitAssessmentPrompts,
+  buildSubmissionAssessmentPrompts,
+  ASSESSMENT_JOB_CHAR_LIMIT,
+  ASSESSMENT_RESUME_CHAR_LIMIT,
   clipForPrompt
 } from "./prompts.ts";
 import {
-  sanitizeAiFitScore,
-  sanitizeStrictReview
-} from "./sanitize.ts";
+  validateFitAssessment,
+  validateSubmissionAssessment
+} from "./fitAssessmentValidation.ts";
+import type {
+  FitAssessment,
+  SubmissionAssessment
+} from "../../shared/fitAssessmentContract.ts";
 
 export type AttemptStats = { attempts?: number };
 
 export type RecruiterAuditOutcome = {
-  strictReview: ReturnType<typeof sanitizeStrictReview>;
-  aiScore: ReturnType<typeof sanitizeAiFitScore>;
+  submissionAssessment: SubmissionAssessment | null;
 };
 
-export type InitialFitAuditOutcome = {
-  review: NonNullable<ReturnType<typeof sanitizeStrictReview>>;
-  score: number;
-} | null;
+export type InitialFitAuditOutcome = FitAssessment | null;
 
 type ReviewFailure = { message: string; status: number };
+
+function exactAssessmentEnvelope(
+  value: unknown,
+  key: "fitAssessment" | "submissionAssessment"
+): Record<string, unknown> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const source = value as Record<string, unknown>;
+  const keys = Object.keys(source);
+  return keys.length === 1 && keys[0] === key ? source : null;
+}
 
 /** Preserve actionable provider failures without exposing raw provider bodies. */
 export function reviewFailureFromReason(reason: unknown, provider: string): ReviewFailure {
@@ -46,44 +57,31 @@ export function reviewFailureFromReason(reason: unknown, provider: string): Revi
   };
 }
 
-// Compose the model-authored review and score into one all-or-nothing outcome.
-// AI Review owns the judgment; the server validates shape, grounding, numeric
-// bounds, and score/verdict consistency without repairing either half.
 export function resolveReviewOutcome(
-  reviewParsed: { strictReview?: unknown; aiScore?: unknown } | null,
+  parsed: { submissionAssessment?: unknown } | null,
   jobText: string,
-  groundingText: string,
-  options: Parameters<typeof sanitizeStrictReview>[3] = {}
+  resumeText: string,
+  honestContext: string
 ): RecruiterAuditOutcome {
-  let strictReview = reviewParsed
-    ? sanitizeStrictReview(reviewParsed.strictReview, jobText, groundingText, options)
-    : null;
-  if (strictReview && (!strictReview.coverage.length || !strictReview.verdictReason.trim())) {
-    strictReview = null;
-  }
-  const aiScore = strictReview
-    ? sanitizeAiFitScore(reviewParsed?.aiScore, strictReview.verdict)
-    : null;
-  return strictReview && aiScore
-    ? { strictReview, aiScore }
-    : { strictReview: null, aiScore: null };
+  const envelope = exactAssessmentEnvelope(parsed, "submissionAssessment");
+  return {
+    submissionAssessment: validateSubmissionAssessment(
+      envelope?.submissionAssessment,
+      jobText,
+      resumeText,
+      honestContext
+    )
+  };
 }
 
-// Initial Fit audits exactly one unchanged document. The shared Recruiter Audit
-// prompt still emits its legacy pair internally, but unequal values would imply
-// a before/after comparison that does not exist and therefore fail closed.
 export function resolveInitialFitAuditOutcome(
-  reviewParsed: { strictReview?: unknown; aiScore?: unknown } | null,
+  parsed: { fitAssessment?: unknown } | null,
   jobText: string,
-  groundingText: string
+  resumeText: string,
+  honestContext: string
 ): InitialFitAuditOutcome {
-  const outcome = resolveReviewOutcome(reviewParsed, jobText, groundingText);
-  if (!outcome.strictReview || !outcome.aiScore) return null;
-  if (outcome.aiScore.base !== outcome.aiScore.tailored) return null;
-  return {
-    review: outcome.strictReview,
-    score: outcome.aiScore.tailored
-  };
+  const envelope = exactAssessmentEnvelope(parsed, "fitAssessment");
+  return validateFitAssessment(envelope?.fitAssessment, jobText, resumeText, honestContext);
 }
 
 type RecruiterAuditRequest = {
@@ -91,12 +89,9 @@ type RecruiterAuditRequest = {
   provider: ResolvedProviderConfig;
   jobText: string;
   resumeText: string;
-  suggestedChanges: unknown;
   honestContext: string;
   customInstructions: string;
   signal: AbortSignal;
-  groundingText?: string;
-  sanitizeOptions?: Parameters<typeof sanitizeStrictReview>[3];
 };
 
 export async function runRecruiterAudit(
@@ -111,13 +106,15 @@ export async function runRecruiterAudit(
   request: RecruiterAuditRequest,
   stats?: AttemptStats
 ): Promise<RecruiterAuditOutcome | InitialFitAuditOutcome> {
-  const prompts = buildStrictReviewPrompts({
-    jobText: clipForPrompt(request.jobText, STRICT_REVIEW_JOB_CHAR_LIMIT, "job description"),
-    resumeText: clipForPrompt(request.resumeText, STRICT_REVIEW_RESUME_CHAR_LIMIT, "reviewed resume"),
-    suggestedChanges: request.suggestedChanges,
+  const promptInput = {
+    jobText: clipForPrompt(request.jobText, ASSESSMENT_JOB_CHAR_LIMIT, "job description"),
+    resumeText: clipForPrompt(request.resumeText, ASSESSMENT_RESUME_CHAR_LIMIT, "reviewed resume"),
     honestContext: request.honestContext,
     customInstructions: request.customInstructions
-  });
+  };
+  const prompts = request.mode === "initial"
+    ? buildFitAssessmentPrompts(promptInput)
+    : buildSubmissionAssessmentPrompts(promptInput);
   const parsed = await callConfiguredProvider({
     provider: request.provider.provider,
     model: request.provider.model,
@@ -126,14 +123,9 @@ export async function runRecruiterAudit(
     systemPrompt: prompts.systemPrompt,
     userPrompt: prompts.userPrompt,
     signal: request.signal
-  }, stats) as { strictReview?: unknown; aiScore?: unknown } | null;
+  }, stats) as { fitAssessment?: unknown; submissionAssessment?: unknown } | null;
 
   return request.mode === "initial"
-    ? resolveInitialFitAuditOutcome(parsed, request.jobText, `${request.resumeText}\n${request.honestContext}`)
-    : resolveReviewOutcome(
-        parsed,
-        request.jobText,
-        request.groundingText ?? `${request.resumeText}\n${request.honestContext}`,
-        request.sanitizeOptions
-      );
+    ? resolveInitialFitAuditOutcome(parsed, request.jobText, request.resumeText, request.honestContext)
+    : resolveReviewOutcome(parsed, request.jobText, request.resumeText, request.honestContext);
 }

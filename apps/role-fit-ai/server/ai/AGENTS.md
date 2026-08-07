@@ -53,11 +53,34 @@ sanitizer code is executable product behavior and anti-fabrication-critical.
   verbatim-source-phrase acceptance check: both reject genuinely better letters.
 - `json.ts` and `errors.ts` own response parsing and user-safe failure mapping.
 
-## Trust and scoring contract
+## Trust and assessment contract
 
-- The selected Review model owns coverage, scores, verdict, reason, gaps, and
-  recommendation. Validate exact shape, enums, bounds, and score/verdict band
-  consistency; reject invalid output instead of recomputing it.
+- Initial Fit owns the categorical candidate-fit verdict, confidence,
+  requirement ledger, eligibility result, and advisory recommendation. Review
+  owns only post-polish document readiness. Validate exact shape, enums,
+  evidence references, and semantic consistency; reject invalid output instead
+  of synthesizing a replacement.
+- Every requirement carries and displays its exact `sourceRequirement` excerpt
+  from the posting, and every candidate evidence excerpt must be a normalized
+  exact source quotation. Source excerpts are unique within each ledger, and
+  eligibility rows cannot reappear as capability requirements. Derived
+  requirement lists may cover all 40 rows; only independent advice lists keep
+  the 16-item cap.
+- Initial Fit `MISSING` requires explicit adverse evidence or a deterministically
+  anchored minimum-years mismatch while `UNCERTAIN` has none. Sponsorship
+  polarity is evaluated around each sponsorship clause after normalizing common
+  contractions and alphanumeric modifiers; `no need for sponsorship` is
+  positive, so generic `have no` detection is limited to named qualification
+  absences. Duration anchors are exact tokens, never prefixes. Submission
+  visibility may retain `HONEST_CONTEXT` evidence
+  for a `MISSING` row only when non-adverse, relevant evidence positively proves
+  the qualification can be surfaced; common contracted and adjectival negative
+  forms remain adverse before positive verbs are considered.
+  Eligibility never changes the fit verdict, and only unresolved eligibility
+  may recommend `CONFIRM_ELIGIBILITY`.
+- User-facing assessment prose derives from the validated ledger wherever
+  possible. Remaining Review advice must pass technology, proper-claim,
+  numeric, and outcome grounding before it can be returned.
 - Tailor emits targeted suggestions grounded in submitted resume/honest context.
   Never import JD-only skills or fabricate claims.
 - Review-only audits the current edited draft. The Review leg of Both receives

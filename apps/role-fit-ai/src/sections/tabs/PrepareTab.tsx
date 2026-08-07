@@ -22,7 +22,7 @@ import {
 import {
   PrepareApplicationRail,
   type PrepareActivity,
-  type PrepareFitAssessment
+  type PrepareSubmissionAssessment
 } from "./prepare/PrepareApplicationRail";
 
 type SourceMethod = "url" | "paste";
@@ -68,12 +68,6 @@ const BRIEF_SECTIONS: readonly PreparedJobBriefSection[] = [
     placeholder: "Health coverage"
   }
 ];
-
-type ReviewGap = {
-  gap: string;
-  severity: string;
-  evidence?: string;
-};
 
 function variantRecommendationLiveText(
   kind: string,
@@ -146,9 +140,7 @@ export type PrepareTabProps = {
   coverAutoPolishThreshold: AutoPolishThreshold;
   onRetryInitialFit: () => void | Promise<unknown>;
   onStopInitialFit: () => void;
-  reviewGaps: ReviewGap[];
-  reviewGapsProvenance: "none" | "current" | "saved";
-  fitAssessment: PrepareFitAssessment | null;
+  submissionAssessment: PrepareSubmissionAssessment | null;
   linkedApplication: Application | null;
   readiness: PreparationReadiness;
   isApplying: boolean;
@@ -213,9 +205,7 @@ export function PrepareTab({
   coverAutoPolishThreshold,
   onRetryInitialFit,
   onStopInitialFit,
-  reviewGaps,
-  reviewGapsProvenance,
-  fitAssessment,
+  submissionAssessment,
   linkedApplication,
   readiness,
   isApplying,
@@ -225,6 +215,12 @@ export function PrepareTab({
   const [sourceMethod, setSourceMethod] = useState<SourceMethod>(() =>
     jobUrl.trim() || (!jobRawText.trim() && !jobDescription.trim()) ? "url" : "paste"
   );
+  const candidateGaps = initialFit.assessment?.requirements.filter(
+    (requirement) => requirement.coverage !== "COVERED"
+  ) ?? [];
+  const candidateGapsProvenance = initialFit.assessment
+    ? (initialFit.status === "saved" ? "saved" : "current")
+    : "none";
 
   useEffect(() => {
     setSourceMode(jobPrepared ? "collapsed" : "replace");
@@ -728,24 +724,24 @@ export function PrepareTab({
                   </div>
                   <div>
                     <p className="prepare-page__eyebrow">
-                      {reviewGapsProvenance === "saved" ? "Candidate gaps · historical" : "Candidate gaps"}
+                      {candidateGapsProvenance === "saved" ? "Candidate gaps · historical" : "Candidate gaps"}
                     </p>
-                    {reviewGaps.length ? (
+                    {candidateGaps.length ? (
                       <ul>
-                        {reviewGaps.map((gap, index) => (
-                          <li key={`${index}:${gap.severity}:${gap.gap}`}>
-                            <strong>{gap.gap}</strong>
-                            <span>{gap.severity.replace(/_/g, " ").toLowerCase()}</span>
-                            {gap.evidence ? <p>{gap.evidence}</p> : null}
+                        {candidateGaps.map((gap) => (
+                          <li key={gap.id}>
+                            <strong>{gap.requirement}</strong>
+                            <span>{gap.coverage.replace(/_/g, " ").toLowerCase()}</span>
+                            <p>{gap.explanation}</p>
                           </li>
                         ))}
                       </ul>
-                    ) : reviewGapsProvenance === "current" ? (
-                      <p>No candidate gaps identified by the current recruiter audit.</p>
-                    ) : reviewGapsProvenance === "saved" ? (
-                      <p>None recorded in the saved Apply review.</p>
+                    ) : candidateGapsProvenance === "current" ? (
+                      <p>No candidate gaps identified by the current Initial Fit assessment.</p>
+                    ) : candidateGapsProvenance === "saved" ? (
+                      <p>None recorded in the saved Initial Fit assessment.</p>
                     ) : (
-                      <p>Run Recruiter audit to compare your evidence with the job.</p>
+                      <p>Initial Fit will compare your evidence with the job.</p>
                     )}
                   </div>
                 </div>
@@ -778,7 +774,7 @@ export function PrepareTab({
                 onPolishCoverLetter={onTailorCoverLetter}
               />
             }
-            fitAssessment={fitAssessment}
+            submissionAssessment={submissionAssessment}
             linkedApplication={linkedApplication}
             readiness={readiness}
             isApplying={isApplying}

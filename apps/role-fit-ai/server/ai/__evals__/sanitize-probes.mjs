@@ -1,5 +1,5 @@
 // Offline, deterministic probes for the tailor-suggestion sanitizer and the
-// AI-review response contracts. No model calls, no network, runs in <1s:
+// submission-assessment and tailoring contracts. No model calls, no network, runs in <1s:
 //
 //   node server/ai/__evals__/sanitize-probes.mjs
 //
@@ -15,16 +15,12 @@ import assert from "node:assert/strict";
 
 import {
   hasUngroundedNumericClaim,
-  makeRewriteGrounder,
-  missingRequiredSkillsFromStrictReview,
-  sanitizeAiFitScore,
   sanitizeMissingRequiredSkills,
   sanitizeTailorSuggestions,
-  sanitizeStrictReview,
   summarizeDroppedSuggestions
 } from "../sanitize.ts";
 import { findUngroundedJdTerm } from "../grounding.ts";
-import { buildPolishPrompts, buildStrictReviewPrompts, serializeJsonForPrompt } from "../prompts.ts";
+import { buildPolishPrompts, buildSubmissionAssessmentPrompts, serializeJsonForPrompt } from "../prompts.ts";
 import {
   normalizeTailorScope,
   resolveReviewOutcome,
@@ -32,6 +28,7 @@ import {
   stripStructuralInlineMarks
 } from "../polish.ts";
 import { UserSafeAiError } from "../errors.ts";
+import { parseSubmissionAssessment } from "../../../shared/fitAssessmentContract.ts";
 
 const scope = {
   sections: [
@@ -98,7 +95,14 @@ sanitizeTailorSuggestions(
   scope, evasionStats, "", JD
 );
 
-const DONT = "DON'T APPLY";
+const negativeQualificationContexts = [
+  "I don't have production Kubernetes experience.",
+  "I have no production Kubernetes experience.",
+  "I am not proficient in Kubernetes.",
+  "I have never used Kubernetes.",
+  "I haven't used Kubernetes in production."
+];
+
 const checks = [
   ["string booleans cannot mark missing-skill evidence honestly addable", (() => {
     const items = sanitizeMissingRequiredSkills(
@@ -384,149 +388,6 @@ const checks = [
     return out.length === 1;
   })()],
 
-  // --- Finding 2 regression lock: the strict-review one-click "apply rewrite"
-  // --- path is entry-scoped via makeRewriteGrounder, so the review pass cannot
-  // --- reintroduce a misattribution the tailor gate drops. ---
-  ["review rewrite CANNOT misattribute Python onto the pure-Node bullet (entry-scoped grounder)", (() => {
-    const corpus = "Python, TypeScript, SQL\nBuilt a resume review engine on a Node provider adapter spanning 10+ LLM backends with a deterministic fallback.\nBuilt batch ETL jobs in Python and containerized them with Docker.";
-    const out = sanitizeStrictReview(
-      { verdict: "STRETCH", rewrites: [
-        { original: "Built a resume review engine on a Node provider adapter spanning 10+ LLM backends with a deterministic fallback.",
-          rewrite: "Built a resume review engine on a Python/Node provider adapter spanning 10+ LLM backends." },
-        { original: "Built batch ETL jobs in Python and containerized them with Docker.",
-          rewrite: "Built batch ETL jobs in Python and containerized them with Docker for scale." }
-      ] },
-      MULTI_JOB.toLowerCase(),
-      corpus,
-      { rewriteGrounder: makeRewriteGrounder(MULTI, "", corpus) }
-    );
-    // Python-on-Node rewrite dropped; the same-entry ETL rewrite kept.
-    return out.rewrites.length === 1 && /ETL jobs in Python/.test(out.rewrites[0].rewrite);
-  })()],
-  ["review rewrite: substring-superset entry does NOT mis-route grounding (re-review bypass)", (() => {
-    // Entry A's bullet CONTAINS entry B's shorter bullet as a substring and A has
-    // Python; the rewrite targets B's exact bullet and injects Python. A blob
-    // substring match would ground against A (Python present) and pass; exact
-    // bullet-equality grounds against B (no Python) and drops. Also matches the
-    // client's findBullet, which applies the rewrite to B.
-    const subScope = { sections: [
-      { id: "exp", heading: "Experience", type: "standard", entries: [
-        { id: "a", titleLeft: "Senior Eng", titleRight: "", subtitleLeft: "", subtitleRight: "", bullets: [
-          { id: "ba", text: "Built the analytics ingestion pipeline for the reporting platform in Python with retries." }
-        ] },
-        { id: "b", titleLeft: "Analyst", titleRight: "", subtitleLeft: "", subtitleRight: "", bullets: [
-          { id: "bb", text: "Built the analytics ingestion pipeline for the reporting platform" }
-        ] }
-      ] }
-    ] };
-    const corpus = "Built the analytics ingestion pipeline for the reporting platform in Python with retries.\nBuilt the analytics ingestion pipeline for the reporting platform";
-    const out = sanitizeStrictReview(
-      { verdict: "STRETCH", rewrites: [
-        { original: "Built the analytics ingestion pipeline for the reporting platform",
-          rewrite: "Built the analytics ingestion pipeline for the reporting platform in Python." }
-      ] },
-      "requirements: python.", corpus,
-      { rewriteGrounder: makeRewriteGrounder(subScope, "", corpus) }
-    );
-    return out.rewrites.length === 0;
-  })()],
-  ["review rewrite: duplicate bullet text fails closed instead of borrowing corpus evidence", (() => {
-    const duplicateScope = { sections: [{ id: "exp", heading: "Experience", type: "standard", entries: [
-      { id: "python-role", titleLeft: "Python Engineer", titleRight: "", subtitleLeft: "", subtitleRight: "", bullets: [
-        { id: "a", text: "Built the reporting service." }
-      ] },
-      { id: "node-role", titleLeft: "Node Engineer", titleRight: "", subtitleLeft: "", subtitleRight: "", bullets: [
-        { id: "b", text: "Built the reporting service." }
-      ] }
-    ] }] };
-    const corpus = "Python Engineer\nBuilt the reporting service.\nNode Engineer\nBuilt the reporting service.";
-    const out = sanitizeStrictReview(
-      { verdict: "STRETCH", rewrites: [{
-        original: "Built the reporting service.",
-        rewrite: "Built the Python reporting service."
-      }] },
-      "Requirements: Python.", corpus,
-      { rewriteGrounder: makeRewriteGrounder(duplicateScope, "", corpus) }
-    );
-    return out.rewrites.length === 0;
-  })()],
-  ["review rewrite WITHOUT grounder keeps corpus behavior (backward-compat)", (() => {
-    const corpus = "Python, TypeScript, SQL\nBuilt a resume review engine on a Node provider adapter with a deterministic fallback.";
-    const out = sanitizeStrictReview(
-      { verdict: "STRETCH", rewrites: [
-        { original: "Built a resume review engine on a Node provider adapter with a deterministic fallback.",
-          rewrite: "Built a resume review engine on a Python/Node provider adapter." }
-      ] },
-      "requirements: python, node.js.",
-      corpus
-    );
-    // No grounder -> corpus grounding -> Python (in the Skills row of the corpus)
-    // still passes. Documents the pre-fix behavior the grounder closes.
-    return out.rewrites.length === 1;
-  })()],
-
-  // --- review rewrite `hits` grounding: the "✓ <kw>" chips claim JD coverage,
-  // --- so a hit is kept only when the rewrite text surfaces it AND it is
-  // --- grounded in the resume/context. A model can no longer stamp fabricated
-  // --- ✓ matches onto a barely-changed rewrite (the tailor path already gated
-  // --- its hits; this closes the review-path asymmetry). ---
-  ["review rewrite: fabricated ✓ hit chips (absent from rewrite) are pruned, honest rewrite + real chip kept", (() => {
-    const corpus = "Built the reporting service in Node with structured logging and a deterministic fallback.";
-    const out = sanitizeStrictReview(
-      { verdict: "STRETCH", rewrites: [
-        { original: "Built the reporting service in Node with structured logging and a deterministic fallback.",
-          rewrite: "Built the reporting service in Node with structured logging, a deterministic fallback, and retries.",
-          hits: ["Kubernetes", "AWS", "logging"] }
-      ] },
-      "requirements: kubernetes, aws, logging.", corpus
-    );
-    // Rewrite kept; only "logging" (in the text + grounded) survives — the
-    // Kubernetes/AWS chips the text never surfaces are dropped.
-    return out.rewrites.length === 1
-      && out.rewrites[0].hits.length === 1
-      && out.rewrites[0].hits[0] === "logging";
-  })()],
-  ["review rewrite: a grounded hit the rewrite actually surfaces is kept", (() => {
-    const corpus = "Tuned PostgreSQL queries for the clinic reporting workload.";
-    const out = sanitizeStrictReview(
-      { verdict: "STRETCH", rewrites: [
-        { original: "Tuned PostgreSQL queries for the clinic reporting workload.",
-          rewrite: "Tuned PostgreSQL queries and indexes for the clinic reporting workload.",
-          hits: ["PostgreSQL"] }
-      ] },
-      "requirements: postgresql.", corpus
-    );
-    return out.rewrites.length === 1 && out.rewrites[0].hits.length === 1 && out.rewrites[0].hits[0] === "PostgreSQL";
-  })()],
-  ["review rewrite: a short-token hit (Go) present + grounded survives the chip gate", (() => {
-    const corpus = "Built services in Go for the ingestion pipeline.";
-    const out = sanitizeStrictReview(
-      { verdict: "STRETCH", rewrites: [
-        { original: "Built services in Go for the ingestion pipeline.",
-          rewrite: "Built high-throughput services in Go for the ingestion pipeline.",
-          hits: ["Go"] }
-      ] },
-      "requirements: go.", corpus
-    );
-    return out.rewrites.length === 1 && out.rewrites[0].hits.length === 1 && out.rewrites[0].hits[0] === "Go";
-  })()],
-  ["review rewrite: a MULTI-WORD hit the rewrite + grounding both surface is kept (phrase branch)", (() => {
-    // Locks the phrase-branch survive path so a future normalizePhrase/isGrounded
-    // edit can't silently regress multi-word ✓ chips. (Known limit: an inflected
-    // variant — "machine learning" vs "machine-learning models" plural/word-order —
-    // drops the one chip; safe-direction under-credit, tracked as a follow-up.)
-    const corpus = "Shipped a machine learning pipeline for demand forecasting.";
-    const out = sanitizeStrictReview(
-      { verdict: "STRETCH", rewrites: [
-        { original: "Shipped a machine learning pipeline for demand forecasting.",
-          rewrite: "Built and shipped a machine learning pipeline for demand forecasting.",
-          hits: ["machine learning"] }
-      ] },
-      "requirements: machine learning.", corpus
-    );
-    return out.rewrites.length === 1 && out.rewrites[0].hits.length === 1 && out.rewrites[0].hits[0] === "machine learning";
-  })()],
-
   // --- prose-mode brand grounding (cover letters / application answers) ---
   // findUngroundedJdTerm(proposedText, jobLower, grounding) — caller lowercases
   // jobLower + grounding. Prose mode skips detector 1 (capitalized tokens) so
@@ -590,235 +451,128 @@ const checks = [
       && !hasUngroundedNumericClaim("Improved throughput by 40%.", "Exact result: improved throughput by 40%.");
   })()],
 
-  // --- AI-owned review contract: the server validates shape and consistency
-  // --- without calculating or changing the model's judgment. ---
-  ["AI fit score passes through unchanged when it matches the AI verdict", (() => {
-    const score = sanitizeAiFitScore({ base: 76, tailored: 88, liftReason: "The tailored draft surfaces exact evidence." }, "STRONG FIT");
-    return score?.base === 76 && score.tailored === 88
-      && score.liftReason === "The tailored draft surfaces exact evidence.";
+  // --- canonical submission-assessment contract ---
+  ["a complete grounded submission assessment is accepted", (() => {
+    const result = resolveReviewOutcome({ submissionAssessment: {
+      readiness: "REVISIONS_RECOMMENDED",
+      summary: "The resume shows Python clearly but should foreground deployment scope.",
+      requirementVisibility: [{
+        id: "python", requirement: "Python", sourceRequirement: "Python", importance: "CORE", coverage: "COVERED",
+        evidence: [{ source: "RESUME", excerpt: "Python" }],
+        explanation: "Python appears in Technical Skills.", canSurfaceInResume: false
+      }],
+      unsupportedClaims: [], missingEvidence: [], presentationIssues: ["Deployment detail is buried."],
+      topEdits: ["Move the deployment bullet higher."]
+    } }, "Python and deployment experience are required.", "Technical Skills: Python. Deployed APIs.", "");
+    return result.submissionAssessment?.readiness === "REVISIONS_RECOMMENDED"
+      && /^revisions recommended:/i.test(result.submissionAssessment.summary)
+      && /resume directly presents trusted evidence/i.test(result.submissionAssessment.requirementVisibility[0].explanation)
+      && result.submissionAssessment.topEdits[0] === "Move the deployment bullet higher.";
   })()],
-  ["AI fit score rejects missing, out-of-range, and contradictory values", (() => {
-    return sanitizeAiFitScore(null, "STRETCH") === null
-      && sanitizeAiFitScore({ base: 70, tailored: 101, liftReason: "" }, "STRONG FIT") === null
-      && sanitizeAiFitScore({ base: 70, tailored: 30, liftReason: "" }, "STRONG FIT") === null
-      && sanitizeAiFitScore({ base: 70.5, tailored: 75, liftReason: "" }, "REASONABLE FIT") === null
-      && sanitizeAiFitScore({ base: "70", tailored: 75, liftReason: "" }, "REASONABLE FIT") === null;
+  ["old score-shaped review output is invalidated without conversion", (() => {
+    const result = resolveReviewOutcome({ strictReview: { verdict: "STRONG FIT" }, aiScore: { base: 70, tailored: 90 } }, "Python required.", "Python", "");
+    return result.submissionAssessment === null;
   })()],
-  ["AI review coverage is shape-sanitized without local status reinterpretation", (() => {
-    const review = sanitizeStrictReview({
-      verdict: "REASONABLE FIT",
-      verdictReason: "Direct evidence covers most core requirements.",
-      coverage: [
-        { category: "Required tech", keyword: "Python", status: "covered", where: "Technical Skills: Python" },
-        { category: "Required experience", keyword: "AWS deployments", status: "adjacent", where: "Technical Skills: AWS" },
-        { category: "Required tech", keyword: "Bad enum", status: "unknown", where: "ignored" },
-        { category: "Invented category", keyword: "Python", status: "covered", where: "ignored" },
-        { category: "Required tech", keyword: "Kubernetes", status: "missing", where: "ignored" }
-      ],
-      gaps: [],
-      rewrites: [],
-      riskFlags: [],
-      recommendation: {}
-    }, "Python and AWS deployments are required.", "Technical Skills: Python, AWS");
-    return review?.coverage.length === 2
-      && review.coverage[0].status === "covered"
-      && review.coverage[1].status === "adjacent";
+  ["invalid submission readiness is rejected", (() => {
+    const result = resolveReviewOutcome({ submissionAssessment: { readiness: "MAYBE" } }, "Python required.", "Python", "");
+    return result.submissionAssessment === null;
   })()],
-  ["invalid gap severity is dropped and string booleans do not become true", (() => {
-    const review = sanitizeStrictReview({
-      verdict: "STRETCH",
-      gaps: [
-        { gap: "Python", severity: "CRITICAL", evidenceType: "none", evidence: "No evidence" },
-        { gap: "AWS", severity: "HIGH", evidenceType: "exact", canHonestlyAdd: "false", evidence: "Skills list AWS" }
-      ],
-      recommendation: { applyAsIs: "false" }
-    }, "Python and AWS are required.", "Skills: AWS");
-    return review?.gaps.length === 1
-      && review.gaps[0].gap === "AWS"
-      && review.gaps[0].canHonestlyAdd === false
-      && review.recommendation.applyAsIs === false;
+  ["submission assessment rejects a requirement absent from the job", (() => {
+    const result = resolveReviewOutcome({ submissionAssessment: {
+      readiness: "REVISIONS_RECOMMENDED", summary: "Review needed.",
+      requirementVisibility: [{ id: "rust", requirement: "Rust", sourceRequirement: "Rust", importance: "CORE", coverage: "MISSING", evidence: [], explanation: "Not visible.", canSurfaceInResume: false }],
+      unsupportedClaims: [], missingEvidence: ["Rust"], presentationIssues: [], topEdits: []
+    } }, "Python required.", "Python", "");
+    return result.submissionAssessment === null;
   })()],
-  ["invalid AI verdict makes the whole review unusable instead of defaulting locally", (() => {
-    return sanitizeStrictReview({ verdict: "MAYBE", recommendation: {} }, "Python required.", "Python") === null;
+  ["resume visibility cannot claim surfacing is safe without honest-context evidence", (() => {
+    const result = resolveReviewOutcome({ submissionAssessment: {
+      readiness: "REVISIONS_RECOMMENDED", summary: "Review needed.",
+      requirementVisibility: [{ id: "python", requirement: "Python", sourceRequirement: "Python", importance: "CORE", coverage: "MISSING", evidence: [], explanation: "Not visible.", canSurfaceInResume: true }],
+      unsupportedClaims: [], missingEvidence: ["Python"], presentationIssues: [], topEdits: []
+    } }, "Python is required.", "Technical Skills: TypeScript.", "");
+    return result.submissionAssessment === null;
   })()],
-
-  // Review's score, verdict, and evidence are one model-authored judgment. A
-  // contradictory/missing score fails the contract instead of surfacing only
-  // the favorable prose as a scoreless success.
-  ["out-of-band aiScore invalidates the whole review", (() => {
-    const reviewParsed = {
-      strictReview: {
-        verdict: "STRONG FIT",
-        verdictReason: "Direct evidence covers the core Python and PostgreSQL requirements.",
-        coverage: [
-          { category: "Required tech", keyword: "Python", status: "covered", where: "Skills: Python" },
-          { category: "Required tech", keyword: "PostgreSQL", status: "covered", where: "Experience: PostgreSQL" }
-        ],
-        gaps: [], rewrites: [], riskFlags: [], recommendation: {}
-      },
-      // 82 sits in the REASONABLE band, contradicting the model's STRONG FIT
-      // verdict (which needs >= 85), so sanitizeAiFitScore rejects it.
-      aiScore: { base: 70, tailored: 82, liftReason: "" }
-    };
-    const jobText = "Requirements: Python and PostgreSQL.";
-    const grounding = "Skills: Python, PostgreSQL\nExperience: Tuned PostgreSQL queries in Python.";
-    const scoreRejected = sanitizeAiFitScore(reviewParsed.aiScore, "STRONG FIT") === null;
-    const { strictReview, aiScore } = resolveReviewOutcome(reviewParsed, jobText, grounding);
-    return scoreRejected && aiScore === null && strictReview === null;
+  ...negativeQualificationContexts.map((honestContext) => [
+    `negative honest context cannot authorize surfacing: ${honestContext}`,
+    (() => {
+      const result = resolveReviewOutcome({ submissionAssessment: {
+        readiness: "REVISIONS_RECOMMENDED", summary: "Review needed.",
+        requirementVisibility: [{
+          id: "kubernetes", requirement: "Production Kubernetes experience",
+          sourceRequirement: "Production Kubernetes experience is required.",
+          importance: "CORE", coverage: "MISSING",
+          evidence: [{ source: "HONEST_CONTEXT", excerpt: honestContext }],
+          explanation: "Not visible.", canSurfaceInResume: true
+        }],
+        unsupportedClaims: [], missingEvidence: [], presentationIssues: [], topEdits: []
+      } }, "Production Kubernetes experience is required.", "Technical Skills: Python.", honestContext);
+      return result.submissionAssessment === null;
+    })()
+  ]),
+  ["positive relevant honest context can authorize surfacing a missing qualification", (() => {
+    const honestContext = "I operate production Kubernetes services.";
+    const result = resolveReviewOutcome({ submissionAssessment: {
+      readiness: "REVISIONS_RECOMMENDED", summary: "Review needed.",
+      requirementVisibility: [{
+        id: "kubernetes", requirement: "Production Kubernetes experience",
+        sourceRequirement: "Production Kubernetes experience is required.",
+        importance: "CORE", coverage: "MISSING",
+        evidence: [{ source: "HONEST_CONTEXT", excerpt: honestContext }],
+        explanation: "Not visible.", canSurfaceInResume: true
+      }],
+      unsupportedClaims: [], missingEvidence: [], presentationIssues: [], topEdits: []
+    } }, "Production Kubernetes experience is required.", "Technical Skills: Python.", honestContext);
+    return result.submissionAssessment?.requirementVisibility[0]?.canSurfaceInResume === true;
   })()],
-  ["a missing aiScore invalidates the whole review", (() => {
-    const reviewParsed = {
-      strictReview: {
-        verdict: "REASONABLE FIT",
-        verdictReason: "Most core requirements are directly evidenced.",
-        coverage: [{ category: "Required tech", keyword: "Python", status: "covered", where: "Skills: Python" }],
-        gaps: [], rewrites: [], riskFlags: [], recommendation: {}
-      }
-      // no aiScore field at all
-    };
-    const { strictReview, aiScore } = resolveReviewOutcome(reviewParsed, "Python required.", "Skills: Python");
-    return aiScore === null && strictReview === null;
+  ["17 missing visibility rows survive the server-to-client round trip", (() => {
+    const rows = Array.from({ length: 17 }, (_, index) => ({
+      id: `missing-${index}`,
+      requirement: `Required capability ${index}`,
+      sourceRequirement: `Required capability ${index} must be demonstrated.`,
+      importance: "SUPPORTING",
+      coverage: "MISSING",
+      evidence: [],
+      explanation: "Not visible.",
+      canSurfaceInResume: false
+    }));
+    const result = resolveReviewOutcome({ submissionAssessment: {
+      readiness: "REVISIONS_RECOMMENDED", summary: "Review needed.",
+      requirementVisibility: rows,
+      unsupportedClaims: [], missingEvidence: [], presentationIssues: [], topEdits: []
+    } }, rows.map((row) => row.sourceRequirement).join("\n"), "Technical Skills: Python.", "");
+    const reparsed = parseSubmissionAssessment(result.submissionAssessment);
+    return result.submissionAssessment?.missingEvidence.length === 17
+      && reparsed?.requirementVisibility.length === 17;
   })()],
-  ["a valid in-band aiScore is surfaced alongside its grounded review", (() => {
-    const reviewParsed = {
-      strictReview: {
-        verdict: "STRONG FIT",
-        verdictReason: "Direct evidence covers the required stack.",
-        coverage: [{ category: "Required tech", keyword: "Python", status: "covered", where: "Skills: Python" }],
-        gaps: [], rewrites: [], riskFlags: [], recommendation: {}
-      },
-      aiScore: { base: 74, tailored: 90, liftReason: "Tailored draft surfaces exact evidence." }
-    };
-    const { strictReview, aiScore } = resolveReviewOutcome(reviewParsed, "Python required.", "Skills: Python");
-    return strictReview !== null && aiScore?.tailored === 90 && aiScore.base === 74;
+  ["submission assessment rejects a fabricated technology and metric in top edits", (() => {
+    const result = resolveReviewOutcome({ submissionAssessment: {
+      readiness: "REVISIONS_RECOMMENDED", summary: "Review needed.",
+      requirementVisibility: [{
+        id: "python", requirement: "Python", sourceRequirement: "Python", importance: "CORE", coverage: "COVERED",
+        evidence: [{ source: "RESUME", excerpt: "Python" }], explanation: "Python is visible.", canSurfaceInResume: false
+      }],
+      unsupportedClaims: [], missingEvidence: [], presentationIssues: [],
+      topEdits: ["Add Kubernetes cluster operations and quantify the 30% latency reduction."]
+    } }, "Python is required.", "Technical Skills: Python.", "");
+    return result.submissionAssessment === null;
   })()],
-  ["an empty-shell review (no coverage rows) is still dropped, regardless of score", (() => {
-    const reviewParsed = {
-      strictReview: {
-        verdict: "STRONG FIT", verdictReason: "Looks strong.",
-        coverage: [], gaps: [], rewrites: [], riskFlags: [], recommendation: {}
-      },
-      aiScore: { base: 74, tailored: 90, liftReason: "" }
-    };
-    const { strictReview, aiScore } = resolveReviewOutcome(reviewParsed, "Python required.", "Skills: Python");
-    // No inspectable coverage -> the whole review is unusable (would be
-    // reviewStatus="failed"), and the score cannot stand alone.
-    return strictReview === null && aiScore === null;
-  })()],
-  ["a null review pass (failed/unparseable) yields no review and no score", (() => {
-    const { strictReview, aiScore } = resolveReviewOutcome(null, "Python required.", "Skills: Python");
-    return strictReview === null && aiScore === null;
-  })()],
-  ["review failures preserve actionable safe classifications without leaking raw errors", (() => {
-    const rateLimit = reviewFailureFromReason(
-      new UserSafeAiError("OpenAI rate limit or quota was reached. Wait, then try again.", 429),
-      "openai"
-    );
+  ["review failures preserve actionable safe classifications", (() => {
+    const rateLimit = reviewFailureFromReason(new UserSafeAiError("OpenAI rate limit or quota was reached. Wait, then try again.", 429), "openai");
     const unknown = reviewFailureFromReason(new Error("secret upstream payload"), "openai");
-    return rateLimit.status === 429
-      && /rate limit/i.test(rateLimit.message)
-      && unknown.status === 502
-      && !unknown.message.includes("secret upstream payload");
+    return rateLimit.status === 429 && /rate limit/i.test(rateLimit.message)
+      && unknown.status === 502 && !unknown.message.includes("secret upstream payload");
   })()],
-  ["strict-review prompt assigns score, verdict, and coverage to the AI", (() => {
-    const { userPrompt } = buildStrictReviewPrompts({
-      jobText: "Required Qualifications: Python and TypeScript. 0-6 years of experience.",
-      resumeText: "Technical Skills: Python, TypeScript.",
-      suggestedChanges: [],
-      honestContext: "",
-      customInstructions: ""
+  ["submission prompt requests readiness without a fit-score contract", (() => {
+    const { userPrompt } = buildSubmissionAssessmentPrompts({
+      jobText: "Python and TypeScript are required.", resumeText: "Technical Skills: Python, TypeScript.", honestContext: "", customInstructions: ""
     });
-    return /"aiScore"/.test(userPrompt)
-      && /"coverage"/.test(userPrompt)
-      && /You own the complete fit judgment/.test(userPrompt)
-      && /does not recompute, cap, or replace your judgment/.test(userPrompt)
-      && !/requirementCoverage|server calculates the score|recomputed server-side/i.test(userPrompt);
+    return /"submissionAssessment"/.test(userPrompt)
+      && /"requirementVisibility"/.test(userPrompt)
+      && /document readiness, not candidate fit/i.test(userPrompt)
+      && !/"(?:score|aiScore|baseScore|tailoredScore)"\s*:/.test(userPrompt);
   })()],
 
-  // --- adversarial review safety: gaps, collision-prone tech, negation, and
-  // --- coverage completeness all fail in the conservative direction. ---
-  ["hallucinated BLOCKER gap absent from JD cannot force DON'T APPLY", (() => {
-    const review = sanitizeStrictReview({
-      verdict: "STRONG FIT",
-      gaps: [{ gap: "Active Secret clearance", severity: "BLOCKER", evidenceType: "none", evidence: "No evidence" }],
-      recommendation: {}
-    }, "Required: React experience.", "Skills: React");
-    return review?.gaps.length === 0 && review.verdict === "STRONG FIT";
-  })()],
-  ["preferred-only HIGH gap stays visible without local score metadata", (() => {
-    const job = "Preferred qualifications:\nGraphQL";
-    const review = sanitizeStrictReview({
-      verdict: "STRONG FIT",
-      gaps: [{ gap: "GraphQL", severity: "HIGH", evidenceType: "none", evidence: "No evidence" }],
-      recommendation: {}
-    }, job, "Skills: React");
-    return review?.gaps[0]?.gap === "GraphQL"
-      && !("capEligible" in review.gaps[0])
-      && review.verdict === "STRONG FIT";
-  })()],
-  ["strict-review exact gap evidence is downgraded when resume support is absent", (() => {
-    const review = sanitizeStrictReview({
-      verdict: "STRETCH",
-      gaps: [{ gap: "GraphQL", severity: "HIGH", evidenceType: "exact", canHonestlyAdd: true, evidence: "Skills list GraphQL" }],
-      recommendation: {}
-    }, "GraphQL is required.", "Skills: React");
-    return review?.gaps[0]?.evidenceType === "none"
-      && review.gaps[0].canHonestlyAdd === false
-      && review.gaps[0].evidence === "";
-  })()],
-  ["strict-review exact gap evidence remains exact when claim and evidence are grounded", (() => {
-    const review = sanitizeStrictReview({
-      verdict: "REASONABLE FIT",
-      gaps: [{ gap: "GraphQL", severity: "MEDIUM", evidenceType: "exact", canHonestlyAdd: true, evidence: "Skills list GraphQL" }],
-      recommendation: {}
-    }, "GraphQL is required.", "Skills: GraphQL");
-    return review?.gaps[0]?.evidenceType === "exact"
-      && review.gaps[0].canHonestlyAdd === true;
-  })()],
-  ["sentence-final gap keyword remains grounded", (() => {
-    const review = sanitizeStrictReview({
-      verdict: "REASONABLE FIT",
-      gaps: [{ gap: "GraphQL.", severity: "MEDIUM", evidenceType: "exact", canHonestlyAdd: true, evidence: "Skills list GraphQL." }],
-      recommendation: {}
-    }, "GraphQL is required.", "Skills: GraphQL.");
-    return review?.gaps[0]?.gap === "GraphQL."
-      && review.gaps[0].evidenceType === "exact"
-      && review.gaps[0].canHonestlyAdd === true;
-  })()],
-  ["review-derived missing skill preserves already-sanitized exact evidence", (() => {
-    const review = sanitizeStrictReview({
-      verdict: "REASONABLE FIT",
-      gaps: [{ gap: "GraphQL", severity: "MEDIUM", evidenceType: "exact", canHonestlyAdd: true, evidence: "Skills list GraphQL" }],
-      recommendation: {}
-    }, "GraphQL is required.", "Skills: GraphQL");
-    const missing = missingRequiredSkillsFromStrictReview(review, "GraphQL is required.", "Skills: GraphQL");
-    return missing[0]?.keyword === "GraphQL"
-      && missing[0].evidenceType === "exact"
-      && missing[0].canHonestlyAdd === true;
-  })()],
-  ["strict-review .NET gap cannot ground on net-zero wording", (() => {
-    const review = sanitizeStrictReview({
-      verdict: "STRETCH",
-      gaps: [{ gap: ".NET development", severity: "HIGH", evidenceType: "none", evidence: "No evidence" }],
-      recommendation: {}
-    }, "Lead our net-zero development roadmap.", "Skills: React");
-    return review?.gaps.length === 0;
-  })()],
-  ["gap suggestedEdit metric requires explicit honest-context grounding", (() => {
-    const raw = {
-      verdict: "STRETCH",
-      gaps: [{ gap: "Latency impact", severity: "MEDIUM", evidenceType: "none", evidence: "No evidence", suggestedEdit: "Reduced latency by 40%." }],
-      recommendation: {}
-    };
-    const withoutAttestation = sanitizeStrictReview(raw, "Latency impact is important.", "Another role reduced latency by 40%.", {
-      suggestedEditNumericGrounding: ""
-    });
-    const withAttestation = sanitizeStrictReview(raw, "Latency impact is important.", "Another role reduced latency by 40%.", {
-      suggestedEditNumericGrounding: "Verified 40% latency reduction for this work."
-    });
-    return withoutAttestation?.gaps[0]?.suggestedEdit === ""
-      && withAttestation?.gaps[0]?.suggestedEdit === "Reduced latency by 40%.";
-  })()],
   // --- JSON prompt budgets preserve syntax and caller-owned inputs. ---
   ["serializeJsonForPrompt is bounded, deterministic, valid JSON, and non-mutating", (() => {
     const input = {
@@ -912,7 +666,7 @@ const checks = [
 
 // Floor: silently deleting a check must shrink the gate loudly, not quietly.
 // Raise this number whenever you ADD a check above.
-assert(checks.length >= 92, `sanitize probe count dropped below the floor (92): found ${checks.length}`);
+assert(checks.length >= 70, `sanitize probe count dropped below the floor (70): found ${checks.length}`);
 
 let failures = 0;
 for (const [name, ok] of checks) {

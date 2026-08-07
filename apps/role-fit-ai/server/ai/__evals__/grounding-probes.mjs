@@ -1,5 +1,5 @@
 // Offline, deterministic probes for the JD-term grounding gate and the
-// strict-review grounding it now drives. No model calls, no network:
+// tailoring-summary grounding it drives. No model calls, no network:
 //
 //   node server/ai/__evals__/grounding-probes.mjs
 //
@@ -7,8 +7,6 @@
 // - detector 4 (short tech tokens C#/C++/ML/NLP), incl. sentence-final periods
 // - proseMode (cover letter / answers): proper nouns allowed, skills still gated
 // - the contract that jobLower/grounding are PRE-LOWERCASED by callers
-// - sanitizeStrictReview dropping an ungrounded rewrite / blanking an ungrounded
-//   suggestedEdit, while staying backward-compatible with the no-args call
 // All fixture text is synthetic. Exit code is non-zero on any failure.
 
 import assert from "node:assert/strict";
@@ -19,7 +17,6 @@ import {
   findUngroundedOutcomeClaim,
   isClaimTermGroundedInSource
 } from "../grounding.ts";
-import { sanitizeStrictReview } from "../sanitize.ts";
 import { groundChangeSummary } from "../polish.ts";
 
 const f = (proposed, job, grounding, opts) => findUngroundedJdTerm(proposed, job, grounding, opts);
@@ -119,103 +116,6 @@ const checks = [
   // --- deliberate exclusion: collision-prone short tokens never flagged ---
   ["bare 'go' is NOT flagged (verb / go-to-market collision)", f("our go-to-market plan", "go developer wanted", "", { proseMode: true }) === null],
 
-  // --- sanitizeStrictReview grounding (resume-field rewrites) ---
-  ["ungrounded rewrite is dropped, grounded kept", (() => {
-    const out = sanitizeStrictReview(
-      { verdict: "STRETCH", rewrites: [
-        { original: "Built APIs", rewrite: "Built Kubernetes-orchestrated APIs" },
-        { original: "Led team", rewrite: "Led a 3-person engineering team" }
-      ] },
-      "kubernetes required",
-      "Built REST APIs in Python. Led a 3-person team."
-    );
-    return out.rewrites.length === 1 && /3-person/.test(out.rewrites[0].rewrite);
-  })()],
-  ["ungrounded suggestedEdit is blanked, gap stays", (() => {
-    const out = sanitizeStrictReview(
-      { verdict: "STRETCH", gaps: [
-        { gap: "No Terraform", severity: "HIGH", evidenceType: "none", suggestedEdit: "Provisioned infra with Terraform" }
-      ] },
-      "terraform required",
-      "Shipped Python services."
-    );
-    return out.gaps.length === 1 && out.gaps[0].suggestedEdit === "";
-  })()],
-  ["no grounding fails closed on a branded rewrite but keeps generic prose", (() => {
-    const out = sanitizeStrictReview({ verdict: "STRETCH", rewrites: [
-      { original: "a", rewrite: "Built Kubernetes things" },
-      { original: "b", rewrite: "Led a team" }
-    ] });
-    return out.rewrites.length === 1 && out.rewrites[0].rewrite === "Led a team";
-  })()],
-
-  // --- Fix 2: advisory review prose (coverLetterAngle, topEdits[],
-  // --- riskFlags[].suggestion) is prose-grounded like suggestedEdit. On an
-  // --- ungrounded JD skill term the STRING is blanked (or the topEdits item
-  // --- dropped), never the parent object; a grounded term survives untouched.
-  // --- proseMode is used, so company/role proper nouns are allowed. ---
-  ["review: ungrounded coverLetterAngle (Kubernetes not in resume) is blanked, review kept", (() => {
-    const out = sanitizeStrictReview(
-      { verdict: "STRETCH", recommendation: { coverLetterAngle: "Frame your Kubernetes orchestration experience as the through-line for this platform role." } },
-      "kubernetes orchestration required",
-      "Built REST APIs in Python. Shipped Docker images."
-    );
-    return out !== null && out.recommendation.coverLetterAngle === "";
-  })()],
-  ["review: grounded coverLetterAngle (Python/Docker in resume) survives", (() => {
-    const out = sanitizeStrictReview(
-      { verdict: "REASONABLE FIT", recommendation: { coverLetterAngle: "Lead with your Python services and Docker delivery work — both map directly to this team." } },
-      "python and docker required",
-      "Built REST APIs in Python. Shipped Docker images."
-    );
-    return out.recommendation.coverLetterAngle.length > 0 && /Python/.test(out.recommendation.coverLetterAngle);
-  })()],
-  ["review: ungrounded topEdits item dropped, grounded items kept (parent survives)", (() => {
-    const out = sanitizeStrictReview(
-      { verdict: "STRETCH", recommendation: { topEdits: [
-        "Surface your Python REST work first.",       // grounded -> kept
-        "Add Kubernetes cluster operations to skills.", // ungrounded JD term -> dropped
-        "Highlight your Docker delivery pipeline."      // grounded -> kept
-      ] } },
-      "python, docker, kubernetes required",
-      "Built REST APIs in Python. Shipped Docker images."
-    );
-    return out.recommendation.topEdits.length === 2
-      && out.recommendation.topEdits.every((e) => !/Kubernetes/i.test(e));
-  })()],
-  ["review: ungrounded riskFlags.suggestion blanked, flag (bullet+risk) kept", (() => {
-    const out = sanitizeStrictReview(
-      { verdict: "STRETCH", riskFlags: [
-        { bullet: "Optimized the reporting pipeline.", risk: "Interviewer may probe scale.", suggestion: "Reframe as Kubernetes-scaled throughput." }
-      ] },
-      "kubernetes required",
-      "Built REST APIs in Python."
-    );
-    return out.riskFlags.length === 1
-      && out.riskFlags[0].risk.length > 0
-      && out.riskFlags[0].suggestion === "";
-  })()],
-  ["review: grounded riskFlags.suggestion survives", (() => {
-    const out = sanitizeStrictReview(
-      { verdict: "STRETCH", riskFlags: [
-        { bullet: "Optimized the reporting pipeline.", risk: "Interviewer may probe scale.", suggestion: "Quantify the Python pipeline's throughput improvement." }
-      ] },
-      "python required",
-      "Built REST APIs in Python."
-    );
-    return out.riskFlags.length === 1 && /Python/.test(out.riskFlags[0].suggestion);
-  })()],
-  ["review: company proper noun in coverLetterAngle is NOT blanked (proseMode allows it)", (() => {
-    const out = sanitizeStrictReview(
-      { verdict: "REASONABLE FIT", recommendation: { coverLetterAngle: "Connect your Python delivery record to Acme's platform-reliability mission." } },
-      "acme is hiring a python engineer",
-      "Built REST APIs in Python."
-    );
-    // "Acme" is a proper noun (not in the tool lexicon) and Python is grounded,
-    // so the angle survives intact.
-    return /Acme/.test(out.recommendation.coverLetterAngle);
-  })()],
-
   // --- Fix C: memoized corpus tokenization is behaviorally invisible. The
   // --- module memoizes the JD + grounding token sets (invariant across a
   // --- review's ~19 calls) in a tiny FIFO cache. Repeated calls on identical
@@ -263,7 +163,7 @@ const checks = [
 
 // Floor: silently deleting a check must shrink the gate loudly, not quietly.
 // Raise this number whenever you ADD a check above.
-assert(checks.length >= 44, `grounding probe count dropped below the floor (44): found ${checks.length}`);
+assert(checks.length >= 35, `grounding probe count dropped below the floor (35): found ${checks.length}`);
 
 let failures = 0;
 for (const [name, ok] of checks) {
