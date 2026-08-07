@@ -10,9 +10,15 @@ import type { ExtractedJobTracking } from "../../lib/jobExtract";
 import { preparedJobRoleContext, type PreparedJobBriefField } from "../../lib/preparedJobBrief";
 import type { PreparationReadiness } from "../../lib/preparationReadiness";
 import type { VariantRecommendation } from "../../lib/variantRecommendation";
+import type { PrepareAutomationState } from "../../hooks/usePrepareAutomation";
+import type { AutoPolishThreshold } from "../../lib/prepareAutomation";
 import { PreparedJobBriefSections, type PreparedJobBriefSection } from "./prepare/PreparedJobBriefSections";
 import { PreparedMaterialCard } from "./prepare/PreparedMaterialCard";
 import { PreparedVariantRecommendation } from "./prepare/PreparedVariantRecommendation";
+import {
+  PrepareDecisionCheckpoint,
+  type PrepareInitialFitView
+} from "./prepare/PrepareDecisionCheckpoint";
 import {
   PrepareApplicationRail,
   type PrepareActivity,
@@ -102,6 +108,7 @@ export type PrepareTabProps = {
   onPreparePosting: (sourceOverride?: string) => void | Promise<void>;
   resumeReady: boolean;
   isSelectingResume: boolean;
+  prepareAutomationBusy: boolean;
   includeResume: boolean;
   onIncludeResumeChange: (included: boolean) => void;
   baseResumeName: string;
@@ -133,6 +140,12 @@ export type PrepareTabProps = {
   coverLetterStatus: string;
   onTailorCoverLetter: () => void | Promise<unknown>;
   onOpenCoverLetter: () => void;
+  initialFit: PrepareInitialFitView;
+  prepareAutomation: PrepareAutomationState;
+  resumeAutoPolishThreshold: AutoPolishThreshold;
+  coverAutoPolishThreshold: AutoPolishThreshold;
+  onRetryInitialFit: () => void | Promise<unknown>;
+  onStopInitialFit: () => void;
   reviewGaps: ReviewGap[];
   reviewGapsProvenance: "none" | "current" | "saved";
   fitAssessment: PrepareFitAssessment | null;
@@ -162,6 +175,7 @@ export function PrepareTab({
   onPreparePosting,
   resumeReady,
   isSelectingResume,
+  prepareAutomationBusy,
   includeResume,
   onIncludeResumeChange,
   baseResumeName,
@@ -193,6 +207,12 @@ export function PrepareTab({
   coverLetterStatus,
   onTailorCoverLetter,
   onOpenCoverLetter,
+  initialFit,
+  prepareAutomation,
+  resumeAutoPolishThreshold,
+  coverAutoPolishThreshold,
+  onRetryInitialFit,
+  onStopInitialFit,
   reviewGaps,
   reviewGapsProvenance,
   fitAssessment,
@@ -299,6 +319,8 @@ export function PrepareTab({
         ? "Wait for the resume variant selection to finish."
         : isPolishing
           ? "Wait for the current polish to finish."
+          : prepareAutomationBusy
+            ? "Wait for Prepare automation to finish."
           : !canTailor
             ? polishStatus || "Finish the resume and AI setup before polishing."
             : "";
@@ -742,6 +764,20 @@ export function PrepareTab({
         {jobPrepared ? (
           <PrepareApplicationRail
             activity={activity}
+            decisionCheckpoint={
+              <PrepareDecisionCheckpoint
+                initialFit={initialFit}
+                automation={prepareAutomation}
+                resumeThreshold={resumeAutoPolishThreshold}
+                coverThreshold={coverAutoPolishThreshold}
+                canPolishResume={canStartTailor}
+                canPolishCoverLetter={canTailorCoverLetter}
+                onRetryInitialFit={onRetryInitialFit}
+                onStopInitialFit={onStopInitialFit}
+                onPolishResume={onTailorPreparedResume}
+                onPolishCoverLetter={onTailorCoverLetter}
+              />
+            }
             fitAssessment={fitAssessment}
             linkedApplication={linkedApplication}
             readiness={readiness}

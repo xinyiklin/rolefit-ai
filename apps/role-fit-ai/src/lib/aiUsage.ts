@@ -1,9 +1,9 @@
-// Per-stage AI usage attribution, captured across Job analysis/tailor/review/
+// Per-stage AI usage attribution, captured across Job analysis/Initial Fit/tailor/review/
 // cover pipeline and snapshotted onto an Application at Apply time (see
 // useApplications.ts's Application.aiUsage). Whole-map-replace semantics: an
 // incoming aiUsage snapshot always wins on upsert — no deep per-stage merge.
 //
-// Stage keys are plain strings ("job-analysis" | "tailor" | "review" | "cover" today)
+// Stage keys are plain strings ("job-analysis" | "initial-fit" | "tailor" | "review" | "cover" today)
 // so a future stage can be added without a schema migration; the server sanitizer
 // constrains keys to /^[a-z][a-z0-9-]{0,23}$/.
 

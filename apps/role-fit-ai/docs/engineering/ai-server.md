@@ -172,6 +172,17 @@ owns:
   from a missing letter, and a cover failure must not discard successful
   tailor/review results. The client surfaces "reviewed by" when either the
   audit provider or audit model differs from the Tailor configuration.
+  `/api/fit-audit` is the automatic Prepare decision checkpoint. It reuses the
+  Recruiter Audit provider resolution, prompt, grounding, sanitizer, verdict
+  bands, and usage attribution, but requires the unchanged base resume as both
+  internal audit inputs and returns one public score rather than a base/tailored
+  pair. Its request binds the successful `preparationId`, prepared job text,
+  settled resume filename and document version, whole visible non-identity
+  resume evidence, honest context, provider/model/effort, and review
+  instructions into a versioned fingerprint. The server rejects mismatched
+  identity, malformed review, or score/verdict inconsistency; the client aborts
+  or marks stale any response whose live fingerprint changed. This route never
+  rewrites a document and never substitutes a local score.
   `/api/cover-letter` is **one operation**, not a staged workflow. It takes
   `sourceCoverLetterText`, the whole `evidenceItems` corpus, the job
   description, `resolvedContext` hints, any `slotAnswers`, and optional
@@ -306,13 +317,15 @@ owns:
   `claimToken` and open a fresh app tab with that token and its own `tabId`, so
   a new posting starts a new independent preparation session instead of
   replacing an existing tab's job. The first progress or delivered-posting
-  callback selects Prepare before updating intake state, and extension intake
-  stops there after Job analysis and the duplicate gates. `extensionImport`,
+  callback selects Prepare before updating intake state. The extension handoff
+  ends after Job analysis and the duplicate gates; after success the receiving
+  tab's ordinary Prepare orchestration settles the resume, runs Initial Fit, and
+  applies its two independent automation thresholds. `extensionImport`,
   `claimToken`, `tabId`, and the `"preparing"` progress token remain stable;
   the retired `autoTailor`, `distillAi`, and pre-extracted `fields` values are
-  ignored and never cross the inbox handoff. Ordinary Prepare may still rank
-  strict saved variants and select a clear winner, but that is source selection,
-  not automatic tailoring or a persisted schema extension.
+  ignored and never cross the inbox handoff. Ordinary Prepare may rank strict
+  saved variants and select a clear winner before Initial Fit; the extension
+  provides no automatic-tailoring command or persisted variant metadata.
   `status` / `analyze` / `import` are reachable cross-origin from the extension
   popup. `analyze` and `import` require the popup's exact, explicitly configured
   `EXTENSION_ALLOWED_ORIGINS` identity (`chrome-extension://`,

@@ -37,5 +37,15 @@ assert.match(
   /dispatchedInitialFitKeysRef\.current\.add\(initialFitAutoRunKey\);\s*void initialFitAudit\.run\(\)/,
   "each automatic dispatch key is claimed before the request starts"
 );
+assert.match(
+  app,
+  /const readyInitialFitAudit =[\s\S]{0,220}?state\.result\.fingerprint === initialFitAudit\.fingerprint/,
+  "render, automation, and Apply cannot consume a ready result from an earlier live input"
+);
+assert.match(
+  app,
+  /const applyPipelineAiUsage = initialFitPreparationId[\s\S]{0,300}?if \(readyInitialFitAudit\)[\s\S]{0,120}?delete usage\["initial-fit"\]/,
+  "Apply strips stale Initial Fit provenance synchronously instead of waiting for an effect"
+);
 
 console.log("initial fit sequencing guards passed");

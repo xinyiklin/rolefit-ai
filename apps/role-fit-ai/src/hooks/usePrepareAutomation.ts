@@ -115,6 +115,22 @@ export function usePrepareAutomation({
   runCoverLetterRef.current = runCoverLetter;
 
   useEffect(() => {
+    if (audit) return;
+    setState((current) => {
+      if (!current.auditFingerprint) return current;
+      const stopActive = (action: PrepareAutomationActionState): PrepareAutomationActionState =>
+        action.status === "waiting" || action.status === "running"
+          ? { status: "stopped", reason: "Initial Fit changed before this automatic action completed." }
+          : action;
+      const resume = stopActive(current.resume);
+      const coverLetter = stopActive(current.coverLetter);
+      return resume === current.resume && coverLetter === current.coverLetter
+        ? current
+        : { ...current, resume, coverLetter };
+    });
+  }, [audit]);
+
+  useEffect(() => {
     if (!audit || handledAuditsRef.current.has(audit.fingerprint)) return;
     const decision = prepareAutomationDecision(audit, resumeThreshold, coverThreshold);
     if (decision.coverLetter && !coverSelectionSettled) {

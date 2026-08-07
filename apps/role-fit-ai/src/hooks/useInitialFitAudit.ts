@@ -204,6 +204,7 @@ export function useInitialFitAudit({ input, ensureReviewProviderReady }: UseInit
   const retry = useCallback(() => run({ force: true }), [run]);
 
   return {
+    fingerprint,
     state,
     result: state.status === "ready" || state.status === "stale" ? state.result : null,
     isRunning: state.status === "running",

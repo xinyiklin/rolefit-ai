@@ -91,9 +91,13 @@ editable documents.
   context, responsibilities, required and preferred qualifications, technical
   keywords, seniority and domain signals, benefits, and any extraction or
   candidate-review gaps—while the Application rail keeps Resume, Cover Letter,
-  fit, readiness, and Apply together. Fit shows the current Recruiter audit, a
-  matching saved audit marked historical, or **Not audited** until that stage
-  runs; RoleFit does not estimate it locally. Each material has an **Include** toggle and its
+  Initial Fit, independent automation receipts, readiness, and Apply together.
+  After safe resume selection settles, Initial Fit always audits that exact base
+  document with the configured Recruiter Audit provider. It shows one score,
+  verdict, reason, strengths, gaps, selected resume, and provenance; a reopened
+  application shows its saved baseline as historical. A separate Proposal fit
+  row appears only after the later Recruiter audit. RoleFit never substitutes a
+  local fit estimate. Each material has an **Include** toggle and its
   own named variant selector. Resume starts included and Cover Letter starts excluded;
   included material must be ready before Apply, while either or both can be
   excluded. The captured posting remains unchanged behind **View** and
@@ -101,6 +105,14 @@ editable documents.
   polishing continues to use the benefits-excluded projection. Candidate gaps
   from a reopened application are explicitly historical until Recruiter audit runs
   against the current resume and prepared job.
+- **Independent Prepare automation** — Settings > Automation keeps Initial Fit
+  always on and gives Resume and Cover Letter separate Off / Stretch or better /
+  Reasonable fit or better / Strong fit thresholds. Both decisions consume the
+  same Initial Fit verdict, inclusively and independently. Eligible Resume
+  automation always includes Tailor (plus the optional final audit selected in
+  Settings); eligible Cover Letter automation uses the dedicated proposal flow
+  even when Cover Letter is not included. Neither path accepts a proposal or
+  changes Include, and manual Polish remains available after any verdict.
 - **Evidence-based variant recommendation** — when multiple saved variants
   exist, Prepare compares the actual strict `.resume` and `.cover` contents with
   weighted role, requirement, responsibility, and technology signals from the
@@ -394,13 +406,15 @@ preparation and duplicate checking to the job board. On any posting, click the
 - a one-click **Prepare in RoleFit** that opens a fresh independent RoleFit
   tab on Prepare, lets the server resolve the raw page text, and always runs
   AI-backed job analysis with that tab's selected provider. The extension
-  handoff stops on Prepare; it never starts resume Polish. If the analysis fails, the
+  handoff lands on Prepare. The receiving tab then follows the same required
+  resume-selection and Initial Fit continuation as any successful preparation;
+  its independent thresholds may start Resume or Cover Letter Polish. If the analysis fails, the
   deterministic brief may remain available for inspection, but Job analysis stays
   failed. The popup has no AI/deterministic or automatic-tailor toggle.
 
 A keyboard shortcut (`Ctrl+Shift+U` / `⌘⇧U` by default) imports the current page
 without opening the popup at all, through the same approval handshake and with
-the same stop on Prepare. `Ctrl+Shift+Y` / `⌘⇧Y` opens the popup. Both are
+the same Prepare continuation. `Ctrl+Shift+Y` / `⌘⇧Y` opens the popup. Both are
 editable in the browser's own extension-shortcut settings, and the popup's
 **Settings** view lists the assigned keys beside the localhost port and links
 there. A keyboard import that cannot finish badges the toolbar icon and explains

@@ -112,6 +112,7 @@ import { ApplyDownloadDialog } from "./sections/ApplyDownloadDialog";
 import { ResumePrintLayer } from "@typeset/editor/sections/ResumePrintLayer.tsx";
 import { ResumeTab } from "./sections/tabs/ResumeTab";
 import { PrepareTab } from "./sections/tabs/PrepareTab";
+import type { PrepareInitialFitView } from "./sections/tabs/prepare/PrepareDecisionCheckpoint";
 import { CoverLetterTab } from "./sections/tabs/CoverLetterTab";
 import { MaterialsTab } from "./sections/tabs/MaterialsTab";
 import type { TrackerView } from "./sections/tabs/TrackerTab";
@@ -1633,6 +1634,38 @@ function App() {
     input: initialFitAuditInput,
     ensureReviewProviderReady: ensureReviewProvider
   });
+  const readyInitialFitAudit =
+    initialFitAudit.state.status === "ready" &&
+    initialFitAudit.state.result.fingerprint === initialFitAudit.fingerprint
+      ? initialFitAudit.state.result
+      : null;
+  const initialFitPreparationRef = useRef(initialFitPreparationId);
+  useEffect(() => {
+    if (initialFitPreparationRef.current === initialFitPreparationId) return;
+    initialFitPreparationRef.current = initialFitPreparationId;
+    initialFitAudit.reset();
+  }, [initialFitAudit.reset, initialFitPreparationId]);
+  useEffect(() => {
+    if (readyInitialFitAudit) {
+      const usage = readyInitialFitAudit.usage;
+      setPipelineAiUsage((current) => ({ ...current, "initial-fit": usage }));
+      return;
+    }
+    if (
+      initialFitAudit.state.status === "running" ||
+      initialFitAudit.state.status === "stale" ||
+      initialFitAudit.state.status === "failed" ||
+      initialFitAudit.state.status === "stopped" ||
+      (initialFitAudit.state.status === "ready" && !readyInitialFitAudit)
+    ) {
+      setPipelineAiUsage((current) => {
+        if (!("initial-fit" in current)) return current;
+        const next = { ...current };
+        delete next["initial-fit"];
+        return next;
+      });
+    }
+  }, [initialFitAudit.state, readyInitialFitAudit]);
   const initialFitAutoRunKey =
     initialFitAuditInput &&
     preparedResumeSelection.state.status === "settled" &&
@@ -1762,7 +1795,7 @@ function App() {
       (Boolean(coverLetterVariantRecommendationInputKey) &&
         coverLetterVariantRecommendationKeyRef.current === coverLetterVariantRecommendationInputKey));
   const prepareAutomation = usePrepareAutomation({
-    audit: initialFitAudit.state.status === "ready" ? initialFitAudit.state.result : null,
+    audit: readyInitialFitAudit,
     resumeThreshold: resumeAutoPolishThreshold,
     coverThreshold: coverAutoPolishThreshold,
     polishStages,
@@ -1774,7 +1807,7 @@ function App() {
     runCoverLetter: handleTailorCoverLetter
   });
   const currentInitialFitFingerprint =
-    initialFitAudit.state.status === "ready" ? initialFitAudit.state.result.fingerprint : "";
+    readyInitialFitAudit?.fingerprint ?? "";
   const prepareAutomationActive =
     Boolean(currentInitialFitFingerprint) &&
     (prepareAutomation.auditFingerprint !== currentInitialFitFingerprint ||
@@ -1824,7 +1857,8 @@ function App() {
       isPolishing ||
       isSavingBaseResume ||
       isManuallySelectingResumeVariant ||
-      isRankingResumeVariants
+      isRankingResumeVariants ||
+      prepareAutomationActive
     ) return;
     // This click is explicit: it tailors exactly the resume currently shown;
     // loading a different variant remains protected by useWorkspaceResume's
@@ -1942,6 +1976,117 @@ function App() {
             provenance: "saved" as const
           }
         : null;
+  const currentInitialFitForApplication =
+    readyInitialFitAudit
+      ? {
+          score: readyInitialFitAudit.score,
+          verdict: readyInitialFitAudit.verdict,
+          verdictReason: readyInitialFitAudit.verdictReason,
+          resumeFileName: readyInitialFitAudit.resumeFileName,
+          completedAt: readyInitialFitAudit.completedAt
+        }
+      : (preparedApplication?.initialFitAudit ?? null);
+  const savedInitialFitMatchesApplication = Boolean(
+    preparedApplication?.initialFitAudit &&
+      (preparedApplication.jobDescription ?? "").trim() === preparedApplicationJobDescription.trim()
+  );
+  const liveInitialFitResult =
+    readyInitialFitAudit
+      ? readyInitialFitAudit
+      : initialFitAudit.state.status === "stale" &&
+          initialFitAudit.state.result.preparationId === initialFitPreparationId
+        ? initialFitAudit.state.result
+      : initialFitAudit.state.status === "running" || initialFitAudit.state.status === "stopped"
+        ? initialFitAudit.state.previous
+        : undefined;
+  const initialFitResultView = liveInitialFitResult
+    ? {
+        score: liveInitialFitResult.score,
+        verdict: liveInitialFitResult.verdict,
+        reason: liveInitialFitResult.verdictReason,
+        strengths: liveInitialFitResult.review.coverage
+          .filter((entry) => entry.status === "covered")
+          .slice(0, 3)
+          .map((entry) => entry.where ? `${entry.keyword} · ${entry.where}` : entry.keyword),
+        gaps: liveInitialFitResult.review.gaps
+          .slice(0, 3)
+          .map((gap) => `${gap.gap} · ${gap.severity.toLowerCase()}`),
+        resumeFileName: liveInitialFitResult.resumeFileName,
+        provenance: [
+          providerLabel(liveInitialFitResult.usage.provider ?? ""),
+          liveInitialFitResult.usage.model,
+          formatHistoryDate(liveInitialFitResult.completedAt)
+        ].filter(Boolean).join(" · ")
+      }
+    : null;
+  let prepareInitialFit: PrepareInitialFitView;
+  if (initialFitAudit.state.status === "running") {
+    prepareInitialFit = {
+      status: "running",
+      message: "Auditing the selected resume against the prepared job."
+    };
+  } else if (readyInitialFitAudit && initialFitResultView) {
+    prepareInitialFit = { status: "ready", ...initialFitResultView };
+  } else if (
+    initialFitAudit.state.status === "stale" &&
+    initialFitAudit.state.result.preparationId === initialFitPreparationId &&
+    initialFitResultView
+  ) {
+    prepareInitialFit = {
+      status: "stale",
+      ...initialFitResultView,
+      message: initialFitAudit.state.reason
+    };
+  } else if (initialFitAudit.state.status === "failed") {
+    prepareInitialFit = {
+      status: "failed",
+      message: `${initialFitAudit.state.errorHeadline}: ${initialFitAudit.state.error}`
+    };
+  } else if (initialFitAudit.state.status === "stopped") {
+    prepareInitialFit = {
+      status: "stopped",
+      message: initialFitAudit.state.error
+    };
+  } else if (preparedResumeSelection.state.status === "selecting" || isRankingResumeVariants) {
+    prepareInitialFit = {
+      status: "selecting",
+      message: "Selecting the best resume before Initial Fit."
+    };
+  } else if (preparedResumeSelection.state.status === "needs-user") {
+    prepareInitialFit = {
+      status: "waiting",
+      message: preparedResumeSelection.state.reason
+    };
+  } else if (savedInitialFitMatchesApplication && preparedApplication?.initialFitAudit) {
+    const savedUsage = preparedApplication.aiUsage?.["initial-fit"];
+    prepareInitialFit = {
+      status: "saved",
+      score: preparedApplication.initialFitAudit.score,
+      verdict: preparedApplication.initialFitAudit.verdict,
+      reason: preparedApplication.initialFitAudit.verdictReason,
+      resumeFileName: preparedApplication.initialFitAudit.resumeFileName,
+      provenance: [
+        savedUsage?.provider ? providerLabel(savedUsage.provider) : "",
+        savedUsage?.model,
+        formatHistoryDate(preparedApplication.initialFitAudit.completedAt)
+      ].filter(Boolean).join(" · ")
+    };
+  } else {
+    prepareInitialFit = {
+      status: "waiting",
+      message: resumeReady
+        ? "Initial Fit starts after the prepared resume selection settles."
+        : "Choose a complete resume to continue to Initial Fit."
+    };
+  }
+  const applyPipelineAiUsage = initialFitPreparationId
+    ? (() => {
+        const usage = { ...pipelineAiUsage };
+        if (readyInitialFitAudit) usage["initial-fit"] = readyInitialFitAudit.usage;
+        else delete usage["initial-fit"];
+        return usage;
+      })()
+    : pipelineAiUsage;
 
   // The Apply flow (download-prompt state + commitApply/handleApply/
   // handleApplyDownloadPick/handleApplyOnly/saveAppliedDocumentArtifacts) lives in
@@ -1970,7 +2115,8 @@ function App() {
     currentResumeText,
     headlineScore,
     fitComparison,
-    pipelineAiUsage,
+    pipelineAiUsage: applyPipelineAiUsage,
+    initialFitAudit: currentInitialFitForApplication,
     applications,
     linkedApplicationId: applicationOfRecordId,
     findForTarget,
@@ -2430,6 +2576,7 @@ function App() {
               onFetchPosting={handleExtractFromLink}
               onPreparePosting={handleAnalyzePaste}
               resumeReady={resumeReady}
+              prepareAutomationBusy={prepareAutomationActive}
               includeResume={materialSelection.resume}
               onIncludeResumeChange={(resume) => setMaterialSelection((current) => ({ ...current, resume }))}
               baseResumeName={baseResumeName}
@@ -2442,7 +2589,8 @@ function App() {
                 canPolish &&
                 !isSavingBaseResume &&
                 !isManuallySelectingResumeVariant &&
-                !isRankingResumeVariants
+                !isRankingResumeVariants &&
+                !prepareAutomationActive
               }
               isPolishing={isPolishing}
               polishProgress={polishProgress}
@@ -2470,7 +2618,8 @@ function App() {
                 coverProviderReady &&
                 !isGeneratingCover &&
                 !isSelectingCoverVariant &&
-                !isRankingCoverLetterVariants
+                !isRankingCoverLetterVariants &&
+                !prepareAutomationActive
               }
               coverLetterTailorHint={
                 !resumeReady && !jobReady
@@ -2481,14 +2630,22 @@ function App() {
                       ? "Prepare the job first."
                       : isSelectingCoverVariant || isRankingCoverLetterVariants
                         ? "Wait for the cover-letter variant selection to finish."
-                      : !coverProviderReady
-                        ? coverProviderMessage
-                        : (coverLetterPreflight.blockers[0] ?? "")
+                        : prepareAutomationActive
+                          ? "Wait for Prepare automation to finish."
+                          : !coverProviderReady
+                            ? coverProviderMessage
+                            : (coverLetterPreflight.blockers[0] ?? "")
               }
               isTailoringCoverLetter={isGeneratingCover}
               coverLetterStatus={coverStatus}
               onTailorCoverLetter={handleTailorCoverLetter}
               onOpenCoverLetter={() => setActiveOutputTab("cover")}
+              initialFit={prepareInitialFit}
+              prepareAutomation={prepareAutomation}
+              resumeAutoPolishThreshold={resumeAutoPolishThreshold}
+              coverAutoPolishThreshold={coverAutoPolishThreshold}
+              onRetryInitialFit={initialFitAudit.retry}
+              onStopInitialFit={initialFitAudit.stop}
               reviewGaps={prepareReviewGaps}
               reviewGapsProvenance={prepareReviewGapsProvenance}
               fitAssessment={prepareFitAssessment}

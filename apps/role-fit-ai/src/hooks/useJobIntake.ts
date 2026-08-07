@@ -306,13 +306,14 @@ export function useJobIntake({
   }
 
   // Fresh-import usage reset: every import path below clears the polish result
-  // (setResult(null)), so the PREVIOUS job's tailor/review/cover attribution is
+  // (setResult(null)), so the PREVIOUS job's Initial Fit/tailor/review/cover attribution is
   // now orphaned — commitApply snapshots pipelineAiUsage onto the Application,
   // and a stale row would record job A's providers on an unpolished job B.
   // Mirrors handlePolish's fresh-run delete (usePolishPipeline) and
   // handleLoadApplication's whole-map replace (App).
   const freshJobAnalysisUsage = (usage: StageAiUsage) => (prev: Record<string, StageAiUsage>) => {
     const next: Record<string, StageAiUsage> = { ...prev, "job-analysis": usage };
+    delete next["initial-fit"];
     delete next.tailor;
     delete next.review;
     delete next.cover;
@@ -731,8 +732,9 @@ export function useJobIntake({
           setPolishStatus("Job details were prepared, then the workflow stopped because this application is already tracked.");
           return;
         }
-        // A successful or locally-fallback job analysis stops here. Tailor remains an
-        // explicit action in Prepare.
+        // Intake owns only Job analysis. App observes a successful terminal
+        // state and continues through settled resume selection and Initial Fit;
+        // a failed local inspection brief cannot cross that boundary.
         const terminalState = jobAnalysisTerminalState(result, duplicateAfter.note);
         setJobAnalysisRetrySource("import");
         setJobAnalysisProgress(terminalState);
