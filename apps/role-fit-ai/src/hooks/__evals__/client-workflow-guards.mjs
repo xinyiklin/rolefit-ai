@@ -416,6 +416,14 @@ assert.match(
   /Polish uses this stage choice everywhere\./,
   "Settings explains that the one stage selection applies to every Polish entry point"
 );
+assert.match(settingsDialog, /id: "automation", label: "Automation"/, "Settings gives Prepare automation one owner");
+assert.match(settingsDialog, /Initial fit audit[\s\S]*Always on/, "Initial Fit is required rather than user-toggleable");
+assert.doesNotMatch(settingsDialog, /runInitialAudit|Run initial audit automatically/, "Settings exposes no Initial Fit on\/off preference");
+assert.match(
+  settingsDialog,
+  /Resume auto-polish[\s\S]*resumeAutoPolishThreshold[\s\S]*Cover letter auto-polish[\s\S]*coverAutoPolishThreshold/,
+  "resume and cover automation expose separate threshold controls"
+);
 assert.ok(
   !existsSync(new URL("../../sections/PolishMenu.tsx", import.meta.url)) &&
     !existsSync(new URL("../../sections/AiMenu.tsx", import.meta.url)),

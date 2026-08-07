@@ -346,6 +346,10 @@ function App() {
     setHonestContext,
     polishStages,
     setPolishStages,
+    resumeAutoPolishThreshold,
+    setResumeAutoPolishThreshold,
+    coverAutoPolishThreshold,
+    setCoverAutoPolishThreshold,
     citizenshipStatus,
     setCitizenshipStatus,
     legallyAuthorizedToWork,
@@ -2816,6 +2820,10 @@ function App() {
           onRefreshProviders={providerAvailability.refresh}
           polishStages={polishStages}
           onPolishStagesChange={setPolishStages}
+          resumeAutoPolishThreshold={resumeAutoPolishThreshold}
+          onResumeAutoPolishThresholdChange={setResumeAutoPolishThreshold}
+          coverAutoPolishThreshold={coverAutoPolishThreshold}
+          onCoverAutoPolishThresholdChange={setCoverAutoPolishThreshold}
           citizenshipStatus={citizenshipStatus}
           onCitizenshipChange={setCitizenshipStatus}
           legallyAuthorizedToWork={legallyAuthorizedToWork}
