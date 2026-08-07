@@ -518,5 +518,7 @@ const routeSource = readFileSync(new URL("../fitAudit.ts", import.meta.url), "ut
 assert.match(routeSource, /assessment: outcome/, "the Initial Fit route returns the canonical assessment");
 assert.doesNotMatch(routeSource, /score: outcome|review: outcome|aiScore:/, "the Initial Fit route exposes no score contract");
 assert.match(routeSource, /resolveReviewOnlyProviderRequest\(body\)/, "Initial Fit reuses the Recruiter Audit provider settings");
+assert.match(routeSource, /failureKind: "output-validation"/, "Initial Fit classifies parseable rejected output explicitly");
+assert.match(routeSource, /phase: outcome\.issue\.phase[\s\S]*code: outcome\.issue\.code[\s\S]*path: outcome\.issue\.path/, "Initial Fit logs only the safe validation classification and path");
 
 console.log("initial fit audit server probes passed");

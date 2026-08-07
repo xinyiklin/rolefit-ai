@@ -143,7 +143,13 @@ export function useInitialFitAudit({ input, ensureReviewProviderReady }: UseInit
         })
       });
       const data = await readJson(response);
-      if (!response.ok) throw new ApiError(typeof data.error === "string" ? data.error : "Initial Fit audit failed.", response.status);
+      if (!response.ok) {
+        throw new ApiError(
+          typeof data.error === "string" ? data.error : "Initial Fit audit failed.",
+          response.status,
+          data.failureKind === "output-validation" ? "output-validation" : undefined
+        );
+      }
       const result = parseInitialFitAuditResponse(data, snapshot);
       if (!result) throw new ApiError("Initial Fit returned an invalid result. Retry, or switch providers.", 502);
       if (

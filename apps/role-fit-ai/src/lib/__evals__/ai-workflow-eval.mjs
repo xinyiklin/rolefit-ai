@@ -59,6 +59,14 @@ const unusable = classifyFailure(new ApiError("The job analyzer returned no usab
 assert.equal(unusable.kind, "parse", "an unusable model response identifies the parsing failure");
 assert.equal(unusable.headline, "Parsing error", "the parsing failure has a specific headline");
 
+const rejectedOutput = classifyFailure(new ApiError(
+  "The assessment did not satisfy RoleFit's evidence contract.",
+  502,
+  "output-validation"
+));
+assert.equal(rejectedOutput.kind, "output-validation", "an explicit semantic output rejection overrides the 502 heuristic");
+assert.equal(rejectedOutput.headline, "AI response rejected", "semantic output rejection is not mislabeled as parsing");
+
 const unreachable = classifyFailure(new TypeError("Failed to fetch"));
 assert.equal(unreachable.kind, "network", "a network failure is identified specifically");
 assert.match(unreachable.detail, /local server/i, "the network message is user-safe");
@@ -105,4 +113,4 @@ assert.equal(
   "an aborted request cannot commit"
 );
 
-console.log("AI workflow eval: 23/23 checks passed");
+console.log("AI workflow eval: 25/25 checks passed");

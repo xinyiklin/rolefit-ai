@@ -15,6 +15,7 @@ export type FailureKind =
   | "too-large"
   | "truncated"
   | "parse"
+  | "output-validation"
   | "validation"
   | "network"
   | "api";
@@ -30,11 +31,13 @@ export type ClassifiedFailure = {
 // server's response code as a stronger signal than message-sniffing alone.
 export class ApiError extends Error {
   httpStatus?: number;
+  failureKind?: FailureKind;
 
-  constructor(message: string, httpStatus?: number) {
+  constructor(message: string, httpStatus?: number, failureKind?: FailureKind) {
     super(message);
     this.name = "ApiError";
     this.httpStatus = httpStatus;
+    this.failureKind = failureKind;
   }
 }
 
@@ -46,6 +49,7 @@ const HEADLINES: Record<FailureKind, string> = {
   "too-large": "Request too large",
   truncated: "Response cut off",
   parse: "Parsing error",
+  "output-validation": "AI response rejected",
   validation: "Validation blocked",
   network: "Network error",
   api: "API error"
@@ -75,6 +79,13 @@ export function classifyFailure(error: unknown): ClassifiedFailure {
   // replace the detail entirely rather than surfacing them.
   if (error instanceof TypeError || /failed to fetch|networkerror|load failed/i.test(message)) {
     return classifiedFrom("network", "Couldn't reach the local server");
+  }
+
+  // A server-classified semantic output rejection is stronger than the shared
+  // HTTP 502 transport heuristic. Keep unreadable JSON as Parsing error while
+  // parseable-but-rejected assessments receive their own recovery headline.
+  if (error instanceof ApiError && error.failureKind) {
+    return classifiedFrom(error.failureKind, detail);
   }
 
   // 2. Auth — missing/expired API key or CLI subscription/login.

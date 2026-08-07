@@ -89,8 +89,17 @@ export async function handleFitAudit(req: IncomingMessage, res: ServerResponse):
       signal: request.signal
     }, stats);
     if (outcome.status === "invalid") {
+      console.warn("[ai] assessment output rejected", {
+        stage: "initial-fit",
+        provider: resolved.provider,
+        model: resolved.model,
+        phase: outcome.issue.phase,
+        code: outcome.issue.code,
+        path: outcome.issue.path
+      });
       sendJson(res, 502, {
-        error: `${providerLabel(provider)} returned an invalid Initial Fit audit. Retry, or switch providers.`
+        error: `${providerLabel(provider)} returned an Initial Fit assessment that did not satisfy RoleFit's evidence contract. Retry, or switch providers.`,
+        failureKind: "output-validation"
       });
       return;
     }

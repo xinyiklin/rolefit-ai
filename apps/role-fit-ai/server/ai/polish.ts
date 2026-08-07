@@ -463,6 +463,16 @@ export async function handlePolish(req: IncomingMessage, res: ServerResponse): P
     let reviewOutcome: RecruiterAuditOutcome | null = null;
     if (reviewSettled.status === "fulfilled") {
       reviewOutcome = reviewSettled.value;
+      if (reviewOutcome?.status === "invalid") {
+        console.warn("[ai] assessment output rejected", {
+          stage: "submission-review",
+          provider: audit.provider,
+          model: audit.model,
+          phase: reviewOutcome.issue.phase,
+          code: reviewOutcome.issue.code,
+          path: reviewOutcome.issue.path
+        });
+      }
     } else {
       console.warn("[ai] submission review pass failed; returning primary rewrite without it", {
         provider: audit.provider,
@@ -497,11 +507,16 @@ export async function handlePolish(req: IncomingMessage, res: ServerResponse): P
       : reviewSettled.status === "rejected"
         ? reviewFailureFromReason(reviewSettled.reason, audit.provider)
         : {
-            message: `${providerLabel(audit.provider)} returned an invalid review. Retry, or switch providers.`,
-            status: 502
+            message: `${providerLabel(audit.provider)} returned a submission review that did not satisfy RoleFit's evidence contract. Retry, or switch providers.`,
+            status: 502,
+            kind: "output-validation" as const
           };
     const reviewFailureEcho = reviewFailure
-      ? { reviewError: reviewFailure.message, reviewErrorStatus: reviewFailure.status }
+      ? {
+          reviewError: reviewFailure.message,
+          reviewErrorStatus: reviewFailure.status,
+          ...("kind" in reviewFailure ? { reviewErrorKind: reviewFailure.kind } : {})
+        }
       : {};
 
     // The audit echo accompanies any response that ran the review pass — both

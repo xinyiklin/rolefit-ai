@@ -485,7 +485,11 @@ export function usePolishPipeline({
         const reviewErrorStatus = typeof data.reviewErrorStatus === "number"
           ? data.reviewErrorStatus
           : 502;
-        const failure = classifyFailure(new ApiError(reviewError, reviewErrorStatus));
+        const failure = classifyFailure(new ApiError(
+          reviewError,
+          reviewErrorStatus,
+          data.reviewErrorKind === "output-validation" ? "output-validation" : undefined
+        ));
         setPolishProgress((prev) => ({
           ...prev,
           review: { status: "failed", errorHeadline: failure.headline, error: failure.detail }
