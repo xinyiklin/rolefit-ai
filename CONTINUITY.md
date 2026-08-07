@@ -25,15 +25,19 @@ bounded; app-only operational detail belongs in the affected app documentation.
   presentation issues, and prioritized edits without changing Initial Fit.
   Tracker and Analytics use categorical fit/readiness distributions, outcome
   progression, recurring requirement gaps, and automatic/manual polish starts.
-- [USER+CODE] Assessment grounding now retains an exact posting excerpt beside
-  every normalized requirement and accepts candidate evidence only as a
-  normalized exact source quotation. Initial Fit `MISSING` requires explicit
-  mismatch evidence; submission visibility separately permits `MISSING` with
-  exact honest-context evidence only when that evidence proves the qualification
-  can be surfaced. Eligibility polarity is context-validated but does not alter
-  the fit verdict. User-facing summaries and ledger explanations are derived
-  from the canonical rows, while remaining Review advice passes technology,
-  proper-claim, numeric, and outcome grounding gates.
+- [USER+CODE] Assessment grounding retains and displays the exact posting
+  excerpt for every requirement and accepts candidate evidence only as a
+  normalized exact source quotation. Source excerpts are unique within ledgers,
+  eligibility and capability rows are disjoint, and all 40 requirement-derived
+  rows survive the shared parser. Initial Fit `MISSING` requires explicit
+  adverse evidence or an anchored lower-bound years mismatch; sponsorship
+  polarity is clause-aware. Submission visibility separately permits `MISSING`
+  with exact honest-context evidence only when non-adverse, relevant evidence
+  positively proves the qualification can be surfaced. Only unresolved
+  eligibility may recommend confirmation, and eligibility never alters the fit
+  verdict. User-facing summaries and ledger explanations derive from canonical
+  rows, while remaining Review advice passes technology, proper-claim, numeric,
+  and outcome grounding gates.
 - [TOOL] The RoleFit production/landing/desktop gate and all 76 offline
   evaluations pass. Root dependency and package-script checks, engine typecheck
   and deterministic evaluations, editor check, and Typeset check also pass.

@@ -107,14 +107,16 @@ type ParseLimits = {
   maxRequirements?: number;
   maxEligibilityItems?: number;
   maxEvidencePerItem?: number;
-  maxListItems?: number;
+  maxDerivedRequirementItems?: number;
+  maxAdviceItems?: number;
 };
 
 const DEFAULT_LIMITS: Required<ParseLimits> = {
   maxRequirements: 40,
   maxEligibilityItems: 16,
   maxEvidencePerItem: 8,
-  maxListItems: 16
+  maxDerivedRequirementItems: 40,
+  maxAdviceItems: 16
 };
 
 function record(value: unknown): Record<string, unknown> | null {
@@ -233,6 +235,33 @@ function uniqueIds(items: { id: string }[]): boolean {
   return new Set(items.map((item) => item.id)).size === items.length;
 }
 
+function normalizedRequirementSource(value: string): string {
+  return value
+    .normalize("NFKC")
+    .toLowerCase()
+    .replace(/[’']/g, "'")
+    .replace(/[^a-z0-9.+#']+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function uniqueRequirementSources(items: { sourceRequirement: string }[]): boolean {
+  const sources = items.map((item) => normalizedRequirementSource(item.sourceRequirement));
+  return new Set(sources).size === sources.length;
+}
+
+function requirementSourcesAreDisjoint(
+  requirements: RequirementAssessment[],
+  eligibilityItems: EligibilityItem[]
+): boolean {
+  const requirementSources = new Set(
+    requirements.map((item) => normalizedRequirementSource(item.sourceRequirement))
+  );
+  return eligibilityItems.every(
+    (item) => !requirementSources.has(normalizedRequirementSource(item.sourceRequirement))
+  );
+}
+
 function parseRequirements(
   value: unknown,
   limits: Required<ParseLimits>,
@@ -243,7 +272,7 @@ function parseRequirements(
   if (!allowEmpty && value.length === 0) return null;
   const requirements = value.map((item) => parseRequirement(item, limits.maxEvidencePerItem, mode));
   if (!requirements.every((item): item is RequirementAssessment => item !== null)) return null;
-  return uniqueIds(requirements) ? requirements : null;
+  return uniqueIds(requirements) && uniqueRequirementSources(requirements) ? requirements : null;
 }
 
 function parseEligibilityItem(
@@ -281,7 +310,11 @@ function parseEligibility(
     return null;
   }
   const items = source.items.map((item) => parseEligibilityItem(item, limits.maxEvidencePerItem));
-  if (!items.every((item): item is EligibilityItem => item !== null) || !uniqueIds(items)) return null;
+  if (
+    !items.every((item): item is EligibilityItem => item !== null)
+    || !uniqueIds(items)
+    || !uniqueRequirementSources(items)
+  ) return null;
   return status === expectedEligibilityStatus(items) ? { status, items } : null;
 }
 
@@ -308,8 +341,8 @@ export function parseFitAssessment(
   const verdictReason = text(source?.verdictReason, 1_200);
   const eligibility = parseEligibility(source?.eligibility, limits);
   const requirements = parseRequirements(source?.requirements, limits, false, "FIT");
-  const strengths = stringList(source?.strengths, limits.maxListItems);
-  const concerns = stringList(source?.concerns, limits.maxListItems);
+  const strengths = stringList(source?.strengths, limits.maxDerivedRequirementItems);
+  const concerns = stringList(source?.concerns, limits.maxDerivedRequirementItems);
   const recommendationSource = record(source?.recommendation);
   if (!hasExactKeys(recommendationSource, ["action", "reason"])) return null;
   const action = exactEnum(recommendationSource?.action, FIT_RECOMMENDATION_ACTIONS);
@@ -326,6 +359,7 @@ export function parseFitAssessment(
     !action ||
     !recommendationReason
   ) return null;
+  if (!requirementSourcesAreDisjoint(requirements, eligibility.items)) return null;
   return {
     verdict,
     confidence,
@@ -357,10 +391,10 @@ export function parseSubmissionAssessment(
   const readiness = exactEnum(source?.readiness, SUBMISSION_READINESSES);
   const summary = text(source?.summary, 1_200);
   const requirementVisibility = parseRequirements(source?.requirementVisibility, limits, true, "VISIBILITY");
-  const unsupportedClaims = stringList(source?.unsupportedClaims, limits.maxListItems);
-  const missingEvidence = stringList(source?.missingEvidence, limits.maxListItems);
-  const presentationIssues = stringList(source?.presentationIssues, limits.maxListItems);
-  const topEdits = stringList(source?.topEdits, limits.maxListItems);
+  const unsupportedClaims = stringList(source?.unsupportedClaims, limits.maxAdviceItems);
+  const missingEvidence = stringList(source?.missingEvidence, limits.maxDerivedRequirementItems);
+  const presentationIssues = stringList(source?.presentationIssues, limits.maxAdviceItems);
+  const topEdits = stringList(source?.topEdits, limits.maxAdviceItems);
   if (
     !readiness ||
     !summary ||

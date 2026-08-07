@@ -43,8 +43,31 @@ assert.equal(parseFitAssessment({ ...assessment, requirements: [] }), null);
 assert.equal(parseFitAssessment({ ...assessment, requirements: [requirement, requirement] }), null);
 assert.equal(parseFitAssessment({
   ...assessment,
+  requirements: [requirement, { ...requirement, id: "req-kubernetes-copy" }]
+}), null, "different ids cannot duplicate one job requirement excerpt");
+assert.equal(parseFitAssessment({
+  ...assessment,
+  eligibility: {
+    status: "SATISFIED",
+    items: [{ ...eligibilityItem, sourceRequirement: requirement.sourceRequirement }]
+  }
+}), null, "eligibility and capability ledgers must be source-disjoint");
+assert.equal(parseFitAssessment({
+  ...assessment,
   requirements: [{ ...requirement, coverage: "MISSING", evidence: [] }]
 }), null);
+
+const largeRequirements = Array.from({ length: 40 }, (_, index) => ({
+  ...requirement,
+  id: `req-large-${index}`,
+  requirement: `Production Kubernetes capability ${index}`,
+  sourceRequirement: `Production Kubernetes capability ${index} is required.`
+}));
+assert.ok(parseFitAssessment({
+  ...assessment,
+  requirements: largeRequirements,
+  strengths: largeRequirements.slice(0, 17).map((item) => `Covered: ${item.requirement}`)
+}), "derived fit lists may contain more than the 16-item advice limit");
 assert.equal(parseFitAssessment({
   ...assessment,
   requirements: [{ ...requirement, coverage: "UNCERTAIN", evidence }]
@@ -74,6 +97,16 @@ assert.deepEqual(parseSubmissionAssessment(submission), submission);
 assert.equal(parseSubmissionAssessment({ ...submission, tailoredScore: 92 }), null);
 assert.equal(parseSubmissionAssessment({ ...submission, readiness: "READY", unsupportedClaims: ["Invented metric"] }), null);
 assert.equal(parseSubmissionAssessment({ ...submission, requirementVisibility: [requirement, requirement] }), null);
+assert.ok(parseSubmissionAssessment({
+  ...submission,
+  readiness: "REVISIONS_RECOMMENDED",
+  requirementVisibility: largeRequirements.map((item) => ({
+    ...item,
+    coverage: "MISSING",
+    evidence: []
+  })),
+  missingEvidence: largeRequirements.slice(0, 17).map((item) => item.requirement)
+}), "derived submission requirement lists may contain more than the 16-item advice limit");
 assert.equal(parseSubmissionAssessment({
   ...submission,
   readiness: "REVISIONS_RECOMMENDED",

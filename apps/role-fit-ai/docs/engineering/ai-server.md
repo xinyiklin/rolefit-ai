@@ -385,14 +385,22 @@ modules under `server/ai/` so no single file carries the whole pipeline:
   canonical requirement evidence, and an advisory recommendation. Review
   returns a separate `SubmissionAssessment` for requirement visibility,
   unsupported claims, missing evidence, presentation issues, and readiness.
-  Each normalized requirement retains an exact `sourceRequirement` excerpt
+  Each requirement retains and displays an exact `sourceRequirement` excerpt
   from the posting; candidate evidence is accepted only as a normalized exact
-  source quotation, so an inserted token or polarity inversion fails closed.
-  Initial Fit `MISSING` requires explicit mismatch evidence and `UNCERTAIN`
-  carries none. Submission visibility uses a separate rule: `MISSING` may keep
-  exact `HONEST_CONTEXT` evidence only when `canSurfaceInResume=true`, while
-  that surfacing flag can never survive without such evidence. Eligibility
-  polarity is validated in context but never changes the fit verdict.
+  source quotation, so an inserted token or model-authored polarity inversion
+  fails closed. Source excerpts are unique within a ledger, and eligibility
+  rows must be disjoint from capability requirements. The shared parser permits
+  all 40 requirement-derived strengths, concerns, and missing-evidence rows;
+  independent advice lists remain capped at 16.
+  Initial Fit `MISSING` requires explicit adverse evidence or a minimum-years
+  mismatch whose candidate duration is anchored to the same qualification;
+  ranges use their lower bound, and ambiguity remains `UNCERTAIN`. Sponsorship
+  polarity is resolved per clause, including modifier phrases such as visa,
+  future, and employment sponsorship. Submission visibility uses a separate
+  rule: `MISSING` may keep exact `HONEST_CONTEXT` evidence only when non-adverse,
+  relevant evidence positively establishes the qualification and
+  `canSurfaceInResume=true`. Eligibility never changes the fit verdict, and
+  `CONFIRM_ELIGIBILITY` is valid only while eligibility is unresolved.
   Summary, reason, explanation, strength, concern, and missing-evidence prose
   is derived from the validated ledger; remaining presentation advice passes
   the existing technology, proper-claim, numeric, and outcome gates. Invalid

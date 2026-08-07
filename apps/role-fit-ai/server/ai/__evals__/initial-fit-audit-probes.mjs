@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 
 import { resolveInitialFitAuditOutcome } from "../recruiterAudit.ts";
 import { buildFitAssessmentPrompts } from "../prompts.ts";
+import { parseFitAssessment } from "../../../shared/fitAssessmentContract.ts";
 
 const jobText = [
   "Python and PostgreSQL are required for production backend services.",
@@ -43,7 +44,11 @@ const fitAssessment = {
 
 const valid = resolveInitialFitAuditOutcome({ fitAssessment }, jobText, resumeText, honestContext);
 assert.equal(valid?.verdict, fitAssessment.verdict, "Initial Fit returns the categorical assessment");
-assert.deepEqual(valid?.strengths, ["Covered: Python and PostgreSQL"], "strengths are derived from the grounded requirement ledger");
+assert.deepEqual(
+  valid?.strengths,
+  ["Covered: Python and PostgreSQL are required for production backend services."],
+  "strengths are derived from the canonical job requirement excerpt",
+);
 assert.doesNotMatch(valid?.summary ?? "", /candidate directly/i, "model-authored summary prose does not reach the user");
 assert.doesNotMatch(valid?.verdictReason ?? "", /central technologies/i, "verdict reasons are derived from the grounded ledger");
 assert.doesNotMatch(valid?.requirements[0]?.explanation ?? "", /names both/i, "requirement explanations are derived from validated coverage");
@@ -146,7 +151,16 @@ const sponsorshipFailure = resolveInitialFitAuditOutcome({
 }, sponsorshipJobText, resumeText, sponsorshipContext);
 assert.equal(sponsorshipFailure, null, "without sponsorship is positive eligibility evidence, not a failure marker");
 
-for (const positiveContext of [sponsorshipContext, "No sponsorship is required."]) {
+for (const positiveContext of [
+  sponsorshipContext,
+  "No sponsorship is required.",
+  "No visa sponsorship required.",
+  "No work visa sponsorship is needed.",
+  "No future sponsorship required.",
+  "No employment sponsorship is needed.",
+  "Work visa sponsorship is not required.",
+  "No sponsorship now or in the future is required."
+]) {
   const satisfied = resolveInitialFitAuditOutcome({
     fitAssessment: {
       ...fitAssessment,
@@ -162,6 +176,32 @@ for (const positiveContext of [sponsorshipContext, "No sponsorship is required."
     }
   }, sponsorshipJobText, resumeText, positiveContext);
   assert.equal(satisfied?.eligibility.status, "SATISFIED", `${positiveContext} remains positive eligibility evidence`);
+}
+
+for (const adverseContext of [
+  "I require visa sponsorship.",
+  "I need work visa sponsorship.",
+  "I will require future sponsorship.",
+  "I seek employment sponsorship.",
+  "Work visa sponsorship is required."
+]) {
+  const notSatisfied = resolveInitialFitAuditOutcome({
+    fitAssessment: {
+      ...fitAssessment,
+      eligibility: {
+        status: "NOT_SATISFIED",
+        items: [{
+          ...eligibilityItem,
+          requirement: "work without employer sponsorship",
+          sourceRequirement: sponsorshipRequirement,
+          status: "NOT_SATISFIED",
+          evidence: [{ source: "HONEST_CONTEXT", excerpt: adverseContext }]
+        }]
+      },
+      recommendation: { action: "NOT_RECOMMENDED", reason: "Sponsorship is required." }
+    }
+  }, sponsorshipJobText, resumeText, adverseContext);
+  assert.equal(notSatisfied?.eligibility.status, "NOT_SATISFIED", `${adverseContext} remains adverse eligibility evidence`);
 }
 
 const relocationContext = "I cannot relocate to Boston.";
@@ -226,6 +266,21 @@ assert.equal(strongWithFailedEligibility?.verdict, "STRONG_FIT", "failed eligibi
 assert.equal(resolveInitialFitAuditOutcome({
   fitAssessment: {
     ...fitAssessment,
+    eligibility: { status: "SATISFIED", items: [eligibilityItem] },
+    requirements: [{
+      ...requirement,
+      id: "req-work-auth-copy",
+      requirement: eligibilityItem.requirement,
+      sourceRequirement: eligibilityItem.sourceRequirement,
+      evidence: eligibilityItem.evidence,
+      canSurfaceInResume: true
+    }]
+  }
+}, jobText, resumeText, honestContext), null, "eligibility conditions cannot reappear in the capability ledger");
+
+assert.equal(resolveInitialFitAuditOutcome({
+  fitAssessment: {
+    ...fitAssessment,
     verdict: "LIMITED_FIT",
     recommendation: { action: "NOT_RECOMMENDED", reason: "The candidate has limited fit." }
   }
@@ -238,6 +293,13 @@ assert.equal(resolveInitialFitAuditOutcome({
   }
 }, jobText, resumeText, honestContext), null, "an eligible strong fit cannot carry a contradictory not-recommended action");
 
+assert.equal(resolveInitialFitAuditOutcome({
+  fitAssessment: {
+    ...fitAssessment,
+    recommendation: { action: "CONFIRM_ELIGIBILITY", reason: "Confirm eligibility." }
+  }
+}, jobText, resumeText, honestContext), null, "satisfied eligibility cannot recommend confirmation");
+
 const paraphrasedRequirement = resolveInitialFitAuditOutcome({
   fitAssessment: {
     ...fitAssessment,
@@ -249,7 +311,113 @@ const paraphrasedRequirement = resolveInitialFitAuditOutcome({
     }]
   }
 }, "Develop and maintain scalable backend services using Python and PostgreSQL.", resumeText, honestContext);
-assert.equal(paraphrasedRequirement?.requirements[0]?.requirement, "Scalable backend development with Python and PostgreSQL", "normalized requirement labels are accepted when an exact job excerpt is grounded");
+assert.equal(paraphrasedRequirement?.requirements[0]?.requirement, "Develop and maintain scalable backend services using Python and PostgreSQL.", "display labels derive from the exact job excerpt");
+
+const invertedRequirementLabel = resolveInitialFitAuditOutcome({
+  fitAssessment: {
+    ...fitAssessment,
+    eligibility: { status: "SATISFIED", items: [] },
+    requirements: [{
+      ...requirement,
+      requirement: "Python and PostgreSQL are not required",
+      sourceRequirement: "Python and PostgreSQL are required for production backend services."
+    }]
+  }
+}, jobText, resumeText, honestContext);
+assert.equal(invertedRequirementLabel?.requirements[0]?.requirement, requirement.sourceRequirement, "model-authored labels cannot reverse source polarity");
+
+function missingYearsOutcome(sourceRequirement, evidenceExcerpt) {
+  return resolveInitialFitAuditOutcome({
+    fitAssessment: {
+      ...fitAssessment,
+      verdict: "STRETCH",
+      eligibility: { status: "SATISFIED", items: [] },
+      requirements: [{
+        ...requirement,
+        id: "req-years",
+        requirement: sourceRequirement,
+        sourceRequirement,
+        coverage: "MISSING",
+        evidence: [{ source: "HONEST_CONTEXT", excerpt: evidenceExcerpt }]
+      }],
+      strengths: [],
+      concerns: ["Experience mismatch."],
+      recommendation: { action: "APPLY_SELECTIVELY", reason: "A core requirement is not satisfied." }
+    }
+  }, sourceRequirement, resumeText, evidenceExcerpt);
+}
+
+assert.equal(
+  missingYearsOutcome("Candidates need 3–5 years of Python experience.", "I have 4 years of Python experience."),
+  null,
+  "a candidate inside a required years range is not missing"
+);
+assert.equal(
+  missingYearsOutcome("Candidates need at least 3 years of Python experience.", "I have 2 years of Python experience.")?.requirements[0]?.coverage,
+  "MISSING",
+  "an unambiguous minimum supports a deterministic years mismatch"
+);
+assert.equal(
+  missingYearsOutcome("Candidates need 3 years of Python experience.", "I have 2 years of Java experience and 5 years of Python experience."),
+  null,
+  "an unrelated shorter duration cannot manufacture a relevant mismatch"
+);
+assert.equal(
+  missingYearsOutcome("Candidates need 3 years of Python experience.", "I have 2 years of Java experience."),
+  null,
+  "a lone duration without a requirement anchor remains uncertain"
+);
+
+const mixedSponsorshipContext = "I do not require sponsorship now, but I will require future sponsorship.";
+assert.equal(resolveInitialFitAuditOutcome({
+  fitAssessment: {
+    ...fitAssessment,
+    eligibility: {
+      status: "SATISFIED",
+      items: [{
+        ...eligibilityItem,
+        requirement: sponsorshipRequirement,
+        sourceRequirement: sponsorshipRequirement,
+        evidence: [{ source: "HONEST_CONTEXT", excerpt: mixedSponsorshipContext }]
+      }]
+    }
+  }
+}, sponsorshipJobText, resumeText, mixedSponsorshipContext), null, "an adverse sponsorship clause cannot be masked by a positive clause");
+
+function largeFitRoundTrip(count, adjacentFrom = count) {
+  const requirements = Array.from({ length: count }, (_, index) => ({
+    ...requirement,
+    id: `req-large-${index}`,
+    requirement: `Python service capability ${index}`,
+    sourceRequirement: `Python service capability ${index} is required.`,
+    importance: "SUPPORTING",
+    coverage: index >= adjacentFrom ? "ADJACENT" : "COVERED",
+    evidence: [{ source: "RESUME", excerpt: `Built Python service capability ${index}.` }]
+  }));
+  const largeJob = requirements.map((item) => item.sourceRequirement).join("\n");
+  const largeResume = requirements.map((item) => item.evidence[0].excerpt).join("\n");
+  const outcome = resolveInitialFitAuditOutcome({
+    fitAssessment: {
+      ...fitAssessment,
+      verdict: adjacentFrom === count ? "STRONG_FIT" : "STRETCH",
+      eligibility: { status: "SATISFIED", items: [] },
+      requirements,
+      strengths: [],
+      concerns: [],
+      recommendation: {
+        action: adjacentFrom === count ? "APPLY" : "APPLY_SELECTIVELY",
+        reason: "Derived from the requirement ledger."
+      }
+    }
+  }, largeJob, largeResume, "");
+  return { outcome, reparsed: parseFitAssessment(outcome) };
+}
+
+for (const [count, adjacentFrom] of [[17, 17], [17, 0], [40, 20]]) {
+  const roundTrip = largeFitRoundTrip(count, adjacentFrom);
+  assert.equal(roundTrip.outcome?.requirements.length, count, `${count} requirements survive server validation`);
+  assert.equal(roundTrip.reparsed?.requirements.length, count, `${count} requirements survive the client parser`);
+}
 
 const uncertain = resolveInitialFitAuditOutcome({
   fitAssessment: {
@@ -283,6 +451,7 @@ assert.match(prompts.userPrompt, /degree or equivalent experience/i);
 assert.match(prompts.userPrompt, /Confidence describes evidence completeness/i);
 assert.match(prompts.userPrompt, /Do not produce a numerical score/i);
 assert.match(prompts.userPrompt, /sourceRequirement/i);
+assert.match(prompts.userPrompt, /Eligibility conditions must appear only under eligibility\.items/i);
 assert.doesNotMatch(prompts.userPrompt, /STRONG_FIT[^\n]*failed eligibility/i);
 assert.doesNotMatch(prompts.userPrompt, /"(?:score|aiScore|baseScore|tailoredScore)"\s*:/i);
 

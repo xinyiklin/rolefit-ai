@@ -60,13 +60,19 @@ sanitizer code is executable product behavior and anti-fabrication-critical.
   owns only post-polish document readiness. Validate exact shape, enums,
   evidence references, and semantic consistency; reject invalid output instead
   of synthesizing a replacement.
-- Every normalized requirement carries an exact `sourceRequirement` excerpt
+- Every requirement carries and displays its exact `sourceRequirement` excerpt
   from the posting, and every candidate evidence excerpt must be a normalized
-  exact source quotation. Initial Fit `MISSING` requires explicit mismatch
-  evidence while `UNCERTAIN` has none; submission visibility may retain
-  `HONEST_CONTEXT` evidence for a `MISSING` row only when it proves the
-  qualification can be surfaced honestly. Eligibility polarity is validated in
-  context and never changes the fit verdict.
+  exact source quotation. Source excerpts are unique within each ledger, and
+  eligibility rows cannot reappear as capability requirements. Derived
+  requirement lists may cover all 40 rows; only independent advice lists keep
+  the 16-item cap.
+- Initial Fit `MISSING` requires explicit adverse evidence or a deterministically
+  anchored minimum-years mismatch while `UNCERTAIN` has none. Sponsorship
+  polarity is evaluated around each sponsorship clause. Submission visibility
+  may retain `HONEST_CONTEXT` evidence for a `MISSING` row only when non-adverse,
+  relevant evidence positively proves the qualification can be surfaced.
+  Eligibility never changes the fit verdict, and only unresolved eligibility
+  may recommend `CONFIRM_ELIGIBILITY`.
 - User-facing assessment prose derives from the validated ledger wherever
   possible. Remaining Review advice must pass technology, proper-claim,
   numeric, and outcome grounding before it can be returned.

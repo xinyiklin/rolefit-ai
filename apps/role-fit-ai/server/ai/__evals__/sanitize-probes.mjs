@@ -28,6 +28,7 @@ import {
   stripStructuralInlineMarks
 } from "../polish.ts";
 import { UserSafeAiError } from "../errors.ts";
+import { parseSubmissionAssessment } from "../../../shared/fitAssessmentContract.ts";
 
 const scope = {
   sections: [
@@ -483,6 +484,56 @@ const checks = [
       unsupportedClaims: [], missingEvidence: ["Python"], presentationIssues: [], topEdits: []
     } }, "Python is required.", "Technical Skills: TypeScript.", "");
     return result.submissionAssessment === null;
+  })()],
+  ["negative honest context cannot authorize surfacing a missing qualification", (() => {
+    const honestContext = "I do not have production Kubernetes experience.";
+    const result = resolveReviewOutcome({ submissionAssessment: {
+      readiness: "REVISIONS_RECOMMENDED", summary: "Review needed.",
+      requirementVisibility: [{
+        id: "kubernetes", requirement: "Production Kubernetes experience",
+        sourceRequirement: "Production Kubernetes experience is required.",
+        importance: "CORE", coverage: "MISSING",
+        evidence: [{ source: "HONEST_CONTEXT", excerpt: honestContext }],
+        explanation: "Not visible.", canSurfaceInResume: true
+      }],
+      unsupportedClaims: [], missingEvidence: [], presentationIssues: [], topEdits: []
+    } }, "Production Kubernetes experience is required.", "Technical Skills: Python.", honestContext);
+    return result.submissionAssessment === null;
+  })()],
+  ["positive relevant honest context can authorize surfacing a missing qualification", (() => {
+    const honestContext = "I operate production Kubernetes services.";
+    const result = resolveReviewOutcome({ submissionAssessment: {
+      readiness: "REVISIONS_RECOMMENDED", summary: "Review needed.",
+      requirementVisibility: [{
+        id: "kubernetes", requirement: "Production Kubernetes experience",
+        sourceRequirement: "Production Kubernetes experience is required.",
+        importance: "CORE", coverage: "MISSING",
+        evidence: [{ source: "HONEST_CONTEXT", excerpt: honestContext }],
+        explanation: "Not visible.", canSurfaceInResume: true
+      }],
+      unsupportedClaims: [], missingEvidence: [], presentationIssues: [], topEdits: []
+    } }, "Production Kubernetes experience is required.", "Technical Skills: Python.", honestContext);
+    return result.submissionAssessment?.requirementVisibility[0]?.canSurfaceInResume === true;
+  })()],
+  ["17 missing visibility rows survive the server-to-client round trip", (() => {
+    const rows = Array.from({ length: 17 }, (_, index) => ({
+      id: `missing-${index}`,
+      requirement: `Required capability ${index}`,
+      sourceRequirement: `Required capability ${index} must be demonstrated.`,
+      importance: "SUPPORTING",
+      coverage: "MISSING",
+      evidence: [],
+      explanation: "Not visible.",
+      canSurfaceInResume: false
+    }));
+    const result = resolveReviewOutcome({ submissionAssessment: {
+      readiness: "REVISIONS_RECOMMENDED", summary: "Review needed.",
+      requirementVisibility: rows,
+      unsupportedClaims: [], missingEvidence: [], presentationIssues: [], topEdits: []
+    } }, rows.map((row) => row.sourceRequirement).join("\n"), "Technical Skills: Python.", "");
+    const reparsed = parseSubmissionAssessment(result.submissionAssessment);
+    return result.submissionAssessment?.missingEvidence.length === 17
+      && reparsed?.requirementVisibility.length === 17;
   })()],
   ["submission assessment rejects a fabricated technology and metric in top edits", (() => {
     const result = resolveReviewOutcome({ submissionAssessment: {

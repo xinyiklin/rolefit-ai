@@ -53,12 +53,40 @@ function evidenceReferencesAreGrounded(
 }
 
 function requirementSourceIsGrounded(
-  requirement: Pick<RequirementAssessment | EligibilityItem, "requirement" | "sourceRequirement">,
+  requirement: Pick<RequirementAssessment | EligibilityItem, "sourceRequirement">,
   jobText: string
 ): boolean {
-  return sourceExcerptIsGrounded(requirement.sourceRequirement, jobText)
-    && !findUngroundedClaimTerm(requirement.requirement, requirement.sourceRequirement)
-    && !hasUngroundedNumericClaim(requirement.requirement, requirement.sourceRequirement);
+  return sourceExcerptIsGrounded(requirement.sourceRequirement, jobText);
+}
+
+const SPONSORSHIP_WORDS = String.raw`(?:[a-z]+\s+){0,8}sponsorship`;
+const SPONSORSHIP_POSITIVE_PATTERNS = [
+  new RegExp(String.raw`\bwithout\s+${SPONSORSHIP_WORDS}\b`, "i"),
+  new RegExp(String.raw`\bno\s+${SPONSORSHIP_WORDS}(?:\s+[a-z]+){0,8}\s+(?:needed|required)\b`, "i"),
+  new RegExp(String.raw`\b(?:do|does|did|will)\s+not\s+(?:need|require)\s+${SPONSORSHIP_WORDS}\b`, "i"),
+  new RegExp(String.raw`\b${SPONSORSHIP_WORDS}(?:\s+[a-z]+){0,3}\s+not\s+(?:needed|required)\b`, "i")
+];
+const SPONSORSHIP_ADVERSE_PATTERNS = [
+  new RegExp(String.raw`\b(?:need|needs|needed|require|requires|required|requiring|seek|seeks|seeking)\s+${SPONSORSHIP_WORDS}\b`, "i"),
+  new RegExp(String.raw`\b${SPONSORSHIP_WORDS}(?:\s+[a-z]+){0,8}\s+(?:needed|required)\b`, "i")
+];
+
+function sponsorshipPolarity(text: string): "POSITIVE" | "ADVERSE" | null {
+  const clauses = String(text ?? "")
+    .normalize("NFKC")
+    .toLowerCase()
+    .split(/(?:[.;!?]+|\bbut\b|\bhowever\b|\balthough\b)/)
+    .map((clause) => normalizedSourceExcerpt(clause))
+    .filter((clause) => clause.includes("sponsorship"));
+  let polarity: "POSITIVE" | "ADVERSE" | null = null;
+  for (const clause of clauses) {
+    if (SPONSORSHIP_POSITIVE_PATTERNS.some((pattern) => pattern.test(clause))) {
+      polarity ??= "POSITIVE";
+      continue;
+    }
+    if (SPONSORSHIP_ADVERSE_PATTERNS.some((pattern) => pattern.test(clause))) return "ADVERSE";
+  }
+  return polarity;
 }
 
 function candidateEvidenceIsAdverse(value: unknown): boolean {
@@ -70,32 +98,89 @@ function candidateEvidenceIsAdverse(value: unknown): boolean {
     || /\bno (?:active |valid )?(?:security )?(?:clearance|license|licence|certification|degree|authorization|citizenship|experience)\b/i.test(text)
     || /\bexpired\b/i.test(text);
   if (adverseCondition) return true;
-  const sponsorshipExemption = /\b(?:can|able to|eligible to) work without (?:employer )?sponsorship\b/i.test(text)
-    || /\bno (?:employer )?sponsorship (?:is )?(?:needed|required)\b/i.test(text)
-    || /\b(?:do|does|will) not (?:need|require) (?:employer )?sponsorship\b/i.test(text);
-  if (sponsorshipExemption) return false;
-  return /\b(?:need|needs|require|requires|required|requiring|seek|seeks|seeking) (?:an? |employer )?sponsorship\b/i.test(text)
-    || /\bsponsorship (?:is )?(?:needed|required)\b/i.test(text);
+  return sponsorshipPolarity(String(value ?? "")) === "ADVERSE";
 }
 
-function firstDurationYears(value: unknown): number | null {
-  const words: Record<string, number> = {
-    one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9,
-    ten: 10, eleven: 11, twelve: 12, thirteen: 13, fourteen: 14, fifteen: 15,
-    sixteen: 16, seventeen: 17, eighteen: 18, nineteen: 19, twenty: 20
-  };
-  const match = String(value ?? "").toLowerCase().match(/\b(\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty)\+?\s+years?\b/);
-  if (!match) return null;
-  return /^\d+$/.test(match[1]) ? Number(match[1]) : words[match[1]] ?? null;
+const YEAR_WORDS: Record<string, number> = {
+  one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9,
+  ten: 10, eleven: 11, twelve: 12, thirteen: 13, fourteen: 14, fifteen: 15,
+  sixteen: 16, seventeen: 17, eighteen: 18, nineteen: 19, twenty: 20
+};
+const YEAR_NUMBER = String.raw`(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty)`;
+
+function yearNumber(value: string): number | null {
+  return /^\d+$/.test(value) ? Number(value) : YEAR_WORDS[value] ?? null;
+}
+
+function requiredMinimumYears(value: unknown): number | null {
+  const text = String(value ?? "").normalize("NFKC").toLowerCase();
+  const rangePatterns = [
+    new RegExp(String.raw`\bbetween\s+(${YEAR_NUMBER})\s+and\s+(${YEAR_NUMBER})\s+years?\b`, "i"),
+    new RegExp(String.raw`\b(${YEAR_NUMBER})\s*(?:-|–|—|to)\s*(${YEAR_NUMBER})\s+years?\b`, "i")
+  ];
+  for (const pattern of rangePatterns) {
+    const match = pattern.exec(text);
+    if (match) return yearNumber(match[1]);
+  }
+  const minimumPatterns = [
+    new RegExp(String.raw`\b(?:at\s+least|minimum(?:\s+of)?)\s+(${YEAR_NUMBER})\s+years?\b`, "i"),
+    new RegExp(String.raw`\b(${YEAR_NUMBER})\s*\+\s*years?\b`, "i"),
+    new RegExp(String.raw`\b(${YEAR_NUMBER})\s+years?\s+or\s+more\b`, "i")
+  ];
+  for (const pattern of minimumPatterns) {
+    const match = pattern.exec(text);
+    if (match) return yearNumber(match[1]);
+  }
+  const plain = [...text.matchAll(new RegExp(String.raw`\b(${YEAR_NUMBER})\s+years?\b`, "gi"))];
+  return plain.length === 1 ? yearNumber(plain[0][1].toLowerCase()) : null;
+}
+
+const DURATION_ANCHOR_STOPWORDS = new Set([
+  "ability", "and", "applicant", "applicants", "between", "candidate", "candidates",
+  "demonstrated", "experience", "have", "knowledge", "least", "minimum", "more", "must",
+  "need", "needs", "of", "or", "plus", "proven", "required", "requirement", "strong", "the",
+  "valid", "with", "year", "years"
+]);
+
+function durationAnchors(value: unknown): string[] {
+  return (normalizedSourceExcerpt(value).match(/[a-z0-9.#+]{3,}/g) ?? [])
+    .map((token) => token.replace(/^\.+|\.+$/g, ""))
+    .filter((token) => !DURATION_ANCHOR_STOPWORDS.has(token) && !/^\d+$/.test(token));
+}
+
+function relevantCandidateYears(requirement: RequirementAssessment): number | null {
+  const anchors = durationAnchors(requirement.sourceRequirement);
+  if (anchors.length === 0) return null;
+  const relevant: number[] = [];
+  for (const reference of requirement.evidence) {
+    const text = String(reference.excerpt ?? "").normalize("NFKC").toLowerCase();
+    const matches = [...text.matchAll(new RegExp(String.raw`\b(${YEAR_NUMBER})\s+years?\b`, "gi"))];
+    const relevantIndexes = new Set<number>();
+    for (const anchor of anchors) {
+      let anchorIndex = text.indexOf(anchor);
+      while (anchorIndex >= 0) {
+        const distances = matches.map((match) => Math.abs((match.index ?? 0) - anchorIndex));
+        const nearestDistance = Math.min(...distances);
+        const nearest = distances
+          .map((distance, index) => ({ distance, index }))
+          .filter(({ distance }) => distance === nearestDistance);
+        if (nearest.length === 1) relevantIndexes.add(nearest[0].index);
+        anchorIndex = text.indexOf(anchor, anchorIndex + anchor.length);
+      }
+    }
+    for (const index of relevantIndexes) {
+      const years = yearNumber(matches[index][1].toLowerCase());
+      if (years !== null) relevant.push(years);
+    }
+  }
+  return relevant.length === 1 ? relevant[0] : null;
 }
 
 function mismatchEvidenceIsExplicit(requirement: RequirementAssessment): boolean {
   if (requirement.evidence.some((reference) => candidateEvidenceIsAdverse(reference.excerpt))) return true;
-  const requiredYears = firstDurationYears(requirement.sourceRequirement);
-  return requiredYears !== null && requirement.evidence.some((reference) => {
-    const candidateYears = firstDurationYears(reference.excerpt);
-    return candidateYears !== null && candidateYears < requiredYears;
-  });
+  const requiredYears = requiredMinimumYears(requirement.sourceRequirement);
+  const candidateYears = relevantCandidateYears(requirement);
+  return requiredYears !== null && candidateYears !== null && candidateYears < requiredYears;
 }
 
 function eligibilityEvidenceMatchesStatus(item: EligibilityItem): boolean {
@@ -125,6 +210,7 @@ function categoricalVerdictIsConsistent(assessment: FitAssessment): boolean {
 
 function recommendationIsConsistent(assessment: FitAssessment): boolean {
   const { action } = assessment.recommendation;
+  if (action === "CONFIRM_ELIGIBILITY" && assessment.eligibility.status !== "UNCERTAIN") return false;
   if (assessment.eligibility.status === "NOT_SATISFIED") return action === "NOT_RECOMMENDED";
   if (assessment.eligibility.status === "UNCERTAIN") {
     return action === "CONFIRM_ELIGIBILITY" || action === "NOT_RECOMMENDED";
@@ -174,10 +260,12 @@ function recommendationReason(assessment: FitAssessment): string {
 function canonicalFitAssessment(assessment: FitAssessment): FitAssessment {
   const requirements = assessment.requirements.map((requirement) => ({
     ...requirement,
+    requirement: requirement.sourceRequirement,
     explanation: requirementExplanation(requirement)
   }));
   const eligibilityItems = assessment.eligibility.items.map((item) => ({
     ...item,
+    requirement: item.sourceRequirement,
     explanation: eligibilityExplanation(item)
   }));
   return {
@@ -231,6 +319,22 @@ function submissionSummary(assessment: SubmissionAssessment): string {
   return `${readiness}: ${hidden} requirements are missing or unclear, with ${assessment.unsupportedClaims.length} unsupported claims and ${assessment.presentationIssues.length} presentation issues.`;
 }
 
+const POSITIVE_QUALIFICATION_PATTERN = /\b(?:authorized|eligible|certified|licensed|qualified|proficient|skilled|experienced|experience|have|has|hold|holds|possess|possesses|use|uses|used|built|build|operate|operates|operated|manage|manages|managed|work|worked|can|able)\b/i;
+
+function visibilityEvidenceSupportsSurfacing(requirement: RequirementAssessment): boolean {
+  const evidenceText = requirement.evidence.map((reference) => reference.excerpt).join("\n");
+  if (!evidenceText || requirement.evidence.some((reference) => candidateEvidenceIsAdverse(reference.excerpt))) {
+    return false;
+  }
+  const positiveQualification = sponsorshipPolarity(evidenceText) === "POSITIVE"
+    || POSITIVE_QUALIFICATION_PATTERN.test(evidenceText);
+  if (!positiveQualification) return false;
+  if (findUngroundedClaimTerm(requirement.requirement, evidenceText)) return false;
+  if (hasUngroundedNumericClaim(requirement.sourceRequirement, evidenceText)) return false;
+  const anchors = durationAnchors(requirement.sourceRequirement);
+  return anchors.length === 0 || anchors.some((anchor) => normalizedSourceExcerpt(evidenceText).includes(anchor));
+}
+
 export function validateFitAssessment(
   raw: unknown,
   jobText: string,
@@ -271,6 +375,7 @@ export function validateSubmissionAssessment(
   for (const requirement of assessment.requirementVisibility) {
     if (!requirementSourceIsGrounded(requirement, jobText)) return null;
     if (!evidenceReferencesAreGrounded(requirement.evidence, resumeText, honestContext)) return null;
+    if (requirement.canSurfaceInResume && !visibilityEvidenceSupportsSurfacing(requirement)) return null;
   }
   if (assessment.unsupportedClaims.some((claim) => !sourceExcerptIsGrounded(claim, resumeText))) return null;
   if (assessment.presentationIssues.some((issue) => !advisoryProseIsGrounded(issue, jobText, resumeText, honestContext))) return null;
@@ -278,6 +383,7 @@ export function validateSubmissionAssessment(
 
   const requirementVisibility = assessment.requirementVisibility.map((requirement) => ({
     ...requirement,
+    requirement: requirement.sourceRequirement,
     explanation: submissionRequirementExplanation(requirement)
   }));
   const missingEvidence = requirementVisibility

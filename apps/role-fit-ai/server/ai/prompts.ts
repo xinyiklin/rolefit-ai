@@ -65,7 +65,7 @@ function fitAssessmentPrompt({
       "status": "SATISFIED | UNCERTAIN | NOT_SATISFIED",
       "items": [{
         "id": "stable unique eligibility id",
-        "requirement": "normalized display label for one mandatory eligibility condition",
+        "requirement": "repeat sourceRequirement exactly",
         "sourceRequirement": "exact quote of that eligibility condition from the job",
         "status": "SATISFIED | UNCERTAIN | NOT_SATISFIED",
         "evidence": [{ "source": "RESUME | HONEST_CONTEXT", "excerpt": "exact source quote" }],
@@ -74,7 +74,7 @@ function fitAssessmentPrompt({
     },
     "requirements": [{
       "id": "stable unique requirement id",
-      "requirement": "normalized display label for one explicit job requirement",
+      "requirement": "repeat sourceRequirement exactly",
       "sourceRequirement": "exact quote of that requirement from the job",
       "importance": "CORE | SUPPORTING",
       "coverage": "COVERED | ADJACENT | MISSING | UNCERTAIN",
@@ -97,17 +97,17 @@ Rules:
 - Match requirements only to the resume and honest context. sourceRequirement and every evidence excerpt must be exact source quotes apart from whitespace and punctuation normalization. Never add, remove, or invert a substantive word.
 - Missing resume text does not prove the candidate lacks a qualification. Use UNCERTAIN when the trusted evidence is incomplete. Use MISSING only when the provided evidence explicitly establishes the absence or the candidate evidence clearly does not meet a requirement.
 - COVERED, ADJACENT, and MISSING require evidence. MISSING evidence must explicitly show the mismatch. UNCERTAIN uses an empty evidence array.
-- Eligibility is separate from fit. Include only explicit mandatory authorization, citizenship, clearance, license, location/relocation, or genuinely non-substitutable degree conditions.
+- Eligibility is separate from fit. Include only explicit mandatory authorization, citizenship, clearance, license, location/relocation, or genuinely non-substitutable degree conditions. Eligibility conditions must appear only under eligibility.items; do not repeat them in requirements.
 - An eligibility item may be NOT_SATISFIED only when candidate evidence explicitly says the condition is not met. Mere absence is UNCERTAIN. SATISFIED and NOT_SATISFIED require evidence; UNCERTAIN uses an empty evidence array.
 - Overall eligibility is NOT_SATISFIED if any item is not satisfied, otherwise UNCERTAIN if any item is uncertain, otherwise SATISFIED.
 - Confidence describes evidence completeness and assessment reliability, never candidate quality.
 - Assess qualifications, not resume presentation. Do not penalize formatting, wording quality, bullet style, section order, or minor presentation problems.
-- A qualification found only in HONEST_CONTEXT may be COVERED and canSurfaceInResume=true.
-- canSurfaceInResume=true requires supporting HONEST_CONTEXT evidence. MISSING and UNCERTAIN cannot be surfaced as candidate qualifications.
+- A relevant positive qualification found only in HONEST_CONTEXT may be COVERED and canSurfaceInResume=true.
+- canSurfaceInResume=true requires non-adverse HONEST_CONTEXT evidence that positively establishes the job qualification. Negative, missing, uncertain, or unrelated context cannot be surfaced as a candidate qualification.
 - Recommendation is advisory and distinct from the verdict. It does not command or trigger automation.
 - Eligibility never changes the fit verdict. STRONG_FIT cannot contain a missing or uncertain core requirement or several adjacent core requirements. REASONABLE_FIT cannot contain several missing core requirements. STRETCH and LIMITED_FIT must not contradict an all-covered core ledger.
-- Keep recommendation logically consistent with the verdict and eligibility. Failed eligibility cannot recommend applying; unresolved eligibility should recommend confirmation; an otherwise eligible STRONG_FIT should not be NOT_RECOMMENDED.
-- Requirement and eligibility ids must be unique within their own lists. Return at least one requirement.
+- Keep recommendation logically consistent with the verdict and eligibility. Failed eligibility cannot recommend applying; only unresolved eligibility may use CONFIRM_ELIGIBILITY; an otherwise eligible STRONG_FIT should not be NOT_RECOMMENDED.
+- Requirement and eligibility ids and sourceRequirement excerpts must be unique within their own lists. No sourceRequirement may appear in both eligibility.items and requirements. Return at least one requirement.
 
 <job_description>
 ${fenceUntrusted(jobText)}
@@ -148,7 +148,7 @@ function submissionAssessmentPrompt({
     "summary": "concise document-readiness summary",
     "requirementVisibility": [{
       "id": "stable unique requirement id",
-      "requirement": "normalized display label for one explicit job requirement",
+      "requirement": "repeat sourceRequirement exactly",
       "sourceRequirement": "exact quote of that requirement from the job",
       "importance": "CORE | SUPPORTING",
       "coverage": "COVERED | ADJACENT | MISSING | UNCERTAIN",
@@ -169,8 +169,8 @@ Rules:
 - Identify explicit job requirements once in requirementVisibility. Combine true alternatives such as "degree or equivalent experience" into one requirement.
 - sourceRequirement and every evidence excerpt must be exact source quotes apart from whitespace and punctuation normalization. Never add, remove, or invert a substantive word.
 - COVERED and ADJACENT describe resume visibility and require RESUME evidence. UNCERTAIN uses an empty evidence array.
-- When HONEST_CONTEXT establishes a qualification that is absent from the resume, mark visibility MISSING, retain the exact HONEST_CONTEXT evidence, and set canSurfaceInResume=true. A MISSING row without such evidence must use an empty evidence array and canSurfaceInResume=false.
-- canSurfaceInResume=true is forbidden without supporting HONEST_CONTEXT evidence.
+- When non-adverse HONEST_CONTEXT positively establishes a relevant qualification that is absent from the resume, mark visibility MISSING, retain the exact HONEST_CONTEXT evidence, and set canSurfaceInResume=true. A MISSING row without such evidence must use an empty evidence array and canSurfaceInResume=false.
+- canSurfaceInResume=true is forbidden without non-adverse HONEST_CONTEXT evidence that positively establishes the job qualification; negative, missing, uncertain, or unrelated context cannot authorize resume copy.
 - unsupportedClaims lists claims actually present in the resume that are not supported by the resume's source evidence or honest context. Do not call a merely missing job qualification an unsupported claim.
 - READY requires no unsupportedClaims and no missingEvidence. EVIDENCE_NEEDED means honest support is needed before a claim can be made safely. NOT_READY is reserved for material unsupported claims, contradictions, or missing core evidence.
 - presentationIssues concerns the document only: clarity, wording, hierarchy, repetition, contradictions, and ATS-readable communication. Do not turn those issues into candidate-fit judgments.
