@@ -5,6 +5,17 @@ bounded; app-only operational detail belongs in the affected app documentation.
 
 ## 2026-08-07
 
+- [USER+CODE] Assessment providers now return a minimal decision-and-evidence
+  envelope; the server derives the unchanged canonical `FitAssessment` and
+  `SubmissionAssessment` ids, aggregate eligibility, display prose,
+  missing-evidence rows, and resume-surfacing permission. Parseable output that
+  fails shape, grounding, or consistency is reported as `output-validation`
+  with shape-only diagnostics and **AI response rejected**, distinct from
+  unreadable JSON. Tailor likewise fails before Review when every returned edit
+  is discarded, while partial acceptance remains successful and a valid
+  gap-only response completes without claiming the resume was tailored. No
+  provider authentication, dispatch construction, Job analysis, client-facing
+  assessment shape, or application persistence schema changed.
 - [USER+CODE] Fit Assessment directly replaces the preview numerical contract.
   `FitAssessment` owns categorical verdict, confidence, eligibility, a unique
   evidence-linked requirement ledger, and an advisory recommendation;

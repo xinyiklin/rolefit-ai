@@ -79,6 +79,26 @@ const evidenceBlocked = classifyFailure(new ApiError("The proposal did not pass 
 assert.equal(evidenceBlocked.kind, "validation", "HTTP 422 is an evidence or validation failure");
 assert.equal(evidenceBlocked.headline, "Validation blocked");
 
+const inputBlocked = classifyFailure(new ApiError("Add a job description before continuing.", 400));
+assert.equal(inputBlocked.kind, "validation", "plain HTTP 400 input rejection remains a validation failure");
+assert.equal(inputBlocked.headline, "Validation blocked", "bad user input keeps the validation headline");
+
+assert.equal(
+  classifyFailure(new ApiError("Codex CLI couldn't authenticate (401).", 401)).kind,
+  "auth",
+  "authentication mapping remains unchanged"
+);
+assert.equal(
+  classifyFailure(new ApiError("Codex CLI timed out before finishing.", 504)).kind,
+  "timeout",
+  "timeout mapping remains unchanged"
+);
+assert.equal(
+  classifyFailure(new ApiError("The selected provider model is unavailable.", 400)).kind,
+  "config",
+  "provider configuration mapping remains unchanged"
+);
+
 const requestFingerprint = workflowInputFingerprint({ resume: "A", job: "B" });
 assert.equal(
   requestFingerprint,
@@ -113,4 +133,4 @@ assert.equal(
   "an aborted request cannot commit"
 );
 
-console.log("AI workflow eval: 25/25 checks passed");
+console.log("AI workflow eval: 30/30 checks passed");

@@ -61,6 +61,7 @@ assert.doesNotMatch(valid?.eligibility.items[0]?.explanation ?? "", /explicitly 
 assert.notEqual(valid?.recommendation.reason, fitAssessment.recommendation.reason, "recommendation reasons are derived from validated action and eligibility");
 assert.match(valid?.requirements[0]?.id ?? "", /^req-[a-z0-9-]+$/, "requirement ids are derived from the source requirement");
 assert.match(valid?.eligibility.items[0]?.id ?? "", /^elig-[a-z0-9-]+$/, "eligibility ids are derived from the source requirement");
+assert.ok(parseFitAssessment(valid), "the canonical Initial Fit result round-trips through the shared parser");
 
 const ignoredAggregate = resolveInitialFitAuditOutcome({
   fitAssessment: {
@@ -100,7 +101,32 @@ assert.equal(resolveInitialFitAuditOutcome({ fitAssessment, score: 92 }, jobText
 
 assert.equal(resolveInitialFitAuditOutcome({
   fitAssessment: { ...fitAssessment, requirements: [requirement, requirement] }
-}, jobText, resumeText, honestContext), null, "duplicate requirement ids fail closed");
+}, jobText, resumeText, honestContext), null, "duplicate source requirements fail closed");
+
+assert.deepEqual(resolveInitialFitAuditResult({
+  fitAssessment: { ...fitAssessment, requirements: [requirement, requirement] }
+}, jobText, resumeText, honestContext), {
+  status: "invalid",
+  issue: {
+    phase: "consistency",
+    code: "DUPLICATE_SOURCE_REQUIREMENT",
+    path: "fitAssessment.requirements[1].sourceRequirement"
+  }
+}, "duplicate source requirements expose only a safe issue code and fixed path");
+
+assert.deepEqual(resolveInitialFitAuditResult({
+  fitAssessment: {
+    ...fitAssessment,
+    requirements: [{ ...requirement, sourceRequirement: "Rust is required." }]
+  }
+}, jobText, resumeText, honestContext), {
+  status: "invalid",
+  issue: {
+    phase: "grounding",
+    code: "SOURCE_REQUIREMENT_NOT_IN_JOB",
+    path: "fitAssessment.requirements[0].sourceRequirement"
+  }
+}, "an ungrounded source requirement reports its fixed field path");
 
 assert.equal(resolveInitialFitAuditOutcome({
   fitAssessment: {
@@ -108,6 +134,20 @@ assert.equal(resolveInitialFitAuditOutcome({
     requirements: [{ ...requirement, evidence: [{ source: "RESUME", excerpt: "Led Rust platform migrations." }] }]
   }
 }, jobText, resumeText, honestContext), null, "unsupported candidate evidence fails closed");
+
+assert.deepEqual(resolveInitialFitAuditResult({
+  fitAssessment: {
+    ...fitAssessment,
+    requirements: [{ ...requirement, evidence: [{ source: "RESUME", excerpt: "Led Rust platform migrations." }] }]
+  }
+}, jobText, resumeText, honestContext), {
+  status: "invalid",
+  issue: {
+    phase: "grounding",
+    code: "EVIDENCE_NOT_IN_SOURCE",
+    path: "fitAssessment.requirements[0].evidence[0].excerpt"
+  }
+}, "ungrounded candidate evidence reports the exact evidence index without echoing content");
 
 assert.equal(resolveInitialFitAuditOutcome({
   fitAssessment: {
@@ -123,6 +163,34 @@ assert.equal(resolveInitialFitAuditOutcome({
     requirements: [{ ...requirement, coverage: "MISSING", evidence: [] }]
   }
 }, jobText, resumeText, honestContext), null, "strong fit with a missing core requirement fails closed");
+
+assert.deepEqual(resolveInitialFitAuditResult({
+  fitAssessment: {
+    ...fitAssessment,
+    verdict: "LIMITED_FIT"
+  }
+}, jobText, resumeText, honestContext), {
+  status: "invalid",
+  issue: {
+    phase: "consistency",
+    code: "INCONSISTENT_VERDICT",
+    path: "fitAssessment.verdict"
+  }
+}, "verdict contradictions retain a specific safe rejection");
+
+assert.deepEqual(resolveInitialFitAuditResult({
+  fitAssessment: {
+    ...fitAssessment,
+    recommendation: { action: "NOT_RECOMMENDED" }
+  }
+}, jobText, resumeText, honestContext), {
+  status: "invalid",
+  issue: {
+    phase: "consistency",
+    code: "INCONSISTENT_RECOMMENDATION",
+    path: "fitAssessment.recommendation.action"
+  }
+}, "recommendation contradictions retain a specific safe rejection");
 
 assert.equal(resolveInitialFitAuditOutcome({
   fitAssessment: {
@@ -295,6 +363,7 @@ const explicitMissing = resolveInitialFitAuditOutcome({
   }
 }, "Production Kubernetes experience is required.", resumeText, explicitMissingContext);
 assert.equal(explicitMissing?.requirements[0]?.coverage, "MISSING", "explicit mismatch evidence distinguishes MISSING from UNCERTAIN");
+assert.equal(explicitMissing?.requirements[0]?.canSurfaceInResume, false, "adverse honest context never permits resume surfacing");
 
 const strongWithFailedEligibility = resolveInitialFitAuditOutcome({
   fitAssessment: {

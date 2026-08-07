@@ -25,7 +25,8 @@ import {
   normalizeTailorScope,
   resolveReviewOutcome as resolveReviewOutcomeResult,
   reviewFailureFromReason,
-  stripStructuralInlineMarks
+  stripStructuralInlineMarks,
+  tailorOutputValidationFailure
 } from "../polish.ts";
 import { UserSafeAiError } from "../errors.ts";
 import { parseSubmissionAssessment } from "../../../shared/fitAssessmentContract.ts";
@@ -96,6 +97,16 @@ function survives(input) {
   return sanitizedSuggestion(input).length === 1;
 }
 
+function tailorDecision(raw) {
+  const dropStats = {};
+  const accepted = sanitizeTailorSuggestions(raw, scope, dropStats, "", JD);
+  return {
+    accepted,
+    dropped: summarizeDroppedSuggestions(dropStats),
+    failure: tailorOutputValidationFailure("claude-cli", raw.length, accepted.length, dropStats)
+  };
+}
+
 const evasionStats = {};
 sanitizeTailorSuggestions(
   [{ target: { sectionId: "s", entryId: "e", bulletId: "b", field: "bullet" }, proposedText: "Led an <b>EHR migration</b> across <b>Linux</b>-based clinic systems.", evidenceType: "exact", evidence: "n/a", hits: [] }],
@@ -111,6 +122,67 @@ const negativeQualificationContexts = [
 ];
 
 const checks = [
+  ["one invalid Tailor field and zero accepted edits fails output validation", (() => {
+    const result = tailorDecision([{
+      target: { sectionId: "s", entryId: "e", bulletId: "b", field: "invented" },
+      proposedText: "Led an EHR migration with PostgreSQL validation.",
+      evidenceType: "exact",
+      evidence: "EHR migration with PostgreSQL"
+    }]);
+    return result.accepted.length === 0
+      && result.dropped?.reasons.badField === 1
+      && result.failure?.failureKind === "output-validation"
+      && result.failure.status === 502
+      && /target or response fields were invalid/i.test(result.failure.message);
+  })()],
+  ["one unknown Tailor target and zero accepted edits fails output validation", (() => {
+    const result = tailorDecision([{
+      target: { sectionId: "s", entryId: "missing", bulletId: "b", field: "bullet" },
+      proposedText: "Led an EHR migration with PostgreSQL validation.",
+      evidenceType: "exact",
+      evidence: "EHR migration with PostgreSQL"
+    }]);
+    return result.accepted.length === 0
+      && result.dropped?.reasons.unknownTarget === 1
+      && result.failure?.failureKind === "output-validation";
+  })()],
+  ["one unsupported Tailor edit and zero accepted edits fails output validation", (() => {
+    const result = tailorDecision([{
+      target: { sectionId: "s", entryId: "e", bulletId: "b", field: "bullet" },
+      proposedText: "Led an EHR migration across Kubernetes clusters.",
+      evidenceType: "none",
+      evidence: "No Kubernetes evidence"
+    }]);
+    return result.accepted.length === 0
+      && result.dropped?.unsupported === 1
+      && result.failure?.failureKind === "output-validation"
+      && /not supported by the resume or honest context/i.test(result.failure.message);
+  })()],
+  ["one accepted and one invalid Tailor edit remains a partial success", (() => {
+    const valid = {
+      target: { sectionId: "s", entryId: "e", bulletId: "b", field: "bullet" },
+      proposedText: "Led an EHR migration with production troubleshooting, PostgreSQL validation, and JavaScript reporting tools.",
+      evidenceType: "exact",
+      evidence: "EHR migration with production troubleshooting using PostgreSQL and JavaScript",
+      hits: ["PostgreSQL"]
+    };
+    const result = tailorDecision([
+      valid,
+      { ...valid, target: { ...valid.target, field: "invented" } }
+    ]);
+    return result.accepted.length === 1
+      && result.dropped?.total === 1
+      && result.failure === null;
+  })()],
+  ["zero Tailor edits plus a grounded missing requirement remains usable", (() => {
+    const gaps = sanitizeMissingRequiredSkills(
+      [{ keyword: "Kubernetes", evidenceType: "none", canHonestlyAdd: false, reason: "Missing from the resume." }],
+      JD,
+      "Led an EHR migration with PostgreSQL and JavaScript."
+    );
+    return gaps.length === 1
+      && tailorOutputValidationFailure("claude-cli", 0, 0, {}) === null;
+  })()],
   ["string booleans cannot mark missing-skill evidence honestly addable", (() => {
     const items = sanitizeMissingRequiredSkills(
       [{ keyword: "PostgreSQL", evidenceType: "exact", canHonestlyAdd: "false", reason: "Resume lists PostgreSQL" }],

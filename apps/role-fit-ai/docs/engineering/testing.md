@@ -101,12 +101,17 @@ Good server verification covers:
   submission-review and regular-tailor modes, including one exact-evidence
   positive case from honest context and an inferred-evidence OS case
 - sanitizer or AI-review contract changes must keep
-  `node apps/role-fit-ai/server/ai/__evals__/sanitize-probes.mjs` green — it is offline,
-  deterministic, and replays every live fabrication/evasion found during
-  the 2026-06-11 hardening (editor `<b>` tokens, ungrounded JD terms,
-  and placeholder evidence). Lock both AI-owned assessment contracts: valid
-  model output must pass through unchanged; malformed enums, inconsistent
-  requirement references, or ungrounded evidence must be rejected. Also lock
+  `node apps/role-fit-ai/server/ai/__evals__/assessment-model-output.mjs`,
+  `node apps/role-fit-ai/server/ai/__evals__/initial-fit-audit-probes.mjs`, and
+  `node apps/role-fit-ai/server/ai/__evals__/sanitize-probes.mjs` green. All are
+  offline and deterministic; the sanitizer probe also replays every live
+  fabrication/evasion found during the 2026-06-11 hardening (editor `<b>`
+  tokens, ungrounded JD terms, and placeholder evidence). Lock both AI-owned assessment contracts: valid
+  model decisions and evidence must canonicalize deterministically; model ids,
+  presentation prose, aggregate status, surfacing metadata, and missing-evidence
+  summaries cannot influence the returned shape. Malformed enums, inconsistent
+  requirement references, forbidden numerical fields, oversized values, or
+  ungrounded evidence must be rejected with safe structured issues. Also lock
   semantic-boundary guidance such as treating alternatives like
   "Bachelor's or Master's" as alternatives rather than conjunctions
 - prompt-budget changes must add probes that build oversized structured
@@ -129,6 +134,14 @@ Good server verification covers:
   the classified cause, keeps the failed step current, and leaves later steps
   as not run; Job analysis may retain a deterministic local brief for inspection,
   but that failed run cannot auto-launch Tailor or Review
+- parseable assessment output rejected by the evidence contract is an
+  `output-validation` 502 and renders **AI response rejected**; unreadable JSON
+  remains **Parsing error**, while bad user input remains **Validation blocked**
+- a Tailor response with raw edits but zero accepted edits fails as
+  `output-validation` and cannot launch Review. Partial acceptance remains
+  successful with withheld counts; zero edits plus grounded gaps completes as
+  **No edits applied · gaps identified**, preserves `tailored: false`, and a
+  later failed retry must not erase a prior successful result
 - duplicate warnings before or after Job analysis must offer Continue/Stop; Stop
   prevents the current and every downstream AI request, while Continue is
   acknowledged for the same job target so the pipeline does not prompt twice
@@ -191,6 +204,9 @@ Useful commands:
 
 ```bash
 npm test --workspace apps/role-fit-ai
+node apps/role-fit-ai/server/ai/__evals__/assessment-model-output.mjs
+node apps/role-fit-ai/server/ai/__evals__/initial-fit-audit-probes.mjs
+node apps/role-fit-ai/server/ai/__evals__/sanitize-probes.mjs
 npm run test:document-workflows --workspace apps/role-fit-ai
 npm run test:server-lifecycle --workspace apps/role-fit-ai
 npm run test:editor:browser

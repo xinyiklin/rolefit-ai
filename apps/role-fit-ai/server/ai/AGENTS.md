@@ -10,6 +10,10 @@ sanitizer code is executable product behavior and anti-fabrication-critical.
 - `clients.ts` owns native API/CLI dispatch. `server/ai-cli/` owns subprocess
   invocation and provider-specific process constraints.
 - `prompts.ts` owns fenced input construction and truthfulness/output rules.
+- `assessmentModelOutput.ts` owns the minimal provider-facing Initial Fit and
+  Submission Review envelopes plus safe structured shape issues.
+- `fitAssessmentValidation.ts` grounds those decisions and derives the unchanged
+  canonical client/persistence assessments.
 - `sanitize.ts` validates suggestions and Review output; it does not invent or
   recalculate a replacement judgment.
 - `polish.ts` orchestrates Tailor and Review; its optional cover leg is retained
@@ -60,6 +64,15 @@ sanitizer code is executable product behavior and anti-fabrication-critical.
   owns only post-polish document readiness. Validate exact shape, enums,
   evidence references, and semantic consistency; reject invalid output instead
   of synthesizing a replacement.
+- Assessment providers supply only decisions and source evidence. They do not
+  own canonical ids, aggregate eligibility, display labels, summaries,
+  explanations, strengths/concerns, missing-evidence lists, or
+  `canSurfaceInResume`; the server derives those fields after shape and
+  grounding validation, then self-validates the canonical result.
+- Parseable assessment output rejected by the shape, grounding, or consistency
+  boundary is `output-validation`, distinct from unreadable JSON. Diagnostics
+  may include only stage, provider, selected model, phase, fixed issue code,
+  fixed indexed path, and safe counts; the issue never reaches normal UI copy.
 - Every requirement carries and displays its exact `sourceRequirement` excerpt
   from the posting, and every candidate evidence excerpt must be a normalized
   exact source quotation. Source excerpts are unique within each ledger, and
@@ -83,6 +96,10 @@ sanitizer code is executable product behavior and anti-fabrication-critical.
   numeric, and outcome grounding before it can be returned.
 - Tailor emits targeted suggestions grounded in submitted resume/honest context.
   Never import JD-only skills or fabricate claims.
+- If Tailor returns edits and every edit is discarded, fail Tailor as
+  `output-validation` before Review dispatch. A partial acceptance stays
+  successful with withheld-edit counts. Zero returned edits plus valid grounded
+  gaps may complete, but must not claim the resume was tailored.
 - Review-only audits the current edited draft. The Review leg of Both receives
   only sanitized suggestions from that same Tailor run.
 - A failed stage fails plainly and stops downstream work. Job analysis may return a

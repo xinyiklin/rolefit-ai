@@ -21,6 +21,7 @@ const applications = readHook("useApplications.ts");
 const applyFlow = readHook("useApplyFlow.ts");
 const answers = readHook("useApplicationAnswers.ts");
 const cover = readHook("useCoverLetter.ts");
+const initialFit = readHook("useInitialFitAudit.ts");
 const polish = readHook("usePolishPipeline.ts");
 const polishServer = readFileSync(new URL("../../../server/ai/polish.ts", import.meta.url), "utf8");
 const inbox = readHook("useExtensionInbox.ts");
@@ -1873,8 +1874,44 @@ assert.match(
 );
 assert.match(
   polish,
-  /polishedText:[\s\S]{0,120}?source: "ai",\s*tailored: true/,
-  "Tailor results carry explicit in-memory provenance"
+  /polishedText:[\s\S]{0,120}?source: "ai",\s*tailored: suggestedChanges\.length > 0/,
+  "Tailor provenance says tailored only when at least one edit survived"
+);
+assert.match(
+  polish,
+  /data\.failureKind === "output-validation" \? "output-validation" : undefined/,
+  "Tailor forwards the server's semantic output-rejection kind"
+);
+assert.match(
+  initialFit,
+  /data\.failureKind === "output-validation" \? "output-validation" : undefined/,
+  "Initial Fit forwards the server's semantic output-rejection kind"
+);
+assert.match(
+  polish,
+  /data\.reviewErrorKind === "output-validation" \? "output-validation" : undefined/,
+  "Submission Review forwards its independent semantic output-rejection kind"
+);
+assert.match(
+  polish,
+  /note: suggestedChanges\.length \? "Tailored with AI" : "No edits applied · gaps identified"/,
+  "a valid gap-only Tailor response completes without claiming an edit was applied"
+);
+assert.match(
+  polish,
+  /const suggestions = await runTailorStage[\s\S]{0,180}?if \(suggestions === null\)[\s\S]{0,520}?runReviewStage/,
+  "Both stops before Review when Tailor fails"
+);
+assert.doesNotMatch(
+  polish,
+  /catch \(error\)[\s\S]{0,520}?setResult\(null\)/,
+  "a failed Tailor run preserves the prior successful result"
+);
+const allDroppedTailorThrow = polishServer.indexOf("throw tailorOutputFailure;");
+const reviewProviderResolution = polishServer.indexOf("const audit = runReview");
+assert.ok(
+  allDroppedTailorThrow >= 0 && reviewProviderResolution > allDroppedTailorThrow,
+  "the server rejects an all-dropped Tailor result before it can dispatch Review"
 );
 assert.match(
   polish,

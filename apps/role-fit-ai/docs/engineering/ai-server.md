@@ -137,9 +137,15 @@ owns:
   current edited draft exactly as submitted; it must not regenerate or replay
   stale tailoring changes. The suggestion pass
   returns only structured `suggestedChanges` (no full-text rewrite and no fit
-  judgment). When the audit does not return a usable submission assessment,
-  the Review stage fails visibly and the client does not calculate or
-  substitute a local readiness judgment;
+  judgment). If the provider returns one or more edits and sanitization rejects
+  all of them, Tailor fails as `output-validation` before Review can dispatch;
+  only provider, raw count, and reason counts are logged. Partial acceptance
+  remains successful and returns the existing withheld-edit summary. A reply
+  with no edits but valid grounded missing-skill rows may complete as a gap-only
+  result; the client records no tailored proposal and labels it **No edits
+  applied · gaps identified**. When the audit does not return a usable
+  submission assessment, the Review stage fails visibly and the client does not
+  calculate or substitute a local readiness judgment;
   the `polishedText` preview is derived server-side by applying only sanitized
   suggestions to the scoped text. Every applied suggestion has passed the
   current deterministic grounding and sanitization gates before the audit,
@@ -380,8 +386,15 @@ modules under `server/ai/` so no single file carries the whole pipeline:
   nowhere in the scope text or honest context is dropped
   (`ungroundedKeyword`) — the model-prose evidence field cannot launder an
   inferred fact (e.g. "clinics run Windows") into the resume.
-- `fitAssessmentValidation.ts` validates both AI judgment boundaries. Initial
-  Fit returns one categorical `FitAssessment` with confidence, eligibility,
+- `assessmentModelOutput.ts` defines the provider-facing assessment boundary.
+  Its exact single-key envelopes contain only categorical decisions and source
+  evidence; old presentation-only fields are ignored for compatibility, while
+  numerical fit fields, oversized values, unknown fields, and malformed
+  coverage/evidence combinations fail with a fixed issue code and path.
+  Prompt examples are generated from exported objects in this module and are
+  parsed by the offline contract probe.
+- `fitAssessmentValidation.ts` grounds and canonicalizes both AI judgment
+  boundaries. Initial Fit returns one categorical `FitAssessment` with confidence, eligibility,
   canonical requirement evidence, and an advisory recommendation. Review
   returns a separate `SubmissionAssessment` for requirement visibility,
   unsupported claims, missing evidence, presentation issues, and readiness.
@@ -392,6 +405,10 @@ modules under `server/ai/` so no single file carries the whole pipeline:
   rows must be disjoint from capability requirements. The shared parser permits
   all 40 requirement-derived strengths, concerns, and missing-evidence rows;
   independent advice lists remain capped at 16.
+  Provider output does not own canonical ids, aggregate eligibility, display
+  labels, summaries, explanations, strengths/concerns, missing-evidence rows,
+  or `canSurfaceInResume`. The server derives them from the validated ledger and
+  round-trips the result through the unchanged shared parser before returning it.
   Initial Fit `MISSING` requires explicit adverse evidence or a minimum-years
   mismatch whose candidate duration is anchored to the same qualification;
   ranges use their lower bound, duration anchors match whole tokens rather than
@@ -669,8 +686,10 @@ In the response:
 - Do not log raw resume text, job descriptions, or AI prompts by
   default.
 - Keep routine AI diagnostics shape-only: stable local classifications, counts,
-  and drop reasons. Do not log model-supplied target IDs, free-form error text,
-  or response fragments.
+  and drop reasons. Assessment rejection logs may add stage, provider, selected
+  model, validation phase, fixed issue code, and fixed indexed path. Do not log
+  model-supplied target IDs, free-form error text, source/evidence excerpts, or
+  response fragments.
 - Local debug logs that include sensitive text require explicit user
   approval and should be temporary.
 - Never log API keys.
