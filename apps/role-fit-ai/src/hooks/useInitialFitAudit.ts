@@ -8,6 +8,7 @@ import {
   type InitialFitAudit,
   type InitialFitAuditInput
 } from "../lib/initialFitAudit";
+import type { ProviderReadiness } from "./useAvailableProviders";
 
 export type InitialFitAuditState =
   | { status: "idle" }
@@ -25,7 +26,7 @@ export type InitialFitAuditRunOutcome =
 
 type UseInitialFitAuditArgs = {
   input: InitialFitAuditInput | null;
-  ensureReviewProviderReady: () => Promise<boolean>;
+  ensureReviewProviderReady: () => Promise<ProviderReadiness>;
 };
 
 async function readJson(response: Response): Promise<Record<string, unknown>> {
@@ -118,8 +119,9 @@ export function useInitialFitAudit({ input, ensureReviewProviderReady }: UseInit
     setState({ status: "running", fingerprint: expectedFingerprint, ...(previous ? { previous } : {}) });
 
     try {
-      if (!(await ensureReviewProviderReady())) {
-        const reason = "Reconnect the Recruiter Audit provider in RoleFit Companion, then retry Initial Fit.";
+      const readiness = await ensureReviewProviderReady();
+      if (!readiness.ready) {
+        const reason = readiness.message || "Reconnect the Recruiter Audit provider in RoleFit Companion, then retry Initial Fit.";
         if (generation === generationRef.current) {
           setState({ status: "failed", fingerprint: expectedFingerprint, errorHeadline: "Check AI settings", error: reason });
         }

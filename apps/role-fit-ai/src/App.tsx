@@ -70,13 +70,16 @@ import { extractJobPosting, type ExtractedJobTracking } from "./lib/jobExtract";
 import { serializeResumeData } from "./lib/resumeText";
 import type { ResumeData } from "@typeset/engine/lib/resumeData.ts";
 import { parseResumeFile } from "@typeset/engine/lib/resumeFile.ts";
-import { defaultTailorModes, type TailorMode } from "./lib/tailorScope";
+import { defaultTailorModes, fullResumeEvidenceText, type TailorMode } from "./lib/tailorScope";
 import { resumeDocumentVersion as resumeDocumentVersionFor } from "./lib/resumeDocumentVersion";
+import { documentSourceFingerprint } from "./lib/documentSourceFingerprint";
 import { canonicalizeAiUsageStageKeys, type StageAiUsage } from "./lib/aiUsage";
 import { useDuplicateGuard } from "./hooks/useDuplicateGuard";
 import { useJobIntake, type ImportedJobSnapshot } from "./hooks/useJobIntake";
 import { usePolishPipeline } from "./hooks/usePolishPipeline";
 import { useWorkspaceResume } from "./hooks/useWorkspaceResume";
+import { useInitialFitAudit } from "./hooks/useInitialFitAudit";
+import { usePreparedResumeSelection } from "./hooks/usePreparedResumeSelection";
 import { useApplyFlow } from "./hooks/useApplyFlow";
 import { useApplicationDocumentSync } from "./hooks/useApplicationDocumentSync";
 import { useApplicationFiles } from "./hooks/useApplicationFiles";
@@ -1373,27 +1376,6 @@ function App() {
     docStyle
   });
 
-  const handleSelectBaseResumeVariant = useCallback(
-    async (fileName: string) => {
-      if (
-        !fileName ||
-        fileName === baseResumeName ||
-        resumeManualVariantSelectionInFlightRef.current
-      ) {
-        return;
-      }
-      resumeManualVariantSelectionInFlightRef.current = true;
-      setIsManuallySelectingResumeVariant(true);
-      try {
-        await loadBaseResumeVersion(fileName);
-      } finally {
-        resumeManualVariantSelectionInFlightRef.current = false;
-        setIsManuallySelectingResumeVariant(false);
-      }
-    },
-    [baseResumeName, loadBaseResumeVersion]
-  );
-
   const workspaceRestoreAdoptionHandlerRef = useRef<() => void>(() => undefined);
   workspaceRestoreAdoptionHandlerRef.current = () => {
     if (resumeDocumentDirty) {
@@ -1429,10 +1411,59 @@ function App() {
   const activeBaseResumeLabel =
     baseResumeOptions.find((option) => option.fileName === baseResumeName)?.label || baseResumeName;
 
+  const activeResumeFileName = baseResumeName || fileName;
+  const initialFitPreparationId =
+    jobPrepared && jobAnalysisProgress.status === "done" && importedJob
+      ? importedJob.preparationId
+      : "";
+  const preparedResumeSelection = usePreparedResumeSelection({
+    preparationId: initialFitPreparationId,
+    currentFileName: activeResumeFileName,
+    currentDocumentVersion: resumeDocumentVersion,
+    resumeReady,
+    busy:
+      isRankingResumeVariants ||
+      isSavingBaseResume ||
+      isManuallySelectingResumeVariant ||
+      isWorkspaceBootstrapping
+  });
+
+  const handleSelectBaseResumeVariant = useCallback(
+    async (fileName: string) => {
+      if (
+        !fileName ||
+        fileName === baseResumeName ||
+        resumeManualVariantSelectionInFlightRef.current
+      ) {
+        return;
+      }
+      resumeManualVariantSelectionInFlightRef.current = true;
+      setIsManuallySelectingResumeVariant(true);
+      try {
+        const applied = await loadBaseResumeVersion(fileName);
+        if (applied && initialFitPreparationId) {
+          const sequence = preparedResumeSelection.begin("manual");
+          preparedResumeSelection.complete(sequence, fileName, "manual");
+        }
+      } finally {
+        resumeManualVariantSelectionInFlightRef.current = false;
+        setIsManuallySelectingResumeVariant(false);
+      }
+    },
+    [
+      baseResumeName,
+      initialFitPreparationId,
+      loadBaseResumeVersion,
+      preparedResumeSelection.begin,
+      preparedResumeSelection.complete
+    ]
+  );
+
   const rankingJobDescription = debouncedPreparedJobDescription.trim();
   const resumeVariantRecommendationInputKey =
     jobPrepared && rankingJobDescription === jobDescription.trim() && baseResumeOptions.length > 1
       ? JSON.stringify({
+          preparationId: initialFitPreparationId,
           job: rankingJobDescription,
           variants: baseResumeOptions.map((option) => option.fileName),
           candidatesRevision: baseResumeCandidatesRevision
@@ -1440,24 +1471,28 @@ function App() {
       : "";
   const resumeVariantSelectionStateRef = useRef({
     baseResumeName,
+    activeResumeFileName,
     resumeDocumentDirty,
     documentVersion: resumeReplacementStateRef.current.version,
     isWorkspaceBootstrapping,
     isSavingBaseResume,
     applicationOfRecordId,
     jobPrepared,
+    preparationId: initialFitPreparationId,
     preparedJobDescription: jobDescription.trim(),
     options: baseResumeOptions,
     loadBaseResumeVersion
   });
   resumeVariantSelectionStateRef.current = {
     baseResumeName,
+    activeResumeFileName,
     resumeDocumentDirty,
     documentVersion: resumeReplacementStateRef.current.version,
     isWorkspaceBootstrapping,
     isSavingBaseResume,
     applicationOfRecordId,
     jobPrepared,
+    preparationId: initialFitPreparationId,
     preparedJobDescription: jobDescription.trim(),
     options: baseResumeOptions,
     loadBaseResumeVersion
@@ -1482,6 +1517,9 @@ function App() {
     const startingBaseResumeName = startState.baseResumeName;
     const startingDocumentVersion = startState.documentVersion;
     const options = startState.options;
+    const selectionSequence = initialFitPreparationId
+      ? preparedResumeSelection.begin("automatic")
+      : 0;
     setIsRankingResumeVariants(true);
     setResumeVariantRecommendation(null);
 
@@ -1490,6 +1528,7 @@ function App() {
       if (
         generation !== resumeVariantRecommendationGenerationRef.current ||
         !resumeVariantSelectionStateRef.current.jobPrepared ||
+        resumeVariantSelectionStateRef.current.preparationId !== initialFitPreparationId ||
         resumeVariantSelectionStateRef.current.preparedJobDescription !== rankingJobDescription
       ) {
         return;
@@ -1498,6 +1537,7 @@ function App() {
       setResumeVariantRecommendation(recommendation);
 
       const current = resumeVariantSelectionStateRef.current;
+      let selectedFileName = current.activeResumeFileName;
       const canAdoptRecommendation =
         recommendation !== null &&
         current.preparedJobDescription === rankingJobDescription &&
@@ -1510,11 +1550,12 @@ function App() {
         !current.isWorkspaceBootstrapping &&
         !current.isSavingBaseResume;
       if (canAdoptRecommendation) {
-        await current.loadBaseResumeVersion(recommendation.fileName, true, () => {
+        const applied = await current.loadBaseResumeVersion(recommendation.fileName, true, () => {
           const latest = resumeVariantSelectionStateRef.current;
           return (
             generation !== resumeVariantRecommendationGenerationRef.current ||
             !latest.jobPrepared ||
+            latest.preparationId !== initialFitPreparationId ||
             latest.preparedJobDescription !== rankingJobDescription ||
             latest.applicationOfRecordId !== null ||
             latest.documentVersion !== startingDocumentVersion ||
@@ -1523,9 +1564,13 @@ function App() {
             resumeManualVariantSelectionInFlightRef.current
           );
         });
+        if (applied) selectedFileName = recommendation.fileName;
       }
       if (generation === resumeVariantRecommendationGenerationRef.current) {
         setIsRankingResumeVariants(false);
+        if (selectionSequence) {
+          preparedResumeSelection.complete(selectionSequence, selectedFileName, "automatic");
+        }
       }
     })();
 
@@ -1534,7 +1579,83 @@ function App() {
         resumeVariantRecommendationGenerationRef.current += 1;
       }
     };
-  }, [readBaseResumeCandidates, rankingJobDescription, resumeVariantRecommendationInputKey]);
+  }, [
+    initialFitPreparationId,
+    preparedResumeSelection.begin,
+    preparedResumeSelection.complete,
+    readBaseResumeCandidates,
+    rankingJobDescription,
+    resumeVariantRecommendationInputKey
+  ]);
+
+  const simplePreparedResumeSelectionKeyRef = useRef("");
+  useEffect(() => {
+    if (!initialFitPreparationId || baseResumeOptions.length > 1 || isWorkspaceBootstrapping) {
+      if (!initialFitPreparationId) simplePreparedResumeSelectionKeyRef.current = "";
+      return;
+    }
+    if (simplePreparedResumeSelectionKeyRef.current === initialFitPreparationId) return;
+    simplePreparedResumeSelectionKeyRef.current = initialFitPreparationId;
+    const sequence = preparedResumeSelection.begin("automatic");
+    preparedResumeSelection.complete(sequence, activeResumeFileName, "automatic");
+  }, [
+    activeResumeFileName,
+    baseResumeOptions.length,
+    initialFitPreparationId,
+    isWorkspaceBootstrapping,
+    preparedResumeSelection.begin,
+    preparedResumeSelection.complete
+  ]);
+
+  const currentInitialFitResumeVersion = documentSourceFingerprint(resumeDocumentVersion);
+  const selectedResumeIsCurrent =
+    preparedResumeSelection.state.status === "settled" &&
+    preparedResumeSelection.state.preparationId === initialFitPreparationId &&
+    preparedResumeSelection.state.resumeFileName === activeResumeFileName;
+  const initialFitAuditInput = useMemo(() => {
+    if (
+      !selectedResumeIsCurrent ||
+      preparedResumeSelection.state.status !== "settled" ||
+      !editedResume
+    ) {
+      return null;
+    }
+    return {
+      preparationId: preparedResumeSelection.state.preparationId,
+      jobText: jobDescription.trim(),
+      resumeFileName: preparedResumeSelection.state.resumeFileName,
+      resumeDocumentVersion: currentInitialFitResumeVersion,
+      resumeText: fullResumeEvidenceText(editedResume),
+      honestContext: requestHonestContext,
+      reviewInstructions: customInstructionsFor("review"),
+      review: stages.review
+    };
+  }, [
+    currentInitialFitResumeVersion,
+    customInstructionsFor,
+    editedResume,
+    jobDescription,
+    preparedResumeSelection.state,
+    requestHonestContext,
+    selectedResumeIsCurrent,
+    stages.review
+  ]);
+  const initialFitAudit = useInitialFitAudit({
+    input: initialFitAuditInput,
+    ensureReviewProviderReady: ensureReviewProvider
+  });
+  const initialFitAutoRunKey =
+    initialFitAuditInput &&
+    preparedResumeSelection.state.status === "settled" &&
+    preparedResumeSelection.state.resumeDocumentVersion === currentInitialFitResumeVersion
+      ? `${preparedResumeSelection.state.preparationId}:${preparedResumeSelection.state.sequence}:${currentInitialFitResumeVersion}`
+      : "";
+  const dispatchedInitialFitKeysRef = useRef(new Set<string>());
+  useEffect(() => {
+    if (!initialFitAutoRunKey || dispatchedInitialFitKeysRef.current.has(initialFitAutoRunKey)) return;
+    dispatchedInitialFitKeysRef.current.add(initialFitAutoRunKey);
+    void initialFitAudit.run();
+  }, [initialFitAudit.run, initialFitAutoRunKey]);
 
   // Cover letters follow the same rule as resumes: select a meaningful unique
   // winner, but only while the current editor is clean and not application-owned.
@@ -1959,6 +2080,7 @@ function App() {
       setImportedJob(
         restoredTailoringText.length > 40
           ? {
+              preparationId: `restored-${documentSourceFingerprint(`${app.id}:${restoredSourceText}`)}`,
               url: (app.jobUrl || "").trim(),
               sourceText: restoredSourceText,
               tailoringText: restoredTailoringText,

@@ -41,6 +41,7 @@ import {
 } from "../lib/preparedJobBrief";
 
 export type ImportedJobSnapshot = {
+  preparationId: string;
   url: string;
   // Immutable source identity for this prepared snapshot. It lets App
   // distinguish "Prepare again" from unrelated fresh intake without comparing
@@ -52,6 +53,15 @@ export type ImportedJobSnapshot = {
   manualReviewFields: string[];
 };
 
+let preparationSequence = 0;
+
+export function createPreparationId(): string {
+  const randomId = globalThis.crypto?.randomUUID?.();
+  if (randomId) return `prep-${randomId}`;
+  preparationSequence += 1;
+  return `prep-${Date.now().toString(36)}-${preparationSequence.toString(36)}`;
+}
+
 function importedJobSnapshot(
   url: string,
   tailoringText: string,
@@ -60,6 +70,7 @@ function importedJobSnapshot(
 ): ImportedJobSnapshot {
   const brief = buildPreparedJobBrief(extracted.tailoringText, sourceText);
   return {
+    preparationId: createPreparationId(),
     url,
     sourceText: sourceText.trim(),
     tailoringText: tailoringText.trim(),
