@@ -5,6 +5,10 @@
 // application-answers route reuses the shared rule helpers exported here.
 
 import { coverLetterHasAuthoredVoice } from "../../src/lib/coverLetterTemplate.ts";
+import {
+  MODEL_FIT_ASSESSMENT_EXAMPLE,
+  MODEL_SUBMISSION_ASSESSMENT_EXAMPLE
+} from "./assessmentModelOutput.ts";
 
 // Character budgets for the follow-up assessment/cover passes. Long resumes/jobs are
 // clipped (middle omitted) so these prompts stay inside a predictable context
@@ -54,44 +58,12 @@ function fitAssessmentPrompt({
   honestContext,
   customInstructions
 }: FitAssessmentPromptInput): string {
-  return `Assess the candidate's fit for this job. Return JSON only, with exactly this top-level shape:
-{
-  "fitAssessment": {
-    "verdict": "STRONG_FIT | REASONABLE_FIT | STRETCH | LIMITED_FIT",
-    "confidence": "HIGH | MEDIUM | LOW",
-    "summary": "concise candidate-fit summary",
-    "verdictReason": "why this categorical verdict follows from the ledger",
-    "eligibility": {
-      "status": "SATISFIED | UNCERTAIN | NOT_SATISFIED",
-      "items": [{
-        "id": "stable unique eligibility id",
-        "requirement": "repeat sourceRequirement exactly",
-        "sourceRequirement": "exact quote of that eligibility condition from the job",
-        "status": "SATISFIED | UNCERTAIN | NOT_SATISFIED",
-        "evidence": [{ "source": "RESUME | HONEST_CONTEXT", "excerpt": "exact source quote" }],
-        "explanation": "brief explanation"
-      }]
-    },
-    "requirements": [{
-      "id": "stable unique requirement id",
-      "requirement": "repeat sourceRequirement exactly",
-      "sourceRequirement": "exact quote of that requirement from the job",
-      "importance": "CORE | SUPPORTING",
-      "coverage": "COVERED | ADJACENT | MISSING | UNCERTAIN",
-      "evidence": [{ "source": "RESUME | HONEST_CONTEXT", "excerpt": "exact source quote" }],
-      "explanation": "brief evidence-grounded explanation",
-      "canSurfaceInResume": true
-    }],
-    "strengths": ["concise strengths derived from the requirement ledger"],
-    "concerns": ["concise concerns derived from the requirement ledger or eligibility"],
-    "recommendation": {
-      "action": "APPLY | POLISH_FIRST | CONFIRM_ELIGIBILITY | APPLY_SELECTIVELY | NOT_RECOMMENDED",
-      "reason": "advisory reason"
-    }
-  }
-}
+  return `Assess the candidate's fit for this job. Return JSON only, matching this exact model-output shape:
+${JSON.stringify(MODEL_FIT_ASSESSMENT_EXAMPLE, null, 2)}
 Rules:
 - Do not produce a numerical score, percentage, score band, base/tailored comparison, or fit lift.
+- verdict must be STRONG_FIT, REASONABLE_FIT, STRETCH, or LIMITED_FIT. confidence must be HIGH, MEDIUM, or LOW.
+- recommendation.action must be APPLY, POLISH_FIRST, CONFIRM_ELIGIBILITY, APPLY_SELECTIVELY, or NOT_RECOMMENDED.
 - Identify every meaningful explicit job requirement once. Combine true alternatives such as "degree or equivalent experience" into one requirement instead of treating either alternative as independently mandatory.
 - CORE means the job presents the requirement as necessary to perform or hold the role. SUPPORTING means preferred, beneficial, or secondary.
 - Match requirements only to the resume and honest context. sourceRequirement and every evidence excerpt must be exact source quotes apart from whitespace and punctuation normalization. Never add, remove, or invert a substantive word.
@@ -99,15 +71,15 @@ Rules:
 - COVERED, ADJACENT, and MISSING require evidence. MISSING evidence must explicitly show the mismatch. UNCERTAIN uses an empty evidence array.
 - Eligibility is separate from fit. Include only explicit mandatory authorization, citizenship, clearance, license, location/relocation, or genuinely non-substitutable degree conditions. Eligibility conditions must appear only under eligibility.items; do not repeat them in requirements.
 - An eligibility item may be NOT_SATISFIED only when candidate evidence explicitly says the condition is not met. Mere absence is UNCERTAIN. SATISFIED and NOT_SATISFIED require evidence; UNCERTAIN uses an empty evidence array.
-- Overall eligibility is NOT_SATISFIED if any item is not satisfied, otherwise UNCERTAIN if any item is uncertain, otherwise SATISFIED.
 - Confidence describes evidence completeness and assessment reliability, never candidate quality.
 - Assess qualifications, not resume presentation. Do not penalize formatting, wording quality, bullet style, section order, or minor presentation problems.
-- A relevant positive qualification found only in HONEST_CONTEXT may be COVERED and canSurfaceInResume=true.
-- canSurfaceInResume=true requires non-adverse HONEST_CONTEXT evidence that positively establishes the job qualification. Negative, missing, uncertain, or unrelated context cannot be surfaced as a candidate qualification.
+- A relevant positive qualification found only in HONEST_CONTEXT may be COVERED. Retain that exact evidence; RoleFit decides whether it can be surfaced in the resume.
 - Recommendation is advisory and distinct from the verdict. It does not command or trigger automation.
 - Eligibility never changes the fit verdict. STRONG_FIT cannot contain a missing or uncertain core requirement or several adjacent core requirements. REASONABLE_FIT cannot contain several missing core requirements. STRETCH and LIMITED_FIT must not contradict an all-covered core ledger.
 - Keep recommendation logically consistent with the verdict and eligibility. Failed eligibility cannot recommend applying; only unresolved eligibility may use CONFIRM_ELIGIBILITY; an otherwise eligible STRONG_FIT should not be NOT_RECOMMENDED.
-- Requirement and eligibility ids and sourceRequirement excerpts must be unique within their own lists. No sourceRequirement may appear in both eligibility.items and requirements. Return at least one requirement.
+- sourceRequirement excerpts must be unique within their own lists. No sourceRequirement may appear in both eligibility.items and requirements. Return at least one requirement.
+- Do not return ids, aggregate eligibility status, display labels, explanations, summaries, verdict reasons, strengths, concerns, recommendation reasons, or canSurfaceInResume. RoleFit derives them after validating evidence.
+- Output only the single fitAssessment envelope shown above.
 
 <job_description>
 ${fenceUntrusted(jobText)}
@@ -141,41 +113,23 @@ function submissionAssessmentPrompt({
   honestContext,
   customInstructions
 }: SubmissionAssessmentPromptInput): string {
-  return `Review whether this resume is ready to submit for this job. Return JSON only, with exactly this top-level shape:
-{
-  "submissionAssessment": {
-    "readiness": "READY | REVISIONS_RECOMMENDED | EVIDENCE_NEEDED | NOT_READY",
-    "summary": "concise document-readiness summary",
-    "requirementVisibility": [{
-      "id": "stable unique requirement id",
-      "requirement": "repeat sourceRequirement exactly",
-      "sourceRequirement": "exact quote of that requirement from the job",
-      "importance": "CORE | SUPPORTING",
-      "coverage": "COVERED | ADJACENT | MISSING | UNCERTAIN",
-      "evidence": [{ "source": "RESUME | HONEST_CONTEXT", "excerpt": "exact source quote" }],
-      "explanation": "how clearly the submitted resume demonstrates the requirement",
-      "canSurfaceInResume": true
-    }],
-    "unsupportedClaims": ["claim present in the resume but unsupported by trusted candidate evidence"],
-    "missingEvidence": ["important job requirement whose evidence is absent or unclear in the resume"],
-    "presentationIssues": ["document wording, organization, clarity, or consistency issue"],
-    "topEdits": ["highest-value remaining edit"]
-  }
-}
+  return `Review whether this resume is ready to submit for this job. Return JSON only, matching this exact model-output shape:
+${JSON.stringify(MODEL_SUBMISSION_ASSESSMENT_EXAMPLE, null, 2)}
 
 Rules:
 - This is document readiness, not candidate fit. Do not return a fit verdict, recommendation to apply, numerical score, percentage, before/after comparison, or fit lift.
+- readiness must be READY, REVISIONS_RECOMMENDED, EVIDENCE_NEEDED, or NOT_READY.
 - Review the resume as supplied. Determine whether relevant existing evidence is visible, specific, consistent, and defensible.
 - Identify explicit job requirements once in requirementVisibility. Combine true alternatives such as "degree or equivalent experience" into one requirement.
 - sourceRequirement and every evidence excerpt must be exact source quotes apart from whitespace and punctuation normalization. Never add, remove, or invert a substantive word.
 - COVERED and ADJACENT describe resume visibility and require RESUME evidence. UNCERTAIN uses an empty evidence array.
-- When non-adverse HONEST_CONTEXT positively establishes a relevant qualification that is absent from the resume, mark visibility MISSING, retain the exact HONEST_CONTEXT evidence, and set canSurfaceInResume=true. A MISSING row without such evidence must use an empty evidence array and canSurfaceInResume=false.
-- canSurfaceInResume=true is forbidden without non-adverse HONEST_CONTEXT evidence that positively establishes the job qualification; negative, missing, uncertain, or unrelated context cannot authorize resume copy.
+- When non-adverse HONEST_CONTEXT positively establishes a relevant qualification that is absent from the resume, mark visibility MISSING and retain the exact HONEST_CONTEXT evidence. A MISSING row without such evidence uses an empty evidence array. RoleFit decides whether that context can be surfaced safely.
 - unsupportedClaims lists claims actually present in the resume that are not supported by the resume's source evidence or honest context. Do not call a merely missing job qualification an unsupported claim.
-- READY requires no unsupportedClaims and no missingEvidence. EVIDENCE_NEEDED means honest support is needed before a claim can be made safely. NOT_READY is reserved for material unsupported claims, contradictions, or missing core evidence.
+- READY requires no unsupportedClaims and no missing or uncertain requirement visibility. EVIDENCE_NEEDED means honest support is needed before a claim can be made safely. NOT_READY is reserved for material unsupported claims, contradictions, or missing core evidence.
 - presentationIssues concerns the document only: clarity, wording, hierarchy, repetition, contradictions, and ATS-readable communication. Do not turn those issues into candidate-fit judgments.
 - presentationIssues and topEdits must not introduce a technology, proper-name claim, metric, or outcome absent from the resume or honest context. Ask for missing evidence instead of proposing invented copy.
-- Requirement ids must be unique. Recommendation and automation are outside this assessment.
+- Do not return ids, display labels, explanations, a summary, missingEvidence, or canSurfaceInResume. RoleFit derives them after validating evidence. Recommendation and automation are outside this assessment.
+- Output only the single submissionAssessment envelope shown above.
 
 <job_description>
 ${fenceUntrusted(jobText)}
