@@ -127,10 +127,11 @@ Rules:
 - sourceRequirement and every evidence excerpt must be exact source quotes apart from whitespace and punctuation normalization. Never add, remove, or invert a substantive word.
 - COVERED and ADJACENT describe resume visibility and require RESUME evidence. UNCERTAIN uses an empty evidence array.
 - When non-adverse HONEST_CONTEXT positively establishes a relevant qualification that is absent from the resume, mark visibility MISSING and retain the exact HONEST_CONTEXT evidence. A MISSING row without such evidence uses an empty evidence array. RoleFit decides whether that context can be surfaced safely.
-- unsupportedClaims lists claims actually present in the resume that are not supported by the resume's source evidence or honest context. Do not call a merely missing job qualification an unsupported claim.
+- Each unsupportedClaims item must be an exact quote from the resume apart from whitespace and punctuation normalization. Include only claims that are not supported by the resume's source evidence or honest context. Do not call a merely missing job qualification an unsupported claim.
 - READY requires no unsupportedClaims and no missing or uncertain requirement visibility. EVIDENCE_NEEDED means honest support is needed before a claim can be made safely. NOT_READY is reserved for material unsupported claims, contradictions, or missing core evidence.
 - presentationIssues concerns the document only: clarity, wording, hierarchy, repetition, contradictions, and ATS-readable communication. Do not turn those issues into candidate-fit judgments.
-- presentationIssues and topEdits must not introduce a technology, proper-name claim, metric, or outcome absent from the resume or honest context. Ask for missing evidence instead of proposing invented copy.
+- presentationIssues and topEdits are optional advice arrays; [] is valid. Use requirementVisibility, not these arrays, for missing or unclear job qualifications.
+- Every specific technology, proper name, number, metric, and outcome in presentationIssues or topEdits must already appear in the resume or honest context. The job description alone does not ground resume advice. When unsure, return [].
 - Do not return ids, display labels, explanations, a summary, missingEvidence, or canSurfaceInResume. RoleFit derives them after validating evidence. Recommendation and automation are outside this assessment.
 - Output only the single submissionAssessment envelope shown above.
 

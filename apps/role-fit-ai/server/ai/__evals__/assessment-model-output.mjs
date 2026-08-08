@@ -57,6 +57,9 @@ assert.match(fitPrompt, new RegExp(JSON.stringify(MODEL_FIT_ASSESSMENT_EXAMPLE, 
 assert.match(submissionPrompt, new RegExp(JSON.stringify(MODEL_SUBMISSION_ASSESSMENT_EXAMPLE, null, 2).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
 assert.match(submissionPrompt, /importance must be CORE or SUPPORTING/);
 assert.match(submissionPrompt, /coverage must be COVERED, ADJACENT, MISSING, or UNCERTAIN/);
+assert.match(submissionPrompt, /unsupportedClaims item must be an exact quote from the resume/);
+assert.match(submissionPrompt, /job description alone does not ground resume advice/);
+assert.match(submissionPrompt, /When unsure, return \[\]/);
 
 const oldRedundantFields = structuredClone(fitExample);
 Object.assign(oldRedundantFields.fitAssessment, {
