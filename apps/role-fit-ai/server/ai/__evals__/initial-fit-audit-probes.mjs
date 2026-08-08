@@ -592,6 +592,8 @@ const prompts = buildFitAssessmentPrompts({
   customInstructions: ""
 });
 assert.match(prompts.userPrompt, /Missing resume text does not prove/i);
+assert.match(prompts.userPrompt, /A different or adjacent skill does not prove MISSING/i);
+assert.match(prompts.userPrompt, /otherwise return UNCERTAIN with no evidence/i);
 assert.match(prompts.userPrompt, /degree or equivalent experience/i);
 assert.match(prompts.userPrompt, /Confidence describes evidence completeness/i);
 assert.match(prompts.userPrompt, /Do not produce a numerical score/i);

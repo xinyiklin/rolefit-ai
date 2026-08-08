@@ -67,8 +67,9 @@ Rules:
 - Identify every meaningful explicit job requirement once. Combine true alternatives such as "degree or equivalent experience" into one requirement instead of treating either alternative as independently mandatory.
 - CORE means the job presents the requirement as necessary to perform or hold the role. SUPPORTING means preferred, beneficial, or secondary.
 - Match requirements only to the resume and honest context. sourceRequirement and every evidence excerpt must be exact source quotes apart from whitespace and punctuation normalization. Never add, remove, or invert a substantive word.
-- Missing resume text does not prove the candidate lacks a qualification. Use UNCERTAIN when the trusted evidence is incomplete. Use MISSING only when the provided evidence explicitly establishes the absence or the candidate evidence clearly does not meet a requirement.
-- COVERED, ADJACENT, and MISSING require evidence. MISSING evidence must explicitly show the mismatch. UNCERTAIN uses an empty evidence array.
+- Missing resume text does not prove the candidate lacks a qualification. Use UNCERTAIN with an empty evidence array whenever the trusted evidence does not answer the requirement.
+- Use MISSING only when an exact candidate quote explicitly says the qualification is absent/adverse, or when an exact candidate duration is below the job's required minimum for that same qualification. A different or adjacent skill does not prove MISSING.
+- COVERED, ADJACENT, and MISSING require evidence. MISSING evidence must itself contain that explicit adverse statement or anchored duration mismatch; otherwise return UNCERTAIN with no evidence.
 - Eligibility is separate from fit. Include only explicit mandatory authorization, citizenship, clearance, license, location/relocation, or genuinely non-substitutable degree conditions. Eligibility conditions must appear only under eligibility.items; do not repeat them in requirements.
 - An eligibility item may be NOT_SATISFIED only when candidate evidence explicitly says the condition is not met. Mere absence is UNCERTAIN. SATISFIED and NOT_SATISFIED require evidence; UNCERTAIN uses an empty evidence array.
 - Confidence describes evidence completeness and assessment reliability, never candidate quality.
