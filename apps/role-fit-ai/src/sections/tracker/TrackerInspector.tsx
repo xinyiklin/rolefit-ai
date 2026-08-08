@@ -15,13 +15,12 @@ import {
 } from "../../lib/applicationDisplay";
 import { describeProviderModel } from "../../config/aiOptions";
 import { canonicalizeAiUsageStageKeys } from "../../lib/aiUsage";
-import { displayVerdictReason } from "../../lib/verdictReason";
 
 const AI_USAGE_STAGES: { key: string; label: string }[] = [
   { key: "job-analysis", label: "Job analysis" },
-  { key: "tailor", label: "Tailor" },
-  { key: "review", label: "Review" },
-  { key: "cover", label: "Cover" }
+  { key: "tailor", label: "Resume Polish" },
+  { key: "final-check", label: "Final Check" },
+  { key: "cover", label: "Cover letter" }
 ];
 
 type TrackerInspectorProps = {
@@ -61,11 +60,7 @@ export function TrackerInspector({
   }
 
   const verdict = appFitVerdict(selected);
-  const verdictSource = selected.review?.verdict
-    ? "AI-judged"
-    : verdict
-    ? "Estimated"
-    : "Not scored";
+  const verdictSource = selected.initialFit?.resumeLabel || "Not checked";
   const safeJobUrl = /^https?:\/\//i.test(selected.jobUrl.trim()) ? selected.jobUrl.trim() : "";
   const displayedAiUsage = canonicalizeAiUsageStageKeys(selected.aiUsage);
 
@@ -106,9 +101,9 @@ export function TrackerInspector({
       <div className="application-detail-score application-detail-score--inline">
         <div className="figures-strip figures-strip--compact">
           <span className="figures-strip__item">
-            <em>Fit</em>
+            <em>Initial Fit</em>
             <strong className={`application-fit application-fit--${verdict?.tone ?? "neutral"}`}>
-              {verdict ? verdict.label : "Not scored"}
+              {verdict ? verdict.label : "Not checked"}
             </strong>
           </span>
           <span className="figures-strip__divider" aria-hidden="true" />
@@ -118,9 +113,7 @@ export function TrackerInspector({
           </span>
         </div>
         <p className="application-detail-score__reason">
-          {selected.review?.verdictReason
-            ? displayVerdictReason(selected.review.verdictReason)
-            : "Use Polish to refresh fit, gaps, and interview risks."}
+          {selected.initialFit?.result.summary ?? "Prepare this job with a resume to create an Initial Fit snapshot."}
         </p>
       </div>
 
@@ -324,14 +317,28 @@ export function TrackerInspector({
         </section>
       ) : null}
 
-      {selected.missingRequiredSkills?.length ? (
+      {selected.initialFit?.result.gaps.length ? (
         <section className="side-section">
-          <p className="side-section__label"><ClipboardCheck size={12} aria-hidden="true" /> Required gaps</p>
+          <p className="side-section__label"><ClipboardCheck size={12} aria-hidden="true" /> Initial Fit gaps</p>
           <div className="application-chip-list">
-            {selected.missingRequiredSkills.slice(0, 5).map((gap) => (
-              <span key={gap.keyword}>{gap.keyword}</span>
+            {selected.initialFit.result.gaps.map((gap) => (
+              <span key={gap}>{gap}</span>
             ))}
           </div>
+        </section>
+      ) : null}
+
+      {selected.finalCheck ? (
+        <section className="side-section">
+          <p className="side-section__label"><ClipboardCheck size={12} aria-hidden="true" /> Final Check · {selected.finalCheck.status.replace("_", " ")}</p>
+          <p className="side-section__value">{selected.finalCheck.summary}</p>
+          {selected.finalCheck.issues.length ? (
+            <div className="application-chip-list">
+              {selected.finalCheck.issues.slice(0, 5).map((issue) => (
+                <span key={`${issue.kind}:${issue.detail}`}>{issue.kind.toLowerCase()}: {issue.detail}</span>
+              ))}
+            </div>
+          ) : null}
         </section>
       ) : null}
 

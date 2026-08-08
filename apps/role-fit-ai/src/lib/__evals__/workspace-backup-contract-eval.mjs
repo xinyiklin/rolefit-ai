@@ -51,7 +51,7 @@ const emptyPortable = { settings: {}, lastBaseResume: "" };
 assert.deepEqual(parsePortableBrowserPreferences(emptyPortable), emptyPortable, "empty settings + empty lastBaseResume is valid (a fresh browser with nothing saved yet)");
 
 const knownSettingPortable = {
-  settings: { aiProvider: "openai", selectedModel: "gpt-5.6-terra", polishStages: "both", citizenshipStatus: "us-citizen" },
+  settings: { aiProvider: "openai", selectedModel: "gpt-5.6-terra", autoCreateResumeProposal: true, citizenshipStatus: "us-citizen" },
   lastBaseResume: "fullstack.resume"
 };
 assert.deepEqual(
@@ -81,13 +81,9 @@ assert.deepEqual(
   },
   "a backup carrying legacy Distill settings is migrated without losing preferences"
 );
-// The legacy strictReview boolean is a MIGRATION field, not a stable value:
-// normalizeSettings adds a derived polishStages key alongside it, so an input
-// carrying bare legacy strictReview never round-trips — lock that as expected
-// rejection here rather than accidentally treating it as "happy path".
 assert.throws(
   () => parsePortableBrowserPreferences({ settings: { strictReview: true }, lastBaseResume: "" }),
-  "a bare legacy strictReview value is migrated (polishStages added) rather than round-tripping unchanged, so it is rejected here by design"
+  "retired strict-review settings are rejected instead of becoming permanent readers"
 );
 
 for (const [name, bad] of [
@@ -103,7 +99,7 @@ for (const [name, bad] of [
   // — this is how the module catches "unsupported or invalid" settings values.
   ["an unsupported provider value normalizeSettings would strip", { settings: { aiProvider: "not-a-real-provider" }, lastBaseResume: "" }],
   ["an unrecognized settings key normalizeSettings would strip", { settings: { notARealSetting: true }, lastBaseResume: "" }],
-  ["a wrong-typed known setting value normalizeSettings would strip", { settings: { strictReview: "yes" }, lastBaseResume: "" }],
+  ["a wrong-typed known setting value normalizeSettings would strip", { settings: { runInitialFit: "yes" }, lastBaseResume: "" }],
   ["settings JSON over the 100,000-byte cap", { settings: { customInstructions: "x".repeat(150_000) }, lastBaseResume: "" }],
   ["lastBaseResume over 200 chars", { settings: {}, lastBaseResume: `base-resume-${"a".repeat(200)}.resume` }],
   ["lastBaseResume not matching the base-resume filename contract", { settings: {}, lastBaseResume: "../../etc/passwd" }],

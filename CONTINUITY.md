@@ -3,6 +3,24 @@
 Cross-workspace decisions and handoff state. Keep entries factual, dated, and
 bounded; app-only operational detail belongs in the affected app documentation.
 
+## 2026-08-07
+
+- [USER+CODE+TOOL] The application workflow now has one fast path with bounded,
+  independent document work. `/api/polish` accepts only the one-pass
+  `resume-proposal` contract; Final Check and Cover Letter remain dedicated
+  routes. After a positive Initial Fit, enabled Resume and Cover proposals start
+  independently without awaiting each other. Apply persists only compact
+  Initial Fit and non-stale Final Check snapshots; numeric scores, full recruiter
+  reviews, missing-skill compatibility fields, Tailor/Review/Both settings, and
+  their permanent readers/evaluations were removed. Final Check settings and AI
+  usage now use the canonical `final-check` name with bounded migration from the
+  old local key. Resume and Cover feedback share a presentation-only component
+  while generation and acceptance stay workflow-owned. The unchanged full
+  RoleFit gate passes outside the managed loopback sandbox: production and
+  landing builds, desktop contract probes, and all 70 offline evaluations are
+  green. Browser and live provider QA remain UNCONFIRMED under the flag-first
+  policy.
+
 ## 2026-08-06
 
 - [TOOL] `job-analysis-rename-contract.mjs` now takes its file list from

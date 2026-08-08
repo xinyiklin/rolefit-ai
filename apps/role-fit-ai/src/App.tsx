@@ -34,8 +34,7 @@ import {
 import { useAiSettings } from "./hooks/useAiSettings";
 import { useAvailableProviders } from "./hooks/useAvailableProviders";
 import { useApplicationAnswers } from "./hooks/useApplicationAnswers";
-import { useApplications, missingRequiredSkillsFromApplication, type Application } from "./hooks/useApplications";
-import { useResumeAnalysis } from "./hooks/useResumeAnalysis";
+import { useApplications, type Application } from "./hooks/useApplications";
 import { useResumeEditor } from "./hooks/useResumeEditor";
 import { useResumeExport } from "./hooks/useResumeExport";
 import { useCoverLetter } from "./hooks/useCoverLetter";
@@ -396,14 +395,15 @@ function App() {
     ]
   );
   const jobAnalysisStage = stages["job-analysis"];
+  const finalCheckStage = stages["final-check"];
   const jobAnalysisProviderReady = providerReady(jobAnalysisStage.provider);
   const tailorProviderReady = providerReady(stages.tailor.provider);
-  const finalCheckProviderReady = providerReady(stages.review.provider);
+  const finalCheckProviderReady = providerReady(finalCheckStage.provider);
   const coverProviderReady = providerReady(stages.cover.provider);
   const answersProviderReady = providerReady(stages.answers.provider);
   const jobAnalysisProviderMessage = providerRecoveryMessage(jobAnalysisStage.provider);
   const tailorProviderMessage = providerRecoveryMessage(stages.tailor.provider);
-  const finalCheckProviderMessage = providerRecoveryMessage(stages.review.provider);
+  const finalCheckProviderMessage = providerRecoveryMessage(finalCheckStage.provider);
   const coverProviderMessage = providerRecoveryMessage(stages.cover.provider);
   const answersProviderMessage = providerRecoveryMessage(stages.answers.provider);
   const ensureJobAnalysisProvider = useCallback(
@@ -415,8 +415,8 @@ function App() {
     [providerAvailability.ensureProvider, stages.tailor.provider]
   );
   const ensureFinalCheckProvider = useCallback(
-    () => providerAvailability.ensureProvider(stages.review.provider),
-    [providerAvailability.ensureProvider, stages.review.provider]
+    () => providerAvailability.ensureProvider(finalCheckStage.provider),
+    [finalCheckStage.provider, providerAvailability.ensureProvider]
   );
   const selectedPolishProvidersReady = tailorProviderReady;
   const candidateFactsContext = buildCandidateFactsContext({
@@ -507,10 +507,6 @@ function App() {
   const {
     editedResume,
     dirty: resumeEdited,
-    // Free-form hand-edits only (NOT accepting/undoing a reviewed suggestion).
-    // Legacy stored comparisons become stale after arbitrary typing; Final Check
-    // is deliberately unscored and does not refresh that compatibility data.
-    manualEdited: resumeManuallyEdited,
     canUndo: canUndoResume,
     canRedo: canRedoResume,
     undoSequence: resumeUndoSequence,
@@ -1122,22 +1118,7 @@ function App() {
   }, [editedResume, jobDescription, jobPrepared, resumeReady, tailorModes]);
   const canPolish = polishInputsReady && selectedPolishProvidersReady;
 
-  // The edited resume is debounced before the diff recompute so typing in the
-  // editor stays smooth (the editor preview itself updates live).
-  const debouncedCurrentResumeText = useDebouncedValue(currentResumeText);
   const debouncedPreparedJobDescription = useDebouncedValue(jobDescription);
-
-  // Every review-score/diff derivation the UI shows is pure (read-only) and lives
-  // in useResumeAnalysis, so it stays decoupled from App's setters.
-  const { fitComparison, headlineScore } = useResumeAnalysis({
-    resumeText,
-    jobDescription,
-    debouncedCurrentResumeText,
-    // Gate AI fit provenance on FREE edits only. Accepting reviewed suggestions
-    // keeps the score attached to the proposal the reviewer judged.
-    isEdited: resumeManuallyEdited,
-    result
-  });
 
   // ----- Derived (non-memo) -----
   const jobReady = jobPrepared;
@@ -1223,9 +1204,9 @@ function App() {
   const jobPreparationActive =
     isExtractingLink || extensionImportPhase !== null || jobAnalysisProgress.status === "running";
 
-  // ----- Polish pipeline (Tailor -> Review) -----
-  // buildPolishContext, the reviewer-attribution + merge helpers, the two
-  // stage runners, handlePolish, retryStage, and Stop — extracted to
+  // ----- Resume Polish -----
+  // Proposal generation, retry, cancellation, and stale-response protection are
+  // extracted to
   // src/hooks/usePolishPipeline.ts. isPolishing/polishProgress/
   // polishProgressVisible are owned by the hook; App only reads them below for
   // render + the presence phase + the before-unload guard.
@@ -1266,8 +1247,8 @@ function App() {
     currentResumeText,
     evidenceText: [resumeText, requestHonestContext].filter(Boolean).join("\n"),
     jobDescription,
-    customInstructions: customInstructionsFor("review"),
-    finalCheckConfig: stages.review,
+    customInstructions: customInstructionsFor("final-check"),
+    finalCheckConfig: finalCheckStage,
     ensureFinalCheckProviderReady: ensureFinalCheckProvider,
     setPipelineAiUsage
   });
@@ -1283,7 +1264,7 @@ function App() {
     aiWorkflowStages.push({
       key: "tailor",
       state: polishProgress.tailor,
-      onRetry: () => void retryStage("tailor"),
+      onRetry: () => void retryStage(),
       onStop: stopPolish
     });
   }
@@ -1911,8 +1892,8 @@ function App() {
     jobRawText,
     result,
     currentResumeText,
-    headlineScore,
-    fitComparison,
+    initialFitSnapshot: quickFitState.status === "ready" ? quickFitState.snapshot : null,
+    finalCheckSnapshot: finalCheck && !finalCheckStale ? finalCheck : null,
     pipelineAiUsage,
     applications,
     linkedApplicationId: applicationOfRecordId,
@@ -2099,21 +2080,7 @@ function App() {
         // resume in the dedicated editor.
         setResult({
           ...restoredAnalysis,
-          polishedText: restoredResume,
-          // Restore only a saved AI comparison. Legacy deterministic estimates
-          // are intentionally ignored; normal Resume Polish and Final Check do
-          // not create or refresh this compatibility-only score.
-          savedFit:
-            app.fitScoreSource === "ai" &&
-            typeof app.baseFitScore === "number" &&
-            typeof app.tailoredFitScore === "number"
-              ? {
-                  source: "ai",
-                  base: app.baseFitScore,
-                  tailored: app.tailoredFitScore
-                }
-              : undefined,
-          missingRequiredSkills: missingRequiredSkillsFromApplication(app)
+          polishedText: restoredResume
         });
         if (restoredResumeData) {
           seedResumeData(restoredResumeData);
@@ -2635,7 +2602,7 @@ function App() {
               finalCheckStatus={finalCheckStatus}
               isChecking={isChecking}
               onPolish={() => void handlePolish()}
-              onRetryTailor={() => void retryStage("tailor")}
+              onRetryTailor={() => void retryStage()}
               onStopPolish={stopPolish}
               onRunFinalCheck={() => void runFinalCheck()}
               onStopFinalCheck={stopFinalCheck}

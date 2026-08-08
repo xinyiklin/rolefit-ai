@@ -9,7 +9,7 @@ import {
   activityCount,
   displayCompany,
   displayRole,
-  fitScore,
+  initialFitRank,
   matchesActivityFilter,
   nextAction,
   priorityFor,
@@ -87,9 +87,7 @@ function compareBy(key: SortKey, a: Application, b: Application): number {
       return nextAction(a).localeCompare(nextAction(b));
     case "fit": {
       // Unknown fit sorts to the bottom of a descending list (the useful default).
-      const fa = fitScore(a) ?? -Infinity;
-      const fb = fitScore(b) ?? -Infinity;
-      return fa - fb;
+      return initialFitRank(a) - initialFitRank(b);
     }
   }
 }

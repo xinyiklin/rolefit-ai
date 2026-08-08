@@ -5,6 +5,8 @@ import {
   attachmentContentType,
   safeAttachmentFileName
 } from "./documents.ts";
+import { sanitizeQuickFit } from "../../shared/quickFitContract.ts";
+import { sanitizeFinalCheckWireResult } from "../../shared/finalCheckContract.ts";
 
 // Narrowing form of filter(Boolean): drops null/undefined AND narrows the element
 // type. Behaviour-identical to filter(Boolean) for these truthy-object arrays.
@@ -61,28 +63,19 @@ export function duplicateApplicationId(applications: { id: string }[]): string |
 }
 
 const APPLICATION_SOURCES = ["LinkedIn", "Company site", "Referral", "Job board", "Recruiter", "Other"] as const;
-const EVIDENCE_TYPES = ["exact", "adjacent", "none"] as const;
-
 const APPLICATION_PRIORITIES = ["High", "Medium", "Low"] as const;
 const SALARY_PERIODS = ["yr", "mo", "hr"] as const;
-const REVIEW_GAP_SEVERITIES = ["BLOCKER", "HIGH", "MEDIUM", "LOW"] as const;
-const REVIEW_VERDICTS = ["STRONG FIT", "REASONABLE FIT", "STRETCH", "DON'T APPLY"] as const;
 // Per-stage AI-usage provenance: which model produced each pipeline stage's
-// output (job-analysis / tailor / review / cover / answers). `source` is required and
+// output (job-analysis / tailor / final-check / cover / answers). `source` is required and
 // enumerated; a stage whose source is not one of these is dropped entirely so a
 // malformed entry can never persist a half-recorded provenance row.
 const AI_USAGE_SOURCES = ["ai", "local", "none"] as const;
-// A stage key is a short lowercase slug (e.g. "job-analysis", "tailor", "review",
+// A stage key is a short lowercase slug (e.g. "job-analysis", "tailor", "final-check",
 // "cover", "answers"). Keep the shape narrow so the map can't be used as an
 // arbitrary key/value store.
 const AI_USAGE_STAGE_RE = /^[a-z][a-z0-9-]{0,23}$/;
 const AI_USAGE_MAX_STAGES = 12;
 const SOURCE_URLS_MAX = 10;
-
-function sanitizeScore(value: unknown): number | null {
-  if (typeof value !== "number" || !Number.isFinite(value)) return null;
-  return Math.max(0, Math.min(100, Math.round(value)));
-}
 
 function sanitizeSalary(value: unknown): number | null {
   if (typeof value !== "number" || !Number.isFinite(value)) return null;
@@ -177,72 +170,12 @@ function sanitizeAttachments(raw: unknown) {
   return attachments.length ? attachments : undefined;
 }
 
-function sanitizeEvidenceType(value: unknown): "exact" | "adjacent" | "none" | undefined {
-  return inList(EVIDENCE_TYPES, value) ? value : undefined;
-}
-
-function sanitizeReviewGapSeverity(value: unknown): "BLOCKER" | "HIGH" | "MEDIUM" | "LOW" | undefined {
-  return inList(REVIEW_GAP_SEVERITIES, value) ? value : undefined;
-}
-
-function sanitizeMissingRequiredSkills(raw: unknown) {
-  if (!Array.isArray(raw)) return undefined;
-  const skills = raw
-    .slice(0, 12)
-    .map((item) => {
-      const evidenceType = sanitizeEvidenceType(item?.evidenceType) ?? "none";
-      return {
-        keyword: sanitizeString(item?.keyword, 160),
-        evidenceType,
-        canHonestlyAdd: evidenceType === "exact" && item?.canHonestlyAdd === true,
-        reason: sanitizeString(item?.reason, 800)
-      };
-    })
-    .filter((item) => item.keyword);
-  return skills.length ? skills : undefined;
-}
-
-function sanitizeReview(raw: unknown) {
-  if (!raw || typeof raw !== "object") return undefined;
-  const r = raw as Record<string, unknown>;
-  // Deep JSON arrays coerced field-by-field below; `any[]` keeps this a thin
-  // parse boundary (each field still runs through a sanitizer).
-  const list = (v: unknown): any[] => (Array.isArray(v) ? v : []);
-  const rec = (r.recommendation && typeof r.recommendation === "object" ? r.recommendation : {}) as Record<string, unknown>;
-  if (!inList(REVIEW_VERDICTS, r.verdict)) return undefined;
-  const review = {
-    verdict: r.verdict,
-    verdictReason: sanitizeString(r.verdictReason, 1_000),
-    riskFlags: list(r.riskFlags)
-      .slice(0, 12)
-      .map((r) => ({ risk: sanitizeString(r?.risk, 400), suggestion: sanitizeString(r?.suggestion, 400) }))
-      .filter((r) => r.risk),
-    gaps: list(r.gaps)
-      .slice(0, 12)
-      .map((g) => {
-        const gap = sanitizeString(g?.gap, 400);
-        const severity = sanitizeReviewGapSeverity(g?.severity);
-        if (!gap || !severity) return null;
-        const evidenceType = sanitizeEvidenceType(g?.evidenceType);
-        return {
-          gap,
-          severity,
-          evidenceType,
-          canHonestlyAdd: evidenceType === "exact" && g?.canHonestlyAdd === true,
-          evidence: sanitizeString(g?.evidence, 800),
-          suggestedEdit: sanitizeString(g?.suggestedEdit, 800)
-        };
-      })
-      .filter(isPresent),
-    recommendation: {
-      applyAsIs: rec.applyAsIs === true,
-      reason: sanitizeString(rec.reason, 1_000),
-      coverLetterAngle: sanitizeString(rec.coverLetterAngle, 1_000),
-      topEdits: list(rec.topEdits).slice(0, 8).map((e) => sanitizeString(e, 300)).filter(Boolean)
-    }
-  };
-  // A valid verdict is required above; optional subfields may safely be empty.
-  return review;
+function sanitizeInitialFitSnapshot(raw: unknown) {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined;
+  const value = raw as Record<string, unknown>;
+  const result = sanitizeQuickFit(value.result);
+  const resumeLabel = sanitizeString(value.resumeLabel, 200).trim();
+  return result && resumeLabel ? { result, resumeLabel } : undefined;
 }
 
 function sanitizeApplicationAnswers(raw: unknown) {
@@ -426,13 +359,9 @@ function sanitizeApplication(raw: unknown) {
     coverLetterArtifacts,
     attachments: sanitizeAttachments(r.attachments),
     notes: typeof r.notes === "string" ? r.notes.slice(0, 8_000) : "",
-    fitScore: sanitizeScore(r.fitScore),
-    baseFitScore: sanitizeScore(r.baseFitScore),
-    tailoredFitScore: sanitizeScore(r.tailoredFitScore),
-    fitScoreSource: r.fitScoreSource === "ai" ? r.fitScoreSource : null,
+    initialFit: sanitizeInitialFitSnapshot(r.initialFit),
+    finalCheck: sanitizeFinalCheckWireResult(r.finalCheck) ?? undefined,
     templateId: typeof r.templateId === "string" ? r.templateId.slice(0, 80) : "",
-    review: sanitizeReview(r.review),
-    missingRequiredSkills: sanitizeMissingRequiredSkills(r.missingRequiredSkills),
     resumeUsed: r.resumeUsed === "base" || r.resumeUsed === "tailored" ? r.resumeUsed : undefined,
     applicationAnswers: sanitizeApplicationAnswers(r.applicationAnswers),
     aiUsage: sanitizeAiUsage(r.aiUsage),

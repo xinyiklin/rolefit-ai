@@ -23,13 +23,24 @@ try {
       updatedAt: "2026-07-29T10:00:00.000Z",
       jobUrl: "https://example.com/job",
       status: "applied",
-      review: {
-        verdict: "STRETCH",
-        gaps: [
-          { gap: "Active Secret clearance", severity: "CRITICAL", evidenceType: "none" },
-          { gap: "PostgreSQL", severity: "HIGH", evidenceType: "exact", canHonestlyAdd: "false" }
-        ]
+      initialFit: {
+        resumeLabel: "Backend resume",
+        result: {
+          verdict: "REASONABLE",
+          summary: "The resume covers the central backend requirements.",
+          matches: ["Python", "PostgreSQL"],
+          gaps: ["Kubernetes"]
+        }
       },
+      finalCheck: {
+        status: "REVIEW",
+        summary: "One clarity issue remains.",
+        issues: [{ kind: "CLARITY", detail: "One bullet is vague.", action: "Name the specific system." }]
+      },
+      // Permanent legacy readers are gone: these fields must be omitted.
+      fitScore: 82,
+      review: { verdict: "STRONG FIT" },
+      missingRequiredSkills: [{ keyword: "legacy" }],
       // sourceUrls: one dupe of the own jobUrl via a tracking-param variant (must
       // collapse), one dupe of another entry, one distinct URL, one empty (dropped).
       sourceUrls: [
@@ -103,10 +114,15 @@ try {
 
   if (written.length !== 2 || read.length !== 2) failures.push("invalid ids are not dropped");
   if (valid?.id !== "app_valid-123") failures.push("valid id did not persist");
-  if (valid?.review?.gaps?.length !== 1 || valid.review.gaps[0]?.severity !== "HIGH") {
-    failures.push("invalid review severity was normalized into a fabricated judgment");
+  if (valid?.initialFit?.result.verdict !== "REASONABLE" || valid.initialFit.resumeLabel !== "Backend resume") {
+    failures.push("compact Initial Fit snapshot did not roundtrip");
   }
-  if (valid?.review?.gaps?.[0]?.canHonestlyAdd !== false) failures.push("string review boolean became an affirmative judgment");
+  if (valid?.finalCheck?.status !== "REVIEW" || valid.finalCheck.issues[0]?.kind !== "CLARITY") {
+    failures.push("compact Final Check snapshot did not roundtrip");
+  }
+  for (const legacy of ["fitScore", "baseFitScore", "tailoredFitScore", "fitScoreSource", "review", "missingRequiredSkills"]) {
+    if (legacy in (valid ?? {})) failures.push(`legacy tracker field survived storage normalization: ${legacy}`);
+  }
   const canonicalCreatedAt = "2026-07-01T00:00:00.000Z";
   const canonicalUpdatedAt = "2026-07-29T10:00:00.000Z";
   const noncanonicalHeaders = sanitizeApplications([

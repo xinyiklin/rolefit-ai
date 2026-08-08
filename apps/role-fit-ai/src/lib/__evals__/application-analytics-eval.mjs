@@ -29,7 +29,6 @@ const applications = [
     id: "withdrawn-without-submit",
     company: "Acme",
     status: "withdrawn",
-    fitScore: 82,
     followupAt: undefined
   },
   {
@@ -38,15 +37,13 @@ const applications = [
     company: "Acme",
     status: "interviewing",
     appliedAt: "2026-05-03T12:00:00.000Z",
-    fitScore: 91,
     followupAt: "2026-05-10T12:00:00.000Z"
   },
   {
     ...base,
     id: "saved",
     company: "Beta",
-    status: "interested",
-    fitScore: 79
+    status: "interested"
   }
 ];
 

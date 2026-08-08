@@ -7,11 +7,10 @@
 // hardcoded to Tailor's provider in another — which is exactly the state the
 // cover letter and Q&A stages were in before they were added here.
 //
-// `settingsPrefix` is the localStorage key prefix. Polish is empty and Final
-// Check retains `audit` for storage compatibility; do not rename those keys
-// without a migration.
+// `settingsPrefix` is the localStorage key prefix. Polish keeps its original
+// unprefixed fields; the other stages use explicit names.
 
-export type AiStageId = "job-analysis" | "tailor" | "review" | "cover" | "answers";
+export type AiStageId = "job-analysis" | "tailor" | "final-check" | "cover" | "answers";
 
 export type AiStageDescriptor = {
   readonly id: AiStageId;
@@ -20,7 +19,7 @@ export type AiStageDescriptor = {
   /** Settings-dialog heading: names the work, not the pipeline position. */
   readonly title: string;
   readonly blurb: string;
-  readonly settingsPrefix: "" | "audit" | "jobAnalysis" | "cover" | "answers";
+  readonly settingsPrefix: "" | "finalCheck" | "jobAnalysis" | "cover" | "answers";
 };
 
 export const AI_STAGES: readonly AiStageDescriptor[] = [
@@ -39,11 +38,11 @@ export const AI_STAGES: readonly AiStageDescriptor[] = [
     settingsPrefix: ""
   },
   {
-    id: "review",
+    id: "final-check",
     label: "Final Check",
     title: "Final Check",
     blurb: "Optionally checks the actual current resume after your edit decisions.",
-    settingsPrefix: "audit"
+    settingsPrefix: "finalCheck"
   },
   {
     id: "cover",

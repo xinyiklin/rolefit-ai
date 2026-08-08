@@ -19,11 +19,13 @@ import type { ApplyDuplicateResolution } from "./useDuplicateGuard";
 import type { ExtractedJobTracking } from "../lib/jobExtract";
 import { canonicalizeAiUsageStageKeys, type StageAiUsage } from "../lib/aiUsage";
 import type { PolishedResume } from "../resumeEngine";
-import type { FitComparison, OutputTab } from "../sections/shared";
+import type { OutputTab } from "../sections/shared";
 import { normalizeDocumentSnapshot } from "../lib/applicationDocuments";
 import type { DocumentUpload } from "../lib/applicationDocumentRequests";
 import { dedupeSourceUrls } from "../lib/jobIdentity";
 import { runApplyPdfExports } from "../lib/applyPdfExports";
+import type { QuickFitSnapshot } from "../../shared/quickFitContract.ts";
+import type { FinalCheckResult } from "../../shared/finalCheckContract.ts";
 
 // Which of the offered PDFs the user kept checked in the download dialog, and
 // the base name (extension excluded) each one carries. Owned here with the rest
@@ -43,8 +45,8 @@ type UseApplyFlowArgs = {
   jobRawText: string;
   result: PolishedResume | null;
   currentResumeText: string;
-  headlineScore: number | null;
-  fitComparison: FitComparison | null;
+  initialFitSnapshot: QuickFitSnapshot | null;
+  finalCheckSnapshot: FinalCheckResult | null;
   pipelineAiUsage: Record<string, StageAiUsage>;
   applications: Application[];
   linkedApplicationId: string | null;
@@ -93,8 +95,8 @@ export function useApplyFlow({
   jobRawText,
   result,
   currentResumeText,
-  headlineScore,
-  fitComparison,
+  initialFitSnapshot,
+  finalCheckSnapshot,
   pipelineAiUsage,
   applications,
   linkedApplicationId,
@@ -253,7 +255,6 @@ export function useApplyFlow({
     const expectedDocumentVersions = { ...latestDocumentVersionsRef.current };
     setIsCommittingApply(true);
     setApplySaveError("");
-    const sr = result?.strictReview;
     const hasStructuredSuggestions = Boolean(result?.suggestedChanges?.length);
     const acceptedStructuredSuggestions =
       hasStructuredSuggestions &&
@@ -279,7 +280,11 @@ export function useApplyFlow({
     aiUsage["job-analysis"] = pipelineAiUsage["job-analysis"] ?? { source: "none" };
     if (materialSelection.resume) {
       aiUsage.tailor = pipelineAiUsage.tailor ?? { source: "none" };
-      aiUsage.review = pipelineAiUsage.review ?? { source: "none" };
+      if (pipelineAiUsage["final-check"]) {
+        aiUsage["final-check"] = pipelineAiUsage["final-check"];
+      } else {
+        delete aiUsage["final-check"];
+      }
     }
     if (materialSelection.coverLetter) {
       if (pipelineAiUsage.cover) aiUsage.cover = pipelineAiUsage.cover;
@@ -329,42 +334,9 @@ export function useApplyFlow({
       aiUsage,
       ...(materialSelection.resume
         ? {
-            fitScore: headlineScore,
-            baseFitScore: fitComparison?.base ?? null,
-            tailoredFitScore: fitComparison?.tailored ?? null,
-            fitScoreSource: fitComparison?.source ?? null,
+            initialFit: initialFitSnapshot ?? undefined,
+            finalCheck: finalCheckSnapshot ?? undefined,
             resumeUsed: usedBase ? ("base" as const) : ("tailored" as const),
-            missingRequiredSkills: result?.missingRequiredSkills?.length
-              ? result.missingRequiredSkills
-              : undefined,
-            ...(sr
-              ? {
-                  review: {
-                    verdict: sr.verdict,
-                    verdictReason: sr.verdictReason,
-                    riskFlags: sr.riskFlags.map((r) => ({
-                      risk: r.risk,
-                      suggestion: r.suggestion
-                    })),
-                    gaps: sr.gaps.map((g) => ({
-                      gap: g.gap,
-                      severity: g.severity,
-                      evidenceType: g.evidenceType,
-                      canHonestlyAdd: g.canHonestlyAdd,
-                      evidence: g.evidence,
-                      suggestedEdit: g.suggestedEdit
-                    })),
-                    recommendation: {
-                      applyAsIs: sr.recommendation.applyAsIs,
-                      reason: sr.recommendation.reason,
-                      coverLetterAngle: sr.recommendation.coverLetterAngle,
-                      topEdits: sr.recommendation.topEdits
-                    }
-                  }
-                }
-              : existing?.review
-                ? { review: existing.review }
-                : {})
           }
         : {})
     };

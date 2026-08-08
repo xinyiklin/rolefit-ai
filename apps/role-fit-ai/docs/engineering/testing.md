@@ -17,14 +17,13 @@ provider keys. A new offline eval is gated automatically unless it is explicitly
 classified as live.
 
 Each eval still runs standalone for a per-case PASS/FAIL list, e.g.
-`node apps/role-fit-ai/server/ai/__evals__/sanitize-probes.mjs`. On a failed case the runner
+`node apps/role-fit-ai/server/ai/__evals__/resume-proposal-probes.mjs`. On a failed case the runner
 attaches the child's last output lines to the assertion so you can see which
 case broke without re-running.
 
-The LIVE evals (`fabrication-eval.mjs`, `tailor-quality-eval.mjs`) are excluded
-via the runner's `LIVE` denylist: they drive a real provider, cost tokens, and
-need a configured key. Run those by hand (see below). Any new network/model
-eval must be added to `LIVE` so it stays out of `npm test`.
+The live cover-letter quality eval is excluded via the runner's `LIVE` denylist:
+it drives a real provider, costs tokens, and needs a configured provider. Any
+new network/model eval must be added to `LIVE` so it stays out of `npm test`.
 
 `src/lib/__evals__/job-identity-golden.mjs` is a CHARACTERIZATION test, not a
 correctness one. It pins the duplicate matcher's verdict for every pair of a
@@ -94,13 +93,11 @@ Good server verification covers:
   stale after semantic input changes, and classifies parsed invalid output as
   validation. Failure never replaces the Polish result and in-flight or failed
   Final Check never enters Apply readiness
-- a fresh standalone Review skips tailoring and sends `suggestedChanges: []`
-  so it audits the current edited draft as submitted; the internal Review leg
-  of Both may send only the sanitized suggestions returned by that same Tailor
-  run, never stale suggestions from an earlier run
-- combined responses always classify cover work with
-  `coverStatus: "off" | "ok" | "failed"`; a failed cover pass preserves any
-  successful tailor/review result
+- positive Initial Fit starts enabled Resume and Cover proposals independently;
+  neither automatic request awaits or suppresses the other, and each failure is
+  confined to its own document workflow
+- `/api/polish` rejects every mode except `resume-proposal` and carries no cover,
+  Review, score, or multi-stage request fields
 - missing/unready configured providers and missing managed credentials surface
   a clear, user-safe error rather than a silent fallback
 - provider failures distinguish authentication, rate-limit/quota,
@@ -113,19 +110,9 @@ Good server verification covers:
   the suggestion list or polished preview; when possible, use a synthetic
   missing-skill case such as a no-Kubernetes resume against a
   Kubernetes-required JD
-- live prompt-eval changes can use
-  `EVAL_MODE=both node apps/role-fit-ai/server/ai/__evals__/fabrication-eval.mjs` to check
-  strict-review and regular-polish modes, including one exact-evidence
-  positive case from honest context and an inferred-evidence OS case
-- sanitizer or AI-review contract changes must keep
-  `node apps/role-fit-ai/server/ai/__evals__/sanitize-probes.mjs` green — it is offline,
-  deterministic, and replays every live fabrication/evasion found during
-  the 2026-06-11 hardening (editor `<b>` tokens, ungrounded JD terms,
-  and placeholder evidence). Lock the AI-owned score/verdict contract: valid
-  model output must pass through unchanged; malformed, out-of-range, or
-  band-inconsistent output must be rejected rather than recomputed. Also lock
-  semantic-boundary guidance such as treating alternatives like
-  "Bachelor's or Master's" as alternatives rather than conjunctions
+- resume-proposal and Final Check contract changes must keep their focused
+  offline probes green, including partial malformed siblings, ungrounded terms,
+  invented numbers, invalid targets, and all-withheld/all-invalid outcomes
 - prompt-budget changes must add probes that build oversized structured
   payloads, extract each emitted JSON fragment (`tailor_scope`,
   `context_sections`, `proposed_changes`, or equivalent), and parse it again;
@@ -140,12 +127,9 @@ Good server verification covers:
   data entirely, enabled Prepare requests Job analysis plus fit in one prompt,
   invalid fit preserves valid job fields, lists cap at three, only the four
   verdicts sanitize, and fit-only retries omit the Job analysis schema
-- tailor-quality changes can grade live consistency on the real resume:
-  `node apps/role-fit-ai/server/ai/__evals__/tailor-quality-eval.mjs apps/role-fit-ai/workspace/tailor-eval/samples/<jd>.json 3`
-  (metrics-only output; full responses land in gitignored
-  `workspace/tailor-eval/`); a matched JD should produce
-  evidence-backed suggestions with a small honest lift, a bad-fit JD a
-  stable DON'T APPLY
+- application storage probes must prove compact Initial Fit and Final Check
+  snapshots round-trip while numeric scores, full recruiter reviews, and
+  missing-skill compatibility fields are omitted at the storage boundary
 - when Job analysis or Initial Fit fails, Prepare keeps the immediate local
   brief editable and manual Polish available; Initial Fit is separately
   retryable and cannot invalidate valid job fields. Resume Polish failure or

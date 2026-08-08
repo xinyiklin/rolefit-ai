@@ -1,9 +1,8 @@
 import type { Application, ApplicationStatus } from "../hooks/useApplications";
-import type { StrictReviewVerdict } from "../resume/types";
-import { fitScore, parseDate } from "./applicationFacts";
-import { VERDICT_LABEL, VERDICT_TONE, verdictFromScore } from "./fitVerdict";
+import type { QuickFitVerdict } from "../../shared/quickFitContract.ts";
+import { parseDate } from "./applicationFacts";
 
-export { displayCompany, fitScore, parseDate } from "./applicationFacts";
+export { displayCompany, parseDate } from "./applicationFacts";
 
 export const STATUS_LABEL: Record<ApplicationStatus, string> = {
   interested: "Saved",
@@ -83,33 +82,31 @@ export function companyInitials(name: string) {
     .join("");
 }
 
-// Score -> tone (fit-color class only). Thresholds mirror the AI Review contract
-// (STRONG FIT >=85, REASONABLE FIT >=70, STRETCH >=46, DON'T APPLY <46) and
-// verdictFromScore in lib/fitVerdict.ts — keep in sync. The
-// fit LABEL now always comes from the shared verdict vocabulary (appFitVerdict /
-// fitVerdict.ts) so the tracker and review pane never disagree.
-// The old fitLabel "Strong/Good/Stretch/Weak match" vocabulary was removed — it
-// was the source of the tracker-vs-review mismatch.
-export function fitTone(score: number | null) {
-  if (score === null) return "neutral";
-  if (score >= 85) return "strong";
-  if (score >= 70) return "good";
-  if (score >= 46) return "stretch";
-  return "weak";
-}
+const QUICK_FIT_DISPLAY: Record<QuickFitVerdict, {
+  label: string;
+  tone: "strong" | "good" | "stretch" | "weak";
+  rank: number;
+}> = {
+  STRONG: { label: "Strong fit", tone: "strong", rank: 4 },
+  REASONABLE: { label: "Reasonable fit", tone: "good", rank: 3 },
+  STRETCH: { label: "Stretch", tone: "stretch", rank: 2 },
+  LIMITED: { label: "Limited fit", tone: "weak", rank: 1 }
+};
 
-// The application's fit as a VERDICT band, in the SAME vocabulary the review
-// pane and resume header use — so the tracker can never show "Good match" while
-// strict review says "Reasonable fit". Prefer the verdict captured at apply time
-// (the AI review verdict); otherwise derive it from a non-local stored score.
-// Label AND tone come from the same verdict so they agree.
+// Tracker fit is the compact Initial Fit verdict captured for the exact resume
+// selected during Prepare. There is no numeric fallback or historical review
+// reader.
 export function appFitVerdict(
   app: Application
-): { verdict: StrictReviewVerdict; label: string; tone: "strong" | "good" | "stretch" | "weak" } | null {
-  const stored = app.review?.verdict as StrictReviewVerdict | undefined;
-  const verdict = stored && VERDICT_LABEL[stored] ? stored : verdictFromScore(fitScore(app));
+): { verdict: QuickFitVerdict; label: string; tone: "strong" | "good" | "stretch" | "weak" } | null {
+  const verdict = app.initialFit?.result.verdict;
   if (!verdict) return null;
-  return { verdict, label: VERDICT_LABEL[verdict], tone: VERDICT_TONE[verdict] };
+  return { verdict, ...QUICK_FIT_DISPLAY[verdict] };
+}
+
+export function initialFitRank(app: Application): number {
+  const verdict = app.initialFit?.result.verdict;
+  return verdict ? QUICK_FIT_DISPLAY[verdict].rank : 0;
 }
 
 export function nextAction(app: Application) {
@@ -124,12 +121,10 @@ export function nextAction(app: Application) {
 export function priorityFor(app: Application) {
   // An explicit choice in the detail modal wins over the derived guess.
   if (app.priority) return app.priority;
-  const score = fitScore(app);
-  if (score !== null && score >= 85) return "High";
+  const fit = app.initialFit?.result.verdict;
+  if (fit === "STRONG") return "High";
   if (app.status === "interviewing" || app.status === "offer") return "High";
-  // Below the STRETCH floor (46, the DON'T APPLY boundary) — not just below 65 —
-  // so a 46-64 "Stretch" reads Medium priority, consistent with its label.
-  if (score !== null && score < 46) return "Low";
+  if (fit === "LIMITED") return "Low";
   return "Medium";
 }
 
@@ -178,12 +173,6 @@ export function dateKey(date: Date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
-export function averageFit(applications: Application[]) {
-  const scores = applications.map(fitScore).filter((score): score is number => typeof score === "number");
-  if (!scores.length) return null;
-  return Math.round(scores.reduce((sum, score) => sum + score, 0) / scores.length);
-}
-
 export function statusCount(applications: Application[], status: ApplicationStatus) {
   return applications.filter((app) => app.status === status).length;
 }
@@ -201,18 +190,4 @@ export function hostLabel(url: string): string {
   } catch {
     return "";
   }
-}
-
-// Average fit-score lift from tailoring (tailoredFitScore - baseFitScore), across
-// applications where both scores are recorded. Returns null when no data.
-export function averageLift(applications: Application[]): number | null {
-  const withLift = applications.filter(
-    (app) => typeof app.baseFitScore === "number" && typeof app.tailoredFitScore === "number"
-  );
-  if (!withLift.length) return null;
-  const total = withLift.reduce(
-    (sum, app) => sum + Number(app.tailoredFitScore) - Number(app.baseFitScore),
-    0
-  );
-  return Math.round(total / withLift.length);
 }

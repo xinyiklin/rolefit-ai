@@ -41,12 +41,3 @@ export type ApplicationAnswersResult = {
   answers: GeneratedAnswer[];
   roleDescriptions: GeneratedRoleDescription[];
 } | null;
-
-// Compatibility shape for historical before/after AI comparisons. Normal
-// Resume Polish and Final Check no longer create these scores.
-export type FitComparison = {
-  source: "ai";
-  base: number;
-  tailored: number;
-  reason: string;
-};

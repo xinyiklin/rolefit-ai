@@ -6,6 +6,7 @@ import type { ResumeEditorActions } from "../../hooks/useResumeEditor";
 import { renderInlineMarks, stripInlineMarks } from "../../lib/inlineMarks";
 import type { PolishedResume, TailorSuggestion } from "../../resumeEngine";
 import type { TailorChangeTarget } from "../../resume/types";
+import { ProposalFeedbackList } from "../document/ProposalFeedbackList";
 
 type ResumeProposalReviewProps = {
   result: PolishedResume;
@@ -96,14 +97,7 @@ export function ResumeProposalReview({
 
   return (
     <div className="resume-proposal">
-      {result.changeSummary?.length ? (
-        <section className="resume-proposal__section">
-          <h3>What improved</h3>
-          <ul>
-            {result.changeSummary.slice(0, 3).map((item) => <li key={item}>{item}</li>)}
-          </ul>
-        </section>
-      ) : null}
+      <ProposalFeedbackList title="What improved" items={result.changeSummary?.slice(0, 3) ?? []} />
 
       {suggestions.length ? (
         <section className="resume-proposal__section">
@@ -186,14 +180,7 @@ export function ResumeProposalReview({
         </section>
       ) : null}
 
-      {result.remainingGaps?.length ? (
-        <section className="resume-proposal__section">
-          <h3>Still missing</h3>
-          <ul>
-            {result.remainingGaps.slice(0, 3).map((gap) => <li key={gap}>{gap}</li>)}
-          </ul>
-        </section>
-      ) : null}
+      <ProposalFeedbackList title="Still missing" items={result.remainingGaps?.slice(0, 3) ?? []} tone="warning" />
 
       {result.withheld?.count ? (
         <p className="resume-proposal__withheld">

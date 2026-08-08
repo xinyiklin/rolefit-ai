@@ -12,8 +12,8 @@ import type { StageConfig, StageId } from "../lib/aiRequest";
 import type { CitizenshipStatus, EducationLevel } from "../lib/candidateFacts";
 
 // Owns every auto-saved AI preference: each stage's provider/model/reasoning-effort
-// config, the shared and per-stage guidance, the candidate facts, and the default
-// polish stage selection. All of these share one debounced localStorage write, so
+// config, the shared and per-stage guidance, and candidate facts. These share
+// one debounced localStorage write, so
 // they live together here rather than scattered across App. Credentials stay in
 // the local companion.
 export function useAiSettings() {
@@ -26,9 +26,6 @@ export function useAiSettings() {
   const [stageCustomInstructions, setStageCustomInstructions] = useState<Partial<Record<StageId, string>>>(
     () => saved.stageCustomInstructions ?? {}
   );
-  // Default "tailor" (no review) — preserve the user's choice once they opt in.
-  // Legacy strictReview boolean is migrated to polishStages in settings.ts coerce().
-  const [polishStages, setPolishStages] = useState<"tailor" | "review" | "both">(saved.polishStages ?? "both");
   const [runInitialFit, setRunInitialFit] = useState(saved.runInitialFit ?? true);
   const [autoCreateResumeProposal, setAutoCreateResumeProposal] = useState(saved.autoCreateResumeProposal ?? false);
   const [autoCreateCoverLetterProposal, setAutoCreateCoverLetterProposal] = useState(
@@ -50,7 +47,6 @@ export function useAiSettings() {
         honestContext,
         customInstructions,
         stageCustomInstructions,
-        polishStages,
         runInitialFit,
         autoCreateResumeProposal,
         autoCreateCoverLetterProposal,
@@ -67,7 +63,6 @@ export function useAiSettings() {
     honestContext,
     customInstructions,
     stageCustomInstructions,
-    polishStages,
     runInitialFit,
     autoCreateResumeProposal,
     autoCreateCoverLetterProposal,
@@ -158,7 +153,6 @@ export function useAiSettings() {
     setHonestContext("");
     setCustomInstructions("");
     setStageCustomInstructions({});
-    setPolishStages("both");
     setRunInitialFit(true);
     setAutoCreateResumeProposal(false);
     setAutoCreateCoverLetterProposal(false);
@@ -176,8 +170,6 @@ export function useAiSettings() {
     copyStage,
     honestContext,
     setHonestContext,
-    polishStages,
-    setPolishStages,
     runInitialFit,
     setRunInitialFit,
     autoCreateResumeProposal,

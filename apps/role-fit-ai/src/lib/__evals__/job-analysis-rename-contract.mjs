@@ -28,11 +28,10 @@ const expectedCounts = new Map([
   ["apps/role-fit-ai/server/extension/__evals__/inbox-probes.mjs", 1],
   ["apps/role-fit-ai/server/runtime.ts", 1],
   ["apps/role-fit-ai/src/hooks/__evals__/client-workflow-guards.mjs", 3],
-  ["apps/role-fit-ai/src/hooks/useApplications.ts", 2],
   ["apps/role-fit-ai/src/lib/__evals__/ai-workflow-eval.mjs", 2],
   ["apps/role-fit-ai/src/lib/__evals__/stage-settings-eval.mjs", 24],
   ["apps/role-fit-ai/src/lib/__evals__/workspace-backup-contract-eval.mjs", 5],
-  ["apps/role-fit-ai/src/lib/aiUsage.ts", 4],
+  ["apps/role-fit-ai/src/lib/aiUsage.ts", 3],
   ["apps/role-fit-ai/src/lib/settings.ts", 7],
   ["apps/role-fit-ai/src/lib/tabPresence.ts", 1],
   ["apps/role-fit-ai/src/sections/SessionsRail.tsx", 2]

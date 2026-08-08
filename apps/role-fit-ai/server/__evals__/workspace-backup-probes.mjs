@@ -159,15 +159,15 @@ try {
   const withBrowser = parseWorkspaceBackupEnvelope({
     ...backup,
     browser: {
-      settings: { polishStages: "both", honestContext: "Grounded experience only" },
+      settings: { autoCreateResumeProposal: true, honestContext: "Grounded experience only" },
       lastBaseResume: "default.resume"
     }
   });
-  assert.equal(withBrowser.browser?.settings.polishStages, "both", "portable browser preferences survive contract parsing");
+  assert.equal(withBrowser.browser?.settings.autoCreateResumeProposal, true, "portable browser preferences survive contract parsing");
   assert.throws(
     () => parseWorkspaceBackupEnvelope({
       ...backup,
-      browser: { settings: { polishStages: "both", credential: "must-not-travel" }, lastBaseResume: "default.resume" }
+      browser: { settings: { autoCreateResumeProposal: true, credential: "must-not-travel" }, lastBaseResume: "default.resume" }
     }),
     /unsupported or invalid values/,
     "portable preferences reject settings outside the owned allowlist"
@@ -175,7 +175,7 @@ try {
   assert.throws(
     () => parseWorkspaceBackupEnvelope({
       ...backup,
-      browser: { settings: { polishStages: "both" }, lastBaseResume: "../private.resume" }
+      browser: { settings: { autoCreateResumeProposal: true }, lastBaseResume: "../private.resume" }
     }),
     /selected base resume is invalid/,
     "portable preferences reject non-managed base-resume names"
@@ -218,7 +218,7 @@ try {
   assert.equal(restoredMirror.source, "restore", "restore writes the browser-preferences mirror with source:restore");
   assert.equal(restoredMirror.format, "rolefit-browser-preferences");
   assert.equal(restoredMirror.schemaVersion, 1);
-  assert.equal(restoredMirror.settings.polishStages, "both", "the restored mirror carries the envelope's browser settings");
+  assert.equal(restoredMirror.settings.autoCreateResumeProposal, true, "the restored mirror carries the envelope's browser settings");
   assert.equal(restoredMirror.lastBaseResume, "default.resume");
   const restoredMarker = parseStoredWorkspaceRestoreMarker(
     JSON.parse(await readFile(join(targetDir, WORKSPACE_RESTORE_MARKER_FILE_NAME), "utf8"))
@@ -403,12 +403,12 @@ try {
   // A valid mirror is folded into envelope.browser but still excluded from files.
   await writeStoredBrowserPreferences(
     prefsDir,
-    { settings: { polishStages: "review", honestContext: "" }, lastBaseResume: "default.resume" },
+    { settings: { autoCreateCoverLetterProposal: true, honestContext: "" }, lastBaseResume: "default.resume" },
     "mirror",
     fixedDate
   );
   const withMirror = await createWorkspaceBackup(prefsDir, fixedDate);
-  assert.equal(withMirror.browser?.settings.polishStages, "review", "a valid mirror is folded into envelope.browser");
+  assert.equal(withMirror.browser?.settings.autoCreateCoverLetterProposal, true, "a valid mirror is folded into envelope.browser");
   assert.equal(withMirror.browser?.lastBaseResume, "default.resume");
   assert.ok(
     !withMirror.files.some((file) => file.path === BROWSER_PREFERENCES_FILE_NAME),

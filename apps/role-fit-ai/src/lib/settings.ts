@@ -15,8 +15,11 @@ export type PersistedSettings = {
   aiProvider?: AiProviderValue;
   selectedModel?: string;
   cliReasoningEffort?: string;
-  // Independent reviewer for the strict-audit pass — its own concrete provider
-  // config (synced via the copy buttons, not a live link).
+  // Independent Final Check provider config.
+  finalCheckProvider?: AiProviderValue;
+  finalCheckSelectedModel?: string;
+  finalCheckCliReasoningEffort?: string;
+  // Legacy Final Check setting names, migrated before allowlisting.
   auditProvider?: AiProviderValue;
   auditSelectedModel?: string;
   auditCliReasoningEffort?: string;
@@ -39,8 +42,6 @@ export type PersistedSettings = {
   customInstructions?: string;
   // Per-stage overrides. A missing or blank entry inherits customInstructions.
   stageCustomInstructions?: Partial<Record<AiStageId, string>>;
-  strictReview?: boolean;
-  polishStages?: "tailor" | "review" | "both";
   runInitialFit?: boolean;
   autoCreateResumeProposal?: boolean;
   autoCreateCoverLetterProposal?: boolean;
@@ -65,6 +66,12 @@ const LEGACY_JOB_ANALYSIS_SETTINGS = [
   ["distillCliReasoningEffort", "jobAnalysisCliReasoningEffort"]
 ] as const;
 
+const LEGACY_FINAL_CHECK_SETTINGS = [
+  ["auditProvider", "finalCheckProvider"],
+  ["auditSelectedModel", "finalCheckSelectedModel"],
+  ["auditCliReasoningEffort", "finalCheckCliReasoningEffort"]
+] as const;
+
 function hasOwn(value: Record<string, unknown>, key: string): boolean {
   return Object.prototype.hasOwnProperty.call(value, key);
 }
@@ -82,6 +89,12 @@ export function migrateSettings(value: unknown): Record<string, unknown> {
     }
     delete migrated[legacyKey];
   }
+  for (const [legacyKey, canonicalKey] of LEGACY_FINAL_CHECK_SETTINGS) {
+    if (!hasOwn(migrated, canonicalKey) && hasOwn(migrated, legacyKey)) {
+      migrated[canonicalKey] = migrated[legacyKey];
+    }
+    delete migrated[legacyKey];
+  }
 
   const rawInstructions = migrated.stageCustomInstructions;
   if (rawInstructions && typeof rawInstructions === "object" && !Array.isArray(rawInstructions)) {
@@ -89,7 +102,11 @@ export function migrateSettings(value: unknown): Record<string, unknown> {
     if (!hasOwn(instructions, "job-analysis") && hasOwn(instructions, "distill")) {
       instructions["job-analysis"] = instructions.distill;
     }
+    if (!hasOwn(instructions, "final-check") && hasOwn(instructions, "review")) {
+      instructions["final-check"] = instructions.review;
+    }
     delete instructions.distill;
+    delete instructions.review;
     migrated.stageCustomInstructions = instructions;
   }
   return migrated;
@@ -112,8 +129,6 @@ const PERSISTED_SETTING_KEYS = [
   "honestContext",
   "customInstructions",
   "stageCustomInstructions",
-  "strictReview",
-  "polishStages",
   "runInitialFit",
   "autoCreateResumeProposal",
   "autoCreateCoverLetterProposal",
@@ -151,8 +166,6 @@ export function normalizeSettings(value: unknown): PersistedSettings {
   // compares against the migrated input so old backups remain valid while
   // unsupported keys still fail closed. The cover/answers stages
   // inherit Tailor's config in useAiSettings' seeder instead, and the one
-  // pre-existing additive migration (strictReview -> polishStages) is already
-  // documented there as an intentional restore rejection.
   for (const [providerKey, modelKey, effortKey] of STAGE_FIELD_GROUPS) {
     if (bag[providerKey] && !validProviders.has(bag[providerKey] as string)) {
       delete bag[providerKey];
@@ -180,18 +193,6 @@ export function normalizeSettings(value: unknown): PersistedSettings {
   // The AI stage sections are permanently visible. Drop the retired accordion
   // preference from older browser storage on the next normal save.
   delete (settings as unknown as Record<string, unknown>).sectionOpen;
-  if (settings.strictReview !== undefined && typeof settings.strictReview !== "boolean") {
-    delete settings.strictReview;
-  }
-  // Validate polishStages — only the 3 literal values are valid.
-  const validStages = new Set(["tailor", "review", "both"]);
-  if (settings.polishStages !== undefined && !validStages.has(settings.polishStages)) {
-    delete settings.polishStages;
-  }
-  // Migrate legacy strictReview → polishStages when polishStages is absent.
-  if (settings.polishStages === undefined && typeof settings.strictReview === "boolean") {
-    settings.polishStages = settings.strictReview ? "both" : "tailor";
-  }
   for (const key of ["runInitialFit", "autoCreateResumeProposal", "autoCreateCoverLetterProposal"] as const) {
     if (settings[key] !== undefined && typeof settings[key] !== "boolean") delete settings[key];
   }

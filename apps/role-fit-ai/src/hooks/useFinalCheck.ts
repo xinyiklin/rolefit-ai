@@ -155,7 +155,7 @@ export function useFinalCheck({
       setFinalCheckStatus(note);
       setPipelineAiUsage((current) => ({
         ...current,
-        review: {
+        "final-check": {
           source: "ai",
           ...(typeof raw.provider === "string" && raw.provider ? { provider: raw.provider } : {}),
           ...(typeof raw.model === "string" && raw.model ? { model: raw.model } : {}),

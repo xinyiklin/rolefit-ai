@@ -782,3 +782,21 @@
 .final-check__issues small {
   color: var(--ink-faint);
 }
+
+.proposal-feedback {
+  margin: 0;
+}
+
+.proposal-feedback h3 {
+  margin: 0 0 0.35rem;
+  font-size: 0.78rem;
+}
+
+.proposal-feedback ul {
+  margin: 0;
+  padding-left: 1rem;
+}
+
+.proposal-feedback--warning {
+  color: var(--warm);
+}

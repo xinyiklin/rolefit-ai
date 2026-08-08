@@ -192,7 +192,7 @@ function localOnlyUsage(): StageAiUsage {
 // pass only prepares the raw text).
 //
 // "Usable AI content" mirrors the tailor pass's usable-response guard (needs
-// suggestions/gaps/summary) and review's reviewStatus="failed": a reply the
+// suggestions/gaps/summary) and any other route response: a reply the
 // server grounded down to nothing of substance is an AI no-op. A bare title or
 // other metadata scalar does NOT count — the deterministic engine extracts those
 // too, so reporting them as "ai" mislabels a failure as success while the same

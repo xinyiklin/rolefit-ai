@@ -36,7 +36,7 @@ assert.equal(
 );
 
 // The state Apply leaves behind: both strict sources stored, plus the metadata the
-// tracker owns (status, notes, dates, job details, fit) that no document save
+// tracker owns (status, notes, dates, job details, Initial Fit) that no document save
 // may touch.
 const applied = {
   id: "app-1",
@@ -50,7 +50,15 @@ const applied = {
   updatedAt: "2026-07-20T10:00:00.000Z",
   appliedAt: "2026-07-20T10:00:00.000Z",
   notes: "Referred by a friend.",
-  fitScore: 82,
+  initialFit: {
+    resumeLabel: "Backend resume",
+    result: {
+      verdict: "REASONABLE",
+      summary: "Backend evidence aligns with the role.",
+      matches: ["services"],
+      gaps: []
+    }
+  },
   resumeUsed: "tailored",
   resumeArtifacts: {
     hasPdf: false,
@@ -196,7 +204,7 @@ for (const field of [
   "createdAt",
   "appliedAt",
   "notes",
-  "fitScore",
+  "initialFit",
   "resumeUsed"
 ]) {
   assert.deepEqual(

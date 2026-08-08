@@ -12,20 +12,20 @@ import {
 import { canonicalizeAiUsageStageKeys } from "../aiUsage.ts";
 import { ApiError, classifyFailure } from "../failures.ts";
 
-const threeStages = (jobAnalysis, tailor, review) => [
+const threeStages = (jobAnalysis, tailor, finalCheck) => [
   { key: "job-analysis", state: { status: jobAnalysis } },
   { key: "tailor", state: { status: tailor } },
-  { key: "review", state: { status: review } }
+  { key: "final-check", state: { status: finalCheck } }
 ];
 
 assert.equal(workflowStepLabel(1, 3), "Step 1 of 3", "the workflow exposes the first step count");
 assert.equal(workflowCurrentIndex(threeStages("running", "idle", "idle")), 0, "Job analysis is step 1");
 assert.equal(workflowCurrentIndex(threeStages("done", "running", "idle")), 1, "Tailor is step 2");
-assert.equal(workflowCurrentIndex(threeStages("done", "done", "running")), 2, "Review is step 3");
+assert.equal(workflowCurrentIndex(threeStages("done", "done", "running")), 2, "Final Check is step 3");
 
 const failedTailor = threeStages("done", "failed", "idle");
 assert.equal(workflowCurrentIndex(failedTailor), 1, "a failed stage remains the current step");
-assert.equal(workflowStageIsBlocked(failedTailor, 2), true, "a failed Tailor blocks Review");
+assert.equal(workflowStageIsBlocked(failedTailor, 2), true, "a failed Tailor blocks a later stage");
 assert.equal(workflowStageCanAdvance({ status: "done" }), true, "only a completed stage may advance");
 assert.equal(workflowStageCanAdvance({ status: "failed" }), false, "a failed stage cannot advance");
 assert.equal(workflowStageCanAdvance({ status: "stopped" }), false, "a stopped stage cannot advance");
@@ -33,13 +33,15 @@ assert.equal(AI_STAGE_COPY["job-analysis"].running, "Analyzing job", "progress u
 
 const legacyUsage = {
   distill: { source: "ai", provider: "anthropic", model: "legacy-model" },
-  tailor: { source: "none" }
+  tailor: { source: "none" },
+  review: { source: "ai", provider: "openai", model: "legacy-reviewer" }
 };
 assert.deepEqual(
   canonicalizeAiUsageStageKeys(legacyUsage),
   {
     "job-analysis": { source: "ai", provider: "anthropic", model: "legacy-model" },
-    tailor: { source: "none" }
+    tailor: { source: "none" },
+    "final-check": { source: "ai", provider: "openai", model: "legacy-reviewer" }
   },
   "historical Distill provenance is read as Job analysis"
 );
@@ -50,7 +52,8 @@ assert.deepEqual(
   }),
   {
     "job-analysis": { source: "ai", provider: "openai", model: "canonical-model" },
-    tailor: { source: "none" }
+    tailor: { source: "none" },
+    "final-check": { source: "ai", provider: "openai", model: "legacy-reviewer" }
   },
   "canonical Job analysis provenance wins when both generations exist"
 );

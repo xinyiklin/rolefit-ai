@@ -13,11 +13,7 @@ import {
   callConfiguredProvider,
   callOpenAiResponsesWithFetch
 } from "../clients.ts";
-import {
-  resolveAuditProviderRequest,
-  resolveProviderRequest,
-  resolveReviewOnlyProviderRequest
-} from "../providers.ts";
+import { resolveProviderRequest } from "../providers.ts";
 import {
   applyProviderSnapshot,
   clearProviderSnapshot
@@ -124,17 +120,6 @@ try {
     );
   }
 
-  const review = resolveReviewOnlyProviderRequest({
-    provider: "openai",
-    apiKey: "",
-    model: "gpt-test",
-    auditProvider: "claude-cli",
-    auditModel: "claude-test",
-    auditReasoningEffort: "low"
-  });
-  assert.equal(review.provider, "claude-cli", "review-only resolves the audit namespace directly");
-  assert.equal(review.model, "claude-test");
-
   delete process.env.OPENAI_API_KEY;
   assert.throws(
     () => resolveProviderRequest({
@@ -145,16 +130,6 @@ try {
     (error) => error?.status === 401 && /RoleFit Companion/.test(error.message),
     "a request-body apiKey cannot authenticate a standalone hosted-provider request"
   );
-  assert.throws(
-    () => resolveReviewOnlyProviderRequest({
-      auditProvider: "openai",
-      auditApiKey: "request-body-only-audit-key",
-      auditModel: "gpt-test"
-    }),
-    (error) => error?.status === 401 && /RoleFit Companion/.test(error.message),
-    "a request-body auditApiKey cannot authenticate a standalone review request"
-  );
-
   applyProviderSnapshot({
     type: "rolefit-provider-snapshot",
     schemaVersion: 1,
@@ -212,28 +187,6 @@ try {
     "an absent companion provider fails even when a headless .env key exists"
   );
   delete process.env.ANTHROPIC_API_KEY;
-  assert.equal(
-    resolveReviewOnlyProviderRequest({
-      auditProvider: "openai",
-      auditApiKey: "request-body-audit-key-must-not-override-vault",
-      auditModel: "gpt-test"
-    }).apiKey,
-    "synthetic-managed-openai-key",
-    "review-only resolution ignores auditApiKey and uses the companion vault"
-  );
-  const managedPrimary = resolveProviderRequest({
-    provider: "claude-cli",
-    model: "claude-test"
-  });
-  assert.equal(
-    resolveAuditProviderRequest({
-      auditProvider: "openai",
-      auditApiKey: "request-body-audit-key-must-not-override-vault",
-      auditModel: "gpt-test"
-    }, managedPrimary).apiKey,
-    "synthetic-managed-openai-key",
-    "independent-review resolution also ignores request-body auditApiKey"
-  );
   clearProviderSnapshot();
 
   process.env.AI_PROVIDER = "opneai";

@@ -36,13 +36,13 @@ const preSplit = {
   cliReasoningEffort: "medium",
   jobAnalysisProvider: "anthropic",
   jobAnalysisSelectedModel: "claude-opus-4-8",
-  auditProvider: "codex-cli",
-  auditSelectedModel: "gpt-5.6-terra"
+  finalCheckProvider: "codex-cli",
+  finalCheckSelectedModel: "gpt-5.6-terra"
 };
 const seeded = seedStages(preSplit);
 assert.equal(seeded.tailor.provider, "openai", "Tailor keeps its own persisted provider");
 assert.equal(seeded["job-analysis"].provider, "anthropic", "Job analysis keeps its own persisted provider");
-assert.equal(seeded.review.provider, "codex-cli", "Review keeps its own persisted provider");
+assert.equal(seeded["final-check"].provider, "codex-cli", "Final Check keeps its own persisted provider");
 for (const stage of ["cover", "answers"]) {
   assert.equal(
     seeded[stage].provider,
@@ -116,6 +116,22 @@ assert.equal(
   normalizedLegacyDistill.stageCustomInstructions?.["job-analysis"],
   "Keep the posting language precise.",
   "legacy stage instructions survive normalization"
+);
+
+assert.deepEqual(
+  migrateSettings({
+    auditProvider: "codex-cli",
+    auditSelectedModel: "gpt-5.6-terra",
+    auditCliReasoningEffort: "high",
+    stageCustomInstructions: { review: "Check only the actual current resume." }
+  }),
+  {
+    finalCheckProvider: "codex-cli",
+    finalCheckSelectedModel: "gpt-5.6-terra",
+    finalCheckCliReasoningEffort: "high",
+    stageCustomInstructions: { "final-check": "Check only the actual current resume." }
+  },
+  "legacy audit settings migrate to the explicit Final Check stage"
 );
 assert.equal("distillProvider" in normalizedLegacyDistill, false, "normalization writes no legacy provider key");
 assert.equal(

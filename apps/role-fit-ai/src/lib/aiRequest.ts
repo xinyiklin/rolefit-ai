@@ -18,7 +18,7 @@ export type AiRequestFields = {
   reasoningEffort: string;
 };
 
-// Resolve the provider/model fields shared by every non-audit AI request
+// Resolve the provider/model fields shared by every AI request
 // body (`/api/polish`'s tailor stage, `/api/job-analysis`, `/api/application-answers`,
 // `/api/cover-letter`): uses the exact field names the server expects, so the
 // call sites cannot drift apart.
@@ -29,23 +29,5 @@ export function buildStageRequestFields(config: StageConfig): AiRequestFields {
     provider: config.provider,
     model: config.selectedModel,
     reasoningEffort: config.cliReasoningEffort
-  };
-}
-
-export type AuditRequestFields = {
-  auditProvider: string;
-  auditModel: string;
-  auditReasoningEffort: string;
-};
-
-// Resolve the independent-reviewer fields for `/api/polish`'s strict audit pass
-// from the reviewer stage's own concrete config. Mirrors buildStageRequestFields
-// with exact server field names, but namespaced with `audit*` so the primary
-// rewrite/cover config is untouched.
-export function buildAuditRequestFields(config: StageConfig): AuditRequestFields {
-  return {
-    auditProvider: config.provider,
-    auditModel: config.selectedModel,
-    auditReasoningEffort: config.cliReasoningEffort
   };
 }

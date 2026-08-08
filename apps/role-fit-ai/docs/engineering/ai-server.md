@@ -305,8 +305,8 @@ owns:
   `inbox` is polled same-origin by the app and stays behind
   the localhost CSRF/Host guard with no CORS header. The extension never reads
   the base resume or calculates a local fit estimate. Prepare's compact Initial
-  Fit runs only inside the app against its selected resume. Detailed score,
-  coverage, and recommendation remain Review outputs.
+  Fit runs only inside the app against its selected resume. RoleFit does not
+  create or persist a detailed numeric fit score.
 - workspace file storage under the host-supplied `workspaceDir` (auto-load,
   upload, save, reload; source development defaults to `workspace/`,
   while packaged runs use `app.getPath("userData")/workspace/`).
@@ -325,9 +325,12 @@ one large route.
 The resume AI flows follow that rule — they are split across focused
 modules under `server/ai/` so no single file carries the whole pipeline:
 
-- `polish.ts` — the `handlePolish` route (request parsing, the
-  normal proposal dispatch plus legacy suggest → parallel audit + cover
-  orchestration and derived `polishedText` assembly) only.
+- `polish.ts` — the `handlePolish` route for the sole
+  `mode: "resume-proposal"` request. It normalizes the editable scope and
+  dispatches `resumeProposal.ts`; cover letters and Final Check have dedicated
+  routes and cannot enter this handler.
+- `resumeScope.ts` — defensive normalization and plain-text serialization for
+  the structured editable resume scope.
 - `resumeProposal.ts` and `shared/resumePolishContract.ts` — flat target
   construction, the compact one-pass prompt/wire contract, deterministic
   per-edit grounding, and Proposal / No changes / Withheld derivation.
@@ -336,7 +339,7 @@ modules under `server/ai/` so no single file carries the whole pipeline:
   READY / REVIEW / NEEDS_EVIDENCE derivation.
 - `providers.ts` — provider identity + per-request config resolution
   (`normalizeProvider`, default provider/model, provider-specific key lookup,
-  `resolveProviderRequest`, `resolveAuditProviderRequest`).
+  and `resolveProviderRequest`).
 - `clients.ts` — the outbound provider clients (OpenAI Responses and
   Anthropic Messages), CLI dispatch, and the
   `callConfiguredProvider` dispatch.
@@ -350,16 +353,13 @@ modules under `server/ai/` so no single file carries the whole pipeline:
   data, never instructions. Prompt budgets are structural: clip individual
   fields/arrays before `JSON.stringify` (or parse, shrink, and re-serialize),
   never character-slice serialized JSON into an invalid payload.
-- `sanitize.ts` — missing-skill, structured suggestion, and strict-review
-  response validation (`sanitizeStrictReview`: enum
-  fallbacks, string clips, array caps, markup rejection on rewrites).
+- `sanitize.ts` — shared markup and numeric-claim guards used by the current
+  Resume Polish, Final Check, Cover Letter, and Application Answers flows.
   The markup gate allows exactly the editor's inline-mark vocabulary
   (`<b>`/`<i>`/`<u>`, no attributes) because formatted bullets carry those
   tokens in `currentText` and a faithful suggestion echoes them; all other
-  tags, LaTeX commands, and newlines still reject. `sanitizeTailorSuggestions`
-  takes an optional drop-stats collector and the route warns (shape-only)
-  when a reply's suggestions are ALL dropped — a silent all-drop is
-  otherwise indistinguishable from "no changes needed".
+  tags, LaTeX commands, and newlines still reject. Resume-specific proposal
+  sanitization lives beside its wire contract in `resumeProposal.ts`.
   Hit-keyword grounding: a suggestion whose claimed JD
   keyword appears in `proposedText` but whose significant words exist
   nowhere in the scope text or honest context is dropped
@@ -508,24 +508,13 @@ The AI must:
 - return up to three concise improvements and remaining gaps. The server derives
   Proposal / No changes / Withheld from accepted mutations, and the editor
   remains the final source of truth
-- on the legacy Review compatibility route only, make one holistic,
-  evidence-backed fit judgment: the strict reviewer returns
-  `aiScore`, `strictReview.verdict`, `strictReview.verdictReason`, and a concise
-  `strictReview.coverage` table in the same response. Score and verdict must use
-  the documented bands (85-100 STRONG FIT, 70-84 REASONABLE FIT, 46-69 STRETCH,
-  0-45 DON'T APPLY). The model must distinguish a genuinely absent requirement
-  from a differently worded or adjacent qualification, avoid duplicating one
-  requirement into several gaps, and treat acceptable ranges such as 0-6 years
-  as ranges. No score lift is allowed unless proposed changes make existing
-  evidence materially clearer. The server rejects malformed or band-inconsistent
-  output but never calculates a replacement score or verdict
 - write bullets as engineering accomplishments in plain language — no
   brochure vocabulary, no claims the candidate could not defend in an
   interview, and proposed text stays close to the current field's length
   so the one-page layout survives
-- keep strict review non-rewriting: in a combined run it compares the original
-  scope with the sanitized tailored result; in review-only it audits the
-  current edited draft as-is
+- keep Final Check non-rewriting and issue-only: it checks the actual current
+  resume and returns at most five grounded Unsupported, Missing, or Clarity
+  issues with a server-derived READY / REVIEW / NEEDS_EVIDENCE status
 
 ### Career-writing guidance
 

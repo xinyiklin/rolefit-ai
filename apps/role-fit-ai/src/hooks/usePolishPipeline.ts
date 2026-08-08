@@ -20,7 +20,7 @@ import {
 } from "../../shared/resumePolishContract.ts";
 
 function idleProgress(): PolishProgressState {
-  return { tailor: { status: "idle" }, review: { status: "idle" } };
+  return { tailor: { status: "idle" } };
 }
 
 type PolishContext = {
@@ -73,11 +73,7 @@ function proposalSuggestions(
       sectionHeading: target.section,
       currentText: target.currentText,
       proposedText: change.replacement,
-      reason: change.reason ?? "",
-      evidenceType: "exact" as const,
-      evidence: "",
-      hits: [],
-      risk: "low" as const
+      reason: change.reason ?? ""
     }];
   });
 }
@@ -184,7 +180,7 @@ export function usePolishPipeline({
     revealResumeOnSuccess: boolean
   ): Promise<boolean> {
     if (!requestIsCurrent(generation, context, signal)) return false;
-    setPolishProgress({ tailor: { status: "running" }, review: { status: "idle" } });
+    setPolishProgress({ tailor: { status: "running" } });
     try {
       const response = await fetch("/api/polish", {
         method: "POST",
@@ -219,11 +215,7 @@ export function usePolishPipeline({
         changeSummary: Array.isArray(data.summary) ? data.summary : [],
         remainingGaps: Array.isArray(data.remainingGaps) ? data.remainingGaps : [],
         suggestedChanges: suggestions,
-        withheld: data.withheld,
-        aiScore: undefined,
-        strictReview: undefined,
-        reviewedBy: undefined,
-        reviewStatus: undefined
+        withheld: data.withheld
       });
       if (revealResumeOnSuccess) setActiveOutputTab("resume");
       const note = data.status === "PROPOSAL"
@@ -237,12 +229,10 @@ export function usePolishPipeline({
               status: "failed",
               errorHeadline: "Suggestions withheld",
               error: "The generated edits could not be verified. Your resume is unchanged."
-            },
-            review: { status: "idle" }
+            }
           }
         : {
-            tailor: { status: "done", note, noteTone: "ok" },
-            review: { status: "idle" }
+            tailor: { status: "done", note, noteTone: "ok" }
           });
       setPolishStatus(note);
       setPipelineAiUsage((current) => ({
@@ -262,8 +252,7 @@ export function usePolishPipeline({
       if (!requestIsCurrent(generation, context)) return false;
       const failure = classifyFailure(error);
       setPolishProgress({
-        tailor: { status: "failed", errorHeadline: failure.headline, error: failure.detail },
-        review: { status: "idle" }
+        tailor: { status: "failed", errorHeadline: failure.headline, error: failure.detail }
       });
       setPolishStatus(`${failure.headline}: ${failure.detail}`);
       setPipelineAiUsage((current) => ({
@@ -292,8 +281,7 @@ export function usePolishPipeline({
       runLockRef.current = false;
       setPolishStatus(provider.message);
       setPolishProgress({
-        tailor: { status: "failed", errorHeadline: "Provider unavailable", error: provider.message },
-        review: { status: "idle" }
+        tailor: { status: "failed", errorHeadline: "Provider unavailable", error: provider.message }
       });
       setPolishProgressVisible(true);
       return;
@@ -349,7 +337,7 @@ export function usePolishPipeline({
     polishProgressVisible,
     setPolishProgressVisible,
     handlePolish: startRun,
-    retryStage: (_stage: "tailor" | "review") => startRun(),
+    retryStage: () => startRun(),
     stopPolish
   };
 }

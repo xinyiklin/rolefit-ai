@@ -22,6 +22,7 @@ const applyFlow = readHook("useApplyFlow.ts");
 const answers = readHook("useApplicationAnswers.ts");
 const cover = readHook("useCoverLetter.ts");
 const polish = readHook("usePolishPipeline.ts");
+const polishRoute = readFileSync(new URL("../../../server/ai/polish.ts", import.meta.url), "utf8");
 const finalCheckHook = readHook("useFinalCheck.ts");
 const inbox = readHook("useExtensionInbox.ts");
 const intake = readHook("useJobIntake.ts");
@@ -403,6 +404,10 @@ assert.doesNotMatch(polishFingerprint, /polishStages|reviewInstructions|review:/
 assert.match(polish, /mode: "resume-proposal"/, "normal Polish selects the flat one-pass server contract");
 assert.equal(polish.match(/fetch\("\/api\/polish"/g)?.length, 1,
   "normal Resume Polish has exactly one provider-backed request path");
+assert.match(polishRoute, /body\.mode !== "resume-proposal"/,
+  "the server rejects every retired Polish mode");
+assert.doesNotMatch(polishRoute, /includeCoverLetter|sourceCoverLetterText|strictReview|auditProvider|stages/,
+  "the Resume Polish route cannot dispatch Cover Letter, Review, or multi-stage work");
 assert.doesNotMatch(
   app,
   /runPolishOnStagesCommitRef|function startPolish\(/,
@@ -487,7 +492,7 @@ assert.ok(
 // another stage's provider still works, so nothing surfaces the mistake. Both
 // cover and answers shipped in exactly that state.
 assert.match(aiStages, /export const AI_STAGES/, "the stage list is declared in config/aiStages.ts");
-for (const stage of ["job-analysis", "tailor", "review", "cover", "answers"]) {
+for (const stage of ["job-analysis", "tailor", "final-check", "cover", "answers"]) {
   assert.match(aiStages, new RegExp(`id: "${stage}"`), `aiStages declares the ${stage} stage`);
 }
 assert.match(app, /aiRequest: stages\.cover,/, "the cover-letter flow runs on its own stage config, not Tailor's");
@@ -1563,8 +1568,8 @@ assert.match(
 );
 assert.match(
   applyFlow,
-  /:\s*existing\?\.review\s*\?\s*\{\s*review:\s*existing\.review\s*\}/,
-  "re-Apply without a fresh Review preserves the saved candidate-gap snapshot"
+  /initialFit: initialFitSnapshot \?\? undefined,[\s\S]{0,100}?finalCheck: finalCheckSnapshot \?\? undefined/,
+  "re-Apply writes only compact current Initial Fit and Final Check snapshots"
 );
 assert.match(
   app,
@@ -1853,13 +1858,13 @@ assert.ok(
 );
 assert.match(
   applyFlow,
-  /if \(materialSelection\.resume\) \{[\s\S]{0,220}?aiUsage\.tailor[\s\S]{0,180}?aiUsage\.review/,
+  /if \(materialSelection\.resume\) \{[\s\S]{0,220}?aiUsage\.tailor[\s\S]{0,260}?aiUsage\["final-check"\]/,
   "re-Apply updates resume AI provenance only when Resume is included"
 );
 assert.match(
   applyFlow,
-  /\.\.\.\(materialSelection\.resume[\s\S]{0,500}?fitScore: headlineScore[\s\S]{0,500}?resumeUsed:/,
-  "re-Apply updates resume-derived fit metadata only when Resume is included"
+  /\.\.\.\(materialSelection\.resume[\s\S]{0,260}?initialFit: initialFitSnapshot[\s\S]{0,180}?finalCheck: finalCheckSnapshot[\s\S]{0,180}?resumeUsed:/,
+  "re-Apply updates compact resume check snapshots only when Resume is included"
 );
 assert.match(
   answers,

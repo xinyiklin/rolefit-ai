@@ -13,6 +13,7 @@ import {
   type DocumentWorkflowCheck,
   type DocumentWorkflowPhase
 } from "../document/DocumentWorkflowRail";
+import { ProposalFeedbackList } from "../document/ProposalFeedbackList";
 
 type CoverLetterReviewProps = {
   words: number;
@@ -216,9 +217,7 @@ export function CoverLetterReview({
             <span>{proposal.result.coverLetterText.trim().split(/\s+/).length} words</span>
             {proposal.result.repaired ? <span>Repaired once</span> : <span>Passed first check</span>}
           </div>
-          {proposal.result.warnings.map((warning) => (
-            <p key={warning} className="cover-letter-proposal__warning">{warning}</p>
-          ))}
+          <ProposalFeedbackList title="Check before using" items={proposal.result.warnings} tone="warning" />
           {proposal.stale ? (
             <p className="cover-letter-proposal__stale" role="status">
               The letter, resume, job, or polishing instructions changed. Polish again for the current inputs.

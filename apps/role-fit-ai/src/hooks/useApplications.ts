@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { EvidenceType, MissingRequiredSkill, StrictReviewSeverity } from "../resumeEngine";
 import { inferApplicationTitle, inferCompanyFromUrl } from "../lib/jobTarget";
 import { sourceFromUrl, type ExtractedJobTracking } from "../lib/jobExtract";
 import { dedupeSourceUrls, normalizeJobUrl, findDuplicateApplications } from "../lib/jobIdentity";
@@ -12,6 +11,8 @@ import {
   type ApplicationMutation
 } from "../lib/applicationMutation";
 import type { ApplicationDocumentArtifacts } from "../../shared/applicationDocumentContract.ts";
+import type { QuickFitSnapshot } from "../../shared/quickFitContract.ts";
+import type { FinalCheckResult } from "../../shared/finalCheckContract.ts";
 
 export type { ApplicationAiUsage, StageAiUsage } from "../lib/aiUsage";
 
@@ -37,25 +38,6 @@ export const APPLICATION_SOURCES: ApplicationSource[] = [
   "Recruiter",
   "Other"
 ];
-
-// Snapshot of the recruiter (strict) review captured when a role is applied, so
-// the pipeline remembers the verdict, interview risks, and gaps per application.
-export type ApplicationReviewGap = {
-  gap: string;
-  severity: StrictReviewSeverity | string;
-  evidenceType?: EvidenceType;
-  canHonestlyAdd?: boolean;
-  evidence?: string;
-  suggestedEdit?: string;
-};
-
-export type ApplicationReview = {
-  verdict: string;
-  verdictReason: string;
-  riskFlags: { risk: string; suggestion: string }[];
-  gaps: ApplicationReviewGap[];
-  recommendation: { applyAsIs: boolean; reason: string; coverLetterAngle: string; topEdits: string[] };
-};
 
 // A drafted application-question answer (or per-role description) the user chose
 // to save with this application from the Application Questions tab.
@@ -114,7 +96,7 @@ export type Application = {
   // jobDescription so later prepared-brief edits cannot rewrite View source or
   // change what "Prepare again" analyzes.
   rawJobDescription?: string;
-  // Per-stage AI usage snapshot (job analysis/tailor/review/cover), captured at Apply
+  // Per-stage AI usage snapshot, captured at Apply
   // time. Whole-map-replace on upsert — an incoming snapshot always wins, no
   // deep per-stage merge.
   aiUsage?: ApplicationAiUsage;
@@ -130,7 +112,7 @@ export type Application = {
   location?: string;
   jobType?: string;
   workAuth?: string;
-  // Explicit priority override; when unset the UI derives it from fit + stage.
+  // Explicit priority override; when unset the UI derives it from Initial Fit + stage.
   priority?: ApplicationPriority;
   // Compensation, as advertised or negotiated. Stored as plain integers in the
   // chosen currency; min/max may be set independently.
@@ -138,20 +120,14 @@ export type Application = {
   salaryMax?: number | null;
   salaryCurrency?: string;
   salaryPeriod?: SalaryPeriod;
-  // Free-text interview prep the user keeps for this role (the review snapshot
-  // below supplies the AI-derived risks/gaps that complement these notes).
+  // Free-text interview prep the user keeps for this role.
   interviewTips?: string;
   contacts?: ApplicationContact[];
-  fitScore?: number | null;
-  // Before/after fit captured at Apply time: the original (base) resume vs. the
-  // tailored draft, so the pipeline can show the lift tailoring produced.
-  baseFitScore?: number | null;
-  tailoredFitScore?: number | null;
-  // Compatibility provenance for historical AI comparison snapshots.
-  fitScoreSource?: "ai" | null;
+  // Compact, bounded snapshots of the two user-facing checks. Full provider
+  // responses and historical numeric scores never enter tracker storage.
+  initialFit?: QuickFitSnapshot;
+  finalCheck?: FinalCheckResult;
   templateId?: string;
-  review?: ApplicationReview;
-  missingRequiredSkills?: MissingRequiredSkill[];
   // Which resume actually went out — the AI-tailored draft or the original/base
   // (the AI may judge the base already a strong fit). Captured at Apply time.
   resumeUsed?: "tailored" | "base";
@@ -167,17 +143,16 @@ export type Application = {
   duplicateDismissedIds?: string[];
 };
 
-// Historical tracker rows can still carry the preview-era `distill` stage key.
-// Normalize as records enter the client so every later mutation writes only the
-// canonical key, even when the user edits an unrelated tracker field.
+// Normalize historical stage keys as records enter the client so every later
+// mutation writes only canonical names.
 function canonicalizeApplicationAiUsage(application: Application): Application {
-  if (!application.aiUsage || !("distill" in application.aiUsage)) return application;
+  if (!application.aiUsage) return application;
   return { ...application, aiUsage: canonicalizeAiUsageStageKeys(application.aiUsage) };
 }
 
 // Build the common skeleton for a new pipeline entry from the current job
 // target. Both the "Apply" and "Save answers" paths start here and
-// then add their own fields (fit scores / review, or saved answers), so the
+// then add their own fields (check snapshots or saved answers), so the
 // shared shape — id, inferred title/company, trimmed job target, default
 // status, timestamps — lives in one place and cannot drift between them.
 // crypto.randomUUID exists only in secure contexts (https / localhost). Served
@@ -244,25 +219,6 @@ export function makeApplicationDraft(
   if (metadata.salaryCurrency) draft.salaryCurrency = cleanDraftString(metadata.salaryCurrency, 8);
   if (metadata.salaryPeriod) draft.salaryPeriod = metadata.salaryPeriod;
   return draft;
-}
-
-// Derive a missing-required-skills list for a saved application: prefer the
-// explicitly stored list, else reconstruct it from the snapshotted review gaps
-// (treating an exact, addable gap as "exact" evidence and the rest as "none").
-export function missingRequiredSkillsFromApplication(app: Application): MissingRequiredSkill[] | undefined {
-  if (app.missingRequiredSkills?.length) return app.missingRequiredSkills;
-  const derived = app.review?.gaps
-    ?.filter((gap) => gap.gap)
-    .map((gap) => {
-      const evidenceType = gap.evidenceType ?? (gap.canHonestlyAdd ? "exact" : "none");
-      return {
-        keyword: gap.gap,
-        evidenceType,
-        canHonestlyAdd: evidenceType === "exact" && Boolean(gap.canHonestlyAdd),
-        reason: gap.evidence || gap.suggestedEdit || (gap.severity ? `${gap.severity} gap` : "")
-      };
-    });
-  return derived?.length ? derived : undefined;
 }
 
 // EXACT-tier only: these two drive SILENT merges (Apply + Save answers), so

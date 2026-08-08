@@ -418,9 +418,8 @@ Never show:
   the model is never told a fact the user did not declare. Citizenship gates the
   work-authorization lines and education level gates the field of study; neither
   block gates the other.
-- The retired `polishStages` preference may still be read for compatibility,
-  but normal UI does not expose or dispatch Tailor/Review/Both. Resume and
-  Prepare both use the one-pass Polish contract.
+- Retired Tailor/Review/Both settings are dropped. Resume and Prepare both use
+  the one-pass Polish contract; Final Check is a separate optional action.
 - Job analysis and Resume Polish each report their real operation. Resume Polish
   never fabricates a second stage: Proposal, No changes, and Withheld are
   distinct, and an all-withheld result is not a completed proposal.
