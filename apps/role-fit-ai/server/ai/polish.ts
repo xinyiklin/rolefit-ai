@@ -32,6 +32,7 @@ import {
   clipForPrompt
 } from "./prompts.ts";
 import { callConfiguredProvider } from "./clients.ts";
+import { generateResumeProposal } from "./resumeProposal.ts";
 import { findUngroundedClaimTerm, findUngroundedOutcomeClaim, proseHasUngroundedTerm } from "./grounding.ts";
 import { reviseGroundedCoverLetter } from "./coverLetter.ts";
 import {
@@ -369,6 +370,21 @@ export async function handlePolish(req: IncomingMessage, res: ServerResponse): P
 
     if (!tailorScope.sections.length || editableText.trim().length < 40 || jobText.trim().length < 40) {
       sendJson(res, 400, { error: "Select at least one editable resume section and add a job description before polishing." });
+      return;
+    }
+
+    if (body.mode === "resume-proposal") {
+      const proposal = await generateResumeProposal({
+        body,
+        tailorScope,
+        scopeText,
+        jobText,
+        honestContext,
+        customInstructions,
+        signal: request.signal
+      });
+      provider = proposal.provider;
+      sendJson(res, 200, proposal);
       return;
     }
 

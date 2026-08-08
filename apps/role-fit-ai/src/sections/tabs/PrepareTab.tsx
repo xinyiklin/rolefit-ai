@@ -18,6 +18,7 @@ import {
   type PrepareActivity
 } from "./prepare/PrepareApplicationRail";
 import type { QuickFitState } from "../../../shared/quickFitContract.ts";
+import type { PolishedResume } from "../../resumeEngine";
 
 type SourceMethod = "url" | "paste";
 
@@ -108,6 +109,7 @@ export type PrepareTabProps = {
   isPolishing: boolean;
   polishProgress: PolishProgressState;
   polishOutputCurrent: boolean;
+  polishOutcome?: PolishedResume["polishOutcome"];
   polishStatus: string;
   onTailorPreparedResume: () => void | Promise<void>;
   onReviewResume: () => void;
@@ -168,6 +170,7 @@ export function PrepareTab({
   isPolishing,
   polishProgress,
   polishOutputCurrent,
+  polishOutcome,
   polishStatus,
   onTailorPreparedResume,
   onReviewResume,
@@ -232,24 +235,23 @@ export function PrepareTab({
         : preparationStatus
           ? { tone: "info", message: preparationStatus }
           : null;
-  const tailorDone = polishOutputCurrent && polishProgress.tailor.status === "done";
-  const reviewDone = polishOutputCurrent && polishProgress.review.status === "done";
+  const polishSettled = polishOutputCurrent && (
+    polishProgress.tailor.status === "done" || polishOutcome === "WITHHELD"
+  );
   const resumeState =
     isRankingResumeVariants || isSelectingResume
       ? "Selecting best match…"
       : isPolishing
-        ? polishProgress.review.status === "running"
-          ? "Auditing…"
-          : "Tailoring…"
-        : reviewDone
-          ? tailorDone
-            ? "Tailored · audited"
-            : "Audited"
-          : tailorDone
-            ? "Tailored"
-            : resumeReady
-              ? "Ready"
-              : "No document";
+        ? "Polishing…"
+        : polishSettled
+          ? polishOutcome === "PROPOSAL"
+            ? "Proposal ready"
+            : polishOutcome === "NO_CHANGES"
+              ? "No changes needed"
+              : "Suggestions withheld"
+          : resumeReady
+            ? "Ready"
+            : "No document";
   // A saved base letter is a template: it holds real prose and unresolved slots
   // like [Company]. Reporting that as "No draft" hid a document the user could
   // see in the selector, so the state names the actual reason it is not ready.
@@ -300,10 +302,8 @@ export function PrepareTab({
             : "";
   const canStartTailor = canTailor && !isPolishing && jobPrepared;
   const resumeWorkflowNeedsAttention =
-    polishProgress.tailor.status === "failed" ||
-    polishProgress.tailor.status === "stopped" ||
-    polishProgress.review.status === "failed" ||
-    polishProgress.review.status === "stopped";
+    (polishProgress.tailor.status === "failed" && polishOutcome !== "WITHHELD") ||
+    polishProgress.tailor.status === "stopped";
   // Success receipts duplicate the state line. Keep only blockers and failures.
   const resumeNote = !canStartTailor && tailorHint
     ? tailorHint

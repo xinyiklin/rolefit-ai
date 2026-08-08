@@ -69,7 +69,7 @@ export function clippedString(value: unknown, max: number): string {
   return String(value ?? "").replace(/\s+/g, " ").trim().slice(0, max);
 }
 
-function containsStructuredMarkup(value: unknown): boolean {
+export function containsStructuredMarkup(value: unknown): boolean {
   const text = String(value ?? "");
   if (/[\r\n]/.test(text)) return true;
   if (/\\(?:begin|end|section|subsection|item|href)\b/i.test(text)) return true;

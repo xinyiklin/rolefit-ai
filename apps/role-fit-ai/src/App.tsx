@@ -346,8 +346,6 @@ function App() {
     copyStage,
     honestContext,
     setHonestContext,
-    polishStages,
-    setPolishStages,
     runInitialFit,
     setRunInitialFit,
     autoCreateResumeProposal,
@@ -399,7 +397,6 @@ function App() {
   const jobAnalysisStage = stages["job-analysis"];
   const jobAnalysisProviderReady = providerReady(jobAnalysisStage.provider);
   const tailorProviderReady = providerReady(stages.tailor.provider);
-  const reviewProviderReady = providerReady(stages.review.provider);
   const coverProviderReady = providerReady(stages.cover.provider);
   const answersProviderReady = providerReady(stages.answers.provider);
   const jobAnalysisProviderMessage = providerRecoveryMessage(jobAnalysisStage.provider);
@@ -414,12 +411,7 @@ function App() {
     () => providerAvailability.ensureProvider(stages.tailor.provider),
     [providerAvailability.ensureProvider, stages.tailor.provider]
   );
-  const ensureReviewProvider = useCallback(
-    () => providerAvailability.ensureProvider(stages.review.provider),
-    [providerAvailability.ensureProvider, stages.review.provider]
-  );
-  const selectedPolishProvidersReady =
-    (polishStages === "review" || tailorProviderReady) && (polishStages === "tailor" || reviewProviderReady);
+  const selectedPolishProvidersReady = tailorProviderReady;
   const candidateFactsContext = buildCandidateFactsContext({
     citizenshipStatus,
     legallyAuthorizedToWork,
@@ -980,7 +972,6 @@ function App() {
   const {
     coverLetterText,
     resetCoverWorkflow,
-    applyPolishCoverResult,
     coverStatus,
     isGeneratingCover,
     handleTailorCoverLetter,
@@ -1143,7 +1134,7 @@ function App() {
 
   // Every review-score/diff derivation the UI shows is pure (read-only) and lives
   // in useResumeAnalysis, so it stays decoupled from App's setters.
-  const { resumeDiff, fitComparison, headlineScore, jobConstraints } = useResumeAnalysis({
+  const { fitComparison, headlineScore } = useResumeAnalysis({
     resumeText,
     jobDescription,
     debouncedCurrentResumeText,
@@ -1256,16 +1247,11 @@ function App() {
     tailorModes,
     currentResumeText,
     jobDescription,
-    includeCoverLetter: false,
     requestHonestContext,
     customInstructionsFor,
-    polishStages,
     tailor: stages.tailor,
-    review: stages.review,
     ensureTailorProviderReady: ensureTailorProvider,
-    ensureReviewProviderReady: ensureReviewProvider,
     setResult,
-    applyPolishCoverResult,
     setActiveOutputTab,
     setPipelineAiUsage,
     setPolishStatus,
@@ -1282,22 +1268,12 @@ function App() {
     });
   }
   if (polishProgressVisible) {
-    if (polishStages !== "review") {
-      aiWorkflowStages.push({
-        key: "tailor",
-        state: polishProgress.tailor,
-        onRetry: () => void retryStage("tailor"),
-        onStop: stopPolish
-      });
-    }
-    if (polishStages !== "tailor") {
-      aiWorkflowStages.push({
-        key: "review",
-        state: polishProgress.review,
-        onRetry: () => void retryStage("review"),
-        onStop: stopPolish
-      });
-    }
+    aiWorkflowStages.push({
+      key: "tailor",
+      state: polishProgress.tailor,
+      onRetry: () => void retryStage("tailor"),
+      onStop: stopPolish
+    });
   }
 
   function dismissAiWorkflow() {
@@ -1314,11 +1290,7 @@ function App() {
     jobAnalysisProgress.status === "running"
       ? "analyzing-job"
       : isPolishing
-        ? polishStages === "review"
-          ? "reviewing"
-          : polishStages === "tailor"
-            ? "tailoring"
-            : "tailoring+reviewing"
+        ? "tailoring"
         : resumeDocumentDirty
           ? "editing"
           : "idle";
@@ -1894,7 +1866,10 @@ function App() {
     },
     [linkApplication]
   );
-  const polishOutputCurrent = result?.source === "ai" && !reviewStale && !resumeManuallyEdited;
+  // A one-pass proposal stays usable after per-field decisions: each edit card
+  // validates its own original target against the live document. Only a changed
+  // job invalidates the proposal wholesale.
+  const polishOutputCurrent = result?.source === "ai" && !reviewStale;
 
   // The Apply flow (download-prompt state + commitApply/handleApply/
   // handleApplyDownloadPick/handleApplyOnly/saveAppliedDocumentArtifacts) lives in
@@ -2400,6 +2375,7 @@ function App() {
               isPolishing={isPolishing}
               polishProgress={polishProgress}
               polishOutputCurrent={polishOutputCurrent}
+              polishOutcome={result?.polishOutcome}
               polishStatus={polishStatus}
               onTailorPreparedResume={handleTailorPreparedResume}
               onReviewResume={() => setActiveOutputTab("resume")}
@@ -2463,9 +2439,7 @@ function App() {
               contentRedoSequence={resumeRedoSequence}
               dirty={resumeDocumentDirty}
               draftAutosaveState={draftAutosaveState}
-              jobConstraints={jobConstraints}
               result={result}
-              resumeDiff={resumeDiff}
               docStyle={docStyle}
               formattingToolbar={
                 <FormattingToolbar
@@ -2627,7 +2601,6 @@ function App() {
               onRequestLinkEditor={() => setLinkEditorOpen(true)}
               tailorModes={tailorModes}
               onSetTailorMode={setTailorMode}
-              onAddHonestContext={handleAddHonestContext}
               pendingAutosaveDraft={pendingAutosaveDraft}
               onRestoreAutosaveDraft={handleRestoreAutosaveDraft}
               onDismissAutosaveDraft={handleDismissAutosaveDraft}
@@ -2635,16 +2608,12 @@ function App() {
               resumeReady={resumeReady}
               jobReady={jobReady}
               tailorProviderReady={tailorProviderReady}
-              auditProviderReady={reviewProviderReady}
-              polishStages={polishStages}
               isPolishing={isPolishing}
               polishProgress={polishProgress}
               polishStatus={polishStatus}
               onPolish={() => void handlePolish()}
               onRetryTailor={() => void retryStage("tailor")}
-              onRetryAudit={() => void retryStage("review")}
               onStopPolish={stopPolish}
-              onProposalChange={() => setReviewStale(true)}
               jobTarget={materialsJobTarget}
               documentActions={
                 <>
@@ -2926,8 +2895,6 @@ function App() {
           availabilityStatus={providerAvailability.status}
           availabilityMessage={providerAvailability.message}
           onRefreshProviders={providerAvailability.refresh}
-          polishStages={polishStages}
-          onPolishStagesChange={setPolishStages}
           runInitialFit={runInitialFit}
           onRunInitialFitChange={setRunInitialFit}
           autoCreateResumeProposal={autoCreateResumeProposal}

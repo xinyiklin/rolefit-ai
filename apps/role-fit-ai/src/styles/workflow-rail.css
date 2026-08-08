@@ -55,7 +55,7 @@
   gap: var(--s2);
   padding-inline-start: 16px;
   color: var(--ink);
-  font-size: 0.76rem;
+  font-size: 0.82rem;
 }
 
 .workflow-rail__checks > li::before {
@@ -174,3 +174,23 @@
 .resume-workflow__steps .is-failed small {
   color: var(--warm);
 }
+
+.resume-workflow__single-step {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--s2);
+  padding-bottom: var(--s3);
+  border-bottom: 1px solid var(--hairline-soft);
+  color: var(--ink);
+  font-size: 0.76rem;
+}
+
+.resume-workflow__single-step small {
+  color: var(--ink-faint);
+  text-transform: capitalize;
+}
+
+.resume-workflow__single-step.is-running small { color: var(--accent-deep); }
+.resume-workflow__single-step.is-failed small,
+.resume-workflow__single-step.is-stopped small,
+.resume-workflow__single-step.is-withheld small { color: var(--warm); }

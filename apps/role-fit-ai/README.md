@@ -2,7 +2,7 @@
 
 RoleFit AI is a local-first workspace for preparing job applications. Import a
 posting from the browser extension, a URL, or pasted text; choose a resume and
-cover-letter variant; run the selected resume stages; review grounded document
+cover-letter variant; create a grounded resume proposal; review document
 proposals; export the final files; and save the application record.
 
 The desktop companion starts the loopback Node server, manages the five
@@ -133,20 +133,23 @@ editable documents.
   estimate fit locally; Initial Fit runs in Prepare against the selected resume. See
   [Browser extension](#browser-extension).
 - **Explicit five-provider setup** — the companion can add **Claude Code CLI**, **Codex CLI**, **Antigravity CLI**, **OpenAI API**, and **Claude API**. CLI paths use their provider-owned account sessions and API paths use a locally encrypted key. Settings > AI stages shows only providers the user explicitly added, keeps configured-but-unready providers visible with reconnect guidance, and never silently switches a stage to a paid provider.
-- **Provider-run fit audit** — the selected Recruiter audit model judges the complete requirement set and returns the coverage table, base/tailored scores, verdict, explanation, gaps, and recommendation. RoleFit validates the response contract but does not recalculate or replace that judgment locally.
+- **One-pass Resume Polish** — one provider operation proposes grounded edits
+  through flat target IDs. The server drops malformed, unknown, unchanged, or
+  unsupported edits independently, so a bad optional note or one bad edit does
+  not discard safe siblings. The source resume stays unchanged until the user
+  applies all or accepts an individual edit.
 - **Optional Initial Fit automation** — Initial Fit defaults on. Resume and Cover
   Letter proposal toggles are independent and default off. Only Strong or
   Reasonable without an eligibility blocker may start an enabled proposal;
   Stretch, Limited, unavailable, and blocked outcomes remain manual. Changing
   the selected resume reruns only Initial Fit, never Job analysis.
-- **Strict recruiter audit** — audit the current edited draft as-is, or audit the sanitized proposal produced moments earlier in **Polish**, for a verdict (STRONG FIT / REASONABLE FIT / STRETCH / DON'T APPLY), AI fit scores, gap severity, targeted bullet rewrites, interview risk flags, ready / edits-pending / missing-evidence status, and a cover-letter angle.
-- **One typeset editing surface** — direct text editing, inline emphasis, undo/redo, keyboard caret movement, structural add/remove/reorder controls, per-section Tailor/Include/Off scope, and review-field highlighting all operate on the exported page layout.
+- **One typeset editing surface** — direct text editing, inline emphasis, undo/redo, keyboard caret movement, structural add/remove/reorder controls, per-section Polish/Include/Off scope, and proposal-field highlighting all operate on the exported page layout.
 - **One document workbench rail** — Resume and Cover Letter share the same
   always-present lifecycle hierarchy, readiness order, failure placement,
   collapsible desktop rail, and narrow accordion behavior while keeping their
-  own workflow state. Both spell the run **Polish**; Resume's Polish runs the
-  Tailor, Recruiter audit, or combined workflow remembered in Settings from both
-  Resume and Prepare, while Cover Letter stages an explicit proposal. Polish sits beside
+  own workflow state. Both spell the run **Polish**; Resume creates one proposal
+  from Resume or Prepare, while Cover Letter stages an explicit whole-document
+  proposal. Polish sits beside
   the rail's disclosure control in both states, so collapsing moves the pair to
   the document's edge rather than relocating the action. Each
   document remembers its own expanded or collapsed preference, and hidden
@@ -163,9 +166,9 @@ editable documents.
   caret or field moves, selections, formatting, structural edits, and pauses
   start a new group.
 - **Truthful AI workflow** — Prepare shows its local brief while Job analysis and
-  optional Initial Fit settle independently. Tailor and Recruiter audit retain
-  exact step counts, specific failure reasons, Retry/Stop behavior, and later
-  stages marked not run after a document-stage failure.
+  optional Initial Fit settle independently. Resume Polish reports Proposal,
+  No changes, and Withheld as different outcomes, retains specific failure and
+  Stop behavior, and never presents an all-discarded response as a ready proposal.
 - **WYSIWYG editor + PDF export** — the editor _is_ the preview: it and the exported PDF use the same shared Typeset layout engine, so visible line breaks and page flow match the export exactly. No external toolchain to install — typesetting and PDF generation run in the browser.
 - **`.resume` save/load** — download strict schema-v1 structured resume data,
   including explicit hidden/visible/absent header state, as a `.resume` file
@@ -301,8 +304,9 @@ the studio tab rail. Every stage section stays expanded together; there is no
 per-section collapse control:
 
 - **Job analysis** — job-link, paste, and import analysis into a compact job brief.
-- **Tailor** — evidence-grounded resume suggestions.
-- **Recruiter audit** — strict fit audit of the current edited draft.
+- **Resume Polish** — one evidence-grounded proposal request over selected fields.
+- **Recruiter audit** — retained for the legacy/headless review route while the
+  separate optional Final Check replaces it; normal Resume Polish does not call it.
 - **Cover letter** — one grounded revision pass over your own letter, run from
   the Cover Letter page's **Polish** action.
 - **Application questions** — drafts for an application's free-text questions.
@@ -380,8 +384,8 @@ resume/job text exclusively on stdin while the subprocess is running.
 
 URL, pasted-text, and extension intake request AI-backed Job analysis. RoleFit
 publishes the deterministic brief first; if Job analysis or Initial Fit fails,
-that local brief remains editable and manual Polish stays available. Tailor,
-Recruiter audit, Cover Letter,
+that local brief remains editable and manual Polish stays available. Resume
+Polish, Cover Letter,
 and application-answer generation fail plainly; no local draft, score, or
 verdict silently stands in.
 

@@ -2059,3 +2059,18 @@ bounded; app-only operational detail belongs in the affected app documentation.
   analytics regression all passed. The UI detector reported only advisory
   font-size matches already permitted by the documented body/label ramps.
   Live-provider and real-browser visual QA were not run.
+- [USER+CODE] 2026-08-07: Normal Resume Polish is one proposal request from
+  Resume or Prepare; the Tailor / Review / Both selector and reviewer readiness
+  gate are absent from that path. The server flattens editable fields to opaque
+  `target-N` ids, keeps identity, contact, education, dates, and omitted sections
+  locked, and validates each mutation independently while treating optional
+  feedback tolerantly. Proposal, No changes, and Withheld are distinct outcomes;
+  all-withheld output is a retryable non-success and never mutates the resume.
+  The compact rail shows only What improved, collapsed Edits ready with Apply
+  all plus Accept/Edit/Discard, Still missing, and a quiet withheld line.
+- [TOOL] 2026-08-07: The full RoleFit check passed with loopback access:
+  application and landing builds, desktop contracts, and 72/72 offline
+  evaluations including the new one-pass proposal probes and 405 client workflow
+  guards. The UI detector reported only advisory matches already covered by the
+  documented body/label ramps or pre-existing styles. Live-provider evaluation
+  and real-browser visual QA were not run.

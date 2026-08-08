@@ -10,10 +10,14 @@ sanitizer code is executable product behavior and anti-fabrication-critical.
 - `clients.ts` owns native API/CLI dispatch. `server/ai-cli/` owns subprocess
   invocation and provider-specific process constraints.
 - `prompts.ts` owns fenced input construction and truthfulness/output rules.
-- `sanitize.ts` validates suggestions and Review output; it does not invent or
+- `sanitize.ts` validates legacy suggestions and Review output; it does not invent or
   recalculate a replacement judgment.
-- `polish.ts` orchestrates Tailor and Review; its optional cover leg is retained
-  only for compatibility with older clients.
+- `resumeProposal.ts` owns normal Resume Polish: one provider dispatch, flat
+  target IDs, deterministic mutation grounding, tolerant optional feedback,
+  and truthful Proposal / No changes / Withheld outcomes.
+- `polish.ts` routes `mode: "resume-proposal"` to that contract. Its older
+  Tailor/Review and optional cover legs are compatibility-only until their
+  staged cleanup; the browser's normal Resume Polish path must not use them.
 - `jobAnalysis.ts`, `quickFit.ts`, `coverLetter.ts`, and `applicationAnswers.ts`
   own their routes and prompt contracts. Prepare may ask `jobAnalysis.ts` for
   Job analysis plus optional compact Initial Fit in one provider dispatch;
@@ -62,8 +66,11 @@ sanitizer code is executable product behavior and anti-fabrication-critical.
 - The selected Review model owns coverage, scores, verdict, reason, gaps, and
   recommendation. Validate exact shape, enums, bounds, and score/verdict band
   consistency; reject invalid output instead of recomputing it.
-- Tailor emits targeted suggestions grounded in submitted resume/honest context.
-  Never import JD-only skills or fabricate claims.
+- Resume Polish emits targeted suggestions grounded in the submitted
+  resume/honest context. Never import JD-only skills or fabricate claims.
+  Unknown, duplicate, unchanged, malformed, or unsupported edits are dropped
+  independently. Optional summary/gap failures never erase safe siblings, while
+  an all-drop returns Withheld rather than a successful empty proposal.
 - Review-only audits the current edited draft. The Review leg of Both receives
   only sanitized suggestions from that same Tailor run.
 - Tailor and Review failures fail plainly and stop downstream document work.

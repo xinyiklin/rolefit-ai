@@ -123,12 +123,17 @@ owns:
   raw CLI output, operation ids, or workspace details
 - `/api/polish` AI provider routing — subscription CLIs (Claude Code,
   Codex CLI, Antigravity CLI) shelled out to local subprocesses,
-  plus the native OpenAI and Anthropic APIs. The route supports independent
-  `tailor` and `review` requests plus a backward-compatible/headless `both`
-  request. The current UI implements Both as two sequential requests: Tailor
-  first (`stages: "tailor"`), then Review
-  (`stages: "review"`) with only the sanitized suggestions from that same run.
-  A headless `stages: "both"` request instead runs targeted suggestions first,
+  plus the native OpenAI and Anthropic APIs. Normal Resume Polish sends
+  `mode: "resume-proposal"` and performs one provider operation. The server
+  flattens mutable fields to `target-1`, `target-2`, and so on, keeps their
+  document mapping private, and returns only outcome, changes, short feedback,
+  withheld counts, and provider provenance. Unknown, duplicate, unchanged,
+  malformed, and unsupported mutations are dropped independently. Optional
+  feedback is tolerant while mutation validation stays strict. Identity,
+  contact, education, dates, and omitted sections never become targets.
+  The route temporarily also supports independent legacy `tailor` and `review`
+  requests plus a backward-compatible/headless `both` request; normal UI does
+  not dispatch those modes. A headless `stages: "both"` request runs targeted suggestions first,
   then runs its strict audit and optional cover pass in parallel. No single
   model response is forced to suggest edits, score, audit, and revise a letter
   at the same time. The optional cover leg remains only for older/headless
@@ -354,8 +359,11 @@ The `/api/polish` flow follows that rule — it is split across focused
 modules under `server/ai/` so no single file carries the whole pipeline:
 
 - `polish.ts` — the `handlePolish` route (request parsing, the
-  suggest → parallel audit + cover orchestration, derived `polishedText`
-  assembly) only.
+  normal proposal dispatch plus legacy suggest → parallel audit + cover
+  orchestration and derived `polishedText` assembly) only.
+- `resumeProposal.ts` and `shared/resumePolishContract.ts` — flat target
+  construction, the compact one-pass prompt/wire contract, deterministic
+  per-edit grounding, and Proposal / No changes / Withheld derivation.
 - `providers.ts` — provider identity + per-request config resolution
   (`normalizeProvider`, default provider/model, provider-specific key lookup,
   `resolveProviderRequest`, `resolveAuditProviderRequest`).
@@ -523,24 +531,24 @@ The AI must:
 - keep each role to no more than five bullets
 - emphasize entry-level SDE / full-stack fit
 - strengthen wording and structure
-- return structured `suggestedChanges` that target existing section,
-  entry, and bullet IDs, so the user can accept, edit, or discard changes
-  in the resume editor
+- return normal Resume Polish changes using only the flat target IDs sent by
+  the server; composite section, entry, bullet, field, evidence, risk, and
+  keyword-hit metadata are not part of this contract
 - preserve truthfulness — never invent employers, dates, metrics,
   education, tools, or outcomes
-- never edit identity, contact, education, or omitted sections unless the
-  user explicitly selects those sections in the editor
+- never edit identity, contact, education, dates, or omitted sections
 - treat honest context as optional evidence; when it is blank, rely only
   on the resume
 - never import a JD-only skill/tool into the resume or skills section
   without exact evidence in the resume or optional honest context; surface
   missing required skills as gaps instead
-- add bracketed placeholders where facts or metrics are missing
-- return a concise `changeSummary` (what changed and why, or why nothing
-  needed to); the selected-section text preview used for scoring/audit is
-  derived server-side from the sanitized suggestions, and the editor
+- omit an edit when material support is missing and surface the important gap
+  separately; do not add drafting placeholders to the resume
+- return up to three concise improvements and remaining gaps. The server derives
+  Proposal / No changes / Withheld from accepted mutations, and the editor
   remains the final source of truth
-- make one holistic, evidence-backed fit judgment: the strict reviewer returns
+- on the legacy Review compatibility route only, make one holistic,
+  evidence-backed fit judgment: the strict reviewer returns
   `aiScore`, `strictReview.verdict`, `strictReview.verdictReason`, and a concise
   `strictReview.coverage` table in the same response. Score and verdict must use
   the documented bands (85-100 STRONG FIT, 70-84 REASONABLE FIT, 46-69 STRETCH,

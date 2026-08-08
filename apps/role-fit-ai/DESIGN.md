@@ -370,7 +370,7 @@ interactive control shares the same focus treatment: 2px Forest Ink outline,
   radios keep native controls. Editor font-family choices use the shared custom
   dropdown so the toolbar and Styles matrix have the same visual and keyboard
   behavior in every browser.
-- **AI setup** keeps Job analysis, Tailor, and Review expanded together with no
+- **AI setup** keeps every configured stage expanded together with no
   per-section collapse affordance. Each stage retains its own concrete
   provider/model/effort controls and **Copy from** action. Provider rows come
   from the local companion's explicitly added registry; added-but-unready rows
@@ -500,9 +500,11 @@ clean blank document when no source exists; content readiness gates PDF, Polish,
 and Apply without replacing the editor with an empty-state panel. Cover letter = one engine-painted
 plain correspondence sheet + the same workflow-rail hierarchy. Both rails remain
 visible from idle through blocked, working, proposal, stale, and applied states.
-Resume's primary Polish action runs the Tailor, Recruiter audit, or combined
-workflow remembered in Settings; the same choice applies when Polish starts in
-Prepare, and the rail retains the granular proposal review. Cover letter keeps
+Resume's primary Polish action runs one grounded proposal request from either
+Resume or Prepare. Its rail shows What improved, collapsed Edits ready with
+Apply all plus individual Accept/Edit/Discard controls, Still missing, and one
+quiet withheld line; Proposal, No changes, and Withheld remain visibly distinct.
+Cover letter keeps
 the editor unchanged while showing a whole-document proposal with explicit
 Accept proposal and Discard proposal actions; Restore appears only after acceptance.
 If that draft fails the evidence checks after repair, the rail shows one flat

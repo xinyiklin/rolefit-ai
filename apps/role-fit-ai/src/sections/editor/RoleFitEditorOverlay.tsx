@@ -7,9 +7,10 @@ import type { EntryTextField } from "@typeset/engine/lib/styleFieldFormatting.ts
 import type { TailorMode } from "../../lib/tailorScope.ts";
 import type { TailorChangeTarget } from "../../resume/types.ts";
 import type { ResumeEditorActions } from "../../hooks/useResumeEditor.ts";
+import { resumePolishSectionIsLocked } from "../../../shared/resumePolishContract.ts";
 
 const TAILOR_MODES: Array<{ mode: TailorMode; label: string }> = [
-  { mode: "tailor", label: "Tailor" },
+  { mode: "tailor", label: "Polish" },
   { mode: "include", label: "Include" },
   { mode: "off", label: "Off" }
 ];
@@ -88,6 +89,14 @@ export function RoleFitEditorOverlay({
   const heading = anchor && anchors ? anchors.headings.get(anchor.sectionId) ?? null : null;
   const headingOrigin = heading ? pageOrigins[heading.page] ?? null : null;
   const sectionMode = anchor ? tailorModes[anchor.sectionId] ?? "off" : "off";
+  const sectionHeading = anchor
+    ? data.sections.find((section) => section.id === anchor.sectionId)?.heading ?? ""
+    : "";
+  const polishLocked = resumePolishSectionIsLocked(sectionHeading);
+  const scopeModes = polishLocked
+    ? TAILOR_MODES.filter(({ mode }) => mode !== "tailor")
+    : TAILOR_MODES;
+  const visibleSectionMode = polishLocked && sectionMode === "tailor" ? "include" : sectionMode;
 
   const detailsSection = detailsTarget
     ? data.sections.find((section) => section.id === detailsTarget.sectionId)
@@ -113,7 +122,7 @@ export function RoleFitEditorOverlay({
         <div
           className="ts-chrome ts-chrome--chips ts-structure-overlay"
           role="radiogroup"
-          aria-label="Section tailor mode"
+          aria-label="Section Polish scope"
           style={{
             left: headingOrigin.left,
             top: headingOrigin.top + heading.top * zoom - 2,
@@ -121,22 +130,22 @@ export function RoleFitEditorOverlay({
             paddingRight: Math.max(geometry.marginRight * zoom - 4, 0)
           }}
         >
-          {TAILOR_MODES.map(({ mode, label }, index) => (
+          {scopeModes.map(({ mode, label }, index) => (
             <button
               key={mode}
               type="button"
               role="radio"
-              className={`ts-chip${sectionMode === mode ? " is-on" : ""}`}
-              aria-checked={sectionMode === mode}
-              tabIndex={sectionMode === mode ? 0 : -1}
+              className={`ts-chip${visibleSectionMode === mode ? " is-on" : ""}`}
+              aria-checked={visibleSectionMode === mode}
+              tabIndex={visibleSectionMode === mode ? 0 : -1}
               onMouseDown={(event) => event.preventDefault()}
               onClick={() => onSetTailorMode(anchor.sectionId, mode)}
               onKeyDown={(event) => {
                 if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)) return;
                 event.preventDefault();
                 const delta = event.key === "ArrowRight" || event.key === "ArrowDown" ? 1 : TAILOR_MODES.length - 1;
-                const next = (index + delta) % TAILOR_MODES.length;
-                onSetTailorMode(anchor.sectionId, TAILOR_MODES[next].mode);
+                const next = (index + delta) % scopeModes.length;
+                onSetTailorMode(anchor.sectionId, scopeModes[next].mode);
                 (event.currentTarget.parentElement?.children[next] as HTMLElement | undefined)?.focus();
               }}
             >

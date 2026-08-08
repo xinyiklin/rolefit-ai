@@ -26,12 +26,6 @@ export const SETTINGS_SECTIONS: { id: SettingsSection; label: string }[] = [
   { id: "guidance", label: "Guidance" }
 ];
 
-const POLISH_STAGE_DEFAULTS: { value: "tailor" | "review" | "both"; label: string }[] = [
-  { value: "both", label: "Polish resume" },
-  { value: "tailor", label: "Tailor only" },
-  { value: "review", label: "Audit current" }
-];
-
 type SettingsDialogProps = {
   section: SettingsSection;
   onSectionChange: (section: SettingsSection) => void;
@@ -46,8 +40,6 @@ type SettingsDialogProps = {
   availabilityStatus: ProviderAvailabilityStatus;
   availabilityMessage: string;
   onRefreshProviders: () => void | Promise<void>;
-  polishStages: "tailor" | "review" | "both";
-  onPolishStagesChange: (value: "tailor" | "review" | "both") => void;
   runInitialFit: boolean;
   onRunInitialFitChange: (value: boolean) => void;
   autoCreateResumeProposal: boolean;
@@ -96,8 +88,6 @@ export function SettingsDialog({
   availabilityStatus,
   availabilityMessage,
   onRefreshProviders,
-  polishStages,
-  onPolishStagesChange,
   runInitialFit,
   onRunInitialFitChange,
   autoCreateResumeProposal,
@@ -235,32 +225,9 @@ export function SettingsDialog({
                     </label>
                   </div>
 
-                  <div className="settings-default-stages__label" id="settings-polish-stages-label">
-                    <strong>Resume workflow</strong>
-                    <small>Polish uses this stage choice everywhere.</small>
-                  </div>
-                  <div
-                    className="segmented-control"
-                    role="radiogroup"
-                    aria-labelledby="settings-polish-stages-label"
-                  >
-                    {POLISH_STAGE_DEFAULTS.map((option) => (
-                      <label
-                        key={option.value}
-                        className={`segmented-control__option${polishStages === option.value ? " is-selected" : ""}`}
-                      >
-                        <input
-                          type="radio"
-                          name="settings-polish-stages"
-                          value={option.value}
-                          checked={polishStages === option.value}
-                          onChange={() => onPolishStagesChange(option.value)}
-                          className="sr-only"
-                        />
-                        {option.label}
-                      </label>
-                    ))}
-                  </div>
+                  <p className="settings-automation__note">
+                    Resume Polish uses one proposal request and leaves the current resume unchanged until you accept edits.
+                  </p>
                 </div>
 
                 <div className="settings-stages">

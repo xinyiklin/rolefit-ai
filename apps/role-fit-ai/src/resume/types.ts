@@ -120,6 +120,12 @@ export type PolishedResume = {
   changeSummary?: string[];
   missingRequiredSkills?: MissingRequiredSkill[];
   suggestedChanges?: TailorSuggestion[];
+  polishOutcome?: "PROPOSAL" | "NO_CHANGES" | "WITHHELD";
+  remainingGaps?: string[];
+  withheld?: {
+    count: number;
+    reasons: Array<"UNSUPPORTED" | "INVALID_TARGET" | "UNCHANGED" | "MALFORMED">;
+  };
   // Anti-fabrication catches the sanitizer withheld this run (counts only, no text).
   droppedSuggestions?: DroppedSuggestions | null;
   trimmedBulletGroups: number;

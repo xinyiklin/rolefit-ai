@@ -74,9 +74,17 @@ Good server verification covers:
   the NodeNext, rewrite, and erasable-syntax options make this the type +
   native-runtime syntax gate)
 - the affected route returns the expected JSON shape and HTTP status
-- `/api/polish` accepts a structured `tailorScope`, does not require or read
-  full-resume `resumeText`, and returns only suggestions targeting IDs from
-  the submitted scope
+- normal `/api/polish` accepts `mode: "resume-proposal"` plus a structured
+  `tailorScope`, does not require full-resume `resumeText`, and owns exactly one
+  provider dispatch. It prompts with flat `target-N` IDs only; education, dates,
+  and omitted sections never become targets
+- one malformed, unknown, duplicate, unchanged, or unsupported edit is dropped
+  without discarding valid siblings. Malformed optional summary/gap items are
+  independently ignored. An all-drop returns Withheld, not a completed proposal;
+  explicit empty output can return No changes
+- the browser makes one `/api/polish` request per normal Resume Polish run,
+  exposes no Tailor/Review/Both selector, and classifies a parsed invalid wire
+  result as validation rather than `Parsing error`
 - a fresh standalone Review skips tailoring and sends `suggestedChanges: []`
   so it audits the current edited draft as submitted; the internal Review leg
   of Both may send only the sanitized suggestions returned by that same Tailor
@@ -131,8 +139,8 @@ Good server verification covers:
   stable DON'T APPLY
 - when Job analysis or Initial Fit fails, Prepare keeps the immediate local
   brief editable and manual Polish available; Initial Fit is separately
-  retryable and cannot invalidate valid job fields. Tailor or Review failures
-  remain current and leave later selected document stages not run
+  retryable and cannot invalidate valid job fields. Resume Polish failure or
+  Withheld keeps the current resume unchanged and locally retryable
 - duplicate warnings before or after Job analysis must offer Continue/Stop; Stop
   prevents the current and every downstream AI request, while Continue is
   acknowledged for the same job target so the pipeline does not prompt twice
@@ -226,7 +234,7 @@ Good frontend verification covers:
   analysis after the local preview is published. Provider failure leaves that
   preview usable, and retry/stale guards cannot apply an earlier posting to the
   current session
-- extension intake never launches Tailor or Review; multiple saved resume
+- extension intake never launches Resume Polish; multiple saved resume
   variants may still be ranked from their actual strict document contents and
   a clear high-confidence winner selected while the editor is clean, but that
   is source selection, not tailoring, and no variant metadata is persisted
@@ -266,14 +274,15 @@ Good frontend verification covers:
   summary disappear together the moment the user edits, opens another document,
   or runs Tailor again. Duration grounding covers equivalent word and digit forms
 - the owned typeset page stays the sole editor and live preview; the tracker may
-  render or open a saved application document as PDF, `ReviewRail` docks only after polish
-  produces review output, and a
-  hovered/focused review card highlights and scrolls to its exact editor field
+  render or open a saved application document as PDF. Resume's proposal rail
+  shows only What improved, Edits ready, Still missing, and a withheld line;
+  individual cards support Accept/Edit/Discard and still highlight their exact
+  editor field, while no evidence/risk/keyword chips return
 - production builds keep `TrackerTab`, `AnalyticsTab`, and
   `ApplicationModal` in lazy chunks, and opening each surface loads cleanly
 - components reuse shared CSS classes and tokens from `src/styles/` instead of
   one-off styles
-- AI setup renders Job analysis, Tailor, and Review expanded together with no
+- AI setup renders every configured stage expanded together with no
   per-section collapse control or persisted collapse state; only explicitly
   configured providers appear, configured-but-unready selections stay visible
   and disabled, and no API key appears in DOM, browser storage, or HTTP requests

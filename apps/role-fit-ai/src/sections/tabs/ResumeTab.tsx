@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type ReactNode, type RefObject } from "react";
 
-import type { PolishedResume, ResumeDiff } from "../../resumeEngine";
+import type { PolishedResume } from "../../resumeEngine";
 import type { ResumeData } from "@typeset/engine/lib/resumeData.ts";
 import type { TailorMode } from "../../lib/tailorScope";
 import type { ResumeEditorActions } from "../../hooks/useResumeEditor";
@@ -15,10 +15,10 @@ import {
   type TypesetEditorHandle,
   type TypesetEditorOverlayContext
 } from "@typeset/editor/sections/editor/TypesetEditor.tsx";
-import type { JobConstraint } from "../../lib/jobConstraints";
 import type { PolishProgressState } from "../../lib/aiWorkflow";
 import type { AutosavedDraft } from "../../hooks/useAutosaveDraft";
 import type { DraftAutosaveState } from "../../hooks/useAutosaveDraft";
+import { resumePolishSectionIsLocked } from "../../../shared/resumePolishContract.ts";
 import { fieldKeyForReviewTarget } from "../../lib/reviewTarget.ts";
 import { useRestoredScroll } from "../../hooks/useRestoredScroll";
 import { DraftRestoreBar } from "../DraftRestoreBar";
@@ -42,9 +42,7 @@ type ResumeTabProps = {
   dirty: boolean;
   draftAutosaveState: DraftAutosaveState;
   // JD lifestyle/logistical conditions for the pre-apply advisory (not fit).
-  jobConstraints?: JobConstraint[];
   result: PolishedResume | null;
-  resumeDiff: ResumeDiff | null;
   docStyle: DocStyleControls;
   formattingToolbar: ReactNode;
   editorRef: RefObject<TypesetEditorHandle | null>;
@@ -59,7 +57,6 @@ type ResumeTabProps = {
   tailorModes: Record<string, TailorMode>;
   onSetTailorMode: (sectionId: string, mode: TailorMode) => void;
   documentActions?: ReactNode;
-  onAddHonestContext?: (keyword: string) => void;
   // Autosave recovery: non-null when a draft from a previous session was found.
   pendingAutosaveDraft?: AutosavedDraft | null;
   onRestoreAutosaveDraft?: (draft: AutosavedDraft) => void;
@@ -73,16 +70,12 @@ type ResumeTabProps = {
   resumeReady: boolean;
   jobReady: boolean;
   tailorProviderReady: boolean;
-  auditProviderReady: boolean;
-  polishStages: "tailor" | "review" | "both";
   isPolishing: boolean;
   polishProgress: PolishProgressState;
   polishStatus?: string;
   onPolish: () => void;
   onRetryTailor: () => void;
-  onRetryAudit: () => void;
   onStopPolish: () => void;
-  onProposalChange: () => void;
 };
 
 // The resume surface is edit-and-check: the owned typeset page is the editor
@@ -100,9 +93,7 @@ export function ResumeTab({
   contentRedoSequence,
   dirty,
   draftAutosaveState,
-  jobConstraints,
   result,
-  resumeDiff,
   docStyle,
   formattingToolbar,
   editorRef,
@@ -116,7 +107,6 @@ export function ResumeTab({
   tailorModes,
   onSetTailorMode,
   documentActions,
-  onAddHonestContext,
   jobTarget,
   pendingAutosaveDraft,
   onRestoreAutosaveDraft,
@@ -125,16 +115,12 @@ export function ResumeTab({
   resumeReady,
   jobReady,
   tailorProviderReady,
-  auditProviderReady,
-  polishStages,
   isPolishing,
   polishProgress,
   polishStatus,
   onPolish,
   onRetryTailor,
-  onRetryAudit,
   onStopPolish,
-  onProposalChange
 }: ResumeTabProps) {
   const { editorScrollerRef, layoutScrollerRef } = useRestoredScroll(
     initialScrollTop,
@@ -182,14 +168,18 @@ export function ResumeTab({
   );
 
   const selectedSectionCount = Object.values(tailorModes).filter((mode) => mode !== "off").length;
-  const tailorSectionCount = Object.values(tailorModes).filter((mode) => mode === "tailor").length;
-  const needsTailor = polishStages !== "review";
-  const needsAudit = polishStages !== "tailor";
+  const lockedSectionIds = new Set(
+    editedResume.sections
+      .filter((section) => resumePolishSectionIsLocked(section.heading))
+      .map((section) => section.id)
+  );
+  const tailorSectionCount = Object.entries(tailorModes)
+    .filter(([sectionId, mode]) => mode === "tailor" && !lockedSectionIds.has(sectionId))
+    .length;
   const canPolish =
     resumeReady &&
     jobReady &&
-    (!needsTailor || tailorProviderReady) &&
-    (!needsAudit || auditProviderReady) &&
+    tailorProviderReady &&
     tailorSectionCount > 0;
   const documentContext = [jobTarget?.role, jobTarget?.company].filter(Boolean).join(" at ");
   // The rail's one primary action, handed to the shell so it sits beside the
@@ -257,26 +247,19 @@ export function ResumeTab({
               result={result}
               resume={editedResume}
               actions={actions}
-              resumeDiff={resumeDiff}
-              jobConstraints={jobConstraints}
               reviewStale={reviewStale}
               jobTarget={jobTarget}
               resumeReady={resumeReady}
               jobReady={jobReady}
               tailorProviderReady={tailorProviderReady}
-              auditProviderReady={auditProviderReady}
-              polishStages={polishStages}
               selectedSectionCount={selectedSectionCount}
               tailorSectionCount={tailorSectionCount}
               isPolishing={isPolishing}
               progress={polishProgress}
               status={polishStatus}
               onRetryTailor={onRetryTailor}
-              onRetryAudit={onRetryAudit}
               onStop={onStopPolish}
               onHighlight={setHighlightTarget}
-              onProposalChange={onProposalChange}
-              onAddHonestContext={onAddHonestContext}
             />
           )
         }}

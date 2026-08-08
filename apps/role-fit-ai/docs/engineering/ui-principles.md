@@ -45,7 +45,7 @@ masthead into the first/default Prepare page on 2026-07-29):
   controls own add/remove/reorder, section type, and per-section tailor scope;
   Open/Save share one document bar; the primary Polish action rides beside the
   workflow rail's disclosure control in either state, and the
-  suggestion/recruiter-review rail docks beside it post-polish), Cover
+  one-pass proposal rail docks beside it), Cover
   letter (a separate plain-paragraph editor with one Polish action and a rail
   that reports readiness before it and the result's provenance after it),
   Materials (application questions and role descriptions); TRACK contains
@@ -141,9 +141,8 @@ only the editor/rail grid, labelled disclosure, independent scrolling,
 container-query stacking, and the two origin-scoped preferences
 `rolefit:document-rail:resume-review` and
 `rolefit:document-rail:cover-tailoring`. Rail children stay mounted while hidden
-so local inputs and review interaction state survive collapse. A new result does
-not override an explicit preference; Resume simply omits the rail until review
-content exists, while Cover Letter always exposes pre-Tailor readiness.
+so local inputs and proposal interaction state survive collapse. A new result does
+not override an explicit preference; both documents expose readiness before a run.
 
 Opening the rail moves the rail, not the workspace. Two rules hold that:
 
@@ -204,12 +203,9 @@ track closes, so it slides out instead of reflowing on the way.
 
 Both workspaces spell the run **Polish** — beside the rail's disclosure control
 in either state, and on the Prepare cards that start the same runs — with `Polishing…`
-while it is in flight and `Polish again` once an outcome exists. `Tailor` and
-`Audit` are stage names, legitimate only where the interface reports which half
-of a run is happening (the resume's progress steps, the Settings stage default,
-a material card's state). The Settings-owned Tailor / Recruiter audit / Both
-choice applies to every Resume Polish entry point, and readiness shows only the
-providers that selected workflow will call. A rail's readiness rows hold gates only: what the
+while it is in flight and `Polish again` once an outcome exists. Resume has no
+Tailor/Review/Both selector: every entry point dispatches one Resume Polish
+proposal request and readiness checks that one provider. A rail's readiness rows hold gates only: what the
 workflow does with them belongs to the description, and a row that is always
 ready is not a check. The two rails share their gate phrasing (`Add your
 resume`, `Prepare the job`, `Check AI settings`) and their decision verbs
@@ -278,12 +274,13 @@ bound to the intended painted line rather than an adjacent text line.
 Resume print-style changes participate in the same chronological Undo/Redo
 stream as content. Zoom, spell-check, and preset labels do not.
 
-Polish should feel like a review queue, not a hidden overwrite. By default,
-the user selects editable resume sections in the document; identity,
-contact, and education stay out of the AI prompt unless explicitly selected.
-After AI returns, show proposed edits as accept / edit / discard cards and
-let the editor remain the final source of truth for export and pipeline
-tracking.
+Polish should feel like a review queue, not a hidden overwrite. The user selects
+editable resume sections in the document; identity, contact, education, dates,
+and omitted sections stay locked. After AI returns, show What improved (up to
+three), Edits ready collapsed by default with Apply all plus individual
+Accept/Edit/Discard, Still missing (up to three), and one quiet withheld line.
+Do not render evidence, risk, or keyword chips in this normal surface. The
+editor remains the final source of truth for export and pipeline tracking.
 
 When changing one menu or tab, preserve the others' layout and labels
 unless the task explicitly touches them.
@@ -415,13 +412,12 @@ Never show:
   the model is never told a fact the user did not declare. Citizenship gates the
   work-authorization lines and education level gates the field of study; neither
   block gates the other.
-- `polishStages` has one stored value in Settings > AI stages. Resume's document
-  action and Prepare card both dispatch that choice; neither owns a per-run
-  override or silently rewrites it.
-- Job analysis, Tailor, and Review share one ordered workflow indicator. It shows
-  every selected stage and its real `Step n of total` position; a failed or
-  user-stopped stage leaves later stages visible as not run and never advances
-  automatically.
+- The retired `polishStages` preference may still be read for compatibility,
+  but normal UI does not expose or dispatch Tailor/Review/Both. Resume and
+  Prepare both use the one-pass Polish contract.
+- Job analysis and Resume Polish each report their real operation. Resume Polish
+  never fabricates a second stage: Proposal, No changes, and Withheld are
+  distinct, and an all-withheld result is not a completed proposal.
 - Duplicate detection is an explicit pipeline gate. Before an AI request, and
   again after Job analysis when richer tracking facts become available, the user
   chooses **Continue pipeline** or **Stop here**. Continuing acknowledges that

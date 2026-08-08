@@ -37,8 +37,9 @@ as deliberate fallbacks. Its complete editable brief exposes tracked job facts,
 one role context, responsibilities, required and preferred qualifications,
 technical keywords, seniority and domain signals, benefits, and extraction
 gaps. Resume proposals remain constrained by server-side
-grounding and anti-fabrication checks, with a recruiter audit for detailed
-post-draft scoring and gap analysis.
+grounding and anti-fabrication checks. Normal Resume Polish is one provider
+operation that stages a proposal for human decisions; it does not automatically
+run a second assessment over edits the user may never accept.
 
 The cover letter is **one Polish click**. RoleFit resolves the date, candidate
 name, role, company, greeting, and sign-off itself, sends the whole candidate
@@ -167,10 +168,9 @@ disappears into the task. Quiet competence, not salesmanship.
    action sits beside that rail's disclosure control — in the rail header while
    it is open, and on the document's edge while it is collapsed.
    Polish is the one name for starting a run, in either document and on the
-   Prepare cards that launch the same runs; Tailor and Audit survive only as the
-   names of the resume pipeline's own stages. Resume's Polish runs the workflow
-   remembered in Settings — Tailor, Recruiter audit, or both — from either the
-   document or Prepare; there is no second menu in the document header. Cover letter
+   Prepare cards that launch the same runs. Resume's Polish creates one grounded
+   proposal from either the document or Prepare; there is no stage selector or
+   second menu in the document header. Cover letter
    stages a whole-document proposal for explicit acceptance. The document rails
    remember their disclosure separately while their orchestration remains
    document-specific. The remaining workspaces are Materials, the Applications
@@ -187,8 +187,9 @@ disappears into the task. Quiet competence, not salesmanship.
    `@typeset/editor`, and each owner's tokens rather than forking controls.
 6. Make workflow state truthful: Prepare publishes its deterministic brief
    immediately, then Job analysis and optional Initial Fit settle independently.
-   Tailor and Recruiter audit show their exact ordered step, stop after
-   failure/user cancellation, and identify the cause.
+   Resume Polish has one request and three distinct settled outcomes: Proposal,
+   No changes, and Withheld. Withheld edits never receive success treatment;
+   failure and cancellation identify the cause without changing the resume.
 7. Preserve product boundaries: RoleFit owns job/AI/tracker orchestration and
    host chrome; shared document editing, formatting, layout, files, and PDF
    remain package-owned and consistent with standalone Typeset.

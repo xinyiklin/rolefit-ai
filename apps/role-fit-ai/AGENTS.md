@@ -55,10 +55,16 @@ own a second resume model, editor, layout engine, or PDF implementation.
   four verdicts, one summary, up to three matches and gaps, and an optional
   eligibility warning. It has no score, confidence, ledger, evidence quotes,
   recommendation, persistence, or analytics contract.
+- Normal Resume Polish is one proposal request, never Tailor followed by Review.
+  It uses flat server-owned target IDs and returns Proposal, No changes, or
+  Withheld. Mutation fields validate strictly; malformed optional feedback is
+  dropped locally without invalidating safe edits. Identity, contact,
+  education, dates, and omitted sections stay locked, and the live resume
+  changes only through explicit Apply all, Accept, or edited acceptance.
 - Prepare publishes its deterministic local brief before provider work. A Job
   analysis or Initial Fit failure leaves that brief editable and manual Polish
   available; invalid Initial Fit output never invalidates valid Job analysis.
-  Tailor and Review failures still stop their selected document pipeline.
+  Resume Polish failure or Withheld leaves the document unchanged.
 - Duplicate checks gate the pipeline before and after Job analysis. Stop means no
   downstream request; Continue is acknowledged for that job target.
 - Keep the server loopback-only by default. `HOST=0.0.0.0` exposes an
@@ -158,7 +164,7 @@ or workspace state, keep it here and expose the smallest host seam instead.
   resume reruns only compact Initial Fit. The fixed auto-proposal rule admits
   only Strong or Reasonable with no eligibility blocker; Resume and Cover Letter
   toggles are independent, default off, and never disable manual Polish.
-- Reuse `AiWorkflowProgress` for ordered/retryable task stages and existing
+- Reuse `AiWorkflowProgress` for retryable AI operations and existing
   dialog/menu primitives for repeated interactions. Do not build parallel
   progress cards, modal shells, provider selectors, or status vocabularies.
 - Keep host components declarative: values/callbacks in, UI out. Network,

@@ -33,9 +33,9 @@ export const AI_STAGES: readonly AiStageDescriptor[] = [
   },
   {
     id: "tailor",
-    label: "Tailor",
-    title: "Resume tailor",
-    blurb: "Rewrites the sections you marked Tailor against the job.",
+    label: "Polish",
+    title: "Resume Polish",
+    blurb: "Creates one grounded proposal for the sections you marked Polish.",
     settingsPrefix: ""
   },
   {

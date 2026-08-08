@@ -173,7 +173,7 @@
 .settings-panel__intro {
   margin: 0;
   color: var(--ink-soft);
-  font-size: 0.76rem;
+  font-size: 0.82rem;
   line-height: 1.45;
 }
 
@@ -211,6 +211,13 @@
   font-size: 0.7rem;
   font-weight: 400;
   line-height: 1.35;
+}
+
+.settings-automation__note {
+  margin: var(--s1) 0 0;
+  color: var(--ink-soft);
+  font-size: 0.76rem;
+  line-height: 1.4;
 }
 
 .settings-default-stages__label {

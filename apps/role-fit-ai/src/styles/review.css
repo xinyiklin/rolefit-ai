@@ -547,3 +547,132 @@
 .review-rail__verdict--stale .rec-pill {
   opacity: 0.65;
 }
+
+.resume-proposal {
+  display: grid;
+  gap: var(--s4);
+}
+
+.resume-proposal__section {
+  display: grid;
+  gap: var(--s2);
+  padding-top: var(--s3);
+  border-top: 1px solid var(--hairline-soft);
+}
+
+.resume-proposal__section h3,
+.resume-proposal__section p {
+  margin: 0;
+}
+
+.resume-proposal__section h3 {
+  color: var(--ink-strong);
+  font-size: 0.82rem;
+  font-weight: 650;
+}
+
+.resume-proposal__section ul {
+  display: grid;
+  gap: var(--s1);
+  margin: 0;
+  padding-left: var(--s4);
+  color: var(--ink-soft);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.resume-proposal__head {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: var(--s3);
+}
+
+.resume-proposal__head p {
+  margin-top: 2px;
+  color: var(--ink-soft);
+  font-size: 0.82rem;
+}
+
+.resume-proposal__edits > summary {
+  cursor: pointer;
+  color: var(--ink-soft);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.resume-proposal__edit-list {
+  display: grid;
+  margin-top: var(--s2);
+  border-top: 1px solid var(--hairline-soft);
+}
+
+.resume-proposal__edit {
+  display: grid;
+  gap: var(--s2);
+  padding: var(--s3) 0;
+  border-bottom: 1px solid var(--hairline-soft);
+}
+
+.resume-proposal__label {
+  color: var(--ink-faint);
+  font-size: 0.68rem;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.resume-proposal__original,
+.resume-proposal__replacement,
+.resume-proposal__reason {
+  margin: 0;
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.resume-proposal__original {
+  color: var(--ink-soft);
+}
+
+.resume-proposal__replacement {
+  color: var(--ink-strong);
+}
+
+.resume-proposal__reason {
+  color: var(--ink-soft);
+  font-size: 0.82rem;
+}
+
+.resume-proposal__edit textarea {
+  width: 100%;
+  resize: vertical;
+}
+
+.resume-proposal__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+}
+
+.resume-proposal__actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s1);
+}
+
+.resume-proposal__decision,
+.resume-proposal__withheld,
+.resume-proposal__empty {
+  color: var(--ink-soft);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.resume-proposal__withheld,
+.resume-proposal__empty {
+  margin: 0;
+}
+
+.resume-proposal__empty.is-warn {
+  color: var(--warm);
+}

@@ -58,7 +58,14 @@ const applicationModal = readFileSync(new URL("../../sections/ApplicationModal.t
 const trackerTab = readFileSync(new URL("../../sections/tabs/TrackerTab.tsx", import.meta.url), "utf8");
 const analyticsTab = readFileSync(new URL("../../sections/tabs/AnalyticsTab.tsx", import.meta.url), "utf8");
 const settingsStage = readFileSync(new URL("../../sections/SettingsStage.tsx", import.meta.url), "utf8");
-const reviewRail = readFileSync(new URL("../../sections/ReviewRail.tsx", import.meta.url), "utf8");
+const resumeProposalReview = readFileSync(
+  new URL("../../sections/resume/ResumeProposalReview.tsx", import.meta.url),
+  "utf8"
+);
+const resumePolishContract = readFileSync(
+  new URL("../../../shared/resumePolishContract.ts", import.meta.url),
+  "utf8"
+);
 const appIndex = readFileSync(new URL("../../../index.html", import.meta.url), "utf8");
 const styleTokens = readFileSync(new URL("../../styles/tokens.css", import.meta.url), "utf8");
 const shellStyles = readFileSync(new URL("../../styles/shell.css", import.meta.url), "utf8");
@@ -74,6 +81,10 @@ const coverPreflight = readFileSync(new URL("../../lib/coverLetterPreflight.ts",
 const resumeTab = readFileSync(new URL("../../sections/tabs/ResumeTab.tsx", import.meta.url), "utf8");
 const resumeWorkflowRail = readFileSync(
   new URL("../../sections/resume/ResumeWorkflowRail.tsx", import.meta.url),
+  "utf8"
+);
+const roleFitEditorOverlay = readFileSync(
+  new URL("../../sections/editor/RoleFitEditorOverlay.tsx", import.meta.url),
   "utf8"
 );
 const coverTab = readFileSync(new URL("../../sections/tabs/CoverLetterTab.tsx", import.meta.url), "utf8");
@@ -368,73 +379,39 @@ assert.doesNotMatch(
 assert.match(intakeFingerprint, /jobUrl/, "Job analysis still guards the live job URL");
 assert.match(intakeFingerprint, /jobDescription/, "Job analysis still guards the live job description");
 assert.match(intakeFingerprint, /aiRequest/, "Job analysis still guards its provider, model, and effort settings");
-assert.match(
-  polish,
-  /const results = await Promise\.all\(checks\)/,
-  "Polish checks selected stage providers in parallel through the shared readiness owner"
-);
-assert.match(
-  polish,
-  /const providerBlocker = await selectedProviderBlocker\(/,
-  "Polish waits for initial provider discovery before beginning"
-);
+assert.match(polish, /const provider = await ensureTailorProviderReady\(\)/,
+  "one-pass Polish waits for its selected provider before dispatch");
 assert.doesNotMatch(
   polishFingerprint,
   /tailorProviderReady|reviewProviderReady/,
-  "advisory provider polling cannot invalidate an active Tailor or Review request"
+  "advisory provider polling cannot invalidate an active Polish request"
 );
-assert.match(polish, /polishRunLockRef/, "Polish has a synchronous double-run lock");
+assert.match(polish, /async function startRun[\s\S]{0,180}?runLockRef\.current = true;[\s\S]{0,180}?ensureTailorProviderReady/,
+  "Polish acquires its double-run lock before provider readiness or duplicate dialogs can yield");
 assert.match(polish, /inputFingerprintRef\.current = inputFingerprint/, "Polish tracks live semantic inputs");
-
-// Settings owns one persisted Resume workflow choice. Every visible Polish
-// action must run that same selection; no document-local override may silently
-// rewrite it before dispatch.
-assert.match(polishFingerprint, /polishStages/, "the polish fingerprint still guards the selected stages");
+assert.doesNotMatch(polishFingerprint, /polishStages|reviewInstructions|review:/,
+  "normal Polish has no Tailor/Review/Both selector or reviewer dependency");
+assert.match(polish, /mode: "resume-proposal"/, "normal Polish selects the flat one-pass server contract");
+assert.equal(polish.match(/fetch\("\/api\/polish"/g)?.length, 1,
+  "normal Resume Polish has exactly one provider-backed request path");
 assert.doesNotMatch(
   app,
   /runPolishOnStagesCommitRef|function startPolish\(/,
-  "the retired per-run chooser cannot override the Settings-owned stage selection"
+  "the retired per-run chooser cannot return"
 );
 assert.match(
   app,
   /onPolish=\{\(\) => void handlePolish\(\)\}/,
-  "the Resume document action dispatches the current Settings-owned workflow"
+  "the Resume document action dispatches the one-pass workflow"
 );
-assert.doesNotMatch(
-  app,
-  /startPolish\("both"\)/,
-  "the Resume document action cannot force both stages over the stored selection"
-);
-assert.match(
-  resumeTab,
-  /polishStages=\{polishStages\}|polishStages:\s*"tailor" \| "review" \| "both"/,
-  "the Resume workbench receives the selected stages for truthful readiness"
-);
-assert.match(
-  resumeWorkflowRail,
-  /polishStages !== "review"[\s\S]{0,160}?polishStages !== "tailor"/,
-  "the workflow rail gates only the providers the selected run will call"
-);
-assert.match(
-  resumeWorkflowRail,
-  /\(!needsTailor \|\| tailorSectionCount > 0\)/,
-  "a review-only run does not require sections marked Tailor"
-);
-assert.match(
-  resumeWorkflowRail,
-  /\.\.\.\(needsTailor[\s\S]{0,420}?Sections selected[\s\S]{0,420}?: \[\]\)/,
-  "the section-selection readiness row only appears when Tailor will run"
-);
-assert.match(
-  resumeWorkflowRail,
-  /\{needsTailor \? \([\s\S]{0,420}?Tailor selected sections[\s\S]{0,420}?\) : null\}/,
-  "the workflow rail only renders the Tailor row when that stage was selected"
-);
-assert.match(
-  resumeWorkflowRail,
-  /\{needsAudit \? \([\s\S]{0,420}?Recruiter audit[\s\S]{0,420}?\) : null\}/,
-  "the workflow rail only renders the audit row when that stage was selected"
-);
+assert.doesNotMatch(resumeTab, /polishStages|auditProviderReady|onRetryAudit/,
+  "the Resume workbench has no normal audit-stage selector or gate");
+assert.match(resumeWorkflowRail, /Create resume proposal/,
+  "the workflow rail renders one truthful proposal step");
+assert.match(resumeWorkflowRail, /const proposalResult = result\?\.polishOutcome \? result : null/,
+  "restored deterministic analysis cannot hide readiness or masquerade as a Polish result");
+assert.doesNotMatch(resumeWorkflowRail, /Recruiter audit|Tailor selected sections/,
+  "the normal workflow rail exposes no sequential Tailor or audit stages");
 assert.doesNotMatch(
   resumeWorkflowRail,
   /Choose Tailor or Include/,
@@ -442,20 +419,21 @@ assert.doesNotMatch(
 );
 assert.match(
   prepareTab,
-  /reviewDone\s*\?\s*tailorDone\s*\?\s*"Tailored · audited"\s*:\s*"Audited"/,
-  "Prepare reports a review-only run as audited instead of claiming it tailored the resume"
+  /polishOutcome === "PROPOSAL"[\s\S]{0,100}?"Proposal ready"[\s\S]{0,100}?"No changes needed"[\s\S]{0,100}?"Suggestions withheld"/,
+  "Prepare distinguishes every one-pass outcome without audit vocabulary"
 );
+assert.match(polish, /invalid outcome", 422/, "a parsed but invalid result is classified as validation, not parsing");
+assert.match(polish, /data\.status === "WITHHELD"[\s\S]{0,160}?status: "failed"/,
+  "an all-withheld result cannot render as a successful completed proposal stage");
 assert.match(
   prepareTab,
   /isTailoringCoverLetter\s*\?\s*"Polishing…"/,
   "Prepare uses the Cover Letter action's Polish vocabulary while work is running"
 );
-// The retired masthead Options menu must not return as another setting owner.
-assert.match(settingsDialog, /onPolishStagesChange/, "Settings exposes the default Polish stage selection");
-assert.match(
-  settingsDialog,
-  /Polish uses this stage choice everywhere\./,
-  "Settings explains that the one stage selection applies to every Polish entry point"
+assert.doesNotMatch(settingsDialog, /polishStages|Tailor only|Audit current|radiogroup/,
+  "Settings no longer exposes Tailor/Review/Both in the normal workflow");
+assert.match(settingsDialog, /Resume Polish uses one proposal request/,
+  "Settings explains the one-pass proposal contract"
 );
 assert.ok(
   !existsSync(new URL("../../sections/PolishMenu.tsx", import.meta.url)) &&
@@ -519,22 +497,15 @@ assert.doesNotMatch(
   "citizenship no longer short-circuits the whole block — education is an independent opt-in"
 );
 
-// Per-stage guidance: Tailor and Review are separate requests, so a shared
-// commonBody carrying one customInstructions would send Review the Tailor text.
+assert.match(
+  polish,
+  /customInstructions: customInstructionsFor\("tailor"\)/,
+  "the one-pass Polish request carries the Resume tailor guidance"
+);
 assert.doesNotMatch(
   polish,
-  /includeCoverLetter,\s*honestContext: requestHonestContext,\s*customInstructions\s*\};/,
-  "customInstructions is resolved per stage, not shared through commonBody"
-);
-assert.match(
-  polish,
-  /stages: "tailor", customInstructions: customInstructionsFor\("tailor"\)/,
-  "the Tailor request carries the Tailor stage's resolved guidance"
-);
-assert.match(
-  polish,
   /customInstructions: customInstructionsFor\("review"\),/,
-  "the Review request carries the Review stage's resolved guidance"
+  "normal Polish never sends Review guidance or a second request"
 );
 
 const responseGuard = inbox.indexOf("if (!res.ok)");
@@ -1360,8 +1331,8 @@ assert.doesNotMatch(
 );
 assert.equal(
   polish.match(/if \(revealResumeOnSuccess\) setActiveOutputTab\("resume"\);/g)?.length,
-  2,
-  "Tailor and Review reveal Resume only when the caller requests it"
+  1,
+  "one-pass Polish reveals Resume only when the caller requests it"
 );
 assert.doesNotMatch(
   prepareTab,
@@ -1611,21 +1582,20 @@ assert.match(
   "loading legacy settings removes the retired accordion preference"
 );
 
-assert.match(
-  reviewRail,
-  /const invalidDropCount = Math\.max\(0, \(result\.droppedSuggestions\?\.total \?\? 0\) - unsupportedDropCount\)[\s\S]*if \(!sr && !suggestions\.length && unsupportedDropCount === 0 && invalidDropCount === 0\) return null/,
-  "the review rail remains visible for all-drop results and separates invalid response-shape drops"
-);
-assert.match(
-  reviewRail,
-  /\{unsupportedDropCount\} AI[\s\S]*wording wasn.t supported by your resume or honest context/,
-  "unsupported AI edits remain visible as evidence-grounding rejections"
-);
-assert.match(
-  reviewRail,
-  /\{invalidDropCount\} \{unsupportedDropCount > 0 \? "additional AI " : "AI "\}[\s\S]*not be applied safely/,
-  "invalid AI edits are visible with grammatical copy whether or not unsupported edits also exist"
-);
+assert.match(resumeProposalReview, /What improved[\s\S]*Edits ready[\s\S]*Still missing/,
+  "resume feedback is limited to summary, edits, and remaining gaps");
+assert.match(resumeProposalReview, /Apply all[\s\S]*Accept[\s\S]*Edit[\s\S]*Discard/,
+  "the proposal supports batch and per-edit human decisions");
+assert.match(resumeProposalReview, /generated edits could not be verified\. Your resume is unchanged/,
+  "an all-withheld result is truthful and preserves the current resume");
+assert.doesNotMatch(resumeProposalReview, /evidenceType|risk|hits|keyword|mini-chip/i,
+  "the normal feedback UI has no evidence, risk, or keyword chips");
+assert.match(resumePolishContract, /targetId: `target-\$\{index \+ 1\}`/,
+  "flat target IDs are assigned locally without exposing composite document IDs to the model");
+assert.match(resumePolishContract, /resumePolishSectionIsLocked\(heading\)/,
+  "the server-owned flat target map applies durable locked-section rules");
+assert.match(roleFitEditorOverlay, /resumePolishSectionIsLocked\(sectionHeading\)[\s\S]{0,100}?mode !== "tailor"/,
+  "the section scope UI does not offer Polish for Education");
 assert.doesNotMatch(
   appIndex,
   /fonts\.googleapis\.com|fonts\.gstatic\.com/,
@@ -1862,8 +1832,8 @@ assert.match(
 );
 assert.match(
   app,
-  /const polishOutputCurrent = result\?\.source === "ai" && !reviewStale && !resumeManuallyEdited/,
-  "a restored deterministic resume analysis cannot inherit completed AI-tailoring status"
+  /const polishOutputCurrent = result\?\.source === "ai" && !reviewStale/,
+  "only a current AI proposal can drive completed Resume Polish status"
 );
 assert.match(
   app,

@@ -123,8 +123,11 @@ and `docs/engineering/ui-principles.md`.
   shared state/target/readiness/failure/body/footer hierarchy for both document
   tabs. The shell places each document's one primary **Polish** action beside the
   rail disclosure control in whichever open or collapsed state is visible.
-  Resume dispatches the Settings-owned Tailor / Recruiter audit / Both choice
-  from both its document action and Prepare; no document-local stage menu exists.
+  Resume dispatches one proposal request from both its document action and
+  Prepare; no stage selector exists. Its compact feedback is What improved,
+  collapsed Edits ready with Apply all and Accept/Edit/Discard, Still missing,
+  and a quiet withheld line. Evidence, risk, and keyword chips do not belong in
+  the normal surface, and Withheld never receives success treatment.
   Cover letter keeps one Polish request but stages its result as a whole-document
   proposal: **Accept proposal** applies it atomically, **Discard proposal** performs no
   mutation, stale inputs disable acceptance, and Restore appears only after acceptance.

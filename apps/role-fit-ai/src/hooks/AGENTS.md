@@ -13,7 +13,10 @@ browser-side effects; components render them and App composes them.
   including benefits and extraction gaps, alongside the exact model-facing
   tailoring text. Job analysis and Initial Fit settle independently, and a fit
   retry or resume change must not rerun Job analysis.
-- `usePolishPipeline` owns Tailor/Review orchestration, abort/retry, and progress.
+- `usePolishPipeline` owns the one-request Resume Polish proposal, abort/retry,
+  stale-request cancellation, and progress. It must not dispatch the Review
+  provider or expose the retired Tailor/Review/Both selector. It stages flat-ID
+  edits and outcome metadata without seeding or replacing the editor.
 - `useDuplicateGuard` owns duplicate acknowledgments and pipeline/apply gates.
 - `useDuplicateScan` owns the Applications tab's tracker-wide duplicate
   clusters: it schedules the O(n²) scan after first paint, cancels a pending
@@ -103,8 +106,8 @@ browser-side effects; components render them and App composes them.
 
 - One state owner per workflow. Return state and intent-level actions; do not
   expose setters when a named action can preserve invariants.
-- Keep document-pipeline sequencing fail-closed. Only a `done` Tailor/Review
-  stage may advance. Prepare's deterministic brief is independently usable when
+- Keep document mutations fail-closed. Only accepted Resume Polish edits may
+  enter the editor; Withheld is not a completed proposal. Prepare's deterministic brief is independently usable when
   Job analysis or compact Initial Fit is unavailable. Preserve abort
   controllers, retry provenance, and stale-input guards inside the owner.
 - Store hot transient values in refs when they must survive async callbacks

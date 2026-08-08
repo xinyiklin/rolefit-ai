@@ -122,7 +122,7 @@ export function useDuplicateGuard({
     return `${STATUS_LABEL[match.application.status]} · ${formatCompactDate(when)}: ${match.evidence[0] ?? "duplicate application"}`;
   }
 
-  async function confirmDuplicateGate(target: DuplicateTarget, nextStage: "Job analysis" | "Tailor / Review"): Promise<DuplicateGateResult> {
+  async function confirmDuplicateGate(target: DuplicateTarget, nextStage: "Job analysis" | "Resume Polish"): Promise<DuplicateGateResult> {
     const match = findDuplicatesForTarget(target)[0];
     if (!match || match.application.status === "interested") return { proceed: true, note: null };
 
@@ -181,7 +181,7 @@ export function useDuplicateGuard({
       company: facts.company,
       role: facts.role,
       location: facts.location
-    }, "Tailor / Review");
+    }, "Resume Polish");
   }
 
   // Blocking gate BEFORE any AI spend: if this job matches a tracked
@@ -191,7 +191,7 @@ export function useDuplicateGuard({
   // extension import of an already-applied job pauses instead of silently
   // burning a polish run on it. Resolves true when polishing may proceed.
   async function confirmDuplicateBeforePolish(): Promise<boolean> {
-    return (await confirmDuplicateGate(currentTarget(), "Tailor / Review")).proceed;
+    return (await confirmDuplicateGate(currentTarget(), "Resume Polish")).proceed;
   }
 
   // Apply-time resolution: warn/confirm as needed and name the record this
