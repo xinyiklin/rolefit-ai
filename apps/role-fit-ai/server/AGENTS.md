@@ -13,7 +13,8 @@ for provider, prompt, sanitizer, and review work.
   Vite/static serving, security guards, explicit route dispatch, and the
   start/close lifecycle used by the local web entry and isolated probes. It must
   not listen or create storage merely because it was imported. Reusability does
-  not make the full server a desktop companion protocol.
+  not make the full server a desktop companion protocol. Preview route renames
+  replace their old dispatch paths; do not retain compatibility aliases.
 - `http.ts` owns body/JSON/fetch utilities and request limits.
 - `network.ts` owns SSRF-safe public-page fetching and redirect validation.
 - `jobImport.ts` owns ATS/public job-text resolution.

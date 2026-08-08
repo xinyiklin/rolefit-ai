@@ -66,7 +66,7 @@ try {
         { fileName: "supplemental.pdf", size: -5 }
       ],
       aiUsage: {
-        distill: {
+        "job-analysis": {
           source: "ai",
           provider: "claude-cli",
           model: "opus",
@@ -79,9 +79,9 @@ try {
           bogusSubfield: "drop me"
         },
         // Empty-string optionals must drop rather than persist as "".
-        tailor: { source: "local", provider: "", model: "" },
+        "resume-polish": { source: "local", provider: "", model: "" },
         // Invalid source enum → whole entry dropped.
-        review: { source: "bogus", provider: "openai" },
+        "final-check": { source: "bogus", provider: "openai" },
         // attempts clamps to 1..9 (12 → 9).
         cover: { source: "ai", attempts: 12 },
         // Bad stage key (uppercase) → dropped.
@@ -102,7 +102,7 @@ try {
       createdAt: "2026-07-01T00:00:00.000Z",
       updatedAt: "2026-07-29T10:00:00.000Z",
       status: "interested",
-      aiUsage: { review: { source: "nope" }, "9bad": { source: "ai" } }
+      aiUsage: { "final-check": { source: "nope" }, "9bad": { source: "ai" } }
     }
   ];
   const written = await writeApplications(workspace, sanitizeApplications(rawApplications));
@@ -201,16 +201,17 @@ try {
   if (su?.[0]?.url !== "https://boards.greenhouse.io/acme/jobs/123") failures.push("sourceUrls kept the wrong entry");
   if (!su?.[0]?.addedAt) failures.push("sourceUrls addedAt default missing");
 
-  // aiUsage: distill valid, tailor keeps only source (empty optionals dropped),
-  // review dropped (bad source), cover attempts clamped to 9, BADKEY dropped.
+  // aiUsage: Job analysis valid, Resume Polish keeps only source (empty
+  // optionals dropped), Document check drops (bad source), cover attempts
+  // clamp to 9, and BADKEY drops.
   const ai = valid?.aiUsage;
   if (!ai || typeof ai !== "object") failures.push("aiUsage did not persist");
-  if (ai?.distill?.bogusSubfield) failures.push("aiUsage unknown subfield survived");
-  if (ai?.distill?.source !== "ai" || ai?.distill?.model !== "opus") failures.push("aiUsage distill entry corrupted");
-  if (ai?.distill?.attempts !== 2) failures.push("aiUsage valid attempts not preserved");
-  if ("provider" in (ai?.tailor ?? {}) || "model" in (ai?.tailor ?? {})) failures.push("aiUsage empty-string optionals persisted");
-  if (ai?.tailor?.source !== "local") failures.push("aiUsage tailor source lost");
-  if (ai && "review" in ai) failures.push("aiUsage invalid source enum did not drop the entry");
+  if (ai?.["job-analysis"]?.bogusSubfield) failures.push("aiUsage unknown subfield survived");
+  if (ai?.["job-analysis"]?.source !== "ai" || ai?.["job-analysis"]?.model !== "opus") failures.push("aiUsage Job analysis entry corrupted");
+  if (ai?.["job-analysis"]?.attempts !== 2) failures.push("aiUsage valid attempts not preserved");
+  if ("provider" in (ai?.["resume-polish"] ?? {}) || "model" in (ai?.["resume-polish"] ?? {})) failures.push("aiUsage empty-string optionals persisted");
+  if (ai?.["resume-polish"]?.source !== "local") failures.push("aiUsage Resume Polish source lost");
+  if (ai && "final-check" in ai) failures.push("aiUsage invalid source enum did not drop the entry");
   if (ai?.cover?.attempts !== 9) failures.push("aiUsage attempts not clamped to 9");
   if (ai && "BADKEY" in ai) failures.push("aiUsage bad stage key survived");
 

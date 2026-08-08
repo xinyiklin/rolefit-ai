@@ -38,8 +38,10 @@ one role context, responsibilities, required and preferred qualifications,
 technical keywords, seniority and domain signals, benefits, and extraction
 gaps. Resume proposals remain constrained by server-side
 grounding and anti-fabrication checks. Normal Resume Polish is one provider
-operation that stages a proposal for human decisions; it does not automatically
-run a second assessment over edits the user may never accept.
+operation that stages a proposal for human decisions; oversized documents
+prioritize material, job-relevant fields and disclose the fields outside that
+pass. It does not automatically run a second assessment over edits the user may
+never accept.
 
 The cover letter is **one Polish click**. RoleFit resolves the date, candidate
 name, role, company, greeting, and sign-off itself, sends the whole candidate
@@ -220,8 +222,12 @@ disappears into the task. Quiet competence, not salesmanship.
     slot.
     Prepare shows compact Initial Fit for the selected resume: one four-level
     verdict, one summary, up to three matches and gaps, and a relevant
-    eligibility warning. It never shows scores, confidence, evidence ledgers,
-    recommendations, or saved/historical audit state there. The bundled starter
+    eligibility warning. The provider supplies a bounded hidden basis with exact
+    posting and candidate anchors; the server validates it and derives the
+    category and visible copy. That basis is never displayed or persisted.
+    Initial Fit never shows scores, confidence, evidence ledgers,
+    recommendations, or saved/historical audit state there, and never silently
+    sets tracker priority. The bundled starter
     is sample content: it never counts as a ready resume, and Prepare says so
     rather than reporting no document.
 11. Preserve safe extension intake: a claimed extension posting requests
@@ -248,8 +254,10 @@ disappears into the task. Quiet competence, not salesmanship.
 13. Keep proposal automation fixed and reversible. Initial Fit defaults on;
     Resume and Cover Letter proposal toggles are independent and default off.
     Only Strong or Reasonable with no eligibility blocker may auto-start an
-    enabled proposal. Stretch, Limited, unavailable, and blocked states remain
-    manual, and manual Polish is always available.
+    enabled proposal. `BLOCKED` requires an explicit posting restriction plus
+    explicit adverse candidate context; unknown or ambiguous status is `CHECK`
+    and may still polish. Stretch, Limited, unavailable, and blocked states
+    remain manual, and manual Polish is always available.
 14. Present one Polish workflow for both documents, and keep its closing check
     non-blocking. Resume and Cover Letter progress through the same named
     sequence — Ready to Polish, Polishing and validating, Proposal ready,

@@ -425,13 +425,6 @@ export async function startRoleFitServer(options: RoleFitServerOptions): Promise
       return;
     }
 
-    // Temporary one-preview compatibility alias for a tab running the previous
-    // browser bundle against a newly restarted local server.
-    if (pathname === "/api/distill") {
-      void handleJobAnalysis(req, res);
-      return;
-    }
-
     if (pathname === "/api/application-answers") {
       void handleApplicationAnswers(req, res);
       return;

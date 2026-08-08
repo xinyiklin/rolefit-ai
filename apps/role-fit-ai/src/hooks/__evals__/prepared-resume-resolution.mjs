@@ -81,7 +81,7 @@ function baseState(overrides = {}) {
 // A harness that records what the resolution actually did, so ordering claims
 // ("waits for hydration", "adopts before returning") are observed, not asserted
 // about source text.
-function harness({ state, candidates = [], hydrate, adoptSucceeds = true, onAdopt }) {
+function harness({ state, candidates = [], hydrate, adoptSucceeds = true, onAdopt, onReadCandidates }) {
   const log = [];
   let live = state;
   let bootstrapped = false;
@@ -99,16 +99,22 @@ function harness({ state, candidates = [], hydrate, adoptSucceeds = true, onAdop
     },
     readCandidates: async (options) => {
       log.push(`readCandidates:${options.map((option) => option.fileName).join(",")}`);
-      return candidates;
+      return onReadCandidates ? onReadCandidates(options, live) : candidates;
     },
     adopt: async (fileName) => {
       log.push(`adopt:${fileName}`);
-      if (onAdopt) live = onAdopt(live) ?? live;
       if (adoptSucceeds) {
         const candidate = candidates.find((entry) => entry.fileName === fileName);
         live = { ...live, baseResumeName: fileName, resumeOrigin: "saved", currentText: candidate?.text ?? live.currentText };
       }
-      return adoptSucceeds;
+      if (onAdopt) live = onAdopt(live) ?? live;
+      return adoptSucceeds
+        ? {
+            fileName: live.baseResumeName,
+            label: live.options.find((option) => option.fileName === live.baseResumeName)?.label ?? live.documentTitle,
+            text: live.currentText
+          }
+        : null;
     },
     isCurrent: () => true
   };
@@ -121,6 +127,68 @@ function harness({ state, candidates = [], hydrate, adoptSucceeds = true, onAdop
     },
     state: () => live
   };
+}
+
+// â”€â”€ Candidate reads and option metadata must describe one snapshot â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+{
+  const frontend = { fileName: "frontend.resume", label: "Frontend", text: resumeText("Frontend", "React TypeScript") };
+  const backend = { fileName: "backend.resume", label: "Backend", text: resumeText("Backend", "Go Postgres Kubernetes") };
+  let live;
+  const run = harness({
+    state: baseState({
+      baseResumeName: frontend.fileName,
+      options: [{ fileName: frontend.fileName, label: frontend.label }],
+      resumeOrigin: "saved",
+      currentText: frontend.text
+    }),
+    candidates: [frontend, backend],
+    onReadCandidates: (options, state) => {
+      live = state;
+      if (options.length === 1) {
+        live.options = [
+          { fileName: frontend.fileName, label: frontend.label },
+          { fileName: backend.fileName, label: backend.label }
+        ];
+        return [frontend];
+      }
+      return [frontend, backend];
+    }
+  }).setJobText("Job title:\nBackend Engineer\nTech stack / keywords:\n- Go\n- Postgres\n- Kubernetes");
+  const resolution = await resolvePreparedResumeSelection(run.deps);
+  check(
+    run.log.filter((entry) => entry.startsWith("readCandidates:")).length,
+    2,
+    "adding an option during the read retries once instead of mixing snapshots"
+  );
+  check(resolution.selection?.fileName, backend.fileName, "the retry ranks the newly complete option set");
+}
+
+{
+  const stale = { fileName: "deleted.resume", label: "Deleted", text: resumeText("Deleted", "React") };
+  const remaining = { fileName: "backend.resume", label: "Backend", text: resumeText("Backend", "Go Postgres") };
+  const run = harness({
+    state: baseState({
+      options: [
+        { fileName: stale.fileName, label: stale.label },
+        { fileName: remaining.fileName, label: remaining.label }
+      ]
+    }),
+    candidates: [stale, remaining],
+    onReadCandidates: (options, state) => {
+      if (options.length === 2) {
+        state.options = [{ fileName: remaining.fileName, label: remaining.label }];
+        return [stale, remaining];
+      }
+      return [remaining];
+    }
+  });
+  const resolution = await resolvePreparedResumeSelection(run.deps);
+  check(
+    run.log.filter((entry) => entry.startsWith("readCandidates:")).length,
+    2,
+    "deleting an option during the read retries once instead of adopting a stale candidate"
+  );
+  check(resolution.selection?.fileName, remaining.fileName, "the retry adopts the sole remaining option");
 }
 
 // ── The reported bug: an import lands while the workspace is still hydrating ──
@@ -284,6 +352,24 @@ function harness({ state, candidates = [], hydrate, adoptSucceeds = true, onAdop
   );
 }
 
+// ── Adoption returns the committed document, not earlier ranking bytes ──────
+{
+  const original = { fileName: "backend.resume", label: "Backend", text: resumeText("Backend", "Go Postgres") };
+  const changedBeforeCommit = resumeText("Backend live", "Go Postgres Kubernetes production ownership");
+  const run = harness({
+    state: baseState({ options: [{ fileName: original.fileName, label: original.label }] }),
+    candidates: [original],
+    onAdopt: (state) => ({ ...state, currentText: changedBeforeCommit })
+  });
+  const resolution = await resolvePreparedResumeSelection(run.deps);
+  check(resolution.selection.text, changedBeforeCommit, "a file changed before adoption returns the committed editor text");
+  check(
+    resolution.selection.contentFingerprint,
+    contentFingerprint(changedBeforeCommit),
+    "the adoption fingerprint describes the committed editor text"
+  );
+}
+
 // ── An incomplete candidate read cannot crown a winner ──────────────────────
 {
   const readable = {
@@ -345,6 +431,7 @@ for (const [label, overrides] of [
 {
   const winner = { fileName: "backend.resume", label: "Backend", text: resumeText("Backend", "Go Postgres Kubernetes") };
   const mine = resumeText("Frontend", "React TypeScript");
+  const current = { fileName: "frontend.resume", label: "Frontend", text: mine };
   const run = harness({
     state: baseState({
       baseResumeName: "frontend.resume",
@@ -355,14 +442,16 @@ for (const [label, overrides] of [
       resumeOrigin: "saved",
       currentText: mine
     }),
-    candidates: [winner],
+    candidates: [current, winner],
     adoptSucceeds: false
   }).setJobText("Job title:\nBackend Engineer\nTech stack / keywords:\n- Go\n- Postgres\n- Kubernetes");
   // The guarded loader refuses (the user started typing); resolution must report
   // the document that is actually on screen, never the variant it wanted.
   const resolution = await resolvePreparedResumeSelection(run.deps);
+  checkOk(run.log.includes(`adopt:${winner.fileName}`), "the ranked winner reached the guarded adoption boundary");
   check(resolution.selection.text, mine, "a refused adoption reports the document the editor still holds");
   check(resolution.selection.origin, "current", "a refused adoption is not reported as a ranked selection");
+  check(resolution.recommendation, null, "a refused adoption does not advertise a winner that was never loaded");
 }
 
 // ── A superseded resolution publishes nothing ───────────────────────────────

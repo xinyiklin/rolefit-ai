@@ -29,7 +29,12 @@ import {
   distinctiveTokenKeys,
   findUngroundedCuratedClaimTerm
 } from "./grounding.ts";
-import { analyzeQuickFit, groundQuickFit, quickFitPromptSection, sanitizeQuickFit } from "./quickFit.ts";
+import {
+  QUICK_FIT_BASIS_RESPONSE_SCHEMA,
+  analyzeQuickFit,
+  calibrateQuickFit,
+  quickFitPromptSection
+} from "./quickFit.ts";
 import type { QuickFitResult } from "../../shared/quickFitContract.ts";
 
 // Optional dispatch-attempt collector: callConfiguredProvider bumps `attempts`.
@@ -88,13 +93,7 @@ ABSOLUTE RULES (anti-fabrication — this is the whole job):
     ? `Return this JSON shape. The job and initialFit subsections are independent; always return the best job object even if Initial Fit is unavailable:
 {
   "job": ${schema.slice(schema.indexOf("{"))},
-  "initialFit": {
-    "verdict": "STRONG | REASONABLE | STRETCH | LIMITED",
-    "summary": "one short explanation",
-    "matches": ["up to 3 concise matches"],
-    "gaps": ["up to 3 important gaps"],
-    "eligibility": { "status": "CLEAR | CHECK | BLOCKED", "note": "optional" }
-  }
+  "initialFit": ${QUICK_FIT_BASIS_RESPONSE_SCHEMA}
 }`
     : schema;
 
@@ -458,7 +457,7 @@ export function sanitizePrepareAnalysisResponse(
     fields: sanitizeJobAnalysis(rawJob, jobText),
     ...(fitInput
       ? {
-          initialFit: groundQuickFit(sanitizeQuickFit(source.initialFit), {
+          initialFit: calibrateQuickFit(source.initialFit, {
             jobText,
             resumeText: fitInput.resumeText,
             candidateContext: fitInput.candidateContext

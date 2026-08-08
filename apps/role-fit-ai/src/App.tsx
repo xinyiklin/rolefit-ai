@@ -71,7 +71,7 @@ import type { ResumeData } from "@typeset/engine/lib/resumeData.ts";
 import { parseResumeFile } from "@typeset/engine/lib/resumeFile.ts";
 import { defaultTailorModes, type TailorMode } from "./lib/tailorScope";
 import { resumeDocumentVersion as resumeDocumentVersionFor } from "./lib/resumeDocumentVersion";
-import { canonicalizeAiUsageStageKeys, type StageAiUsage } from "./lib/aiUsage";
+import { copyAiUsage, type StageAiUsage } from "./lib/aiUsage";
 import { useDuplicateGuard } from "./hooks/useDuplicateGuard";
 import { useJobIntake, type ImportedJobSnapshot } from "./hooks/useJobIntake";
 import { usePolishPipeline } from "./hooks/usePolishPipeline";
@@ -407,12 +407,12 @@ function App() {
   const resumePolishStage = stages["resume-polish"];
   const finalCheckStage = stages["final-check"];
   const jobAnalysisProviderReady = providerReady(jobAnalysisStage.provider);
-  const tailorProviderReady = providerReady(resumePolishStage.provider);
+  const resumePolishProviderReady = providerReady(resumePolishStage.provider);
   const finalCheckProviderReady = providerReady(finalCheckStage.provider);
   const coverProviderReady = providerReady(stages.cover.provider);
   const answersProviderReady = providerReady(stages.answers.provider);
   const jobAnalysisProviderMessage = providerRecoveryMessage(jobAnalysisStage.provider);
-  const tailorProviderMessage = providerRecoveryMessage(resumePolishStage.provider);
+  const resumePolishProviderMessage = providerRecoveryMessage(resumePolishStage.provider);
   const finalCheckProviderMessage = providerRecoveryMessage(finalCheckStage.provider);
   const coverProviderMessage = providerRecoveryMessage(stages.cover.provider);
   const answersProviderMessage = providerRecoveryMessage(stages.answers.provider);
@@ -420,7 +420,7 @@ function App() {
     () => providerAvailability.ensureProvider(jobAnalysisStage.provider),
     [jobAnalysisStage.provider, providerAvailability.ensureProvider]
   );
-  const ensureTailorProvider = useCallback(
+  const ensureResumePolishProvider = useCallback(
     () => providerAvailability.ensureProvider(resumePolishStage.provider),
     [providerAvailability.ensureProvider, resumePolishStage.provider]
   );
@@ -428,7 +428,7 @@ function App() {
     () => providerAvailability.ensureProvider(finalCheckStage.provider),
     [finalCheckStage.provider, providerAvailability.ensureProvider]
   );
-  const selectedPolishProvidersReady = tailorProviderReady;
+  const selectedPolishProvidersReady = resumePolishProviderReady;
   const candidateFactsContext = buildCandidateFactsContext({
     citizenshipStatus,
     legallyAuthorizedToWork,
@@ -1238,7 +1238,7 @@ function App() {
     requestHonestContext,
     customInstructionsFor,
     resumePolish: resumePolishStage,
-    ensureTailorProviderReady: ensureTailorProvider,
+    ensureResumePolishProviderReady: ensureResumePolishProvider,
     setResult,
     setActiveOutputTab,
     setPipelineAiUsage,
@@ -1308,14 +1308,14 @@ function App() {
   useEffect(() => {
     if (!resumeProposalDecisions.decisionsSettled || proposalStale) return;
     requestResumeAutoCheck(
-      `${jobDescription}|${result?.suggestedChanges?.map((change) => change.id).join(",") ?? ""}`
+      `${jobDescription}|${resumeProposalDecisions.proposalKey}`
     );
   }, [
     jobDescription,
     proposalStale,
     requestResumeAutoCheck,
-    result,
-    resumeProposalDecisions.decisionsSettled
+    resumeProposalDecisions.decisionsSettled,
+    resumeProposalDecisions.proposalKey
   ]);
   const aiWorkflowStages: AiWorkflowStage[] = [];
   if (jobAnalysisProgressVisible) {
@@ -2034,7 +2034,7 @@ function App() {
       // below runs — a tracker-restore must not carry over the PREVIOUS working
       // job's provider attribution or raw text.
       setPipelineAiUsage(
-        canonicalizeAiUsageStageKeys(app.aiUsage ?? { "job-analysis": { source: "none" } })
+        copyAiUsage(app.aiUsage ?? { "job-analysis": { source: "none" } })
       );
       setJobRawText(restoredSourceText);
       // Include controls describe the NEXT Apply package, not which historical
@@ -2122,7 +2122,7 @@ function App() {
       : Boolean(draft.jobLabel && draft.jobLabel === _autosaveJobLabel);
     if (provenanceApplies) {
       if (draft.pipelineAiUsage) {
-        setPipelineAiUsage(canonicalizeAiUsageStageKeys(draft.pipelineAiUsage));
+        setPipelineAiUsage(copyAiUsage(draft.pipelineAiUsage));
       }
       if (draft.jobRawText) setJobRawText(draft.jobRawText);
     }
@@ -2573,7 +2573,7 @@ function App() {
               proposalStale={proposalStale}
               resumeReady={resumeReady}
               jobReady={jobReady}
-              tailorProviderReady={tailorProviderReady}
+              resumePolishProviderReady={resumePolishProviderReady}
               checkProviderReady={finalCheckProviderReady}
               checkProviderMessage={finalCheckProviderMessage}
               isPolishing={isPolishing}
@@ -2866,8 +2866,8 @@ function App() {
               isGeneratingAnswers={isGeneratingAnswers}
               resumeReady={resumeReady}
               jobReady={jobReady}
-              aiProviderReady={tailorProviderReady}
-              aiProviderMessage={tailorProviderMessage}
+              aiProviderReady={resumePolishProviderReady}
+              aiProviderMessage={resumePolishProviderMessage}
               canSave={Boolean(jobUrl.trim() || jobDescription.trim())}
               onGenerate={handleGenerateAnswers}
               onSaveAnswers={handleSaveAnswers}

@@ -112,6 +112,7 @@
 
 .resume-proposal__decision,
 .resume-proposal__withheld,
+.resume-proposal__omitted,
 .resume-proposal__empty {
   color: var(--ink-soft);
   font-size: 0.82rem;
@@ -119,6 +120,7 @@
 }
 
 .resume-proposal__withheld,
+.resume-proposal__omitted,
 .resume-proposal__empty {
   margin: 0;
 }

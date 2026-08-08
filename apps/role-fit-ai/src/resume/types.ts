@@ -26,6 +26,7 @@ export type PolishedResume = {
   suggestedChanges?: TailorSuggestion[];
   polishOutcome?: "PROPOSAL" | "NO_CHANGES" | "WITHHELD";
   remainingGaps?: string[];
+  omittedTargetCount?: number;
   withheld?: {
     count: number;
     reasons: Array<"UNSUPPORTED" | "INVALID_TARGET" | "UNCHANGED" | "MALFORMED">;

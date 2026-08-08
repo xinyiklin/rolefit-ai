@@ -59,27 +59,15 @@ assert.deepEqual(
   knownSettingPortable,
   "a settings bag of known, already-normalized keys/values round-trips unchanged"
 );
-const legacyJobAnalysisPortable = {
-  settings: {
-    distillProvider: "anthropic",
-    distillSelectedModel: "claude-opus-4-8",
-    distillCliReasoningEffort: "high",
-    stageCustomInstructions: { distill: "Use only grounded posting facts." }
-  },
-  lastBaseResume: "fullstack.resume"
-};
-assert.deepEqual(
-  parsePortableBrowserPreferences(legacyJobAnalysisPortable),
-  {
+assert.throws(
+  () => parsePortableBrowserPreferences({
     settings: {
-      jobAnalysisProvider: "anthropic",
-      jobAnalysisSelectedModel: "claude-opus-4-8",
-      jobAnalysisCliReasoningEffort: "high",
-      stageCustomInstructions: { "job-analysis": "Use only grounded posting facts." }
+      distillProvider: "anthropic",
+      stageCustomInstructions: { distill: "Legacy analyzer instructions." }
     },
     lastBaseResume: "fullstack.resume"
-  },
-  "a backup carrying legacy Distill settings is migrated without losing preferences"
+  }),
+  "a backup carrying retired preview settings is rejected"
 );
 assert.throws(
   () => parsePortableBrowserPreferences({ settings: { strictReview: true }, lastBaseResume: "" }),

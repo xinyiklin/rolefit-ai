@@ -51,15 +51,23 @@ own a second resume model, editor, layout engine, or PDF implementation.
 - Never invent employers, dates, metrics, education, tools, experience, or
   outcomes. Missing facts become gaps or bracketed prompts for human evidence.
 - Initial Fit is a compact Prepare advisory: four verdicts, one summary, up to
-  three matches and gaps, and an optional eligibility warning. It has no score,
-  confidence, ledger, evidence quotes, recommendation, persistence, or analytics
-  contract.
+  three matches and gaps, and an optional eligibility warning. The provider
+  returns at most six exact-anchored hidden basis items; the server validates
+  them and derives the public category/copy. That basis has no UI or persistence
+  contract. The compact result has no score, confidence, visible ledger,
+  evidence quotes, recommendation, or analytics role, and never derives tracker
+  priority.
 - Normal Resume Polish is one proposal request, never Tailor followed by Review.
   It uses flat server-owned target IDs and returns Proposal, No changes, or
   Withheld. Mutation fields validate strictly; malformed optional feedback is
   dropped locally without invalidating safe edits. Identity, contact,
   education, dates, and omitted sections stay locked, and the live resume
-  changes only through explicit Apply all, Accept, or edited acceptance.
+  changes only through explicit Apply all, Accept, or edited acceptance. Skills
+  category labels and actual skill lists are distinct target kinds; swaps and
+  job-only skill insertions fail independently. When all editable targets do
+  not fit the prompt budget, material and job-relevant targets win without
+  prefix-order bias; only sent targets may be changed, and the rail states the
+  omitted count quietly.
 - **The current-document check is the closing phase of Polish, not a separate
   tool.** Both documents show one sequence — Ready to Polish, Polishing and
   validating, Proposal ready, Reviewing proposal, Checking current document,
@@ -80,6 +88,8 @@ own a second resume model, editor, layout engine, or PDF implementation.
   or guidance is "Out of date" and invites a re-polish. Both expose one inline
   Check again. The check stays advisory: it never rewrites the document, never
   blocks Apply or editing, and a failure says the document was unaffected.
+  Provider issues require exact private source excerpts from the current
+  document or posting; invalid anchors are dropped and never reach the client.
   It is skippable through one setting because it is a real extra request per
   polish, but skippable is not the same as user-operated.
 - Prepare publishes its deterministic local brief before provider work. A Job
@@ -187,6 +197,10 @@ or workspace state, keep it here and expose the smallest host seam instead.
   not have) while the provider still receives the raw posting. **"The workspace
   is still loading" is never "no resume"** — resolution awaits hydration rather
   than sampling a boolean an extension import can observe mid-flight.
+  Candidate reads and the ordered option metadata form one snapshot; retry once
+  if that snapshot changes, then retain the current document rather than mixing
+  generations. A successful adoption returns the guarded loader's committed
+  document receipt, while a blocked/failed adoption clears its recommendation.
   Adoption still goes through the guarded workspace loader only while the editor
   is clean and not application-owned; an explicit manual variant choice
   synchronously preempts it; while an included variant is resolving or loading,
@@ -195,6 +209,11 @@ or workspace state, keep it here and expose the smallest host seam instead.
   selection. Cover letters keep their own ranking effect and the same safety
   rules. Do not add persisted variant metadata or another schema for either
   choice.
+- Proposal decisions are keyed by outcome plus each target's id, original text,
+  proposed text, and reason. A mismatched key derives an empty decision map
+  without setting state during render; the first decision initializes the new
+  key. The automatic document check separately tracks pending provider preflight
+  and a consumed request, and consumes the proposal key only after fetch starts.
 - The document's ORIGIN (saved / uploaded / application / starter / blank) is
   explicit state. The bundled starter is sample content that passes every length
   test, so it never satisfies resume readiness, Initial Fit, or an automatic
@@ -206,8 +225,10 @@ or workspace state, keep it here and expose the smallest host seam instead.
   selected resume reruns only compact Initial Fit. A fit's provenance is a
   CONTENT fingerprint of the resume and posting actually screened, never a
   friendly label: labels collide, editing never changes one, and a re-prepared
-  posting keeps the old one. The fixed auto-proposal rule admits
-  only Strong or Reasonable with no eligibility blocker AND unchanged fit
+  posting keeps the old one. `BLOCKED` requires an explicit posting restriction
+  plus explicit adverse candidate context; unknown or ambiguous status is
+  `CHECK`. The fixed auto-proposal rule admits only Strong or Reasonable with no
+  eligibility blocker AND unchanged fit
   inputs; Resume and Cover Letter
   toggles are independent, default off, and never disable manual Polish.
   Retry is offered whenever a preparation exists to retry — including when no

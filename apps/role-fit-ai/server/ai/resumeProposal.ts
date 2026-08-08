@@ -28,20 +28,67 @@ function text(value: unknown, max: number): string {
   return typeof value === "string" ? value.replace(/\s+/g, " ").trim().slice(0, max) : "";
 }
 
-function promptTargets(targets: FlatResumeTarget[]): string {
-  const selected: Array<Pick<FlatResumeTarget, "targetId" | "kind" | "section" | "currentText">> = [];
-  for (const target of targets) {
-    const candidate = {
+const PROMPT_TARGET_BUDGET = 42_000;
+const JOB_TERM_STOP_WORDS = new Set([
+  "and", "are", "for", "from", "have", "role", "that", "the", "this", "with", "you", "your"
+]);
+
+type PromptTarget = Pick<FlatResumeTarget, "targetId" | "kind" | "section" | "currentText">;
+
+function matchingJobTermCount(target: FlatResumeTarget, jobTerms: Set<string>): number {
+  const targetTerms = new Set(`${target.section} ${target.currentText}`
+    .toLowerCase()
+    .match(/[a-z0-9+#.]{3,}/g) ?? []);
+  let matches = 0;
+  for (const term of targetTerms) {
+    if (jobTerms.has(term)) matches += 1;
+  }
+  return matches;
+}
+
+function targetPriority(target: FlatResumeTarget, jobTerms: Set<string>): number {
+  const kindPriority = target.kind === "bullet"
+    ? 40
+    : target.kind === "skill-list"
+      ? 35
+      : target.kind === "field"
+        ? 15
+        : 5;
+  const summaryPriority = target.sectionType === "summary" ? 45 : 0;
+  return kindPriority + summaryPriority + Math.min(12, matchingJobTermCount(target, jobTerms)) * 10;
+}
+
+export function selectPromptTargets(targets: FlatResumeTarget[], jobText: string): {
+  selectedTargets: FlatResumeTarget[];
+  omittedCount: number;
+  serialized: string;
+} {
+  const jobTerms = new Set((jobText.toLowerCase().match(/[a-z0-9+#.]{3,}/g) ?? [])
+    .filter((term) => !JOB_TERM_STOP_WORDS.has(term)));
+  const ranked = targets
+    .map((target, index) => ({ target, index, priority: targetPriority(target, jobTerms) }))
+    .sort((left, right) =>
+      right.priority - left.priority
+      || left.target.section.localeCompare(right.target.section)
+      || left.index - right.index
+    );
+  const selectedTargets: FlatResumeTarget[] = [];
+  const promptTargets: PromptTarget[] = [];
+  let serialized = "[]";
+  for (const { target } of ranked) {
+    const candidate: PromptTarget = {
       targetId: target.targetId,
       kind: target.kind,
       section: target.section,
       currentText: target.currentText.slice(0, 900)
     };
-    const next = [...selected, candidate];
-    if (JSON.stringify(next).length > 42_000) break;
-    selected.push(candidate);
+    const nextSerialized = JSON.stringify([...promptTargets, candidate]);
+    if (nextSerialized.length > PROMPT_TARGET_BUDGET) continue;
+    promptTargets.push(candidate);
+    selectedTargets.push(target);
+    serialized = nextSerialized;
   }
-  return JSON.stringify(selected);
+  return { selectedTargets, omittedCount: targets.length - selectedTargets.length, serialized };
 }
 
 export function buildResumeProposalPrompts({
@@ -57,6 +104,7 @@ export function buildResumeProposalPrompts({
   honestContext: string;
   customInstructions: string;
 }) {
+  const targetSelection = selectPromptTargets(targets, jobText);
   const systemPrompt = `You are a careful resume editor. Return exactly one JSON object and no markdown.
 
 ${inputFirewallRule()}
@@ -69,7 +117,7 @@ ${fenceUntrusted(clipForPrompt(jobText, 24_000, "job posting"))}
 </job_description>
 
 <editable_targets>
-${fenceUntrusted(promptTargets(targets))}
+${fenceUntrusted(targetSelection.serialized)}
 </editable_targets>
 
 <resume_context>
@@ -88,7 +136,11 @@ Rules:
 - Return only targetId values from editable_targets.
 - replacement must be a complete replacement for currentText, not instructions or commentary.
 - Preserve supported inline <b>, <i>, and <u> marks when relevant; return no other markup or newlines.
-- A real skill may be added to a Skills or Summary target from the whole resume/context. A project or experience rewrite may use only facts grounded in that same entry.
+- skill-label describes only the category (for example Languages, Frameworks, Cloud & DevOps, Databases, Tools, or Platforms). Keep it to a short category phrase.
+- skill-list contains actual skills only. It may reorder, deduplicate, or surface skills already supported by the resume or candidate context.
+- Never move content between skill-label and skill-list. Never replace a category label with technologies, and never replace a skill list with a category label.
+- A new skill may come only from the resume or candidate context, never merely from the job description.
+- A real skill may be added to a skill-list or Summary target from the whole resume/context. A project or experience rewrite may use only facts grounded in that same entry.
 - Omit weak, cosmetic, unchanged, or unsupported edits. Do not explain evidence metadata.
 - summary and remainingGaps are optional concise feedback, maximum 3 items each.
 
@@ -101,11 +153,70 @@ Return this shape:
   "summary": ["up to 3 material improvements"],
   "remainingGaps": ["up to 3 important gaps"]
 }`;
-  return { systemPrompt, userPrompt };
+  return { systemPrompt, userPrompt, ...targetSelection };
 }
 
 function increment(counts: DropCounts, reason: ResumePolishWithheldReason): void {
   counts[reason] += 1;
+}
+
+function stripInlineMarks(value: string): string {
+  return value.replace(/<\/?(?:b|i|u)>/gi, "").trim();
+}
+
+function normalizedSkillText(value: string): string {
+  return stripInlineMarks(value)
+    .normalize("NFKC")
+    .toLowerCase()
+    .replace(/[^a-z0-9.+#/&-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+const SKILL_CATEGORY_LABEL = /^(?:(?:programming|technical)\s+)?languages?|frameworks?(?:\s*(?:&|and)\s*libraries)?|libraries|cloud(?:\s*(?:&|and)\s*devops)?|devops|databases?|tools?|platforms?|technologies|technical skills|skills|data\s*(?:&|and)\s*analytics|methods?\s*(?:&|and)\s*tools?|software$/i;
+
+function isSkillCategoryLabel(value: string): boolean {
+  return SKILL_CATEGORY_LABEL.test(normalizedSkillText(value));
+}
+
+function validSkillLabel(value: string): boolean {
+  const plain = stripInlineMarks(value);
+  const words = plain.match(/[A-Za-z0-9+#.-]+/g) ?? [];
+  return plain.length <= 60
+    && words.length >= 1
+    && words.length <= 5
+    && !/[,;|:\r\n.!?]/.test(plain)
+    && isSkillCategoryLabel(plain);
+}
+
+function splitSkillList(value: string): string[] {
+  return stripInlineMarks(value)
+    .split(/[,;|]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function corpusContainsSkill(corpus: string, skill: string): boolean {
+  const normalizedCorpus = normalizedSkillText(corpus);
+  const normalizedSkill = normalizedSkillText(skill);
+  if (!normalizedSkill) return false;
+  const escaped = normalizedSkill.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`(?:^|[^a-z0-9+#.])${escaped}(?=$|[^a-z0-9+#.])`, "i").test(normalizedCorpus);
+}
+
+function validSkillList(replacement: string, target: FlatResumeTarget, grounding: string): boolean {
+  const items = splitSkillList(replacement);
+  if (!items.length || items.length > 30 || (items.length === 1 && isSkillCategoryLabel(items[0]))) return false;
+  const currentItems = new Set(splitSkillList(target.currentText).map(normalizedSkillText));
+  const seen = new Set<string>();
+  for (const item of items) {
+    const key = normalizedSkillText(item);
+    const words = item.match(/[A-Za-z0-9+#.-]+/g) ?? [];
+    if (!key || seen.has(key) || words.length > 8 || /[.!?]$/.test(item) || isSkillCategoryLabel(item)) return false;
+    if (!currentItems.has(key) && !corpusContainsSkill(grounding, item)) return false;
+    seen.add(key);
+  }
+  return true;
 }
 
 function replacementIsSupported(
@@ -115,9 +226,12 @@ function replacementIsSupported(
   scopeText: string,
   honestContext: string
 ): boolean {
+  const wholeResumeGrounding = `${scopeText}\n${honestContext}`;
+  if (target.kind === "skill-label") return validSkillLabel(replacement);
+  if (target.kind === "skill-list" && !validSkillList(replacement, target, wholeResumeGrounding)) return false;
   const grounding = target.sectionType === "standard"
     ? target.entryText
-    : `${scopeText}\n${honestContext}`;
+    : wholeResumeGrounding;
   const lowerGrounding = grounding.toLowerCase();
   return !findUngroundedJdTerm(replacement, jobText.toLowerCase(), lowerGrounding)
     && !hasUngroundedNumericClaim(replacement, grounding)
@@ -145,7 +259,8 @@ export function sanitizeResumeProposal(
   targets: FlatResumeTarget[],
   jobText: string,
   scopeText: string,
-  honestContext: string
+  honestContext: string,
+  omittedTargetCount = 0
 ): ResumePolishWireResult {
   const source = raw && typeof raw === "object" && !Array.isArray(raw)
     ? raw as Record<string, unknown>
@@ -221,6 +336,7 @@ export function sanitizeResumeProposal(
     changes,
     summary,
     remainingGaps: optionalList(source.remainingGaps, 260),
+    omittedTargetCount,
     withheld: { count: withheldCount, reasons: withheldReasons }
   };
 }
@@ -265,7 +381,14 @@ export async function generateResumeProposal({
     signal
   }, stats);
   return {
-    ...sanitizeResumeProposal(parsed, targets, jobText, scopeText, honestContext),
+    ...sanitizeResumeProposal(
+      parsed,
+      prompts.selectedTargets,
+      jobText,
+      scopeText,
+      honestContext,
+      prompts.omittedCount
+    ),
     provider,
     model,
     reasoningEffort,

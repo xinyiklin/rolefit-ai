@@ -503,7 +503,9 @@ visible from idle through blocked, working, proposal, stale, and applied states.
 Resume's primary Polish action runs one grounded proposal request from either
 Resume or Prepare. Its rail shows What improved, collapsed Edits ready with
 Apply all plus individual Accept/Edit/Discard controls, Still missing, and one
-quiet withheld line; Proposal, No changes, and Withheld remain visibly distinct.
+quiet withheld line; when the prompt budget excludes editable fields, one
+equally quiet neutral line reports that count. Proposal, No changes, and
+Withheld remain visibly distinct.
 Cover letter keeps
 the editor unchanged while showing a whole-document proposal with explicit
 Accept proposal and Discard proposal actions; Restore appears only after acceptance.

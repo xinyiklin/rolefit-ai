@@ -129,18 +129,18 @@ assert.match(
 assert.doesNotMatch(applications, /deleteIds/, "the obsolete deleteIds contract cannot return");
 assert.match(
   applications,
-  /import \{ canonicalizeAiUsageStageKeys, type ApplicationAiUsage \} from "\.\.\/lib\/aiUsage";/,
-  "the tracker owns one historical AI-usage read adapter"
+  /import \{ copyAiUsage, type ApplicationAiUsage \} from "\.\.\/lib\/aiUsage";/,
+  "the tracker copies stored AI-usage receipts at its read boundary"
 );
 assert.equal(
   applications.match(/data\.applications\.map\(canonicalizeApplicationAiUsage\)/g)?.length,
   3,
-  "initial, refreshed, and post-write tracker reads canonicalize historical AI-usage stage keys"
+  "initial, refreshed, and post-write tracker reads copy AI-usage receipts"
 );
 assert.match(
   applications,
   /this\.applications = applications\.map\(canonicalizeApplicationAiUsage\)/,
-  "conflict snapshots canonicalize historical AI-usage stage keys"
+  "conflict snapshots copy AI-usage receipts"
 );
 assert.match(
   applications,
@@ -399,14 +399,14 @@ assert.doesNotMatch(
 assert.match(intakeFingerprint, /jobUrl/, "Job analysis still guards the live job URL");
 assert.match(intakeFingerprint, /jobDescription/, "Job analysis still guards the live job description");
 assert.match(intakeFingerprint, /aiRequest/, "Job analysis still guards its provider, model, and effort settings");
-assert.match(polish, /const provider = await ensureTailorProviderReady\(\)/,
+assert.match(polish, /const provider = await ensureResumePolishProviderReady\(\)/,
   "one-pass Polish waits for its selected provider before dispatch");
 assert.doesNotMatch(
   polishFingerprint,
-  /tailorProviderReady|reviewProviderReady/,
+  /resumePolishProviderReady|reviewProviderReady/,
   "advisory provider polling cannot invalidate an active Polish request"
 );
-assert.match(polish, /async function startRun[\s\S]{0,180}?runLockRef\.current = true;[\s\S]{0,180}?ensureTailorProviderReady/,
+assert.match(polish, /async function startRun[\s\S]{0,180}?runLockRef\.current = true;[\s\S]{0,180}?ensureResumePolishProviderReady/,
   "Polish acquires its double-run lock before provider readiness or duplicate dialogs can yield");
 assert.match(polish, /inputFingerprintRef\.current = inputFingerprint/, "Polish tracks live semantic inputs");
 assert.doesNotMatch(polishFingerprint, /polishStages|reviewInstructions|review:/,
@@ -513,15 +513,32 @@ assert.match(
   "a changed job, evidence, or guidance is Out of date"
 );
 // The resume runs the check once, when the last edit decision settles.
+assert.match(documentCheckHook, /const autoPendingKeyRef = useRef<string \| null>\(null\)/,
+  "the automatic phase tracks an in-flight proposal separately from a consumed one");
 assert.match(
   documentCheckHook,
-  /const requestAutoCheck = useCallback\((?:.|\n){0,400}?autoRunKeyRef\.current === key\) return;/,
-  "the automatic phase runs once per settled proposal, never once per accepted edit"
+  /autoRunKeyRef\.current === key\s*\|\|\s*autoPendingKeyRef\.current === key/,
+  "the automatic phase deduplicates both started and provider-readiness work"
+);
+assert.match(
+  documentCheckHook,
+  /autoPendingKeyRef\.current = key;[\s\S]{0,500}?autoRunKeyRef\.current = key;[\s\S]{0,120}?autoPendingKeyRef\.current = null/,
+  "a proposal key becomes consumed only from the request-start callback"
+);
+assert.match(
+  documentCheckHook,
+  /if \(!started && autoPendingKeyRef\.current === key\) autoPendingKeyRef\.current = null/,
+  "provider, input, and lock preflight failures release the pending key for a later retry"
 );
 assert.match(
   app,
   /if \(!resumeProposalDecisions\.decisionsSettled \|\| proposalStale\) return;[\s\S]{0,240}?requestResumeAutoCheck\(/,
   "the resume checks the resulting document only after every edit has a decision"
+);
+assert.match(
+  app,
+  /requestResumeAutoCheck\(\s*`\$\{jobDescription\}\|\$\{resumeProposalDecisions\.proposalKey\}`/,
+  "a changed proposal body earns a distinct automatic check even when target ids are reused"
 );
 assert.match(
   coverReview,
@@ -533,6 +550,10 @@ assert.match(
   /decisionsSettled: Boolean\(result\?\.polishOutcome\) && outstanding === 0/,
   "decision state is owned by the workflow so the check can observe it settle"
 );
+assert.match(proposalDecisions, /resumeProposalKey\(result\)/,
+  "proposal identity comes from proposal content rather than reusable target ids alone");
+assert.doesNotMatch(proposalDecisions, /decisionsKeyRef|if \([^)]*proposalKey[^)]*\)\s*\{[^}]*setDecision/s,
+  "a new proposal derives an empty decision map without setting React state during render");
 assert.doesNotMatch(
   readFileSync(new URL("../../sections/resume/ResumeProposalReview.tsx", import.meta.url), "utf8"),
   /useState<Record<string, Decision>>/,
@@ -592,12 +613,8 @@ assert.doesNotMatch(
   /const STAGE_FIELD_GROUPS: Array<\[keyof PersistedSettings, keyof PersistedSettings, keyof PersistedSettings\]> = \[\s*\[/,
   "persisted stage key groups are derived from the stage list, not hand-listed"
 );
-// The cover/answers stages inherit Resume Polish's config when they have none of their
-// own. That inheritance MUST live in the seeder: key migration may rename an
-// existing persisted value, but normalization must not seed a stage that was
-// absent from a portable backup.
-// Seeding is a pure module so it has a test seam without React; the behavior
-// itself is covered by src/lib/__evals__/stage-settings-eval.mjs.
+// Seeding stays pure so independent stage defaults have a test seam without
+// React; the behavior itself is covered by stage-settings-eval.mjs.
 assert.match(
   aiSettings,
   /import \{ seedStages, stageFieldsToPersist \} from "\.\.\/lib\/stageSettings";/,
@@ -605,8 +622,8 @@ assert.match(
 );
 assert.doesNotMatch(
   persistedSettings,
-  /bag\[keys\.provider\] = bag\[RESUME_POLISH_KEYS\.provider\]/,
-  "normalizeSettings never adds a stage key — it would break workspace-backup restore"
+  /distillProvider|auditProvider|workAuthorization\?|sponsorship\?/,
+  "retired preview setting readers are absent from the persisted contract"
 );
 
 // Anti-fabrication: every candidate fact is opt-in. A default that asserted a
@@ -1159,8 +1176,9 @@ assert.match(
 assert.match(
   sessionsRail,
   /tailoring: "polishing resume",[\s\S]{0,100}?reviewing: "checking document"/,
-  "persisted presence phases render with current workflow language"
+  "current presence phases render with current workflow language"
 );
+assert.doesNotMatch(sessionsRail, /distilling/, "the retired preview presence phase is gone");
 
 // The masthead-only menu rules must disappear with the old ownership. The rail
 // gets its own utility surface and a fixed rightward popover rule so the menu is
@@ -1384,6 +1402,11 @@ assert.match(
   preparedResumeHook,
   /loadBaseResumeVersion\([\s\S]{0,420}?latest\.applicationOwned \|\|\s*latest\.documentDirty \|\|\s*latest\.manualSelectionInFlight/,
   "an in-flight adoption cancels on a restored application, a fresh edit, or manual selection"
+);
+assert.match(
+  preparedResumeHook,
+  /const clearPreparedResumeRecommendation = useCallback\(\(\) => \{\s*resolveGenerationRef\.current \+= 1;\s*setResumeVariantRecommendation\(null\);\s*setIsResolvingPreparedResume\(false\);/,
+  "cancelling a resolution clears the visible resolving flag as well as invalidating its generation"
 );
 assert.match(
   preparedResumeRules,

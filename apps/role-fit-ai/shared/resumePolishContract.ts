@@ -20,6 +20,7 @@ export type ResumePolishWireResult = {
   changes: ResumePolishWireChange[];
   summary: string[];
   remainingGaps: string[];
+  omittedTargetCount: number;
   withheld: {
     count: number;
     reasons: ResumePolishWithheldReason[];
@@ -35,7 +36,7 @@ export type ResumePolishEditorTarget = {
 
 export type FlatResumeTarget = {
   targetId: string;
-  kind: "bullet" | "skills" | "field";
+  kind: "bullet" | "skill-label" | "skill-list" | "field";
   section: string;
   currentText: string;
   target: ResumePolishEditorTarget;
@@ -115,8 +116,8 @@ export function flattenResumeTargets(scope: ScopeLike): FlatResumeTarget[] {
         });
       };
       if (type === "skills") {
-        addField("skill", entry.subtitleLeft, "skills");
-        addField("titleLeft", entry.titleLeft);
+        addField("skill", entry.subtitleLeft, "skill-list");
+        addField("titleLeft", entry.titleLeft, "skill-label");
       } else if (type === "standard") {
         addField("titleLeft", entry.titleLeft);
         addField("titleRight", entry.titleRight);
@@ -182,12 +183,17 @@ export function sanitizeResumePolishWireResult(raw: unknown): ResumePolishWireRe
           (RESUME_POLISH_WITHHELD_REASONS as readonly string[]).includes(reason)
         ))]
     : [];
+  const omittedTargetCount = typeof source.omittedTargetCount === "number"
+    && Number.isInteger(source.omittedTargetCount)
+    ? Math.max(0, Math.min(160, source.omittedTargetCount))
+    : 0;
 
   return {
     status: status as ResumePolishStatus,
     changes,
     summary: list(source.summary, 260),
     remainingGaps: list(source.remainingGaps, 260),
+    omittedTargetCount,
     withheld: { count, reasons }
   };
 }

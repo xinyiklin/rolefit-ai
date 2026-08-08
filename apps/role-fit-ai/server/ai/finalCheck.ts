@@ -41,22 +41,27 @@ function containsFeedbackMarkup(value: unknown): boolean {
   return /[\r\n]|<\/?[a-z][^>]*>|\\(?:begin|end|section|subsection|item|href)\b/i.test(valueText);
 }
 
+function exactSourceExcerpt(value: unknown, max: number): string {
+  if (typeof value !== "string") return "";
+  const excerpt = value.trim();
+  return excerpt.length <= max ? excerpt : "";
+}
+
 function hasUngroundedClaimSignal(value: string, grounding: string): boolean {
   return hasUngroundedNumericClaim(value, grounding)
     || Boolean(findUngroundedCuratedClaimTerm(value, grounding))
     || Boolean(findUngroundedOutcomeClaim(value, grounding, { candidateProse: true }));
 }
 
-// Grounding is document-kind agnostic: an UNSUPPORTED issue must name something
-// the document says and the evidence does not, a MISSING issue must name
-// something the job says and the document does not, and a CLARITY issue must
-// name wording the document actually contains.
-function issueIsGrounded(
+function issueHasExactSourceAnchor(
   issue: FinalCheckIssue,
+  sourceExcerpt: string,
   currentDocument: string,
   evidenceText: string,
   jobText: string
 ): boolean {
+  const source = issue.kind === "MISSING" ? jobText : currentDocument;
+  if (!sourceExcerpt || !source.includes(sourceExcerpt)) return false;
   if (issue.kind === "UNSUPPORTED") {
     return !hasUngroundedClaimSignal(issue.detail, currentDocument)
       && hasUngroundedClaimSignal(issue.detail, evidenceText);
@@ -97,10 +102,12 @@ export function sanitizeFinalCheck(
     if (!rawIssue || typeof rawIssue !== "object" || Array.isArray(rawIssue)) continue;
     const issue = rawIssue as Record<string, unknown>;
     const kind = text(issue.kind, 24).toUpperCase();
+    const sourceExcerpt = exactSourceExcerpt(issue.sourceExcerpt, 500);
     const detail = text(issue.detail, 500);
     const action = text(issue.action, 360);
     if (
       !(FINAL_CHECK_ISSUE_KINDS as readonly string[]).includes(kind)
+      || !sourceExcerpt
       || !detail
       || !action
       || containsFeedbackMarkup(issue.detail)
@@ -112,7 +119,10 @@ export function sanitizeFinalCheck(
       action
     };
     const key = `${kind}:${detail.toLowerCase()}`;
-    if (seen.has(key) || !issueIsGrounded(candidate, currentDocument, evidenceText, jobText)) continue;
+    if (
+      seen.has(key)
+      || !issueHasExactSourceAnchor(candidate, sourceExcerpt, currentDocument, evidenceText, jobText)
+    ) continue;
     seen.add(key);
     issues.push(candidate);
     if (issues.length === 5) break;
@@ -173,6 +183,7 @@ Issue kinds:
 
 Rules:
 - Return at most five material issues, ordered by importance.
+- sourceExcerpt is an exact verbatim substring from the current ${noun} for UNSUPPORTED and CLARITY, or from job_description for MISSING.
 - detail identifies the exact claim, requirement, or wording at issue.
 - action is one concise human action; never write replacement ${noun} text.
 - Do not report cosmetic preferences, evidence metadata, scores, verdicts, or recommendations to apply.
@@ -182,7 +193,7 @@ Return this shape:
   "status": "READY | REVIEW | NEEDS_EVIDENCE",
   "summary": "one short sentence",
   "issues": [
-    { "kind": "UNSUPPORTED | MISSING | CLARITY", "detail": "specific issue", "action": "specific action" }
+    { "kind": "UNSUPPORTED | MISSING | CLARITY", "sourceExcerpt": "exact source text", "detail": "specific issue", "action": "specific action" }
   ]
 }`;
   return { systemPrompt, userPrompt };

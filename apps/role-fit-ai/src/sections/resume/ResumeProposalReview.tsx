@@ -30,6 +30,11 @@ export function ResumeProposalReview({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const { suggestions, decisions, outstanding, isPending, accept, discard, applyAll } = proposal;
+  const omittedNote = result.omittedTargetCount ? (
+    <p className="resume-proposal__omitted">
+      {result.omittedTargetCount} other editable field{result.omittedTargetCount === 1 ? " was" : "s were"} outside this Polish pass.
+    </p>
+  ) : null;
 
   function acceptEdit(suggestionId: string, value: string): void {
     const suggestion = suggestions.find((entry) => entry.id === suggestionId);
@@ -40,10 +45,10 @@ export function ResumeProposalReview({
   }
 
   if (result.polishOutcome === "NO_CHANGES") {
-    return <p className="resume-proposal__empty">No safe material changes were suggested.</p>;
+    return <><p className="resume-proposal__empty">No safe material changes were suggested.</p>{omittedNote}</>;
   }
   if (result.polishOutcome === "WITHHELD" && !suggestions.length) {
-    return <p className="resume-proposal__empty is-warn">The generated edits could not be verified. Your resume is unchanged.</p>;
+    return <><p className="resume-proposal__empty is-warn">The generated edits could not be verified. Your resume is unchanged.</p>{omittedNote}</>;
   }
 
   return (
@@ -138,6 +143,7 @@ export function ResumeProposalReview({
           {result.withheld.count} generated edit{result.withheld.count === 1 ? " was" : "s were"} withheld because it could not be verified.
         </p>
       ) : null}
+      {omittedNote}
     </div>
   );
 }

@@ -3,7 +3,7 @@ import { inferApplicationTitle, inferCompanyFromUrl } from "../lib/jobTarget";
 import { sourceFromUrl, type ExtractedJobTracking } from "../lib/jobExtract";
 import { dedupeSourceUrls, normalizeJobUrl, findDuplicateApplications } from "../lib/jobIdentity";
 import type { DuplicateTarget } from "../lib/jobIdentity";
-import { canonicalizeAiUsageStageKeys, type ApplicationAiUsage } from "../lib/aiUsage";
+import { copyAiUsage, type ApplicationAiUsage } from "../lib/aiUsage";
 import { applicationMatchesJobTarget } from "../lib/applicationDocuments";
 import {
   applicationMutationRecords,
@@ -147,7 +147,7 @@ export type Application = {
 // mutation writes only canonical names.
 function canonicalizeApplicationAiUsage(application: Application): Application {
   if (!application.aiUsage) return application;
-  return { ...application, aiUsage: canonicalizeAiUsageStageKeys(application.aiUsage) };
+  return { ...application, aiUsage: copyAiUsage(application.aiUsage) };
 }
 
 // Build the common skeleton for a new pipeline entry from the current job

@@ -25,12 +25,17 @@ browser-side effects; components render them and App composes them.
   Polish-validation receipt a cover letter adopts instead of re-checking, and
   the two distinct staleness fingerprints (document edited vs inputs changed).
   It submits the live serialized document and must never mutate an editor,
-  replace a Polish result, or participate in Apply readiness.
+  replace a Polish result, or participate in Apply readiness. Automatic checks
+  keep provider preflight pending separately from consumed requests: repeated
+  renders deduplicate pending work, and a proposal key is consumed only after
+  fetch starts so failed readiness or a held lock can retry later.
 - `useResumeProposalDecisions` owns accept/edit/discard for the proposal's
   individual edits. It lives above the review list because the resulting resume
   only exists once every edit has a decision, and that is when the check runs;
   `outstanding` re-derives from the live document so an undo makes an edit
-  pending again.
+  pending again. Its proposal key includes outcome, target id, original text,
+  replacement text, and reason. A changed key derives empty decisions during
+  render and initializes keyed state only from the next user decision.
 - `useDuplicateGuard` owns duplicate acknowledgments and pipeline/apply gates.
 - `useDuplicateScan` owns the Applications tab's tracker-wide duplicate
   clusters: it schedules the O(n²) scan after first paint, cancels a pending
@@ -69,8 +74,12 @@ browser-side effects; components render them and App composes them.
   preparation. The ordering rules live in `lib/preparedResume.ts` — pure, so the
   hydration wait, the terminal states, and the adoption guards are executable in
   tests rather than only inspectable as source. Do not reintroduce a second
-  selector or a post-preparation re-ranking effect for the resume.
-  `useApplications` sends only mutation-named upsert records, keeps optimistic
+  selector or a post-preparation re-ranking effect for the resume. Candidate
+  bytes and ordered option metadata must share one snapshot; retry one changed
+  snapshot, then retain current. The guarded loader returns the exact committed
+  document receipt, failed adoption clears the recommendation, and cancellation
+  clears both the recommendation and visible resolving flag.
+- `useApplications` sends only mutation-named upsert records, keeps optimistic
   updates serial, and reconciles successful own-write snapshots by id/revision
   so unchanged objects retain identity. Manual refreshes and conflict snapshots
   remain fresh authoritative objects.

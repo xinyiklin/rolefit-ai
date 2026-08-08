@@ -101,8 +101,10 @@ export function useDocumentCheck({
   const abortRef = useRef<AbortController | null>(null);
   const generationRef = useRef(0);
   const runLockRef = useRef(false);
-  // Which settled proposal already triggered the automatic phase. One key per
-  // proposal, so resolving the last edit runs the check exactly once.
+  // Provider readiness is asynchronous, so "requested" and "started" are
+  // separate identities. A pending key deduplicates renders while preflight is
+  // running; the consumed key advances only after fetch is actually invoked.
+  const autoPendingKeyRef = useRef<string | null>(null);
   const autoRunKeyRef = useRef<string | null>(null);
 
   const documentFingerprint = contentFingerprint(documentText);
@@ -144,25 +146,25 @@ export function useDocumentCheck({
     runLockRef.current = false;
   }, []);
 
-  const runCheck = useCallback(async (): Promise<void> => {
-    if (runLockRef.current || isChecking) return;
+  const runCheck = useCallback(async (onStarted?: () => void): Promise<boolean> => {
+    if (runLockRef.current || isChecking) return false;
     if (documentText.trim().length < 80) {
       setStatus(`Add your ${noun} before checking it.`);
-      return;
+      return false;
     }
     if (jobDescription.trim().length < 40) {
       setStatus(`Prepare the job before checking the ${noun}.`);
-      return;
+      return false;
     }
 
     runLockRef.current = true;
     const provider = await ensureProviderReady();
-    if (!runLockRef.current) return;
+    if (!runLockRef.current) return false;
     if (!provider.ready) {
       runLockRef.current = false;
       setProgress({ status: "failed", errorHeadline: "Provider unavailable", error: provider.message });
       setStatus(provider.message);
-      return;
+      return false;
     }
 
     const controller = new AbortController();
@@ -181,8 +183,9 @@ export function useDocumentCheck({
     setIsChecking(true);
     setProgress({ status: "running" });
     setStatus(`Reviewing the current ${noun} for evidence, coverage, and clarity…`);
+    let started = false;
     try {
-      const response = await fetch("/api/final-check", {
+      const responsePromise = fetch("/api/final-check", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -195,8 +198,11 @@ export function useDocumentCheck({
         }),
         signal: controller.signal
       });
+      started = true;
+      onStarted?.();
+      const response = await responsePromise;
       const raw = await readCheckResponse(response);
-      if (!requestIsCurrent()) return;
+      if (!requestIsCurrent()) return started;
       if (!response.ok) throw new ApiError((raw.error as string) ?? "The check failed.", response.status);
       const checked = sanitizeFinalCheckWireResult(raw);
       if (!checked) throw new ApiError("The check returned an invalid outcome", 422);
@@ -223,7 +229,7 @@ export function useDocumentCheck({
         }
       }));
     } catch (error) {
-      if (controller.signal.aborted || !requestIsCurrent()) return;
+      if (controller.signal.aborted || !requestIsCurrent()) return started;
       const failure = classifyFailure(error);
       setProgress({ status: "failed", errorHeadline: failure.headline, error: failure.detail });
       setStatus(`${failure.headline}: ${failure.detail}`);
@@ -234,6 +240,7 @@ export function useDocumentCheck({
         setIsChecking(false);
       }
     }
+    return started;
   }, [
     documentFingerprint,
     documentKind,
@@ -254,15 +261,29 @@ export function useDocumentCheck({
   // proposal's identity, so re-deciding the same proposal never re-spends a
   // request while a fresh proposal always earns its own check.
   const requestAutoCheck = useCallback((key: string): void => {
-    if (!enabled || !key || autoRunKeyRef.current === key) return;
-    autoRunKeyRef.current = key;
-    void runCheck();
+    if (
+      !enabled
+      || !key
+      || autoRunKeyRef.current === key
+      || autoPendingKeyRef.current === key
+    ) return;
+    autoPendingKeyRef.current = key;
+    void runCheck(() => {
+      if (autoPendingKeyRef.current !== key) return;
+      autoRunKeyRef.current = key;
+      autoPendingKeyRef.current = null;
+    }).then((started) => {
+      if (!started && autoPendingKeyRef.current === key) autoPendingKeyRef.current = null;
+    }, () => {
+      if (autoPendingKeyRef.current === key) autoPendingKeyRef.current = null;
+    });
   }, [enabled, runCheck]);
 
   // A cover letter accepted from a validated proposal is already checked: that
   // exact text is what the server validated and, where needed, repaired. Record
   // it rather than paying for a second opinion on the same bytes.
   const adoptValidatedReceipt = useCallback((acceptedText: string, summary: string): void => {
+    autoPendingKeyRef.current = null;
     autoRunKeyRef.current = null;
     setCheck({ status: "READY", summary, issues: [] });
     setCheckSource("polish-validation");
@@ -273,6 +294,7 @@ export function useDocumentCheck({
   }, [inputsFingerprint]);
 
   const clearCheck = useCallback((): void => {
+    autoPendingKeyRef.current = null;
     autoRunKeyRef.current = null;
     setCheck(null);
     setCheckedDocumentFingerprint("");

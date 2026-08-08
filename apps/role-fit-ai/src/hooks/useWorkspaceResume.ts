@@ -29,7 +29,7 @@ import type { VariantCandidate } from "../lib/variantRecommendation";
 import { fetchBaseResumeCandidates } from "../lib/baseResumeWorkspaceRepository.ts";
 // The document's origin is a domain fact about the resume, not workspace
 // plumbing; it lives beside the resolution rules that consume it.
-import type { ResumeOrigin } from "../lib/preparedResume.ts";
+import type { PreparedResumeAdoption, ResumeOrigin } from "../lib/preparedResume.ts";
 export type { ResumeOrigin };
 import { createBlankResumeData } from "../lib/blankResume.ts";
 
@@ -240,22 +240,22 @@ export function useWorkspaceResume({
     skipGuard = false,
     clearRecoveryOnCommit = false,
     shouldCancel?: () => boolean
-  ): Promise<boolean> {
-    if (!baseResume.exists || !baseResume.text) return false;
+  ): Promise<{ text: string } | null> {
+    if (!baseResume.exists || !baseResume.text) return null;
 
     let candidate: PreparedResumeCandidate;
     try {
       candidate = prepareResumeText(baseResume.text, baseResume.kind === "resume");
     } catch (error) {
       setFileStatus(error instanceof Error ? error.message : "This .resume file could not be read.");
-      return false;
+      return null;
     }
 
-    if (shouldCancel?.()) return false;
+    if (shouldCancel?.()) return null;
 
     if (!skipGuard) {
       const approved = await approveCurrentReplacement(approvedVersion);
-      if (approved === null) return false;
+      if (approved === null) return null;
       approvedVersion = approved;
 
       // This is the final await-free commit boundary. Re-read the live version
@@ -266,11 +266,11 @@ export function useWorkspaceResume({
         replacementGuard.currentVersion() !== approvedVersion
       ) {
         const refreshedApproval = await approveCurrentReplacement();
-        if (refreshedApproval === null) return false;
+        if (refreshedApproval === null) return null;
       }
       clearRecoveryOnCommit ||= replacementGuard.isDirtyNow();
     }
-    if (shouldCancel?.()) return false;
+    if (shouldCancel?.()) return null;
 
     // Validation and any required confirmation have both succeeded. Recovery
     // data is superseded only at this commit boundary, never while a file is
@@ -301,7 +301,9 @@ export function useWorkspaceResume({
       seedResumeEditor(candidate.text, "");
     }
     setFileStatus(status);
-    return true;
+    return {
+      text: candidate.kind === "resume" ? serializeResumeData(candidate.parsed.data) : candidate.text
+    };
   }
 
   function updateWorkspaceState(workspace: JobWorkspace) {
@@ -617,7 +619,7 @@ export function useWorkspaceResume({
     fileName: string,
     clearRecoveryOnCommit = true,
     shouldCancel?: () => boolean
-  ): Promise<boolean> {
+  ): Promise<PreparedResumeAdoption | null> {
     setIsSavingBaseResume(true);
     setWorkspaceStatus("Loading base resume version…");
     try {
@@ -647,7 +649,7 @@ export function useWorkspaceResume({
         } else {
           setWorkspaceStatus("The selected base resume could not be loaded. The current editor was kept.");
         }
-        return false;
+        return null;
       }
       setResumeOrigin("saved");
       updateWorkspaceState({
@@ -658,10 +660,18 @@ export function useWorkspaceResume({
         files: workspace.files ?? workspaceFiles
       });
       setWorkspaceStatus("");
-      return true;
+      const adoptedFileName = workspace.baseResume.fileName ?? "";
+      const adoptedLabel = workspace.baseResumeOptions?.find((option) => option.fileName === adoptedFileName)?.label
+        ?? workspace.baseResume.label
+        ?? adoptedFileName;
+      return {
+        fileName: adoptedFileName,
+        label: adoptedLabel,
+        text: applied.text
+      };
     } catch (error) {
       setWorkspaceStatus(error instanceof Error ? error.message : "Base resume load failed.");
-      return false;
+      return null;
     } finally {
       setIsSavingBaseResume(false);
     }

@@ -71,7 +71,7 @@ type ResumeTabProps = {
   proposalStale?: boolean;
   resumeReady: boolean;
   jobReady: boolean;
-  tailorProviderReady: boolean;
+  resumePolishProviderReady: boolean;
   checkProviderReady: boolean;
   checkProviderMessage: string;
   isPolishing: boolean;
@@ -129,7 +129,7 @@ export function ResumeTab({
   proposalStale,
   resumeReady,
   jobReady,
-  tailorProviderReady,
+  resumePolishProviderReady,
   checkProviderReady,
   checkProviderMessage,
   isPolishing,
@@ -205,7 +205,7 @@ export function ResumeTab({
   const canPolish =
     resumeReady &&
     jobReady &&
-    tailorProviderReady &&
+    resumePolishProviderReady &&
     tailorSectionCount > 0;
   const documentContext = [jobTarget?.role, jobTarget?.company].filter(Boolean).join(" at ");
   // The rail's one primary action, handed to the shell so it sits beside the
@@ -277,7 +277,7 @@ export function ResumeTab({
               jobTarget={jobTarget}
               resumeReady={resumeReady}
               jobReady={jobReady}
-              tailorProviderReady={tailorProviderReady}
+              resumePolishProviderReady={resumePolishProviderReady}
               checkProviderReady={checkProviderReady}
               checkProviderMessage={checkProviderMessage}
               selectedSectionCount={selectedSectionCount}

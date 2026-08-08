@@ -28,6 +28,15 @@ export type PreparedResumeSelection = {
   origin: PreparedResumeOrigin;
 };
 
+// Receipt from the guarded workspace loader. It describes the exact document
+// committed to the editor, which may differ from bytes read earlier for
+// ranking if the saved file changed while resolution was in flight.
+export type PreparedResumeAdoption = {
+  fileName: string;
+  label: string;
+  text: string;
+};
+
 // Why no resume could be resolved. "starter-only" is the case worth naming: the
 // bundled starter is long enough to pass every length test while being sample
 // content that must never be screened, polished, or reported as ready.
@@ -172,6 +181,27 @@ export function currentResumeSelection(state: PreparedResumeState): PreparedResu
   };
 }
 
+export function preparedResumeOptionSnapshotKey(state: PreparedResumeState): string {
+  return JSON.stringify({
+    orderedFileNames: state.options.map((option) => option.fileName),
+    optionCount: state.options.length,
+    loadedFileName: state.baseResumeName
+  });
+}
+
+function retainCurrentResume(state: PreparedResumeState): PreparedResumeResolution {
+  const selection = currentResumeSelection(state);
+  if (selection) return { selection, recommendation: null, blocker: null };
+  return {
+    selection: null,
+    recommendation: null,
+    blocker:
+      !resumeIsApplicantOwned(state) && state.currentText.trim().length >= MINIMUM_PREPARED_RESUME_LENGTH
+        ? "starter-only"
+        : "no-resume"
+  };
+}
+
 export type PreparedResumeResolutionDeps = {
   jobText: string;
   // Terminal states only. A resume that is still being read is not "no resume",
@@ -180,8 +210,9 @@ export type PreparedResumeResolutionDeps = {
   whenWorkspaceBootstrapped: () => Promise<void>;
   readState: () => PreparedResumeState;
   readCandidates: (options: { fileName: string; label: string }[]) => Promise<VariantCandidate[]>;
-  // The guarded workspace loader. Returns whether the document was replaced.
-  adopt: (fileName: string) => Promise<boolean>;
+  // The guarded workspace loader. A successful receipt carries the exact
+  // document committed to the editor, not the earlier ranking candidate.
+  adopt: (fileName: string) => Promise<PreparedResumeAdoption | null>;
   // False once this resolution has been superseded by a newer one.
   isCurrent: () => boolean;
 };
@@ -192,14 +223,25 @@ export async function resolvePreparedResumeSelection(
   await deps.whenWorkspaceBootstrapped();
   if (!deps.isCurrent()) return null;
 
-  const hydrated = deps.readState();
-  const candidates = documentIsReplaceable(hydrated) && hydrated.options.length
-    ? await deps.readCandidates(hydrated.options)
-    : [];
-  if (!deps.isCurrent()) return null;
+  let settled = deps.readState();
+  let candidates: VariantCandidate[] = [];
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const snapshot = settled;
+    const snapshotKey = preparedResumeOptionSnapshotKey(snapshot);
+    candidates = documentIsReplaceable(snapshot) && snapshot.options.length
+      ? await deps.readCandidates(snapshot.options)
+      : [];
+    if (!deps.isCurrent()) return null;
 
-  // Re-read: reading candidates awaited, and the user may have started editing.
-  const settled = deps.readState();
+    // Candidate bytes and option metadata are one snapshot. If files were
+    // added, removed, or another option was loaded while the batch read was in
+    // flight, retry once with the new ordered set. A second change keeps the
+    // current editor rather than ranking mixed snapshots indefinitely.
+    settled = deps.readState();
+    if (snapshotKey === preparedResumeOptionSnapshotKey(settled)) break;
+    if (attempt === 1) return retainCurrentResume(settled);
+  }
+
   const { decision, recommendation } = decidePreparedResume({
     jobText: deps.jobText,
     savedOptionCount: settled.options.length,
@@ -212,15 +254,19 @@ export async function resolvePreparedResumeSelection(
 
   if (decision.kind === "adopt") {
     const candidate = candidates.find((entry) => entry.fileName === decision.fileName);
-    const adopted = candidate ? await deps.adopt(decision.fileName) : false;
+    const adopted = candidate ? await deps.adopt(decision.fileName) : null;
     if (!deps.isCurrent()) return null;
-    if (adopted && candidate) {
+    if (
+      adopted
+      && adopted.fileName === decision.fileName
+      && adopted.text.trim().length >= MINIMUM_PREPARED_RESUME_LENGTH
+    ) {
       return {
         selection: {
-          fileName: candidate.fileName,
-          label: candidate.label,
-          text: candidate.text,
-          contentFingerprint: contentFingerprint(candidate.text),
+          fileName: adopted.fileName,
+          label: adopted.label,
+          text: adopted.text,
+          contentFingerprint: contentFingerprint(adopted.text),
           origin: decision.origin
         },
         recommendation,
@@ -229,12 +275,7 @@ export async function resolvePreparedResumeSelection(
     }
     // A blocked or failed adoption falls back to the document actually on
     // screen rather than reporting a resume the editor does not hold.
-    const fallbackSelection = currentResumeSelection(deps.readState());
-    return {
-      selection: fallbackSelection,
-      recommendation,
-      blocker: fallbackSelection ? null : "no-resume"
-    };
+    return retainCurrentResume(deps.readState());
   }
 
   if (decision.kind === "current") {

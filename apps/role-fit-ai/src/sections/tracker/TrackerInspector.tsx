@@ -14,7 +14,7 @@ import {
   nextAction
 } from "../../lib/applicationDisplay";
 import { describeProviderModel } from "../../config/aiOptions";
-import { canonicalizeAiUsageStageKeys } from "../../lib/aiUsage";
+import { copyAiUsage } from "../../lib/aiUsage";
 
 const AI_USAGE_STAGES: { key: string; label: string }[] = [
   { key: "job-analysis", label: "Job analysis" },
@@ -62,7 +62,7 @@ export function TrackerInspector({
   const verdict = appFitVerdict(selected);
   const verdictSource = selected.initialFit?.resumeLabel || "Not checked";
   const safeJobUrl = /^https?:\/\//i.test(selected.jobUrl.trim()) ? selected.jobUrl.trim() : "";
-  const displayedAiUsage = canonicalizeAiUsageStageKeys(selected.aiUsage);
+  const displayedAiUsage = copyAiUsage(selected.aiUsage);
 
   // Other members of the selected app's duplicate group, each paired with the
   // edge (evidence) that connects it to the selected app.

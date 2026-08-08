@@ -5,6 +5,60 @@ bounded; app-only operational detail belongs in the affected app documentation.
 
 ## 2026-08-08
 
+- [USER+CODE+TOOL] **The remaining accuracy and preview-cleanup slices are now in
+  place.** Final Check requires a private exact source excerpt for every issue,
+  validates it against the current document or posting, preserves valid
+  siblings, and removes the excerpt from the public result. Resume Polish ranks
+  oversized editable-target sets by materiality and job relevance into complete
+  JSON, validates responses only against the selected set, and reports a quiet
+  omitted-target count without adding a provider call. The temporary
+  `/api/distill` alias, renamed stage/instruction setting readers, obsolete
+  eligibility tri-states, historical AI-usage key rewriting, legacy presence
+  phase, and cover/answers cross-stage inheritance are removed under the preview
+  no-compatibility policy. Older continuity entries describing those readers or
+  migrations are retained as historical chronology and are superseded by this
+  current-state entry. The complete RoleFit gate passes: production and landing
+  builds, both browser/server TypeScript projects, every desktop contract and
+  security probe, and all 79 offline evaluations. Live-provider and visual
+  browser QA were not run; the only visible change is one quiet derived count
+  line using the existing proposal typography.
+- [USER+CODE+TOOL] **Prepared-resume and proposal closing lifecycles now keep
+  one content-consistent generation.** The prepared-resume resolver snapshots
+  ordered filenames, option count, and loaded filename around its candidate
+  read, retries one changed snapshot, and otherwise retains the current editor.
+  Guarded adoption returns the exact validated document committed by the
+  workspace loader; failed/blocked adoption clears its recommendation, and
+  cancellation clears the visible resolving flag. Resume proposal decisions are
+  keyed by outcome plus target/original/replacement/reason content, derive empty
+  on a new key without a render-time state update, and preserve live-document
+  undo/manual-match semantics. The automatic current-document check tracks
+  provider preflight separately and consumes a proposal key only once fetch
+  starts, so incomplete inputs, unavailable providers, or a held lock can retry.
+  Focused red/green probes pass (53 prepared-resume checks and 459 client
+  workflow guards), as do both TypeScript projects, the production build, every
+  desktop contract/security probe, and all 79 offline evaluations. Browser and
+  live-provider QA were not run; no layout contract or provider-call count
+  changed.
+- [USER+CODE+TOOL] **The fast one-call workflow now has a compact deterministic
+  accuracy layer.** Resume Polish preserves its single provider dispatch while
+  exposing Skills category labels and actual skill lists as distinct target
+  kinds; controlled label changes and grounded list edits survive, while swaps
+  and job-only skill insertions fail independently. Combined Job analysis +
+  Initial Fit and fit-only retry now ask the provider for at most six material
+  requirement rows with exact posting/candidate anchors. The server validates
+  those anchors, treats missing/invalid evidence as `NOT_SHOWN`, recognizes
+  explicit years and eligibility contradictions, prevents supporting preferences
+  or eligibility conditions from depressing fit, and derives the public
+  category, summary, matches, gaps, and optional eligibility warning. The hidden
+  basis is neither returned nor persisted. `BLOCKED` requires both an explicit
+  posting restriction and explicit adverse candidate context; `CHECK` remains
+  eligible for automatic polishing. Initial Fit no longer derives tracker
+  priority: explicit user choice wins, Interviewing/Offer may derive High, and
+  other records default Medium while fit remains sortable. Focused red/green
+  probes, both client/server TypeScript gates, Job analysis and provider
+  contracts, the production build, all desktop contract/security probes, and
+  all 78 offline evaluations pass. Live-provider evaluation and browser QA were
+  not run; the code changed no visible layout or interaction contract.
 - [USER+CODE+TOOL] **Prepare's wrapped Initial Fit detail now remains inside
   the Application rail panel.** The desktop two-pane scroller stretched the
   rail's single grid item to the scrollport height, so a longer fit summary

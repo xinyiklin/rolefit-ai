@@ -14,18 +14,25 @@ sanitizer code is executable product behavior and anti-fabrication-critical.
   modules own their response schemas and outcome derivation.
 - `resumeProposal.ts` owns normal Resume Polish: one provider dispatch, flat
   target IDs, deterministic mutation grounding, tolerant optional feedback,
-  and truthful Proposal / No changes / Withheld outcomes.
+  and truthful Proposal / No changes / Withheld outcomes. Oversized target sets
+  are ranked by materiality and job relevance into complete JSON; the response
+  is validated only against that selected set and reports the omitted count.
 - `finalCheck.ts` owns the separate optional current-resume check: one provider
   dispatch, an independent compact contract, deterministic issue grounding,
   partial valid issue survival, and server-derived status. It never returns a
-  score, fit verdict, recommendation, or rewrite.
+  score, fit verdict, recommendation, or rewrite. Every provider issue carries
+  a private exact source excerpt from the current document (Unsupported /
+  Clarity) or posting (Missing); that anchor is validated and never returned.
 - `polish.ts` accepts only `mode: "resume-proposal"` and routes it to that
   contract. Cover letters and current-document checks use their own routes.
 - `jobAnalysis.ts`, `quickFit.ts`, `coverLetter.ts`, and `applicationAnswers.ts`
   own their routes and prompt contracts. Prepare may ask `jobAnalysis.ts` for
   Job analysis plus optional compact Initial Fit in one provider dispatch;
   their response subsections sanitize independently. `mode: "initial-fit"`
-  reruns only the compact fit for a changed resume.
+  reruns only the compact fit for a changed resume. Initial Fit asks the provider
+  for at most six material requirement assessments with exact posting/candidate
+  anchors. `quickFit.ts` validates those anchors and derives the four-category
+  public result and eligibility; the hidden basis is never returned or persisted.
   Cover-letter tailoring is **one call**. It requires the candidate's source
   letter and the evidence corpus derived from their own resume, notes, and
   answers; it never generates from resume/job inputs alone. The route shares
@@ -33,7 +40,8 @@ sanitizer code is executable product behavior and anti-fabrication-critical.
   provider dispatch only for a genuinely unresolvable fact, and cannot return
   `ready` with template tokens or unresolved correspondence fields.
 - `grounding.ts` and `eligibilityLexicon.ts` provide deterministic evidence
-  checks, never a local fit-scoring system.
+  checks. The only deterministic fit classifier is the compact category rubric
+  in `quickFit.ts`; do not add numeric scores or a visible/persisted ledger.
 - Evidence selection belongs to the model, not to the candidate and not to a
   prompt-enforced count. The server sends the whole corpus, verifies the ids
   that come back, and reports provenance. Do not reintroduce a preparation plan,
@@ -69,11 +77,13 @@ sanitizer code is executable product behavior and anti-fabrication-critical.
 - Resume Polish emits targeted suggestions grounded in the submitted
   resume/honest context. Never import JD-only skills or fabricate claims.
   Unknown, duplicate, unchanged, malformed, or unsupported edits are dropped
-  independently. Optional summary/gap failures never erase safe siblings, while
-  an all-drop returns Withheld rather than a successful empty proposal.
+  independently. Skill labels and lists retain separate semantics, so a label/list
+  swap or unsupported new list item is dropped without erasing safe siblings.
+  Optional summary/gap failures never erase safe siblings, while an all-drop
+  returns Withheld rather than a successful empty proposal.
 - Final Check audits the current edited draft only when enabled or explicitly
-  rerun. Validate its
-  issue kinds and grounded details independently, drop malformed siblings, and
+  rerun. Validate its issue kinds, exact private source anchors, and grounded
+  details independently, drop malformed siblings, and
   derive READY / REVIEW / NEEDS_EVIDENCE from the surviving issues. Its failure
   is non-blocking and cannot alter Polish or Apply.
 - Polish failures fail plainly without changing the document.

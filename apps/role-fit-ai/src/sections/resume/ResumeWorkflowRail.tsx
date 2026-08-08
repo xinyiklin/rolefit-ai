@@ -22,7 +22,7 @@ type ResumeWorkflowRailProps = {
   jobTarget?: { role?: string; company?: string } | null;
   resumeReady: boolean;
   jobReady: boolean;
-  tailorProviderReady: boolean;
+  resumePolishProviderReady: boolean;
   checkProviderReady: boolean;
   checkProviderMessage: string;
   selectedSectionCount: number;
@@ -55,7 +55,7 @@ export function ResumeWorkflowRail({
   jobTarget,
   resumeReady,
   jobReady,
-  tailorProviderReady,
+  resumePolishProviderReady,
   checkProviderReady,
   checkProviderMessage,
   selectedSectionCount,
@@ -77,7 +77,7 @@ export function ResumeWorkflowRail({
 }: ResumeWorkflowRailProps) {
   const proposalResult = result?.polishOutcome ? result : null;
   const target = [jobTarget?.role, jobTarget?.company].filter(Boolean).join(" at ") || "Resume";
-  const ready = resumeReady && jobReady && tailorProviderReady && tailorSectionCount > 0;
+  const ready = resumeReady && jobReady && resumePolishProviderReady && tailorSectionCount > 0;
   const failed = progress.polish.status === "failed" || progress.polish.status === "stopped";
   const withheld = proposalResult?.polishOutcome === "WITHHELD";
 
@@ -120,7 +120,7 @@ export function ResumeWorkflowRail({
   const checks = [
     readiness("Resume", resumeReady, "Add your resume"),
     readiness("Prepared job", jobReady, "Prepare the job"),
-    readiness("Polish provider", tailorProviderReady, "Check AI settings"),
+    readiness("Polish provider", resumePolishProviderReady, "Check AI settings"),
     readiness(
       "Sections selected",
       tailorSectionCount > 0,

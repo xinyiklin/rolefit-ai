@@ -9,7 +9,7 @@ import {
   workflowStageIsBlocked,
   workflowStepLabel
 } from "../aiWorkflow.ts";
-import { canonicalizeAiUsageStageKeys } from "../aiUsage.ts";
+import { copyAiUsage } from "../aiUsage.ts";
 import { ApiError, classifyFailure } from "../failures.ts";
 
 const threeStages = (jobAnalysis, resumePolish, finalCheck) => [
@@ -33,33 +33,16 @@ assert.equal(AI_STAGE_COPY["job-analysis"].running, "Analyzing job", "progress u
 assert.equal(AI_STAGE_COPY["final-check"].running, "Checking document", "document-check progress is not resume-only");
 assert.equal(AI_STAGE_COPY.cover.running, "Polishing cover letter", "cover progress matches the Polish action");
 
-const legacyUsage = {
-  distill: { source: "ai", provider: "anthropic", model: "legacy-model" },
-  tailor: { source: "none" },
-  review: { source: "ai", provider: "openai", model: "legacy-reviewer" }
+const storedUsage = {
+  "job-analysis": { source: "ai", provider: "anthropic", model: "analysis-model" },
+  "resume-polish": { source: "none" }
 };
 assert.deepEqual(
-  canonicalizeAiUsageStageKeys(legacyUsage),
-  {
-    "job-analysis": { source: "ai", provider: "anthropic", model: "legacy-model" },
-    "resume-polish": { source: "none" },
-    "final-check": { source: "ai", provider: "openai", model: "legacy-reviewer" }
-  },
-  "historical Distill and Tailor provenance use canonical stage names"
+  copyAiUsage(storedUsage),
+  storedUsage,
+  "current AI usage receipts are copied unchanged"
 );
-assert.deepEqual(
-  canonicalizeAiUsageStageKeys({
-    ...legacyUsage,
-    "job-analysis": { source: "ai", provider: "openai", model: "canonical-model" },
-    "resume-polish": { source: "ai", provider: "codex-cli", model: "canonical-polish" }
-  }),
-  {
-    "job-analysis": { source: "ai", provider: "openai", model: "canonical-model" },
-    "resume-polish": { source: "ai", provider: "codex-cli", model: "canonical-polish" },
-    "final-check": { source: "ai", provider: "openai", model: "legacy-reviewer" }
-  },
-  "canonical stage provenance wins when both generations exist"
-);
+assert.notEqual(copyAiUsage(storedUsage), storedUsage, "the copy boundary does not expose stored mutation");
 
 const unusable = classifyFailure(new ApiError("The job analyzer returned no usable job requirements", 502));
 assert.equal(unusable.kind, "parse", "an unusable model response identifies the parsing failure");

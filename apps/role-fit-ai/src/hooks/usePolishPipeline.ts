@@ -41,7 +41,7 @@ type UsePolishPipelineArgs = {
   requestHonestContext: string;
   customInstructionsFor: (stage: StageId) => string;
   resumePolish: StageConfig;
-  ensureTailorProviderReady: () => Promise<ProviderReadiness>;
+  ensureResumePolishProviderReady: () => Promise<ProviderReadiness>;
   setResult: (updater: PolishedResume | null | ((prev: PolishedResume | null) => PolishedResume | null)) => void;
   setActiveOutputTab: (tab: OutputTab) => void;
   setPipelineAiUsage: (updater: (prev: Record<string, StageAiUsage>) => Record<string, StageAiUsage>) => void;
@@ -86,7 +86,7 @@ export function usePolishPipeline({
   requestHonestContext,
   customInstructionsFor,
   resumePolish,
-  ensureTailorProviderReady,
+  ensureResumePolishProviderReady,
   setResult,
   setActiveOutputTab,
   setPipelineAiUsage,
@@ -214,6 +214,7 @@ export function usePolishPipeline({
         polishOutcome: data.status,
         changeSummary: Array.isArray(data.summary) ? data.summary : [],
         remainingGaps: Array.isArray(data.remainingGaps) ? data.remainingGaps : [],
+        omittedTargetCount: data.omittedTargetCount,
         suggestedChanges: suggestions,
         withheld: data.withheld
       });
@@ -275,7 +276,7 @@ export function usePolishPipeline({
       runLockRef.current = false;
       return;
     }
-    const provider = await ensureTailorProviderReady();
+    const provider = await ensureResumePolishProviderReady();
     if (!runLockRef.current) return;
     if (!provider.ready) {
       runLockRef.current = false;

@@ -14,16 +14,20 @@
  * to match a proposed replacement counts as decided, and an undo that restores
  * the original text makes the edit pending again.
  */
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import type { ResumeData, ResumeEntry } from "@typeset/engine/lib/resumeData.ts";
 
-import { stripInlineMarks } from "../lib/inlineMarks";
-import type { PolishedResume, TailorSuggestion } from "../resumeEngine";
-import type { ResumeEditorActions } from "./useResumeEditor";
+import {
+  decisionsForProposal,
+  recordProposalDecision,
+  resumeProposalEditIsPending,
+  resumeProposalKey,
+  type ResumeProposalDecisionState
+} from "../lib/resumeProposalDecisionState.ts";
+import type { PolishedResume, TailorSuggestion } from "../resumeEngine.ts";
+import type { ResumeEditorActions } from "./useResumeEditor.ts";
 
-export type ResumeProposalDecision = { kind: "accepted"; text: string } | { kind: "discarded" };
-
-const normalize = (value: string) => stripInlineMarks(value).replace(/\s+/g, " ").trim().toLowerCase();
+export type { ResumeProposalDecision } from "../lib/resumeProposalDecisionState.ts";
 
 function findEntry(resume: ResumeData, suggestion: TailorSuggestion): ResumeEntry | null {
   const section = resume.sections.find((item) => item.id === suggestion.target.sectionId);
@@ -64,25 +68,19 @@ export function useResumeProposalDecisions({
   const suggestions = useMemo(() => result?.suggestedChanges ?? [], [result]);
   // Suggestion ids are unique within one proposal but not across proposals, so
   // decisions reset on the proposal's own identity rather than on any single id.
-  const proposalKey = useMemo(
-    () => `${result?.polishOutcome ?? ""}|${suggestions.map((suggestion) => suggestion.id).join(",")}`,
-    [result?.polishOutcome, suggestions]
-  );
-  const [decisions, setDecisions] = useState<Record<string, ResumeProposalDecision>>({});
-  const decisionsKeyRef = useRef(proposalKey);
-  if (decisionsKeyRef.current !== proposalKey) {
-    decisionsKeyRef.current = proposalKey;
-    // A fresh proposal starts undecided. Setting during render (rather than in
-    // an effect) keeps this render from briefly attributing the previous
-    // proposal's decisions to the new one.
-    setDecisions({});
-  }
+  const proposalKey = useMemo(() => resumeProposalKey(result), [result]);
+  const [decisionState, setDecisionState] = useState<ResumeProposalDecisionState>(() => ({
+    proposalKey,
+    byTargetId: {}
+  }));
+  // A changed key exposes an empty map immediately without mutating React state
+  // during render. The first decision atomically initializes the new key.
+  const decisions = decisionsForProposal(decisionState, proposalKey);
 
   const isPending = useCallback(
     (suggestion: TailorSuggestion): boolean => {
-      if (decisions[suggestion.id]?.kind === "discarded") return false;
       const current = currentTargetText(resume, suggestion);
-      return current !== null && normalize(current) === normalize(suggestion.currentText);
+      return resumeProposalEditIsPending(current, suggestion, decisions[suggestion.id]);
     },
     [decisions, resume]
   );
@@ -96,29 +94,42 @@ export function useResumeProposalDecisions({
     (suggestion: TailorSuggestion, value = suggestion.proposedText) => {
       if (!value.trim()) return;
       applyTarget(actions, suggestion, value);
-      setDecisions((current) => ({ ...current, [suggestion.id]: { kind: "accepted", text: value } }));
+      setDecisionState((current) => recordProposalDecision(
+        current,
+        proposalKey,
+        suggestion.id,
+        { kind: "accepted", text: value }
+      ));
     },
-    [actions]
+    [actions, proposalKey]
   );
 
   const discard = useCallback((suggestion: TailorSuggestion) => {
-    setDecisions((current) => ({ ...current, [suggestion.id]: { kind: "discarded" } }));
-  }, []);
+    setDecisionState((current) => recordProposalDecision(
+      current,
+      proposalKey,
+      suggestion.id,
+      { kind: "discarded" }
+    ));
+  }, [proposalKey]);
 
   const applyAll = useCallback(() => {
     const pending = suggestions.filter(isPending);
     for (const suggestion of pending) applyTarget(actions, suggestion, suggestion.proposedText);
-    setDecisions((current) => ({
-      ...current,
-      ...Object.fromEntries(pending.map((suggestion) => [
+    setDecisionState((current) => pending.reduce(
+      (next, suggestion) => recordProposalDecision(
+        next,
+        proposalKey,
         suggestion.id,
-        { kind: "accepted", text: suggestion.proposedText } satisfies ResumeProposalDecision
-      ]))
-    }));
-  }, [actions, isPending, suggestions]);
+        { kind: "accepted", text: suggestion.proposedText }
+      ),
+      current
+    ));
+  }, [actions, isPending, proposalKey, suggestions]);
 
   return {
     decisions,
+    proposalKey,
     suggestions,
     outstanding,
     total: suggestions.length,

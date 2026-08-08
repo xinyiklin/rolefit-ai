@@ -1,8 +1,8 @@
 import type { Application, ApplicationStatus } from "../hooks/useApplications";
 import type { QuickFitVerdict } from "../../shared/quickFitContract.ts";
-import { parseDate } from "./applicationFacts";
+import { parseDate } from "./applicationFacts.ts";
 
-export { displayCompany, parseDate } from "./applicationFacts";
+export { displayCompany, parseDate } from "./applicationFacts.ts";
 
 export const STATUS_LABEL: Record<ApplicationStatus, string> = {
   interested: "Saved",
@@ -119,12 +119,10 @@ export function nextAction(app: Application) {
 }
 
 export function priorityFor(app: Application) {
-  // An explicit choice in the detail modal wins over the derived guess.
+  // Initial Fit stays advisory and sortable; it never silently changes the
+  // user's queue priority. Only explicit priority or advanced status does.
   if (app.priority) return app.priority;
-  const fit = app.initialFit?.result.verdict;
-  if (fit === "STRONG") return "High";
   if (app.status === "interviewing" || app.status === "offer") return "High";
-  if (fit === "LIMITED") return "Low";
   return "Medium";
 }
 

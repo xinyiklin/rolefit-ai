@@ -25,6 +25,7 @@ import { useCallback, useRef, useState } from "react";
 
 import {
   resolvePreparedResumeSelection,
+  type PreparedResumeAdoption,
   type PreparedResumeSelection,
   type PreparedResumeState
 } from "../lib/preparedResume.ts";
@@ -41,7 +42,7 @@ type UsePreparedResumeArgs = {
     fileName: string,
     clearRecoveryOnCommit?: boolean,
     shouldCancel?: () => boolean
-  ) => Promise<boolean>;
+  ) => Promise<PreparedResumeAdoption | null>;
 };
 
 export function usePreparedResume({
@@ -58,6 +59,7 @@ export function usePreparedResume({
   const clearPreparedResumeRecommendation = useCallback(() => {
     resolveGenerationRef.current += 1;
     setResumeVariantRecommendation(null);
+    setIsResolvingPreparedResume(false);
   }, []);
 
   const resolvePreparedResume = useCallback(

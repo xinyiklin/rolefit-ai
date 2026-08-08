@@ -1,8 +1,25 @@
 export const QUICK_FIT_VERDICTS = ["STRONG", "REASONABLE", "STRETCH", "LIMITED"] as const;
 export const QUICK_FIT_ELIGIBILITY = ["CLEAR", "CHECK", "BLOCKED"] as const;
+export const QUICK_FIT_BASIS_IMPORTANCE = ["CORE", "SUPPORTING"] as const;
+export const QUICK_FIT_BASIS_COVERAGE = ["DIRECT", "ADJACENT", "NOT_SHOWN", "CONTRADICTED"] as const;
+export const QUICK_FIT_EVIDENCE_SOURCES = ["RESUME", "CANDIDATE_CONTEXT"] as const;
 
 export type QuickFitVerdict = (typeof QUICK_FIT_VERDICTS)[number];
 export type QuickFitEligibilityStatus = (typeof QUICK_FIT_ELIGIBILITY)[number];
+export type QuickFitBasisImportance = (typeof QUICK_FIT_BASIS_IMPORTANCE)[number];
+export type QuickFitBasisCoverage = (typeof QUICK_FIT_BASIS_COVERAGE)[number];
+export type QuickFitEvidenceSource = (typeof QUICK_FIT_EVIDENCE_SOURCES)[number];
+
+// Provider-only calibration input. The server validates these anchors and
+// derives the public result below; basis items never enter tracker persistence
+// or the visible Initial Fit contract.
+export type QuickFitBasisItem = {
+  sourceRequirement: string;
+  importance: QuickFitBasisImportance;
+  coverage: QuickFitBasisCoverage;
+  evidenceSource?: QuickFitEvidenceSource;
+  evidenceExcerpt?: string;
+};
 
 export type QuickFitResult = {
   verdict: QuickFitVerdict;

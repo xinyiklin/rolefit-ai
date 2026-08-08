@@ -43,9 +43,6 @@ export type PresencePhase =
   | "idle"
   | "editing"
   | "analyzing-job"
-  // These persisted wire values stay readable across simultaneously open tabs
-  // from earlier previews; SessionsMenu maps them to current product language.
-  | "distilling"
   | "tailoring"
   | "reviewing"
   | "tailoring+reviewing";

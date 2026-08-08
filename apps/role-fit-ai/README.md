@@ -91,11 +91,15 @@ editable documents.
   context, responsibilities, required and preferred qualifications, technical
   keywords, seniority and domain signals, benefits, and any extraction gaps—while
   the Application rail keeps Resume, Cover Letter, Initial Fit, readiness, and
-  Apply together. Initial Fit is a compact provider advisory for the selected
-  resume: Strong, Reasonable, Stretch, or Limited; one summary; up to three
-  matches and gaps; and an eligibility warning only when relevant. It has no
-  score, confidence, requirement ledger, evidence quotes, recommendation, or
-  analytics role. Each material has an **Include** toggle and its
+  Apply together. Initial Fit is a compact server-calibrated provider advisory
+  for the selected resume: Strong, Reasonable, Stretch, or Limited; one summary;
+  up to three matches and gaps; and an eligibility warning only when relevant.
+  The provider supplies at most six exact-anchored requirement assessments; the
+  server validates their posting/candidate excerpts and derives the public
+  result. That hidden basis is neither displayed nor stored. Initial Fit has no
+  score, confidence, visible requirement ledger, evidence quotes,
+  recommendation, or analytics role, and it never silently sets tracker
+  priority. Each material has an **Include** toggle and its
   own named variant selector. Resume starts included and Cover Letter starts excluded;
   included material must be ready before Apply, while either or both can be
   excluded. The captured posting remains unchanged behind **View** and
@@ -107,8 +111,10 @@ editable documents.
   prepared job. A meaningful unique winner is selected automatically for either
   document while its editor is clean and not application-owned. A tie or
   incomplete comparison keeps the current choice and makes no recommendation;
-  unsaved work is never replaced. Neither document persists parallel
-  variant metadata.
+  unsaved work is never replaced. Resume candidate bytes and option metadata
+  are resolved from one snapshot, with one retry if the saved option set changes
+  mid-read; a failed load keeps the current resume without advertising an
+  unloaded winner. Neither document persists parallel variant metadata.
 - **Job-link preparation** — paste a posting URL on Prepare and fetch the
   description: Workday-aware through CXS JSON, Ashby-aware through
   its public posting API (including Handshake's branded wrapper), with
@@ -134,15 +140,19 @@ editable documents.
   [Browser extension](#browser-extension).
 - **Explicit five-provider setup** — the companion can add **Claude Code CLI**, **Codex CLI**, **Antigravity CLI**, **OpenAI API**, and **Claude API**. CLI paths use their provider-owned account sessions and API paths use a locally encrypted key. Settings > AI stages shows only providers the user explicitly added, keeps configured-but-unready providers visible with reconnect guidance, and never silently switches a stage to a paid provider.
 - **One-pass Resume Polish** — one provider operation proposes grounded edits
-  through flat target IDs. The server drops malformed, unknown, unchanged, or
+  through flat target IDs. The server distinguishes Skills category labels from
+  actual skill lists and drops malformed, unknown, unchanged, swapped, or
   unsupported edits independently, so a bad optional note or one bad edit does
-  not discard safe siblings. The source resume stays unchanged until the user
-  applies all or accepts an individual edit.
+  not discard safe siblings. Large resumes prioritize material, job-relevant
+  fields inside the prompt budget, validate replies only against fields actually
+  sent, and show how many editable fields were outside that pass. The source
+  resume stays unchanged until the user applies all or accepts an individual edit.
 - **Optional Initial Fit automation** — Initial Fit defaults on. Resume and Cover
   Letter proposal toggles are independent and default off. Only Strong or
   Reasonable without an eligibility blocker may start an enabled proposal;
-  Stretch, Limited, unavailable, and blocked outcomes remain manual. Changing
-  the selected resume reruns only Initial Fit, never Job analysis.
+  a Check warning may still polish because Polish is not submission. Stretch,
+  Limited, unavailable, and blocked outcomes remain manual. Changing the
+  selected resume reruns only Initial Fit, never Job analysis.
 - **One typeset editing surface** — direct text editing, inline emphasis, undo/redo, keyboard caret movement, structural add/remove/reorder controls, per-section Polish/Include/Off scope, and proposal-field highlighting all operate on the exported page layout.
 - **One document workbench rail** — Resume and Cover Letter share the same
   always-present lifecycle hierarchy, readiness order, failure placement,
@@ -169,6 +179,10 @@ editable documents.
   optional Initial Fit settle independently. Resume Polish reports Proposal,
   No changes, and Withheld as different outcomes, retains specific failure and
   Stop behavior, and never presents an all-discarded response as a ready proposal.
+- **Grounded document check** — each reported Unsupported or Clarity issue must
+  quote an exact private anchor from the current document, while Missing must
+  anchor to the posting. The server validates and removes those anchors before
+  returning the compact advisory issue list.
 - **WYSIWYG editor + PDF export** — the editor _is_ the preview: it and the exported PDF use the same shared Typeset layout engine, so visible line breaks and page flow match the export exactly. No external toolchain to install — typesetting and PDF generation run in the browser.
 - **`.resume` save/load** — download strict schema-v1 structured resume data,
   including explicit hidden/visible/absent header state, as a `.resume` file
@@ -195,7 +209,7 @@ editable documents.
   confirmed-dead orphans, preserves drafts owned by live sibling tabs, and
   notifies those siblings that the saved workspace changed.
 - **Portable workspace backup + restore** — the companion's Workspace section saves one versioned `.rolefit-backup` containing validated base resumes, resume history, tracker records, each application's saved `.resume`, `.cover`, or PDF document, PDF attachments, and mirrored allowlisted RoleFit preferences. Restore validates every checksum and domain file in a staging workspace before replacing the active saved workspace, then keeps the previous workspace as a local safety copy. The JSON backup is not encrypted and never contains standalone cover-letter variants, provider keys, CLI sessions, arbitrary workspace files, or unsaved recovery drafts.
-- **On-disk pipeline tracker** — a sortable, paginated applications table (right-click any row for quick actions: open details, change stage, preview the saved resume as a PDF, or delete) alongside a calendar view of submissions and upcoming follow-ups. Tracks status / source / company / role / follow-up date / notes, compact Initial Fit and current document-check snapshots, plus saved resume, cover letter, and additional PDF documents per application. It does not retain numeric fit scores or full provider review payloads. A document is shown as saved only when its strict `.resume`/`.cover` source or explicit PDF exists; tracker text is never a reloadable document or an artifact claim.
+- **On-disk pipeline tracker** — a sortable, paginated applications table (right-click any row for quick actions: open details, change stage, preview the saved resume as a PDF, or delete) alongside a calendar view of submissions and upcoming follow-ups. Tracks status / source / company / role / follow-up date / notes, compact Initial Fit and current document-check snapshots, plus saved resume, cover letter, and additional PDF documents per application. It does not retain numeric fit scores, the hidden calibration basis, or full provider review payloads. Initial Fit remains available for explicit sorting but never derives High/Low priority; the user's selection wins, Interviewing/Offer may derive High, and other records default Medium. A document is shown as saved only when its strict `.resume`/`.cover` source or explicit PDF exists; tracker text is never a reloadable document or an artifact claim.
   **Open preparation** restores a stored application's validated posting and
   available strict documents into the session, keeps the dirty-document
   replacement confirmation, and lands on Prepare. Apply saves only the

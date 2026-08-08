@@ -212,11 +212,12 @@ resume`, `Prepare the job`, `Check AI settings`) and their decision verbs
 (`Accept` / `Discard` a proposal) while their content stays document-specific; a
 row never repeats a reason that the field directly below it already carries.
 
-Resume places an optional Final Check after the proposal decisions. It is one
-explicit action over the actual current resume, displays READY, REVIEW, or NEEDS
-EVIDENCE with at most five actionable issues, and becomes visibly out of date
-when its semantic inputs change. It does not appear as a Polish stage, does not
-replace proposal feedback, and never blocks Apply.
+When enabled, Resume's current-document check is the closing Polish phase and
+runs once after proposal decisions settle. It checks the actual resulting
+resume, displays READY, REVIEW, or NEEDS EVIDENCE with at most five actionable
+issues, and becomes visibly out of date when its semantic inputs change. The
+inline Check again action may rerun it after later edits. It is not a standalone
+Final Check section, does not replace proposal feedback, and never blocks Apply.
 
 The stacked layout owns vertical scrolling inside the document tabs' clipped
 studio host; the editor and rail can then participate as full-width rows without

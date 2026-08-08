@@ -37,16 +37,19 @@ const partial = sanitizeFinalCheck(
     issues: [
       {
         kind: "UNSUPPORTED",
+        sourceExcerpt: "improved uptime by 30%",
         detail: "The resume claims a 30% uptime improvement.",
         action: "Add evidence for the metric or remove it."
       },
       {
         kind: "MISSING",
+        sourceExcerpt: "AWS",
         detail: "The job requires AWS, but the current resume does not show it.",
         action: "Add supported AWS evidence if available."
       },
       {
         kind: "UNSUPPORTED",
+        sourceExcerpt: "JavaScript and SQL tools",
         detail: "The resume claims JavaScript and SQL experience.",
         action: "Remove the supported skills."
       },
@@ -59,6 +62,10 @@ const partial = sanitizeFinalCheck(
 );
 assert.equal(partial.status, "NEEDS_EVIDENCE", "the server derives the truthful status from valid issues");
 assert.equal(partial.issues.length, 2, "one malformed issue does not discard valid siblings");
+assert.ok(
+  partial.issues.every((issue) => !("sourceExcerpt" in issue)),
+  "private source anchors never enter the public result"
+);
 assert.match(partial.summary, /1 claim needs evidence/);
 assert.ok(sanitizeFinalCheckWireResult(partial), "the server result satisfies the independent client wire contract");
 
@@ -66,6 +73,7 @@ const review = sanitizeFinalCheck(
   {
     issues: [{
       kind: "CLARITY",
+      sourceExcerpt: "Built JavaScript and SQL tools for internal teams",
       detail: "The JavaScript and SQL tools bullet is vague about the work delivered.",
       action: "Clarify the supported responsibility or scope."
     }]
@@ -75,6 +83,61 @@ const review = sanitizeFinalCheck(
   jobText
 );
 assert.equal(review.status, "REVIEW");
+
+const paraphrased = sanitizeFinalCheck(
+  {
+    issues: [{
+      kind: "CLARITY",
+      sourceExcerpt: "Built JavaScript and SQL tools for internal teams",
+      detail: "The opening accomplishment does not make the candidate's ownership easy to scan.",
+      action: "Clarify the supported scope and ownership."
+    }]
+  },
+  currentResume,
+  evidenceText,
+  jobText
+);
+assert.equal(
+  paraphrased.issues.length,
+  1,
+  "an exact source anchor survives even when the public detail paraphrases it"
+);
+
+assert.throws(
+  () => sanitizeFinalCheck(
+    {
+      issues: [{
+        kind: "CLARITY",
+        sourceExcerpt: "Architected a globally distributed platform",
+        detail: "The platform claim is hard to scan.",
+        action: "Clarify the platform scope."
+      }]
+    },
+    currentResume,
+    evidenceText,
+    jobText
+  ),
+  /invalid document check/,
+  "fabricated document wording cannot become a clarity issue"
+);
+
+assert.throws(
+  () => sanitizeFinalCheck(
+    {
+      issues: [{
+        kind: "MISSING",
+        sourceExcerpt: "five years of healthcare experience",
+        detail: "The posting requires five years of healthcare experience.",
+        action: "Add supported healthcare experience if available."
+      }]
+    },
+    currentResume,
+    evidenceText,
+    jobText
+  ),
+  /invalid document check/,
+  "a fabricated job requirement cannot become a missing issue"
+);
 
 const ready = sanitizeFinalCheck({ status: "REVIEW", issues: [] }, currentResume, evidenceText, jobText);
 assert.deepEqual(ready, {
@@ -145,6 +208,7 @@ const letterChecked = sanitizeFinalCheck(
     issues: [
       {
         kind: "UNSUPPORTED",
+        sourceExcerpt: "improved uptime by 30%",
         detail: "The letter claims a 30% uptime improvement.",
         action: "Add evidence for the uptime figure or soften the claim."
       }

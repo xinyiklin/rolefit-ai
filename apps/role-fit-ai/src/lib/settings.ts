@@ -20,18 +20,12 @@ export type PersistedSettings = {
   finalCheckProvider?: AiProviderValue;
   finalCheckSelectedModel?: string;
   finalCheckCliReasoningEffort?: string;
-  // Legacy Final Check setting names, migrated before allowlisting.
-  auditProvider?: AiProviderValue;
-  auditSelectedModel?: string;
-  auditCliReasoningEffort?: string;
   // Independent analyzer for the /api/job-analysis pass — its own concrete provider
   // config (synced to other stages via the copy buttons, not a live link).
   jobAnalysisProvider?: AiProviderValue;
   jobAnalysisSelectedModel?: string;
   jobAnalysisCliReasoningEffort?: string;
-  // Cover-letter polish and application Q&A. Both ran on the Resume Polish
-  // config before they were configurable; absent keys inherit it on load so an
-  // existing install keeps the provider it was already using.
+  // Cover-letter polish and application Q&A keep independent concrete configs.
   coverProvider?: AiProviderValue;
   coverSelectedModel?: string;
   coverCliReasoningEffort?: string;
@@ -55,69 +49,18 @@ export type PersistedSettings = {
   requiresSponsorship?: boolean;
   educationLevel?: EducationLevel;
   major?: string;
-  // Legacy values from the short-lived tri-state version. Coerced to booleans
-  // on load so old localStorage cannot leave the UI in an impossible state.
-  workAuthorization?: "unspecified" | "authorized-us" | "not-authorized-us";
-  sponsorship?: "unspecified" | "not-required" | "required";
 };
 
 const KEY = "rolefit:settings";
 
 const validProviders = new Set<string>(providerOptions.map((option) => option.value));
 
-const LEGACY_JOB_ANALYSIS_SETTINGS = [
-  ["distillProvider", "jobAnalysisProvider"],
-  ["distillSelectedModel", "jobAnalysisSelectedModel"],
-  ["distillCliReasoningEffort", "jobAnalysisCliReasoningEffort"]
-] as const;
-
-const LEGACY_FINAL_CHECK_SETTINGS = [
-  ["auditProvider", "finalCheckProvider"],
-  ["auditSelectedModel", "finalCheckSelectedModel"],
-  ["auditCliReasoningEffort", "finalCheckCliReasoningEffort"]
-] as const;
-
-function hasOwn(value: Record<string, unknown>, key: string): boolean {
-  return Object.prototype.hasOwnProperty.call(value, key);
-}
-
-// Rename persisted Distill settings before the strict allowlist/normalizer sees
-// them. This is shared by localStorage, the workspace mirror, and portable
-// backups so all three retain the user's exact provider configuration. When a
-// hand-edited bag contains both generations, the canonical value wins.
+// Normalize provider-owned model identifiers before the strict allowlist sees
+// them. Shared localStorage, workspace mirrors, and portable backups use this
+// same boundary.
 export function migrateSettings(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) return {};
   const migrated = { ...(value as Record<string, unknown>) };
-  for (const [legacyKey, canonicalKey] of LEGACY_JOB_ANALYSIS_SETTINGS) {
-    if (!hasOwn(migrated, canonicalKey) && hasOwn(migrated, legacyKey)) {
-      migrated[canonicalKey] = migrated[legacyKey];
-    }
-    delete migrated[legacyKey];
-  }
-  for (const [legacyKey, canonicalKey] of LEGACY_FINAL_CHECK_SETTINGS) {
-    if (!hasOwn(migrated, canonicalKey) && hasOwn(migrated, legacyKey)) {
-      migrated[canonicalKey] = migrated[legacyKey];
-    }
-    delete migrated[legacyKey];
-  }
-
-  const rawInstructions = migrated.stageCustomInstructions;
-  if (rawInstructions && typeof rawInstructions === "object" && !Array.isArray(rawInstructions)) {
-    const instructions = { ...(rawInstructions as Record<string, unknown>) };
-    if (!hasOwn(instructions, "job-analysis") && hasOwn(instructions, "distill")) {
-      instructions["job-analysis"] = instructions.distill;
-    }
-    if (!hasOwn(instructions, "final-check") && hasOwn(instructions, "review")) {
-      instructions["final-check"] = instructions.review;
-    }
-    if (!hasOwn(instructions, "resume-polish") && hasOwn(instructions, "tailor")) {
-      instructions["resume-polish"] = instructions.tailor;
-    }
-    delete instructions.distill;
-    delete instructions.review;
-    delete instructions.tailor;
-    migrated.stageCustomInstructions = instructions;
-  }
 
   // Antigravity 1.1.5 introduced stable slugs accepted by `--model`. Preserve
   // every stage's prior model choice instead of letting strict normalization
@@ -156,9 +99,7 @@ const PERSISTED_SETTING_KEYS = [
   "legallyAuthorizedToWork",
   "requiresSponsorship",
   "educationLevel",
-  "major",
-  "workAuthorization",
-  "sponsorship"
+  "major"
 ] as const satisfies readonly (keyof PersistedSettings)[];
 
 // Reconcile persisted values that may be stale (older app version, a renamed
@@ -181,11 +122,9 @@ export function normalizeSettings(value: unknown): PersistedSettings {
   // (or undefined), so indexing through the strongly-typed PersistedSettings
   // would fight the compiler for no safety benefit.
   const bag = settings as unknown as Record<string, string | undefined>;
-  // After the key migration above, normalization only removes or repairs values;
-  // it does not seed missing stage configuration. `workspaceBackupContract.ts`
-  // compares against the migrated input so old backups remain valid while
-  // unsupported keys still fail closed. The cover/answers stages
-  // inherit Resume Polish's config in useAiSettings' seeder instead.
+  // Normalization only removes or repairs values; it does not seed missing
+  // stage configuration. `workspaceBackupContract.ts` compares against the
+  // normalized input so unsupported keys still fail closed.
   for (const [providerKey, modelKey, effortKey] of STAGE_FIELD_GROUPS) {
     if (bag[providerKey] && !validProviders.has(bag[providerKey] as string)) {
       delete bag[providerKey];
@@ -228,16 +167,6 @@ export function normalizeSettings(value: unknown): PersistedSettings {
   if (settings.requiresSponsorship !== undefined && typeof settings.requiresSponsorship !== "boolean") {
     delete settings.requiresSponsorship;
   }
-  if (settings.legallyAuthorizedToWork === undefined && settings.workAuthorization) {
-    if (settings.workAuthorization === "authorized-us") settings.legallyAuthorizedToWork = true;
-    if (settings.workAuthorization === "not-authorized-us") settings.legallyAuthorizedToWork = false;
-  }
-  if (settings.requiresSponsorship === undefined && settings.sponsorship) {
-    if (settings.sponsorship === "required") settings.requiresSponsorship = true;
-    if (settings.sponsorship === "not-required") settings.requiresSponsorship = false;
-  }
-  delete settings.workAuthorization;
-  delete settings.sponsorship;
   if (typeof settings.honestContext !== "string") delete settings.honestContext;
   else settings.honestContext = settings.honestContext.slice(0, 50_000);
   if (typeof settings.customInstructions !== "string") delete settings.customInstructions;

@@ -76,7 +76,9 @@ Good server verification covers:
 - normal `/api/polish` accepts `mode: "resume-proposal"` plus a structured
   `tailorScope`, does not require full-resume `resumeText`, and owns exactly one
   provider dispatch. It prompts with flat `target-N` IDs only; education, dates,
-  and omitted sections never become targets
+  and omitted sections never become targets. Oversized fixtures prove complete
+  JSON stays within budget, later job-relevant targets survive, response ids
+  outside the selected set are withheld, and the omitted count round-trips
 - one malformed, unknown, duplicate, unchanged, or unsupported edit is dropped
   without discarding valid siblings. Malformed optional summary/gap items are
   independently ignored. An all-drop returns Withheld, not a completed proposal;
@@ -86,15 +88,19 @@ Good server verification covers:
   result as validation rather than `Parsing error`
 - `/api/final-check` owns exactly one provider dispatch and a contract
   independent of Initial Fit and Polish. It receives the actual current resume,
-  preserves valid issues beside malformed siblings, derives its status from the
-  surviving issues, and rejects an all-invalid response rather than returning a
-  false Ready result
+  requires exact private document anchors for Unsupported/Clarity and exact
+  posting anchors for Missing, preserves valid issues beside malformed siblings,
+  strips anchors from the public result, derives status from surviving issues,
+  and rejects an all-invalid response rather than returning a false Ready result
 - when enabled, the browser starts Final Check once after all resume proposal
   decisions settle; the inline action may rerun it. It marks the result stale
   after semantic input changes and classifies parsed invalid output as
   validation. A cover letter may instead adopt the validated receipt from its
   accepted proposal. Failure never replaces the Polish result, and an in-flight
-  or failed Final Check never enters Apply readiness
+  or failed Final Check never enters Apply readiness. Provider preflight uses a
+  pending key distinct from the consumed proposal key; only an invoked fetch
+  consumes it, while incomplete inputs, unavailable providers, or a held lock
+  release pending state for a later retry
 - positive Initial Fit starts enabled Resume and Cover proposals independently;
   neither automatic request awaits or suppresses the other, and each failure is
   confined to its own document workflow
@@ -118,17 +124,25 @@ Good server verification covers:
 - prompt-budget changes must add probes that build oversized structured
   payloads, extract each emitted JSON fragment (`tailor_scope`,
   `context_sections`, `proposed_changes`, or equivalent), and parse it again;
-  serialized JSON must never be truncated by raw character count
+  serialized JSON must never be truncated by raw character count. Resume target
+  selection must also prove it avoids prefix-order bias and sanitizes against
+  only the selected targets
 - job-analysis grounding changes must cover `roleDescription` and `jobType`
   alongside title/company/location, including negated, benefits-only, and
   qualification-only wording that must not false-ground tracking metadata
 - the Job analysis rename contract must keep current code and docs free of the
-  retired term except for the temporary route alias, settings/backup/provenance
-  readers, extension cleanup keys, compatibility tests, and historical release notes
+  retired term except for explicit rejection probes and intentional historical
+  release/continuity records
 - compact Initial Fit probes must prove that disabling it omits resume/context
   data entirely, enabled Prepare requests Job analysis plus fit in one prompt,
-  invalid fit preserves valid job fields, lists cap at three, only the four
-  verdicts sanitize, and fit-only retries omit the Job analysis schema
+  invalid fit preserves valid job fields, the hidden basis caps at six exact
+  posting/candidate anchors, preferred qualifications cannot depress the
+  category, contradiction requires adverse evidence, the server derives all
+  four category boundaries and eligibility states, public lists cap at three,
+  and fit-only retries omit the Job analysis schema
+- resume proposal probes must distinguish `skill-label` from `skill-list`, allow
+  controlled label changes and grounded list reordering/additions, reject both
+  swap directions and job-only skills, and preserve safe sibling edits
 - application storage probes must prove compact Initial Fit and Final Check
   snapshots round-trip while numeric scores, full recruiter reviews, and
   missing-skill compatibility fields are omitted at the storage boundary
@@ -236,15 +250,19 @@ Good frontend verification covers:
 - the prepared-resume resolution runs as REAL sequences rather than source
   regexes (`src/hooks/__evals__/prepared-resume-resolution.mjs`): an import
   arriving before workspace hydration, exactly one saved variant, a
-  starter-only workspace, a ranked winner, a protected document, and a refused
-  adoption. `src/lib/__evals__/variant-candidate-reads-eval.mjs` pins ONE
+  starter-only workspace, a ranked winner, option addition/deletion during a
+  read, a changed candidate before adoption, a protected document, and a refused
+  adoption with no stale recommendation. `src/lib/__evals__/resume-proposal-decisions-eval.mjs`
+  pins content-derived proposal identity, keyed resets, undo, and manual-match
+  behavior. `src/lib/__evals__/variant-candidate-reads-eval.mjs` pins ONE
   request per candidate read at 1, 5, and 20 variants for both document kinds,
   and `server/__evals__/workspace-candidate-batch-probes.mjs` pins the batch
   routes' name guards, bounded size, skip-on-corrupt behavior, and that they
   return candidates and nothing else
 - a valid Initial Fit survives a local job-analysis fallback
-  (`src/lib/__evals__/job-analysis-fallback-fit-eval.mjs`), and the narrow fit
-  grounding layer has adversarial probes in
+  (`src/lib/__evals__/job-analysis-fallback-fit-eval.mjs`), and the compact fit
+  calibration layer has category-boundary, source-anchor, preference, years,
+  partial-survival, and eligibility adversarial probes in
   `server/ai/__evals__/quick-fit-probes.mjs`
 - Initial Fit shows only verdict, selected resume, summary, up to three matches
   and gaps, and a relevant eligibility warning. It exposes no score, confidence,
@@ -253,6 +271,9 @@ Good frontend verification covers:
   Initial Fit sends no resume/context data. Only Strong or Reasonable without an
   eligibility blocker can start each independently enabled proposal, while
   manual Polish remains available for every fit state
+- Initial Fit never derives tracker priority: explicit user priority wins,
+  Interviewing/Offer may derive High, and every other record defaults Medium;
+  `initialFitRank` remains available for explicit sorting
 - Resume and Cover Letter render the same material-card structure with separate
   variant selectors and Include toggles, neither is labeled optional, and a
   fresh prepared job starts with Resume included and Cover Letter excluded

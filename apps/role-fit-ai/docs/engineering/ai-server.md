@@ -127,17 +127,25 @@ owns:
   `mode: "resume-proposal"` and performs one provider operation. The server
   flattens mutable fields to `target-1`, `target-2`, and so on, keeps their
   document mapping private, and returns only outcome, changes, short feedback,
-  withheld counts, and provider provenance. Unknown, duplicate, unchanged,
-  malformed, and unsupported mutations are dropped independently. Optional
+  withheld counts, prompt-omitted target count, and provider provenance. If the
+  complete target set exceeds 42,000 serialized characters, the server selects
+  material bullets, summaries, actual skill lists, and job-relevant fields
+  without prefix-order bias. It serializes only complete target objects and
+  validates the reply against exactly that selected set. Skills category labels
+  and actual skill lists use distinct semantic target kinds; label/list swaps
+  and job-only skill additions are rejected independently beside unknown,
+  duplicate, unchanged, malformed, and unsupported mutations. Optional
   feedback is tolerant while mutation validation stays strict. Identity,
   contact, education, dates, and omitted sections never become targets.
   `/api/final-check` is a separate optional operation over the actual current
   resume, candidate evidence, and prepared job. It performs one provider
   dispatch and returns READY, REVIEW, or NEEDS_EVIDENCE plus a short summary
   and at most five UNSUPPORTED, MISSING, or CLARITY issues. The server drops
-  malformed issue siblings, grounds surviving details, and derives status
-  rather than trusting contradictory model status. An all-invalid response
-  fails instead of becoming a false Ready result. It returns no score, fit
+  malformed issue siblings, requires an exact private source excerpt from the
+  current document for Unsupported/Clarity or the posting for Missing, grounds
+  surviving details, strips the excerpt, and derives status rather than trusting
+  contradictory model status. An all-invalid response fails instead of becoming
+  a false Ready result. It returns no score, fit
   verdict, recommendation, or rewrite and never participates in Polish or
   Apply readiness.
   `/api/polish` accepts only the one-pass `resume-proposal` contract. Cover
@@ -226,8 +234,14 @@ owns:
   provider after publishing the deterministic local brief. When the request
   fails, that local brief remains editable and manual Polish stays available.
   If Initial Fit is enabled and a selected resume is usable, the same provider
-  dispatch requests an independent `initialFit` subsection. The two subsections
-  are sanitized independently in BOTH directions: the server preserves valid job
+  dispatch requests an independent `initialFit` subsection containing at most
+  six material requirement assessments. Each assessment carries an exact posting
+  excerpt and, for covered/contradicted rows, an exact resume or candidate-context
+  excerpt. `quickFit.ts` validates those anchors, downgrades invalid evidence to
+  `NOT_SHOWN`, normalizes preferred qualifications to supporting, and derives the
+  public category, summary, matches, gaps, and eligibility. The hidden basis is
+  never returned to the client or persisted. The two subsections are sanitized
+  independently in BOTH directions: the server preserves valid job
   fields when fit is absent or invalid, and the client preserves a valid fit when
   the job half falls back to the deterministic local brief. Discarding one half
   with the other would waste the combined request the fast path exists to make.
@@ -239,9 +253,7 @@ owns:
   success response echoes the RESOLVED `provider` / `model` / `reasoningEffort`
   (never `apiKey`) plus `attempts` (dispatch count, ≥1) so the
   client can record which model produced the brief.
-  For one preview release, `/api/distill` remains a server-only alias to this
-  handler so an already-open previous-preview browser bundle survives a local
-  server restart. Current clients call only `/api/job-analysis`.
+  `/api/job-analysis` is the only route for this handler.
 - browser-extension API (`/api/extension/*`, helpers in
   `server/extension/index.ts`): `status` (GET) is the content-free same-port
   service marker. For a syntactically valid extension Origin it returns the
@@ -333,8 +345,9 @@ modules under `server/ai/` so no single file carries the whole pipeline:
 - `resumeScope.ts` — defensive normalization and plain-text serialization for
   the structured editable resume scope.
 - `resumeProposal.ts` and `shared/resumePolishContract.ts` — flat target
-  construction, the compact one-pass prompt/wire contract, deterministic
-  per-edit grounding, and Proposal / No changes / Withheld derivation.
+  construction (including distinct `skill-label` / `skill-list` semantics), the
+  compact one-pass prompt/wire contract, deterministic per-edit grounding, and
+  Proposal / No changes / Withheld derivation.
 - `finalCheck.ts` and `shared/finalCheckContract.ts` — the independent optional
   current-resume check, grounded partial issue sanitization, and deterministic
   READY / REVIEW / NEEDS_EVIDENCE derivation.
@@ -366,24 +379,19 @@ modules under `server/ai/` so no single file carries the whole pipeline:
   nowhere in the scope text or honest context is dropped
   (`ungroundedKeyword`) — the model-prose evidence field cannot launder an
   inferred fact (e.g. "clinics run Windows") into the resume.
-- `eligibilityLexicon.ts` — work-authorization and credential stems shared by
-  the job analyzer's `workAuth` grounding and Initial Fit's eligibility
-  anchoring. Eligibility JUDGMENT still belongs to Initial Fit; this module does
-  not gate, score, or select a verdict.
-- `quickFit.ts` `groundQuickFit` — a deliberately narrow accuracy layer over the
-  shape sanitizer, not a restored evidence ledger or forensic validator. It
-  rejects exactly three things: a named technology in a match or gap that
-  appears in NEITHER the posting nor the selected resume (in *neither*, so a
-  posting's "Go" against a resume's "Golang" stays honest paraphrase); a gap
-  whose distinctive terms appear nowhere in the posting; and an eligibility note
-  claiming a work-authorization class neither the posting nor the candidate's own
-  context mentions — that note is dropped while its status is kept, because a
-  wrongly raised concern is the safe direction and nothing here may invent a
-  CLEAR. The verdict and summary are never filtered: a verdict is a judgement
-  rather than a claim of fact, and discarding a whole screening over one summary
-  word trades a small inaccuracy for no screening at all. The stopword list and
-  distinctive-token keys live in `grounding.ts` so job extraction and fit
-  anchoring share one definition of "grounded".
+- `eligibilityLexicon.ts` — work-authorization and credential stems used by the
+  job analyzer's `workAuth` grounding. It does not select a fit verdict.
+- `quickFit.ts` `calibrateQuickFit` — the compact hidden calibration layer, not
+  a restored visible evidence ledger or numeric scorer. It accepts at most six
+  requirement rows, validates tightly normalized posting/candidate excerpts,
+  treats absence as `NOT_SHOWN`, recognizes explicit adverse contradictions
+  such as a lower years total, and derives Strong / Reasonable / Stretch /
+  Limited from core coverage only. Supporting preferences may appear in public
+  matches/gaps but cannot depress the category. Eligibility is derived separately:
+  `BLOCKED` requires both an explicit posting restriction and explicit adverse
+  candidate context, unknown/ambiguous status becomes `CHECK`, and no relevant
+  condition produces no eligibility object. The model's verdict, summary, and
+  eligibility prose are never accepted because the model no longer returns them.
 - Candidate facts reach the model only through `honestContext`. The client's
   `buildCandidateFactsContext` (`src/lib/candidateFacts.ts`) prepends declared
   citizenship, work authorization, sponsorship, education level, and field of
@@ -434,20 +442,12 @@ providers the user explicitly added: `/api/job-analysis` receives the Job analys
 `/api/polish` receives the Resume Polish config as `provider` / `model` /
 `reasoningEffort`, `/api/final-check` receives the Document check config,
 `/api/cover-letter` receives the Cover config, and
-`/api/application-answers` receives the Answers config. Cover and Answers ran on
-the Resume Polish config before they became separately configurable; an install
-that predates the split inherits it on load, so its behavior does not change
-across the upgrade.
-
-Settings and workspace-backup loads migrate `distillProvider`,
-`distillSelectedModel`, `distillCliReasoningEffort`, and
-`stageCustomInstructions.distill` before strict normalization. A canonical Job
-analysis value wins if both generations are present. Historical tracker
-`aiUsage.distill` is read and displayed as Job analysis, while every new or
-subsequent tracker write emits only `aiUsage["job-analysis"]`.
-The same boundary migrates `stageCustomInstructions.tailor` and historical
-`aiUsage.tailor` to the canonical `resume-polish` stage. The original unprefixed
-provider/model/effort fields remain the durable Resume Polish storage keys.
+`/api/application-answers` receives the Answers config. Missing stage fields use
+that stage's own product default; no stage inherits another stage's persisted
+provider/model/effort triple. Browser settings drop retired preview keys during
+strict normalization, and portable workspace preferences carrying them fail
+closed. The original unprefixed provider/model/effort fields remain the durable
+Resume Polish storage keys.
 
 `customInstructions` is resolved PER STAGE in the browser before the request is
 sent: a stage with its own non-blank override sends that text, otherwise it sends
@@ -522,6 +522,9 @@ The AI must:
 - return normal Resume Polish changes using only the flat target IDs sent by
   the server; composite section, entry, bullet, field, evidence, risk, and
   keyword-hit metadata are not part of this contract
+- select oversized target sets before serialization by materiality and job
+  relevance, never by a raw JSON slice; reject response ids outside the exact
+  selected set and report the separate omitted-target count
 - preserve truthfulness — never invent employers, dates, metrics,
   education, tools, or outcomes
 - never edit identity, contact, education, dates, or omitted sections
@@ -541,7 +544,9 @@ The AI must:
   so the one-page layout survives
 - keep Final Check non-rewriting and issue-only: it checks the actual current
   resume and returns at most five grounded Unsupported, Missing, or Clarity
-  issues with a server-derived READY / REVIEW / NEEDS_EVIDENCE status
+  issues with a server-derived READY / REVIEW / NEEDS_EVIDENCE status. Each
+  issue must include a private exact source excerpt from the document or posting,
+  and that excerpt never enters the public result
 
 ### Career-writing guidance
 

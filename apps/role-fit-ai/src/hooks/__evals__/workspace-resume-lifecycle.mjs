@@ -112,6 +112,7 @@ const selectResponse = select.indexOf("if (!response.ok");
 const selectCommit = select.indexOf("await applyWorkspaceBaseResume", selectResponse);
 assert.ok(selectResponse >= 0 && selectCommit > selectResponse, "selection commits only after a successful response");
 assert.doesNotMatch(select, /onReplacementCommitted\(\)/, "selection does not clear recovery before the server succeeds");
+assert.match(select, /text: applied\.text/, "selection returns the exact validated text committed to the editor");
 
 const uploadStart = source.indexOf("  async function handleFileUpload");
 const uploadEnd = source.indexOf("\n  return {", uploadStart);

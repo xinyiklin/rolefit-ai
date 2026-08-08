@@ -28,23 +28,10 @@ export type StageAiUsage = {
 
 export type ApplicationAiUsage = Record<string, StageAiUsage>;
 
-// Canonicalize historical stage names at client read/merge boundaries. A
-// canonical value wins if both old and new keys are present.
-export function canonicalizeAiUsageStageKeys(
+// Copy at read/merge boundaries so callers can add current stage receipts
+// without mutating a stored application or recovery draft.
+export function copyAiUsage(
   usage: ApplicationAiUsage | undefined
 ): ApplicationAiUsage {
-  const canonical = { ...(usage ?? {}) };
-  if (!canonical["job-analysis"] && canonical.distill) {
-    canonical["job-analysis"] = canonical.distill;
-  }
-  if (!canonical["final-check"] && canonical.review) {
-    canonical["final-check"] = canonical.review;
-  }
-  if (!canonical["resume-polish"] && canonical.tailor) {
-    canonical["resume-polish"] = canonical.tailor;
-  }
-  delete canonical.distill;
-  delete canonical.review;
-  delete canonical.tailor;
-  return canonical;
+  return { ...(usage ?? {}) };
 }

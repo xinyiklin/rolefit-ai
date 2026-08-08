@@ -90,7 +90,6 @@ for (const invalid of [
 assert.equal(createLocalSiteOrigin("5181"), "http://localhost:5181");
 assert.throws(() => createLocalSiteOrigin("https://localhost:5181"));
 
-Object.assign(store, { autoTailor: true, distillAi: false });
 globalThis.ROLEFIT_EXTENSION_RUNTIME_CONFIG = {
   schemaVersion: 1,
   localSitePort: 5_191
@@ -103,8 +102,7 @@ assert.deepEqual(await loadExtensionSettings(), {
 assert.deepEqual({ ...store }, {
   rolefitExtensionSettings: { schemaVersion: 1, localSitePort: 5_191 }
 });
-assert.deepEqual(calls.map(([operation]) => operation), ["get", "remove", "set"]);
-assert.deepEqual(calls[1], ["remove", ["autoTailor", "distillAi"]]);
+assert.deepEqual(calls.map(([operation]) => operation), ["get", "set"]);
 
 store.rolefitExtensionSettings = { schemaVersion: 1, localSitePort: 5_299 };
 globalThis.ROLEFIT_EXTENSION_RUNTIME_CONFIG = {
