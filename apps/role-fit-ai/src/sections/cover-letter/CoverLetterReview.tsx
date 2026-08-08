@@ -8,11 +8,15 @@ import type {
   CoverLetterDetailKey,
   CoverLetterPreflight
 } from "../../lib/coverLetterPreflight";
+import { resolveDocumentWorkflowStatus } from "../../../shared/documentWorkflowContract.ts";
+import type { FinalCheckResult } from "../../../shared/finalCheckContract.ts";
+import type { DocumentCheckSource } from "../../hooks/useDocumentCheck";
+import type { AiStageState } from "../../lib/aiWorkflow";
 import {
   DocumentWorkflowRail,
-  type DocumentWorkflowCheck,
-  type DocumentWorkflowPhase
+  type DocumentWorkflowCheck
 } from "../document/DocumentWorkflowRail";
+import { DocumentCheckSummary } from "../document/DocumentCheckSummary";
 import { ProposalFeedbackList } from "../document/ProposalFeedbackList";
 
 type CoverLetterReviewProps = {
@@ -36,6 +40,19 @@ type CoverLetterReviewProps = {
   onRestore: () => void;
   onAddHonestContext?: (keyword: string) => void;
   status: string;
+  // The letter's closing phase. An accepted proposal arrives already checked —
+  // that exact text is what the server validated — so this usually reports a
+  // Polish-time receipt rather than a second provider request.
+  check: FinalCheckResult | null;
+  checkSource: DocumentCheckSource;
+  checkDocumentChanged: boolean;
+  checkInputsChanged: boolean;
+  checkProgress: AiStageState;
+  isChecking: boolean;
+  canCheck: boolean;
+  checkBlocker: string;
+  onCheck: () => void;
+  onStopCheck: () => void;
 };
 
 const FIELD_COPY: Record<
@@ -47,7 +64,7 @@ const FIELD_COPY: Record<
   company: { placeholder: "Employer name", maxLength: 300 }
 };
 
-function check(label: string, ready: boolean, blockedDetail: string): DocumentWorkflowCheck {
+function readiness(label: string, ready: boolean, blockedDetail: string): DocumentWorkflowCheck {
   return {
     label,
     state: ready ? "ready" : "blocked",
@@ -97,6 +114,16 @@ export function CoverLetterReview({
   onAcceptProposal,
   onDiscardProposal,
   onRestore,
+  check,
+  checkSource,
+  checkDocumentChanged,
+  checkInputsChanged,
+  checkProgress,
+  isChecking,
+  canCheck,
+  checkBlocker,
+  onCheck,
+  onStopCheck,
   onAddHonestContext,
   status
 }: CoverLetterReviewProps) {
@@ -111,32 +138,41 @@ export function CoverLetterReview({
   const detailsBlocked = slotBlocker
     ?? (fieldCount > 0 ? `${fieldCount} ${fieldCount === 1 ? "field" : "fields"} below` : "Complete the fields");
   const checks = [
-    check("Resume", resumeReady, "Add your resume"),
-    check("Prepared job", jobReady, "Prepare the job"),
-    check("Polish provider", providerReady, "Check AI settings"),
-    check("Template details", preflight.canTailor, detailsBlocked)
+    readiness("Resume", resumeReady, "Add your resume"),
+    readiness("Prepared job", jobReady, "Prepare the job"),
+    readiness("Polish provider", providerReady, "Check AI settings"),
+    readiness("Template details", preflight.canTailor, detailsBlocked)
   ];
 
-  let phase: DocumentWorkflowPhase = ready ? "ready" : "blocked";
-  let description = ready
-    ? "Polish creates a reviewable proposal from your current letter, resume evidence, and prepared job."
-    : "Complete the blocked rows before polishing.";
-  if (isTailoring) {
-    phase = "working";
-    description = "Polishing and checking every candidate claim against your evidence.";
-  } else if (failure) {
-    phase = "blocked";
-    description = "No changes were applied. Your current letter is unchanged.";
-  } else if (proposal?.stale) {
-    phase = "stale";
-    description = "The inputs changed after this proposal was created. Polish again before using it.";
-  } else if (proposal) {
-    phase = "proposal";
-    description = "Compare this replacement with the current editable letter before deciding.";
-  } else if (appliedResult && canRestore) {
-    phase = "applied";
-    description = "The accepted proposal is now the live document.";
-  }
+  // The letter's proposal is atomic: one accept-or-discard decision, which is
+  // 1 of 1 outstanding until it is made. That is how a whole-document
+  // replacement rides the same named sequence as the resume's granular edits
+  // without pretending to have them.
+  const workflow = resolveDocumentWorkflowStatus({
+    ready,
+    polishing: isTailoring,
+    checking: isChecking,
+    proposal: proposal && !proposal.stale ? { outstanding: 1, total: 1 } : null,
+    proposalSuperseded: Boolean(proposal?.stale),
+    check: check?.status ?? null,
+    checkDocumentChanged,
+    checkInputsChanged
+  });
+  const description = isTailoring
+    ? "Polishing and checking every candidate claim against your evidence."
+    : workflow.state === "checking"
+      ? "Reviewing the current letter for evidence, coverage, and clarity."
+      : failure
+        ? "No changes were applied. Your current letter is unchanged."
+        : workflow.state === "stale" && workflow.staleReason === "proposal-superseded"
+          ? "The inputs changed after this proposal was created. Polish again before using it."
+          : workflow.state === "proposal"
+            ? "Compare this replacement with the current editable letter before deciding."
+            : workflow.state === "ready-to-polish"
+              ? "Polish creates a reviewable proposal from your current letter, resume evidence, and prepared job."
+              : workflow.state === "blocked"
+                ? "Complete the blocked rows before polishing."
+                : "";
 
   const blockedFailure = failure?.kind === "blocked" ? failure : null;
   const errorFailure = failure?.kind === "error" ? failure : null;
@@ -195,7 +231,7 @@ export function CoverLetterReview({
   return (
     <DocumentWorkflowRail
       ariaLabel="Cover letter workflow"
-      phase={phase}
+      status={workflow}
       target={target}
       description={description}
       checks={proposal || appliedResult ? [] : checks}
@@ -209,7 +245,7 @@ export function CoverLetterReview({
           : { items: [errorFailure?.detail ?? "Try Polish again."] })
       } : null}
       footer={footer}
-      status={status}
+      statusLine={status}
     >
       {proposal ? (
         <section className="cover-letter-proposal" aria-label="Proposed replacement">
@@ -291,6 +327,18 @@ export function CoverLetterReview({
           ) : null}
         </>
       )}
+      <DocumentCheckSummary
+        documentNoun="cover letter"
+        check={check}
+        source={checkSource}
+        staleReason={workflow.state === "stale" ? workflow.staleReason : undefined}
+        progress={checkProgress}
+        isChecking={isChecking}
+        canCheck={canCheck}
+        blocker={checkBlocker}
+        onCheck={onCheck}
+        onStop={onStopCheck}
+      />
     </DocumentWorkflowRail>
   );
 }

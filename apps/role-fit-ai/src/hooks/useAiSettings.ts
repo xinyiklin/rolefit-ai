@@ -27,6 +27,7 @@ export function useAiSettings() {
     () => saved.stageCustomInstructions ?? {}
   );
   const [runInitialFit, setRunInitialFit] = useState(saved.runInitialFit ?? true);
+  const [runFinalCheck, setRunFinalCheck] = useState(saved.runFinalCheck ?? true);
   const [autoCreateResumeProposal, setAutoCreateResumeProposal] = useState(saved.autoCreateResumeProposal ?? false);
   const [autoCreateCoverLetterProposal, setAutoCreateCoverLetterProposal] = useState(
     saved.autoCreateCoverLetterProposal ?? false
@@ -48,6 +49,7 @@ export function useAiSettings() {
         customInstructions,
         stageCustomInstructions,
         runInitialFit,
+        runFinalCheck,
         autoCreateResumeProposal,
         autoCreateCoverLetterProposal,
         citizenshipStatus,
@@ -64,6 +66,7 @@ export function useAiSettings() {
     customInstructions,
     stageCustomInstructions,
     runInitialFit,
+    runFinalCheck,
     autoCreateResumeProposal,
     autoCreateCoverLetterProposal,
     citizenshipStatus,
@@ -172,6 +175,8 @@ export function useAiSettings() {
     setHonestContext,
     runInitialFit,
     setRunInitialFit,
+    runFinalCheck,
+    setRunFinalCheck,
     autoCreateResumeProposal,
     setAutoCreateResumeProposal,
     autoCreateCoverLetterProposal,

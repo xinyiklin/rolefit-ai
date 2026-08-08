@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
-import { buildFinalCheckPrompts, sanitizeFinalCheck } from "../finalCheck.ts";
+import { buildFinalCheckPrompts, finalCheckDocumentKind, sanitizeFinalCheck } from "../finalCheck.ts";
 import { sanitizeFinalCheckWireResult } from "../../../shared/finalCheckContract.ts";
 
 const currentResume = `Software Developer | Acme
@@ -25,7 +25,7 @@ assert.match(
   "the local server exposes Final Check through its own route"
 );
 
-const prompts = buildFinalCheckPrompts({ currentResume, evidenceText, jobText, customInstructions: "" });
+const prompts = buildFinalCheckPrompts({ currentDocument: currentResume, evidenceText, jobText, customInstructions: "" });
 assert.match(prompts.userPrompt, /<current_resume>[\s\S]*30%/);
 assert.match(prompts.userPrompt, /<candidate_evidence>[\s\S]*JavaScript, SQL/);
 assert.doesNotMatch(prompts.userPrompt, /aiScore|strictReview|requirementId|coverage table/i);
@@ -93,5 +93,68 @@ assert.throws(
   /invalid Final Check/,
   "an all-invalid response fails instead of becoming a false READY result"
 );
+
+// --- The same check serves a cover letter ---------------------------------
+// A letter that was never produced by Polish has no validated receipt, so it is
+// eligible for the same check. Only the nouns change: the issue kinds,
+// grounding, and outcomes are one contract for both documents.
+assert.equal(finalCheckDocumentKind("cover-letter"), "cover-letter", "the letter kind is explicit");
+assert.equal(finalCheckDocumentKind("resume"), "resume", "the resume kind is explicit");
+assert.equal(finalCheckDocumentKind(undefined), "resume", "an absent kind defaults to the resume");
+assert.equal(finalCheckDocumentKind("../etc/passwd"), "resume", "an unknown kind cannot select a third prompt");
+
+const letter = `Dear Hiring Team,
+
+I built JavaScript and SQL reporting tools at Acme and improved uptime by 30%.
+
+Sincerely,
+Jordan`;
+const letterPrompts = buildFinalCheckPrompts({
+  documentKind: "cover-letter",
+  currentDocument: letter,
+  evidenceText,
+  jobText,
+  customInstructions: ""
+});
+assert.match(letterPrompts.userPrompt, /<current_cover_letter>[\s\S]*30%/, "the letter is fenced under its own tag");
+assert.doesNotMatch(letterPrompts.userPrompt, /<current_resume>/, "a letter check never claims to read a resume");
+assert.match(
+  letterPrompts.systemPrompt,
+  /advisory final check of a job application cover letter/,
+  "the system prompt names the document it is reading"
+);
+assert.doesNotMatch(
+  letterPrompts.systemPrompt.split("Inspect the actual")[1],
+  /resume/,
+  "the letter's own instructions do not mix in resume vocabulary"
+);
+// Both documents' fences must be declared data by the shared firewall, or the
+// letter's prose becomes an injection path the moment it is fenced.
+for (const tag of ["<current_resume>", "<current_cover_letter>", "<candidate_evidence>", "<user_guidance>"]) {
+  assert.ok(
+    letterPrompts.systemPrompt.includes(tag),
+    `the input firewall declares ${tag} as data, never instructions`
+  );
+}
+assert.match(letterPrompts.userPrompt, /never write replacement cover letter text/, "the letter check stays advisory");
+
+const letterChecked = sanitizeFinalCheck(
+  {
+    status: "NEEDS_EVIDENCE",
+    summary: "advisory",
+    issues: [
+      {
+        kind: "UNSUPPORTED",
+        detail: "The letter claims a 30% uptime improvement.",
+        action: "Add evidence for the uptime figure or soften the claim."
+      }
+    ]
+  },
+  letter,
+  evidenceText,
+  jobText
+);
+assert.equal(letterChecked.status, "NEEDS_EVIDENCE", "a letter reaches the same three outcomes as a resume");
+assert.equal(letterChecked.issues.length, 1, "a grounded letter issue survives the same sanitizer");
 
 console.log("optional Final Check probes: passed");

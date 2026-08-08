@@ -244,11 +244,25 @@ disappears into the task. Quiet competence, not salesmanship.
     Only Strong or Reasonable with no eligibility blocker may auto-start an
     enabled proposal. Stretch, Limited, unavailable, and blocked states remain
     manual, and manual Polish is always available.
-14. Keep Final Check deliberate and non-blocking. It runs only when requested,
-    checks the actual current resume after proposal decisions, and reports at
-    most five unsupported, missing, or clarity issues. It has no score, fit
-    verdict, recommendation, or rewrite. A failed or stale Final Check never
-    changes Polish state and never prevents Apply.
+14. Present one Polish workflow for both documents, and keep its closing check
+    non-blocking. Resume and Cover Letter progress through the same named
+    sequence — Ready to Polish, Polishing and validating, Proposal ready,
+    Reviewing proposal, Checking current document, then Ready / Review / Needs
+    evidence — with no separately named check to understand or operate.
+    Consistency is the terminology and the progression, not the proposal unit:
+    a resume proposes individual edits and a cover letter proposes one complete
+    replacement, and both stay that way. The resume's check therefore runs once,
+    after its edit decisions settle, because the resulting resume does not exist
+    before then; an accepted cover letter is already checked, because the server
+    validated those exact words during Polish. Editing a checked document says
+    "Changed since check"; a changed job, evidence, or guidance says "Out of
+    date"; both offer one inline Check again, and a letter that never came from
+    Polish is eligible for the same check. The check reports at most five
+    unsupported, missing, or clarity issues with no score, fit verdict,
+    recommendation, or rewrite, and a failed or stale check never changes Polish
+    state, never edits the document, and never prevents Apply. Role Fit stays
+    separate: it judges whether the application is worth pursuing, not whether
+    the finished document is sound.
 
 ## Accessibility & Inclusion
 

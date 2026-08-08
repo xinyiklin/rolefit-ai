@@ -677,73 +677,59 @@
   color: var(--warm);
 }
 
-.final-check {
-  display: grid;
-  gap: var(--s3);
-  padding-top: var(--s4);
-  border-top: 1px solid var(--hairline-strong);
-}
-
-.final-check__head {
-  display: flex;
-  align-items: start;
-  justify-content: space-between;
-  gap: var(--s3);
-}
-
-.final-check__head h3,
-.final-check__head p,
-.final-check__result p,
-.final-check__failure,
-.final-check__note {
-  margin: 0;
-}
-
-.final-check__head h3 {
-  color: var(--ink-strong);
-  font-size: 0.82rem;
-  font-weight: 650;
-}
-
-.final-check__head p,
-.final-check__note,
-.final-check__failure,
-.final-check__result > p {
-  color: var(--ink-soft);
-  font-size: 0.82rem;
-  line-height: 1.45;
-}
-
-.final-check__head button,
-.final-check__head button.is-compact {
-  flex: 0 0 auto;
-  white-space: normal;
-}
-
-.final-check__failure strong {
-  color: var(--warm);
-}
-
-.final-check__result {
+/* The closing phase of Polish, not a section of its own: no heading row, no
+   primary action, and nothing rendered at all until there is an outcome. The
+   old .final-check block carried a title, an explainer, and a Run button, which
+   is what made an internal phase look like a separate tool. */
+.document-check {
   display: grid;
   gap: var(--s2);
   padding-top: var(--s3);
   border-top: 1px solid var(--hairline-soft);
 }
 
-.final-check__result.is-stale {
+.document-check.is-checking,
+.document-check.is-failed {
+  align-items: baseline;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.document-check p,
+.document-check__note {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.document-check__note {
+  color: var(--ink-faint);
+}
+
+.document-check.is-failed strong {
+  color: var(--warm);
+}
+
+.document-check.is-stale {
   opacity: 0.68;
 }
 
-.final-check__status {
+.document-check button,
+.document-check button.is-compact {
+  flex: 0 0 auto;
+  justify-self: start;
+  white-space: normal;
+}
+
+.document-check__outcome {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
   gap: var(--s2);
 }
 
-.final-check__status span,
-.final-check__issues > li > span {
+.document-check__outcome span,
+.document-check__issues > li > span {
   color: var(--ink-strong);
   font-size: 0.68rem;
   font-weight: 650;
@@ -751,12 +737,18 @@
   text-transform: uppercase;
 }
 
-.final-check__status small {
+.document-check.is-review .document-check__outcome span,
+.document-check.is-needs-evidence .document-check__outcome span,
+.document-check.is-stale .document-check__outcome span {
   color: var(--warm);
+}
+
+.document-check__outcome small {
+  color: var(--ink-faint);
   font-size: 0.68rem;
 }
 
-.final-check__issues {
+.document-check__issues {
   display: grid;
   gap: 0;
   margin: var(--s1) 0 0;
@@ -764,22 +756,22 @@
   list-style: none;
 }
 
-.final-check__issues li {
+.document-check__issues li {
   display: grid;
   gap: var(--s1);
   padding: var(--s3) 0;
   border-top: 1px solid var(--hairline-soft);
 }
 
-.final-check__issues p,
-.final-check__issues small {
+.document-check__issues p,
+.document-check__issues small {
   margin: 0;
   color: var(--ink-soft);
   font-size: 0.82rem;
   line-height: 1.45;
 }
 
-.final-check__issues small {
+.document-check__issues small {
   color: var(--ink-faint);
 }
 

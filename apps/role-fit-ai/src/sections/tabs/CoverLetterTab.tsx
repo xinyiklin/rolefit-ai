@@ -21,6 +21,9 @@ import type {
 } from "../../lib/coverLetterPreflight";
 import { DOC_PAGE_WIDTH_PX } from "@typeset/engine/lib/documentStyle.ts";
 import { useRestoredScroll } from "../../hooks/useRestoredScroll";
+import type { FinalCheckResult } from "../../../shared/finalCheckContract.ts";
+import type { DocumentCheckSource } from "../../hooks/useDocumentCheck";
+import type { AiStageState } from "../../lib/aiWorkflow";
 import { CoverLetterReview } from "../cover-letter/CoverLetterReview";
 import { DraftRestoreBar } from "../DraftRestoreBar";
 import { CoverLetterToolbar } from "../cover-letter/CoverLetterToolbar";
@@ -66,6 +69,17 @@ type CoverLetterTabProps = {
   onSlotAnswerChange: (slotId: string, value: string) => void;
   onAcceptProposal: () => void;
   onDiscardProposal: () => void;
+  // The letter's closing phase, mirroring the resume's.
+  check: FinalCheckResult | null;
+  checkSource: DocumentCheckSource;
+  checkDocumentChanged: boolean;
+  checkInputsChanged: boolean;
+  checkProgress: AiStageState;
+  isChecking: boolean;
+  canCheck: boolean;
+  checkBlocker: string;
+  onCheck: () => void;
+  onStopCheck: () => void;
   onAddHonestContext?: (keyword: string) => void;
   onRestorePreTailor: () => void;
 };
@@ -104,6 +118,16 @@ export function CoverLetterTab({
   onSlotAnswerChange,
   onAcceptProposal,
   onDiscardProposal,
+  check,
+  checkSource,
+  checkDocumentChanged,
+  checkInputsChanged,
+  checkProgress,
+  isChecking,
+  canCheck,
+  checkBlocker,
+  onCheck,
+  onStopCheck,
   onAddHonestContext,
   onRestorePreTailor
 }: CoverLetterTabProps) {
@@ -197,6 +221,16 @@ export function CoverLetterTab({
             onDetailChange={onDetailChange}
             onSlotAnswerChange={onSlotAnswerChange}
             onTailor={onTailor}
+            check={check}
+            checkSource={checkSource}
+            checkDocumentChanged={checkDocumentChanged}
+            checkInputsChanged={checkInputsChanged}
+            checkProgress={checkProgress}
+            isChecking={isChecking}
+            canCheck={canCheck}
+            checkBlocker={checkBlocker}
+            onCheck={onCheck}
+            onStopCheck={onStopCheck}
             onAcceptProposal={onAcceptProposal}
             onDiscardProposal={onDiscardProposal}
             onRestore={onRestorePreTailor}

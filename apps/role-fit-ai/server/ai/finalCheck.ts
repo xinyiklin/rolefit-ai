@@ -17,6 +17,21 @@ import { hasUngroundedNumericClaim } from "./sanitize.ts";
 
 type AttemptStats = { attempts?: number };
 
+// The check reads one finished document against the same job and evidence
+// whichever kind it is. Only the nouns in the prompt change: a resume's claims
+// live in entries and bullets, a letter's in prose, and telling the model which
+// it is reading is the difference between useful and generic feedback.
+export type FinalCheckDocumentKind = "resume" | "cover-letter";
+
+const DOCUMENT_NOUNS: Record<FinalCheckDocumentKind, { noun: string; tag: string; article: string }> = {
+  resume: { noun: "resume", tag: "current_resume", article: "a job application resume" },
+  "cover-letter": { noun: "cover letter", tag: "current_cover_letter", article: "a job application cover letter" }
+};
+
+export function finalCheckDocumentKind(value: unknown): FinalCheckDocumentKind {
+  return value === "cover-letter" ? "cover-letter" : "resume";
+}
+
 function text(value: unknown, max: number): string {
   return typeof value === "string" ? value.replace(/\s+/g, " ").trim().slice(0, max) : "";
 }
@@ -32,21 +47,25 @@ function hasUngroundedClaimSignal(value: string, grounding: string): boolean {
     || Boolean(findUngroundedOutcomeClaim(value, grounding, { candidateProse: true }));
 }
 
+// Grounding is document-kind agnostic: an UNSUPPORTED issue must name something
+// the document says and the evidence does not, a MISSING issue must name
+// something the job says and the document does not, and a CLARITY issue must
+// name wording the document actually contains.
 function issueIsGrounded(
   issue: FinalCheckIssue,
-  currentResume: string,
+  currentDocument: string,
   evidenceText: string,
   jobText: string
 ): boolean {
   if (issue.kind === "UNSUPPORTED") {
-    return !hasUngroundedClaimSignal(issue.detail, currentResume)
+    return !hasUngroundedClaimSignal(issue.detail, currentDocument)
       && hasUngroundedClaimSignal(issue.detail, evidenceText);
   }
   if (issue.kind === "MISSING") {
-    return !hasUngroundedClaimSignal(issue.detail, `${currentResume}\n${jobText}`)
-      && hasUngroundedClaimSignal(issue.detail, currentResume);
+    return !hasUngroundedClaimSignal(issue.detail, `${currentDocument}\n${jobText}`)
+      && hasUngroundedClaimSignal(issue.detail, currentDocument);
   }
-  return !hasUngroundedClaimSignal(issue.detail, currentResume);
+  return !hasUngroundedClaimSignal(issue.detail, currentDocument);
 }
 
 function derivedSummary(status: FinalCheckResult["status"], issues: FinalCheckIssue[]): string {
@@ -60,7 +79,7 @@ function derivedSummary(status: FinalCheckResult["status"], issues: FinalCheckIs
 
 export function sanitizeFinalCheck(
   raw: unknown,
-  currentResume: string,
+  currentDocument: string,
   evidenceText: string,
   jobText: string
 ): FinalCheckResult {
@@ -93,7 +112,7 @@ export function sanitizeFinalCheck(
       action
     };
     const key = `${kind}:${detail.toLowerCase()}`;
-    if (seen.has(key) || !issueIsGrounded(candidate, currentResume, evidenceText, jobText)) continue;
+    if (seen.has(key) || !issueIsGrounded(candidate, currentDocument, evidenceText, jobText)) continue;
     seen.add(key);
     issues.push(candidate);
     if (issues.length === 5) break;
@@ -111,26 +130,29 @@ export function sanitizeFinalCheck(
 }
 
 export function buildFinalCheckPrompts({
-  currentResume,
+  documentKind = "resume",
+  currentDocument,
   evidenceText,
   jobText,
   customInstructions
 }: {
-  currentResume: string;
+  documentKind?: FinalCheckDocumentKind;
+  currentDocument: string;
   evidenceText: string;
   jobText: string;
   customInstructions: string;
 }) {
-  const systemPrompt = `You perform a concise, advisory final check of a job application resume. Return exactly one JSON object and no markdown.
+  const { noun, tag, article } = DOCUMENT_NOUNS[documentKind];
+  const systemPrompt = `You perform a concise, advisory final check of ${article}. Return exactly one JSON object and no markdown.
 
 ${inputFirewallRule()}
 
-Inspect the actual current resume. Never rewrite it, score fit, choose whether to apply, or invent candidate facts. Candidate evidence may substantiate a claim but is not another editable resume. Report only material issues a candidate can act on.`;
-  const userPrompt = `Check the current resume against the job and candidate evidence.
+Inspect the actual current ${noun}. Never rewrite it, score fit, choose whether to apply, or invent candidate facts. Candidate evidence may substantiate a claim but is not another editable ${noun}. Report only material issues a candidate can act on.`;
+  const userPrompt = `Check the current ${noun} against the job and candidate evidence.
 
-<current_resume>
-${fenceUntrusted(clipForPrompt(currentResume, 35_000, "current resume"))}
-</current_resume>
+<${tag}>
+${fenceUntrusted(clipForPrompt(currentDocument, 35_000, `current ${noun}`))}
+</${tag}>
 
 <candidate_evidence>
 ${fenceUntrusted(clipForPrompt(evidenceText, 35_000, "candidate evidence"))}
@@ -145,14 +167,14 @@ ${fenceUntrusted(clipForPrompt(customInstructions, 3_000, "user guidance")) || "
 </user_guidance>
 
 Issue kinds:
-- UNSUPPORTED: a concrete current-resume claim is not substantiated by candidate_evidence.
-- MISSING: an important job requirement is not evidenced in the current resume.
-- CLARITY: current-resume wording is materially ambiguous or hard to scan.
+- UNSUPPORTED: a concrete claim in the current ${noun} is not substantiated by candidate_evidence.
+- MISSING: an important job requirement is not evidenced in the current ${noun}.
+- CLARITY: wording in the current ${noun} is materially ambiguous or hard to scan.
 
 Rules:
 - Return at most five material issues, ordered by importance.
 - detail identifies the exact claim, requirement, or wording at issue.
-- action is one concise human action; never write replacement resume text.
+- action is one concise human action; never write replacement ${noun} text.
 - Do not report cosmetic preferences, evidence metadata, scores, verdicts, or recommendations to apply.
 
 Return this shape:
@@ -176,17 +198,20 @@ export async function handleFinalCheck(req: IncomingMessage, res: ServerResponse
   const request = requestAbortSignal(req, res);
   try {
     const body = await readAiJsonBody(req, 500_000);
-    const currentResume = String(body.resumeText ?? "").slice(0, 45_000).trim();
+    const documentKind = finalCheckDocumentKind(body.documentKind);
+    const currentDocument = String(body.documentText ?? body.resumeText ?? "").slice(0, 45_000).trim();
     const evidenceText = String(body.evidenceText ?? "").slice(0, 45_000).trim();
     const jobText = String(body.jobText ?? "").slice(0, 35_000).trim();
     const customInstructions = String(body.customInstructions ?? "").slice(0, 4_000).trim();
-    if (currentResume.length < 80 || jobText.length < 40) {
-      sendJson(res, 400, { error: "Add the current resume and prepare the job before running Final Check." });
+    if (currentDocument.length < 80 || jobText.length < 40) {
+      sendJson(res, 400, {
+        error: `Add the current ${DOCUMENT_NOUNS[documentKind].noun} and prepare the job before checking it.`
+      });
       return;
     }
     const resolved = resolveProviderRequest(body);
     provider = resolved.provider;
-    const prompts = buildFinalCheckPrompts({ currentResume, evidenceText, jobText, customInstructions });
+    const prompts = buildFinalCheckPrompts({ documentKind, currentDocument, evidenceText, jobText, customInstructions });
     const stats: AttemptStats = {};
     const parsed = await callConfiguredProvider({
       ...resolved,
@@ -195,7 +220,7 @@ export async function handleFinalCheck(req: IncomingMessage, res: ServerResponse
       signal: request.signal
     }, stats);
     sendJson(res, 200, {
-      ...sanitizeFinalCheck(parsed, currentResume, evidenceText, jobText),
+      ...sanitizeFinalCheck(parsed, currentDocument, evidenceText, jobText),
       provider: resolved.provider,
       model: resolved.model,
       reasoningEffort: resolved.reasoningEffort,

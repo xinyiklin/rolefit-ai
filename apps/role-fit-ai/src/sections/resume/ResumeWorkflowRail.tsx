@@ -1,43 +1,45 @@
 import type { ResumeData } from "@typeset/engine/lib/resumeData.ts";
 
-import type { ResumeEditorActions } from "../../hooks/useResumeEditor";
+import type { useResumeProposalDecisions } from "../../hooks/useResumeProposalDecisions";
+import type { DocumentCheckSource } from "../../hooks/useDocumentCheck";
 import type { AiStageState, PolishProgressState } from "../../lib/aiWorkflow";
 import type { PolishedResume } from "../../resumeEngine";
 import type { TailorChangeTarget } from "../../resume/types";
 import type { FinalCheckResult } from "../../../shared/finalCheckContract.ts";
+import { resolveDocumentWorkflowStatus } from "../../../shared/documentWorkflowContract.ts";
 import {
   DocumentWorkflowRail,
-  type DocumentWorkflowCheck,
-  type DocumentWorkflowPhase
+  type DocumentWorkflowCheck
 } from "../document/DocumentWorkflowRail";
+import { DocumentCheckSummary } from "../document/DocumentCheckSummary";
 import { ResumeProposalReview } from "./ResumeProposalReview";
-import { FinalCheckPanel } from "./FinalCheckPanel";
 
 type ResumeWorkflowRailProps = {
   result: PolishedResume | null;
   resume: ResumeData;
-  actions: ResumeEditorActions;
+  decisions: ReturnType<typeof useResumeProposalDecisions>;
   proposalStale?: boolean;
   jobTarget?: { role?: string; company?: string } | null;
   resumeReady: boolean;
   jobReady: boolean;
   tailorProviderReady: boolean;
-  finalCheckProviderReady: boolean;
-  finalCheckProviderMessage: string;
+  checkProviderReady: boolean;
+  checkProviderMessage: string;
   selectedSectionCount: number;
   tailorSectionCount: number;
   isPolishing: boolean;
   progress: PolishProgressState;
   status?: string;
-  finalCheck: FinalCheckResult | null;
-  finalCheckStale: boolean;
-  finalCheckProgress: AiStageState;
-  finalCheckStatus: string;
+  check: FinalCheckResult | null;
+  checkSource: DocumentCheckSource;
+  checkDocumentChanged: boolean;
+  checkInputsChanged: boolean;
+  checkProgress: AiStageState;
   isChecking: boolean;
   onRetryTailor: () => void;
   onStop: () => void;
-  onRunFinalCheck: () => void;
-  onStopFinalCheck: () => void;
+  onCheck: () => void;
+  onStopCheck: () => void;
   onHighlight: (target: TailorChangeTarget | null) => void;
 };
 
@@ -48,28 +50,29 @@ function readiness(label: string, ready: boolean, detail: string): DocumentWorkf
 export function ResumeWorkflowRail({
   result,
   resume,
-  actions,
+  decisions,
   proposalStale,
   jobTarget,
   resumeReady,
   jobReady,
   tailorProviderReady,
-  finalCheckProviderReady,
-  finalCheckProviderMessage,
+  checkProviderReady,
+  checkProviderMessage,
   selectedSectionCount,
   tailorSectionCount,
   isPolishing,
   progress,
   status,
-  finalCheck,
-  finalCheckStale,
-  finalCheckProgress,
-  finalCheckStatus,
+  check,
+  checkSource,
+  checkDocumentChanged,
+  checkInputsChanged,
+  checkProgress,
   isChecking,
   onRetryTailor,
   onStop,
-  onRunFinalCheck,
-  onStopFinalCheck,
+  onCheck,
+  onStopCheck,
   onHighlight
 }: ResumeWorkflowRailProps) {
   const proposalResult = result?.polishOutcome ? result : null;
@@ -77,30 +80,42 @@ export function ResumeWorkflowRail({
   const ready = resumeReady && jobReady && tailorProviderReady && tailorSectionCount > 0;
   const failed = progress.tailor.status === "failed" || progress.tailor.status === "stopped";
   const withheld = proposalResult?.polishOutcome === "WITHHELD";
-  let phase: DocumentWorkflowPhase = ready ? "ready" : "blocked";
-  let description = ready
-    ? "Polish creates one evidence-grounded proposal for the selected sections."
-    : "Complete the blocked rows before polishing.";
 
-  if (isPolishing) {
-    phase = "working";
-    description = "Creating grounded edits. Your current resume remains unchanged.";
-  } else if (proposalResult && proposalStale) {
-    phase = "stale";
-    description = "The resume or prepared job changed. Polish again for a current proposal.";
-  } else if (withheld) {
-    phase = "blocked";
-    description = "The generated edits could not be verified. Your resume is unchanged.";
-  } else if (failed) {
-    phase = "blocked";
-    description = "No proposal replaced your resume. Retry when ready.";
-  } else if (proposalResult?.polishOutcome === "PROPOSAL") {
-    phase = "proposal";
-    description = `${proposalResult.suggestedChanges?.length ?? 0} edit${proposalResult.suggestedChanges?.length === 1 ? "" : "s"} ready for your decision.`;
-  } else if (proposalResult?.polishOutcome === "NO_CHANGES") {
-    phase = "ready";
-    description = "No safe material changes were suggested.";
-  }
+  // A proposal is only "outstanding" while edits still need a decision. Once
+  // they settle, the workflow moves on to the current-resume check rather than
+  // parking on a proposal the user has finished with.
+  const workflow = resolveDocumentWorkflowStatus({
+    ready,
+    polishing: isPolishing,
+    checking: isChecking,
+    proposal: proposalResult && decisions.outstanding > 0
+      ? { outstanding: decisions.outstanding, total: decisions.total }
+      : null,
+    proposalSuperseded: Boolean(proposalResult && proposalStale),
+    check: check?.status ?? null,
+    checkDocumentChanged,
+    checkInputsChanged
+  });
+
+  const description = isPolishing
+    ? "Creating evidence-grounded resume edits. Your current resume remains unchanged."
+    : workflow.state === "checking"
+      ? "Reviewing the resulting document for evidence, coverage, and clarity."
+      : workflow.state === "proposal"
+        ? `${decisions.total} edit${decisions.total === 1 ? "" : "s"} waiting for your decision.`
+        : workflow.state === "reviewing"
+          ? `${decisions.outstanding} of ${decisions.total} edits still need a decision.`
+          : withheld
+            ? "The generated edits could not be verified. Your resume is unchanged."
+            : failed
+              ? "No proposal replaced your resume. Retry when ready."
+              : workflow.state === "stale" && workflow.staleReason === "proposal-superseded"
+                ? "The resume or prepared job changed. Polish again for a current proposal."
+                : workflow.state === "ready-to-polish"
+                  ? "Polish creates one evidence-grounded proposal, then checks the resulting resume."
+                  : workflow.state === "blocked"
+                    ? "Complete the blocked rows before polishing."
+                    : "";
 
   const checks = [
     readiness("Resume", resumeReady, "Add your resume"),
@@ -114,15 +129,15 @@ export function ResumeWorkflowRail({
         : "Mark at least one section Polish"
     )
   ];
-  const canRunFinalCheck = resumeReady && jobReady && finalCheckProviderReady && !isPolishing;
-  const finalCheckBlocker = !resumeReady
+  const canCheck = resumeReady && jobReady && checkProviderReady && !isPolishing;
+  const checkBlocker = !resumeReady
     ? "Add your resume first."
     : !jobReady
       ? "Prepare the job first."
-      : !finalCheckProviderReady
-        ? finalCheckProviderMessage || "Check Final Check settings."
+      : !checkProviderReady
+        ? checkProviderMessage || "Check the AI settings for this stage."
         : isPolishing
-          ? "Wait for Resume Polish to finish."
+          ? "Wait for Polish to finish."
           : "";
   const failure = failed && !withheld ? {
     title: progress.tailor.errorHeadline || "Polish failed",
@@ -138,38 +153,33 @@ export function ResumeWorkflowRail({
   return (
     <DocumentWorkflowRail
       ariaLabel="Resume workflow"
-      phase={phase}
+      status={workflow}
       target={target}
       description={description}
       checks={proposalResult ? [] : checks}
       failure={failure}
       footer={footer}
-      status={status}
+      statusLine={status}
     >
-      {isPolishing || progress.tailor.status !== "idle" ? (
-        <div className={`resume-workflow__single-step is-${withheld ? "withheld" : progress.tailor.status}`}>
-          <span>Create resume proposal</span>
-          <small>{withheld ? "withheld" : proposalResult?.polishOutcome === "NO_CHANGES" ? "no changes" : progress.tailor.status}</small>
-        </div>
-      ) : null}
       {proposalResult ? (
         <ResumeProposalReview
           result={proposalResult}
           resume={resume}
-          actions={actions}
+          decisions={decisions}
           onHighlight={onHighlight}
         />
       ) : null}
-      <FinalCheckPanel
-        result={finalCheck}
-        stale={finalCheckStale}
-        progress={finalCheckProgress}
-        status={finalCheckStatus}
-        canRun={canRunFinalCheck}
+      <DocumentCheckSummary
+        documentNoun="resume"
+        check={check}
+        source={checkSource}
+        staleReason={workflow.state === "stale" ? workflow.staleReason : undefined}
+        progress={checkProgress}
         isChecking={isChecking}
-        blocker={finalCheckBlocker}
-        onRun={onRunFinalCheck}
-        onStop={onStopFinalCheck}
+        canCheck={canCheck}
+        blocker={checkBlocker}
+        onCheck={onCheck}
+        onStop={onStopCheck}
       />
     </DocumentWorkflowRail>
   );

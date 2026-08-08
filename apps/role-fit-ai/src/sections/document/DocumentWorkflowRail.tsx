@@ -1,12 +1,26 @@
 import type { ReactNode } from "react";
 
-export type DocumentWorkflowPhase =
-  | "ready"
-  | "working"
-  | "proposal"
-  | "blocked"
-  | "applied"
-  | "stale";
+import {
+  documentWorkflowLabel,
+  type DocumentWorkflowStatus
+} from "../../../shared/documentWorkflowContract.ts";
+
+// Visual tone, not vocabulary: the shared contract owns which states exist and
+// what they are called, and the rail only needs to know which ones read as a
+// problem. Keeping this map small is what stops ten states from becoming ten
+// bespoke rail treatments.
+const TONES: Record<DocumentWorkflowStatus["state"], "neutral" | "working" | "attention"> = {
+  blocked: "attention",
+  "ready-to-polish": "neutral",
+  polishing: "working",
+  proposal: "neutral",
+  reviewing: "working",
+  checking: "working",
+  ready: "neutral",
+  review: "attention",
+  "needs-evidence": "attention",
+  stale: "attention"
+};
 
 export type DocumentWorkflowCheck = {
   label: string;
@@ -23,40 +37,36 @@ export type DocumentWorkflowFailure = {
 
 type DocumentWorkflowRailProps = {
   ariaLabel: string;
-  phase: DocumentWorkflowPhase;
+  status: DocumentWorkflowStatus;
   target: string;
   description?: string;
   checks?: DocumentWorkflowCheck[];
   failure?: DocumentWorkflowFailure | null;
   children?: ReactNode;
   footer?: ReactNode;
-  status?: string;
-};
-
-const PHASE_LABELS: Record<DocumentWorkflowPhase, string> = {
-  ready: "Ready",
-  working: "Working",
-  proposal: "Proposal ready",
-  blocked: "Blocked",
-  applied: "Applied",
-  stale: "Stale"
+  // The live announcement line. Named apart from `status` because that now
+  // carries the workflow state, and one component cannot own two "status".
+  statusLine?: string;
 };
 
 export function DocumentWorkflowRail({
   ariaLabel,
-  phase,
+  status: workflow,
   target,
   description,
   checks = [],
   failure,
   children,
   footer,
-  status
+  statusLine
 }: DocumentWorkflowRailProps) {
   return (
-    <aside className={`workflow-rail workflow-rail--${phase}`} aria-label={ariaLabel}>
+    <aside
+      className={`workflow-rail workflow-rail--${workflow.state} is-${TONES[workflow.state]}`}
+      aria-label={ariaLabel}
+    >
       <header className="workflow-rail__intro">
-        <p className="workflow-rail__eyebrow">{PHASE_LABELS[phase]}</p>
+        <p className="workflow-rail__eyebrow">{documentWorkflowLabel(workflow)}</p>
         <h2>{target}</h2>
         {description ? <p className="workflow-rail__description">{description}</p> : null}
       </header>
@@ -88,7 +98,7 @@ export function DocumentWorkflowRail({
       {children ? <div className="workflow-rail__body">{children}</div> : null}
       {footer ? <footer className="workflow-rail__footer">{footer}</footer> : null}
       <p className="workflow-rail__status" role="status" aria-live="polite" aria-atomic="true">
-        {status}
+        {statusLine}
       </p>
     </aside>
   );

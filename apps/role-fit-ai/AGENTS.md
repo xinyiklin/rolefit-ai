@@ -60,10 +60,28 @@ own a second resume model, editor, layout engine, or PDF implementation.
   dropped locally without invalidating safe edits. Identity, contact,
   education, dates, and omitted sections stay locked, and the live resume
   changes only through explicit Apply all, Accept, or edited acceptance.
-- Final Check is a separate, optional request over the actual current resume,
-  candidate evidence, and prepared job. Its small contract is independent of
-  Initial Fit and Polish, it never rewrites the document, and failure never
-  invalidates a proposal or blocks Apply.
+- **The current-document check is the closing phase of Polish, not a separate
+  tool.** Both documents show one sequence — Ready to Polish, Polishing and
+  validating, Proposal ready, Reviewing proposal, Checking current document,
+  then Ready / Review / Needs evidence — owned by
+  `shared/documentWorkflowContract.ts`. Do not reintroduce a separately named,
+  manually operated Final Check section.
+  The visible sequence is shared; the internals are not, and must not be forced
+  to match. A resume proposal is individual edits, so the resulting resume does
+  not exist until each one is accepted, edited, or discarded: the check runs
+  ONCE when the last decision settles, never per accepted edit, and never inside
+  the Polish request (that would check a hypothetical accept-everything resume).
+  A cover-letter proposal is one complete replacement the server already
+  validated and repaired, so accepting it records that receipt as Ready with no
+  second provider request; the request path exists for letters with no such
+  receipt — manually authored, imported, or edited after acceptance.
+  Staleness has two meanings that must stay distinct: editing the document is
+  "Changed since check" and invites a re-check, while a changed job, evidence,
+  or guidance is "Out of date" and invites a re-polish. Both expose one inline
+  Check again. The check stays advisory: it never rewrites the document, never
+  blocks Apply or editing, and a failure says the document was unaffected.
+  It is skippable through one setting because it is a real extra request per
+  polish, but skippable is not the same as user-operated.
 - Prepare publishes its deterministic local brief before provider work. A Job
   analysis or Initial Fit failure leaves that brief editable and manual Polish
   available; invalid Initial Fit output never invalidates valid Job analysis.

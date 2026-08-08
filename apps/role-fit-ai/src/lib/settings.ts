@@ -43,6 +43,10 @@ export type PersistedSettings = {
   // Per-stage overrides. A missing or blank entry inherits customInstructions.
   stageCustomInstructions?: Partial<Record<AiStageId, string>>;
   runInitialFit?: boolean;
+  // The closing phase of Polish. It is one extra provider request per polish,
+  // which is a real cost on metered providers, so it stays user-owned even
+  // though it is no longer a separately operated workflow section.
+  runFinalCheck?: boolean;
   autoCreateResumeProposal?: boolean;
   autoCreateCoverLetterProposal?: boolean;
   citizenshipStatus?: CitizenshipStatus;
@@ -130,6 +134,7 @@ const PERSISTED_SETTING_KEYS = [
   "customInstructions",
   "stageCustomInstructions",
   "runInitialFit",
+  "runFinalCheck",
   "autoCreateResumeProposal",
   "autoCreateCoverLetterProposal",
   "citizenshipStatus",
@@ -193,7 +198,7 @@ export function normalizeSettings(value: unknown): PersistedSettings {
   // The AI stage sections are permanently visible. Drop the retired accordion
   // preference from older browser storage on the next normal save.
   delete (settings as unknown as Record<string, unknown>).sectionOpen;
-  for (const key of ["runInitialFit", "autoCreateResumeProposal", "autoCreateCoverLetterProposal"] as const) {
+  for (const key of ["runInitialFit", "runFinalCheck", "autoCreateResumeProposal", "autoCreateCoverLetterProposal"] as const) {
     if (settings[key] !== undefined && typeof settings[key] !== "boolean") delete settings[key];
   }
   // "unspecified" is the neutral default (not a selectable option), so add it

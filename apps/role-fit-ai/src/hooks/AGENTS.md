@@ -20,10 +20,17 @@ browser-side effects; components render them and App composes them.
   stale-request cancellation, and progress. It must not dispatch the Review
   provider or expose the retired Tailor/Review/Both selector. It stages flat-ID
   edits and outcome metadata without seeding or replacing the editor.
-- `useFinalCheck` owns the optional current-resume check, abort/retry, provider
-  readiness, and semantic staleness. It submits the live serialized resume and
-  must never mutate the editor, replace the Polish result, or participate in
-  Apply readiness.
+- `useDocumentCheck` owns the closing current-document check for BOTH documents:
+  the request, abort/retry, the once-per-settled-proposal automatic trigger, the
+  Polish-validation receipt a cover letter adopts instead of re-checking, and
+  the two distinct staleness fingerprints (document edited vs inputs changed).
+  It submits the live serialized document and must never mutate an editor,
+  replace a Polish result, or participate in Apply readiness.
+- `useResumeProposalDecisions` owns accept/edit/discard for the proposal's
+  individual edits. It lives above the review list because the resulting resume
+  only exists once every edit has a decision, and that is when the check runs;
+  `outstanding` re-derives from the live document so an undo makes an edit
+  pending again.
 - `useDuplicateGuard` owns duplicate acknowledgments and pipeline/apply gates.
 - `useDuplicateScan` owns the Applications tab's tracker-wide duplicate
   clusters: it schedules the O(n²) scan after first paint, cancels a pending

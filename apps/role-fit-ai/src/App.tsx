@@ -75,7 +75,8 @@ import { canonicalizeAiUsageStageKeys, type StageAiUsage } from "./lib/aiUsage";
 import { useDuplicateGuard } from "./hooks/useDuplicateGuard";
 import { useJobIntake, type ImportedJobSnapshot } from "./hooks/useJobIntake";
 import { usePolishPipeline } from "./hooks/usePolishPipeline";
-import { useFinalCheck } from "./hooks/useFinalCheck";
+import { useDocumentCheck } from "./hooks/useDocumentCheck";
+import { useResumeProposalDecisions } from "./hooks/useResumeProposalDecisions";
 import { useWorkspaceResume } from "./hooks/useWorkspaceResume";
 import { useApplyFlow } from "./hooks/useApplyFlow";
 import { useApplicationDocumentSync } from "./hooks/useApplicationDocumentSync";
@@ -356,6 +357,8 @@ function App() {
     setHonestContext,
     runInitialFit,
     setRunInitialFit,
+    runFinalCheck,
+    setRunFinalCheck,
     autoCreateResumeProposal,
     setAutoCreateResumeProposal,
     autoCreateCoverLetterProposal,
@@ -1248,23 +1251,76 @@ function App() {
     setExportStatus,
     confirmDuplicateBeforePolish: duplicateGuard.confirmDuplicateBeforePolish
   });
-  const {
-    finalCheck,
-    finalCheckStale,
-    finalCheckProgress,
-    finalCheckStatus,
-    isChecking,
-    runFinalCheck,
-    stopFinalCheck
-  } = useFinalCheck({
-    currentResumeText,
-    evidenceText: [resumeText, requestHonestContext].filter(Boolean).join("\n"),
-    jobDescription,
-    customInstructions: customInstructionsFor("final-check"),
-    finalCheckConfig: finalCheckStage,
-    ensureFinalCheckProviderReady: ensureFinalCheckProvider,
-    setPipelineAiUsage
+  // Accept / edit / discard state for the proposal's individual edits. It lives
+  // here, not in the review list, because the resulting resume only exists once
+  // every edit has a decision — and that is exactly when the check may run.
+  const resumeProposalDecisions = useResumeProposalDecisions({
+    result,
+    resume: editedResume,
+    actions: resumeEditorActions
   });
+  const checkEvidenceText = [resumeText, requestHonestContext].filter(Boolean).join("\n");
+  const checkInstructions = customInstructionsFor("final-check");
+  const {
+    check: finalCheck,
+    checkSource: finalCheckSource,
+    checkDocumentChanged: finalCheckDocumentChanged,
+    checkInputsChanged: finalCheckInputsChanged,
+    progress: finalCheckProgress,
+    isChecking,
+    runCheck: runResumeCheck,
+    requestAutoCheck: requestResumeAutoCheck,
+    stopCheck: stopResumeCheck
+  } = useDocumentCheck({
+    documentKind: "resume",
+    documentText: currentResumeText,
+    evidenceText: checkEvidenceText,
+    jobDescription,
+    customInstructions: checkInstructions,
+    enabled: runFinalCheck,
+    stageConfig: finalCheckStage,
+    ensureProviderReady: ensureFinalCheckProvider,
+    setPipelineAiUsage,
+    usageKey: "final-check"
+  });
+  const {
+    check: coverCheck,
+    checkSource: coverCheckSource,
+    checkDocumentChanged: coverCheckDocumentChanged,
+    checkInputsChanged: coverCheckInputsChanged,
+    progress: coverCheckProgress,
+    isChecking: isCheckingCoverLetter,
+    runCheck: runCoverCheck,
+    adoptValidatedReceipt: adoptCoverValidatedReceipt,
+    stopCheck: stopCoverCheck
+  } = useDocumentCheck({
+    documentKind: "cover-letter",
+    documentText: coverLetterEditor.text,
+    evidenceText: checkEvidenceText,
+    jobDescription,
+    customInstructions: checkInstructions,
+    enabled: runFinalCheck,
+    stageConfig: finalCheckStage,
+    ensureProviderReady: ensureFinalCheckProvider,
+    setPipelineAiUsage,
+    usageKey: "cover-check"
+  });
+
+  // The resume's closing phase: run the check ONCE, when the last edit decision
+  // settles. Not per accepted edit — that would spend a request per click and
+  // leave every earlier result stale the moment the next decision landed.
+  useEffect(() => {
+    if (!resumeProposalDecisions.decisionsSettled || proposalStale) return;
+    requestResumeAutoCheck(
+      `${jobDescription}|${result?.suggestedChanges?.map((change) => change.id).join(",") ?? ""}`
+    );
+  }, [
+    jobDescription,
+    proposalStale,
+    requestResumeAutoCheck,
+    result,
+    resumeProposalDecisions.decisionsSettled
+  ]);
   const aiWorkflowStages: AiWorkflowStage[] = [];
   if (jobAnalysisProgressVisible) {
     aiWorkflowStages.push({
@@ -1803,7 +1859,8 @@ function App() {
     result,
     currentResumeText,
     initialFitSnapshot: quickFitState.status === "ready" ? quickFitState.snapshot : null,
-    finalCheckSnapshot: finalCheck && !finalCheckStale ? finalCheck : null,
+    finalCheckSnapshot:
+      finalCheck && !finalCheckDocumentChanged && !finalCheckInputsChanged ? finalCheck : null,
     pipelineAiUsage,
     applications,
     linkedApplicationId: applicationOfRecordId,
@@ -2506,21 +2563,23 @@ function App() {
               resumeReady={resumeReady}
               jobReady={jobReady}
               tailorProviderReady={tailorProviderReady}
-              finalCheckProviderReady={finalCheckProviderReady}
-              finalCheckProviderMessage={finalCheckProviderMessage}
+              checkProviderReady={finalCheckProviderReady}
+              checkProviderMessage={finalCheckProviderMessage}
               isPolishing={isPolishing}
               polishProgress={polishProgress}
               polishStatus={polishStatus}
-              finalCheck={finalCheck}
-              finalCheckStale={finalCheckStale}
-              finalCheckProgress={finalCheckProgress}
-              finalCheckStatus={finalCheckStatus}
+              proposalDecisions={resumeProposalDecisions}
+              check={finalCheck}
+              checkSource={finalCheckSource}
+              checkDocumentChanged={finalCheckDocumentChanged}
+              checkInputsChanged={finalCheckInputsChanged}
+              checkProgress={finalCheckProgress}
               isChecking={isChecking}
               onPolish={() => void handlePolish()}
               onRetryTailor={() => void retryStage()}
               onStopPolish={stopPolish}
-              onRunFinalCheck={() => void runFinalCheck()}
-              onStopFinalCheck={stopFinalCheck}
+              onCheck={() => void runResumeCheck()}
+              onStopCheck={stopResumeCheck}
               jobTarget={materialsJobTarget}
               documentActions={
                 <>
@@ -2711,8 +2770,38 @@ function App() {
               slotAnswers={coverLetterSlotAnswers}
               onDetailChange={updateCoverLetterDetail}
               onSlotAnswerChange={updateCoverLetterSlotAnswer}
-              onAcceptProposal={acceptCoverLetterProposal}
+              onAcceptProposal={() => {
+                const accepted = coverLetterProposal?.result.coverLetterText ?? "";
+                acceptCoverLetterProposal();
+                // The accepted letter IS the validated document — the server
+                // checked and, where needed, repaired these exact words. Record
+                // that receipt instead of paying for a second opinion on it.
+                if (accepted) {
+                  adoptCoverValidatedReceipt(
+                    accepted,
+                    "This letter passed evidence checks during Polish."
+                  );
+                }
+              }}
               onDiscardProposal={discardCoverLetterProposal}
+              check={coverCheck}
+              checkSource={coverCheckSource}
+              checkDocumentChanged={coverCheckDocumentChanged}
+              checkInputsChanged={coverCheckInputsChanged}
+              checkProgress={coverCheckProgress}
+              isChecking={isCheckingCoverLetter}
+              canCheck={resumeReady && jobPrepared && finalCheckProviderReady && !isGeneratingCover}
+              checkBlocker={
+                !jobPrepared
+                  ? "Prepare the job first."
+                  : !finalCheckProviderReady
+                    ? finalCheckProviderMessage || "Check the AI settings for this stage."
+                    : isGeneratingCover
+                      ? "Wait for Polish to finish."
+                      : ""
+              }
+              onCheck={() => void runCoverCheck()}
+              onStopCheck={stopCoverCheck}
               onAddHonestContext={handleAddHonestContext}
               onRestorePreTailor={() => {
                 coverLetterEditor.restorePreTailor();
@@ -2803,6 +2892,8 @@ function App() {
           availabilityMessage={providerAvailability.message}
           onRefreshProviders={providerAvailability.refresh}
           runInitialFit={runInitialFit}
+          runFinalCheck={runFinalCheck}
+          onRunFinalCheckChange={setRunFinalCheck}
           onRunInitialFitChange={setRunInitialFit}
           autoCreateResumeProposal={autoCreateResumeProposal}
           onAutoCreateResumeProposalChange={setAutoCreateResumeProposal}

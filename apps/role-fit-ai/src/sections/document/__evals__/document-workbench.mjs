@@ -36,7 +36,7 @@ const styles = readFileSync(sourceUrl("../../../styles/document-workbench.css"),
 const studioStyles = readFileSync(sourceUrl("../../../styles/studio.css"), "utf8");
 const resumeTab = readFileSync(sourceUrl("../../tabs/ResumeTab.tsx"), "utf8");
 const coverTab = readFileSync(sourceUrl("../../tabs/CoverLetterTab.tsx"), "utf8");
-const finalCheckPanel = readFileSync(sourceUrl("../../resume/FinalCheckPanel.tsx"), "utf8");
+const documentCheckSummary = readFileSync(sourceUrl("../DocumentCheckSummary.tsx"), "utf8");
 const app = readFileSync(sourceUrl("../../../App.tsx"), "utf8");
 
 const values = new Map();
@@ -145,13 +145,18 @@ assert.doesNotMatch(
 );
 assert.match(
   workflowRail,
-  /<aside className=\{`workflow-rail/,
+  /<aside\s*\n?\s*className=\{`workflow-rail/,
   "the shared workflow rail owns the complementary landmark"
 );
 assert.doesNotMatch(
-  finalCheckPanel,
-  /<aside/,
-  "Final Check content does not create a nested complementary landmark"
+  documentCheckSummary,
+  /<aside|<section|<h[1-6]/,
+  "the closing check is a phase of the rail, not a nested landmark or section of its own"
+);
+assert.doesNotMatch(
+  documentCheckSummary,
+  /primary-button/,
+  "the closing check offers no primary action — it is not a tool the user operates"
 );
 assert.match(
   workbench,
@@ -330,10 +335,26 @@ assert.match(
   "only a typed post-draft blocker adds a collapsed Cover Letter rail count"
 );
 assert.match(coverTab, /issueCount > 0[\s\S]{0,180}?attention:/);
+// The vocabulary moved to the shared contract so a resume's granular edits and
+// a letter's whole-document replacement cannot drift into two workflows.
+const workflowContract = readFileSync(
+  sourceUrl("../../../../shared/documentWorkflowContract.ts"),
+  "utf8"
+);
+assert.match(
+  workflowContract,
+  /DOCUMENT_WORKFLOW_LABELS[\s\S]*proposal:\s*"Proposal ready"/,
+  "both documents share the workflow state vocabulary"
+);
 assert.match(
   workflowRail,
-  /PHASE_LABELS[\s\S]*proposal:\s*"Proposal ready"/,
-  "both documents share the workflow state vocabulary"
+  /documentWorkflowLabel\(workflow\)/,
+  "the rail renders the shared label rather than owning a second one"
+);
+assert.doesNotMatch(
+  workflowRail,
+  /PHASE_LABELS/,
+  "the rail no longer keeps a private phase vocabulary"
 );
 // One action, one name. Both workspaces — and the Prepare cards that start the
 // same runs — say Polish; Tailor and Audit survive only as the resume pipeline's
@@ -400,7 +421,7 @@ assert.match(
   /readiness\("Resume", resumeReady, "Add your resume"\)/,
   "both rails phrase the same readiness gate identically"
 );
-assert.match(coverRail, /check\("Resume", resumeReady, "Add your resume"\)/);
+assert.match(coverRail, /readiness\("Resume", resumeReady, "Add your resume"\)/);
 assert.doesNotMatch(
   resumeRail,
   /label: "Workflow", state: "ready"/,

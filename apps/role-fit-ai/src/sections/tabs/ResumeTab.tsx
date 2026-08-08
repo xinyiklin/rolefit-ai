@@ -20,6 +20,8 @@ import type { AutosavedDraft } from "../../hooks/useAutosaveDraft";
 import type { DraftAutosaveState } from "../../hooks/useAutosaveDraft";
 import { resumePolishSectionIsLocked } from "../../../shared/resumePolishContract.ts";
 import type { FinalCheckResult } from "../../../shared/finalCheckContract.ts";
+import type { DocumentCheckSource } from "../../hooks/useDocumentCheck";
+import type { useResumeProposalDecisions } from "../../hooks/useResumeProposalDecisions";
 import { fieldKeyForReviewTarget } from "../../lib/reviewTarget.ts";
 import { useRestoredScroll } from "../../hooks/useRestoredScroll";
 import { DraftRestoreBar } from "../DraftRestoreBar";
@@ -70,21 +72,25 @@ type ResumeTabProps = {
   resumeReady: boolean;
   jobReady: boolean;
   tailorProviderReady: boolean;
-  finalCheckProviderReady: boolean;
-  finalCheckProviderMessage: string;
+  checkProviderReady: boolean;
+  checkProviderMessage: string;
   isPolishing: boolean;
   polishProgress: PolishProgressState;
   polishStatus?: string;
-  finalCheck: FinalCheckResult | null;
-  finalCheckStale: boolean;
-  finalCheckProgress: AiStageState;
-  finalCheckStatus: string;
+  // Decision state for the proposal's individual edits, owned by the workflow
+  // because the current-resume check runs when the last one settles.
+  proposalDecisions: ReturnType<typeof useResumeProposalDecisions>;
+  check: FinalCheckResult | null;
+  checkSource: DocumentCheckSource;
+  checkDocumentChanged: boolean;
+  checkInputsChanged: boolean;
+  checkProgress: AiStageState;
   isChecking: boolean;
   onPolish: () => void;
   onRetryTailor: () => void;
   onStopPolish: () => void;
-  onRunFinalCheck: () => void;
-  onStopFinalCheck: () => void;
+  onCheck: () => void;
+  onStopCheck: () => void;
 };
 
 // The resume surface is edit-and-check: the owned typeset page is the editor
@@ -124,21 +130,23 @@ export function ResumeTab({
   resumeReady,
   jobReady,
   tailorProviderReady,
-  finalCheckProviderReady,
-  finalCheckProviderMessage,
+  checkProviderReady,
+  checkProviderMessage,
   isPolishing,
   polishProgress,
   polishStatus,
-  finalCheck,
-  finalCheckStale,
-  finalCheckProgress,
-  finalCheckStatus,
+  proposalDecisions,
+  check,
+  checkSource,
+  checkDocumentChanged,
+  checkInputsChanged,
+  checkProgress,
   isChecking,
   onPolish,
   onRetryTailor,
   onStopPolish,
-  onRunFinalCheck,
-  onStopFinalCheck,
+  onCheck,
+  onStopCheck,
 }: ResumeTabProps) {
   const { editorScrollerRef, layoutScrollerRef } = useRestoredScroll(
     initialScrollTop,
@@ -264,28 +272,29 @@ export function ResumeTab({
             <ResumeWorkflowRail
               result={result}
               resume={editedResume}
-              actions={actions}
+              decisions={proposalDecisions}
               proposalStale={proposalStale}
               jobTarget={jobTarget}
               resumeReady={resumeReady}
               jobReady={jobReady}
               tailorProviderReady={tailorProviderReady}
-              finalCheckProviderReady={finalCheckProviderReady}
-              finalCheckProviderMessage={finalCheckProviderMessage}
+              checkProviderReady={checkProviderReady}
+              checkProviderMessage={checkProviderMessage}
               selectedSectionCount={selectedSectionCount}
               tailorSectionCount={tailorSectionCount}
               isPolishing={isPolishing}
               progress={polishProgress}
               status={polishStatus}
-              finalCheck={finalCheck}
-              finalCheckStale={finalCheckStale}
-              finalCheckProgress={finalCheckProgress}
-              finalCheckStatus={finalCheckStatus}
+              check={check}
+              checkSource={checkSource}
+              checkDocumentChanged={checkDocumentChanged}
+              checkInputsChanged={checkInputsChanged}
+              checkProgress={checkProgress}
               isChecking={isChecking}
               onRetryTailor={onRetryTailor}
               onStop={onStopPolish}
-              onRunFinalCheck={onRunFinalCheck}
-              onStopFinalCheck={onStopFinalCheck}
+              onCheck={onCheck}
+              onStopCheck={onStopCheck}
               onHighlight={setHighlightTarget}
             />
           )

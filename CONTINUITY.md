@@ -3,6 +3,45 @@
 Cross-workspace decisions and handoff state. Keep entries factual, dated, and
 bounded; app-only operational detail belongs in the affected app documentation.
 
+## 2026-08-08
+
+- [USER+CODE+TOOL] **Final Check is no longer a separate tool; it is the closing
+  phase of Polish for both documents.** The Resume rail showed a standalone
+  "Final Check — Optional review of the actual current resume. Run Final Check"
+  block while the cover letter validated and repaired its proposal invisibly, so
+  the product exposed an implementation difference as two workflows. Both now
+  show one sequence, owned by `shared/documentWorkflowContract.ts`: Ready to
+  Polish, Polishing and validating, Proposal ready, Reviewing proposal, Checking
+  current document, then Ready / Review / Needs evidence.
+  The internal difference is deliberate and stays. A resume proposal is
+  individual edits, so the resulting resume does not exist until each is
+  accepted, edited, or discarded; checking inside the Polish request would check
+  a hypothetical accept-everything resume. The check therefore runs ONCE when
+  the last decision settles — not per accepted edit — which required lifting
+  decision state out of `ResumeProposalReview` into `useResumeProposalDecisions`
+  so the workflow can observe it settle. A cover-letter proposal is one complete
+  replacement the server already validated and repaired, so accepting it records
+  that receipt as Ready with no second provider request; `/api/final-check` is
+  now document-kind aware for the letters that have no receipt (manually
+  authored, imported, or edited after acceptance).
+  Staleness split into two meanings that were previously one: editing the
+  document is "Changed since check" and invites a re-check, while a changed job,
+  evidence, or guidance is "Out of date" and invites a re-polish. Both expose
+  one inline Check again. The check remains advisory — it never rewrites a
+  document, blocks Apply, or invalidates a proposal — and a new `runFinalCheck`
+  setting (default on) keeps the extra request per polish user-owned without
+  making it a user-operated section. Role Fit stays separate and no fit score or
+  post-tailor fit audit returned.
+  The shared input firewall now also declares the check-time and Initial Fit
+  fences (`<current_resume>`, `<current_cover_letter>`, `<candidate_evidence>`,
+  `<selected_resume>`, `<candidate_context>`, `<user_guidance>`) as data; those
+  carried untrusted text with no such instruction before. 75 offline evaluations
+  (1 new executable state eval), 438 client workflow guards, RoleFit production
+  and landing builds, and both TypeScript gates pass. **Browser QA is
+  UNCONFIRMED** and is the outstanding check: the Resume rail lost a section and
+  both rails changed status vocabulary. No live provider evaluation ran, so the
+  automatic post-decision check has not been observed against a real provider.
+
 ## 2026-08-07
 
 - [USER+CODE+TOOL] **Which resume a preparation speaks for now has exactly one

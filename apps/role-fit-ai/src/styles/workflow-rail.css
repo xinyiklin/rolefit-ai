@@ -19,8 +19,9 @@
   text-transform: uppercase;
 }
 
-.workflow-rail--blocked .workflow-rail__eyebrow,
-.workflow-rail--stale .workflow-rail__eyebrow {
+/* Tone, not state: the shared workflow contract owns ten states, and the rail
+   only distinguishes the ones that need the user's attention. */
+.workflow-rail.is-attention .workflow-rail__eyebrow {
   color: var(--warm);
 }
 

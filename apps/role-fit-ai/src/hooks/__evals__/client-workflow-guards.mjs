@@ -23,7 +23,8 @@ const answers = readHook("useApplicationAnswers.ts");
 const cover = readHook("useCoverLetter.ts");
 const polish = readHook("usePolishPipeline.ts");
 const polishRoute = readFileSync(new URL("../../../server/ai/polish.ts", import.meta.url), "utf8");
-const finalCheckHook = readHook("useFinalCheck.ts");
+const documentCheckHook = readHook("useDocumentCheck.ts");
+const proposalDecisions = readHook("useResumeProposalDecisions.ts");
 const inbox = readHook("useExtensionInbox.ts");
 const intake = readHook("useJobIntake.ts");
 const prepareTab = readFileSync(new URL("../../sections/tabs/PrepareTab.tsx", import.meta.url), "utf8");
@@ -64,8 +65,8 @@ const resumeProposalReview = readFileSync(
   new URL("../../sections/resume/ResumeProposalReview.tsx", import.meta.url),
   "utf8"
 );
-const finalCheckPanel = readFileSync(
-  new URL("../../sections/resume/FinalCheckPanel.tsx", import.meta.url),
+const documentCheckSummary = readFileSync(
+  new URL("../../sections/document/DocumentCheckSummary.tsx", import.meta.url),
   "utf8"
 );
 const resumePolishContract = readFileSync(
@@ -420,8 +421,21 @@ assert.match(
 );
 assert.doesNotMatch(resumeTab, /polishStages|auditProviderReady|onRetryAudit/,
   "the Resume workbench has no normal audit-stage selector or gate");
-assert.match(resumeWorkflowRail, /Create resume proposal/,
-  "the workflow rail renders one truthful proposal step");
+// The private one-row progress step is gone: the shared workflow state already
+// says "Polishing and validating", and repeating it under the header was the
+// resume showing its mechanism where the letter showed its situation.
+assert.doesNotMatch(resumeWorkflowRail, /resume-workflow__single-step|Create resume proposal/,
+  "the rail reports the shared workflow state rather than a private step row");
+assert.match(
+  resumeWorkflowRail,
+  /resolveDocumentWorkflowStatus\(\{[\s\S]{0,400}?checkDocumentChanged,\s*checkInputsChanged/,
+  "the resume derives its state from the shared workflow contract"
+);
+assert.match(
+  resumeWorkflowRail,
+  /proposal: proposalResult && decisions\.outstanding > 0/,
+  "a fully decided proposal stops being outstanding so the workflow can move on to the check"
+);
 assert.match(resumeWorkflowRail, /const proposalResult = result\?\.polishOutcome \? result : null/,
   "restored deterministic analysis cannot hide readiness or masquerade as a Polish result");
 assert.doesNotMatch(resumeWorkflowRail, /Recruiter audit|Tailor selected sections/,
@@ -449,14 +463,17 @@ assert.doesNotMatch(settingsDialog, /polishStages|Tailor only|Audit current|radi
 assert.match(settingsDialog, /Resume Polish uses one proposal request/,
   "Settings explains the one-pass proposal contract"
 );
-assert.equal(finalCheckHook.match(/fetch\("\/api\/final-check"/g)?.length, 1,
-  "Final Check has one independent request path");
-assert.match(finalCheckHook, /resumeText: currentResumeText/,
-  "Final Check submits the actual current resume after proposal decisions");
-assert.doesNotMatch(finalCheckHook, /\bsetResult\b|\/api\/polish/,
-  "Final Check cannot replace or invalidate the Resume Polish result");
+// The check is the closing phase of Polish for BOTH documents, not a separate
+// tool. These guards pin that shape; document-workflow-state-eval.mjs and
+// proposal-decisions-eval.mjs exercise the sequencing itself.
+assert.equal(documentCheckHook.match(/fetch\("\/api\/final-check"/g)?.length, 1,
+  "the current-document check has one independent request path");
+assert.match(documentCheckHook, /documentKind,\s*documentText,/,
+  "one check serves both documents through an explicit document kind");
+assert.doesNotMatch(documentCheckHook, /\bsetResult\b|\/api\/polish/,
+  "the check cannot replace or invalidate the Polish proposal");
 assert.match(app, /useBeforeUnloadGuard\([\s\S]{0,240}?isChecking/,
-  "closing the app during Final Check receives the standard in-flight warning");
+  "closing the app during the check receives the standard in-flight warning");
 assert.match(
   app,
   /const applicationPreparationActive =([\s\S]*?)const preparationReadiness =/,
@@ -466,15 +483,65 @@ const applicationPreparationSlice = app.match(
   /const applicationPreparationActive =([\s\S]*?)const preparationReadiness =/
 )?.[1] ?? "";
 assert.doesNotMatch(applicationPreparationSlice, /isChecking/,
-  "optional Final Check never blocks Apply readiness");
-assert.match(finalCheckHook, /invalid outcome", 422/,
-  "a parsed invalid Final Check is validation, not a parsing error");
-assert.match(finalCheckHook, /finalCheckStale:[\s\S]{0,100}?resultFingerprint !== contentFingerprint/,
-  "a completed Final Check becomes visibly stale when its actual inputs change");
-assert.match(finalCheckPanel, /Run Final Check/,
-  "Final Check runs only from an explicit user action");
-assert.match(finalCheckPanel, /actual current resume[\s\S]*Polish and Apply are unaffected/,
-  "Final Check describes its actual target and keeps failure non-blocking");
+  "the advisory check never blocks Apply readiness");
+assert.match(documentCheckHook, /invalid outcome", 422/,
+  "a parsed invalid check outcome is validation, not a parsing error");
+// Two stale meanings, never one: editing the document invites a re-check while
+// changing the job or evidence invites a re-polish.
+assert.match(
+  documentCheckHook,
+  /checkDocumentChanged: Boolean\(check && checkedDocumentFingerprint !== documentFingerprint\)/,
+  "an edited document is Changed since check"
+);
+assert.match(
+  documentCheckHook,
+  /checkInputsChanged: Boolean\(check && checkedInputsFingerprint !== inputsFingerprint\)/,
+  "a changed job, evidence, or guidance is Out of date"
+);
+// The resume runs the check once, when the last edit decision settles.
+assert.match(
+  documentCheckHook,
+  /const requestAutoCheck = useCallback\((?:.|\n){0,400}?autoRunKeyRef\.current === key\) return;/,
+  "the automatic phase runs once per settled proposal, never once per accepted edit"
+);
+assert.match(
+  app,
+  /if \(!resumeProposalDecisions\.decisionsSettled \|\| proposalStale\) return;[\s\S]{0,240}?requestResumeAutoCheck\(/,
+  "the resume checks the resulting document only after every edit has a decision"
+);
+assert.match(
+  proposalDecisions,
+  /decisionsSettled: Boolean\(result\?\.polishOutcome\) && outstanding === 0/,
+  "decision state is owned by the workflow so the check can observe it settle"
+);
+assert.doesNotMatch(
+  readFileSync(new URL("../../sections/resume/ResumeProposalReview.tsx", import.meta.url), "utf8"),
+  /useState<Record<string, Decision>>/,
+  "the review list no longer privately owns the decisions the workflow depends on"
+);
+// An accepted cover letter is already checked: the server validated those exact
+// words during Polish, so a second provider request would be redundant.
+assert.match(
+  documentCheckHook,
+  /adoptValidatedReceipt = useCallback\((?:.|\n){0,320}?setCheckSource\("polish-validation"\)/,
+  "an accepted letter records its Polish-time validation as the Ready outcome"
+);
+assert.match(
+  app,
+  /acceptCoverLetterProposal\(\);[\s\S]{0,320}?adoptCoverValidatedReceipt\(/,
+  "accepting a letter proposal adopts its validation receipt rather than re-checking it"
+);
+assert.match(
+  documentCheckSummary,
+  /This \$\{documentNoun\} passed evidence checks during Polish\./,
+  "a Polish-validated document says so instead of borrowing check wording"
+);
+assert.doesNotMatch(documentCheckSummary, /Run Final Check|Optional review/,
+  "the check is no longer a separately named optional tool the user operates");
+assert.match(documentCheckSummary, /Check again/,
+  "a document that moved on since its check offers one inline re-check");
+assert.match(documentCheckSummary, /Your \{documentNoun\} was not affected/,
+  "a failed check stays advisory and says the document is untouched");
 assert.doesNotMatch(finalCheckContract, /QuickFit|ResumePolish|requirement|score|verdict|recommendation/i,
   "Final Check keeps an independent compact contract");
 assert.match(finalCheckContract, /READY[\s\S]*REVIEW[\s\S]*NEEDS_EVIDENCE/,

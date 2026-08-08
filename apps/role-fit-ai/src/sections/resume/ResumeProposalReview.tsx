@@ -1,91 +1,42 @@
 import { useState } from "react";
 import { Check, Pencil, X } from "lucide-react";
-import type { ResumeData, ResumeEntry } from "@typeset/engine/lib/resumeData.ts";
 
-import type { ResumeEditorActions } from "../../hooks/useResumeEditor";
+import type { useResumeProposalDecisions } from "../../hooks/useResumeProposalDecisions";
+import { currentTargetText } from "../../hooks/useResumeProposalDecisions";
 import { renderInlineMarks, stripInlineMarks } from "../../lib/inlineMarks";
-import type { PolishedResume, TailorSuggestion } from "../../resumeEngine";
+import type { PolishedResume } from "../../resumeEngine";
+import type { ResumeData } from "@typeset/engine/lib/resumeData.ts";
 import type { TailorChangeTarget } from "../../resume/types";
 import { ProposalFeedbackList } from "../document/ProposalFeedbackList";
 
 type ResumeProposalReviewProps = {
   result: PolishedResume;
   resume: ResumeData;
-  actions: ResumeEditorActions;
+  // Decision state is owned by the workflow, not by this component: the
+  // current-resume check runs when the last decision settles, and the review
+  // list cannot be the thing that knows.
+  decisions: ReturnType<typeof useResumeProposalDecisions>;
   onHighlight: (target: TailorChangeTarget | null) => void;
 };
 
-type Decision = { kind: "accepted"; text: string } | { kind: "discarded" };
-
 const normalize = (value: string) => stripInlineMarks(value).replace(/\s+/g, " ").trim().toLowerCase();
-
-function findEntry(resume: ResumeData, suggestion: TailorSuggestion): ResumeEntry | null {
-  const section = resume.sections.find((item) => item.id === suggestion.target.sectionId);
-  return section?.items.find((entry) => entry.id === suggestion.target.entryId) ?? null;
-}
-
-function currentTargetText(resume: ResumeData, suggestion: TailorSuggestion): string | null {
-  const entry = findEntry(resume, suggestion);
-  if (!entry) return null;
-  if (suggestion.target.field === "bullet") {
-    return entry.bullets.find((bullet) => bullet.id === suggestion.target.bulletId)?.text ?? null;
-  }
-  if (suggestion.target.field === "skill") return entry.subtitleLeft;
-  return entry[suggestion.target.field] ?? null;
-}
-
-function applyTarget(actions: ResumeEditorActions, suggestion: TailorSuggestion, value: string): void {
-  const { sectionId, entryId, bulletId, field } = suggestion.target;
-  if (!entryId) return;
-  if (field === "bullet") {
-    if (bulletId) actions.updateBullet(sectionId, entryId, bulletId, value, true);
-    return;
-  }
-  actions.updateEntry(sectionId, entryId, field === "skill" ? "subtitleLeft" : field, value, true);
-}
 
 export function ResumeProposalReview({
   result,
   resume,
-  actions,
+  decisions: proposal,
   onHighlight
 }: ResumeProposalReviewProps) {
-  const suggestions = result.suggestedChanges ?? [];
-  const [decisions, setDecisions] = useState<Record<string, Decision>>({});
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
+  const { suggestions, decisions, outstanding, isPending, accept, discard, applyAll } = proposal;
 
-  const isPending = (suggestion: TailorSuggestion): boolean => {
-    if (decisions[suggestion.id]?.kind === "discarded") return false;
-    const current = currentTargetText(resume, suggestion);
-    return current !== null && normalize(current) === normalize(suggestion.currentText);
-  };
-  const pendingCount = suggestions.filter(isPending).length;
-
-  function accept(suggestion: TailorSuggestion, value = suggestion.proposedText): void {
-    if (!value.trim()) return;
-    applyTarget(actions, suggestion, value);
-    setDecisions((current) => ({ ...current, [suggestion.id]: { kind: "accepted", text: value } }));
+  function acceptEdit(suggestionId: string, value: string): void {
+    const suggestion = suggestions.find((entry) => entry.id === suggestionId);
+    if (!suggestion) return;
+    accept(suggestion, value);
     setEditingId(null);
     setDraft("");
-  }
-
-  function discard(suggestion: TailorSuggestion): void {
-    setDecisions((current) => ({ ...current, [suggestion.id]: { kind: "discarded" } }));
-  }
-
-  function applyAll(): void {
-    const pending = suggestions.filter(isPending);
-    for (const suggestion of pending) {
-      applyTarget(actions, suggestion, suggestion.proposedText);
-    }
-    setDecisions((current) => ({
-      ...current,
-      ...Object.fromEntries(pending.map((suggestion) => [
-        suggestion.id,
-        { kind: "accepted", text: suggestion.proposedText } satisfies Decision
-      ]))
-    }));
   }
 
   if (result.polishOutcome === "NO_CHANGES") {
@@ -104,9 +55,9 @@ export function ResumeProposalReview({
           <div className="resume-proposal__head">
             <div>
               <h3>Edits ready</h3>
-              <p>{pendingCount} of {suggestions.length} waiting for your decision</p>
+              <p>{outstanding} of {suggestions.length} waiting for your decision</p>
             </div>
-            <button className="primary-button is-compact" type="button" onClick={applyAll} disabled={!pendingCount}>
+            <button className="primary-button is-compact" type="button" onClick={applyAll} disabled={!outstanding}>
               Apply all
             </button>
           </div>
@@ -146,7 +97,7 @@ export function ResumeProposalReview({
                     <div className="resume-proposal__actions">
                       {editing ? (
                         <>
-                          <button className="primary-button is-compact" type="button" onClick={() => accept(suggestion, draft)} disabled={!draft.trim()}>
+                          <button className="primary-button is-compact" type="button" onClick={() => acceptEdit(suggestion.id, draft)} disabled={!draft.trim()}>
                             <Check size={13} aria-hidden="true" /> Apply edit
                           </button>
                           <button className="ghost-button is-compact" type="button" onClick={() => setEditingId(null)}>Cancel</button>

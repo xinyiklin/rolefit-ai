@@ -41,6 +41,8 @@ type SettingsDialogProps = {
   availabilityMessage: string;
   onRefreshProviders: () => void | Promise<void>;
   runInitialFit: boolean;
+  runFinalCheck: boolean;
+  onRunFinalCheckChange: (value: boolean) => void;
   onRunInitialFitChange: (value: boolean) => void;
   autoCreateResumeProposal: boolean;
   onAutoCreateResumeProposalChange: (value: boolean) => void;
@@ -89,6 +91,8 @@ export function SettingsDialog({
   availabilityMessage,
   onRefreshProviders,
   runInitialFit,
+  runFinalCheck,
+  onRunFinalCheckChange,
   onRunInitialFitChange,
   autoCreateResumeProposal,
   onAutoCreateResumeProposalChange,
@@ -221,6 +225,17 @@ export function SettingsDialog({
                       <span>
                         <strong>Automatically create a cover-letter proposal</strong>
                         <small>Runs independently after Strong or Reasonable Fit.</small>
+                      </span>
+                    </label>
+                    <label className="check-row">
+                      <input
+                        type="checkbox"
+                        checked={runFinalCheck}
+                        onChange={(event) => onRunFinalCheckChange(event.target.checked)}
+                      />
+                      <span>
+                        <strong>Check the document after Polish</strong>
+                        <small>Reviews the resulting document once your edit decisions settle.</small>
                       </span>
                     </label>
                   </div>
