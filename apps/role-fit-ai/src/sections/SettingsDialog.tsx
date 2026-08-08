@@ -48,6 +48,12 @@ type SettingsDialogProps = {
   onRefreshProviders: () => void | Promise<void>;
   polishStages: "tailor" | "review" | "both";
   onPolishStagesChange: (value: "tailor" | "review" | "both") => void;
+  runInitialFit: boolean;
+  onRunInitialFitChange: (value: boolean) => void;
+  autoCreateResumeProposal: boolean;
+  onAutoCreateResumeProposalChange: (value: boolean) => void;
+  autoCreateCoverLetterProposal: boolean;
+  onAutoCreateCoverLetterProposalChange: (value: boolean) => void;
 
   // ----- About you -----
   citizenshipStatus: CitizenshipStatus;
@@ -92,6 +98,12 @@ export function SettingsDialog({
   onRefreshProviders,
   polishStages,
   onPolishStagesChange,
+  runInitialFit,
+  onRunInitialFitChange,
+  autoCreateResumeProposal,
+  onAutoCreateResumeProposalChange,
+  autoCreateCoverLetterProposal,
+  onAutoCreateCoverLetterProposalChange,
   citizenshipStatus,
   onCitizenshipChange,
   legallyAuthorizedToWork,
@@ -185,6 +197,44 @@ export function SettingsDialog({
                 </p>
 
                 <div className="settings-default-stages">
+                  <div className="settings-automation" aria-label="Prepare automation">
+                    <label className="check-row">
+                      <input
+                        type="checkbox"
+                        checked={runInitialFit}
+                        onChange={(event) => onRunInitialFitChange(event.target.checked)}
+                      />
+                      <span>
+                        <strong>Run Initial Fit after Prepare</strong>
+                        <small>Checks the selected resume in the same AI request.</small>
+                      </span>
+                    </label>
+                    <label className="check-row">
+                      <input
+                        type="checkbox"
+                        checked={autoCreateResumeProposal}
+                        disabled={!runInitialFit}
+                        onChange={(event) => onAutoCreateResumeProposalChange(event.target.checked)}
+                      />
+                      <span>
+                        <strong>Automatically create a resume proposal</strong>
+                        <small>Runs after Strong or Reasonable Fit.</small>
+                      </span>
+                    </label>
+                    <label className="check-row">
+                      <input
+                        type="checkbox"
+                        checked={autoCreateCoverLetterProposal}
+                        disabled={!runInitialFit}
+                        onChange={(event) => onAutoCreateCoverLetterProposalChange(event.target.checked)}
+                      />
+                      <span>
+                        <strong>Automatically create a cover-letter proposal</strong>
+                        <small>Runs independently after Strong or Reasonable Fit.</small>
+                      </span>
+                    </label>
+                  </div>
+
                   <div className="settings-default-stages__label" id="settings-polish-stages-label">
                     <strong>Resume workflow</strong>
                     <small>Polish uses this stage choice everywhere.</small>

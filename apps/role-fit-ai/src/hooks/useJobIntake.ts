@@ -21,8 +21,10 @@ import { useEffect, useRef, useState } from "react";
 import type { ExtractedJobTracking } from "../lib/jobExtract";
 import { extractJobPosting } from "../lib/jobExtract";
 import {
+  analyzeInitialFit,
   analyzeJobPosting,
   localJobAnalysisResult,
+  type InitialFitRequest,
   type JobAnalysisResult
 } from "../lib/aiJobAnalysis";
 import { ApiError, classifyFailure } from "../lib/failures";
@@ -40,6 +42,7 @@ import {
   reconcilePreparedJobManualReviewFields,
   type PreparedJobBrief
 } from "../lib/preparedJobBrief";
+import type { QuickFitState } from "../../shared/quickFitContract.ts";
 
 export type ImportedJobSnapshot = {
   url: string;
@@ -119,6 +122,8 @@ type UseJobIntakeArgs = {
   ) => Promise<{ proceed: boolean; note: string | null }>;
   jobAnalysisRequestFields: () => Record<string, unknown>;
   ensureProviderReady: () => Promise<ProviderReadiness>;
+  runInitialFit: boolean;
+  selectResumeForInitialFit: (jobText: string) => Promise<InitialFitRequest | null>;
   extensionImportsReady: boolean;
   onExtensionPrepareStarted: () => void;
   onExtensionJobReceived: () => void;
@@ -140,17 +145,23 @@ export function useJobIntake({
   confirmDuplicateAfterJobAnalysis,
   jobAnalysisRequestFields,
   ensureProviderReady,
+  runInitialFit,
+  selectResumeForInitialFit,
   extensionImportsReady,
   onExtensionPrepareStarted,
   onExtensionJobReceived
 }: UseJobIntakeArgs) {
   const [isExtractingLink, setIsExtractingLink] = useState(false);
   const [extensionImportPhase, setExtensionImportPhase] = useState<"receiving" | "preparing" | null>(null);
+  const [localPreparedPreview, setLocalPreparedPreview] = useState<ImportedJobSnapshot | null>(null);
   // Job analysis progress row in the shared AI workflow. Driven by both
   // job-analysis entry points (link and pasted posting); the DONE card
   // reports whether the brief came from the AI or the local fallback.
   const [jobAnalysisProgress, setJobAnalysisProgress] = useState<StageState>({ status: "idle" });
   const [jobAnalysisProgressVisible, setJobAnalysisProgressVisible] = useState(false);
+  const [quickFitState, setQuickFitState] = useState<QuickFitState>(
+    runInitialFit ? { status: "unavailable", resumeLabel: "", message: "Prepare a job to run Initial Fit." } : { status: "disabled" }
+  );
   // Which job analysis action the card's Retry should re-run (link, paste, or a
   // reanalyze of an extension import). Stored as a tag, not a captured closure,
   // so Retry dispatches to the LIVE handler and picks up the current URL / paste
@@ -172,13 +183,15 @@ export function useJobIntake({
   const jobAnalysisSettledRef = useRef<Promise<void>>(Promise.resolve());
   const jobAnalysisGenerationRef = useRef(0);
   const jobAnalysisAbortRef = useRef<AbortController | null>(null);
-  // Job analysis consumes only the job source and its stage-local AI settings.
-  // Resume/workspace bootstrap and Tailor-mode reconciliation may finish after
-  // a fresh extension tab claims its import; neither changes the in-flight
-  // Job analysis request, so neither belongs in its stale-input guard.
+  const initialFitAbortRef = useRef<AbortController | null>(null);
+  const latestInitialFitRef = useRef<{ jobText: string; request: InitialFitRequest } | null>(null);
+  // The stale-input guard tracks the job source, Initial Fit setting, and
+  // stage-local AI settings. The selected resume is captured immediately
+  // before dispatch and is not allowed to mutate the in-flight request.
   const jobAnalysisInputFingerprint = workflowInputFingerprint({
     jobUrl,
     jobDescription,
+    runInitialFit,
     aiRequest: jobAnalysisRequestFields()
   });
   const jobAnalysisInputFingerprintRef = useRef(jobAnalysisInputFingerprint);
@@ -187,6 +200,8 @@ export function useJobIntake({
   function startJobAnalysisRequest() {
     jobAnalysisGenerationRef.current += 1;
     jobAnalysisAbortRef.current?.abort();
+    initialFitAbortRef.current?.abort();
+    initialFitAbortRef.current = null;
     const controller = new AbortController();
     jobAnalysisAbortRef.current = controller;
     const generation = jobAnalysisGenerationRef.current;
@@ -226,7 +241,22 @@ export function useJobIntake({
     jobAnalysisGenerationRef.current += 1;
     jobAnalysisAbortRef.current?.abort();
     jobAnalysisAbortRef.current = null;
+    initialFitAbortRef.current?.abort();
+    initialFitAbortRef.current = null;
   }, []);
+
+  useEffect(() => {
+    if (runInitialFit) {
+      setQuickFitState((current) => current.status === "disabled"
+        ? { status: "unavailable", resumeLabel: "", message: "Prepare the current posting to run Initial Fit." }
+        : current);
+      return;
+    }
+    initialFitAbortRef.current?.abort();
+    initialFitAbortRef.current = null;
+    latestInitialFitRef.current = null;
+    setQuickFitState({ status: "disabled" });
+  }, [runInitialFit]);
 
   function claimJobAnalysisRun(): () => void {
     jobAnalysisBusyRef.current = true;
@@ -247,6 +277,100 @@ export function useJobIntake({
   async function waitAndClaimJobAnalysisRun(): Promise<() => void> {
     while (jobAnalysisBusyRef.current) await jobAnalysisSettledRef.current;
     return claimJobAnalysisRun();
+  }
+
+  async function prepareInitialFitRequest(jobText: string): Promise<InitialFitRequest | null> {
+    if (!runInitialFit) {
+      latestInitialFitRef.current = null;
+      setQuickFitState({ status: "disabled" });
+      return null;
+    }
+    const fitRequest = await selectResumeForInitialFit(jobText);
+    if (!fitRequest) {
+      latestInitialFitRef.current = null;
+      setQuickFitState({
+        status: "unavailable",
+        resumeLabel: "",
+        message: "Initial Fit needs a loaded resume. You can still continue to Polish."
+      });
+      return null;
+    }
+    latestInitialFitRef.current = { jobText, request: fitRequest };
+    setQuickFitState({ status: "running", resumeLabel: fitRequest.resumeLabel });
+    return fitRequest;
+  }
+
+  function settleInitialFit(result: JobAnalysisResult, fitRequest: InitialFitRequest | null) {
+    if (!runInitialFit) {
+      setQuickFitState({ status: "disabled" });
+      return;
+    }
+    if (!fitRequest) return;
+    if (result.initialFit) {
+      setQuickFitState({
+        status: "ready",
+        snapshot: { result: result.initialFit, resumeLabel: fitRequest.resumeLabel }
+      });
+      return;
+    }
+    setQuickFitState({
+      status: "unavailable",
+      resumeLabel: fitRequest.resumeLabel,
+      message: "Initial Fit is unavailable. You can continue to Polish or retry the fit check."
+    });
+  }
+
+  async function refreshInitialFit(jobText: string, fitRequest: InitialFitRequest) {
+    if (!runInitialFit) {
+      setQuickFitState({ status: "disabled" });
+      return;
+    }
+    initialFitAbortRef.current?.abort();
+    const controller = new AbortController();
+    initialFitAbortRef.current = controller;
+    latestInitialFitRef.current = { jobText, request: fitRequest };
+    setQuickFitState({ status: "running", resumeLabel: fitRequest.resumeLabel });
+    try {
+      const readiness = await ensureProviderReady();
+      if (controller.signal.aborted) return;
+      if (!readiness.ready) {
+        setQuickFitState({
+          status: "unavailable",
+          resumeLabel: fitRequest.resumeLabel,
+          message: `Initial Fit is unavailable: ${readiness.message}`
+        });
+        return;
+      }
+      const outcome = await analyzeInitialFit(jobText, fitRequest, {
+        aiRequest: jobAnalysisRequestFields(),
+        signal: controller.signal
+      });
+      if (controller.signal.aborted) return;
+      setQuickFitState(outcome.initialFit
+        ? {
+            status: "ready",
+            snapshot: { result: outcome.initialFit, resumeLabel: fitRequest.resumeLabel }
+          }
+        : {
+            status: "unavailable",
+            resumeLabel: fitRequest.resumeLabel,
+            message: "Initial Fit is unavailable. You can continue to Polish or retry the fit check."
+          });
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") return;
+      setQuickFitState({
+        status: "unavailable",
+        resumeLabel: fitRequest.resumeLabel,
+        message: "Initial Fit is unavailable. You can continue to Polish or retry the fit check."
+      });
+    } finally {
+      if (initialFitAbortRef.current === controller) initialFitAbortRef.current = null;
+    }
+  }
+
+  function retryInitialFit() {
+    const latest = latestInitialFitRef.current;
+    if (latest) void refreshInitialFit(latest.jobText, latest.request);
   }
 
   function jobAnalysisTerminalState(result: JobAnalysisResult, duplicateNote?: string | null): StageState {
@@ -293,6 +417,11 @@ export function useJobIntake({
     setImportedJob(null);
     setPipelineAiUsage((prev) => ({ ...prev, "job-analysis": { source: "none" } }));
     setJobRawText("");
+    setLocalPreparedPreview(null);
+    latestInitialFitRef.current = null;
+    setQuickFitState(runInitialFit
+      ? { status: "unavailable", resumeLabel: "", message: "Prepare the current posting to run Initial Fit." }
+      : { status: "disabled" });
   }
 
   // Fresh-import usage reset: every import path below clears the polish result
@@ -354,12 +483,22 @@ export function useJobIntake({
         return;
       }
       const aiRequest = jobAnalysisRequestFields();
+      setLocalPreparedPreview(importedJobSnapshot(url, localExtracted.tailoringText, localExtracted, rawText));
+      const fitRequest = await prepareInitialFitRequest(rawText);
+      if (!request.isCurrent()) return;
       const result = readiness.ready
-        ? await analyzeJobPosting(rawText, { url, aiRequest, localExtracted, signal: request.signal })
+        ? await analyzeJobPosting(rawText, {
+            url,
+            aiRequest,
+            initialFit: fitRequest ?? undefined,
+            localExtracted,
+            signal: request.signal
+          })
         : localJobAnalysisResult(rawText, {
             url,
             aiRequest,
             localExtracted,
+            initialFitRequested: Boolean(fitRequest),
             failure: classifyFailure(new ApiError(readiness.message, 503))
           });
       if (!request.isCurrent()) return;
@@ -381,10 +520,12 @@ export function useJobIntake({
       if (!request.isCurrent()) return;
       setJobDescription(relevant);
       setImportedJob(importedJobSnapshot(url, relevant, extracted, rawText));
+      setLocalPreparedPreview(null);
       setResult(null);
       resetCoverWorkflow();
       setPipelineAiUsage(freshJobAnalysisUsage(usage));
       setJobRawText(rawText);
+      settleInitialFit(result, fitRequest);
       if (!duplicateAfter.proceed) {
         setJobAnalysisProgress(duplicateStoppedState("after"));
         setLinkStatus("Job details were prepared, then the workflow stopped because this application is already tracked.");
@@ -473,10 +614,14 @@ export function useJobIntake({
         return;
       }
       const aiRequest = jobAnalysisRequestFields();
+      setLocalPreparedPreview(importedJobSnapshot(trimmedUrl, localExtracted.tailoringText, localExtracted, cleaned));
+      const fitRequest = await prepareInitialFitRequest(cleaned);
+      if (!request.isCurrent()) return;
       const result = readiness.ready
         ? await analyzeJobPosting(cleaned, {
             url: jobUrl.trim() || undefined,
             aiRequest,
+            initialFit: fitRequest ?? undefined,
             localExtracted,
             signal: request.signal
           })
@@ -484,6 +629,7 @@ export function useJobIntake({
             url: jobUrl.trim() || undefined,
             aiRequest,
             localExtracted,
+            initialFitRequested: Boolean(fitRequest),
             failure: classifyFailure(new ApiError(readiness.message, 503))
           });
       if (!request.isCurrent()) return;
@@ -504,10 +650,12 @@ export function useJobIntake({
       if (!request.isCurrent()) return;
       setJobDescription(relevant);
       setImportedJob(importedJobSnapshot(trimmedUrl, relevant, extracted, cleaned));
+      setLocalPreparedPreview(null);
       setResult(null);
       resetCoverWorkflow();
       setPipelineAiUsage(freshJobAnalysisUsage(usage));
       setJobRawText(cleaned);
+      settleInitialFit(result, fitRequest);
       if (!duplicateAfter.proceed) {
         setJobAnalysisProgress(duplicateStoppedState("after"));
         setLinkStatus("Job details were prepared, then the workflow stopped because this application is already tracked.");
@@ -553,6 +701,10 @@ export function useJobIntake({
       note: "Raw description retained for duplicate review",
       noteTone: "info"
     });
+    latestInitialFitRef.current = null;
+    setQuickFitState(runInitialFit
+      ? { status: "unavailable", resumeLabel: "", message: "Initial Fit did not run because duplicate review stopped Prepare." }
+      : { status: "disabled" });
   }
 
   // Retry an extension-import analysis by re-running provider-backed AI job analysis
@@ -592,10 +744,14 @@ export function useJobIntake({
         return;
       }
       const aiRequest = jobAnalysisRequestFields();
+      setLocalPreparedPreview(importedJobSnapshot(payload.url, localExtracted.tailoringText, localExtracted, payload.text));
+      const fitRequest = await prepareInitialFitRequest(payload.text);
+      if (!request.isCurrent()) return;
       const result = readiness.ready
         ? await analyzeJobPosting(payload.text, {
             url: payload.url || undefined,
             aiRequest,
+            initialFit: fitRequest ?? undefined,
             localExtracted,
             signal: request.signal
           })
@@ -603,6 +759,7 @@ export function useJobIntake({
             url: payload.url || undefined,
             aiRequest,
             localExtracted,
+            initialFitRequested: Boolean(fitRequest),
             failure: classifyFailure(new ApiError(readiness.message, 503))
           });
       if (!request.isCurrent()) return;
@@ -625,10 +782,12 @@ export function useJobIntake({
       setJobUrl(payload.url);
       setJobDescription(relevant);
       setImportedJob(importedJobSnapshot(payload.url, relevant, extracted, payload.text));
+      setLocalPreparedPreview(null);
       setResult(null);
       resetCoverWorkflow();
       setPipelineAiUsage(freshJobAnalysisUsage(usage));
       setJobRawText(payload.text);
+      settleInitialFit(result, fitRequest);
       if (!duplicateAfter.proceed) {
         setJobAnalysisProgress(duplicateStoppedState("after"));
         setPolishStatus("Job details were prepared, then the workflow stopped because this application is already tracked.");
@@ -681,10 +840,14 @@ export function useJobIntake({
         setJobAnalysisProgress({ status: "running" });
         setJobAnalysisProgressVisible(true);
         const aiRequest = jobAnalysisRequestFields();
+        setLocalPreparedPreview(importedJobSnapshot(trimmedUrl, localExtracted.tailoringText, localExtracted, text));
+        const fitRequest = await prepareInitialFitRequest(text);
+        if (!request.isCurrent()) return;
         const result = readiness.ready
           ? await analyzeJobPosting(text, {
               url: trimmedUrl || undefined,
               aiRequest,
+              initialFit: fitRequest ?? undefined,
               localExtracted,
               signal: request.signal
             })
@@ -692,6 +855,7 @@ export function useJobIntake({
               url: trimmedUrl || undefined,
               aiRequest,
               localExtracted,
+              initialFitRequested: Boolean(fitRequest),
               failure: classifyFailure(new ApiError(readiness.message, 503))
             });
         if (!request.isCurrent()) return;
@@ -715,10 +879,12 @@ export function useJobIntake({
         setJobUrl(trimmedUrl);
         setJobDescription(relevant);
         setImportedJob(importedJobSnapshot(trimmedUrl, relevant, extracted, text));
+        setLocalPreparedPreview(null);
         setResult(null);
         resetCoverWorkflow();
         setPipelineAiUsage(freshJobAnalysisUsage(usage));
         setJobRawText(text);
+        settleInitialFit(result, fitRequest);
         if (!duplicateAfter.proceed) {
           setJobAnalysisRetrySource("import");
           setJobAnalysisProgress(duplicateStoppedState("after"));
@@ -781,6 +947,10 @@ export function useJobIntake({
     jobAnalysisProgressVisible,
     dismissJobAnalysisProgress,
     jobAnalysisRetry,
+    quickFitState,
+    retryInitialFit,
+    refreshInitialFit,
+    localPreparedPreview,
     handleManualJobDescriptionChange,
     handleExtractFromLink,
     handleAnalyzePaste

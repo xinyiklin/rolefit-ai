@@ -41,6 +41,9 @@ export type PersistedSettings = {
   stageCustomInstructions?: Partial<Record<AiStageId, string>>;
   strictReview?: boolean;
   polishStages?: "tailor" | "review" | "both";
+  runInitialFit?: boolean;
+  autoCreateResumeProposal?: boolean;
+  autoCreateCoverLetterProposal?: boolean;
   citizenshipStatus?: CitizenshipStatus;
   legallyAuthorizedToWork?: boolean;
   requiresSponsorship?: boolean;
@@ -111,6 +114,9 @@ const PERSISTED_SETTING_KEYS = [
   "stageCustomInstructions",
   "strictReview",
   "polishStages",
+  "runInitialFit",
+  "autoCreateResumeProposal",
+  "autoCreateCoverLetterProposal",
   "citizenshipStatus",
   "legallyAuthorizedToWork",
   "requiresSponsorship",
@@ -185,6 +191,9 @@ export function normalizeSettings(value: unknown): PersistedSettings {
   // Migrate legacy strictReview → polishStages when polishStages is absent.
   if (settings.polishStages === undefined && typeof settings.strictReview === "boolean") {
     settings.polishStages = settings.strictReview ? "both" : "tailor";
+  }
+  for (const key of ["runInitialFit", "autoCreateResumeProposal", "autoCreateCoverLetterProposal"] as const) {
+    if (settings[key] !== undefined && typeof settings[key] !== "boolean") delete settings[key];
   }
   // "unspecified" is the neutral default (not a selectable option), so add it
   // explicitly — the option lists carry only the concrete values.

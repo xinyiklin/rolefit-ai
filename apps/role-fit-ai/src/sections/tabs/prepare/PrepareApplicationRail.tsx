@@ -2,10 +2,8 @@ import type { ReactNode } from "react";
 import { Check, Circle, LoaderCircle, Minus } from "lucide-react";
 
 import type { Application } from "../../../hooks/useApplications";
-import { VERDICT_LABEL, verdictPillClass } from "../../../lib/fitVerdict";
 import type { PreparationReadiness } from "../../../lib/preparationReadiness";
-import { displayVerdictReason } from "../../../lib/verdictReason";
-import type { StrictReviewVerdict } from "../../../resume/types";
+import type { QuickFitState, QuickFitVerdict } from "../../../../shared/quickFitContract.ts";
 
 // Preparation is one of the readiness checks, so its progress earns rail space
 // only while something is actually happening or a message is outstanding.
@@ -14,16 +12,17 @@ export type PrepareActivity = {
   message: string;
 };
 
-export type PrepareFitAssessment = {
-  verdict: StrictReviewVerdict;
-  score: number | null;
-  reason: string;
-  provenance: "current" | "saved";
+const QUICK_FIT_LABEL: Record<QuickFitVerdict, string> = {
+  STRONG: "Strong fit",
+  REASONABLE: "Reasonable fit",
+  STRETCH: "Stretch",
+  LIMITED: "Limited fit"
 };
 
 type PrepareApplicationRailProps = {
   activity: PrepareActivity | null;
-  fitAssessment: PrepareFitAssessment | null;
+  quickFit: QuickFitState;
+  onRetryInitialFit: () => void;
   linkedApplication: Application | null;
   readiness: PreparationReadiness;
   isApplying: boolean;
@@ -33,7 +32,8 @@ type PrepareApplicationRailProps = {
 
 export function PrepareApplicationRail({
   activity,
-  fitAssessment,
+  quickFit,
+  onRetryInitialFit,
   linkedApplication,
   readiness,
   isApplying,
@@ -60,24 +60,54 @@ export function PrepareApplicationRail({
         </div>
 
         <div className="prepare-fit">
-          <p className="prepare-page__eyebrow">Fit</p>
-          {fitAssessment ? (
+          <p className="prepare-page__eyebrow">Initial Fit</p>
+          {quickFit.status === "ready" ? (
             <>
               <div className="prepare-fit__summary">
-                <strong className={`verdict-pill ${verdictPillClass(fitAssessment.verdict)}`}>
-                  {VERDICT_LABEL[fitAssessment.verdict]}
+                <strong className={`quick-fit-verdict is-${quickFit.snapshot.result.verdict.toLowerCase()}`}>
+                  {QUICK_FIT_LABEL[quickFit.snapshot.result.verdict]}
                 </strong>
-                <span>
-                  {fitAssessment.score === null ? "" : `${fitAssessment.score}/100 · `}
-                  {fitAssessment.provenance === "current" ? "Current audit" : "Historical audit"}
-                </span>
+                <span>{quickFit.snapshot.resumeLabel}</span>
               </div>
-              {fitAssessment.reason ? <p>{displayVerdictReason(fitAssessment.reason)}</p> : null}
+              <p>{quickFit.snapshot.result.summary}</p>
+              {quickFit.snapshot.result.matches.length ? (
+                <div className="quick-fit-list">
+                  <strong>Matches</strong>
+                  <ul>
+                    {quickFit.snapshot.result.matches.map((match) => <li key={match}>{match}</li>)}
+                  </ul>
+                </div>
+              ) : null}
+              {quickFit.snapshot.result.gaps.length ? (
+                <div className="quick-fit-list">
+                  <strong>Important gaps</strong>
+                  <ul>
+                    {quickFit.snapshot.result.gaps.map((gap) => <li key={gap}>{gap}</li>)}
+                  </ul>
+                </div>
+              ) : null}
+              {quickFit.snapshot.result.eligibility && quickFit.snapshot.result.eligibility.status !== "CLEAR" ? (
+                <p className="quick-fit-eligibility">
+                  {quickFit.snapshot.result.eligibility.note || "Check the role's eligibility requirement before applying."}
+                </p>
+              ) : null}
             </>
+          ) : quickFit.status === "running" ? (
+            <p className="prepare-note is-working" role="status">
+              <LoaderCircle className="spin" size={13} aria-hidden="true" />
+              Checking {quickFit.resumeLabel}…
+            </p>
+          ) : quickFit.status === "disabled" ? (
+            <p>Off in Settings. You can continue directly to Polish.</p>
           ) : (
             <>
-              <strong className="prepare-fit__empty">Not audited</strong>
-              <p>Run Recruiter audit to compare your resume evidence with this role.</p>
+              <strong className="prepare-fit__empty">Initial Fit unavailable</strong>
+              <p>{quickFit.message}</p>
+              {quickFit.resumeLabel ? (
+                <button className="ghost-button is-compact" type="button" onClick={onRetryInitialFit}>
+                  Retry fit check
+                </button>
+              ) : null}
             </>
           )}
         </div>

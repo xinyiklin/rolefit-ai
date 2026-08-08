@@ -167,4 +167,22 @@ assert.deepEqual(
   "seeding is idempotent through a persist/normalize/seed cycle"
 );
 
+const workflowSettings = normalizeSettings({
+  runInitialFit: false,
+  autoCreateResumeProposal: true,
+  autoCreateCoverLetterProposal: false
+});
+assert.equal(workflowSettings.runInitialFit, false, "Initial Fit can be disabled explicitly");
+assert.equal(workflowSettings.autoCreateResumeProposal, true, "resume automation persists independently");
+assert.equal(workflowSettings.autoCreateCoverLetterProposal, false, "cover automation persists independently");
+assert.deepEqual(
+  normalizeSettings({
+    runInitialFit: "always",
+    autoCreateResumeProposal: 1,
+    autoCreateCoverLetterProposal: null
+  }),
+  {},
+  "invalid automation preferences are dropped instead of becoming truthy"
+);
+
 console.log("stage-settings probes passed");

@@ -712,9 +712,72 @@
 
 .prepare-fit > p:not(.prepare-page__eyebrow) {
   margin: 0;
-  color: var(--ink-faint);
-  font-size: 0.72rem;
+  color: var(--ink-soft);
+  font-size: 0.82rem;
   line-height: 1.4;
+}
+
+.quick-fit-verdict {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 var(--s2);
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--r-pill);
+  font-size: 0.7rem;
+  font-weight: 650;
+}
+
+.quick-fit-verdict.is-strong {
+  color: var(--on-accent);
+  background: var(--accent);
+  border-color: var(--accent-deep);
+}
+
+.quick-fit-verdict.is-reasonable {
+  color: var(--accent-deep);
+  background: var(--accent-soft);
+  border-color: var(--accent-veil);
+}
+
+.quick-fit-verdict.is-stretch {
+  color: var(--warm);
+  background: var(--warm-veil);
+  border-color: var(--warm-soft);
+}
+
+.quick-fit-verdict.is-limited {
+  color: var(--danger);
+  background: var(--danger-soft);
+  border-color: var(--danger-line);
+}
+
+.quick-fit-list {
+  display: grid;
+  gap: 4px;
+}
+
+.quick-fit-list > strong {
+  color: var(--ink-strong);
+  font-size: 0.7rem;
+  font-weight: 650;
+}
+
+.quick-fit-list ul {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding-left: var(--s4);
+  color: var(--ink-soft);
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+.quick-fit-eligibility {
+  padding: var(--s2);
+  color: var(--warm) !important;
+  background: var(--warm-veil);
+  border-radius: var(--r-md);
 }
 
 .prepare-fit__empty {

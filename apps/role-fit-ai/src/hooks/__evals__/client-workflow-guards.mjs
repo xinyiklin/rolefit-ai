@@ -43,6 +43,7 @@ const prepareApplicationRail = readFileSync(
 );
 const preparationReadiness = readFileSync(new URL("../../lib/preparationReadiness.ts", import.meta.url), "utf8");
 const preparedJobBrief = readFileSync(new URL("../../lib/preparedJobBrief.ts", import.meta.url), "utf8");
+const aiJobAnalysis = readFileSync(new URL("../../lib/aiJobAnalysis.ts", import.meta.url), "utf8");
 const variantRecommendation = readFileSync(new URL("../../lib/variantRecommendation.ts", import.meta.url), "utf8");
 const workspaceResume = readHook("useWorkspaceResume.ts");
 const coverLetterRepository = readFileSync(
@@ -55,6 +56,7 @@ const navMenu = readFileSync(new URL("../../sections/NavMenu.tsx", import.meta.u
 const studioPane = readFileSync(new URL("../../sections/StudioPane.tsx", import.meta.url), "utf8");
 const applicationModal = readFileSync(new URL("../../sections/ApplicationModal.tsx", import.meta.url), "utf8");
 const trackerTab = readFileSync(new URL("../../sections/tabs/TrackerTab.tsx", import.meta.url), "utf8");
+const analyticsTab = readFileSync(new URL("../../sections/tabs/AnalyticsTab.tsx", import.meta.url), "utf8");
 const settingsStage = readFileSync(new URL("../../sections/SettingsStage.tsx", import.meta.url), "utf8");
 const reviewRail = readFileSync(new URL("../../sections/ReviewRail.tsx", import.meta.url), "utf8");
 const appIndex = readFileSync(new URL("../../../index.html", import.meta.url), "utf8");
@@ -286,8 +288,8 @@ assert.doesNotMatch(answersFingerprint, /providerReady/, "provider polling canno
 assert.doesNotMatch(coverFingerprint, /providerReady/, "provider polling cannot invalidate active cover generation");
 assert.equal(
   intake.match(/await ensureProviderReady\(\)/g)?.length,
-  4,
-  "every AI-backed job-analysis entry point awaits the shared initial provider discovery"
+  5,
+  "every Prepare entry point and compact Initial Fit retry awaits shared provider discovery"
 );
 assert.ok(
   intake.indexOf("const readiness = await ensureProviderReady()") <
@@ -304,6 +306,26 @@ assert.match(
   /status: "done",[\s\S]{0,100}?Local brief ready[\s\S]{0,100}?continue or retry AI Job Analysis/,
   "a local fallback completes Prepare instead of dead-ending the workflow"
 );
+assert.match(
+  aiJobAnalysis,
+  /\.\.\.\(initialFitRequested \? \{ initialFit: \{ enabled: true, \.\.\.initialFit \} \} : \{\}\)/,
+  "the Prepare request omits Initial Fit entirely when the setting is off"
+);
+assert.match(
+  aiJobAnalysis,
+  /mode: "initial-fit"/,
+  "a resume-variant change can rerun compact Initial Fit without repeating Job Analysis"
+);
+assert.match(
+  app,
+  /if \(loaded && fitCandidate\) \{[\s\S]{0,80}?void refreshInitialFit\(/,
+  "resume selection releases its busy gate before the advisory fit-only request settles"
+);
+assert.match(
+  intake,
+  /setLocalPreparedPreview\(importedJobSnapshot\([\s\S]{0,180}?const fitRequest = await prepareInitialFitRequest/,
+  "Prepare publishes deterministic extraction before waiting on resume selection or AI"
+);
 assert.doesNotMatch(
   intake,
   /autoTailor|distillAi|extractedFromAiOrLocal|item\.fields/,
@@ -318,6 +340,20 @@ assert.doesNotMatch(
   app,
   /autoTailorJob|setAutoTailorJob|distillContinuesToPolish/,
   "App has no automatic tailoring state or continuation signal"
+);
+assert.match(
+  settingsDialog,
+  /Run Initial Fit after Prepare[\s\S]{0,900}?Automatically create a resume proposal[\s\S]{0,900}?Automatically create a cover-letter proposal/,
+  "Settings exposes one Initial Fit toggle and two independent proposal toggles"
+);
+assert.doesNotMatch(settingsDialog, /Strong threshold|Reasonable threshold|Stretch threshold|confidence threshold/i,
+  "Prepare automation has no adjustable verdict or confidence thresholds");
+assert.match(app, /quickFitAllowsAutoProposal\(fit\)/,
+  "automatic proposals use the shared fixed positive-verdict and eligibility rule");
+assert.match(
+  app,
+  /if \(!receipt\.resumeStarted && canStartResume\)[\s\S]{0,180}?void handlePolish[\s\S]{0,500}?if \(!receipt\.coverStarted && canStartCover\)[\s\S]{0,180}?void handleTailorCoverLetter/,
+  "positive Initial Fit starts enabled resume and cover proposals independently without sequential awaits"
 );
 assert.doesNotMatch(
   intakeFingerprint,
@@ -764,10 +800,25 @@ assert.match(
   /Extraction gaps[\s\S]{0,700}?manualReviewFields/,
   "Prepare exposes the structured fields Job analysis could not extract"
 );
-assert.match(
+assert.doesNotMatch(
   prepareTab,
-  /Candidate gaps[\s\S]{0,700}?reviewGaps/,
-  "Prepare exposes candidate-to-job gaps beside the prepared brief"
+  /Candidate gaps|recruiter audit|reviewGaps/,
+  "Prepare no longer mixes post-polish Review findings into the job brief"
+);
+assert.match(
+  prepareApplicationRail,
+  /Initial Fit[\s\S]{0,900}?Matches[\s\S]{0,900}?Important gaps/,
+  "Prepare presents only the compact Initial Fit decision aid"
+);
+assert.doesNotMatch(
+  prepareApplicationRail,
+  /score|confidence|requirement ledger|evidence quote|recommendation/i,
+  "Initial Fit does not expose forensic audit artifacts"
+);
+assert.doesNotMatch(
+  analyticsTab,
+  /Avg fit|Avg lift|Best current fit|Gaps to address|High-fit/i,
+  "Analytics does not treat the compact Initial Fit advisory as durable measurement"
 );
 assert.equal(
   prepareTab.match(/<PreparedMaterialCard/g)?.length,
@@ -818,19 +869,18 @@ assert.doesNotMatch(
 );
 assert.match(
   prepareApplicationRail,
-  /<h3>Application<\/h3>[\s\S]{0,500}?\{children\}[\s\S]{0,1200}?prepare-fit[\s\S]{0,1200}?prepare-readiness/,
+  /<h3>Application<\/h3>[\s\S]{0,500}?\{children\}[\s\S]{0,3000}?prepare-fit[\s\S]{0,3000}?prepare-readiness/,
   "the prepared rail combines material decisions with readiness instead of reserving a sparse status column"
 );
 assert.match(
   prepareApplicationRail,
-  /<p className="prepare-page__eyebrow">Fit<\/p>[\s\S]{0,900}?Not audited[\s\S]{0,200}?Run Recruiter audit/,
-  "Prepare names fit as unaudited until a provider-backed recruiter audit exists"
+  /<p className="prepare-page__eyebrow">Initial Fit<\/p>[\s\S]{0,2400}?Initial Fit unavailable[\s\S]{0,500}?Retry fit check/,
+  "Prepare treats compact Initial Fit failure as retryable and non-blocking"
 );
-assert.match(
-  app,
-  /const prepareFitAssessment =[\s\S]{0,900}?provenance: "current"[\s\S]{0,900}?provenance: "saved"/,
-  "Prepare prefers the current recruiter audit and otherwise labels a matching saved audit as historical"
-);
+assert.match(app, /quickFit=\{quickFitState\}[\s\S]{0,100}?onRetryInitialFit=\{retryInitialFit\}/,
+  "Prepare receives the current compact Initial Fit state and retry action");
+assert.doesNotMatch(app, /prepareFitAssessment|savedApplicationFitVerdict/,
+  "Prepare no longer derives Initial Fit from saved or post-polish audit scores");
 const prepareFitStyles = prepareStyles.match(/\.prepare-fit\s*\{[\s\S]*?\n\}/)?.[0] ?? "";
 assert.notEqual(prepareFitStyles, "", "Prepare gives the fit summary a dedicated flat rail row");
 assert.match(prepareFitStyles, /border-top:/, "the fit row uses the rail's divider hierarchy");
@@ -1820,16 +1870,10 @@ assert.match(
   /if \(result\.source !== "ai"\) return;\s*setReviewStale\(jobDescription !== lastPolishedJobRef\.current\)/,
   "zero-suggestion Tailor output still becomes stale when the prepared job changes"
 );
-assert.match(
-  app,
-  /const prepareReviewGapsProvenance = currentReviewAvailable[\s\S]{0,180}?"saved"[\s\S]{0,100}?"none"/,
-  "Prepare distinguishes a current recruiter audit from an explicitly historical saved snapshot"
-);
-assert.match(
-  prepareTab,
-  /reviewGapsProvenance === "current"[\s\S]{0,140}?No candidate gaps identified by the current recruiter audit/,
-  "a current recruiter audit with zero gaps is not presented as if no audit ran"
-);
+assert.doesNotMatch(app, /prepareReviewGapsProvenance|savedApplicationReviewAvailable/,
+  "Prepare does not reuse saved Recruiter Review state as Initial Fit");
+assert.doesNotMatch(prepareTab, /reviewGapsProvenance|current recruiter audit/,
+  "the compact Prepare surface contains no Recruiter Review fallback copy");
 assert.match(
   app,
   /const polishInputsReady = useMemo\(\(\) => \{[\s\S]{0,160}?jobPrepared &&[\s\S]{0,420}?\}, \[editedResume, jobDescription, jobPrepared, resumeReady, tailorModes\]\)/,

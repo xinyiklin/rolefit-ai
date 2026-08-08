@@ -29,6 +29,11 @@ export function useAiSettings() {
   // Default "tailor" (no review) — preserve the user's choice once they opt in.
   // Legacy strictReview boolean is migrated to polishStages in settings.ts coerce().
   const [polishStages, setPolishStages] = useState<"tailor" | "review" | "both">(saved.polishStages ?? "both");
+  const [runInitialFit, setRunInitialFit] = useState(saved.runInitialFit ?? true);
+  const [autoCreateResumeProposal, setAutoCreateResumeProposal] = useState(saved.autoCreateResumeProposal ?? false);
+  const [autoCreateCoverLetterProposal, setAutoCreateCoverLetterProposal] = useState(
+    saved.autoCreateCoverLetterProposal ?? false
+  );
   const [citizenshipStatus, setCitizenshipStatus] = useState<CitizenshipStatus>(saved.citizenshipStatus ?? "unspecified");
   const [legallyAuthorizedToWork, setLegallyAuthorizedToWork] = useState(saved.legallyAuthorizedToWork ?? true);
   const [requiresSponsorship, setRequiresSponsorship] = useState(saved.requiresSponsorship ?? false);
@@ -46,6 +51,9 @@ export function useAiSettings() {
         customInstructions,
         stageCustomInstructions,
         polishStages,
+        runInitialFit,
+        autoCreateResumeProposal,
+        autoCreateCoverLetterProposal,
         citizenshipStatus,
         legallyAuthorizedToWork,
         requiresSponsorship,
@@ -60,6 +68,9 @@ export function useAiSettings() {
     customInstructions,
     stageCustomInstructions,
     polishStages,
+    runInitialFit,
+    autoCreateResumeProposal,
+    autoCreateCoverLetterProposal,
     citizenshipStatus,
     legallyAuthorizedToWork,
     requiresSponsorship,
@@ -148,6 +159,9 @@ export function useAiSettings() {
     setCustomInstructions("");
     setStageCustomInstructions({});
     setPolishStages("both");
+    setRunInitialFit(true);
+    setAutoCreateResumeProposal(false);
+    setAutoCreateCoverLetterProposal(false);
     setCitizenshipStatus("unspecified");
     setLegallyAuthorizedToWork(true);
     setRequiresSponsorship(false);
@@ -164,6 +178,12 @@ export function useAiSettings() {
     setHonestContext,
     polishStages,
     setPolishStages,
+    runInitialFit,
+    setRunInitialFit,
+    autoCreateResumeProposal,
+    setAutoCreateResumeProposal,
+    autoCreateCoverLetterProposal,
+    setAutoCreateCoverLetterProposal,
     citizenshipStatus,
     setCitizenshipStatus,
     legallyAuthorizedToWork,

@@ -25,6 +25,8 @@ import { callConfiguredProvider } from "./clients.ts";
 import { clipForPrompt, fenceUntrusted, inputFirewallRule } from "./prompts.ts";
 import { AUTH_STEMS, mentionsAuthStem } from "./eligibilityLexicon.ts";
 import { findUngroundedCuratedClaimTerm } from "./grounding.ts";
+import { analyzeQuickFit, quickFitPromptSection, sanitizeQuickFit } from "./quickFit.ts";
+import type { QuickFitResult } from "../../shared/quickFitContract.ts";
 
 // Optional dispatch-attempt collector: callConfiguredProvider bumps `attempts`.
 type AttemptStats = { attempts?: number };
@@ -33,7 +35,19 @@ type StrListOptions = { maxItems: number; maxLen?: number; minLen?: number };
 
 const JOB_TEXT_CHAR_LIMIT = 24_000;
 
-export function buildJobAnalysisPrompts({ jobText }: { jobText: unknown }): { systemPrompt: string; userPrompt: string } {
+type InitialFitInput = {
+  resumeText: string;
+  resumeLabel: string;
+  candidateContext?: string;
+};
+
+export function buildJobAnalysisPrompts({
+  jobText,
+  initialFit
+}: {
+  jobText: unknown;
+  initialFit?: InitialFitInput | null;
+}): { systemPrompt: string; userPrompt: string } {
   const systemPrompt = `You are a precise job-posting parser. You read one job posting and return ONLY a structured JSON object of facts that are EXPLICITLY present in it.
 
 ${inputFirewallRule()}
@@ -66,6 +80,19 @@ ABSOLUTE RULES (anti-fabrication — this is the whole job):
   "senioritySignals": ["e.g. \\"senior\\", \\"entry-level / junior\\", \\"3-5 years\\", \\"leadership\\""],
   "domainSignals": ["e.g. \\"fintech\\", \\"healthcare\\", \\"AI\\", \\"infrastructure\\""]
 }`;
+  const responseSchema = initialFit
+    ? `Return this JSON shape. The job and initialFit subsections are independent; always return the best job object even if Initial Fit is unavailable:
+{
+  "job": ${schema.slice(schema.indexOf("{"))},
+  "initialFit": {
+    "verdict": "STRONG | REASONABLE | STRETCH | LIMITED",
+    "summary": "one short explanation",
+    "matches": ["up to 3 concise matches"],
+    "gaps": ["up to 3 important gaps"],
+    "eligibility": { "status": "CLEAR | CHECK | BLOCKED", "note": "optional" }
+  }
+}`
+    : schema;
 
   // The source URL is intentionally NOT included: it can carry private ATS
   // tokens / tracking params, and the product contract (README, ai-server.md)
@@ -76,9 +103,25 @@ ABSOLUTE RULES (anti-fabrication — this is the whole job):
 ${fenceUntrusted(clipForPrompt(jobText, JOB_TEXT_CHAR_LIMIT, "job posting")) || "Not provided."}
 </job_description>
 
-${schema}`;
+${initialFit ? quickFitPromptSection(initialFit) : ""}
+
+${responseSchema}`;
 
   return { systemPrompt, userPrompt };
+}
+
+function initialFitInput(body: Record<string, unknown>): InitialFitInput | null {
+  const raw = body.initialFit;
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const source = raw as Record<string, unknown>;
+  if (source.enabled !== true) return null;
+  const resumeText = typeof source.resumeText === "string" ? source.resumeText : "";
+  if (resumeText.trim().length < 40) return null;
+  return {
+    resumeText,
+    resumeLabel: typeof source.resumeLabel === "string" ? source.resumeLabel : "Selected resume",
+    ...(typeof source.candidateContext === "string" ? { candidateContext: source.candidateContext } : {})
+  };
 }
 
 // --- sanitizing + grounding ------------------------------------------------
@@ -430,6 +473,23 @@ export function sanitizeJobAnalysis(parsed: unknown, sourceText: string) {
   };
 }
 
+export function sanitizePrepareAnalysisResponse(
+  parsed: unknown,
+  jobText: string,
+  fitRequested: boolean
+): { fields: ReturnType<typeof sanitizeJobAnalysis>; initialFit?: QuickFitResult | null } {
+  const source = parsed && typeof parsed === "object" && !Array.isArray(parsed)
+    ? parsed as Record<string, unknown>
+    : {};
+  const rawJob = fitRequested && source.job && typeof source.job === "object"
+    ? source.job
+    : source;
+  return {
+    fields: sanitizeJobAnalysis(rawJob, jobText),
+    ...(fitRequested ? { initialFit: sanitizeQuickFit(source.initialFit) } : {})
+  };
+}
+
 // Resolve provider from `body` (default provider when none given), call the model,
 // and return grounded fields plus the RESOLVED provider/model/reasoningEffort and
 // the dispatch attempt count. Used by the /api/job-analysis route (extension imports
@@ -448,14 +508,17 @@ export async function analyzeJobToFields({
   signal?: AbortSignal;
 }) {
   const { provider, apiKey, model, reasoningEffort } = resolveProviderRequest(body);
-  const { systemPrompt, userPrompt } = buildJobAnalysisPrompts({ jobText });
+  const fitInput = initialFitInput(body);
+  const { systemPrompt, userPrompt } = buildJobAnalysisPrompts({ jobText, initialFit: fitInput });
   const stats: AttemptStats = {};
   const parsed = await callConfiguredProvider(
     { provider, model, reasoningEffort, apiKey, systemPrompt, userPrompt, signal },
     stats
   );
+  const prepared = sanitizePrepareAnalysisResponse(parsed, jobText, Boolean(fitInput));
   return {
-    fields: sanitizeJobAnalysis(parsed, jobText),
+    ...prepared,
+    initialFitRequested: Boolean(fitInput),
     provider,
     model,
     reasoningEffort,
@@ -480,6 +543,30 @@ export async function handleJobAnalysis(req: IncomingMessage, res: ServerRespons
     }
     // Resolve once for the error label / key validation, then analyze.
     provider = resolveProviderRequest(body).provider;
+    if (body.mode === "initial-fit") {
+      const resumeText = String(body.resumeText ?? "");
+      if (resumeText.trim().length < 40) {
+        sendJson(res, 400, { error: "Load a resume before retrying Initial Fit." });
+        return;
+      }
+      const fit = await analyzeQuickFit({
+        jobText,
+        resumeText,
+        resumeLabel: String(body.resumeLabel ?? "Selected resume"),
+        candidateContext: String(body.candidateContext ?? ""),
+        body,
+        signal: request.signal
+      });
+      sendJson(res, 200, {
+        source: "ai",
+        initialFit: fit.initialFit,
+        initialFitStatus: fit.initialFit ? "ready" : "unavailable",
+        provider: fit.provider,
+        model: fit.model,
+        reasoningEffort: fit.reasoningEffort
+      });
+      return;
+    }
     const result = await analyzeJobToFields({ jobText, body, signal: request.signal });
     // Echo the RESOLVED provider/model/reasoningEffort (never the API key)
     // plus the dispatch attempt count so the client can record which model actually
@@ -490,7 +577,13 @@ export async function handleJobAnalysis(req: IncomingMessage, res: ServerRespons
       provider: result.provider,
       model: result.model,
       reasoningEffort: result.reasoningEffort,
-      attempts: result.attempts
+      attempts: result.attempts,
+      ...(result.initialFitRequested
+        ? {
+            initialFit: result.initialFit,
+            initialFitStatus: result.initialFit ? "ready" : "unavailable"
+          }
+        : {})
     });
   } catch (error) {
     if (isRequestAborted(error, req, res)) return;

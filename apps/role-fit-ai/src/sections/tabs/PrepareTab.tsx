@@ -15,9 +15,9 @@ import { PreparedMaterialCard } from "./prepare/PreparedMaterialCard";
 import { PreparedVariantRecommendation } from "./prepare/PreparedVariantRecommendation";
 import {
   PrepareApplicationRail,
-  type PrepareActivity,
-  type PrepareFitAssessment
+  type PrepareActivity
 } from "./prepare/PrepareApplicationRail";
+import type { QuickFitState } from "../../../shared/quickFitContract.ts";
 
 type SourceMethod = "url" | "paste";
 
@@ -63,12 +63,6 @@ const BRIEF_SECTIONS: readonly PreparedJobBriefSection[] = [
   }
 ];
 
-type ReviewGap = {
-  gap: string;
-  severity: string;
-  evidence?: string;
-};
-
 function variantRecommendationLiveText(
   kind: string,
   isRanking: boolean,
@@ -89,6 +83,7 @@ export type PrepareTabProps = {
   onJobDescriptionChange: (value: string) => void;
   jobRawText: string;
   importedJob: ImportedJobSnapshot | null;
+  localPreparedPreview: ImportedJobSnapshot | null;
   onJobTrackingChange: (field: keyof ExtractedJobTracking, value: string | number | null) => void;
   onJobBriefChange: (field: PreparedJobBriefField, value: string) => void;
   jobPrepared: boolean;
@@ -133,9 +128,8 @@ export type PrepareTabProps = {
   coverLetterStatus: string;
   onTailorCoverLetter: () => void | Promise<void>;
   onOpenCoverLetter: () => void;
-  reviewGaps: ReviewGap[];
-  reviewGapsProvenance: "none" | "current" | "saved";
-  fitAssessment: PrepareFitAssessment | null;
+  quickFit: QuickFitState;
+  onRetryInitialFit: () => void;
   linkedApplication: Application | null;
   readiness: PreparationReadiness;
   isApplying: boolean;
@@ -149,6 +143,7 @@ export function PrepareTab({
   onJobDescriptionChange,
   jobRawText,
   importedJob,
+  localPreparedPreview,
   onJobTrackingChange,
   onJobBriefChange,
   jobPrepared,
@@ -193,9 +188,8 @@ export function PrepareTab({
   coverLetterStatus,
   onTailorCoverLetter,
   onOpenCoverLetter,
-  reviewGaps,
-  reviewGapsProvenance,
-  fitAssessment,
+  quickFit,
+  onRetryInitialFit,
   linkedApplication,
   readiness,
   isApplying,
@@ -210,11 +204,13 @@ export function PrepareTab({
     setSourceMode(jobPrepared ? "collapsed" : "replace");
   }, [jobPrepared]);
 
-  const tracking = jobPrepared ? (importedJob?.tracking ?? {}) : {};
-  const brief = importedJob?.brief;
+  const displayedJob = jobPrepared ? importedJob : localPreparedPreview;
+  const hasPreparedPreview = Boolean(jobPrepared || (isPreparing && localPreparedPreview));
+  const tracking = displayedJob?.tracking ?? {};
+  const brief = displayedJob?.brief;
   const role = tracking.role || tracking.title || "Role not identified";
   const company = tracking.company || "Company not identified";
-  const manualReviewFields = jobPrepared ? (importedJob?.manualReviewFields ?? []) : [];
+  const manualReviewFields = hasPreparedPreview ? (displayedJob?.manualReviewFields ?? []) : [];
   const sourceLength = (jobRawText || jobDescription).trim().length;
   const isReceiving = extensionImportPhase === "receiving";
   const progressRunning = isPreparing || jobAnalysisProgress.status === "running";
@@ -369,8 +365,14 @@ export function PrepareTab({
       <header className="workspace-page__head prepare-page__head">
         <h2 className="page-serif">Prepare</h2>
         <span className={`prepare-page__state${jobPrepared ? " is-ready" : ""}`}>
-          {jobPrepared ? <Check size={13} aria-hidden="true" /> : <Circle size={10} aria-hidden="true" />}
-          {jobPrepared ? `${role} · ${company}` : "No prepared application"}
+          {jobPrepared || hasPreparedPreview
+            ? <Check size={13} aria-hidden="true" />
+            : <Circle size={10} aria-hidden="true" />}
+          {jobPrepared
+            ? `${role} · ${company}`
+            : hasPreparedPreview
+              ? `Local brief ready · improving with AI`
+              : "No prepared application"}
         </span>
       </header>
 
@@ -549,11 +551,11 @@ export function PrepareTab({
             <div className="prepare-panel__head">
               <h3 id="prepare-brief-title">Job brief</h3>
               <span className="prepare-panel__meta">
-                {jobPrepared ? "Edits apply to tailoring and Apply" : "Not prepared"}
+                {jobPrepared ? "Edits apply to tailoring and Apply" : hasPreparedPreview ? "Local preview" : "Not prepared"}
               </span>
             </div>
 
-            {jobPrepared && brief ? (
+            {hasPreparedPreview && brief ? (
               <>
                 <fieldset className="prepare-brief-fields" disabled={isPreparing}>
                   <div className="prepare-detail-grid">
@@ -704,28 +706,6 @@ export function PrepareTab({
                       <p>None.</p>
                     )}
                   </div>
-                  <div>
-                    <p className="prepare-page__eyebrow">
-                      {reviewGapsProvenance === "saved" ? "Candidate gaps · historical" : "Candidate gaps"}
-                    </p>
-                    {reviewGaps.length ? (
-                      <ul>
-                        {reviewGaps.map((gap, index) => (
-                          <li key={`${index}:${gap.severity}:${gap.gap}`}>
-                            <strong>{gap.gap}</strong>
-                            <span>{gap.severity.replace(/_/g, " ").toLowerCase()}</span>
-                            {gap.evidence ? <p>{gap.evidence}</p> : null}
-                          </li>
-                        ))}
-                      </ul>
-                    ) : reviewGapsProvenance === "current" ? (
-                      <p>No candidate gaps identified by the current recruiter audit.</p>
-                    ) : reviewGapsProvenance === "saved" ? (
-                      <p>None recorded in the saved Apply review.</p>
-                    ) : (
-                      <p>Run Recruiter audit to compare your evidence with the job.</p>
-                    )}
-                  </div>
                 </div>
               </>
             ) : (
@@ -742,7 +722,8 @@ export function PrepareTab({
         {jobPrepared ? (
           <PrepareApplicationRail
             activity={activity}
-            fitAssessment={fitAssessment}
+            quickFit={quickFit}
+            onRetryInitialFit={onRetryInitialFit}
             linkedApplication={linkedApplication}
             readiness={readiness}
             isApplying={isApplying}

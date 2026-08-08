@@ -91,6 +91,8 @@ import {
   type PreparedJobBriefField
 } from "./lib/preparedJobBrief";
 import { recommendVariant, type VariantRecommendation } from "./lib/variantRecommendation";
+import type { InitialFitRequest } from "./lib/aiJobAnalysis";
+import { quickFitAllowsAutoProposal } from "../shared/quickFitContract.ts";
 import { coverLetterRecoveryDirty } from "./lib/coverLetterRecovery";
 import { applicationDocumentUrl, type ApplicationDocumentKind } from "./lib/applicationDocumentRequests";
 import { applicationDocumentPdfBlob } from "./lib/applicationDocumentPdf";
@@ -114,11 +116,7 @@ import type { TrackerView } from "./sections/tabs/TrackerTab";
 import type { OutputTab, OutputTabDescriptor } from "./sections/shared";
 import { providerLabel } from "./config/aiOptions";
 import { formatHistoryDate } from "./lib/historyDate";
-import {
-  appFitVerdict,
-  fitScore,
-  type ApplicationActivityFilter
-} from "./lib/applicationDisplay";
+import { type ApplicationActivityFilter } from "./lib/applicationDisplay";
 
 const PreviewOverlay = lazy(() => import("./sections/PreviewOverlay"));
 
@@ -314,8 +312,12 @@ function App() {
   const [polishStatus, setPolishStatus] = useState("");
   const [resumeVariantRecommendation, setResumeVariantRecommendation] = useState<VariantRecommendation | null>(null);
   const [isRankingResumeVariants, setIsRankingResumeVariants] = useState(false);
+  const selectResumeForInitialFitRef = useRef<(jobText: string) => Promise<InitialFitRequest | null>>(
+    async () => null
+  );
   const resumeVariantRecommendationKeyRef = useRef("");
   const resumeVariantRecommendationGenerationRef = useRef(0);
+  const autoProposalFitRef = useRef({ key: "", resumeStarted: false, coverStarted: false });
   // Both document kinds use the same recommendation and safe auto-selection
   // contract; dirty editors and restored applications are never replaced.
   const [coverLetterVariantRecommendation, setCoverLetterVariantRecommendation] =
@@ -346,6 +348,12 @@ function App() {
     setHonestContext,
     polishStages,
     setPolishStages,
+    runInitialFit,
+    setRunInitialFit,
+    autoCreateResumeProposal,
+    setAutoCreateResumeProposal,
+    autoCreateCoverLetterProposal,
+    setAutoCreateCoverLetterProposal,
     citizenshipStatus,
     setCitizenshipStatus,
     legallyAuthorizedToWork,
@@ -1197,6 +1205,10 @@ function App() {
     jobAnalysisProgressVisible,
     dismissJobAnalysisProgress,
     jobAnalysisRetry,
+    quickFitState,
+    retryInitialFit,
+    refreshInitialFit,
+    localPreparedPreview,
     handleManualJobDescriptionChange,
     handleExtractFromLink,
     handleAnalyzePaste
@@ -1218,6 +1230,8 @@ function App() {
     confirmDuplicateAfterJobAnalysis: duplicateGuard.confirmDuplicateAfterJobAnalysis,
     jobAnalysisRequestFields,
     ensureProviderReady: ensureJobAnalysisProvider,
+    runInitialFit,
+    selectResumeForInitialFit: (jobText) => selectResumeForInitialFitRef.current(jobText),
     extensionImportsReady: hasLoadedApplications,
   });
   const jobPreparationActive =
@@ -1369,6 +1383,38 @@ function App() {
     docStyle
   });
 
+  selectResumeForInitialFitRef.current = async (sourceJobText) => {
+    const currentText = currentResumeText || resumeText;
+    const currentLabel =
+      baseResumeOptions.find((option) => option.fileName === baseResumeName)?.label ||
+      documentTitle ||
+      "Current resume";
+    const canRecommend =
+      baseResumeOptions.length > 1 &&
+      applicationOfRecordId === null &&
+      !resumeDocumentDirty &&
+      !resumeManualVariantSelectionInFlightRef.current &&
+      !isWorkspaceBootstrapping &&
+      !isSavingBaseResume;
+    if (canRecommend) {
+      const candidates = await readBaseResumeCandidates(baseResumeOptions);
+      const recommendation = recommendVariant(sourceJobText, candidates, baseResumeOptions.length);
+      const candidate = recommendation
+        ? candidates.find((entry) => entry.fileName === recommendation.fileName)
+        : null;
+      if (candidate) {
+        return {
+          resumeText: candidate.text,
+          resumeLabel: candidate.label,
+          candidateContext: requestHonestContext
+        };
+      }
+    }
+    return currentText.trim().length >= 80
+      ? { resumeText: currentText, resumeLabel: currentLabel, candidateContext: requestHonestContext }
+      : null;
+  };
+
   const handleSelectBaseResumeVariant = useCallback(
     async (fileName: string) => {
       if (
@@ -1381,13 +1427,39 @@ function App() {
       resumeManualVariantSelectionInFlightRef.current = true;
       setIsManuallySelectingResumeVariant(true);
       try {
-        await loadBaseResumeVersion(fileName);
+        const option = baseResumeOptions.find((entry) => entry.fileName === fileName);
+        const fitCandidate = runInitialFit && jobPrepared && option
+          ? (await readBaseResumeCandidates([option]))[0]
+          : undefined;
+        const loaded = await loadBaseResumeVersion(fileName);
+        if (loaded && fitCandidate) {
+          void refreshInitialFit(
+            importedJob?.sourceText || jobRawText || jobDescription,
+            {
+              resumeText: fitCandidate.text,
+              resumeLabel: fitCandidate.label,
+              candidateContext: requestHonestContext
+            }
+          );
+        }
       } finally {
         resumeManualVariantSelectionInFlightRef.current = false;
         setIsManuallySelectingResumeVariant(false);
       }
     },
-    [baseResumeName, loadBaseResumeVersion]
+    [
+      baseResumeName,
+      baseResumeOptions,
+      importedJob?.sourceText,
+      jobDescription,
+      jobPrepared,
+      jobRawText,
+      loadBaseResumeVersion,
+      readBaseResumeCandidates,
+      refreshInitialFit,
+      requestHonestContext,
+      runInitialFit
+    ]
   );
 
   const workspaceRestoreAdoptionHandlerRef = useRef<() => void>(() => undefined);
@@ -1673,6 +1745,84 @@ function App() {
     void handlePolish({ revealResumeOnSuccess: false });
   }
 
+  useEffect(() => {
+    if (quickFitState.status !== "ready") return;
+    const { result: fit, resumeLabel } = quickFitState.snapshot;
+    if (!quickFitAllowsAutoProposal(fit)) return;
+    const key = JSON.stringify({
+      source: importedJob?.sourceText || jobRawText || jobDescription,
+      resumeLabel,
+      verdict: fit.verdict,
+      summary: fit.summary
+    });
+    if (autoProposalFitRef.current.key !== key) {
+      autoProposalFitRef.current = { key, resumeStarted: false, coverStarted: false };
+    }
+    const receipt = autoProposalFitRef.current;
+    const currentResumeLabel =
+      baseResumeOptions.find((option) => option.fileName === baseResumeName)?.label ||
+      documentTitle ||
+      "Current resume";
+    const fitResumeIsCurrent = resumeLabel === currentResumeLabel;
+
+    const canStartResume =
+      autoCreateResumeProposal &&
+      materialSelection.resume &&
+      fitResumeIsCurrent &&
+      jobPrepared &&
+      canPolish &&
+      !isPolishing &&
+      !isSavingBaseResume &&
+      !isManuallySelectingResumeVariant &&
+      !isRankingResumeVariants;
+    if (!receipt.resumeStarted && canStartResume) {
+      receipt.resumeStarted = true;
+      void handlePolish({ revealResumeOnSuccess: false });
+    }
+
+    const canStartCover =
+      autoCreateCoverLetterProposal &&
+      materialSelection.coverLetter &&
+      fitResumeIsCurrent &&
+      coverLetterPreflight.canTailor &&
+      resumeReady &&
+      jobPrepared &&
+      coverProviderReady &&
+      !isGeneratingCover &&
+      !isSelectingCoverVariant &&
+      !isRankingCoverLetterVariants;
+    if (!receipt.coverStarted && canStartCover) {
+      receipt.coverStarted = true;
+      void handleTailorCoverLetter();
+    }
+  }, [
+    autoCreateCoverLetterProposal,
+    autoCreateResumeProposal,
+    baseResumeName,
+    baseResumeOptions,
+    canPolish,
+    coverLetterPreflight.canTailor,
+    coverProviderReady,
+    documentTitle,
+    handlePolish,
+    handleTailorCoverLetter,
+    importedJob?.sourceText,
+    isGeneratingCover,
+    isManuallySelectingResumeVariant,
+    isPolishing,
+    isRankingCoverLetterVariants,
+    isRankingResumeVariants,
+    isSavingBaseResume,
+    isSelectingCoverVariant,
+    jobDescription,
+    jobPrepared,
+    jobRawText,
+    materialSelection.coverLetter,
+    materialSelection.resume,
+    quickFitState,
+    resumeReady
+  ]);
+
   // Called from the document review rails when a candidate claim needs evidence.
   // Appends a template line to honestContext (unless the keyword is already there),
   // then opens Settings on Guidance so the user can fill it in and re-run Polish.
@@ -1745,44 +1895,6 @@ function App() {
     [linkApplication]
   );
   const polishOutputCurrent = result?.source === "ai" && !reviewStale && !resumeManuallyEdited;
-  const currentReviewAvailable = polishOutputCurrent && Boolean(result?.strictReview);
-  const savedApplicationReviewAvailable = Boolean(
-    jobPrepared &&
-      preparedApplication?.review &&
-      (preparedApplication.jobDescription ?? "").trim() ===
-        preparedApplicationJobDescription.trim()
-  );
-  const prepareReviewGaps =
-    currentReviewAvailable && result?.strictReview
-      ? result.strictReview.gaps
-      : savedApplicationReviewAvailable
-        ? preparedApplication?.review?.gaps ?? []
-        : [];
-  const prepareReviewGapsProvenance = currentReviewAvailable
-    ? "current"
-    : savedApplicationReviewAvailable
-      ? "saved"
-      : "none";
-  const savedApplicationFitVerdict =
-    savedApplicationReviewAvailable && preparedApplication
-      ? appFitVerdict(preparedApplication)
-      : null;
-  const prepareFitAssessment =
-    currentReviewAvailable && result?.strictReview
-      ? {
-          verdict: result.strictReview.verdict,
-          score: headlineScore,
-          reason: result.strictReview.verdictReason,
-          provenance: "current" as const
-        }
-      : savedApplicationReviewAvailable && preparedApplication && savedApplicationFitVerdict
-        ? {
-            verdict: savedApplicationFitVerdict.verdict,
-            score: fitScore(preparedApplication),
-            reason: preparedApplication.review?.verdictReason ?? "",
-            provenance: "saved" as const
-          }
-        : null;
 
   // The Apply flow (download-prompt state + commitApply/handleApply/
   // handleApplyDownloadPick/handleApplyOnly/saveAppliedDocumentArtifacts) lives in
@@ -2258,6 +2370,7 @@ function App() {
               onJobDescriptionChange={handleManualJobDescriptionChange}
               jobRawText={jobRawText}
               importedJob={importedJob}
+              localPreparedPreview={localPreparedPreview}
               onJobTrackingChange={handlePreparedJobTrackingChange}
               onJobBriefChange={handlePreparedJobBriefChange}
               jobPrepared={jobPrepared}
@@ -2329,9 +2442,8 @@ function App() {
               coverLetterStatus={coverStatus}
               onTailorCoverLetter={handleTailorCoverLetter}
               onOpenCoverLetter={() => setActiveOutputTab("cover")}
-              reviewGaps={prepareReviewGaps}
-              reviewGapsProvenance={prepareReviewGapsProvenance}
-              fitAssessment={prepareFitAssessment}
+              quickFit={quickFitState}
+              onRetryInitialFit={retryInitialFit}
               linkedApplication={preparedApplication}
               readiness={preparationReadiness}
               isApplying={isApplying}
@@ -2816,6 +2928,12 @@ function App() {
           onRefreshProviders={providerAvailability.refresh}
           polishStages={polishStages}
           onPolishStagesChange={setPolishStages}
+          runInitialFit={runInitialFit}
+          onRunInitialFitChange={setRunInitialFit}
+          autoCreateResumeProposal={autoCreateResumeProposal}
+          onAutoCreateResumeProposalChange={setAutoCreateResumeProposal}
+          autoCreateCoverLetterProposal={autoCreateCoverLetterProposal}
+          onAutoCreateCoverLetterProposalChange={setAutoCreateCoverLetterProposal}
           citizenshipStatus={citizenshipStatus}
           onCitizenshipChange={setCitizenshipStatus}
           legallyAuthorizedToWork={legallyAuthorizedToWork}

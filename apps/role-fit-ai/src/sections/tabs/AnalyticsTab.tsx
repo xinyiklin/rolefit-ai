@@ -2,18 +2,10 @@ import type { Application } from "../../hooks/useApplications";
 import {
   BOARD_STATUSES,
   STATUS_LABEL,
-  averageFit,
-  averageLift,
-  displayCompany,
-  fitScore,
-  fitTone,
-  formatCompactDate,
   statusCount
 } from "../../lib/applicationDisplay";
 import {
-  highestFitApplication,
   monthlyApplicationsSent,
-  recurringSkillGaps,
   topTrackedCompanies,
   trackingHygiene
 } from "../../lib/applicationAnalytics";
@@ -27,14 +19,10 @@ export function AnalyticsTab({ applications, onOpenApplications }: AnalyticsTabP
   const total = applications.length;
   const interviews = statusCount(applications, "interviewing");
   const offers = statusCount(applications, "offer");
-  const avgFit = averageFit(applications);
-  const lift = averageLift(applications);
   const months = monthlyApplicationsSent(applications);
   const maxMonthly = Math.max(1, ...months.map(([, row]) => row.applications));
-  const bestApp = highestFitApplication(applications);
-  const gaps = recurringSkillGaps(applications);
   const companies = topTrackedCompanies(applications);
-  const { highFit, missingFollowup, closed, submitted } = trackingHygiene(applications);
+  const { missingFollowup, closed, submitted } = trackingHygiene(applications);
 
   return (
     <section className="workspace-page analytics-page">
@@ -61,18 +49,6 @@ export function AnalyticsTab({ applications, onOpenApplications }: AnalyticsTabP
         <span className="figures-strip__item">
           <em>Offers</em>
           <strong>{offers}</strong>
-        </span>
-        <span className="figures-strip__divider" aria-hidden="true" />
-        <span className="figures-strip__item">
-          <em>Avg fit</em>
-          <strong>{avgFit === null ? "--" : `${avgFit}%`}</strong>
-        </span>
-        <span className="figures-strip__divider" aria-hidden="true" />
-        <span className="figures-strip__item">
-          <em>Avg lift</em>
-          <strong className={lift === null ? "" : lift >= 0 ? "figures-strip__lift--up" : "figures-strip__lift--down"}>
-            {lift === null ? "--" : `${lift >= 0 ? "+" : ""}${lift}pt`}
-          </strong>
         </span>
       </div>
 
@@ -131,46 +107,8 @@ export function AnalyticsTab({ applications, onOpenApplications }: AnalyticsTabP
         </section>
 
         <section className="analytics-panel--flat analytics-panel--half">
-          <p className="analytics-flat__head">Gaps to address</p>
-          {gaps.length ? (
-            <dl className="ledger-rows">
-              {gaps.map(([keyword, count]) => (
-                <div className="ledger-row" key={keyword}>
-                  <dt>{keyword}</dt>
-                  <span className="ledger-row__leader" aria-hidden="true" />
-                  <dd>{count}</dd>
-                </div>
-              ))}
-            </dl>
-          ) : (
-            <p className="analytics-empty">Polish roles to collect gap analysis.</p>
-          )}
-        </section>
-
-        <section className="analytics-panel--flat analytics-panel--half">
-          <p className="analytics-flat__head">Best current fit</p>
-          {bestApp ? (
-            <div className="analytics-best-inline">
-              <span className={`application-fit--${fitTone(fitScore(bestApp))} analytics-best-score`}>{fitScore(bestApp)}%</span>
-              <div>
-                <strong>{displayCompany(bestApp)}</strong>
-                <span>{bestApp.role || bestApp.title}</span>
-                <em>Updated {formatCompactDate(bestApp.updatedAt)}</em>
-              </div>
-            </div>
-          ) : (
-            <p className="analytics-empty">No scored applications yet.</p>
-          )}
-        </section>
-
-        <section className="analytics-panel--flat analytics-panel--half">
           <p className="analytics-flat__head">Tracking hygiene</p>
           <dl className="ledger-rows">
-            <div className="ledger-row">
-              <dt>High-fit scored roles</dt>
-              <span className="ledger-row__leader" aria-hidden="true" />
-              <dd>{highFit}</dd>
-            </div>
             <div className="ledger-row">
               <dt>Open roles without follow-up dates</dt>
               <span className="ledger-row__leader" aria-hidden="true" />

@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 
 import {
-  highestFitApplication,
   monthlyApplicationsSent,
   topTrackedCompanies,
   trackingHygiene
@@ -58,10 +57,9 @@ assert.equal(months[0][1].applications, 1, "generic updates and withdrawn drafts
 const hygiene = trackingHygiene(applications);
 assert.deepEqual(
   hygiene,
-  { highFit: 2, missingFollowup: 1, closed: 1, submitted: 1 },
+  { missingFollowup: 1, closed: 1, submitted: 1 },
   "tracking facts are exact counts over stored fields"
 );
-assert.equal(highestFitApplication(applications)?.id, "submitted", "the highest stored fit is selected");
 assert.deepEqual(topTrackedCompanies(applications)[0], ["Acme", 2], "company counts aggregate displayed company identity");
 
 console.log("PASS application analytics provenance");
