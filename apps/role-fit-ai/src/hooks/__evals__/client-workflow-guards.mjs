@@ -296,8 +296,13 @@ assert.ok(
 );
 assert.match(
   intake,
-  /const result = await analyzeJobPosting\(text,\s*\{/,
-  "extension delivery always runs the selected provider-backed Job analysis request"
+  /const result = readiness\.ready\s*\? await analyzeJobPosting\(text,[\s\S]{0,260}?: localJobAnalysisResult\(text,/,
+  "extension delivery uses AI when ready and keeps a local brief when the provider is unavailable"
+);
+assert.match(
+  intake,
+  /status: "done",[\s\S]{0,100}?Local brief ready[\s\S]{0,100}?continue or retry AI Job Analysis/,
+  "a local fallback completes Prepare instead of dead-ending the workflow"
 );
 assert.doesNotMatch(
   intake,

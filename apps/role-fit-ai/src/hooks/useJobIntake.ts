@@ -22,9 +22,10 @@ import type { ExtractedJobTracking } from "../lib/jobExtract";
 import { extractJobPosting } from "../lib/jobExtract";
 import {
   analyzeJobPosting,
+  localJobAnalysisResult,
   type JobAnalysisResult
 } from "../lib/aiJobAnalysis";
-import { classifyFailure } from "../lib/failures";
+import { ApiError, classifyFailure } from "../lib/failures";
 import { useExtensionInbox, type ExtensionImport } from "./useExtensionInbox";
 import {
   workflowInputFingerprint,
@@ -251,9 +252,9 @@ export function useJobIntake({
   function jobAnalysisTerminalState(result: JobAnalysisResult, duplicateNote?: string | null): StageState {
     if (result.failure) {
       return {
-        status: "failed",
-        errorHeadline: result.failure.headline,
-        error: `${result.failure.detail}. A local brief is available, but the pipeline stopped before the next stage.`
+        status: "done",
+        noteTone: "warn",
+        note: `Local brief ready · ${result.failure.headline}. You can continue or retry AI Job Analysis.`
       };
     }
     const base: StageState = result.source === "ai"
@@ -318,13 +319,7 @@ export function useJobIntake({
       return;
     }
     if (!readiness.ready) {
-      setLinkStatus(readiness.message);
-      // Point the failed card's Retry at THIS action — without it the button
-      // would re-dispatch whatever job analysis ran previously (or be absent).
       setJobAnalysisRetrySource("link");
-      setJobAnalysisProgress({ status: "failed", errorHeadline: "Provider unavailable", error: readiness.message });
-      setJobAnalysisProgressVisible(true);
-      return;
     }
     const releaseJobAnalysisRun = tryClaimJobAnalysisRun();
     if (!releaseJobAnalysisRun) return;
@@ -358,12 +353,15 @@ export function useJobIntake({
         setLinkStatus("Preparation stopped because this application is already tracked.");
         return;
       }
-      const result = await analyzeJobPosting(rawText, {
-        url,
-        aiRequest: jobAnalysisRequestFields(),
-        localExtracted,
-        signal: request.signal
-      });
+      const aiRequest = jobAnalysisRequestFields();
+      const result = readiness.ready
+        ? await analyzeJobPosting(rawText, { url, aiRequest, localExtracted, signal: request.signal })
+        : localJobAnalysisResult(rawText, {
+            url,
+            aiRequest,
+            localExtracted,
+            failure: classifyFailure(new ApiError(readiness.message, 503))
+          });
       if (!request.isCurrent()) return;
       const { extracted, usage } = result;
       const relevant = extracted.tailoringText;
@@ -394,7 +392,7 @@ export function useJobIntake({
       }
       const missing = compactManualReviewFields(extracted.manualReviewFields);
       setLinkStatus(result.failure
-        ? `${result.failure.headline}: ${result.failure.detail}. A local brief is available; preparation stopped.`
+        ? `${result.failure.headline}: ${result.failure.detail}. The local brief is ready, and you can continue to Polish.`
         : `Prepared ${relevant.length.toLocaleString()} compact characters for tailoring and captured ${presentTrackingFields(
             extracted.tracking
           )}${missing ? `; add ${missing} manually if needed` : ""}.`);
@@ -431,12 +429,7 @@ export function useJobIntake({
       return;
     }
     if (!readiness.ready) {
-      setLinkStatus(readiness.message);
-      // Point the failed card's Retry at THIS action (see handleExtractFromLink).
       setJobAnalysisRetrySource("paste");
-      setJobAnalysisProgress({ status: "failed", errorHeadline: "Provider unavailable", error: readiness.message });
-      setJobAnalysisProgressVisible(true);
-      return;
     }
     // Strip HTML tags only if the paste looks tag-shaped (text from "View
     // source" or a copied editor block). Plain copy-paste from a rendered page
@@ -479,12 +472,20 @@ export function useJobIntake({
         setLinkStatus("Preparation stopped because this application is already tracked.");
         return;
       }
-      const result = await analyzeJobPosting(cleaned, {
-        url: jobUrl.trim() || undefined,
-        aiRequest: jobAnalysisRequestFields(),
-        localExtracted,
-        signal: request.signal
-      });
+      const aiRequest = jobAnalysisRequestFields();
+      const result = readiness.ready
+        ? await analyzeJobPosting(cleaned, {
+            url: jobUrl.trim() || undefined,
+            aiRequest,
+            localExtracted,
+            signal: request.signal
+          })
+        : localJobAnalysisResult(cleaned, {
+            url: jobUrl.trim() || undefined,
+            aiRequest,
+            localExtracted,
+            failure: classifyFailure(new ApiError(readiness.message, 503))
+          });
       if (!request.isCurrent()) return;
       const { extracted, usage } = result;
       const relevant = extracted.tailoringText;
@@ -514,7 +515,7 @@ export function useJobIntake({
       }
       const missing = compactManualReviewFields(extracted.manualReviewFields);
       setLinkStatus(result.failure
-        ? `${result.failure.headline}: ${result.failure.detail}. A local brief is available; preparation stopped.`
+        ? `${result.failure.headline}: ${result.failure.detail}. The local brief is ready, and you can continue to Polish.`
         : `Prepared ${relevant.length.toLocaleString()} compact characters from the paste and captured ${presentTrackingFields(
             extracted.tracking
           )}${missing ? `; add ${missing} manually if needed` : ""}.`);
@@ -563,10 +564,6 @@ export function useJobIntake({
     const readiness = await ensureProviderReady();
     if (!readiness.ready) {
       setJobAnalysisRetrySource("import");
-      setJobAnalysisProgress({ status: "failed", errorHeadline: "Provider unavailable", error: readiness.message });
-      setJobAnalysisProgressVisible(true);
-      setPolishStatus(`The extension posting could not be prepared: ${readiness.message}`);
-      return;
     }
     const releaseJobAnalysisRun = tryClaimJobAnalysisRun();
     if (!releaseJobAnalysisRun) return;
@@ -594,12 +591,20 @@ export function useJobIntake({
         setPolishStatus("Preparation stopped because this application is already tracked.");
         return;
       }
-      const result = await analyzeJobPosting(payload.text, {
-        url: payload.url || undefined,
-        aiRequest: jobAnalysisRequestFields(),
-        localExtracted,
-        signal: request.signal
-      });
+      const aiRequest = jobAnalysisRequestFields();
+      const result = readiness.ready
+        ? await analyzeJobPosting(payload.text, {
+            url: payload.url || undefined,
+            aiRequest,
+            localExtracted,
+            signal: request.signal
+          })
+        : localJobAnalysisResult(payload.text, {
+            url: payload.url || undefined,
+            aiRequest,
+            localExtracted,
+            failure: classifyFailure(new ApiError(readiness.message, 503))
+          });
       if (!request.isCurrent()) return;
       const { extracted, usage } = result;
       const relevant = extracted.tailoringText;
@@ -631,7 +636,7 @@ export function useJobIntake({
       }
       setJobAnalysisProgress(jobAnalysisTerminalState(result, duplicateAfter.note));
       setPolishStatus(result.failure
-        ? `${result.failure.headline}: ${result.failure.detail}. A local brief was loaded; Tailor and Review were not run.`
+        ? `${result.failure.headline}: ${result.failure.detail}. The local brief is ready, and you can continue to Polish.`
         : "Application prepared from the browser extension.");
     } catch (error) {
       if (!request.isCurrent()) return;
@@ -658,13 +663,6 @@ export function useJobIntake({
       jobAnalysisImportRef.current = { text, url: trimmedUrl };
       setJobAnalysisRetrySource("import");
       const readiness = await ensureProviderReady();
-      if (!readiness.ready) {
-        setJobAnalysisProgress({ status: "failed", errorHeadline: "Provider unavailable", error: readiness.message });
-        setJobAnalysisProgressVisible(true);
-        setPolishStatus(`The extension posting could not be prepared: ${readiness.message}`);
-        setExtensionImportPhase(null);
-        return;
-      }
       const releaseJobAnalysisRun = await waitAndClaimJobAnalysisRun();
       const request = startJobAnalysisRequest();
       setIsExtractingLink(true);
@@ -682,12 +680,20 @@ export function useJobIntake({
 
         setJobAnalysisProgress({ status: "running" });
         setJobAnalysisProgressVisible(true);
-        const result = await analyzeJobPosting(text, {
-          url: trimmedUrl || undefined,
-          aiRequest: jobAnalysisRequestFields(),
-          localExtracted,
-          signal: request.signal
-        });
+        const aiRequest = jobAnalysisRequestFields();
+        const result = readiness.ready
+          ? await analyzeJobPosting(text, {
+              url: trimmedUrl || undefined,
+              aiRequest,
+              localExtracted,
+              signal: request.signal
+            })
+          : localJobAnalysisResult(text, {
+              url: trimmedUrl || undefined,
+              aiRequest,
+              localExtracted,
+              failure: classifyFailure(new ApiError(readiness.message, 503))
+            });
         if (!request.isCurrent()) return;
         const { extracted, usage } = result;
         const relevant = extracted.tailoringText;
@@ -727,7 +733,7 @@ export function useJobIntake({
         setJobAnalysisProgress(terminalState);
         setJobAnalysisProgressVisible(true);
         setPolishStatus(result.failure
-          ? `${result.failure.headline}: ${result.failure.detail}. A local brief was loaded; Tailor and Review were not run.`
+          ? `${result.failure.headline}: ${result.failure.detail}. The local brief is ready, and you can continue to Polish.`
           : "Application prepared from the browser extension.");
       } catch (error) {
         if (!request.isCurrent()) return;

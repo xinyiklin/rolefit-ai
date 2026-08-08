@@ -110,6 +110,27 @@ export type JobAnalysisResult = {
   failure?: ClassifiedFailure;
 };
 
+export function localJobAnalysisResult(
+  text: string,
+  options: {
+    url?: string;
+    aiRequest?: Partial<AiRequestFields>;
+    localExtracted?: ExtractedJobPosting;
+    failure?: ClassifiedFailure;
+  } = {}
+): JobAnalysisResult {
+  const extracted = options.localExtracted ?? extractJobPosting(text, { url: options.url });
+  if (!options.failure) {
+    return { extracted, source: "local", usage: localOnlyUsage() };
+  }
+  return {
+    extracted,
+    source: "local",
+    usage: localFallbackUsage(options.aiRequest),
+    failure: options.failure
+  };
+}
+
 function definedFields<T extends Record<string, unknown>>(obj: T): Partial<T> {
   return Object.fromEntries(Object.entries(obj).filter(([, v]) => v !== undefined && v !== "")) as Partial<T>;
 }
@@ -218,12 +239,15 @@ export async function analyzeJobPosting(
   const resolveLocalExtracted = (): ExtractedJobPosting =>
     localExtracted ?? (memoizedLocalExtracted ??= extractJobPosting(text, { url }));
   // No AI attempted at all (text too short to bother calling out).
-  const localOnly = (): JobAnalysisResult => ({ extracted: resolveLocalExtracted(), source: "local", usage: localOnlyUsage() });
+  const localOnly = (): JobAnalysisResult => localJobAnalysisResult(text, {
+    url,
+    localExtracted: resolveLocalExtracted()
+  });
   // An AI call was made but didn't produce a usable result.
-  const localAfterAttempt = (failure: ClassifiedFailure): JobAnalysisResult => ({
-    extracted: resolveLocalExtracted(),
-    source: "local",
-    usage: localFallbackUsage(aiRequest),
+  const localAfterAttempt = (failure: ClassifiedFailure): JobAnalysisResult => localJobAnalysisResult(text, {
+    url,
+    aiRequest,
+    localExtracted: resolveLocalExtracted(),
     failure
   });
   if (text.trim().length < 40) return localOnly();
