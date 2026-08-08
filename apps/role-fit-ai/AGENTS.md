@@ -153,21 +153,46 @@ or workspace state, keep it here and expose the smallest host seam instead.
   post-commit export; the pre-commit naming prompt remains interactive.
 - Extension intake requests AI-backed Job analysis and stops on Prepare. Its
   local brief remains usable when that request fails, and it never implicitly
-  launches Polish. The ordinary app may still rank actual saved
-  resume and cover-letter contents against weighted prepared-job sections and
-  auto-select a meaningful unique winner while its editor is clean and not
-  application-owned, but that selection is not automatic tailoring.
-  An explicit manual variant choice synchronously preempts recommendation work;
-  while an included variant is ranking or loading, preparation remains busy and
-  Apply or another Tailor action cannot start.
-  A tie or incomplete comparison returns no recommendation and keeps the current
-  selection. Do not add persisted variant metadata or another schema for either
+  launches Polish.
+- **Which resume a preparation speaks for has exactly ONE owner**
+  (`usePreparedResume` over the pure rules in `lib/preparedResume.ts`). It runs
+  once per preparation, after the deterministic local job analysis and before
+  the combined provider request, and it is the sole source for Initial Fit, the
+  editor's loaded document, Prepare's recommendation note, and automatic
+  proposals. Do not add a second selector: a pre-fit picker plus a post-Prepare
+  ranking effect is what made Initial Fit describe one resume while the editor
+  held another. Its terminal states are: a real current document is
+  authoritative; exactly one saved variant is adopted; several variants rank and
+  a meaningful unique winner is adopted; otherwise no resume resolves. Ranking
+  uses the LOCAL brief (the ranker weights section headings the raw posting does
+  not have) while the provider still receives the raw posting. **"The workspace
+  is still loading" is never "no resume"** — resolution awaits hydration rather
+  than sampling a boolean an extension import can observe mid-flight.
+  Adoption still goes through the guarded workspace loader only while the editor
+  is clean and not application-owned; an explicit manual variant choice
+  synchronously preempts it; while an included variant is resolving or loading,
+  preparation remains busy and Apply or another Tailor action cannot start. A
+  tie or incomplete comparison returns no recommendation and keeps the current
+  selection. Cover letters keep their own ranking effect and the same safety
+  rules. Do not add persisted variant metadata or another schema for either
   choice.
+- The document's ORIGIN (saved / uploaded / application / starter / blank) is
+  explicit state. The bundled starter is sample content that passes every length
+  test, so it never satisfies resume readiness, Initial Fit, or an automatic
+  proposal, and Prepare names it ("Starter template") instead of claiming there
+  is no document. Saving it as a base resume is what makes it the applicant's.
 - When enabled, Initial Fit shares Prepare's normal Job analysis provider
-  dispatch and independently sanitizes its subsection. Changing the selected
-  resume reruns only compact Initial Fit. The fixed auto-proposal rule admits
-  only Strong or Reasonable with no eligibility blocker; Resume and Cover Letter
+  dispatch and independently sanitizes its subsection — in both directions: a
+  local job-analysis fallback never discards a valid screening. Changing the
+  selected resume reruns only compact Initial Fit. A fit's provenance is a
+  CONTENT fingerprint of the resume and posting actually screened, never a
+  friendly label: labels collide, editing never changes one, and a re-prepared
+  posting keeps the old one. The fixed auto-proposal rule admits
+  only Strong or Reasonable with no eligibility blocker AND unchanged fit
+  inputs; Resume and Cover Letter
   toggles are independent, default off, and never disable manual Polish.
+  Retry is offered whenever a preparation exists to retry — including when no
+  resume resolved, the state that most needs recovery and has no label.
 - Reuse `AiWorkflowProgress` for retryable AI operations and existing
   dialog/menu primitives for repeated interactions. Do not build parallel
   progress cards, modal shells, provider selectors, or status vocabularies.

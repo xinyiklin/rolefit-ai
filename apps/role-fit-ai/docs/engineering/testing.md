@@ -231,6 +231,19 @@ Good frontend verification covers:
   variants may still be ranked from their actual strict document contents and
   a clear high-confidence winner selected while the editor is clean, but that
   is source selection, not tailoring, and no variant metadata is persisted
+- the prepared-resume resolution runs as REAL sequences rather than source
+  regexes (`src/hooks/__evals__/prepared-resume-resolution.mjs`): an import
+  arriving before workspace hydration, exactly one saved variant, a
+  starter-only workspace, a ranked winner, a protected document, and a refused
+  adoption. `src/lib/__evals__/variant-candidate-reads-eval.mjs` pins ONE
+  request per candidate read at 1, 5, and 20 variants for both document kinds,
+  and `server/__evals__/workspace-candidate-batch-probes.mjs` pins the batch
+  routes' name guards, bounded size, skip-on-corrupt behavior, and that they
+  return candidates and nothing else
+- a valid Initial Fit survives a local job-analysis fallback
+  (`src/lib/__evals__/job-analysis-fallback-fit-eval.mjs`), and the narrow fit
+  grounding layer has adversarial probes in
+  `server/ai/__evals__/quick-fit-probes.mjs`
 - Initial Fit shows only verdict, selected resume, summary, up to three matches
   and gaps, and a relevant eligibility warning. It exposes no score, confidence,
   evidence ledger, quotations, recommendation, saved audit, or analytics metric

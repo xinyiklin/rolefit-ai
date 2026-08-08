@@ -215,18 +215,23 @@ disappears into the task. Quiet competence, not salesmanship.
     Prepare shows compact Initial Fit for the selected resume: one four-level
     verdict, one summary, up to three matches and gaps, and a relevant
     eligibility warning. It never shows scores, confidence, evidence ledgers,
-    recommendations, or saved/historical audit state there.
+    recommendations, or saved/historical audit state there. The bundled starter
+    is sample content: it never counts as a ready resume, and Prepare says so
+    rather than reporting no document.
 11. Preserve safe extension intake: a claimed extension posting requests
     AI-backed Job analysis and stops on Prepare; it never implicitly starts
     resume Polish. A failed analysis leaves the deterministic brief editable and
-    manual Polish available. The ordinary Prepare workflow may rank actual saved
-    resume and cover-letter contents against the prepared job and auto-select a
-    meaningful unique winner while the editor is clean and not application-
-    owned; that selection is not tailoring. A tie or incomplete comparison keeps
-    the current selection. Do not add persisted variant metadata or another
-    document schema for this decision. When Initial Fit is enabled, it shares
-    Prepare's normal provider dispatch and sanitizes independently; changing the
-    selected resume reruns only Initial Fit.
+    manual Polish available. Every preparation resolves which resume it speaks
+    for exactly once, before the provider request: it waits for the local
+    workspace to finish loading, keeps a real current document, and otherwise
+    adopts the sole saved variant or a meaningful unique winner while the editor
+    is clean and not application-owned; that selection is not tailoring. A tie or
+    incomplete comparison keeps the current selection. Do not add persisted
+    variant metadata or another document schema for this decision. When Initial
+    Fit is enabled, it shares Prepare's normal provider dispatch and sanitizes
+    independently in both directions; changing the selected resume reruns only
+    Initial Fit, and a fit is tied to the resume and posting it actually
+    screened rather than to their names.
 12. Keep the complete prepared job correctable without another AI run. Along
     with role, company, location, type, source, work authorization,
     compensation, and one role context, expose responsibilities,

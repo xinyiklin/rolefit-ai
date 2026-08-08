@@ -878,6 +878,65 @@
   text-align: center;
 }
 
+/* -------- Prepared two-pane height -------- */
+
+/* A prepared application is two columns of unrelated length: the editable brief
+   grows with the posting, the rail grows with Initial Fit, materials, and
+   readiness. With the studio body as the only scroller, the taller column set
+   the page height and the shorter one left a long dead band beside it — and the
+   sticky rail could still be cut off by a much longer brief.
+
+   Bound the prepared row to the studio's own height and let whichever column
+   overflows scroll inside itself. Grid already knows each column's intrinsic
+   height, so no measurement, ResizeObserver, or JS is involved. Desktop only:
+   below 1080px the layout is a single column and the page scroll is correct. */
+@media (min-width: 1081px) {
+  .studio-body[data-tab="prepare"]:has(.prepare-layout.is-prepared) {
+    grid-template-rows: minmax(0, 1fr);
+    overflow: hidden;
+    padding-bottom: var(--s4);
+  }
+
+  /* The spacer exists to keep bottom padding inside a SCROLLING grid container
+     (Firefox drops it otherwise). This container no longer scrolls, so the
+     padding above is enough and the spacer would only steal height. */
+  .studio-body[data-tab="prepare"]:has(.prepare-layout.is-prepared)::after {
+    display: none;
+  }
+
+  .prepare-page:has(.prepare-layout.is-prepared) {
+    height: 100%;
+    min-height: 0;
+    grid-template-rows: auto minmax(0, 1fr);
+    align-content: stretch;
+  }
+
+  .prepare-layout.is-prepared {
+    min-height: 0;
+    align-items: stretch;
+  }
+
+  .prepare-layout.is-prepared > .prepare-main,
+  .prepare-layout.is-prepared > .prepare-rail {
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+  }
+
+  /* Sticky solved the old problem (a rail shorter than the page); an own
+     scroller solves it better and sticky inside one is meaningless. */
+  .prepare-layout.is-prepared > .prepare-rail {
+    position: static;
+  }
+
+  /* Keep the single rail panel filling its column so the pane reads as one
+     surface rather than a card floating in an empty scroll area. */
+  .prepare-layout.is-prepared > .prepare-rail > .prepare-application {
+    min-height: 100%;
+  }
+}
+
 @media (max-width: 1080px) {
   .prepare-layout {
     grid-template-columns: 1fr;

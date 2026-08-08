@@ -228,9 +228,12 @@ owns:
   provider after publishing the deterministic local brief. When the request
   fails, that local brief remains editable and manual Polish stays available.
   If Initial Fit is enabled and a selected resume is usable, the same provider
-  dispatch requests an independent `initialFit` subsection. The server preserves
-  valid job fields when fit is absent or invalid; fit output never invalidates
-  Job analysis. `mode: "initial-fit"` reuses this route for a compact fit-only
+  dispatch requests an independent `initialFit` subsection. The two subsections
+  are sanitized independently in BOTH directions: the server preserves valid job
+  fields when fit is absent or invalid, and the client preserves a valid fit when
+  the job half falls back to the deterministic local brief. Discarding one half
+  with the other would waste the combined request the fast path exists to make.
+  `mode: "initial-fit"` reuses this route for a compact fit-only
   rerun after the selected resume changes. The
   route sits behind the localhost CSRF/Host guard. `.env` keys stay server-side;
   a menu-entered key reaches the route only in that transient request and is
@@ -365,9 +368,24 @@ modules under `server/ai/` so no single file carries the whole pipeline:
   nowhere in the scope text or honest context is dropped
   (`ungroundedKeyword`) — the model-prose evidence field cannot launder an
   inferred fact (e.g. "clinics run Windows") into the resume.
-- `eligibilityLexicon.ts` — work-authorization and credential stems used only
-  to ground facts extracted by the job analyzer. Eligibility judgment belongs
-  to Initial Fit; this module does not gate, score, or select a verdict.
+- `eligibilityLexicon.ts` — work-authorization and credential stems shared by
+  the job analyzer's `workAuth` grounding and Initial Fit's eligibility
+  anchoring. Eligibility JUDGMENT still belongs to Initial Fit; this module does
+  not gate, score, or select a verdict.
+- `quickFit.ts` `groundQuickFit` — a deliberately narrow accuracy layer over the
+  shape sanitizer, not a restored evidence ledger or forensic validator. It
+  rejects exactly three things: a named technology in a match or gap that
+  appears in NEITHER the posting nor the selected resume (in *neither*, so a
+  posting's "Go" against a resume's "Golang" stays honest paraphrase); a gap
+  whose distinctive terms appear nowhere in the posting; and an eligibility note
+  claiming a work-authorization class neither the posting nor the candidate's own
+  context mentions — that note is dropped while its status is kept, because a
+  wrongly raised concern is the safe direction and nothing here may invent a
+  CLEAR. The verdict and summary are never filtered: a verdict is a judgement
+  rather than a claim of fact, and discarding a whole screening over one summary
+  word trades a small inaccuracy for no screening at all. The stopword list and
+  distinctive-token keys live in `grounding.ts` so job extraction and fit
+  anchoring share one definition of "grounded".
 - Candidate facts reach the model only through `honestContext`. The client's
   `buildCandidateFactsContext` (`src/lib/candidateFacts.ts`) prepends declared
   citizenship, work authorization, sponsorship, education level, and field of

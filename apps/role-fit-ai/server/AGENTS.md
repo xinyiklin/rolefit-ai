@@ -20,6 +20,14 @@ for provider, prompt, sanitizer, and review work.
 - `workspace.ts` owns resume variants/history plus the serialized atomic
   storage primitives shared with `coverLetterWorkspace.ts`. Keep strict
   cover-letter storage separate from resume import and starter fallbacks.
+  Each kind exposes a bounded `/candidates` batch read beside its `/select`
+  route: ranking saved variants needs several documents at once, and `/select`
+  answers with a whole workspace snapshot under the workspace lock, so per-file
+  reads cost N serialized snapshots before the first AI result. A batch reads
+  only the requested files under ONE lock, returns nothing else, applies the
+  same name guards, and SKIPS an unreadable or invalid document rather than
+  failing — the client ranker treats a short candidate list as "no
+  recommendation", while a 500 would leave Prepare with no selection at all.
 - `applications/` owns tracker persistence and routes. `schema.ts` validates the
   current record shape, `storage.ts` owns the serialized write queue,
   `reconcile.ts` applies sparse revision-checked mutations, and

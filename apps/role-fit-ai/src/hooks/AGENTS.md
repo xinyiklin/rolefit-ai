@@ -11,8 +11,11 @@ browser-side effects; components render them and App composes them.
   state changes; claim tokens and fresh-tab ownership remain transport
   concerns. The imported snapshot carries the complete editable Prepare brief,
   including benefits and extraction gaps, alongside the exact model-facing
-  tailoring text. Job analysis and Initial Fit settle independently, and a fit
-  retry or resume change must not rerun Job analysis.
+  tailoring text. Job analysis and Initial Fit settle independently in both
+  directions — a local job-analysis fallback keeps a valid screening — and a fit
+  retry or resume change must not rerun Job analysis. Intake does not choose the
+  resume: it calls `usePreparedResume` once per preparation and records the fit's
+  provenance as content fingerprints of exactly what it sent.
 - `usePolishPipeline` owns the one-request Resume Polish proposal, abort/retry,
   stale-request cancellation, and progress. It must not dispatch the Review
   provider or expose the retired Tailor/Review/Both selector. It stages flat-ID
@@ -47,10 +50,19 @@ browser-side effects; components render them and App composes them.
   matches that prepared projection.
   `useWorkspaceResume` may read actual saved resume documents to support
   Prepare's deterministic recommendation, but that decision stays session-only
-  and never adds persisted variant metadata. Authoritative workspace snapshots
-  invalidate cached candidate rankings because a saved variant can change
-  without changing its filename; automatic selection must also cancel before
-  commit if the session becomes linked to an application of record.
+  and never adds persisted variant metadata. It reads every variant through one
+  batch request (`lib/baseResumeWorkspaceRepository.ts`), caches the result
+  against a candidate revision, and exposes a settled signal callers await
+  instead of sampling `isWorkspaceBootstrapping` mid-flight. Authoritative
+  workspace snapshots invalidate both the ranking key and the cached bytes,
+  because a saved variant can change without changing its filename; automatic
+  selection must also cancel before commit if the session becomes linked to an
+  application of record.
+- `usePreparedResume` owns the ONE prepared-resume resolution for a
+  preparation. The ordering rules live in `lib/preparedResume.ts` — pure, so the
+  hydration wait, the terminal states, and the adoption guards are executable in
+  tests rather than only inspectable as source. Do not reintroduce a second
+  selector or a post-preparation re-ranking effect for the resume.
   `useApplications` sends only mutation-named upsert records, keeps optimistic
   updates serial, and reconciles successful own-write snapshots by id/revision
   so unchanged objects retain identity. Manual refreshes and conflict snapshots

@@ -5,6 +5,45 @@ bounded; app-only operational detail belongs in the affected app documentation.
 
 ## 2026-08-07
 
+- [USER+CODE+TOOL] **Which resume a preparation speaks for now has exactly one
+  owner.** Prepare ran two independent selectors: a pre-fit picker that never
+  adopted its choice, and a post-Prepare effect that re-ranked every variant and
+  could load a different one. When they disagreed, Initial Fit described resume
+  A while the editor held resume B, and the auto-proposal gate — comparing
+  friendly labels — then suppressed the proposals that fit had just approved.
+  The pre-fit picker also sampled `isWorkspaceBootstrapping` mid-flight, so an
+  extension import arriving before the startup workspace load returned read an
+  empty editor and reported "Initial Fit needs a loaded resume" with an empty
+  label that also hid the rail's Retry. `usePreparedResume`, over the pure rules
+  in `lib/preparedResume.ts`, now resolves once per preparation after the local
+  job analysis and before the combined provider request: it awaits hydration,
+  treats a single saved variant as the answer rather than a ranking problem,
+  ranks several against the LOCAL brief while the provider still receives the
+  raw posting, adopts through the existing guarded loader, and returns the exact
+  text the request carries. It runs whether or not Initial Fit is enabled.
+  An explicit resume origin (saved/uploaded/application/starter/blank) stops the
+  bundled starter — sample content long enough to pass every length test — from
+  satisfying readiness, Initial Fit, or an automatic proposal; Prepare now says
+  "Starter template" instead of "No document". Fit provenance became a content
+  fingerprint of the resume and posting actually screened rather than a label.
+  A valid Initial Fit now survives a local job-analysis fallback, and a narrow
+  grounding layer rejects only three things: a named technology absent from both
+  sources, a gap unanchored in the posting, and an eligibility note claiming an
+  authorization class neither the posting nor the candidate's context mentions
+  (note dropped, status kept). The retired evidence ledger and forensic
+  validator were deliberately NOT restored. Candidate reads for both document
+  kinds moved to bounded batch routes: one workspace lock, only the requested
+  files, nothing else in the response, and a corrupt variant skipped rather than
+  failing the batch. Prepare's prepared two-column row is now bounded to the
+  studio height with each column scrolling internally (CSS grid only — no
+  measurement, no observers); below 1080px the single-column behavior is
+  unchanged. 74 offline evaluations (4 new, including executed resolution
+  sequences that replace removed source-regex guards), 427 client workflow
+  guards, red/green proof on the new fit-grounding probes, both TypeScript
+  gates, and the RoleFit production build pass. **Browser QA of the new prepared
+  two-pane scrolling is UNCONFIRMED** and is the outstanding check; no live
+  provider evaluation ran, so combined-response reliability and concurrent
+  Resume/Cover latency remain unmeasured.
 - [USER+CODE+TOOL] The application workflow now has one fast path with bounded,
   independent document work. `/api/polish` accepts only the one-pass
   `resume-proposal` contract; Final Check and Cover Letter remain dedicated

@@ -733,6 +733,45 @@ assert.match(
   /\.prepare-layout\.is-intake \.prepare-job-brief\s*\{[\s\S]{0,80}?display:\s*none/,
   "the unprepared state hides the empty job-brief scaffold"
 );
+// A prepared application is two columns of unrelated length. Bounding the row to
+// the studio's height and giving each column its own scroller is what stops the
+// taller one from setting the page height and stranding a dead band beside the
+// shorter one; the rail's old sticky positioning could still be cut off.
+const preparedHeightBlock = prepareStyles.slice(
+  prepareStyles.indexOf("@media (min-width: 1081px)"),
+  prepareStyles.indexOf("@media (max-width: 1080px)")
+);
+assert.notEqual(preparedHeightBlock, "", "the prepared two-pane height rules are desktop-scoped");
+assert.match(
+  preparedHeightBlock,
+  /\.studio-body\[data-tab="prepare"\]:has\(\.prepare-layout\.is-prepared\)\s*\{[\s\S]{0,220}?overflow:\s*hidden/,
+  "a prepared Prepare bounds the studio scroller instead of growing it"
+);
+assert.match(
+  preparedHeightBlock,
+  /\.prepare-layout\.is-prepared > \.prepare-main,\s*\.prepare-layout\.is-prepared > \.prepare-rail\s*\{[\s\S]{0,240}?overflow-y:\s*auto/,
+  "whichever column overflows scrolls inside itself"
+);
+assert.match(
+  preparedHeightBlock,
+  /\.prepare-layout\.is-prepared > \.prepare-main,[\s\S]{0,240}?overscroll-behavior:\s*contain/,
+  "an inner column's scroll does not chain out to the shell"
+);
+assert.match(
+  preparedHeightBlock,
+  /\.prepare-layout\.is-prepared > \.prepare-rail\s*\{\s*position:\s*static/,
+  "the rail owns a real scroller rather than sticky positioning inside one"
+);
+assert.doesNotMatch(
+  preparedHeightBlock,
+  /ResizeObserver|calc\(100vh/,
+  "column heights come from the grid, not from measurement or viewport arithmetic"
+);
+assert.match(
+  prepareStyles,
+  /@media \(max-width: 1080px\)\s*\{[\s\S]{0,220}?\.prepare-layout\s*\{\s*grid-template-columns:\s*1fr/,
+  "the single-column layout below 1080px is unchanged"
+);
 assert.match(
   prepareStyles,
   /\.prepare-include-toggle\s*\{[\s\S]{0,600}?min-height:\s*32px/,
